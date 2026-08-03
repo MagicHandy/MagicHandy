@@ -7,11 +7,12 @@ MagicHandy can build two Windows x64 artifacts from one staged payload:
 
 The setup EXE is a thin Inno Setup shell with a native x64 loader and non-solid
 `zip/9` payload compression. This avoids the 32-bit loader and opaque solid
-ultra-LZMA stream used by the withdrawn alpha.6 package. Until trusted
-Authenticode signing is provisioned, that unsigned EXE is **CI lifecycle
-evidence only** and is not a GitHub Release asset; the packaging change reduces
-heuristic risk but does not establish publisher identity. Public alphas
-temporarily contain the portable ZIP and a checksum file covering that ZIP.
+ultra-LZMA stream used by the withdrawn alpha.6 package. Microsoft completed its
+review of that exact alpha.6 file as `Not malware` and removed the detection.
+ADR 0014 therefore permits alpha.8 setup publication through a dedicated policy
+bound to that version and case. A later unsigned version fails closed until a
+new explicit review decision. This exception does not establish publisher
+identity; trusted Authenticode remains the production target.
 The portable archive contains the app, workers, optional-module helper scripts,
 license, source notice, and release manifest. It does not bundle models,
 Python, CUDA, llama.cpp, or Parakeet; those remain explicit setup choices.
@@ -65,7 +66,7 @@ Useful build-only options:
 | `-OutputRoot PATH` | Write artifacts outside the default `artifacts\` folder |
 | `-ISCCPath PATH` | Select a specific Inno compiler |
 | `-SkipFrontendBuild` | Reuse the existing canonical `web/dist`; local debugging only |
-| `-SkipInstaller` | Build the public portable-only artifact set; required for unsigned public releases |
+| `-SkipInstaller` | Build a portable-only artifact set for fallback or local inspection |
 | `-KeepStaging` | Retain the temporary payload for inspection |
 | `-AllowDirty` | Permit a local smoke build and mark its source state dirty/unverified; never publish it |
 
@@ -91,9 +92,8 @@ The staged `MagicHandy` directory contains:
   and per-file SHA-256 hashes.
 
 The manifest is generated after all payload files except the manifest itself
-are staged. For an unsigned CI lifecycle package, the outer checksum file
-covers the portable ZIP and setup EXE. For a public portable-only package, it
-covers only the ZIP.
+are staged. Setup-bearing CI and reviewed public packages cover the portable ZIP
+and setup EXE in the outer checksum. A portable-only package covers only the ZIP.
 
 ## Local Acceptance
 
@@ -121,8 +121,8 @@ test host and refuses to run if an existing install, data directory, shortcut,
 or uninstall entry would be touched. CI runs this form on a disposable Windows
 runner.
 
-The temporary public release shape is built and verified separately so a broad
-artifact glob cannot accidentally publish the unsigned setup executable:
+The reviewed public release shape is built and verified in one dedicated
+directory. The exact setup then receives the full lifecycle test:
 
 ```powershell
 $commit = (git rev-parse HEAD).Trim()
@@ -130,16 +130,19 @@ $commit = (git rev-parse HEAD).Trim()
   -Version 0.0.0-local `
   -Commit $commit `
   -OutputRoot artifacts\release `
-  -SkipFrontendBuild `
-  -SkipInstaller
+  -SkipFrontendBuild
 .\scripts\release\Test-WindowsRelease.ps1 `
   -Version 0.0.0-local `
   -Commit $commit `
   -ArtifactsRoot artifacts\release `
-  -ArtifactPolicy PortablePublic
+  -ArtifactPolicy ReviewedUnsignedPublic `
+  -ReviewedFalsePositiveCaseID 15c1e36d-fb35-4c5d-85de-83707169818a `
+  -ExerciseInstaller
 ```
 
-`SignedPublic` is the fail-closed policy for restoring a setup release. It
+`ReviewedUnsignedPublic` accepts only alpha.8 with the recorded Microsoft case
+ID and checks the x64 unsigned setup, four x64 payload executables, manifests,
+and both outer hashes. `SignedPublic` is the fail-closed long-term policy. It
 requires valid, timestamped Authenticode on the setup executable and all four
 payload executables, rejects self-signed certificates, and requires the
 approved certificate's 40-character thumbprint through
@@ -177,18 +180,18 @@ retention is seven days.
 It requires that the exact tagged commit matches the current `origin/main` tip,
 that the checkout is clean, and that matching release notes exist. It reruns
 Go, race, lint, pure-Go, frontend, installer, package, and full Windows
-lifecycle gates. It then builds and independently verifies a dedicated public
-portable-only directory and creates the GitHub Release from explicit ZIP and
-checksum paths in that directory. The unsigned setup candidate remains a
-seven-day workflow artifact and cannot enter the release through a wildcard.
-Prerelease tags are marked as GitHub prereleases.
+lifecycle gates. It builds setup, portable ZIP, and checksum in the dedicated
+public directory, verifies that exact setup with `ReviewedUnsignedPublic`, and
+creates the GitHub Release from three explicit paths. No wildcard publishes a
+release asset. Prerelease tags are marked as GitHub prereleases.
 
 ## Release Boundaries
 
-- Public setup executables are blocked until a real certificate, protected
-  signing identity, timestamp service, and revocation process exist. The
-  temporary portable alpha remains visibly unsigned; do not bypass Defender or
-  SmartScreen if it is classified as unsafe.
+- Reviewed public alpha setup remains visibly unsigned. Do not bypass Defender
+  or SmartScreen if a new artifact is classified as unsafe; withdraw and submit
+  that exact hash for analysis. A real certificate, protected signing identity,
+  timestamp service, and revocation process remain required to retire the
+  unsigned exception.
 - Versioned builds can discover the latest stable GitHub Release and notify the
   user. The check is cached, can be set to manual-only, and never downloads or
   runs an installer. See [Release Checks And Update Handoff](update-checks.md).

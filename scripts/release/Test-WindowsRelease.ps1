@@ -8,8 +8,8 @@ Portable payload and checksum checks are always read-only. -ExerciseInstaller
 uses an isolated current-user install directory. -ExerciseDefaultInstall also
 tests the real Program Files default and clean user-data removal, but refuses to
 run when an existing packaged install or default MagicHandy data directory is
-present. ArtifactPolicy separates unsigned CI lifecycle packages from public
-portable releases and future Authenticode-signed setup releases.
+present. ArtifactPolicy separates unsigned CI, portable-only, reviewed unsigned
+public, and future Authenticode-signed setup releases.
 #>
 [CmdletBinding()]
 param(
@@ -18,7 +18,8 @@ param(
     [string]$ArtifactsRoot = '',
     [string]$RepositoryRoot = '',
     [ValidateSet('clean', 'dirty', 'unverified')][string]$ExpectedSourceState = 'clean',
-    [ValidateSet('UnsignedCI', 'PortablePublic', 'SignedPublic')][string]$ArtifactPolicy = 'UnsignedCI',
+    [ValidateSet('UnsignedCI', 'PortablePublic', 'ReviewedUnsignedPublic', 'SignedPublic')][string]$ArtifactPolicy = 'UnsignedCI',
+    [string]$ReviewedFalsePositiveCaseID = '',
     [string]$ExpectedSignerThumbprint = '',
     [switch]$ExerciseInstaller,
     [switch]$ExerciseDefaultInstall
@@ -45,6 +46,18 @@ if ($ExerciseDefaultInstall -and -not $ExerciseInstaller) {
 }
 if ($ArtifactPolicy -eq 'PortablePublic' -and ($ExerciseInstaller -or $ExerciseDefaultInstall)) {
     throw 'PortablePublic artifacts intentionally contain no setup executable and cannot exercise installer lifecycle tests.'
+}
+$reviewedCaseID = '15c1e36d-fb35-4c5d-85de-83707169818a'
+$reviewedVersion = '0.1.0-alpha.8'
+if ($ArtifactPolicy -eq 'ReviewedUnsignedPublic') {
+    if ($ReviewedFalsePositiveCaseID.Trim().ToLowerInvariant() -ne $reviewedCaseID) {
+        throw "ReviewedUnsignedPublic requires Microsoft false-positive case $reviewedCaseID."
+    }
+    if ($Version.Trim() -ne $reviewedVersion) {
+        throw "ReviewedUnsignedPublic is approved only for version $reviewedVersion."
+    }
+} elseif (-not [string]::IsNullOrWhiteSpace($ReviewedFalsePositiveCaseID)) {
+    throw '-ReviewedFalsePositiveCaseID is valid only with ReviewedUnsignedPublic.'
 }
 $normalizedSignerThumbprint = $ExpectedSignerThumbprint.Replace(' ', '').Trim().ToUpperInvariant()
 if ($ArtifactPolicy -eq 'SignedPublic' -and $normalizedSignerThumbprint -notmatch '^[0-9A-F]{40}$') {

@@ -1279,12 +1279,12 @@ Mitigation:
 
 - build the setup EXE and portable ZIP from one staged payload with exact commit
   provenance, GPL source URL, per-file SHA-256 manifest, and outer checksums
-- keep the pull-request workflow read-only and artifact-only; label unsigned
-  setup output `unsigned-ci`, retain it briefly for lifecycle evidence, and
-  never attach it to a GitHub Release
-- publish only an independently verified portable ZIP and checksum until a
-  trusted signing identity exists; reject any setup EXE in that public output
-  directory
+- keep the pull-request workflow read-only and artifact-only; label its unsigned
+  setup output `unsigned-ci`, retain it briefly, and give it no release path
+- require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
+  case ID and the explicitly approved alpha.8 version for unsigned setup
+  publication; build into a dedicated public directory and lifecycle-test that
+  exact setup before publishing three explicit paths
 - keep Inno Setup thin: files, shortcuts, uninstall metadata, and launch only;
   all optional decisions and progress remain in the backend-authoritative GUI
 - collect optional runtime/voice choices without executing them, show purpose,
@@ -1319,13 +1319,15 @@ Exit evidence:
 - a public setup release has valid, timestamped Authenticode on the installer
   and every payload executable through a documented protected process
 
-Status 2026-08-02: the unsigned alpha.6 setup executable was classified at
+Status 2026-08-03: the unsigned alpha.6 setup executable was classified at
 launch as `Behavior:Win32/DefenseEvasion.A!ml` and its GitHub Release was
 withdrawn. Exact checksum and CI provenance did not mitigate the absent
 publisher identity or justify a security bypass. The file was submitted to
-Microsoft for analysis. ADR 0014 now separates unsigned seven-day CI lifecycle
-artifacts from a dedicated portable-only public directory and adds a
-timestamped `SignedPublic` verification policy. Release acceptance still
+Microsoft for analysis. Microsoft completed case
+`15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
+reported no current cloud or client detection, and removed the detection.
+ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8,
+and timestamped `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit
 data retention, bounded clean purge, and fresh state after reinstall. R28
@@ -1334,19 +1336,18 @@ production signing. The managed llama.cpp CPU and CUDA bundle paths have passed
 real-network install, checksum, extraction, activation, and runner probes
 without developer toolchains.
 
-The exact setup hash subsequently showed 4 of 71 detections on VirusTotal. Its
+The exact alpha.6 setup hash showed 4 of 71 detections on VirusTotal. Its
 sandbox summary reported no direct detection but attached generic obfuscation
-and self-delete behavior tags to the unsigned Inno Setup overlay. Microsoft
-Security Intelligence case `15c1e36d-fb35-4c5d-85de-83707169818a` remains the
-authoritative pending vendor determination; the public artifact stays withdrawn
-regardless of heuristic interpretation.
+and self-delete behavior tags to the unsigned Inno Setup overlay. Microsoft's
+completed determination is authoritative for that submitted hash; alpha.6 stays
+withdrawn and its immutable tag is not reused.
 
 A controlled same-payload packaging comparison subsequently removed two
 avoidable structural triggers from the CI setup: the 32-bit loader around an
 amd64 payload and the solid `lzma2/ultra64` stream. The native-x64, non-solid
 `zip/9` candidate passed PE-machine checks, the isolated installer lifecycle,
 and a current Defender custom scan with no threats. Its larger approximately
-17.9 MB size is an accepted transparency tradeoff. This does not lower R28 or
-authorize public setup distribution: the candidate is still unsigned,
-launch-time cloud reputation was not independently reproduced, and ADR 0014's
-Authenticode gate remains authoritative.
+17.9 MB size is an accepted transparency tradeoff. Alpha.8 may publish this
+hardened shape only through `ReviewedUnsignedPublic`, bound to the completed
+case and full lifecycle acceptance. This does not lower R28: the new hash is
+still unsigned and trusted Authenticode remains the production exit evidence.

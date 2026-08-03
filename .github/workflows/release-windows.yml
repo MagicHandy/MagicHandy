@@ -79,7 +79,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
 
@@ -168,44 +168,26 @@ jobs:
         shell: powershell
         run: .\scripts\test-installer.ps1
 
-      - name: Build unsigned CI lifecycle artifacts
-        shell: powershell
-        run: >-
-          .\scripts\release\Build-WindowsRelease.ps1
-          -Version "${{ needs.validate.outputs.version }}"
-          -Commit "${{ needs.validate.outputs.commit }}"
-          -OutputRoot "artifacts\ci"
-          -ISCCPath "$env:INNO_ISCC"
-
-      - name: Verify unsigned CI lifecycle artifacts
-        shell: powershell
-        run: >-
-          .\scripts\release\Test-WindowsRelease.ps1
-          -Version "${{ needs.validate.outputs.version }}"
-          -Commit "${{ needs.validate.outputs.commit }}"
-          -ArtifactsRoot "artifacts\ci"
-          -ArtifactPolicy UnsignedCI
-          -ExerciseInstaller
-          -ExerciseDefaultInstall
-
-      - name: Build public portable artifacts
+      - name: Build reviewed public Windows artifacts
         shell: powershell
         run: >-
           .\scripts\release\Build-WindowsRelease.ps1
           -Version "${{ needs.validate.outputs.version }}"
           -Commit "${{ needs.validate.outputs.commit }}"
           -OutputRoot "artifacts\release"
-          -SkipFrontendBuild
-          -SkipInstaller
+          -ISCCPath "$env:INNO_ISCC"
 
-      - name: Verify public portable artifacts
+      - name: Verify reviewed public Windows artifacts
         shell: powershell
         run: >-
           .\scripts\release\Test-WindowsRelease.ps1
           -Version "${{ needs.validate.outputs.version }}"
           -Commit "${{ needs.validate.outputs.commit }}"
           -ArtifactsRoot "artifacts\release"
-          -ArtifactPolicy PortablePublic
+          -ArtifactPolicy ReviewedUnsignedPublic
+          -ReviewedFalsePositiveCaseID "15c1e36d-fb35-4c5d-85de-83707169818a"
+          -ExerciseInstaller
+          -ExerciseDefaultInstall
 
       - name: Retain verified public release artifacts
         uses: actions/upload-artifact@v4
@@ -213,20 +195,10 @@ jobs:
           name: magichandy-windows-${{ needs.validate.outputs.version }}
           path: |
             artifacts/release/*-portable.zip
+            artifacts/release/*-setup.exe
             artifacts/release/*-SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
-
-      - name: Retain unsigned installer lifecycle evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: magichandy-windows-unsigned-ci-${{ needs.validate.outputs.version }}
-          path: |
-            artifacts/ci/*-portable.zip
-            artifacts/ci/*-setup.exe
-            artifacts/ci/*-SHA256SUMS.txt
-          if-no-files-found: error
-          retention-days: 7
 
       - name: Publish GitHub release
         shell: pwsh
@@ -237,6 +209,7 @@ jobs:
           $version = '${{ needs.validate.outputs.version }}'
           $assets = @(
             "artifacts/release/MagicHandy-$version-windows-amd64-portable.zip",
+            "artifacts/release/MagicHandy-$version-windows-amd64-setup.exe",
             "artifacts/release/MagicHandy-$version-windows-amd64-SHA256SUMS.txt"
           )
           $arguments = @(

@@ -60,7 +60,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
 | Binary size | < 30 MB | **Met** | Corrective-alpha tree: 23,648,768 bytes plain and 17,004,032 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.7` withdraws public unsigned setup publication after the alpha.6 Defender incident while retaining all checksum-pinned runtime and managed-Python recovery work. A dedicated public directory contains only the manifest-verified portable ZIP and its checksum. Unsigned setup remains short-lived CI evidence so exact provenance, custom/default installs, shortcuts and ARP metadata, active-process over-install, explicit retention, bounded purge, and clean reinstall stay gated. The CI setup now uses a native x64 loader and non-solid `zip/9`; the measured local candidate is about 17.9 MB versus approximately 9.3 MB for the opaque solid-LZMA shape. `SignedPublic` verification still requires valid timestamped Authenticode before setup publication can return. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.8` restores the full setup after Microsoft completed alpha.6 case `15c1e36d-fb35-4c5d-85de-83707169818a` as `Not malware` and removed the detection. `ReviewedUnsignedPublic` requires alpha.8 and that case ID, a native x64 loader, non-solid `zip/9`, unsigned-status checks, exact setup/ZIP hashes, and the full custom/default install lifecycle against the public artifact. Later unsigned versions fail closed. Pull requests remain short-lived `UnsignedCI`; `SignedPublic` still requires valid timestamped Authenticode as the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -141,6 +141,17 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-03** - Microsoft completed false-positive submission
+  `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination
+  `Not malware` and removed the alpha.6 Defender detection. Alpha.8 restores
+  setup publication through a new `ReviewedUnsignedPublic` policy bound to that
+  case. The tag workflow builds one public setup/ZIP/checksum set and exercises
+  the exact setup through custom and Program Files install, over-install,
+  retention, purge, uninstall, and clean reinstall before publishing three
+  explicit paths. Pull-request artifacts remain CI-only, and trusted signing
+  remains open R28 exit evidence. No app, motion, transport, model, or voice
+  behavior changed.
 
 - **2026-08-02** - Hardened the CI-only Inno setup after a controlled
   same-payload comparison identified a 32-bit bootstrap around the amd64 app and

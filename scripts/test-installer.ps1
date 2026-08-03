@@ -549,18 +549,20 @@ func main() {
 
     Write-Host 'Checking public Windows artifact policy...'
     $releaseWorkflowSource = [System.IO.File]::ReadAllText((Join-Path $Repo '.github\workflows\release-windows.yml'))
-    Assert-True -Condition ($releaseWorkflowSource.Contains('-ArtifactPolicy UnsignedCI')) -Message 'release workflow should label the unsigned installer as CI lifecycle evidence'
-    Assert-True -Condition ($releaseWorkflowSource.Contains('-ArtifactPolicy PortablePublic')) -Message 'release workflow should verify the public portable-only policy'
-    Assert-True -Condition ($releaseWorkflowSource.Contains('-SkipInstaller')) -Message 'public release build should omit the unsigned setup executable'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-ArtifactPolicy ReviewedUnsignedPublic')) -Message 'release workflow should select the reviewed unsigned public policy explicitly'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-ReviewedFalsePositiveCaseID "15c1e36d-fb35-4c5d-85de-83707169818a"')) -Message 'release workflow should bind setup publication to the completed Microsoft review'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-ExerciseInstaller')) -Message 'release workflow should exercise the exact public setup lifecycle'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-ExerciseDefaultInstall')) -Message 'release workflow should exercise the exact public setup in Program Files'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts\ci')) -Message 'tag workflow should not lifecycle-test a parallel setup instead of the public artifact'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('-SkipInstaller')) -Message 'public release build should include the reviewed setup executable'
     Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/MagicHandy-$version-windows-amd64-portable.zip')) -Message 'GitHub release should publish the verified portable ZIP'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/MagicHandy-$version-windows-amd64-setup.exe')) -Message 'GitHub release should publish the verified setup executable'
     Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/MagicHandy-$version-windows-amd64-SHA256SUMS.txt')) -Message 'GitHub release should publish the portable checksum file'
-    Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts/MagicHandy-$version-windows-amd64-setup.exe')) -Message 'GitHub release must not publish the unsigned setup executable'
-    Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts/release/*-setup.exe')) -Message 'public release retention must not include a setup executable'
-    Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/ci/*-setup.exe')) -Message 'unsigned setup should remain available only as short-lived CI evidence'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/*-setup.exe')) -Message 'public release retention should include the reviewed setup executable'
     Assert-True -Condition ($releaseWorkflowSource.Contains('Install-InnoSetup.ps1')) -Message 'release workflow should install the pinned Inno Setup 7 compiler'
     Assert-True -Condition ($releaseWorkflowSource.Contains('-ISCCPath "$env:INNO_ISCC"')) -Message 'release workflow should pass the verified Inno compiler explicitly'
     Assert-True -Condition (-not $releaseWorkflowSource.Contains('choco install innosetup')) -Message 'release workflow should not silently fall back to Chocolatey Inno Setup 6'
-    Assert-True -Condition ($releaseWorkflowSource.IndexOf('- name: Publish GitHub release', [StringComparison]::Ordinal) -gt $releaseWorkflowSource.IndexOf('- name: Retain unsigned installer lifecycle evidence', [StringComparison]::Ordinal)) -Message 'GitHub release publication should be the final artifact step'
+    Assert-True -Condition ($releaseWorkflowSource.IndexOf('- name: Publish GitHub release', [StringComparison]::Ordinal) -gt $releaseWorkflowSource.IndexOf('- name: Retain verified public release artifacts', [StringComparison]::Ordinal)) -Message 'GitHub release publication should be the final artifact step'
     $packageWorkflowSource = [System.IO.File]::ReadAllText((Join-Path $Repo '.github\workflows\package-windows.yml'))
     Assert-True -Condition ($packageWorkflowSource.Contains('-ArtifactPolicy UnsignedCI')) -Message 'pull-request packaging should explicitly select the unsigned CI policy'
     Assert-True -Condition ($packageWorkflowSource.Contains('magichandy-windows-unsigned-ci-')) -Message 'pull-request artifacts should be visibly labeled unsigned CI output'
@@ -568,6 +570,24 @@ func main() {
     Assert-True -Condition ($packageWorkflowSource.Contains('-ISCCPath "$env:INNO_ISCC"')) -Message 'package workflow should pass the verified Inno compiler explicitly'
     Assert-True -Condition (-not $packageWorkflowSource.Contains('choco install innosetup')) -Message 'package workflow should not silently fall back to Chocolatey Inno Setup 6'
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
+    Assert-True -Condition ($releaseVerifierSource.Contains("'ReviewedUnsignedPublic'")) -Message 'release verifier should expose the reviewed unsigned public policy'
+    Assert-True -Condition ($releaseVerifierSource.Contains('ReviewedUnsignedPublic requires Microsoft false-positive case')) -Message 'reviewed unsigned publication should fail closed without the recorded Microsoft case'
+    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersion = '0.1.0-alpha.8'")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release version'
+    Assert-Throws -Action {
+        & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
+            -Version '0.0.0-local' `
+            -Commit ('0' * 40) `
+            -ArtifactsRoot $tempRoot `
+            -ArtifactPolicy ReviewedUnsignedPublic
+    } -Pattern 'requires Microsoft false-positive case' -Message 'reviewed unsigned policy without case ID'
+    Assert-Throws -Action {
+        & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
+            -Version '0.1.0-alpha.9' `
+            -Commit ('0' * 40) `
+            -ArtifactsRoot $tempRoot `
+            -ArtifactPolicy ReviewedUnsignedPublic `
+            -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
+    } -Pattern 'approved only for version 0.1.0-alpha.8' -Message 'reviewed unsigned policy reused by a later version'
     Assert-True -Condition ($releaseVerifierSource.Contains('-ExpectedSignerThumbprint')) -Message 'signed public verification should require an explicitly pinned signer'
     Assert-True -Condition ($releaseVerifierSource.Contains('must not use a self-signed certificate')) -Message 'signed public verification should reject self-signed certificates'
     $innoInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Install-InnoSetup.ps1'))
