@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
@@ -252,7 +253,7 @@ func writeHTTPAPIOllamaFixture(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
-	model := append([]byte("GGUF"), make([]byte, 4096)...)
+	model := httpAPITestGGUF()
 	modelDigest := writeHTTPAPIBlob(t, blobs, model)
 	configData := []byte(`{"model_format":"gguf","model_family":"llama","model_type":"1B","file_type":"Q4_0"}`)
 	configDigest := writeHTTPAPIBlob(t, blobs, configData)
@@ -274,6 +275,27 @@ func writeHTTPAPIOllamaFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return root
+}
+
+func httpAPITestGGUF() []byte {
+	payload := make([]byte, 0, 4096)
+	appendUint32 := func(value uint32) { payload = binary.LittleEndian.AppendUint32(payload, value) }
+	appendUint64 := func(value uint64) { payload = binary.LittleEndian.AppendUint64(payload, value) }
+	appendString := func(value string) {
+		appendUint64(uint64(len(value)))
+		payload = append(payload, value...)
+	}
+	payload = append(payload, "GGUF"...)
+	appendUint32(3)
+	appendUint64(1)
+	appendUint64(2)
+	appendString("general.architecture")
+	appendUint32(8)
+	appendString("llama")
+	appendString("llama.context_length")
+	appendUint32(4)
+	appendUint32(4096)
+	return append(payload, make([]byte, 4096-len(payload))...)
 }
 
 func writeHTTPAPIManagedRuntime(t *testing.T, dataDir string) {

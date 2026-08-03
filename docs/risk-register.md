@@ -462,6 +462,18 @@ seven 379-614 ms requests, with one provider call and no repair in every turn.
 Live simultaneous-TTS cancellation acceptance remains required, so R13 stays
 High.
 
+Ollama-import compatibility follow-up (2026-08-03): one Ollama manifest exposed
+a single model layer, but its GGUF embedded Gemma 4 audio and vision components;
+Ollama loaded that fused artifact while the pinned stock llama.cpp text runner
+failed with a tensor-count mismatch. Managed import and inventory now parse a
+bounded GGUF metadata section, reject split shards and embedded audio, vision,
+or projector components with an actionable Ollama/text-only explanation, and
+cache compatibility until the file changes. The parser accepted the installed
+12B text-only Gemma and rejected the reported fused model in 40 ms total. Chat
+also keeps a visible first-pass draft stable while a repair streams, preventing
+the repair pass from looking like repeated generation. Fixture and UI regression
+tests cover both paths; R13 remains High for the existing open work.
+
 ## R14: Per-Source Motion Path Divergence
 
 Level: High
@@ -1289,6 +1301,9 @@ Mitigation:
   case ID and the explicitly approved alpha.8 through alpha.11 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
+- use `PortablePublic` after that version-bound exception: build no setup,
+  verify the ZIP and one-entry checksum, scan the exact public directory, and
+  publish only those two explicit paths until trusted signing is available
 - keep Inno Setup thin: files, shortcuts, uninstall metadata, and launch only;
   all optional decisions and progress remain in the backend-authoritative GUI
 - collect optional runtime/voice choices without executing them, show purpose,
@@ -1330,8 +1345,9 @@ publisher identity or justify a security bypass. The file was submitted to
 Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
-ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8 through alpha.11,
-and timestamped `SignedPublic` policies. Release acceptance still
+ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
+through alpha.11, portable-only alpha.12, and timestamped `SignedPublic`
+policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit
 data retention, bounded clean purge, and fresh state after reinstall. R28
@@ -1354,5 +1370,10 @@ and a current Defender custom scan with no threats. Its larger approximately
 17.9 MB size is an accepted transparency tradeoff. Alpha.8 through alpha.11 may
 publish this hardened shape only through `ReviewedUnsignedPublic`, bound to the
 completed case, alpha.9-and-later exact-artifact Defender scan, and full lifecycle
-acceptance. This does not lower R28: each new hash is
-still unsigned and trusted Authenticode remains the production exit evidence.
+acceptance. This does not lower R28: each new hash is still unsigned and trusted
+Authenticode remains the production exit evidence.
+
+Alpha.12 does not extend that exception. Its tag workflow selects
+`PortablePublic`, builds no setup wrapper, scans the exact ZIP/checksum
+directory, and publishes only those two files. CI continues exercising the
+unsigned setup lifecycle without giving that artifact a public release path.

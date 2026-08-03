@@ -197,6 +197,9 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
     activeStream.current = controller;
     let raw = "";
     let repairRaw = "";
+    let initialReply = "";
+    let retainReplyOnAbort = false;
+    let stagedReplySeen = false;
     let mustRefreshStopState = false;
     try {
       await streamChat(sessionId, text, (ev) => {
@@ -230,14 +233,18 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
         } else if (ev.event === "delta" || ev.event === "repair_delta") {
           const phase = (ev.data as { phase?: string }).phase;
           const chunk = (ev.data as { text?: string }).text ?? "";
-          if (ev.event === "repair_delta" || phase === "repair") repairRaw += chunk;
+          const repairing = ev.event === "repair_delta" || phase === "repair";
+          if (repairing) repairRaw += chunk;
           else raw += chunk;
-          const draftReply = extractReplyDraft(ev.event === "repair_delta" ? repairRaw : raw);
-          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: draftReply || x.text || "..." } : x)));
+          const draftReply = extractReplyDraft(repairing ? repairRaw : raw);
+          if (!repairing && draftReply) initialReply = draftReply;
+          const visibleDraft = repairing && initialReply ? initialReply : draftReply;
+          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: visibleDraft || x.text || "..." } : x)));
         } else if (ev.event === "message") {
           const finalReply = String(ev.data.reply ?? "");
           const replySeq = Number((ev.data as { seq?: number }).seq ?? 0);
           if (replySeq > lastSeq.current) lastSeq.current = replySeq;
+          stagedReplySeen = true;
           setMessages((m) => m.map((x) => (x.id === assistantId ? {
             ...x,
             text: finalReply || "...",
@@ -261,12 +268,18 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
           // A reply the backend already committed stays visible: replacing it
           // with the error would contradict the history a reload shows.
           const replyRetained = String((ev.data as { reply_retained?: string }).reply_retained ?? "") === "true";
+          if (replyRetained) retainReplyOnAbort = true;
           show(message, "error");
           setMessages((m) => m.map((x) => (x.id === assistantId
             ? { ...x, text: replyRetained ? x.text : message, warning: true }
             : x)));
         } else if (ev.event === "done" && ev.data.ok === false) {
-          setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: x.text || t("Malformed model response."), warning: true } : x)));
+          const malformed = Boolean(ev.data.malformed);
+          setMessages((m) => m.map((x) => (x.id === assistantId ? {
+            ...x,
+            text: malformed ? t("Malformed model response.") : x.text || t("Malformed model response."),
+            warning: true,
+          } : x)));
         }
       }, controller.signal, stopSequence);
       if (mounted.current && streamGeneration.current === requestGeneration && lastSeq.current > 0) {
@@ -292,9 +305,13 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
       onBusyChange?.(false);
       setMessages((m) => m.flatMap((x) => {
         if (x.id !== assistantId) return [x];
-        if (controller.signal.aborted && !x.text) return [];
+        if (controller.signal.aborted && !retainReplyOnAbort) return [];
         return [{ ...x, streaming: false }];
       }));
+      if (controller.signal.aborted && stagedReplySeen && !retainReplyOnAbort) {
+        await loadHistory();
+      }
+      if (!mounted.current || streamGeneration.current !== requestGeneration) return;
       if (!controller.signal.aborted) onSessionChanged?.();
     }
   }

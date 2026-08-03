@@ -1316,6 +1316,7 @@
   "the worker completed without returning audio": "工作进程已完成，但未返回音频",
   "this video {video} · setup {setup}": "本视频 {video} · 设置 {setup}",
   "trimmed": "已剪辑",
+  "unsupported": "不支持",
   "unavailable": "不可用",
   "unknown playback error": "未知播放错误",
   "voice crashed": "语音服务已崩溃",

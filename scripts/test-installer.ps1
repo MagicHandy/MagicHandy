@@ -700,21 +700,21 @@ func main() {
 
     Write-Host 'Checking public Windows artifact policy...'
     $releaseWorkflowSource = [System.IO.File]::ReadAllText((Join-Path $Repo '.github\workflows\release-windows.yml'))
-    Assert-True -Condition ($releaseWorkflowSource.Contains('-ArtifactPolicy ReviewedUnsignedPublic')) -Message 'release workflow should select the reviewed unsigned public policy explicitly'
-    Assert-True -Condition ($releaseWorkflowSource.Contains('-ReviewedFalsePositiveCaseID "15c1e36d-fb35-4c5d-85de-83707169818a"')) -Message 'release workflow should bind setup publication to the completed Microsoft review'
-    Assert-True -Condition ($releaseWorkflowSource.Contains('-ExerciseInstaller')) -Message 'release workflow should exercise the exact public setup lifecycle'
-    Assert-True -Condition ($releaseWorkflowSource.Contains('-ExerciseDefaultInstall')) -Message 'release workflow should exercise the exact public setup in Program Files'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-ArtifactPolicy PortablePublic')) -Message 'release workflow should select the portable-only public policy explicitly'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('-ReviewedFalsePositiveCaseID')) -Message 'portable publication should not reuse the setup false-positive exception'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('-ExerciseInstaller')) -Message 'portable publication should not claim to exercise a setup lifecycle'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('-ExerciseDefaultInstall')) -Message 'portable publication should not claim to exercise a Program Files setup'
     Assert-True -Condition ($releaseWorkflowSource.Contains('Scan exact public artifacts with Microsoft Defender')) -Message 'release workflow should scan the exact public artifact directory before publication'
     Assert-True -Condition ($releaseWorkflowSource.Contains('-DisableRemediation')) -Message 'release Defender scan should report rather than mutate the candidate'
-    Assert-True -Condition ($releaseWorkflowSource.IndexOf('Scan exact public artifacts with Microsoft Defender', [StringComparison]::Ordinal) -lt $releaseWorkflowSource.IndexOf('Verify reviewed public Windows artifacts', [StringComparison]::Ordinal)) -Message 'Defender should scan the candidate before release verification and publication'
+    Assert-True -Condition ($releaseWorkflowSource.IndexOf('Scan exact public artifacts with Microsoft Defender', [StringComparison]::Ordinal) -lt $releaseWorkflowSource.IndexOf('Verify portable public Windows artifacts', [StringComparison]::Ordinal)) -Message 'Defender should scan the candidate before release verification and publication'
     Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts\ci')) -Message 'tag workflow should not lifecycle-test a parallel setup instead of the public artifact'
-    Assert-True -Condition (-not $releaseWorkflowSource.Contains('-SkipInstaller')) -Message 'public release build should include the reviewed setup executable'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-SkipInstaller')) -Message 'portable public release should not build an unsigned setup executable'
     Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/MagicHandy-$version-windows-amd64-portable.zip')) -Message 'GitHub release should publish the verified portable ZIP'
-    Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/MagicHandy-$version-windows-amd64-setup.exe')) -Message 'GitHub release should publish the verified setup executable'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts/release/MagicHandy-$version-windows-amd64-setup.exe')) -Message 'GitHub release should not publish an unsigned setup executable'
     Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/MagicHandy-$version-windows-amd64-SHA256SUMS.txt')) -Message 'GitHub release should publish the portable checksum file'
-    Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/*-setup.exe')) -Message 'public release retention should include the reviewed setup executable'
-    Assert-True -Condition ($releaseWorkflowSource.Contains('Install-InnoSetup.ps1')) -Message 'release workflow should install the pinned Inno Setup 7 compiler'
-    Assert-True -Condition ($releaseWorkflowSource.Contains('-ISCCPath "$env:INNO_ISCC"')) -Message 'release workflow should pass the verified Inno compiler explicitly'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts/release/*-setup.exe')) -Message 'public release retention should exclude setup executables'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('Install-InnoSetup.ps1')) -Message 'portable release workflow should not install an unused setup compiler'
+    Assert-True -Condition (-not $releaseWorkflowSource.Contains('-ISCCPath "$env:INNO_ISCC"')) -Message 'portable release workflow should not pass an unused setup compiler'
     Assert-True -Condition (-not $releaseWorkflowSource.Contains('choco install innosetup')) -Message 'release workflow should not silently fall back to Chocolatey Inno Setup 6'
     Assert-True -Condition ($releaseWorkflowSource.IndexOf('- name: Publish GitHub release', [StringComparison]::Ordinal) -gt $releaseWorkflowSource.IndexOf('- name: Retain verified public release artifacts', [StringComparison]::Ordinal)) -Message 'GitHub release publication should be the final artifact step'
     $packageWorkflowSource = [System.IO.File]::ReadAllText((Join-Path $Repo '.github\workflows\package-windows.yml'))
@@ -742,6 +742,32 @@ func main() {
             -ArtifactPolicy ReviewedUnsignedPublic `
             -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
     } -Pattern 'approved only for versions 0.1.0-alpha.8, 0.1.0-alpha.9, 0.1.0-alpha.10, 0.1.0-alpha.11' -Message 'reviewed unsigned policy reused by a later version'
+    $portablePolicyFixture = Join-Path $tempRoot 'portable-policy-fixture'
+    New-Item -ItemType Directory -Force -Path $portablePolicyFixture | Out-Null
+    $portableFixtureName = 'MagicHandy-0.1.0-alpha.12-windows-amd64-portable.zip'
+    $checksumFixtureName = 'MagicHandy-0.1.0-alpha.12-windows-amd64-SHA256SUMS.txt'
+    [System.IO.File]::WriteAllText((Join-Path $portablePolicyFixture $portableFixtureName), 'fixture')
+    [System.IO.File]::WriteAllText((Join-Path $portablePolicyFixture $checksumFixtureName), ('0' * 64) + "  $portableFixtureName`n")
+    [System.IO.File]::WriteAllText((Join-Path $portablePolicyFixture 'unexpected-setup.exe'), 'fixture')
+    Assert-Throws -Action {
+        & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
+            -Version '0.1.0-alpha.12' `
+            -Commit ('0' * 40) `
+            -ArtifactsRoot $portablePolicyFixture `
+            -ArtifactPolicy PortablePublic
+    } -Pattern 'exactly 2 artifacts' -Message 'portable public policy with an extra setup executable'
+    Remove-Item -LiteralPath (Join-Path $portablePolicyFixture 'unexpected-setup.exe') -Force
+    $outsideFixture = Join-Path $tempRoot 'outside-portable.zip'
+    [System.IO.File]::WriteAllText($outsideFixture, 'fixture')
+    $outsideHash = (Get-FileHash -LiteralPath $outsideFixture -Algorithm SHA256).Hash.ToLowerInvariant()
+    [System.IO.File]::WriteAllText((Join-Path $portablePolicyFixture $checksumFixtureName), "$outsideHash  ..\outside-portable.zip`n")
+    Assert-Throws -Action {
+        & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
+            -Version '0.1.0-alpha.12' `
+            -Commit ('0' * 40) `
+            -ArtifactsRoot $portablePolicyFixture `
+            -ArtifactPolicy PortablePublic
+    } -Pattern 'canonical artifact filename' -Message 'portable checksum path traversal'
     Assert-True -Condition ($releaseVerifierSource.Contains('-ExpectedSignerThumbprint')) -Message 'signed public verification should require an explicitly pinned signer'
     Assert-True -Condition ($releaseVerifierSource.Contains('must not use a self-signed certificate')) -Message 'signed public verification should reject self-signed certificates'
     $innoInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Install-InnoSetup.ps1'))

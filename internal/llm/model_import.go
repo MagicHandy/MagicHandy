@@ -501,9 +501,10 @@ func validateGGUFFile(path string) (os.FileInfo, error) {
 	if info.Size() <= 4 || info.Size() > maxManagedModelBytes {
 		return nil, fmt.Errorf("GGUF model size must be between 5 bytes and %d bytes", maxManagedModelBytes)
 	}
-	var magic [4]byte
-	if _, err := io.ReadFull(file, magic[:]); err != nil || string(magic[:]) != "GGUF" {
+	if err := inspectManagedGGUF(context.Background(), file, info.Size()); errors.Is(err, errNotGGUF) {
 		return nil, errors.New("selected file is not a GGUF model")
+	} else if err != nil {
+		return nil, fmt.Errorf("selected GGUF is not compatible with managed llama.cpp: %w", err)
 	}
 	return info, nil
 }

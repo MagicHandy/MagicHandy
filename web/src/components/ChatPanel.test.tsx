@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api, streamChat } from "../api/client";
 import { ChatPanel } from "./ChatPanel";
@@ -270,6 +270,74 @@ describe("ChatPanel history", () => {
     await waitFor(() => expect(onSessionChanged).toHaveBeenCalledTimes(1));
   });
 
+  it("keeps the initial reply stable while a repair streams", async () => {
+    getChatMessages.mockResolvedValueOnce({
+      messages: [],
+      latest_seq: 0,
+      cursor: 0,
+      session_id: SESSION_ID,
+    });
+    let emit: Parameters<typeof streamChat>[2] | undefined;
+    let finish: (() => void) | undefined;
+    streamChatMock.mockImplementation((_sessionId, _message, onEvent) => {
+      emit = onEvent;
+      return new Promise<void>((resolve) => { finish = resolve; });
+    });
+
+    const onBusyChange = vi.fn();
+    render(<ChatPanel sessionId={SESSION_ID} onBusyChange={onBusyChange} />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "say something" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(emit).toBeDefined());
+
+    act(() => emit?.({ event: "delta", data: { text: "{\"reply\":\"First draft\"" } }));
+    expect(await screen.findByText("First draft")).toBeInTheDocument();
+
+    act(() => {
+      emit?.({ event: "malformed", data: {} });
+      emit?.({ event: "repair_delta", data: { text: "{\"reply\":\"Replacement still streaming" } });
+      emit?.({ event: "delta", data: { phase: "repair", text: " more" } });
+    });
+    expect(screen.getByText("First draft")).toBeInTheDocument();
+    expect(screen.queryByText("Replacement still streaming")).not.toBeInTheDocument();
+
+    await act(async () => {
+      emit?.({ event: "message", data: { reply: "Repaired reply", seq: 2, initial_malformed: true } });
+      emit?.({ event: "done", data: { ok: true } });
+      finish?.();
+      await Promise.resolve();
+    });
+    expect(await screen.findByText("Repaired reply")).toBeInTheDocument();
+    expect(screen.queryByText("First draft")).not.toBeInTheDocument();
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("replaces rejected drafts when the repair also stays malformed", async () => {
+    getChatMessages.mockResolvedValueOnce({
+      messages: [],
+      latest_seq: 0,
+      cursor: 0,
+      session_id: SESSION_ID,
+    });
+    streamChatMock.mockImplementation(async (_sessionId, _message, onEvent) => {
+      onEvent({ event: "delta", data: { text: "{\"reply\":\"Rejected first draft" } });
+      onEvent({ event: "malformed", data: { recoverable: true } });
+      onEvent({ event: "repair_delta", data: { text: "{\"reply\":\"Rejected repair" } });
+      onEvent({ event: "malformed", data: { recoverable: false } });
+      onEvent({ event: "done", data: { ok: false, malformed: true } });
+    });
+
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "say something" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(await screen.findByText("Malformed model response.")).toBeInTheDocument();
+    expect(screen.queryByText("Rejected first draft")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rejected repair")).not.toBeInTheDocument();
+  });
+
   it("sends with Enter while preserving Shift+Enter and IME composition", async () => {
     getChatMessages.mockResolvedValueOnce({
       messages: [],
@@ -384,8 +452,11 @@ describe("ChatPanel history", () => {
       session_id: SESSION_ID,
     });
     let streamSignal: AbortSignal | undefined;
-    streamChatMock.mockImplementation((_sessionId, _message, _onEvent, signal) => {
+    streamChatMock.mockImplementation((_sessionId, _message, onEvent, signal) => {
       streamSignal = signal;
+      onEvent({ event: "delta", data: { text: "{\"reply\":\"Uncommitted draft" } });
+      onEvent({ event: "malformed", data: { recoverable: true } });
+      onEvent({ event: "repair_delta", data: { text: "{\"reply\":\"Uncommitted repair" } });
       return new Promise<void>((_resolve, reject) => {
         signal?.addEventListener(
           "abort",
@@ -400,6 +471,7 @@ describe("ChatPanel history", () => {
     fireEvent.change(textbox, { target: { value: "keep talking" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(streamChatMock).toHaveBeenCalledOnce());
+    expect(await screen.findByText("Uncommitted draft")).toBeInTheDocument();
 
     result.unmount();
     expect(streamSignal?.aborted).toBe(true);
@@ -420,8 +492,11 @@ describe("ChatPanel history", () => {
       session_id: SESSION_ID,
     });
     let streamSignal: AbortSignal | undefined;
-    streamChatMock.mockImplementation((_sessionId, _message, _onEvent, signal) => {
+    streamChatMock.mockImplementation((_sessionId, _message, onEvent, signal) => {
       streamSignal = signal;
+      onEvent({ event: "delta", data: { text: "{\"reply\":\"Uncommitted draft" } });
+      onEvent({ event: "malformed", data: { recoverable: true } });
+      onEvent({ event: "repair_delta", data: { text: "{\"reply\":\"Uncommitted repair" } });
       return new Promise<void>((_resolve, reject) => {
         signal?.addEventListener(
           "abort",
@@ -435,14 +510,99 @@ describe("ChatPanel history", () => {
     fireEvent.change(textbox, { target: { value: "keep talking" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(streamChatMock).toHaveBeenCalledOnce());
+    expect(await screen.findByText("Uncommitted draft")).toBeInTheDocument();
 
     app.state = { ...app.state, stop_sequence: 2 };
     result.rerender(<ChatPanel sessionId={SESSION_ID} />);
 
     await waitFor(() => expect(streamSignal?.aborted).toBe(true));
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
+    expect(screen.queryByText("Uncommitted draft")).not.toBeInTheDocument();
     expect(app.show).not.toHaveBeenCalled();
     expect(app.queueSpeech).not.toHaveBeenCalled();
     expect(app.refresh).not.toHaveBeenCalled();
+  });
+
+  it("removes a staged reply when Emergency Stop races its commit", async () => {
+    getChatMessages
+      .mockResolvedValueOnce({
+        messages: [],
+        latest_seq: 0,
+        cursor: 0,
+        session_id: SESSION_ID,
+      })
+      .mockResolvedValueOnce({
+        messages: [{ seq: 1, role: "user", content: "keep talking", created_at: "now" }],
+        latest_seq: 1,
+        cursor: 0,
+        session_id: SESSION_ID,
+      });
+    let streamSignal: AbortSignal | undefined;
+    streamChatMock.mockImplementation((_sessionId, _message, onEvent, signal) => {
+      streamSignal = signal;
+      onEvent({ event: "message", data: { reply: "Staged but not committed", seq: 2 } });
+      return new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    });
+    const result = render(<ChatPanel sessionId={SESSION_ID} />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "keep talking" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Staged but not committed")).toBeInTheDocument();
+
+    app.state = { ...app.state, stop_sequence: 2 };
+    result.rerender(<ChatPanel sessionId={SESSION_ID} />);
+
+    await waitFor(() => expect(streamSignal?.aborted).toBe(true));
+    await waitFor(() => expect(screen.queryByText("Staged but not committed")).not.toBeInTheDocument());
+    expect(getChatMessages).toHaveBeenCalledTimes(2);
+  });
+
+  it("restores a committed reply when Stop wins the retention-event race", async () => {
+    getChatMessages
+      .mockResolvedValueOnce({
+        messages: [],
+        latest_seq: 0,
+        cursor: 0,
+        session_id: SESSION_ID,
+      })
+      .mockResolvedValueOnce({
+        messages: [
+          { seq: 1, role: "user", content: "keep talking", created_at: "now" },
+          { seq: 2, role: "assistant", content: "Committed before Stop", created_at: "now" },
+        ],
+        latest_seq: 2,
+        cursor: 0,
+        session_id: SESSION_ID,
+      });
+    let streamSignal: AbortSignal | undefined;
+    streamChatMock.mockImplementation((_sessionId, _message, onEvent, signal) => {
+      streamSignal = signal;
+      onEvent({ event: "message", data: { reply: "Committed before Stop", seq: 2 } });
+      return new Promise<void>((_resolve, reject) => {
+        signal?.addEventListener(
+          "abort",
+          () => reject(new DOMException("Aborted", "AbortError")),
+          { once: true },
+        );
+      });
+    });
+    const result = render(<ChatPanel sessionId={SESSION_ID} />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    fireEvent.change(textbox, { target: { value: "keep talking" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Committed before Stop")).toBeInTheDocument();
+
+    app.state = { ...app.state, stop_sequence: 2 };
+    result.rerender(<ChatPanel sessionId={SESSION_ID} />);
+
+    await waitFor(() => expect(streamSignal?.aborted).toBe(true));
+    await waitFor(() => expect(getChatMessages).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("Committed before Stop").closest(".chat-message")).not.toHaveAttribute("data-streaming");
   });
 });

@@ -1020,7 +1020,7 @@ export interface ManagedLLMModel {
   license?: string;
   imported_at: string;
   updated_at: string;
-  state: "ready" | "missing" | "changed";
+  state: "ready" | "missing" | "changed" | "unsupported";
   message?: string;
 }
 

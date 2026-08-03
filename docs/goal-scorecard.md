@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Local Go 1.26.4 alpha.11 candidate: 23,660,032 bytes plain and 17,031,168 bytes release-style stripped with `CGO_ENABLED=0`, `-trimpath`, and injected version/commit metadata; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for the published artifact. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 build: 23,712,768 bytes plain and 17,049,600 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.11` restores prerelease update discovery and materializes Faster Qwen model files for clean Windows installs while retaining the reviewed native x64, non-solid `zip/9` package. `ReviewedUnsignedPublic` accepts only alpha.8 through alpha.11 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; the tag workflow requires a Defender scan of the exact public directory, unsigned-status checks, exact setup/ZIP hashes, and the full custom/default install lifecycle. Later unsigned versions fail closed. Pull requests remain short-lived `UnsignedCI`; `SignedPublic` still requires valid timestamped Authenticode as the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.12` uses `PortablePublic`: the tag workflow builds no unsigned setup, Defender-scans the exact public directory, verifies the ZIP manifest and one-entry checksum, and publishes two explicit assets. `ReviewedUnsignedPublic` remains limited to alpha.8 through alpha.11 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`. Pull requests still lifecycle-test setup as short-lived `UnsignedCI`; `SignedPublic` requires valid timestamped Authenticode before setup publication resumes. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -112,9 +112,12 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,676,852 raw / 797,558 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 796,097 raw / 210,419 gzip bytes; all
-   HTML/CSS/JS is 1,232,616 raw / 360,161 gzip bytes. The updater's
+   browser payload is 1,677,300 raw / 797,770 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 796,342 raw / 210,540 gzip bytes; all
+   HTML/CSS/JS is 1,233,064 raw / 360,373 gzip bytes. The localized Ollama
+   compatibility state and stable repair-draft presentation add 448 raw / 212
+   gzip bytes overall and 245 raw / 121 gzip bytes to the English startup path.
+   The updater's
    channel-neutral status wording adds 86 raw bytes and removes 2 gzip bytes
    overall; the English startup path adds 24 raw and removes 2 gzip bytes. The managed llama.cpp
    loading-state UI adds 465 raw / 75 gzip bytes to each measure. The Phase 16
@@ -144,6 +147,25 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-03** - Rejected GGUFs that a text-only managed llama.cpp runner
+  cannot load even when Ollama stores them as one model layer. Import and
+  inventory parse at most 64 MiB of GGUF metadata, reject split shards and
+  embedded audio, vision, or projector components, cache unchanged inventory
+  results, and expose existing incompatible copies as `unsupported` instead of
+  `ready`. The parser accepted the installed text-only 12B Gemma and rejected
+  the reported fused Gemma 4 in 40 ms total. During malformed-output repair,
+  Chat now keeps an already-visible first-pass reply stable until the final
+  backend message instead of visibly starting the reply again. Plain/stripped
+  `CGO_ENABLED=0` binaries are 23,712,768 / 17,049,600 bytes. The complete
+  browser payload is 1,677,300 raw / 797,770 level-9 gzip; HTML/CSS/JS is
+  1,233,064 / 360,373 and English startup is 796,342 / 210,540 (+448 / +212
+  overall and +245 / +121 at startup). Alpha.12 returns to `PortablePublic`
+  after alpha.11's version-bound setup exception: a dirty-state local smoke
+  package passed portable manifest and one-entry outer-checksum verification.
+  Full Go tests, vet, zero-issue lint, 387 frontend tests, localization,
+  typecheck/build, installer policy tests, and plain/stripped zero-CGo builds
+  pass. No hardware connection or motion command was used.
 
 - **2026-08-03** - Restored update discovery for prerelease builds and corrected
   clean-machine Faster Qwen model finalization. The backend now scans a bounded

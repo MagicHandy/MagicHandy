@@ -1316,6 +1316,7 @@
   "the worker completed without returning audio": "ワーカーが音声を返さずに完了しました",
   "this video {video} · setup {setup}": "この動画 {video}・設定 {setup}",
   "trimmed": "トリミング済み",
+  "unsupported": "非対応",
   "unavailable": "利用不可",
   "unknown playback error": "不明な再生エラー",
   "voice crashed": "音声サービスが異常終了",
