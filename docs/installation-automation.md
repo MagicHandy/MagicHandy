@@ -16,8 +16,8 @@ Phase 16.
 
 | Entry point | Intended user | Responsibility |
 | --- | --- | --- |
-| Signed Windows setup EXE (temporarily unavailable) | Normal Windows user | Install the versioned payload, shortcuts, and uninstaller, then open `#/setup` |
-| Portable ZIP | Current public Windows path, no-install, or USB use | Provide the payload without Windows integration |
+| Reviewed Windows setup EXE | Normal Windows user | Install the versioned payload, shortcuts, and uninstaller, then open `#/setup` |
+| Portable ZIP | No-install or USB use | Provide the payload without Windows integration |
 | `bootstrap.ps1` + `install.ps1` | Source user | Repair WinGet/Git, build the pure-Go core, then open `#/setup` |
 | `install.ps1 -Yes ...` | Managed automation | Provision explicitly selected optional components without prompts |
 | `update.ps1` | Existing source checkout | Safely fast-forward and rebuild the core; optionally open `#/setup` |
@@ -25,9 +25,10 @@ Phase 16.
 
 The setup EXE and portable ZIP require no Go, Node, Python, CMake, Visual
 Studio, or CUDA installation to run the MagicHandy core. The unsigned setup EXE
-is currently CI-only under ADR 0014; public alphas use the portable ZIP until a
-trusted signing identity exists. Optional selections can add their own
-dependencies after explicit consent.
+is published for alpha.8 under ADR 0014 after Microsoft's `Not malware`
+determination. The exception is version-bound and still lacks publisher
+identity. Optional selections can add
+their own dependencies after explicit consent.
 
 ## GUI-Owned Decisions
 
@@ -105,12 +106,12 @@ before opening the browser.
 
 Implemented on the Phase 16 branch:
 
-- public portable Windows ZIP plus a thin Inno Setup lifecycle candidate from
-  one versioned payload; the unsigned setup artifact is CI-only;
+- public portable Windows ZIP plus a thin reviewed Inno Setup EXE from one
+  versioned payload;
 - artifact manifest, exact source revision, GPL license, and SHA-256 sums;
 - read-only pull-request packaging plus a separate SemVer-tag publication
-  workflow. Public ZIP/checksum output is isolated from unsigned install,
-  upgrade, retain, purge, and clean-reinstall acceptance artifacts;
+  workflow. The exact public setup is isolated in `artifacts/release` and
+  receives install, upgrade, retain, purge, and clean-reinstall acceptance;
 - fresh-store detection and a re-runnable `#/setup` route;
 - GUI-managed verified llama.cpp installation, GGUF import, Ollama/external selection,
   Parakeet, Faster Qwen3-TTS, and Chatterbox provisioning;

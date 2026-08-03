@@ -6,10 +6,9 @@ or let Freestyle run hands-free. Conversations, settings, and credentials stay
 on your machine — no account, no tracking.
 
 > **Status:** early alpha and under active development. Local chat already
-> drives real device motion. The current Windows build is the portable-only
-> [v0.1.0-alpha.7](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.7).
-> The unsigned setup package is withheld until trusted Authenticode signing is
-> available.
+> drives real device motion. The current Windows build is
+> [v0.1.0-alpha.8](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.8),
+> with a full setup EXE and portable ZIP. The binaries remain unsigned.
 > Expect rough edges — see [what's coming](#roadmap).
 
 ## What it does
@@ -40,14 +39,14 @@ on your machine — no account, no tracking.
 
 ## Get started
 
-For Windows x64, download the portable ZIP and SHA-256 checksum file from the
-[v0.1.0-alpha.7 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.7).
-Verify the ZIP, extract it to a user-owned folder, and run
-`MagicHandy\magichandy.exe`; guided setup opens in the browser. No Go, Node,
-Python, CMake, or compiler is needed to run the core. The executable is still
-unsigned, so do not bypass Defender or SmartScreen if Windows classifies it as
-unsafe. Optional local model and voice choices can install their separately
-disclosed dependencies later.
+For Windows x64, download the setup EXE and SHA-256 checksum file from the
+[v0.1.0-alpha.8 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.8).
+Verify the setup hash, run it, and complete guided setup in the browser. The
+portable ZIP remains available when Windows installer integration is not
+wanted. No Go, Node, Python, CMake, or compiler is needed to run the core. The
+executables are still unsigned, so do not bypass Defender or SmartScreen if
+Windows classifies a new build as unsafe. Optional local model and voice choices
+can install their separately disclosed dependencies later.
 
 To build from source instead, open PowerShell in the folder where you want
 MagicHandy and paste this entire block. It needs only Windows PowerShell and
@@ -79,9 +78,8 @@ choices, then can open guided setup when you want to change them.
 Versioned Windows builds also check the project's latest stable GitHub Release
 and place an update notice in the app. The check can be set to manual-only in
 **Settings > General**. MagicHandy never downloads or executes an update in the
-background. Current portable updates require explicit review, checksum
-verification, and directory replacement; over-install returns only with a
-trusted, signed setup executable.
+background. Packaged updates require explicit release-note and checksum review;
+the setup EXE supports over-install while preserving app data.
 
 Prefer to build it yourself? `go run ./cmd/magichandy` (Go 1.25+) serves the
 app at <http://127.0.0.1:49717> — no Node required. Details in the

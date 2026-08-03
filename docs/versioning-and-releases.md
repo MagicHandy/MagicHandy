@@ -57,26 +57,28 @@ the release manifest, `SOURCE.txt`, and `magichandy.exe -version`.
 
 ## Release Artifacts
 
-Until trusted Authenticode signing is provisioned, each Windows x64 release
-contains exactly these downloadable artifacts:
+The reviewed unsigned Windows alpha.8 release contains exactly these
+downloadable artifacts:
 
+- `MagicHandy-<version>-windows-amd64-setup.exe`
 - `MagicHandy-<version>-windows-amd64-portable.zip`
 - `MagicHandy-<version>-windows-amd64-SHA256SUMS.txt`
 
 The portable payload records the exact source commit, GPL-3.0-only license,
 source URL, file sizes, and per-file SHA-256 hashes in
-`release-manifest.json`. The checksum file covers the ZIP.
+`release-manifest.json`. The checksum file covers the setup EXE and ZIP.
 
-The workflow continues to build an unsigned setup EXE from the same staged
-payload and exercises the full install lifecycle, but retains it only as a
-short-lived `unsigned-ci` workflow artifact. It is not a public download.
+Pull-request workflows continue to retain setup only as a short-lived
+`unsigned-ci` artifact. The tag workflow uses `ReviewedUnsignedPublic`, the
+alpha.8 version, the completed Microsoft false-positive case ID from ADR 0014,
+and the full lifecycle test against the exact setup placed in
+`artifacts/release`. A later unsigned version fails this policy until the
+repository records a new explicit decision.
 
-When setup publication returns, the public artifact set will add
-`MagicHandy-<version>-windows-amd64-setup.exe`, and the checksum file will cover
-both outer artifacts. The release gate requires valid, timestamped
-Authenticode from one explicitly pinned signer on the setup EXE and every
-shipped payload EXE. A self-signed certificate is rejected. See
-[ADR 0014](decisions/0014-public-windows-signing-gate.md).
+When trusted signing is provisioned, the same public artifact set moves to
+`SignedPublic`. That gate requires valid, timestamped Authenticode from one
+explicitly pinned signer on the setup EXE and every shipped payload EXE and
+rejects self-signed certificates. See [ADR 0014](decisions/0014-public-windows-signing-gate.md).
 
 ## Release Gate
 
@@ -85,7 +87,8 @@ A release tag is created only after all of the following are true on the merged
 
 1. Go, race, lint, architecture, pure-Go, frontend, and installer suites pass.
 2. The package workflow verifies the portable manifest, outer checksums, and
-   unsigned installer lifecycle without publishing its setup executable.
+   unsigned installer lifecycle without release permission; the tag workflow
+   repeats those checks against the exact reviewed public setup.
 3. The installer acceptance test covers Program Files default placement,
    custom destination selection, optional desktop and Start Menu shortcuts,
    Add/Remove Programs metadata, active-process over-install, explicit data

@@ -4,9 +4,10 @@
 Builds the versioned Windows payload, portable ZIP, and optional unsigned x64 Inno Setup executable.
 
 .DESCRIPTION
-The script never publishes a release. The unsigned setup executable exists for
-local and CI lifecycle acceptance only; public release workflows must pass
--SkipInstaller until a trusted Authenticode signing process is configured.
+The script never publishes a release. Unsigned setup executables require an
+explicit verification policy before publication. The reviewed public-alpha
+exception is recorded in ADR 0014; trusted Authenticode remains the long-term
+release path.
 Artifacts are built from one staged payload containing the pure-Go app,
 first-party voice adapters, licenses, documentation, and optional-module setup
 scripts used by the in-app setup flow.
@@ -322,7 +323,7 @@ try {
 
     $setupPath = $null
     if (-not $SkipInstaller) {
-        Write-Warning 'Building a hardened x64, non-solid ZIP setup executable for local/CI lifecycle testing. It remains unsigned; do not attach it to a public release.'
+        Write-Warning 'Building a hardened x64, non-solid ZIP setup executable. It remains unsigned; public use requires the reviewed ADR 0014 release policy.'
         $iscc = Resolve-ISCC
         Assert-InnoSetup7 -Path $iscc
         $innoScript = Join-Path $repository 'installer\magichandy.iss'

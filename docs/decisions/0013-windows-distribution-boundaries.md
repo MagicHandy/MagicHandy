@@ -3,8 +3,9 @@
 ## Status
 
 Accepted, with the public unsigned-artifact clause superseded by
-[ADR 0014](0014-public-windows-signing-gate.md). Unsigned setup executables are
-now CI-only; public setup publication requires trusted Authenticode.
+[ADR 0014](0014-public-windows-signing-gate.md). ADR 0014 now permits a narrow
+reviewed unsigned-alpha exception after Microsoft's completed false-positive
+determination; trusted Authenticode remains the production target.
 
 ## Context
 
@@ -20,12 +21,13 @@ properties merely to imitate a conventional desktop application.
 
 ## Decision
 
-1. **Unsigned setup artifacts remain private to CI until signing exists.**
-   Development and pull-request artifacts are labeled unsigned. Public setup
-   publication requires a publisher identity, protected certificate access,
-   timestamping, rotation/revocation, and verification in the release workflow.
-   A placeholder or personal certificate is not treated as production signing.
-   ADR 0014 defines the public artifact gate and temporary portable-only path.
+1. **Unsigned setup publication is an explicit reviewed exception.**
+   Development and pull-request artifacts are labeled unsigned and remain
+   private to CI. ADR 0014 defines the completed Microsoft review and dedicated
+   `ReviewedUnsignedPublic` gate for public alpha setup. Production signing
+   still requires publisher identity, protected certificate access,
+   timestamping, rotation/revocation, and release-workflow verification; a
+   placeholder or personal certificate is not production signing.
 2. **Discovery without silent auto-update.** Versioned builds may perform a
    cached, unauthenticated read of the canonical GitHub latest-stable-release
    endpoint and notify the user when its semantic version is newer. The user
