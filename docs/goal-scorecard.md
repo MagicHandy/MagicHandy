@@ -60,7 +60,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
 | Binary size | < 30 MB | **Met** | Current local Go 1.26.4 build: 23,712,768 bytes plain and 17,049,600 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.12` uses `PortablePublic`: the tag workflow builds no unsigned setup, Defender-scans the exact public directory, verifies the ZIP manifest and one-entry checksum, and publishes two explicit assets. `ReviewedUnsignedPublic` remains limited to alpha.8 through alpha.11 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`. Pull requests still lifecycle-test setup as short-lived `UnsignedCI`; `SignedPublic` requires valid timestamped Authenticode before setup publication resumes. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.13` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -160,9 +160,12 @@ Ranked by threat to the stated goals:
   `CGO_ENABLED=0` binaries are 23,712,768 / 17,049,600 bytes. The complete
   browser payload is 1,677,300 raw / 797,770 level-9 gzip; HTML/CSS/JS is
   1,233,064 / 360,373 and English startup is 796,342 / 210,540 (+448 / +212
-  overall and +245 / +121 at startup). Alpha.12 returns to `PortablePublic`
-  after alpha.11's version-bound setup exception: a dirty-state local smoke
-  package passed portable manifest and one-entry outer-checksum verification.
+  overall and +245 / +121 at startup). Alpha.12's portable-only Release was
+  withdrawn without moving its tag; alpha.13 restores the explicit reviewed
+  setup/ZIP/checksum path and normal over-install guidance. A local alpha.13
+  setup/ZIP/checksum build passed `ReviewedUnsignedPublic` provenance, PE,
+  unsigned-status, manifest, and outer-hash verification; Microsoft Defender
+  scanned that exact directory with no threats.
   Full Go tests, vet, zero-issue lint, 387 frontend tests, localization,
   typecheck/build, installer policy tests, and plain/stripped zero-CGo builds
   pass. No hardware connection or motion command was used.

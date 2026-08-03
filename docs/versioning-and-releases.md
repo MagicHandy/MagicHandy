@@ -57,24 +57,25 @@ the release manifest, `SOURCE.txt`, and `magichandy.exe -version`.
 
 ## Release Artifacts
 
-The portable-only Windows alpha.12 release contains exactly these downloadable
-artifacts:
+The reviewed unsigned Windows alpha.13 release contains exactly these
+downloadable artifacts:
 
+- `MagicHandy-<version>-windows-amd64-setup.exe`
 - `MagicHandy-<version>-windows-amd64-portable.zip`
 - `MagicHandy-<version>-windows-amd64-SHA256SUMS.txt`
 
 The portable payload records the exact source commit, GPL-3.0-only license,
 source URL, file sizes, and per-file SHA-256 hashes in
-`release-manifest.json`. The checksum file covers the ZIP. Alpha.8 through
-alpha.11 also published a setup EXE under the version-bound reviewed unsigned
-exception in ADR 0014; that exception is not extended to alpha.12.
+`release-manifest.json`. The checksum file covers the setup EXE and ZIP.
+Alpha.12's portable-only GitHub Release was withdrawn; its immutable source tag
+remains for provenance.
 
 Pull-request workflows continue to retain setup only as a short-lived
 `unsigned-ci` artifact and exercise its full lifecycle. The tag workflow uses
-`PortablePublic`, builds no setup executable, scans the exact public directory
-with Defender, verifies the portable manifest and one-entry outer checksum, and
-publishes only the ZIP and checksum. `ReviewedUnsignedPublic` remains limited to
-the historical alpha.8 through alpha.11 setup releases.
+`ReviewedUnsignedPublic`, limited to alpha.8 through alpha.11 and alpha.13,
+scans the exact public directory with Defender, verifies the setup/ZIP manifests
+and two-entry outer checksum, exercises the exact setup lifecycle, and publishes
+three explicit assets.
 
 When trusted signing is provisioned, setup publication can resume under
 `SignedPublic`, restoring the signed setup/ZIP/checksum set. That gate requires
@@ -90,7 +91,7 @@ A release tag is created only after all of the following are true on the merged
 1. Go, race, lint, architecture, pure-Go, frontend, and installer suites pass.
 2. The package workflow verifies the portable manifest, outer checksums, and
    unsigned installer lifecycle without release permission; the tag workflow
-   verifies the exact portable-only public artifact set.
+   repeats those checks against the exact reviewed public setup.
 3. The installer acceptance test covers Program Files default placement,
    custom destination selection, optional desktop and Start Menu shortcuts,
    Add/Remove Programs metadata, active-process over-install, explicit data

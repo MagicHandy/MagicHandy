@@ -4,7 +4,8 @@
 
 Accepted; amended 2026-08-03 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
-corrections, and alpha.11's update-discovery and clean-machine voice correction.
+corrections, alpha.11's update-discovery and clean-machine voice correction, and
+alpha.13's restored setup distribution after alpha.12 was withdrawn.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
@@ -61,15 +62,17 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 reviewed unsigned setup are explicit
-   exceptions.** The tag workflow may publish only those four unsigned setup versions with the
+3. **Alpha.8 through alpha.11 and alpha.13 reviewed unsigned setup are explicit
+   exceptions.** The tag workflow may publish only those five unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
    case ID above. Alpha.9 corrects installer-script argument handling without
    changing the hardened Inno packaging shape. Alpha.10 retains that shape and
    corrects managed llama.cpp cold-load readiness, managed TTS verification,
-   and worker process-tree cleanup. Alpha.11 retains the hardened package shape,
+and worker process-tree cleanup. Alpha.11 retains the hardened package shape,
    restores prerelease update discovery, and materializes Faster Qwen model
-   files outside Hugging Face snapshot links for clean Windows installs. The tag
+   files outside Hugging Face snapshot links for clean Windows installs.
+   Alpha.13 retains the hardened package shape and ships the Ollama GGUF and
+   repaired-chat corrections after alpha.12's portable release was withdrawn. The tag
    workflow scans each exact candidate
    directory with Microsoft Defender before lifecycle verification. The
    verifier rejects every other version, so a later unsigned setup requires a
@@ -77,12 +80,9 @@ VirusTotal report:
    checksum into one dedicated `artifacts/release` directory, runs the full
    lifecycle against that exact setup, and publishes only the three explicit
    paths. An ordinary `UnsignedCI` build cannot enter a GitHub Release.
-4. **Alpha.12 returns to portable-only publication.** The alpha.8 through
-   alpha.11 setup exception is not broadened. The tag workflow builds no setup
-   executable, verifies the ZIP and one-entry checksum with `PortablePublic`,
-   scans the exact public directory with Defender, and publishes only those two
-   explicit paths. Pull-request CI continues to build and lifecycle-test the
-   unsigned setup without release permission.
+4. **Alpha.12 remains withdrawn and immutable.** Its portable-only GitHub
+   Release was removed, its source tag is not moved or reused, and the corrected
+   distribution uses the next prerelease ordinal, alpha.13.
 5. **Trusted Authenticode remains the production target.** `SignedPublic`
    requires a protected organizational signing identity, trusted timestamp,
    and `Valid` Authenticode status on the setup executable and every shipped
@@ -123,12 +123,12 @@ Negative:
 - public alpha executables still have no publisher identity and may show
   reputation warnings until signing is provisioned;
 - Microsoft's determination covers the submitted alpha.6 hash, not alpha.8,
-  alpha.9, alpha.10, alpha.11, or any future package; the later exceptions therefore add
+  alpha.9, alpha.10, alpha.11, alpha.13, or any future package; the later exceptions therefore add
   an exact pre-publication Defender scan but still do not establish publisher
   identity;
   and
 - a trusted signing service and identity-validation process are still needed
-  before setup publication can resume under `SignedPublic`.
+  to retire reviewed unsigned setup exceptions.
 
 ## Verification
 
@@ -138,16 +138,16 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 version and the recorded Microsoft case ID, the
+  alpha.8 through alpha.11 or alpha.13 version and the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 reviewed setup workflows and the alpha.12 portable
-  workflow run Microsoft Defender against the exact public artifact directory
-  before verification or release creation.
+- Alpha.9 through alpha.11 and alpha.13 reviewed setup workflows run Microsoft
+  Defender against the exact public artifact directory before verification or
+  release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
   timestamped Authenticode from the explicitly pinned signer on the setup
   executable and every payload EXE.
-- The tag workflow publishes only explicit paths under `artifacts/release` and
-  contains no alpha.12 setup path.
-- Installer integration tests keep reviewed-policy, case-ID, and lifecycle
-  coverage in CI while asserting the public workflow selects `PortablePublic`.
+- The tag workflow publishes only the explicit setup, ZIP, and checksum paths
+  under `artifacts/release`.
+- Installer integration tests require the reviewed policy, case ID, exact setup
+  path, and full lifecycle switches in the tag workflow.

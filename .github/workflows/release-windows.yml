@@ -157,18 +157,25 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Install verified Inno Setup 7
+        shell: powershell
+        run: |
+          $iscc = .\scripts\release\Install-InnoSetup.ps1 `
+            -InstallRoot (Join-Path $env:RUNNER_TEMP 'inno-setup-7.0.2')
+          "INNO_ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Test installer and recovery scripts
         shell: powershell
         run: .\scripts\test-installer.ps1
 
-      - name: Build portable public Windows artifacts
+      - name: Build reviewed public Windows artifacts
         shell: powershell
         run: >-
           .\scripts\release\Build-WindowsRelease.ps1
           -Version "${{ needs.validate.outputs.version }}"
           -Commit "${{ needs.validate.outputs.commit }}"
           -OutputRoot "artifacts\release"
-          -SkipInstaller
+          -ISCCPath "$env:INNO_ISCC"
 
       - name: Scan exact public artifacts with Microsoft Defender
         shell: powershell
@@ -188,14 +195,17 @@ jobs:
             throw "Microsoft Defender rejected or could not scan the public artifacts (exit $LASTEXITCODE)."
           }
 
-      - name: Verify portable public Windows artifacts
+      - name: Verify reviewed public Windows artifacts
         shell: powershell
         run: >-
           .\scripts\release\Test-WindowsRelease.ps1
           -Version "${{ needs.validate.outputs.version }}"
           -Commit "${{ needs.validate.outputs.commit }}"
           -ArtifactsRoot "artifacts\release"
-          -ArtifactPolicy PortablePublic
+          -ArtifactPolicy ReviewedUnsignedPublic
+          -ReviewedFalsePositiveCaseID "15c1e36d-fb35-4c5d-85de-83707169818a"
+          -ExerciseInstaller
+          -ExerciseDefaultInstall
 
       - name: Retain verified public release artifacts
         uses: actions/upload-artifact@v4
@@ -203,6 +213,7 @@ jobs:
           name: magichandy-windows-${{ needs.validate.outputs.version }}
           path: |
             artifacts/release/*-portable.zip
+            artifacts/release/*-setup.exe
             artifacts/release/*-SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
@@ -216,6 +227,7 @@ jobs:
           $version = '${{ needs.validate.outputs.version }}'
           $assets = @(
             "artifacts/release/MagicHandy-$version-windows-amd64-portable.zip",
+            "artifacts/release/MagicHandy-$version-windows-amd64-setup.exe",
             "artifacts/release/MagicHandy-$version-windows-amd64-SHA256SUMS.txt"
           )
           $arguments = @(

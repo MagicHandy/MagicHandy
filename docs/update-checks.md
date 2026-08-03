@@ -45,18 +45,12 @@ References:
 
 ## Update Paths
 
-For setup-bearing releases, packaged users review the release notes and
-checksums and run the newer setup over the existing installation. Inno Setup
-uses the stable app identity, closes the running `magichandy.exe`, replaces
-program files, and leaves `%APPDATA%\MagicHandy` intact.
-
-Alpha.12 is portable-only. Alpha.8-alpha.11 setup users stop MagicHandy,
-uninstall it from Windows Installed apps while declining user-data removal,
-then extract alpha.12 to a user-writable directory outside Program Files and run
-`magichandy.exe`. They must not overwrite the old Program Files directory with
-portable files. Uninstalling first removes stale shortcuts, the uninstaller, and
-the old executable; the portable app reuses `%APPDATA%\MagicHandy`. Database
-migrations remain the new core's responsibility at startup.
+Packaged users review the release notes and checksums and run the newer setup
+over the existing installation. Inno Setup uses the stable app identity, closes
+the running `magichandy.exe`, replaces program files, and leaves
+`%APPDATA%\MagicHandy` intact. Database migrations remain the new core's
+responsibility at startup. Reviewed alpha setup remains unsigned under ADR 0014;
+a new security classification is never a bypass step.
 
 Portable users replace the extracted application directory with the new
 portable payload while the app is stopped. Their data also remains under the

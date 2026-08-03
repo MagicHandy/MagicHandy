@@ -1298,12 +1298,12 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
-- use `PortablePublic` after that version-bound exception: build no setup,
-  verify the ZIP and one-entry checksum, scan the exact public directory, and
-  publish only those two explicit paths until trusted signing is available
+- retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
+  ZIP and one-entry checksum, scan the exact public directory, and publish only
+  those two explicit paths
 - keep Inno Setup thin: files, shortcuts, uninstall metadata, and launch only;
   all optional decisions and progress remain in the backend-authoritative GUI
 - collect optional runtime/voice choices without executing them, show purpose,
@@ -1346,8 +1346,8 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11, portable-only alpha.12, and timestamped `SignedPublic`
-policies. Release acceptance still
+through alpha.11 and alpha.13, withdrawn portable-only alpha.12, and timestamped
+`SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit
 data retention, bounded clean purge, and fresh state after reinstall. R28
@@ -1367,13 +1367,12 @@ avoidable structural triggers from the CI setup: the 32-bit loader around an
 amd64 payload and the solid `lzma2/ultra64` stream. The native-x64, non-solid
 `zip/9` candidate passed PE-machine checks, the isolated installer lifecycle,
 and a current Defender custom scan with no threats. Its larger approximately
-17.9 MB size is an accepted transparency tradeoff. Alpha.8 through alpha.11 may
-publish this hardened shape only through `ReviewedUnsignedPublic`, bound to the
-completed case, alpha.9-and-later exact-artifact Defender scan, and full lifecycle
-acceptance. This does not lower R28: each new hash is still unsigned and trusted
-Authenticode remains the production exit evidence.
+17.9 MB size is an accepted transparency tradeoff. Alpha.8 through alpha.11 and
+alpha.13 may publish this hardened shape only through `ReviewedUnsignedPublic`,
+bound to the completed case, alpha.9-and-later exact-artifact Defender scan, and
+full lifecycle acceptance. This does not lower R28: each new hash is still
+unsigned and trusted Authenticode remains the production exit evidence.
 
-Alpha.12 does not extend that exception. Its tag workflow selects
-`PortablePublic`, builds no setup wrapper, scans the exact ZIP/checksum
-directory, and publishes only those two files. CI continues exercising the
-unsigned setup lifecycle without giving that artifact a public release path.
+Alpha.12's portable-only GitHub Release was withdrawn and its immutable tag was
+retained. Alpha.13 is the corrected distribution and explicitly restores the
+three-artifact reviewed setup path without reusing or moving alpha.12.
