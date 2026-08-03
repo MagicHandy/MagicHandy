@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/processtree"
 )
 
 const managedServerStderrBytes = 8 << 10
@@ -28,6 +30,7 @@ type managedServer struct {
 	command *exec.Cmd
 	done    chan error
 	output  *serverTail
+	tree    *processtree.Handle
 }
 
 func newManagedServer(path string, args []string, dir string, port int, env map[string]string) *managedServer {
@@ -77,16 +80,24 @@ func (s *managedServer) Start() error {
 	command.Env = appendEnvironment(os.Environ(), s.env)
 	command.Stdout = s.output
 	command.Stderr = s.output
+	processtree.Configure(command)
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("start TTS server: %w", err)
+	}
+	tree, err := processtree.Attach(command)
+	if err != nil {
+		_ = command.Process.Kill()
+		_ = command.Wait()
+		return fmt.Errorf("contain TTS server process tree: %w", err)
 	}
 
 	done := make(chan error, 1)
 	go func() {
-		done <- command.Wait()
+		done <- errors.Join(command.Wait(), tree.Close())
 	}()
 	s.command = command
 	s.done = done
+	s.tree = tree
 	return nil
 }
 
@@ -94,18 +105,18 @@ func (s *managedServer) Stop() error {
 	s.mu.Lock()
 	command := s.command
 	done := s.done
+	tree := s.tree
 	s.command = nil
 	s.done = nil
+	s.tree = nil
 	s.mu.Unlock()
 
 	if command == nil {
 		return nil
 	}
 	var stopErr error
-	if command.Process != nil {
-		if err := command.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
-			stopErr = err
-		}
+	if err := tree.Close(); err != nil {
+		stopErr = err
 	}
 	if done != nil {
 		select {
@@ -131,6 +142,7 @@ func (s *managedServer) runningLocked() bool {
 	case err := <-s.done:
 		s.command = nil
 		s.done = nil
+		s.tree = nil
 		if err != nil {
 			s.output.WriteString(err.Error())
 		}

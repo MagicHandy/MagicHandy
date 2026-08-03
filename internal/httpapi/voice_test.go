@@ -56,6 +56,22 @@ func TestResolveWorkerBinaryOrder(t *testing.T) {
 	}
 }
 
+func TestResolveFirstPartyWorkerBinaryFallsBackFromStaleOverride(t *testing.T) {
+	root := t.TempDir()
+	appDir := filepath.Join(root, "app")
+	worker := managedTestFile(t, filepath.Join(appDir, workerBinaryName("voice-openai-tts-worker")))
+	executable := filepath.Join(appDir, "magichandy.exe")
+	stale := filepath.Join(root, "old-install", workerBinaryName("voice-openai-tts-worker"))
+
+	if got := resolveFirstPartyWorkerBinary(stale, executable, "", "voice-openai-tts-worker"); got != worker {
+		t.Fatalf("stale managed override resolved to %q, want bundled worker %q", got, worker)
+	}
+	explicit := managedTestFile(t, filepath.Join(root, "custom", workerBinaryName("voice-openai-tts-worker")))
+	if got := resolveFirstPartyWorkerBinary(explicit, executable, "", "voice-openai-tts-worker"); got != explicit {
+		t.Fatalf("valid managed override resolved to %q, want %q", got, explicit)
+	}
+}
+
 func TestVoiceManagerConfigComposesExternalOpenAITTS(t *testing.T) {
 	settings := config.DefaultSettings().Voice
 	settings.Enabled = true
@@ -115,6 +131,7 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 	if got.TTS.Env["HF_HOME"] != filepath.Join(root, "model-cache") ||
 		got.TTS.Env["HF_HUB_OFFLINE"] != "1" ||
 		got.TTS.Env["TRANSFORMERS_OFFLINE"] != "1" ||
+		got.TTS.Env["NUMBA_CACHE_DIR"] != filepath.Join(root, "runtime-cache", "numba") ||
 		got.TTS.Env["OPENAI_TTS_API_KEY"] != "" {
 		t.Fatalf("managed Faster Qwen environment = %+v", got.TTS.Env)
 	}

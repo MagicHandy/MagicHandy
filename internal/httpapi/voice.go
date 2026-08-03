@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -90,10 +91,15 @@ func voiceManagerConfig(settings config.VoiceSettings, executablePath, dataDir s
 }
 
 func openAITTSWorkerConfig(settings config.VoiceSettings, executablePath, dataDir string) voice.WorkerConfig {
+	command := resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-openai-tts-worker")
+	if settings.TTSProvider == config.VoiceTTSProviderFasterQwen ||
+		settings.TTSProvider == config.VoiceTTSProviderChatterbox {
+		command = resolveFirstPartyWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-openai-tts-worker")
+	}
 	worker := voice.WorkerConfig{
 		Enabled:    settings.Enabled,
 		JobTimeout: 10 * time.Minute,
-		Command:    resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-openai-tts-worker"),
+		Command:    command,
 		Args: []string{
 			"-base-url", settings.TTSBaseURL,
 			"-model", settings.TTSModel,
@@ -135,6 +141,7 @@ func openAITTSWorkerConfig(settings config.VoiceSettings, executablePath, dataDi
 		worker.Env["HF_HOME"] = filepath.Join(moduleRoot, "model-cache")
 		worker.Env["HF_HUB_OFFLINE"] = "1"
 		worker.Env["TRANSFORMERS_OFFLINE"] = "1"
+		worker.Env["NUMBA_CACHE_DIR"] = filepath.Join(moduleRoot, "runtime-cache", "numba")
 	}
 	return worker
 }
@@ -213,34 +220,55 @@ func managedTTSCommand(settings config.VoiceSettings, dataDir string) (managedTT
 }
 
 func managedTTSRuntimeInstalled(settings config.VoiceSettings, dataDir string) bool {
+	return managedTTSRuntimeError(settings, dataDir) == nil
+}
+
+func managedTTSRuntimeError(settings config.VoiceSettings, dataDir string) error {
 	root := ttsModuleRoot(settings, dataDir)
 	if root == "" {
-		return false
+		return errors.New("managed TTS module root is unavailable")
 	}
 	python := filepath.Join(root, ".venv", "Scripts", "python.exe")
 	if runtime.GOOS != "windows" {
 		python = filepath.Join(root, ".venv", "bin", "python")
 	}
 	if !isRegularFile(python) {
-		return false
+		return fmt.Errorf("managed Python executable is missing: %s", python)
 	}
 	source := filepath.Join(root, "source")
 	switch settings.TTSProvider {
 	case config.VoiceTTSProviderFasterQwen:
-		if !isRegularFile(filepath.Join(source, "examples", "openai_server.py")) ||
-			!isRegularFile(filepath.Join(root, "magichandy-faster-qwen-server.py")) {
-			return false
+		server := filepath.Join(source, "examples", "openai_server.py")
+		if !isRegularFile(server) {
+			return fmt.Errorf("faster Qwen3-TTS server entry point is missing: %s", server)
 		}
-		_, err := fasterQwenModelPath(settings, dataDir)
-		return err == nil
+		adapter := filepath.Join(root, "magichandy-faster-qwen-server.py")
+		if !isRegularFile(adapter) {
+			return fmt.Errorf("missing MagicHandy Faster Qwen3-TTS adapter: %s", adapter)
+		}
+		if _, err := fasterQwenModelPath(settings, dataDir); err != nil {
+			return err
+		}
+		return nil
 	case config.VoiceTTSProviderChatterbox:
 		runtimeDir := filepath.Join(root, "runtime")
-		return isRegularFile(filepath.Join(source, "server.py")) &&
-			isRegularFile(filepath.Join(root, "magichandy-chatterbox-server.py")) &&
-			isRegularFile(filepath.Join(runtimeDir, "config.yaml")) &&
-			isRegularFile(filepath.Join(runtimeDir, "voices", settings.TTSVoice))
+		required := []struct {
+			label string
+			path  string
+		}{
+			{label: "Chatterbox server entry point", path: filepath.Join(source, "server.py")},
+			{label: "MagicHandy Chatterbox adapter", path: filepath.Join(root, "magichandy-chatterbox-server.py")},
+			{label: "Chatterbox runtime configuration", path: filepath.Join(runtimeDir, "config.yaml")},
+			{label: "selected Chatterbox voice", path: filepath.Join(runtimeDir, "voices", settings.TTSVoice)},
+		}
+		for _, file := range required {
+			if !isRegularFile(file.path) {
+				return fmt.Errorf("%s is missing: %s", file.label, file.path)
+			}
+		}
+		return nil
 	default:
-		return false
+		return fmt.Errorf("provider %q is not an app-managed TTS runtime", settings.TTSProvider)
 	}
 }
 
@@ -405,8 +433,9 @@ func inspectParakeetAppModule(workerOverride, executablePath, dataDir string) vo
 }
 
 func inspectTTSModule(settings config.VoiceSettings, executablePath, dataDir string) voiceModuleStatus {
-	worker := resolveWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-openai-tts-worker")
-	runtimeInstalled := managedTTSRuntimeInstalled(settings, dataDir)
+	worker := resolveFirstPartyWorkerBinary(settings.TTSWorkerPath, executablePath, dataDir, "voice-openai-tts-worker")
+	runtimeErr := managedTTSRuntimeError(settings, dataDir)
+	runtimeInstalled := runtimeErr == nil
 	name := "Local TTS"
 	switch settings.TTSProvider {
 	case config.VoiceTTSProviderFasterQwen:
@@ -435,9 +464,33 @@ func inspectTTSModule(settings config.VoiceSettings, executablePath, dataDir str
 	}
 	if status.WorkerInstalled || runtimeInstalled {
 		status.State = "incomplete"
-		status.Message = name + " is incomplete. Rerun scripts/update-tts-module.ps1."
+		switch {
+		case !status.WorkerInstalled:
+			status.Message = name + " cannot find the bundled OpenAI-compatible worker. Repair or reinstall MagicHandy."
+		case runtimeErr != nil:
+			status.Message = name + " is incomplete: " + runtimeErr.Error() + ". Rerun scripts/update-tts-module.ps1 or retry from Setup."
+		}
 	}
 	return status
+}
+
+func resolveFirstPartyWorkerBinary(explicit, executablePath, dataDir, name string) string {
+	explicit = strings.TrimSpace(explicit)
+	if explicit == "" || workerCommandAvailable(explicit) {
+		return resolveWorkerBinary(explicit, executablePath, dataDir, name)
+	}
+	if bundled := resolveWorkerBinary("", executablePath, dataDir, name); bundled != "" {
+		return bundled
+	}
+	return explicit
+}
+
+func workerCommandAvailable(command string) bool {
+	if isRegularFile(command) {
+		return true
+	}
+	resolved, err := exec.LookPath(command)
+	return err == nil && isRegularFile(resolved)
 }
 
 func resolveWorkerBinary(explicit, executablePath, dataDir, name string) string {

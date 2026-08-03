@@ -358,7 +358,13 @@ func (m *setupManager) installVoice(
 	err = command.Run()
 	m.detachCommand(id, command)
 	if err == nil {
-		err = verifyInstalledVoiceModule(root, module.ID)
+		err = verifyInstalledVoiceModule(root, module)
+	}
+	if err == nil {
+		worker := resolveFirstPartyWorkerBinary("", m.executablePath, m.dataDir, "voice-openai-tts-worker")
+		if !isRegularFile(worker) {
+			err = errors.New("voice module install is incomplete: the bundled OpenAI-compatible worker is missing")
+		}
 	}
 	if err == nil && ctx.Err() == nil && m.onInstalled != nil {
 		err = m.onInstalled(context.WithoutCancel(ctx), setupVoiceInstallResult{
@@ -515,37 +521,33 @@ func resolveSetupPowerShell() (string, error) {
 	return "", errors.New("managed voice installation requires Windows PowerShell 5.1 or PowerShell 7")
 }
 
-func verifyInstalledVoiceModule(root, module string) error {
-	required := []string{
-		filepath.Join(root, "module-state.json"),
-		filepath.Join(root, ".venv", "Scripts", "python.exe"),
-	}
-	if module == "faster-qwen3-tts" {
-		required = append(required, filepath.Join(root, "magichandy-faster-qwen-server.py"))
-	} else {
-		required = append(required, filepath.Join(root, "magichandy-chatterbox-server.py"))
-	}
-	for _, path := range required {
-		info, err := os.Stat(path)
-		if err != nil || !info.Mode().IsRegular() {
-			return fmt.Errorf("voice module install is incomplete: %s is missing", filepath.Base(path))
-		}
-	}
+func verifyInstalledVoiceModule(root string, module setupVoiceModule) error {
 	stateFile, err := os.Open(filepath.Join(root, "module-state.json")) // #nosec G304 -- fixed beneath the app-owned voice module root.
 	if err != nil {
-		return err
+		return fmt.Errorf("voice module install is incomplete: module-state.json is missing: %w", err)
 	}
 	defer func() { _ = stateFile.Close() }()
 	var state struct {
 		SchemaVersion int    `json:"schema_version"`
 		Module        string `json:"module"`
+		Provider      string `json:"provider"`
+		Model         string `json:"model"`
+		Voice         string `json:"voice"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(stateFile, 32*1024))
 	if err := decoder.Decode(&state); err != nil {
 		return fmt.Errorf("read voice module state: %w", err)
 	}
-	if state.SchemaVersion != 2 || state.Module != module {
+	if state.SchemaVersion != 2 || state.Module != module.ID || state.Provider != module.Provider {
 		return errors.New("voice module state does not match the requested module")
+	}
+	settings := config.DefaultSettings().Voice
+	settings.TTSProvider = module.Provider
+	settings.TTSModuleRoot = root
+	settings.TTSModel = strings.TrimSpace(state.Model)
+	settings.TTSVoice = strings.TrimSpace(state.Voice)
+	if err := managedTTSRuntimeError(settings, ""); err != nil {
+		return fmt.Errorf("voice module install is incomplete: %w", err)
 	}
 	return nil
 }
@@ -763,6 +765,8 @@ func (s *Server) applyInstalledVoiceModule(ctx context.Context, result setupVoic
 		current.Voice.Enabled = false
 		current.Voice.SpeakReplies = false
 		current.Voice.TTSProvider = result.Module.Provider
+		current.Voice.TTSWorkerPath = ""
+		current.Voice.TTSWorkerArgs = nil
 		current.Voice.TTSModuleRoot = result.Root
 		current.Voice.TTSBaseURL = fmt.Sprintf("http://127.0.0.1:%d", result.Module.Port)
 		current.Voice.TTSServerPort = result.Module.Port

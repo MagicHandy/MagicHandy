@@ -446,6 +446,7 @@ func main() {
     $savedFakeUvJunctionFailure = $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE
     $savedFakeUvUnrelatedFailure = $env:MAGICHANDY_FAKE_UV_UNRELATED_FAILURE
     $savedFakePythonVenvFailure = $env:MAGICHANDY_FAKE_PYTHON_VENV_FAILURE
+    $savedNumbaCache = $env:NUMBA_CACHE_DIR
     try {
         $reuseRoot = Join-Path $tempRoot 'tts-reuse'
         $reuseScripts = Join-Path $reuseRoot '.venv\Scripts'
@@ -467,9 +468,11 @@ func main() {
         Assert-True -Condition (Test-Path -LiteralPath $fakePython -PathType Leaf) -Message 'compatible TTS Python launcher should remain in place'
         $runtimeProbeInvocation = Join-Path $tempRoot 'runtime-probe-invocation.txt'
         $savedRuntimeProbeCapture = $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION
+        $runtimeNumbaCache = Join-Path $reuseRoot 'runtime-cache\numba'
         try {
             $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION = $runtimeProbeInvocation
-            Test-TTSPythonRuntime -Python $fakePython -Module faster-qwen3-tts -RuntimeDevice cuda -Probe $ttsRuntimeProbe
+            $env:NUMBA_CACHE_DIR = 'preexisting-numba-cache'
+            Test-TTSPythonRuntime -Python $fakePython -Module faster-qwen3-tts -RuntimeDevice cuda -Probe $ttsRuntimeProbe -NumbaCacheDirectory $runtimeNumbaCache
         } finally {
             $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION = $savedRuntimeProbeCapture
         }
@@ -478,6 +481,8 @@ func main() {
         Assert-Equal -Expected 'faster-qwen3-tts' -Actual $runtimeProbeArguments[2] -Message 'runtime verification should preserve the module argument'
         Assert-Equal -Expected 'cuda' -Actual $runtimeProbeArguments[3] -Message 'runtime verification should preserve the device argument'
         Assert-True -Condition ($runtimeProbeArguments -notcontains '-c') -Message 'runtime verification should not depend on Windows PowerShell multiline command quoting'
+        Assert-True -Condition (Test-Path -LiteralPath $runtimeNumbaCache -PathType Container) -Message 'runtime verification should create an app-owned Numba cache'
+        Assert-Equal -Expected 'preexisting-numba-cache' -Actual $env:NUMBA_CACHE_DIR -Message 'runtime verification should restore the caller Numba cache setting'
 
         $env:MAGICHANDY_FAKE_UV_FAIL = $null
         $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE = '1'
@@ -563,6 +568,7 @@ func main() {
         $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE = $savedFakeUvJunctionFailure
         $env:MAGICHANDY_FAKE_UV_UNRELATED_FAILURE = $savedFakeUvUnrelatedFailure
         $env:MAGICHANDY_FAKE_PYTHON_VENV_FAILURE = $savedFakePythonVenvFailure
+        $env:NUMBA_CACHE_DIR = $savedNumbaCache
     }
 
     foreach ($constraintsFile in @('faster-qwen-constraints.txt', 'chatterbox-constraints.txt')) {
@@ -636,7 +642,7 @@ func main() {
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseVerifierSource.Contains("'ReviewedUnsignedPublic'")) -Message 'release verifier should expose the reviewed unsigned public policy'
     Assert-True -Condition ($releaseVerifierSource.Contains('ReviewedUnsignedPublic requires Microsoft false-positive case')) -Message 'reviewed unsigned publication should fail closed without the recorded Microsoft case'
-    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
+    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
             -Version '0.0.0-local' `
@@ -646,12 +652,12 @@ func main() {
     } -Pattern 'requires Microsoft false-positive case' -Message 'reviewed unsigned policy without case ID'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
-            -Version '0.1.0-alpha.10' `
+            -Version '0.1.0-alpha.11' `
             -Commit ('0' * 40) `
             -ArtifactsRoot $tempRoot `
             -ArtifactPolicy ReviewedUnsignedPublic `
             -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
-    } -Pattern 'approved only for versions 0.1.0-alpha.8, 0.1.0-alpha.9' -Message 'reviewed unsigned policy reused by a later version'
+    } -Pattern 'approved only for versions 0.1.0-alpha.8, 0.1.0-alpha.9, 0.1.0-alpha.10' -Message 'reviewed unsigned policy reused by a later version'
     Assert-True -Condition ($releaseVerifierSource.Contains('-ExpectedSignerThumbprint')) -Message 'signed public verification should require an explicitly pinned signer'
     Assert-True -Condition ($releaseVerifierSource.Contains('must not use a self-signed certificate')) -Message 'signed public verification should reject self-signed certificates'
     $innoInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Install-InnoSetup.ps1'))

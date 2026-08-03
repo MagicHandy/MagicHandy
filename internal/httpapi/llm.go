@@ -21,7 +21,9 @@ type llmRuntime struct {
 	cacheKey   string
 }
 
-const llmAutoloadTimeout = 45 * time.Second
+// Autoload is asynchronous and may include a cold multi-gigabyte model read.
+// It must outlive the managed provider's readiness budget.
+const llmAutoloadTimeout = 2 * time.Minute
 
 func newLLMRuntime(runtime Runtime) llmRuntime {
 	return llmRuntime{

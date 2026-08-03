@@ -205,6 +205,38 @@ describe("runtime panels", () => {
     await waitFor(() => expect(llmStatus).toHaveBeenCalledOnce());
   });
 
+  it("keeps polling while a managed llama.cpp model is loading", async () => {
+    llmModels.mockResolvedValue(emptyManager);
+    llmStatus
+      .mockResolvedValueOnce({
+        provider: "llama_cpp",
+        base_url: "http://127.0.0.1:8080",
+        model: "local-model",
+        available: false,
+        managed: true,
+        loaded: true,
+        loading: true,
+        message: "llama.cpp is loading the model",
+      })
+      .mockResolvedValue({
+        provider: "llama_cpp",
+        base_url: "http://127.0.0.1:8080",
+        model: "local-model",
+        available: true,
+        model_available: true,
+        managed: true,
+        loaded: true,
+        message: "ready",
+      });
+
+    renderModelPanel();
+
+    const loadingMessage = await screen.findByText("llama.cpp is loading the model");
+    expect(loadingMessage.closest('[role="status"]')).toHaveAttribute("aria-busy", "true");
+    await waitFor(() => expect(screen.getByText("ready")).toBeInTheDocument(), { timeout: 2500 });
+    expect(llmStatus).toHaveBeenCalledTimes(2);
+  });
+
   it("names speech providers distinctly and surfaces voice-status failures", async () => {
     voiceStatus.mockRejectedValue(new Error("voice endpoint unavailable"));
     render(

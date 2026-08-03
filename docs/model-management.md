@@ -214,6 +214,10 @@ Generation controls stay deliberately small and provider-aware:
   process; the next Load or chat starts it with the new `--ctx-size`. External
   llama.cpp and Ollama ignore this setting, including for provider cache
   identity, because those runtimes own their context configuration.
+- **Cold-load readiness** treats llama.cpp's bounded HTTP 503 `Loading model`
+  response as a running/loading state rather than a runtime failure. Managed
+  startup waits up to 90 seconds for slower first reads, and the Model screen
+  polls that state until it becomes ready. Unknown 503 responses remain errors.
 - **Maximum output** defaults to 256 tokens and applies to both passes.
   llama.cpp receives `max_tokens`; Ollama receives `options.num_predict`.
   Provider `length` completion reasons are handled as truncation rather than a

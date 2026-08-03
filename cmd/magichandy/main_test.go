@@ -241,6 +241,8 @@ func TestRunTTSModuleUpdatePreservesGUIReference(t *testing.T) {
 	_, _, err = store.Update(func(settings config.Settings) (config.Settings, error) {
 		settings.Voice.TTSReferenceWAV = `C:\voices\sample.wav`
 		settings.Voice.TTSReferenceText = "Exact reference transcript."
+		settings.Voice.TTSWorkerPath = `C:\old-install\voice-openai-tts-worker.exe`
+		settings.Voice.TTSWorkerArgs = []string{"--legacy"}
 		return settings, nil
 	})
 	if closeErr := store.Close(); err == nil {
@@ -269,7 +271,8 @@ func TestRunTTSModuleUpdatePreservesGUIReference(t *testing.T) {
 	settings, _ := store.Snapshot()
 	if settings.Voice.TTSReferenceWAV != `C:\voices\sample.wav` ||
 		settings.Voice.TTSReferenceText != "Exact reference transcript." ||
-		settings.Voice.TTSServerPort != 8993 {
+		settings.Voice.TTSServerPort != 8993 ||
+		settings.Voice.TTSWorkerPath != "" || len(settings.Voice.TTSWorkerArgs) != 0 {
 		t.Fatalf("saved TTS settings after update = %+v", settings.Voice)
 	}
 }

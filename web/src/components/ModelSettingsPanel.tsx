@@ -175,12 +175,33 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
     if (buildStatus && !isActiveRuntimeBuild(manager?.runtime_build)) void refreshStatus();
   }, [manager?.runtime_build, refreshStatus]);
 
+  useEffect(() => {
+    if (dirty || !status?.loading) return undefined;
+    let canceled = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      await refreshStatus();
+      if (!canceled) timer = window.setTimeout(() => void poll(), 500);
+    };
+    timer = window.setTimeout(() => void poll(), 500);
+    return () => {
+      canceled = true;
+      window.clearTimeout(timer);
+    };
+  }, [dirty, refreshStatus, status?.loading]);
+
   async function runtimeAction(action: "load" | "unload") {
     setBusy(action);
     try {
       const next = await (action === "load" ? api.llmLoad() : api.llmUnload());
       setStatus(next);
-      show(action === "load" ? t("Model loaded.") : t("Model unloaded."));
+      if (action === "unload") {
+        show(t("Model unloaded."));
+      } else if (next.available) {
+        show(t("Model loaded."));
+      } else {
+        show(translateKnown(next.message || (next.loading ? "Model is still loading." : "Model could not be loaded.")), next.loading ? undefined : "error");
+      }
     } catch (error) {
       show(message(error), "error");
     } finally {
@@ -291,7 +312,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
       <div className="group">
         <div className="model-section-head model-runtime-section-head">
           <h3 className="group-title">{t("Local LLM")}</h3>
-          <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite">
+          <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite" aria-busy={status?.loading || undefined}>
             <span className="status-dot" aria-hidden="true" />
             <span>{statusMessage}</span>
           </div>
@@ -399,7 +420,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
 
         {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
           <div className="row-actions model-runtime-actions">
-            <button type="button" className="btn btn-secondary" disabled={locked || dirty || !managedConfigured || runtimeBuildActive || busy !== ""} onClick={() => void runtimeAction("load")}>{busy === "load" ? t("Loading...") : t("Load")}</button>
+            <button type="button" className="btn btn-secondary" disabled={locked || dirty || !managedConfigured || runtimeBuildActive || busy !== "" || status?.loading} onClick={() => void runtimeAction("load")}>{busy === "load" ? t("Loading...") : t("Load")}</button>
             <button type="button" className="btn btn-secondary" disabled={locked || dirty || runtimeBuildActive || busy !== "" || !status?.loaded} onClick={() => void runtimeAction("unload")}>{busy === "unload" ? t("Unloading...") : t("Unload")}</button>
             {dirty && <span className="form-status">{t("Save settings before runtime actions.")}</span>}
           </div>

@@ -111,6 +111,12 @@ func (p *LlamaCPPProvider) Status(ctx context.Context) ProviderStatus {
 		_ = response.Body.Close()
 	}()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 64*1024))
+		if response.StatusCode == http.StatusServiceUnavailable && llamaCPPModelLoading(body) {
+			status.Loading = true
+			status.Message = "llama.cpp is loading the model"
+			return status
+		}
 		status.Message = fmt.Sprintf("health endpoint returned %d", response.StatusCode)
 		return status
 	}
@@ -130,6 +136,31 @@ func (p *LlamaCPPProvider) Status(ctx context.Context) ProviderStatus {
 	}
 	status.Message = "ready"
 	return status
+}
+
+func llamaCPPModelLoading(body []byte) bool {
+	var payload struct {
+		Status string `json:"status"`
+		Error  *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return false
+	}
+	messages := []string{payload.Status}
+	if payload.Error != nil {
+		messages = append(messages, payload.Error.Message)
+	}
+	for _, message := range messages {
+		normalized := strings.Join(strings.Fields(strings.ToLower(message)), " ")
+		for _, prefix := range []string{"loading model", "model loading", "model is loading"} {
+			if normalized == prefix || strings.HasPrefix(normalized, prefix+" ") || strings.HasPrefix(normalized, prefix+":") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (p *LlamaCPPProvider) listModels(ctx context.Context) ([]string, error) {

@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-02, Windows packaging and release discovery
+## Snapshot — 2026-08-03, managed runtime readiness and voice recovery
 
 ### Goal 1: Maintainability
 
@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Corrective-alpha tree: 23,648,768 bytes plain and 17,004,032 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Managed-readiness tree: 23,635,968 bytes plain and 17,015,296 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.9` corrects managed-voice setup while retaining the reviewed native x64, non-solid `zip/9` package. `ReviewedUnsignedPublic` accepts only alpha.8 and alpha.9 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; alpha.9 additionally requires a Defender scan of the exact public directory, unsigned-status checks, exact setup/ZIP hashes, and the full custom/default install lifecycle. Later unsigned versions fail closed. Pull requests remain short-lived `UnsignedCI`; `SignedPublic` still requires valid timestamped Authenticode as the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.10` corrects managed llama.cpp readiness and managed-voice setup while retaining the reviewed native x64, non-solid `zip/9` package. `ReviewedUnsignedPublic` accepts only alpha.8 through alpha.10 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; the tag workflow requires a Defender scan of the exact public directory, unsigned-status checks, exact setup/ZIP hashes, and the full custom/default install lifecycle. Later unsigned versions fail closed. Pull requests remain short-lived `UnsignedCI`; `SignedPublic` still requires valid timestamped Authenticode as the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -112,12 +112,13 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,676,301 raw / 797,485 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 795,608 raw / 210,346 gzip bytes; all
-   HTML/CSS/JS is 1,232,065 raw / 360,088 gzip bytes. The Phase 16 setup and
-   update UI add 84,371 raw / 25,014 gzip bytes overall and 43,171 raw / 10,356
-   gzip bytes to the English startup path against the preceding snapshot. LLM
-   loading controls,
+   browser payload is 1,676,766 raw / 797,560 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 796,073 raw / 210,421 gzip bytes; all
+   HTML/CSS/JS is 1,232,530 raw / 360,163 gzip bytes. The managed llama.cpp
+   loading-state UI adds 465 raw / 75 gzip bytes to each measure. The Phase 16
+   setup and update UI add 84,371 raw / 25,014 gzip bytes overall and 43,171 raw
+   / 10,356 gzip bytes to the English startup path against the preceding
+   snapshot. LLM loading controls,
    phase diagnostics, speech policy, and duplicate-process recovery add 21,116
    raw / 6,163 gzip bytes overall and 9,696 raw / 2,180 gzip bytes to startup
    against the checked-in predecessor. The local-TTS transition
@@ -141,6 +142,30 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-03** - Corrected managed-runtime readiness after fresh packaged
+  installs. Official and former source-built llama.cpp paths use the same
+  pinned `b9966` / `c749cb0` source and launch flags; the packaged runner was
+  healthy but exposed its structured HTTP 503 `Loading model` state while a
+  cold GGUF was still loading. The provider now distinguishes that bounded
+  state from other 503 failures, managed readiness allows 90 seconds, and the
+  Model screen polls instead of reporting a dead health endpoint. Current
+  provider code reached the installed verified CUDA runner and received a
+  valid Gemma response in 468 ms. The full current-app chat SSE path then
+  returned `PACKAGED LLAMA READY` in 867 ms with a 714 ms first token and no
+  motion selection. Fresh Faster Qwen setup now validates the
+  exact Python/server/adapter/model contract and clears stale worker paths,
+  while installer probes and runtime launches share an app-owned Numba cache.
+  Managed Python servers use kill-on-close process-tree containment so stopping
+  the worker also stops launcher descendants. A current-branch CUDA run became
+  ready in under 30 seconds, completed the app queue with a finalized 99,884-byte
+  WAV, then left zero Qwen Python processes and no port 8991 listener after
+  Stop. Full Go tests, vet, zero-issue lint, 383 frontend tests, typecheck/build,
+  zero-CGo builds, and the installer suite pass. Local race remains unavailable
+  because MSYS2 has no compiler package; CI retains the mandatory race gate.
+  The complete browser payload is 1,676,766 raw / 797,560 gzip; HTML/CSS/JS is
+  1,232,530 / 360,163 and English startup is 796,073 / 210,421 (+465 / +75 for
+  all three). No hardware connection or motion command was used.
 
 - **2026-08-03** - Microsoft completed false-positive submission
   `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination
