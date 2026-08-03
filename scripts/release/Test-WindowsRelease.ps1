@@ -48,7 +48,7 @@ if ($ArtifactPolicy -eq 'PortablePublic' -and ($ExerciseInstaller -or $ExerciseD
     throw 'PortablePublic artifacts intentionally contain no setup executable and cannot exercise installer lifecycle tests.'
 }
 $reviewedCaseID = '15c1e36d-fb35-4c5d-85de-83707169818a'
-$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11')
+$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13')
 if ($ArtifactPolicy -eq 'ReviewedUnsignedPublic') {
     if ($ReviewedFalsePositiveCaseID.Trim().ToLowerInvariant() -ne $reviewedCaseID) {
         throw "ReviewedUnsignedPublic requires Microsoft false-positive case $reviewedCaseID."

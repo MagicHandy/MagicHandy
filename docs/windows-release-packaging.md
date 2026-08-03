@@ -9,12 +9,12 @@ The setup EXE is a thin Inno Setup shell with a native x64 loader and non-solid
 `zip/9` payload compression. This avoids the 32-bit loader and opaque solid
 ultra-LZMA stream used by the withdrawn alpha.6 package. Microsoft completed its
 review of that exact alpha.6 file as `Not malware` and removed the detection.
-ADR 0014 therefore permits alpha.8 through alpha.11 setup publication through a
-dedicated policy bound to those versions and case. Alpha.9 and later reviewed
-versions also add a Defender scan of the exact public artifact directory. A
-later unsigned setup fails closed until a new explicit review decision. Alpha.12
-uses the existing portable-only public policy instead: no setup EXE is built or
-published. The historical exception does not establish publisher identity;
+ADR 0014 therefore permits alpha.8 through alpha.11 and alpha.13 setup
+publication through a dedicated policy bound to those versions and case.
+Alpha.9 through alpha.11 and alpha.13 also add a Defender scan of the exact
+public artifact directory. Alpha.12's portable-only GitHub Release was withdrawn; its
+source tag remains immutable. A later unsigned setup fails closed until another
+explicit review decision. The exception does not establish publisher identity;
 trusted Authenticode remains the production target.
 The portable archive contains the app, workers, optional-module helper scripts,
 license, source notice, and release manifest. It does not bundle models,
@@ -23,9 +23,7 @@ Python, CUDA, llama.cpp, or Parakeet; those remain explicit setup choices.
 Release versions and tag policy are defined in
 [Versioning And Releases](versioning-and-releases.md). Local build and test
 commands never publish. The tag-triggered workflow publishes only after its own
-quality, policy, Defender, and portable-verification gates pass. Setup lifecycle
-remains mandatory CI evidence on the pull request, not a claim about alpha.12's
-public artifact set.
+quality, installer-policy, Defender, and exact setup lifecycle gates pass.
 
 ## Build Prerequisites
 
@@ -126,28 +124,29 @@ test host and refuses to run if an existing install, data directory, shortcut,
 or uninstall entry would be touched. CI runs this form on a disposable Windows
 runner.
 
-The portable public release shape is built and verified in one dedicated
-directory:
+The reviewed public release shape is built and verified in one dedicated
+directory. The exact setup then receives lifecycle verification:
 
 ```powershell
 $commit = (git rev-parse HEAD).Trim()
 .\scripts\release\Build-WindowsRelease.ps1 `
-  -Version 0.1.0-alpha.12 `
+  -Version 0.1.0-alpha.13 `
   -Commit $commit `
   -OutputRoot artifacts\release `
-  -SkipFrontendBuild `
-  -SkipInstaller
+  -SkipFrontendBuild
 .\scripts\release\Test-WindowsRelease.ps1 `
-  -Version 0.1.0-alpha.12 `
+  -Version 0.1.0-alpha.13 `
   -Commit $commit `
   -ArtifactsRoot artifacts\release `
-  -ArtifactPolicy PortablePublic
+  -ArtifactPolicy ReviewedUnsignedPublic `
+  -ReviewedFalsePositiveCaseID 15c1e36d-fb35-4c5d-85de-83707169818a `
+  -ExerciseInstaller
 ```
 
-`ReviewedUnsignedPublic` accepts only alpha.8 through alpha.11 with the recorded
-Microsoft case ID and checks the x64 unsigned setup, four x64 payload
-executables, manifests, and both outer hashes. `SignedPublic` is the fail-closed
-long-term policy. It requires valid, timestamped Authenticode on the setup
+`ReviewedUnsignedPublic` accepts only alpha.8 through alpha.11 and alpha.13 with
+the recorded Microsoft case ID and checks the x64 unsigned setup, four x64
+payload executables, manifests, and both outer hashes. `SignedPublic` is the
+fail-closed long-term policy. It requires valid, timestamped Authenticode on the setup
 executable and all four
 payload executables, rejects self-signed certificates, and requires the
 approved certificate's 40-character thumbprint through
@@ -188,21 +187,20 @@ retention is seven days.
 `.github/workflows/release-windows.yml` runs only for a supported SemVer tag.
 It requires that the exact tagged commit matches the current `origin/main` tip,
 that the checkout is clean, and that matching release notes exist. It reruns
-Go, race, lint, pure-Go, frontend, and installer-policy gates. The pull-request
-package workflow separately provides full Windows setup lifecycle evidence. The
-tag workflow builds the portable ZIP and checksum in the dedicated public
-directory, scans the exact directory with Microsoft Defender, verifies it with
-`PortablePublic`, and creates the GitHub Release from two explicit paths. No
-wildcard publishes a release asset. Prerelease tags are marked as GitHub
-prereleases.
+Go, race, lint, pure-Go, frontend, installer, package, and full Windows
+lifecycle gates. It builds setup, portable ZIP, and checksum in the dedicated
+public directory, scans the exact directory with Microsoft Defender, verifies
+that setup with `ReviewedUnsignedPublic`, and creates the GitHub Release from
+three explicit paths. No wildcard publishes a release asset. Prerelease tags
+are marked as GitHub prereleases.
 
 ## Release Boundaries
 
-- Historical reviewed public alpha setup remains visibly unsigned. Alpha.12 is
-  portable-only. Do not bypass Defender or SmartScreen if a new artifact is
-  classified as unsafe; withdraw and submit that exact hash for analysis. A
-  real certificate, protected signing identity, timestamp service, and
-  revocation process remain required before setup publication resumes.
+- Reviewed public alpha setup remains visibly unsigned. Do not bypass Defender
+  or SmartScreen if a new artifact is classified as unsafe; withdraw and submit
+  that exact hash for analysis. A real certificate, protected signing identity,
+  timestamp service, and revocation process remain required to retire the
+  unsigned exception.
 - Versioned builds can discover the latest compatible GitHub Release and notify
   the user. Stable builds exclude prereleases; prerelease builds can advance
   through compatible stages. The check is cached, can be set to manual-only, and never downloads or
