@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -222,6 +223,106 @@ func TestFasterQwenModelPathRejectsAmbiguousOrIncompleteCaches(t *testing.T) {
 	if _, err := fasterQwenModelPath(settings, ""); err == nil || !strings.Contains(err.Error(), "invalid refs/main") {
 		t.Fatalf("unsafe model revision error = %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(repositoryCache, "refs", "main"), make([]byte, (4<<10)+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fasterQwenModelPath(settings, ""); err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Fatalf("oversized model revision error = %v", err)
+	}
+}
+
+func TestFasterQwenModelPathPrefersMaterializedModel(t *testing.T) {
+	root := t.TempDir()
+	settings := config.DefaultSettings().Voice
+	settings.TTSProvider = config.VoiceTTSProviderFasterQwen
+	settings.TTSModuleRoot = root
+	settings.TTSModel = config.DefaultFasterQwenModel
+	materialized := filepath.Join(root, "model")
+	managedFasterQwenMaterializedModel(t, materialized, settings.TTSModel)
+
+	got, err := fasterQwenModelPath(settings, "")
+	if err != nil || got != materialized {
+		t.Fatalf("materialized model = %q, %v; want %q", got, err, materialized)
+	}
+
+	settings.TTSModel = "fixture/different-model"
+	if _, err := fasterQwenModelPath(settings, ""); err == nil || !strings.Contains(err.Error(), "belongs to") {
+		t.Fatalf("mismatched materialized model error = %v", err)
+	}
+
+	managedFasterQwenMaterializedManifest(t, materialized, settings.TTSModel, false)
+	managedTestFile(t, filepath.Join(materialized, fasterQwenMaterializedManifest))
+	if _, err := fasterQwenModelPath(settings, ""); err == nil || !strings.Contains(err.Error(), "incomplete") {
+		t.Fatalf("in-progress materialized model error = %v", err)
+	}
+}
+
+func TestFasterQwenModelPathRetainsCompleteLegacyCacheDuringMaterialization(t *testing.T) {
+	root := t.TempDir()
+	settings := config.DefaultSettings().Voice
+	settings.TTSProvider = config.VoiceTTSProviderFasterQwen
+	settings.TTSModuleRoot = root
+	settings.TTSModel = config.DefaultFasterQwenModel
+	managedTestFile(t, filepath.Join(root, "model", "partial.txt"))
+	legacy := managedFasterQwenSnapshot(t, root, settings.TTSModel, "abc123")
+
+	got, err := fasterQwenModelPath(settings, "")
+	if err != nil || got != legacy {
+		t.Fatalf("legacy fallback = %q, %v; want %q", got, err, legacy)
+	}
+}
+
+func TestValidateFasterQwenModelDirectoryRequiresIndexedShards(t *testing.T) {
+	directory := t.TempDir()
+	managedFasterQwenModelFiles(t, directory)
+	if err := os.Remove(filepath.Join(directory, "model.safetensors")); err != nil {
+		t.Fatal(err)
+	}
+	indexPath := filepath.Join(directory, "model.safetensors.index.json")
+	if err := os.WriteFile(indexPath, []byte(`{"weight_map":{"layer":"model-00001-of-00001.safetensors"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := validateFasterQwenModelDirectory(directory); err == nil || !strings.Contains(err.Error(), "shard is missing") {
+		t.Fatalf("missing indexed shard error = %v", err)
+	}
+	managedTestFile(t, filepath.Join(directory, "model-00001-of-00001.safetensors"))
+	if _, err := validateFasterQwenModelDirectory(directory); err != nil {
+		t.Fatalf("complete indexed model: %v", err)
+	}
+	if err := os.WriteFile(indexPath, []byte(`{"weight_map":{"layer":"../escape.safetensors"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := validateFasterQwenModelDirectory(directory); err == nil || !strings.Contains(err.Error(), "unsafe shard path") {
+		t.Fatalf("unsafe indexed shard error = %v", err)
+	}
+	for _, shard := range []string{"nested//shard.safetensors", "nested/./shard.safetensors", `nested\shard.safetensors`} {
+		contents := []byte(`{"weight_map":{"layer":` + strconv.Quote(shard) + `}}`)
+		if err := os.WriteFile(indexPath, contents, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := validateFasterQwenModelDirectory(directory); err == nil || !strings.Contains(err.Error(), "unsafe shard path") {
+			t.Fatalf("unsafe indexed shard %q error = %v", shard, err)
+		}
+	}
+	if err := os.WriteFile(indexPath, make([]byte, maxFasterQwenWeightIndexBytes+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := validateFasterQwenModelDirectory(directory); err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Fatalf("oversized indexed shard map error = %v", err)
+	}
+}
+
+func TestValidateFasterQwenMaterializedModelRejectsLinks(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "target")
+	managedFasterQwenMaterializedModel(t, target, config.DefaultFasterQwenModel)
+	link := filepath.Join(root, "model")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("model-directory symlinks unavailable: %v", err)
+	}
+	if _, err := validateFasterQwenMaterializedModelDirectory(link, config.DefaultFasterQwenModel); err == nil || !strings.Contains(err.Error(), "unsafe") {
+		t.Fatalf("linked materialized model error = %v", err)
+	}
 }
 
 func TestVoiceManagerConfigComposesManagedChatterbox(t *testing.T) {
@@ -346,12 +447,39 @@ func managedFasterQwenModelFiles(t *testing.T, directory string) {
 	t.Helper()
 	for _, path := range []string{
 		filepath.Join(directory, "config.json"),
+		filepath.Join(directory, "generation_config.json"),
+		filepath.Join(directory, "merges.txt"),
+		filepath.Join(directory, "preprocessor_config.json"),
 		filepath.Join(directory, "tokenizer_config.json"),
+		filepath.Join(directory, "vocab.json"),
 		filepath.Join(directory, "model.safetensors"),
 		filepath.Join(directory, "speech_tokenizer", "config.json"),
+		filepath.Join(directory, "speech_tokenizer", "configuration.json"),
 		filepath.Join(directory, "speech_tokenizer", "model.safetensors"),
+		filepath.Join(directory, "speech_tokenizer", "preprocessor_config.json"),
 	} {
 		managedTestFile(t, path)
+	}
+}
+
+func managedFasterQwenMaterializedModel(t *testing.T, directory, repository string) {
+	t.Helper()
+	managedFasterQwenModelFiles(t, directory)
+	managedFasterQwenMaterializedManifest(t, directory, repository, true)
+}
+
+func managedFasterQwenMaterializedManifest(t *testing.T, directory, repository string, complete bool) {
+	t.Helper()
+	contents, err := json.Marshal(map[string]any{
+		"schema_version": 1,
+		"repository":     repository,
+		"complete":       complete,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(directory), fasterQwenMaterializedManifest), contents, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 

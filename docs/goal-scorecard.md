@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-03, managed runtime readiness and voice recovery
+## Snapshot — 2026-08-03, prerelease updates and clean-machine voice models
 
 ### Goal 1: Maintainability
 
@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Managed-readiness tree: 23,635,968 bytes plain and 17,015,296 bytes stripped with `CGO_ENABLED=0`, `-trimpath`, and `-ldflags "-s -w"`; the packaged core remains well below 30 MB. |
+| Binary size | < 30 MB | **Met** | Local Go 1.26.4 alpha.11 candidate: 23,660,032 bytes plain and 17,031,168 bytes release-style stripped with `CGO_ENABLED=0`, `-trimpath`, and injected version/commit metadata; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for the published artifact. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.10` corrects managed llama.cpp readiness and managed-voice setup while retaining the reviewed native x64, non-solid `zip/9` package. `ReviewedUnsignedPublic` accepts only alpha.8 through alpha.10 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; the tag workflow requires a Defender scan of the exact public directory, unsigned-status checks, exact setup/ZIP hashes, and the full custom/default install lifecycle. Later unsigned versions fail closed. Pull requests remain short-lived `UnsignedCI`; `SignedPublic` still requires valid timestamped Authenticode as the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.11` restores prerelease update discovery and materializes Faster Qwen model files for clean Windows installs while retaining the reviewed native x64, non-solid `zip/9` package. `ReviewedUnsignedPublic` accepts only alpha.8 through alpha.11 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; the tag workflow requires a Defender scan of the exact public directory, unsigned-status checks, exact setup/ZIP hashes, and the full custom/default install lifecycle. Later unsigned versions fail closed. Pull requests remain short-lived `UnsignedCI`; `SignedPublic` still requires valid timestamped Authenticode as the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -112,9 +112,11 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,676,766 raw / 797,560 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 796,073 raw / 210,421 gzip bytes; all
-   HTML/CSS/JS is 1,232,530 raw / 360,163 gzip bytes. The managed llama.cpp
+   browser payload is 1,676,852 raw / 797,558 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 796,097 raw / 210,419 gzip bytes; all
+   HTML/CSS/JS is 1,232,616 raw / 360,161 gzip bytes. The updater's
+   channel-neutral status wording adds 86 raw bytes and removes 2 gzip bytes
+   overall; the English startup path adds 24 raw and removes 2 gzip bytes. The managed llama.cpp
    loading-state UI adds 465 raw / 75 gzip bytes to each measure. The Phase 16
    setup and update UI add 84,371 raw / 25,014 gzip bytes overall and 43,171 raw
    / 10,356 gzip bytes to the English startup path against the preceding
@@ -142,6 +144,21 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-03** - Restored update discovery for prerelease builds and corrected
+  clean-machine Faster Qwen model finalization. The backend now scans a bounded
+  GitHub release list, ignores drafts and invalid or mismatched tags, and chooses
+  the highest release allowed by stable/alpha/beta/RC progression instead of
+  calling the stable-only `/releases/latest` endpoint. A current core built with
+  alpha.9 metadata queried the live public API and returned alpha.10 as
+  available. Faster Qwen now materializes ordinary app-owned model files while
+  retaining completed files and resumable local metadata; complete alpha.10 snapshots remain
+  compatible. Focused Go tests and the full PowerShell installer suite pass. The
+  local Go 1.26.4 candidate core is 23,660,032 bytes plain / 17,031,168
+  release-style stripped. The complete
+  browser payload is 1,676,852 raw / 797,558 gzip; HTML/CSS/JS is 1,232,616 /
+  360,161 and English startup is 796,097 / 210,419. No hardware connection or
+  motion command was used.
 
 - **2026-08-03** - Corrected managed-runtime readiness after fresh packaged
   installs. Official and former source-built llama.cpp paths use the same

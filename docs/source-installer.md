@@ -158,15 +158,22 @@ uses `magichandy.exe -configure-tts-module` to persist the provider settings.
 The Chatterbox launcher suppresses the upstream standalone browser so
 MagicHandy remains the only UI.
 
-On Windows, model files are finalized serially so Hugging Face's ordinary-file
-fallback works without Administrator access, Developer Mode, or symlink
-privileges. A failed model transfer is retried against the same resumable cache
-and completed files are retained; rerunning the installer continues that cache
-instead of starting the multi-gigabyte download over.
+On Windows, Faster Qwen model files are finalized serially into an ordinary
+app-owned model directory so runtime use does not depend on Hugging Face cache
+snapshot links, Administrator access, Developer Mode, or symlink privileges. A
+failed model transfer is retried with the same materialized directory and local
+download metadata; completed files are retained so rerunning does not restart
+the multi-gigabyte download from zero. An app-owned manifest beside the
+download tree records its repository identity outside the repository's own file
+namespace. Retries preserve files only when that identity matches;
+selecting another repository removes the prior model before downloading so
+mixed files cannot pass readiness checks. Each transfer marks the manifest
+incomplete until full verification succeeds, and retained trees are rejected if
+they contain links or reparse points before the downloader starts.
 
 The module install is restartable before `module-state.json` exists. A retry
-reuses the managed source checkout, Python environment, installed packages,
-and model cache. Package metadata created by the install itself is registered
+  reuses the managed source checkout, Python environment, installed packages,
+  and completed model files. Package metadata created by the install itself is registered
 in that checkout's private `.git/info/exclude`; tracked source edits and any
 other untracked files still stop the update instead of being overwritten. The
 initial no-checkout clone is staged beside the final source directory and moved

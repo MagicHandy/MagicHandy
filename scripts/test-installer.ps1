@@ -124,6 +124,8 @@ try {
     Assert-True -Condition (-not $ttsInstallerSource.Contains('requires a reference WAV and its exact transcript')) -Message 'empty Faster Qwen references must not fail installation'
     Assert-True -Condition ($ttsInstallerSource.Contains('Import-Module $supportPath -Force')) -Message 'standalone TTS install should initialize its isolated installer support module'
     Assert-True -Condition ($ttsInstallerSource.Contains("@('--max-workers', '1')")) -Message 'Windows TTS model downloads must serialize Hugging Face cache finalization'
+    Assert-True -Condition ($ttsInstallerSource.Contains("@('--local-dir', `$LocalDirectory)")) -Message 'Faster Qwen downloads must materialize ordinary model files outside the Hugging Face snapshot links'
+    Assert-True -Condition ($ttsInstallerSource.Contains("Join-Path `$InstallRoot 'model'")) -Message 'Faster Qwen should use a stable app-owned materialized model directory'
     Assert-True -Condition ($ttsInstallerSource.Contains("'HF_HUB_DISABLE_SYMLINKS_WARNING'")) -Message 'Windows TTS installs should replace the Hugging Face symlink warning with installer-owned handling'
     Assert-True -Condition ($ttsInstallerSource.Contains('for ($attempt = 1; $attempt -le 3; $attempt++)')) -Message 'TTS model downloads should retry the resumable cache'
     Assert-True -Condition ($ttsInstallerSource.Contains("`$ErrorActionPreference = 'Continue'")) -Message 'TTS native dependency commands should not treat ordinary stderr as a terminating PowerShell error'
@@ -159,7 +161,7 @@ try {
         [ref]$ttsTokens,
         [ref]$ttsErrors
     )
-    foreach ($functionName in @('Invoke-Checked', 'Invoke-HuggingFaceModelDownload', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Get-TTSPythonVersion', 'Get-TTSVirtualEnvironmentVersion', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
+    foreach ($functionName in @('Invoke-Checked', 'Invoke-HuggingFaceModelDownload', 'Test-FasterQwenMaterializedRegularFile', 'Get-FasterQwenMaterializedRepository', 'Assert-FasterQwenMaterializedTreeNoReparsePoints', 'Write-FasterQwenMaterializedManifest', 'Initialize-FasterQwenMaterializedModel', 'Assert-FasterQwenMaterializedModel', 'Complete-FasterQwenMaterializedModel', 'Write-TTSModuleState', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Get-TTSPythonVersion', 'Get-TTSVirtualEnvironmentVersion', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
         $functionAst = $ttsAst.Find({
             $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                 $args[0].Name -eq $functionName
@@ -381,6 +383,88 @@ func main() {
     } finally {
         $env:MAGICHANDY_FAKE_HF_STDERR = $savedFakeHFStderr
     }
+
+    Write-Host 'Checking Hugging Face materialized model arguments...'
+    $materializedModel = Join-Path $tempRoot 'Program Files\MagicHandy model'
+    $materializedRepository = 'fixture/model'
+    $modelInvocation = Join-Path $tempRoot 'hf-materialized-invocation.txt'
+    $savedModelCapture = $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION
+    try {
+        $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION = $modelInvocation
+        Initialize-FasterQwenMaterializedModel -Root $tempRoot -Directory $materializedModel -Repository $materializedRepository
+        Invoke-HuggingFaceModelDownload `
+            -Executable $fakeHF `
+            -Repository $materializedRepository `
+            -CacheDirectory (Join-Path $tempRoot 'hf-cache') `
+            -LocalDirectory $materializedModel
+    } finally {
+        $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION = $savedModelCapture
+    }
+    $modelArguments = @([System.IO.File]::ReadAllLines($modelInvocation))
+    $localDirectoryIndex = [Array]::IndexOf($modelArguments, '--local-dir')
+    Assert-True -Condition ($localDirectoryIndex -ge 0) -Message 'Faster Qwen model download should request a materialized local directory'
+    Assert-Equal -Expected ([System.IO.Path]::GetFullPath($materializedModel)) -Actual $modelArguments[$localDirectoryIndex + 1] -Message 'materialized model path with spaces should remain one native argument'
+    Assert-True -Condition (Test-Path -LiteralPath $materializedModel -PathType Container) -Message 'model materialization directory should exist before the Hugging Face client starts'
+    [System.IO.File]::WriteAllText((Join-Path $materializedModel 'model-manifest.json'), '{"schema_version":1,"repository":"fixture/model","complete":true}')
+    Assert-Throws -Action {
+        Assert-FasterQwenMaterializedModel -Directory $materializedModel -Repository $materializedRepository
+    } -Pattern 'materialized model is incomplete' -Message 'a non-empty partial Hugging Face local directory must not pass model verification'
+    foreach ($relativePath in @(
+        'config.json',
+        'generation_config.json',
+        'merges.txt',
+        'preprocessor_config.json',
+        'tokenizer_config.json',
+        'vocab.json',
+        'model.safetensors',
+        'speech_tokenizer\config.json',
+        'speech_tokenizer\configuration.json',
+        'speech_tokenizer\model.safetensors',
+        'speech_tokenizer\preprocessor_config.json'
+    )) {
+        $path = Join-Path $materializedModel $relativePath
+        New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
+        [System.IO.File]::WriteAllText($path, 'fixture')
+    }
+    Complete-FasterQwenMaterializedModel -Directory $materializedModel -Repository $materializedRepository
+    Remove-Item -LiteralPath (Join-Path $materializedModel 'model.safetensors') -Force
+    [System.IO.File]::WriteAllText(
+        (Join-Path $materializedModel 'model.safetensors.index.json'),
+        '{"weight_map":{"layer":"model-00001-of-00001.safetensors"}}'
+    )
+    Assert-Throws -Action {
+        Assert-FasterQwenMaterializedModel -Directory $materializedModel -Repository $materializedRepository
+    } -Pattern 'indexed weight shard.*is missing' -Message 'a sharded model index must not pass without every referenced shard'
+    [System.IO.File]::WriteAllText((Join-Path $materializedModel 'model-00001-of-00001.safetensors'), 'fixture')
+    Complete-FasterQwenMaterializedModel -Directory $materializedModel -Repository $materializedRepository
+    $externalModelDirectory = Join-Path $tempRoot 'external-model-directory'
+    $modelJunction = Join-Path $materializedModel 'linked-directory'
+    New-Item -ItemType Directory -Path $externalModelDirectory -Force | Out-Null
+    $junctionCreated = $false
+    try {
+        New-Item -ItemType Junction -Path $modelJunction -Target $externalModelDirectory -ErrorAction Stop | Out-Null
+        $junctionCreated = $true
+        Assert-Throws -Action {
+            Initialize-FasterQwenMaterializedModel -Root $tempRoot -Directory $materializedModel -Repository $materializedRepository
+        } -Pattern 'linked or reparse-point path' -Message 'same-repository resume must reject descendant junctions before invoking Hugging Face'
+    } catch {
+        if ($junctionCreated) {
+            throw
+        }
+        Write-Warning "Directory junction fixture unavailable; descendant reparse-point installer check was skipped: $($_.Exception.Message)"
+    } finally {
+        if ($junctionCreated) {
+            [System.IO.Directory]::Delete($modelJunction)
+        }
+    }
+    [System.IO.File]::WriteAllText((Join-Path $materializedModel 'retained.partial'), 'fixture')
+    Initialize-FasterQwenMaterializedModel -Root $tempRoot -Directory $materializedModel -Repository $materializedRepository
+    Assert-True -Condition (Test-Path -LiteralPath (Join-Path $materializedModel 'retained.partial') -PathType Leaf) -Message 'retrying the same repository should retain resumable model files'
+    $inProgressManifest = [System.IO.File]::ReadAllText((Join-Path (Split-Path -Parent $materializedModel) 'model-manifest.json')) | ConvertFrom-Json
+    Assert-True -Condition (-not [bool]$inProgressManifest.complete) -Message 'starting any model refresh must mark the materialized model incomplete until full verification succeeds'
+    Initialize-FasterQwenMaterializedModel -Root $tempRoot -Directory $materializedModel -Repository 'fixture/replacement'
+    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $materializedModel 'retained.partial'))) -Message 'changing model repositories must remove files from the prior repository'
+    Assert-Equal -Expected 'fixture/replacement' -Actual (Get-FasterQwenMaterializedRepository -Directory $materializedModel) -Message 'materialized model identity should follow the selected repository'
 
     Write-Host 'Checking WinGet uv alias recovery...'
     $uvFixture = Join-Path $tempRoot 'uv-resolution'
@@ -642,7 +726,7 @@ func main() {
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseVerifierSource.Contains("'ReviewedUnsignedPublic'")) -Message 'release verifier should expose the reviewed unsigned public policy'
     Assert-True -Condition ($releaseVerifierSource.Contains('ReviewedUnsignedPublic requires Microsoft false-positive case')) -Message 'reviewed unsigned publication should fail closed without the recorded Microsoft case'
-    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
+    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
             -Version '0.0.0-local' `
@@ -652,12 +736,12 @@ func main() {
     } -Pattern 'requires Microsoft false-positive case' -Message 'reviewed unsigned policy without case ID'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
-            -Version '0.1.0-alpha.11' `
+            -Version '0.1.0-alpha.12' `
             -Commit ('0' * 40) `
             -ArtifactsRoot $tempRoot `
             -ArtifactPolicy ReviewedUnsignedPublic `
             -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
-    } -Pattern 'approved only for versions 0.1.0-alpha.8, 0.1.0-alpha.9, 0.1.0-alpha.10' -Message 'reviewed unsigned policy reused by a later version'
+    } -Pattern 'approved only for versions 0.1.0-alpha.8, 0.1.0-alpha.9, 0.1.0-alpha.10, 0.1.0-alpha.11' -Message 'reviewed unsigned policy reused by a later version'
     Assert-True -Condition ($releaseVerifierSource.Contains('-ExpectedSignerThumbprint')) -Message 'signed public verification should require an explicitly pinned signer'
     Assert-True -Condition ($releaseVerifierSource.Contains('must not use a self-signed certificate')) -Message 'signed public verification should reject self-signed certificates'
     $innoInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Install-InnoSetup.ps1'))

@@ -86,14 +86,23 @@ import-time availability check may still attempt `sox -h`; that warning does
 not mean setup omitted a required component.
 
 Model downloads do not require Windows symlink privileges. The installer uses
-one Hugging Face file-finalization worker on Windows to avoid a first-use
-symlink-probe race, retries transient failures three times, and keeps the
-resumable cache when all attempts fail. Rerunning either installer reuses files
-that already finished.
+one Hugging Face file-finalization worker and materializes Faster Qwen into an
+ordinary app-owned model directory, retries transient failures three times, and
+keeps completed files plus resumable local metadata when all attempts fail.
+Rerunning either installer reuses files that already finished for the same
+repository. A small app-owned manifest beside the download tree binds the
+directory to that repository without sharing the repository's file namespace;
+choosing a different repository replaces the old materialized files instead of
+mixing two models. Every refresh marks that manifest incomplete before transfer
+and complete only after the entire model validates, so a failed mutable-revision
+refresh cannot expose mixed old and new files as ready. Retained trees are
+checked for links and reparse points before the downloader can write into them.
 
 Managed Faster Qwen startup resolves the configured Hugging Face repository ID
-to the cache revision recorded in `refs/main`, verifies the model and speech
-tokenizer files, and passes that local snapshot directory to the server. The
+to the materialized model directory, verifies the model and speech tokenizer
+files, rejects linked/reparse-point materialized paths, verifies the repository
+manifest, and passes that local directory to the server. Complete alpha.10
+caches remain compatible through their `refs/main` snapshot. The
 server remains in Hugging Face and Transformers offline modes after installation;
 startup never depends on a network metadata request. A legacy cache without a
 revision ref is accepted only when it contains exactly one complete snapshot.

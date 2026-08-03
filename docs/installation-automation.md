@@ -25,7 +25,7 @@ Phase 16.
 
 The setup EXE and portable ZIP require no Go, Node, Python, CMake, Visual
 Studio, or CUDA installation to run the MagicHandy core. The unsigned setup EXE
-is published for alpha.9 under ADR 0014 after Microsoft's `Not malware`
+is published through alpha.11 under ADR 0014 after Microsoft's `Not malware`
 determination for alpha.6 and a new exact-artifact Defender scan. The exception is version-bound and still lacks publisher
 identity. Optional selections can add
 their own dependencies after explicit consent.
@@ -74,7 +74,9 @@ Git, CMake, Visual Studio, MSYS2, or the CUDA Toolkit. Choosing existing Ollama
 or skipping chat setup avoids the managed runtime's disk use.
 
 Managed Faster Qwen keeps Hugging Face, `uv`, and Numba caches below its
-app-owned module root. The installer runtime probe and every managed launch use
+app-owned module root. It materializes ordinary model files for runtime use so
+clean Windows installs do not depend on Hugging Face snapshot links. The
+installer runtime probe and every managed launch use
 the same Numba cache path, so Python never needs to write compiled cache probes
 into packaged dependencies. Managed Python servers are assigned to one owned
 process tree; stopping or restarting the worker terminates both a launcher and

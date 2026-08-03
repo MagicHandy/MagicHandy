@@ -621,9 +621,11 @@ Mitigation:
 - install each module only through the main decision tree or explicit module
   script; both show the pinned source revision, license, model, hardware
   target, install root, and expected disk impact before consent
-- serialize Hugging Face model-file finalization on Windows so standard
-  accounts use the copy fallback without a concurrent symlink-probe race;
-  retry against the resumable cache and retain completed files after failure
+- serialize Hugging Face model-file finalization on Windows and materialize
+  Faster Qwen into ordinary app-owned files rather than runtime snapshot links;
+  bind those files to the selected repository with a checked manifest, reject
+  linked materialized paths, and retry with retained files and local metadata
+  only for that same repository after failure
 - resume source, environment, package, and model artifacts left before module
   state is committed; exclude only installer-generated package metadata from
   the managed checkout's integrity check, while tracked edits and unknown
@@ -686,9 +688,11 @@ module-compatible Python 3.10 or 3.11 plus PyTorch/model assets, and does not
 require a preinstalled compiler. Faster Qwen installation now deliberately
 defers its reference WAV and exact transcript to Settings > Voice without
 blocking runtime installation or allowing updates to erase those values.
-Windows model downloads serialize cache finalization and retry the retained
-resumable cache, avoiding `WinError 1314` on ordinary non-Developer-Mode
-accounts. Interrupted installs can resume before module state exists without
+Windows model downloads serialize finalization, materialize the Faster Qwen
+runtime outside cache snapshot links, and retry with retained files and local
+metadata, avoiding `WinError 1314` and incomplete-link failures on ordinary
+non-Developer-Mode accounts. Interrupted installs can resume before module
+state exists without
 discarding completed packages or treating installer-generated metadata as a
 source edit, and nested module verification no longer invalidates the parent
 installer: TTS module scripts now run in an isolated Windows PowerShell process
@@ -1282,7 +1286,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8/alpha.9 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - keep Inno Setup thin: files, shortcuts, uninstall metadata, and launch only;
@@ -1304,10 +1308,10 @@ Mitigation:
   retention, and never infer or delete external/custom paths
 - keep packaged defaults on loopback and defer LAN/HTTPS and auto-update until
   their authentication, signing, rollback, and motion-stop designs exist
-- keep release discovery read-only and opt-out: query only the canonical latest
-  stable GitHub endpoint, cache and conditionally revalidate it, construct the
-  release link locally, send no credentials, and never download or execute an
-  artifact
+- keep release discovery read-only and opt-out: query only the canonical GitHub
+  release list, select the highest backend-compatible stable or progressive
+  prerelease version, cache and conditionally revalidate it, construct the
+  release link locally, send no credentials, and never download or execute an artifact
 
 Exit evidence:
 
@@ -1326,7 +1330,7 @@ publisher identity or justify a security bypass. The file was submitted to
 Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
-ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8/alpha.9,
+ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8 through alpha.11,
 and timestamped `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit
@@ -1347,8 +1351,8 @@ avoidable structural triggers from the CI setup: the 32-bit loader around an
 amd64 payload and the solid `lzma2/ultra64` stream. The native-x64, non-solid
 `zip/9` candidate passed PE-machine checks, the isolated installer lifecycle,
 and a current Defender custom scan with no threats. Its larger approximately
-17.9 MB size is an accepted transparency tradeoff. Alpha.8 and alpha.9 may
+17.9 MB size is an accepted transparency tradeoff. Alpha.8 through alpha.11 may
 publish this hardened shape only through `ReviewedUnsignedPublic`, bound to the
-completed case, alpha.9 exact-artifact Defender scan, and full lifecycle
+completed case, alpha.9-and-later exact-artifact Defender scan, and full lifecycle
 acceptance. This does not lower R28: each new hash is
 still unsigned and trusted Authenticode remains the production exit evidence.

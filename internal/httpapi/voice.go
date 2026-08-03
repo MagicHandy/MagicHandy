@@ -293,12 +293,38 @@ func fasterQwenModelPath(settings config.VoiceSettings, dataDir string) (string,
 	if root == "" {
 		return "", errors.New("faster Qwen3-TTS module root is unavailable")
 	}
-	repositoryCache := filepath.Join(root, "model-cache", "hub", "models--"+strings.Join(parts, "--"))
+	materialized := filepath.Join(root, "model")
+	var materializedErr error
+	if info, err := os.Stat(materialized); err == nil && info.IsDir() {
+		resolved, err := validateFasterQwenMaterializedModelDirectory(materialized, model)
+		if err == nil {
+			return resolved, nil
+		}
+		materializedErr = err
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("inspect materialized Faster Qwen3-TTS model: %w", err)
+	}
+
+	// Alpha.10 and earlier installs stored the runtime directly in Hugging
+	// Face's cache snapshot. Retain that path for existing verified installs;
+	// new installs materialize ordinary files above for reliable Windows use.
+	resolved, err := fasterQwenCachedModelPath(root, parts)
+	if err == nil {
+		return resolved, nil
+	}
+	if materializedErr != nil {
+		return "", materializedErr
+	}
+	return "", err
+}
+
+func fasterQwenCachedModelPath(root string, repositoryParts []string) (string, error) {
+	repositoryCache := filepath.Join(root, "model-cache", "hub", "models--"+strings.Join(repositoryParts, "--"))
 	snapshots := filepath.Join(repositoryCache, "snapshots")
 
 	// #nosec G304 -- the module root is an explicit local setting and the
 	// repository components are validated before this fixed cache path is read.
-	ref, err := os.ReadFile(filepath.Join(repositoryCache, "refs", "main"))
+	ref, err := readFileLimited(filepath.Join(repositoryCache, "refs", "main"), 4<<10)
 	if err == nil {
 		revision := strings.TrimSpace(string(ref))
 		if !validSnapshotRevision(revision) {
@@ -336,27 +362,139 @@ func validSnapshotRevision(revision string) bool {
 		!strings.ContainsAny(revision, `/\:`)
 }
 
+const (
+	fasterQwenMaterializedManifest = "model-manifest.json"
+	maxFasterQwenManifestBytes     = 64 << 10
+	maxFasterQwenWeightIndexBytes  = 4 << 20
+)
+
+func validateFasterQwenMaterializedModelDirectory(directory, repository string) (string, error) {
+	info, err := os.Lstat(directory)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", errors.New("faster Qwen3-TTS materialized model directory is missing or unsafe")
+	}
+	moduleRoot := filepath.Dir(directory)
+	manifestPath := filepath.Join(moduleRoot, fasterQwenMaterializedManifest)
+	if !isRegularFileWithoutLinks(moduleRoot, manifestPath) {
+		return "", errors.New("faster Qwen3-TTS materialized model repository manifest is missing or unsafe")
+	}
+	contents, err := readFileLimited(manifestPath, maxFasterQwenManifestBytes)
+	if err != nil {
+		return "", fmt.Errorf("read Faster Qwen3-TTS materialized model repository manifest: %w", err)
+	}
+	var manifest struct {
+		SchemaVersion int    `json:"schema_version"`
+		Repository    string `json:"repository"`
+		Complete      bool   `json:"complete"`
+	}
+	if err := json.Unmarshal(contents, &manifest); err != nil || manifest.SchemaVersion != 1 || manifest.Repository == "" {
+		return "", errors.New("faster Qwen3-TTS materialized model repository manifest is invalid")
+	}
+	if manifest.Repository != repository {
+		return "", fmt.Errorf("faster Qwen3-TTS materialized model belongs to %q, not configured repository %q", manifest.Repository, repository)
+	}
+	if !manifest.Complete {
+		return "", errors.New("faster Qwen3-TTS materialized model download is incomplete")
+	}
+	return validateFasterQwenModelDirectoryWithFileCheck(directory, func(path string) bool {
+		return isRegularFileWithoutLinks(directory, path)
+	})
+}
+
 func validateFasterQwenModelDirectory(directory string) (string, error) {
+	return validateFasterQwenModelDirectoryWithFileCheck(directory, isRegularFile)
+}
+
+func validateFasterQwenModelDirectoryWithFileCheck(directory string, regularFile func(string) bool) (string, error) {
 	required := []string{
 		filepath.Join(directory, "config.json"),
+		filepath.Join(directory, "generation_config.json"),
+		filepath.Join(directory, "merges.txt"),
+		filepath.Join(directory, "preprocessor_config.json"),
 		filepath.Join(directory, "tokenizer_config.json"),
+		filepath.Join(directory, "vocab.json"),
 		filepath.Join(directory, "speech_tokenizer", "config.json"),
+		filepath.Join(directory, "speech_tokenizer", "configuration.json"),
 		filepath.Join(directory, "speech_tokenizer", "model.safetensors"),
+		filepath.Join(directory, "speech_tokenizer", "preprocessor_config.json"),
 	}
 	for _, path := range required {
-		if !isRegularFile(path) {
-			return "", fmt.Errorf("faster Qwen3-TTS model cache is incomplete: %s is missing", path)
+		if !regularFile(path) {
+			return "", fmt.Errorf("faster Qwen3-TTS model directory is incomplete: %s is missing", path)
 		}
 	}
-	if !isRegularFile(filepath.Join(directory, "model.safetensors")) &&
-		!isRegularFile(filepath.Join(directory, "model.safetensors.index.json")) {
-		return "", fmt.Errorf("faster Qwen3-TTS model cache is incomplete: model weights are missing from %s", directory)
+	if err := validateFasterQwenModelWeights(directory, regularFile); err != nil {
+		return "", err
 	}
 	abs, err := filepath.Abs(directory)
 	if err != nil {
 		return "", fmt.Errorf("resolve Faster Qwen3-TTS model directory: %w", err)
 	}
 	return filepath.Clean(abs), nil
+}
+
+func validateFasterQwenModelWeights(directory string, regularFile func(string) bool) error {
+	if regularFile(filepath.Join(directory, "model.safetensors")) {
+		return nil
+	}
+	indexPath := filepath.Join(directory, "model.safetensors.index.json")
+	if !regularFile(indexPath) {
+		return fmt.Errorf("faster Qwen3-TTS model directory is incomplete: model weights are missing from %s", directory)
+	}
+	contents, err := readFileLimited(indexPath, maxFasterQwenWeightIndexBytes)
+	if err != nil {
+		return fmt.Errorf("read Faster Qwen3-TTS model weight index: %w", err)
+	}
+	var index struct {
+		WeightMap map[string]string `json:"weight_map"`
+	}
+	if err := json.Unmarshal(contents, &index); err != nil || len(index.WeightMap) == 0 {
+		return errors.New("faster Qwen3-TTS model weight index is invalid")
+	}
+	for _, shard := range index.WeightMap {
+		if !validFasterQwenModelShard(shard) {
+			return errors.New("faster Qwen3-TTS model weight index contains an unsafe shard path")
+		}
+		path := filepath.Join(directory, filepath.FromSlash(shard))
+		if !regularFile(path) {
+			return fmt.Errorf("faster Qwen3-TTS model directory is incomplete: indexed weight shard is missing: %s", path)
+		}
+	}
+	return nil
+}
+
+func validFasterQwenModelShard(shard string) bool {
+	if shard == "" || filepath.IsAbs(shard) || strings.ContainsAny(shard, `\:`) {
+		return false
+	}
+	for _, part := range strings.Split(shard, "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return strings.EqualFold(filepath.Ext(shard), ".safetensors")
+}
+
+func readFileLimited(path string, limit int64) (contents []byte, err error) {
+	// #nosec G304,G703 -- callers constrain the filename to a validated local
+	// model or cache metadata path before opening it.
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+	contents, err = io.ReadAll(io.LimitReader(file, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(contents)) > limit {
+		return nil, errors.New("file is too large")
+	}
+	return contents, nil
 }
 
 func fasterQwenReferenceConfigured(settings config.VoiceSettings) bool {
@@ -397,6 +535,39 @@ func isRegularFile(path string) bool {
 	// content; provider processes receive the same path after validation.
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular()
+}
+
+func isRegularFileWithoutLinks(root, path string) bool {
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	path, err = filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	relative, err := filepath.Rel(root, path)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return false
+	}
+
+	current := root
+	info, err := os.Lstat(current)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	parts := strings.Split(relative, string(filepath.Separator))
+	for index, part := range parts {
+		current = filepath.Join(current, part)
+		info, err = os.Lstat(current)
+		if err != nil || info.Mode()&os.ModeSymlink != 0 {
+			return false
+		}
+		if index < len(parts)-1 && !info.IsDir() {
+			return false
+		}
+	}
+	return info.Mode().IsRegular()
 }
 
 type voiceModuleStatus struct {

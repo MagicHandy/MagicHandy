@@ -544,10 +544,21 @@ function Invoke-HuggingFaceModelDownload {
     param(
         [Parameter(Mandatory = $true)][string]$Executable,
         [Parameter(Mandatory = $true)][string]$Repository,
-        [Parameter(Mandatory = $true)][string]$CacheDirectory
+        [Parameter(Mandatory = $true)][string]$CacheDirectory,
+        [string]$LocalDirectory = ''
     )
 
     $arguments = @('download', $Repository, '--cache-dir', $CacheDirectory)
+    if (-not [string]::IsNullOrWhiteSpace($LocalDirectory)) {
+        $LocalDirectory = [System.IO.Path]::GetFullPath($LocalDirectory)
+        New-Item -ItemType Directory -Path $LocalDirectory -Force | Out-Null
+        $arguments += @('--local-dir', $LocalDirectory)
+    }
+    $retryStorage = if ([string]::IsNullOrWhiteSpace($LocalDirectory)) {
+        'the resumable cache'
+    } else {
+        'retained local files and metadata'
+    }
     $isWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
     if ($isWindows) {
         # huggingface_hub probes symlink support lazily. Concurrent first-use
@@ -586,7 +597,7 @@ function Invoke-HuggingFaceModelDownload {
                 return
             }
             if ($attempt -lt 3) {
-                Write-Warning "Model download attempt $attempt failed (exit $exitCode). Retrying with the resumable cache..."
+                Write-Warning "Model download attempt $attempt failed (exit $exitCode). Retrying with $retryStorage..."
                 Start-Sleep -Seconds (2 * $attempt)
             }
         }
@@ -601,6 +612,204 @@ function Invoke-HuggingFaceModelDownload {
     }
 
     throw "Model download failed after 3 attempts (last exit $exitCode). Downloaded files were kept; rerun the installer to resume."
+}
+
+function Test-FasterQwenMaterializedRegularFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $root = [System.IO.Path]::GetFullPath($Directory).TrimEnd('\')
+    $candidate = [System.IO.Path]::GetFullPath($Path)
+    if (-not $candidate.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase)) {
+        return $false
+    }
+    try {
+        $item = Get-Item -LiteralPath $root -Force -ErrorAction Stop
+        if (-not $item.PSIsContainer -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            return $false
+        }
+        $current = $root
+        foreach ($part in $candidate.Substring($root.Length + 1).Split('\')) {
+            $current = Join-Path $current $part
+            $item = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+            if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+                return $false
+            }
+        }
+        return -not $item.PSIsContainer
+    } catch {
+        return $false
+    }
+}
+
+function Get-FasterQwenMaterializedRepository {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    $moduleRoot = Split-Path -Parent $Directory
+    $manifestPath = Join-Path $moduleRoot 'model-manifest.json'
+    if (-not (Test-FasterQwenMaterializedRegularFile -Directory $moduleRoot -Path $manifestPath)) {
+        return ''
+    }
+    $manifestItem = Get-Item -LiteralPath $manifestPath -Force
+    if ($manifestItem.Length -gt 64KB) {
+        return ''
+    }
+    try {
+        $manifest = [System.IO.File]::ReadAllText($manifestPath) | ConvertFrom-Json -ErrorAction Stop
+        if ([int]$manifest.schema_version -ne 1) {
+            return ''
+        }
+        return [string]$manifest.repository
+    } catch {
+        return ''
+    }
+}
+
+function Assert-FasterQwenMaterializedTreeNoReparsePoints {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    $root = [System.IO.Path]::GetFullPath($Directory)
+    $pending = New-Object 'System.Collections.Generic.Stack[string]'
+    $pending.Push($root)
+    while ($pending.Count -gt 0) {
+        $current = $pending.Pop()
+        $currentItem = Get-Item -LiteralPath $current -Force -ErrorAction Stop
+        if ($currentItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+            throw "The managed Faster Qwen3-TTS model contains a linked or reparse-point path: '$current'."
+        }
+        foreach ($item in @(Get-ChildItem -LiteralPath $current -Force -ErrorAction Stop)) {
+            if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+                throw "The managed Faster Qwen3-TTS model contains a linked or reparse-point path: '$($item.FullName)'."
+            }
+            if ($item.PSIsContainer) {
+                $pending.Push($item.FullName)
+            }
+        }
+    }
+}
+
+function Write-FasterQwenMaterializedManifest {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$Repository,
+        [Parameter(Mandatory = $true)][bool]$Complete
+    )
+
+    Write-TTSModuleState -Path (Join-Path (Split-Path -Parent $Directory) 'model-manifest.json') -State ([ordered]@{
+        schema_version = 1
+        repository = $Repository
+        complete = $Complete
+    })
+}
+
+function Initialize-FasterQwenMaterializedModel {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$Repository
+    )
+
+    Assert-MagicHandyChildPath -Root $Root -Candidate $Directory
+    if (Test-Path -LiteralPath $Directory) {
+        $directoryItem = Get-Item -LiteralPath $Directory -Force
+        if (-not $directoryItem.PSIsContainer -or ($directoryItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            throw "The managed Faster Qwen3-TTS model path is not a normal app-owned directory: '$Directory'."
+        }
+        $existingRepository = Get-FasterQwenMaterializedRepository -Directory $Directory
+        if ([string]::Equals($existingRepository, $Repository, [StringComparison]::Ordinal)) {
+            Assert-FasterQwenMaterializedTreeNoReparsePoints -Directory $Directory
+        } else {
+            Write-Warning "Replacing Faster Qwen3-TTS model files because their repository identity is missing or differs from '$Repository'."
+            Remove-Item -LiteralPath $Directory -Recurse -Force
+        }
+    }
+    New-Item -ItemType Directory -Path $Directory -Force | Out-Null
+    # A failed refresh must never leave a partially replaced model reporting ready.
+    Write-FasterQwenMaterializedManifest -Directory $Directory -Repository $Repository -Complete $false
+}
+
+function Assert-FasterQwenMaterializedModel {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$Repository
+    )
+
+    $materializedRepository = Get-FasterQwenMaterializedRepository -Directory $Directory
+    if (-not [string]::Equals($materializedRepository, $Repository, [StringComparison]::Ordinal)) {
+        throw "Faster Qwen3-TTS materialized model repository identity is missing or does not match '$Repository'."
+    }
+
+    $requiredFiles = @(
+        'config.json',
+        'generation_config.json',
+        'merges.txt',
+        'preprocessor_config.json',
+        'tokenizer_config.json',
+        'vocab.json',
+        'speech_tokenizer\config.json',
+        'speech_tokenizer\configuration.json',
+        'speech_tokenizer\model.safetensors',
+        'speech_tokenizer\preprocessor_config.json'
+    )
+    foreach ($relativePath in $requiredFiles) {
+        $path = Join-Path $Directory $relativePath
+        if (-not (Test-FasterQwenMaterializedRegularFile -Directory $Directory -Path $path)) {
+            throw "Faster Qwen3-TTS materialized model is incomplete: '$path' is missing. Rerun setup to resume the download."
+        }
+    }
+    if (Test-FasterQwenMaterializedRegularFile -Directory $Directory -Path (Join-Path $Directory 'model.safetensors')) {
+        return
+    }
+    $indexPath = Join-Path $Directory 'model.safetensors.index.json'
+    if (-not (Test-FasterQwenMaterializedRegularFile -Directory $Directory -Path $indexPath)) {
+        throw "Faster Qwen3-TTS materialized model weights are missing from '$Directory'. Rerun setup to resume the download."
+    }
+    if ((Get-Item -LiteralPath $indexPath).Length -gt 4MB) {
+        throw 'Faster Qwen3-TTS materialized model weight index is too large.'
+    }
+    try {
+        $index = [System.IO.File]::ReadAllText($indexPath) | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        throw "Faster Qwen3-TTS materialized model weight index is invalid: $($_.Exception.Message)"
+    }
+    if ($null -eq $index.PSObject.Properties['weight_map'] -or $null -eq $index.weight_map) {
+        throw 'Faster Qwen3-TTS materialized model weight index is empty.'
+    }
+    $weightEntries = @($index.weight_map.PSObject.Properties)
+    if ($weightEntries.Count -eq 0) {
+        throw 'Faster Qwen3-TTS materialized model weight index is empty.'
+    }
+    $root = [System.IO.Path]::GetFullPath($Directory).TrimEnd('\') + '\'
+    foreach ($entry in $weightEntries) {
+        $shard = [string]$entry.Value
+        if ([string]::IsNullOrWhiteSpace($shard) -or
+            $shard.Contains('\') -or
+            $shard.Contains(':') -or
+            [System.IO.Path]::IsPathRooted($shard) -or
+            [System.IO.Path]::GetExtension($shard) -ne '.safetensors' -or
+            [bool](@($shard -split '/') | Where-Object { $_ -eq '' -or $_ -eq '.' -or $_ -eq '..' })) {
+            throw "Faster Qwen3-TTS materialized model weight index contains an unsafe shard path: '$shard'."
+        }
+        $shardPath = [System.IO.Path]::GetFullPath((Join-Path $Directory ($shard.Replace('/', '\'))))
+        if (-not $shardPath.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Faster Qwen3-TTS materialized model weight index escapes the model directory: '$shard'."
+        }
+        if (-not (Test-FasterQwenMaterializedRegularFile -Directory $Directory -Path $shardPath)) {
+            throw "Faster Qwen3-TTS materialized model is incomplete: indexed weight shard '$shardPath' is missing. Rerun setup to resume the download."
+        }
+    }
+}
+
+function Complete-FasterQwenMaterializedModel {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$Repository
+    )
+
+    Assert-FasterQwenMaterializedModel -Directory $Directory -Repository $Repository
+    Write-FasterQwenMaterializedManifest -Directory $Directory -Repository $Repository -Complete $true
 }
 
 function ConvertTo-YamlSingleQuotedScalar {
@@ -956,7 +1165,14 @@ Test-TTSPythonRuntime `
     -NumbaCacheDirectory $numbaCacheDirectory
 $modelRepo = if ($Module -eq 'faster-qwen3-tts') { $Model } else { 'ResembleAI/chatterbox-turbo' }
 $modelCache = Join-Path $InstallRoot 'model-cache\hub'
-Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache
+$materializedModel = if ($Module -eq 'faster-qwen3-tts') { Join-Path $InstallRoot 'model' } else { '' }
+if ($Module -eq 'faster-qwen3-tts') {
+    Initialize-FasterQwenMaterializedModel -Root $InstallRoot -Directory $materializedModel -Repository $modelRepo
+}
+Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache -LocalDirectory $materializedModel
+if ($Module -eq 'faster-qwen3-tts') {
+    Complete-FasterQwenMaterializedModel -Directory $materializedModel -Repository $modelRepo
+}
 
 $healthPath = '/health'
 if ($Module -eq 'faster-qwen3-tts') {
