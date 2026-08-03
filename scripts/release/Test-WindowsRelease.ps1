@@ -221,9 +221,19 @@ foreach ($path in $requiredArtifacts) {
 if (-not $requiresSetup) {
     Assert-Release -Condition (-not (Test-Path -LiteralPath $setupPath)) -Message 'PortablePublic output must not contain a setup executable'
 }
-$releaseFiles = @(Get-ChildItem -LiteralPath $ArtifactsRoot -File | Where-Object { $_.Name -like "MagicHandy-$artifactVersion-windows-amd64-*" })
-$expectedArtifactCount = if ($requiresSetup) { 3 } else { 2 }
-Assert-Release -Condition ($releaseFiles.Count -eq $expectedArtifactCount) -Message "$ArtifactPolicy output should contain exactly $expectedArtifactCount artifacts for this version"
+$expectedArtifactNames = @(
+    [System.IO.Path]::GetFileName($portablePath),
+    [System.IO.Path]::GetFileName($checksumPath)
+)
+if ($requiresSetup) {
+    $expectedArtifactNames += [System.IO.Path]::GetFileName($setupPath)
+}
+$releaseEntries = @(Get-ChildItem -LiteralPath $ArtifactsRoot -Force)
+Assert-Release -Condition ($releaseEntries.Count -eq $expectedArtifactNames.Count) -Message "$ArtifactPolicy output should contain exactly $($expectedArtifactNames.Count) artifacts"
+foreach ($entry in $releaseEntries) {
+    Assert-Release -Condition (-not $entry.PSIsContainer) -Message "$ArtifactPolicy output must not contain directories"
+    Assert-Release -Condition ($entry.Name -in $expectedArtifactNames) -Message "$ArtifactPolicy output contains unexpected artifact '$($entry.Name)'"
+}
 if ($requiresSetup) {
     $setupVersion = (Get-Item -LiteralPath $setupPath).VersionInfo
     $expectedNumericVersion = Get-ExpectedWindowsNumericVersion
@@ -237,6 +247,29 @@ if ($requiresSetup) {
         [System.Management.Automation.SignatureStatus]::NotSigned
     }
     Assert-AuthenticodeStatus -Path $setupPath -ExpectedStatus $expectedSetupSignature -Description 'setup executable' -SignerThumbprint $normalizedSignerThumbprint
+}
+
+Write-Host 'Verifying outer artifact checksums...'
+$expectedChecksumNames = @([System.IO.Path]::GetFileName($portablePath))
+if ($requiresSetup) {
+    $expectedChecksumNames += [System.IO.Path]::GetFileName($setupPath)
+}
+$checksumLines = @(Get-Content -LiteralPath $checksumPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+Assert-Release -Condition ($checksumLines.Count -eq $expectedChecksumNames.Count) -Message "$ArtifactPolicy checksum file should cover exactly $($expectedChecksumNames.Count) distributable artifact(s)"
+$checksummedNames = @()
+foreach ($line in $checksumLines) {
+    Assert-Release -Condition ($line -match '^([0-9a-f]{64})  (.+)$') -Message "checksum line '$line' should use SHA256SUMS format"
+    $checksumName = [string]$Matches[2]
+    Assert-Release -Condition ($checksumName -eq [System.IO.Path]::GetFileName($checksumName)) -Message "checksum target '$checksumName' must be one canonical artifact filename"
+    Assert-Release -Condition ($checksumName -in $expectedChecksumNames) -Message "checksum target '$checksumName' is not an expected distributable artifact"
+    Assert-Release -Condition ($checksumName -notin $checksummedNames) -Message "checksum target '$checksumName' is duplicated"
+    $checksummedNames += $checksumName
+    $artifact = Join-Path $ArtifactsRoot $checksumName
+    $actual = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLowerInvariant()
+    Assert-Release -Condition ($actual -eq $Matches[1]) -Message "outer checksum for '$checksumName' should match"
+}
+foreach ($expectedName in $expectedChecksumNames) {
+    Assert-Release -Condition ($expectedName -in $checksummedNames) -Message "checksum file should cover '$expectedName'"
 }
 
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("magichandy-release-test-" + [Guid]::NewGuid().ToString('N'))
@@ -298,18 +331,6 @@ try {
         Assert-Release -Condition (Test-Path -LiteralPath $path -PathType Leaf) -Message "manifest file '$($file.path)' should exist"
         $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
         Assert-Release -Condition ($actual -eq [string]$file.sha256) -Message "manifest hash for '$($file.path)' should match"
-    }
-
-    Write-Host 'Verifying outer artifact checksums...'
-    $checksumLines = @(Get-Content -LiteralPath $checksumPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-    $expectedChecksumCount = if ($requiresSetup) { 2 } else { 1 }
-    Assert-Release -Condition ($checksumLines.Count -eq $expectedChecksumCount) -Message "$ArtifactPolicy checksum file should cover exactly $expectedChecksumCount distributable artifact(s)"
-    foreach ($line in $checksumLines) {
-        Assert-Release -Condition ($line -match '^([0-9a-f]{64})  (.+)$') -Message "checksum line '$line' should use SHA256SUMS format"
-        $artifact = Join-Path $ArtifactsRoot $Matches[2]
-        Assert-Release -Condition (Test-Path -LiteralPath $artifact -PathType Leaf) -Message "checksummed artifact '$($Matches[2])' should exist"
-        $actual = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash.ToLowerInvariant()
-        Assert-Release -Condition ($actual -eq $Matches[1]) -Message "outer checksum for '$($Matches[2])' should match"
     }
 
     if (-not $ExerciseInstaller) {

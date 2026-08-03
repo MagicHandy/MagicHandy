@@ -22,10 +22,11 @@ const (
 	// ModelSourceOllama identifies a GGUF copied from an Ollama library.
 	ModelSourceOllama = "ollama"
 
-	modelStateReady   = "ready"
-	modelStateMissing = "missing"
-	modelStateChanged = "changed"
-	stalePartialAge   = 24 * time.Hour
+	modelStateReady       = "ready"
+	modelStateMissing     = "missing"
+	modelStateChanged     = "changed"
+	modelStateUnsupported = "unsupported"
+	stalePartialAge       = 24 * time.Hour
 )
 
 var (
@@ -79,7 +80,15 @@ type ModelManager struct {
 	closed bool
 	wg     sync.WaitGroup
 
-	inventoryMu sync.Mutex
+	inventoryMu     sync.Mutex
+	compatibilityMu sync.Mutex
+	compatibility   map[string]modelCompatibilityCacheEntry
+}
+
+type modelCompatibilityCacheEntry struct {
+	size          int64
+	modifiedNanos int64
+	reason        string
 }
 
 // OpenModelManager opens the inventory and prepares private model directories.
@@ -105,11 +114,12 @@ func OpenModelManagerWithDatabase(database *dbstore.DB) (*ModelManager, error) {
 
 func openModelManagerWithDatabase(database *dbstore.DB, ownsDB bool) (*ModelManager, error) {
 	manager := &ModelManager{
-		db:           database,
-		ownsDB:       ownsDB,
-		modelsDir:    filepath.Join(database.DataDir(), "models", "gguf"),
-		downloadsDir: filepath.Join(database.DataDir(), "downloads"),
-		jobs:         make(map[string]*modelImportJob),
+		db:            database,
+		ownsDB:        ownsDB,
+		modelsDir:     filepath.Join(database.DataDir(), "models", "gguf"),
+		downloadsDir:  filepath.Join(database.DataDir(), "downloads"),
+		jobs:          make(map[string]*modelImportJob),
+		compatibility: make(map[string]modelCompatibilityCacheEntry),
 	}
 	for _, directory := range []string{manager.modelsDir, manager.downloadsDir} {
 		if err := os.MkdirAll(directory, 0o700); err != nil {
@@ -406,9 +416,54 @@ func (m *ModelManager) modelFileState(record ModelRecord) ModelRecord {
 		record.State = modelStateChanged
 		record.Message = "model file size changed after import"
 	default:
-		record.State = modelStateReady
+		if reason := m.modelCompatibilityReason(record.ModelPath, info); reason != "" {
+			record.State = modelStateUnsupported
+			record.Message = reason
+		} else {
+			record.State = modelStateReady
+		}
 	}
 	return record
+}
+
+func (m *ModelManager) modelCompatibilityReason(path string, info os.FileInfo) string {
+	m.compatibilityMu.Lock()
+	if cached, ok := m.compatibility[path]; ok &&
+		cached.size == info.Size() && cached.modifiedNanos == info.ModTime().UnixNano() {
+		m.compatibilityMu.Unlock()
+		return cached.reason
+	}
+	m.compatibilityMu.Unlock()
+	file, err := os.Open(path) // #nosec G304 -- path was validated as an app-owned managed model file.
+	if err != nil {
+		return "model file is unavailable"
+	}
+	defer func() { _ = file.Close() }()
+	openedInfo, err := file.Stat()
+	if err != nil || openedInfo.Size() != info.Size() || openedInfo.ModTime() != info.ModTime() {
+		return "model file changed while compatibility was checked"
+	}
+	err = inspectManagedGGUF(context.Background(), file, openedInfo.Size())
+	reason := ""
+	if err != nil {
+		reason = err.Error()
+	}
+	finalInfo, statErr := file.Stat()
+	if statErr != nil || finalInfo.Size() != openedInfo.Size() || finalInfo.ModTime() != openedInfo.ModTime() {
+		return "model file changed while compatibility was checked"
+	}
+	if err != nil {
+		var pathErr *os.PathError
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.As(err, &pathErr) {
+			return reason
+		}
+	}
+	m.compatibilityMu.Lock()
+	m.compatibility[path] = modelCompatibilityCacheEntry{
+		size: info.Size(), modifiedNanos: info.ModTime().UnixNano(), reason: reason,
+	}
+	m.compatibilityMu.Unlock()
+	return reason
 }
 
 func (m *ModelManager) modelDirectory(record ModelRecord) (string, error) {

@@ -301,6 +301,7 @@
 
 .model-state-changed,
 .model-state-missing,
+.model-state-unsupported,
 .model-state-outdated {
   color: var(--warn);
 }

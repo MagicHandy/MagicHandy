@@ -1,8 +1,10 @@
 package llm
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -126,6 +128,129 @@ func TestOllamaScanRejectsUnsupportedAndChangedLayers(t *testing.T) {
 	if scan.Candidates[0].Importable || !strings.Contains(scan.Candidates[0].Reason, "size") {
 		t.Fatalf("changed candidate = %+v", scan.Candidates[0])
 	}
+
+	embeddedRoot := filepath.Join(t.TempDir(), "embedded")
+	writeOllamaFixture(t, embeddedRoot, ollamaFixtureOptions{embeddedVision: true})
+	scan, err = manager.ScanOllama(context.Background(), embeddedRoot)
+	if err != nil {
+		t.Fatalf("ScanOllama embedded vision: %v", err)
+	}
+	if scan.Candidates[0].Importable || !strings.Contains(scan.Candidates[0].Reason, "through Ollama") {
+		t.Fatalf("embedded vision candidate = %+v", scan.Candidates[0])
+	}
+	topLevelRoot := filepath.Join(t.TempDir(), "top-level-vision")
+	writeOllamaFixture(t, topLevelRoot, ollamaFixtureOptions{topLevelVision: true})
+	scan, err = manager.ScanOllama(context.Background(), topLevelRoot)
+	if err != nil {
+		t.Fatalf("ScanOllama top-level vision: %v", err)
+	}
+	if scan.Candidates[0].Importable || !strings.Contains(scan.Candidates[0].Reason, "through Ollama") {
+		t.Fatalf("top-level vision candidate = %+v", scan.Candidates[0])
+	}
+
+	splitRoot := filepath.Join(t.TempDir(), "split")
+	writeOllamaFixture(t, splitRoot, ollamaFixtureOptions{splitCount: 2})
+	scan, err = manager.ScanOllama(context.Background(), splitRoot)
+	if err != nil {
+		t.Fatalf("ScanOllama split: %v", err)
+	}
+	if scan.Candidates[0].Importable || !strings.Contains(scan.Candidates[0].Reason, "multiple shard") {
+		t.Fatalf("split candidate = %+v", scan.Candidates[0])
+	}
+}
+
+func TestModelManagerRejectsIncompatibleStandaloneAndExistingGGUF(t *testing.T) {
+	manager, err := OpenModelManager(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+
+	for _, test := range []struct {
+		name    string
+		options ggufFixtureOptions
+		message string
+	}{
+		{name: "embedded vision", options: ggufFixtureOptions{embeddedVision: true}, message: "through Ollama"},
+		{name: "split", options: ggufFixtureOptions{splitCount: 2}, message: "multiple shard"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "incompatible.gguf")
+			if err := os.WriteFile(path, testGGUFData(t, test.options), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := manager.StartGGUFImport(path, test.name); err == nil || !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("StartGGUFImport error = %v", err)
+			}
+		})
+	}
+
+	id := "existing-ollama"
+	directory := filepath.Join(manager.modelsDir, id)
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "model.gguf")
+	data := testGGUFData(t, ggufFixtureOptions{embeddedVision: true})
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	now := nowText()
+	if err := manager.insertModel(context.Background(), ModelRecord{
+		ID: id, DisplayName: "Existing Ollama model", Provider: "llama_cpp",
+		Source: ModelSourceOllama, Format: "gguf", SizeBytes: int64(len(data)),
+		SHA256: strings.Repeat("a", 64), ModelPath: path, ImportedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	record, err := manager.Model(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.State != modelStateUnsupported || !strings.Contains(record.Message, "through Ollama") {
+		t.Fatalf("existing incompatible model = %+v", record)
+	}
+}
+
+func TestModelManagerCachesMalformedGGUFMetadata(t *testing.T) {
+	manager, err := OpenModelManager(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = manager.Close() })
+
+	id := "malformed-metadata"
+	directory := filepath.Join(manager.modelsDir, id)
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "model.gguf")
+	data := testGGUFData(t, ggufFixtureOptions{})
+	binary.LittleEndian.PutUint32(data[4:8], 99)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	now := nowText()
+	if err := manager.insertModel(context.Background(), ModelRecord{
+		ID: id, DisplayName: "Malformed metadata", Provider: "llama_cpp",
+		Source: ModelSourceGGUF, Format: "gguf", SizeBytes: int64(len(data)),
+		SHA256: strings.Repeat("b", 64), ModelPath: path, ImportedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	record, err := manager.Model(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.State != modelStateUnsupported || !strings.Contains(record.Message, "unsupported version") {
+		t.Fatalf("malformed model = %+v", record)
+	}
+	manager.compatibilityMu.Lock()
+	_, cached := manager.compatibility[path]
+	manager.compatibilityMu.Unlock()
+	if !cached {
+		t.Fatal("deterministic malformed metadata result was not cached")
+	}
 }
 
 func TestModelManagerImportsStandaloneGGUFAndDeduplicates(t *testing.T) {
@@ -136,7 +261,7 @@ func TestModelManagerImportsStandaloneGGUFAndDeduplicates(t *testing.T) {
 	t.Cleanup(func() { _ = manager.Close() })
 
 	source := filepath.Join(t.TempDir(), "local.gguf")
-	data := append([]byte("GGUF"), make([]byte, 4096)...)
+	data := testGGUFData(t, ggufFixtureOptions{})
 	if err := os.WriteFile(source, data, 0o600); err != nil {
 		t.Fatalf("write GGUF: %v", err)
 	}
@@ -167,7 +292,7 @@ func TestModelManagerDoesNotDeduplicateAgainstMissingCopy(t *testing.T) {
 	t.Cleanup(func() { _ = manager.Close() })
 
 	source := filepath.Join(t.TempDir(), "local.gguf")
-	data := append([]byte("GGUF"), make([]byte, 4096)...)
+	data := testGGUFData(t, ggufFixtureOptions{})
 	if err := os.WriteFile(source, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +327,7 @@ func TestModelManagerDeleteRestoresFilesWhenDatabaseDeleteFails(t *testing.T) {
 	t.Cleanup(func() { _ = manager.Close() })
 
 	source := filepath.Join(t.TempDir(), "local.gguf")
-	if err := os.WriteFile(source, append([]byte("GGUF"), make([]byte, 128)...), 0o600); err != nil {
+	if err := os.WriteFile(source, testGGUFData(t, ggufFixtureOptions{}), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	job, err := manager.StartGGUFImport(source, "Delete rollback")
@@ -243,7 +368,7 @@ func TestModelManagerDeleteRejectsInventoryPathMismatch(t *testing.T) {
 	t.Cleanup(func() { _ = manager.Close() })
 
 	source := filepath.Join(t.TempDir(), "local.gguf")
-	if err := os.WriteFile(source, append([]byte("GGUF"), make([]byte, 128)...), 0o600); err != nil {
+	if err := os.WriteFile(source, testGGUFData(t, ggufFixtureOptions{}), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	job, err := manager.StartGGUFImport(source, "Path guard")
@@ -294,7 +419,7 @@ func TestModelManagerReconcilesInterruptedDeletion(t *testing.T) {
 				t.Fatal(err)
 			}
 			source := filepath.Join(t.TempDir(), "local.gguf")
-			if err := os.WriteFile(source, append([]byte("GGUF"), make([]byte, 128)...), 0o600); err != nil {
+			if err := os.WriteFile(source, testGGUFData(t, ggufFixtureOptions{}), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			job, err := manager.StartGGUFImport(source, "Crash recovery")
@@ -361,7 +486,7 @@ func TestModelImportStopsAfterExpectedSize(t *testing.T) {
 	t.Cleanup(func() { _ = manager.Close() })
 
 	source := filepath.Join(t.TempDir(), "growing.gguf")
-	if err := os.WriteFile(source, append([]byte("GGUF"), make([]byte, 4096)...), 0o600); err != nil {
+	if err := os.WriteFile(source, testGGUFData(t, ggufFixtureOptions{}), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	job, err := manager.startImport(modelImportSpec{
@@ -494,7 +619,16 @@ func TestOpenModelManagerRemovesOnlyOldImportPartials(t *testing.T) {
 }
 
 type ollamaFixtureOptions struct {
-	projector bool
+	projector      bool
+	embeddedVision bool
+	topLevelVision bool
+	splitCount     uint16
+}
+
+type ggufFixtureOptions struct {
+	embeddedVision bool
+	topLevelVision bool
+	splitCount     uint16
 }
 
 type ollamaFixture struct {
@@ -512,7 +646,11 @@ func writeOllamaFixture(t *testing.T, root string, options ollamaFixtureOptions)
 			t.Fatalf("mkdir fixture: %v", err)
 		}
 	}
-	modelData := append([]byte("GGUF"), make([]byte, 8192)...)
+	modelData := testGGUFData(t, ggufFixtureOptions{
+		embeddedVision: options.embeddedVision,
+		topLevelVision: options.topLevelVision,
+		splitCount:     options.splitCount,
+	})
 	modelDigest, modelPath := writeOllamaBlob(t, blobs, modelData)
 	configData := []byte(`{"model_format":"gguf","model_family":"llama","model_type":"3.2B","file_type":"Q4_K_M"}`)
 	configDigest, _ := writeOllamaBlob(t, blobs, configData)
@@ -538,6 +676,63 @@ func writeOllamaFixture(t *testing.T, root string, options ollamaFixtureOptions)
 		t.Fatalf("write manifest: %v", err)
 	}
 	return ollamaFixture{modelPath: modelPath, modelData: modelData, modelSHA: strings.TrimPrefix(modelDigest, "sha256:")}
+}
+
+func testGGUFData(t *testing.T, options ggufFixtureOptions) []byte {
+	t.Helper()
+	var payload bytes.Buffer
+	writeNumber := func(value any) {
+		if err := binary.Write(&payload, binary.LittleEndian, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeString := func(value string) {
+		writeNumber(uint64(len(value)))
+		_, _ = payload.WriteString(value)
+	}
+
+	metadataCount := uint64(3)
+	if options.embeddedVision || options.topLevelVision {
+		metadataCount++
+	}
+	if options.splitCount > 0 {
+		metadataCount++
+	}
+	_, _ = payload.WriteString("GGUF")
+	writeNumber(uint32(ggufVersion3))
+	writeNumber(uint64(1))
+	writeNumber(metadataCount)
+
+	writeString("general.architecture")
+	writeNumber(uint32(ggufTypeString))
+	writeString("llama")
+	writeString("llama.context_length")
+	writeNumber(uint32(ggufTypeUint32))
+	writeNumber(uint32(4096))
+	writeString("tokenizer.ggml.tokens")
+	writeNumber(uint32(ggufTypeArray))
+	writeNumber(uint32(ggufTypeString))
+	writeNumber(uint64(2))
+	writeString("hello")
+	writeString("world")
+	if options.embeddedVision || options.topLevelVision {
+		key := "gemma4.vision.embedding_length"
+		if options.topLevelVision {
+			key = "vision.embedding_length"
+		}
+		writeString(key)
+		writeNumber(uint32(ggufTypeUint32))
+		writeNumber(uint32(1152))
+	}
+	if options.splitCount > 0 {
+		writeString("split.count")
+		writeNumber(uint32(ggufTypeUint16))
+		writeNumber(options.splitCount)
+	}
+	if payload.Len() > 8196 {
+		t.Fatalf("GGUF fixture exceeds fixed size: %d", payload.Len())
+	}
+	return append(payload.Bytes(), make([]byte, 8196-payload.Len())...)
 }
 
 func writeOllamaBlob(t *testing.T, directory string, payload []byte) (string, string) {

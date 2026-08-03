@@ -181,7 +181,7 @@ where the logic lives.
 
 | Gap | Where it lands |
 | --- | --- |
-| Release plumbing: setup EXE, portable ZIP, version metadata, PR artifacts, tag publication | Implemented; `v0.1.0-alpha.11` retains version-bound reviewed unsigned setup publication and the exact-artifact Defender scan |
+| Release plumbing: setup EXE, portable ZIP, version metadata, PR artifacts, tag publication | Implemented; `v0.1.0-alpha.12` uses portable-only public publication after alpha.11's version-bound unsigned setup exception ended |
 | Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Implemented with official `b9966` CPU and CUDA 12.4 assets |
 | Inno Setup script, destination/shortcut choices, explicit retain/purge uninstall | Implemented and covered by release lifecycle acceptance |
 | First-run detection, `#/setup`, re-run from Settings | Implemented |

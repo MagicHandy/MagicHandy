@@ -1279,6 +1279,7 @@
   "the worker completed without returning audio": "the worker completed without returning audio",
   "this video {video} · setup {setup}": "this video {video} · setup {setup}",
   "trimmed": "trimmed",
+  "unsupported": "unsupported",
   "unavailable": "unavailable",
   "unknown playback error": "unknown playback error",
   "voice crashed": "voice crashed",

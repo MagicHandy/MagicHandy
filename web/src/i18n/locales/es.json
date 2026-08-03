@@ -1316,6 +1316,7 @@
   "the worker completed without returning audio": "el proceso terminó sin devolver audio",
   "this video {video} · setup {setup}": "este video {video} · configuración {setup}",
   "trimmed": "recortado",
+  "unsupported": "no compatible",
   "unavailable": "No disponible",
   "unknown playback error": "error de reproducción desconocido",
   "voice crashed": "El servicio de voz falló",

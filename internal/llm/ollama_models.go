@@ -105,6 +105,7 @@ func (m *ModelManager) ScanOllama(ctx context.Context, root string) (OllamaScan,
 	}
 
 	candidates := make([]OllamaCandidate, 0)
+	compatibility := make(map[string]string)
 	manifestRoot := filepath.Join(resolved, "manifests")
 	err = filepath.WalkDir(manifestRoot, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -123,7 +124,10 @@ func (m *ModelManager) ScanOllama(ctx context.Context, root string) (OllamaScan,
 		if err != nil {
 			return err
 		}
-		candidate := scanOllamaManifest(resolved, path, relative)
+		candidate := scanOllamaManifest(ctx, resolved, path, relative, compatibility)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if record, ok := imported[strings.TrimPrefix(candidate.Digest, "sha256:")]; ok {
 			candidate.ImportedModelID = record.ID
 			if record.State != modelStateReady {
@@ -150,7 +154,7 @@ func (m *ModelManager) ScanOllama(ctx context.Context, root string) (OllamaScan,
 	return OllamaScan{Path: resolved, Candidates: candidates}, nil
 }
 
-func scanOllamaManifest(root, path, relative string) OllamaCandidate {
+func scanOllamaManifest(ctx context.Context, root, path, relative string, compatibility map[string]string) OllamaCandidate {
 	candidate := OllamaCandidate{Name: ollamaNameFromManifest(relative)}
 	payload, err := readLimitedFile(path, maxOllamaManifestSize)
 	if err != nil {
@@ -184,7 +188,13 @@ func scanOllamaManifest(root, path, relative string) OllamaCandidate {
 		return candidate
 	}
 	candidate.blobPath = ollamaBlobPath(root, candidate.Digest)
-	if reason := validateOllamaBlob(candidate.blobPath, candidate.SizeBytes); reason != "" {
+	compatibilityKey := candidate.Digest + fmt.Sprintf(":%d", candidate.SizeBytes)
+	reason, checked := compatibility[compatibilityKey]
+	if !checked {
+		reason = validateOllamaBlob(ctx, candidate.blobPath, candidate.SizeBytes)
+		compatibility[compatibilityKey] = reason
+	}
+	if reason != "" {
 		candidate.Reason = reason
 		return candidate
 	}
@@ -212,7 +222,7 @@ func rejectOllamaCandidate(candidate OllamaCandidate, relative, reason string) O
 	return candidate
 }
 
-func validateOllamaBlob(path string, expectedSize int64) string {
+func validateOllamaBlob(ctx context.Context, path string, expectedSize int64) string {
 	info, err := os.Stat(path)
 	if err != nil || !info.Mode().IsRegular() {
 		return "model blob is missing"
@@ -225,9 +235,10 @@ func validateOllamaBlob(path string, expectedSize int64) string {
 		return "model blob is unreadable"
 	}
 	defer func() { _ = file.Close() }()
-	var magic [4]byte
-	if _, err := io.ReadFull(file, magic[:]); err != nil || string(magic[:]) != "GGUF" {
+	if err := inspectManagedGGUF(ctx, file, info.Size()); errors.Is(err, errNotGGUF) {
 		return "model layer is not a GGUF file"
+	} else if err != nil {
+		return err.Error()
 	}
 	return ""
 }

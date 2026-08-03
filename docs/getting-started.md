@@ -6,17 +6,16 @@ Everything you need to install, update, and run MagicHandy from source. The
 ## Windows release package
 
 The current Windows x64 release is
-[v0.1.0-alpha.11](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.11).
-Download its setup EXE and `SHA256SUMS` file, verify the setup hash, and run it.
-The portable ZIP is also available when installer integration is not wanted.
-The prebuilt core requires no Go, Node, Python, CMake, or Visual Studio and
-opens the same guided setup described below.
+[v0.1.0-alpha.12](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.12).
+Download its portable ZIP and `SHA256SUMS` file, verify the ZIP hash, extract
+it, and run `magichandy.exe`. The prebuilt core requires no Go, Node, Python,
+CMake, or Visual Studio and opens the same guided setup described below.
 
 The executables remain unsigned. Microsoft completed false-positive case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`
-and removed the alpha.6 detection. Alpha.11 keeps the hardened x64/non-solid
-package, adds an exact-artifact Defender scan, and receives the full installer
-lifecycle test before publication. If
+and removed the alpha.6 detection. The reviewed unsigned setup exception ended
+with alpha.11. Alpha.12 is portable-only, receives an exact-artifact Defender
+scan, and does not ask users to run a newly unreviewed setup wrapper. If
 Defender or SmartScreen classifies a new download as unsafe, do not bypass the
 warning; retain the checksum and report the detection.
 Build and acceptance commands are in
@@ -26,10 +25,13 @@ Versioned builds check the latest compatible GitHub Release and notify through
 the app. Stable builds ignore prereleases; alpha, beta, and release-candidate
 builds can follow newer compatible prereleases. **Settings > General > Updates** provides an
 explicit check and a manual-only preference. The app opens the release page;
-it does not silently download or run an artifact. Setup over-install upgrades
-preserve `%APPDATA%\MagicHandy`. Existing packaged installs keep their current
-uninstaller and data behavior. Full trust
-boundaries are in
+it does not silently download or run an artifact. To move from an
+alpha.8-alpha.11 setup install to portable-only alpha.12, stop the app, uninstall
+the old package from Windows Installed apps and decline user-data removal, then
+extract alpha.12 to a user-writable directory outside Program Files and run
+`magichandy.exe`. Do not overwrite the old Program Files directory with portable
+files. The new process reuses `%APPDATA%\MagicHandy`; uninstalling first removes
+stale shortcuts and the old binary. Full trust boundaries are in
 [update-checks.md](update-checks.md).
 
 ## Windows source bootstrap (`install.ps1`)

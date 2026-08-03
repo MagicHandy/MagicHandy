@@ -77,21 +77,27 @@ VirusTotal report:
    checksum into one dedicated `artifacts/release` directory, runs the full
    lifecycle against that exact setup, and publishes only the three explicit
    paths. An ordinary `UnsignedCI` build cannot enter a GitHub Release.
-4. **Trusted Authenticode remains the production target.** `SignedPublic`
+4. **Alpha.12 returns to portable-only publication.** The alpha.8 through
+   alpha.11 setup exception is not broadened. The tag workflow builds no setup
+   executable, verifies the ZIP and one-entry checksum with `PortablePublic`,
+   scans the exact public directory with Defender, and publishes only those two
+   explicit paths. Pull-request CI continues to build and lifecycle-test the
+   unsigned setup without release permission.
+5. **Trusted Authenticode remains the production target.** `SignedPublic`
    requires a protected organizational signing identity, trusted timestamp,
    and `Valid` Authenticode status on the setup executable and every shipped
    payload executable. Verification pins the approved signer thumbprint and
    rejects self-signed certificates. The reviewed unsigned exception does not
    satisfy this long-term publisher-identity requirement.
-5. **Signing is a release operation, not a source-build dependency.** Developer
+6. **Signing is a release operation, not a source-build dependency.** Developer
    and CI lifecycle builds remain possible without signing credentials. The
    eventual signing service must expose credentials only to the protected tag
    workflow and must not make private key material available to pull requests.
-6. **Warnings are not an installation step.** Documentation must not advise
+7. **Warnings are not an installation step.** Documentation must not advise
    users to disable Defender, ignore a malware classification, or use a
    SmartScreen bypass. A newly detected public artifact is withdrawn and
    investigated before another version is published.
-7. **Published tags remain immutable.** A withdrawn version keeps its tag and a
+8. **Published tags remain immutable.** A withdrawn version keeps its tag and a
    source-tree notice explaining the withdrawal. A corrected release uses the
    next SemVer prerelease ordinal.
 
@@ -122,7 +128,7 @@ Negative:
   identity;
   and
 - a trusted signing service and identity-validation process are still needed
-  before the reviewed unsigned exception can be retired.
+  before setup publication can resume under `SignedPublic`.
 
 ## Verification
 
@@ -135,12 +141,13 @@ Negative:
   alpha.8 through alpha.11 version and the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- The alpha.9 and later reviewed tag workflows run Microsoft Defender against
-  the exact public artifact directory before lifecycle verification or release
-  creation.
+- Alpha.9 through alpha.11 reviewed setup workflows and the alpha.12 portable
+  workflow run Microsoft Defender against the exact public artifact directory
+  before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
   timestamped Authenticode from the explicitly pinned signer on the setup
   executable and every payload EXE.
-- The tag workflow publishes only explicit paths under `artifacts/release`.
-- Installer integration tests require the reviewed policy, case ID, exact setup
-  path, and full lifecycle switches in the tag workflow.
+- The tag workflow publishes only explicit paths under `artifacts/release` and
+  contains no alpha.12 setup path.
+- Installer integration tests keep reviewed-policy, case-ID, and lifecycle
+  coverage in CI while asserting the public workflow selects `PortablePublic`.

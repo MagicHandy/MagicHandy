@@ -136,12 +136,14 @@ a choice never silently deletes an existing runtime or model library.
 
 The user provides a local file path and optional display name. MagicHandy:
 
-1. requires a regular file with the `GGUF` magic header;
-2. starts an asynchronous, cancellable copy;
-3. computes SHA-256 while copying;
-4. commits the file and metadata atomically;
-5. deduplicates the inventory by SHA-256; and
-6. leaves the source file unchanged.
+1. requires a regular file with a supported GGUF header and bounded metadata;
+2. rejects split shards and embedded audio, vision, or projector components that
+   the managed text-only runner cannot load;
+3. starts an asynchronous, cancellable copy;
+4. computes SHA-256 while copying;
+5. commits the file and metadata atomically;
+6. deduplicates the inventory by SHA-256; and
+7. leaves the source file unchanged.
 
 The selected model cannot be removed. Selection stores only the managed model
 ID, then follows the normal Save settings flow. At provider construction the
@@ -167,12 +169,16 @@ candidate only when:
 - the manifest is bounded JSON schema 2;
 - exactly one `application/vnd.ollama.image.model` layer exists;
 - no separate adapter or projector layer is required;
-- the blob exists, has the manifest size, and starts with `GGUF`; and
+- the blob exists, has the manifest size, and has supported bounded GGUF
+  metadata with no split-shard declaration or embedded audio, vision, or
+  projector component; and
 - the config reports GGUF when it reports a format.
 
-Multi-layer/split models and models requiring auxiliary projector/adapter
-arguments are shown with an incompatibility reason. The managed provider does
-not silently drop those layers.
+Multi-layer/split models and models requiring auxiliary audio, vision,
+projector, or adapter handling are shown with an incompatibility reason. The
+managed provider does not silently drop those components. Existing managed
+copies are classified the same way during inventory reads, with the result
+cached until the file size or modification time changes.
 
 Import re-scans the candidate, copies its model blob, computes SHA-256, and
 requires an exact match with the manifest digest before commit. The Ollama
@@ -231,7 +237,10 @@ Generation controls stay deliberately small and provider-aware:
   providers retain their native behavior and rely on the repair fallback.
 - Repair temperature `0` is serialized explicitly, repair always requests
   reasoning off where supported, and the original conversation remains in
-  repair context. Prompt
+  repair context. During an interactive repair, an already-visible first-pass
+  reply remains stable until the backend sends the authoritative final repaired
+  message; when no first-pass reply was parseable, the repair draft may stream.
+  Prompt
   examples are parser-valid and an immutable final guard makes reply-only JSON
   the uncertainty fallback, following the strongest small-model lesson from the
   STGPT-RV prompt inventory. Managed llama.cpp remembers
