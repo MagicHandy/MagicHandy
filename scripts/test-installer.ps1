@@ -77,6 +77,9 @@ try {
         Assert-Equal -Expected 0 -Actual $errors.Count -Message "$file should parse"
     }
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $Repo 'scripts\tts\chatterbox-server.py') -PathType Leaf) -Message 'Chatterbox launcher shim should ship with the installer'
+    $ttsRuntimeProbe = Join-Path $Repo 'scripts\tts\runtime-probe.py'
+    Assert-True -Condition (Test-Path -LiteralPath $ttsRuntimeProbe -PathType Leaf) -Message 'Python runtime verification should ship as a standalone script'
+    $ttsRuntimeProbeSource = [System.IO.File]::ReadAllText($ttsRuntimeProbe)
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $Repo 'internal\llm\runtimeassets\LICENSE-llama.cpp') -PathType Leaf) -Message 'managed llama.cpp installer should ship the pinned upstream license'
     $bootstrapSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'bootstrap.ps1'))
     Assert-True -Condition ($bootstrapSource.Contains('Microsoft.WinGet.Client')) -Message 'clean-machine bootstrap should use the official WinGet repair path'
@@ -94,19 +97,26 @@ try {
     Assert-True -Condition ($ttsInstallerSource.Contains('Initialize-TTSGit')) -Message 'TTS install should expose its verified Git executable to uv child processes'
     Assert-True -Condition ($ttsInstallerSource.Contains('Get-TTSNvidiaGPUName')) -Message 'Faster Qwen install should probe the NVIDIA driver before downloading dependencies'
     Assert-True -Condition ($ttsInstallerSource.Contains('Find-TTSManagedPython')) -Message 'TTS install should resolve the patch-specific managed Python without depending on uv junctions'
-    Assert-True -Condition ($ttsInstallerSource.Contains('--install-dir $managedPythonRoot --no-bin --no-registry')) -Message 'TTS install should keep Python app-owned without global executable or registry links'
+    Assert-True -Condition ($ttsInstallerSource.Contains("--install-dir 'managed-python' --no-bin --no-registry")) -Message 'TTS install should keep Python app-owned without a spaced absolute uv argument or global links'
     Assert-True -Condition ($ttsInstallerSource.Contains("`$env:UV_CACHE_DIR = `$uvCacheRoot")) -Message 'TTS install should keep the uv cache inside the managed module'
     Assert-True -Condition ($ttsInstallerSource.Contains("`$env:UV_CREDENTIALS_DIR = `$uvCredentialsRoot")) -Message 'TTS install should keep uv credential locks out of restricted global profile paths'
-    Assert-True -Condition ($ttsInstallerSource.Contains("-Arguments @('-m', 'venv', '--without-pip', `$venv)")) -Message 'TTS venv creation should use CPython directly without uv launchers or pip bootstrapping'
+    Assert-True -Condition ($ttsInstallerSource.Contains("-Arguments @('-m', 'venv', '--without-pip', '.venv')")) -Message 'TTS venv creation should use a module-relative target without uv launchers or pip bootstrapping'
     Assert-True -Condition (-not $ttsInstallerSource.Contains("-Arguments @('venv'")) -Message 'TTS venv creation must not restore the uv Windows trampoline path'
     Assert-True -Condition ($ttsInstallerSource.Contains('optional minor-version junction')) -Message 'TTS install should recover when Windows rejects uv minor-version junction creation after extraction'
     Assert-True -Condition ($ttsInstallerSource.Contains('Reusing the existing $reportedVersion environment')) -Message 'TTS reinstall should not replace an in-use compatible Python launcher'
-    Assert-True -Condition ($ttsInstallerSource.Contains("@('pip', 'check', '--python', `$python)")) -Message 'TTS install should reject an inconsistent final Python dependency graph'
+    Assert-True -Condition ($ttsInstallerSource.Contains("@('pip', 'check', '--python', `$relativePython)")) -Message 'TTS install should reject an inconsistent final Python dependency graph'
+    Assert-True -Condition ($ttsInstallerSource.Contains("`$relativePython = '.venv\Scripts\python.exe'")) -Message 'uv dependency commands should use the module-relative Python launcher'
+    Assert-True -Condition ($ttsInstallerSource.Contains("'--constraint', `$stagedConstraintsName")) -Message 'uv dependency commands should use a module-relative constraints path'
+    Assert-True -Condition ($ttsInstallerSource.Contains("'--editable', 'source[demo]'")) -Message 'Faster Qwen editable installation should use a module-relative source path'
+    Assert-True -Condition ($ttsInstallerSource.Contains('-WorkingDirectory $InstallRoot')) -Message 'uv dependency commands should execute from the module root'
+    Assert-True -Condition (-not $ttsInstallerSource.Contains("'--constraint', `$constraints")) -Message 'uv must not receive an absolute packaged constraints path that can be truncated at Program Files'
     Assert-True -Condition ($ttsInstallerSource.Contains('faster-qwen-constraints.txt')) -Message 'Faster Qwen install should use the packaged validated dependency constraints'
     Assert-True -Condition ($ttsInstallerSource.Contains('chatterbox-constraints.txt')) -Message 'Chatterbox install should use the packaged validated dependency constraints'
     Assert-True -Condition ($ttsInstallerSource.Contains('protobuf==4.25.8')) -Message 'Chatterbox install should apply the pinned upstream ONNX protobuf compatibility repair'
-    Assert-True -Condition ($ttsInstallerSource.Contains('chatterbox.tts_turbo')) -Message 'Chatterbox install should verify the actual Turbo model import path'
-    Assert-True -Condition ($ttsInstallerSource.Contains('torch.cuda.is_available()')) -Message 'CUDA TTS install should verify the installed runtime can use the driver before downloading a model'
+    Assert-True -Condition ($ttsRuntimeProbeSource.Contains('chatterbox.tts_turbo')) -Message 'Chatterbox install should verify the actual Turbo model import path'
+    Assert-True -Condition ($ttsRuntimeProbeSource.Contains('torch.cuda.is_available()')) -Message 'CUDA TTS install should verify the installed runtime can use the driver before downloading a model'
+    Assert-True -Condition ($ttsInstallerSource.Contains("'tts\runtime-probe.py'")) -Message 'TTS install should invoke the packaged runtime probe'
+    Assert-True -Condition (-not $ttsInstallerSource.Contains("-Arguments @('-c', `$probe")) -Message 'TTS runtime verification must not pass multiline Python through Windows PowerShell native quoting'
     Assert-True -Condition ($ttsInstallerSource.Contains("@('version') -Description 'Hugging Face client verification'")) -Message 'TTS install should probe the generated Hugging Face launcher before downloading a model'
     Assert-True -Condition (-not $ttsInstallerSource.Contains("Read-TTSChoice -Question 'Reference WAV path'")) -Message 'TTS install must leave Faster Qwen reference selection to the GUI'
     Assert-True -Condition (-not $ttsInstallerSource.Contains("Read-TTSChoice -Question 'Exact reference transcript'")) -Message 'TTS install must leave Faster Qwen transcription to the GUI'
@@ -206,6 +216,19 @@ func copySelf(destination string) {
 
 func main() {
 	base := filepath.Base(os.Args[0])
+	if capture := os.Getenv("MAGICHANDY_FAKE_CAPTURE_INVOCATION"); capture != "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(87)
+		}
+		contents := strings.Join(append([]string{cwd}, os.Args[1:]...), "\n")
+		if err := os.WriteFile(capture, []byte(contents), 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(86)
+		}
+		return
+	}
 	if hasArg("--stderr-success") {
 		fmt.Fprintln(os.Stderr, "non-fatal native diagnostic")
 		return
@@ -242,10 +265,15 @@ func main() {
 			return
 		}
 		if len(os.Args) > 2 && os.Args[1] == "python" && os.Args[2] == "install" {
-			installDir := valueAfter("--install-dir")
-			if installDir == "" || !hasArg("--no-bin") || !hasArg("--no-registry") {
+			installDirArgument := valueAfter("--install-dir")
+			if installDirArgument == "" || !hasArg("--no-bin") || !hasArg("--no-registry") {
 				fmt.Fprintln(os.Stderr, "managed Python install was not isolated")
 				os.Exit(94)
+			}
+			installDir, err := filepath.Abs(installDirArgument)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(85)
 			}
 			if !strings.EqualFold(os.Getenv("UV_PYTHON_INSTALL_DIR"), installDir) {
 				fmt.Fprintln(os.Stderr, "managed Python environment did not match install directory")
@@ -318,6 +346,27 @@ func main() {
         $nativeFailureRejected = $_.Exception.Message -match 'Failed native diagnostic fixture failed \(exit 73\)'
     }
     Assert-True -Condition $nativeFailureRejected -Message 'native stderr must not bypass authoritative exit-code handling'
+
+    Write-Host 'Checking native invocation from a Program Files-style path...'
+    $spacedWorkingDirectory = Join-Path $tempRoot 'Program Files\MagicHandy voice module'
+    $capturedInvocation = Join-Path $tempRoot 'spaced-native-invocation.txt'
+    New-Item -ItemType Directory -Force -Path $spacedWorkingDirectory | Out-Null
+    $savedCaptureInvocation = $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION
+    try {
+        $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION = $capturedInvocation
+        Invoke-Checked `
+            -Executable $fakeRuntimeBuild `
+            -Arguments @('pip', 'install', '--python', '.venv\Scripts\python.exe', '--constraint', '.magichandy-install-constraints.txt', '--editable', 'source[demo]') `
+            -WorkingDirectory $spacedWorkingDirectory `
+            -Description 'Spaced native invocation fixture'
+    } finally {
+        $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION = $savedCaptureInvocation
+    }
+    $capturedArguments = @([System.IO.File]::ReadAllLines($capturedInvocation))
+    Assert-Equal -Expected ([System.IO.Path]::GetFullPath($spacedWorkingDirectory)) -Actual $capturedArguments[0] -Message 'native command should execute from the requested spaced working directory'
+    Assert-Equal -Expected '.venv\Scripts\python.exe' -Actual $capturedArguments[4] -Message 'uv Python argument should remain module-relative'
+    Assert-Equal -Expected '.magichandy-install-constraints.txt' -Actual $capturedArguments[6] -Message 'uv constraints argument should remain module-relative'
+    Assert-Equal -Expected 'source[demo]' -Actual $capturedArguments[8] -Message 'uv editable source argument should remain module-relative'
 
     Write-Host 'Checking Hugging Face stderr progress handling...'
     $fakeHF = Join-Path $tempRoot 'hf.exe'
@@ -416,11 +465,23 @@ func main() {
         Assert-Equal -Expected $fakePython -Actual ([string]$reusedEnvironment.Python) -Message 'compatible TTS Python path should be reused'
         Assert-Equal -Expected 'Python 3.11.15' -Actual ([string]$reusedEnvironment.Version) -Message 'compatible TTS Python version should be retained'
         Assert-True -Condition (Test-Path -LiteralPath $fakePython -PathType Leaf) -Message 'compatible TTS Python launcher should remain in place'
-        Test-TTSPythonRuntime -Python $fakePython -Module faster-qwen3-tts -RuntimeDevice cuda
+        $runtimeProbeInvocation = Join-Path $tempRoot 'runtime-probe-invocation.txt'
+        $savedRuntimeProbeCapture = $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION
+        try {
+            $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION = $runtimeProbeInvocation
+            Test-TTSPythonRuntime -Python $fakePython -Module faster-qwen3-tts -RuntimeDevice cuda -Probe $ttsRuntimeProbe
+        } finally {
+            $env:MAGICHANDY_FAKE_CAPTURE_INVOCATION = $savedRuntimeProbeCapture
+        }
+        $runtimeProbeArguments = @([System.IO.File]::ReadAllLines($runtimeProbeInvocation))
+        Assert-Equal -Expected $ttsRuntimeProbe -Actual $runtimeProbeArguments[1] -Message 'runtime verification should execute the packaged Python script directly'
+        Assert-Equal -Expected 'faster-qwen3-tts' -Actual $runtimeProbeArguments[2] -Message 'runtime verification should preserve the module argument'
+        Assert-Equal -Expected 'cuda' -Actual $runtimeProbeArguments[3] -Message 'runtime verification should preserve the device argument'
+        Assert-True -Condition ($runtimeProbeArguments -notcontains '-c') -Message 'runtime verification should not depend on Windows PowerShell multiline command quoting'
 
         $env:MAGICHANDY_FAKE_UV_FAIL = $null
         $env:MAGICHANDY_FAKE_UV_JUNCTION_FAILURE = '1'
-        $fallbackRoot = Join-Path $tempRoot 'tts-junction-fallback'
+        $fallbackRoot = Join-Path $tempRoot 'Program Files\tts-junction-fallback'
         $staleEnvironment = Join-Path $fallbackRoot '.venv'
         New-Item -ItemType Directory -Force -Path $staleEnvironment | Out-Null
         [System.IO.File]::WriteAllText((Join-Path $staleEnvironment 'partial.txt'), 'interrupted venv')
@@ -553,6 +614,9 @@ func main() {
     Assert-True -Condition ($releaseWorkflowSource.Contains('-ReviewedFalsePositiveCaseID "15c1e36d-fb35-4c5d-85de-83707169818a"')) -Message 'release workflow should bind setup publication to the completed Microsoft review'
     Assert-True -Condition ($releaseWorkflowSource.Contains('-ExerciseInstaller')) -Message 'release workflow should exercise the exact public setup lifecycle'
     Assert-True -Condition ($releaseWorkflowSource.Contains('-ExerciseDefaultInstall')) -Message 'release workflow should exercise the exact public setup in Program Files'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('Scan exact public artifacts with Microsoft Defender')) -Message 'release workflow should scan the exact public artifact directory before publication'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('-DisableRemediation')) -Message 'release Defender scan should report rather than mutate the candidate'
+    Assert-True -Condition ($releaseWorkflowSource.IndexOf('Scan exact public artifacts with Microsoft Defender', [StringComparison]::Ordinal) -lt $releaseWorkflowSource.IndexOf('Verify reviewed public Windows artifacts', [StringComparison]::Ordinal)) -Message 'Defender should scan the candidate before release verification and publication'
     Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts\ci')) -Message 'tag workflow should not lifecycle-test a parallel setup instead of the public artifact'
     Assert-True -Condition (-not $releaseWorkflowSource.Contains('-SkipInstaller')) -Message 'public release build should include the reviewed setup executable'
     Assert-True -Condition ($releaseWorkflowSource.Contains('artifacts/release/MagicHandy-$version-windows-amd64-portable.zip')) -Message 'GitHub release should publish the verified portable ZIP'
@@ -572,7 +636,7 @@ func main() {
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseVerifierSource.Contains("'ReviewedUnsignedPublic'")) -Message 'release verifier should expose the reviewed unsigned public policy'
     Assert-True -Condition ($releaseVerifierSource.Contains('ReviewedUnsignedPublic requires Microsoft false-positive case')) -Message 'reviewed unsigned publication should fail closed without the recorded Microsoft case'
-    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersion = '0.1.0-alpha.8'")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release version'
+    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
             -Version '0.0.0-local' `
@@ -582,12 +646,12 @@ func main() {
     } -Pattern 'requires Microsoft false-positive case' -Message 'reviewed unsigned policy without case ID'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
-            -Version '0.1.0-alpha.9' `
+            -Version '0.1.0-alpha.10' `
             -Commit ('0' * 40) `
             -ArtifactsRoot $tempRoot `
             -ArtifactPolicy ReviewedUnsignedPublic `
             -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
-    } -Pattern 'approved only for version 0.1.0-alpha.8' -Message 'reviewed unsigned policy reused by a later version'
+    } -Pattern 'approved only for versions 0.1.0-alpha.8, 0.1.0-alpha.9' -Message 'reviewed unsigned policy reused by a later version'
     Assert-True -Condition ($releaseVerifierSource.Contains('-ExpectedSignerThumbprint')) -Message 'signed public verification should require an explicitly pinned signer'
     Assert-True -Condition ($releaseVerifierSource.Contains('must not use a self-signed certificate')) -Message 'signed public verification should reject self-signed certificates'
     $innoInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Install-InnoSetup.ps1'))

@@ -25,8 +25,8 @@ Phase 16.
 
 The setup EXE and portable ZIP require no Go, Node, Python, CMake, Visual
 Studio, or CUDA installation to run the MagicHandy core. The unsigned setup EXE
-is published for alpha.8 under ADR 0014 after Microsoft's `Not malware`
-determination. The exception is version-bound and still lacks publisher
+is published for alpha.9 under ADR 0014 after Microsoft's `Not malware`
+determination for alpha.6 and a new exact-artifact Defender scan. The exception is version-bound and still lacks publisher
 identity. Optional selections can add
 their own dependencies after explicit consent.
 

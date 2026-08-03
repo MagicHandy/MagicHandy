@@ -6,7 +6,7 @@ Everything you need to install, update, and run MagicHandy from source. The
 ## Windows release package
 
 The current Windows x64 release is
-[v0.1.0-alpha.8](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.8).
+[v0.1.0-alpha.9](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.9).
 Download its setup EXE and `SHA256SUMS` file, verify the setup hash, and run it.
 The portable ZIP is also available when installer integration is not wanted.
 The prebuilt core requires no Go, Node, Python, CMake, or Visual Studio and
@@ -14,8 +14,9 @@ opens the same guided setup described below.
 
 The executables remain unsigned. Microsoft completed false-positive case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`
-and removed the alpha.6 detection. Alpha.8 is a new hardened x64/non-solid
-package and receives the full installer lifecycle test before publication. If
+and removed the alpha.6 detection. Alpha.9 keeps the hardened x64/non-solid
+package, adds an exact-artifact Defender scan, and receives the full installer
+lifecycle test before publication. If
 Defender or SmartScreen classifies a new download as unsafe, do not bypass the
 warning; retain the checksum and report the detection.
 Build and acceptance commands are in

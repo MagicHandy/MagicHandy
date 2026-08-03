@@ -9,8 +9,9 @@ The setup EXE is a thin Inno Setup shell with a native x64 loader and non-solid
 `zip/9` payload compression. This avoids the 32-bit loader and opaque solid
 ultra-LZMA stream used by the withdrawn alpha.6 package. Microsoft completed its
 review of that exact alpha.6 file as `Not malware` and removed the detection.
-ADR 0014 therefore permits alpha.8 setup publication through a dedicated policy
-bound to that version and case. A later unsigned version fails closed until a
+ADR 0014 therefore permits alpha.8 and alpha.9 setup publication through a
+dedicated policy bound to those versions and case. Alpha.9 also adds a Defender
+scan of the exact public artifact directory. A later unsigned version fails closed until a
 new explicit review decision. This exception does not establish publisher
 identity; trusted Authenticode remains the production target.
 The portable archive contains the app, workers, optional-module helper scripts,
@@ -140,8 +141,8 @@ $commit = (git rev-parse HEAD).Trim()
   -ExerciseInstaller
 ```
 
-`ReviewedUnsignedPublic` accepts only alpha.8 with the recorded Microsoft case
-ID and checks the x64 unsigned setup, four x64 payload executables, manifests,
+`ReviewedUnsignedPublic` accepts only alpha.8 or alpha.9 with the recorded
+Microsoft case ID and checks the x64 unsigned setup, four x64 payload executables, manifests,
 and both outer hashes. `SignedPublic` is the fail-closed long-term policy. It
 requires valid, timestamped Authenticode on the setup executable and all four
 payload executables, rejects self-signed certificates, and requires the
@@ -181,7 +182,8 @@ It requires that the exact tagged commit matches the current `origin/main` tip,
 that the checkout is clean, and that matching release notes exist. It reruns
 Go, race, lint, pure-Go, frontend, installer, package, and full Windows
 lifecycle gates. It builds setup, portable ZIP, and checksum in the dedicated
-public directory, verifies that exact setup with `ReviewedUnsignedPublic`, and
+public directory, scans the exact directory with Microsoft Defender, verifies
+that setup with `ReviewedUnsignedPublic`, and
 creates the GitHub Release from three explicit paths. No wildcard publishes a
 release asset. Prerelease tags are marked as GitHub prereleases.
 

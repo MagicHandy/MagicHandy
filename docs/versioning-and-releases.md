@@ -57,7 +57,7 @@ the release manifest, `SOURCE.txt`, and `magichandy.exe -version`.
 
 ## Release Artifacts
 
-The reviewed unsigned Windows alpha.8 release contains exactly these
+The reviewed unsigned Windows alpha.9 release contains exactly these
 downloadable artifacts:
 
 - `MagicHandy-<version>-windows-amd64-setup.exe`
@@ -70,8 +70,9 @@ source URL, file sizes, and per-file SHA-256 hashes in
 
 Pull-request workflows continue to retain setup only as a short-lived
 `unsigned-ci` artifact. The tag workflow uses `ReviewedUnsignedPublic`, the
-alpha.8 version, the completed Microsoft false-positive case ID from ADR 0014,
-and the full lifecycle test against the exact setup placed in
+explicitly approved alpha.8/alpha.9 version list, the completed Microsoft
+false-positive case ID from ADR 0014, an exact-artifact Defender scan for
+alpha.9, and the full lifecycle test against the exact setup placed in
 `artifacts/release`. A later unsigned version fails this policy until the
 repository records a new explicit decision.
 

@@ -177,6 +177,24 @@ jobs:
           -OutputRoot "artifacts\release"
           -ISCCPath "$env:INNO_ISCC"
 
+      - name: Scan exact public artifacts with Microsoft Defender
+        shell: powershell
+        run: |
+          $defender = Join-Path $env:ProgramFiles 'Windows Defender\MpCmdRun.exe'
+          if (-not (Test-Path -LiteralPath $defender -PathType Leaf)) {
+            $platformRoot = Join-Path $env:ProgramData 'Microsoft\Windows Defender\Platform'
+            $defender = Get-ChildItem -LiteralPath $platformRoot -Filter MpCmdRun.exe -File -Recurse -ErrorAction SilentlyContinue |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          if ([string]::IsNullOrWhiteSpace($defender) -or -not (Test-Path -LiteralPath $defender -PathType Leaf)) {
+            throw 'Microsoft Defender command-line scanner is unavailable on the release runner.'
+          }
+          & $defender -Scan -ScanType 3 -File (Resolve-Path 'artifacts\release') -DisableRemediation
+          if ($LASTEXITCODE -ne 0) {
+            throw "Microsoft Defender rejected or could not scan the public artifacts (exit $LASTEXITCODE)."
+          }
+
       - name: Verify reviewed public Windows artifacts
         shell: powershell
         run: >-
