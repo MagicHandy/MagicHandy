@@ -20,6 +20,11 @@ reports the result, and the user remains in control of the actual update.
   distinct results. Automatic network failures do not raise a startup alarm;
   an explicit check reports the failure in place.
 
+This compatible-prerelease policy ships in alpha.11. Alpha.10 and earlier used
+GitHub's stable-only latest-release endpoint and cannot discover alpha.11, so
+those users need one manual update. Alpha.11 and later builds can discover
+subsequent compatible prereleases under the policy above.
+
 GitHub's paginated `GET /repos/MagicHandy/MagicHandy/releases?per_page=100`
 endpoint is the source of truth. The core follows up to ten pages and fails
 closed instead of silently truncating a larger result. It ignores drafts, malformed semantic tags, and releases
