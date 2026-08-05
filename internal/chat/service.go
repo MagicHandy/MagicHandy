@@ -197,14 +197,42 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	if err := emitEvent(emit, StreamEvent{Type: "malformed", Phase: "initial", Error: parseErr.Error()}); err != nil {
 		return result, err
 	}
+	return s.repairResponse(ctx, repairInput{
+		result:       result,
+		messages:     messages,
+		prompt:       prompt,
+		raw:          raw,
+		parseErr:     parseErr,
+		truncated:    truncated,
+		userMessage:  userMessage,
+		capabilities: capabilities,
+	}, emit)
+}
 
-	repairMessages := append([]llm.Message(nil), messages...)
-	repairContext := strings.TrimSpace(raw)
+// repairInput carries one malformed turn into the second attempt. It exists so
+// the repair phase reads as its own step rather than as the tail of Complete.
+type repairInput struct {
+	result       Result
+	messages     []llm.Message
+	prompt       PromptSet
+	raw          string
+	parseErr     error
+	truncated    bool
+	userMessage  string
+	capabilities Capabilities
+}
+
+// repairResponse asks the model to replace one malformed response, then applies
+// the same validation and the semantic fallback to whatever comes back.
+func (s Service) repairResponse(ctx context.Context, in repairInput, emit func(StreamEvent) error) (Result, error) {
+	result := in.result
+	repairMessages := append([]llm.Message(nil), in.messages...)
+	repairContext := strings.TrimSpace(in.raw)
 	if repairContext == "" {
 		repairContext = emptyRepairContext
 	}
 	repairMessages = append(repairMessages, llm.Message{Role: "assistant", Content: repairContext})
-	repairMessages = append(repairMessages, llm.Message{Role: "user", Content: repairPromptFor(prompt, parseErr.Error(), truncated)})
+	repairMessages = append(repairMessages, llm.Message{Role: "user", Content: repairPromptFor(in.prompt, in.parseErr.Error(), in.truncated)})
 	repairRaw, repairErr := s.Provider.StreamChat(ctx, llm.ChatRequest{
 		Messages:      repairMessages,
 		Model:         s.Model,
@@ -221,9 +249,9 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return result, fmt.Errorf("repair assistant response: %w", repairErr)
 	}
 
-	repaired, repairParseErr := s.parseAndValidateResponse(repairRaw, capabilities, userMessage)
+	repaired, repairParseErr := s.parseAndValidateResponse(repairRaw, in.capabilities, in.userMessage)
 	if repairParseErr != nil {
-		if fallback, ok := s.recoverSemanticRepair(repaired, userMessage, repairParseErr); ok {
+		if fallback, ok := s.recoverSemanticRepair(repaired, in.userMessage, repairParseErr); ok {
 			result.Response = fallback
 			result.Malformed = false
 			result.Repaired = true
