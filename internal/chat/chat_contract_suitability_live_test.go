@@ -111,6 +111,67 @@ func speedOf(m *motionShape, fallback int) int {
 	return fallback
 }
 
+// recordTurn folds one response into the tally and reports whether it produced a
+// usable object. It exists so the test body stays a loop over turns rather than
+// a single function carrying every contract rule.
+func (s *suitability) recordTurn(t *testing.T, it intent, raw string, prevSpeed *int) (contractShape, bool) {
+	t.Helper()
+	var shape contractShape
+	if strings.TrimSpace(raw) == "" {
+		return shape, false
+	}
+	candidate := firstJSONObject(raw)
+	parsed := candidate != "" && json.Unmarshal([]byte(candidate), &shape) == nil
+	if parsed && !mFence.MatchString(raw) {
+		s.jsonOK++
+	}
+	if !parsed {
+		t.Logf("  [%s] BAD JSON: %s", it.turn, truncate(raw, 120))
+		return shape, false
+	}
+	if strings.TrimSpace(shape.Reply) != "" {
+		s.replyOK++
+		s.register.add(shape.Reply)
+		s.totalWords += len(strings.Fields(shape.Reply))
+	}
+	// Top-level action/speed_percent/pattern_id are explicitly forbidden by the
+	// contract; they are the most common way a weak model breaks it.
+	if len(shape.Action) > 0 || len(shape.Speed) > 0 || len(shape.Patt) > 0 {
+		s.leak++
+	}
+	s.recordMotionShape(shape.Motion)
+
+	tried, correct, next := judgeIntent(it.want, shape, *prevSpeed)
+	if tried {
+		s.intentTried++
+		if correct {
+			s.intentOK++
+		} else {
+			t.Logf("  [%s] want %s got %s", it.turn, it.want, motionSummary(shape.Motion))
+		}
+	}
+	*prevSpeed = next
+	return shape, true
+}
+
+// recordMotionShape counts the structural contract rules a motion object can
+// break independently of whether it matched the turn's intent.
+func (s *suitability) recordMotionShape(m *motionShape) {
+	if m == nil {
+		return
+	}
+	// pattern_id and intensity are an inseparable pair.
+	if (m.PatternID != "") != (m.Intensity != nil) {
+		s.pairViolations++
+	}
+	if m.Speed != nil && (*m.Speed < 0 || *m.Speed > 100) {
+		s.rangeViolations++
+	}
+	if m.PatternID != "" && m.Speed != nil {
+		s.pairViolations++ // must choose one pacing representation
+	}
+}
+
 func TestSuitability(t *testing.T) {
 	base := os.Getenv("LLAMACPP")
 	if base == "" {
@@ -139,52 +200,10 @@ func TestSuitability(t *testing.T) {
 		elapsed := int(time.Since(began).Milliseconds())
 		s.turns++
 		s.totalMillis += elapsed
-		if strings.TrimSpace(raw) == "" {
+		shape, ok := s.recordTurn(t, it, raw, &prevSpeed)
+		if !ok {
 			continue
 		}
-
-		candidate := firstJSONObject(raw)
-		var shape contractShape
-		parsed := candidate != "" && json.Unmarshal([]byte(candidate), &shape) == nil
-		if parsed && !mFence.MatchString(raw) {
-			s.jsonOK++
-		}
-		if !parsed {
-			t.Logf("  [%s] BAD JSON: %s", it.turn, truncate(raw, 120))
-			continue
-		}
-		if strings.TrimSpace(shape.Reply) != "" {
-			s.replyOK++
-			s.register.add(shape.Reply)
-			s.totalWords += len(strings.Fields(shape.Reply))
-		}
-		// Top-level action/speed_percent/pattern_id are explicitly forbidden by
-		// the contract; they are the most common way a weak model breaks it.
-		if len(shape.Action) > 0 || len(shape.Speed) > 0 || len(shape.Patt) > 0 {
-			s.leak++
-		}
-		if m := shape.Motion; m != nil {
-			// pattern_id and intensity are an inseparable pair.
-			if (m.PatternID != "") != (m.Intensity != nil) {
-				s.pairViolations++
-			}
-			if m.Speed != nil && (*m.Speed < 0 || *m.Speed > 100) {
-				s.rangeViolations++
-			}
-			if m.PatternID != "" && m.Speed != nil {
-				s.pairViolations++ // must choose one pacing representation
-			}
-		}
-		tried, ok, next := judgeIntent(it.want, shape, prevSpeed)
-		if tried {
-			s.intentTried++
-			if ok {
-				s.intentOK++
-			} else {
-				t.Logf("  [%s] want %s got %s", it.turn, it.want, motionSummary(shape.Motion))
-			}
-		}
-		prevSpeed = next
 
 		history = append(history, omsg{Role: "user", Content: it.turn}, omsg{Role: "assistant", Content: shape.Reply})
 		if len(history) > 6 {
