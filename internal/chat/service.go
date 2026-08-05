@@ -171,6 +171,21 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	}
 	if truncated {
 		parseErr = fmt.Errorf("assistant response was truncated before valid JSON: %w", parseErr)
+		// A response cut off at the output cap cannot be repaired by asking for
+		// the corrected object under that same cap: the correction is longer
+		// than the text that already did not fit, so it truncates again. That
+		// cost a second full generation and produced a second failure, which on
+		// a slow model is where the request reset. The prose the user asked for
+		// is already sitting in the partial JSON, so recover it instead. No
+		// motion is taken from a partial object.
+		if reply := salvageTruncatedReply(raw); reply != "" {
+			return Result{
+				Response:         AssistantResponse{Reply: reply},
+				Raw:              raw,
+				InitialMalformed: true,
+				Repaired:         true,
+			}, nil
+		}
 	}
 
 	result := Result{
@@ -182,14 +197,42 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	if err := emitEvent(emit, StreamEvent{Type: "malformed", Phase: "initial", Error: parseErr.Error()}); err != nil {
 		return result, err
 	}
+	return s.repairResponse(ctx, repairInput{
+		result:       result,
+		messages:     messages,
+		prompt:       prompt,
+		raw:          raw,
+		parseErr:     parseErr,
+		truncated:    truncated,
+		userMessage:  userMessage,
+		capabilities: capabilities,
+	}, emit)
+}
 
-	repairMessages := append([]llm.Message(nil), messages...)
-	repairContext := strings.TrimSpace(raw)
+// repairInput carries one malformed turn into the second attempt. It exists so
+// the repair phase reads as its own step rather than as the tail of Complete.
+type repairInput struct {
+	result       Result
+	messages     []llm.Message
+	prompt       PromptSet
+	raw          string
+	parseErr     error
+	truncated    bool
+	userMessage  string
+	capabilities Capabilities
+}
+
+// repairResponse asks the model to replace one malformed response, then applies
+// the same validation and the semantic fallback to whatever comes back.
+func (s Service) repairResponse(ctx context.Context, in repairInput, emit func(StreamEvent) error) (Result, error) {
+	result := in.result
+	repairMessages := append([]llm.Message(nil), in.messages...)
+	repairContext := strings.TrimSpace(in.raw)
 	if repairContext == "" {
 		repairContext = emptyRepairContext
 	}
 	repairMessages = append(repairMessages, llm.Message{Role: "assistant", Content: repairContext})
-	repairMessages = append(repairMessages, llm.Message{Role: "user", Content: RepairPrompt(prompt, parseErr.Error())})
+	repairMessages = append(repairMessages, llm.Message{Role: "user", Content: repairPromptFor(in.prompt, in.parseErr.Error(), in.truncated)})
 	repairRaw, repairErr := s.Provider.StreamChat(ctx, llm.ChatRequest{
 		Messages:      repairMessages,
 		Model:         s.Model,
@@ -206,9 +249,9 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return result, fmt.Errorf("repair assistant response: %w", repairErr)
 	}
 
-	repaired, repairParseErr := s.parseAndValidateResponse(repairRaw, capabilities, userMessage)
+	repaired, repairParseErr := s.parseAndValidateResponse(repairRaw, in.capabilities, in.userMessage)
 	if repairParseErr != nil {
-		if fallback, ok := s.recoverSemanticRepair(repaired, userMessage, repairParseErr); ok {
+		if fallback, ok := s.recoverSemanticRepair(repaired, in.userMessage, repairParseErr); ok {
 			result.Response = fallback
 			result.Malformed = false
 			result.Repaired = true
@@ -226,6 +269,64 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	result.Malformed = false
 	result.Repaired = true
 	return result, nil
+}
+
+// salvageTruncatedReply pulls the reply text out of a JSON object that was cut
+// off mid-generation. It decodes the "reply" string manually because the object
+// has no closing brace and often no closing quote, so encoding/json cannot help.
+//
+// It reads only the top-level "reply" key and stops at the first unescaped
+// quote, so a truncated object cannot smuggle in a motion command: the caller
+// discards everything else.
+func salvageTruncatedReply(raw string) string {
+	const key = `"reply"`
+	at := strings.Index(raw, key)
+	if at < 0 {
+		return ""
+	}
+	rest := raw[at+len(key):]
+	colon := strings.IndexByte(rest, ':')
+	if colon < 0 {
+		return ""
+	}
+	rest = strings.TrimLeft(rest[colon+1:], " \t\r\n")
+	if !strings.HasPrefix(rest, `"`) {
+		return ""
+	}
+	rest = rest[1:]
+
+	var out strings.Builder
+	for i := 0; i < len(rest); i++ {
+		switch rest[i] {
+		case '\\':
+			if i+1 >= len(rest) {
+				// Trailing backslash: the escape itself was cut in half.
+				return strings.TrimSpace(out.String())
+			}
+			// Decode the escape through encoding/json so \n, \", and \uXXXX all
+			// behave, rather than hand-rolling a second JSON string parser.
+			var decoded string
+			if err := json.Unmarshal([]byte(`"\`+string(rest[i+1])+`"`), &decoded); err == nil {
+				out.WriteString(decoded)
+				i++
+				continue
+			}
+			if rest[i+1] == 'u' && i+5 < len(rest) {
+				if err := json.Unmarshal([]byte(`"`+rest[i:i+6]+`"`), &decoded); err == nil {
+					out.WriteString(decoded)
+					i += 5
+					continue
+				}
+			}
+			return strings.TrimSpace(out.String())
+		case '"':
+			return strings.TrimSpace(out.String())
+		default:
+			out.WriteByte(rest[i])
+		}
+	}
+	// Ran off the end: the string itself was truncated, which is the common case.
+	return strings.TrimSpace(out.String())
 }
 
 func (s Service) recoverSemanticRepair(response AssistantResponse, userMessage string, repairErr error) (AssistantResponse, bool) {
