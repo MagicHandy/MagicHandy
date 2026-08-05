@@ -62,7 +62,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 reviewed unsigned setup are explicit
+3. **Alpha.8 through alpha.11, alpha.13, and alpha.14 reviewed unsigned setup are explicit
    exceptions.** The tag workflow may publish only those five unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
    case ID above. Alpha.9 corrects installer-script argument handling without
@@ -141,7 +141,7 @@ Negative:
   alpha.8 through alpha.11 or alpha.13 version and the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 reviewed setup workflows run Microsoft
+- Alpha.9 through alpha.11, alpha.13, and alpha.14 reviewed setup workflows run Microsoft
   Defender against the exact public artifact directory before verification or
   release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
