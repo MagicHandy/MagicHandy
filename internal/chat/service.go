@@ -171,6 +171,21 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	}
 	if truncated {
 		parseErr = fmt.Errorf("assistant response was truncated before valid JSON: %w", parseErr)
+		// A response cut off at the output cap cannot be repaired by asking for
+		// the corrected object under that same cap: the correction is longer
+		// than the text that already did not fit, so it truncates again. That
+		// cost a second full generation and produced a second failure, which on
+		// a slow model is where the request reset. The prose the user asked for
+		// is already sitting in the partial JSON, so recover it instead. No
+		// motion is taken from a partial object.
+		if reply := salvageTruncatedReply(raw); reply != "" {
+			return Result{
+				Response:         AssistantResponse{Reply: reply},
+				Raw:              raw,
+				InitialMalformed: true,
+				Repaired:         true,
+			}, nil
+		}
 	}
 
 	result := Result{
@@ -189,7 +204,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		repairContext = emptyRepairContext
 	}
 	repairMessages = append(repairMessages, llm.Message{Role: "assistant", Content: repairContext})
-	repairMessages = append(repairMessages, llm.Message{Role: "user", Content: RepairPrompt(prompt, parseErr.Error())})
+	repairMessages = append(repairMessages, llm.Message{Role: "user", Content: repairPromptFor(prompt, parseErr.Error(), truncated)})
 	repairRaw, repairErr := s.Provider.StreamChat(ctx, llm.ChatRequest{
 		Messages:      repairMessages,
 		Model:         s.Model,
@@ -226,6 +241,64 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	result.Malformed = false
 	result.Repaired = true
 	return result, nil
+}
+
+// salvageTruncatedReply pulls the reply text out of a JSON object that was cut
+// off mid-generation. It decodes the "reply" string manually because the object
+// has no closing brace and often no closing quote, so encoding/json cannot help.
+//
+// It reads only the top-level "reply" key and stops at the first unescaped
+// quote, so a truncated object cannot smuggle in a motion command: the caller
+// discards everything else.
+func salvageTruncatedReply(raw string) string {
+	const key = `"reply"`
+	at := strings.Index(raw, key)
+	if at < 0 {
+		return ""
+	}
+	rest := raw[at+len(key):]
+	colon := strings.IndexByte(rest, ':')
+	if colon < 0 {
+		return ""
+	}
+	rest = strings.TrimLeft(rest[colon+1:], " \t\r\n")
+	if !strings.HasPrefix(rest, `"`) {
+		return ""
+	}
+	rest = rest[1:]
+
+	var out strings.Builder
+	for i := 0; i < len(rest); i++ {
+		switch rest[i] {
+		case '\\':
+			if i+1 >= len(rest) {
+				// Trailing backslash: the escape itself was cut in half.
+				return strings.TrimSpace(out.String())
+			}
+			// Decode the escape through encoding/json so \n, \", and \uXXXX all
+			// behave, rather than hand-rolling a second JSON string parser.
+			var decoded string
+			if err := json.Unmarshal([]byte(`"\`+string(rest[i+1])+`"`), &decoded); err == nil {
+				out.WriteString(decoded)
+				i++
+				continue
+			}
+			if rest[i+1] == 'u' && i+5 < len(rest) {
+				if err := json.Unmarshal([]byte(`"`+rest[i:i+6]+`"`), &decoded); err == nil {
+					out.WriteString(decoded)
+					i += 5
+					continue
+				}
+			}
+			return strings.TrimSpace(out.String())
+		case '"':
+			return strings.TrimSpace(out.String())
+		default:
+			out.WriteByte(rest[i])
+		}
+	}
+	// Ran off the end: the string itself was truncated, which is the common case.
+	return strings.TrimSpace(out.String())
 }
 
 func (s Service) recoverSemanticRepair(response AssistantResponse, userMessage string, repairErr error) (AssistantResponse, bool) {

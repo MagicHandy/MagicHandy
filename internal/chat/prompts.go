@@ -784,16 +784,27 @@ func memoryInstructionForPrompt(promptID string) string {
 
 // RepairPrompt asks the same model to replace malformed output with the contract.
 func RepairPrompt(prompt PromptSet, parseError string) string {
+	return repairPromptFor(prompt, parseError, false)
+}
+
+// repairPromptFor adds a length instruction when the previous attempt was cut
+// off at the output cap. Without it the model reproduces the same over-long
+// reply and truncates again, because nothing told it the first one did not fit.
+func repairPromptFor(prompt PromptSet, parseError string, truncated bool) string {
+	brevity := ""
+	if truncated {
+		brevity = "\n\nYour previous reply was cut off because it exceeded the output limit. Write a SHORTER reply that fits comfortably, and close the JSON object."
+	}
 	return fmt.Sprintf(`Repair your previous MagicHandy response.
 
-Return exactly one JSON object matching the contract from the system prompt. Do not add markdown, comments, code fences, or extra keys.
+Return exactly one JSON object matching the contract from the system prompt. Do not add markdown, comments, code fences, or extra keys.%s
 %s
 
 Validation error:
 %s
 
 Prompt set:
-%s`, repairLanguageInstruction(prompt.ID), strings.TrimSpace(parseError), prompt.ID)
+%s`, brevity, repairLanguageInstruction(prompt.ID), strings.TrimSpace(parseError), prompt.ID)
 }
 
 // ComposeSystemForTest exposes the full composition path, including the
