@@ -81,7 +81,7 @@ type omsg struct {
 	Content string `json:"content"`
 }
 
-func matrixGenerate(t *testing.T, base, model, system string, history []omsg, user string) string {
+func matrixGenerate(t *testing.T, endpoint, system string, history []omsg, user string) string {
 	t.Helper()
 	messages := append([]omsg{{Role: "system", Content: system}}, history...)
 	messages = append(messages, omsg{Role: "user", Content: user})
@@ -95,12 +95,15 @@ func matrixGenerate(t *testing.T, base, model, system string, history []omsg, us
 		"response_format":      map[string]any{"type": "json_object"},
 		"chat_template_kwargs": map[string]any{"enable_thinking": false},
 	})
-	request, err := http.NewRequest(http.MethodPost, base+"/v1/chat/completions", bytes.NewReader(body))
+	// #nosec G704 -- endpoint is rebuilt from a validated loopback host by
+	// loopbackEndpoint, shared with the register harness in this package.
+	request, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	client := &http.Client{Timeout: 300 * time.Second}
+	// #nosec G704 -- same validated loopback endpoint.
 	response, err := client.Do(request)
 	if err != nil {
 		t.Logf("generate failed: %v", err)
@@ -291,7 +294,7 @@ func (s *score) line(label string) string {
 		s.pct(s.refusal), s.pct(s.assistant), len(s.vocab))
 }
 
-func runPersona(t *testing.T, base, model string, p evalPersona, show bool) *score {
+func runPersona(t *testing.T, endpoint string, p evalPersona, show bool) *score {
 	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
 	caps := FullCapabilities()
 	caps.Voice = p.voice
@@ -305,7 +308,7 @@ func runPersona(t *testing.T, base, model string, p evalPersona, show bool) *sco
 	var history []omsg
 	for _, turn := range matrixTurns {
 		system := composeSystem(set, nil, defaultPatternChoices(), caps, nil, ctx)
-		raw := matrixGenerate(t, base, model, system, history, turn)
+		raw := matrixGenerate(t, endpoint, system, history, turn)
 		reply := replyOf(raw)
 		sc.add(reply)
 		if show && reply != "" {
@@ -336,6 +339,7 @@ func TestMatrix(t *testing.T) {
 	if base == "" {
 		t.Skip("set LLAMACPP to the llama.cpp server base URL")
 	}
+	endpoint := loopbackEndpoint(t, base)
 	models := strings.Split(os.Getenv("MODELS"), ",")
 	wanted := os.Getenv("PERSONAS")
 	show := os.Getenv("SHOW") != ""
@@ -354,7 +358,7 @@ func TestMatrix(t *testing.T) {
 			if wanted != "" && wanted != "all" && !strings.Contains(wanted, p.key) {
 				continue
 			}
-			sc := runPersona(t, base, model, p, show)
+			sc := runPersona(t, endpoint, p, show)
 			fmt.Println("  " + sc.line(p.key+"/"+string(p.voice)))
 			if r := sc.topRepeats(); r != "" {
 				fmt.Println("      repeats: " + r)
