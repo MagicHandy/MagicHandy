@@ -23,7 +23,10 @@ decisions it reaches should become an ADR (next free number: 0014) before code.
    posture.
 6. **Queue depth 1 with coalescing, never a backlog.** An image that arrives
    four messages late is worse than no image.
-7. **Assume single-GPU contention is the hard problem**, because it is.
+7. **In autopilot, schedule beats against the session arc and render ahead of
+   them.** Autopilot is the only mode that knows what happens next, which means
+   it is the only place the generation latency can be hidden entirely.
+8. **Assume single-GPU contention is the hard problem**, because it is.
 
 ## Why This Is The TTS Problem Again
 
@@ -253,6 +256,117 @@ A manual "generate an image of this moment" affordance on a message is probably
 the highest-value-per-effort version of the whole feature, and should exist
 regardless of whether automatic requests do.
 
+## Autopilot: Where This Gets Interesting
+
+Chat is the easy case. Autopilot is the one worth thinking hard about, because
+the assumption the chat design rests on — that every image hangs off a message
+the user just caused — is not true there.
+
+Three things change. The loop is autonomous, so there may be no reply to attach
+to. It runs for a long time, so cost accumulates instead of being a one-off. And
+the user is very likely **not reading the transcript**, which makes an image
+buried in chat history close to worthless.
+
+But autopilot also has something chat can never have, and it turns the single
+biggest weakness of local image generation into a non-issue.
+
+### The unlock: autopilot knows what happens next
+
+Image generation is slow because you ask for the picture at the moment you want
+it. Autopilot does not have that constraint. It runs a plan: segments carry an
+explicit `DurationMillis` in the 6–24 s range (`internal/modes/freestyle.go`),
+and the session arc has a known minimum duration in minutes
+(`AutopilotMinimumArcMinutes`).
+
+So the backend can **schedule a beat and render toward it**:
+
+1. Commit to the next image beat in advance — "at arc 40%", or a time offset.
+2. Start rendering when the beat is roughly one render-time away.
+3. Hold the finished image and reveal it **exactly on the beat**.
+
+Done this way the latency is completely hidden. The user never sees a spinner,
+never waits, and the image lands on a moment rather than trailing behind one.
+Chat cannot do this because it cannot know when the next turn arrives; autopilot
+can, and it should.
+
+Two rules keep it honest. If the render finishes early, **hold it** — revealing
+early is worse than revealing on time, because the whole value is that it lands
+on the beat. If it finishes late by more than one segment, **drop it**; the same
+no-stale-artifacts rule as chat. And if a render is still in flight when the next
+beat arrives, skip that beat rather than queue — precisely what
+`autopilotSpeechBacklogged` already does for speech
+(`internal/httpapi/autopilot.go:319`), which is a good sign the instinct is
+already house style.
+
+### Beats should follow the arc, not a timer
+
+A timer produces decoration. The session arc produces meaning, and it already
+exists: a visible 0–100 % buildup the model can ask to `advance`, `ease`, or
+`hold` within backend-enforced bounds (`internal/config/autopilot.go:53`).
+
+Triggering image beats on **arc milestone crossings** rather than elapsed time
+means the pictures track the session's shape — sparse and slower early, closer
+together as it fills, and an ease-back is visible too. It also gives the prompt
+composer an intensity parameter for free, so the images escalate with the
+session instead of being uniformly the same register.
+
+That is the difference between "the app occasionally shows a picture" and "the
+session has visual beats", for roughly the same implementation cost.
+
+### Cadence is an existing axis; add to it
+
+`SpeechCadence` and `MotionCadence` already exist side by side with a `Natural`
+default (`internal/config/autopilot.go:80`). `ImageCadence` belongs beside them
+with the same shape — `Off` / `Rare` / `Natural` / `Frequent` — so the control
+surface stays one idea rather than a new concept, and `Off` remains the default
+until the user has a working provider.
+
+### No extra model call in the common case
+
+The composer for an autopilot beat needs: persona appearance tags, arc
+percentage, current focus area, mood, and the character of the running pattern.
+**All of that is backend-owned state.** No LLM round-trip, so autopilot images
+add exactly zero chat latency — which matters much more here than in chat,
+because the loop is already pacing itself against speech playback
+(`AwaitPlayback`).
+
+When autopilot is *already* calling the model for a spoken check-in, the
+decision can optionally carry a short scene intent, the same bounded field the
+chat contract uses. Free when it happens, never required.
+
+### Where an autopilot image actually appears
+
+This is the part that would be easy to get wrong by defaulting to "put it in
+chat". Proposed, in priority order:
+
+- **A stage surface** — the image displays large in the area the video player
+  occupies, when no video is playing. This is where the user is already looking
+  during an autopilot session, and it costs no new screen real estate.
+- **A chat row as the durable record**, so the session transcript stays
+  complete and the image is still there tomorrow.
+- **A session filmstrip** — the beats of one session, in order, on the images
+  page. This falls out of the retention model for free and is a genuinely nice
+  artifact: the visual shape of a session, matching the arc that produced it.
+
+### Pause, Stop, and switching
+
+- **Pause** holds the pending image and freezes the beat schedule. A paused
+  session is resumed, not abandoned, so discarding the in-flight render wastes
+  the one expensive thing in the loop.
+- **Stop** cancels and discards, using the same epoch discipline as
+  `enqueueSpeechAt`. Consistency is worth more than one salvaged render.
+- **Mode or session switch** cancels; the beat belongs to a session that is no
+  longer running.
+
+### The cost profile is worse here
+
+A sustained hour of autopilot at a natural cadence is dozens of renders
+competing with the LLM for the same card, for the whole session — not one render
+next to one reply. This sharpens the single-GPU guidance below rather than
+sitting beside it: for autopilot specifically, a **remote or second-GPU ComfyUI
+is close to a requirement**, and the shipped cadence default should be
+conservative.
+
 ## The Hard Problem: Single-GPU Contention
 
 This deserves more weight than it usually gets in a design like this.
@@ -304,35 +418,101 @@ own install, exactly as Ollama does.
 
 ## Suggested Slices
 
-- **17.x.0 — provider plumbing.** Settings (provider, base URL, enable), a
-  connection check that validates required node types, the pinned workflow
-  template, prompt composition, and a manual "generate image" action on a
-  message. No LLM involvement at all. This alone is shippable and useful.
+- **17.x.0 — provider plumbing and its page.** Settings (provider, base URL,
+  enable), a connection check that validates required node types, the pinned
+  workflow template, prompt composition, the images route with manual
+  generation, the job log, and retention with the 100-image default. No LLM
+  involvement at all. **This slice is shippable on its own** and is the cheapest
+  way to find out whether the images are any good before building anything
+  around them.
 - **17.x.1 — persona appearance.** `appearance_tags`, `negative_tags`,
-  `style_preset` on the persona, editor UI, applied to composition.
+  `style_preset` on the persona, editor UI, applied to composition. Turns
+  "generates an image" into "generates *her*".
 - **17.x.2 — chat integration.** Contract section behind a capability gate,
   persisted correlation, inline placeholder, queue with coalescing, Stop
-  cancellation, backend rate policy.
-- **17.x.3 — retention.** Per-session and total-size caps, purge with chat
-  history, disclosure of the storage path. Images accumulate fast; this cannot
-  be an afterthought.
+  cancellation, backend rate policy, error-verbosity setting.
+- **17.x.3 — autopilot beats.** `ImageCadence`, arc-milestone triggering,
+  scheduled render-ahead with hold-until-beat, skip-when-busy, pause/Stop
+  handling, and the stage surface. Depends on 17.x.2 for the queue and on
+  nothing else; this is where the feature stops being a novelty.
 - **17.x.4 — optional consistency layer.** Reference-image conditioning using
   the existing persona portrait, gated on the user's ComfyUI actually having the
   nodes.
 - **Later, if wanted:** a second provider (A1111-style REST) to prove the
-  interface; `stable-diffusion.cpp` as a managed path.
+  interface; `stable-diffusion.cpp` as a managed path; the session filmstrip.
 
-## Open Questions
+## Decisions
 
-- **Retention default.** Keep every image forever, or cap and prune oldest?
-  Leaning cap-by-total-size with an explicit setting, since these are large and
-  the data directory is already the thing uninstall deliberately preserves.
-- **Do generated images belong in the media library** alongside videos, or only
-  inline in chat? Reusing the media catalog is tempting but it is built around
-  playable video with funscript offsets; a separate lightweight store is
-  probably cleaner.
-- **Real-person likeness.** Tags or a reference image can describe a real
-  person. Worth a stated policy line before the reference-image slice, which is
-  the one that makes it materially easier.
-- **Should a failed image be visible at all?** A quiet inline note is proposed
-  above, but "silently nothing" is defensible and less noisy.
+### Retention: keep the last 100, configurable
+
+Count-based, not size-based: a count is what a user can reason about, and these
+files are uniform enough that 100 lands around 100–200 MB. Oldest pruned first
+when the cap is exceeded. The cap is a setting with no upper bound beyond disk,
+and `0` means keep everything for someone who wants to curate manually.
+
+Two details that matter. Pruning is by **age across all sessions**, not per
+session, so one long autopilot run cannot silently evict every image from a
+conversation the user cared about — unless it genuinely is the oldest. And
+deleting a chat session offers to delete its images with it, but does not do so
+silently; uninstall already deliberately preserves the data directory, and
+generated images belong to that same "the user's own content" category.
+
+### ComfyUI gets its own page
+
+Agreed — it is far too much to bolt onto Settings, and the surface only grows.
+A dedicated route in the nav rail, appearing once a provider is configured:
+
+- provider connection, reachability, and the **node-validation result** — the
+  single most useful diagnostic, since a missing custom node is the failure mode
+  the pinned-template design exists to make legible
+- checkpoint/model selection, and style presets shared across personas
+- the gallery, grouped by session, with the retention control and manual delete
+- manual generation, so the provider can be exercised without chat at all
+- live queue and job state, plus the recent-failure log
+- an entry point into per-persona appearance tags, which are edited on the
+  persona but belong conceptually here too
+
+Settings keeps only a pointer to this page, matching how the app already keeps
+heavy surfaces out of Settings.
+
+### Content restriction: out of scope
+
+The user supplies the image generator, its models, and its configuration.
+MagicHandy applies no content filtering of its own; what is possible is defined
+by the local install. This is consistent with the rest of the product — a
+single-operator, local-first controller that does not police the user's own
+machine. The one thing the app should still do is be accurate in its own UI
+about where images came from and where they are stored.
+
+### Error verbosity: configurable, and speaks up by default
+
+Three levels, defaulting to the middle:
+
+- **Silent** — the placeholder disappears and nothing is said. For immersion,
+  and the right choice mid-session for someone who does not want the illusion
+  broken.
+- **Brief** (default) — "Image generation failed", dismissible, with a retry.
+  Failing invisibly is the worse default: an image that silently never arrives
+  is indistinguishable from a cadence that decided not to fire one, and the user
+  has no way to tell that their ComfyUI fell over.
+- **Detailed** — surfaces the provider's own error. This is not a power-user
+  luxury; ComfyUI's characteristic failures (a missing node type, a checkpoint
+  that is not present, CUDA OOM) are only actionable if the text reaches the
+  user.
+
+Independent of the level, every failure is recorded in the job log on the images
+page, and **the chat message itself is never affected** — the same rule speech
+already follows.
+
+## Remaining Open Questions
+
+- **Do generated images belong in the media library** alongside videos, or in
+  their own store? The media catalog is built around playable video with
+  funscript offsets and compatibility probing; a separate lightweight store is
+  probably cleaner, at the cost of a second gallery concept.
+- **Should the stage surface be opt-in?** Displaying autopilot images full-size
+  where the video player sits is proposed above as the default, but someone
+  running video alongside autopilot may want the image confined to chat.
+- **Arc milestone spacing.** Every 20 % is a guess. Whether beats should be
+  evenly spaced across the arc or cluster toward the top wants a real session to
+  answer, not a design doc.
