@@ -72,7 +72,7 @@ remains for provenance.
 
 Pull-request workflows continue to retain setup only as a short-lived
 `unsigned-ci` artifact and exercise its full lifecycle. The tag workflow uses
-`ReviewedUnsignedPublic`, limited to alpha.8 through alpha.11, alpha.13, alpha.14, and alpha.15,
+`ReviewedUnsignedPublic`, limited to alpha.8 through alpha.11, alpha.13, alpha.14, alpha.15, and alpha.16,
 scans the exact public directory with Defender, verifies the setup/ZIP manifests
 and two-entry outer checksum, exercises the exact setup lifecycle, and publishes
 three explicit assets.
