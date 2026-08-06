@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "./api/client";
 import type { ManagedLLMDuplicateSnapshot } from "./api/types";
 import { ManagedLLMDuplicateDialog } from "./components/ManagedLLMDuplicateDialog";
+import { SetupPromptDialog } from "./components/SetupPromptDialog";
 import { PatternLibraryRoute } from "./routes/PatternLibraryRoute";
 import { PresetModesRoute } from "./routes/PresetModesRoute";
 import { ChatRoute } from "./routes/ChatRoute";
@@ -24,6 +25,9 @@ export function App() {
   const [duplicateRuntime, setDuplicateRuntime] = useState<ManagedLLMDuplicateSnapshot | null>(null);
   const [terminatingDuplicate, setTerminatingDuplicate] = useState(false);
   const [duplicateError, setDuplicateError] = useState("");
+  const [setupPromptDismissed, setSetupPromptDismissed] = useState(false);
+  const [dismissingSetupPrompt, setDismissingSetupPrompt] = useState(false);
+  const [setupPromptError, setSetupPromptError] = useState("");
   const checkedDuplicateConfig = useRef("");
   const llmSettings = state?.settings?.llm;
   const duplicateConfigKey = llmSettings
@@ -40,11 +44,19 @@ export function App() {
       }
     };
   }, [theme]);
+  // A store with no saved settings document at all is a first run, and going
+  // straight to the wizard is the onboarding we want. A store that already holds
+  // settings but is not marked configured is the other case: an update, or a
+  // previous run that left setup part-way. That used to hijack the route on
+  // every launch with no way to decline, so it asks instead.
+  const setupPending = state?.settings?.ui?.setup_completed === false;
+  const freshStore = (state?.settings_status as { using_defaults?: boolean } | undefined)?.using_defaults === true;
+  const askBeforeSetup = setupPending && !freshStore && !setupPromptDismissed;
   useEffect(() => {
-    if (state?.settings?.ui?.setup_completed === false && base !== "setup") {
+    if (setupPending && freshStore && base !== "setup") {
       window.location.hash = "#/setup";
     }
-  }, [base, state?.settings?.ui?.setup_completed]);
+  }, [base, freshStore, setupPending]);
   useEffect(() => {
     const workspace = document.getElementById("workspace");
     if (!workspace) return;
@@ -79,6 +91,27 @@ export function App() {
       window.clearTimeout(retryTimer);
     };
   }, [duplicateConfigKey, managedLLMSelected]);
+
+  // Declining has to persist, or the same question returns on every launch,
+  // which is the behaviour this replaced. Marking the store configured is what
+  // the user is actually saying, and Settings > General still offers "Run setup
+  // again". A failure here only leaves the prompt for next time, so the dialog
+  // closes either way rather than trapping anyone behind a failed write.
+  const declineSetup = async () => {
+    if (dismissingSetupPrompt) return;
+    setSetupPromptDismissed(true);
+    if (readOnly) return;
+    setDismissingSetupPrompt(true);
+    setSetupPromptError("");
+    try {
+      await api.completeSetup(true);
+      await refresh();
+    } catch (error) {
+      setSetupPromptError(error instanceof Error ? error.message : t("Setup could not be marked as complete."));
+    } finally {
+      setDismissingSetupPrompt(false);
+    }
+  };
 
   const terminateDuplicates = async () => {
     if (!duplicateRuntime || terminatingDuplicate || readOnly) return;
@@ -123,6 +156,18 @@ export function App() {
           <ChatRoute />
         )}
       </ErrorBoundary>}
+      {askBeforeSetup && (
+        <SetupPromptDialog
+          pending={dismissingSetupPrompt}
+          readOnly={readOnly}
+          error={setupPromptError}
+          onRunSetup={() => {
+            setSetupPromptDismissed(true);
+            window.location.hash = "#/setup";
+          }}
+          onDismiss={() => void declineSetup()}
+        />
+      )}
       {duplicateRuntime && (
         <ManagedLLMDuplicateDialog
           snapshot={duplicateRuntime}

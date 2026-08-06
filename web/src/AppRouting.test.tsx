@@ -34,16 +34,57 @@ vi.mock("./routes/PatternLibraryRoute", () => ({ PatternLibraryRoute: () => <div
 vi.mock("./routes/VideoRoute", () => ({ VideoRoute: () => <div>Videos route</div> }));
 vi.mock("./routes/SetupRoute", () => ({ SetupRoute: () => <div>Setup route</div> }));
 
+const client = vi.hoisted(() => ({ completeSetup: vi.fn().mockResolvedValue({ settings: {} }), llmDuplicates: vi.fn().mockRejectedValue(new Error("no")) }));
+vi.mock("./api/client", () => ({ api: client }));
+
 describe("App route lifetime", () => {
   beforeEach(() => {
+    client.completeSetup.mockClear();
     app.state = {};
     window.location.hash = "#/chat";
   });
 
   it("redirects a fresh data store into guided setup", async () => {
     app.route = "#/chat";
-    app.state = { settings: { ui: { setup_completed: false } } };
+    // using_defaults marks a store with no saved settings document at all, which
+    // is the only case that should take over the route.
+    app.state = { settings: { ui: { setup_completed: false } }, settings_status: { using_defaults: true } };
     render(<App />);
+
+    await waitFor(() => expect(window.location.hash).toBe("#/setup"));
+  });
+
+  // A store that already holds settings but is not marked configured is an
+  // update or an abandoned setup, not a first run. Taking over the route there
+  // gave the user no way to decline and repeated on every launch.
+  it("asks instead of redirecting when a configured store is not marked complete", async () => {
+    app.route = "#/chat";
+    app.state = { settings: { ui: { setup_completed: false } }, settings_status: { using_defaults: false } };
+    render(<App />);
+
+    expect(await screen.findByRole("dialog", { name: "Run setup again?" })).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/chat");
+    expect(screen.getByText("Chat route")).toBeInTheDocument();
+  });
+
+  it("declining records the choice so the question does not return next launch", async () => {
+    app.route = "#/chat";
+    app.state = { settings: { ui: { setup_completed: false } }, settings_status: { using_defaults: false } };
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Not now" }));
+
+    await waitFor(() => expect(client.completeSetup).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(window.location.hash).toBe("#/chat");
+  });
+
+  it("accepting opens setup", async () => {
+    app.route = "#/chat";
+    app.state = { settings: { ui: { setup_completed: false } }, settings_status: { using_defaults: false } };
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Run setup" }));
 
     await waitFor(() => expect(window.location.hash).toBe("#/setup"));
   });
