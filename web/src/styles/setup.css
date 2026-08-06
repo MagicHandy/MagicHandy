@@ -656,3 +656,52 @@
     animation: none;
   }
 }
+
+/* Asked instead of redirecting when a configured store is not marked complete.
+   Matches the managed-duplicate dialog so the two startup prompts read as one
+   pattern rather than two designs. */
+.setup-prompt-dialog {
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.setup-prompt-dialog header,
+.setup-prompt-body,
+.setup-prompt-actions {
+  padding: 16px 18px;
+}
+
+.setup-prompt-dialog header {
+  border-bottom: 1px solid var(--line);
+}
+
+.setup-prompt-dialog h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.setup-prompt-body {
+  display: grid;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.setup-prompt-body p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.setup-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+}
