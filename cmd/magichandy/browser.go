@@ -17,7 +17,7 @@ type browserLaunchFlags struct {
 func addBrowserFlags(flags *flag.FlagSet) browserLaunchFlags {
 	return browserLaunchFlags{
 		open:  flags.Bool("open-browser", false, "open the local app in the default browser after startup"),
-		setup: flags.Bool("setup", false, "open the first-run setup route when launching a browser"),
+		setup: flags.Bool("setup", false, "open guided setup for explicit reconfiguration when launching a browser"),
 	}
 }
 
@@ -25,11 +25,15 @@ func launchBrowserWhenReady(open, setup bool, address string, logger *slog.Logge
 	if !open {
 		return
 	}
+	go openLocalAppWhenReady(address, browserLaunchRoute(setup), logger)
+}
+
+func browserLaunchRoute(setup bool) string {
 	route := "#/chat"
 	if setup {
-		route = "#/setup"
+		route = "#/setup/reconfigure"
 	}
-	go openLocalAppWhenReady(address, route, logger)
+	return route
 }
 
 func openLocalAppWhenReady(address, route string, logger *slog.Logger) {

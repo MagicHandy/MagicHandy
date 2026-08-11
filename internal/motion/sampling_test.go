@@ -445,6 +445,71 @@ func TestRetargetTransitionIsContinuousAndChains(t *testing.T) {
 	}
 }
 
+func TestPhasePreservingTempoRetargetDoesNotBlendDivergingTimelines(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	definition, found := BuiltinPatternDefinition(PatternCrosscut)
+	if !found {
+		t.Fatal("Crosscut pattern is missing")
+	}
+	previous := NewMotionPlan("previous", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 75,
+	}, settings, 0, 0, time.Unix(0, 0))
+	const handoff = int64(5473)
+	next := previous.Retarget("next", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 50,
+	}, settings, handoff, time.Unix(1, 0))
+
+	handoffGap := math.Abs(
+		previous.SampleAt(handoff).PositionPercent - next.SampleAt(handoff).PositionPercent,
+	)
+	if handoffGap > transitionPositionEpsilon {
+		t.Fatalf("handoff gap = %.4f%%, test requires a continuous handoff", handoffGap)
+	}
+	pathGap := math.Abs(
+		previous.SampleAt(handoff+500).PositionPercent - next.SampleAt(handoff+500).PositionPercent,
+	)
+	if pathGap < 3 {
+		t.Fatalf("path gap = %.3f%%, test does not exercise diverging tempos", pathGap)
+	}
+	if transitionRequired(previous, nil, next, handoff) {
+		t.Fatal("continuous speed-only handoff requested a moving-path crossfade")
+	}
+}
+
+func TestPhasePreservingTempoRetargetBridgesDirectionMismatchNearReversal(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	definition, found := BuiltinPatternDefinition(PatternStroke)
+	if !found {
+		t.Fatal("Stroke pattern is missing")
+	}
+	previous := NewMotionPlan("previous", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 10,
+	}, settings, 0, 0, time.Unix(0, 0))
+	const handoff = int64(1040)
+	next := previous.Retarget("next", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
+	}, settings, handoff, time.Unix(1, 0))
+
+	handoffGap := math.Abs(
+		previous.SampleAt(handoff).PositionPercent - next.SampleAt(handoff).PositionPercent,
+	)
+	if handoffGap > transitionPositionEpsilon {
+		t.Fatalf("handoff gap = %.4f%%, test requires a position-continuous handoff", handoffGap)
+	}
+	beforeDirection := previous.DirectionAt(handoff)
+	afterDirection := next.DirectionAt(handoff)
+	if beforeDirection == afterDirection {
+		t.Fatalf("directions = %d and %d, test requires a reversal-guide mismatch", beforeDirection, afterDirection)
+	}
+	if !transitionRequired(previous, nil, next, handoff) {
+		t.Fatal("opposed reversal directions skipped the bounded transition")
+	}
+}
+
 func TestTransitionHistoryExpiresByPlaybackTimeNotBufferedTail(t *testing.T) {
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMaxPercent = 100

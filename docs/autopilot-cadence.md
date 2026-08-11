@@ -118,7 +118,8 @@ segment interior:
   longer segments exist to establish.
 - Offsets are sampled inside evenly divided slots rather than fixed at the
   midpoint, so the texture is not metronomic. Two consecutive schedules for the
-  same segment length differ.
+  same segment length differ, while consecutive waypoints remain at least six
+  seconds apart.
 - Count is earned by segment length (one per 20s, hard cap 3), then scaled by the
   model's variability category. This **self-balances against the cadence
   preset**: a 10s Dynamic segment has no room and gets none because it is already
@@ -167,9 +168,13 @@ a long stretch can still breathe, and a short one can stay flat.
 
 It is a category rather than a number for the same reason `next` is: a local
 model emits a category reliably, and backend sampling guarantees variety even
-when the model answers `normal` every turn. It is optional on the wire — it was
-added after the contract shipped, so an omitted field resolves to `normal` rather
-than failing the turn.
+when the model answers `normal` every turn. Motion turns require this field.
+That keeps a deliberate model hold from acquiring backend-invented sway merely
+because the field was omitted; a missing or unknown category gets the normal
+one-shot repair path, then the explicit planner fallback if repair fails. A
+spoken check-in also requires the field when its saved authority admits a target
+motion. Chat-only speech omits both motion and variability, so speech cannot
+silently acquire a backend-selected texture either.
 
 ### Session tracking
 
@@ -196,15 +201,18 @@ properties, all load bearing:
 - **Bounded.** A percentage with a full mark, not a counter that grows.
 - **Backend-owned.** The model may return `arc: advance|ease|hold` to move the
   bar by at most 6 points per turn. It can never write the value, so it cannot
-  sprint the bar to full, and every nudge appears in the trace.
+  sprint the bar to full, and every nudge appears in the trace. A nudge is
+  applied only after the decision survives the current mode generation and is
+  admitted; canceled or superseded model output cannot move the bar.
 
 The buildup positions intent *inside* the user's existing speed band. It never widens
 the band, the focus range, or any capability gate — asserted by
 `TestArcNudgeDoesNotTouchSpeedLimits`, which advances the bar 40 times and checks
 the motion settings are untouched.
 
-Time is the floor, so a session left running still progresses; nudges let the
-model lead or lag that baseline. `ease` exists so the bar is not a ratchet. The
+Time advances the bar when no nudge is made; an accepted nudge re-anchors that
+clock at its new bounded value so the model can lead or lag the prior baseline.
+`ease` exists so the bar is not a ratchet. The
 user can place or reset it. Duration accepts any positive whole number of
 minutes; there is no product-level maximum, only an implementation guard against
 overflowing Go's duration type. Placement is refused with a 409 while no
@@ -228,9 +236,11 @@ playing. A result is applied only if its mode generation is still current.
 Speech is checked after due motion work. If TTS is already queued or active,
 the check-in is postponed without calling the model. Publishing a line and
 queueing its audio remain lockstep operations through the canonical chat and
-voice paths. Browser playback reports completion to the backend so the next
-speech interval begins from what the user actually heard, not from inference
-completion.
+voice paths. A speech-authorized target is applied only after that line has been
+committed to canonical Chat, so a persistence failure cannot leave an
+unexplained device change. Browser playback reports completion to the backend
+so the next speech interval begins from what the user actually heard, not from
+inference completion.
 
 **The acknowledgement fires on any terminal outcome, not only on success.** The
 first implementation acknowledged only after audio played, so failed synthesis or
@@ -256,7 +266,7 @@ separate prompts.
 Motion:
 
 ```json
-{"motion":{"action":"target","pattern_id":"...","intensity":35},"next":"normal"}
+{"motion":{"action":"target","pattern_id":"...","intensity":35},"next":"normal","variability":"restless"}
 ```
 
 `motion` may be omitted or use `{"action":"none"}` for a hold. No reply is
@@ -271,7 +281,9 @@ Speech:
 Depending on the saved speech authority, `motion` is either unavailable,
 restricted to speed/area changes, or fully available. The existing semantic
 motion parser, enabled-pattern lookup, and settings clamps still validate any
-motion field.
+motion field. When speech includes target motion, it must also include
+`"variability":"settled"|"normal"|"restless"`; variability is omitted when
+speech does not change motion.
 
 ## Diagnostics and acceptance
 

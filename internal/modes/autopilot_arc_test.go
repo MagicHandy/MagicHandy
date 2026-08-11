@@ -1,6 +1,7 @@
 package modes
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -91,10 +92,27 @@ func TestArcCanEaseBack(t *testing.T) {
 	manager.arc.startedAt = now.Add(-30 * time.Minute)
 	before := manager.arcPercentLocked(now)
 	manager.applyArcIntentLocked(now, config.AutopilotArcEase)
-	after := manager.arc.percent
+	after := manager.arcPercentLocked(now)
 	manager.mu.Unlock()
 	if after >= before {
 		t.Fatalf("ease moved the bar from %d%% to %d%%", before, after)
+	}
+}
+
+func TestArcContinuesFromAnEasedValue(t *testing.T) {
+	manager := swayTestManager(t, arcSettings(true, true, 60))
+	now := time.Unix(3500, 0)
+	manager.mu.Lock()
+	manager.arc.startedAt = now.Add(-30 * time.Minute)
+	manager.applyArcIntentLocked(now, config.AutopilotArcEase)
+	eased := manager.arcPercentLocked(now)
+	later := manager.arcPercentLocked(now.Add(6 * time.Minute))
+	manager.mu.Unlock()
+	if eased != 50-config.AutopilotArcNudgePercent {
+		t.Fatalf("eased value = %d%%, want %d%%", eased, 50-config.AutopilotArcNudgePercent)
+	}
+	if later <= eased {
+		t.Fatalf("buildup stayed at %d%% after time advanced; later = %d%%", eased, later)
 	}
 }
 
@@ -109,6 +127,41 @@ func TestUnknownArcIntentHolds(t *testing.T) {
 	manager.mu.Unlock()
 	if after != before {
 		t.Fatalf("an unrecognized intent moved the bar from %d%% to %d%%", before, after)
+	}
+}
+
+func TestArcIntentWaitsForCurrentChoiceAdmission(t *testing.T) {
+	manager := swayTestManager(t, arcSettings(true, true, 60))
+	now := manager.options.Now()
+	manager.mu.Lock()
+	manager.mode = ModeAutopilot
+	manager.generation = 7
+	manager.segment = Segment{PatternID: "steady", SpeedPercent: 30}
+	manager.arc.startedAt = now
+	manager.mu.Unlock()
+
+	choice := manager.runDecision(t.Context(), func(context.Context, DecisionInput) (Decision, error) {
+		return Decision{
+			Hold:        true,
+			Next:        TimingLater,
+			Variability: VariabilitySettled,
+			ArcIntent:   config.AutopilotArcAdvance,
+		}, nil
+	}, true)
+	if got := manager.SessionArcSnapshot().Percent; got != 0 {
+		t.Fatalf("unadmitted decision moved buildup to %d%%", got)
+	}
+	if manager.armAutopilotChoice(ModeAutopilot, &choice, 6) {
+		t.Fatal("stale decision was admitted")
+	}
+	if got := manager.SessionArcSnapshot().Percent; got != 0 {
+		t.Fatalf("stale decision moved buildup to %d%%", got)
+	}
+	if !manager.armAutopilotChoice(ModeAutopilot, &choice, 7) {
+		t.Fatal("current decision was not admitted")
+	}
+	if got := manager.SessionArcSnapshot().Percent; got != config.AutopilotArcNudgePercent {
+		t.Fatalf("accepted decision moved buildup to %d%%, want %d%%", got, config.AutopilotArcNudgePercent)
 	}
 }
 

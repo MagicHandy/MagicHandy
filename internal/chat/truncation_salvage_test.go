@@ -24,9 +24,29 @@ func TestSalvageTruncatedReply(t *testing.T) {
 			want: "Line one.\nShe said \"stay\" and I did. Then",
 		},
 		{
-			name: "unicode escape is decoded",
+			name: "unicode text is preserved",
 			raw:  `{"reply": "café and then`,
 			want: "café and then",
+		},
+		{
+			name: "unicode escape is decoded",
+			raw:  `{"reply": "caf\u00e9 and then`,
+			want: "café and then",
+		},
+		{
+			name: "unicode surrogate pair is decoded",
+			raw:  `{"reply": "wave \uD83D\uDC4B and then`,
+			want: "wave 👋 and then",
+		},
+		{
+			name: "replacement character escape is preserved",
+			raw:  `{"reply": "safe \uFFFD marker and then`,
+			want: "safe � marker and then",
+		},
+		{
+			name: "lone surrogate is not emitted",
+			raw:  `{"reply": "safe text \uD83D`,
+			want: "safe text",
 		},
 		{
 			name: "closed string stops at the quote",
@@ -42,6 +62,21 @@ func TestSalvageTruncatedReply(t *testing.T) {
 			name: "other keys before reply do not confuse it",
 			raw:  `{"new_mood": "Passionate", "reply": "Come here and`,
 			want: "Come here and",
+		},
+		{
+			name: "nested reply before top level is ignored",
+			raw:  `{"metadata":{"reply":"not the assistant reply"},"reply":"Come here and`,
+			want: "Come here and",
+		},
+		{
+			name: "reply token inside prior string is ignored",
+			raw:  `{"metadata":"the key \"reply\" is documented","reply":"Come here and`,
+			want: "Come here and",
+		},
+		{
+			name: "nested reply alone is not salvaged",
+			raw:  `{"metadata":{"reply":"not the assistant reply"`,
+			want: "",
 		},
 		{name: "no reply key", raw: `{"motion": {"action":"stop"}}`, want: ""},
 		{name: "reply is not a string", raw: `{"reply": 12`, want: ""},

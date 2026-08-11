@@ -466,6 +466,73 @@ func TestAutopilotSpeechMotionPreservesSpeechTimingChoice(t *testing.T) {
 	}
 }
 
+func TestAutopilotSpeechPublicationFailureDoesNotApplyMotion(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	motionDecider := &fakeDecider{decisions: []Decision{{
+		Segment: Segment{PatternID: motion.PatternStroke, SpeedPercent: 30},
+		Next:    TimingLater,
+	}}}
+	announcementAttempted := make(chan struct{})
+	var announcementOnce sync.Once
+	manager, err := NewManager(Options{
+		Ensure:   func(context.Context) (Engine, error) { return engine, nil },
+		Current:  func() Engine { return engine },
+		Settings: func() config.MotionSettings { return config.DefaultSettings().Motion },
+		AutopilotSettings: func() config.AutopilotSettings {
+			settings := config.DefaultAutopilotSettings()
+			settings.MotionCadence = config.AutopilotMotionCustom
+			settings.MotionMinSeconds = 60
+			settings.MotionMaxSeconds = 60
+			settings.AdaptiveMotionTiming = false
+			settings.SpeechCadence = config.AutopilotSpeechCustom
+			settings.SpeechMinSeconds = 8
+			settings.SpeechMaxSeconds = 8
+			settings.AdaptiveSpeechTiming = false
+			return settings
+		},
+		Now:    clock.Now,
+		Tick:   2 * time.Millisecond,
+		Seed:   42,
+		Decide: motionDecider.decide,
+		DecideSpeech: func(context.Context, DecisionInput) (Decision, error) {
+			return Decision{
+				Segment:     Segment{PatternID: motion.PatternStroke, SpeedPercent: 40},
+				Say:         "A line that cannot be published.",
+				Next:        TimingNormal,
+				Variability: VariabilityRestless,
+			}, nil
+		},
+		Announce: func(context.Context, string) Announcement {
+			announcementOnce.Do(func() { close(announcementAttempted) })
+			return Announcement{}
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewManager: %v", err)
+	}
+	t.Cleanup(manager.Shutdown)
+	if _, err := manager.Start(t.Context(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+
+	clock.Advance(9 * time.Second)
+	select {
+	case <-announcementAttempted:
+	case <-time.After(time.Second):
+		t.Fatal("speech publication was not attempted")
+	}
+	engine.mu.Lock()
+	reasons := append([]string(nil), engine.reasons...)
+	engine.mu.Unlock()
+	for _, reason := range reasons {
+		if reason == "autopilot_speech" {
+			t.Fatalf("failed speech publication applied coupled motion: reasons = %v", reasons)
+		}
+	}
+}
+
 func TestAutopilotChatActivityBlocksAutonomousWorkUntilComplete(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}

@@ -89,6 +89,8 @@ Test expectation:
 
 - same-pattern update does not restart at phase zero
 - trace marks phase preservation
+- a tempo-only update with a position-continuous handoff does not crossfade two
+  differently paced copies of the same path
 
 ## Invariant 7: New-Pattern Retargets Choose Low-Jump Handoff
 

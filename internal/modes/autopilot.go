@@ -117,6 +117,7 @@ type segmentChoice struct {
 	say             string
 	timing          TimingPreference
 	variability     VariabilityPreference
+	arcIntent       string
 	decisionLatency time.Duration
 }
 
@@ -158,23 +159,18 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 	}
 	timing := normalizeTiming(decision.Next)
 	variability := normalizeVariability(decision.Variability)
-	if decision.ArcIntent != "" {
-		m.mu.Lock()
-		m.applyArcIntentLocked(m.options.Now(), decision.ArcIntent)
-		m.mu.Unlock()
-	}
 	if decision.Hold {
 		if segment, pattern, ok := m.heldSegment(); ok {
 			return segmentChoice{
 				segment: segment, pattern: pattern, source: "hold",
-				say: decision.Say, timing: timing, variability: variability,
+				say: decision.Say, timing: timing, variability: variability, arcIntent: decision.ArcIntent,
 				decisionLatency: latency,
 			}
 		}
 		if !fallback {
 			return segmentChoice{
 				source: "hold", say: decision.Say, timing: timing,
-				variability: variability, decisionLatency: latency,
+				variability: variability, arcIntent: decision.ArcIntent, decisionLatency: latency,
 			}
 		}
 		segment, scores := m.nextPlannedSegment()
@@ -182,13 +178,13 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		return segmentChoice{
 			segment: segment, scores: scores, source: "fallback",
 			note: "hold_without_segment", say: decision.Say, timing: timing,
-			variability: variability, decisionLatency: latency,
+			variability: variability, arcIntent: decision.ArcIntent, decisionLatency: latency,
 		}
 	}
 	return segmentChoice{
 		segment: NormalizeSegment(decision.Segment), pattern: decision.Pattern,
 		source: "model", say: decision.Say, timing: timing,
-		variability: variability, decisionLatency: latency,
+		variability: variability, arcIntent: decision.ArcIntent, decisionLatency: latency,
 	}
 }
 
@@ -201,9 +197,9 @@ func normalizeTiming(timing TimingPreference) TimingPreference {
 	}
 }
 
-// normalizeVariability resolves an absent or unrecognized category to normal, so
-// a model that omits the field or invents a word still gets ordinary texture
-// rather than either extreme.
+// normalizeVariability keeps the manager defensive for planner/fallback and
+// direct test callers. Model motion turns validate the required category before
+// they reach this boundary.
 func normalizeVariability(variability VariabilityPreference) VariabilityPreference {
 	switch variability {
 	case VariabilitySettled, VariabilityNormal, VariabilityRestless:

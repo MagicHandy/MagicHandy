@@ -67,6 +67,36 @@ describe("App route lifetime", () => {
     expect(screen.getByText("Chat route")).toBeInTheDocument();
   });
 
+  it("does not interrupt an in-progress setup after its first settings save", () => {
+    app.route = "#/setup";
+    app.state = { settings: { ui: { setup_completed: false } }, settings_status: { using_defaults: false } };
+    render(<App />);
+
+    expect(screen.getByText("Setup route")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Run setup again?" })).not.toBeInTheDocument();
+  });
+
+  it("redirects a stale setup tab after a completed app returns from an update", async () => {
+    app.route = "#/setup";
+    window.location.hash = "#/setup";
+    app.state = { settings: { ui: { setup_completed: true } }, settings_status: { using_defaults: false } };
+    render(<App />);
+
+    expect(screen.getByText("Chat route")).toBeInTheDocument();
+    expect(screen.queryByText("Setup route")).not.toBeInTheDocument();
+    await waitFor(() => expect(window.location.hash).toBe("#/chat"));
+  });
+
+  it("keeps setup open when a completed user explicitly requests reconfiguration", () => {
+    app.route = "#/setup/reconfigure";
+    window.location.hash = "#/setup/reconfigure";
+    app.state = { settings: { ui: { setup_completed: true } }, settings_status: { using_defaults: false } };
+    render(<App />);
+
+    expect(screen.getByText("Setup route")).toBeInTheDocument();
+    expect(window.location.hash).toBe("#/setup/reconfigure");
+  });
+
   it("declining records the choice so the question does not return next launch", async () => {
     app.route = "#/chat";
     app.state = { settings: { ui: { setup_completed: false } }, settings_status: { using_defaults: false } };
@@ -86,7 +116,7 @@ describe("App route lifetime", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Run setup" }));
 
-    await waitFor(() => expect(window.location.hash).toBe("#/setup"));
+    await waitFor(() => expect(window.location.hash).toBe("#/setup/reconfigure"));
   });
 
   it("preserves settings drafts between subsections but resets them after leaving Settings", () => {

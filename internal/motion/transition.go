@@ -52,6 +52,23 @@ func smootherStep(value float64) float64 {
 }
 
 func transitionRequired(previous MotionPlan, transition *planTransition, next MotionPlan, handoffMillis int64) bool {
+	// A phase-preserving tempo update already meets the old path at handoff when
+	// its authored shape and spatial projection are unchanged. Crossfading the
+	// two differently paced trajectories after that point can make them oppose
+	// each other, creating an artificial reversal or near-hold on every speed
+	// adjustment. Change pace directly at the continuous handoff in this narrow
+	// case; spatial/content changes and an in-progress transition still use the
+	// full bounded bridge below.
+	if transition == nil && samePhaseGeometry(previous, next) {
+		before := previous.SampleAt(handoffMillis).PositionPercent
+		after := next.SampleAt(handoffMillis).PositionPercent
+		beforeDirection := previous.DirectionAt(handoffMillis)
+		afterDirection := next.DirectionAt(handoffMillis)
+		if beforeDirection == afterDirection && math.Abs(before-after) <= transitionPositionEpsilon {
+			return false
+		}
+	}
+
 	times := motionPathKnotTimes(previous, transition, handoffMillis, handoffMillis+retargetTransitionMillis+1)
 	times = append(times, next.knotTimesBetween(handoffMillis, handoffMillis+retargetTransitionMillis+1)...)
 	for at := handoffMillis; at <= handoffMillis+retargetTransitionMillis; at += bufferedProbeIntervalMillis {
@@ -66,6 +83,34 @@ func transitionRequired(previous MotionPlan, transition *planTransition, next Mo
 		}
 	}
 	return false
+}
+
+func samePhaseGeometry(previous, next MotionPlan) bool {
+	if !next.PhasePreserved || !previous.Loop || !next.Loop ||
+		previous.PatternID != next.PatternID || previous.ProgramID != next.ProgramID ||
+		previous.MediaID != next.MediaID || previous.curve.duration != next.curve.duration ||
+		previous.curve.loop != next.curve.loop || previous.curve.linear != next.curve.linear ||
+		len(previous.curve.authoredKnots) != len(next.curve.authoredKnots) ||
+		!sameFocusProjection(previous.focus, next.focus) {
+		return false
+	}
+	for index := range previous.curve.authoredKnots {
+		if previous.curve.authoredKnots[index] != next.curve.authoredKnots[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func sameFocusProjection(left, right focusProjection) bool {
+	if left.sourceMin != right.sourceMin || left.sourceSpan != right.sourceSpan ||
+		left.targetMin != right.targetMin || left.targetSpan != right.targetSpan {
+		return false
+	}
+	if left.anchor == nil || right.anchor == nil {
+		return left.anchor == nil && right.anchor == nil
+	}
+	return *left.anchor == *right.anchor
 }
 
 func motionPathDirection(plan MotionPlan, transition *planTransition, streamMillis int64) int {

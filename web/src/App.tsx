@@ -50,13 +50,22 @@ export function App() {
   // previous run that left setup part-way. That used to hijack the route on
   // every launch with no way to decline, so it asks instead.
   const setupPending = state?.settings?.ui?.setup_completed === false;
+  const setupComplete = state?.settings?.ui?.setup_completed === true;
   const freshStore = (state?.settings_status as { using_defaults?: boolean } | undefined)?.using_defaults === true;
-  const askBeforeSetup = setupPending && !freshStore && !setupPromptDismissed;
+  const setupRoutePath = route.replace(/^#\/?/, "").split("?")[0].replace(/\/+$/, "");
+  const explicitSetup = setupRoutePath === "setup/reconfigure";
+  const contentBase = setupComplete && base === "setup" && !explicitSetup ? "chat" : base;
+  const askBeforeSetup = setupPending && !freshStore && base !== "setup" && !setupPromptDismissed;
   useEffect(() => {
     if (setupPending && freshStore && base !== "setup") {
       window.location.hash = "#/setup";
+    } else if (setupComplete && base === "setup" && !explicitSetup) {
+      // An update can revive an existing browser tab whose old hash still
+      // points at setup. Only an explicit reconfiguration route may reopen the
+      // wizard after completion.
+      window.location.hash = "#/chat";
     }
-  }, [base, freshStore, setupPending]);
+  }, [base, explicitSetup, freshStore, setupComplete, setupPending]);
   useEffect(() => {
     const workspace = document.getElementById("workspace");
     if (!workspace) return;
@@ -139,18 +148,18 @@ export function App() {
             <button type="button" className="btn btn-secondary" onClick={refresh}>{t("Retry core connection")}</button>
           )}
         </section>
-      ) : <ErrorBoundary key={base}>
-        {base === "setup" ? (
+      ) : <ErrorBoundary key={contentBase}>
+        {contentBase === "setup" ? (
           <SetupRoute />
-        ) : base === "personas" ? (
+        ) : contentBase === "personas" ? (
           <PersonasRoute />
-        ) : base === "modes" ? (
+        ) : contentBase === "modes" ? (
           <PresetModesRoute />
-        ) : base === "library" ? (
+        ) : contentBase === "library" ? (
           <PatternLibraryRoute />
-        ) : base === "videos" ? (
+        ) : contentBase === "videos" ? (
           <VideoRoute />
-        ) : base === "settings" ? (
+        ) : contentBase === "settings" ? (
           <SettingsRoute />
         ) : (
           <ChatRoute />
@@ -163,7 +172,7 @@ export function App() {
           error={setupPromptError}
           onRunSetup={() => {
             setSetupPromptDismissed(true);
-            window.location.hash = "#/setup";
+            window.location.hash = "#/setup/reconfigure";
           }}
           onDismiss={() => void declineSetup()}
         />

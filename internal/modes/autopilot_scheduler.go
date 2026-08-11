@@ -201,6 +201,9 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	if choice.decisionLatency > 0 {
 		m.lastDecisionTime = choice.decisionLatency
 	}
+	if choice.source != "speech" && choice.arcIntent != "" {
+		m.applyArcIntentLocked(now, choice.arcIntent)
+	}
 	duration := m.sampleMotionDelayLocked(choice.timing)
 	if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
 		duration = m.options.MaxSegmentDuration
@@ -257,7 +260,6 @@ func (m *Manager) tickAutopilotSpeech(ctx context.Context, engine Engine, genera
 		return
 	}
 
-	m.applyAutopilotSpeechMotion(operationCtx, engine, generation, choice)
 	announcement := m.options.Announce(operationCtx, choice.say)
 	if operationCtx.Err() != nil || !m.modeGenerationActive(ModeAutopilot, generation) {
 		return
@@ -266,7 +268,14 @@ func (m *Manager) tickAutopilotSpeech(ctx context.Context, engine Engine, genera
 		m.retryAutopilotSpeech(generation, speechDecisionRetry, "speech_publish_failed", "")
 		return
 	}
-	m.armAutopilotSpeech(generation, choice.say, choice.timing, announcement)
+	// Canonical Chat publication admits the coupled action. Applying motion
+	// first could leave an unexplained device change when persistence or speech
+	// publication failed.
+	m.applyAutopilotSpeechMotion(operationCtx, engine, generation, choice)
+	if operationCtx.Err() != nil || !m.modeGenerationActive(ModeAutopilot, generation) {
+		return
+	}
+	m.armAutopilotSpeech(generation, choice.say, choice.timing, choice.arcIntent, announcement)
 }
 
 func (m *Manager) retryAutopilotSpeech(generation uint64, delay time.Duration, event string, note string) {
@@ -312,12 +321,16 @@ func (m *Manager) armAutopilotSpeech(
 	generation uint64,
 	say string,
 	timing TimingPreference,
+	arcIntent string,
 	announcement Announcement,
 ) {
 	m.mu.Lock()
 	if m.mode != ModeAutopilot || m.generation != generation || m.userStopped {
 		m.mu.Unlock()
 		return
+	}
+	if arcIntent != "" {
+		m.applyArcIntentLocked(m.options.Now(), arcIntent)
 	}
 	m.lastSay = say
 	m.speechNextTiming = timing

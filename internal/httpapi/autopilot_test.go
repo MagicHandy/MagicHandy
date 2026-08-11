@@ -135,7 +135,7 @@ func TestAutopilotFallsBackWithoutConfiguredLLM(t *testing.T) {
 
 func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"motion":{"action":"none"},"next":"normal"}`,
+		`{"motion":{"action":"none"},"next":"normal","variability":"settled"}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 	t.Cleanup(server.Close)
@@ -181,7 +181,7 @@ func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 
 func TestAutopilotDecisionCanCurateMotionDespiteStopProhibition(t *testing.T) {
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"motion":{"action":"target","pattern_id":"stroke","intensity":45},"next":"soon"}`,
+		`{"motion":{"action":"target","pattern_id":"stroke","intensity":45},"next":"soon","variability":"normal"}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 	t.Cleanup(server.Close)

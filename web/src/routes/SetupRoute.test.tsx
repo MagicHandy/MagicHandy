@@ -154,6 +154,24 @@ describe("SetupRoute", () => {
     expect(screen.getByRole("radio", { name: /Use my existing Ollama/i })).not.toBeChecked();
   });
 
+  it("returns the workspace to the top when the wizard advances", async () => {
+    const workspace = document.createElement("main");
+    workspace.id = "workspace";
+    document.body.append(workspace);
+    const result = render(<SetupRoute />, { container: workspace });
+
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    workspace.scrollTop = 420;
+    workspace.scrollLeft = 25;
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
+    expect(workspace.scrollTop).toBe(0);
+    expect(workspace.scrollLeft).toBe(0);
+    result.unmount();
+    workspace.remove();
+  });
+
   it("imports a selected model from an existing Ollama library during managed setup", async () => {
     render(<SetupRoute />);
 

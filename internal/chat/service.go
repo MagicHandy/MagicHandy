@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -279,21 +280,66 @@ func (s Service) repairResponse(ctx context.Context, in repairInput, emit func(S
 // quote, so a truncated object cannot smuggle in a motion command: the caller
 // discards everything else.
 func salvageTruncatedReply(raw string) string {
-	const key = `"reply"`
-	at := strings.Index(raw, key)
-	if at < 0 {
+	position := skipJSONSpace(raw, 0)
+	if position >= len(raw) || raw[position] != '{' {
 		return ""
 	}
-	rest := raw[at+len(key):]
-	colon := strings.IndexByte(rest, ':')
-	if colon < 0 {
-		return ""
+	position++
+
+	for {
+		position = skipJSONSpace(raw, position)
+		if position >= len(raw) || raw[position] == '}' {
+			return ""
+		}
+
+		decoder := json.NewDecoder(strings.NewReader(raw[position:]))
+		var key string
+		if err := decoder.Decode(&key); err != nil {
+			return ""
+		}
+		position += int(decoder.InputOffset())
+		position = skipJSONSpace(raw, position)
+		if position >= len(raw) || raw[position] != ':' {
+			return ""
+		}
+		position = skipJSONSpace(raw, position+1)
+		if key == "reply" {
+			if position >= len(raw) || raw[position] != '"' {
+				return ""
+			}
+			return decodePartialJSONString(raw[position+1:])
+		}
+
+		// A later key can only be top-level when this value is complete. Let
+		// encoding/json skip strings, arrays, and objects without confusing a
+		// nested or quoted "reply" token for the field we want.
+		decoder = json.NewDecoder(strings.NewReader(raw[position:]))
+		var ignored json.RawMessage
+		if err := decoder.Decode(&ignored); err != nil {
+			return ""
+		}
+		position += int(decoder.InputOffset())
+		position = skipJSONSpace(raw, position)
+		if position >= len(raw) || raw[position] != ',' {
+			return ""
+		}
+		position++
 	}
-	rest = strings.TrimLeft(rest[colon+1:], " \t\r\n")
-	if !strings.HasPrefix(rest, `"`) {
-		return ""
+}
+
+func skipJSONSpace(raw string, position int) int {
+	for position < len(raw) {
+		switch raw[position] {
+		case ' ', '\t', '\r', '\n':
+			position++
+		default:
+			return position
+		}
 	}
-	rest = rest[1:]
+	return position
+}
+
+func decodePartialJSONString(rest string) string {
 
 	var out strings.Builder
 	for i := 0; i < len(rest); i++ {
@@ -303,20 +349,39 @@ func salvageTruncatedReply(raw string) string {
 				// Trailing backslash: the escape itself was cut in half.
 				return strings.TrimSpace(out.String())
 			}
-			// Decode the escape through encoding/json so \n, \", and \uXXXX all
-			// behave, rather than hand-rolling a second JSON string parser.
+			// Decode escapes through encoding/json rather than maintaining a
+			// second mapping. Try a full UTF-16 surrogate pair before a single
+			// \uXXXX escape so non-BMP characters survive intact.
 			var decoded string
-			if err := json.Unmarshal([]byte(`"\`+string(rest[i+1])+`"`), &decoded); err == nil {
-				out.WriteString(decoded)
-				i++
-				continue
-			}
 			if rest[i+1] == 'u' && i+5 < len(rest) {
+				unit, ok := parseJSONUTF16Unit(rest[i:])
+				if !ok {
+					return strings.TrimSpace(out.String())
+				}
+				if unit >= 0xd800 && unit <= 0xdbff {
+					low, pairOK := parseJSONUTF16Unit(rest[i+6:])
+					if i+11 < len(rest) && pairOK && low >= 0xdc00 && low <= 0xdfff {
+						if err := json.Unmarshal([]byte(`"`+rest[i:i+12]+`"`), &decoded); err == nil {
+							out.WriteString(decoded)
+							i += 11
+							continue
+						}
+					}
+					return strings.TrimSpace(out.String())
+				}
+				if unit >= 0xdc00 && unit <= 0xdfff {
+					return strings.TrimSpace(out.String())
+				}
 				if err := json.Unmarshal([]byte(`"`+rest[i:i+6]+`"`), &decoded); err == nil {
 					out.WriteString(decoded)
 					i += 5
 					continue
 				}
+			}
+			if err := json.Unmarshal([]byte(`"\`+string(rest[i+1])+`"`), &decoded); err == nil {
+				out.WriteString(decoded)
+				i++
+				continue
 			}
 			return strings.TrimSpace(out.String())
 		case '"':
@@ -327,6 +392,14 @@ func salvageTruncatedReply(raw string) string {
 	}
 	// Ran off the end: the string itself was truncated, which is the common case.
 	return strings.TrimSpace(out.String())
+}
+
+func parseJSONUTF16Unit(raw string) (uint16, bool) {
+	if len(raw) < 6 || raw[0] != '\\' || raw[1] != 'u' {
+		return 0, false
+	}
+	value, err := strconv.ParseUint(raw[2:6], 16, 16)
+	return uint16(value), err == nil
 }
 
 func (s Service) recoverSemanticRepair(response AssistantResponse, userMessage string, repairErr error) (AssistantResponse, bool) {

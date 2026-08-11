@@ -431,7 +431,7 @@ export function SettingsRoute() {
             <div className="group">
               <h3 className="group-title">{t("Guided setup")}</h3>
               <p className="hint-block">{t("Review device, model, and optional voice choices in the same guided flow used after installation.")}</p>
-              <a className="btn btn-secondary settings-setup-link" href="#/setup">{t("Run setup again")}</a>
+              <a className="btn btn-secondary settings-setup-link" href="#/setup/reconfigure">{t("Run setup again")}</a>
             </div>
           </>
         )}
