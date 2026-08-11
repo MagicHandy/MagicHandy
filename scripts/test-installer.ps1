@@ -786,6 +786,8 @@ func main() {
     Assert-True -Condition ($innoSource.Contains('DisableDirPage=no')) -Message 'Windows setup should always expose the destination chooser'
     Assert-True -Condition ($innoSource.Contains('Name: "desktopicon"')) -Message 'Windows setup should offer a desktop shortcut'
     Assert-True -Condition ($innoSource.Contains('Flags: unchecked')) -Message 'desktop shortcut should remain opt-in'
+    Assert-True -Condition ($innoSource.Contains('Parameters: "-open-browser"; Description: "Open MagicHandy"')) -Message 'Windows setup should open the app and let backend first-run state select the setup route'
+    Assert-True -Condition (-not $innoSource.Contains('Parameters: "-setup -open-browser"')) -Message 'Windows over-install should not force completed users back into setup'
     Assert-True -Condition ($innoSource.Contains("HasUninstallSwitch('/KEEPUSERDATA')")) -Message 'uninstall should support explicit data retention'
     Assert-True -Condition ($innoSource.Contains("HasUninstallSwitch('/PURGEUSERDATA')")) -Message 'uninstall should support explicit clean removal'
     Assert-True -Condition ($innoSource.Contains('PurgeRequested or UninstallSilent')) -Message 'silent uninstall should default to a clean reset'

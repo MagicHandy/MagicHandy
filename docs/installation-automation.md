@@ -16,7 +16,7 @@ Phase 16.
 
 | Entry point | Intended user | Responsibility |
 | --- | --- | --- |
-| Reviewed Windows setup EXE | Normal Windows user | Install the versioned payload, shortcuts, and uninstaller, then open `#/setup` |
+| Reviewed Windows setup EXE | Normal Windows user | Install the versioned payload, shortcuts, and uninstaller, then open the app; backend first-run state selects `#/setup` only for a fresh store |
 | Portable ZIP | No-install or USB use | Provide the payload without Windows integration |
 | `bootstrap.ps1` + `install.ps1` | Source user | Repair WinGet/Git, build the pure-Go core, then open `#/setup` |
 | `install.ps1 -Yes ...` | Managed automation | Provision explicitly selected optional components without prompts |
