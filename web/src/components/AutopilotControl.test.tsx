@@ -291,6 +291,32 @@ describe("AutopilotControl", () => {
     }));
   });
 
+  it("preserves an edited buildup duration across background snapshots", async () => {
+    saveAutopilotPreferences.mockImplementation(async (next) => ({ autopilot: next }));
+    app.state = {
+      modes: { mode: "autopilot" },
+      settings: { autopilot: { ...autopilotPreferences, session_arc: true } },
+    };
+    const result = render(<AutopilotControl />);
+    const duration = screen.getByRole("spinbutton", { name: "Session buildup minutes" });
+
+    fireEvent.change(duration, { target: { value: "5" } });
+    app.state = {
+      ...app.state,
+      settings: { autopilot: { ...autopilotPreferences, session_arc: true } },
+    };
+    result.rerender(<AutopilotControl />);
+
+    expect(duration).toHaveValue(5);
+    await act(async () => {
+      fireEvent.blur(duration);
+      await Promise.resolve();
+    });
+    expect(saveAutopilotPreferences).toHaveBeenCalledWith(expect.objectContaining({
+      session_arc_minutes: 5,
+    }));
+  });
+
   it("clears the arc when session tracking is switched off", async () => {
     saveAutopilotPreferences.mockResolvedValue({ autopilot: autopilotPreferences });
     app.state = {

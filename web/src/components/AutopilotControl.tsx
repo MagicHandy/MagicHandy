@@ -244,22 +244,36 @@ function AutopilotPreferences({
 }) {
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
+  const draftRef = useRef(value);
+  const editingRef = useRef(false);
   const savingRef = useRef(false);
 
   useEffect(() => {
-    if (!savingRef.current) setDraft(value);
+    if (savingRef.current || editingRef.current) return;
+    draftRef.current = value;
+    setDraft(value);
   }, [value]);
+
+  function edit(next: AutopilotSettings) {
+    editingRef.current = true;
+    draftRef.current = next;
+    setDraft(next);
+  }
 
   async function save(next: AutopilotSettings) {
     if (savingRef.current) return;
+    editingRef.current = false;
+    draftRef.current = next;
     setDraft(next);
     savingRef.current = true;
     setSaving(true);
     try {
       const response = await api.saveAutopilotPreferences(next);
+      draftRef.current = response.autopilot;
       setDraft(response.autopilot);
       onSaved();
     } catch (error) {
+      draftRef.current = value;
       setDraft(value);
       onError(error);
     } finally {
@@ -275,7 +289,7 @@ function AutopilotPreferences({
     const minutes = Number.isFinite(parsed)
       ? Math.min(maximumBuildupMinutes, Math.max(minimumBuildupMinutes, parsed))
       : 30;
-    void save({ ...draft, session_arc_minutes: minutes });
+    void save({ ...draftRef.current, session_arc_minutes: minutes });
   }
 
   function saveNumber(
@@ -286,7 +300,7 @@ function AutopilotPreferences({
     const ceiling = speech ? 600 : 300;
     const parsed = Number.parseInt(raw, 10);
     const number = Number.isFinite(parsed) ? Math.min(ceiling, Math.max(8, parsed)) : 8;
-    const next = { ...draft, [key]: number };
+    const next = { ...draftRef.current, [key]: number };
     if (key.endsWith("min_seconds")) {
       const maxKey = speech ? "speech_max_seconds" : "motion_max_seconds";
       next[maxKey] = Math.max(next[maxKey], number);
@@ -316,7 +330,7 @@ function AutopilotPreferences({
             max={300}
             value={draft.motion_min_seconds}
             aria-label={t("Motion minimum seconds")}
-            onChange={(event) => setDraft({ ...draft, motion_min_seconds: Number(event.target.value) })}
+            onChange={(event) => edit({ ...draftRef.current, motion_min_seconds: Number(event.target.value) })}
             onBlur={(event) => saveNumber("motion_min_seconds", event.target.value)}
           />
           <span aria-hidden="true">-</span>
@@ -326,7 +340,7 @@ function AutopilotPreferences({
             max={300}
             value={draft.motion_max_seconds}
             aria-label={t("Motion maximum seconds")}
-            onChange={(event) => setDraft({ ...draft, motion_max_seconds: Number(event.target.value) })}
+            onChange={(event) => edit({ ...draftRef.current, motion_max_seconds: Number(event.target.value) })}
             onBlur={(event) => saveNumber("motion_max_seconds", event.target.value)}
           />
           <span>{t("seconds")}</span>
@@ -347,7 +361,7 @@ function AutopilotPreferences({
             max={600}
             value={draft.speech_min_seconds}
             aria-label={t("Speech minimum seconds")}
-            onChange={(event) => setDraft({ ...draft, speech_min_seconds: Number(event.target.value) })}
+            onChange={(event) => edit({ ...draftRef.current, speech_min_seconds: Number(event.target.value) })}
             onBlur={(event) => saveNumber("speech_min_seconds", event.target.value)}
           />
           <span aria-hidden="true">-</span>
@@ -357,7 +371,7 @@ function AutopilotPreferences({
             max={600}
             value={draft.speech_max_seconds}
             aria-label={t("Speech maximum seconds")}
-            onChange={(event) => setDraft({ ...draft, speech_max_seconds: Number(event.target.value) })}
+            onChange={(event) => edit({ ...draftRef.current, speech_max_seconds: Number(event.target.value) })}
             onBlur={(event) => saveNumber("speech_max_seconds", event.target.value)}
           />
           <span>{t("seconds")}</span>
@@ -390,7 +404,7 @@ function AutopilotPreferences({
               min={minimumBuildupMinutes}
               value={draft.session_arc_minutes}
               aria-label={t("Session buildup minutes")}
-              onChange={(event) => setDraft({ ...draft, session_arc_minutes: Number(event.target.value) })}
+              onChange={(event) => edit({ ...draftRef.current, session_arc_minutes: Number(event.target.value) })}
               onBlur={(event) => saveBuildupMinutes(event.target.value)}
             />
             <span>{t("minutes")}</span>
