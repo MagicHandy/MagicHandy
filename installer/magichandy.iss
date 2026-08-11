@@ -75,7 +75,7 @@ Name: "{group}\MagicHandy"; Filename: "{app}\magichandy.exe"; Parameters: "-open
 Name: "{autodesktop}\MagicHandy"; Filename: "{app}\magichandy.exe"; Parameters: "-open-browser"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\magichandy.exe"; Parameters: "-setup -open-browser"; Description: "Open MagicHandy setup"; WorkingDir: "{app}"; Flags: postinstall nowait skipifsilent runasoriginaluser
+Filename: "{app}\magichandy.exe"; Parameters: "-open-browser"; Description: "Open MagicHandy"; WorkingDir: "{app}"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [UninstallRun]
 Filename: "{app}\magichandy.exe"; Parameters: "-prepare-uninstall"; WorkingDir: "{app}"; Flags: runhidden skipifdoesntexist; RunOnceId: "PrepareUninstall"

@@ -96,7 +96,8 @@ For the install binary itself, **Inno Setup** over WiX/NSIS/hand-rolled:
   itself stays a Phase 16 decision doc).
 - Explicitly **no custom wizard pages** beyond directory/shortcut choices —
   all real interactivity lives in the app. The finish page launches
-  MagicHandy, which opens the browser at first-run setup.
+  MagicHandy at its normal route. Backend-confirmed fresh stores redirect to
+  first-run setup; over-installs with preserved settings remain in the app.
 - WiX/MSI is enterprise plumbing (GPO, transforms) no one asked for; NSIS
   offers nothing over Inno here; a pure-Go self-extracting stub would
   hand-roll uninstall/ARP semantics for purity points — recorded as the

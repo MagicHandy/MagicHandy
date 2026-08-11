@@ -29,7 +29,9 @@ builds can follow newer compatible prereleases. **Settings > General > Updates**
 explicit check and a manual-only preference. The app opens the release page;
 it does not silently download or run an artifact. Setup over-install upgrades
 replace the old program files while preserving `%APPDATA%\MagicHandy`, existing
-settings, imported models, and history. Full trust boundaries are in
+settings, imported models, and history. The installer opens the normal app
+route after an upgrade instead of forcing the setup wizard to reappear. Full
+trust boundaries are in
 [update-checks.md](update-checks.md).
 
 ## Windows source bootstrap (`install.ps1`)
