@@ -253,13 +253,18 @@ Bridge points are allowed when they reduce discontinuity. They must obey:
 - exact point at replacement stream time when needed to prevent snap
 - trace annotation marking bridge points
 
-The current implementation crossfades the old effective path into the new plan
+Spatial or content changes crossfade the old effective path into the new plan
 for 750 ms with a smootherstep weight. The weight has zero first derivative at
 both boundaries, so the handoff does not introduce a position or velocity snap.
 Because two moving curves can crossfade into a small extra turn, the final
 transition frame removes rapid reversals at or below 2% prominence while
-protecting its start and end. The old `bridge_points=true` trace annotation is
-retained for compatibility.
+protecting its start and end. A phase-preserving tempo-only update whose
+authored curve, spatial projection, and travel direction are unchanged switches
+pace directly at an already-continuous handoff (within 0.05%). Crossfading two
+differently paced copies of the same moving curve can cancel their velocities
+and manufacture a brief stop; a larger handoff mismatch still takes the bounded
+bridge. The old `bridge_points=true` trace annotation is retained for
+compatibility.
 
 ## Settings Retargets
 

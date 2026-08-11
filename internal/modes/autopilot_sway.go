@@ -104,7 +104,7 @@ func (m *Manager) planSwayLocked(
 	for index := 0; index < allowed; index++ {
 		base := swayEdgeGuard + slot*time.Duration(index)
 		jitter := time.Duration(0)
-		if span := int64(slot - swayMinSpacing/2); span > 0 {
+		if span := int64(slot - swayMinSpacing); span > 0 {
 			jitter = time.Duration(m.swayRNG.Int63n(span))
 		}
 		delta := m.swayRNG.Intn(2*amplitude+1) - amplitude

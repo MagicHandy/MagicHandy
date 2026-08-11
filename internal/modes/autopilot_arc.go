@@ -85,15 +85,28 @@ func (m *Manager) applyArcIntentLocked(now time.Time, intent string) {
 	m.arc.lastNudge = intent
 	switch intent {
 	case config.AutopilotArcAdvance:
-		m.arc.percent = clampInt(current+config.AutopilotArcNudgePercent, 0, 100)
+		m.placeArcPercentLocked(now, current+config.AutopilotArcNudgePercent)
 	case config.AutopilotArcEase:
-		// Easing below the time baseline is allowed: winding down is a legitimate
-		// direction, and the next arcPercentLocked floor keeps it from sticking
-		// at zero for the rest of a long session.
-		m.arc.percent = clampInt(current-config.AutopilotArcNudgePercent, 0, 100)
+		// Re-anchor the time baseline so easing is visible instead of being
+		// immediately hidden by the pre-nudge elapsed-time floor. Time resumes
+		// progressing from the eased value on the next snapshot.
+		m.placeArcPercentLocked(now, current-config.AutopilotArcNudgePercent)
 	default:
 		m.arc.percent = current
 	}
+}
+
+// placeArcPercentLocked moves the visible value and re-anchors elapsed progress
+// at that same point. Callers hold the lock.
+func (m *Manager) placeArcPercentLocked(now time.Time, percent int) {
+	m.arc.percent = clampInt(percent, 0, 100)
+	settings := m.options.AutopilotSettings()
+	minutes := settings.SessionArcMinutes
+	if minutes < config.AutopilotMinimumArcMinutes {
+		minutes = config.AutopilotDefaultArcMinutes
+	}
+	offset := time.Duration(m.arc.percent) * time.Duration(minutes) * time.Minute / 100
+	m.arc.startedAt = now.Add(-offset)
 }
 
 // SessionArcSnapshot reports buildup for the UI.
@@ -139,16 +152,9 @@ func (m *Manager) SetSessionArcPercent(percent int) bool {
 		m.mu.Unlock()
 		return false
 	}
-	m.arc.percent = clampInt(percent, 0, 100)
 	// Re-anchor the time baseline to the placed value so the bar does not snap
 	// back to wherever elapsed time had already reached.
-	settings := m.options.AutopilotSettings()
-	minutes := settings.SessionArcMinutes
-	if minutes < config.AutopilotMinimumArcMinutes {
-		minutes = config.AutopilotDefaultArcMinutes
-	}
-	offset := time.Duration(m.arc.percent) * time.Duration(minutes) * time.Minute / 100
-	m.arc.startedAt = now.Add(-offset)
+	m.placeArcPercentLocked(now, percent)
 	m.mu.Unlock()
 	m.trace(ModeAutopilot, "session_arc_set", nil, "")
 	return true

@@ -195,6 +195,25 @@ independent of everything.
   coupling requiring its own explicit, visible, user-armed mode and a design
   doc.
 
+## D. Review follow-ups requiring measurement - 2026-08-11
+
+- **Continuous tempo morphing.** The motion engine now changes pace directly
+  when a looping same-pattern retarget has the same authored geometry, spatial
+  projection, travel direction, and a position-continuous handoff. Replacing
+  discrete retargets with a continuously parameterized tempo envelope could be
+  smoother still, but it would alter the engine's timing model and needs
+  trace-aligned device A/B tests on subtle low-speed patterns before it is a
+  justified refactor. **Research spike; do not infer improvement from preview
+  curves alone.**
+- **Managed-model cold-load budget.** The pinned llama.cpp package was verified
+  to return HTTP 503 while loading and to generate successfully with the same
+  request shape MagicHandy uses. The core now keeps polling an app-owned process
+  through a bodyless or malformed loading 503. Whether the current 90-second
+  budget is enough for large GGUF files, slow disks, and active antivirus still
+  needs startup measurements; extending it blindly would only hide a genuinely
+  failed process for longer. **Measure representative cold starts before
+  changing the budget.**
+
 ---
 
 ## What this changes elsewhere

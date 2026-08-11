@@ -20,8 +20,8 @@ Phase 16.
 | Portable ZIP | No-install or USB use | Provide the payload without Windows integration |
 | `bootstrap.ps1` + `install.ps1` | Source user | Repair WinGet/Git, build the pure-Go core, then open `#/setup` |
 | `install.ps1 -Yes ...` | Managed automation | Provision explicitly selected optional components without prompts |
-| `update.ps1` | Existing source checkout | Safely fast-forward and rebuild the core; optionally open `#/setup` |
-| Settings > General > Run setup again | Existing app | Revisit device, model, and voice choices at any time |
+| `update.ps1` | Existing source checkout | Safely fast-forward and rebuild the core; optionally open `#/setup/reconfigure` |
+| Settings > General > Run setup again | Existing app | Revisit device, model, and voice choices through `#/setup/reconfigure` |
 
 The setup EXE and portable ZIP require no Go, Node, Python, CMake, Visual
 Studio, or CUDA installation to run the MagicHandy core. The unsigned setup EXE
@@ -127,7 +127,8 @@ Implemented:
 - read-only pull-request packaging plus a separate SemVer-tag publication
   workflow; the exact public setup receives install, upgrade, retain, purge, and
   clean-reinstall acceptance;
-- fresh-store detection and a re-runnable `#/setup` route;
+- fresh-store detection at `#/setup` plus an explicit, re-runnable
+  `#/setup/reconfigure` route that stale tabs cannot trigger after an update;
 - GUI-managed verified llama.cpp installation, GGUF import, Ollama/external selection,
   Parakeet, Faster Qwen3-TTS, and Chatterbox provisioning;
 - one cancellable backend setup queue with controller ownership;

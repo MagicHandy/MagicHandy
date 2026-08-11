@@ -40,9 +40,8 @@ type AutopilotResponse struct {
 	Motion *MotionCommand
 	Next   AutopilotTiming
 	// Variability is how much the target should wander before the next boundary.
-	// Unlike Next it is optional on the wire: a model that omits it gets ordinary
-	// texture rather than a rejected turn, because it was added after the
-	// contract shipped and a missing field is not a malformed response.
+	// Motion turns require the model to choose it explicitly so a scheduler hold
+	// cannot acquire backend-invented movement after the model answered.
 	Variability string
 	// Arc is a request to move visible session buildup by one bounded step. It is
 	// read only while the arc is enabled and can never set the value.
@@ -147,44 +146,15 @@ func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotRespon
 	if raw == "" {
 		return AutopilotResponse{}, errors.New("autopilot response is empty")
 	}
-	var response AutopilotResponse
-	switch kind {
-	case AutopilotKindMotion:
-		var wire struct {
-			Motion      *MotionCommand  `json:"motion,omitempty"`
-			Next        AutopilotTiming `json:"next"`
-			Variability string          `json:"variability,omitempty"`
-			Arc         string          `json:"arc,omitempty"`
-		}
-		if err := decodeAutopilotJSON(raw, &wire); err != nil {
-			return AutopilotResponse{}, err
-		}
-		response.Motion = wire.Motion
-		response.Next = wire.Next
-		response.Variability = strings.TrimSpace(wire.Variability)
-		response.Arc = strings.TrimSpace(wire.Arc)
-	case AutopilotKindSpeech:
-		var wire struct {
-			Reply       string          `json:"reply"`
-			Motion      *MotionCommand  `json:"motion,omitempty"`
-			Next        AutopilotTiming `json:"next"`
-			Variability string          `json:"variability,omitempty"`
-			Arc         string          `json:"arc,omitempty"`
-		}
-		if err := decodeAutopilotJSON(raw, &wire); err != nil {
-			return AutopilotResponse{}, err
-		}
-		response.Reply = strings.TrimSpace(wire.Reply)
-		response.Motion = wire.Motion
-		response.Next = wire.Next
-		response.Variability = strings.TrimSpace(wire.Variability)
-		response.Arc = strings.TrimSpace(wire.Arc)
-		if response.Reply == "" {
-			return AutopilotResponse{}, errors.New("autopilot speech reply is required")
-		}
+	response, err := decodeAutopilotResponse(raw, kind)
+	if err != nil {
+		return AutopilotResponse{}, err
 	}
 	if !validAutopilotTiming(response.Next) {
 		return AutopilotResponse{}, fmt.Errorf("unknown Autopilot timing %q", response.Next)
+	}
+	if response.Arc != "" && !validAutopilotArc(response.Arc) {
+		return AutopilotResponse{}, fmt.Errorf("unknown Autopilot buildup intent %q", response.Arc)
 	}
 
 	// Reuse the interactive semantic validator with an inert non-empty reply.
@@ -208,7 +178,71 @@ func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotRespon
 		return AutopilotResponse{}, errors.New("autopilot motion action must be target or none")
 	}
 	response.Motion = validated.Motion
+	if err := normalizeAutopilotSpeechVariability(&response, kind); err != nil {
+		return AutopilotResponse{}, err
+	}
 	return response, nil
+}
+
+func decodeAutopilotResponse(raw string, kind AutopilotKind) (AutopilotResponse, error) {
+	switch kind {
+	case AutopilotKindMotion:
+		var wire struct {
+			Motion      *MotionCommand  `json:"motion,omitempty"`
+			Next        AutopilotTiming `json:"next"`
+			Variability string          `json:"variability,omitempty"`
+			Arc         string          `json:"arc,omitempty"`
+		}
+		if err := decodeAutopilotJSON(raw, &wire); err != nil {
+			return AutopilotResponse{}, err
+		}
+		response := AutopilotResponse{
+			Motion: wire.Motion, Next: wire.Next,
+			Variability: strings.TrimSpace(wire.Variability), Arc: strings.TrimSpace(wire.Arc),
+		}
+		if !validAutopilotVariability(response.Variability) {
+			return AutopilotResponse{}, fmt.Errorf("unknown Autopilot variability %q", response.Variability)
+		}
+		return response, nil
+	case AutopilotKindSpeech:
+		var wire struct {
+			Reply       string          `json:"reply"`
+			Motion      *MotionCommand  `json:"motion,omitempty"`
+			Next        AutopilotTiming `json:"next"`
+			Variability string          `json:"variability,omitempty"`
+			Arc         string          `json:"arc,omitempty"`
+		}
+		if err := decodeAutopilotJSON(raw, &wire); err != nil {
+			return AutopilotResponse{}, err
+		}
+		response := AutopilotResponse{
+			Reply: strings.TrimSpace(wire.Reply), Motion: wire.Motion, Next: wire.Next,
+			Variability: strings.TrimSpace(wire.Variability), Arc: strings.TrimSpace(wire.Arc),
+		}
+		if response.Reply == "" {
+			return AutopilotResponse{}, errors.New("autopilot speech reply is required")
+		}
+		return response, nil
+	default:
+		return AutopilotResponse{}, fmt.Errorf("unknown Autopilot kind %q", kind)
+	}
+}
+
+func normalizeAutopilotSpeechVariability(response *AutopilotResponse, kind AutopilotKind) error {
+	if kind != AutopilotKindSpeech {
+		return nil
+	}
+	if response.Motion != nil && response.Motion.Action == MotionActionTarget {
+		if !validAutopilotVariability(response.Variability) {
+			return fmt.Errorf("autopilot speech target requires settled, normal, or restless variability, got %q", response.Variability)
+		}
+		return nil
+	}
+	// Variability has no meaning without admitted target motion. Clear it after
+	// capability enforcement so an unadvertised motion object stays inert instead
+	// of leaking a scheduler preference.
+	response.Variability = ""
+	return nil
 }
 
 func decodeAutopilotJSON(raw string, destination any) error {
@@ -228,6 +262,14 @@ func validAutopilotTiming(timing AutopilotTiming) bool {
 	return timing == AutopilotTimingSoon || timing == AutopilotTimingNormal || timing == AutopilotTimingLater
 }
 
+func validAutopilotVariability(variability string) bool {
+	return variability == "settled" || variability == "normal" || variability == "restless"
+}
+
+func validAutopilotArc(arc string) bool {
+	return arc == "advance" || arc == "ease" || arc == "hold"
+}
+
 func composeAutopilotSystem(
 	set PromptSet,
 	memories []string,
@@ -244,7 +286,7 @@ func composeAutopilotSystem(
 		case "response_contract":
 			sections = append(sections, autopilotContract(kind, capabilities))
 		case "output_guard":
-			sections = append(sections, autopilotOutputGuard(kind))
+			sections = append(sections, autopilotOutputGuard(kind, capabilities))
 		case "voice_identity", "reaction_style", "voice_check", "language_reminder":
 			if kind == AutopilotKindSpeech {
 				sections = append(sections, section.Text)
@@ -262,14 +304,19 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 	if kind == AutopilotKindSpeech {
 		builder.WriteString(`The object requires a non-empty "reply" string and "next":"soon"|"normal"|"later".`)
 	} else {
-		builder.WriteString(`The object requires "next":"soon"|"normal"|"later". Do not include a "reply" field.`)
+		builder.WriteString(`The object requires "next":"soon"|"normal"|"later" and "variability":"settled"|"normal"|"restless". Do not include a "reply" field.`)
 	}
 	builder.WriteString("\nThe timing value is a relative preference only. Never emit seconds, a duration, or a deadline.\n")
+	builder.WriteString(`The optional "arc" value may be "advance", "ease", or "hold" only when this turn describes visible session buildup; otherwise omit it.`)
+	builder.WriteByte('\n')
 	if !capabilities.Motion {
 		builder.WriteString(`Motion control is unavailable for this turn. Do not include a "motion" field.`)
 		return builder.String()
 	}
 	builder.WriteString(`The optional "motion" value may be {"action":"none"} or use action "target" to change active motion. Never use "start" or "stop".`)
+	if kind == AutopilotKindSpeech {
+		builder.WriteString(` A target motion requires "variability":"settled"|"normal"|"restless"; omit variability when motion is omitted or uses "none".`)
+	}
 	builder.WriteString("\nOmitted target fields preserve the live target. Never invent device commands, pattern IDs, URLs, or transport details.")
 	if capabilities.Patterns {
 		builder.WriteString(` To select an enabled pattern, include "pattern_id" and "intensity" together and omit "speed_percent".`)
@@ -284,11 +331,14 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 	return builder.String()
 }
 
-func autopilotOutputGuard(kind AutopilotKind) string {
+func autopilotOutputGuard(kind AutopilotKind, capabilities Capabilities) string {
 	if kind == AutopilotKindSpeech {
-		return `FINAL OUTPUT: return only {"reply":"<one short in-character line>","next":"soon|normal|later"} plus an optional allowed "motion" object.`
+		if capabilities.Motion {
+			return `FINAL OUTPUT: return only {"reply":"<one short in-character line>","next":"soon|normal|later"} plus optional "arc" or allowed target "motion" with matching "variability".`
+		}
+		return `FINAL OUTPUT: return only {"reply":"<one short in-character line>","next":"soon|normal|later"} plus an optional "arc" field. No motion.`
 	}
-	return `FINAL OUTPUT: return only {"next":"soon|normal|later"} plus an optional allowed "motion" object. No reply text.`
+	return `FINAL OUTPUT: return only {"next":"soon|normal|later","variability":"settled|normal|restless"} plus optional allowed "motion" and "arc" fields. No reply text.`
 }
 
 func autopilotRepairPrompt(promptID string, kind AutopilotKind, parseError error) string {

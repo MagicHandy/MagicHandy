@@ -59,8 +59,8 @@ func TestSettledVariabilityPlansNoSway(t *testing.T) {
 	}
 }
 
-// An absent or invented category must behave like normal rather than either
-// extreme, because the field is optional on the wire.
+// The manager remains defensive for planner/fallback and direct callers even
+// though model motion turns validate this required category at the chat edge.
 func TestUnknownVariabilityBehavesLikeNormal(t *testing.T) {
 	manager := swayTestManager(t, config.DefaultAutopilotSettings())
 	unknown := len(planSway(t, manager, 60*time.Second, VariabilityPreference("frantic")))
@@ -182,7 +182,7 @@ func TestSwayWaypointsAreSpacedAndClearOfTheBoundaries(t *testing.T) {
 		if point.at.After(start.Add(duration - swayEdgeGuard)) {
 			t.Fatalf("waypoint %d landed inside the closing guard", index)
 		}
-		if index > 0 && point.at.Sub(previous) < swayMinSpacing/2 {
+		if index > 0 && point.at.Sub(previous) < swayMinSpacing {
 			t.Fatalf("waypoint %d is %s after the previous one", index, point.at.Sub(previous))
 		}
 		previous = point.at

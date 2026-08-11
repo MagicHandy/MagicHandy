@@ -223,7 +223,10 @@ Generation controls stay deliberately small and provider-aware:
 - **Cold-load readiness** treats llama.cpp's bounded HTTP 503 `Loading model`
   response as a running/loading state rather than a runtime failure. Managed
   startup waits up to 90 seconds for slower first reads, and the Model screen
-  polls that state until it becomes ready. Unknown 503 responses remain errors.
+  polls that state until it becomes ready. Because the pinned app-owned health
+  endpoint reserves 503 for cold loading, a live managed process also treats a
+  bodyless or malformed 503 as loading; external llama.cpp servers retain the
+  stricter body check.
 - **Maximum output** defaults to 256 tokens and applies to both passes.
   llama.cpp receives `max_tokens`; Ollama receives `options.num_predict`.
   Provider `length` completion reasons are handled as truncation rather than a

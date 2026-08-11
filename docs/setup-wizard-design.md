@@ -25,8 +25,9 @@ than a second UI specification.
 A fresh data store has `ui.setup_completed=false`, so any normal route redirects
 to `#/setup`. Settings documents created before this field existed are treated
 as already configured and are not forced through onboarding after an update.
-The `-setup` flag opens the route explicitly, and Settings > General exposes
-**Run setup again**.
+A completed store that returns on a stale `#/setup` browser tab is sent back to
+Chat. The `-setup` flag and Settings > General's **Run setup again** action use
+`#/setup/reconfigure`, which is the explicit opt-in to reopen the wizard.
 
 Completion is an explicit backend write. Leaving halfway preserves each saved
 step and keeps setup required. The normal app shell remains mounted throughout,

@@ -118,6 +118,7 @@ func (p *ManagedLlamaCPPProvider) Status(ctx context.Context) ProviderStatus {
 	providerStatus := p.clientSnapshot().Status(ctx)
 	providerStatus.Managed = true
 	providerStatus.Loaded = p.running()
+	providerStatus = normalizeManagedLlamaLoadingStatus(providerStatus)
 	if !providerStatus.Loaded {
 		providerStatus.Available = false
 		providerStatus.ModelAvailable = false
@@ -147,6 +148,7 @@ func (p *ManagedLlamaCPPProvider) Load(ctx context.Context) ProviderStatus {
 		providerStatus := p.clientSnapshot().Status(ctx)
 		providerStatus.Managed = true
 		providerStatus.Loaded = p.running()
+		providerStatus = normalizeManagedLlamaLoadingStatus(providerStatus)
 		if !providerStatus.Loaded {
 			providerStatus.Available = false
 			providerStatus.ModelAvailable = false
@@ -176,6 +178,18 @@ func (p *ManagedLlamaCPPProvider) Load(ctx context.Context) ProviderStatus {
 		case <-timer.C:
 		}
 	}
+}
+
+// The pinned llama.cpp health contract reserves HTTP 503 for model loading.
+// Preserve stricter handling for external servers, but do not let an empty or
+// briefly malformed body turn a live app-owned cold load into a terminal UI
+// error that stops status polling.
+func normalizeManagedLlamaLoadingStatus(status ProviderStatus) ProviderStatus {
+	if status.Loaded && !status.Available && status.Message == "health endpoint returned 503" {
+		status.Loading = true
+		status.Message = "llama.cpp is loading the model"
+	}
+	return status
 }
 
 // Unload stops the managed llama-server process.

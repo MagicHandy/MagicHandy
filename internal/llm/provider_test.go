@@ -318,6 +318,28 @@ func TestLlamaCPPStatusKeepsUnknownServiceUnavailableAsFailure(t *testing.T) {
 	}
 }
 
+func TestManagedLlamaCPPStatusTreatsAmbiguousServiceUnavailableAsLoading(t *testing.T) {
+	status := normalizeManagedLlamaLoadingStatus(ProviderStatus{
+		Loaded:  true,
+		Message: "health endpoint returned 503",
+	})
+	if !status.Loading || status.Message != "llama.cpp is loading the model" {
+		t.Fatalf("managed loading status = %+v", status)
+	}
+
+	for _, unchanged := range []ProviderStatus{
+		{Loaded: false, Message: "health endpoint returned 503"},
+		{Loaded: true, Message: "health endpoint returned 500"},
+		{Loaded: true, Available: true, Message: "ready"},
+	} {
+		got := normalizeManagedLlamaLoadingStatus(unchanged)
+		if got.Loaded != unchanged.Loaded || got.Available != unchanged.Available ||
+			got.Loading != unchanged.Loading || got.Message != unchanged.Message {
+			t.Fatalf("normalizeManagedLlamaLoadingStatus(%+v) = %+v", unchanged, got)
+		}
+	}
+}
+
 func TestManagedLlamaCPPStatusRequiresManagedRuntimeAndModel(t *testing.T) {
 	provider, err := NewManagedLlamaCPPProvider(ManagedLlamaCPPOptions{
 		HTTPProviderOptions: HTTPProviderOptions{

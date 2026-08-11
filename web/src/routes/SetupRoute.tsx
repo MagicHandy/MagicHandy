@@ -128,6 +128,13 @@ export function SetupRoute() {
     if (runtimeChoice === "ollama") void loadOllama();
   }, [loadOllama, runtimeChoice]);
 
+  useEffect(() => {
+    const workspace = document.getElementById("workspace");
+    if (!workspace) return;
+    workspace.scrollTop = 0;
+    workspace.scrollLeft = 0;
+  }, [step]);
+
   const run = async (name: string, action: () => Promise<void>) => {
     if (busy) return;
     setBusy(name);
