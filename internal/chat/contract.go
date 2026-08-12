@@ -173,6 +173,32 @@ func preserveCurrentPatternSpeed(response *AssistantResponse, currentSpeed *int)
 	}
 }
 
+// resolveOverspecifiedPacing picks one pacing representation when the model sent
+// both, instead of discarding the whole decision.
+//
+// The contract asks for exactly one of pattern_id+intensity or speed_percent,
+// and rejecting the pair is right for a hand-written command. For a model it was
+// costing the entire turn: measured against the live 26B, 60% of autopilot
+// motion decisions were thrown away on this rule alone, and every one of them
+// fell back to the deterministic planner. That is what flattened session speed.
+//
+// Both values here came from the model and both remain subject to the band and
+// range checks below, so nothing is invented and no limit moves. The choice
+// follows the contract's own preference: a named pattern is paced by intensity,
+// and intensity without a pattern is meaningless, so speed_percent wins there.
+// This mirrors enforceCapabilities, which already strips stray fields rather
+// than spending a repair round-trip on model noise.
+func resolveOverspecifiedPacing(motion *MotionCommand) {
+	if motion == nil || motion.Intensity == nil || motion.SpeedPercent == nil {
+		return
+	}
+	if strings.TrimSpace(motion.PatternID) != "" {
+		motion.SpeedPercent = nil
+		return
+	}
+	motion.Intensity = nil
+}
+
 func validateAssistantResponse(response *AssistantResponse, patterns []PatternChoice, curation bool) error {
 	response.Reply = strings.TrimSpace(response.Reply)
 	if response.Reply == "" {
@@ -188,6 +214,7 @@ func validateAssistantResponse(response *AssistantResponse, patterns []PatternCh
 	response.Motion.Action = strings.ToLower(strings.TrimSpace(response.Motion.Action))
 	response.Motion.PatternID = strings.ToLower(strings.TrimSpace(response.Motion.PatternID))
 	response.Motion.Area = strings.ToLower(strings.TrimSpace(response.Motion.Area))
+	resolveOverspecifiedPacing(response.Motion)
 	switch response.Motion.Action {
 	case MotionActionNone, MotionActionStart, MotionActionTarget, MotionActionStop:
 	default:

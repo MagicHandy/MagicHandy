@@ -81,14 +81,24 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	}
 	writeSessionProgress(&builder, context)
 	builder.WriteString("Decide what happens for the next stretch using the recent conversation as the user's ongoing direction:\n")
-	builder.WriteString("- To change motion, use action \"target\" and include only the pattern_id, intensity, speed_percent, or area fields that should change; omitted fields preserve the live target.\n")
+	builder.WriteString("- To change motion, use action \"target\" and change only what should change; omitted fields preserve the live target.\n")
+	// Listing intensity and speed_percent together as freely combinable read as
+	// permission to send both, which the contract rejects outright. The whole
+	// decision is then discarded and the scheduler falls back to the planner, so
+	// the cost of getting this wrong is the model losing its turn entirely.
+	builder.WriteString("- Pace the change exactly one way, never both: either pattern_id together with intensity, or speed_percent on its own. Sending intensity and speed_percent in the same decision is rejected and the whole decision is thrown away.\n")
 	builder.WriteString("- A broad request to vary or change things up may change pattern, speed, area, or a fitting combination. Do not reduce every variation request to pattern cycling.\n")
 	if context.AreaFocusEnabled && area != AreaZoneFull {
 		builder.WriteString("- The current named area focus is temporary. Unless the user explicitly asked to stay there, broad variation should normally move the focus or set area to \"full\".\n")
 	}
 	builder.WriteString("- To deliberately keep the current motion going, set motion to {\"action\":\"none\"} or omit motion.\n")
 	builder.WriteString("- Never use action \"start\" or \"stop\": only the scheduler starts and only the user stops motion.\n")
-	builder.WriteString("- Set next to soon, normal, or later for when motion should next be reconsidered. Do not provide seconds.\n")
+	// Every axis here collapses to one value unless the spread is asked for. A
+	// live session held one pattern, chose "soon" every time, and kept speed
+	// inside a narrow band for ten minutes.
+	fmt.Fprintf(&builder, "- Use the width of %d-%d%% across the session rather than settling into one comfortable band. Easing down is what makes the next climb land, and several decisions in a row at nearly the same speed is the main thing to avoid.\n",
+		context.SpeedMinPercent, context.SpeedMaxPercent)
+	builder.WriteString("- Set next to soon, normal, or later for when motion should next be reconsidered. Do not provide seconds. Vary it: back-to-back short stretches read as flat as one long one.\n")
 	builder.WriteString("- Set variability to settled, normal, or restless for how much the speed should wander before then. This is separate from next: a long stretch can still breathe, and a short one can stay flat.")
 	return builder.String()
 }
