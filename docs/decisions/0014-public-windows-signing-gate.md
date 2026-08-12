@@ -62,19 +62,22 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.17, and alpha.18 reviewed unsigned setup are explicit
-   exceptions.** The tag workflow may publish only those listed unsigned setup versions with the
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.19 reviewed unsigned
+   setup are explicit exceptions.** The tag workflow may publish only those
+   listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
    case ID above. Alpha.9 corrects installer-script argument handling without
    changing the hardened Inno packaging shape. Alpha.10 retains that shape and
    corrects managed llama.cpp cold-load readiness, managed TTS verification,
-and worker process-tree cleanup. Alpha.11 retains the hardened package shape,
+   and worker process-tree cleanup. Alpha.11 retains the hardened package shape,
    restores prerelease update discovery, and materializes Faster Qwen model
    files outside Hugging Face snapshot links for clean Windows installs.
    Alpha.13 retains the hardened package shape and ships the Ollama GGUF and
-   repaired-chat corrections after alpha.12's portable release was withdrawn. The tag
-   workflow scans each exact candidate
-   directory with Microsoft Defender before lifecycle verification. The
+   repaired-chat corrections after alpha.12's portable release was withdrawn.
+   Alpha.18 and alpha.19 retain the hardened package shape while shipping the
+   reviewed Autopilot control-path corrections.
+   The tag workflow scans each exact candidate directory with Microsoft
+   Defender before lifecycle verification. The
    verifier rejects every other version, so a later unsigned setup requires a
    new reviewed policy change. It builds setup, portable ZIP, and two-entry
    checksum into one dedicated `artifacts/release` directory, runs the full
@@ -138,12 +141,13 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.18 version and the recorded Microsoft case ID, the
+  alpha.8 through alpha.11 or alpha.13 through alpha.19 version, the recorded
+  Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.17, and alpha.18 reviewed setup workflows run Microsoft
-  Defender against the exact public artifact directory before verification or
-  release creation.
+- Alpha.9 through alpha.11 and alpha.13 through alpha.19 reviewed setup
+  workflows run Microsoft Defender against the exact public artifact directory
+  before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
   timestamped Authenticode from the explicitly pinned signer on the setup
   executable and every payload EXE.
