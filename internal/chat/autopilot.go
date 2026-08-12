@@ -77,7 +77,10 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 		fmt.Fprintf(&builder, "Current motion: pattern %q at %d%% speed in area %q.\n", context.CurrentPatternID, context.CurrentSpeed, area)
 	}
 	if len(context.RecentPatternIDs) > 0 {
-		fmt.Fprintf(&builder, "Recently played patterns (oldest first): %s. Treat these as context, not a ban on deliberate reuse.\n", strings.Join(context.RecentPatternIDs, ", "))
+		// Framed as permission to repeat, this read as encouragement to stay put:
+		// a live session held one pattern for its whole length while this list
+		// showed that same id four times over.
+		fmt.Fprintf(&builder, "Recently played patterns (oldest first): %s. Reach for something outside this list unless repeating one is a deliberate choice for this moment.\n", strings.Join(context.RecentPatternIDs, ", "))
 	}
 	writeSessionProgress(&builder, context)
 	builder.WriteString("Decide what happens for the next stretch using the recent conversation as the user's ongoing direction:\n")
@@ -88,8 +91,15 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	// the cost of getting this wrong is the model losing its turn entirely.
 	builder.WriteString("- Pace the change exactly one way, never both: either pattern_id together with intensity, or speed_percent on its own. Sending intensity and speed_percent in the same decision is rejected and the whole decision is thrown away.\n")
 	builder.WriteString("- A broad request to vary or change things up may change pattern, speed, area, or a fitting combination. Do not reduce every variation request to pattern cycling.\n")
-	if context.AreaFocusEnabled && area != AreaZoneFull {
-		builder.WriteString("- The current named area focus is temporary. Unless the user explicitly asked to stay there, broad variation should normally move the focus or set area to \"full\".\n")
+	// The only area guidance used to fire once a focus was already set, so at
+	// "full" -- where every session starts, and stays without a reason to leave --
+	// the affordance was invisible. A live session never left the full range once.
+	if context.AreaFocusEnabled {
+		if area == AreaZoneFull {
+			builder.WriteString("- The stroke currently covers the full range. Narrowing area to \"tip\", \"shaft\", or \"base\" for a stretch is one of the strongest changes available, and returning to \"full\" afterwards is a change in its own right.\n")
+		} else {
+			builder.WriteString("- The current named area focus is temporary. Unless the user explicitly asked to stay there, broad variation should normally move the focus or set area to \"full\".\n")
+		}
 	}
 	builder.WriteString("- To deliberately keep the current motion going, set motion to {\"action\":\"none\"} or omit motion.\n")
 	builder.WriteString("- Never use action \"start\" or \"stop\": only the scheduler starts and only the user stops motion.\n")

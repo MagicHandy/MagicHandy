@@ -63,10 +63,15 @@ func TestSettledVariabilityPlansNoSway(t *testing.T) {
 // though model motion turns validate this required category at the chat edge.
 func TestUnknownVariabilityBehavesLikeNormal(t *testing.T) {
 	manager := swayTestManager(t, config.DefaultAutopilotSettings())
-	unknown := len(planSway(t, manager, 60*time.Second, VariabilityPreference("frantic")))
-	normal := len(planSway(t, manager, 60*time.Second, VariabilityNormal))
+	// Compare the earned allowance rather than two sampled schedules: planning
+	// twice advances the shared RNG, so the second call legitimately drops a
+	// different number of same-speed waypoints and the counts need not match.
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	unknown := manager.swayAllowanceLocked(60*time.Second, VariabilityPreference("frantic"))
+	normal := manager.swayAllowanceLocked(60*time.Second, VariabilityNormal)
 	if unknown != normal {
-		t.Fatalf("unknown category planned %d waypoints, normal planned %d", unknown, normal)
+		t.Fatalf("unknown category earned %d waypoints, normal earned %d", unknown, normal)
 	}
 }
 
@@ -79,9 +84,15 @@ func TestSwayAllowanceScalesWithSegmentLengthAndIsCapped(t *testing.T) {
 		duration time.Duration
 		want     int
 	}{
+		// One waypoint per 8s of stretch. The old 20s cadence gave a typical
+		// 20-60s Autopilot stretch a single waypoint whichever variability the
+		// model chose, so the axis barely reached the device.
+		{4 * time.Second, 0},
+		// Below swayMinTexturedSegment nothing is earned: the fast end is where
+		// retarget churn is the risk, not flatness.
 		{10 * time.Second, 0},
-		{20 * time.Second, 1},
-		{60 * time.Second, 3},
+		{20 * time.Second, 2},
+		{60 * time.Second, maxSwayPoints},
 		{120 * time.Second, maxSwayPoints},
 		{300 * time.Second, maxSwayPoints},
 	}

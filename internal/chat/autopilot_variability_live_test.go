@@ -159,6 +159,30 @@ func (v *varTally) report(label string, bandLow, bandHigh int) {
 	fmt.Printf("  arc           : %s\n", keyed(v.arcs))
 }
 
+// menuWithoutRecent mirrors httpapi.withoutRecentPatterns, which cannot be
+// imported here without a dependency cycle.
+func menuWithoutRecent(choices []PatternChoice, recent []string) []PatternChoice {
+	const floor = 4
+	if len(choices) <= floor || len(recent) == 0 {
+		return choices
+	}
+	withheld := map[string]bool{}
+	for _, id := range recent {
+		withheld[strings.ToLower(strings.TrimSpace(id))] = true
+	}
+	kept := make([]PatternChoice, 0, len(choices))
+	for _, choice := range choices {
+		if withheld[strings.ToLower(strings.TrimSpace(choice.ID))] {
+			continue
+		}
+		kept = append(kept, choice)
+	}
+	if len(kept) < floor {
+		return choices
+	}
+	return kept
+}
+
 func TestAutopilotVariability(t *testing.T) {
 	base := os.Getenv("LLAMACPP")
 	if base == "" {
@@ -213,8 +237,14 @@ func TestAutopilotVariability(t *testing.T) {
 		current.SegmentIndex = turn
 		current.SessionSeconds = turn * 30
 		current.SecondsAtCurrentSpeed = secondsAtSpeed
-		current.ArcPercent = min(100, turn*100/max(1, turns-1))
+		// The arc fills over the configured session length, not over the number of
+		// decisions. Ramping it straight to 100% made the prompt say "aim higher"
+		// every turn, which pinned speed at the ceiling and hid everything else.
+		const arcMinutes, secondsPerTurn = 20, 30
+		current.ArcPercent = min(100, turn*secondsPerTurn*100/(arcMinutes*60))
 
+		// Mirrors withoutRecentPatterns in the httpapi motion path.
+		service.Patterns = menuWithoutRecent(catalog, current.RecentPatternIDs)
 		began := time.Now()
 		response, err := service.Complete(context.Background(), AutopilotKindMotion,
 			Request{Message: AutopilotMotionMessage(current)})
@@ -231,35 +261,53 @@ func TestAutopilotVariability(t *testing.T) {
 		if a := strings.TrimSpace(response.Arc); a != "" {
 			tally.arcs[a]++
 		}
-		m := response.Motion
-		if m == nil || m.Action == MotionActionNone {
-			tally.holds++
-			secondsAtSpeed += 30
-			t.Logf("  turn %2d HOLD    speed=%d next=%s var=%s", turn, current.CurrentSpeed, response.Next, response.Variability)
-			continue
-		}
-		if m.PatternID != "" {
-			current.CurrentPatternID = m.PatternID
-		}
-		if m.SpeedPercent != nil {
-			if *m.SpeedPercent != current.CurrentSpeed {
-				secondsAtSpeed = 0
-			}
-			current.CurrentSpeed = *m.SpeedPercent
-		} else if m.Intensity != nil {
-			if *m.Intensity != current.CurrentSpeed {
-				secondsAtSpeed = 0
-			}
-			current.CurrentSpeed = *m.Intensity
-		}
-		if m.Area != "" {
-			current.CurrentArea = m.Area
-		}
-		tally.speeds = append(tally.speeds, current.CurrentSpeed)
-		tally.patterns[current.CurrentPatternID]++
-		tally.areas[current.CurrentArea]++
-		t.Logf("  turn %2d CHANGE  speed=%d pattern=%s area=%s next=%s var=%s arc=%s",
-			turn, current.CurrentSpeed, current.CurrentPatternID, current.CurrentArea, response.Next, response.Variability, response.Arc)
+		tally.applyDecision(t, turn, response, &current, &secondsAtSpeed)
 	}
 	tally.report(os.Getenv("LABEL")+" autopilot motion", bandLow, bandHigh)
+}
+
+// applyDecision folds one response into the running session, so the test body
+// stays a loop over turns.
+func (v *varTally) applyDecision(
+	t *testing.T,
+	turn int,
+	response AutopilotResponse,
+	current *AutopilotContext,
+	secondsAtSpeed *int,
+) {
+	t.Helper()
+	m := response.Motion
+	if m == nil || m.Action == MotionActionNone {
+		v.holds++
+		*secondsAtSpeed += 30
+		t.Logf("  turn %2d HOLD    speed=%d next=%s var=%s", turn, current.CurrentSpeed, response.Next, response.Variability)
+		return
+	}
+	if m.PatternID != "" {
+		current.CurrentPatternID = m.PatternID
+	}
+	switch {
+	case m.SpeedPercent != nil:
+		if *m.SpeedPercent != current.CurrentSpeed {
+			*secondsAtSpeed = 0
+		}
+		current.CurrentSpeed = *m.SpeedPercent
+	case m.Intensity != nil:
+		if *m.Intensity != current.CurrentSpeed {
+			*secondsAtSpeed = 0
+		}
+		current.CurrentSpeed = *m.Intensity
+	}
+	if m.Area != "" {
+		current.CurrentArea = m.Area
+	}
+	current.RecentPatternIDs = append(current.RecentPatternIDs, current.CurrentPatternID)
+	if len(current.RecentPatternIDs) > 4 {
+		current.RecentPatternIDs = current.RecentPatternIDs[len(current.RecentPatternIDs)-4:]
+	}
+	v.speeds = append(v.speeds, current.CurrentSpeed)
+	v.patterns[current.CurrentPatternID]++
+	v.areas[current.CurrentArea]++
+	t.Logf("  turn %2d CHANGE  speed=%d pattern=%s area=%s next=%s var=%s arc=%s",
+		turn, current.CurrentSpeed, current.CurrentPatternID, current.CurrentArea, response.Next, response.Variability, response.Arc)
 }
