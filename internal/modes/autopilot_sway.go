@@ -54,6 +54,10 @@ const (
 	swayEdgeGuard = 4 * time.Second
 	// swayMinSpacing is the least time between consecutive waypoints.
 	swayMinSpacing = 6 * time.Second
+	// swayMinJitterWindow reserves room in every timing slot to move a waypoint
+	// away from a fixed offset. Without it, a 20-second restless segment placed
+	// both waypoints at the same 4s/10s marks every time.
+	swayMinJitterWindow = time.Second
 	// swayBandPercentNormal and swayBandPercentRestless are the share of the
 	// user's speed band one waypoint may move through.
 	swayBandPercentNormal   = 14
@@ -161,6 +165,11 @@ func (m *Manager) swayAllowanceLocked(duration time.Duration, variability Variab
 		return 0
 	}
 	byLength := int(duration / (swaySecondsPerPoint * time.Second))
+	interior := duration - 2*swayEdgeGuard
+	bySpacing := int(interior / (swayMinSpacing + swayMinJitterWindow))
+	if byLength > bySpacing {
+		byLength = bySpacing
+	}
 	if byLength > maxSwayPoints {
 		byLength = maxSwayPoints
 	}

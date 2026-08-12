@@ -343,20 +343,18 @@ func (s *Server) rememberAutopilotSpeech(replySeq int64, requestID string) {
 // to nothing, and a forced choice is worse than a repeated one.
 const minAutopilotPatternChoices = 4
 
-// withoutRecentPatterns hides the patterns just played from the autopilot motion
-// menu, so the model chooses among what it has not used rather than being asked
-// to resist the one already in front of it.
+// withoutRecentPatterns temporarily removes patterns just played from the
+// autonomous motion allow-list. The model can still deliberately hold the live
+// pattern or change only its pace by omitting pattern_id; interactive chat keeps
+// the complete enabled catalog so an explicit user request is never withheld.
 //
 // Prompting alone did not move this. Across four wordings, including replacing
 // the recency list's "not a ban on deliberate reuse" with an explicit nudge, a
 // live 26B held one pattern for an entire twenty-decision session with that same
 // id sitting in the recent list four times over. Shaping the choice set is what
-// the deterministic planner already does through recencyPenalty; this gives the
-// model-driven path the same property without overriding a decision it made.
-//
-// Motion turns only. Interactive chat must keep the whole catalog: a user asking
-// for a pattern by name has to be able to get the one they named, even if it
-// just played.
+// the deterministic planner already does through recencyPenalty. It remains
+// model-owned at the action boundary: action none is always valid, while a
+// requested pattern change must use the current bounded menu.
 func withoutRecentPatterns(choices []chat.PatternChoice, recent []string) []chat.PatternChoice {
 	if len(choices) <= minAutopilotPatternChoices || len(recent) == 0 {
 		return choices

@@ -91,7 +91,11 @@ func TestSwayAllowanceScalesWithSegmentLengthAndIsCapped(t *testing.T) {
 		// Below swayMinTexturedSegment nothing is earned: the fast end is where
 		// retarget churn is the risk, not flatness.
 		{10 * time.Second, 0},
-		{20 * time.Second, 2},
+		// A 20s segment has room for only one sampled point once edge,
+		// spacing, and jitter guards are honored.
+		{16 * time.Second, 1},
+		{20 * time.Second, 1},
+		{30 * time.Second, 3},
 		{60 * time.Second, maxSwayPoints},
 		{120 * time.Second, maxSwayPoints},
 		{300 * time.Second, maxSwayPoints},

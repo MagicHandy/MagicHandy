@@ -480,15 +480,33 @@ func TestAutopilotDecisionMessageFramesTheContract(t *testing.T) {
 		"Autopilot motion decision 3",
 		"balanced",
 		"20-80%",
-		"stroke, pulse",
-		"Current motion: pattern \"stroke\" at 30% speed in area \"base\"",
-		"current named area focus is temporary",
+		"current catalog may omit recently played patterns",
+		"Current motion: a recently played catalog pattern at 30% speed in area \"base\"",
+		"Area changes available now: tip, shaft, full",
+		"Suggested spatial contrast for this stretch:",
+		"omit area to deliberately keep \"base\"",
 		"Never use action \"start\" or \"stop\"",
 		"Set next to soon, normal, or later",
 	} {
 		if !strings.Contains(message, want) {
 			t.Fatalf("decision message missing %q:\n%s", want, message)
 		}
+	}
+	if strings.Contains(message, "stroke, pulse") || strings.Contains(message, `pattern "stroke"`) {
+		t.Fatalf("temporarily unavailable pattern IDs leaked into the motion prompt:\n%s", message)
+	}
+}
+
+func TestAutopilotDecisionMessageOffersFocusedAlternativesFromFull(t *testing.T) {
+	message := chat.AutopilotDecisionMessage(chat.AutopilotContext{
+		CurrentPatternID: "stroke",
+		CurrentSpeed:     30,
+		CurrentArea:      chat.AreaZoneFull,
+		AreaFocusEnabled: true,
+	})
+	if !strings.Contains(message, "Area changes available now: tip, shaft, base") ||
+		strings.Contains(message, "Area changes available now: tip, shaft, base, full") {
+		t.Fatalf("full-area alternatives are not explicit:\n%s", message)
 	}
 }
 
