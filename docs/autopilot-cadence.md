@@ -1,6 +1,6 @@
 # Autopilot cadence and autonomy
 
-Status: implementation contract (2026-07-30)
+Status: implementation contract (2026-08-12)
 
 This document defines how Chat Autopilot decides when to change motion and when
 to speak. It is intentionally separate from motion-style scoring and from voice
@@ -100,6 +100,34 @@ to an overlapping portion of the selected range and samples a concrete delay.
 When disabled, code samples the full selected range. The model never emits
 seconds or a deadline.
 
+### Autonomous target variation
+
+The model still decides whether a motion turn changes anything. `action:none`
+remains a first-class hold and never retargets the engine. When the model does
+request a pattern change, the turn-specific catalog temporarily omits recently
+played patterns whenever at least four other enabled choices remain. The
+omission is a strict allow-list for that autonomous turn, not a hidden library
+toggle: interactive chat always receives the complete enabled catalog, and the
+model can keep the current pattern while changing only pace by omitting
+`pattern_id` and using `speed_percent`.
+
+A pattern outside the turn-specific catalog receives the normal single repair
+attempt only on interactive chat. Autonomous motion skips that repair and lets
+the established planner fallback supply a bounded semantic target immediately:
+live testing found a 26B model copied the unavailable current ID into both its
+first answer and repair, doubling latency without recovering. Model-visible
+status therefore also describes an omitted current pattern without repeating
+its unavailable ID. This avoids silently accepting a latched output while
+preserving model ownership of the hold/change decision.
+
+Area focus is not backend-randomized. Every motion turn names the three areas
+that differ from the live area and highlights one context-derived suggestion to
+avoid presenting a small model with three equally weighted optional choices.
+The suggestion varies with the segment and current pattern but authorizes
+nothing: the model may use it when it fits or omit `area` to deliberately
+preserve the live focus. This makes spatial contrast explicit without forcing a
+focus change or overriding conversation context.
+
 ### Intra-segment sway
 
 Longer cadence windows created a second problem the first pass did not solve.
@@ -120,11 +148,13 @@ segment interior:
   midpoint, so the texture is not metronomic. Two consecutive schedules for the
   same segment length differ, while consecutive waypoints remain at least six
   seconds apart.
-- Count is earned by segment length (one per 20s, hard cap 3), then scaled by the
-  model's variability category. This **self-balances against the cadence
-  preset**: a 10s Dynamic segment has no room and gets none because it is already
-  changing constantly, while a 120s Steady segment earns the most because it is
-  the one at risk of feeling static.
+- Count is earned by segment length (one per 8s after a 16s floor, hard cap 6),
+  then scaled by the model's variability category. Edge guards, six-second
+  spacing, and a one-second jitter reserve can lower that count when a short
+  segment cannot fit genuinely sampled timing. This **self-balances against the
+  cadence preset**: a 10s Dynamic segment has no room and gets none because it
+  is already changing constantly, while a 120s Steady segment earns the most
+  because it is the one at risk of feeling static.
 - Amplitude is a share of the user's own speed band (14% normal, 26% restless),
   and every waypoint is clamped inside it. Sway widens nothing.
 - A waypoint equal to the current speed is dropped, because that is exactly the
@@ -144,15 +174,15 @@ pre-change loop produced roughly 4-9/min):
 | Preset | Segment | settled | normal | restless |
 | --- | --- | --- | --- | --- |
 | Dynamic | 10s | 6.0 | 6.0 | 6.0 |
-| Dynamic | 35s | 1.7 | 3.4 | 3.4 |
+| Dynamic | 35s | 1.7 | 5.1 | 6.9 |
 | Natural | 20s | 3.0 | 6.0 | 6.0 |
-| Natural | 60s | 1.0 | 3.0 | 4.0 |
-| Steady | 45s | 1.3 | 2.7 | 4.0 |
-| Steady | 120s | 0.5 | 1.5 | 2.0 |
+| Natural | 60s | 1.0 | 4.0 | 7.0 |
+| Steady | 45s | 1.3 | 5.3 | 8.0 |
+| Steady | 120s | 0.5 | 2.0 | 3.5 |
 
-Worst case is 6.0/min, under the churn this work removed, and the texture lands
+Worst case is 8.0/min, under the churn this work removed, and the texture lands
 where it was missing: a two-minute Steady target went from 0.5 changes/min to
-2.0. `TestCombinedRetargetRateStaysUnderThePreChangeChurn` prints this table and
+3.5. `TestCombinedRetargetRateStaysUnderThePreChangeChurn` prints this table and
 fails if any cell exceeds 9.
 
 ### Variability

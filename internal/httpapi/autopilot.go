@@ -62,6 +62,9 @@ func (s *Server) autopilotModelTurn(
 	if err != nil {
 		return chat.AutopilotResponse{}, fmt.Errorf("resolve pattern catalog: %w", err)
 	}
+	if kind == chat.AutopilotKindMotion {
+		patternChoices = withoutRecentPatterns(patternChoices, input.RecentPatternIDs)
+	}
 	provider, err := s.newLLMProvider(ctx, settings.LLM)
 	if err != nil {
 		return chat.AutopilotResponse{}, err
@@ -333,4 +336,44 @@ func (s *Server) rememberAutopilotSpeech(replySeq int64, requestID string) {
 			delete(s.chatSpeechRequests, seq)
 		}
 	}
+}
+
+// minAutopilotPatternChoices is how many patterns must remain on the menu before
+// recent ones are withheld. A small enabled library would otherwise be narrowed
+// to nothing, and a forced choice is worse than a repeated one.
+const minAutopilotPatternChoices = 4
+
+// withoutRecentPatterns temporarily removes patterns just played from the
+// autonomous motion allow-list. The model can still deliberately hold the live
+// pattern or change only its pace by omitting pattern_id; interactive chat keeps
+// the complete enabled catalog so an explicit user request is never withheld.
+//
+// Prompting alone did not move this. Across four wordings, including replacing
+// the recency list's "not a ban on deliberate reuse" with an explicit nudge, a
+// live 26B held one pattern for an entire twenty-decision session with that same
+// id sitting in the recent list four times over. Shaping the choice set is what
+// the deterministic planner already does through recencyPenalty. It remains
+// model-owned at the action boundary: action none is always valid, while a
+// requested pattern change must use the current bounded menu.
+func withoutRecentPatterns(choices []chat.PatternChoice, recent []string) []chat.PatternChoice {
+	if len(choices) <= minAutopilotPatternChoices || len(recent) == 0 {
+		return choices
+	}
+	withheld := make(map[string]bool, len(recent))
+	for _, id := range recent {
+		withheld[strings.ToLower(strings.TrimSpace(id))] = true
+	}
+	kept := make([]chat.PatternChoice, 0, len(choices))
+	for _, choice := range choices {
+		if withheld[strings.ToLower(strings.TrimSpace(choice.ID))] {
+			continue
+		}
+		kept = append(kept, choice)
+	}
+	// Never narrow past the floor: fall back to the full menu rather than hand
+	// the model too few options to make a sensible choice.
+	if len(kept) < minAutopilotPatternChoices {
+		return choices
+	}
+	return kept
 }

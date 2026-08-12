@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -45,6 +46,24 @@ func TestAutopilotContractRejectsStartAndNumericTiming(t *testing.T) {
 		AutopilotKindMotion,
 	); err == nil {
 		t.Fatal("motion contract accepted numeric timing")
+	}
+}
+
+func TestAutopilotCompleteSkipsIneffectiveRepairOutsideCurrentMenu(t *testing.T) {
+	provider := &scriptedProvider{responses: []string{
+		`{"motion":{"action":"target","pattern_id":"pulse","intensity":35},"next":"normal","variability":"normal"}`,
+	}}
+	service := AutopilotService{
+		Provider:     provider,
+		Capabilities: FullCapabilities(),
+		Patterns:     []PatternChoice{{ID: "stroke"}, {ID: "tease"}},
+	}
+	_, err := service.Complete(context.Background(), AutopilotKindMotion, Request{Message: "Choose the next stretch."})
+	if err == nil || !strings.Contains(err.Error(), `unknown motion pattern "pulse"`) {
+		t.Fatalf("Complete error = %v, want the allow-list violation", err)
+	}
+	if len(provider.requests) != 1 {
+		t.Fatalf("provider requests = %d, want no ineffective repair", len(provider.requests))
 	}
 }
 

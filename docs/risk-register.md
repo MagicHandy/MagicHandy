@@ -532,6 +532,14 @@ still resolves to semantic targets and runs through the same engine; explicit
 user library rows remain non-destructive data rather than being reclassified as
 built-ins.
 
+Status 2026-08-12: Autopilot's denser intra-segment speed texture remains a
+same-pattern semantic `ApplyTarget` through the shared engine, so phase-preserving
+handoffs and transport-independent bounds still apply. Timing-space guards keep
+sampled waypoints at least six seconds apart with room for jitter, and the
+worst measured boundary-plus-sway rate is 8.0 retargets/minute versus the
+pre-change 9/minute ceiling. Pattern recency changes only the model-facing
+allow-list; it does not create another motion or transport path.
+
 ## R15: Chat And Voice Delivery Ordering
 
 Level: Medium

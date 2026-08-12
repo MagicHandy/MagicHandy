@@ -110,6 +110,14 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	if parseErr == nil {
 		return response, nil
 	}
+	var patternErr unknownPatternError
+	if errors.As(parseErr, &patternErr) {
+		// The model selected outside the turn-specific autonomous catalog. A live
+		// 26B repeated the same unavailable ID during repair, doubling decision
+		// latency without recovering. Let the existing planner fallback choose a
+		// bounded target immediately; interactive chat retains its repair path.
+		return AutopilotResponse{}, parseErr
+	}
 	if truncated {
 		parseErr = fmt.Errorf("autopilot response was truncated before valid JSON: %w", parseErr)
 	}

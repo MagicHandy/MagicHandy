@@ -100,6 +100,14 @@ type PatternChoice struct {
 	Weight      float64
 }
 
+type unknownPatternError struct {
+	patternID string
+}
+
+func (e unknownPatternError) Error() string {
+	return fmt.Sprintf("unknown motion pattern %q", e.patternID)
+}
+
 // ParseAssistantResponse validates one strict JSON response from the model.
 func ParseAssistantResponse(raw string) (AssistantResponse, error) {
 	return parseAssistantResponse(raw, defaultPatternChoices(), false, nil)
@@ -221,7 +229,7 @@ func validateAssistantResponse(response *AssistantResponse, patterns []PatternCh
 		return fmt.Errorf("unknown motion action %q", response.Motion.Action)
 	}
 	if response.Motion.PatternID != "" && !allowedPatternID(response.Motion.PatternID, patterns) {
-		return fmt.Errorf("unknown motion pattern %q", response.Motion.PatternID)
+		return unknownPatternError{patternID: response.Motion.PatternID}
 	}
 	if response.Motion.Area != "" && !oneOfZone(response.Motion.Area) {
 		return fmt.Errorf("unknown motion area %q", response.Motion.Area)

@@ -29,14 +29,35 @@ import (
 //     clamped inside it. Sway widens nothing.
 const (
 	// swaySecondsPerPoint earns one waypoint per this much segment length.
-	swaySecondsPerPoint = 20
-	// maxSwayPoints bounds the retarget budget on very long segments.
-	maxSwayPoints = 3
+	//
+	// At 20s a typical 20-60s Autopilot stretch earned one waypoint, and normal
+	// and restless both rounded to that same one, so the variability the model is
+	// asked to choose barely reached the device. A real session recorded eleven
+	// sway rows over ten minutes, every one of them "remaining=0", with a
+	// three-minute stretch carrying none at all. That is the flatness users feel.
+	//
+	// StrokeGPT, which solves the same problem without asking a model, jitters
+	// the live target on every step and moves speed even when it repeats a
+	// choice. This is the same idea inside this scheduler: enough waypoints that
+	// a stretch breathes, and a real gap between settled, normal, and restless.
+	swaySecondsPerPoint = 8
+	// swayMinTexturedSegment is the shortest stretch that earns any waypoint, so
+	// the denser cadence above cannot reach the fast end where retarget churn is
+	// the risk rather than flatness.
+	swayMinTexturedSegment = 16 * time.Second
+	// maxSwayPoints bounds the retarget budget on very long segments. It rises
+	// with the denser cadence above so a long restless stretch is not clipped
+	// back to the old near-flat budget; swayMinSpacing still bounds the rate.
+	maxSwayPoints = 6
 	// swayEdgeGuard keeps waypoints clear of both segment boundaries so a sway
 	// never lands on top of a semantic change.
 	swayEdgeGuard = 4 * time.Second
 	// swayMinSpacing is the least time between consecutive waypoints.
 	swayMinSpacing = 6 * time.Second
+	// swayMinJitterWindow reserves room in every timing slot to move a waypoint
+	// away from a fixed offset. Without it, a 20-second restless segment placed
+	// both waypoints at the same 4s/10s marks every time.
+	swayMinJitterWindow = time.Second
 	// swayBandPercentNormal and swayBandPercentRestless are the share of the
 	// user's speed band one waypoint may move through.
 	swayBandPercentNormal   = 14
@@ -136,7 +157,19 @@ func (m *Manager) swayAllowanceLocked(duration time.Duration, variability Variab
 	if normalizeVariability(variability) == VariabilitySettled {
 		return 0
 	}
+	// Short stretches earn nothing regardless of cadence. Dynamic already
+	// retargets constantly at the short end, and adding waypoints there is what
+	// blows out the retarget budget; texture is for the slower stretches that
+	// actually feel static.
+	if duration < swayMinTexturedSegment {
+		return 0
+	}
 	byLength := int(duration / (swaySecondsPerPoint * time.Second))
+	interior := duration - 2*swayEdgeGuard
+	bySpacing := int(interior / (swayMinSpacing + swayMinJitterWindow))
+	if byLength > bySpacing {
+		byLength = bySpacing
+	}
 	if byLength > maxSwayPoints {
 		byLength = maxSwayPoints
 	}

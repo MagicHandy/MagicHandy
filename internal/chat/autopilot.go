@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"hash/fnv"
 	"strings"
 )
 
@@ -74,10 +75,14 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 		area = AreaZoneFull
 	}
 	if context.CurrentPatternID != "" && context.CurrentSpeed > 0 {
-		fmt.Fprintf(&builder, "Current motion: pattern %q at %d%% speed in area %q.\n", context.CurrentPatternID, context.CurrentSpeed, area)
+		if containsPatternID(context.RecentPatternIDs, context.CurrentPatternID) {
+			fmt.Fprintf(&builder, "Current motion: a recently played catalog pattern at %d%% speed in area %q.\n", context.CurrentSpeed, area)
+		} else {
+			fmt.Fprintf(&builder, "Current motion: pattern %q at %d%% speed in area %q.\n", context.CurrentPatternID, context.CurrentSpeed, area)
+		}
 	}
 	if len(context.RecentPatternIDs) > 0 {
-		fmt.Fprintf(&builder, "Recently played patterns (oldest first): %s. Treat these as context, not a ban on deliberate reuse.\n", strings.Join(context.RecentPatternIDs, ", "))
+		builder.WriteString("The current catalog may omit recently played patterns. Use only IDs in that catalog. To continue the current pattern, use action \"none\", or omit pattern_id and use speed_percent to change only its pace.\n")
 	}
 	writeSessionProgress(&builder, context)
 	builder.WriteString("Decide what happens for the next stretch using the recent conversation as the user's ongoing direction:\n")
@@ -88,8 +93,11 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	// the cost of getting this wrong is the model losing its turn entirely.
 	builder.WriteString("- Pace the change exactly one way, never both: either pattern_id together with intensity, or speed_percent on its own. Sending intensity and speed_percent in the same decision is rejected and the whole decision is thrown away.\n")
 	builder.WriteString("- A broad request to vary or change things up may change pattern, speed, area, or a fitting combination. Do not reduce every variation request to pattern cycling.\n")
-	if context.AreaFocusEnabled && area != AreaZoneFull {
-		builder.WriteString("- The current named area focus is temporary. Unless the user explicitly asked to stay there, broad variation should normally move the focus or set area to \"full\".\n")
+	if context.AreaFocusEnabled {
+		alternatives := autopilotAreaAlternatives(area)
+		fmt.Fprintf(&builder,
+			"- Area changes available now: %s. Suggested spatial contrast for this stretch: %q. Use it only when it fits the conversation; omit area to deliberately keep %q. A named focus is temporary unless the conversation asks to stay there.\n",
+			strings.Join(alternatives, ", "), autopilotAreaSuggestion(context, alternatives), area)
 	}
 	builder.WriteString("- To deliberately keep the current motion going, set motion to {\"action\":\"none\"} or omit motion.\n")
 	builder.WriteString("- Never use action \"start\" or \"stop\": only the scheduler starts and only the user stops motion.\n")
@@ -101,6 +109,36 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	builder.WriteString("- Set next to soon, normal, or later for when motion should next be reconsidered. Do not provide seconds. Vary it: back-to-back short stretches read as flat as one long one.\n")
 	builder.WriteString("- Set variability to settled, normal, or restless for how much the speed should wander before then. This is separate from next: a long stretch can still breathe, and a short one can stay flat.")
 	return builder.String()
+}
+
+func containsPatternID(ids []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, id := range ids {
+		if strings.EqualFold(strings.TrimSpace(id), target) {
+			return true
+		}
+	}
+	return false
+}
+
+func autopilotAreaAlternatives(current string) []string {
+	current = strings.ToLower(strings.TrimSpace(current))
+	alternatives := make([]string, 0, len(AreaZones())-1)
+	for _, area := range AreaZones() {
+		if area != current {
+			alternatives = append(alternatives, area)
+		}
+	}
+	return alternatives
+}
+
+func autopilotAreaSuggestion(context AutopilotContext, alternatives []string) string {
+	if len(alternatives) == 0 {
+		return ""
+	}
+	hash := fnv.New32a()
+	_, _ = fmt.Fprintf(hash, "%d|%s|%s", context.SegmentIndex, context.CurrentPatternID, context.CurrentArea)
+	return alternatives[int(hash.Sum32())%len(alternatives)]
 }
 
 // AutopilotSpeechMessage renders the independent autonomous speech turn.
