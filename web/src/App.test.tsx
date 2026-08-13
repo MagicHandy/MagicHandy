@@ -728,7 +728,7 @@ describe("app shell safety invariants", () => {
     expect(screen.getByText(/auto-disable at low weight/i)).toBeInTheDocument();
   });
 
-  it("keeps program intensity inside the backend speed envelope", async () => {
+  it("keeps program speed inside the backend speed envelope", async () => {
     const state = {
       ...baseState,
       settings: {
@@ -741,9 +741,9 @@ describe("app shell safety invariants", () => {
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/library");
     fireEvent.click(await screen.findByRole("tab", { name: /^programs$/i }));
-    const intensity = screen.getByRole("slider", { name: /intensity/i });
-    expect(intensity).toHaveAttribute("max", "25");
-    await waitFor(() => expect(intensity).toHaveValue("25"));
+    const speed = screen.getByRole("slider", { name: /^speed/i });
+    expect(speed).toHaveAttribute("max", "25");
+    await waitFor(() => expect(speed).toHaveValue("25"));
   });
 
   it("shows the deterministic curation fallback when every pattern is disabled", async () => {

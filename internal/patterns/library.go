@@ -432,6 +432,9 @@ func (l *Library) seedBuiltins(ctx context.Context) error {
 		activeBuiltins := make(map[string]struct{}, len(motion.BuiltinPatternDefinitions()))
 		for _, definition := range motion.BuiltinPatternDefinitions() {
 			activeBuiltins[string(definition.ID)] = struct{}{}
+			if err := migrateLegacyBuiltinName(ctx, tx, definition); err != nil {
+				return err
+			}
 			points, _ := json.Marshal(definition.Points)
 			tags, _ := json.Marshal(definition.Tags)
 			_, err := tx.ExecContext(ctx, `
@@ -471,6 +474,53 @@ func (l *Library) seedBuiltins(ctx context.Context) error {
 		}
 		return nil
 	})
+}
+
+func migrateLegacyBuiltinName(ctx context.Context, tx *sql.Tx, definition motion.PatternDefinition) error {
+	for _, legacyName := range legacyBuiltinNames(definition.ID) {
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE patterns SET name = ?
+			WHERE id = ? AND origin = 'builtin' AND name = ?
+		`, definition.Name, definition.ID, legacyName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func legacyBuiltinNames(id motion.PatternID) []string {
+	switch id {
+	case motion.PatternEasingDown:
+		return []string{"Easing Down"}
+	case motion.PatternBuildingUp:
+		return []string{"Building Up"}
+	case motion.PatternSteadyDrift:
+		return []string{"Steady Drift"}
+	case motion.PatternNarrowing:
+		return []string{"Narrowing"}
+	case motion.PatternOpeningUp:
+		return []string{"Opening Up"}
+	case motion.PatternSlowFastFull:
+		return []string{"Slow-to-Fast Full"}
+	case motion.PatternSwell:
+		return []string{"Swell"}
+	case motion.PatternSurgeAndSettle:
+		return []string{"Surge and Settle"}
+	}
+	const prefix = "curated-"
+	stem := strings.TrimPrefix(string(id), prefix)
+	if stem == string(id) {
+		return nil
+	}
+	parts := strings.Split(stem, "-")
+	for index, part := range parts {
+		runes := []rune(part)
+		if len(runes) > 0 {
+			runes[0] = unicode.ToUpper(runes[0])
+			parts[index] = string(runes)
+		}
+	}
+	return []string{strings.Join(parts, " ")}
 }
 
 func (l *Library) purgeRetiredBuiltinPatterns(ctx context.Context, tx *sql.Tx, activeIDs map[string]struct{}) error {

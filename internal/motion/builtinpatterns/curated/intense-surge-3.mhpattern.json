@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Surge 3",
-  "description": "Quick cadence.",
+  "name": "Near-Full Run",
+  "description": "Repeating full-span reversals with one near-full peak. Grouped timing creates offbeat accents.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -203,8 +203,8 @@
     }
   ],
   "tags": [
-    "deep",
-    "rhythmic",
-    "build"
+    "near-full",
+    "repeating",
+    "syncopated"
   ]
 }

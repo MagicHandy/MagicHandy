@@ -370,11 +370,11 @@ export const api = {
   patchPattern: (id: string, patch: Partial<LibraryPattern>) =>
     request<{ pattern: LibraryPattern }>("PATCH", `/api/library/patterns/${encodeURIComponent(id)}`, patch),
   deletePattern: (id: string) => request("DELETE", `/api/library/patterns/${encodeURIComponent(id)}`),
-  playPattern: (id: string, intensity: number, feel = "original") =>
-    request("POST", `/api/library/patterns/${encodeURIComponent(id)}/play`, { intensity, feel }),
+  playPattern: (id: string, speedPercent: number, feel = "original") =>
+    request("POST", `/api/library/patterns/${encodeURIComponent(id)}/play`, { speed_percent: speedPercent, feel }),
   deleteProgram: (id: string) => request("DELETE", `/api/library/programs/${encodeURIComponent(id)}`),
-  playProgram: (id: string, intensity: number) =>
-    request("POST", `/api/library/programs/${encodeURIComponent(id)}/play`, { intensity }),
+  playProgram: (id: string, speedPercent: number) =>
+    request("POST", `/api/library/programs/${encodeURIComponent(id)}/play`, { speed_percent: speedPercent }),
   patternFeedback: (pattern_id: string, rating: -1 | 1) =>
     request<{ feedback: PatternFeedback; pattern: LibraryPattern }>("POST", "/api/library/feedback", { pattern_id, rating }),
   undoPatternFeedback: (id: number) =>

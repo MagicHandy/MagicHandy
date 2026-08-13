@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Roll 1",
-  "description": "Quick cadence.",
+  "name": "Upper to Full Blocks",
+  "description": "Upper-range blocks transition into broad and full-span sweeps. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -203,8 +203,8 @@
     }
   ],
   "tags": [
-    "pauses",
-    "rhythmic",
-    "uneven"
+    "upper-to-full",
+    "grouped",
+    "varied-rhythm"
   ]
 }

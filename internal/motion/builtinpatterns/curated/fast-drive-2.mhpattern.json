@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Drive 2",
-  "description": "Medium cadence.",
+  "name": "Multi-Level Circuit A",
+  "description": "Full, partial, and centered strokes rotate through an irregular circuit. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -139,8 +139,8 @@
     }
   ],
   "tags": [
-    "full",
-    "rhythmic",
-    "build"
+    "multi-level",
+    "alternating",
+    "varied-rhythm"
   ]
 }

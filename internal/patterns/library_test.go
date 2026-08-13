@@ -60,6 +60,51 @@ func TestLibrarySeedsBuiltinsAndPersistsEnablement(t *testing.T) {
 	}
 }
 
+func TestLibraryMigratesOnlyUntouchedLegacyBuiltinNames(t *testing.T) {
+	dir := t.TempDir()
+	library, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	customName := "My descending pattern"
+	if _, err := library.db.SQL().Exec(`UPDATE patterns SET name = ? WHERE id = ?`, "Building Up", motion.PatternBuildingUp); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.db.SQL().Exec(`UPDATE patterns SET name = ? WHERE id = ?`, customName, motion.PatternEasingDown); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.db.SQL().Exec(`UPDATE patterns SET name = ? WHERE id = ?`, "Fast Drive 1", "curated-fast-drive-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.db.SQL().Exec(`UPDATE patterns SET name = ? WHERE id = ?`, "Swell", motion.PatternSwell); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.db.SQL().Exec(`UPDATE patterns SET name = ? WHERE id = ?`, "Surge and Settle", motion.PatternSurgeAndSettle); err != nil {
+		t.Fatal(err)
+	}
+	if err := library.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	for id, want := range map[string]string{
+		string(motion.PatternBuildingUp):     "Ascending Window",
+		string(motion.PatternEasingDown):     customName,
+		string(motion.PatternSwell):          "Rising Window Arc",
+		string(motion.PatternSurgeAndSettle): "Full Sweep and Mid Blocks",
+		"curated-fast-drive-1":               "Return Depth Shuffle",
+	} {
+		pattern, patternErr := reopened.Pattern(id)
+		if patternErr != nil || pattern.Name != want {
+			t.Errorf("pattern %q name = %q, err=%v; want %q", id, pattern.Name, patternErr, want)
+		}
+	}
+}
+
 func TestLibraryReconcilesGeneratedBuiltinsAndPurgesImportedClipDuplicates(t *testing.T) {
 	dir := t.TempDir()
 	library, err := Open(dir)
@@ -413,7 +458,7 @@ func TestFeedbackIsVisibleReversibleAndAutoDisableIsOptIn(t *testing.T) {
 	}
 }
 
-func TestPreviewMatchesMotionPlanSampler(t *testing.T) {
+func TestPreviewMatchesMotionPlanShapeAfterRetiming(t *testing.T) {
 	input := authoredFixture()
 	preview, err := PreviewPattern(input)
 	if err != nil {
@@ -429,7 +474,10 @@ func TestPreviewMatchesMotionPlanSampler(t *testing.T) {
 		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 100,
 	}, settings, 0, 0, time.Unix(0, 0))
 	for _, sample := range preview.Samples {
-		got := plan.SampleAt(sample.TimeMillis).PositionPercent
+		playedAt := int64(math.Round(
+			float64(sample.TimeMillis) * float64(plan.PeriodMillis) / float64(preview.CycleMillis),
+		))
+		got := plan.SampleAt(playedAt).PositionPercent
 		if math.Abs(got-sample.PositionPercent) > 0.51 {
 			t.Fatalf("sample at %d = %.3f, preview %.3f", sample.TimeMillis, got, sample.PositionPercent)
 		}

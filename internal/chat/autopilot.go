@@ -78,7 +78,7 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 		if containsPatternID(context.RecentPatternIDs, context.CurrentPatternID) {
 			fmt.Fprintf(&builder, "Current motion: a recently played catalog pattern at %d%% speed in area %q.\n", context.CurrentSpeed, area)
 		} else {
-			fmt.Fprintf(&builder, "Current motion: pattern %q at %d%% speed in area %q.\n", context.CurrentPatternID, context.CurrentSpeed, area)
+			fmt.Fprintf(&builder, "Current motion: an enabled catalog pattern at %d%% speed in area %q.\n", context.CurrentSpeed, area)
 		}
 	}
 	if len(context.RecentPatternIDs) > 0 {
@@ -87,11 +87,7 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	writeSessionProgress(&builder, context)
 	builder.WriteString("Decide what happens for the next stretch using the recent conversation as the user's ongoing direction:\n")
 	builder.WriteString("- To change motion, use action \"target\" and change only what should change; omitted fields preserve the live target.\n")
-	// Listing intensity and speed_percent together as freely combinable read as
-	// permission to send both, which the contract rejects outright. The whole
-	// decision is then discarded and the scheduler falls back to the planner, so
-	// the cost of getting this wrong is the model losing its turn entirely.
-	builder.WriteString("- Pace the change exactly one way, never both: either pattern_id together with intensity, or speed_percent on its own. Sending intensity and speed_percent in the same decision is rejected and the whole decision is thrown away.\n")
+	builder.WriteString("- Pattern selects motion shape and speed_percent independently selects pace. Include both when changing both; omit either field to preserve it.\n")
 	builder.WriteString("- A broad request to vary or change things up may change pattern, speed, area, or a fitting combination. Do not reduce every variation request to pattern cycling.\n")
 	if context.AreaFocusEnabled {
 		alternatives := autopilotAreaAlternatives(area)
@@ -153,7 +149,7 @@ func AutopilotSpeechMessage(context AutopilotContext) string {
 		if area == "" {
 			area = AreaZoneFull
 		}
-		fmt.Fprintf(&builder, "Current motion: pattern %q at %d%% speed in area %q.\n", context.CurrentPatternID, context.CurrentSpeed, area)
+		fmt.Fprintf(&builder, "Current motion: a catalog pattern at %d%% speed in area %q.\n", context.CurrentSpeed, area)
 	}
 	writeSessionProgress(&builder, context)
 	builder.WriteString("Write one short in-character line that fits the recent conversation (under 150 characters and no question that demands an answer).\n")

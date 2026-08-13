@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Drive 1",
-  "description": "Quick cadence.",
+  "name": "Split-Level Pulse",
+  "description": "Full sweeps alternate with a repeated middle-range pulse. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -235,8 +235,8 @@
     }
   ],
   "tags": [
-    "deep",
-    "rhythmic",
-    "build"
+    "split-level",
+    "middle-pulse",
+    "varied-rhythm"
   ]
 }

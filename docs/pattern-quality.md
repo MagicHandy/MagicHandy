@@ -1,6 +1,6 @@
 # What makes a motion pattern good or bad
 
-Status: working guideline (2026-08-01)
+Status: working guideline (2026-08-13)
 
 Two batches of patterns have now been rejected after being felt on hardware: the
 descending/decaying shapes that were hand-authored into the catalog, and the
@@ -18,6 +18,14 @@ curve.
 **What a person feels is speed, not shape.** A pattern's drawing can look varied
 and interesting while the thing it actually produces is a device that keeps
 slowing to a crawl. Every rule below follows from that.
+
+Shape and global playback pace are nevertheless separate controls. A stored
+pattern defines geometry and relative rhythm; the runtime planner measures its
+total travel and retimes the whole loop to the requested `speed_percent`.
+Catalog names, descriptions, and tags therefore must not promise an absolute
+pace such as “fast,” “gentle,” or “intense.” Those words belong to the speed
+choice. The rules below ensure that a pattern remains coherent at its reference
+pace; a user may still deliberately request a very low playback speed.
 
 ## Failure mode 1: the device stops
 
@@ -100,10 +108,10 @@ bounded range. Turning points alternate direction, so a long stroke must be
 followed by another long one to stay in range. Big/small contrast has to come in
 *blocks*, not alternation.
 
-## Reaching the minimum cycle: repeat, never stretch
+## Reaching the stored minimum cycle: repeat, never stretch
 
-Cycles must be at least 6600 ms. It is tempting to reach that by scaling all the
-timestamps, and `mustFitCatalog` does exactly that when a spec is under budget —
+Stored routine cycles must be at least 6600 ms. It is tempting to reach that by
+scaling all the timestamps, and `mustFitCatalog` does exactly that when a spec is under budget —
 which divides every velocity by the same factor and puts the stalls straight
 back. `Descending Ladder` was authored crisp at 410–474 ms strokes and got slowed
 1.22× to reach the floor.
@@ -124,7 +132,13 @@ Taken from the patterns that survived contact with hardware:
 | longest dip (rendered, < 45 %/s) | ≤ 120 ms | see below — this is the one that matters |
 | reversal gap | ≥ 450 ms | `catalogMinReversalGap` |
 | acceleration | ≤ 3000 %/s² | `catalogMaxAcceleration` |
-| cycle | 6600–12000 ms | floor plus the manifest ceiling |
+| stored cycle | 6600–12000 ms | authoring floor plus the manifest ceiling |
+
+Playback may produce a shorter or longer runtime period. The planner targets
+`180 * speed_percent / 100` mean percentage-points of travel per second, then
+lengthens the period if the selected curve would exceed its acceleration or
+reversal-gap safety floor. This normalization is what makes a speed change
+meaningful across patterns with very different total travel.
 
 ### Measure the loaded, rendered curve — nothing earlier
 
@@ -178,8 +192,9 @@ node scripts/pattern-designer.js
 
 **Repairing and filtering imports — `scripts/curated-pattern-labeller.js`.**
 Excises dead time without touching geometry (merges strokes too small to feel,
-shortens strokes slower than the floor), drops whatever still fails, and labels
-what survives from the *repaired* curve.
+shortens strokes slower than the floor), drops whatever still fails, and gives
+survivors geometry/relative-rhythm metadata without changing stable IDs or
+points.
 
 ```bash
 node scripts/curated-pattern-labeller.js
@@ -202,6 +217,19 @@ gate is in Go.
 - `TestBuiltinCatalogIncludesGeneratedPatternsWithoutExactTimingExemption` —
   curated clips against the acceleration and reversal budgets.
 - `TestGeneratedCatalogMeetsHardwareBudgets` — the same for generated specs.
+- `TestLoopSpeedNormalizesMeanTravelAcrossPatterns` — different shapes
+  request the same mean travel rate at the same speed.
+- `TestLoopSpeedProducesProportionalTempoChanges` — 20%, 40%, and 80% produce the
+  expected 1:2:4 tempo progression where safety does not cap it.
+- `TestMeasureCurveIncludesLoopSeamReversalGap` — reversal timing includes the
+  wrap from the final stroke back into the first stroke.
+- `TestFocusedLoopRespectsCatalogAccelerationAndReversalBudgets`,
+  `TestFocusExpansionPreservesRequestedTravelRate`, and
+  `TestSoftAnchorPreservesRequestedTravelRate` — focus compression, expansion,
+  and anchoring preserve the requested pace unless a hardware budget requires a
+  slower period.
+- `TestBuiltinMetadataDoesNotEncodeAbsolutePace` — model-facing metadata does
+  not reintroduce global pace through names, descriptions, or tags.
 
 ## What this cost
 

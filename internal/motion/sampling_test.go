@@ -11,7 +11,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
-func TestEnginePreservesAuthoredKnotsBetweenSamplerTicks(t *testing.T) {
+func TestEnginePreservesRetimedAuthoredKnotsBetweenSamplerTicks(t *testing.T) {
 	fake := transport.NewFake()
 	engine, err := NewEngine(EngineOptions{
 		Transport:        fake,
@@ -33,9 +33,28 @@ func TestEnginePreservesAuthoredKnotsBetweenSamplerTicks(t *testing.T) {
 	if add == nil {
 		t.Fatal("start did not append points")
 	}
+	definition, found := BuiltinPatternDefinition(PatternHardAndRegular)
+	if !found {
+		t.Fatal("Hard and Regular pattern is missing")
+	}
+	outputTimes := pointTimes(add.Points)
 	for _, authoredTime := range []int64{166, 333, 458, 625, 791} {
-		if !containsTimedPoint(add.Points, authoredTime) {
-			t.Fatalf("output times = %v, missing authored knot %d", pointTimes(add.Points), authoredTime)
+		playedTime := int64(math.Round(
+			float64(authoredTime) * float64(engine.plan.PeriodMillis) / float64(definition.CycleMillis),
+		))
+		for engine.nextSampleMillis <= playedTime {
+			engine.mu.Lock()
+			samples, sampleErr := engine.nextMotionSamplesLocked()
+			engine.mu.Unlock()
+			if sampleErr != nil {
+				t.Fatalf("sample follow-up chunk: %v", sampleErr)
+			}
+			for _, sample := range samples {
+				outputTimes = append(outputTimes, sample.TimeMillis)
+			}
+		}
+		if !containsMillis(outputTimes, playedTime) {
+			t.Fatalf("output times = %v, missing retimed knot %d (authored at %d)", outputTimes, playedTime, authoredTime)
 		}
 	}
 }
@@ -489,10 +508,27 @@ func TestPhasePreservingTempoRetargetBridgesDirectionMismatchNearReversal(t *tes
 	previous := NewMotionPlan("previous", MotionTarget{
 		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 10,
 	}, settings, 0, 0, time.Unix(0, 0))
-	const handoff = int64(1040)
-	next := previous.Retarget("next", MotionTarget{
-		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
-	}, settings, handoff, time.Unix(1, 0))
+	var (
+		handoff       int64
+		next          MotionPlan
+		foundMismatch bool
+	)
+	for candidate := int64(0); candidate < previous.PeriodMillis; candidate += 5 {
+		candidatePlan := previous.Retarget("next", MotionTarget{
+			PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
+		}, settings, candidate, time.Unix(1, 0))
+		beforeDirection := previous.DirectionAt(candidate)
+		afterDirection := candidatePlan.DirectionAt(candidate)
+		if beforeDirection != 0 && afterDirection != 0 && beforeDirection != afterDirection {
+			handoff = candidate
+			next = candidatePlan
+			foundMismatch = true
+			break
+		}
+	}
+	if !foundMismatch {
+		t.Fatal("could not find a speed-retarget reversal-guide mismatch")
+	}
 
 	handoffGap := math.Abs(
 		previous.SampleAt(handoff).PositionPercent - next.SampleAt(handoff).PositionPercent,
@@ -746,21 +782,21 @@ func motionSampleAt(samples []MotionSample, at int64) (MotionSample, bool) {
 	return MotionSample{}, false
 }
 
-func containsTimedPoint(points []transport.TimedPoint, at int64) bool {
-	for _, point := range points {
-		if point.TimeMillis == at {
-			return true
-		}
-	}
-	return false
-}
-
 func pointTimes(points []transport.TimedPoint) []int64 {
 	times := make([]int64, len(points))
 	for index, point := range points {
 		times[index] = point.TimeMillis
 	}
 	return times
+}
+
+func containsMillis(values []int64, want int64) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func interpolateMotionSamples(samples []MotionSample, at int64) float64 {

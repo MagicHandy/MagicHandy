@@ -36,6 +36,111 @@ func TestGeneratedCatalogMeetsHardwareBudgets(t *testing.T) {
 	}
 }
 
+func TestMeasureCurveIncludesLoopSeamReversalGap(t *testing.T) {
+	points := []CurvePoint{
+		{TimeMillis: 0, PositionPercent: 0},
+		{TimeMillis: 1000, PositionPercent: 100},
+		{TimeMillis: 1200, PositionPercent: 0},
+	}
+	metrics, err := MeasureCurve(points, 1200, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metrics.MinReversalGapMillis != 200 {
+		t.Fatalf("loop reversal gap = %dms, want 200ms final-return seam", metrics.MinReversalGapMillis)
+	}
+}
+
+func TestLoopSpeedNormalizesMeanTravelAcrossPatterns(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	patternIDs := []PatternID{PatternStroke, PatternPulse, PatternHardAndRegular}
+
+	for _, speed := range []int{20, 40} {
+		wantRate := patternReferenceTravelRatePercentPerSecond * float64(speed) / 100
+		for _, patternID := range patternIDs {
+			definition, found := BuiltinPatternDefinition(patternID)
+			if !found {
+				t.Fatalf("pattern %q is missing", patternID)
+			}
+			plan := NewMotionPlan("normalized", MotionTarget{
+				PatternID: definition.ID, Pattern: &definition, SpeedPercent: speed,
+			}, settings, 0, 0, time.Unix(0, 0))
+			gotRate := totalCurveTravel(definition.Points) * 1000 / float64(plan.PeriodMillis)
+			if math.Abs(gotRate-wantRate) > 0.05 {
+				t.Errorf("%s at %d%% = %.2f%% travel/s, want %.2f", definition.Name, speed, gotRate, wantRate)
+			}
+		}
+	}
+}
+
+func TestLoopSpeedProducesProportionalTempoChanges(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	definition, _ := BuiltinPatternDefinition(PatternStroke)
+	period := func(speed int) int64 {
+		return NewMotionPlan("speed", MotionTarget{
+			PatternID: definition.ID, Pattern: &definition, SpeedPercent: speed,
+		}, settings, 0, 0, time.Unix(0, 0)).PeriodMillis
+	}
+
+	if slow, medium := period(20), period(40); math.Abs(float64(slow)/float64(medium)-2) > 0.01 {
+		t.Fatalf("20%%/40%% periods = %d/%d, want a 2x tempo change", slow, medium)
+	}
+	if medium, fast := period(40), period(80); math.Abs(float64(medium)/float64(fast)-2) > 0.01 {
+		t.Fatalf("40%%/80%% periods = %d/%d, want a 2x tempo change", medium, fast)
+	}
+}
+
+func TestLoopPlaybackHonorsCatalogSafetyBudgets(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMaxPercent = 100
+	for _, definition := range BuiltinPatternDefinitions() {
+		plan := NewMotionPlan("safe", MotionTarget{
+			PatternID: definition.ID, Pattern: &definition, SpeedPercent: 100,
+		}, settings, 0, 0, time.Unix(0, 0))
+		timeFactor := float64(plan.PeriodMillis) / float64(definition.CycleMillis)
+		metrics, err := MeasureCurve(definition.Points, definition.CycleMillis, true)
+		if err != nil {
+			t.Fatalf("measure %q: %v", definition.ID, err)
+		}
+		playedAcceleration := metrics.MaxAccelerationPercentPerSecond2 / (timeFactor * timeFactor)
+		if playedAcceleration > catalogMaxAcceleration*1.001 {
+			t.Errorf("%s acceleration = %.1f%%/s^2, over %.1f", definition.Name, playedAcceleration, catalogMaxAcceleration)
+		}
+		if metrics.MinReversalGapMillis > 0 {
+			playedGap := float64(metrics.MinReversalGapMillis) * timeFactor
+			if playedGap+0.01 < catalogMinReversalGap {
+				t.Errorf("%s reversal gap = %.1fms, below %d", definition.Name, playedGap, catalogMinReversalGap)
+			}
+		}
+	}
+}
+
+func TestBuiltinMetadataDoesNotEncodeAbsolutePace(t *testing.T) {
+	for _, definition := range BuiltinPatternDefinitions() {
+		metadata := strings.ToLower(definition.Name + " " + definition.Description + " " + strings.Join(definition.Tags, " "))
+		for _, term := range []string{"gentle", "easy", "slow", "steady", "fast", "intense"} {
+			if containsMetadataWord(metadata, term) {
+				t.Errorf("pattern %q encodes absolute pace %q in model-facing metadata: %q", definition.ID, term, metadata)
+			}
+		}
+	}
+}
+
+func containsMetadataWord(metadata, want string) bool {
+	for _, field := range strings.FieldsFunc(metadata, func(r rune) bool {
+		return r < 'a' || r > 'z'
+	}) {
+		if field == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestExperimentalCatalogContainsSixVariableReplacementCycles(t *testing.T) {
 	seenIDs := make(map[PatternID]bool)
 	seenShapes := make(map[string]PatternID)
@@ -213,23 +318,23 @@ func TestSampledPatternsUseMotionSemanticNames(t *testing.T) {
 		PatternFourLevelCircuit:    "Four-Level Circuit",
 		PatternHighLowBlocks:       "High-Low Blocks",
 		PatternDeepShallowSequence: "Deep-Shallow Sequence",
-		PatternSlowFastFull:        "Slow-to-Fast Full",
+		PatternSlowFastFull:        "Tempo Ramp",
 		PatternDeepPartialSequence: "Deep-Partial Sequence",
 		PatternRisingReach:         "Rising Reach",
-		PatternEasingDown:          "Easing Down",
-		PatternBuildingUp:          "Building Up",
+		PatternEasingDown:          "Descending Window",
+		PatternBuildingUp:          "Ascending Window",
 		PatternBroadAndTight:       "Broad and Tight",
 		PatternUpperAccents:        "Upper Accents",
 		PatternLowerAccents:        "Lower Accents",
-		PatternSteadyDrift:         "Steady Drift",
-		PatternNarrowing:           "Narrowing",
-		PatternOpeningUp:           "Opening Up",
+		PatternSteadyDrift:         "Window Drift",
+		PatternNarrowing:           "Narrowing Window",
+		PatternOpeningUp:           "Widening Window",
 		PatternRocking:             "Rocking",
 		PatternThreeAndOne:         "Three and One",
 		PatternOffbeat:             "Offbeat",
 		PatternLongReturn:          "Long Return",
-		PatternSwell:               "Swell",
-		PatternSurgeAndSettle:      "Surge and Settle",
+		PatternSwell:               "Rising Window Arc",
+		PatternSurgeAndSettle:      "Full Sweep and Mid Blocks",
 		PatternCrosscut:            "Crosscut",
 	}
 	for _, definition := range BuiltinPatternDefinitions() {

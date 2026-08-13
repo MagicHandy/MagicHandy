@@ -148,7 +148,7 @@ func TestCuratedParserAcceptsOnlyEnabledPatternIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("enabled selection: %v", err)
 	}
-	if response.Motion == nil || response.Motion.Intensity == nil || *response.Motion.Intensity != 32 {
+	if response.Motion == nil || response.Motion.SpeedPercent == nil || *response.Motion.SpeedPercent != 32 || response.Motion.Intensity != nil {
 		t.Fatalf("curated response = %+v", response)
 	}
 	_, err = ParseAssistantResponseWithPatterns(

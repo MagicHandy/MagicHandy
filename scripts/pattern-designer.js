@@ -22,7 +22,7 @@
 // Speed scaling is a uniform time factor (plan.go: timeFactor = period/duration),
 // so velocity RATIOS inside a pattern are speed-invariant. That is why the rules
 // below are ratios or nominal-speed floors, and why no two patterns may differ
-// only by pace -- that is what intensity is for.
+// only by pace -- that is what speed_percent is for.
 //
 // These constants are a design aid, not the gate. The authority is
 // TestCatalogPatternsHoldTheMeasuredSpeedEnvelope in internal/motion, which
@@ -139,113 +139,112 @@ function check(p, m) {
   return fail;
 }
 
-// Names and descriptions are model-facing: prompts.go ships {id, name,
-// description, tags} straight into the catalog JSON the model chooses from.
-// Each description says what it feels like AND when to reach for it, because
-// the model is mapping conversational intent onto a pattern id.
+// Names and descriptions are model-facing: prompts.go ships an opaque handle
+// with the reviewed name, description, and tags. Metadata describes geometry
+// and relative rhythm only; global pace belongs to speed_percent.
 const specs = [
   {
-    id: "easing-down", name: "Easing Down",
-    description: "The stroke window steps steadily lower without losing pace. Use when winding down from a peak or easing intensity back.",
-    tags: ["easing", "descending", "calming"],
+    id: "easing-down", name: "Descending Window",
+    description: "A fixed-width window steps down the range, then resets at the top.",
+    tags: ["descending-window", "fixed-width", "progressive"],
     positions: [100, 56, 86, 42, 72, 28, 58, 14],
     velocities: [85, 62, 85, 62, 85, 62, 85, 120],
   },
   {
-    id: "building-up", name: "Building Up",
-    description: "The stroke window climbs step by step, then one full sweep resets it. Use when building intensity or answering an eager reply.",
-    tags: ["building", "ascending", "progressive"],
+    id: "building-up", name: "Ascending Window",
+    description: "A fixed-width window climbs the range, then resets at the bottom.",
+    tags: ["ascending-window", "fixed-width", "progressive"],
     positions: [0, 44, 14, 58, 28, 72, 42, 86],
     velocities: [85, 62, 85, 62, 85, 62, 85, 120],
   },
   {
     id: "broad-and-tight", name: "Broad and Tight",
-    description: "One wide sweep answered by a run of tight centred strokes. Use for playful contrast that keeps a steady pace.",
-    tags: ["contrast", "paired", "centred"],
+    description: "One wide sweep, then a run of tight centered strokes. Playful contrast.",
+    tags: ["contrast", "paired", "centered"],
     positions: [6, 94, 34, 66, 34, 66],
     velocities: [120, 120, 62, 62, 62, 62],
   },
   {
     id: "upper-accents", name: "Upper Accents",
-    description: "Quick accents in the upper range answered by one broad sweep. Use to hold attention near the top.",
+    description: "Repeated upper-range accents are answered by one broad sweep.",
     tags: ["upper", "accent", "teasing"],
     positions: [8, 96, 62, 96, 62, 96],
     velocities: [122, 70, 70, 70, 70, 122],
   },
   {
     id: "lower-accents", name: "Lower Accents",
-    description: "Quick accents in the lower range answered by one broad sweep. Use to keep the motion low and deep.",
+    description: "Repeated lower-range accents are answered by one broad sweep.",
     tags: ["lower", "accent", "deep"],
     positions: [92, 4, 38, 4, 38, 4],
     velocities: [122, 70, 70, 70, 70, 122],
   },
   {
-    id: "steady-drift", name: "Steady Drift",
-    description: "A single unchanging pace while the stroke window wanders up and back. Use for a calm, hypnotic stretch or a dependable baseline.",
-    tags: ["steady", "migrating", "calm"],
+    id: "steady-drift", name: "Window Drift",
+    description: "A consistent-width window wanders upward, then repeats from the bottom.",
+    tags: ["migrating-window", "fixed-width", "repeating"],
     positions: [10, 52, 20, 62, 30, 72],
     velocities: [70, 70, 70, 70, 70, 70],
   },
   {
     id: "offbeat", name: "Offbeat",
-    description: "Even strokes broken by one deeper reach off the beat. Use when the rhythm should stay unpredictable.",
+    description: "Even strokes broken by one deeper reach off the beat. Stays unpredictable.",
     tags: ["syncopated", "accent", "varied"],
     positions: [16, 64, 16, 64, 16, 92],
     velocities: [72, 72, 72, 72, 72, 122],
   },
   {
-    id: "narrowing", name: "Narrowing",
-    description: "Strokes close in toward the centre and the pace eases with them. Use to concentrate and quiet the motion.",
-    tags: ["narrowing", "easing", "centred"],
+    id: "narrowing", name: "Narrowing Window",
+    description: "Centered strokes contract step by step, then reset to the widest span.",
+    tags: ["narrowing-window", "centered", "progressive"],
     positions: [15, 85, 21, 79, 28, 72, 35, 65],
     velocities: [134, 122, 112, 98, 86, 72, 62, 98],
   },
   {
-    id: "opening-up", name: "Opening Up",
-    description: "Strokes widen out from the centre and pick up pace as they go. Use to open the motion out of a tight stretch.",
-    tags: ["widening", "building", "centred"],
+    id: "opening-up", name: "Widening Window",
+    description: "Centered strokes widen step by step, then reset to the narrowest span.",
+    tags: ["widening-window", "centered", "progressive"],
     positions: [35, 65, 28, 72, 21, 79, 15, 85],
     velocities: [62, 72, 86, 98, 112, 122, 134, 98],
   },
   {
     id: "long-return", name: "Long Return",
-    description: "A quick reach answered by an unhurried return, over and over. Use for a leaning, asymmetric feel.",
+    description: "Each reach uses a shorter leg out and a longer return, creating an asymmetric lean.",
     tags: ["asymmetric", "leaning", "paired"],
     positions: [10, 78, 10, 78],
     velocities: [120, 62, 120, 62],
   },
   {
-    id: "swell", name: "Swell",
-    description: "The stroke window rises across the whole cycle and settles back down again. Use for one long unbroken arc rather than a repeating beat.",
+    id: "swell", name: "Rising Window Arc",
+    description: "A fixed-width window rises across the cycle and returns along one continuous arc.",
     tags: ["arc", "migrating", "long"],
     positions: [5, 45, 15, 55, 25, 65, 35, 75, 25, 65, 15, 55],
     velocities: [80, 62, 80, 62, 80, 62, 80, 98, 80, 98, 80, 98],
   },
   {
     id: "rocking", name: "Rocking",
-    description: "Even mid-range strokes at one unchanging pace, nothing else. Use as a plain dependable rhythm to settle into.",
-    tags: ["steady", "even", "centred"],
+    description: "Even mid-range strokes repeat without changing their span.",
+    tags: ["midrange", "even", "repeating"],
     positions: [25, 75],
     velocities: [90, 90],
   },
   {
-    id: "surge-and-settle", name: "Surge and Settle",
-    description: "One fast full sweep drops into a long run of moderate mid strokes. Use to punctuate hard, then recover for a while.",
-    tags: ["accent", "recovery", "long"],
+    id: "surge-and-settle", name: "Full Sweep and Mid Blocks",
+    description: "One full sweep alternates with a repeated block of shorter middle strokes.",
+    tags: ["full-sweep", "midrange-blocks", "repeating"],
     positions: [2, 98, 35, 68, 35, 68, 35, 68, 35, 68, 35, 68],
     velocities: [140, 110, 68, 68, 68, 68, 68, 68, 68, 68, 68, 112],
   },
   {
     id: "three-and-one", name: "Three and One",
-    description: "Three tight strokes held up high, then one full plunge and recovery. Use for a grouped phrase with a clear landing.",
+    description: "Three tight strokes up high, then one full plunge and recovery.",
     tags: ["grouped", "resolving", "upper"],
     positions: [95, 65, 95, 65, 95, 65, 95, 5],
     velocities: [62, 62, 62, 62, 62, 62, 122, 122],
   },
   {
     id: "crosscut", name: "Crosscut",
-    description: "A long block of broad strokes trades places with a long block of tight ones. Use for restless variety that still keeps a beat.",
-    tags: ["alternating", "blocks", "restless"],
+    description: "Blocks of broad strokes alternate with blocks of tight strokes on an even beat.",
+    tags: ["alternating", "blocks", "contrast"],
     positions: [8, 88, 8, 88, 8, 88, 55, 85, 55, 85, 55, 85],
     velocities: [125, 125, 125, 125, 125, 68, 62, 62, 62, 62, 62, 122],
   },

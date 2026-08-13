@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Drive 12",
-  "description": "Quick cadence.",
+  "name": "Peak Groups",
+  "description": "Deep returns anchor grouped upper peaks of several heights. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -267,8 +267,8 @@
     }
   ],
   "tags": [
-    "paired",
-    "fast",
-    "contrast"
+    "grouped-peaks",
+    "deep-return",
+    "varied-rhythm"
   ]
 }

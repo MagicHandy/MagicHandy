@@ -155,10 +155,10 @@ func (s *Server) mapAutopilotResponse(
 		patternID = string(input.CurrentPatternID)
 	}
 	speed := input.CurrentSpeed
-	if command.Intensity != nil {
-		speed = *command.Intensity
-	} else if command.SpeedPercent != nil {
+	if command.SpeedPercent != nil {
 		speed = *command.SpeedPercent
+	} else if command.Intensity != nil {
+		speed = *command.Intensity
 	}
 	var areaFocus *motion.AreaFocus
 	if input.CurrentAreaFocus != nil {

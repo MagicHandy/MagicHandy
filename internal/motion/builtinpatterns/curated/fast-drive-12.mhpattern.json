@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Drive 12",
-  "description": "Quick cadence.",
+  "name": "Midrange Break",
+  "description": "A run of full sweeps gives way briefly to a centered pair before resetting. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -163,8 +163,8 @@
     }
   ],
   "tags": [
-    "full",
-    "rhythmic",
-    "balanced"
+    "full-to-midrange",
+    "grouped",
+    "varied-rhythm"
   ]
 }

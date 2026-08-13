@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Drive 8",
-  "description": "Medium cadence.",
+  "name": "Descending Peak Blocks",
+  "description": "Deep returns support grouped peaks that step down in height. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -147,8 +147,8 @@
     }
   ],
   "tags": [
-    "full",
-    "rhythmic",
-    "balanced"
+    "descending-peaks",
+    "grouped",
+    "varied-rhythm"
   ]
 }

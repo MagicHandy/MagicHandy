@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Roll 3",
-  "description": "Quick cadence.",
+  "name": "Upper Step Blocks",
+  "description": "A full sweep frames a block of repeated upper-half strokes. Grouped timing creates offbeat accents.",
   "kind": "routine",
   "cycle_ms": 8780,
   "points": [
@@ -207,8 +207,8 @@
     }
   ],
   "tags": [
-    "tip",
-    "rhythmic",
-    "varied"
+    "upper-block",
+    "full-frame",
+    "syncopated"
   ]
 }

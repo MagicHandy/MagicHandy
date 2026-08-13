@@ -1,13 +1,12 @@
 package motion
 
-// promotedBuiltinPatterns preserve the timing of two user-tested imported
-// curves. Unlike generated catalog content, these are not time-fitted because
-// changing their cadence would change the behavior that was accepted in live
-// use. They still run through the shared engine and global motion envelope.
+// promotedBuiltinPatterns preserve the relative timing of two user-tested
+// imported curves in storage. They bypass catalog fitting, but normal runtime
+// speed retiming and the global motion envelope still apply in the shared engine.
 var promotedBuiltinPatterns = []PatternDefinition{
 	mustNormalizeCatalog(PatternDefinition{
 		ID: PatternHardAndRegular, Name: "Hard and Regular",
-		Description: "Fast full-range strokes with a brief eased return on each beat.",
+		Description: "Full-range strokes with a brief partial return accent on each beat.",
 		Kind:        PatternKindRoutine, CycleMillis: 7333,
 		Points: []CurvePoint{
 			{TimeMillis: 0, PositionPercent: 0},
@@ -60,11 +59,11 @@ var promotedBuiltinPatterns = []PatternDefinition{
 			{TimeMillis: 7208, PositionPercent: 74.24242424242425},
 			{TimeMillis: 7333, PositionPercent: 0},
 		},
-		Tags: []string{TagCurated, "fast", "full", "regular", "accented"},
+		Tags: []string{"full-span", "regular", "return-accent", TagCurated},
 	}),
 	mustNormalizeCatalog(PatternDefinition{
 		ID: PatternPlayfulJerk, Name: "playful jerk",
-		Description: "Staggered full-range accents shift from quick pauses into longer sweeps.",
+		Description: "Staggered full-range accents shift from short midpoint holds into longer sweeps.",
 		Kind:        PatternKindRoutine, CycleMillis: 11704,
 		Points: []CurvePoint{
 			{TimeMillis: 0, PositionPercent: 0},
@@ -101,7 +100,7 @@ var promotedBuiltinPatterns = []PatternDefinition{
 			{TimeMillis: 10837, PositionPercent: 100},
 			{TimeMillis: 11704, PositionPercent: 0},
 		},
-		Tags: []string{TagCurated, "syncopated", "full", "pauses", "tempo-change"},
+		Tags: []string{"syncopated", "full-span", "midpoint-holds", "tempo-ramp", TagCurated},
 	}),
 }
 

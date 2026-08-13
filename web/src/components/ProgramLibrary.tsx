@@ -12,8 +12,8 @@ interface Props {
   locked: boolean;
   offline: boolean;
   busyKeys: LibraryBusyKeys;
-  maxIntensity: number;
-  onPlay: (id: string, intensity: number) => Promise<void>;
+  maxSpeed: number;
+  onPlay: (id: string, speedPercent: number) => Promise<void>;
   onPause: () => Promise<void>;
   onResume: () => Promise<void>;
   onStop: () => Promise<void>;
@@ -21,9 +21,9 @@ interface Props {
   onDelete: (id: string) => Promise<void>;
 }
 
-export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, maxIntensity, onPlay, onPause, onResume, onStop, onExport, onDelete }: Props) {
-  const intensityCap = clampIntensityCap(maxIntensity);
-  const [intensity, setIntensity] = useState(Math.min(30, intensityCap));
+export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, maxSpeed, onPlay, onPause, onResume, onStop, onExport, onDelete }: Props) {
+  const speedCap = clampSpeedCap(maxSpeed);
+  const [speed, setSpeed] = useState(Math.min(30, speedCap));
   const activeProgram = engine?.target?.program_id;
   const rawPhase = Number.isFinite(engine?.phase) ? engine?.phase ?? 0 : 0;
   const progress = activeProgram ? Math.round(Math.min(1, Math.max(0, rawPhase)) * 100) : 0;
@@ -37,15 +37,15 @@ export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, ma
   } else if (engine?.running) {
     playbackState = "Playing";
   }
-  useEffect(() => setIntensity((value) => Math.min(value, intensityCap)), [intensityCap]);
+  useEffect(() => setSpeed((value) => Math.min(value, speedCap)), [speedCap]);
 
   return (
     <section className="library-view" aria-label={t("Programs and funscripts")}>
       {programs.length > 0 && <h2 className="visually-hidden">{t("Programs")}</h2>}
       <div className="program-toolbar">
         <label className="inline-slider">
-          <span>{t("Intensity")}<strong>{intensity}%</strong></span>
-          <input type="range" min={1} max={intensityCap} value={intensity} disabled={locked} onChange={(event) => setIntensity(Number(event.target.value))} />
+          <span>{t("Speed")}<strong>{speed}%</strong></span>
+          <input type="range" min={1} max={speedCap} value={speed} disabled={locked} onChange={(event) => setSpeed(Number(event.target.value))} />
         </label>
       </div>
 
@@ -73,7 +73,7 @@ export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, ma
               <div className="pattern-meta"><span>{formatClock(program.duration_ms)}</span><span>{t("{count} knots", { count: program.points.length })}</span><span>{program.origin}</span></div>
             </div>
             <div className="pattern-actions">
-              <button type="button" className="btn btn-primary compact-command" disabled={locked || mutating || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(program.id, intensity)}><PlayIcon />{t("Play")}</button>
+              <button type="button" className="btn btn-primary compact-command" disabled={locked || mutating || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(program.id, speed)}><PlayIcon />{t("Play")}</button>
               <button type="button" className="icon-button" title={t("Export program")} aria-label={t("Export {name}", { name: program.name })} disabled={offline || busyKeys.has(libraryActionKey.exportProgram(program.id))} onClick={() => void onExport(program.id)}><DownloadIcon /></button>
               <button type="button" className="icon-button" title={t("Delete program")} aria-label={t("Delete {name}", { name: program.name })} disabled={locked || mutating} onClick={() => void onDelete(program.id)}><TrashIcon /></button>
             </div>
@@ -85,6 +85,6 @@ export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, ma
   );
 }
 
-function clampIntensityCap(value: number): number {
+function clampSpeedCap(value: number): number {
   return Math.max(1, Math.min(100, Number.isFinite(value) ? Math.round(value) : 100));
 }

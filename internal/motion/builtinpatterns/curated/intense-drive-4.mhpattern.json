@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Drive 4",
-  "description": "Quick cadence.",
+  "name": "Lowered Finish",
+  "description": "A full-sweep run ends on a shortened upper peak. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -171,8 +171,8 @@
     }
   ],
   "tags": [
-    "tip",
-    "rhythmic",
-    "varied"
+    "full-span",
+    "shortened-finish",
+    "varied-rhythm"
   ]
 }

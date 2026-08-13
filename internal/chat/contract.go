@@ -2,6 +2,7 @@
 package chat
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,10 +68,12 @@ type AssistantResponse struct {
 
 // MotionCommand is semantic motion intent, not a transport command.
 type MotionCommand struct {
-	Action       string `json:"action"`
-	PatternID    string `json:"pattern_id,omitempty"`
-	Intensity    *int   `json:"intensity,omitempty"`
-	SpeedPercent *int   `json:"speed_percent,omitempty"`
+	Action    string `json:"action"`
+	PatternID string `json:"pattern_id,omitempty"`
+	// Intensity is accepted only to decode responses produced by older prompts.
+	// normalizePacing removes it before validation and dispatch.
+	Intensity    *int `json:"intensity,omitempty"`
+	SpeedPercent *int `json:"speed_percent,omitempty"`
 	// Area optionally focuses motion on a named zone. Named zones localize to
 	// bounded relative windows in deterministic code (the STGPT-RV area-focus
 	// lesson: zones, never raw model-authored depth numbers).
@@ -181,28 +184,20 @@ func preserveCurrentPatternSpeed(response *AssistantResponse, currentSpeed *int)
 	}
 }
 
-// resolveOverspecifiedPacing picks one pacing representation when the model sent
-// both, instead of discarding the whole decision.
+// normalizePacing converts the retired model-facing intensity alias into the
+// single speed_percent control. Keeping the field in the decoder lets saved
+// history and responses from an older prompt remain usable, but no downstream
+// motion path has to preserve two names for the same semantic value.
 //
-// The contract asks for exactly one of pattern_id+intensity or speed_percent,
-// and rejecting the pair is right for a hand-written command. For a model it was
-// costing the entire turn: measured against the live 26B, 60% of autopilot
-// motion decisions were thrown away on this rule alone, and every one of them
-// fell back to the deterministic planner. That is what flattened session speed.
-//
-// Both values here came from the model and both remain subject to the band and
-// range checks below, so nothing is invented and no limit moves. The choice
-// follows the contract's own preference: a named pattern is paced by intensity,
-// and intensity without a pattern is meaningless, so speed_percent wins there.
-// This mirrors enforceCapabilities, which already strips stray fields rather
-// than spending a repair round-trip on model noise.
-func resolveOverspecifiedPacing(motion *MotionCommand) {
-	if motion == nil || motion.Intensity == nil || motion.SpeedPercent == nil {
+// When both arrive, the canonical field wins. This is deterministic and avoids
+// dropping an otherwise valid motion decision.
+func normalizePacing(motion *MotionCommand) {
+	if motion == nil {
 		return
 	}
-	if strings.TrimSpace(motion.PatternID) != "" {
-		motion.SpeedPercent = nil
-		return
+	if motion.SpeedPercent == nil && motion.Intensity != nil {
+		speed := *motion.Intensity
+		motion.SpeedPercent = &speed
 	}
 	motion.Intensity = nil
 }
@@ -220,16 +215,20 @@ func validateAssistantResponse(response *AssistantResponse, patterns []PatternCh
 	}
 
 	response.Motion.Action = strings.ToLower(strings.TrimSpace(response.Motion.Action))
-	response.Motion.PatternID = strings.ToLower(strings.TrimSpace(response.Motion.PatternID))
+	response.Motion.PatternID = strings.TrimSpace(response.Motion.PatternID)
 	response.Motion.Area = strings.ToLower(strings.TrimSpace(response.Motion.Area))
-	resolveOverspecifiedPacing(response.Motion)
+	normalizePacing(response.Motion)
 	switch response.Motion.Action {
 	case MotionActionNone, MotionActionStart, MotionActionTarget, MotionActionStop:
 	default:
 		return fmt.Errorf("unknown motion action %q", response.Motion.Action)
 	}
-	if response.Motion.PatternID != "" && !allowedPatternID(response.Motion.PatternID, patterns) {
-		return unknownPatternError{patternID: response.Motion.PatternID}
+	if response.Motion.PatternID != "" {
+		resolved, ok := resolvePatternID(response.Motion.PatternID, patterns)
+		if !ok {
+			return unknownPatternError{patternID: response.Motion.PatternID}
+		}
+		response.Motion.PatternID = resolved
 	}
 	if response.Motion.Area != "" && !oneOfZone(response.Motion.Area) {
 		return fmt.Errorf("unknown motion area %q", response.Motion.Area)
@@ -260,9 +259,6 @@ func validMood(value Mood) (Mood, bool) {
 }
 
 func validateMotionRanges(command MotionCommand) error {
-	if command.Intensity != nil && (*command.Intensity < 1 || *command.Intensity > 100) {
-		return errors.New("motion intensity must be between 1 and 100")
-	}
 	if command.SpeedPercent != nil && (*command.SpeedPercent < 1 || *command.SpeedPercent > 100) {
 		return errors.New("motion speed_percent must be between 1 and 100")
 	}
@@ -270,14 +266,8 @@ func validateMotionRanges(command MotionCommand) error {
 }
 
 func validateMotionCombination(command MotionCommand, curation bool) error {
-	if command.PatternID == "" && command.Intensity != nil {
-		return errors.New("motion intensity requires an enabled pattern_id")
-	}
-	if command.PatternID != "" && curation && command.Intensity == nil && command.SpeedPercent == nil {
-		return errors.New("curated pattern_id requires intensity")
-	}
-	if command.Intensity != nil && command.SpeedPercent != nil {
-		return errors.New("motion cannot include both intensity and speed_percent")
+	if command.PatternID != "" && curation && command.SpeedPercent == nil {
+		return errors.New("pattern_id requires speed_percent")
 	}
 	if command.Action == MotionActionNone && (command.PatternID != "" || command.Intensity != nil || command.SpeedPercent != nil || command.Area != "") {
 		return errors.New("motion action none cannot include target fields")
@@ -297,13 +287,27 @@ func oneOfZone(zone string) bool {
 	return false
 }
 
-func allowedPatternID(patternID string, patterns []PatternChoice) bool {
+func resolvePatternID(patternID string, patterns []PatternChoice) (string, bool) {
+	patternID = strings.TrimSpace(patternID)
 	for _, pattern := range patterns {
-		if strings.EqualFold(strings.TrimSpace(pattern.ID), patternID) {
-			return true
+		actual := strings.TrimSpace(pattern.ID)
+		if actual != "" && (strings.EqualFold(actual, patternID) || strings.EqualFold(modelPatternID(actual), patternID)) {
+			return actual, true
 		}
 	}
-	return false
+	return "", false
+}
+
+// modelPatternID is a stable, opaque handle used only at the LLM boundary.
+// Persisted IDs often contain import filenames or obsolete pace labels; showing
+// those IDs made the model choose by label instead of the reviewed geometry.
+func modelPatternID(patternID string) string {
+	patternID = strings.ToLower(strings.TrimSpace(patternID))
+	if patternID == "" {
+		return ""
+	}
+	digest := sha256.Sum256([]byte(patternID))
+	return fmt.Sprintf("p-%x", digest[:6])
 }
 
 func defaultPatternChoices() []PatternChoice {

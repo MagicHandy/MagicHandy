@@ -103,6 +103,19 @@ position for startup decisions, so clamping cannot skip the verified lead-in.
 No post-fix hardware motion was run; capped Cloud REST startup and restored
 pattern-feel evidence remain open.
 
+Status 2026-08-13: pattern choice no longer determines global playback pace.
+The prior catalog spanned roughly 57.6–436.4% travel/s at authored timing while
+the full 1–100 speed control changed a selected loop by less than 2x. The shared
+planner now measures each loop and targets `180 * speed_percent / 100` mean
+semantic travel per second, then lengthens only where that curve's acceleration
+or reversal floor requires it. The retained generated set is 59 of the original
+171 (nine accepted, 50 experimental); together with six experimental designed
+patterns, 31 of 87 built-ins are model-visible by default. Simulation covers
+cross-pattern rate equality, proportional 20/40/80 pacing, focus compression
+and expansion, soft anchoring, loop-seam reversals, and all-built-in safety at
+100%. No post-change hardware motion was issued, so subjective
+low-speed and reversal feel remain open under this risk.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -540,6 +553,13 @@ worst measured boundary-plus-sway rate is 8.0 retargets/minute versus the
 pre-change 9/minute ceiling. Pattern recency changes only the model-facing
 allow-list; it does not create another motion or transport path.
 
+Status 2026-08-13: normalized pattern speed is implemented inside the shared
+motion planner, after semantic target admission and before the existing sampler
+and transport owner. Chat, Autopilot, library audition, and programs still
+produce `MotionTarget` values and do not gain a private clock or dispatch loop.
+Video funscripts remain media-clock-locked and intentionally bypass loop-rate
+normalization.
+
 ## R15: Chat And Voice Delivery Ordering
 
 Level: Medium
@@ -953,6 +973,15 @@ The established feel envelope labels 170 experimental and leaves only `Easy
 Drive 4` normally labeled. The offline generator has no live-app posting path,
 and the Go bulk importer requires explicit experimental acknowledgment. These
 controls do not substitute for capped hardware acceptance.
+
+Status 2026-08-13: the quality pass now ships 59 generated survivors rather
+than all 171. Fifty remain experimental and nine clear the fitted-feel gate.
+Model-facing metadata was rewritten around geometry and relative rhythm;
+legacy pace-biased IDs remain only for persistence and are replaced by opaque
+handles in prompts. A narrow seed migration updates untouched legacy default
+names while preserving user renames, enablement, weights, and feedback. Runtime
+speed normalization prevents authored travel rate from silently overriding the
+LLM or user's requested pace. Capped physical acceptance remains required.
 
 Relates to R1 (real-device validation), R8 (migration), and R14 (one motion
 path).

@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Drive 9",
-  "description": "Quick cadence.",
+  "name": "Full Sweep Run L",
+  "description": "Repeating full-span reversals. Reversal timing is even.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -195,8 +195,8 @@
     }
   ],
   "tags": [
-    "deep",
-    "rhythmic",
-    "build"
+    "full-span",
+    "repeating",
+    "even-rhythm"
   ]
 }

@@ -296,7 +296,7 @@ separate prompts.
 Motion:
 
 ```json
-{"motion":{"action":"target","pattern_id":"...","intensity":35},"next":"normal","variability":"restless"}
+{"motion":{"action":"target","pattern_id":"p-...","speed_percent":35},"next":"normal","variability":"restless"}
 ```
 
 `motion` may be omitted or use `{"action":"none"}` for a hold. No reply is

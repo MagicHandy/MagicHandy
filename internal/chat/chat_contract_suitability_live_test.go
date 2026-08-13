@@ -160,15 +160,16 @@ func (s *suitability) recordMotionShape(m *motionShape) {
 	if m == nil {
 		return
 	}
-	// pattern_id and intensity are an inseparable pair.
-	if (m.PatternID != "") != (m.Intensity != nil) {
+	// A pattern is a shape choice and uses the same canonical speed field as
+	// speed-only motion. Emitting the retired alias is a prompt-contract defect.
+	if m.PatternID != "" && m.Speed == nil {
 		s.pairViolations++
 	}
-	if m.Speed != nil && (*m.Speed < 0 || *m.Speed > 100) {
-		s.rangeViolations++
+	if m.Intensity != nil {
+		s.pairViolations++
 	}
-	if m.PatternID != "" && m.Speed != nil {
-		s.pairViolations++ // must choose one pacing representation
+	if m.Speed != nil && (*m.Speed < 1 || *m.Speed > 100) {
+		s.rangeViolations++
 	}
 }
 

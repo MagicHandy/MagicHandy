@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Drive 15",
-  "description": "Quick cadence.",
+  "name": "Two-Stage Peaks",
+  "description": "Deep returns support one repeated peak height followed by a higher one. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -291,8 +291,8 @@
     }
   ],
   "tags": [
-    "accent",
-    "fast",
-    "tempo-change"
+    "two-stage-peaks",
+    "deep-return",
+    "varied-rhythm"
   ]
 }

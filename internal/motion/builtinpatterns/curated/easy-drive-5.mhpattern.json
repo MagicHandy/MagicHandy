@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Easy Drive 5",
-  "description": "Medium cadence.",
+  "name": "Peak Steps",
+  "description": "A fixed lower return alternates among several upper peaks. Reversal timing is even.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -75,8 +75,8 @@
     }
   ],
   "tags": [
-    "full",
-    "steady",
-    "balanced"
+    "stepped-peaks",
+    "fixed-return",
+    "even-rhythm"
   ]
 }

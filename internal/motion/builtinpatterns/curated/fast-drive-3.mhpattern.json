@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Drive 3",
-  "description": "Quick cadence.",
+  "name": "Upper Shelf Pulse",
+  "description": "Upper-range pulses settle onto a repeated shallow return shelf. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -187,9 +187,8 @@
     }
   ],
   "tags": [
-    "accent",
-    "rhythmic",
-    "tempo-change",
-    "upper-return"
+    "upper-range",
+    "return-shelf",
+    "varied-rhythm"
   ]
 }

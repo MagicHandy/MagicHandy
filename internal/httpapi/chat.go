@@ -1041,10 +1041,10 @@ func (s *Server) writeChatStorageError(w http.ResponseWriter, err error) {
 func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) (motion.MotionTarget, error) {
 	patternID := motion.PatternID(command.PatternID)
 	speedPercent := 0
-	if command.Intensity != nil {
-		speedPercent = *command.Intensity
-	} else if command.SpeedPercent != nil {
+	if command.SpeedPercent != nil {
 		speedPercent = *command.SpeedPercent
+	} else if command.Intensity != nil {
+		speedPercent = *command.Intensity
 	}
 	var definition *motion.PatternDefinition
 	var programDefinition *motion.ProgramDefinition

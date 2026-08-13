@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Steady Drive 5",
-  "description": "Medium cadence.",
+  "name": "Deep Step Quartet",
+  "description": "A four-level descending step repeats between full sweeps. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 6708,
   "points": [
@@ -75,8 +75,8 @@
     }
   ],
   "tags": [
-    "paired",
-    "steady",
-    "contrast"
+    "descending-steps",
+    "full-frame",
+    "varied-rhythm"
   ]
 }

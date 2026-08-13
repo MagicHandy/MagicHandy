@@ -17,12 +17,11 @@
 // large share of these clips the dead time IS the content -- one had two live
 // strokes out of twenty-two -- and there is no pattern hiding inside them.
 //
-// LABELLING. Bands are computed from the excised curve, so they describe live
-// motion. The first pass labelled by mean stroke speed across the whole clip,
-// which averages motion together with stillness: a clip that was mostly stopped
-// scored a low mean and came out labelled "Gentle". Measured afterwards, 100% of
-// that Gentle band contained a dead stroke against 23% of Intense. The label was
-// reporting how much the clip rested while reading as how hard it worked.
+// LABELLING. Names and tags describe geometry and relative rhythm only. Absolute
+// pace is deliberately absent: every loop now shares one normalized speed
+// control, so an authored clip's old Gentle/Fast/Intense tier is both misleading
+// and harmful to model selection. Stable filenames and IDs are retained for
+// user preferences and saved sessions.
 
 const fs = require("fs");
 const path = require("path");
@@ -40,12 +39,73 @@ const CYCLE_CEILING = 12000;  // asserted by TestCuratedBuiltinPatternsLoad
 const ACCEL_BUDGET = 2600;    // under catalogMaxAcceleration 3000, leaving blend headroom
 const MIN_TURNING_POINTS = 5; // fewer than this is a twitch, not a loop
 
-const BANDS = [
-  { name: "Gentle", max: 90 }, { name: "Easy", max: 150 },
-  { name: "Steady", max: 240 }, { name: "Fast", max: 380 },
-  { name: "Intense", max: Infinity },
-];
-const rhythmOf = (cv) => (cv < 0.35 ? "Drive" : cv < 0.7 ? "Roll" : "Surge");
+const SHAPE_METADATA = {
+  "easy-drive-1.mhpattern.json": ["Notched Full Sweep", "Mostly full-span reversals with one shortened peak.", ["full-span", "single-notch"]],
+  "easy-drive-2.mhpattern.json": ["Full Sweep Run A", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "easy-drive-3.mhpattern.json": ["Full Sweep Run B", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "easy-drive-4.mhpattern.json": ["Full Sweep Run C", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "easy-drive-5.mhpattern.json": ["Peak Steps", "A fixed lower return alternates among several upper peaks.", ["stepped-peaks", "fixed-return"]],
+  "easy-roll.mhpattern.json": ["Upper Cascade", "An upper-biased sequence moves through several return depths and peaks.", ["upper-biased", "multi-level"]],
+  "fast-drive-1.mhpattern.json": ["Return Depth Shuffle", "Broad strokes shuffle among full and partial return depths.", ["varied-returns", "broad-strokes"]],
+  "fast-drive-10.mhpattern.json": ["Broken Full Sweep", "Full-span reversals are interrupted by a small set of partial returns.", ["full-span", "partial-breaks"]],
+  "fast-drive-11.mhpattern.json": ["Peak Ladder Mosaic", "Peak heights and return depths change in short stepped groups.", ["stepped-peaks", "varied-returns"]],
+  "fast-drive-12.mhpattern.json": ["Midrange Break", "A run of full sweeps gives way briefly to a centered pair before resetting.", ["full-to-midrange", "grouped"]],
+  "fast-drive-13.mhpattern.json": ["Descending Peak Finish", "Mostly full-depth returns meet upper peaks that shorten near the end.", ["descending-peaks", "deep-return"]],
+  "fast-drive-2.mhpattern.json": ["Multi-Level Circuit A", "Full, partial, and centered strokes rotate through an irregular circuit.", ["multi-level", "alternating"]],
+  "fast-drive-3.mhpattern.json": ["Upper Shelf Pulse", "Upper-range pulses settle onto a repeated shallow return shelf.", ["upper-range", "return-shelf"]],
+  "fast-drive-4.mhpattern.json": ["Return Ladder", "Broad upper peaks meet a ladder of progressively different return depths.", ["return-ladder", "broad-peaks"]],
+  "fast-drive-5.mhpattern.json": ["Multi-Level Circuit B", "Broad sweeps and middle-range strokes alternate through several levels.", ["multi-level", "broad-contrast"]],
+  "fast-drive-6.mhpattern.json": ["Return Depth Accents", "Full sweeps are punctuated by several shallower return accents.", ["varied-returns", "full-span"]],
+  "fast-drive-7.mhpattern.json": ["Peak Drift", "Peak heights drift while mostly deep returns anchor the phrase.", ["drifting-peaks", "deep-return"]],
+  "fast-drive-8.mhpattern.json": ["Descending Peak Blocks", "Deep returns support grouped peaks that step down in height.", ["descending-peaks", "grouped"]],
+  "fast-drive-9.mhpattern.json": ["Lowered Return Shuffle", "Upper peaks repeat over a shuffled set of lower return depths.", ["varied-returns", "upper-peaks"]],
+  "fast-roll-1.mhpattern.json": ["Upper to Full Blocks", "Upper-range blocks transition into broad and full-span sweeps.", ["upper-to-full", "grouped"]],
+  "fast-roll-2.mhpattern.json": ["Full Sweep Tail", "A long full-sweep run ends with two partial-depth accents.", ["full-span", "tail-accent"]],
+  "fast-roll-3.mhpattern.json": ["Upper Step Blocks", "A full sweep frames a block of repeated upper-half strokes.", ["upper-block", "full-frame"]],
+  "fast-roll-4.mhpattern.json": ["Near-Full Accent", "Near-full reversals carry a few small endpoint offsets.", ["near-full", "endpoint-offsets"]],
+  "fast-surge-1.mhpattern.json": ["Rising Ladder Reset", "Lower-anchored peaks rise in stages before an upper multi-level reset.", ["rising-peaks", "lower-anchor"]],
+  "fast-surge-2.mhpattern.json": ["Offset Zigzag", "Both endpoints shift through a broad irregular zigzag.", ["offset-zigzag", "multi-level"]],
+  "gentle-drive-1.mhpattern.json": ["Full Sweep Run D", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "gentle-drive-2.mhpattern.json": ["Full Sweep Run E", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "gentle-drive-3.mhpattern.json": ["Full Sweep Run F", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "intense-drive-1.mhpattern.json": ["Split-Level Pulse", "Full sweeps alternate with a repeated middle-range pulse.", ["split-level", "middle-pulse"]],
+  "intense-drive-10.mhpattern.json": ["Full Sweep Run G", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "intense-drive-11.mhpattern.json": ["Return Ladder Mosaic", "Upper peaks combine with a stepped mosaic of return depths.", ["return-ladder", "varied-peaks"]],
+  "intense-drive-12.mhpattern.json": ["Peak Groups", "Deep returns anchor grouped upper peaks of several heights.", ["grouped-peaks", "deep-return"]],
+  "intense-drive-13.mhpattern.json": ["Full Sweep Run H", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "intense-drive-14.mhpattern.json": ["Full Sweep Run I", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "intense-drive-15.mhpattern.json": ["Two-Stage Peaks", "Deep returns support one repeated peak height followed by a higher one.", ["two-stage-peaks", "deep-return"]],
+  "intense-drive-16.mhpattern.json": ["Full Sweep Run J", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "intense-drive-2.mhpattern.json": ["Peak Accent Chain", "Mostly full sweeps carry a chain of slightly shortened peak accents.", ["peak-accents", "deep-return"]],
+  "intense-drive-3.mhpattern.json": ["Single Shallow Return", "A full-sweep run contains one shallow return and one shortened peak.", ["full-span", "single-return-accent"]],
+  "intense-drive-4.mhpattern.json": ["Lowered Finish", "A full-sweep run ends on a shortened upper peak.", ["full-span", "shortened-finish"]],
+  "intense-drive-5.mhpattern.json": ["Framed Full Sweep", "A short upper-range frame interrupts an otherwise full-sweep run.", ["full-span", "upper-frame"]],
+  "intense-drive-6.mhpattern.json": ["Full Sweep Run K", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "intense-drive-7.mhpattern.json": ["Descending Peaks", "Deep returns support a sequence of upper peaks at changing heights.", ["descending-peaks", "deep-return"]],
+  "intense-drive-8.mhpattern.json": ["Peak Alternation", "Full peaks alternate with a repeated slightly shortened peak.", ["alternating-peaks", "deep-return"]],
+  "intense-drive-9.mhpattern.json": ["Full Sweep Run L", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "intense-roll-1.mhpattern.json": ["Offset Full Sweep", "Full sweeps carry a small set of near-endpoint offsets.", ["near-full", "endpoint-offsets"]],
+  "intense-roll-2.mhpattern.json": ["Double Peak Accent", "A full-sweep run contains a paired set of shortened peak accents.", ["paired-peaks", "full-span"]],
+  "intense-roll-3.mhpattern.json": ["Tapered Peak Finish", "Full sweeps taper to a shortened peak at each end of the phrase.", ["tapered-peaks", "deep-return"]],
+  "intense-roll-4.mhpattern.json": ["Full Sweep Run M", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "intense-roll-5.mhpattern.json": ["Descending Entry", "A descending staircase enters a run of full sweeps.", ["descending-entry", "full-span"]],
+  "intense-surge-1.mhpattern.json": ["Peak Shuffle", "Deep returns support a shuffled set of near-full peak heights.", ["varied-peaks", "deep-return"]],
+  "intense-surge-2.mhpattern.json": ["Full Sweep Run N", "Repeating full-span reversals.", ["full-span", "repeating"]],
+  "intense-surge-3.mhpattern.json": ["Near-Full Run", "Repeating full-span reversals with one near-full peak.", ["near-full", "repeating"]],
+  "steady-drive-1.mhpattern.json": ["Lower Anchor Circuit", "An upper entry drops into repeated lower-range anchors before a full reset.", ["lower-anchor", "multi-level"]],
+  "steady-drive-2.mhpattern.json": ["Peak Accent Run", "Deep returns repeat under a sequence of full and shortened peaks.", ["varied-peaks", "deep-return"]],
+  "steady-drive-3.mhpattern.json": ["Three-Level Pairing", "Three middle levels form a paired phrase framed by full sweeps.", ["three-level", "paired"]],
+  "steady-drive-4.mhpattern.json": ["Upper Accent Circuit", "Full sweeps transition into an upper-biased multi-level circuit.", ["upper-biased", "multi-level"]],
+  "steady-drive-5.mhpattern.json": ["Deep Step Quartet", "A four-level descending step repeats between full sweeps.", ["descending-steps", "full-frame"]],
+  "steady-roll-1.mhpattern.json": ["Upper Pulse Run", "A long upper-range pulse run resolves through one full sweep.", ["upper-pulses", "full-resolution"]],
+  "steady-roll-2.mhpattern.json": ["Multi-Level Drift", "Both endpoints drift through an irregular set of partial and broad strokes.", ["multi-level", "drifting-window"]],
+};
+
+function relativeRhythm(cv) {
+  if (cv < 0.15) return { tag: "even-rhythm", sentence: "Reversal timing is even." };
+  if (cv < 0.45) return { tag: "varied-rhythm", sentence: "Reversal timing varies within the loop." };
+  return { tag: "syncopated", sentence: "Grouped timing creates offbeat accents." };
+}
 
 // A clip as turning positions plus the duration of the stroke leaving each one.
 function toStrokes(doc) {
@@ -194,20 +254,14 @@ for (const file of files) {
   });
 }
 
-// Label from the repaired curve, ordered by pace inside each band so the
-// numbering carries meaning.
-kept.sort((a, b) => a.after.paceMean - b.after.paceMean);
-const counters = {};
+kept.sort((a, b) => a.file.localeCompare(b.file, "en"));
 for (const entry of kept) {
-  entry.key = `${BANDS.find((b) => entry.after.paceMean < b.max).name} ${rhythmOf(entry.after.cv)}`;
-  counters[entry.key] = (counters[entry.key] || 0) + 1;
-  entry.index = counters[entry.key];
-}
-for (const entry of kept) {
-  entry.newName = counters[entry.key] > 1 ? `${entry.key} ${entry.index}` : entry.key;
-  entry.newFile = entry.newName.toLowerCase().replace(/\s+/g, "-") + ".mhpattern.json";
-  const spm = (entry.repaired.positions.length / (entry.built.phrase / 1000)) * 60;
-  entry.newDesc = spm < 90 ? "Slow cadence." : spm < 220 ? "Medium cadence." : "Quick cadence.";
+  const metadata = SHAPE_METADATA[entry.file];
+  if (!metadata) throw new Error(`missing shape metadata for ${entry.file}`);
+  const rhythm = relativeRhythm(entry.after.cv);
+  entry.newName = metadata[0];
+  entry.newDesc = `${metadata[1]} ${rhythm.sentence}`;
+  entry.newTags = [...new Set([...metadata[2], rhythm.tag])];
 }
 
 console.log(`${files.length} curated clips\n`);
@@ -223,41 +277,31 @@ for (const [reason, count] of Object.entries(byReason).sort((a, b) => b[1] - a[1
   console.log(`  ${String(count).padStart(3)}  ${reason}`);
 }
 
-console.log("\nkept, by band:");
-for (const band of BANDS) {
-  const inBand = kept.filter((k) => k.key.startsWith(band.name));
-  if (!inBand.length) continue;
-  const paces = inBand.map((k) => k.after.paceMean);
-  console.log(`  ${band.name.padEnd(8)} ${String(inBand.length).padStart(3)}  ` +
-    `${Math.min(...paces).toFixed(0)}-${Math.max(...paces).toFixed(0)} %/s`);
+console.log("\nkept, by relative rhythm:");
+for (const tag of ["even-rhythm", "varied-rhythm", "syncopated"]) {
+  console.log(`  ${tag.padEnd(16)} ${String(kept.filter((k) => k.newTags.includes(tag)).length).padStart(3)}`);
 }
 console.log(`\nexcised ${(kept.reduce((s, k) => s + k.excised, 0) / 1000).toFixed(1)}s of dead time from the kept clips`);
 
-if (new Set(kept.map((k) => k.newFile)).size !== kept.length) {
-  console.error("ERROR: duplicate output names");
+if (new Set(kept.map((k) => k.newName)).size !== kept.length) {
+  console.error("ERROR: duplicate display names");
   process.exit(1);
 }
 
 if (APPLY) {
   for (const d of dropped) fs.unlinkSync(path.join(DIR, d.file));
-  // Two passes: every source moves to a scratch name first, so a clip renaming
-  // onto a name another clip still holds cannot clobber it.
-  for (const entry of kept) {
-    entry.scratch = path.join(DIR, `~${entry.file}`);
-    fs.renameSync(entry.full, entry.scratch);
-  }
   for (const entry of kept) {
     entry.doc.name = entry.newName;
     entry.doc.description = entry.newDesc;
+    entry.doc.tags = entry.newTags;
     entry.doc.cycle_ms = entry.built.cycle;
     entry.doc.points = entry.built.points;
-    fs.writeFileSync(entry.scratch, JSON.stringify(entry.doc, null, 2) + "\n");
-    fs.renameSync(entry.scratch, path.join(DIR, entry.newFile));
+    fs.writeFileSync(entry.full, JSON.stringify(entry.doc, null, 2) + "\n");
   }
   const catalog = JSON.parse(fs.readFileSync(CATALOG_PATH, "utf8"));
   catalog.pattern_count = kept.length;
   catalog.patterns = kept
-    .map((k) => ({ file: k.newFile, name: k.newName }))
+    .map((k) => ({ file: k.file, name: k.newName }))
     .sort((a, b) => a.file.localeCompare(b.file, "en"));
   fs.writeFileSync(CATALOG_PATH, JSON.stringify(catalog, null, 2) + "\n");
   console.log(`\napplied: ${kept.length} rewritten, ${dropped.length} deleted, catalog reindexed`);

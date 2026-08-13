@@ -228,17 +228,18 @@ always visibly indicated when on (status-bar phase = "autopilot" plus an active
 state on the button).
 
 **What the initial slice does.** While on, the model receives a bounded tail of
-the canonical conversation plus style, speed limits, recent pattern ids, and
+the canonical conversation plus style, speed limits, recent opaque pattern handles, and
 its last autonomous line. At each segment boundary it may select an **enabled**
-pattern and intensity or keep the current segment. Deterministic code chooses
+pattern shape and playback speed or keep the current segment. Deterministic code chooses
 the bounded dwell time. Focus regions, programs, freeform arrangements,
 session buildup, and user-configurable speech cadence remain planned; the initial
 slice must not be described as already controlling them.
 
 **How it routes (no separate pathway).** Autopilot emits the same bounded
 **arrangement segment loop** as Freestyle (Phase 11 contract) and picks
-`{pattern_id, intensity}` from **enabled** library entries (the Phase 14
-curation contract). Deterministic code compiles those
+an opaque `{pattern_id, speed_percent}` selection from **enabled** library
+entries (the Phase 14 curation contract). Pattern chooses geometry and relative
+rhythm while speed independently controls playback pace. Deterministic code compiles those
 into engine `ApplyTarget` retargets. The model **never** triggers low-level
 stream replacement per turn and **never** imports `transport`; the existing
 depguard import boundary keeps `internal/modes` off transport. If nothing

@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Drive 5",
-  "description": "Quick cadence.",
+  "name": "Framed Full Sweep",
+  "description": "A short upper-range frame interrupts an otherwise full-sweep run. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -171,8 +171,8 @@
     }
   ],
   "tags": [
-    "tip",
-    "rhythmic",
-    "varied"
+    "full-span",
+    "upper-frame",
+    "varied-rhythm"
   ]
 }

@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-03, prerelease updates and clean-machine voice models
+## Snapshot — 2026-08-13, pattern speed semantics and model-facing catalog
 
 ### Goal 1: Maintainability
 
@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 build: 23,712,768 bytes plain and 17,049,600 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 build: 23,768,576 bytes plain and 17,088,000 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
 | Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.13` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.19 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
@@ -112,9 +112,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,677,300 raw / 797,770 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 796,342 raw / 210,540 gzip bytes; all
-   HTML/CSS/JS is 1,233,064 raw / 360,373 gzip bytes. The localized Ollama
+   browser payload is 1,684,034 raw / 799,562 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 800,325 raw / 211,345 gzip bytes; all
+   HTML/CSS/JS is 1,239,798 raw / 362,165 gzip bytes. The localized Ollama
    compatibility state and stable repair-draft presentation add 448 raw / 212
    gzip bytes overall and 245 raw / 121 gzip bytes to the English startup path.
    The updater's
@@ -147,6 +147,34 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-13** - Separated pattern identity from playback pace. Before this
+  correction, built-in authored rates ranged from 57.6 to 436.4% travel/s and
+  the complete 1–100 control changed any selected loop by less than 2x, so the
+  chosen pattern dominated the requested speed. The shared planner now measures
+  total loop travel and targets `180 * speed_percent / 100` semantic
+  percentage-points/s, with curve-specific acceleration and reversal floors.
+  Tests cover equal requested rate across unlike patterns, proportional
+  20/40/80 pacing, focus compression/expansion, soft anchors, loop-seam
+  reversals, retained knots, and every built-in at 100%.
+  Programs use direct clock scaling; video remains media-clock-locked.
+  The 87 built-ins now carry geometry/relative-rhythm metadata: 31 are visible
+  to the model by default and 56 are experimental. Stable database IDs remain
+  for persistence, while deterministic opaque handles prevent historical
+  pace-biased IDs from entering prompts. Untouched legacy names migrate to the
+  new labels without overwriting user renames. The model contract and Pattern
+  Library UI use `speed_percent`; old `intensity` input remains compatibility-only
+  and is normalized immediately.
+  Installed Gemma/llama.cpp live evaluation returned strict JSON on 10/10 Chat
+  turns with no schema/range violations, then completed 12/12 full-catalog
+  Autopilot decisions with zero errors, nine distinct speeds (65–85), and six
+  resolved patterns. Neither run entered the engine or transport.
+  Full Go tests, vet, zero-issue lint, localization, typecheck, production build,
+  all 395 frontend tests, catalog tooling, and plain/stripped zero-CGo builds
+  pass. Local race remains unavailable because MSYS2 has no compiler; CI retains
+  the mandatory race gate. The core is 23,768,576 / 17,088,000 bytes
+  plain/stripped. Rebuilding the canonical UI changes the checked-in payload by
+  -16 raw / +1 gzip byte to 1,684,034 / 799,562. No hardware command was issued.
 
 - **2026-08-03** - Rejected GGUFs that a text-only managed llama.cpp runner
   cannot load even when Ollama stores them as one model layer. Import and
