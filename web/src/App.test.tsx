@@ -695,7 +695,7 @@ describe("app shell safety invariants", () => {
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/library");
     expect(await screen.findByText("Stroke")).toBeInTheDocument();
-    expect(screen.getByText(/1 pattern available to chat/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 pattern enabled/i)).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /enable stroke/i })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /enable pulse/i })).not.toBeChecked();
     expect(screen.getByRole("button", { name: /audition stroke/i })).toBeEnabled();

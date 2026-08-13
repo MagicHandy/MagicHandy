@@ -44,7 +44,7 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
       {patterns.length > 0 && <h2 className="visually-hidden">{t("Patterns")}</h2>}
       <div className="library-toolbar">
         <div className="curation-readout" data-fallback={enabled === 0 || undefined}>
-          <strong>{enabled === 0 ? t("Deterministic fallback active") : enabled === 1 ? t("1 pattern available to chat") : t("{count} patterns available to chat", { count: enabled })}</strong>
+          <strong>{enabled === 0 ? t("Deterministic fallback active") : enabled === 1 ? t("1 pattern enabled") : t("{count} patterns enabled", { count: enabled })}</strong>
           <span>{t("{count} total", { count: patterns.length })}</span>
         </div>
         <label className="field compact-field">
