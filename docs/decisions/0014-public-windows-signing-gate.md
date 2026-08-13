@@ -62,7 +62,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.20 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.21 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -74,7 +74,7 @@ VirusTotal report:
    files outside Hugging Face snapshot links for clean Windows installs.
    Alpha.13 retains the hardened package shape and ships the Ollama GGUF and
    repaired-chat corrections after alpha.12's portable release was withdrawn.
-   Alpha.18 through alpha.20 retain the hardened package shape while shipping
+   Alpha.18 through alpha.21 retain the hardened package shape while shipping
    reviewed Autopilot and pattern-pacing corrections.
    The tag workflow scans each exact candidate directory with Microsoft
    Defender before lifecycle verification. The
@@ -141,11 +141,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.20 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.21 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.20 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.21 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,

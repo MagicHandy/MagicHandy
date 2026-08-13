@@ -7,7 +7,7 @@ on your machine — no account, no tracking.
 
 > **Status:** early alpha and under active development. Local chat already
 > drives real device motion. The current Windows build is
-> [v0.1.0-alpha.20](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.20),
+> [v0.1.0-alpha.21](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.21),
 > with a full setup EXE and portable ZIP. The binaries remain unsigned.
 > Expect rough edges — see [what's coming](#roadmap).
 
@@ -40,7 +40,7 @@ on your machine — no account, no tracking.
 ## Get started
 
 For Windows x64, download the setup EXE and SHA-256 checksum file from the
-[v0.1.0-alpha.20 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.20).
+[v0.1.0-alpha.21 release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.21).
 Verify the setup hash, run it, and complete guided setup in the browser. The
 portable ZIP remains available when Windows integration is not wanted. No Go,
 Node, Python, CMake, or compiler is needed to run the core. The executables are
