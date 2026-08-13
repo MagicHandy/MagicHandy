@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Drive 6",
-  "description": "Medium cadence.",
+  "name": "Return Depth Accents",
+  "description": "Full sweeps are punctuated by several shallower return accents. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -139,8 +139,8 @@
     }
   ],
   "tags": [
-    "full",
-    "gentle",
-    "breathing"
+    "varied-returns",
+    "full-span",
+    "varied-rhythm"
   ]
 }

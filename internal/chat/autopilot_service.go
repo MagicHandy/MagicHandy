@@ -327,9 +327,9 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 	}
 	builder.WriteString("\nOmitted target fields preserve the live target. Never invent device commands, pattern IDs, URLs, or transport details.")
 	if capabilities.Patterns {
-		builder.WriteString(` To select an enabled pattern, include "pattern_id" and "intensity" together and omit "speed_percent".`)
+		builder.WriteString(` Pattern selects shape and speed_percent selects pace. A pattern_id may omit speed_percent to preserve the live pace; include both only when changing both.`)
 	} else {
-		builder.WriteString(` Pattern selection is unavailable. Do not include "pattern_id" or "intensity"; use "speed_percent" for pace changes.`)
+		builder.WriteString(` Pattern selection is unavailable. Do not include "pattern_id"; use "speed_percent" for pace changes.`)
 	}
 	if capabilities.AreaFocus {
 		builder.WriteString(` "area" may be "tip", "shaft", "base", or "full".`)

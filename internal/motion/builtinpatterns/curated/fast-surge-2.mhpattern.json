@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Surge 2",
-  "description": "Medium cadence.",
+  "name": "Offset Zigzag",
+  "description": "Both endpoints shift through a broad irregular zigzag. Grouped timing creates offbeat accents.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -151,8 +151,8 @@
     }
   ],
   "tags": [
-    "full",
-    "rhythmic",
-    "build"
+    "offset-zigzag",
+    "multi-level",
+    "syncopated"
   ]
 }

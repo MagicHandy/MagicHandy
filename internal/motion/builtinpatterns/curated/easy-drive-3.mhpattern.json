@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Easy Drive 3",
-  "description": "Slow cadence.",
+  "name": "Full Sweep Run B",
+  "description": "Repeating full-span reversals. Reversal timing is even.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -59,9 +59,8 @@
     }
   ],
   "tags": [
-    "tip",
-    "rhythmic",
-    "varied",
-    "upper-return"
+    "full-span",
+    "repeating",
+    "even-rhythm"
   ]
 }

@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Roll 5",
-  "description": "Quick cadence.",
+  "name": "Descending Entry",
+  "description": "A descending staircase enters a run of full sweeps. Grouped timing creates offbeat accents.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -267,8 +267,8 @@
     }
   ],
   "tags": [
-    "tip",
-    "rhythmic",
-    "varied"
+    "descending-entry",
+    "full-span",
+    "syncopated"
   ]
 }

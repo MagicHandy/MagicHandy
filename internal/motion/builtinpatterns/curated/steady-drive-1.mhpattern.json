@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Steady Drive 1",
-  "description": "Quick cadence.",
+  "name": "Lower Anchor Circuit",
+  "description": "An upper entry drops into repeated lower-range anchors before a full reset. Reversal timing is even.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -179,8 +179,8 @@
     }
   ],
   "tags": [
-    "full",
-    "steady",
-    "balanced"
+    "lower-anchor",
+    "multi-level",
+    "even-rhythm"
   ]
 }

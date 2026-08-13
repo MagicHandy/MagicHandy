@@ -11,14 +11,15 @@ sampling, active playback, completion, Pause, and Stop.
 
 **Patterns** are repeatable relative curves. Positions are semantic 0–100 and
 are projected into the configured stroke window exactly once at the transport
-boundary. A pattern is either `routine` (minimum 6600 ms cycle) or `burst`
-(minimum 500 ms cycle). Built-ins are code-generated; users can author and
-share additional entries. The 6600 ms routine value is a minimum, not a maximum;
-a coherent imported or authored loop may retain a longer cycle.
+boundary. A stored pattern is either `routine` (minimum 6600 ms authored cycle)
+or `burst` (minimum 500 ms authored cycle). Built-ins are code-generated; users
+can author and share additional entries. The authoring floor is not a runtime
+speed lock: playback retimes the complete curve while preserving its relative
+rhythm.
 
 **Programs** are finite, elapsed-time curves. A funscript imported as a program
 keeps its action timing and relative spacing and does not loop. Playback may
-uniformly time-scale the complete curve through the bounded intensity control;
+uniformly time-scale the complete curve through the bounded speed control;
 the stored actions are unchanged. The current engine applies a 500 ms minimum
 execution period, so shorter stored programs play at that floor. The engine
 samples it through the same path as patterns and sends an explicit Stop at
@@ -34,38 +35,35 @@ envelope that came out of it, and which script to reach for.
 
 ## Built-In Catalog
 
-The built-in catalog contains 199 patterns: three established patterns
+The built-in catalog contains 87 patterns: three established patterns
 (`Stroke`, `Pulse`, and `Tease`), eight retained generated patterns, 15
-velocity-authored replacements, two timing-preserved user-curated patterns, and
-171 generated Rockfire/Claude patterns.
-`experimental` is an active review state rather than a historical label:
-retained patterns no longer carry the tag or the `Experimental:` description
-prefix. Only `Rising Reach`, `Offbeat`, `Long Return`, `Swell`, `Surge and
-Settle`, and `Crosscut` are experimental among the original 28.
+velocity-authored replacements, two user-curated patterns, and 59 generated
+Rockfire/Claude patterns that survived the quality pass. `experimental` is an
+active review state rather than a historical label. Six designed patterns and
+50 generated survivors carry it, leaving 31 patterns in the default model
+catalog and all 87 available when the user opts into experimental patterns.
 
-The 171 generated `curated-*` clips under
-`internal/motion/builtinpatterns/curated` are active built-ins, but they have no
-bulk timing exemption. A trace captured with a 35% configured maximum showed
-the target correctly clamped to 35%, while `curated-fast-drive-20` still
-contained 20-point reversals only 40 ms apart. A source audit found 165 of the
-171 clips outside the normal acceleration or reversal budgets. Those curves are
-resampled across their complete source cycle into roughly 450 ms buckets,
-low-prominence reversal chatter is removed, and every generated result passes
-the same catalog fitter as ordinary built-ins. The existing physical-feel
-envelope marks 170 results `experimental`; `Easy Drive 4` is the sole generated
-curve that clears both source safety and fitted feel checks. Only `Hard and
-Regular` and `playful jerk`, identified by their canonical IDs and the `curated`
-tag, retain timing-preserved exceptions based on prior hardware acceptance.
+The 59 `curated-*` files under `internal/motion/builtinpatterns/curated` are the
+survivors of a 171-file generated import. Nine clear the current source and
+fitted-feel checks; 50 remain experimental. Generated curves receive no timing
+or speed-limit exemption. The two promoted user curves (`Hard and Regular` and
+`playful jerk`) preserve their stored knots and relative rhythm, but normal
+runtime speed retiming and safety bounds still apply.
+
+Generated filenames and database IDs remain stable because saved sessions,
+enablement, weights, and feedback refer to them. Display names, descriptions,
+and model-facing tags describe geometry and relative rhythm, not an implied
+global pace. Model prompts receive opaque handles rather than the legacy
+pace-biased IDs.
 
 The source directory carries an explicit
 `magichandy.generated-pattern-catalog.v3` manifest. Tests require every
-manifest filename and display name to match the embedded source, preventing the
-stale 171-file manifest left by the later statistical relabel. The relabel tool
-resolves the repository path instead of naming one developer machine and keeps
-that manifest synchronized. The Python sampler is offline-only and cannot post
-to a running app. The sole bulk-import command is the Go utility, which requires
-`-allow-experimental`. That acknowledgment does not promote or hardware-approve
-a clip.
+manifest filename and display name to match the embedded source. The labelling
+tool resolves the repository path, keeps that manifest synchronized, and does
+not rename IDs or modify points. The Python sampler is offline-only and cannot
+post to a running app. The sole bulk-import command is the Go utility, which
+requires `-allow-experimental`. That acknowledgment does not promote or
+hardware-approve a clip.
 
 The 250-pattern persistence limit applies to user-authored, generated, and
 imported rows only. Reconciled built-ins do not consume that capacity, so the
@@ -108,11 +106,11 @@ which is the gate.
 The prior screening rule asked for reach *variety* -- four amplitude bands, no
 repeated endpoint, no run of two near-equal amplitudes. Measurement does not
 support variety as the quality axis: the disabled patterns were the more varied
-group. `TestCatalogPatternsHoldTheMeasuredSpeedEnvelope` replaces it with bounds
+group. `TestCatalogPatternsHoldTheMeasuredSpeedEnvelope` replaces it with authoring bounds
 taken from the retained patterns: every stroke at least 22% travel and 42%/s, at
 most a 3.3x internal speed spread, at least 55%/s mean, and no more than 200 ms
-under 30%/s. Because speed scaling is a uniform time factor, those ratios hold at
-any intensity. The 450 ms reversal-gap and 3000 relative-position/s2 acceleration
+under 30%/s. Runtime retiming preserves the ratios between legs while changing
+their absolute rates. The 450 ms reversal-gap and 3000 relative-position/s2 acceleration
 budgets are unchanged; together they imply the 22% minimum stroke, and they cap a
 short stroke's speed at `amplitude / 0.45`, which is why long strokes are the fast
 ones in every replacement.
@@ -122,23 +120,40 @@ They do not catch `Sway`, `Rolling`, or `Double Tap`, whose slowest strokes
 (46, 54, 57%/s) sit inside the retained range; those three were the weakest part
 of the case for removing them.
 
-`Hard and Regular` and `playful jerk` are exact curves promoted from the live
-user library. Their accepted timing is intentionally preserved instead of being
-passed through the generated-pattern time fitter, which would change their
-feel. They carry the `curated` tag, are bounded by the same persisted motion
-envelope, and still play only through the shared engine. On an existing
+`Hard and Regular` and `playful jerk` are exact stored curves promoted from the
+live user library. Their knots and relative timing are preserved instead of
+being passed through the generated-pattern fitter. They carry the `curated` tag,
+use the same runtime speed semantics and persisted motion envelope, and still
+play only through the shared engine. On an existing
 database, seed reconciliation transfers enabled state and weight from an exact
 name-and-curve match to the canonical built-in, then removes only that proven
 duplicate. Similar names or edited curves are left untouched.
 
 The seed also removes the six explicitly retired built-in IDs, including their
 cascading feedback rows, and inserts the six replacement IDs. No SQLite schema
-change is required. Existing names, enablement, and weights on retained
-built-ins remain user-owned. The library's inline rename control changes the
+change is required. Seed reconciliation updates a built-in name only when it
+still equals a known older default; a user rename remains user-owned. Existing
+enablement and weights are also preserved. The library's inline rename control changes the
 display name for any pattern and persists it across restart; IDs and built-in
 curve content remain immutable, so chat and playback keep a stable contract.
 
 ## Sampling And Authoring
+
+### Playback speed semantics
+
+A pattern is a shape plus relative rhythm, not a fixed pace. At runtime the
+planner measures total absolute travel in one loop and chooses a period that
+targets a mean semantic travel rate of `180 * speed_percent / 100` percentage
+points per second. Thus 20%, 40%, and 80% request 36, 72, and 144 percentage
+points per second regardless of whether the selected curve is shallow, deep,
+simple, or highly articulated. Acceleration and reversal-gap safety floors may
+lengthen a period at the top end; the configured user maximum remains an
+independent cap. Area focus contracts travel and period together where safety
+allows, so selecting a narrow region does not silently make a pattern slower.
+
+Finite programs use direct clock scaling (`stored duration * 100 / speed`) and
+retain every relative action interval. Video funscripts are media-clock-locked
+and therefore do not use pattern normalization.
 
 - Curves use wall-time PCHIP/Fritsch-Carlson interpolation. Loop reversals use
   a trapezoidal velocity profile with at most 75 ms acceleration/deceleration
@@ -190,7 +205,7 @@ two interpretations:
 - **Pattern** compresses stationary gaps over five seconds to 500 ms, requires
   at least 5% source span, normalizes it once to relative 0–100, removes only
   rapid low-prominence reversal chatter, simplifies it, and closes the loop.
-  Cycles shorter than 6600 ms are stretched to that floor; longer active timing
+  Stored cycles shorter than 6600 ms are stretched to that authoring floor; longer active timing
   remains intact. The UI rejects a selection with more than 255 essential
   reversal knots because loop closure and the stored 256-point limit make that
   shape impossible to preserve. This is a shape limit, not a duration limit.
@@ -216,23 +231,25 @@ share files carry their own content kind and bypass this trim workflow.
 
 ## Curation And Feedback
 
-The chat prompt receives only enabled `{id,name,description,tags,weight}` rows,
-ordered by visible weight. The primary LLM motion vocabulary is
-`{pattern_id,intensity}`. Parsing rejects IDs outside that supplied catalog;
-dispatch resolves the ID again to protect against a concurrent disable. When no
-pattern is enabled, the deterministic semantic speed-only contract remains
-available.
+The chat prompt receives enabled pattern metadata ordered by visible weight,
+with geometry/rhythm names and tags plus a deterministic opaque handle. The
+primary LLM motion vocabulary is `{pattern_id,speed_percent}`. Parsing resolves
+the handle and rejects entries outside that supplied catalog; dispatch resolves
+the resulting stable ID again to protect against a concurrent disable. Persisted
+IDs, including legacy pace-biased generated IDs, never enter the prompt. When no
+pattern is enabled, the semantic speed-only contract remains available.
 
 Model permissions further narrow that catalog. Turning pattern selection off
 removes pattern fields and skips the pattern-store read for the turn. Turning
-experimental patterns off (the default) excludes the six experimental rows
-while retaining all accepted and user-curated built-ins. Area focus is
+experimental patterns off (the default) excludes 56 experimental rows while
+retaining 31 accepted and user-curated built-ins. Area focus is
 independent of catalog storage. These permissions persist in the existing
 versioned settings document in SQLite and therefore do not add a table or
 schema migration.
 
 Interactive chat receives the current engine target and a bounded tail of
-recent chat-selected pattern ids from the runtime trace ring. Steady and
+recent chat-selected patterns from the runtime trace ring, represented to the
+model by the same opaque handles. Steady and
 pacing-only requests preserve the current pattern. Explicit variation prefers
 an enabled pattern outside the recent tail; one repair pass and a deterministic
 fresh-pattern fallback prevent a weak model from returning a semantic no-op or
@@ -254,9 +271,10 @@ SQLite schema v8 introduced (and later schema versions retain):
 - `pattern_feedback` for the reversible rating ledger
 - `app_kv['patterns.auto_disable']` for the opt-in preference
 
-Built-ins are seeded idempotently on open while preserving user names,
-enablement, and weights. Explicit catalog retirement and exact-curve promotion
-also run in that transaction. Library writes use the datastore transaction
+Built-ins are seeded idempotently on open while preserving user-renamed names,
+enablement, and weights. Untouched legacy default names migrate to the current
+shape-based labels. Explicit catalog retirement and exact-curve promotion also
+run in that transaction. Library writes use the datastore transaction
 helper. Runtime databases, WAL files, imports, and exports remain user data and
 are never committed.
 
@@ -285,4 +303,7 @@ report rather than implicit conversion at startup.
 Reads and downloads are available to read-only clients. Preview, import,
 mutation, feedback, and playback require the active controller. Playback is
 also bounded by the persisted speed/stroke settings; global Stop stays
-available regardless of controller ownership or backend state.
+available regardless of controller ownership or backend state. Pattern and
+program play requests use `speed_percent`; the backend still accepts the old
+`intensity` request field for compatibility and gives the canonical field
+precedence when both are present.

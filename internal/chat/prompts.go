@@ -60,22 +60,20 @@ Rules:
 - Use "start" only when the user asks to begin motion.
 - Use "target" only to adjust active motion.
 - Use only {"action":"stop"} when the user asks to stop, pause, or end motion.
-- Use speed_percent for deterministic pacing when no pattern is selected.
+- Use speed_percent for pacing. Pattern choice changes motion shape, not pace.
 - Apply the supplied speed bands to speed_percent: "slow"/"gentle" means low, "moderate"/"medium" and unqualified requests mean middle, and "fast"/"hard"/"as fast as you can" means high. Never choose a value outside the requested band or the supplied user limits.
 - Never invent device commands, API calls, Bluetooth commands, URLs, or transport details.
 - The motion examples define only the nested motion object. Never copy their wording into "reply".
 - Write a reply that fits the user's request and the selected chat voice.
 - Keep speeds conservative unless the user explicitly asks otherwise.`
 
-const contractPatternSection = `- Pattern selection is enabled. Prefer an enabled pattern_id with intensity when a catalog entry fits the request.
-- For each start or target, choose exactly one pacing representation:
-  A. Curated pattern: include pattern_id and intensity together, and omit speed_percent.
-  B. Deterministic pacing: include speed_percent, and omit pattern_id and intensity.
-- Every pattern_id requires intensity in the same motion object. Never emit pattern_id alone.
-- pattern_id and intensity belong only inside "motion", never at the top level.
+const contractPatternSection = `- Pattern selection is enabled. Prefer an enabled pattern_id when a catalog shape fits the request.
+- Pattern controls shape and relative rhythm only. speed_percent independently controls the played pace for every pattern.
+- When starting motion with a pattern, include speed_percent. When changing only shape in running motion, pattern_id may omit speed_percent to preserve the live pace.
+- pattern_id and speed_percent belong only inside "motion", never at the top level.
 - Choose pattern_id only from the enabled catalog supplied below.
-- Apply the exact supplied speed bands and limits to intensity too.
-- Omit pattern_id and intensity and use speed_percent when no enabled pattern fits.
+- Apply the exact supplied speed bands and limits to speed_percent.
+- Omit pattern_id when no enabled pattern fits; speed_percent may still change pace.
 - Never invent pattern IDs.`
 
 const contractAreaSection = `- Focus motion on one zone by adding "area":"tip", "area":"shaft", or "area":"base" to a start or target; use "area":"full" to clear an active focus.
@@ -677,7 +675,7 @@ func quotedPromptData(value string) string {
 
 func curationInstructions(patterns []PatternChoice) string {
 	if len(patterns) == 0 {
-		return "No motion patterns are enabled. For start or target, omit pattern_id and intensity and use speed_percent. Chat-only and stop shapes remain unchanged."
+		return "No motion patterns are enabled. For start or target, omit pattern_id and use speed_percent. Chat-only and stop shapes remain unchanged."
 	}
 	// One delimited line per pattern rather than an array of JSON objects.
 	//
@@ -697,7 +695,7 @@ func curationInstructions(patterns []PatternChoice) string {
 	weighted := false
 	firstID := ""
 	for _, pattern := range patterns {
-		id := promptTableField(pattern.ID, 120)
+		id := promptTableField(modelPatternID(pattern.ID), 120)
 		if id == "" {
 			continue
 		}
@@ -706,10 +704,10 @@ func curationInstructions(patterns []PatternChoice) string {
 		}
 		builder.WriteString(id)
 		builder.WriteString(" | ")
-		builder.WriteString(promptTableField(pattern.Name, 80))
+		builder.WriteString(promptTableField(modelPatternName(pattern), 80))
 		builder.WriteString(" | ")
-		builder.WriteString(promptTableField(pattern.Description, 200))
-		if tags := promptTableField(joinLeadingTags(pattern.Tags), 60); tags != "" {
+		builder.WriteString(promptTableField(modelPatternDescription(pattern.Description), 200))
+		if tags := promptTableField(joinModelTags(pattern.Tags), 60); tags != "" {
 			builder.WriteString(" | ")
 			builder.WriteString(tags)
 		}
@@ -722,20 +720,20 @@ func curationInstructions(patterns []PatternChoice) string {
 		builder.WriteByte('\n')
 	}
 	if firstID == "" {
-		return "No motion patterns are enabled. For start or target, omit pattern_id and intensity and use speed_percent. Chat-only and stop shapes remain unchanged."
+		return "No motion patterns are enabled. For start or target, omit pattern_id and use speed_percent. Chat-only and stop shapes remain unchanged."
 	}
 	startExample, _ := json.Marshal(map[string]any{
-		"action": "start", "pattern_id": firstID, "intensity": 40,
+		"action": "start", "pattern_id": firstID, "speed_percent": 40,
 	})
 	targetExample, _ := json.Marshal(map[string]any{
-		"action": "target", "pattern_id": firstID, "intensity": 40,
+		"action": "target", "pattern_id": firstID, "speed_percent": 40,
 	})
 	builder.WriteString("Choose only an id from the first column.")
 	if weighted {
 		builder.WriteString(" Prefer a higher preference value when entries fit equally well.")
 	}
-	builder.WriteString("\nValid curated start motion object using an enabled id: " + string(startExample))
-	builder.WriteString("\nValid curated target motion object using an enabled id: " + string(targetExample))
+	builder.WriteString("\nValid catalog start motion object using an enabled id: " + string(startExample))
+	builder.WriteString("\nValid catalog target motion object using an enabled id: " + string(targetExample))
 	return builder.String()
 }
 
@@ -758,6 +756,33 @@ func joinLeadingTags(tags []string) string {
 		}
 	}
 	return strings.Join(kept, ", ")
+}
+
+func modelPatternDescription(description string) string {
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(description), "Experimental:"))
+}
+
+func modelPatternName(pattern PatternChoice) string {
+	name := strings.TrimSpace(pattern.Name)
+	// This user-promoted pattern keeps its requested library display name, but
+	// "Hard" is a pace cue and must not steer model shape selection.
+	if strings.EqualFold(strings.TrimSpace(pattern.ID), "hard-and-regular") && strings.EqualFold(name, "Hard and Regular") {
+		return "Regular Return Accents"
+	}
+	return name
+}
+
+func joinModelTags(tags []string) string {
+	filtered := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		switch strings.ToLower(strings.TrimSpace(tag)) {
+		case "", "experimental", "curated", "imported":
+			continue
+		default:
+			filtered = append(filtered, tag)
+		}
+	}
+	return joinLeadingTags(filtered)
 }
 
 // promptTableField makes one value safe to place in a delimited catalog row.

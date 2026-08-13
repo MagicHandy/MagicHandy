@@ -29,7 +29,7 @@ export function PatternLibraryRoute() {
   const mounted = useRef(true);
   const tabRefs = useRef<Partial<Record<View, HTMLButtonElement | null>>>({});
   const locked = !backendOnline || readOnly;
-  const maxIntensity = state?.settings?.motion?.speed_max_percent ?? 100;
+  const maxSpeed = state?.settings?.motion?.speed_max_percent ?? 100;
 
   const load = useCallback(async (signal?: AbortSignal) => {
     const generation = ++loadGeneration.current;
@@ -74,9 +74,9 @@ export function PatternLibraryRoute() {
     });
   }
 
-  async function playPattern(id: string, intensity = Math.min(30, maxIntensity), feel = "original") {
+  async function playPattern(id: string, speedPercent = Math.min(30, maxSpeed), feel = "original") {
     await withBusy(libraryActionKey.motionStart, async () => {
-      await api.playPattern(id, intensity, feel);
+      await api.playPattern(id, speedPercent, feel);
       refresh();
     });
   }
@@ -168,9 +168,9 @@ export function PatternLibraryRoute() {
     await withBusy(libraryActionKey.exportProgram(id), async () => exportFile(() => api.exportProgram(id)));
   }
 
-  async function playProgram(id: string, intensity: number) {
+  async function playProgram(id: string, speedPercent: number) {
     await withBusy(libraryActionKey.motionStart, async () => {
-      await api.playProgram(id, intensity);
+      await api.playProgram(id, speedPercent);
       refresh();
     });
   }
@@ -277,7 +277,7 @@ export function PatternLibraryRoute() {
                 locked={locked}
                 offline={!backendOnline}
                 busyKeys={busyKeys}
-                maxIntensity={maxIntensity}
+                maxSpeed={maxSpeed}
                 onPlay={playProgram}
                 onPause={pausePlayer}
                 onResume={resumePlayer}
@@ -299,7 +299,7 @@ export function PatternLibraryRoute() {
                 autoDisable={library.auto_disable}
                 locked={locked}
                 busyKeys={busyKeys}
-                maxIntensity={maxIntensity}
+                maxSpeed={maxSpeed}
                 onPlay={playPattern}
                 onFeedback={ratePattern}
                 onUndo={undoFeedback}

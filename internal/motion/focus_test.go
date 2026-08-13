@@ -59,7 +59,7 @@ func TestFocusedLoopPreservesRequestedTravelRateWithinAccelerationBudget(t *test
 	}
 }
 
-func TestFocusedLoopRespectsAuthoredAccelerationBudget(t *testing.T) {
+func TestFocusedLoopRespectsCatalogAccelerationAndReversalBudgets(t *testing.T) {
 	definition := PatternDefinition{
 		ID: "slow-custom", Name: "Slow custom", Kind: PatternKindRoutine, CycleMillis: 12000,
 		Points: []CurvePoint{
@@ -73,10 +73,66 @@ func TestFocusedLoopRespectsAuthoredAccelerationBudget(t *testing.T) {
 		AreaFocus: &AreaFocus{MinPercent: 0, MaxPercent: 25},
 	}, focusTestSettings(), 0, 0, time.Unix(0, 0))
 
-	// A quarter-distance loop needs at least half its authored period to keep
-	// acceleration at or below the source pattern (distance / time^2).
-	if focused.PeriodMillis != 6000 {
-		t.Fatalf("focused period = %dms, want 6000ms authored-acceleration floor", focused.PeriodMillis)
+	wantPeriod := minimumSafeLoopPeriodAtGain(definition.Points, definition.CycleMillis, 0.25)
+	if focused.PeriodMillis != wantPeriod {
+		t.Fatalf("focused period = %dms, want %dms catalog-safety floor", focused.PeriodMillis, wantPeriod)
+	}
+	if acceleration := maximumPlanAcceleration(focused); acceleration > catalogMaxAcceleration*1.02 {
+		t.Fatalf("focused acceleration = %.1f%%/s^2, over %.1f budget", acceleration, catalogMaxAcceleration)
+	}
+	metrics, err := MeasureCurve(definition.Points, definition.CycleMillis, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	playedGap := float64(metrics.MinReversalGapMillis) * float64(focused.PeriodMillis) / float64(definition.CycleMillis)
+	if playedGap+0.01 < catalogMinReversalGap {
+		t.Fatalf("focused reversal gap = %.1fms, below %dms budget", playedGap, catalogMinReversalGap)
+	}
+}
+
+func TestFocusExpansionPreservesRequestedTravelRate(t *testing.T) {
+	definition := PatternDefinition{
+		ID: "narrow", Name: "Narrow", Kind: PatternKindRoutine, CycleMillis: 6600,
+		Points: []CurvePoint{
+			{TimeMillis: 0, PositionPercent: 40},
+			{TimeMillis: 3300, PositionPercent: 60},
+			{TimeMillis: 6600, PositionPercent: 40},
+		},
+	}
+	full := NewMotionPlan("full", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
+	}, focusTestSettings(), 0, 0, time.Unix(0, 0))
+	focused := NewMotionPlan("focused", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
+		AreaFocus: &AreaFocus{MinPercent: 0, MaxPercent: 34},
+	}, focusTestSettings(), 0, 0, time.Unix(0, 0))
+
+	gain := focused.focus.gain()
+	if gain <= 1 {
+		t.Fatalf("focus gain = %.2f, want expansion", gain)
+	}
+	fullRate := totalCurveTravel(definition.Points) * 1000 / float64(full.PeriodMillis)
+	focusedRate := totalCurveTravel(definition.Points) * gain * 1000 / float64(focused.PeriodMillis)
+	if math.Abs(fullRate-focusedRate) > 0.05 {
+		t.Fatalf("expanded focus rate = %.2f%%/s, want %.2f", focusedRate, fullRate)
+	}
+}
+
+func TestSoftAnchorPreservesRequestedTravelRate(t *testing.T) {
+	definition, _ := BuiltinPatternDefinition(PatternStroke)
+	full := NewMotionPlan("full", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
+	}, focusTestSettings(), 0, 0, time.Unix(0, 0))
+	anchored := NewMotionPlan("anchored", MotionTarget{
+		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 20,
+		SoftAnchor: &SoftAnchor{PositionPercent: 50, WeightPercent: 50},
+	}, focusTestSettings(), 0, 0, time.Unix(0, 0))
+
+	gain := anchored.focus.gain()
+	fullRate := totalCurveTravel(definition.Points) * 1000 / float64(full.PeriodMillis)
+	anchoredRate := totalCurveTravel(definition.Points) * gain * 1000 / float64(anchored.PeriodMillis)
+	if math.Abs(fullRate-anchoredRate) > 0.05 {
+		t.Fatalf("anchored rate = %.2f%%/s, want %.2f", anchoredRate, fullRate)
 	}
 }
 
@@ -188,9 +244,9 @@ func TestReversalRampShortensWithSpeedAndFocus(t *testing.T) {
 }
 
 // The reversal ramp exists to keep acceleration bounded. Shortening it must
-// not push a fitted pattern past the budget it is derived from. Only the two
-// explicitly promoted, hardware-accepted curves in content_curated.go retain
-// their exact timing and remain out of scope here.
+// not push a fitted pattern past the stored-catalog budget it is derived from.
+// The two promoted curves bypass authoring fit; runtime playback safety is
+// covered separately for every built-in at the requested speed.
 func TestReversalRampStaysInsideItsAccelerationBudget(t *testing.T) {
 	for _, definition := range BuiltinPatternDefinitions() {
 		if UsesExactImportedCurve(definition) {
@@ -216,4 +272,22 @@ func planPositionBounds(plan MotionPlan) (float64, float64) {
 		maximum = math.Max(maximum, position)
 	}
 	return minimum, maximum
+}
+
+func maximumPlanAcceleration(plan MotionPlan) float64 {
+	const sampleMillis = int64(5)
+	previous := plan.SampleAt(0).PositionPercent
+	previousVelocity := 0.0
+	maximum := 0.0
+	for at := sampleMillis; at <= plan.PeriodMillis; at += sampleMillis {
+		position := plan.SampleAt(at).PositionPercent
+		velocity := (position - previous) * 1000 / float64(sampleMillis)
+		if at > sampleMillis {
+			acceleration := math.Abs(velocity-previousVelocity) * 1000 / float64(sampleMillis)
+			maximum = math.Max(maximum, acceleration)
+		}
+		previous = position
+		previousVelocity = velocity
+	}
+	return maximum
 }

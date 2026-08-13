@@ -97,13 +97,16 @@ func TestLibraryAPIEnablementAndPlaybackUseMotionEngine(t *testing.T) {
 	enable := httptest.NewRecorder()
 	server.Handler().ServeHTTP(enable, withController(httptest.NewRequest(http.MethodPatch, "/api/library/patterns/"+id, strings.NewReader(`{"enabled":true}`))))
 	play := httptest.NewRecorder()
-	server.Handler().ServeHTTP(play, withController(httptest.NewRequest(http.MethodPost, "/api/library/patterns/"+id+"/play", strings.NewReader(`{"intensity":30,"feel":"smooth"}`))))
+	server.Handler().ServeHTTP(play, withController(httptest.NewRequest(http.MethodPost, "/api/library/patterns/"+id+"/play", strings.NewReader(`{"speed_percent":30,"intensity":80,"feel":"smooth"}`))))
 	if play.Code != http.StatusOK {
 		t.Fatalf("play pattern = %d: %s", play.Code, play.Body.String())
 	}
 	engine := server.currentMotionEngine()
 	if engine == nil || !engine.Snapshot().Running || string(engine.Snapshot().Target.PatternID) != id {
 		t.Fatalf("engine did not own pattern playback: %+v", engine)
+	}
+	if engine.Snapshot().Target.SpeedPercent != 30 {
+		t.Fatalf("canonical speed = %d, want 30", engine.Snapshot().Target.SpeedPercent)
 	}
 }
 
@@ -133,7 +136,7 @@ func TestLibraryFunscriptProgramCompletesAndPreviewIsBackendSampled(t *testing.T
 		t.Fatal(err)
 	}
 	play := httptest.NewRecorder()
-	server.Handler().ServeHTTP(play, withController(httptest.NewRequest(http.MethodPost, "/api/library/programs/"+result.Import.Program.ID+"/play", strings.NewReader(`{"intensity":80}`))))
+	server.Handler().ServeHTTP(play, withController(httptest.NewRequest(http.MethodPost, "/api/library/programs/"+result.Import.Program.ID+"/play", strings.NewReader(`{"speed_percent":80}`))))
 	if play.Code != http.StatusOK {
 		t.Fatalf("program play = %d: %s", play.Code, play.Body.String())
 	}

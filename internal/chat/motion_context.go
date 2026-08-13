@@ -48,6 +48,11 @@ func motionContextInstructions(context MotionContext, capabilities Capabilities,
 		data.PatternID = ""
 		data.ProgramID = ""
 		data.RecentPatternIDs = nil
+	} else {
+		data.PatternID = modelPatternID(data.PatternID)
+		for index, id := range data.RecentPatternIDs {
+			data.RecentPatternIDs[index] = modelPatternID(id)
+		}
 	}
 	if !capabilities.AreaFocus {
 		data.Area = ""
@@ -65,8 +70,9 @@ func motionContextInstructions(context MotionContext, capabilities Capabilities,
 			recent[strings.ToLower(id)] = true
 		}
 		for _, pattern := range patterns {
-			id := strings.TrimSpace(pattern.ID)
-			if id != "" && !strings.EqualFold(id, context.PatternID) {
+			actualID := strings.TrimSpace(pattern.ID)
+			id := modelPatternID(actualID)
+			if id != "" && !strings.EqualFold(actualID, context.PatternID) {
 				alternatives = append(alternatives, id)
 				if !recent[strings.ToLower(id)] {
 					freshAlternatives = append(freshAlternatives, id)
@@ -97,7 +103,7 @@ Use that snapshot deliberately:
 - Ordinary conversation is not a reason to change motion.`)
 	if capabilities.Patterns {
 		builder.WriteString(`
-- Recent patterns are context, not a prohibition. Prefer variety when it fits, but you may deliberately reuse one while changing speed or area. If the user wants the same pace, omit intensity and speed_percent; the app preserves current speed. For a pacing-only request, keep the current pattern by omitting pattern_id.`)
+- Recent patterns are context, not a prohibition. Prefer variety when it fits, but you may deliberately reuse one while changing speed or area. If the user wants the same pace, omit speed_percent; the app preserves current speed. For a pacing-only request, keep the current pattern by omitting pattern_id.`)
 	}
 	if capabilities.AreaFocus {
 		builder.WriteString(`

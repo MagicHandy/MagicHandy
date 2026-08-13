@@ -172,7 +172,7 @@ func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 		contextText.WriteString(message.Content)
 		contextText.WriteByte('\n')
 	}
-	for _, want := range []string{"Use the slower pattern next.", "I will keep that in mind.", "Autopilot motion decision", "pattern \"stroke\" at 30% speed in area \"base\""} {
+	for _, want := range []string{"Use the slower pattern next.", "I will keep that in mind.", "Autopilot motion decision", "an enabled catalog pattern at 30% speed in area \"base\""} {
 		if !strings.Contains(contextText.String(), want) {
 			t.Fatalf("provider context missing %q:\n%s", want, contextText.String())
 		}

@@ -92,6 +92,61 @@ func TestCatalogSendsOnlyTheLeadingTags(t *testing.T) {
 	}
 }
 
+func TestCatalogUsesOpaquePatternHandlesAndGeometryOnlyMetadata(t *testing.T) {
+	choice := PatternChoice{
+		ID: "curated-intense-drive-16", Name: "Full Sweep Run H",
+		Description: "Experimental: Repeating full-range strokes with even geometry.",
+		Tags:        []string{"experimental", "full-span", "even", "curated"},
+	}
+	catalog := curationInstructions([]PatternChoice{choice})
+	handle := modelPatternID(choice.ID)
+	if !strings.Contains(catalog, handle+" | ") {
+		t.Fatalf("opaque handle %q missing:\n%s", handle, catalog)
+	}
+	for _, leaked := range []string{choice.ID, "Experimental:", "experimental", "curated"} {
+		if strings.Contains(catalog, leaked) {
+			t.Fatalf("model catalog leaked status or pace-biased storage label %q:\n%s", leaked, catalog)
+		}
+	}
+	response, err := ParseAssistantResponseWithPatterns(
+		`{"reply":"Changing shape.","motion":{"action":"target","pattern_id":"`+handle+`","speed_percent":40}}`,
+		[]PatternChoice{choice},
+	)
+	if err != nil {
+		t.Fatalf("parse opaque handle: %v", err)
+	}
+	if response.Motion == nil || response.Motion.PatternID != choice.ID {
+		t.Fatalf("resolved pattern = %+v, want %q", response.Motion, choice.ID)
+	}
+}
+
+func TestModelCatalogMasksRequiredPaceBiasedDisplayName(t *testing.T) {
+	catalog := curationInstructions([]PatternChoice{{
+		ID: "hard-and-regular", Name: "Hard and Regular",
+		Description: "Full-range strokes with a partial return accent.",
+	}})
+	if strings.Contains(catalog, "Hard and Regular") {
+		t.Fatalf("pace-biased display name reached the model catalog:\n%s", catalog)
+	}
+	if !strings.Contains(catalog, "Regular Return Accents") {
+		t.Fatalf("geometry-only model label missing:\n%s", catalog)
+	}
+}
+
+func TestModelPatternHandlesAreStableAndDistinct(t *testing.T) {
+	seen := map[string]string{}
+	for _, choice := range []PatternChoice{{ID: "stroke"}, {ID: "pulse"}, {ID: "curated-intense-drive-16"}} {
+		handle := modelPatternID(choice.ID)
+		if handle == "" || handle != modelPatternID(strings.ToUpper(choice.ID)) {
+			t.Fatalf("handle for %q is not stable: %q", choice.ID, handle)
+		}
+		if previous := seen[handle]; previous != "" {
+			t.Fatalf("patterns %q and %q share handle %q", previous, choice.ID, handle)
+		}
+		seen[handle] = choice.ID
+	}
+}
+
 // An empty catalog still has to route the model to the speed-only contract.
 func TestCatalogWithNoUsableIDsFallsBackToSpeedOnly(t *testing.T) {
 	for _, patterns := range [][]PatternChoice{nil, {{ID: "   ", Name: "Blank"}}} {

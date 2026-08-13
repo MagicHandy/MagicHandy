@@ -14,6 +14,13 @@ import (
 // sub-minimum-speed moves with a dwell at each reversal.
 const mediaFullSpeedRatePercentPerSecond = 300.0
 
+// patternReferenceTravelRatePercentPerSecond is the mean semantic travel rate
+// requested by a loop at 100% speed. It matches the established Stroke
+// pattern's authored pace closely, while making speed independent of whatever
+// cadence an imported pattern happened to carry. Shape-specific acceleration
+// and reversal limits may lower the achievable rate.
+const patternReferenceTravelRatePercentPerSecond = 180.0
+
 // MotionPlan is repeatable or finite semantic content sampled over stream time.
 //
 //revive:disable-next-line:exported -- Phase 6 explicitly names this contract.
@@ -63,11 +70,16 @@ func NewMotionPlan(
 		id = fmt.Sprintf("%s-%d", motionContentID(target), createdAt.UnixNano())
 	}
 	focus := newFocusProjection(target, content)
-	periodMillis := periodForContent(content.duration, target.SpeedPercent, content.loop, patternKind(target))
+	periodMillis := periodForContent(
+		content.points,
+		content.duration,
+		target.SpeedPercent,
+		content.loop,
+	)
 	if target.Media != nil {
 		periodMillis = content.duration
 	} else {
-		periodMillis = focusedLoopPeriod(periodMillis, content.duration, content.loop, patternKind(target), focus)
+		periodMillis = focusedLoopPeriod(periodMillis, content.points, content.duration, content.loop, focus)
 	}
 	return MotionPlan{
 		ID:            id,
@@ -292,46 +304,80 @@ func limitMediaTimelineRate(points []CurvePoint, speedPercent int) []CurvePoint 
 	return limited
 }
 
-func periodForContent(baseDuration int64, speedPercent int, loop bool, kind string) int64 {
+func periodForContent(points []CurvePoint, baseDuration int64, speedPercent int, loop bool) int64 {
 	speedPercent = clamp(speedPercent, 1, 100)
-	factor := 2 - float64(speedPercent)/100
-	period := int64(math.Round(float64(baseDuration) * factor))
-	if loop && kind != PatternKindBurst && period < RoutineCycleFloorMillis {
-		return RoutineCycleFloorMillis
+	minimum := int64(minimumBurstCycleMillis)
+	if !loop {
+		period := int64(math.Round(float64(baseDuration) * 100 / float64(speedPercent)))
+		return max(period, minimum)
 	}
-	if period < minimumBurstCycleMillis {
-		return minimumBurstCycleMillis
+
+	travel := totalCurveTravel(points)
+	period := int64(0)
+	if travel > 0 {
+		requestedRate := patternReferenceTravelRatePercentPerSecond * float64(speedPercent) / 100
+		period = int64(math.Round(travel * 1000 / requestedRate))
+	} else {
+		period = int64(math.Round(float64(baseDuration) * 100 / float64(speedPercent)))
 	}
-	return period
+	minimum = minimumSafeLoopPeriod(points, baseDuration)
+	return max(period, minimum)
 }
 
-// focusedLoopPeriod keeps a narrowed loop from also becoming proportionally
-// slower. The requested period contracts with travel, while the routine floor
-// contracts only by sqrt(gain): acceleration scales with distance/time^2, so
-// this preserves the catalog acceleration budget when a high requested speed
-// cannot preserve both travel rate and acceleration.
-func focusedLoopPeriod(period, authoredPeriod int64, loop bool, kind string, focus focusProjection) int64 {
+func totalCurveTravel(points []CurvePoint) float64 {
+	travel := 0.0
+	for index := 1; index < len(points); index++ {
+		travel += math.Abs(points[index].PositionPercent - points[index-1].PositionPercent)
+	}
+	return travel
+}
+
+// minimumSafeLoopPeriod returns the shortest full-span playback period that
+// keeps the rendered curve inside the catalog acceleration and reversal
+// budgets. It deliberately permits a runtime period below the 6.6 second
+// authoring floor when a short phrase has enough headroom; cycle length is not
+// a safety property independent of the number and size of its strokes.
+func minimumSafeLoopPeriod(points []CurvePoint, authoredPeriod int64) int64 {
+	return minimumSafeLoopPeriodAtGain(points, authoredPeriod, 1)
+}
+
+func minimumSafeLoopPeriodAtGain(points []CurvePoint, authoredPeriod int64, gain float64) int64 {
+	minimum := int64(minimumBurstCycleMillis)
+	if authoredPeriod <= 0 || len(points) < 2 {
+		return minimum
+	}
+	metrics, err := MeasureCurve(points, authoredPeriod, true)
+	if err != nil {
+		return max(authoredPeriod, minimum)
+	}
+	factor := 0.0
+	if metrics.MaxAccelerationPercentPerSecond2 > 0 {
+		factor = math.Sqrt(metrics.MaxAccelerationPercentPerSecond2 * gain / catalogMaxAcceleration)
+	}
+	if metrics.MinReversalGapMillis > 0 {
+		factor = math.Max(factor, float64(catalogMinReversalGap)/float64(metrics.MinReversalGapMillis))
+	}
+	return max(minimum, int64(math.Ceil(float64(authoredPeriod)*factor)))
+}
+
+// focusedLoopPeriod keeps focus and soft anchoring from changing the requested
+// mean travel rate. The requested period scales with played amplitude. The
+// safety floor treats acceleration and reversal cadence separately: amplitude
+// changes acceleration, but the minimum time between reversals does not shrink.
+func focusedLoopPeriod(
+	period int64,
+	points []CurvePoint,
+	authoredPeriod int64,
+	loop bool,
+	focus focusProjection,
+) int64 {
 	gain := focus.gain()
-	if !loop || gain <= 0 || gain >= 1 {
+	if !loop || gain <= 0 {
 		return period
 	}
 	adjusted := int64(math.Round(float64(period) * gain))
-	baseline := max(authoredPeriod, int64(minimumBurstCycleMillis))
-	minimum := int64(minimumBurstCycleMillis)
-	if kind != PatternKindBurst {
-		baseline = max(baseline, RoutineCycleFloorMillis)
-		minimum = int64(math.Ceil(float64(baseline) * math.Sqrt(gain)))
-	} else {
-		minimum = max(minimum, int64(math.Ceil(float64(baseline)*math.Sqrt(gain))))
-	}
+	minimum := minimumSafeLoopPeriodAtGain(points, authoredPeriod, gain)
 	return max(adjusted, minimum)
-}
-
-func patternKind(target MotionTarget) string {
-	if target.Pattern != nil {
-		return target.Pattern.Kind
-	}
-	return PatternKindRoutine
 }
 
 func motionContentID(target MotionTarget) string {
@@ -396,7 +442,11 @@ func (f focusProjection) gain() float64 {
 	if f.sourceSpan <= 0 {
 		return 1
 	}
-	return f.targetSpan / f.sourceSpan
+	gain := f.targetSpan / f.sourceSpan
+	if f.anchor != nil {
+		gain *= 1 - float64(f.anchor.WeightPercent)/100
+	}
+	return math.Max(0, gain)
 }
 
 func (f focusProjection) apply(percent float64) float64 {

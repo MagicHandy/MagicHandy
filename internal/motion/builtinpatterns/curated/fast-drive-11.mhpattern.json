@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Drive 11",
-  "description": "Quick cadence.",
+  "name": "Peak Ladder Mosaic",
+  "description": "Peak heights and return depths change in short stepped groups. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -187,8 +187,8 @@
     }
   ],
   "tags": [
-    "full",
-    "rhythmic",
-    "build"
+    "stepped-peaks",
+    "varied-returns",
+    "varied-rhythm"
   ]
 }

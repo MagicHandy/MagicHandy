@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Roll 4",
-  "description": "Quick cadence.",
+  "name": "Near-Full Accent",
+  "description": "Near-full reversals carry a few small endpoint offsets. Grouped timing creates offbeat accents.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -163,8 +163,8 @@
     }
   ],
   "tags": [
-    "accent",
-    "rhythmic",
-    "tempo-change"
+    "near-full",
+    "endpoint-offsets",
+    "syncopated"
   ]
 }

@@ -172,7 +172,9 @@ func (s *Server) handleLibraryImport(w http.ResponseWriter, r *http.Request) {
 }
 
 type libraryPlayRequest struct {
-	Intensity int    `json:"intensity,omitempty"`
+	SpeedPercent *int `json:"speed_percent,omitempty"`
+	// Intensity is the retired request name retained for older clients.
+	Intensity *int   `json:"intensity,omitempty"`
 	Feel      string `json:"feel,omitempty"`
 }
 
@@ -197,7 +199,7 @@ func (s *Server) handleLibraryPatternPlay(w http.ResponseWriter, r *http.Request
 	definition = patterns.AuditionDefinition(definition, request.Feel)
 	target := motion.MotionTarget{
 		Label: definition.Name, Source: "pattern_library", PatternID: definition.ID,
-		SpeedPercent: request.Intensity, Pattern: &definition,
+		SpeedPercent: *request.SpeedPercent, Pattern: &definition,
 	}
 	state, err := s.playLibraryPattern(r, target, stopSequence)
 	s.writeMotionResult(w, state, err)
@@ -220,7 +222,7 @@ func (s *Server) handleLibraryProgramPlay(w http.ResponseWriter, r *http.Request
 	definition := program.Definition()
 	target := motion.MotionTarget{
 		Label: definition.Name, Source: "program_player", ProgramID: definition.ID,
-		SpeedPercent: request.Intensity, Program: &definition,
+		SpeedPercent: *request.SpeedPercent, Program: &definition,
 	}
 	state, err := s.playLibraryProgram(r, target, stopSequence)
 	s.writeMotionResult(w, state, err)
@@ -335,17 +337,25 @@ func (s *Server) handleLibraryAutoDisable(w http.ResponseWriter, r *http.Request
 }
 
 func decodeLibraryPlayRequest(w http.ResponseWriter, r *http.Request) (libraryPlayRequest, bool) {
-	request := libraryPlayRequest{Intensity: 30}
+	request := libraryPlayRequest{}
 	if r.ContentLength != 0 {
 		if err := decodeJSON(r, &request); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return libraryPlayRequest{}, false
 		}
 	}
-	if request.Intensity < 1 || request.Intensity > 100 {
-		writeError(w, http.StatusBadRequest, errors.New("intensity must be between 1 and 100"))
+	speed := 30
+	if request.SpeedPercent != nil {
+		speed = *request.SpeedPercent
+	} else if request.Intensity != nil {
+		speed = *request.Intensity
+	}
+	if speed < 1 || speed > 100 {
+		writeError(w, http.StatusBadRequest, errors.New("speed_percent must be between 1 and 100"))
 		return libraryPlayRequest{}, false
 	}
+	request.SpeedPercent = &speed
+	request.Intensity = nil
 	request.Feel = strings.ToLower(strings.TrimSpace(request.Feel))
 	if request.Feel != "" && request.Feel != "original" && request.Feel != "smooth" && request.Feel != "crisp" {
 		writeError(w, http.StatusBadRequest, errors.New("feel must be original, smooth, or crisp"))

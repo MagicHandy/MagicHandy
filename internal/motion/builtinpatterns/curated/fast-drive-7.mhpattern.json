@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Drive 7",
-  "description": "Medium cadence.",
+  "name": "Peak Drift",
+  "description": "Peak heights drift while mostly deep returns anchor the phrase. Reversal timing is even.",
   "kind": "routine",
   "cycle_ms": 8810,
   "points": [
@@ -131,8 +131,8 @@
     }
   ],
   "tags": [
-    "full",
-    "rhythmic",
-    "build"
+    "drifting-peaks",
+    "deep-return",
+    "even-rhythm"
   ]
 }

@@ -26,7 +26,7 @@ physical transport), and it matches the reference app's explicit guardrail:
 > should remain backend implementation details with tests and trace fields.
 > — `StrokeGPT-ReVibed/docs/motion_control_modes.md`
 
-So the model emits **semantic intent** (a region, a pattern id, an intensity, a
+So the model emits **semantic intent** (a region, an opaque pattern handle, a speed, a
 named arrangement). Deterministic code compiles that into motion and clamps it
 to the user's speed/stroke/limit envelope. Speed and stroke limits stay
 transport-layer caps, never prompt-only behavior. Emergency Stop stays
@@ -46,19 +46,26 @@ state, but it has no representation in `MotionCommand`, `MotionContext`,
 | Field | Values | Meaning |
 | --- | --- | --- |
 | `action` | `none` / `start` / `target` / `stop` | start, retarget, or stop motion through the engine |
-| `pattern_id` | an **enabled** library id | curate one enabled pattern (rejected if disabled/unknown) |
-| `intensity` | 1–100 | playback intensity for the chosen pattern (maps to speed within limits) |
-| `speed_percent` | 1–100 | absolute semantic speed, clamped again by the user's limits |
+| `pattern_id` | an opaque **enabled** catalog handle | curate one enabled shape; parsing resolves it to a stable internal ID |
+| `speed_percent` | 1–100 | semantic playback speed, clamped again by the user's limits |
 | `area` | `tip` / `shaft` / `base` / `full` | select a named stroke zone; `full` clears area focus |
 
-Validation enforces the safe combinations: intensity requires a pattern,
-intensity and speed are mutually exclusive, and `none`/`stop` carry no target
-fields. A stopped engine accepts only `start`; `target` never starts motion as
+Validation enforces the safe combinations: a pattern requires speed, and
+`none`/`stop` carry no target fields. The decoder still accepts the retired
+`intensity` alias from old saved responses, immediately normalizes it to
+`speed_percent`, and never advertises it to a model. When both fields are
+present, `speed_percent` wins. A stopped engine accepts only `start`; `target` never starts motion as
 a side effect. A running pattern change may omit pace, in which case
 deterministic code preserves the current speed. Disabled or unknown pattern ids
 are rejected, and an all-disabled library keeps the deterministic speed-only
 contract. This is real curation — the model selects from author-owned content —
 but it is still narrower than the engine.
+
+Pattern choices describe shape and relative rhythm only. The prompt strips
+storage/status tags (`experimental`, `curated`, `imported`) and never exposes
+persisted IDs whose historical names imply a pace. The engine independently
+normalizes each loop's total travel to the requested speed, subject to the
+configured maximum and curve-specific acceleration/reversal safety floors.
 
 After parsing, deterministic current-turn authorization strips `start` or
 `target` unless the current user message contains a positive, action-specific
@@ -95,7 +102,9 @@ path.
 Each interactive turn also receives one authoritative runtime snapshot:
 stopped/running/paused state, current pattern or program, current speed and
 area, the persisted speed envelope split into low/middle/high bands, and up to
-four recent chat-selected pattern ids. This state is prompt data, not a second
+four recent chat-selected patterns. Pattern references use the same
+deterministic opaque handles as the enabled catalog, so legacy pace-biased
+database IDs cannot steer selection. This state is prompt data, not a second
 frontend motion model. It is derived from the engine snapshot and bounded trace
 ring, so it is deliberately runtime-only and requires no database migration.
 
@@ -116,7 +125,7 @@ Continuity and variation are separate intents. Ordinary conversation,
 preserve content and area. For an explicit variation request, the model owns
 the semantic choice across pattern, speed, and area. Any meaningful target
 change is valid, including an area-only move back to `full` or a speed change
-that keeps the current pattern. Recent pattern ids are prompt context rather
+that keeps the current pattern. Recent pattern handles are prompt context rather
 than a deterministic exclusion list.
 
 Semantic no-op targets receive one repair pass. If the model repeats a no-op,
@@ -128,8 +137,8 @@ the model instead of a second hard-coded motion policy.
 
 Chat Autopilot reuses this same contract at bounded segment boundaries. Its
 request includes the latest 12 canonical conversation messages, current style
-and speed band, the engine's live pattern, speed, and area, recent pattern ids,
-and the last autonomous line. It may curate an enabled pattern/intensity or
+and speed band, the engine's live pattern, speed, and area, recent pattern handles,
+and the last autonomous line. It may curate an enabled pattern/speed or
 hold; deterministic code owns duration and all clamps. An accepted interactive
 chat target temporarily suspends decision dispatch, then becomes Autopilot's
 current segment after the engine applies it; a stale in-flight decision cannot
@@ -145,7 +154,7 @@ engine actually consumes — is richer than the chat contract that feeds it:
 | Engine field | Capability | Reachable from chat today? |
 | --- | --- | --- |
 | `PatternID` | repeatable pattern | **yes** |
-| `SpeedPercent` | speed within limits | **yes** (as intensity/speed) |
+| `SpeedPercent` | speed within limits | **yes** |
 | `AreaFocus{MinPercent,MaxPercent}` | constrain sampling to a **stroke region** | **yes**, through named zones |
 | `SoftAnchor{PositionPercent,WeightPercent}` | gently bias motion toward a point | **no** |
 | `ProgramID` | play a finite **program/funscript** | **no** |
@@ -221,13 +230,13 @@ subtle. Three changes, measured in
 ### B. Program / script selection (parity; low–moderate risk)
 
 Extend curation so the model can pick an enabled **program** (funscript), not
-only a pattern — the reference app's item #16 `{script_id, intensity}` shape.
+only a pattern — the reference app's historical item #16 `{script_id, intensity}` shape.
 The engine already accepts `ProgramID`; the library already separates finite
 programs from loops ([pattern-library.md](pattern-library.md)).
 
 - Dependency: expose enabled program ids to the model as data (same
   enabled-only, curation-gated rule as patterns) and add a `program_id` branch
-  to the contract with intensity mapped to playback speed within limits.
+  to the contract with the same `speed_percent` field used by patterns.
 - Disposition: good, but respect the reference app's own caution — with a small
   catalog "the LLM keeps picking the same two scripts" becomes the failure
   mode. Worth doing; pair with a note that catalog size gates its value.
@@ -262,7 +271,7 @@ the same conclusion ("steer model behavior without hidden prompt drift").
 ### E. LLM-requested motion arrangement (net-new; moderate risk)
 
 Let the model *request* a bounded arrangement — named styles, focus regions,
-durations, repetitions, intensity drift — that compiles through the existing
+durations, repetitions, speed drift — that compiles through the existing
 Phase 11 arrangement contract, instead of nudging low-level targets every turn.
 This is precisely the reference app's "Preferred direction" in
 `motion_control_modes.md` and its item #16 arrangement note. MagicHandy already
@@ -288,7 +297,7 @@ The cadence and speech-authority portion is now specified in
 [autopilot-cadence.md](autopilot-cadence.md): motion evolution and speech use
 independent clocks, model timing is categorical and code-bounded, and a hold is
 scheduler-only. Remaining work is a visible **session-level autonomy choice**
-between curated authored content (`{pattern_id or program_id, intensity}`) and
+between curated authored content (`{pattern_id or program_id, speed_percent}`) and
 future freeform arrangements. A
 guarded `mode_action` field is still needed before the model itself may enter or
 leave a session, especially from voice transcripts. Model-triggered mode
@@ -328,7 +337,7 @@ same skepticism.
   program, style, mode, speed) should be legible in diagnostics/trace, so a user
   can always answer "why did it do that?" This is a documentation/observability
   requirement on all of the above, not a feature.
-- **Sentiment-paced drift — flagged, not recommended.** Tie intensity drift to
+- **Sentiment-paced drift — flagged, not recommended.** Tie speed drift to
   conversational escalation. Tempting, but it is hidden state and easy to
   overfit; the reference app reached the same verdict on fuzzy controllers
   ("likely too noisy without large-scale human input; treat as a research

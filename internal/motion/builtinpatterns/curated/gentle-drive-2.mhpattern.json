@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Gentle Drive 2",
-  "description": "Slow cadence.",
+  "name": "Full Sweep Run E",
+  "description": "Repeating full-span reversals. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -43,8 +43,8 @@
     }
   ],
   "tags": [
-    "full",
-    "gentle",
-    "breathing"
+    "full-span",
+    "repeating",
+    "varied-rhythm"
   ]
 }

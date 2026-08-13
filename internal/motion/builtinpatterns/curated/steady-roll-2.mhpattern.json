@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Steady Roll 2",
-  "description": "Quick cadence.",
+  "name": "Multi-Level Drift",
+  "description": "Both endpoints drift through an irregular set of partial and broad strokes. Grouped timing creates offbeat accents.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -175,9 +175,8 @@
     }
   ],
   "tags": [
-    "full",
-    "rhythmic",
-    "varied",
-    "upper-return"
+    "multi-level",
+    "drifting-window",
+    "syncopated"
   ]
 }

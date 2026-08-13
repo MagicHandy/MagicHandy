@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Intense Surge 1",
-  "description": "Quick cadence.",
+  "name": "Peak Shuffle",
+  "description": "Deep returns support a shuffled set of near-full peak heights. Grouped timing creates offbeat accents.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -203,8 +203,8 @@
     }
   ],
   "tags": [
-    "accent",
-    "rhythmic",
-    "tempo-change"
+    "varied-peaks",
+    "deep-return",
+    "syncopated"
   ]
 }

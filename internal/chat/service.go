@@ -763,11 +763,11 @@ func motionTargetMatchesContext(command MotionCommand, context MotionContext) bo
 }
 
 func motionSpeedMatchesContext(command MotionCommand, currentSpeed int) bool {
-	if command.Intensity != nil {
-		return *command.Intensity == currentSpeed
-	}
 	if command.SpeedPercent != nil {
 		return *command.SpeedPercent == currentSpeed
+	}
+	if command.Intensity != nil {
+		return *command.Intensity == currentSpeed
 	}
 	return true
 }
@@ -781,10 +781,10 @@ func validateRequestedSpeedBand(command MotionCommand, context MotionContext, us
 		return nil
 	}
 	speed := 0
-	if command.Intensity != nil {
-		speed = *command.Intensity
-	} else if command.SpeedPercent != nil {
+	if command.SpeedPercent != nil {
 		speed = *command.SpeedPercent
+	} else if command.Intensity != nil {
+		speed = *command.Intensity
 	} else if context.Running {
 		speed = context.SpeedPercent
 	}

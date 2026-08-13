@@ -99,7 +99,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 14C | Floating connection manager, live limits, connection animation | **Implemented; full-route rendered QA refreshed 2026-07-18** | #60, #63 |
 | 16-pre | Model manager, managed llama.cpp, source installer/updater foundations | **Complete** | #55, #56, #61, #62, #64, #65 |
 | Localization | Five-locale browser UI, installer/update/recovery flow, and hybrid built-in chat prompts | **Complete; release language review remains part of final parity** | #137, #138 |
-| Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/intensity curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation complete; interactive managed llama.cpp + Ollama model matrix passed; long-session, cadence, and richer-arrangement acceptance open** | #101, #106 |
+| Chat Autopilot | Chat-native, LLM-curated autonomy over the shared segment loop: bounded recent-conversation context, enabled pattern/speed curation, browser-playable chat/TTS delivery, and visible planner fallback | **Initial implementation complete; interactive managed llama.cpp + Ollama model matrix passed; long-session, cadence, and richer-arrangement acceptance open** | #101, #106 |
 | 9/13 hardening | Small-model structured-output recovery | **Complete** | #66 |
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0-M2 implemented; M3 hardware acceptance in progress** | #104 |
@@ -196,10 +196,10 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 - SQLite-backed pattern and finite-program library with generated built-ins,
   share-file/funscript import and export, shared-engine playback, backend-sampled
   previews, sparse freehand authoring, and visible reversible preference
-  training. The catalog now has three established and twelve clearly labeled,
-  complete-cycle experimental built-ins. The LLM can select only enabled
-  pattern IDs and falls back to the deterministic semantic target contract when
-  no library entry applies.
+  training. The catalog now has 87 built-ins: 31 model-visible by default and
+  56 clearly labeled experimental. The LLM can select only enabled opaque
+  pattern handles, with shape metadata separate from `speed_percent`, and falls
+  back to the semantic speed-only contract when no library entry applies.
 - CI: gofmt, `go vet`, `golangci-lint`, tests, race tests, `CGO_ENABLED=0`
   build, import-boundary tests.
 
@@ -586,7 +586,7 @@ Implement:
 
 - Freestyle MVP and normal-chat keep-moving behavior in `internal/modes`
 - a bounded **motion arrangement** contract: a planner emits named segments
-  (pattern/style, focus region, duration or cycle count, intensity drift) and
+  (pattern/style, focus region, duration or cycle count, speed drift) and
   deterministic code compiles them into continuous plans with explicit
   transition rules — the LLM/planner never triggers low-level stream
   replacement per turn (see `docs/motion-retargeting.md`, "Route Policy
@@ -1221,10 +1221,11 @@ Implement:
 - built-in pattern format, user pattern registry, program/funscript registry,
   import/export
 - playback through the shared motion engine only (risk R14)
-- **LLM curation contract**: the model selects `{pattern_id, intensity}` from
-  enabled library entries as its primary motion vocabulary once the library
-  exists; the deterministic semantic-target path stays as fallback so the
-  model is never silenced when nothing matches; disabled patterns are never
+- **LLM curation contract**: the model selects
+  `{pattern_id,speed_percent}` from enabled library entries. `pattern_id` is an
+  opaque prompt handle resolved to a stable internal ID; names and tags describe
+  shape/relative rhythm rather than absolute pace. The semantic speed-only path
+  remains available when no pattern matches; disabled patterns are never
   selectable (tested)
 - authoring canvas: freehand drawing with simplification and interpolation
   controls, preview from the backend sampler (never a client-side guess)
@@ -1246,13 +1247,15 @@ paid for on a real device; do not rediscover them):
   amplitude into twitches)
 - generated catalog entries are **generated parametrically** with wall-clock
   acceleration and reversal-gap budgets enforced by the generator, not hand
-  keyframes; exact user-tested timing exceptions are explicitly tagged
-  `curated` and still use the shared engine/envelope
+  keyframes; user-tested stored-curve exceptions are explicitly tagged
+  `curated` and still use normal runtime speed retiming plus the shared
+  engine/envelope
 - sampling is **time-parameterized monotone cubic** (PCHIP-style): C1 in
   wall time, no overshoot, zero-velocity reversals
-- routine pattern cycles get a **~6.6 s floor** (time-only stretch; burst
-  shapes exempt) — shorter cycles stuttered on hardware and the signal was
-  invisible in synthetic analysis
+- stored routine pattern cycles get a **~6.6 s authoring floor** (burst shapes
+  exempt). Runtime playback preserves the curve's relative rhythm while
+  normalizing total travel to requested speed and applying curve-specific
+  acceleration/reversal safety floors
 - mode planners (Freestyle, Autopilot) hold each applied target for at
   least the recent measured command latency plus padding (**latency-aware
   dwell floor**) so latency spikes never cause replace-thrash
@@ -1270,17 +1273,19 @@ Implementation evidence: unit/API/UI tests cover generated catalogs,
 PCHIP sampling, acceleration/reversal budgets, relative projection, funscript
 normalization, long-gap stripping, finite-program completion, controller
 ownership, disabled-pattern rejection, curation fallback, feedback undo, and
-backend previews. A follow-up content slice expanded the catalog with 24
-generated patterns. Live device curation then retired six disabled loops whose
+backend previews. An early content slice expanded the catalog with 24 generated
+patterns. Live device curation then retired six disabled loops whose
 fixed-endpoint shallow strokes or repeated same-span strokes produced jittery
 motion. Six complete-cycle replacements from distinct source fingerprints add
 minimum-travel, amplitude-band, endpoint-diversity, and repetition checks on top
-of the existing acceleration/reversal budgets. Only those replacements remain
-tagged experimental; accepted generated loops no longer carry a provisional
-label. Exact `Hard and Regular` and `playful jerk` user curves are promoted as
-timing-preserved curated built-ins. Idempotent seed reconciliation removes the
-retired IDs, deduplicates only exact promoted curves, and preserves names,
-enablement, and weights without a schema migration. Inline rename updates any
+of the existing acceleration/reversal budgets. At that stage only those
+replacements were experimental; later generated imports are accounted for
+below. Exact `Hard and Regular` and `playful jerk` user curves are promoted as
+stored-knot-preserving curated built-ins, while runtime speed retiming still
+applies. Idempotent seed reconciliation removes the retired IDs, deduplicates
+only exact promoted curves, and preserves user-renamed names, enablement, and
+weights without a schema migration. Untouched legacy default names migrate to
+the current shape-based labels. Inline rename updates any
 pattern's display name while stable IDs and built-in curve content remain
 immutable. Source filenames did not influence or enter pattern metadata. Only
 transformed sparse curves are committed. Long imported loop cycles remain valid
@@ -1297,27 +1302,34 @@ submitted payloads. Its integrated timeline was rendered at 1280x800 and
 wheel zoom, horizontal timeline panning, a proportional draggable viewport
 scrollbar, and an exact 4:15 / 16-knot end-to-end program import. A refreshed
 complete five-tab rendered pass remains useful after future shared-shell changes.
-The remaining manual evidence is the six replacement-pattern feel check on the
-real device, capped below 40% intensity; synthetic tests cannot establish
+The remaining manual evidence is the replacement-pattern feel check on the
+real device, capped below 40% speed; synthetic tests cannot establish
 physical feel. The six retired rows and two promoted user curves reflect prior
 live curation, not a new automated hardware run.
 
 A later 171-pattern generated import exposed a catalog-policy defect. A
-35%-maximum trace selected `curated-fast-drive-20`, whose dense source curve
-reversed across 20% of travel every 40 ms even though the semantic target itself
-was correctly clamped. The files remain active built-ins under a test-enforced
-v3 generated-catalog manifest, but no `curated-*` ID receives an exact-timing
-exception. A runtime source audit resamples the 165 curves that exceed normal
-acceleration or reversal budgets into complete roughly 450 ms buckets, removes
-low-prominence reversal chatter, and passes every result through the ordinary
-catalog fitter. Existing feel-envelope checks mark 170 problematic results
-`experimental`; `Easy Drive 4` is the sole normally labeled generated curve.
-Only the two canonical hardware-promoted user patterns retain their explicit
-timing exception. Offline generation has no live-app posting path, and the Go
-bulk-import utility requires `-allow-experimental`. Explicit user imports remain
-user data and continue through the shared engine. Capped physical-feel checks
-for the restored generated catalog and the accepted-calibration-offset startup
-acquisition remain open.
+35%-maximum trace selected a dense curve with 40 ms reversals even though the
+semantic target itself was correctly clamped. The quality pass retained 59 and
+dropped 112; nine retained curves clear the fitted-feel gate and 50 remain
+experimental. No generated ID receives a timing or speed-limit exemption, and
+all retained curves pass the ordinary catalog fitter. Stable filenames and IDs
+remain for persistence, while model-facing names/tags describe geometry and
+relative rhythm and prompts use opaque handles. Only the two canonical
+hardware-promoted user patterns bypass authoring fit, preserving stored knots;
+normal runtime speed retiming still applies. Offline generation has no live-app
+posting path, and the Go bulk-import utility requires `-allow-experimental`.
+Explicit user imports remain user data and continue through the shared engine.
+Capped physical-feel checks for the retained generated catalog and the
+accepted-calibration-offset startup acquisition remain open.
+
+The current 87-pattern catalog uses normalized runtime speed semantics. The
+planner measures loop travel and targets `180 * speed_percent / 100` semantic
+percentage-points per second, with per-curve acceleration and reversal floors.
+Tests establish cross-pattern equality at a shared speed and a 1:2:4 tempo
+progression at 20/40/80 where safety does not cap playback. Programs use direct
+clock scaling; media funscripts remain media-clock-locked. The model contract
+advertises only `speed_percent`; the retired `intensity` alias is accepted for
+old responses and immediately normalized.
 
 A 2026-07-20 motion-path audit closed additional engine-level jitter sources:
 buffered frames now preserve authored knots through a bounded adaptive sampler,

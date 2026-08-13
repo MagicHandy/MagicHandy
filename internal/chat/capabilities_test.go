@@ -121,14 +121,15 @@ func TestComposeSystemUsesAuthoritativeMotionContext(t *testing.T) {
 		FullCapabilities(), context)
 
 	for _, want := range []string{
-		`"state":"running"`, `"pattern_id":"pulse"`, `"speed_percent":30`,
-		`"recent_pattern_ids":["stroke","pulse","waves","tease"]`,
+		`"state":"running"`, `"pattern_id":"` + modelPatternID("pulse") + `"`, `"speed_percent":30`,
+		`"recent_pattern_ids":["` + modelPatternID("stroke") + `","` + modelPatternID("pulse") + `","` + modelPatternID("waves") + `","` + modelPatternID("tease") + `"]`,
 		`"area":"tip"`, `"low":[20,26]`, `"middle":[27,33]`, `"high":[34,40]`,
-		`Fresh enabled pattern IDs (current and recent patterns excluded): ["sway"]`,
+		`Fresh enabled pattern IDs (current and recent patterns excluded): ["` + modelPatternID("sway") + `"]`,
 		`For "continue", "steady", "same", or "hold it there"`,
 		`A direct embodied partner-action request such as "fuck me", "suck me", "kiss it", "stroke me", or "ride me"`,
 		`For an explicit request to vary, mix up, surprise, or change the feel`,
 		`For a pacing-only request, keep the current pattern`,
+		`When changing only shape in running motion, pattern_id may omit speed_percent`,
 	} {
 		if !strings.Contains(system, want) {
 			t.Fatalf("motion context prompt missing %q:\n%s", want, system)

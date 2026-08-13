@@ -71,13 +71,13 @@ describe("pattern library components", () => {
     await waitFor(() => expect(screen.getByRole("heading", { level: 3, name: "Rolling custom" })).toBeInTheDocument());
   });
 
-  it("clamps program progress and invalid intensity limits before rendering", () => {
+  it("clamps program progress and invalid speed limits before rendering", () => {
     const props = {
       programs: [],
       locked: false,
       offline: false,
       busyKeys: new Set<string>(),
-      maxIntensity: 0,
+      maxSpeed: 0,
       onImport: async () => {},
       onPlay: async () => {},
       onPause: async () => {},
@@ -90,7 +90,7 @@ describe("pattern library components", () => {
 
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
     expect(screen.getByRole("progressbar").firstElementChild).toHaveStyle({ width: "100%" });
-    expect(screen.getByRole("slider", { name: /Intensity/ })).toHaveAttribute("max", "1");
+    expect(screen.getByRole("slider", { name: /Speed/ })).toHaveAttribute("max", "1");
 
     result.rerender(<ProgramLibrary {...props} engine={engineWithPhase(-0.4)} />);
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
@@ -112,7 +112,7 @@ describe("pattern library components", () => {
       locked={false}
       offline={false}
       busyKeys={new Set()}
-      maxIntensity={40}
+      maxSpeed={40}
       onPlay={async () => {}}
       onPause={async () => {}}
       onResume={async () => {}}

@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	// RoutineCycleFloorMillis is the hardware-derived minimum catalog cycle.
+	// RoutineCycleFloorMillis is the hardware-derived minimum stored authoring
+	// cycle. Runtime playback may retime that curve through the shared plan.
 	RoutineCycleFloorMillis int64 = 6600
 	// PatternKindRoutine identifies a normal repeating pattern.
 	PatternKindRoutine = "routine"
@@ -322,7 +323,7 @@ func MeasureCurve(points []CurvePoint, durationMillis int64, loop bool) (CurveMe
 	if err != nil {
 		return CurveMetrics{}, err
 	}
-	metrics := CurveMetrics{MinReversalGapMillis: reversalGap(points)}
+	metrics := CurveMetrics{MinReversalGapMillis: reversalGap(points, durationMillis, loop)}
 	previousVelocity := curve.Velocity(0)
 	for at := catalogSampleMillis; at <= durationMillis; at += catalogSampleMillis {
 		velocity := curve.Velocity(at)
@@ -631,7 +632,7 @@ func generateStrokePattern() PatternDefinition {
 	return mustFitCatalog(PatternDefinition{
 		ID: PatternStroke, Name: "Stroke", Description: "Even full-span reversals.",
 		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
-		Tags: []string{"steady", "full", "balanced"},
+		Tags: []string{"full-span", "even", "balanced"},
 	})
 }
 
@@ -645,7 +646,7 @@ func generatePulsePattern() PatternDefinition {
 	return mustFitCatalog(PatternDefinition{
 		ID: PatternPulse, Name: "Pulse", Description: "Alternating deep and shorter peaks.",
 		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
-		Tags: []string{"rhythmic", "varied", "peaks"},
+		Tags: []string{"alternating-peaks", "fixed-returns", "varied-rhythm"},
 	})
 }
 
@@ -662,7 +663,7 @@ func generateTeasePattern() PatternDefinition {
 	return mustFitCatalog(PatternDefinition{
 		ID: PatternTease, Name: "Tease", Description: "Progressive peaks with a consistent return.",
 		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
-		Tags: []string{"progressive", "varied", "build"},
+		Tags: []string{"ascending-peaks", "fixed-returns", "progressive"},
 	})
 }
 
@@ -695,24 +696,24 @@ var catalogPatternSpecs = []catalogPatternSpec{
 		Tags:         []string{"flutter", "contrast", "tight"},
 	},
 	{
-		ID: PatternDrift, Name: "Drift", Description: "A steady-width stroke migrates upward and returns.",
+		ID: PatternDrift, Name: "Drift", Description: "A fixed-width stroke migrates upward and returns.",
 		Positions:    []float64{15, 45, 22, 55, 30, 65, 40, 78, 48, 82, 38, 68, 28, 55},
 		TravelMillis: []int64{520, 520, 540, 540, 560, 560, 580, 580, 560, 560, 540, 540, 520, 580},
 		Tags:         []string{"migrating", "progressive", "smooth"},
 	},
 	{
-		ID: PatternEasingDown, Name: "Easing Down",
-		Description:  "Steps steadily lower without losing pace. For winding down from a peak.",
+		ID: PatternEasingDown, Name: "Descending Window",
+		Description:  "A fixed-width window steps down the range, then resets at the top.",
 		Positions:    []float64{100, 56, 86, 42, 72, 28, 58, 14, 100, 56, 86, 42, 72, 28, 58, 14},
 		TravelMillis: []int64{518, 484, 518, 484, 518, 484, 518, 717, 518, 484, 518, 484, 518, 484, 518, 717},
-		Tags:         []string{"easing", "descending", "calming"},
+		Tags:         []string{"descending-window", "fixed-width", "progressive"},
 	},
 	{
-		ID: PatternBuildingUp, Name: "Building Up",
-		Description:  "Climbs step by step, then one full sweep resets it. For building intensity.",
+		ID: PatternBuildingUp, Name: "Ascending Window",
+		Description:  "A fixed-width window climbs the range, then resets at the bottom.",
 		Positions:    []float64{0, 44, 14, 58, 28, 72, 42, 86, 0, 44, 14, 58, 28, 72, 42, 86},
 		TravelMillis: []int64{518, 484, 518, 484, 518, 484, 518, 717, 518, 484, 518, 484, 518, 484, 518, 717},
-		Tags:         []string{"building", "ascending", "progressive"},
+		Tags:         []string{"ascending-window", "fixed-width", "progressive"},
 	},
 	{
 		ID: PatternBroadAndTight, Name: "Broad and Tight",
@@ -723,45 +724,45 @@ var catalogPatternSpecs = []catalogPatternSpec{
 	},
 	{
 		ID: PatternUpperAccents, Name: "Upper Accents",
-		Description:  "Quick accents up top, answered by one broad sweep.",
+		Description:  "Repeated upper-range accents are answered by one broad sweep.",
 		Positions:    []float64{8, 96, 62, 96, 62, 96, 8, 96, 62, 96, 62, 96},
 		TravelMillis: []int64{721, 486, 486, 486, 486, 721, 721, 486, 486, 486, 486, 721},
 		Tags:         []string{"upper", "accent", "teasing"},
 	},
 	{
 		ID: PatternLowerAccents, Name: "Lower Accents",
-		Description:  "Quick accents down low, answered by one broad sweep.",
+		Description:  "Repeated lower-range accents are answered by one broad sweep.",
 		Positions:    []float64{92, 4, 38, 4, 38, 4, 92, 4, 38, 4, 38, 4},
 		TravelMillis: []int64{721, 486, 486, 486, 486, 721, 721, 486, 486, 486, 486, 721},
 		Tags:         []string{"lower", "accent", "deep"},
 	},
 	{
-		ID: PatternSteadyDrift, Name: "Steady Drift",
-		Description:  "One unchanging pace while the window wanders up and back. Calm baseline.",
+		ID: PatternSteadyDrift, Name: "Window Drift",
+		Description:  "A consistent-width window wanders upward, then repeats from the bottom.",
 		Positions:    []float64{10, 52, 20, 62, 30, 72, 10, 52, 20, 62, 30, 72},
 		TravelMillis: []int64{600, 457, 600, 457, 600, 886, 600, 457, 600, 457, 600, 886},
-		Tags:         []string{"steady", "migrating", "calm"},
+		Tags:         []string{"migrating-window", "fixed-width", "repeating"},
 	},
 	{
-		ID: PatternNarrowing, Name: "Narrowing",
-		Description:  "Strokes close toward the center and the pace eases with them.",
+		ID: PatternNarrowing, Name: "Narrowing Window",
+		Description:  "Centered strokes contract step by step, then reset to the widest span.",
 		Positions:    []float64{15, 85, 21, 79, 28, 72, 35, 65, 15, 85, 21, 79, 28, 72, 35, 65},
 		TravelMillis: []int64{522, 525, 518, 520, 512, 514, 484, 510, 522, 525, 518, 520, 512, 514, 484, 510},
-		Tags:         []string{"narrowing", "easing", "centered"},
+		Tags:         []string{"narrowing-window", "centered", "progressive"},
 	},
 	{
-		ID: PatternOpeningUp, Name: "Opening Up",
-		Description:  "Strokes widen out from the center and pick up pace.",
+		ID: PatternOpeningUp, Name: "Widening Window",
+		Description:  "Centered strokes widen step by step, then reset to the narrowest span.",
 		Positions:    []float64{35, 65, 28, 72, 21, 79, 15, 85, 35, 65, 28, 72, 21, 79, 15, 85},
 		TravelMillis: []int64{484, 514, 512, 520, 518, 525, 522, 510, 484, 514, 512, 520, 518, 525, 522, 510},
-		Tags:         []string{"widening", "building", "centered"},
+		Tags:         []string{"widening-window", "centered", "progressive"},
 	},
 	{
 		ID: PatternRocking, Name: "Rocking",
-		Description:  "Even mid-range strokes at one steady pace. A plain rhythm to settle into.",
+		Description:  "Even mid-range strokes repeat without changing their span.",
 		Positions:    []float64{25, 75, 25, 75, 25, 75, 25, 75, 25, 75, 25, 75},
 		TravelMillis: []int64{556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556},
-		Tags:         []string{"steady", "even", "centered"},
+		Tags:         []string{"midrange", "even", "repeating"},
 	},
 	{
 		ID: PatternThreeAndOne, Name: "Three and One",
@@ -779,31 +780,31 @@ var catalogPatternSpecs = []catalogPatternSpec{
 	},
 	{
 		ID: PatternLongReturn, Name: "Long Return",
-		Description:  "A quick reach answered by an unhurried return. Leaning, asymmetric.",
+		Description:  "Each reach uses a shorter leg out and a longer return, creating an asymmetric lean.",
 		Positions:    []float64{10, 78, 10, 78, 10, 78, 10, 78},
 		TravelMillis: []int64{567, 1097, 567, 1097, 567, 1097, 567, 1097},
 		Tags:         []string{"asymmetric", "leaning", "paired"}, Experimental: true,
 	},
 	{
-		ID: PatternSwell, Name: "Swell",
-		Description:  "The window rises across the cycle and settles back. One arc, not a beat.",
+		ID: PatternSwell, Name: "Rising Window Arc",
+		Description:  "A fixed-width window rises across the cycle and returns along one continuous arc.",
 		Positions:    []float64{5, 45, 15, 55, 25, 65, 35, 75, 25, 65, 15, 55, 5, 45, 15, 55, 25, 65, 35, 75, 25, 65, 15, 55},
 		TravelMillis: []int64{500, 484, 500, 484, 500, 484, 500, 510, 500, 510, 500, 510, 500, 484, 500, 484, 500, 484, 500, 510, 500, 510, 500, 510},
 		Tags:         []string{"arc", "migrating", "long"}, Experimental: true,
 	},
 	{
-		ID: PatternSurgeAndSettle, Name: "Surge and Settle",
-		Description:  "One fast full sweep, then a long settled run of mid strokes.",
+		ID: PatternSurgeAndSettle, Name: "Full Sweep and Mid Blocks",
+		Description:  "One full sweep alternates with a repeated block of shorter middle strokes.",
 		Positions:    []float64{2, 98, 35, 68, 35, 68, 35, 68, 35, 68, 35, 68, 2, 98, 35, 68, 35, 68, 35, 68, 35, 68, 35, 68},
 		TravelMillis: []int64{686, 573, 485, 485, 485, 485, 485, 485, 485, 485, 485, 589, 686, 573, 485, 485, 485, 485, 485, 485, 485, 485, 485, 589},
-		Tags:         []string{"accent", "recovery", "long"}, Experimental: true,
+		Tags:         []string{"full-sweep", "midrange-blocks", "repeating"}, Experimental: true,
 	},
 	{
 		ID: PatternCrosscut, Name: "Crosscut",
-		Description:  "Blocks of broad strokes trade with blocks of tight ones. Restless but on a beat.",
+		Description:  "Blocks of broad strokes alternate with blocks of tight strokes on an even beat.",
 		Positions:    []float64{8, 88, 8, 88, 8, 88, 55, 85, 55, 85, 55, 85},
 		TravelMillis: []int64{640, 640, 640, 640, 640, 485, 484, 484, 484, 484, 484, 631},
-		Tags:         []string{"alternating", "blocks", "restless"}, Experimental: true,
+		Tags:         []string{"alternating", "blocks", "contrast"}, Experimental: true,
 	},
 	{
 		ID: PatternFourLevelCircuit, Name: "Four-Level Circuit", Description: "Full and partial strokes rotate through both halves of the range.",
@@ -824,10 +825,10 @@ var catalogPatternSpecs = []catalogPatternSpec{
 		Tags:         []string{"uneven", "deep", "upper-return"},
 	},
 	{
-		ID: PatternSlowFastFull, Name: "Slow-to-Fast Full", Description: "Two measured full strokes transition into a run of faster full strokes.",
+		ID: PatternSlowFastFull, Name: "Tempo Ramp", Description: "Full-span strokes shorten their relative timing across the loop.",
 		Positions:    []float64{0, 100, 0, 100, 0, 100, 0, 100, 0, 100},
 		TravelMillis: []int64{702, 1170, 701, 1204, 471, 470, 470, 470, 471, 471},
-		Tags:         []string{"full", "tempo-change", "accelerating"},
+		Tags:         []string{"full-span", "tempo-ramp", "progressive"},
 	},
 	{
 		ID: PatternDeepPartialSequence, Name: "Deep-Partial Sequence", Description: "Lower returns mix full-depth and partial-depth strokes with uneven accents.",
@@ -905,9 +906,27 @@ func mustFitCatalog(definition PatternDefinition) PatternDefinition {
 	panic(fmt.Sprintf("pattern %q could not satisfy motion budgets", definition.ID))
 }
 
-func reversalGap(points []CurvePoint) int64 {
-	minimum := int64(0)
-	lastReversal := int64(-1)
+func reversalGap(points []CurvePoint, durationMillis int64, loop bool) int64 {
+	reversals, firstDirection, lastDirection := reversalTimes(points)
+	if loop && firstDirection != 0 && lastDirection != firstDirection {
+		reversals = append(reversals, durationMillis)
+	}
+	if len(reversals) == 0 || (!loop && len(reversals) < 2) {
+		return 0
+	}
+	if loop && len(reversals) == 1 {
+		return durationMillis
+	}
+	minimum := minimumAdjacentGap(reversals)
+	if loop {
+		minimum = smallerPositiveGap(minimum, durationMillis-reversals[len(reversals)-1]+reversals[0])
+	}
+	return minimum
+}
+
+func reversalTimes(points []CurvePoint) ([]int64, int, int) {
+	reversals := make([]int64, 0, len(points))
+	firstDirection := 0
 	previousDirection := 0
 	for index := 1; index < len(points); index++ {
 		delta := points[index].PositionPercent - points[index-1].PositionPercent
@@ -915,16 +934,33 @@ func reversalGap(points []CurvePoint) int64 {
 		if direction == 0 {
 			continue
 		}
+		if firstDirection == 0 {
+			firstDirection = direction
+		}
 		if previousDirection != 0 && direction != previousDirection {
-			at := points[index-1].TimeMillis
-			if lastReversal >= 0 && (minimum == 0 || at-lastReversal < minimum) {
-				minimum = at - lastReversal
-			}
-			lastReversal = at
+			reversals = append(reversals, points[index-1].TimeMillis)
 		}
 		previousDirection = direction
 	}
+	return reversals, firstDirection, previousDirection
+}
+
+func minimumAdjacentGap(times []int64) int64 {
+	minimum := int64(0)
+	for index := 1; index < len(times); index++ {
+		minimum = smallerPositiveGap(minimum, times[index]-times[index-1])
+	}
 	return minimum
+}
+
+func smallerPositiveGap(current, candidate int64) int64 {
+	if candidate <= 0 {
+		return current
+	}
+	if current == 0 || candidate < current {
+		return candidate
+	}
+	return current
 }
 
 func signFloat(value float64) int {

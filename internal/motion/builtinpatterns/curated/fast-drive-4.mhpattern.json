@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Drive 4",
-  "description": "Medium cadence.",
+  "name": "Return Ladder",
+  "description": "Broad upper peaks meet a ladder of progressively different return depths. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -123,9 +123,8 @@
     }
   ],
   "tags": [
-    "full",
-    "steady",
-    "varied",
-    "upper-return"
+    "return-ladder",
+    "broad-peaks",
+    "varied-rhythm"
   ]
 }

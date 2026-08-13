@@ -378,7 +378,10 @@ func TestEngineFreezesPhaseAfterStop(t *testing.T) {
 func TestEngineProjectsRelativePatternIntoStrokeWindowOnlyAtTransport(t *testing.T) {
 	fake := transport.NewFake()
 	engine := newTestEngine(t, fake, diagnostics.NewTraceRing(32), time.Hour)
-	engine.chunkSize = 12
+	// Cover more than one normalized cycle. The speed control now derives the
+	// period from semantic travel, so this short authored burst no longer fits
+	// in the legacy 12-sample startup window.
+	engine.chunkSize = 64
 	pattern := PatternDefinition{
 		ID: "relative-burst", Name: "Relative burst", Kind: PatternKindBurst, CycleMillis: 500,
 		Points: []CurvePoint{

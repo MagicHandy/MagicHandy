@@ -175,14 +175,15 @@ identity and example removal had the larger effect.
 
 The first refactor correctly removed lexical anchors but one live response put
 motion fields at the top level. A later run selected `pattern_id` without its
-required `intensity`.
+required pace value.
 
 The fix adds capability-aware structural rules:
 
 - motion fields belong only inside `motion`
 - disabled pattern and area fields are not mentioned
-- `pattern_id` and `intensity` are an inseparable pair
-- each start or target uses either that curated pair or `speed_percent`, never both
+- `pattern_id` selects only geometry and relative rhythm
+- each selected pattern includes `speed_percent`; pace-only changes omit `pattern_id`
+- model-facing pattern IDs are opaque handles rather than persisted IDs or source filenames
 
 These rules preserve the backend-authoritative capability contract without
 reintroducing reply prose.
@@ -271,11 +272,11 @@ The evaluator intentionally rejected intermediate versions:
    Explicit", and the intimate final check gained an explicit boundary.
 2. One response flattened `action` and `speed_percent` to the top level.
    Capability-aware nesting rules were added.
-3. One curated pattern response omitted `intensity`. The pattern pair rule was
-   added.
-4. A later stochastic run combined the curated pair with `speed_percent`. The
-   contract now presents curated and deterministic pacing as mutually exclusive
-   branches.
+3. One catalog pattern response omitted the then-required `intensity`. The old
+   pattern pair rule was added at that point.
+4. A later stochastic run combined that old pair with `speed_percent`. The
+   current contract resolves the ambiguity by exposing only `speed_percent` for
+   both catalog and pace-only decisions.
 
 These failures are retained here because they show why prompt review and valid
 JSON output alone were insufficient.

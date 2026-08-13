@@ -11,22 +11,22 @@ interface Props {
   autoDisable: boolean;
   locked: boolean;
   busyKeys: LibraryBusyKeys;
-  maxIntensity: number;
-  onPlay: (id: string, intensity: number, feel: string) => Promise<void>;
+  maxSpeed: number;
+  onPlay: (id: string, speedPercent: number, feel: string) => Promise<void>;
   onFeedback: (id: string, rating: -1 | 1) => Promise<void>;
   onUndo: (id: number) => Promise<void>;
   onAutoDisable: (enabled: boolean) => Promise<void>;
 }
 
-export function PatternTraining({ patterns, feedback, autoDisable, locked, busyKeys, maxIntensity, onPlay, onFeedback, onUndo, onAutoDisable }: Props) {
+export function PatternTraining({ patterns, feedback, autoDisable, locked, busyKeys, maxSpeed, onPlay, onFeedback, onUndo, onAutoDisable }: Props) {
   const enabled = useMemo(() => patterns.filter((pattern) => pattern.enabled), [patterns]);
   const patternNames = useMemo(() => new Map(patterns.map((pattern) => [pattern.id, pattern.name])), [patterns]);
-  const intensityCap = Math.max(1, Math.min(100, Number.isFinite(maxIntensity) ? Math.round(maxIntensity) : 100));
+  const speedCap = Math.max(1, Math.min(100, Number.isFinite(maxSpeed) ? Math.round(maxSpeed) : 100));
   const [index, setIndex] = useState(0);
-  const [intensity, setIntensity] = useState(Math.min(30, intensityCap));
+  const [speed, setSpeed] = useState(Math.min(30, speedCap));
   const [feel, setFeel] = useState("original");
   useEffect(() => { if (index >= enabled.length) setIndex(0); }, [enabled.length, index]);
-  useEffect(() => setIntensity((value) => Math.min(value, intensityCap)), [intensityCap]);
+  useEffect(() => setSpeed((value) => Math.min(value, speedCap)), [speedCap]);
   const pattern = enabled[index];
   const latest = pattern ? feedback.find((item) => item.pattern_id === pattern.id && !item.reverted) : undefined;
   const patternBusy = pattern ? busyKeys.has(libraryActionKey.pattern(pattern.id)) : false;
@@ -45,9 +45,9 @@ export function PatternTraining({ patterns, feedback, autoDisable, locked, busyK
         <PatternCurve points={pattern.preview_samples} knots={pattern.points} label={t("Backend-sampled training curve for {name}", { name: pattern.name })} className="training-curve" />
         <div className="training-stats"><span>{t("Weight")}<strong>{pattern.weight.toFixed(2)}</strong></span><span>{t("{seconds} s cycle", { seconds: (pattern.cycle_ms / 1000).toFixed(1) })}</span><span>{pattern.kind}</span></div>
         <div className="training-controls">
-          <label className="inline-slider"><span>{t("Intensity")}<strong>{intensity}%</strong></span><input type="range" min={1} max={intensityCap} value={intensity} disabled={locked} onChange={(event) => setIntensity(Number(event.target.value))} /></label>
+          <label className="inline-slider"><span>{t("Speed")}<strong>{speed}%</strong></span><input type="range" min={1} max={speedCap} value={speed} disabled={locked} onChange={(event) => setSpeed(Number(event.target.value))} /></label>
           <div className="segmented compact-segmented" role="group" aria-label={t("Audition feel")}><button type="button" aria-pressed={feel === "original"} data-active={feel === "original" || undefined} onClick={() => setFeel("original")}>{t("Original")}</button><button type="button" aria-pressed={feel === "smooth"} data-active={feel === "smooth" || undefined} onClick={() => setFeel("smooth")}>{t("Smooth")}</button><button type="button" aria-pressed={feel === "crisp"} data-active={feel === "crisp" || undefined} onClick={() => setFeel("crisp")}>{t("Crisp")}</button></div>
-          <button type="button" className="btn btn-primary" disabled={locked || patternBusy || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(pattern.id, intensity, feel)}><PlayIcon />{t("Audition")}</button>
+          <button type="button" className="btn btn-primary" disabled={locked || patternBusy || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(pattern.id, speed, feel)}><PlayIcon />{t("Audition")}</button>
         </div>
         <div className="rating-controls" role="group" aria-label={t("Rate {name}", { name: pattern.name })}>
           <button type="button" className="btn btn-secondary" disabled={locked || patternBusy} onClick={() => void onFeedback(pattern.id, 1)}><ThumbUpIcon />{t("More like this")}</button>

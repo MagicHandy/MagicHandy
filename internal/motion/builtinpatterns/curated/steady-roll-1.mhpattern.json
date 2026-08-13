@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Steady Roll 1",
-  "description": "Medium cadence.",
+  "name": "Upper Pulse Run",
+  "description": "A long upper-range pulse run resolves through one full sweep. Grouped timing creates offbeat accents.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -155,9 +155,8 @@
     }
   ],
   "tags": [
-    "full",
-    "rhythmic",
-    "varied",
-    "upper-return"
+    "upper-pulses",
+    "full-resolution",
+    "syncopated"
   ]
 }

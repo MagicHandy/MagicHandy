@@ -49,3 +49,27 @@ func TestSessionFactsAndArcAppearOnlyWhenEnabled(t *testing.T) {
 		t.Fatalf("the variability instruction is missing:\n%s", arc)
 	}
 }
+
+func TestAutopilotSpeechMessageDoesNotExposePatternStorageID(t *testing.T) {
+	message := AutopilotSpeechMessage(AutopilotContext{
+		CurrentPatternID: "curated-intense-drive-16",
+		CurrentSpeed:     40,
+		CurrentArea:      AreaZoneFull,
+	})
+	if strings.Contains(message, "curated-intense-drive-16") {
+		t.Fatalf("speech prompt leaked persisted pattern ID:\n%s", message)
+	}
+	if !strings.Contains(message, "catalog pattern at 40% speed") {
+		t.Fatalf("speech prompt lost useful motion context:\n%s", message)
+	}
+}
+
+func TestAutopilotContractKeepsPatternAndSpeedIndependent(t *testing.T) {
+	contract := autopilotContract(AutopilotKindMotion, FullCapabilities())
+	if !strings.Contains(contract, "pattern_id may omit speed_percent to preserve the live pace") {
+		t.Fatalf("autopilot contract does not explain shape-only changes:\n%s", contract)
+	}
+	if strings.Contains(contract, "include \"pattern_id\" and \"speed_percent\" together") {
+		t.Fatalf("autopilot contract still couples pattern and pace:\n%s", contract)
+	}
+}

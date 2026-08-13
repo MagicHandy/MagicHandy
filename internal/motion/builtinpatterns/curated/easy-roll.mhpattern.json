@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Easy Roll",
-  "description": "Medium cadence.",
+  "name": "Upper Cascade",
+  "description": "An upper-biased sequence moves through several return depths and peaks. Grouped timing creates offbeat accents.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -155,9 +155,8 @@
     }
   ],
   "tags": [
-    "accent",
-    "rhythmic",
-    "tempo-change",
-    "upper-return"
+    "upper-biased",
+    "multi-level",
+    "syncopated"
   ]
 }

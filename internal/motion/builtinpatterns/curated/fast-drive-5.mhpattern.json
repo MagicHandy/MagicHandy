@@ -1,7 +1,7 @@
 {
   "schema": "magichandy.pattern.v1",
-  "name": "Fast Drive 5",
-  "description": "Medium cadence.",
+  "name": "Multi-Level Circuit B",
+  "description": "Broad sweeps and middle-range strokes alternate through several levels. Reversal timing varies within the loop.",
   "kind": "routine",
   "cycle_ms": 10000,
   "points": [
@@ -131,8 +131,8 @@
     }
   ],
   "tags": [
-    "full",
-    "steady",
-    "build"
+    "multi-level",
+    "broad-contrast",
+    "varied-rhythm"
   ]
 }
