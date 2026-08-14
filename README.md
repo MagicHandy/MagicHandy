@@ -1,8 +1,8 @@
 # MagicHandy
 
 MagicHandy is a free, open-source, local-first app for controlling
-[The Handy](https://www.thehandy.com/) with local AI chat, hands-free modes,
-patterns, and synchronized video scripts. App data stays on your machine, with
+[The Handy](https://www.thehandy.com/) with a customizable AI chatbot, hands-free modes,
+pattern library, and video funscript playback. App data stays on your machine, with
 cloud services available only when you enable them.
 
 [Download](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.22)
@@ -17,10 +17,8 @@ cloud services available only when you enable them.
 ## Highlights
 
 - Local LLM chat through managed llama.cpp or an existing Ollama installation.
-- One shared motion engine for Chat, Autopilot, Freestyle, patterns, and video.
-- Immediate speed, stroke, and direction controls with global `Esc` Stop.
-- Handy Cloud, browser Bluetooth, and Intiface Central transports.
-- Local SQLite storage for settings, chats, personas, and patterns.
+- Immediate speed, stroke, and direction controls with safe `Esc` Stop.
+- Handy Cloud, browser Bluetooth, and Intiface support.
 - Optional local speech input and output modules.
 
 ## Install On Windows
