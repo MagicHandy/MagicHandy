@@ -6,7 +6,7 @@ Everything you need to install, update, and run MagicHandy from source. The
 ## Windows release package
 
 The current Windows x64 release is
-[v0.1.0-alpha.21](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.21).
+[v0.1.0-alpha.22](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.22).
 Download its setup EXE and `SHA256SUMS` file, verify the setup hash, and run it.
 The portable ZIP remains available when installer integration is not wanted.
 The prebuilt core requires no Go, Node, Python, CMake, or Visual Studio and opens
