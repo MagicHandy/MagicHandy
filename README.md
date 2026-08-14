@@ -11,7 +11,7 @@ cloud services available only when you enable them.
 | [Contributing](#contributing)
 
 > [!IMPORTANT]
-> MagicHandy is early alpha software that controls real hardware. The current
+> MagicHandy is still in early development (alpha). The current
 > Windows build is `v0.1.0-alpha.22` and remains unsigned.
 
 ## Highlights
@@ -32,10 +32,6 @@ Download the checksum and one package from the
 - **Portable ZIP:** no installer or Windows integration.
 
 Verify the SHA-256 hash before running either package.
-
-> [!WARNING]
-> Do not bypass Defender or SmartScreen if a download is classified as malware.
-> Report the filename and checksum instead.
 
 ## Build From Source
 
