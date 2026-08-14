@@ -23,13 +23,11 @@ cloud services available only when you enable them.
 
 ## Install On Windows
 
-Download the checksum and one package from the
+Download the installer package from the
 [latest release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.22):
 
 - **Setup EXE:** standard installation, shortcuts, and Windows integration.
 - **Portable ZIP:** no installer or Windows integration.
-
-Verify the SHA-256 hash before running either package.
 
 ## Build From Source
 
