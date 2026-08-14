@@ -88,6 +88,24 @@ reading as *how hard it worked*.
 
 > Judge a pattern by its **worst** stroke, never its average.
 
+### Runtime normalization can expose the same defect
+
+Mean-rate playback does not repair a bad ratio between legs. A 2026-08-14 Cloud
+trace showed `Hard and Regular` with continuous, accepted HSP timestamps and no
+buffer gap, yet its 100 -> 74 return took about one second at 40%. The imported
+curve had assigned that 26-point leg almost as much time as the preceding
+100-point leg. Uniform retiming preserved that ratio and turned a brief accent
+at the fast source cadence into a perceived stop. `Deep-Partial Sequence` had
+the same defect in two long full-range legs. Sampling two cycles also exposed a
+360 ms `Tease` slowdown split across the loop seam; its short strokes had shared
+the same duration as its full reaches.
+
+All three curves keep their turning positions but derive usable leg timing.
+Tests render every non-experimental, non-hold loop through the real planner at
+40% and reject any continuous interval longer than 250 ms below 45% travel/s.
+The Cloud-resolution wire frame for `Hard and Regular` is checked separately so
+sampler simplification cannot reintroduce the apex pause.
+
 ## Two facts about the geometry
 
 These are consequences of the hardware budgets, not opinions, and they surprise

@@ -983,6 +983,19 @@ names while preserving user renames, enablement, weights, and feedback. Runtime
 speed normalization prevents authored travel rate from silently overriding the
 LLM or user's requested pace. Capped physical acceptance remains required.
 
+Status 2026-08-14: a retained Cloud trace separated a reported stop in `Hard
+and Regular` from transport starvation. HSP point times stayed continuous and
+accepted, but mean-rate normalization stretched its disproportionately long
+26-point return into a roughly one-second sub-perceptual leg at 40%. A catalog
+sweep found the same accidental runtime dwell in `Deep-Partial Sequence`.
+Two-cycle sampling also found a 360 ms `Tease` slowdown split across its loop
+seam. Their turning positions remain unchanged while the bad leg timing is
+rebalanced. Planner and Cloud-resolution tests now cap continuous motion below
+45% travel/s at 250 ms for default patterns without intentional holds. The
+post-fix physical-feel check remains open; the failing scenario used Cloud REST
+at 35-40%, roughly 322-379 ms request latency, with one later unrelated network
+failure followed by a successful Stop.
+
 Relates to R1 (real-device validation), R8 (migration), and R14 (one motion
 path).
 

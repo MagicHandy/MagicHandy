@@ -148,6 +148,20 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-08-14** - Closed the normalized-pattern dwell regression found in a
+  retained Cloud trace. `Hard and Regular` had no HSP timestamp gap, but its
+  short 100 -> 74 accent inherited nearly a full-stroke duration and remained
+  below perceptible velocity for 950 ms at 40%; `Deep-Partial Sequence` exposed
+  the same defect for 2.86 seconds, and a cyclic check found 360 ms split across
+  the `Tease` seam. Velocity-balanced leg timing reduces all three planner
+  intervals to 50 ms or less without changing turning positions, total travel,
+  controller ownership, or the transport contract. A
+  default-catalog 40% continuity gate and a separate 1%-resolution Cloud frame
+  regression test cover the planner and emitted path. The observed Cloud run
+  used 35-40%, 322-379 ms request latency, continuous accepted coverage until a
+  later network error, and a successful explicit Stop; post-fix physical feel
+  remains open.
+
 - **2026-08-13** - Separated pattern identity from playback pace. Before this
   correction, built-in authored rates ranged from 57.6 to 436.4% travel/s and
   the complete 1–100 control changed any selected loop by less than 2x, so the

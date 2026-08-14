@@ -60,6 +60,56 @@ func TestLibrarySeedsBuiltinsAndPersistsEnablement(t *testing.T) {
 	}
 }
 
+func TestLibraryRefreshesBuiltinTimingWithoutResettingUserPreferences(t *testing.T) {
+	dir := t.TempDir()
+	library, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyPoints, err := json.Marshal([]motion.CurvePoint{
+		{TimeMillis: 0, PositionPercent: 0},
+		{TimeMillis: 3300, PositionPercent: 100},
+		{TimeMillis: 6600, PositionPercent: 0},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.db.SQL().Exec(`
+		UPDATE patterns
+		SET name = 'My regular rhythm', enabled = 0, weight = 1.7,
+			cycle_ms = 6600, points_json = ?
+		WHERE id = ?
+	`, string(legacyPoints), motion.PatternHardAndRegular); err != nil {
+		t.Fatal(err)
+	}
+	if err := library.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+	got, err := reopened.Pattern(string(motion.PatternHardAndRegular))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, found := motion.BuiltinPatternDefinition(motion.PatternHardAndRegular)
+	if !found {
+		t.Fatal("Hard and Regular built-in is missing")
+	}
+	pointsMatch := slices.EqualFunc(got.Points, want.Points, func(left, right motion.CurvePoint) bool {
+		return left.TimeMillis == right.TimeMillis && left.PositionPercent == right.PositionPercent
+	})
+	if got.CycleMillis != want.CycleMillis || !pointsMatch {
+		t.Fatalf("refreshed timing = cycle %d points %+v, want cycle %d points %+v", got.CycleMillis, got.Points, want.CycleMillis, want.Points)
+	}
+	if got.Name != "My regular rhythm" || got.Enabled || got.Weight != 1.7 {
+		t.Fatalf("user-owned preferences changed during timing refresh: %+v", got)
+	}
+}
+
 func TestLibraryMigratesOnlyUntouchedLegacyBuiltinNames(t *testing.T) {
 	dir := t.TempDir()
 	library, err := Open(dir)

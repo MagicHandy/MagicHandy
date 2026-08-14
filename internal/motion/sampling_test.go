@@ -38,7 +38,8 @@ func TestEnginePreservesRetimedAuthoredKnotsBetweenSamplerTicks(t *testing.T) {
 		t.Fatal("Hard and Regular pattern is missing")
 	}
 	outputTimes := pointTimes(add.Points)
-	for _, authoredTime := range []int64{166, 333, 458, 625, 791} {
+	for _, point := range definition.Points[1:6] {
+		authoredTime := point.TimeMillis
 		playedTime := int64(math.Round(
 			float64(authoredTime) * float64(engine.plan.PeriodMillis) / float64(definition.CycleMillis),
 		))

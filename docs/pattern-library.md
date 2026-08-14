@@ -47,8 +47,12 @@ The 59 `curated-*` files under `internal/motion/builtinpatterns/curated` are the
 survivors of a 171-file generated import. Nine clear the current source and
 fitted-feel checks; 50 remain experimental. Generated curves receive no timing
 or speed-limit exemption. The two promoted user curves (`Hard and Regular` and
-`playful jerk`) preserve their stored knots and relative rhythm, but normal
-runtime speed retiming and safety bounds still apply.
+`playful jerk`) preserve their selected geometry, but normal runtime speed
+retiming and safety bounds still apply. `playful jerk` keeps its intentional
+imported midpoint holds. `Hard and Regular` keeps the 0 -> 100 -> 74 -> 0 beat
+with velocity-balanced leg timing; preserving its original timestamps made the
+short return accent feel like a stop once global pace normalization was
+introduced.
 
 Generated filenames and database IDs remain stable because saved sessions,
 enablement, weights, and feedback refer to them. Display names, descriptions,
@@ -120,11 +124,13 @@ They do not catch `Sway`, `Rolling`, or `Double Tap`, whose slowest strokes
 (46, 54, 57%/s) sit inside the retained range; those three were the weakest part
 of the case for removing them.
 
-`Hard and Regular` and `playful jerk` are exact stored curves promoted from the
-live user library. Their knots and relative timing are preserved instead of
-being passed through the generated-pattern fitter. They carry the `curated` tag,
-use the same runtime speed semantics and persisted motion envelope, and still
-play only through the shared engine. On an existing
+`Hard and Regular` and `playful jerk` are stored curves promoted from the live
+user library. `playful jerk` preserves its exact knots and relative timing.
+`Hard and Regular` preserves the accepted turning positions and 16-beat shape,
+but its 26-point partial return now uses 70 ms of the authored 450 ms beat
+instead of nearly the same time as the preceding 100-point stroke. They carry
+the `curated` tag, use the same runtime speed semantics and persisted motion
+envelope, and still play only through the shared engine. On an existing
 database, seed reconciliation transfers enabled state and weight from an exact
 name-and-curve match to the canonical built-in, then removes only that proven
 duplicate. Similar names or edited curves are left untouched.
@@ -154,6 +160,11 @@ allows, so selecting a narrow region does not silently make a pattern slower.
 Finite programs use direct clock scaling (`stored duration * 100 / speed`) and
 retain every relative action interval. Video funscripts are media-clock-locked
 and therefore do not use pattern normalization.
+
+The default catalog is also sampled at 40% playback pace in tests. Except for a
+pattern explicitly tagged with intentional holds, no non-experimental loop may
+remain below 45% semantic travel per second for more than 250 ms. This catches
+bad per-leg timing that a correct mean travel rate can otherwise hide.
 
 - Curves use wall-time PCHIP/Fritsch-Carlson interpolation. Loop reversals use
   a trapezoidal velocity profile with at most 75 ms acceleration/deceleration

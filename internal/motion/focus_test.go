@@ -2,6 +2,7 @@ package motion
 
 import (
 	"math"
+	"slices"
 	"testing"
 	"time"
 
@@ -245,11 +246,11 @@ func TestReversalRampShortensWithSpeedAndFocus(t *testing.T) {
 
 // The reversal ramp exists to keep acceleration bounded. Shortening it must
 // not push a fitted pattern past the stored-catalog budget it is derived from.
-// The two promoted curves bypass authoring fit; runtime playback safety is
-// covered separately for every built-in at the requested speed.
+// Promoted user curves bypass authoring fit; runtime playback safety is covered
+// separately for every built-in at the requested speed.
 func TestReversalRampStaysInsideItsAccelerationBudget(t *testing.T) {
 	for _, definition := range BuiltinPatternDefinitions() {
-		if UsesExactImportedCurve(definition) {
+		if slices.Contains(definition.Tags, TagCurated) {
 			continue
 		}
 		metrics, err := MeasureCurve(definition.Points, definition.CycleMillis, true)

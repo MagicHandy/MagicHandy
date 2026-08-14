@@ -38,7 +38,7 @@ const (
 	// library but exposed to the model only behind the user's
 	// experimental-patterns capability gate.
 	TagExperimental = "experimental"
-	// TagCurated marks exact user-tested curves promoted into the built-in catalog.
+	// TagCurated marks user-selected curves promoted into the built-in catalog.
 	TagCurated = "curated"
 )
 
@@ -207,13 +207,14 @@ func (c Curve) Preview(intervalMillis int64) []CurvePoint {
 	return points
 }
 
-// UsesExactImportedCurve marks the small explicit allowlist of hardware-accepted
-// timing exceptions. A bulk-imported filename is never sufficient evidence.
+// UsesExactImportedCurve marks the explicit allowlist of imported timing that
+// intentionally preserves holds and bypasses generated-pattern fitting. A
+// bulk-imported filename is never sufficient evidence.
 func UsesExactImportedCurve(definition PatternDefinition) bool {
 	if !slices.Contains(definition.Tags, TagCurated) {
 		return false
 	}
-	return definition.ID == PatternHardAndRegular || definition.ID == PatternPlayfulJerk
+	return definition.ID == PatternPlayfulJerk
 }
 
 // BuiltinPatternDefinitions returns the parametrically generated catalog.
@@ -652,17 +653,21 @@ func generatePulsePattern() PatternDefinition {
 
 func generateTeasePattern() PatternDefinition {
 	peaks := []float64{45, 60, 80, 100, 75, 55}
+	travelMillis := []int64{450, 450, 450, 450, 600, 600, 800, 800, 550, 550, 450, 450}
 	points := make([]CurvePoint, 0, len(peaks)*2+1)
 	points = append(points, CurvePoint{PositionPercent: 20})
+	elapsed := int64(0)
 	for index, peak := range peaks {
+		elapsed += travelMillis[index*2]
 		points = append(points,
-			CurvePoint{TimeMillis: int64(index*2+1) * 550, PositionPercent: peak},
-			CurvePoint{TimeMillis: int64(index*2+2) * 550, PositionPercent: 20},
+			CurvePoint{TimeMillis: elapsed, PositionPercent: peak},
 		)
+		elapsed += travelMillis[index*2+1]
+		points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: 20})
 	}
 	return mustFitCatalog(PatternDefinition{
 		ID: PatternTease, Name: "Tease", Description: "Progressive peaks with a consistent return.",
-		Kind: PatternKindRoutine, CycleMillis: RoutineCycleFloorMillis, Points: points,
+		Kind: PatternKindRoutine, CycleMillis: elapsed, Points: points,
 		Tags: []string{"ascending-peaks", "fixed-returns", "progressive"},
 	})
 }
@@ -833,7 +838,7 @@ var catalogPatternSpecs = []catalogPatternSpec{
 	{
 		ID: PatternDeepPartialSequence, Name: "Deep-Partial Sequence", Description: "Lower returns mix full-depth and partial-depth strokes with uneven accents.",
 		Positions:    []float64{0, 100, 0, 80, 0, 100, 0, 100, 0, 80},
-		TravelMillis: []int64{462, 462, 462, 463, 1418, 496, 1452, 453, 471, 461},
+		TravelMillis: []int64{462, 462, 462, 463, 620, 496, 620, 453, 471, 461},
 		Tags:         []string{"uneven", "deep", "partial"},
 	},
 	{
