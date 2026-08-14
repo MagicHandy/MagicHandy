@@ -1280,11 +1280,14 @@ motion. Six complete-cycle replacements from distinct source fingerprints add
 minimum-travel, amplitude-band, endpoint-diversity, and repetition checks on top
 of the existing acceleration/reversal budgets. At that stage only those
 replacements were experimental; later generated imports are accounted for
-below. Exact `Hard and Regular` and `playful jerk` user curves are promoted as
-stored-knot-preserving curated built-ins, while runtime speed retiming still
-applies. Idempotent seed reconciliation removes the retired IDs, deduplicates
-only exact promoted curves, and preserves user-renamed names, enablement, and
-weights without a schema migration. Untouched legacy default names migrate to
+below. `Hard and Regular` and `playful jerk` user curves are promoted as
+curated built-ins, while runtime speed retiming still applies. `playful jerk`
+preserves its intentional imported holds; `Hard and Regular` preserves its
+turning positions with velocity-balanced accent timing after normalized pace
+made the original short return feel stationary. Idempotent seed reconciliation
+removes the retired IDs, deduplicates only exact promoted curves, and preserves
+user-renamed names, enablement, and weights without a schema migration.
+Untouched legacy default names migrate to
 the current shape-based labels. Inline rename updates any
 pattern's display name while stable IDs and built-in curve content remain
 immutable. Source filenames did not influence or enter pattern metadata. Only
@@ -1315,9 +1318,11 @@ experimental. No generated ID receives a timing or speed-limit exemption, and
 all retained curves pass the ordinary catalog fitter. Stable filenames and IDs
 remain for persistence, while model-facing names/tags describe geometry and
 relative rhythm and prompts use opaque handles. Only the two canonical
-hardware-promoted user patterns bypass authoring fit, preserving stored knots;
-normal runtime speed retiming still applies. Offline generation has no live-app
-posting path, and the Go bulk-import utility requires `-allow-experimental`.
+hardware-promoted user patterns bypass authoring fit; only `playful jerk`
+preserves exact imported timing, while `Hard and Regular` uses the shared
+runtime-continuity gate. Normal runtime speed retiming still applies. Offline
+generation has no live-app posting path, and the Go bulk-import utility requires
+`-allow-experimental`.
 Explicit user imports remain user data and continue through the shared engine.
 Capped physical-feel checks for the retained generated catalog and the
 accepted-calibration-offset startup acquisition remain open.

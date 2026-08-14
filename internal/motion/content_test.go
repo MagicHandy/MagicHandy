@@ -20,7 +20,7 @@ func TestGeneratedCatalogMeetsHardwareBudgets(t *testing.T) {
 		if definition.CycleMillis < RoutineCycleFloorMillis {
 			t.Fatalf("pattern %q cycle = %d, below routine floor", definition.ID, definition.CycleMillis)
 		}
-		if UsesExactImportedCurve(definition) {
+		if slices.Contains(definition.Tags, TagCurated) {
 			continue
 		}
 		metrics, err := MeasureCurve(definition.Points, definition.CycleMillis, true)
@@ -352,22 +352,23 @@ func TestSampledPatternsUseMotionSemanticNames(t *testing.T) {
 	}
 }
 
-func TestPromotedUserPatternsKeepAcceptedNamesAndTiming(t *testing.T) {
+func TestPromotedUserPatternsKeepAcceptedIdentityAndTimingPolicy(t *testing.T) {
 	want := map[PatternID]struct {
 		name       string
 		cycle      int64
 		pointCount int
+		exact      bool
 	}{
-		PatternHardAndRegular: {name: "Hard and Regular", cycle: 7333, pointCount: 49},
-		PatternPlayfulJerk:    {name: "playful jerk", cycle: 11704, pointCount: 33},
+		PatternHardAndRegular: {name: "Hard and Regular", cycle: 7200, pointCount: 49},
+		PatternPlayfulJerk:    {name: "playful jerk", cycle: 11704, pointCount: 33, exact: true},
 	}
 	for _, definition := range PromotedBuiltinPatternDefinitions() {
 		expected, ok := want[definition.ID]
 		if !ok {
 			t.Fatalf("unexpected promoted pattern %q", definition.ID)
 		}
-		if !UsesExactImportedCurve(definition) {
-			t.Fatalf("promoted pattern %q is not an exact timing exception", definition.ID)
+		if UsesExactImportedCurve(definition) != expected.exact {
+			t.Fatalf("promoted pattern %q exact timing = %t, want %t", definition.ID, UsesExactImportedCurve(definition), expected.exact)
 		}
 		if definition.Name != expected.name || definition.CycleMillis != expected.cycle || len(definition.Points) != expected.pointCount {
 			t.Fatalf("promoted pattern %q = name %q cycle %d points %d", definition.ID, definition.Name, definition.CycleMillis, len(definition.Points))

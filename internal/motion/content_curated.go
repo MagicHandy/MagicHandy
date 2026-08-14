@@ -1,66 +1,42 @@
 package motion
 
-// promotedBuiltinPatterns preserve the relative timing of two user-tested
-// imported curves in storage. They bypass catalog fitting, but normal runtime
-// speed retiming and the global motion envelope still apply in the shared engine.
-var promotedBuiltinPatterns = []PatternDefinition{
-	mustNormalizeCatalog(PatternDefinition{
+// generateHardAndRegularPattern keeps the accepted 0 -> 100 -> 74 -> 0 beat,
+// but makes the partial return brief enough to remain motion after normal pace
+// retiming. The imported source gave the 26-point accent almost as much time as
+// the preceding 100-point stroke. That worked only at its unusually fast source
+// cadence; at a normal 40% pace it became a one-second crawl after every apex.
+func generateHardAndRegularPattern() PatternDefinition {
+	const (
+		beats          = 16
+		beatMillis     = int64(450)
+		upMillis       = int64(210)
+		accentMillis   = int64(70)
+		accentPosition = 74.24242424242425
+	)
+	points := make([]CurvePoint, 0, beats*3+1)
+	points = append(points, CurvePoint{PositionPercent: 0})
+	for beat := range beats {
+		start := int64(beat) * beatMillis
+		points = append(points,
+			CurvePoint{TimeMillis: start + upMillis, PositionPercent: 100},
+			CurvePoint{TimeMillis: start + upMillis + accentMillis, PositionPercent: accentPosition},
+			CurvePoint{TimeMillis: start + beatMillis, PositionPercent: 0},
+		)
+	}
+	return mustNormalizeCatalog(PatternDefinition{
 		ID: PatternHardAndRegular, Name: "Hard and Regular",
 		Description: "Full-range strokes with a brief partial return accent on each beat.",
-		Kind:        PatternKindRoutine, CycleMillis: 7333,
-		Points: []CurvePoint{
-			{TimeMillis: 0, PositionPercent: 0},
-			{TimeMillis: 166, PositionPercent: 100},
-			{TimeMillis: 333, PositionPercent: 74.24242424242425},
-			{TimeMillis: 458, PositionPercent: 0},
-			{TimeMillis: 625, PositionPercent: 100},
-			{TimeMillis: 791, PositionPercent: 74.24242424242425},
-			{TimeMillis: 916, PositionPercent: 0},
-			{TimeMillis: 1083, PositionPercent: 100},
-			{TimeMillis: 1250, PositionPercent: 74.24242424242425},
-			{TimeMillis: 1375, PositionPercent: 0},
-			{TimeMillis: 1541, PositionPercent: 100},
-			{TimeMillis: 1708, PositionPercent: 74.24242424242425},
-			{TimeMillis: 1833, PositionPercent: 0},
-			{TimeMillis: 2000, PositionPercent: 100},
-			{TimeMillis: 2166, PositionPercent: 74.24242424242425},
-			{TimeMillis: 2291, PositionPercent: 0},
-			{TimeMillis: 2458, PositionPercent: 100},
-			{TimeMillis: 2625, PositionPercent: 74.24242424242425},
-			{TimeMillis: 2750, PositionPercent: 0},
-			{TimeMillis: 2916, PositionPercent: 100},
-			{TimeMillis: 3083, PositionPercent: 74.24242424242425},
-			{TimeMillis: 3208, PositionPercent: 0},
-			{TimeMillis: 3375, PositionPercent: 100},
-			{TimeMillis: 3541, PositionPercent: 74.24242424242425},
-			{TimeMillis: 3666, PositionPercent: 0},
-			{TimeMillis: 3833, PositionPercent: 100},
-			{TimeMillis: 4000, PositionPercent: 74.24242424242425},
-			{TimeMillis: 4125, PositionPercent: 0},
-			{TimeMillis: 4291, PositionPercent: 100},
-			{TimeMillis: 4458, PositionPercent: 74.24242424242425},
-			{TimeMillis: 4583, PositionPercent: 0},
-			{TimeMillis: 4750, PositionPercent: 100},
-			{TimeMillis: 4916, PositionPercent: 74.24242424242425},
-			{TimeMillis: 5041, PositionPercent: 0},
-			{TimeMillis: 5208, PositionPercent: 100},
-			{TimeMillis: 5375, PositionPercent: 74.24242424242425},
-			{TimeMillis: 5500, PositionPercent: 0},
-			{TimeMillis: 5666, PositionPercent: 100},
-			{TimeMillis: 5833, PositionPercent: 74.24242424242425},
-			{TimeMillis: 5958, PositionPercent: 0},
-			{TimeMillis: 6125, PositionPercent: 100},
-			{TimeMillis: 6291, PositionPercent: 74.24242424242425},
-			{TimeMillis: 6416, PositionPercent: 0},
-			{TimeMillis: 6583, PositionPercent: 100},
-			{TimeMillis: 6750, PositionPercent: 74.24242424242425},
-			{TimeMillis: 6875, PositionPercent: 0},
-			{TimeMillis: 7041, PositionPercent: 100},
-			{TimeMillis: 7208, PositionPercent: 74.24242424242425},
-			{TimeMillis: 7333, PositionPercent: 0},
-		},
+		Kind:        PatternKindRoutine, CycleMillis: beats * beatMillis, Points: points,
 		Tags: []string{"full-span", "regular", "return-accent", TagCurated},
-	}),
+	})
+}
+
+// promotedBuiltinPatterns preserve user-selected geometry in the built-in
+// catalog. Normal runtime speed retiming and the global motion envelope still
+// apply in the shared engine. Only playful jerk retains exact imported holds;
+// Hard and Regular uses the velocity-balanced timing above.
+var promotedBuiltinPatterns = []PatternDefinition{
+	generateHardAndRegularPattern(),
 	mustNormalizeCatalog(PatternDefinition{
 		ID: PatternPlayfulJerk, Name: "playful jerk",
 		Description: "Staggered full-range accents shift from short midpoint holds into longer sweeps.",
