@@ -61,6 +61,9 @@ describe("MotionVisualizer", () => {
               dynamic: {
                 center_percent: 50,
                 span_percent: 84,
+                span_min_percent: 30,
+                span_profile: "contrast",
+                phrase_seed: 42,
                 anchors: [
                   { name: "tip", position_percent: 92 },
                   { name: "middle", position_percent: 50 },
@@ -76,8 +79,8 @@ describe("MotionVisualizer", () => {
     );
 
     expect(screen.getByText("Creative")).toBeInTheDocument();
-    expect(screen.getByText(/tip → middle → base · 18s · chat/)).toBeInTheDocument();
-    expect(screen.getByText("84%")).toBeInTheDocument();
+    expect(screen.getByText(/tip → middle → base · Contrast · 18s · chat/)).toBeInTheDocument();
+    expect(screen.getByText("30-84%")).toBeInTheDocument();
     expect(screen.getByText("24%")).toBeInTheDocument();
     expect(screen.getByText("32%")).toBeInTheDocument();
   });

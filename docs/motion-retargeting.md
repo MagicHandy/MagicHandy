@@ -44,8 +44,9 @@ The shared path must:
 - split large depth jumps and protect against oversized single steps
 - smooth turn apexes and direction reversals
 - compile Dynamic named-anchor routes so interior anchors retain a pass-through
-  tangent and only true route endpoints reverse. Slow variation changes center
-  and span over several cycles; it must not inject per-sample noise
+  tangent and only true route endpoints reverse. Slow center/rhythm variation
+  and an optional long span envelope transform the whole route coherently; they
+  must not inject per-sample noise
 - sample with wall-time-parameterized monotone interpolation (PCHIP /
   Fritsch-Carlson style). Loop patterns use backend-only velocity guides to
   confine acceleration and deceleration to at most 75 ms on each side of a
@@ -240,6 +241,10 @@ For new-pattern retargets:
 - avoid candidates at near-hold segments if they would feel like a stop
 - use the effective path (including a transition already in progress) for phase
   selection, then apply the bounded continuity transition only when paths differ
+- scale candidate-phase search with authored curve complexity. A 30-second
+  Creative phrase must not inherit the same coarse search grid as a short motif
+- score the forward direction available after handoff; a replacement plan
+  cannot sample time before its own handoff
 
 For area-focus retargets:
 
@@ -310,8 +315,8 @@ Every retarget trace should include:
 - next plan identity
 - previous semantic target
 - next semantic target
-- motion kind and, for Dynamic targets, center, span, anchor names, variation,
-  and decision horizon
+- motion kind and, for Dynamic targets, center, outer span, span floor/profile,
+  phrase seed, anchor names, center/rhythm variation, and decision horizon
 - estimated current sampled position
 - selected handoff time
 - lead time
@@ -368,9 +373,11 @@ connection key.
   real-device feel check because that threshold was hardware-derived.
 - Dynamic LLM geometry compiles to the same PCHIP content and shared engine.
   Automated checks cover interior-anchor velocity, reversal dwell, bounded
-  loop-closed variation, and position/direction/velocity-aware retargeting.
-  Managed-model and capped real-device A/B feel evidence remains open, so
-  Dynamic is selectable but Pattern Library remains the default.
+  loop-closed center/rhythm and span-profile variation, and adaptive
+  position/direction/velocity-aware retargeting. The installed managed model
+  passed the transport-free prompt matrices; Ollama and capped real-device A/B
+  feel evidence remain open, so Dynamic is selectable but Pattern Library
+  remains the default.
 - Stroke-window and reverse changes remain immediate owner-envelope operations.
   Their interaction with points already buffered by HSP needs matched hardware
   traces before introducing a separate ramped-envelope contract.

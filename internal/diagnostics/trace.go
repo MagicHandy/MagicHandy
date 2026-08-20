@@ -65,6 +65,9 @@ type MotionTraceTarget struct {
 	MotionKind                string   `json:"motion_kind,omitempty"`
 	DynamicCenterPercent      int      `json:"dynamic_center_percent,omitempty"`
 	DynamicSpanPercent        int      `json:"dynamic_span_percent,omitempty"`
+	DynamicSpanMinPercent     int      `json:"dynamic_span_min_percent,omitempty"`
+	DynamicSpanProfile        string   `json:"dynamic_span_profile,omitempty"`
+	DynamicPhraseSeed         uint32   `json:"dynamic_phrase_seed,omitempty"`
 	DynamicAnchors            []string `json:"dynamic_anchors,omitempty"`
 	DynamicVariationPercent   int      `json:"dynamic_variation_percent,omitempty"`
 	DynamicSegmentSeconds     int      `json:"dynamic_segment_seconds,omitempty"`

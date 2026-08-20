@@ -148,6 +148,17 @@ trace, subjective continuity,
 and Emergency Stop before this risk or Dynamic's opt-in status changes. See
 `docs/motion-calibration.md`.
 
+Status 2026-08-20 range-envelope follow-up: Creative now separates outer
+geometry, a model-selected 20%-or-wider span floor/profile, center/rhythm
+variation, pace, and decision horizon. Breathe, wander, and contrast compile to
+deterministic, loop-closed phrases lasting at least about 30 seconds at the
+fastest supported normal profile; steady clears the envelope. Planner tests
+cover bounds, acceleration, all three Handy profiles, trace identity, and
+adaptive continuous retargets. The installed managed 12B Gemma model passed
+25/25 first-response Creative cases with no repair and no engine or transport.
+This reduces schema/prompt risk but does not establish physical feel: the
+matched-device trace/Stop run above and the supported Ollama matrix remain open.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -609,6 +620,14 @@ admission/retarget path rejects them before transport work. Zero-value sampling
 also fails stationary rather than panicking. Exhaustive variation/profile tests
 cover the reduced case without adding a source-specific sampler or transport
 path.
+
+Status 2026-08-20 (alpha.26): explicit Creative span envelopes are compiled
+inside the same `dynamicContent` resolver before ordinary curve validation.
+They add no goroutine, transport method, device window mutation, or frontend
+motion state. The trace records outer span, floor/profile, and backend-derived
+phrase seed. Long-phrase phase search now scales with authored curve complexity
+and scores the direction actually available after handoff; continuity tests
+cover profile-to-profile retargets through the existing transition path.
 
 ## R15: Chat And Voice Delivery Ordering
 
@@ -1398,7 +1417,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.25 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.26 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1446,7 +1465,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.25, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.26, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit

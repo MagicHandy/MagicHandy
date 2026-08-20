@@ -195,8 +195,8 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 func TestChatStreamStartsAndRetargetsDynamicMotionThroughOneEngine(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"reply":"Starting dynamically.","motion":{"action":"start","speed_percent":30,"anchors":["tip","middle","base"],"variation_percent":20,"segment_seconds":12}}`,
-		`{"reply":"Changing the geometry.","motion":{"action":"update","center_percent":35,"span_percent":50,"variation_percent":30,"segment_seconds":18}}`,
+		`{"reply":"Starting creatively.","motion":{"action":"start","speed_percent":30,"anchors":["tip","middle","base"],"span_min_percent":30,"span_profile":"wander","variation_percent":20,"segment_seconds":18}}`,
+		`{"reply":"Changing the geometry.","motion":{"action":"update","center_percent":35,"span_percent":50,"span_min_percent":24,"span_profile":"contrast","variation_percent":30,"segment_seconds":22}}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{
 		Transport: fake, MotionTransport: fake, LLMProvider: provider,
@@ -212,20 +212,14 @@ func TestChatStreamStartsAndRetargetsDynamicMotionThroughOneEngine(t *testing.T)
 		t.Fatalf("dynamic start did not dispatch:\n%s", started)
 	}
 	snapshot := server.currentMotionEngine().Snapshot()
-	if !snapshot.Running || snapshot.Target.Dynamic == nil || snapshot.Target.PatternID != "" ||
-		len(snapshot.Target.Dynamic.Anchors) != 3 {
-		t.Fatalf("dynamic start target = %+v", snapshot.Target)
-	}
+	assertStartedDynamicTarget(t, snapshot)
 
 	updated := postChatStream(t, server, `{"message":"keep changing it up"}`)
 	if !strings.Contains(updated, `"action":"update"`) {
 		t.Fatalf("dynamic update did not dispatch:\n%s", updated)
 	}
 	snapshot = server.currentMotionEngine().Snapshot()
-	if dynamic := snapshot.Target.Dynamic; dynamic == nil || dynamic.CenterPercent != 35 || dynamic.SpanPercent != 50 ||
-		dynamic.VariationPercent != 30 || dynamic.SegmentSeconds != 18 || len(dynamic.Anchors) != 0 {
-		t.Fatalf("dynamic update target = %+v", dynamic)
-	}
+	assertUpdatedDynamicTarget(t, snapshot)
 	plays := 0
 	for _, command := range fake.Commands() {
 		if command.Kind == transport.CommandKindPointsPlay {
@@ -234,6 +228,27 @@ func TestChatStreamStartsAndRetargetsDynamicMotionThroughOneEngine(t *testing.T)
 	}
 	if plays != 1 {
 		t.Fatalf("dynamic retarget restarted transport playback %d times, want one shared stream", plays)
+	}
+}
+
+func assertStartedDynamicTarget(t *testing.T, snapshot motion.ActiveMotionState) {
+	t.Helper()
+	dynamic := snapshot.Target.Dynamic
+	if !snapshot.Running || dynamic == nil || snapshot.Target.PatternID != "" ||
+		len(dynamic.Anchors) != 3 || dynamic.SpanMinPercent != 30 ||
+		dynamic.SpanProfile != motion.DynamicSpanProfileWander || dynamic.PhraseSeed == 0 {
+		t.Fatalf("dynamic start target = %+v", snapshot.Target)
+	}
+}
+
+func assertUpdatedDynamicTarget(t *testing.T, snapshot motion.ActiveMotionState) {
+	t.Helper()
+	dynamic := snapshot.Target.Dynamic
+	if dynamic == nil || dynamic.CenterPercent != 35 || dynamic.SpanPercent != 50 ||
+		dynamic.SpanMinPercent != 24 || dynamic.SpanProfile != motion.DynamicSpanProfileContrast ||
+		dynamic.PhraseSeed == 0 || dynamic.VariationPercent != 30 ||
+		dynamic.SegmentSeconds != 22 || len(dynamic.Anchors) != 0 {
+		t.Fatalf("dynamic update target = %+v", dynamic)
 	}
 }
 
@@ -627,6 +642,40 @@ func TestChatSpeedOnlyTargetPreservesActiveProgram(t *testing.T) {
 	}
 	if target.SpeedPercent != speed {
 		t.Fatalf("speed-only target speed = %d, want %d", target.SpeedPercent, speed)
+	}
+}
+
+func TestDynamicDefinitionFromCommandPreservesAndClearsSpanEnvelope(t *testing.T) {
+	current := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 78, SpanMinPercent: 32,
+		SpanProfile: motion.DynamicSpanProfileWander, VariationPercent: 20, SegmentSeconds: 18,
+	})
+	if current.PhraseSeed == 0 {
+		t.Fatal("fixture has no phrase seed")
+	}
+
+	speed := 34
+	preserved := dynamicDefinitionFromCommand(&chat.MotionCommand{
+		Action: chat.MotionActionUpdate, SpeedPercent: &speed,
+	}, &current)
+	if preserved.SpanMinPercent != current.SpanMinPercent || preserved.SpanProfile != current.SpanProfile ||
+		preserved.PhraseSeed != current.PhraseSeed {
+		t.Fatalf("speed-only update reset envelope: current=%+v updated=%+v", current, preserved)
+	}
+
+	steady := dynamicDefinitionFromCommand(&chat.MotionCommand{
+		Action: chat.MotionActionUpdate, SpanProfile: chat.DynamicSpanProfileSteady,
+	}, &current)
+	if steady.SpanProfile != motion.DynamicSpanProfileSteady || steady.SpanMinPercent != steady.SpanPercent || steady.PhraseSeed != 0 {
+		t.Fatalf("steady update did not clear envelope: %+v", steady)
+	}
+
+	spanMin := 26
+	restarted := dynamicDefinitionFromCommand(&chat.MotionCommand{
+		Action: chat.MotionActionUpdate, SpanMinPercent: &spanMin,
+	}, &steady)
+	if restarted.SpanProfile != motion.DynamicSpanProfileWander || restarted.SpanMinPercent != spanMin || restarted.PhraseSeed == 0 {
+		t.Fatalf("span floor did not restart a wandering envelope: %+v", restarted)
 	}
 }
 

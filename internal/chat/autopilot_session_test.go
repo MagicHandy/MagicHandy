@@ -94,10 +94,20 @@ func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
 
 	running := AutopilotMotionMessage(AutopilotContext{
 		MotionMode: MotionModeDynamic, CurrentSpeed: 30, CurrentCenter: 50,
-		CurrentSpan: 60, CurrentVariation: 10, SpeedMinPercent: 20,
+		CurrentSpan: 60, CurrentSpanMin: 26, CurrentSpanProfile: DynamicSpanProfileWander,
+		CurrentVariation: 10, SpeedMinPercent: 20,
 		SpeedMaxPercent: 40, MotionMinSeconds: 20, MotionMaxSeconds: 60,
 	})
 	if strings.Contains(running, "No Dynamic target is active") {
 		t.Fatalf("running Dynamic prompt still claims startup state:\n%s", running)
+	}
+	for _, want := range []string{
+		`span floor 26%, span profile "wander"`,
+		"span_min_percent and choose span_profile breathe, wander, or contrast",
+		"variation_percent controls slow center and rhythm texture independently",
+	} {
+		if !strings.Contains(running, want) {
+			t.Fatalf("running Dynamic prompt missing %q:\n%s", want, running)
+		}
 	}
 }

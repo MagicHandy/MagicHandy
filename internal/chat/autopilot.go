@@ -9,24 +9,26 @@ import (
 // AutopilotContext is bounded semantic context for an autonomous model turn.
 // It contains no transport or engine details.
 type AutopilotContext struct {
-	Style            string
-	SegmentIndex     int
-	RecentPatternIDs []string
-	SpeedMinPercent  int
-	SpeedMaxPercent  int
-	LastSay          string
-	CurrentPatternID string
-	CurrentSpeed     int
-	CurrentArea      string
-	AreaFocusEnabled bool
-	MotionMode       MotionMode
-	CurrentCenter    int
-	CurrentSpan      int
-	CurrentAnchors   []string
-	CurrentVariation int
-	CurrentSegment   int
-	MotionMinSeconds int
-	MotionMaxSeconds int
+	Style              string
+	SegmentIndex       int
+	RecentPatternIDs   []string
+	SpeedMinPercent    int
+	SpeedMaxPercent    int
+	LastSay            string
+	CurrentPatternID   string
+	CurrentSpeed       int
+	CurrentArea        string
+	AreaFocusEnabled   bool
+	MotionMode         MotionMode
+	CurrentCenter      int
+	CurrentSpan        int
+	CurrentSpanMin     int
+	CurrentSpanProfile string
+	CurrentAnchors     []string
+	CurrentVariation   int
+	CurrentSegment     int
+	MotionMinSeconds   int
+	MotionMaxSeconds   int
 	// SessionTracking gates the three session facts below. When false they are
 	// omitted from the prompt entirely rather than rendered as zeros, so the model
 	// cannot reason from a number that means "unknown".
@@ -86,8 +88,13 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 			maximumSeconds = 120
 		}
 		if context.CurrentSpeed > 0 {
-			fmt.Fprintf(&builder, "Current dynamic motion: %d%% speed, center %d%%, span %d%%, variation %d%%",
-				context.CurrentSpeed, context.CurrentCenter, context.CurrentSpan, context.CurrentVariation)
+			fmt.Fprintf(&builder, "Current creative motion: %d%% speed, center %d%%, widest span %d%%",
+				context.CurrentSpeed, context.CurrentCenter, context.CurrentSpan)
+			if context.CurrentSpanProfile != "" {
+				fmt.Fprintf(&builder, ", span floor %d%%, span profile %q",
+					context.CurrentSpanMin, context.CurrentSpanProfile)
+			}
+			fmt.Fprintf(&builder, ", center/rhythm variation %d%%", context.CurrentVariation)
 			if len(context.CurrentAnchors) > 0 {
 				fmt.Fprintf(&builder, ", anchors %q", context.CurrentAnchors)
 			}
@@ -100,7 +107,8 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 		builder.WriteString("- Use action \"update\" only when a meaningful change fits. Omitted fields preserve the live dynamic target.\n")
 		builder.WriteString("- Use action \"none\" to deliberately continue. Holding is a first-class model decision, not a failure.\n")
 		builder.WriteString("- Change center/span or provide a new 2-6 anchor route; never provide both representations together. Interior anchors are pass-through positions, not pauses.\n")
-		builder.WriteString("- variation_percent controls slow multi-cycle drift. Use zero for settled motion and higher values for organic change, never for jitter.\n")
+		builder.WriteString("- To vary stroke length inside the stretch, provide span_min_percent and choose span_profile breathe, wander, or contrast. The current widest span or anchor route remains the ceiling. Use steady to clear range variation.\n")
+		builder.WriteString("- variation_percent controls slow center and rhythm texture independently from an explicit span profile. Use zero for mechanically even motion, never for jitter.\n")
 		fmt.Fprintf(&builder, "- segment_seconds must be %d-%d and says when to reconsider, not when to stop. Vary it naturally rather than choosing one constant.\n",
 			minimumSeconds, maximumSeconds)
 		builder.WriteString("- Never use start or stop: the scheduler owns start and only the user stops motion.\n")

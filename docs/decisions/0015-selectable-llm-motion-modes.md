@@ -35,9 +35,9 @@ MagicHandy has three persisted, mutually exclusive LLM motion modes:
 
 1. **Creative** (`dynamic` in settings/API): the model emits bounded semantic geometry (`center_percent` plus
    `span_percent`, or an ordered route through named anchors),
-   `speed_percent`, slow `variation_percent`, and a `segment_seconds` decision
-   horizon. The backend compiles this to ordinary loop content and a
-   `MotionPlan`.
+   an optional stroke-length envelope, `speed_percent`, slow center/rhythm
+   `variation_percent`, and a `segment_seconds` decision horizon. The backend
+   compiles this to ordinary loop content and a `MotionPlan`.
 2. **Pattern Library**: the model selects enabled opaque pattern handles, speed,
    and optional named area focus. This remains the default while Dynamic
    acceptance is open.
@@ -64,11 +64,22 @@ Dynamic geometry is bounded as follows:
 - center is 0–100 and span is 20–100;
 - anchor routes contain 2–6 names from base/lower/middle/upper/tip, cannot
   repeat consecutively, and must cover at least 20% of travel;
-- variation is 0–100 and produces deterministic, loop-closed multi-harmonic
-  center/span drift plus bounded leg-time breathing over a route-sized phrase
-  of at least about eight seconds at maximum reference speed, rather than
-  random per-sample noise or a short repeating sine;
+- `span_percent` or the anchor bounds are the outer reach;
+  `span_min_percent` is a 20–outer-span floor and `span_profile` selects
+  `steady`, `breathe`, `wander`, or `contrast`;
+- an explicit variable span profile produces a deterministic, loop-closed
+  phrase of at least about 30 seconds at maximum reference speed. It changes
+  the complete anchor route coherently rather than adding sample jitter;
+- variation is 0–100 and independently produces loop-closed multi-harmonic
+  center drift plus bounded leg-time breathing over a route-sized phrase of at
+  least about eight seconds at maximum reference speed;
 - the decision horizon is 4–120 seconds and does not stop motion at expiry.
+
+The empty span profile preserves alpha.25's bounded implicit span swell for old
+in-memory targets. New model responses use the explicit vocabulary. A variable
+profile without a usable floor is rejected or normalized steady at non-chat
+boundaries; the backend never invents the amount of range variation. The
+backend-derived phrase seed is diagnostic/runtime state, not a model field.
 
 Interior route anchors are pass-through knots with a non-zero tangent. Only
 the true route endpoints reverse direction. Dynamic content enters the same
@@ -76,12 +87,16 @@ the true route endpoints reverse direction. Dynamic content enters the same
 generation as every other source. Content identity excludes the decision
 horizon so a timing-only update preserves phase. Cross-geometry handoff phase
 selection considers position, direction, and bounded velocity mismatch before
-the existing C1 continuity transition.
+the existing C1 continuity transition. Its phase search scales with authored
+curve complexity, so a long Creative phrase is not searched at the same coarse
+resolution as a short catalog motif.
 
-While Dynamic motion is active, any non-empty, non-negated interactive turn may
-carry a model-selected `update` or `none`. Deterministic code does not map taste
-phrases to geometry and does not force variation after a valid `none`. Starting
-motion still requires explicit current-turn authority. Autopilot has its
+While Dynamic motion is active, any non-empty interactive turn may carry a
+model-selected `update` or `none`. A negative qualifier applies to its semantic
+axis: preserving pace does not cancel an explicit range request, while an
+unscoped refusal remains inert. Deterministic code does not map taste phrases
+to geometry and does not force variation after a valid `none`. Starting motion
+still requires explicit current-turn authority. Autopilot has its
 existing autonomous authority; it clamps the model horizon to the user's motion
 cadence range. If Dynamic generation fails, it holds or waits rather than
 falling back to a deterministic pattern.
@@ -135,6 +150,22 @@ modes. The comparison and formulas are recorded in
 [`../motion-calibration.md`](../motion-calibration.md).
 The cross-device percentage mapping is separately governed by
 [`ADR 0016`](0016-handy-model-speed-calibration.md).
+
+## 2026-08-20 range-envelope follow-up
+
+The first Creative variation field coupled center, span, and timing into one
+small texture. That kept the schema compact but did not let the model express
+phrases such as alternating tight and broad strokes independently of pace or
+center drift. Creative now treats outer geometry, span floor/profile,
+center/rhythm variation, pace, and decision horizon as separate semantic axes.
+
+The installed managed 12B Gemma model passed 16/16 repeated range-envelope
+cases and the broader 9/9 Creative intent matrix on the first response, with no
+engine or transport instantiated. Cases covered variable start, legacy-to-
+breathe, contrast, steady-to-variable, variable-to-steady, pace-only
+preservation, unchanged continuation, conversation-only hold, start, focus,
+negation, and Stop. This closes the managed-provider prompt/parser portion of
+acceptance, but not the Ollama or real-device feel portions.
 
 This is a refinement of the accepted one-engine decision, not a new motion
 path. The initiating report lacked transport, latency, and trace evidence, and

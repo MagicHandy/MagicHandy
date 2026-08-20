@@ -71,6 +71,9 @@ export interface EngineSnapshot {
     dynamic?: {
       center_percent: number;
       span_percent: number;
+      span_min_percent?: number;
+      span_profile?: "steady" | "breathe" | "wander" | "contrast" | string;
+      phrase_seed?: number;
       anchors?: Array<{ name: string; position_percent: number }>;
       variation_percent: number;
       segment_seconds: number;

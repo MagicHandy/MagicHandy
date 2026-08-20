@@ -72,8 +72,17 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   const rawSource = engine?.target?.source?.trim();
   const source = active && rawSource ? rawSource.replaceAll("_", " ") : "--";
   const dynamicAnchors = dynamic?.anchors?.map((anchor) => anchor.name).filter(Boolean) ?? [];
+  const dynamicSpan = dynamic && typeof dynamic.span_min_percent === "number" &&
+    dynamic.span_min_percent < dynamic.span_percent
+    ? `${dynamic.span_min_percent}-${dynamic.span_percent}%`
+    : dynamic ? `${dynamic.span_percent}%` : "";
+  const dynamicSpanProfile = dynamic?.span_profile === "steady" ? t("Steady")
+    : dynamic?.span_profile === "breathe" ? t("Breathe")
+      : dynamic?.span_profile === "wander" ? t("Wander")
+        : dynamic?.span_profile === "contrast" ? t("Contrast")
+          : "";
   const dynamicMeta = dynamic
-    ? `${dynamicAnchors.length ? dynamicAnchors.join(" → ") : `${t("Center")} ${dynamic.center_percent}%`} · ${dynamic.segment_seconds}s · ${source}`
+    ? `${dynamicAnchors.length ? dynamicAnchors.join(" → ") : `${t("Center")} ${dynamic.center_percent}%`} · ${dynamicSpanProfile ? `${dynamicSpanProfile} · ` : ""}${dynamic.segment_seconds}s · ${source}`
     : "";
   // The stroke channel and carriage ride on the device center axis. 100% is the
   // top of the channel.
@@ -141,7 +150,7 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
           {dynamic ? (
             <dl className="viz-metrics dynamic-metrics">
               <div><dt>{t("Center")}</dt><dd>{dynamic.center_percent}%</dd></div>
-              <div><dt>{t("Span")}</dt><dd>{dynamic.span_percent}%</dd></div>
+              <div><dt>{t("Span")}</dt><dd>{dynamicSpan}</dd></div>
               <div><dt>{t("Speed")}</dt><dd>{speed}</dd></div>
               <div><dt>{t("Variation")}</dt><dd>{dynamic.variation_percent}%</dd></div>
             </dl>

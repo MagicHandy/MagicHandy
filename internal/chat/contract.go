@@ -84,9 +84,34 @@ type MotionCommand struct {
 	// fields preserve omitted running values without conflating zero with absent.
 	CenterPercent    *int     `json:"center_percent,omitempty"`
 	SpanPercent      *int     `json:"span_percent,omitempty"`
+	SpanMinPercent   *int     `json:"span_min_percent,omitempty"`
+	SpanProfile      string   `json:"span_profile,omitempty"`
 	Anchors          []string `json:"anchors,omitempty"`
 	VariationPercent *int     `json:"variation_percent,omitempty"`
 	SegmentSeconds   *int     `json:"segment_seconds,omitempty"`
+}
+
+const (
+	// DynamicSpanProfileSteady holds one stroke length.
+	DynamicSpanProfileSteady = "steady"
+	// DynamicSpanProfileBreathe produces a slow coherent swell.
+	DynamicSpanProfileBreathe = "breathe"
+	// DynamicSpanProfileWander produces smooth correlated range changes.
+	DynamicSpanProfileWander = "wander"
+	// DynamicSpanProfileContrast groups tight, medium, and broad strokes.
+	DynamicSpanProfileContrast = "contrast"
+)
+
+// DynamicSpanProfiles lists the compact range-envelope vocabulary exposed to
+// local models. It is duplicated at the chat boundary to keep chat independent
+// of the motion package.
+func DynamicSpanProfiles() []string {
+	return []string{
+		DynamicSpanProfileSteady,
+		DynamicSpanProfileBreathe,
+		DynamicSpanProfileWander,
+		DynamicSpanProfileContrast,
+	}
 }
 
 // Named area-focus zones the model may request. "full" explicitly clears an
@@ -171,6 +196,11 @@ func parseAssistantResponseForCapabilities(raw string, patterns []PatternChoice,
 	preserveCurrentPatternSpeed(&response, currentSpeed)
 	if err := validateAssistantResponse(&response, patterns, patternsEnabled, dynamicEnabled); err != nil {
 		return AssistantResponse{}, err
+	}
+	if dynamicEnabled {
+		if err := validateDynamicSpanEnvelopeState(response.Motion, context); err != nil {
+			return AssistantResponse{}, err
+		}
 	}
 	return response, nil
 }
@@ -260,6 +290,7 @@ func validateAssistantResponse(response *AssistantResponse, patterns []PatternCh
 	response.Motion.Action = strings.ToLower(strings.TrimSpace(response.Motion.Action))
 	response.Motion.PatternID = strings.TrimSpace(response.Motion.PatternID)
 	response.Motion.Area = strings.ToLower(strings.TrimSpace(response.Motion.Area))
+	response.Motion.SpanProfile = strings.ToLower(strings.TrimSpace(response.Motion.SpanProfile))
 	for index := range response.Motion.Anchors {
 		response.Motion.Anchors[index] = strings.ToLower(strings.TrimSpace(response.Motion.Anchors[index]))
 	}
@@ -315,17 +346,35 @@ func validateMotionRanges(command MotionCommand) error {
 }
 
 func validateDynamicMotionRanges(command MotionCommand) error {
-	if command.CenterPercent != nil && (*command.CenterPercent < 0 || *command.CenterPercent > 100) {
-		return errors.New("motion center_percent must be between 0 and 100")
-	}
-	if command.SpanPercent != nil && (*command.SpanPercent < 20 || *command.SpanPercent > 100) {
-		return errors.New("motion span_percent must be between 20 and 100")
+	if err := validateDynamicGeometryRanges(command); err != nil {
+		return err
 	}
 	if command.VariationPercent != nil && (*command.VariationPercent < 0 || *command.VariationPercent > 100) {
 		return errors.New("motion variation_percent must be between 0 and 100")
 	}
 	if command.SegmentSeconds != nil && (*command.SegmentSeconds < 4 || *command.SegmentSeconds > 120) {
 		return errors.New("motion segment_seconds must be between 4 and 120")
+	}
+	return nil
+}
+
+func validateDynamicGeometryRanges(command MotionCommand) error {
+	if command.CenterPercent != nil && (*command.CenterPercent < 0 || *command.CenterPercent > 100) {
+		return errors.New("motion center_percent must be between 0 and 100")
+	}
+	if command.SpanPercent != nil && (*command.SpanPercent < 20 || *command.SpanPercent > 100) {
+		return errors.New("motion span_percent must be between 20 and 100")
+	}
+	if command.SpanMinPercent != nil && (*command.SpanMinPercent < 20 || *command.SpanMinPercent > 100) {
+		return errors.New("motion span_min_percent must be between 20 and 100")
+	}
+	if command.SpanProfile != "" && !validDynamicSpanProfile(command.SpanProfile) {
+		return fmt.Errorf("unknown motion span_profile %q", command.SpanProfile)
+	}
+	if command.SpanMinPercent != nil {
+		if outer, ok := commandDynamicOuterSpan(command); ok && *command.SpanMinPercent > outer {
+			return errors.New("motion span_min_percent cannot exceed the outer span")
+		}
 	}
 	return nil
 }
@@ -393,11 +442,73 @@ func validateDynamicMotionCombination(command MotionCommand) error {
 		if len(command.Anchors) == 0 && (command.CenterPercent == nil || command.SpanPercent == nil) {
 			return errors.New("dynamic motion start requires anchors or both center_percent and span_percent")
 		}
+		if variableDynamicSpanProfile(command.SpanProfile) && command.SpanMinPercent == nil {
+			return errors.New("a variable span_profile requires span_min_percent on dynamic motion start")
+		}
 	}
 	if command.Action == MotionActionUpdate && command.SpeedPercent == nil && !hasDynamicMotionFields(command) {
 		return errors.New("dynamic motion update requires at least one changed field")
 	}
 	return nil
+}
+
+// validateDynamicSpanEnvelopeState checks the effective update, including
+// fields preserved from the authoritative running target. Without this check a
+// variable profile with no usable floor would normalize to steady motion while
+// the assistant's reply still claimed that stroke length was changing.
+func validateDynamicSpanEnvelopeState(command *MotionCommand, context *MotionContext) error {
+	if command == nil || (command.Action != MotionActionStart && command.Action != MotionActionUpdate) {
+		return nil
+	}
+
+	profile := effectiveDynamicSpanProfile(command, context)
+	if !variableDynamicSpanProfile(profile) {
+		return nil
+	}
+
+	outer, hasOuter := effectiveDynamicOuterSpan(command, context)
+	floor, hasFloor := effectiveDynamicSpanFloor(command, context)
+	if !hasFloor {
+		return errors.New("a variable span_profile requires a usable span_min_percent")
+	}
+	if hasOuter && floor >= outer {
+		return errors.New("a variable span_profile requires span_min_percent below the outer span")
+	}
+	return nil
+}
+
+func effectiveDynamicSpanProfile(command *MotionCommand, context *MotionContext) string {
+	profile := strings.ToLower(strings.TrimSpace(command.SpanProfile))
+	if profile == "" && context != nil && context.Running {
+		profile = strings.ToLower(strings.TrimSpace(context.SpanProfile))
+	}
+	if command.SpanMinPercent != nil &&
+		(profile == "" || profile == DynamicSpanProfileSteady) {
+		// A floor-only command intentionally selects ordinary organic movement
+		// at the HTTP boundary, so validate that same effective target.
+		return DynamicSpanProfileWander
+	}
+	return profile
+}
+
+func effectiveDynamicOuterSpan(command *MotionCommand, context *MotionContext) (int, bool) {
+	if outer, ok := commandDynamicOuterSpan(*command); ok {
+		return outer, true
+	}
+	if context != nil && context.Running && context.SpanPercent >= 20 {
+		return context.SpanPercent, true
+	}
+	return 0, false
+}
+
+func effectiveDynamicSpanFloor(command *MotionCommand, context *MotionContext) (int, bool) {
+	if command.SpanMinPercent != nil {
+		return *command.SpanMinPercent, true
+	}
+	if context != nil && context.Running && context.SpanMinPercent >= 20 {
+		return context.SpanMinPercent, true
+	}
+	return 0, false
 }
 
 func hasMotionTargetFields(command MotionCommand) bool {
@@ -407,7 +518,43 @@ func hasMotionTargetFields(command MotionCommand) bool {
 
 func hasDynamicMotionFields(command MotionCommand) bool {
 	return command.CenterPercent != nil || command.SpanPercent != nil || len(command.Anchors) > 0 ||
+		command.SpanMinPercent != nil || command.SpanProfile != "" ||
 		command.VariationPercent != nil || command.SegmentSeconds != nil
+}
+
+func validDynamicSpanProfile(profile string) bool {
+	switch strings.ToLower(strings.TrimSpace(profile)) {
+	case DynamicSpanProfileSteady, DynamicSpanProfileBreathe,
+		DynamicSpanProfileWander, DynamicSpanProfileContrast:
+		return true
+	default:
+		return false
+	}
+}
+
+func variableDynamicSpanProfile(profile string) bool {
+	profile = strings.ToLower(strings.TrimSpace(profile))
+	return profile == DynamicSpanProfileBreathe || profile == DynamicSpanProfileWander ||
+		profile == DynamicSpanProfileContrast
+}
+
+func commandDynamicOuterSpan(command MotionCommand) (int, bool) {
+	if command.SpanPercent != nil {
+		return *command.SpanPercent, true
+	}
+	if len(command.Anchors) < 2 {
+		return 0, false
+	}
+	minimum, maximum := 100, 0
+	for _, name := range command.Anchors {
+		position, ok := DynamicAnchorPosition(name)
+		if !ok {
+			return 0, false
+		}
+		minimum = min(minimum, position)
+		maximum = max(maximum, position)
+	}
+	return maximum - minimum, true
 }
 
 func oneOfZone(zone string) bool {

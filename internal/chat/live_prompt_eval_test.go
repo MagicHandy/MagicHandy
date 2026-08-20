@@ -522,6 +522,175 @@ func TestLiveDynamicMotionMatrix(t *testing.T) {
 	}
 }
 
+// TestLiveDynamicSpanEnvelopeMatrix holds the installed model to the semantic
+// quality bar for Creative range variation. It covers first-pass selection,
+// preservation, and clearing of an envelope without constructing an engine or
+// transport, so it cannot dispatch motion to a device.
+func TestLiveDynamicSpanEnvelopeMatrix(t *testing.T) {
+	model := liveEvalModel(t)
+	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+		BaseURL: liveEvalLlamaURL,
+		Model:   model,
+		Timeout: 2 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	promptSet, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	capabilities.AreaFocus = false
+	capabilities.Voice = VoiceUtility
+
+	tests := []struct {
+		name     string
+		message  string
+		context  MotionContext
+		action   string
+		validate func(*testing.T, MotionCommand, MotionContext)
+	}{
+		{
+			name: "organic variable start", message: "Start at a moderate pace with a naturally changing mix of tight and broad strokes.",
+			context: stoppedDynamicContext(), action: MotionActionStart,
+			validate: func(t *testing.T, command MotionCommand, context MotionContext) {
+				assertLiveVariableSpanEnvelope(t, command, context, "")
+			},
+		},
+		{
+			name: "breathe from legacy target", message: "Let the stroke length slowly breathe, but keep exactly the same pace.",
+			context: legacyRunningDynamicContext(), action: MotionActionUpdate,
+			validate: func(t *testing.T, command MotionCommand, context MotionContext) {
+				assertLiveVariableSpanEnvelope(t, command, context, DynamicSpanProfileBreathe)
+				assertLivePacePreserved(t, command, context)
+			},
+		},
+		{
+			name: "contrast existing envelope", message: "Use mostly tight strokes with an occasional broad one. Keep the same pace.",
+			context: runningDynamicContext(), action: MotionActionUpdate,
+			validate: func(t *testing.T, command MotionCommand, context MotionContext) {
+				assertLiveVariableSpanEnvelope(t, command, context, DynamicSpanProfileContrast)
+				assertLivePacePreserved(t, command, context)
+			},
+		},
+		{
+			name: "mix range from steady", message: "Mix short and deep strokes smoothly without changing the pace.",
+			context: steadyRunningDynamicContext(), action: MotionActionUpdate,
+			validate: func(t *testing.T, command MotionCommand, context MotionContext) {
+				assertLiveVariableSpanEnvelope(t, command, context, "")
+				assertLivePacePreserved(t, command, context)
+			},
+		},
+		{
+			name: "clear to steady", message: "Keep the stroke length perfectly steady now. Do not change the pace.",
+			context: runningDynamicContext(), action: MotionActionUpdate,
+			validate: func(t *testing.T, command MotionCommand, context MotionContext) {
+				if command.SpanProfile != DynamicSpanProfileSteady {
+					t.Fatalf("span profile = %q, want steady", command.SpanProfile)
+				}
+				assertLivePacePreserved(t, command, context)
+			},
+		},
+		{
+			name: "pace only preserves envelope", message: "A little faster, but keep the range exactly as it is.",
+			context: runningDynamicContext(), action: MotionActionUpdate,
+			validate: func(t *testing.T, command MotionCommand, context MotionContext) {
+				if command.SpeedPercent == nil || *command.SpeedPercent <= context.SpeedPercent {
+					t.Fatalf("speed update = %v, want above current %d", command.SpeedPercent, context.SpeedPercent)
+				}
+				if command.CenterPercent != nil || command.SpanPercent != nil || command.SpanMinPercent != nil ||
+					command.SpanProfile != "" || len(command.Anchors) > 0 || command.VariationPercent != nil {
+					t.Fatalf("pace-only request mutated Creative geometry: %+v", command)
+				}
+			},
+		},
+		{
+			name: "continue exact envelope", message: "Keep going exactly like that.",
+			context: runningDynamicContext(), action: MotionActionNone,
+		},
+		{
+			name: "conversation preserves envelope", message: "Tell me something encouraging while you keep going.",
+			context: runningDynamicContext(), action: MotionActionNone,
+		},
+	}
+
+	const runsPerCase = 2
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			for run := 1; run <= runsPerCase; run++ {
+				service := Service{
+					Provider: provider, Prompt: promptSet, Model: model,
+					MaxTokens: 256, ReasoningMode: "off",
+					MotionContext: &test.context, Capabilities: &capabilities,
+				}
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				started := time.Now()
+				result, completeErr := service.Complete(ctx, Request{Message: test.message}, nil)
+				elapsed := time.Since(started)
+				cancel()
+				if completeErr != nil {
+					t.Fatalf("run %d: %v", run, completeErr)
+				}
+				action := dynamicResultAction(result.Response)
+				t.Logf("run=%d action=%s repaired=%t fallback=%t total=%s response=%s", run, action,
+					result.Repaired, result.SemanticFallback, elapsed.Round(time.Millisecond), compactLiveEvalJSON(result.Raw))
+				if result.Malformed {
+					t.Fatalf("run %d remained malformed: %s", run, result.MalformedError)
+				}
+				if result.Repaired || result.SemanticFallback {
+					t.Fatalf("run %d was not a valid first-pass decision: repaired=%t fallback=%t repair=%s",
+						run, result.Repaired, result.SemanticFallback, compactLiveEvalJSON(result.RepairRaw))
+				}
+				if action != test.action {
+					t.Fatalf("run %d action=%q, want %q", run, action, test.action)
+				}
+				if strings.TrimSpace(result.Response.Reply) == "" {
+					t.Fatalf("run %d reply is empty", run)
+				}
+				if test.validate != nil {
+					if result.Response.Motion == nil {
+						t.Fatalf("run %d has no motion command", run)
+					}
+					test.validate(t, *result.Response.Motion, test.context)
+				}
+			}
+		})
+	}
+}
+
+func assertLiveVariableSpanEnvelope(t *testing.T, command MotionCommand, context MotionContext, wantedProfile string) {
+	t.Helper()
+	profile := command.SpanProfile
+	if profile == "" {
+		profile = context.SpanProfile
+	}
+	if wantedProfile != "" && profile != wantedProfile {
+		t.Fatalf("span profile = %q, want %q", profile, wantedProfile)
+	}
+	if !variableDynamicSpanProfile(profile) {
+		t.Fatalf("span profile = %q, want breathe, wander, or contrast", profile)
+	}
+	outer, ok := commandDynamicOuterSpan(command)
+	if !ok {
+		outer, ok = context.SpanPercent, context.SpanPercent >= 20
+	}
+	floor := context.SpanMinPercent
+	if command.SpanMinPercent != nil {
+		floor = *command.SpanMinPercent
+	}
+	if !ok || floor < 20 || floor >= outer {
+		t.Fatalf("effective span envelope = floor %d outer %d, want 20 <= floor < outer", floor, outer)
+	}
+}
+
+func assertLivePacePreserved(t *testing.T, command MotionCommand, context MotionContext) {
+	t.Helper()
+	if command.SpeedPercent != nil && *command.SpeedPercent != context.SpeedPercent {
+		t.Fatalf("speed = %d, want omitted or preserved at %d", *command.SpeedPercent, context.SpeedPercent)
+	}
+}
+
 func stoppedDynamicContext() MotionContext {
 	return MotionContext{
 		MotionMode: MotionModeDynamic, SpeedMinPercent: 10, SpeedMaxPercent: 40,
@@ -531,15 +700,31 @@ func stoppedDynamicContext() MotionContext {
 func runningDynamicContext() MotionContext {
 	return MotionContext{
 		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 24,
-		CenterPercent: 50, SpanPercent: 76, VariationPercent: 18, SegmentSeconds: 14,
+		CenterPercent: 50, SpanPercent: 76, SpanMinPercent: 34,
+		SpanProfile: DynamicSpanProfileWander, VariationPercent: 18, SegmentSeconds: 14,
 		SpeedMinPercent: 10, SpeedMaxPercent: 40,
 	}
+}
+
+func legacyRunningDynamicContext() MotionContext {
+	context := runningDynamicContext()
+	context.SpanMinPercent = 0
+	context.SpanProfile = ""
+	return context
+}
+
+func steadyRunningDynamicContext() MotionContext {
+	context := runningDynamicContext()
+	context.SpanMinPercent = context.SpanPercent
+	context.SpanProfile = DynamicSpanProfileSteady
+	return context
 }
 
 func focusedDynamicContext() MotionContext {
 	return MotionContext{
 		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 24,
-		CenterPercent: 14, SpanPercent: 24, VariationPercent: 8, SegmentSeconds: 18,
+		CenterPercent: 14, SpanPercent: 24, SpanMinPercent: 20,
+		SpanProfile: DynamicSpanProfileBreathe, VariationPercent: 8, SegmentSeconds: 18,
 		SpeedMinPercent: 10, SpeedMaxPercent: 40,
 	}
 }

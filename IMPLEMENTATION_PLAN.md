@@ -170,8 +170,9 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   chat-driven motion through the engine only. A persisted sidebar list selects
   **Dynamic**, **Pattern Library**, or **Off**. Pattern Library exposes enabled
   opaque pattern handles and named focus; Dynamic exposes bounded center/span
-  or named-anchor geometry, slow variation, pace, and a decision horizon, with
-  no catalog in its prompt. Both compile through the same target, plan,
+  or named-anchor geometry, an optional long stroke-length envelope, independent
+  center/rhythm variation, pace, and a decision horizon, with no catalog in its
+  prompt. Both compile through the same target, plan,
   retarget, limit, transport, trace, and Stop path. Pattern remains the default
   until Dynamic completes live-provider and real-device A/B acceptance (ADR
   0015). Each turn receives the authoritative mode-specific engine snapshot and
@@ -1345,9 +1346,13 @@ and per-plan runtime bounds. Programs use direct clock scaling; media funscripts
 remain media-clock-locked, while their optional rate limiter uses the same
 calibrated percentage. The model contract advertises only `speed_percent`; the
 retired `intensity` alias is accepted for old responses and immediately
-normalized. Dynamic variation now combines a long loop-closed harmonic spatial
-wander with bounded timing breathing, and engine phase samples retain fractional
-authored time. See `docs/motion-calibration.md`.
+normalized. Creative motion now separates outer geometry, a model-selected span
+floor/profile, center/rhythm variation, pace, and decision horizon. Explicit
+breathe/wander/contrast span envelopes are deterministic, loop-closed phrases
+of at least about 30 seconds at maximum reference speed; legacy implicit span
+swell remains compatible. Engine phase samples retain fractional authored time,
+and long-curve retarget search scales with authored complexity. See
+`docs/motion-calibration.md`.
 The device-profile boundary is recorded in
 `docs/decisions/0016-handy-model-speed-calibration.md`.
 

@@ -175,6 +175,11 @@ func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotRespon
 	if err := validateAssistantResponse(&validated, s.Patterns, patternsEnabled, dynamicEnabled); err != nil {
 		return AutopilotResponse{}, err
 	}
+	if dynamicEnabled {
+		if err := validateDynamicSpanEnvelopeState(validated.Motion, s.MotionContext); err != nil {
+			return AutopilotResponse{}, err
+		}
+	}
 	if validated.Motion != nil && validated.Motion.Action != MotionActionNone &&
 		validated.Motion.Action != MotionActionTarget && validated.Motion.Action != MotionActionUpdate {
 		return AutopilotResponse{}, errors.New("autopilot motion action must be target, update, or none")
