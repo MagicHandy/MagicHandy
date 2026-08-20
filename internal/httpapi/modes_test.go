@@ -238,8 +238,20 @@ func TestQuickEndpointPersistsMotionStyle(t *testing.T) {
 	if settings.Motion.Style != "intense" {
 		t.Fatalf("persisted style = %q, want intense", settings.Motion.Style)
 	}
+	model := personalizationRequest(t, server, http.MethodPost, "/api/motion/quick", `{"handy_model":"handy_2_pro"}`)
+	if model.Code != http.StatusOK || !strings.Contains(model.Body.String(), `"handy_model":"handy_2_pro"`) {
+		t.Fatalf("Handy model update = %d: %s", model.Code, model.Body.String())
+	}
+	settings, _ = server.store.Snapshot()
+	if settings.Motion.HandyModel != config.HandyModel2Pro {
+		t.Fatalf("persisted Handy model = %q, want %q", settings.Motion.HandyModel, config.HandyModel2Pro)
+	}
 	invalid := personalizationRequest(t, server, http.MethodPost, "/api/motion/quick", `{"style":"chaotic"}`)
 	if invalid.Code != http.StatusBadRequest {
 		t.Fatalf("invalid style = %d, want 400", invalid.Code)
+	}
+	invalidModel := personalizationRequest(t, server, http.MethodPost, "/api/motion/quick", `{"handy_model":"overclock"}`)
+	if invalidModel.Code != http.StatusBadRequest {
+		t.Fatalf("invalid Handy model = %d, want 400", invalidModel.Code)
 	}
 }

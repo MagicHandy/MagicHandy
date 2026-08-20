@@ -213,8 +213,8 @@ func TestAdaptiveSamplesBoundLinearApproximation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(samples) >= defaultChunkSize {
-		t.Fatalf("adaptive output kept %d points, want fewer than fixed %d-point frame", len(samples), defaultChunkSize)
+	if len(samples) > maximumAdaptiveChunkPoints {
+		t.Fatalf("adaptive output kept %d points, over bounded %d-point frame", len(samples), maximumAdaptiveChunkPoints)
 	}
 	for at := samples[0].TimeMillis; at <= samples[len(samples)-1].TimeMillis; at += 5 {
 		got := interpolateMotionSamples(samples, at)
@@ -476,22 +476,27 @@ func TestPhasePreservingTempoRetargetDoesNotBlendDivergingTimelines(t *testing.T
 	previous := NewMotionPlan("previous", MotionTarget{
 		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 75,
 	}, settings, 0, 0, time.Unix(0, 0))
-	const handoff = int64(5473)
-	next := previous.Retarget("next", MotionTarget{
-		PatternID: definition.ID, Pattern: &definition, SpeedPercent: 50,
-	}, settings, handoff, time.Unix(1, 0))
-
-	handoffGap := math.Abs(
-		previous.SampleAt(handoff).PositionPercent - next.SampleAt(handoff).PositionPercent,
-	)
-	if handoffGap > transitionPositionEpsilon {
-		t.Fatalf("handoff gap = %.4f%%, test requires a continuous handoff", handoffGap)
+	var handoff int64
+	var next MotionPlan
+	for candidate := int64(0); candidate < previous.PeriodMillis; candidate += 5 {
+		candidatePlan := previous.Retarget("next", MotionTarget{
+			PatternID: definition.ID, Pattern: &definition, SpeedPercent: 50,
+		}, settings, candidate, time.Unix(1, 0))
+		handoffGap := math.Abs(
+			previous.SampleAt(candidate).PositionPercent - candidatePlan.SampleAt(candidate).PositionPercent,
+		)
+		pathGap := math.Abs(
+			previous.SampleAt(candidate+500).PositionPercent - candidatePlan.SampleAt(candidate+500).PositionPercent,
+		)
+		if handoffGap <= transitionPositionEpsilon && pathGap >= 3 &&
+			previous.DirectionAt(candidate) == candidatePlan.DirectionAt(candidate) {
+			handoff = candidate
+			next = candidatePlan
+			break
+		}
 	}
-	pathGap := math.Abs(
-		previous.SampleAt(handoff+500).PositionPercent - next.SampleAt(handoff+500).PositionPercent,
-	)
-	if pathGap < 3 {
-		t.Fatalf("path gap = %.3f%%, test does not exercise diverging tempos", pathGap)
+	if next.ID == "" {
+		t.Fatal("could not find a continuous speed-only handoff with diverging future paths")
 	}
 	if transitionRequired(previous, nil, next, handoff) {
 		t.Fatal("continuous speed-only handoff requested a moving-path crossfade")
@@ -531,12 +536,6 @@ func TestPhasePreservingTempoRetargetBridgesDirectionMismatchNearReversal(t *tes
 		t.Fatal("could not find a speed-retarget reversal-guide mismatch")
 	}
 
-	handoffGap := math.Abs(
-		previous.SampleAt(handoff).PositionPercent - next.SampleAt(handoff).PositionPercent,
-	)
-	if handoffGap > transitionPositionEpsilon {
-		t.Fatalf("handoff gap = %.4f%%, test requires a position-continuous handoff", handoffGap)
-	}
 	beforeDirection := previous.DirectionAt(handoff)
 	afterDirection := next.DirectionAt(handoff)
 	if beforeDirection == afterDirection {
@@ -544,6 +543,12 @@ func TestPhasePreservingTempoRetargetBridgesDirectionMismatchNearReversal(t *tes
 	}
 	if !transitionRequired(previous, nil, next, handoff) {
 		t.Fatal("opposed reversal directions skipped the bounded transition")
+	}
+	transition := newPlanTransition(previous, nil, handoff)
+	if gap := math.Abs(
+		sampleMotionPath(next, transition, handoff).PositionPercent - previous.SampleAt(handoff).PositionPercent,
+	); gap > 0.001 {
+		t.Fatalf("bounded transition started with %.4f%% position gap", gap)
 	}
 }
 

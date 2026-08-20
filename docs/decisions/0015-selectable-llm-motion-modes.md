@@ -2,8 +2,11 @@
 
 ## Status
 
-Accepted and implemented. Dynamic remains opt-in until live-provider and
-real-device A/B acceptance supports changing the default.
+Accepted and implemented. The persisted/API identifier remains `dynamic`; the
+UI labels this mode `Creative` beginning with alpha.24. Creative remains opt-in
+until live-provider and real-device A/B acceptance supports changing the
+default. This is a presentation rename, not a settings migration or a second
+motion mode.
 
 ## Context
 
@@ -30,7 +33,7 @@ Stop lifecycle.
 
 MagicHandy has three persisted, mutually exclusive LLM motion modes:
 
-1. **Dynamic**: the model emits bounded semantic geometry (`center_percent` plus
+1. **Creative** (`dynamic` in settings/API): the model emits bounded semantic geometry (`center_percent` plus
    `span_percent`, or an ordered route through named anchors),
    `speed_percent`, slow `variation_percent`, and a `segment_seconds` decision
    horizon. The backend compiles this to ordinary loop content and a
@@ -41,8 +44,8 @@ MagicHandy has three persisted, mutually exclusive LLM motion modes:
 3. **Off**: the model is chat-only. Model-authored starts and updates are
    rejected, but user and model Stop paths remain unconditional.
 
-The Chat Controls sidebar exposes a list with all three values. Settings > Model
-exposes the same list and shows area-focus and experimental-content controls
+The Chat Controls sidebar exposes a segmented choice with all three values.
+Settings > Model exposes the same categorical list and shows area-focus and experimental-content controls
 only for Pattern Library. The permanent navigation rail remains navigation, not
 a mixed global control surface. Selection persists through a controller-gated
 scoped settings endpoint. A mode change stops Autopilot planning so an
@@ -61,8 +64,10 @@ Dynamic geometry is bounded as follows:
 - center is 0–100 and span is 20–100;
 - anchor routes contain 2–6 names from base/lower/middle/upper/tip, cannot
   repeat consecutively, and must cover at least 20% of travel;
-- variation is 0–100 and produces deterministic, loop-closed center/span drift
-  over several cycles rather than random per-sample noise;
+- variation is 0–100 and produces deterministic, loop-closed multi-harmonic
+  center/span drift plus bounded leg-time breathing over a route-sized phrase
+  of at least about eight seconds at maximum reference speed, rather than
+  random per-sample noise or a short repeating sine;
 - the decision horizon is 4–120 seconds and does not stop motion at expiry.
 
 Interior route anchors are pass-through knots with a non-zero tangent. Only
@@ -108,6 +113,33 @@ Negative:
 - The extra Chat control consumes some of the already dense motion sidebar.
 - Dynamic state adds trace and frontend types that must stay synchronized with
   the engine snapshot.
+
+## 2026-08-20 calibration follow-up
+
+Initial physical feedback found Dynamic motion still robotic and reported that
+73% felt materially slower than comparable controls. Inspection showed that
+Dynamic's nonzero variation repeated a four-cycle sine and that all loop speeds
+were calibrated to 180% travel/s at 100%, then constrained by the catalog's
+450 ms authoring reversal floor.
+
+The shared planner now maps 1–100 through an explicitly selected Original /
+Handy 2 Standard / Handy 2 Pro travel and normal-speed profile, then applies a
+distinct exact-curve runtime envelope; catalog authoring keeps its quieter
+quality limits. Handy publishes enough travel and speed data for this physical
+calibration, but not per-model acceleration limits, so the runtime ceiling stays
+shared and Pro overclocking is not exposed. Dynamic variation uses a longer deterministic harmonic phrase
+and bounded temporal asymmetry, and fractional phase sampling removes authored-
+millisecond plateaus. The Chat sidebar uses visible set-point sliders for
+ordered cadence/style settings and segmented radio choices for categorical
+modes. The comparison and formulas are recorded in
+[`../motion-calibration.md`](../motion-calibration.md).
+The cross-device percentage mapping is separately governed by
+[`ADR 0016`](0016-handy-model-speed-calibration.md).
+
+This is a refinement of the accepted one-engine decision, not a new motion
+path. The initiating report lacked transport, latency, and trace evidence, and
+no post-change device run has yet been captured, so the acceptance gate below
+remains open.
 
 ## Rejected Alternatives
 

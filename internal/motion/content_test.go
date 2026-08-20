@@ -58,7 +58,7 @@ func TestLoopSpeedNormalizesMeanTravelAcrossPatterns(t *testing.T) {
 	patternIDs := []PatternID{PatternStroke, PatternPulse, PatternHardAndRegular}
 
 	for _, speed := range []int{20, 40} {
-		wantRate := patternReferenceTravelRatePercentPerSecond * float64(speed) / 100
+		wantRate := referenceTravelRateForSpeed(speed, settings.HandyModel)
 		for _, patternID := range patternIDs {
 			definition, found := BuiltinPatternDefinition(patternID)
 			if !found {
@@ -75,7 +75,7 @@ func TestLoopSpeedNormalizesMeanTravelAcrossPatterns(t *testing.T) {
 	}
 }
 
-func TestLoopSpeedProducesProportionalTempoChanges(t *testing.T) {
+func TestLoopSpeedUsesCalibratedManualControlCurve(t *testing.T) {
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMinPercent = 1
 	settings.SpeedMaxPercent = 100
@@ -86,34 +86,39 @@ func TestLoopSpeedProducesProportionalTempoChanges(t *testing.T) {
 		}, settings, 0, 0, time.Unix(0, 0)).PeriodMillis
 	}
 
-	if slow, medium := period(20), period(40); math.Abs(float64(slow)/float64(medium)-2) > 0.01 {
-		t.Fatalf("20%%/40%% periods = %d/%d, want a 2x tempo change", slow, medium)
-	}
-	if medium, fast := period(40), period(80); math.Abs(float64(medium)/float64(fast)-2) > 0.01 {
-		t.Fatalf("40%%/80%% periods = %d/%d, want a 2x tempo change", medium, fast)
+	for _, pair := range [][2]int{{20, 40}, {40, 73}} {
+		slow, fast := period(pair[0]), period(pair[1])
+		wantRatio := referenceTravelRateForSpeed(pair[1], settings.HandyModel) /
+			referenceTravelRateForSpeed(pair[0], settings.HandyModel)
+		if math.Abs(float64(slow)/float64(fast)-wantRatio) > 0.01 {
+			t.Fatalf("%d%%/%d%% periods = %d/%d, want calibrated %.3fx tempo change",
+				pair[0], pair[1], slow, fast, wantRatio)
+		}
 	}
 }
 
-func TestLoopPlaybackHonorsCatalogSafetyBudgets(t *testing.T) {
+func TestLoopPlaybackHonorsRuntimeSafetyEnvelope(t *testing.T) {
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMaxPercent = 100
 	for _, definition := range BuiltinPatternDefinitions() {
 		plan := NewMotionPlan("safe", MotionTarget{
 			PatternID: definition.ID, Pattern: &definition, SpeedPercent: 100,
 		}, settings, 0, 0, time.Unix(0, 0))
-		timeFactor := float64(plan.PeriodMillis) / float64(definition.CycleMillis)
+		playedAcceleration := maximumPlanAcceleration(plan)
+		if playedAcceleration > runtimeMaxAccelerationPercentPerSecond2*1.001 {
+			t.Errorf("%s acceleration = %.1f%%/s^2, over %.1f", definition.Name,
+				playedAcceleration, runtimeMaxAccelerationPercentPerSecond2)
+		}
 		metrics, err := MeasureCurve(definition.Points, definition.CycleMillis, true)
 		if err != nil {
 			t.Fatalf("measure %q: %v", definition.ID, err)
 		}
-		playedAcceleration := metrics.MaxAccelerationPercentPerSecond2 / (timeFactor * timeFactor)
-		if playedAcceleration > catalogMaxAcceleration*1.001 {
-			t.Errorf("%s acceleration = %.1f%%/s^2, over %.1f", definition.Name, playedAcceleration, catalogMaxAcceleration)
-		}
 		if metrics.MinReversalGapMillis > 0 {
-			playedGap := float64(metrics.MinReversalGapMillis) * timeFactor
-			if playedGap+0.01 < catalogMinReversalGap {
-				t.Errorf("%s reversal gap = %.1fms, below %d", definition.Name, playedGap, catalogMinReversalGap)
+			playedGap := float64(metrics.MinReversalGapMillis) * float64(plan.PeriodMillis) /
+				float64(definition.CycleMillis)
+			if playedGap+0.01 < float64(runtimeMinimumReversalGapMillis) {
+				t.Errorf("%s reversal gap = %.1fms, below %d", definition.Name,
+					playedGap, runtimeMinimumReversalGapMillis)
 			}
 		}
 	}
@@ -544,13 +549,14 @@ func TestMediaTimelineCapsOverFastTravelWithoutChangingClock(t *testing.T) {
 	if plan.PeriodMillis != timeline.DurationMillis || plan.Loop {
 		t.Fatalf("media plan timing = period %d loop %v", plan.PeriodMillis, plan.Loop)
 	}
+	maximumDelta := referenceTravelRateForSpeed(40, settings.HandyModel) / 10
 	want := []CurvePoint{
 		{TimeMillis: 0, PositionPercent: 0},
-		{TimeMillis: 100, PositionPercent: 12},
+		{TimeMillis: 100, PositionPercent: maximumDelta},
 		{TimeMillis: 200, PositionPercent: 0},
 	}
 	for index, point := range plan.Target.Media.Points {
-		if point != want[index] {
+		if point.TimeMillis != want[index].TimeMillis || math.Abs(point.PositionPercent-want[index].PositionPercent) > 1e-9 {
 			t.Fatalf("limited point %d = %+v, want %+v", index, point, want[index])
 		}
 	}
@@ -573,14 +579,15 @@ func TestMediaTimelineLimitPreservesAuthoredDirectionAfterClipping(t *testing.T)
 		Label: "Reversal after clip", Source: TargetSourceMedia, MediaID: timeline.ID, Media: &timeline,
 	}, settings, 0, 0, time.Unix(0, 0))
 
+	maximumDelta := referenceTravelRateForSpeed(40, settings.HandyModel) / 10
 	want := []CurvePoint{
 		{TimeMillis: 0, PositionPercent: 0},
-		{TimeMillis: 100, PositionPercent: 12},
-		{TimeMillis: 200, PositionPercent: 2},
-		{TimeMillis: 300, PositionPercent: 7},
+		{TimeMillis: 100, PositionPercent: maximumDelta},
+		{TimeMillis: 200, PositionPercent: maximumDelta - 10},
+		{TimeMillis: 300, PositionPercent: maximumDelta - 5},
 	}
 	for index, point := range plan.Target.Media.Points {
-		if point != want[index] {
+		if point.TimeMillis != want[index].TimeMillis || math.Abs(point.PositionPercent-want[index].PositionPercent) > 1e-9 {
 			t.Fatalf("limited point %d = %+v, want %+v", index, point, want[index])
 		}
 	}
@@ -595,8 +602,8 @@ func TestMediaTimelineLimitNeverAmplifiesAnAuthoredSegment(t *testing.T) {
 		{TimeMillis: 1200, PositionPercent: 40},
 		{TimeMillis: 1300, PositionPercent: 40},
 	}
-	limited := limitMediaTimelineRate(points, 25)
-	maximumRate := mediaFullSpeedRatePercentPerSecond * 0.25
+	limited := limitMediaTimelineRate(points, 25, config.HandyModelOriginal)
+	maximumRate := referenceTravelRateForSpeed(25, config.HandyModelOriginal)
 
 	for index := 1; index < len(points); index++ {
 		authoredDelta := points[index].PositionPercent - points[index-1].PositionPercent

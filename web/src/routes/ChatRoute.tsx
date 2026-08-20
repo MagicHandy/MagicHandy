@@ -8,6 +8,7 @@ import { ChatSessionDialog } from "../components/ChatSessionDialog";
 import { ChatTabs } from "../components/ChatTabs";
 import { MotionVisualizer } from "../components/MotionVisualizer";
 import { QuickSettings } from "../components/QuickSettings";
+import { SegmentedChoice } from "../components/SetpointControls";
 import { VoiceQuickControls } from "../components/VoiceQuickControls";
 import { useAppState, useToast } from "../state/app-state";
 
@@ -184,25 +185,26 @@ export function ChatRoute() {
         </section>
 
         <aside className="chat-sidebar" aria-label={t("Motion controls")}>
-          <h2 className="section-title">{t("Controls")}</h2>
-          <label className="chat-motion-mode">
-            <span>{t("LLM motion")}</span>
-            <select
-              aria-label={t("LLM motion")}
+          <div className="chat-sidebar-controls">
+            <h2 className="section-title">{t("Controls")}</h2>
+            <SegmentedChoice
+              className="chat-motion-mode"
+              label={t("LLM motion")}
               value={motionMode}
+              options={[
+                { value: "dynamic", label: t("Creative") },
+                { value: "pattern", label: t("Pattern library") },
+                { value: "off", label: t("Off") },
+              ]}
               disabled={!backendOnline || readOnly || changingMotionMode}
-              onChange={(event) => void changeMotionMode(event.target.value as "dynamic" | "pattern" | "off")}
-            >
-              <option value="dynamic">{t("Dynamic")}</option>
-              <option value="pattern">{t("Pattern library")}</option>
-              <option value="off">{t("Off")}</option>
-            </select>
-          </label>
-          <AutopilotControl />
-          <VoiceQuickControls />
-          <div className="divider" />
-          <h2 className="section-title">{t("Motion style")}</h2>
-          <QuickSettings section="style" />
+              onChange={(mode) => void changeMotionMode(mode)}
+            />
+            <AutopilotControl />
+            <VoiceQuickControls />
+            <div className="divider" />
+            <h2 className="section-title">{t("Motion style")}</h2>
+            <QuickSettings section="style" />
+          </div>
           <div className="chat-motion-status">
             <h3 className="group-title">{t("Motion status")}</h3>
             <MotionVisualizer motion={motion} />

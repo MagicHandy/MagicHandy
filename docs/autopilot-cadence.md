@@ -248,8 +248,9 @@ moment later. Buildup requires session tracking; the settings validator rejects
 the combination rather than letting the document express a state the runtime
 would silently ignore.
 
-In the Chat control, Motion changes and Spoken check-ins reveal their custom
-timing rows directly beneath the corresponding selector. Session buildup and its
+In the Chat control, Motion changes and Spoken check-ins are labeled set-point
+sliders and reveal their custom timing rows directly beneath the corresponding
+control. Session buildup and its
 duration are primary controls as well; only adaptive timing, speech-motion
 authority, and the lower-level tracking switch remain under Advanced.
 

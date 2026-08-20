@@ -97,13 +97,12 @@ describe("ChatRoute", () => {
     render(<ChatRoute />);
 
     const controls = screen.getByRole("complementary", { name: "Motion controls" });
-    const mode = within(controls).getByRole("combobox", { name: "LLM motion" });
-    expect(mode).toHaveValue("pattern");
-    expect(within(controls).getByRole("option", { name: "Dynamic" })).toBeInTheDocument();
-    expect(within(controls).getByRole("option", { name: "Pattern library" })).toBeInTheDocument();
-    expect(within(controls).getByRole("option", { name: "Off" })).toBeInTheDocument();
+    const mode = within(controls).getByRole("radiogroup", { name: "LLM motion" });
+    expect(within(mode).getByRole("radio", { name: "Creative" })).not.toBeChecked();
+    expect(within(mode).getByRole("radio", { name: "Pattern library" })).toBeChecked();
+    expect(within(mode).getByRole("radio", { name: "Off" })).toBeInTheDocument();
 
-    fireEvent.change(mode, { target: { value: "dynamic" } });
+    fireEvent.click(within(mode).getByRole("radio", { name: "Creative" }));
     await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("dynamic"));
   });
 

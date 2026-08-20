@@ -8,18 +8,16 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
-// At 100%, media may traverse the full semantic stroke three times per
-// second. Lower speed limits cap only segments that exceed that rate; they do
-// not contract every authored excursion and turn ordinary slow strokes into
-// sub-minimum-speed moves with a dwell at each reversal.
-const mediaFullSpeedRatePercentPerSecond = 300.0
+// maximumSupportedReferenceTravelRatePercentPerSecond is the fastest semantic
+// rate among the documented, non-overclocked Handy profiles. Dynamic uses it
+// to keep a varied phrase long enough under every supported calibration.
+const maximumSupportedReferenceTravelRatePercentPerSecond = 400.0 / 110.0 * 100.0
 
-// patternReferenceTravelRatePercentPerSecond is the mean semantic travel rate
-// requested by a loop at 100% speed. It matches the established Stroke
-// pattern's authored pace closely, while making speed independent of whatever
-// cadence an imported pattern happened to carry. Shape-specific acceleration
-// and reversal limits may lower the achievable rate.
-const patternReferenceTravelRatePercentPerSecond = 180.0
+type handySpeedProfile struct {
+	strokeMillimeters  float64
+	minimumMMPerSecond float64
+	maximumMMPerSecond float64
+}
 
 // MotionPlan is repeatable or finite semantic content sampled over stream time.
 //
@@ -65,7 +63,7 @@ func NewMotionPlan(
 ) MotionPlan {
 	settings = normalizeMotionSettings(settings)
 	target = NormalizeTarget(target, settings)
-	target, content := resolveTargetContent(target)
+	target, content := resolveTargetContent(target, settings.HandyModel)
 	if id == "" {
 		id = fmt.Sprintf("%s-%d", motionContentID(target), createdAt.UnixNano())
 	}
@@ -75,6 +73,7 @@ func NewMotionPlan(
 		content.duration,
 		target.SpeedPercent,
 		content.loop,
+		settings.HandyModel,
 	)
 	if target.Media != nil {
 		periodMillis = content.duration
@@ -100,8 +99,11 @@ func NewMotionPlan(
 // SampleAt samples the plan at the given stream-relative time.
 func (p MotionPlan) SampleAt(streamMillis int64) MotionSample {
 	phase := p.PhaseAt(streamMillis)
-	curveMillis := int64(math.Round(phase * float64(p.curve.duration)))
-	position := p.focus.apply(p.curve.Sample(curveMillis))
+	// Preserve fractional authored time. Rounding here used to turn a single
+	// authored millisecond into a long exact plateau when a curve was played
+	// slowly, even though the semantic curve itself remained continuous.
+	curveMillis := phase * float64(p.curve.duration)
+	position := p.focus.apply(p.curve.sampleFloat(curveMillis))
 	return MotionSample{
 		PlanID:          p.ID,
 		PatternID:       p.PatternID,
@@ -217,6 +219,7 @@ func (c resolvedContent) buildCurve(scale playbackScale) Curve {
 
 func (c resolvedContent) playbackScale(focus focusProjection, periodMillis int64) playbackScale {
 	scale := neutralPlaybackScale()
+	scale.maxAccelerationPercentSecond2 = runtimeMaxAccelerationPercentPerSecond2
 	if c.duration > 0 && periodMillis > 0 {
 		scale.timeFactor = float64(periodMillis) / float64(c.duration)
 	}
@@ -224,7 +227,7 @@ func (c resolvedContent) playbackScale(focus focusProjection, periodMillis int64
 	return scale
 }
 
-func resolveTargetContent(target MotionTarget) (MotionTarget, resolvedContent) {
+func resolveTargetContent(target MotionTarget, handyModel string) (MotionTarget, resolvedContent) {
 	if target.Dynamic != nil {
 		definition := NormalizeDynamicDefinition(*target.Dynamic)
 		target.Dynamic = &definition
@@ -240,7 +243,7 @@ func resolveTargetContent(target MotionTarget) (MotionTarget, resolvedContent) {
 	if target.Media != nil {
 		if definition, err := NormalizeMediaTimelineDefinition(*target.Media); err == nil {
 			if target.MediaSpeedLimitEnabled {
-				definition.Points = limitMediaTimelineRate(definition.Points, target.SpeedPercent)
+				definition.Points = limitMediaTimelineRate(definition.Points, target.SpeedPercent, handyModel)
 			}
 			target.Media = &definition
 			target.MediaID = definition.ID
@@ -306,11 +309,11 @@ func patternContent(definition PatternDefinition) resolvedContent {
 // script has reversed, which both amplifies that segment and feels faster than
 // the uncapped script. Delta limiting preserves every authored direction and
 // never adds travel that the source did not request.
-func limitMediaTimelineRate(points []CurvePoint, speedPercent int) []CurvePoint {
+func limitMediaTimelineRate(points []CurvePoint, speedPercent int, handyModel string) []CurvePoint {
 	if len(points) < 2 {
 		return append([]CurvePoint(nil), points...)
 	}
-	maximumRate := mediaFullSpeedRatePercentPerSecond * float64(clamp(speedPercent, 1, 100)) / 100
+	maximumRate := referenceTravelRateForSpeed(speedPercent, handyModel)
 	limited := append([]CurvePoint(nil), points...)
 	for index := 1; index < len(limited); index++ {
 		elapsedMillis := points[index].TimeMillis - points[index-1].TimeMillis
@@ -328,7 +331,7 @@ func limitMediaTimelineRate(points []CurvePoint, speedPercent int) []CurvePoint 
 	return limited
 }
 
-func periodForContent(points []CurvePoint, baseDuration int64, speedPercent int, loop bool) int64 {
+func periodForContent(points []CurvePoint, baseDuration int64, speedPercent int, loop bool, handyModel string) int64 {
 	speedPercent = clamp(speedPercent, 1, 100)
 	minimum := int64(minimumBurstCycleMillis)
 	if !loop {
@@ -339,13 +342,38 @@ func periodForContent(points []CurvePoint, baseDuration int64, speedPercent int,
 	travel := totalCurveTravel(points)
 	period := int64(0)
 	if travel > 0 {
-		requestedRate := patternReferenceTravelRatePercentPerSecond * float64(speedPercent) / 100
+		requestedRate := referenceTravelRateForSpeed(speedPercent, handyModel)
 		period = int64(math.Round(travel * 1000 / requestedRate))
 	} else {
 		period = int64(math.Round(float64(baseDuration) * 100 / float64(speedPercent)))
 	}
 	minimum = minimumSafeLoopPeriod(points, baseDuration)
 	return max(period, minimum)
+}
+
+// referenceTravelRateForSpeed maps the selectable 1..100 control onto the
+// selected Handy model's published full-travel, normal speed envelope. The
+// result remains semantic percentage-points/second; no physical units or raw
+// device payload cross the shared engine boundary. The affine floor matters:
+// one is the slowest supported carriage speed, not near-stationary motion.
+func referenceTravelRateForSpeed(speedPercent int, handyModel string) float64 {
+	speedPercent = clamp(speedPercent, 1, 100)
+	progress := float64(speedPercent-1) / 99
+	profile := handySpeedProfileFor(handyModel)
+	physicalRate := profile.minimumMMPerSecond +
+		(profile.maximumMMPerSecond-profile.minimumMMPerSecond)*progress
+	return physicalRate / profile.strokeMillimeters * 100
+}
+
+func handySpeedProfileFor(handyModel string) handySpeedProfile {
+	switch handyModel {
+	case config.HandyModel2Standard:
+		return handySpeedProfile{strokeMillimeters: 125, minimumMMPerSecond: 32, maximumMMPerSecond: 400}
+	case config.HandyModel2Pro:
+		return handySpeedProfile{strokeMillimeters: 125, minimumMMPerSecond: 32, maximumMMPerSecond: 450}
+	default:
+		return handySpeedProfile{strokeMillimeters: 110, minimumMMPerSecond: 32, maximumMMPerSecond: 400}
+	}
 }
 
 func totalCurveTravel(points []CurvePoint) float64 {
@@ -357,10 +385,11 @@ func totalCurveTravel(points []CurvePoint) float64 {
 }
 
 // minimumSafeLoopPeriod returns the shortest full-span playback period that
-// keeps the rendered curve inside the catalog acceleration and reversal
-// budgets. It deliberately permits a runtime period below the 6.6 second
-// authoring floor when a short phrase has enough headroom; cycle length is not
-// a safety property independent of the number and size of its strokes.
+// keeps the rendered curve inside the runtime acceleration and reversal
+// envelope. Catalog authoring remains deliberately gentler. Runtime evaluates
+// the actual scaled curve because reversal guides adapt to playback speed; the
+// old square-root scaling assumed a fixed authored curve and therefore slowed
+// high requested speeds even after the guide had been rebuilt for them.
 func minimumSafeLoopPeriod(points []CurvePoint, authoredPeriod int64) int64 {
 	return minimumSafeLoopPeriodAtGain(points, authoredPeriod, 1)
 }
@@ -370,18 +399,50 @@ func minimumSafeLoopPeriodAtGain(points []CurvePoint, authoredPeriod int64, gain
 	if authoredPeriod <= 0 || len(points) < 2 {
 		return minimum
 	}
-	metrics, err := MeasureCurve(points, authoredPeriod, true)
+	gain = math.Max(0, gain)
+	if gain == 0 {
+		return minimum
+	}
+	if gap := reversalGap(points, authoredPeriod, true); gap > 0 {
+		minimum = max(minimum, int64(math.Ceil(
+			float64(authoredPeriod)*float64(runtimeMinimumReversalGapMillis)/float64(gap),
+		)))
+	}
+	if loopPeriodWithinRuntimeEnvelope(points, authoredPeriod, minimum, gain) {
+		return minimum
+	}
+
+	upper := max(authoredPeriod, minimum+1)
+	for !loopPeriodWithinRuntimeEnvelope(points, authoredPeriod, upper, gain) {
+		if upper > math.MaxInt64/2 {
+			return upper
+		}
+		upper *= 2
+	}
+	lower := minimum
+	for lower+1 < upper {
+		candidate := lower + (upper-lower)/2
+		if loopPeriodWithinRuntimeEnvelope(points, authoredPeriod, candidate, gain) {
+			upper = candidate
+		} else {
+			lower = candidate
+		}
+	}
+	return upper
+}
+
+func loopPeriodWithinRuntimeEnvelope(points []CurvePoint, authoredPeriod, playedPeriod int64, gain float64) bool {
+	scale := playbackScale{
+		timeFactor: float64(playedPeriod) / float64(authoredPeriod), amplitudeFactor: gain,
+		maxAccelerationPercentSecond2: runtimeMaxAccelerationPercentPerSecond2,
+	}
+	curve, err := newCurve(points, authoredPeriod, true, false, maximumCurvePoints, scale)
 	if err != nil {
-		return max(authoredPeriod, minimum)
+		return false
 	}
-	factor := 0.0
-	if metrics.MaxAccelerationPercentPerSecond2 > 0 {
-		factor = math.Sqrt(metrics.MaxAccelerationPercentPerSecond2 * gain / catalogMaxAcceleration)
-	}
-	if metrics.MinReversalGapMillis > 0 {
-		factor = math.Max(factor, float64(catalogMinReversalGap)/float64(metrics.MinReversalGapMillis))
-	}
-	return max(minimum, int64(math.Ceil(float64(authoredPeriod)*factor)))
+	playedAcceleration := curve.maximumAccelerationPerMillis2() * gain /
+		(scale.timeFactor * scale.timeFactor) * 1e6
+	return playedAcceleration <= runtimeMaxAccelerationPercentPerSecond2*1.001
 }
 
 // focusedLoopPeriod keeps focus and soft anchoring from changing the requested

@@ -14,14 +14,18 @@ import (
 // ramp entirely is not the alternative — without a guide the zero PCHIP slope
 // at the extremum eases the whole leg, which is worse.
 const (
-	maximumPatternReversalBlendMillis int64 = 75
-	minimumPatternReversalBlendMillis int64 = 4
-	// maximumReversalAccelerationPerMillis2 bounds the ramp in played percent
-	// per millisecond squared. Two thirds of the catalog ceiling leaves the
-	// rest of the curve its own headroom, and it keeps a full-span full-speed
-	// stroke leg on the existing 75 ms cap, so the fast full-range feel that
-	// constant was tuned for is unchanged.
-	maximumReversalAccelerationPerMillis2 = catalogMaxAcceleration * 2 / 3 / 1e6
+	// These are played-time limits. Pattern authoring deliberately stays inside
+	// the quieter catalogMaxAcceleration/catalogMinReversalGap envelope, while
+	// runtime playback may use the wider calibrated device envelope when the
+	// selected speed asks for it.
+	runtimeMaxAccelerationPercentPerSecond2       = 7500.0
+	runtimeMinimumReversalGapMillis               = int64(100)
+	maximumPatternReversalBlendMillis       int64 = 75
+	minimumPatternReversalBlendMillis       int64 = 4
+	// Two thirds of the selected curve ceiling leaves the rest of the curve its
+	// own headroom. playbackScale chooses the catalog ceiling for authoring and
+	// the wider runtime ceiling for an engine plan.
+	reversalAccelerationShare = 2.0 / 3.0
 )
 
 // playbackScale describes how authored curve coordinates become played motion:
@@ -29,12 +33,16 @@ const (
 // authored percent covers amplitudeFactor played percent. Both compress the
 // reversal budget, so both belong in the ramp calculation.
 type playbackScale struct {
-	timeFactor      float64
-	amplitudeFactor float64
+	timeFactor                    float64
+	amplitudeFactor               float64
+	maxAccelerationPercentSecond2 float64
 }
 
 func neutralPlaybackScale() playbackScale {
-	return playbackScale{timeFactor: 1, amplitudeFactor: 1}
+	return playbackScale{
+		timeFactor: 1, amplitudeFactor: 1,
+		maxAccelerationPercentSecond2: catalogMaxAcceleration,
+	}
 }
 
 func (s playbackScale) normalized() playbackScale {
@@ -43,6 +51,9 @@ func (s playbackScale) normalized() playbackScale {
 	}
 	if !(s.amplitudeFactor > 0) || math.IsInf(s.amplitudeFactor, 0) {
 		s.amplitudeFactor = 1
+	}
+	if !(s.maxAccelerationPercentSecond2 > 0) || math.IsInf(s.maxAccelerationPercentSecond2, 0) {
+		s.maxAccelerationPercentSecond2 = catalogMaxAcceleration
 	}
 	return s
 }
@@ -61,15 +72,26 @@ func (s playbackScale) reversalBlendMillis(deltaPercent float64, durationMillis 
 	}
 	s = s.normalized()
 	duration := float64(durationMillis)
+	maximumAccelerationPerMillis2 := s.maxAccelerationPercentSecond2 * reversalAccelerationShare / 1e6
 	budget := math.Abs(deltaPercent) * s.amplitudeFactor /
-		(maximumReversalAccelerationPerMillis2 * s.timeFactor * s.timeFactor)
+		(maximumAccelerationPerMillis2 * s.timeFactor * s.timeFactor)
 	blend := duration / 2
 	if discriminant := duration*duration - 4*budget; discriminant > 0 {
 		blend = (duration - math.Sqrt(discriminant)) / 2
 	}
+	// The curve stores authored milliseconds, but the reversal envelope is a
+	// played-time contract. Keeping a fixed authored cap made faster playback
+	// shorten the physical ramp exactly when it needed more room, while very
+	// slow playback could stretch a four-millisecond guide into a visible hold.
+	minimumAuthored := max(int64(1), int64(math.Ceil(
+		float64(minimumPatternReversalBlendMillis)/s.timeFactor,
+	)))
+	maximumAuthored := max(minimumAuthored, int64(math.Ceil(
+		float64(maximumPatternReversalBlendMillis)/s.timeFactor,
+	)))
 	return min(
-		maximumPatternReversalBlendMillis,
-		max(minimumPatternReversalBlendMillis, int64(math.Ceil(blend))),
+		maximumAuthored,
+		max(minimumAuthored, int64(math.Ceil(blend))),
 	)
 }
 

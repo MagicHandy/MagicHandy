@@ -55,7 +55,7 @@ describe("MotionVisualizer", () => {
             running: true,
             paused: false,
             target: {
-              pattern_name: "Dynamic",
+              pattern_name: "Creative",
               source: "chat",
               speed_percent: 32,
               dynamic: {
@@ -75,7 +75,7 @@ describe("MotionVisualizer", () => {
       />,
     );
 
-    expect(screen.getByText("Dynamic")).toBeInTheDocument();
+    expect(screen.getByText("Creative")).toBeInTheDocument();
     expect(screen.getByText(/tip → middle → base · 18s · chat/)).toBeInTheDocument();
     expect(screen.getByText("84%")).toBeInTheDocument();
     expect(screen.getByText("24%")).toBeInTheDocument();
@@ -152,6 +152,7 @@ describe("MotionVisualizer", () => {
               reverse_direction: false,
               apply_video_speed_limit: false,
               style: "balanced",
+              handy_model: "handy_original",
             },
           },
         }}
@@ -179,6 +180,7 @@ describe("MotionVisualizer", () => {
               reverse_direction: true,
               apply_video_speed_limit: false,
               style: "balanced",
+              handy_model: "handy_original",
             },
           },
         }}

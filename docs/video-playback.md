@@ -268,14 +268,15 @@ drift never re-times the device:
 
 Safety inheritance: authored timestamps and positions stay locked to the video
 by default. Settings > Media can opt into a semantic rate cap derived from the
-configured maximum speed (300 semantic percentage points/second at 100%, scaled
-by the selected maximum). The cap clips each authored segment's displacement
+configured maximum speed (the same selected Handy-model travel/speed
+calibration used by loop motion). The cap clips each authored segment's displacement
 without changing its timestamp or direction. It never amplifies a source
 segment and cannot continue toward an old absolute target after the script has
 already reversed. Because the video clock cannot slow down, clipping a segment
 can compress or offset the later range; the control reports that tradeoff
-instead of claiming authored-exact playback. This is not calibrated
-physical-velocity feedback. Changing the effective cap during an active media
+instead of claiming authored-exact playback. It is a documented model
+calibration, not measured physical-velocity feedback. Changing the selected
+model or effective cap during an active media
 run Stops and invalidates that run because already-buffered HSP points cannot
 be rewritten; Play starts a clean stream.
 Startup acquisition remains speed-bounded by the configured maximum even when

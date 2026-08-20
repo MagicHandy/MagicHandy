@@ -218,6 +218,7 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 		StrokeMaxPercent *int    `json:"stroke_max_percent,omitempty"`
 		ReverseDirection *bool   `json:"reverse_direction,omitempty"`
 		Style            *string `json:"style,omitempty"`
+		HandyModel       *string `json:"handy_model,omitempty"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -243,6 +244,9 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 		}
 		if body.Style != nil {
 			motionSettings.Style = *body.Style
+		}
+		if body.HandyModel != nil {
+			motionSettings.HandyModel = *body.HandyModel
 		}
 		current.Motion = motionSettings
 		return current, nil
@@ -571,7 +575,8 @@ func (s *Server) stopActiveMedia(ctx context.Context, reason string) (bool, erro
 
 func mediaSpeedPolicyChanged(previous, next config.MotionSettings) bool {
 	return previous.ApplyVideoSpeedLimit != next.ApplyVideoSpeedLimit ||
-		(next.ApplyVideoSpeedLimit && previous.SpeedMaxPercent != next.SpeedMaxPercent)
+		(next.ApplyVideoSpeedLimit && (previous.SpeedMaxPercent != next.SpeedMaxPercent ||
+			previous.HandyModel != next.HandyModel))
 }
 
 func motionStateActive(state motion.ActiveMotionState) bool {

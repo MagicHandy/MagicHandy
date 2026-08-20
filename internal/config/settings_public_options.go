@@ -16,6 +16,11 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			MotionStyleBalanced,
 			MotionStyleIntense,
 		},
+		HandyModels: []string{
+			HandyModelOriginal,
+			HandyModel2Standard,
+			HandyModel2Pro,
+		},
 		AutopilotSpeechCadences: []string{
 			AutopilotSpeechOff,
 			AutopilotSpeechQuiet,

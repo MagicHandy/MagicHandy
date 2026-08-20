@@ -49,7 +49,7 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > readouts, stopwatch, mini visualizer, and the connection disclosure), and
 > workspaces as routed pages under a hash router. The shell-owned connection
 > manager stays available on every route and owns live provider actions plus
-> speed/stroke limits and direction. Chat keeps Autopilot, motion style, and the
+> Handy model calibration, speed/stroke limits, and direction. Chat keeps Autopilot, motion style, and the
 > visualizer; the manual device test lives under Settings > Device, beside the
 > connection it exercises.
 > Settings is a routed page with sibling sections
@@ -121,10 +121,11 @@ with Save reachable.
 `#/chat` is the primary workspace: the main column holds the canonical
 conversation, while the control column holds the compact Autopilot session
 control, voice shortcuts, motion style, and the motion
-visualizer in an attached bottom status band. Autopilot Pause/Resume stays in
+visualizer in an aligned bottom status section. Autopilot Pause/Resume stays in
 that control sidebar and its generated lines appear in the conversation instead
 of a duplicate status card.
-The route uses the full remaining workspace width and height rather than the
+The footer remains visible while the control stack scrolls independently. The
+route uses the full remaining workspace width and height rather than the
 default content-width cap. Its compact `Chat` title occupies the leading edge
 of the horizontal session strip instead of a separate route heading, leaving
 the conversation more vertical room. Active tabs use symmetric top corners and
@@ -156,8 +157,8 @@ active run and drains its autonomous owner before the diagnostic claims the
 shared engine. The manual-target API also rejects retargeting unless that
 `manual_ui` session is still active, so an idle or autonomous target cannot be
 relabeled by a stale diagnostic control. The shell-level connection manager owns the
-saved dispatch owner's connect/check/discover actions and immediate speed/stroke
-limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
+saved dispatch owner's connect/check/discover actions and immediate Handy model,
+speed/stroke limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
 future saved arrangements), `#/library` hosts the
 Browse / Programs / Import / Author / Training workspace, `#/videos` hosts
 the local media catalog and player, and `#/settings` hosts configuration.
@@ -240,15 +241,17 @@ One component, one source of truth.
   abstract progress bar. The configured stroke envelope surrounds the moving
   sleeve, which follows the backend sample position. Detailed telemetry names
   state, target speed, range, source, and the backend-resolved active pattern
-  without adding controls to the artwork. On Chat, this compact telemetry is an
-  attached status band in the control rail rather than a floating panel.
+  without adding controls to the artwork. On Chat, this compact telemetry is a
+  full-width inset footer whose contents align with the control column rather
+  than a floating or partial-width nested panel.
 - Is never itself a click target: controls are separate, labeled elements
   (limits and direction live in the connection manager; style lives in Chat), not
   artwork turned into a mystery button.
 
 ## Quick Controls
 
-Speed limits, stroke range, reverse direction, and motion style.
+Handy model calibration, speed limits, stroke range, reverse direction, and
+motion style.
 
 - Apply immediately to active motion (ADR 0002, invariant 9). No save step.
 - Speed, stroke, and reverse direction live in the persistent floating

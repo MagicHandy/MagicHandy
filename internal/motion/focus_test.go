@@ -60,7 +60,7 @@ func TestFocusedLoopPreservesRequestedTravelRateWithinAccelerationBudget(t *test
 	}
 }
 
-func TestFocusedLoopRespectsCatalogAccelerationAndReversalBudgets(t *testing.T) {
+func TestFocusedLoopRespectsRuntimeAccelerationAndReversalBudgets(t *testing.T) {
 	definition := PatternDefinition{
 		ID: "slow-custom", Name: "Slow custom", Kind: PatternKindRoutine, CycleMillis: 12000,
 		Points: []CurvePoint{
@@ -78,16 +78,17 @@ func TestFocusedLoopRespectsCatalogAccelerationAndReversalBudgets(t *testing.T) 
 	if focused.PeriodMillis != wantPeriod {
 		t.Fatalf("focused period = %dms, want %dms catalog-safety floor", focused.PeriodMillis, wantPeriod)
 	}
-	if acceleration := maximumPlanAcceleration(focused); acceleration > catalogMaxAcceleration*1.02 {
-		t.Fatalf("focused acceleration = %.1f%%/s^2, over %.1f budget", acceleration, catalogMaxAcceleration)
+	if acceleration := maximumPlanAcceleration(focused); acceleration > runtimeMaxAccelerationPercentPerSecond2*1.02 {
+		t.Fatalf("focused acceleration = %.1f%%/s^2, over %.1f budget",
+			acceleration, runtimeMaxAccelerationPercentPerSecond2)
 	}
 	metrics, err := MeasureCurve(definition.Points, definition.CycleMillis, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	playedGap := float64(metrics.MinReversalGapMillis) * float64(focused.PeriodMillis) / float64(definition.CycleMillis)
-	if playedGap+0.01 < catalogMinReversalGap {
-		t.Fatalf("focused reversal gap = %.1fms, below %dms budget", playedGap, catalogMinReversalGap)
+	if playedGap+0.01 < float64(runtimeMinimumReversalGapMillis) {
+		t.Fatalf("focused reversal gap = %.1fms, below %dms budget", playedGap, runtimeMinimumReversalGapMillis)
 	}
 }
 
@@ -276,19 +277,7 @@ func planPositionBounds(plan MotionPlan) (float64, float64) {
 }
 
 func maximumPlanAcceleration(plan MotionPlan) float64 {
-	const sampleMillis = int64(5)
-	previous := plan.SampleAt(0).PositionPercent
-	previousVelocity := 0.0
-	maximum := 0.0
-	for at := sampleMillis; at <= plan.PeriodMillis; at += sampleMillis {
-		position := plan.SampleAt(at).PositionPercent
-		velocity := (position - previous) * 1000 / float64(sampleMillis)
-		if at > sampleMillis {
-			acceleration := math.Abs(velocity-previousVelocity) * 1000 / float64(sampleMillis)
-			maximum = math.Max(maximum, acceleration)
-		}
-		previous = position
-		previousVelocity = velocity
-	}
-	return maximum
+	timeFactor := float64(plan.PeriodMillis) / float64(plan.curve.duration)
+	return plan.curve.maximumAccelerationPerMillis2() * plan.focus.gain() /
+		(timeFactor * timeFactor) * 1e6
 }

@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-13, pattern speed semantics and model-facing catalog
+## Snapshot — 2026-08-20, motion calibration and visible set-point controls
 
 ### Goal 1: Maintainability
 
@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 Dynamic-mode build: 23,815,680 bytes plain and 17,148,928 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 calibrated-motion build: 23,847,936 bytes plain and 17,176,064 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.23` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.23 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.24` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.24 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -75,7 +75,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Status | Evidence / Notes |
 | --- | --- | --- |
 | Engine retarget checklist on hardware | **Met** | Phase 7 via `cmd/retarget-validate` |
-| Full app path — Cloud REST | **Met** | A 2026-07-12 isolated Phase 14B app build at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation. This predates PR #63's visible connection/limit refinements, whose rendered QA refresh remains open (`docs/perf-baseline.md`, "Phase 14B Intiface Hardware Evidence"). |
+| Full app path — Cloud REST | **Met** | A 2026-07-12 isolated Phase 14B app build at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation. Qualitative 2026-08-20 feedback that Dynamic felt robotic and 73% felt slow lacked transport/latency/trace evidence; the resulting shared calibration correction has not yet had a post-change hardware run (`docs/motion-calibration.md`). |
 | Full app path — Browser Bluetooth | **At Risk** | The 2026-07-02 visible Edge Web Bluetooth run moved and stopped the real device, but it predates the reverse-direction fix and was a short session. Revalidate reverse, unconditional Stop, and endurance on hardware. |
 | Full app path — Intiface | **At Risk** | The 2026-07-12 Handy workflow passed safety and lifecycle checks, but it predates the deadline-driven asynchronous-ACK pacer and measured queue admission rather than wire timing. Repeat the matched run with `motion_trace.v3` and record subjective feel (`docs/intiface.md`). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE, and explicit stop-first takeover with a globally locked handoff (`docs/controller-dispatch-semantics.md`) |
@@ -91,7 +91,11 @@ reads authoritative current state, preserves steady/pacing-only continuity,
 supports named area focus, and bounds explicit pattern variation.
 The selectable Dynamic mode adds bounded model-authored center/span or named-
 anchor geometry without a second motion path; Pattern Library remains the
-default pending managed-model and capped real-device A/B acceptance.
+default pending managed-model and capped real-device A/B acceptance. Its
+nonzero variation now uses a long deterministic spatial-and-timing phrase, and
+the shared 1–100 loop-speed scale is calibrated through the selected Original /
+Handy 2 Standard / Handy 2 Pro published travel and normal speed envelope, with
+a separate exact-curve runtime envelope.
 Opted-in chat voice now also receives bounded persona/anatomy context, strict
 per-session model mood, and three canonical recent assistant lines while
 utility remains byte-identical and all motion gates remain unchanged.
@@ -115,9 +119,12 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,687,474 raw / 800,703 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 802,961 raw / 212,114 gzip bytes; all
-   HTML/CSS/JS is 1,243,238 raw / 363,306 gzip bytes. Selectable Dynamic motion,
+   browser payload is 1,694,189 raw / 802,171 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 809,481 raw / 213,497 gzip bytes; all
+   HTML/CSS/JS is 1,249,953 raw / 364,774 gzip bytes. Motion calibration,
+   the merged Handy model control, and aligned visible set-point controls add
+   6,502 raw / 1,427 gzip bytes overall and 6,307 raw / 1,342 gzip bytes to
+   startup against checked-in `main`. Selectable Dynamic motion,
    mode-specific status, and the Chat control-sidebar list add 3,718 raw / 1,199
    gzip bytes overall and 2,696 raw / 780 gzip bytes to the English startup
    path against branch base `0d0a8348`; the artwork is unchanged. The localized Ollama
@@ -153,6 +160,29 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-20** - Recalibrated shared loop and optional media-limit speed
+  semantics after qualitative hardware feedback found Dynamic robotic and 73%
+  materially slow. The former 100%=180% travel/s reference made 73% only
+  131.4%/s. The new affine 1–100 control uses a Connection-menu Original /
+  Handy 2 Standard / Handy 2 Pro calibration based on the published 110/125 mm
+  travel and 32–400/450 mm/s normal envelopes; 73% on Original now requests
+  272.4%/s (299.6 mm/s). Catalog authoring retains its 3000%/s² and 450 ms quality gates while
+  runtime playback evaluates an exact rendered-curve 7500%/s² and 100 ms
+  envelope. Reversal ramps are bounded in played time, fractional phase removes
+  authored-millisecond plateaus, and Dynamic variation combines a route-sized
+  eight-second-or-longer harmonic wander with bounded timing breathing. Chat's
+  ordered cadence/style controls are visible set-point sliders; categorical
+  motion/authority modes are segmented radio choices, with queued saves
+  preserving the last rapid edit. Handy publishes no per-model acceleration
+  limits, so the shared runtime ceiling remains conservative and the Pro's
+  optional 800 mm/s overclock is excluded. The full Go suite, vet, lint, 402
+  frontend tests, typecheck/build, and plain/stripped `CGO_ENABLED=0` builds
+  pass. Local `go test -race` remains unavailable because `gcc` is absent; CI
+  retains that mandatory gate. Browser and binary measurements are recorded in
+  the current snapshot. The initiating report had no transport/latency/trace evidence and no
+  post-change hardware command was issued, so R1 and Dynamic default acceptance
+  remain open. See `docs/motion-calibration.md`.
 
 - **2026-08-20** - Added selectable Dynamic / Pattern Library / Off LLM motion
   modes. Dynamic emits bounded semantic geometry and slow loop-closed variation
@@ -210,6 +240,8 @@ Ranked by threat to the stated goals:
   chosen pattern dominated the requested speed. The shared planner now measures
   total loop travel and targets `180 * speed_percent / 100` semantic
   percentage-points/s, with curve-specific acceleration and reversal floors.
+  This was the 2026-08-13 intermediate calibration and was superseded by the
+  2026-08-20 minimum-to-maximum reference curve above.
   Tests cover equal requested rate across unlike patterns, proportional
   20/40/80 pacing, focus compression/expansion, soft anchors, loop-seam
   reversals, retained knots, and every built-in at 100%.

@@ -1,0 +1,179 @@
+# Motion speed and organic-loop calibration
+
+Status: implemented calibration, awaiting matched real-device confirmation
+(2026-08-20)
+
+## Why this changed
+
+The first shape-independent speed model fixed an important defect: pattern
+identity no longer decided global pace. Its reference constant was nevertheless
+the authored pace of MagicHandy's moderate `Stroke` loop, 180 semantic travel
+percentage-points per second at 100%. That made the number honest relative to
+that one curve, but not relative to the manual speed control users already knew.
+A full-range 73% target requested only 131.4% travel/s, or about 145 mm/s over a
+110 mm reference stroke.
+
+Dynamic motion exposed a second mismatch. Every reversal inherited the catalog
+authoring floor of 450 ms, regardless of stroke length, and nonzero variation
+repeated one four-cycle sine motif. A short stroke therefore stayed slow while
+its supposedly organic envelope became more obviously periodic as speed rose.
+Slow finite plans had a separate quantization artifact: engine sampling rounded
+phase back to a whole authored millisecond, so one authored millisecond could
+become a visible plateau after time stretching.
+
+## Comparison with other implementations
+
+No cross-device protocol defines one universal `speed_percent`, so the useful
+comparison is the physical meaning each implementation gives its control:
+
+- The original Handy publishes a 32–400 mm/s sustained carriage range and
+  110 mm travel. Handy 2 publishes 125 mm travel with a 32–400 mm/s Standard
+  range and a 32–450 mm/s normal Pro range. Its HAMP SDK exposes velocity
+  directly as 0–100% and explicitly notes that zero selects the slowest motion
+  rather than Stop. That is an affine minimum-to-maximum control, not
+  `maximum × percent` from a stationary zero. See
+  [The Handy FAQ](https://www.thehandy.com/faq/),
+  [the original Handy specification](https://www.thehandy.com/store/the-handy-eu/),
+  [the Handy 2 specification](https://www.thehandy.com/store/the-handy-2-eu/),
+  and the [official Handy JavaScript SDK](https://gitlab.com/sweettechas/platform/handy-js-sdk/-/tree/master).
+- Buttplug's linear command does not invent a percentage speed at all. It sends
+  a normalized target position and an explicit movement duration, so physical
+  speed is distance divided by time. See the
+  [Buttplug `LinearCmd` specification](https://stpihkal.docs.buttplug.io/docs/spec/generic/#linearcmd).
+- MultiFunPlayer keeps range, waveform, and a continuous time multiplier as
+  separate motion-provider inputs. It offers triangle/sine/other waveforms,
+  PCHIP or Makima custom-curve interpolation, and a continuous OpenSimplex
+  random provider rather than repeating a tiny fixed random table. See its
+  [motion-provider base](https://github.com/Yoooi0/MultiFunPlayer/blob/36c08fbb99ac9398a63ff1cca1bbf68cd2228a94/Source/MultiFunPlayer/MotionProvider/AbstractMotionProvider.cs),
+  [pattern provider](https://github.com/Yoooi0/MultiFunPlayer/blob/36c08fbb99ac9398a63ff1cca1bbf68cd2228a94/Source/MultiFunPlayer/MotionProvider/ViewModels/PatternMotionProvider.cs),
+  and [continuous-noise provider](https://github.com/Yoooi0/MultiFunPlayer/blob/36c08fbb99ac9398a63ff1cca1bbf68cd2228a94/Source/MultiFunPlayer/MotionProvider/ViewModels/RandomMotionProvider.cs).
+- `handy-ai-motion` derives mm/s from position delta and duration, clamps it to
+  a configured physical range, and tells its model to maintain rhythm coherence
+  and avoid unnecessary mechanical repetition. Its useful lesson is explicit
+  distance/time calibration; its client-owned timed-command loop and direct
+  model-authored delays are not compatible with MagicHandy's one-engine safety
+  architecture. See its
+  [motion implementation](https://github.com/Fran31416/handy-ai-motion/blob/94125fccb59262c82e7b0e63252d73b878e55a1a/index.js).
+
+MagicHandy retains its semantic target and shared sampled stream. None of these
+implementations is copied as a transport or second motion path.
+
+## Calibrated percentage
+
+Loop targets and the optional media speed limiter now share one selected Handy
+model calibration:
+
+```text
+progress = (speed_percent - 1) / 99
+physical rate = minimum_mm/s + (maximum_mm/s - minimum_mm/s) × progress
+semantic travel rate = physical rate / full_travel_mm × 100
+```
+
+The Connection menu exposes the profile as a three-part merged `Handy model`
+radio control: Original, 2 Standard, and 2 Pro. Existing settings default to
+Original Handy; Handy 2 owners must select their documented model. The backend
+publishes the valid options, the selected profile's travel and normal speed sit
+directly below the buttons, and a change applies immediately to an active loop
+through the same retarget path.
+
+| profile | published travel | published normal speed | semantic endpoints | physical rate at 73% |
+| --- | ---: | ---: | ---: | ---: |
+| Original Handy | 110 mm | 32–400 mm/s | 29.1–363.6%/s | 299.6 mm/s |
+| Handy 2 Standard | 125 mm | 32–400 mm/s | 25.6–320.0%/s | 299.6 mm/s |
+| Handy 2 Pro | 125 mm | 32–450 mm/s | 25.6–360.0%/s | 336.0 mm/s |
+
+Thus the same percentage has the same documented physical interpretation on
+the Original and Handy 2 Standard even though their semantic rates differ to
+account for travel. Pro follows its higher supported normal ceiling. The
+setting changes semantic timing only: positions remain 0–100 and transports
+still receive no model-specific motion schema or raw physical payload.
+
+Handy's product page mentions an optional 800 mm/s Pro overclock, but it is
+deliberately not exposed. No official source found in this review publishes
+per-model acceleration limits. The selector therefore does not invent them
+from motor RPM or marketing descriptions; all three profiles retain the shared
+conservative runtime acceleration envelope below.
+
+The requested rate is not a promise that every shape can achieve it. The shared
+planner lengthens a loop when its actual rendered cubic curve would exceed the
+runtime envelope. The UI therefore continues to label position as a commanded
+estimate rather than physical feedback.
+
+## Two envelopes, for two jobs
+
+The former implementation reused catalog-quality numbers as runtime limits.
+Those concerns are now explicit:
+
+| envelope | acceleration | reversal gap | purpose |
+| --- | ---: | ---: | --- |
+| stored catalog | ≤ 3000%/s² | ≥ 450 ms | reject patterns that feel like chatter at their authored reference pace |
+| runtime plan | ≤ 7500%/s² | ≥ 100 ms | bound a user-selected faster playback while permitting calibrated manual-control speeds |
+
+Runtime safety is evaluated against the exact rendered Hermite second
+derivative after focus, time scaling, and speed-aware reversal guides. A cubic
+segment's acceleration is linear, so checking both ends of every interval gives
+the exact maximum without probe-step error. Reversal-ramp caps are expressed in
+played milliseconds; a faster plan no longer shortens its physical ramp merely
+because its authored clock was compressed.
+
+Catalog acceptance remains on the quieter envelope. This is not a relaxation of
+what may be stored or exposed to the model by default.
+
+## Organic Creative motion (`dynamic` schema)
+
+`variation_percent` remains one bounded semantic field instead of growing a
+second timing schema. It now controls two related properties:
+
+1. a loop-closed multi-harmonic center/span transform applied to the complete
+   anchor route, preserving anchor order and avoiding hard-limit clipping; and
+2. bounded leg-time breathing and direction asymmetry, limited to 0.75–1.25×
+   the local authored timing before the plan's global speed normalization.
+
+The backend chooses enough cycles for the variation phrase to take at least
+about eight seconds at the maximum reference rate. Narrow spans consequently
+receive more cycles than broad spans. The phrase is deterministic for traces,
+tests, and seamless looping; it is not random per-sample noise. A zero variation
+still means deliberately metronomic motion, while the Dynamic prompt recommends
+25–45 for an ordinary start unless the user asks for steady motion.
+
+Engine phase now remains fractional through curve sampling. This removes
+authored-millisecond stair steps without adding points, browser state, or a new
+dispatch path.
+
+## Control-surface rule
+
+The compact Chat sidebar now distinguishes ordered and categorical settings:
+
+- Motion-change cadence, spoken-check-in cadence, and Gentle/Balanced/Intense
+  style are native discrete sliders with every named set point visible. Their
+  marks use the handle's real inset travel: the first and last marks are the
+  actual endpoints, and intermediate marks use `index / (count - 1)` rather
+  than the centers of equal-width label cells.
+- Creative (`dynamic` in settings/API)/Pattern Library/Off and speech-motion
+  authority are segmented radio choices, because rendering categories on a
+  scalar slider would imply a false numeric relationship.
+- Custom timing inputs remain directly below their corresponding cadence
+  slider. Rapid set-point changes are serialized so the final choice cannot be
+  lost behind an in-flight save.
+- The global Connection menu contains one low-frequency three-part merged
+  `Handy model` radio control. Its selected travel and normal maximum appear
+  directly below the buttons, so the calibration choice remains visible
+  without introducing another list selector.
+
+All values still come from and return to backend settings snapshots.
+
+## Evidence still required
+
+The initiating feedback was qualitative: Dynamic felt robotic and a selected
+73% felt slow. It did not include a transport, latency summary, or trace export.
+Automated tests now cover the calibration points, exact runtime acceleration,
+runtime reversal spacing, fractional sampling, bounded/deterministic Dynamic
+variation, long variation period, and the one-stream retarget path.
+
+A capped matched-device A/B run must still record Handy model/profile,
+transport, selected span and speed, command latency, `motion_trace.v3`, Stop
+behavior, and subjective feel.
+Until that exists, this change corrects the demonstrable schema/timing mismatch
+but does not close the real-device acceptance item or make Creative the default.
+The cross-cutting model-profile decision is recorded in
+[`ADR 0016`](decisions/0016-handy-model-speed-calibration.md).

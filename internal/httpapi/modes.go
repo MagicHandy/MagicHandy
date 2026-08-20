@@ -99,7 +99,7 @@ func (s *Server) handleModeStart(w http.ResponseWriter, r *http.Request) {
 	}
 	settings, _ := s.store.Snapshot()
 	if body.Mode == modes.ModeAutopilot && settings.LLM.MotionGenerationMode == config.LLMMotionModeOff {
-		writeError(w, http.StatusBadRequest, errors.New("autopilot motion is off; choose Dynamic or Pattern library in the sidebar"))
+		writeError(w, http.StatusBadRequest, errors.New("autopilot motion is off; choose Creative or Pattern library in the sidebar"))
 		return
 	}
 	s.chatLifecycleMu.Lock()

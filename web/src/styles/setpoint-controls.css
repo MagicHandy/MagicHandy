@@ -1,0 +1,204 @@
+/* Named set-point scales and compact categorical controls. */
+.setpoint-control {
+  --setpoint-thumb-size: 14px;
+  --setpoint-track-size: 4px;
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.setpoint-head {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.setpoint-head > span {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.setpoint-head small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+.setpoint-head output {
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.setpoint-control input[type="range"] {
+  width: 100%;
+  height: 20px;
+  min-height: 20px;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.setpoint-control input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: var(--setpoint-track-size);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 var(--setpoint-progress),
+    var(--line-strong) var(--setpoint-progress) 100%
+  );
+}
+.setpoint-control input[type="range"]::-webkit-slider-thumb {
+  width: var(--setpoint-thumb-size);
+  height: var(--setpoint-thumb-size);
+  margin-top: calc((var(--setpoint-track-size) - var(--setpoint-thumb-size)) / 2);
+  appearance: none;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+}
+.setpoint-control input[type="range"]::-moz-range-track {
+  height: var(--setpoint-track-size);
+  border: 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+.setpoint-control input[type="range"]::-moz-range-progress {
+  height: var(--setpoint-track-size);
+  border-radius: 999px;
+  background: var(--accent);
+}
+.setpoint-control input[type="range"]::-moz-range-thumb {
+  width: calc(var(--setpoint-thumb-size) - 4px);
+  height: calc(var(--setpoint-thumb-size) - 4px);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+}
+.setpoint-control input[type="range"]:focus-visible {
+  outline: none;
+}
+.setpoint-control input[type="range"]:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.setpoint-control input[type="range"]:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.setpoint-control input[type="range"]:disabled {
+  cursor: not-allowed;
+}
+.setpoint-scale {
+  position: relative;
+  height: 22px;
+  margin-inline: calc(var(--setpoint-thumb-size) / 2);
+  color: var(--muted);
+  font-size: 0.62rem;
+  line-height: 1.15;
+}
+.setpoint-stop {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: var(--setpoint-position);
+  display: grid;
+  width: max-content;
+  justify-items: center;
+  gap: 3px;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.setpoint-stop::before {
+  content: "";
+  width: 1px;
+  height: 5px;
+  background: var(--line-strong);
+}
+.setpoint-stop[data-selected="true"] {
+  color: var(--text);
+  font-weight: 600;
+}
+.setpoint-stop[data-selected="true"]::before {
+  width: 2px;
+  background: var(--accent);
+}
+.setpoint-stop:first-child {
+  justify-items: start;
+  text-align: start;
+  transform: none;
+}
+.setpoint-stop:last-child {
+  justify-items: end;
+  text-align: end;
+  transform: translateX(-100%);
+}
+.segmented-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.segmented-field legend {
+  margin-bottom: 6px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.segmented-choice {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-inset);
+}
+.segmented-option {
+  position: relative;
+  min-width: 0;
+  border-right: 1px solid var(--line);
+  cursor: pointer;
+}
+.segmented-option:last-child {
+  border-right: 0;
+}
+.segmented-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.segmented-option span {
+  display: grid;
+  min-height: 32px;
+  padding: 5px 7px;
+  place-items: center;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1.15;
+  text-align: center;
+}
+.segmented-option input:checked + span {
+  background: var(--accent-tint);
+  color: var(--text);
+}
+.segmented-option input:focus-visible + span {
+  position: relative;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.segmented-field:disabled .segmented-option {
+  cursor: not-allowed;
+}

@@ -8,13 +8,20 @@ import (
 
 const (
 	// DynamicMotionName is the user-facing content label for model-authored loops.
-	DynamicMotionName = "Dynamic"
+	DynamicMotionName = "Creative"
 	// MinimumDynamicSpanPercent prevents narrow model targets from collapsing
 	// into whole-percent device stalls at slow speeds.
 	MinimumDynamicSpanPercent = 20
 	defaultDynamicCenter      = 50
 	defaultDynamicSpan        = 70
 	defaultDynamicSegment     = 12
+	// Spatial and timing variation must establish a slow texture rather than a
+	// short motif that repeats every few strokes. The cycle count adapts to the
+	// route's travel so even the minimum 20% span takes roughly this long to
+	// repeat at the calibrated maximum reference speed.
+	minimumDynamicVariationLoopSeconds = 8.0
+	minimumDynamicVariationCycles      = 12
+	maximumDynamicVariationCycles      = 72
 )
 
 // DynamicAnchor is one semantic pass-through target in a model-authored loop.
@@ -112,25 +119,67 @@ func dynamicContent(definition DynamicDefinition) resolvedContent {
 	base := dynamicBasePositions(definition)
 	cycles := 1
 	if definition.VariationPercent > 0 {
-		cycles = 4
+		cycles = dynamicVariationCycleCount(base, definition.VariationPercent)
 	}
 	indices := dynamicTraversalIndices(len(base))
 	points := make([]CurvePoint, 0, cycles*len(indices)+1)
+	totalLegs := cycles * len(indices)
 	var elapsed int64
 	for cycle := range cycles {
 		phase := float64(cycle) / float64(cycles)
 		for _, index := range indices {
 			position := dynamicVariedPosition(base[index], base, definition.VariationPercent, phase)
 			if len(points) > 0 {
-				elapsed += dynamicLegMillis(points[len(points)-1].PositionPercent, position)
+				legPhase := (float64(len(points)-1) + 0.5) / float64(totalLegs)
+				elapsed += dynamicLegMillis(
+					points[len(points)-1].PositionPercent, position,
+					definition.VariationPercent, legPhase,
+				)
 			}
 			points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: position})
 		}
 	}
 	closing := dynamicVariedPosition(base[0], base, definition.VariationPercent, 1)
-	elapsed += dynamicLegMillis(points[len(points)-1].PositionPercent, closing)
+	closingPhase := (float64(totalLegs) - 0.5) / float64(totalLegs)
+	elapsed += dynamicLegMillis(
+		points[len(points)-1].PositionPercent, closing,
+		definition.VariationPercent, closingPhase,
+	)
 	points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: closing})
 	return resolvedContent{points: points, duration: elapsed, loop: true, maximumPoints: maximumCurvePoints}
+}
+
+func dynamicVariationCycleCount(base []float64, variation int) int {
+	indices := dynamicTraversalIndices(len(base))
+	if len(indices) < 2 {
+		return minimumDynamicVariationCycles
+	}
+	targetTravel := minimumDynamicVariationLoopSeconds * maximumSupportedReferenceTravelRatePercentPerSecond
+	for cycles := minimumDynamicVariationCycles; cycles <= maximumDynamicVariationCycles; cycles++ {
+		if dynamicVariationTravel(base, indices, variation, cycles) >= targetTravel {
+			return cycles
+		}
+	}
+	return maximumDynamicVariationCycles
+}
+
+func dynamicVariationTravel(base []float64, indices []int, variation, cycles int) float64 {
+	travel := 0.0
+	previous := 0.0
+	hasPrevious := false
+	for cycle := range cycles {
+		phase := float64(cycle) / float64(cycles)
+		for _, index := range indices {
+			position := dynamicVariedPosition(base[index], base, variation, phase)
+			if hasPrevious {
+				travel += math.Abs(position - previous)
+			}
+			previous = position
+			hasPrevious = true
+		}
+	}
+	closing := dynamicVariedPosition(base[0], base, variation, 1)
+	return travel + math.Abs(closing-previous)
 }
 
 func dynamicBasePositions(definition DynamicDefinition) []float64 {
@@ -169,14 +218,47 @@ func dynamicVariedPosition(position float64, base []float64, variation int, phas
 		maximum = math.Max(maximum, candidate)
 	}
 	center := (minimum + maximum) / 2
+	span := maximum - minimum
+	if span <= 0 {
+		return position
+	}
 	amount := float64(variation) / 100
-	drift := 10 * amount * math.Sin(2*math.Pi*phase)
-	scale := 1 + 0.12*amount*math.Cos(2*math.Pi*phase)
-	return math.Max(0, math.Min(100, center+drift+(position-center)*scale))
+	// A small harmonic field is deterministic and loop-closed like the former
+	// sine, but its mixed periods avoid a single obvious mechanical swell. It
+	// transforms the whole anchor route together, preserving order and spacing.
+	centerWave := 0.58*math.Sin(2*math.Pi*phase+0.35) +
+		0.27*math.Sin(6*math.Pi*phase+1.10) +
+		0.15*math.Sin(10*math.Pi*phase+2.20)
+	spanWave := 0.68*math.Cos(2*math.Pi*phase+0.80) +
+		0.32*math.Sin(8*math.Pi*phase+0.15)
+	variedSpan := math.Max(
+		MinimumDynamicSpanPercent,
+		math.Min(100, span*(1+0.14*amount*spanWave)),
+	)
+	variedCenter := center + 9*amount*centerWave
+	variedCenter = math.Max(variedSpan/2, math.Min(100-variedSpan/2, variedCenter))
+	return variedCenter + (position-center)*variedSpan/span
 }
 
-func dynamicLegMillis(left, right float64) int64 {
-	return max(int64(180), int64(math.Round(math.Abs(right-left)*10)))
+func dynamicLegMillis(left, right float64, variation int, phase float64) int64 {
+	base := max(int64(180), int64(math.Round(math.Abs(right-left)*10)))
+	if variation <= 0 {
+		return base
+	}
+	amount := float64(variation) / 100
+	direction := 1.0
+	if right < left {
+		direction = -1
+	}
+	breathing := 0.64*math.Sin(2*math.Pi*phase+0.55) +
+		0.36*math.Sin(6*math.Pi*phase+1.75)
+	// Directional skew makes the two halves of a stroke subtly unequal, while
+	// a slower harmonic changes which half leads. The bound prevents variation
+	// from becoming a hidden speed multiplier or abrupt jitter.
+	skew := direction * math.Sin(4*math.Pi*phase+0.90)
+	scale := 1 + amount*(0.18*breathing+0.09*skew)
+	scale = math.Max(0.75, math.Min(1.25, scale))
+	return max(int64(120), int64(math.Round(float64(base)*scale)))
 }
 
 func dynamicContentID(definition DynamicDefinition) string {

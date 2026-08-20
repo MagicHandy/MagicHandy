@@ -2,6 +2,7 @@ package motion
 
 import (
 	"math"
+	"reflect"
 	"testing"
 	"time"
 
@@ -79,6 +80,81 @@ func TestDynamicVariationIsBoundedAndLoopClosed(t *testing.T) {
 	for _, point := range content.points {
 		if point.PositionPercent < 0 || point.PositionPercent > 100 {
 			t.Fatalf("dynamic variation point escaped semantic travel: %+v", point)
+		}
+	}
+}
+
+func TestDynamicVariationUsesLongDeterministicOrganicPhrase(t *testing.T) {
+	definition := DynamicDefinition{CenterPercent: 50, SpanPercent: 70, VariationPercent: 60}
+	first := dynamicContent(definition)
+	second := dynamicContent(definition)
+	if !reflect.DeepEqual(first.points, second.points) {
+		t.Fatal("dynamic organic phrase is not deterministic")
+	}
+	if len(first.points) <= 25 {
+		t.Fatalf("dynamic variation has %d points, want a phrase longer than the former four-cycle motif", len(first.points))
+	}
+
+	minimumRatio := math.MaxFloat64
+	maximumRatio := 0.0
+	for index := 1; index < len(first.points); index++ {
+		distance := math.Abs(first.points[index].PositionPercent - first.points[index-1].PositionPercent)
+		if distance < 1 {
+			continue
+		}
+		ratio := float64(first.points[index].TimeMillis-first.points[index-1].TimeMillis) / distance
+		minimumRatio = math.Min(minimumRatio, ratio)
+		maximumRatio = math.Max(maximumRatio, ratio)
+	}
+	if maximumRatio/minimumRatio < 1.10 {
+		t.Fatalf("dynamic leg timing ratio %.3f..%.3f is still metronomic", minimumRatio, maximumRatio)
+	}
+	if maximumRatio/minimumRatio > 1.70 {
+		t.Fatalf("dynamic leg timing ratio %.3f..%.3f exceeds the bounded texture", minimumRatio, maximumRatio)
+	}
+
+	for _, model := range []string{config.HandyModelOriginal, config.HandyModel2Standard, config.HandyModel2Pro} {
+		for _, span := range []int{20, 40, 70, 100} {
+			settings := config.DefaultSettings().Motion
+			settings.SpeedMaxPercent = 100
+			settings.HandyModel = model
+			normalized := NormalizeDynamicDefinition(DynamicDefinition{
+				CenterPercent: 50, SpanPercent: span, VariationPercent: 100,
+			})
+			plan := NewMotionPlan("organic", MotionTarget{Dynamic: &normalized, SpeedPercent: 100}, settings, 0, 0, time.Unix(0, 0))
+			if plan.PeriodMillis < int64(minimumDynamicVariationLoopSeconds*1000) {
+				t.Errorf("model=%s span=%d variation repeats in %dms, want at least %.0fs at maximum speed",
+					model, span, plan.PeriodMillis, minimumDynamicVariationLoopSeconds)
+			}
+		}
+	}
+}
+
+func TestDynamicPlaybackHonorsRuntimeEnvelope(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	for _, span := range []int{20, 40, 70, 100} {
+		for _, variation := range []int{0, 30, 100} {
+			for _, speed := range []int{1, 20, 73, 100} {
+				definition := NormalizeDynamicDefinition(DynamicDefinition{
+					CenterPercent: 50, SpanPercent: span, VariationPercent: variation,
+				})
+				plan := NewMotionPlan("bounded", MotionTarget{
+					Dynamic: &definition, SpeedPercent: speed,
+				}, settings, 0, 0, time.Unix(0, 0))
+				if acceleration := maximumPlanAcceleration(plan); acceleration > runtimeMaxAccelerationPercentPerSecond2*1.002 {
+					t.Errorf("span=%d variation=%d speed=%d acceleration=%.1f, over %.1f",
+						span, variation, speed, acceleration, runtimeMaxAccelerationPercentPerSecond2)
+				}
+				if gap := reversalGap(plan.curve.authoredKnots, plan.curve.duration, true); gap > 0 {
+					playedGap := float64(gap) * float64(plan.PeriodMillis) / float64(plan.curve.duration)
+					if playedGap+0.01 < float64(runtimeMinimumReversalGapMillis) {
+						t.Errorf("span=%d variation=%d speed=%d reversal gap=%.1fms, below %dms",
+							span, variation, speed, playedGap, runtimeMinimumReversalGapMillis)
+					}
+				}
+			}
 		}
 	}
 }

@@ -149,13 +149,17 @@ curve content remain immutable, so chat and playback keep a stable contract.
 
 A pattern is a shape plus relative rhythm, not a fixed pace. At runtime the
 planner measures total absolute travel in one loop and chooses a period that
-targets a mean semantic travel rate of `180 * speed_percent / 100` percentage
-points per second. Thus 20%, 40%, and 80% request 36, 72, and 144 percentage
-points per second regardless of whether the selected curve is shallow, deep,
-simple, or highly articulated. Acceleration and reversal-gap safety floors may
-lengthen a period at the top end; the configured user maximum remains an
-independent cap. Area focus contracts travel and period together where safety
-allows, so selecting a narrow region does not silently make a pattern slower.
+maps the selectable 1–100 control through the selected Handy model's published
+full travel and normal physical-speed range. For the Original Handy profile,
+representative requests are 93.3%/s at 20%, 272.4%/s at 73%, and 363.6%/s at
+100%; Handy 2 profiles account for their 125 mm travel and Standard/Pro maximum.
+The same calibration applies regardless of whether the selected curve is
+shallow, deep, simple, or highly articulated. The exact rendered curve is lengthened when it
+would cross the runtime acceleration or reversal envelope; the configured user
+maximum remains an independent cap. Area focus contracts travel and period
+together where safety allows, so selecting a narrow region does not silently
+make a pattern slower. The derivation and separate catalog/runtime envelopes are
+recorded in [`motion-calibration.md`](motion-calibration.md).
 
 Finite programs use direct clock scaling (`stored duration * 100 / speed`) and
 retain every relative action interval. Video funscripts are media-clock-locked

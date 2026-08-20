@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import type { AutopilotSettings, SessionArc } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { PauseIcon, PlayIcon } from "../shell/icons";
+import { SegmentedChoice, SetpointSlider } from "./SetpointControls";
 import { useAppState, useToast } from "../state/app-state";
 import { ownsActiveMotion } from "../util/motion";
 
@@ -247,6 +248,7 @@ function AutopilotPreferences({
   const draftRef = useRef(value);
   const editingRef = useRef(false);
   const savingRef = useRef(false);
+  const queuedSaveRef = useRef<AutopilotSettings | null>(null);
 
   useEffect(() => {
     if (savingRef.current || editingRef.current) return;
@@ -261,18 +263,30 @@ function AutopilotPreferences({
   }
 
   async function save(next: AutopilotSettings) {
-    if (savingRef.current) return;
     editingRef.current = false;
     draftRef.current = next;
     setDraft(next);
+    if (savingRef.current) {
+      queuedSaveRef.current = next;
+      return;
+    }
     savingRef.current = true;
     setSaving(true);
     try {
-      const response = await api.saveAutopilotPreferences(next);
-      draftRef.current = response.autopilot;
-      setDraft(response.autopilot);
-      onSaved();
+      let requested: AutopilotSettings | null = next;
+      while (requested) {
+        queuedSaveRef.current = null;
+        const response = await api.saveAutopilotPreferences(requested);
+        const queued = queuedSaveRef.current;
+        if (!queued) {
+          draftRef.current = response.autopilot;
+          setDraft(response.autopilot);
+        }
+        onSaved();
+        requested = queued;
+      }
     } catch (error) {
+      queuedSaveRef.current = null;
       draftRef.current = value;
       setDraft(value);
       onError(error);
@@ -311,16 +325,18 @@ function AutopilotPreferences({
     void save(next);
   }
 
-  const controlsDisabled = disabled || saving;
+  const controlsDisabled = disabled;
   return (
-    <fieldset className="autopilot-preferences" disabled={controlsDisabled}>
+    <fieldset className="autopilot-preferences" disabled={controlsDisabled} aria-busy={saving || undefined}>
       <legend className="visually-hidden">{t("Autopilot timing")}</legend>
-      <label>
-        <span>{t("Motion changes")}</span>
-        <select value={draft.motion_cadence} onChange={(event) => void save({ ...draft, motion_cadence: event.target.value })}>
-          {motionOptions.map(([option, label]) => <option key={option} value={option}>{translateKnown(label)}</option>)}
-        </select>
-      </label>
+      <SetpointSlider
+        className="autopilot-setpoints"
+        label={t("Motion changes")}
+        value={draft.motion_cadence}
+        options={motionOptions.map(([option, label]) => ({ value: option, label: translateKnown(label) }))}
+        disabled={controlsDisabled}
+        onChange={(motion_cadence) => void save({ ...draftRef.current, motion_cadence })}
+      />
       {draft.motion_cadence === "custom" && (
         <div className="autopilot-window autopilot-window-range">
           <span>{t("Motion range")}</span>
@@ -346,12 +362,14 @@ function AutopilotPreferences({
           <span>{t("seconds")}</span>
         </div>
       )}
-      <label>
-        <span>{t("Spoken check-ins")}</span>
-        <select value={draft.speech_cadence} onChange={(event) => void save({ ...draft, speech_cadence: event.target.value })}>
-          {speechOptions.map(([option, label]) => <option key={option} value={option}>{translateKnown(label)}</option>)}
-        </select>
-      </label>
+      <SetpointSlider
+        className="autopilot-setpoints"
+        label={t("Spoken check-ins")}
+        value={draft.speech_cadence}
+        options={speechOptions.map(([option, label]) => ({ value: option, label: translateKnown(label) }))}
+        disabled={controlsDisabled}
+        onChange={(speech_cadence) => void save({ ...draftRef.current, speech_cadence })}
+      />
       {draft.speech_cadence === "custom" && (
         <div className="autopilot-window autopilot-window-range">
           <span>{t("Speech range")}</span>
@@ -413,15 +431,14 @@ function AutopilotPreferences({
       </div>
       <details className="autopilot-advanced">
         <summary>{t("Advanced")}</summary>
-        <label className="autopilot-authority">
-          <span>{t("Speech motion")}</span>
-          <select
-            value={draft.speech_motion_authority}
-            onChange={(event) => void save({ ...draft, speech_motion_authority: event.target.value })}
-          >
-            {authorityOptions.map(([option, label]) => <option key={option} value={option}>{translateKnown(label)}</option>)}
-          </select>
-        </label>
+        <SegmentedChoice
+          className="autopilot-authority"
+          label={t("Speech motion")}
+          value={draft.speech_motion_authority}
+          options={authorityOptions.map(([option, label]) => ({ value: option, label: translateKnown(label) }))}
+          disabled={controlsDisabled}
+          onChange={(speech_motion_authority) => void save({ ...draftRef.current, speech_motion_authority })}
+        />
         <label className="toggle-line">
           <span className="toggle">
             <input
@@ -466,7 +483,7 @@ function AutopilotPreferences({
           </span>
           <span>{t("Session tracking")}</span>
         </label>
-        <p className="hint">{t("Lets the assistant see how long the session has run and whether the pace has been holding. It informs decisions and changes no limits.")}</p>
+        <p className="autopilot-session-hint">{t("Shares timing and pace; limits stay unchanged.")}</p>
       </details>
     </fieldset>
   );

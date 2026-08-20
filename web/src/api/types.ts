@@ -4,6 +4,7 @@
 // chaining. See docs/decisions/0009-react-frontend.md (State Model Rules).
 
 export type MotionStyle = "gentle" | "balanced" | "intense";
+export type HandyModel = "handy_original" | "handy_2_standard" | "handy_2_pro";
 export type NotificationCategory = "app" | "system" | "library" | "voice" | "updates";
 
 export interface MotionSettings {
@@ -14,6 +15,7 @@ export interface MotionSettings {
   reverse_direction: boolean;
   apply_video_speed_limit: boolean;
   style: string;
+  handy_model: HandyModel | string;
 }
 
 export interface AutopilotSettings {
@@ -844,6 +846,7 @@ export interface OptionHints {
   api_application_id_sources?: string[];
   diagnostics_verbosities?: string[];
   motion_styles?: string[];
+  handy_models?: HandyModel[];
   autopilot_speech_cadences?: string[];
   autopilot_motion_cadences?: string[];
   autopilot_speech_motion_authorities?: string[];
