@@ -124,6 +124,30 @@ Dynamic remains opt-in until a managed llama.cpp/Ollama prompt matrix and a
 capped matched-device A/B run cover slow narrow loops, anchor pass-throughs,
 reversals, conversational updates, Autopilot boundaries, and Stop.
 
+Status 2026-08-20 calibration follow-up: qualitative device feedback reported
+that Dynamic remained robotic and that a selected 73% felt slow relative to
+other applications. The report did not include transport mode, latency, or a
+`motion_trace.v3` export, so it establishes a feel regression but cannot isolate
+transport timing. The shared planner's 100% reference was only 180% travel/s,
+making 73% 131.4%/s (about 145 mm/s over a 110 mm reference stroke), and the
+450 ms catalog authoring gap was also reused as a runtime floor for every
+reversal. The engine now maps 1–100 through a selected Original / Handy 2
+Standard / Handy 2 Pro profile using the published 110/125 mm travel and
+32–400/450 mm/s normal envelopes. It evaluates a separate 7500%/s² and 100 ms
+runtime envelope against the exact rendered curve, keeps
+fractional authored phase, and gives nonzero Dynamic variation a long bounded
+spatial-and-timing phrase. Ordered Chat settings are labeled set-point sliders;
+categorical motion modes remain segmented choices, and the Connection menu
+exposes the model calibration with its travel/top-speed evidence. No published
+per-model acceleration limits were found, so no motor-RPM inference or Pro
+overclock mode was added. Automated calibration,
+acceleration, reversal, continuity, Dynamic determinism, UI, and Stop lifecycle
+coverage is retained. No post-change hardware command was issued. A capped
+matched run must still record selected model/profile, transport, latency,
+trace, subjective continuity,
+and Emergency Stop before this risk or Dynamic's opt-in status changes. See
+`docs/motion-calibration.md`.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -1365,7 +1389,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.23 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.24 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1413,7 +1437,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.23, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.24, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit

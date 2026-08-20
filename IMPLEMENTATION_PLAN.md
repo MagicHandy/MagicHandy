@@ -1332,13 +1332,24 @@ Capped physical-feel checks for the retained generated catalog and the
 accepted-calibration-offset startup acquisition remain open.
 
 The current 87-pattern catalog uses normalized runtime speed semantics. The
-planner measures loop travel and targets `180 * speed_percent / 100` semantic
-percentage-points per second, with per-curve acceleration and reversal floors.
-Tests establish cross-pattern equality at a shared speed and a 1:2:4 tempo
-progression at 20/40/80 where safety does not cap playback. Programs use direct
-clock scaling; media funscripts remain media-clock-locked. The model contract
-advertises only `speed_percent`; the retired `intensity` alias is accepted for
-old responses and immediately normalized.
+planner measures loop travel and maps 1–100 through the selected Handy model's
+published full travel and normal 32–400/450 mm/s range, with exact rendered-
+curve acceleration and reversal floors. The resulting supported semantic
+endpoints are 25.6–363.6 percentage-points per second.
+This aligns the control with the familiar minimum-to-maximum manual velocity
+envelope instead of treating the moderate authored `Stroke` pace as 100%.
+Catalog authoring retains its quieter 3000%/s² and 450 ms quality gates; runtime
+uses a separate bounded 7500%/s² and 100 ms envelope. Tests establish cross-
+pattern equality at a shared speed, per-model 1/20/50/73/100 calibration,
+and per-plan runtime bounds. Programs use direct clock scaling; media funscripts
+remain media-clock-locked, while their optional rate limiter uses the same
+calibrated percentage. The model contract advertises only `speed_percent`; the
+retired `intensity` alias is accepted for old responses and immediately
+normalized. Dynamic variation now combines a long loop-closed harmonic spatial
+wander with bounded timing breathing, and engine phase samples retain fractional
+authored time. See `docs/motion-calibration.md`.
+The device-profile boundary is recorded in
+`docs/decisions/0016-handy-model-speed-calibration.md`.
 
 A 2026-07-20 motion-path audit closed additional engine-level jitter sources:
 buffered frames now preserve authored knots through a bounded adaptive sampler,

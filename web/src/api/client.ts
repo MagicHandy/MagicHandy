@@ -8,6 +8,7 @@ import type {
   ChatStreamEvent,
   MemoryState,
   MotionStyle,
+  HandyModel,
   BluetoothAckPayload,
   BluetoothClientStatus,
   BluetoothCommandsResponse,
@@ -353,6 +354,7 @@ export const api = {
     stroke_max_percent: number;
     reverse_direction: boolean;
     style: MotionStyle | string;
+    handy_model: HandyModel | string;
   }>) => request("POST", "/api/motion/quick", patch),
 
   // Shared-engine modes. Freestyle is surfaced in Preset Modes; Autopilot is

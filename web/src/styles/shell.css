@@ -706,6 +706,27 @@
   gap: 6px;
   padding: 6px 12px 9px;
 }
+.connection-manager .quick-handy-model {
+  margin-bottom: 0;
+}
+.connection-manager .quick-handy-model legend {
+  margin-bottom: 4px;
+  font-size: 0.72rem;
+}
+.connection-manager .quick-handy-model .segmented-choice {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.connection-manager .quick-handy-model .segmented-option span {
+  min-height: 30px;
+  padding-inline: 4px;
+  font-size: 0.7rem;
+}
+.connection-manager .quick-handy-spec {
+  margin-top: -3px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-align: right;
+}
 .connection-manager .quick-fields-connection .range-slider {
   display: grid;
   min-height: 28px;

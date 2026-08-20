@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { AutopilotControl } from "./AutopilotControl";
@@ -163,12 +163,39 @@ describe("AutopilotControl", () => {
 
     expect(screen.getByText("Motion 31 s · Speech 1m 31s")).toBeInTheDocument();
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("Motion changes"), { target: { value: "dynamic" } });
+      fireEvent.change(screen.getByLabelText("Motion changes"), { target: { value: "2" } });
     });
 
     expect(saveAutopilotPreferences).toHaveBeenCalledWith({
       ...autopilotPreferences,
       motion_cadence: "dynamic",
+    });
+  });
+
+  it("serializes rapid set-point edits and persists the final choice", async () => {
+    app.state = {
+      modes: { mode: "autopilot" },
+      settings: { autopilot: autopilotPreferences },
+    };
+    let resolveFirst!: (value: { autopilot: typeof autopilotPreferences }) => void;
+    saveAutopilotPreferences
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockImplementation(async (next) => ({ autopilot: next }));
+    render(<AutopilotControl />);
+
+    const slider = screen.getByRole("slider", { name: "Motion changes" });
+    fireEvent.change(slider, { target: { value: "2" } });
+    fireEvent.change(slider, { target: { value: "3" } });
+    expect(saveAutopilotPreferences).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst({ autopilot: { ...autopilotPreferences, motion_cadence: "dynamic" } });
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(saveAutopilotPreferences).toHaveBeenCalledTimes(2));
+    expect(saveAutopilotPreferences).toHaveBeenLastCalledWith({
+      ...autopilotPreferences,
+      motion_cadence: "custom",
     });
   });
 
@@ -257,8 +284,8 @@ describe("AutopilotControl", () => {
     render(<AutopilotControl />);
 
     const advanced = screen.getByText("Advanced").closest("details");
-    const motionSelector = screen.getByRole("combobox", { name: "Motion changes" });
-    const speechSelector = screen.getByRole("combobox", { name: "Spoken check-ins" });
+    const motionSelector = screen.getByRole("slider", { name: "Motion changes" });
+    const speechSelector = screen.getByRole("slider", { name: "Spoken check-ins" });
     const motionMinimum = screen.getByRole("spinbutton", { name: "Motion minimum seconds" });
     const speechMinimum = screen.getByRole("spinbutton", { name: "Speech minimum seconds" });
     expect(advanced).not.toContainElement(motionMinimum);
@@ -325,6 +352,7 @@ describe("AutopilotControl", () => {
     };
     render(<AutopilotControl />);
     fireEvent.click(screen.getByText("Advanced"));
+    expect(screen.getByText("Shares timing and pace; limits stay unchanged.")).toHaveClass("autopilot-session-hint");
     fireEvent.click(screen.getByRole("checkbox", { name: /Session tracking/ }));
 
     await act(async () => {

@@ -4,11 +4,13 @@ import { t, translateKnown } from "../i18n";
 // Disabled for read-only or backend-offline clients with a visible reason.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { MotionSettings } from "../api/types";
+import type { HandyModel, MotionSettings } from "../api/types";
 import { RangeSlider } from "./RangeSlider";
+import { SegmentedChoice, SetpointSlider } from "./SetpointControls";
 import { useAppState, useToast } from "../state/app-state";
 
 const STYLES = ["gentle", "balanced", "intense"] as const;
+const DEFAULT_HANDY_MODELS: HandyModel[] = ["handy_original", "handy_2_standard", "handy_2_pro"];
 type QuickPatch = Parameters<typeof api.applyQuick>[0];
 type QuickKey = keyof QuickPatch;
 
@@ -20,6 +22,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
   const { state, backendOnline, readOnly, refresh } = useAppState();
   const { show } = useToast();
   const motion = state?.settings?.motion;
+  const handyModels = state?.settings?.options?.handy_models ?? DEFAULT_HANDY_MODELS;
   const locked = !backendOnline || readOnly;
   const [vals, setVals] = useState<MotionSettings | null>(null);
   const timer = useRef<number | undefined>(undefined);
@@ -109,6 +112,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
   const showLimits = section === "all" || section === "limits" || section === "connection";
   const showDirection = section === "all" || section === "connection";
   const showStyle = section === "all" || section === "style";
+  const showHandyModel = section === "connection";
   const legend = section === "limits"
     ? t("Speed and stroke ranges")
     : section === "style"
@@ -120,6 +124,19 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
   return (
     <fieldset className={`quick-fields quick-fields-${section}`} disabled={locked}>
       <legend className="visually-hidden">{legend}</legend>
+      {showHandyModel && <>
+        <SegmentedChoice
+          className="quick-handy-model"
+          label={t("Handy model")}
+          value={vals.handy_model}
+          options={handyModels.map((model) => ({ value: model, label: handyModelLabel(model) }))}
+          onChange={(handy_model) => {
+            setVals((current) => (current ? { ...current, handy_model } : current));
+            push({ handy_model });
+          }}
+        />
+        <small className="quick-handy-spec">{handyModelDetail(vals.handy_model)}</small>
+      </>}
       {showLimits && (
         <RangeSlider
           label={t("Speed")}
@@ -164,27 +181,41 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
         </span>
         <span>{t("Reverse direction")}</span>
       </label>}
-      {showStyle && <label className="field">
-        <span className="label">{t("Style")}<span className="hint-inline">{t("biases motion character")}</span>
-        </span>
-        <select
-          value={vals.style}
-          onChange={(e) => {
-            const v = e.target.value;
-            setVals((s) => (s ? { ...s, style: v } : s));
-            push({ style: v });
-          }}
-        >
-          {STYLES.map((s) => (
-            <option key={s} value={s}>{translateKnown(s[0].toUpperCase() + s.slice(1))}</option>
-          ))}
-        </select>
-      </label>}
+      {showStyle && <SetpointSlider
+        className="quick-style-setpoints"
+        label={t("Style")}
+        hint={t("biases motion character")}
+        value={vals.style}
+        options={STYLES.map((style) => ({
+          value: style,
+          label: translateKnown(style[0].toUpperCase() + style.slice(1)),
+        }))}
+        onChange={(style) => {
+          setVals((current) => (current ? { ...current, style } : current));
+          push({ style });
+        }}
+      />}
       {locked && (
         <p className="form-status">{readOnly ? t("Read-only client — cannot change motion.") : t("Core offline.")}</p>
       )}
     </fieldset>
   );
+}
+
+function handyModelLabel(model: string): string {
+  switch (model) {
+    case "handy_2_standard": return "2 Standard";
+    case "handy_2_pro": return "2 Pro";
+    default: return "Original";
+  }
+}
+
+function handyModelDetail(model: string): string {
+  switch (model) {
+    case "handy_2_standard": return "125 mm · 32–400 mm/s";
+    case "handy_2_pro": return "125 mm · 32–450 mm/s";
+    default: return "110 mm · 32–400 mm/s";
+  }
 }
 
 function quickKeys(patch: QuickPatch): QuickKey[] {

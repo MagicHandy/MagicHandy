@@ -27,7 +27,7 @@ const baseState = {
     server: { port: 49717 },
     ui: { locale: "en", theme: "steel-azure", setup_completed: true, update_check_mode: "automatic" },
     device: { hsp_dispatch_owner: "cloud_rest", intiface_server_address: "ws://127.0.0.1:12345", firmware_api_requirement: "firmware_v4_api_v3_required", api_application_id_source: "bundled_app_id", connection_key_set: false },
-    motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, apply_video_speed_limit: false, style: "balanced" },
+    motion: { speed_min_percent: 20, speed_max_percent: 80, stroke_min_percent: 0, stroke_max_percent: 100, reverse_direction: false, apply_video_speed_limit: false, style: "balanced", handy_model: "handy_original" },
     llm: { provider: "llama_cpp", llama_cpp_mode: "managed", llama_cpp_base_url: "", llama_cpp_context_size: 32768, ollama_base_url: "", model: "", prompt_set: "default", request_timeout_ms: 120000, max_output_tokens: 256, reasoning_mode: "off" },
     voice: { enabled: false, tts_provider: "none", asr_provider: "none", tts_worker_path: "", tts_worker_args: [], asr_worker_path: "", asr_worker_args: [], parakeet_source: "app_managed", input_mode: "hands_free", input_sensitivity: 55, input_silence_ms: 900, input_noise_suppression: true, speak_replies: false, tts_auto_launch: false, tts_base_url: "http://127.0.0.1:8991", tts_model: "Qwen/Qwen3-TTS-12Hz-0.6B-Base", tts_voice: "default", tts_response_format: "wav", tts_health_path: "/health", tts_module_root: "", tts_server_port: 8991, tts_reference_wav: "", tts_reference_text: "", tts_language: "Auto", tts_device: "auto", tts_seed: 1337, tts_seed_mode: "fixed", tts_tone_preset: "natural", tts_tone_prompt: "", elevenlabs_key_set: false, openai_tts_key_set: false },
     chat: { startup_behavior: "previous", keep_unsaved_on_exit: false },
@@ -414,10 +414,12 @@ describe("app shell safety invariants", () => {
       expect(within(manager).getByRole("slider", { name })).toBeInTheDocument();
     }
     expect(within(manager).getByRole("switch", { name: /reverse direction/i })).toBeInTheDocument();
+    const handyModel = within(manager).getByRole("radiogroup", { name: /handy model/i });
+    expect(within(handyModel).getByRole("radio", { name: "Original" })).toBeChecked();
     const motionControls = screen.getByRole("complementary", { name: /motion controls/i });
     expect(within(motionControls).queryByRole("slider", { name: /speed min/i })).toBeNull();
     expect(within(motionControls).queryByRole("switch", { name: /reverse direction/i })).toBeNull();
-    expect(within(motionControls).getByRole("combobox", { name: /style/i })).toBeInTheDocument();
+    expect(within(motionControls).getByRole("slider", { name: /style/i })).toHaveAttribute("aria-valuetext", "Balanced");
   });
 
   it("shows a neutral connection state until the first backend snapshot arrives", async () => {

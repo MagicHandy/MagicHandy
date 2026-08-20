@@ -67,7 +67,7 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
     ? engine.target.label?.trim() || t("Video funscript")
     : "";
   const patternName = active
-    ? dynamic ? t("Dynamic") : resolvedMediaName || resolvedPatternName || (engine?.target?.program_id ? t("Program playback") : t("Unknown pattern"))
+    ? dynamic ? t("Creative") : resolvedMediaName || resolvedPatternName || (engine?.target?.program_id ? t("Program playback") : t("Unknown pattern"))
     : t("No active pattern");
   const rawSource = engine?.target?.source?.trim();
   const source = active && rawSource ? rawSource.replaceAll("_", " ") : "--";

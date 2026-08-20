@@ -449,6 +449,29 @@ func (c Curve) velocityFloat(at float64) float64 {
 	return ((6*u*u-6*u)*y0+(-6*u*u+6*u)*y1)/h + (3*u*u-4*u+1)*m0 + (3*u*u-2*u)*m1
 }
 
+// maximumAccelerationPerMillis2 returns the exact peak magnitude of the
+// piecewise-cubic second derivative. A Hermite segment's acceleration is
+// linear, so an extremum occurs at one of its two ends; sampling is unnecessary
+// and would make a safety decision depend on an arbitrary probe interval.
+func (c Curve) maximumAccelerationPerMillis2() float64 {
+	if c.linear || len(c.points) < 2 {
+		return 0
+	}
+	maximum := 0.0
+	for left := 0; left < len(c.points)-1; left++ {
+		right := left + 1
+		h := float64(c.points[right].TimeMillis - c.points[left].TimeMillis)
+		y0, y1 := c.points[left].PositionPercent, c.points[right].PositionPercent
+		m0, m1 := c.slopes[left], c.slopes[right]
+		for _, u := range []float64{0, 1} {
+			acceleration := ((12*u-6)*y0+(-12*u+6)*y1)/(h*h) +
+				((6*u-4)*m0+(6*u-2)*m1)/h
+			maximum = math.Max(maximum, math.Abs(acceleration))
+		}
+	}
+	return maximum
+}
+
 func (c Curve) interval(at float64) (int, int) {
 	index := sort.Search(len(c.points), func(index int) bool {
 		return float64(c.points[index].TimeMillis) >= at

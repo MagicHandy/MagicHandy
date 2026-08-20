@@ -1,6 +1,6 @@
 # What makes a motion pattern good or bad
 
-Status: working guideline (2026-08-13)
+Status: working guideline (2026-08-20)
 
 Two batches of patterns have now been rejected after being felt on hardware: the
 descending/decaying shapes that were hand-authored into the catalog, and the
@@ -116,10 +116,11 @@ speed floor is about 45%/s, so the shortest stroke that can satisfy both is
 `0.45 × 45 ≈ 22`. Anything smaller is either too slow to feel or too abrupt for
 the device.
 
-**Long strokes are the fast ones.** The same 450 ms gap caps a stroke's speed at
+**At the stored authoring pace, long strokes are the fast ones.** The same 450 ms gap caps a stroke's speed at
 `amplitude / 0.45`. A 30-unit stroke can never exceed 66%/s. So "a broad slow
 sweep answered by a quick little one" is not achievable — it has to be the other
-way round.
+way round inside one accepted source curve. Runtime playback has a separate,
+distance-aware envelope described below.
 
 Also: **fast alternation between big and small strokes is impossible** inside a
 bounded range. Turning points alternate direction, so a long stroke must be
@@ -152,11 +153,15 @@ Taken from the patterns that survived contact with hardware:
 | acceleration | ≤ 3000 %/s² | `catalogMaxAcceleration` |
 | stored cycle | 6600–12000 ms | authoring floor plus the manifest ceiling |
 
-Playback may produce a shorter or longer runtime period. The planner targets
-`180 * speed_percent / 100` mean percentage-points of travel per second, then
-lengthens the period if the selected curve would exceed its acceleration or
-reversal-gap safety floor. This normalization is what makes a speed change
-meaningful across patterns with very different total travel.
+Playback may produce a shorter or longer runtime period. The planner maps the
+selectable 1–100 control through the selected Handy model's documented travel
+and normal speed envelope (25.6–363.6%/s across the supported profiles),
+then lengthens the period if the exact rendered curve would exceed the separate
+7500%/s² runtime acceleration or 100 ms reversal floor. The stored 3000%/s² and
+450 ms values remain catalog-quality gates; reusing them at runtime was what
+made high percentages and narrow Dynamic strokes unexpectedly slow. See
+[`motion-calibration.md`](motion-calibration.md) for the formula, comparison,
+and evidence boundary.
 
 ### Measure the loaded, rendered curve — nothing earlier
 
@@ -237,11 +242,12 @@ gate is in Go.
 - `TestGeneratedCatalogMeetsHardwareBudgets` — the same for generated specs.
 - `TestLoopSpeedNormalizesMeanTravelAcrossPatterns` — different shapes
   request the same mean travel rate at the same speed.
-- `TestLoopSpeedProducesProportionalTempoChanges` — 20%, 40%, and 80% produce the
-  expected 1:2:4 tempo progression where safety does not cap it.
+- `TestLoopSpeedUsesCalibratedManualControlCurve` and
+  `TestReferenceTravelRateCalibration` — representative 1/20/50/73/100 values
+  follow each model's physical calibration where safety does not cap it.
 - `TestMeasureCurveIncludesLoopSeamReversalGap` — reversal timing includes the
   wrap from the final stroke back into the first stroke.
-- `TestFocusedLoopRespectsCatalogAccelerationAndReversalBudgets`,
+- `TestFocusedLoopRespectsRuntimeAccelerationAndReversalBudgets`,
   `TestFocusExpansionPreservesRequestedTravelRate`, and
   `TestSoftAnchorPreservesRequestedTravelRate` — focus compression, expansion,
   and anchoring preserve the requested pace unless a hardware budget requires a

@@ -732,6 +732,10 @@ func TestMediaSpeedPolicyChanged(t *testing.T) {
 	maxChangedOn.SpeedMaxPercent = 40
 	minimumChangedOn := enabled
 	minimumChangedOn.SpeedMinPercent++
+	modelChangedOff := base
+	modelChangedOff.HandyModel = config.HandyModel2Standard
+	modelChangedOn := enabled
+	modelChangedOn.HandyModel = config.HandyModel2Standard
 
 	testCases := []struct {
 		name     string
@@ -745,6 +749,8 @@ func TestMediaSpeedPolicyChanged(t *testing.T) {
 		{name: "disabled", previous: enabled, next: base, want: true},
 		{name: "maximum changes while enabled", previous: enabled, next: maxChangedOn, want: true},
 		{name: "minimum changes while enabled", previous: enabled, next: minimumChangedOn},
+		{name: "model changes while disabled", previous: base, next: modelChangedOff},
+		{name: "model changes while enabled", previous: enabled, next: modelChangedOn, want: true},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {

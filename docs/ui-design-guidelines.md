@@ -215,9 +215,11 @@ window and direction; the buffered queue tail is diagnostics, not position.
   accessible while rendering only its state icon.
 - The expanded non-modal panel is at most 360px wide, one overlay surface with
   dividers rather than nested cards. It contains the current provider's live
-  actions, a Settings link, and compact immediate controls for speed, stroke,
-  and reverse direction. Direction is right-aligned below the two range rows
-  without increasing the panel's previous control-section height.
+  actions, a Settings link, and compact immediate controls for the documented
+  Handy model calibration, speed, stroke, and reverse direction. The model is
+  a three-part merged native radio group (`Original`, `2 Standard`, `2 Pro`),
+  with the selected travel and normal maximum shown directly beneath it;
+  direction is right-aligned below the two range rows.
   Cloud REST includes one compact write-only connection-key row and identifies
   whether the bundled or developer API v3 application ID is active.
 - Cloud REST keeps three actions distinct: the quiet refresh icon performs a
@@ -256,6 +258,21 @@ window and direction; the buffered queue tail is diagnostics, not position.
 - Range: native with `accent-color: --accent`. A dual-thumb range keeps two
   native keyboard/AT sliders, exposes each bound's effective ARIA constraint,
   and uses one track-sized pointer target so close thumbs remain reachable.
+  An ordered setting with three to five named values uses one native discrete
+  range with every set-point label visible and the active label exposed through
+  `aria-valuetext`; do not hide the scale in a select. Categorical values use a
+  compact segmented radio group instead, because a slider would imply a false
+  numeric order. Its selected state uses the quiet accent-tint fill and text
+  contrast only—do not add an underline that makes it read like a tab. In the
+  compact Chat sidebar, discrete ranges use a 14px handle
+  and 4px track, following the restrained proportions in the
+  [Carbon slider specification](https://carbondesignsystem.com/components/slider/style/).
+  Their visual stop axis is inset by half the handle width—the same centerline
+  the native handle actually traverses—and stop `i` is placed at
+  `i / (count - 1)`. Never center labels in `count` equal grid cells: that puts
+  the first and last marks inside the real endpoints. Preserve the native
+  arrow/Home/End interaction and human-readable `aria-valuetext` required by
+  the [WAI-ARIA slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider/).
   Toggle: 40×22 track, 18px thumb; off `--line` + `--muted` thumb, on
   `--accent-strong` track + white thumb.
 - Import timeline: default to fit-all and put direct trim handles on the kept
@@ -292,12 +309,31 @@ window and direction; the buffered queue tail is diagnostics, not position.
 
 - The Chat route fills the remaining workspace beside the persistent nav rail.
   Its conversation and compact control sidebar share the available height; do
-  not reapply the ordinary route max-width to this workspace.
-- The Chat Controls sidebar begins with a compact native `LLM motion` select for
-  Dynamic / Pattern Library / Off. This is conversational behavior, not global
+  not reapply the ordinary route max-width to this workspace. The sidebar
+  reserves equal stable vertical-scrollbar gutters on both edges so opening
+  Advanced cannot shift or compress every control, and the stack remains
+  visually centered in the rail.
+- The Chat Controls sidebar begins with a compact segmented `LLM motion` radio
+  choice for Creative / Pattern Library / Off. `Creative` is the user-facing
+  name for the persisted `dynamic` mode. Ordered Motion changes, Spoken
+  check-ins, and motion Style controls use labeled discrete sliders; speech-
+  motion authority remains categorical and uses a segmented choice.
+  The LLM-motion row remains one fixed 32px line when Advanced makes the
+  sidebar scrollbar appear; localized visual text may ellipsize, while the
+  native radio keeps its complete accessible label. These controls are
+  conversational behavior, not global
   navigation: do not put it in the permanent rail. The backend owns and
   persists the value; read-only or offline clients see it disabled. Settings >
   Model retains the secondary configuration surface.
+- Expanded Autopilot Advanced controls use explicit vertical rhythm: a small
+  gap after the speech-motion selector and between its toggle rows, followed by
+  one compact muted session-tracking note aligned with the toggle labels. Avoid
+  default paragraph margins in this rail. Keep a visible minimum gap below
+  Motion style before the aligned bottom status section even when expanded
+  content makes the sidebar scroll. The status section extends its darker
+  inset background through the sidebar's full interior width while its own
+  stable gutters keep the contents aligned with the centered, independently
+  scrolling control column; do not leave it as a partial-width nested slab.
 - Session tabs are a 43px restrained strip with the compact `Chat` route title
   attached at its leading edge, ordered by creation time so active changes do
   not move targets. The active tab uses one symmetric top-corner surface and a

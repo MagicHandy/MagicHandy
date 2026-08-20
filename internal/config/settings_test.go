@@ -457,6 +457,9 @@ func TestMissingFieldsAreDefaulted(t *testing.T) {
 	if settings.Motion.ApplyVideoSpeedLimit {
 		t.Fatal("missing video speed-limit policy should default off")
 	}
+	if settings.Motion.HandyModel != HandyModelOriginal {
+		t.Fatalf("missing Handy model = %q, want %q", settings.Motion.HandyModel, HandyModelOriginal)
+	}
 	if settings.LLM.Provider != LLMProviderLlamaCPP {
 		t.Fatal("missing LLM settings were not defaulted")
 	}

@@ -449,7 +449,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
               disabled={locked}
               onChange={(event) => patchMotionMode(event.target.value)}
             >
-              <option value="dynamic">{t("Dynamic")}</option>
+              <option value="dynamic">{t("Creative")}</option>
               <option value="pattern">{t("Pattern library")}</option>
               <option value="off">{t("Off")}</option>
             </select>

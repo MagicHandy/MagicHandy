@@ -228,6 +228,7 @@ input[type="range"] {
   background: none;
   border: 0;
 }
+
 input:disabled,
 select:disabled,
 textarea:disabled {

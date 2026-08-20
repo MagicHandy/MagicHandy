@@ -301,6 +301,9 @@ func normalizeMotionSettings(settings config.MotionSettings) config.MotionSettin
 	if settings.StrokeMaxPercent == 0 {
 		settings.StrokeMaxPercent = defaults.StrokeMaxPercent
 	}
+	if settings.HandyModel == "" {
+		settings.HandyModel = defaults.HandyModel
+	}
 	settings.SpeedMinPercent = clamp(settings.SpeedMinPercent, 1, 100)
 	settings.SpeedMaxPercent = clamp(settings.SpeedMaxPercent, settings.SpeedMinPercent, 100)
 	settings.StrokeMinPercent = clamp(settings.StrokeMinPercent, 0, 99)

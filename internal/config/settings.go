@@ -262,6 +262,15 @@ type DeviceSettings struct {
 	HandyConnectionKey       string `json:"handy_connection_key,omitempty"`
 }
 
+// Handy model profiles calibrate the semantic speed control against published
+// full-travel and normal operating-speed specifications. They do not select a
+// transport, enable overclocking, or claim undocumented acceleration limits.
+const (
+	HandyModelOriginal  = "handy_original"
+	HandyModel2Standard = "handy_2_standard"
+	HandyModel2Pro      = "handy_2_pro"
+)
+
 // Motion style preferences bias the deterministic mode planners directly
 // (never only prompt text): pattern weights, speed bias, and segment pacing.
 const (
@@ -273,7 +282,9 @@ const (
 	MotionStyleIntense = "intense"
 )
 
-// MotionSettings contains transport-neutral motion control defaults.
+// MotionSettings contains semantic motion defaults and the selected physical
+// calibration profile. The profile changes semantic timing only; raw device
+// coordinates and transport payloads remain outside the engine.
 type MotionSettings struct {
 	SpeedMinPercent      int    `json:"speed_min_percent"`
 	SpeedMaxPercent      int    `json:"speed_max_percent"`
@@ -282,6 +293,7 @@ type MotionSettings struct {
 	ReverseDirection     bool   `json:"reverse_direction"`
 	ApplyVideoSpeedLimit bool   `json:"apply_video_speed_limit"`
 	Style                string `json:"style"`
+	HandyModel           string `json:"handy_model"`
 }
 
 // LLMSettings contains local model provider settings.
@@ -546,6 +558,7 @@ type PublicSettingsOptionHints struct {
 	APIApplicationIDSources []string `json:"api_application_id_sources"`
 	DiagnosticsVerbosities  []string `json:"diagnostics_verbosities"`
 	MotionStyles            []string `json:"motion_styles"`
+	HandyModels             []string `json:"handy_models"`
 	AutopilotSpeechCadences []string `json:"autopilot_speech_cadences"`
 	AutopilotMotionCadences []string `json:"autopilot_motion_cadences"`
 	AutopilotAuthorities    []string `json:"autopilot_speech_motion_authorities"`
@@ -685,6 +698,7 @@ func DefaultSettings() Settings {
 			StrokeMinPercent: 0,
 			StrokeMaxPercent: 100,
 			Style:            MotionStyleBalanced,
+			HandyModel:       HandyModelOriginal,
 		},
 		Autopilot: DefaultAutopilotSettings(),
 		LLM: LLMSettings{
@@ -1202,6 +1216,9 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Motion.Style == "" {
 		settings.Motion.Style = defaults.Motion.Style
 	}
+	if settings.Motion.HandyModel == "" {
+		settings.Motion.HandyModel = defaults.Motion.HandyModel
+	}
 	if settings.Motion.StrokeMaxPercent == 0 {
 		settings.Motion.StrokeMaxPercent = defaults.Motion.StrokeMaxPercent
 	}
@@ -1292,6 +1309,9 @@ func validateMotionSettings(settings MotionSettings) error {
 	}
 	if !oneOf(settings.Style, MotionStyleGentle, MotionStyleBalanced, MotionStyleIntense) {
 		return fmt.Errorf("unknown motion style %q", settings.Style)
+	}
+	if !oneOf(settings.HandyModel, HandyModelOriginal, HandyModel2Standard, HandyModel2Pro) {
+		return fmt.Errorf("unknown Handy model %q", settings.HandyModel)
 	}
 	return nil
 }

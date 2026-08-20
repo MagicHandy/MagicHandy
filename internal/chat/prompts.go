@@ -99,7 +99,7 @@ Rules:
 - Use only {"action":"stop"} when the user asks to stop, pause, or end motion.
 - center_percent is the midpoint of travel: 0 is base/deep and 100 is tip/shallow. span_percent is total travel around that midpoint and must be 20-100.
 - anchors are an ordered loop through 2-6 names chosen only from base, lower, middle, upper, and tip. Use anchors instead of center_percent/span_percent, never together.
-- variation_percent is 0-100 and controls slow organic drift over several cycles. It is not shake, flutter, noise, or a requirement to change on every turn.
+- variation_percent is 0-100 and controls slow organic spatial drift plus bounded rhythm breathing over a long loop. It is not shake, flutter, per-sample noise, or a requirement to change on every turn. Prefer 25-45 for an ordinary dynamic start; use 0 only when the user asks for steady or metronomic motion.
 - segment_seconds is a 4-120 second decision horizon. Motion remains continuous at the boundary; it is not a stop timer.
 - Apply the supplied speed bands and user limits to speed_percent. Keep speeds conservative unless the user explicitly asks otherwise.
 - You own whether a valid turn changes motion. Do not mechanically update a field merely to be different.
