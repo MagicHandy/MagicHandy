@@ -192,6 +192,51 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 	}
 }
 
+func TestChatStreamStartsAndRetargetsDynamicMotionThroughOneEngine(t *testing.T) {
+	fake := transport.NewFake()
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"reply":"Starting dynamically.","motion":{"action":"start","speed_percent":30,"anchors":["tip","middle","base"],"variation_percent":20,"segment_seconds":12}}`,
+		`{"reply":"Changing the geometry.","motion":{"action":"update","center_percent":35,"span_percent":50,"variation_percent":30,"segment_seconds":18}}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport: fake, MotionTransport: fake, LLMProvider: provider,
+	})
+	t.Cleanup(server.Close)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.LLM.MotionGenerationMode = config.LLMMotionModeDynamic
+		return settings
+	})
+
+	started := postChatStream(t, server, `{"message":"start moving gently"}`)
+	if !strings.Contains(started, `event: motion`) {
+		t.Fatalf("dynamic start did not dispatch:\n%s", started)
+	}
+	snapshot := server.currentMotionEngine().Snapshot()
+	if !snapshot.Running || snapshot.Target.Dynamic == nil || snapshot.Target.PatternID != "" ||
+		len(snapshot.Target.Dynamic.Anchors) != 3 {
+		t.Fatalf("dynamic start target = %+v", snapshot.Target)
+	}
+
+	updated := postChatStream(t, server, `{"message":"keep changing it up"}`)
+	if !strings.Contains(updated, `"action":"update"`) {
+		t.Fatalf("dynamic update did not dispatch:\n%s", updated)
+	}
+	snapshot = server.currentMotionEngine().Snapshot()
+	if dynamic := snapshot.Target.Dynamic; dynamic == nil || dynamic.CenterPercent != 35 || dynamic.SpanPercent != 50 ||
+		dynamic.VariationPercent != 30 || dynamic.SegmentSeconds != 18 || len(dynamic.Anchors) != 0 {
+		t.Fatalf("dynamic update target = %+v", dynamic)
+	}
+	plays := 0
+	for _, command := range fake.Commands() {
+		if command.Kind == transport.CommandKindPointsPlay {
+			plays++
+		}
+	}
+	if plays != 1 {
+		t.Fatalf("dynamic retarget restarted transport playback %d times, want one shared stream", plays)
+	}
+}
+
 func TestChatStreamPreservesDirectPartnerNoMotionChoice(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{
@@ -271,6 +316,36 @@ func TestChatStopBypassesLLMAndStopsMotion(t *testing.T) {
 	commands := fake.Commands()
 	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
 		t.Fatalf("last command = %+v, want stop", commands)
+	}
+}
+
+func TestChatStopRemainsAvailableWhenLLMMotionIsOff(t *testing.T) {
+	fake := transport.NewFake()
+	server := newTestServerWithRuntime(t, Runtime{
+		Transport:       fake,
+		MotionTransport: fake,
+	})
+	t.Cleanup(server.Close)
+
+	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":30}`)
+	_, _, err := server.store.Update(func(settings config.Settings) (config.Settings, error) {
+		settings.LLM.MotionGenerationMode = config.LLMMotionModeOff
+		return settings, nil
+	})
+	if err != nil {
+		t.Fatalf("disable LLM motion: %v", err)
+	}
+
+	dispatch, err := server.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionStop})
+	if err != nil {
+		t.Fatalf("dispatch Stop while LLM motion is off: %v", err)
+	}
+	if !dispatch.Applied {
+		t.Fatalf("Stop dispatch = %+v, want applied", dispatch)
+	}
+	commands := fake.Commands()
+	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
+		t.Fatalf("last transport command = %+v, want Stop", commands)
 	}
 }
 

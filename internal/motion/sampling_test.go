@@ -637,7 +637,7 @@ func TestRetargetFromStateChoosesPhaseFromEffectivePath(t *testing.T) {
 	const handoff = int64(2000)
 	next := previous.retargetFromState("next", MotionTarget{
 		PatternID: targetDefinition.ID, Pattern: &targetDefinition, SpeedPercent: 100,
-	}, settings, handoff, 87, 1, time.Unix(2, 0))
+	}, settings, handoff, 87, 1, 0, time.Unix(2, 0))
 	position := next.SampleAt(handoff).PositionPercent
 	if math.Abs(position-87) > 3 {
 		t.Fatalf("retarget handoff position = %.3f, want near effective path position 87", position)
@@ -667,7 +667,7 @@ func TestCatalogRetargetTransitionsDoNotCreateRapidChatter(t *testing.T) {
 			}
 			next := previous.retargetFromState("next", MotionTarget{
 				PatternID: nextDefinition.ID, Pattern: &nextDefinition, SpeedPercent: 100,
-			}, settings, handoff, position, direction, time.Unix(1, 0))
+			}, settings, handoff, position, direction, previous.VelocityAt(handoff), time.Unix(1, 0))
 			assertTransitionFrameHasNoRapidChatter(
 				t, previousDefinition.Name+" -> "+nextDefinition.Name, previous, next, handoff,
 			)
@@ -692,7 +692,7 @@ func TestCatalogFocusTransitionsDoNotCreateRapidChatter(t *testing.T) {
 		}
 		focused := full.retargetFromState(
 			"focused", focusedTarget, settings, handoff,
-			full.SampleAt(handoff).PositionPercent, full.DirectionAt(handoff), time.Unix(1, 0),
+			full.SampleAt(handoff).PositionPercent, full.DirectionAt(handoff), full.VelocityAt(handoff), time.Unix(1, 0),
 		)
 		assertTransitionFrameHasNoRapidChatter(t, definition.Name+" full -> focus", full, focused, handoff)
 
@@ -702,7 +702,7 @@ func TestCatalogFocusTransitionsDoNotCreateRapidChatter(t *testing.T) {
 				PatternID: definition.ID, Pattern: &definition, SpeedPercent: 100,
 			}, settings, handoff,
 			focusedStart.SampleAt(handoff).PositionPercent,
-			focusedStart.DirectionAt(handoff), time.Unix(1, 0),
+			focusedStart.DirectionAt(handoff), focusedStart.VelocityAt(handoff), time.Unix(1, 0),
 		)
 		assertTransitionFrameHasNoRapidChatter(t, definition.Name+" focus -> full", focusedStart, unfocused, handoff)
 	}

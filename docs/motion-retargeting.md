@@ -29,11 +29,11 @@ current engine uses a path blend rather than one stationary bridge sample.
 
 ## Shared Sampling And Smoothing Protections
 
-Every motion source -- plain chat targets, Freestyle, mode planners, trained
-patterns, and imported scripts/programs -- runs through one shared sampler and
-sanitizer. Per-source motion paths were a root cause of mode-specific motion
-bugs in StrokeGPT-ReVibed: a protection added for one caller did not reach the
-others.
+Every motion source -- pattern and Dynamic chat targets, Freestyle, mode
+planners, trained patterns, and imported scripts/programs -- runs through one
+shared sampler and sanitizer. Per-source motion paths were a root cause of
+mode-specific motion bugs in StrokeGPT-ReVibed: a protection added for one
+caller did not reach the others.
 
 The shared path must:
 
@@ -43,6 +43,9 @@ The shared path must:
   pattern-local speed
 - split large depth jumps and protect against oversized single steps
 - smooth turn apexes and direction reversals
+- compile Dynamic named-anchor routes so interior anchors retain a pass-through
+  tangent and only true route endpoints reverse. Slow variation changes center
+  and span over several cycles; it must not inject per-sample noise
 - sample with wall-time-parameterized monotone interpolation (PCHIP /
   Fritsch-Carlson style). Loop patterns use backend-only velocity guides to
   confine acceleration and deceleration to at most 75 ms on each side of a
@@ -164,12 +167,12 @@ Policy for MagicHandy:
 - **Keepalive/recovery restarts motion only when the transport is actually
   inactive** or the active stream reports stale playback — never because state
   from a previous, already-replaced stream looks starved.
-- **Higher-level variation goes through a planner contract**, not per-turn
-  stream replacement: a mode or LLM requests a bounded arrangement of named
-  styles, focus regions, durations, and intensity drift, and deterministic
-  code compiles it with explicit transition rules (see IMPLEMENTATION_PLAN.md,
-  Phase 11). LLM-facing contracts never expose transport details such as HSP
-  replacement, morph duration, or phase offsets.
+- **Higher-level variation goes through a semantic contract**, not per-turn
+  stream replacement: Pattern Library mode selects an authored shape; Dynamic
+  mode requests bounded center/span or named-anchor geometry, slow variation,
+  pace, and a decision horizon. Deterministic code compiles either request into
+  the same plan and transition rules. LLM-facing contracts never expose HSP
+  replacement, morph duration, phase offsets, or timed transport points.
 
 ## Active Stream Representation
 
@@ -232,6 +235,8 @@ For new-pattern retargets:
 
 - choose a candidate phase whose sampled position is close to the current sampled position
 - prefer candidates that do not immediately oppose current travel direction
+- include bounded velocity mismatch in the candidate score so two candidates at
+  the same position prefer the one with the more continuous physical handoff
 - avoid candidates at near-hold segments if they would feel like a stop
 - use the effective path (including a transition already in progress) for phase
   selection, then apply the bounded continuity transition only when paths differ
@@ -305,6 +310,8 @@ Every retarget trace should include:
 - next plan identity
 - previous semantic target
 - next semantic target
+- motion kind and, for Dynamic targets, center, span, anchor names, variation,
+  and decision horizon
 - estimated current sampled position
 - selected handoff time
 - lead time
@@ -359,6 +366,11 @@ connection key.
   lifecycle checks pass. Authored-knot/adaptive-frame checks now cover subtle
   focus windows and loop seams; the 6.6 s routine floor still needs a capped
   real-device feel check because that threshold was hardware-derived.
+- Dynamic LLM geometry compiles to the same PCHIP content and shared engine.
+  Automated checks cover interior-anchor velocity, reversal dwell, bounded
+  loop-closed variation, and position/direction/velocity-aware retargeting.
+  Managed-model and capped real-device A/B feel evidence remains open, so
+  Dynamic is selectable but Pattern Library remains the default.
 - Stroke-window and reverse changes remain immediate owner-envelope operations.
   Their interaction with points already buffered by HSP needs matched hardware
   traces before introducing a separate ramped-envelope contract.

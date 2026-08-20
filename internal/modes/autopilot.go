@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
@@ -62,6 +63,9 @@ type DecisionInput struct {
 	CurrentPatternID motion.PatternID
 	CurrentSpeed     int
 	CurrentAreaFocus *motion.AreaFocus
+	CurrentDynamic   *motion.DynamicDefinition
+	MotionMinSeconds int
+	MotionMaxSeconds int
 	// SessionSeconds, SecondsAtCurrentSpeed, and SpeedTrend are backend-computed
 	// session facts. They are read-only input: the model cannot fabricate them,
 	// they appear in traces, and they authorize nothing on their own. This is
@@ -91,9 +95,6 @@ type Decision struct {
 	Next    TimingPreference
 	// Variability is how much the target should wander before the next boundary.
 	Variability VariabilityPreference
-	// ArcIntent is a request to advance or ease the session buildup by one clamped
-	// step. It is honored only while buildup is enabled, and never sets a value.
-	ArcIntent string
 }
 
 // Announcement reports whether a line entered canonical chat and whether the
@@ -117,7 +118,6 @@ type segmentChoice struct {
 	say             string
 	timing          TimingPreference
 	variability     VariabilityPreference
-	arcIntent       string
 	decisionLatency time.Duration
 }
 
@@ -150,6 +150,16 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		if !fallback {
 			return segmentChoice{source: "speech_error", note: err.Error(), decisionLatency: latency}
 		}
+		if m.options.MotionGenerationMode != nil && m.options.MotionGenerationMode() == config.LLMMotionModeDynamic {
+			if segment, pattern, ok := m.heldSegment(); ok {
+				return segmentChoice{
+					segment: segment, pattern: pattern, source: "hold", note: err.Error(),
+					timing: TimingNormal, variability: VariabilityNormal, decisionLatency: latency,
+				}
+			}
+			return segmentChoice{source: "hold", note: err.Error(), timing: TimingNormal,
+				variability: VariabilityNormal, decisionLatency: latency}
+		}
 		segment, scores := m.nextPlannedSegment()
 		segment.DriftToSpeedPercent = 0
 		return segmentChoice{
@@ -163,14 +173,14 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		if segment, pattern, ok := m.heldSegment(); ok {
 			return segmentChoice{
 				segment: segment, pattern: pattern, source: "hold",
-				say: decision.Say, timing: timing, variability: variability, arcIntent: decision.ArcIntent,
+				say: decision.Say, timing: timing, variability: variability,
 				decisionLatency: latency,
 			}
 		}
 		if !fallback {
 			return segmentChoice{
 				source: "hold", say: decision.Say, timing: timing,
-				variability: variability, arcIntent: decision.ArcIntent, decisionLatency: latency,
+				variability: variability, decisionLatency: latency,
 			}
 		}
 		segment, scores := m.nextPlannedSegment()
@@ -178,13 +188,13 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		return segmentChoice{
 			segment: segment, scores: scores, source: "fallback",
 			note: "hold_without_segment", say: decision.Say, timing: timing,
-			variability: variability, arcIntent: decision.ArcIntent, decisionLatency: latency,
+			variability: variability, decisionLatency: latency,
 		}
 	}
 	return segmentChoice{
 		segment: NormalizeSegment(decision.Segment), pattern: decision.Pattern,
 		source: "model", say: decision.Say, timing: timing,
-		variability: variability, arcIntent: decision.ArcIntent, decisionLatency: latency,
+		variability: variability, decisionLatency: latency,
 	}
 }
 
@@ -215,7 +225,7 @@ func (m *Manager) decisionInput() DecisionInput {
 	var current *motion.MotionTarget
 	if engine := m.options.Current(); engine != nil {
 		snapshot := engine.Snapshot()
-		if (snapshot.Running || snapshot.Paused) && snapshot.Target.PatternID != "" {
+		if (snapshot.Running || snapshot.Paused) && (snapshot.Target.PatternID != "" || snapshot.Target.Dynamic != nil) {
 			copied := cloneTarget(snapshot.Target)
 			current = &copied
 		}
@@ -255,7 +265,7 @@ func (m *Manager) decisionInput() DecisionInput {
 			input.ArcPercent = m.arcPercentLocked(now)
 		}
 	}
-	if current == nil && m.segment.PatternID != "" {
+	if current == nil && m.segment.hasContent() {
 		fallback := m.segment.Target(modeLabel(m.mode), m.mode)
 		fallback.Pattern = m.pattern
 		copied := cloneTarget(fallback)
@@ -270,7 +280,10 @@ func (m *Manager) decisionInput() DecisionInput {
 			focus := *current.AreaFocus
 			input.CurrentAreaFocus = &focus
 		}
+		input.CurrentDynamic = cloneDynamicDefinition(current.Dynamic)
 	}
+	input.MotionMinSeconds = autopilot.MotionMinSeconds
+	input.MotionMaxSeconds = autopilot.MotionMaxSeconds
 	return input
 }
 
@@ -306,7 +319,7 @@ func (m *Manager) heldSegment() (Segment, *motion.PatternDefinition, bool) {
 }
 
 func segmentFromMotionTarget(target motion.MotionTarget, durationMillis int64) (Segment, *motion.PatternDefinition, bool) {
-	if target.PatternID == "" || target.SpeedPercent <= 0 {
+	if (target.PatternID == "" && target.Dynamic == nil) || target.SpeedPercent <= 0 {
 		return Segment{}, nil, false
 	}
 	copied := cloneTarget(target)
@@ -314,6 +327,7 @@ func segmentFromMotionTarget(target motion.MotionTarget, durationMillis int64) (
 		PatternID:      copied.PatternID,
 		SpeedPercent:   copied.SpeedPercent,
 		AreaFocus:      copied.AreaFocus,
+		Dynamic:        copied.Dynamic,
 		DurationMillis: durationMillis,
 	})
 	return segment, copied.Pattern, true
@@ -330,12 +344,14 @@ func (m *Manager) rememberChoice(mode string, choice segmentChoice) {
 	if mode == ModeAutopilot {
 		m.decisionSource = choice.source
 	}
-	if choice.source == "hold" || choice.segment.PatternID == "" {
+	if choice.source == "hold" || !choice.segment.hasContent() {
 		return
 	}
-	m.recentPatternIDs = append(m.recentPatternIDs, string(choice.segment.PatternID))
-	if len(m.recentPatternIDs) > 4 {
-		m.recentPatternIDs = m.recentPatternIDs[len(m.recentPatternIDs)-4:]
+	if choice.segment.PatternID != "" {
+		m.recentPatternIDs = append(m.recentPatternIDs, string(choice.segment.PatternID))
+		if len(m.recentPatternIDs) > 4 {
+			m.recentPatternIDs = m.recentPatternIDs[len(m.recentPatternIDs)-4:]
+		}
 	}
 }
 

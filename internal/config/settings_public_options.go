@@ -39,14 +39,8 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			DiagnosticsVerbosityDebug,
 			DiagnosticsVerbosityTrace,
 		},
-		LLMProviders: []string{
-			LLMProviderLlamaCPP,
-			LLMProviderOllama,
-		},
-		LlamaCPPModes: []string{
-			LlamaCPPModeManaged,
-			LlamaCPPModeExternal,
-		},
+		LLMProviders:  []string{LLMProviderLlamaCPP, LLMProviderOllama},
+		LlamaCPPModes: []string{LlamaCPPModeManaged, LlamaCPPModeExternal},
 		LLMManagedLoadPolicies: []string{
 			LLMManagedLoadStartup,
 			LLMManagedLoadOnDemand,
@@ -57,6 +51,7 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			LLMReasoningAuto,
 		},
 		LLMMaxOutputTokens: []int{128, 256, 512, 1024},
+		LLMMotionModes:     []string{LLMMotionModeDynamic, LLMMotionModePattern, LLMMotionModeOff},
 		LLMChatVoices:      LLMChatVoices(),
 		LLMUserAnatomies: []string{
 			LLMUserAnatomyPenis,

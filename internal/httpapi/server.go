@@ -364,9 +364,59 @@ func (s *Server) routes(mux *http.ServeMux) {
 func (s *Server) settingsAndUpdateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	mux.HandleFunc("PUT /api/settings/llm-motion-mode", s.handlePutLLMMotionMode)
 	mux.HandleFunc("GET /api/update", s.handleUpdateStatus)
 	mux.HandleFunc("PUT /api/settings/device/connection-key", s.handlePutConnectionKey)
 	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
+}
+
+func (s *Server) handlePutLLMMotionMode(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var body struct {
+		Mode string `json:"mode"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	body.Mode = strings.ToLower(strings.TrimSpace(body.Mode))
+	if body.Mode != config.LLMMotionModeDynamic && body.Mode != config.LLMMotionModePattern && body.Mode != config.LLMMotionModeOff {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("unknown LLM motion generation mode %q", body.Mode))
+		return
+	}
+	var updateErr error
+	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
+		current.LLM.MotionGenerationMode = body.Mode
+		capabilities := current.LLM.Capabilities()
+		capabilities.Motion = body.Mode != config.LLMMotionModeOff
+		if body.Mode == config.LLMMotionModePattern {
+			capabilities.Patterns = true
+		}
+		current.LLM.MotionCapabilities = &capabilities
+		var next config.Settings
+		next, updateErr = config.NormalizeSettings(current)
+		return next, updateErr
+	})
+	if updateErr != nil {
+		writeError(w, http.StatusBadRequest, updateErr)
+		return
+	}
+	if saveErr != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("LLM motion mode could not be saved"))
+		return
+	}
+	if s.modes != nil {
+		s.modes.Stop("llm_motion_mode_changed")
+	}
+	payload := map[string]any{"settings": saved.Public(), "mode": saved.LLM.MotionGenerationMode}
+	status := http.StatusOK
+	if runtimeErr != nil {
+		status = http.StatusBadGateway
+		payload["error"] = "LLM motion mode was saved, but the active runtime could not apply it"
+	}
+	writeJSON(w, status, payload)
 }
 
 func newUpdateChecker(runtime Runtime, version VersionInfo) *updatecheck.Checker {

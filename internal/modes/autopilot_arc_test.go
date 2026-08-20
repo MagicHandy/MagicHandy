@@ -1,7 +1,6 @@
 package modes
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -64,125 +63,58 @@ func TestArcAdvancesWithElapsedTime(t *testing.T) {
 	}
 }
 
-// The model may ask, never write. One turn moves the bar by at most one clamped
-// step, which is what stops an eager model sprinting it to full.
-func TestArcNudgeIsClampedPerTurn(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 60))
-	now := time.Unix(2000, 0)
+func TestThirtyMinuteArcHonorsConfiguredDuration(t *testing.T) {
+	manager := swayTestManager(t, arcSettings(true, true, 30))
+	start := time.Unix(1500, 0)
 	manager.mu.Lock()
-	manager.arc.startedAt = now
-	before := manager.arcPercentLocked(now)
-	manager.applyArcIntentLocked(now, config.AutopilotArcAdvance)
-	after := manager.arcPercentLocked(now)
+	manager.arc.startedAt = start
+	quarter := manager.arcPercentLocked(start.Add(7*time.Minute + 30*time.Second))
+	half := manager.arcPercentLocked(start.Add(15 * time.Minute))
+	full := manager.arcPercentLocked(start.Add(30 * time.Minute))
 	manager.mu.Unlock()
-	if moved := after - before; moved > config.AutopilotArcNudgePercent {
-		t.Fatalf("one advance moved the bar %d points, over the %d cap",
-			moved, config.AutopilotArcNudgePercent)
-	}
-	if after <= before {
-		t.Fatal("advance did not move the bar at all")
+	if quarter != 25 || half != 50 || full != 100 {
+		t.Fatalf("30-minute buildup = %d/%d/%d%%, want 25/50/100%%", quarter, half, full)
 	}
 }
 
-// Winding down has to be expressible, or the bar is a ratchet.
-func TestArcCanEaseBack(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 60))
-	now := time.Unix(3000, 0)
+func TestMaximumArcDurationDoesNotOverflow(t *testing.T) {
+	manager := swayTestManager(t, arcSettings(true, true, config.AutopilotMaximumArcMinutes))
+	start := time.Unix(0, 0)
+	duration := time.Duration(config.AutopilotMaximumArcMinutes) * time.Minute
 	manager.mu.Lock()
-	manager.arc.startedAt = now.Add(-30 * time.Minute)
-	before := manager.arcPercentLocked(now)
-	manager.applyArcIntentLocked(now, config.AutopilotArcEase)
-	after := manager.arcPercentLocked(now)
+	manager.arc.startedAt = start
+	half := manager.arcPercentLocked(start.Add(duration / 2))
 	manager.mu.Unlock()
-	if after >= before {
-		t.Fatalf("ease moved the bar from %d%% to %d%%", before, after)
+	if half < 49 || half > 50 {
+		t.Fatalf("maximum-duration midpoint = %d%%, want about 50%%", half)
 	}
 }
 
-func TestArcContinuesFromAnEasedValue(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 60))
-	now := time.Unix(3500, 0)
-	manager.mu.Lock()
-	manager.arc.startedAt = now.Add(-30 * time.Minute)
-	manager.applyArcIntentLocked(now, config.AutopilotArcEase)
-	eased := manager.arcPercentLocked(now)
-	later := manager.arcPercentLocked(now.Add(6 * time.Minute))
-	manager.mu.Unlock()
-	if eased != 50-config.AutopilotArcNudgePercent {
-		t.Fatalf("eased value = %d%%, want %d%%", eased, 50-config.AutopilotArcNudgePercent)
-	}
-	if later <= eased {
-		t.Fatalf("buildup stayed at %d%% after time advanced; later = %d%%", eased, later)
-	}
-}
-
-func TestUnknownArcIntentHolds(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 60))
-	now := time.Unix(4000, 0)
-	manager.mu.Lock()
-	manager.arc.startedAt = now
-	before := manager.arcPercentLocked(now)
-	manager.applyArcIntentLocked(now, "sprint")
-	after := manager.arc.percent
-	manager.mu.Unlock()
-	if after != before {
-		t.Fatalf("an unrecognized intent moved the bar from %d%% to %d%%", before, after)
-	}
-}
-
-func TestArcIntentWaitsForCurrentChoiceAdmission(t *testing.T) {
+// The configured duration is authoritative. Planning churn must not accelerate
+// the bar: the model may react to visible progress, but cannot rewrite it.
+func TestAcceptedDecisionsDoNotAccelerateBuildup(t *testing.T) {
 	manager := swayTestManager(t, arcSettings(true, true, 60))
 	now := manager.options.Now()
 	manager.mu.Lock()
 	manager.mode = ModeAutopilot
 	manager.generation = 7
 	manager.segment = Segment{PatternID: "steady", SpeedPercent: 30}
-	manager.arc.startedAt = now
+	manager.arc.startedAt = now.Add(-15 * time.Minute)
 	manager.mu.Unlock()
 
-	choice := manager.runDecision(t.Context(), func(context.Context, DecisionInput) (Decision, error) {
-		return Decision{
-			Hold:        true,
-			Next:        TimingLater,
-			Variability: VariabilitySettled,
-			ArcIntent:   config.AutopilotArcAdvance,
-		}, nil
-	}, true)
-	if got := manager.SessionArcSnapshot().Percent; got != 0 {
-		t.Fatalf("unadmitted decision moved buildup to %d%%", got)
+	before := manager.SessionArcSnapshot().Percent
+	for range 20 {
+		choice := segmentChoice{
+			segment: Segment{PatternID: "steady", SpeedPercent: 30},
+			source:  "model", timing: TimingSoon, variability: VariabilityRestless,
+		}
+		if !manager.armAutopilotChoice(ModeAutopilot, &choice, 7) {
+			t.Fatal("current decision was not admitted")
+		}
 	}
-	if manager.armAutopilotChoice(ModeAutopilot, &choice, 6) {
-		t.Fatal("stale decision was admitted")
-	}
-	if got := manager.SessionArcSnapshot().Percent; got != 0 {
-		t.Fatalf("stale decision moved buildup to %d%%", got)
-	}
-	if !manager.armAutopilotChoice(ModeAutopilot, &choice, 7) {
-		t.Fatal("current decision was not admitted")
-	}
-	if got := manager.SessionArcSnapshot().Percent; got != config.AutopilotArcNudgePercent {
-		t.Fatalf("accepted decision moved buildup to %d%%, want %d%%", got, config.AutopilotArcNudgePercent)
-	}
-}
-
-// An arc nudge must never reach the settings that own the limits. The bar is
-// where in the band to aim, not how wide the band is.
-func TestArcNudgeDoesNotTouchSpeedLimits(t *testing.T) {
-	manager := swayTestManager(t, arcSettings(true, true, 30))
-	before := manager.options.Settings()
-	now := time.Unix(5000, 0)
-	manager.mu.Lock()
-	for range 40 {
-		manager.applyArcIntentLocked(now, config.AutopilotArcAdvance)
-	}
-	percent := manager.arc.percent
-	manager.mu.Unlock()
-	after := manager.options.Settings()
-	if percent != 100 {
-		t.Fatalf("repeated advances reached %d%%, want the bar pinned at 100", percent)
-	}
-	if before.SpeedMinPercent != after.SpeedMinPercent || before.SpeedMaxPercent != after.SpeedMaxPercent {
-		t.Fatal("the arc changed the user's speed limits")
+	after := manager.SessionArcSnapshot().Percent
+	if before != 25 || after != before {
+		t.Fatalf("decision churn moved buildup from %d%% to %d%%, want elapsed-time value 25%%", before, after)
 	}
 }
 

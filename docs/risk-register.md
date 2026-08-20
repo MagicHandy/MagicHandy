@@ -116,6 +116,14 @@ and expansion, soft anchoring, loop-seam reversals, and all-built-in safety at
 100%. No post-change hardware motion was issued, so subjective
 low-speed and reversal feel remain open under this risk.
 
+Status 2026-08-20: selectable Dynamic LLM motion adds ephemeral center/span or
+named-anchor geometry through the same planner and sampler. Tests bound span,
+variation, reversal dwell, interior-anchor velocity, and active handoff
+position/direction/velocity, but those checks do not establish physical feel.
+Dynamic remains opt-in until a managed llama.cpp/Ollama prompt matrix and a
+capped matched-device A/B run cover slow narrow loops, anchor pass-throughs,
+reversals, conversational updates, Autopilot boundaries, and Stop.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -559,6 +567,15 @@ and transport owner. Chat, Autopilot, library audition, and programs still
 produce `MotionTarget` values and do not gain a private clock or dispatch loop.
 Video funscripts remain media-clock-locked and intentionally bypass loop-rate
 normalization.
+
+Status 2026-08-20: Dynamic LLM geometry also produces a semantic
+`MotionTarget.Dynamic` and compiles to ordinary resolved loop content before
+entering `Engine.Start`/`ApplyTarget`. It has no goroutine, transport import, or
+dispatch API of its own. Interior anchors, slow variation, and velocity-aware
+phase selection live in the shared planner; an API integration test verifies a
+Dynamic start and update issue only one transport Play. Pattern and Dynamic
+prompts are mutually exclusive, and an in-flight result is rejected if the
+persisted mode changed before dispatch.
 
 ## R15: Chat And Voice Delivery Ordering
 

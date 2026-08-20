@@ -50,15 +50,6 @@ const (
 	// AutopilotDefaultMotionMaxSeconds is the upper natural motion bound.
 	AutopilotDefaultMotionMaxSeconds = 60
 
-	// AutopilotArcHold keeps the session buildup where it is.
-	AutopilotArcHold = "hold"
-	// AutopilotArcAdvance asks the backend to move the buildup forward one bounded
-	// step. The model can never write the value itself.
-	AutopilotArcAdvance = "advance"
-	// AutopilotArcEase asks the backend to move the buildup back one bounded step, so
-	// the model can wind down as well as build.
-	AutopilotArcEase = "ease"
-
 	// AutopilotMinimumArcMinutes accepts any positive whole-minute buildup.
 	// The model cadence remains independently bounded, so a short buildup does
 	// not permit faster model calls or motion outside the user's limits.
@@ -68,9 +59,6 @@ const (
 	AutopilotMaximumArcMinutes = 153_722_867
 	// AutopilotDefaultArcMinutes is the first-run buildup duration.
 	AutopilotDefaultArcMinutes = 30
-	// AutopilotArcNudgePercent is the most one model turn may move the buildup. A
-	// clamp is what keeps an eager model from sprinting the bar to full.
-	AutopilotArcNudgePercent = 6
 )
 
 // AutopilotSettings contains durable user preferences. Scheduler deadlines,
@@ -91,10 +79,10 @@ type AutopilotSettings struct {
 	// it informs decisions and authorizes nothing. Off removes the facts from the
 	// prompt entirely rather than sending zeros.
 	SessionTracking bool `json:"session_tracking"`
-	// SessionArc enables the visible fill bar the model is encouraged to build
-	// along. It is a separate switch from SessionTracking because knowing how
-	// long a session has run and being encouraged to escalate through it are
-	// different things, and a user may want the first without the second.
+	// SessionArc enables the visible elapsed-session fill bar supplied to the
+	// model as pacing context. It is a separate switch from SessionTracking
+	// because knowing how long a session has run and asking the model to pace
+	// along a configured buildup are different choices.
 	//
 	// The buildup positions intent inside the user's existing speed band. It never
 	// widens the band, the focus range, or any capability gate.
@@ -121,12 +109,6 @@ func DefaultAutopilotSettings() AutopilotSettings {
 		SessionArc:        false,
 		SessionArcMinutes: AutopilotDefaultArcMinutes,
 	}
-}
-
-// ValidAutopilotArcIntent reports whether a model-supplied buildup nudge is one this
-// build honors. Anything else resolves to hold.
-func ValidAutopilotArcIntent(intent string) bool {
-	return oneOf(intent, AutopilotArcHold, AutopilotArcAdvance, AutopilotArcEase)
 }
 
 // SpeechWindow returns the effective bounds and whether autonomous speech is

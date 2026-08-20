@@ -147,6 +147,7 @@ func (p MotionPlan) Retarget(
 		id, target, settings, streamMillis,
 		p.SampleAt(streamMillis).PositionPercent,
 		p.DirectionAt(streamMillis),
+		p.VelocityAt(streamMillis),
 		createdAt,
 	)
 }
@@ -158,17 +159,28 @@ func (p MotionPlan) retargetFromState(
 	streamMillis int64,
 	currentPosition float64,
 	currentDirection int,
+	currentVelocity float64,
 	createdAt time.Time,
 ) MotionPlan {
 	target = NormalizeTarget(target, normalizeMotionSettings(settings))
 	phase := p.PhaseAt(streamMillis)
 	preserved := motionContentID(p.Target) == motionContentID(target)
 	if !preserved {
-		phase = chooseNearestPhase(target, settings, currentPosition, currentDirection)
+		phase = chooseNearestPhase(target, settings, currentPosition, currentDirection, currentVelocity)
 	}
 	next := NewMotionPlan(id, target, settings, phase, streamMillis, createdAt)
 	next.PhasePreserved = preserved
 	return next
+}
+
+// VelocityAt estimates played semantic velocity in percent per second. It is
+// used only to choose a smooth retarget phase; transports still receive the
+// normal sampled plan.
+func (p MotionPlan) VelocityAt(streamMillis int64) float64 {
+	const probeMillis = int64(25)
+	before := p.SampleAt(streamMillis - probeMillis).PositionPercent
+	after := p.SampleAt(streamMillis + probeMillis).PositionPercent
+	return (after - before) * 1000 / float64(probeMillis*2)
 }
 
 // DirectionAt estimates current semantic travel direction.
@@ -213,6 +225,18 @@ func (c resolvedContent) playbackScale(focus focusProjection, periodMillis int64
 }
 
 func resolveTargetContent(target MotionTarget) (MotionTarget, resolvedContent) {
+	if target.Dynamic != nil {
+		definition := NormalizeDynamicDefinition(*target.Dynamic)
+		target.Dynamic = &definition
+		target.PatternID = ""
+		target.PatternName = DynamicMotionName
+		target.ProgramID = ""
+		target.MediaID = ""
+		target.Pattern = nil
+		target.Program = nil
+		target.Media = nil
+		return target, dynamicContent(definition)
+	}
 	if target.Media != nil {
 		if definition, err := NormalizeMediaTimelineDefinition(*target.Media); err == nil {
 			if target.MediaSpeedLimitEnabled {
@@ -381,6 +405,9 @@ func focusedLoopPeriod(
 }
 
 func motionContentID(target MotionTarget) string {
+	if target.Dynamic != nil {
+		return dynamicContentID(*target.Dynamic)
+	}
 	if target.MediaID != "" {
 		return "media:" + target.MediaID
 	}
@@ -461,7 +488,7 @@ func (f focusProjection) apply(percent float64) float64 {
 	return position
 }
 
-func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, current float64, currentDirection int) float64 {
+func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, current float64, currentDirection int, currentVelocity float64) float64 {
 	candidatePlan := NewMotionPlan("candidate", target, settings, 0, 0, time.Unix(0, 0))
 	bestPhase := 0.0
 	bestDistance := math.MaxFloat64
@@ -474,7 +501,8 @@ func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, cur
 		position := candidatePlan.SampleAt(int64(float64(candidatePlan.PeriodMillis) * phase)).PositionPercent
 		distance := math.Abs(position - current)
 		candidateDirection := candidatePlan.DirectionAt(int64(float64(candidatePlan.PeriodMillis) * phase))
-		score := handoffScore(distance, currentDirection, candidateDirection)
+		candidateVelocity := candidatePlan.VelocityAt(int64(float64(candidatePlan.PeriodMillis) * phase))
+		score := handoffScore(distance, currentDirection, candidateDirection, currentVelocity, candidateVelocity)
 		if score < bestDistance {
 			bestDistance = score
 			bestPhase = phase
@@ -483,7 +511,7 @@ func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, cur
 	return bestPhase
 }
 
-func handoffScore(distance float64, currentDirection, candidateDirection int) float64 {
+func handoffScore(distance float64, currentDirection, candidateDirection int, currentVelocity, candidateVelocity float64) float64 {
 	score := distance
 	if currentDirection != 0 && candidateDirection != 0 && candidateDirection != currentDirection {
 		score += 8
@@ -491,6 +519,9 @@ func handoffScore(distance float64, currentDirection, candidateDirection int) fl
 	if candidateDirection == 0 && distance > 2 {
 		score += 4
 	}
+	// Position remains dominant, but two equally close phases should continue
+	// with the closest velocity rather than visibly braking or surging.
+	score += math.Min(8, math.Abs(candidateVelocity-currentVelocity)*0.025)
 	return score
 }
 

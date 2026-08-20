@@ -201,10 +201,20 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	if choice.decisionLatency > 0 {
 		m.lastDecisionTime = choice.decisionLatency
 	}
-	if choice.source != "speech" && choice.arcIntent != "" {
-		m.applyArcIntentLocked(now, choice.arcIntent)
-	}
 	duration := m.sampleMotionDelayLocked(choice.timing)
+	if choice.segment.Dynamic != nil && choice.segment.Dynamic.SegmentSeconds > 0 {
+		requested := time.Duration(choice.segment.Dynamic.SegmentSeconds) * time.Second
+		settings := m.options.AutopilotSettings()
+		minimum := time.Duration(settings.MotionMinSeconds) * time.Second
+		maximum := time.Duration(settings.MotionMaxSeconds) * time.Second
+		if minimum > 0 && requested < minimum {
+			requested = minimum
+		}
+		if maximum >= minimum && requested > maximum {
+			requested = maximum
+		}
+		duration = requested
+	}
 	if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
 		duration = m.options.MaxSegmentDuration
 	}
@@ -275,7 +285,7 @@ func (m *Manager) tickAutopilotSpeech(ctx context.Context, engine Engine, genera
 	if operationCtx.Err() != nil || !m.modeGenerationActive(ModeAutopilot, generation) {
 		return
 	}
-	m.armAutopilotSpeech(generation, choice.say, choice.timing, choice.arcIntent, announcement)
+	m.armAutopilotSpeech(generation, choice.say, choice.timing, announcement)
 }
 
 func (m *Manager) retryAutopilotSpeech(generation uint64, delay time.Duration, event string, note string) {
@@ -295,7 +305,7 @@ func (m *Manager) applyAutopilotSpeechMotion(
 	generation uint64,
 	choice segmentChoice,
 ) {
-	if choice.source == "hold" || choice.segment.PatternID == "" {
+	if choice.source == "hold" || !choice.segment.hasContent() {
 		return
 	}
 	motionChoice := choice
@@ -321,16 +331,12 @@ func (m *Manager) armAutopilotSpeech(
 	generation uint64,
 	say string,
 	timing TimingPreference,
-	arcIntent string,
 	announcement Announcement,
 ) {
 	m.mu.Lock()
 	if m.mode != ModeAutopilot || m.generation != generation || m.userStopped {
 		m.mu.Unlock()
 		return
-	}
-	if arcIntent != "" {
-		m.applyArcIntentLocked(m.options.Now(), arcIntent)
 	}
 	m.lastSay = say
 	m.speechNextTiming = timing

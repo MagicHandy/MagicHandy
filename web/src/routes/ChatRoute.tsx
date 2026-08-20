@@ -25,6 +25,7 @@ export function ChatRoute() {
   const [loadError, setLoadError] = useState("");
   const [operation, setOperation] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  const [changingMotionMode, setChangingMotionMode] = useState(false);
   const [pendingChange, setPendingChange] = useState<PendingChange | null>(null);
 
   const loadSessions = useCallback(async () => {
@@ -57,6 +58,11 @@ export function ChatRoute() {
     : "";
   const autopilotActive = state?.modes?.mode === "autopilot" || state?.modes?.active_mode === "autopilot";
   const locked = !backendOnline || readOnly || loading || operation || streaming;
+  const savedMotionMode = state?.settings?.llm?.motion_generation_mode;
+  const motionCapabilities = state?.settings?.llm?.motion_capabilities;
+  const motionMode = savedMotionMode === "dynamic" || savedMotionMode === "pattern" || savedMotionMode === "off"
+    ? savedMotionMode
+    : motionCapabilities?.motion === false ? "off" : "pattern";
 
   useEffect(() => {
     if (!workspace || loading || operation || streaming) return;
@@ -130,6 +136,20 @@ export function ChatRoute() {
     void applyWorkspace(() => api.deleteChatSession(session.id), "Chat deleted.");
   }
 
+  async function changeMotionMode(mode: "dynamic" | "pattern" | "off") {
+    if (mode === motionMode || changingMotionMode || !backendOnline || readOnly) return;
+    setChangingMotionMode(true);
+    try {
+      await api.setLLMMotionMode(mode);
+      await refresh();
+      show(t("LLM motion mode changed."));
+    } catch (error) {
+      show(error instanceof Error ? translateKnown(error.message) : t("Request failed"), "error");
+    } finally {
+      if (mounted.current) setChangingMotionMode(false);
+    }
+  }
+
   return (
     <div className="chat-route">
       <div className="chat-workbench">
@@ -165,6 +185,19 @@ export function ChatRoute() {
 
         <aside className="chat-sidebar" aria-label={t("Motion controls")}>
           <h2 className="section-title">{t("Controls")}</h2>
+          <label className="chat-motion-mode">
+            <span>{t("LLM motion")}</span>
+            <select
+              aria-label={t("LLM motion")}
+              value={motionMode}
+              disabled={!backendOnline || readOnly || changingMotionMode}
+              onChange={(event) => void changeMotionMode(event.target.value as "dynamic" | "pattern" | "off")}
+            >
+              <option value="dynamic">{t("Dynamic")}</option>
+              <option value="pattern">{t("Pattern library")}</option>
+              <option value="off">{t("Off")}</option>
+            </select>
+          </label>
           <AutopilotControl />
           <VoiceQuickControls />
           <div className="divider" />

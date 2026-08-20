@@ -53,10 +53,13 @@ type Options struct {
 	Settings func() config.MotionSettings
 	// AutopilotSettings returns durable cadence and speech-authority settings.
 	AutopilotSettings func() config.AutopilotSettings
-	Traces            *diagnostics.TraceRing
-	Now               func() time.Time
-	Tick              time.Duration
-	Seed              int64
+	// MotionGenerationMode keeps Autopilot fallback inside the selected model
+	// vocabulary. Dynamic mode never falls through to the pattern planner.
+	MotionGenerationMode func() string
+	Traces               *diagnostics.TraceRing
+	Now                  func() time.Time
+	Tick                 time.Duration
+	Seed                 int64
 	// MaxSegmentDuration caps armed segment deadlines. It exists for tests
 	// that need many segment boundaries quickly; production leaves it zero.
 	MaxSegmentDuration time.Duration
@@ -466,9 +469,11 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 			m.speedChangedAt = now
 		}
 		m.decisionSource = "interactive"
-		m.recentPatternIDs = append(m.recentPatternIDs, string(segment.PatternID))
-		if len(m.recentPatternIDs) > 4 {
-			m.recentPatternIDs = m.recentPatternIDs[len(m.recentPatternIDs)-4:]
+		if segment.PatternID != "" {
+			m.recentPatternIDs = append(m.recentPatternIDs, string(segment.PatternID))
+			if len(m.recentPatternIDs) > 4 {
+				m.recentPatternIDs = m.recentPatternIDs[len(m.recentPatternIDs)-4:]
+			}
 		}
 	}
 	m.mu.Unlock()
@@ -477,7 +482,7 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 		m.trace(ModeAutopilot, "interactive_target_adopted", &diagnostics.MotionTracePlanner{
 			Mode:              ModeAutopilot,
 			Event:             "interactive_target_adopted",
-			PatternIdentifier: string(segment.PatternID),
+			PatternIdentifier: segmentContentIdentifier(segment),
 			SpeedPercent:      segment.SpeedPercent,
 			DurationMillis:    segment.DurationMillis,
 		}, "chat")
@@ -592,7 +597,7 @@ func (m *Manager) tickFreestyle(ctx context.Context, mode string) {
 					m.trace(mode, "segment_drift", &diagnostics.MotionTracePlanner{
 						Mode:              mode,
 						Event:             "segment_drift",
-						PatternIdentifier: string(segment.PatternID),
+						PatternIdentifier: segmentContentIdentifier(segment),
 						DriftToPercent:    segment.DriftToSpeedPercent,
 					}, "")
 				}
@@ -638,6 +643,10 @@ func (m *Manager) startNextSegment(ctx context.Context, mode string, reason stri
 	}
 	choice := m.nextSegmentChoice(operationCtx, mode)
 	if operationCtx.Err() != nil {
+		return
+	}
+	if !choice.segment.hasContent() {
+		m.backoff(mode, generation, "start_waiting_for_model", errors.New("model did not provide a startable motion target"))
 		return
 	}
 	state, err := engine.Start(operationCtx, m.choiceTarget(mode, choice), m.options.Settings())
@@ -808,10 +817,15 @@ func (m *Manager) tickChat(ctx context.Context) {
 		return
 	}
 	m.trace(ModeChat, "chat_keepalive_restart", &diagnostics.MotionTracePlanner{
-		Mode:              ModeChat,
-		Event:             "chat_keepalive_restart",
-		PatternIdentifier: string(target.PatternID),
-		SpeedPercent:      target.SpeedPercent,
+		Mode:  ModeChat,
+		Event: "chat_keepalive_restart",
+		PatternIdentifier: func() string {
+			if target.Dynamic != nil {
+				return "dynamic"
+			}
+			return string(target.PatternID)
+		}(),
+		SpeedPercent: target.SpeedPercent,
 	}, "")
 }
 
@@ -938,6 +952,9 @@ func cloneTarget(target motion.MotionTarget) motion.MotionTarget {
 		pattern.Tags = append([]string(nil), pattern.Tags...)
 		target.Pattern = &pattern
 	}
+	if target.Dynamic != nil {
+		target.Dynamic = cloneDynamicDefinition(target.Dynamic)
+	}
 	if target.Program != nil {
 		program := *target.Program
 		program.Points = append([]motion.CurvePoint(nil), program.Points...)
@@ -955,7 +972,7 @@ func (m *Manager) tracePlanned(mode string, reason string, choice segmentChoice)
 		Mode:              mode,
 		Event:             reason,
 		Style:             m.options.Settings().Style,
-		PatternIdentifier: string(choice.segment.PatternID),
+		PatternIdentifier: segmentContentIdentifier(choice.segment),
 		SpeedPercent:      choice.segment.SpeedPercent,
 		DriftToPercent:    choice.segment.DriftToSpeedPercent,
 		DurationMillis:    choice.segment.DurationMillis,
@@ -981,6 +998,13 @@ func (m *Manager) tracePlanned(mode string, reason string, choice segmentChoice)
 		}
 	}
 	m.trace(mode, reason, row, note)
+}
+
+func segmentContentIdentifier(segment Segment) string {
+	if segment.Dynamic != nil {
+		return "dynamic"
+	}
+	return string(segment.PatternID)
 }
 
 func (m *Manager) plannerSnapshot() *Planner {

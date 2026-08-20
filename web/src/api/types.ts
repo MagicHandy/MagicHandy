@@ -37,13 +37,12 @@ export interface AutopilotSettings {
   session_arc_minutes: number;
 }
 
-// SessionArc is the visible progression bar. The backend owns the value; the
-// model may ask to advance or ease it by one bounded step and can never write it.
+// SessionArc is the visible progression bar. The backend derives the value from
+// active elapsed time; model output cannot alter it.
 export interface SessionArc {
   enabled: boolean;
   percent: number;
   minutes: number;
-  intent?: string;
 }
 
 export interface MotionSample {
@@ -59,7 +58,22 @@ export interface EngineSnapshot {
   running_ms?: number;
   phase?: number;
   recent_command_latency_ms?: number;
-  target?: { label?: string; source?: string; speed_percent?: number; pattern_id?: string; pattern_name?: string; program_id?: string; media_id?: string };
+  target?: {
+    label?: string;
+    source?: string;
+    speed_percent?: number;
+    pattern_id?: string;
+    pattern_name?: string;
+    program_id?: string;
+    media_id?: string;
+    dynamic?: {
+      center_percent: number;
+      span_percent: number;
+      anchors?: Array<{ name: string; position_percent: number }>;
+      variation_percent: number;
+      segment_seconds: number;
+    };
+  };
   current_sample?: MotionSample;
   last_sample?: MotionSample;
   settings?: MotionSettings;
@@ -839,6 +853,7 @@ export interface OptionHints {
   llama_cpp_context_sizes?: number[];
   llm_reasoning_modes?: string[];
   llm_max_output_tokens?: number[];
+	llm_motion_modes?: Array<"dynamic" | "pattern" | "off" | string>;
   llm_chat_voices?: string[];
   llm_user_anatomies?: LLMUserAnatomy[];
   prompt_sets?: string[];
@@ -892,6 +907,7 @@ export interface PublicSettings {
     custom_anatomy?: string;
     persona_description?: string;
     motion_capabilities?: LLMMotionCapabilities;
+		motion_generation_mode: "dynamic" | "pattern" | "off" | string;
   };
   voice: VoiceSettings;
   chat?: {

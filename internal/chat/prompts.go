@@ -83,6 +83,28 @@ const contractAreaSection = `- Focus motion on one zone by adding "area":"tip", 
 - Use a zone whenever the user names a place or asks to stay somewhere, however they word it — "just the tip", "stay near the top", "work the base", and "keep it shallow" are all zone requests.
 - Return to "full" when they ask for the whole range again. A zone request is a change on its own: send it even when speed and pattern stay the same.`
 
+const contractDynamic = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
+
+Every response requires a non-empty "reply" string written freshly in the selected chat voice. The optional "motion" value must be exactly one of these shapes:
+- Explicitly no motion change: {"action":"none"}
+- Start dynamic motion: {"action":"start","speed_percent":30,"center_percent":50,"span_percent":70,"variation_percent":20,"segment_seconds":12}
+- Start an anchor loop: {"action":"start","speed_percent":30,"anchors":["tip","middle","base"],"variation_percent":15,"segment_seconds":12}
+- Update active motion: {"action":"update","center_percent":25,"span_percent":40}
+- Stop motion: {"action":"stop"}
+
+Rules:
+- Omit "motion" or use only {"action":"none"} when you decide the current motion should continue unchanged. Ordinary conversation is not a reason to change motion.
+- Use "start" only for an explicit request to begin motion. Start requires speed_percent and either center_percent plus span_percent, or 2-6 anchors.
+- Use "update" only while motion is active. Include only fields you deliberately want to change; every omitted field preserves its live value.
+- Use only {"action":"stop"} when the user asks to stop, pause, or end motion.
+- center_percent is the midpoint of travel: 0 is base/deep and 100 is tip/shallow. span_percent is total travel around that midpoint and must be 20-100.
+- anchors are an ordered loop through 2-6 names chosen only from base, lower, middle, upper, and tip. Use anchors instead of center_percent/span_percent, never together.
+- variation_percent is 0-100 and controls slow organic drift over several cycles. It is not shake, flutter, noise, or a requirement to change on every turn.
+- segment_seconds is a 4-120 second decision horizon. Motion remains continuous at the boundary; it is not a stop timer.
+- Apply the supplied speed bands and user limits to speed_percent. Keep speeds conservative unless the user explicitly asks otherwise.
+- You own whether a valid turn changes motion. Do not mechanically update a field merely to be different.
+- Never invent pattern IDs, device commands, API calls, Bluetooth commands, URLs, phase values, or transport details.`
+
 const contractChatOnly = `Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.
 Always return an object with exactly one string field named "reply".
 Motion control is disabled by the user's settings: never include a "motion" key, and if asked to move the device, explain that motion control is switched off in Settings.`
@@ -100,6 +122,13 @@ func contractInstructions(capabilities Capabilities) string {
 			return contractChatOnlyWithMood + "\n" + moodContractInstructions()
 		}
 		return contractChatOnly
+	}
+	if capabilities.MotionMode == MotionModeDynamic {
+		text := contractDynamic
+		if capabilities.MoodTracking {
+			text += "\n" + moodContractInstructions()
+		}
+		return text
 	}
 	text := contractBase
 	if capabilities.MoodTracking {
@@ -120,6 +149,7 @@ func contractInstructions(capabilities Capabilities) string {
 // settings.
 type Capabilities struct {
 	Motion               bool
+	MotionMode           MotionMode
 	Patterns             bool
 	AreaFocus            bool
 	ExperimentalPatterns bool
@@ -132,6 +162,19 @@ type Capabilities struct {
 	// non-utility chat. It never grants a motion capability.
 	MoodTracking bool
 }
+
+// MotionMode selects the one model-facing motion vocabulary composed for a
+// turn. The zero value preserves the legacy pattern/speed contract in tests.
+type MotionMode string
+
+const (
+	// MotionModeDynamic exposes bounded model-authored geometry.
+	MotionModeDynamic MotionMode = "dynamic"
+	// MotionModePattern exposes enabled library pattern curation.
+	MotionModePattern MotionMode = "pattern"
+	// MotionModeOff keeps the model chat-only.
+	MotionModeOff MotionMode = "off"
+)
 
 // VoiceLevel selects how sexual the model's reply register may be. It shapes
 // only the user-facing reply text: the motion contract, capability enforcement,
@@ -314,7 +357,7 @@ Draw things out. Withhold a little, make me ask twice, and enjoy the anticipatio
 
 // FullCapabilities matches the historical always-on behavior plus area focus.
 func FullCapabilities() Capabilities {
-	return Capabilities{Motion: true, Patterns: true, AreaFocus: true, ExperimentalPatterns: true}
+	return Capabilities{Motion: true, MotionMode: MotionModePattern, Patterns: true, AreaFocus: true, ExperimentalPatterns: true}
 }
 
 const finalOutputGuard = `FINAL OUTPUT RULE:

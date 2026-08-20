@@ -202,6 +202,17 @@ func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnosti
 		trace.SoftAnchorPositionPercent = target.SoftAnchor.PositionPercent
 		trace.SoftAnchorWeightPercent = target.SoftAnchor.WeightPercent
 	}
+	if target.Dynamic != nil {
+		dynamic := NormalizeDynamicDefinition(*target.Dynamic)
+		trace.MotionKind = "dynamic"
+		trace.DynamicCenterPercent = dynamic.CenterPercent
+		trace.DynamicSpanPercent = dynamic.SpanPercent
+		trace.DynamicVariationPercent = dynamic.VariationPercent
+		trace.DynamicSegmentSeconds = dynamic.SegmentSeconds
+		for _, anchor := range dynamic.Anchors {
+			trace.DynamicAnchors = append(trace.DynamicAnchors, anchor.Name)
+		}
+	}
 	return trace
 }
 
@@ -217,6 +228,11 @@ func cloneMotionTarget(target MotionTarget) MotionTarget {
 	if target.Pattern != nil {
 		definition := clonePatternDefinition(*target.Pattern)
 		target.Pattern = &definition
+	}
+	if target.Dynamic != nil {
+		dynamic := *target.Dynamic
+		dynamic.Anchors = append([]DynamicAnchor(nil), target.Dynamic.Anchors...)
+		target.Dynamic = &dynamic
 	}
 	if target.Program != nil {
 		definition := *target.Program

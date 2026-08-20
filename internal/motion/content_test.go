@@ -490,7 +490,7 @@ func TestChooseNearestPhaseIncludesFiniteEndpoint(t *testing.T) {
 		ID: "endpoint", Name: "Endpoint", DurationMillis: 1000,
 		Points: []CurvePoint{{TimeMillis: 0}, {TimeMillis: 1000, PositionPercent: 100}},
 	}
-	phase := chooseNearestPhase(MotionTarget{Program: &program, ProgramID: program.ID}, config.DefaultSettings().Motion, 100, 1)
+	phase := chooseNearestPhase(MotionTarget{Program: &program, ProgramID: program.ID}, config.DefaultSettings().Motion, 100, 1, 0)
 	if phase != 1 {
 		t.Fatalf("finite endpoint phase = %g, want 1", phase)
 	}

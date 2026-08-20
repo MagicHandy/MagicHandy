@@ -53,6 +53,28 @@
   background: var(--surface);
 }
 
+.chat-motion-mode {
+  display: grid;
+  grid-template-columns: minmax(84px, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.chat-motion-mode select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 28px 6px 8px;
+  background-color: var(--surface-2);
+  font-size: 0.8rem;
+}
+
 .chat-motion-status {
   margin: auto -14px -14px;
   padding: 11px 14px 13px;

@@ -9,10 +9,12 @@ const mocks = vi.hoisted(() => ({
   saveChatSession: vi.fn(),
   deleteChatSession: vi.fn(),
   stopMode: vi.fn(),
+  setLLMMotionMode: vi.fn(),
   show: vi.fn(),
   refresh: vi.fn(),
   appState: { modes: {} } as {
     modes: { mode?: string };
+    settings?: { llm?: { motion_generation_mode?: string; motion_capabilities?: { motion?: boolean } } };
     chat?: { active_session_id?: string; latest_seq?: number; current_mood?: string };
     uptime_seconds?: number;
   },
@@ -53,6 +55,7 @@ vi.mock("../api/client", () => ({
     saveChatSession: mocks.saveChatSession,
     deleteChatSession: mocks.deleteChatSession,
     stopMode: mocks.stopMode,
+    setLLMMotionMode: mocks.setLLMMotionMode,
   },
 }));
 vi.mock("../state/app-state", () => ({
@@ -83,6 +86,25 @@ describe("ChatRoute", () => {
     expect(within(conversation).queryByText("Autopilot control")).not.toBeInTheDocument();
     expect(within(controls).getByText("Autopilot control")).toBeInTheDocument();
     expect(screen.queryByText("Manual motion")).not.toBeInTheDocument();
+  });
+
+  it("offers every LLM motion mode from the Chat control sidebar", async () => {
+    mocks.appState = {
+      modes: {},
+      settings: { llm: { motion_generation_mode: "pattern", motion_capabilities: { motion: true } } },
+    };
+    mocks.setLLMMotionMode.mockResolvedValue({ mode: "dynamic" });
+    render(<ChatRoute />);
+
+    const controls = screen.getByRole("complementary", { name: "Motion controls" });
+    const mode = within(controls).getByRole("combobox", { name: "LLM motion" });
+    expect(mode).toHaveValue("pattern");
+    expect(within(controls).getByRole("option", { name: "Dynamic" })).toBeInTheDocument();
+    expect(within(controls).getByRole("option", { name: "Pattern library" })).toBeInTheDocument();
+    expect(within(controls).getByRole("option", { name: "Off" })).toBeInTheDocument();
+
+    fireEvent.change(mode, { target: { value: "dynamic" } });
+    await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("dynamic"));
   });
 
   it("shows only the backend mood for the active session", async () => {

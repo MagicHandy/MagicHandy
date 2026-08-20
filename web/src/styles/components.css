@@ -523,11 +523,23 @@ textarea:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.viz-pattern small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.64rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .viz-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   margin: 0;
+}
+.viz-metrics.dynamic-metrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .viz-metrics > div {
   display: grid;

@@ -145,16 +145,3 @@ func TestExplicitTrackingOffIsPreserved(t *testing.T) {
 		t.Fatal("an explicit tracking-off choice was overwritten by the default")
 	}
 }
-
-func TestArcIntentVocabulary(t *testing.T) {
-	for _, intent := range []string{AutopilotArcHold, AutopilotArcAdvance, AutopilotArcEase} {
-		if !ValidAutopilotArcIntent(intent) {
-			t.Fatalf("%q should be a valid arc intent", intent)
-		}
-	}
-	for _, intent := range []string{"", "sprint", "ADVANCE", "100"} {
-		if ValidAutopilotArcIntent(intent) {
-			t.Fatalf("%q should not be a valid arc intent", intent)
-		}
-	}
-}

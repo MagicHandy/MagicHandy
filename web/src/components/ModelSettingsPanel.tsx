@@ -85,6 +85,17 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
     patch({ motion_capabilities: { ...capabilities, [key]: value } });
   }
 
+  function patchMotionMode(mode: string) {
+    patch({
+      motion_generation_mode: mode,
+      motion_capabilities: {
+        ...capabilities,
+        motion: mode !== "off",
+        patterns: mode === "pattern" ? true : capabilities.patterns,
+      },
+    });
+  }
+
   const refreshManager = useCallback(async () => {
     if (managerRefresh.current) return managerRefresh.current;
     if (mounted.current) setManagerMessage("");
@@ -429,44 +440,42 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
       </div>
 
       <div className="group">
-        <h3 id="model-permissions-title" className="group-title">{t("Model permissions")}</h3>
+        <h3 id="model-permissions-title" className="group-title">{t("Motion generation")}</h3>
         <div className="capability-gates" role="group" aria-labelledby="model-permissions-title">
-          <label className="capability-gate" title={t("Allow chat and Autopilot to issue motion commands")}>
-            <input
-              type="checkbox"
-              checked={capabilities.motion}
+          <label className="field capability-mode">
+            <span className="label">{t("LLM motion")}</span>
+            <select
+              value={settings.motion_generation_mode || (capabilities.motion ? "pattern" : "off")}
               disabled={locked}
-              onChange={(event) => patchCapability("motion", event.target.checked)}
-            />
-            <span>{t("Motion commands")}</span>
+              onChange={(event) => patchMotionMode(event.target.value)}
+            >
+              <option value="dynamic">{t("Dynamic")}</option>
+              <option value="pattern">{t("Pattern library")}</option>
+              <option value="off">{t("Off")}</option>
+            </select>
           </label>
-          <label className="capability-gate" title={t("Allow selection from enabled library patterns")}>
-            <input
-              type="checkbox"
-              checked={capabilities.patterns}
-              disabled={locked || !capabilities.motion}
-              onChange={(event) => patchCapability("patterns", event.target.checked)}
-            />
-            <span>{t("Pattern selection")}</span>
-          </label>
-          <label className="capability-gate" title={t("Allow tip, shaft, base, and full-range targets")}>
-            <input
-              type="checkbox"
-              checked={capabilities.area_focus}
-              disabled={locked || !capabilities.motion}
-              onChange={(event) => patchCapability("area_focus", event.target.checked)}
-            />
-            <span>{t("Area focus")}</span>
-          </label>
-          <label className="capability-gate" title={t("Allow experimental-tagged library patterns")}>
-            <input
-              type="checkbox"
-              checked={capabilities.experimental_patterns}
-              disabled={locked || !capabilities.motion || !capabilities.patterns}
-              onChange={(event) => patchCapability("experimental_patterns", event.target.checked)}
-            />
-            <span>{t("Experimental patterns")}</span>
-          </label>
+          {(settings.motion_generation_mode || "pattern") === "pattern" && (
+            <>
+              <label className="capability-gate" title={t("Allow tip, shaft, base, and full-range targets")}>
+                <input
+                  type="checkbox"
+                  checked={capabilities.area_focus}
+                  disabled={locked}
+                  onChange={(event) => patchCapability("area_focus", event.target.checked)}
+                />
+                <span>{t("Area focus")}</span>
+              </label>
+              <label className="capability-gate" title={t("Allow experimental-tagged library patterns")}>
+                <input
+                  type="checkbox"
+                  checked={capabilities.experimental_patterns}
+                  disabled={locked}
+                  onChange={(event) => patchCapability("experimental_patterns", event.target.checked)}
+                />
+                <span>{t("Experimental patterns")}</span>
+              </label>
+            </>
+          )}
         </div>
       </div>
 

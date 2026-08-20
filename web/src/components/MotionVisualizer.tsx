@@ -61,15 +61,20 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   const speed = active && typeof engine?.target?.speed_percent === "number"
     ? `${Math.round(clampPercent(engine.target.speed_percent, 0))}%`
     : "--";
+  const dynamic = active ? engine?.target?.dynamic : undefined;
   const resolvedPatternName = engine?.target?.pattern_name?.trim() || engine?.target?.pattern_id?.trim();
   const resolvedMediaName = engine?.target?.source === "media"
     ? engine.target.label?.trim() || t("Video funscript")
     : "";
   const patternName = active
-    ? resolvedMediaName || resolvedPatternName || (engine?.target?.program_id ? t("Program playback") : t("Unknown pattern"))
+    ? dynamic ? t("Dynamic") : resolvedMediaName || resolvedPatternName || (engine?.target?.program_id ? t("Program playback") : t("Unknown pattern"))
     : t("No active pattern");
   const rawSource = engine?.target?.source?.trim();
   const source = active && rawSource ? rawSource.replaceAll("_", " ") : "--";
+  const dynamicAnchors = dynamic?.anchors?.map((anchor) => anchor.name).filter(Boolean) ?? [];
+  const dynamicMeta = dynamic
+    ? `${dynamicAnchors.length ? dynamicAnchors.join(" → ") : `${t("Center")} ${dynamic.center_percent}%`} · ${dynamic.segment_seconds}s · ${source}`
+    : "";
   // The stroke channel and carriage ride on the device center axis. 100% is the
   // top of the channel.
   const travelTop = 30;
@@ -129,23 +134,33 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
             <span className="viz-commanded"><strong>{roundedPosition}%</strong><small>{t("commanded")}</small></span>
           </div>
           <div className="viz-pattern">
-            <span>{t("Pattern")}</span>
+            <span>{dynamic ? t("Motion") : t("Pattern")}</span>
             <strong title={patternName}>{patternName}</strong>
+            {dynamicMeta && <small title={dynamicMeta}>{dynamicMeta}</small>}
           </div>
-          <dl className="viz-metrics">
-            <div>
-              <dt>{t("Range")}</dt>
-              <dd>{Math.round(min)}-{Math.round(max)}%</dd>
-            </div>
-            <div>
-              <dt>{t("Speed")}</dt>
-              <dd>{speed}</dd>
-            </div>
-            <div>
-              <dt>{t("Source")}</dt>
-              <dd title={source}>{source}</dd>
-            </div>
-          </dl>
+          {dynamic ? (
+            <dl className="viz-metrics dynamic-metrics">
+              <div><dt>{t("Center")}</dt><dd>{dynamic.center_percent}%</dd></div>
+              <div><dt>{t("Span")}</dt><dd>{dynamic.span_percent}%</dd></div>
+              <div><dt>{t("Speed")}</dt><dd>{speed}</dd></div>
+              <div><dt>{t("Variation")}</dt><dd>{dynamic.variation_percent}%</dd></div>
+            </dl>
+          ) : (
+            <dl className="viz-metrics">
+              <div>
+                <dt>{t("Range")}</dt>
+                <dd>{Math.round(min)}-{Math.round(max)}%</dd>
+              </div>
+              <div>
+                <dt>{t("Speed")}</dt>
+                <dd>{speed}</dd>
+              </div>
+              <div>
+                <dt>{t("Source")}</dt>
+                <dd title={source}>{source}</dd>
+              </div>
+            </dl>
+          )}
         </div>
       )}
     </div>

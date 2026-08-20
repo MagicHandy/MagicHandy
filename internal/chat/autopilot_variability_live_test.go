@@ -258,9 +258,6 @@ func TestAutopilotVariability(t *testing.T) {
 		}
 		tally.timings[string(response.Next)]++
 		tally.variabits[strings.TrimSpace(response.Variability)]++
-		if a := strings.TrimSpace(response.Arc); a != "" {
-			tally.arcs[a]++
-		}
 		tally.applyDecision(t, turn, response, &current, &secondsAtSpeed)
 	}
 	tally.report(os.Getenv("LABEL")+" autopilot motion", bandLow, bandHigh)
@@ -308,6 +305,6 @@ func (v *varTally) applyDecision(
 	v.speeds = append(v.speeds, current.CurrentSpeed)
 	v.patterns[current.CurrentPatternID]++
 	v.areas[current.CurrentArea]++
-	t.Logf("  turn %2d CHANGE  speed=%d pattern=%s area=%s next=%s var=%s arc=%s",
-		turn, current.CurrentSpeed, current.CurrentPatternID, current.CurrentArea, response.Next, response.Variability, response.Arc)
+	t.Logf("  turn %2d CHANGE  speed=%d pattern=%s area=%s next=%s var=%s",
+		turn, current.CurrentSpeed, current.CurrentPatternID, current.CurrentArea, response.Next, response.Variability)
 }

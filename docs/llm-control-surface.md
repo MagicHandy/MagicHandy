@@ -1,9 +1,11 @@
-# LLM Motion Control Surface — Current State and Ideas
+# LLM Motion Control Modes
 
-This document catalogs how the local LLM can drive the device today, what the
-motion engine can already do that the model cannot yet reach, and a ranked set
-of ideas for widening LLM control. The initial Chat Autopilot slice landed in
-PR #101; the remaining ideas are design inputs, not implied commitments.
+This document defines how the local LLM can drive the device, how users choose
+that control surface, what the engine can do that the model still cannot reach,
+and the remaining ideas for widening LLM control. Dynamic motion is implemented
+as a selectable alternative to Pattern Library control. Pattern Library remains
+the conservative default until Dynamic completes live-provider and real-device
+A/B acceptance.
 
 It is grounded in two things: MagicHandy's current code
 (`internal/chat/contract.go`, `internal/motion/target.go`) and the reference
@@ -26,10 +28,10 @@ physical transport), and it matches the reference app's explicit guardrail:
 > should remain backend implementation details with tests and trace fields.
 > — `StrokeGPT-ReVibed/docs/motion_control_modes.md`
 
-So the model emits **semantic intent** (a region, an opaque pattern handle, a speed, a
-named arrangement). Deterministic code compiles that into motion and clamps it
+So the model emits **semantic intent** (bounded geometry or an opaque pattern
+handle plus speed). Deterministic code compiles that into motion and clamps it
 to the user's speed/stroke/limit envelope. Speed and stroke limits stay
-transport-layer caps, never prompt-only behavior. Emergency Stop stays
+engine/transport caps, never prompt-only behavior. Emergency Stop stays
 independent of every generation, upload, and playback latency.
 
 ## What the LLM can emit today
@@ -41,25 +43,51 @@ enum. It is persisted as session diagnostics and shown as backend-reported Chat
 state, but it has no representation in `MotionCommand`, `MotionContext`,
 `MotionTarget`, or transport dispatch.
 
-`MotionCommand`, the only model-authored motion shape the parser accepts:
+One persisted mode selects one model-facing vocabulary. Dynamic and Pattern
+Library fields are never advertised together:
+
+| Mode | Model surface | Runtime behavior |
+| --- | --- | --- |
+| **Dynamic** | speed plus center/span or an ordered named-anchor route, slow variation, and a decision horizon | compiles an ephemeral loop through the shared motion engine; no pattern catalog enters the prompt |
+| **Pattern Library** | enabled opaque `pattern_id`, speed, and optional named area focus | resolves an authored library shape through the shared motion engine |
+| **Off** | reply text and optional mood only | rejects model motion while every user Stop path remains available |
+
+The Chat Controls sidebar exposes all three modes beside Autopilot. Settings >
+Model exposes the same list with the Pattern-only area-focus and
+experimental-content gates. The permanent navigation rail remains a list of
+destinations. The scoped mode endpoint persists immediately and requires
+controller ownership. Changing mode cancels Autopilot planning so an in-flight
+decision from the old vocabulary cannot land late; it does not stop
+already-running engine motion. Dispatch rechecks the saved mode before applying
+a result. `stop` is exempt from that rejection and remains unconditional even
+after switching to Off.
+
+`MotionCommand`, the only model-authored motion union the parser accepts:
 
 | Field | Values | Meaning |
 | --- | --- | --- |
-| `action` | `none` / `start` / `target` / `stop` | start, retarget, or stop motion through the engine |
-| `pattern_id` | an opaque **enabled** catalog handle | curate one enabled shape; parsing resolves it to a stable internal ID |
+| `action` | `none` / `start` / `target` / `update` / `stop` | Pattern Library uses `target`; Dynamic uses `update`; both start and stop only through the engine |
 | `speed_percent` | 1–100 | semantic playback speed, clamped again by the user's limits |
-| `area` | `tip` / `shaft` / `base` / `full` | select a named stroke zone; `full` clears area focus |
+| `pattern_id` | an opaque **enabled** catalog handle | Pattern Library only: resolve one enabled authored shape |
+| `area` | `tip` / `shaft` / `base` / `full` | Pattern Library only: select a named stroke zone; `full` clears focus |
+| `center_percent` | 0–100 | Dynamic only: midpoint of the requested loop |
+| `span_percent` | 20–100 | Dynamic only: total travel around the midpoint; the floor avoids stall-prone micro-motion |
+| `anchors` | 2–6 of `base`, `lower`, `middle`, `upper`, `tip` | Dynamic only: ordered semantic route; consecutive duplicates and routes narrower than 20% are rejected |
+| `variation_percent` | 0–100 | Dynamic only: bounded deterministic drift over several cycles, never high-frequency noise |
+| `segment_seconds` | 4–120 | Dynamic only: model decision horizon, not a stop timer |
 
-Validation enforces the safe combinations: a pattern requires speed, and
-`none`/`stop` carry no target fields. The decoder still accepts the retired
+Validation enforces the mode-specific combinations. A Dynamic start requires
+speed and either center plus span or anchors. A Dynamic update may omit fields
+to preserve their live values but must change at least one value. A Pattern
+Library start or target cannot include Dynamic fields. `none` and `stop` carry
+no target fields in either mode. The decoder still accepts the retired
 `intensity` alias from old saved responses, immediately normalizes it to
 `speed_percent`, and never advertises it to a model. When both fields are
-present, `speed_percent` wins. A stopped engine accepts only `start`; `target` never starts motion as
-a side effect. A running pattern change may omit pace, in which case
-deterministic code preserves the current speed. Disabled or unknown pattern ids
-are rejected, and an all-disabled library keeps the deterministic speed-only
-contract. This is real curation — the model selects from author-owned content —
-but it is still narrower than the engine.
+present, `speed_percent` wins. A stopped engine accepts only `start`; neither
+`target` nor `update` starts motion as a side effect. A running Pattern Library
+shape change may omit pace, and a Dynamic update may omit any unchanged field.
+Disabled or unknown pattern ids are rejected. Dynamic never reads pattern
+storage or receives catalog names.
 
 Pattern choices describe shape and relative rhythm only. The prompt strips
 storage/status tags (`experimental`, `curated`, `imported`) and never exposes
@@ -67,11 +95,15 @@ persisted IDs whose historical names imply a pace. The engine independently
 normalizes each loop's total travel to the requested speed, subject to the
 configured maximum and curve-specific acceleration/reversal safety floors.
 
-After parsing, deterministic current-turn authorization strips `start` or
-`target` unless the current user message contains a positive, action-specific
-motion request in one of the supported prompt languages. Negation and common
-conversation objects are rejected before matching; broad standalone topic
-words such as `different`, `continue`, or `pattern` do not authorize motion.
+After parsing, deterministic current-turn authorization strips `start` or a
+Pattern Library `target` unless the current user message contains a positive,
+action-specific motion request in one of the supported prompt languages.
+Dynamic `update` deliberately has broader admission while Dynamic motion is
+already running: any non-empty, non-negated current turn may carry the model's
+choice to update or not update. This keeps semantic taste and non-deterministic
+action/no-action ownership with the model instead of reconstructing the legacy
+phrase ruleset. Negation still blocks an update, and Dynamic `start` still
+requires explicit current-turn authority.
 An unauthorized command returns as inert reply text before semantic repair, so
 fallback cannot recreate it. Autopilot is the sole exception to the user-turn
 matcher: its decision message is generated inside the mode manager and carries
@@ -100,13 +132,13 @@ limits, Stop epochs, and the selected transport; it is not a private motion
 path.
 
 Each interactive turn also receives one authoritative runtime snapshot:
-stopped/running/paused state, current pattern or program, current speed and
-area, the persisted speed envelope split into low/middle/high bands, and up to
-four recent chat-selected patterns. Pattern references use the same
-deterministic opaque handles as the enabled catalog, so legacy pace-biased
-database IDs cannot steer selection. This state is prompt data, not a second
-frontend motion model. It is derived from the engine snapshot and bounded trace
-ring, so it is deliberately runtime-only and requires no database migration.
+stopped/running/paused state, current speed, and the persisted speed envelope
+split into low/middle/high bands. Pattern Library adds the active pattern/area
+and up to four recent chat-selected opaque handles. Dynamic instead adds the
+live center, span, ordered anchors, variation, and decision horizon. This state
+is prompt data, not a second frontend motion model. It is derived from the
+engine snapshot and bounded trace ring, so it is runtime-only and requires no
+database migration.
 
 Opted-in interactive non-utility chat receives a separate backend-owned conversation
 snapshot: bounded persona/anatomy settings, the effective session mood, and the
@@ -120,13 +152,11 @@ profile-free, do not update mood, and suppress its readout; Autopilot motion
 decisions deliberately exclude profile context so quoted persona data cannot
 steer an autonomous motion decision.
 
-Continuity and variation are separate intents. Ordinary conversation,
-"continue", and steady/hold requests preserve motion; pacing-only requests
-preserve content and area. For an explicit variation request, the model owns
-the semantic choice across pattern, speed, and area. Any meaningful target
-change is valid, including an area-only move back to `full` or a speed change
-that keeps the current pattern. Recent pattern handles are prompt context rather
-than a deterministic exclusion list.
+Continuity and variation are separate intents. In Pattern Library mode,
+ordinary conversation, "continue", and steady/hold requests preserve motion;
+pacing-only requests preserve content and area. In Dynamic mode, omitted fields
+preserve live geometry and a valid `none` remains authoritative even for a
+variation request. The backend does not force a random change merely to differ.
 
 Semantic no-op targets receive one repair pass. If the model repeats a no-op,
 deterministic recovery drops the motion command and preserves the valid reply;
@@ -135,16 +165,15 @@ enabled-content checks, configured limits, and the shared motion engine remain
 deterministic. Content-selection taste and conversational variation stay with
 the model instead of a second hard-coded motion policy.
 
-Chat Autopilot reuses this same contract at bounded segment boundaries. Its
-request includes the latest 12 canonical conversation messages, current style
-and speed band, the engine's live pattern, speed, and area, recent pattern handles,
-and the last autonomous line. It may curate an enabled pattern/speed or
-hold; deterministic code owns duration and all clamps. An accepted interactive
-chat target temporarily suspends decision dispatch, then becomes Autopilot's
-current segment after the engine applies it; a stale in-flight decision cannot
-restore the previous focus. A generation token prevents late adoption after
-Stop or a mode change. This is broader orchestration of the existing contract,
-not a second motion schema.
+Chat Autopilot reuses the selected contract at bounded decision boundaries. In
+Pattern Library mode it may curate an enabled pattern/speed or hold. In Dynamic
+mode it may start or update geometry, and its `segment_seconds` is clamped to
+the user's Autopilot motion-cadence range. Dynamic provider failure holds the
+current Dynamic target or waits for a model decision; it never falls back to a
+deterministic library pattern. An accepted interactive chat target temporarily
+suspends decision dispatch and then becomes Autopilot's current segment. A
+generation token prevents late adoption after Stop or a mode change. This is
+orchestration of the shared engine, not a second motion loop.
 
 ## What the engine already supports that the model cannot reach
 
@@ -156,6 +185,7 @@ engine actually consumes — is richer than the chat contract that feeds it:
 | `PatternID` | repeatable pattern | **yes** |
 | `SpeedPercent` | speed within limits | **yes** |
 | `AreaFocus{MinPercent,MaxPercent}` | constrain sampling to a **stroke region** | **yes**, through named zones |
+| `Dynamic` | ephemeral center/span or named-anchor loop with slow variation | **yes**, in Dynamic mode |
 | `SoftAnchor{PositionPercent,WeightPercent}` | gently bias motion toward a point | **no** |
 | `ProgramID` | play a finite **program/funscript** | **no** |
 
@@ -166,13 +196,13 @@ about building new motion.
 
 ## Capability gates and live-provider evidence
 
-Settings > Model exposes four persisted model permissions: motion commands,
-pattern selection, area focus, and experimental patterns. Dependencies remain
-visible but disabled when their parent permission is off. Disabled methods are
-absent from the prompt and stripped from model noise before dispatch. The
-settings live in the existing versioned settings JSON document in SQLite;
-absent older values resolve to conservative defaults, so no schema/table
-migration is needed.
+The sidebar and Settings > Model expose the persisted Dynamic / Pattern Library
+/ Off mode list. Pattern mode additionally exposes area focus and experimental
+patterns. Disabled methods are absent from the prompt and stripped from model
+noise before dispatch. The setting lives in the existing versioned settings
+JSON document in SQLite; an older document without the field preserves Pattern
+Library behavior, except an existing chat-only capability maps to Off. No
+schema/table migration is needed.
 
 The 2026-07-20 live matrix exercised the final service against both supported
 provider paths with a 20–40% test envelope and no transport dispatch:
@@ -187,8 +217,11 @@ provider paths with a 20–40% test envelope and no transport dispatch:
   the same five-turn variation sequence avoided immediate reuse and every speed
   stayed at or below 40%
 
-This closes interactive provider/prompt evidence. It is not a real-device feel
-check or a long-running Chat Autopilot acceptance run; those remain separate.
+This closes the Pattern Library interactive provider/prompt evidence. Dynamic
+currently has parser, prompt-isolation, shared-engine, phase/velocity retarget,
+Autopilot, trace, and frontend coverage. It does not yet have a managed
+llama.cpp/Ollama model matrix or a matched real-device feel comparison, so it is
+selectable but not the default.
 
 ## Ideas, ranked by leverage-to-risk
 
@@ -268,21 +301,26 @@ the same conclusion ("steer model behavior without hidden prompt drift").
   separate idea. It must be an explicit semantic field consumed by deterministic
   scoring, never hidden prompt drift or an interpretation of `new_mood`.
 
-### E. LLM-requested motion arrangement (net-new; moderate risk)
+### E. Dynamic model-authored motion (reference direction; moderate risk) — **shipped, acceptance open**
 
-Let the model *request* a bounded arrangement — named styles, focus regions,
-durations, repetitions, speed drift — that compiles through the existing
-Phase 11 arrangement contract, instead of nudging low-level targets every turn.
-This is precisely the reference app's "Preferred direction" in
-`motion_control_modes.md` and its item #16 arrangement note. MagicHandy already
-has the compiler (Freestyle uses it); the new part is a safe *request* schema.
+Dynamic implements the useful part of the reference app's default non-library
+control without copying its private timers, UI state, or transport writes. The
+model requests bounded center/span geometry or an ordered route through named
+anchors, pace, slow variation, and a 4–120 second decision horizon. The backend
+compiles that request into ordinary sampled content and `MotionPlan`; the shared
+engine still owns startup, retargeting, limits, transport framing, and Stop.
 
-- Dependency: a versioned `arrangement` request shape plus validation that it
-  stays inside the 1–8 segment / 4–120 s bounds the planner already enforces.
-- Disposition: high-value and architecturally aligned, but it is the first idea
-  that grows the schema meaningfully — version it, keep each segment long enough
-  to establish feel (multiple cycles), and surface the active arrangement in
-  diagnostics so users can see what the model changed.
+Interior anchor knots carry a non-zero tangent so they are pass-through points,
+not accidental stops. True route endpoints reverse. Variation is deterministic,
+bounded, loop-closed drift over several cycles; it cannot add high-frequency
+shake. Active retarget phase selection scores position, direction, and bounded
+velocity mismatch, and the existing C1 handoff remains the only bridge. A
+horizon-only update preserves content identity and phase.
+
+The remaining acceptance gate is empirical: compare Dynamic and Pattern Library
+on the same local models and real device at capped speed, including slow narrow
+motion, route reversals, repeated conversational updates, Autopilot handoffs,
+and Stop. Do not make Dynamic the default from simulation alone.
 
 ### F. Chat Autopilot session controls (partially implemented; moderate)
 
@@ -293,27 +331,25 @@ execution/lifecycle owner. This placement keeps assistant autonomy with the
 conversation and leaves Freestyle as the clearly separate deterministic preset
 behavior.
 
-The cadence and speech-authority portion is now specified in
+The cadence and speech-authority portion is specified in
 [autopilot-cadence.md](autopilot-cadence.md): motion evolution and speech use
 independent clocks, model timing is categorical and code-bounded, and a hold is
-scheduler-only. Remaining work is a visible **session-level autonomy choice**
-between curated authored content (`{pattern_id or program_id, speed_percent}`) and
-future freeform arrangements. A
-guarded `mode_action` field is still needed before the model itself may enter or
-leave a session, especially from voice transcripts. Model-triggered mode
-changes remain off until that explicit opt-in exists.
+scheduler-only. The sidebar now provides the visible session-level choice
+between curated authored content and Dynamic geometry. Off prevents Autopilot
+start. A guarded `mode_action` field is still needed before the model itself may
+enter or leave Autopilot, especially from voice transcripts. Model-triggered
+mode changes remain off until that explicit opt-in exists.
 
 ### G. Soft-anchor waypoints (parity; moderate)
 
-Expose the engine's `SoftAnchor` so the model (or a saved preset) can bias
-motion toward 2–6 waypoints (tip/upper/middle/lower/base) that motion slides
-through without hard stops. Reference ROADMAP #7 designed exactly this as an
-inspectable control surface.
+The Dynamic contract now accepts an ordered loop through 2–6 named anchors
+(tip/upper/middle/lower/base), and the engine compiles interior anchors as
+pass-through knots. This is not the existing weighted `SoftAnchor` field: it is
+ephemeral route geometry and cannot be persisted or selected as a preset.
 
-- Disposition: attractive but do it after A/B; the reference app deliberately
-  put visible *authoring* of soft anchors ahead of letting the model invent
-  them. Prefer "model selects a saved soft-anchor preset" over "model emits raw
-  waypoints."
+- Remaining disposition: saved, visible weighted-anchor presets are still
+  attractive after Dynamic A/B acceptance. Prefer the model selecting an
+  inspectable preset over exposing raw `SoftAnchor` weights.
 
 ## New ideas not in the reference notes
 
@@ -347,6 +383,8 @@ same skepticism.
 
 - Current contract: `internal/chat/contract.go`; engine intent:
   `internal/motion/target.go`; system-prompt assembly: `internal/chat/prompts.go`.
+- [ADR 0015](decisions/0015-selectable-llm-motion-modes.md) — the persisted
+  Dynamic / Pattern Library / Off decision and acceptance gate.
 - [motion-retargeting.md](motion-retargeting.md) — the sampler/retarget model
   any new intent compiles through.
 - [pattern-library.md](pattern-library.md) — patterns vs programs, enabled-only

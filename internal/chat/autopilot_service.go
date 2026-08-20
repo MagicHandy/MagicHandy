@@ -43,9 +43,6 @@ type AutopilotResponse struct {
 	// Motion turns require the model to choose it explicitly so a scheduler hold
 	// cannot acquire backend-invented movement after the model answered.
 	Variability string
-	// Arc is a request to move visible session buildup by one bounded step. It is
-	// read only while the arc is enabled and can never set the value.
-	Arc string
 }
 
 // AutopilotService runs the dedicated autonomous contracts through the same
@@ -161,10 +158,6 @@ func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotRespon
 	if !validAutopilotTiming(response.Next) {
 		return AutopilotResponse{}, fmt.Errorf("unknown Autopilot timing %q", response.Next)
 	}
-	if response.Arc != "" && !validAutopilotArc(response.Arc) {
-		return AutopilotResponse{}, fmt.Errorf("unknown Autopilot buildup intent %q", response.Arc)
-	}
-
 	// Reuse the interactive semantic validator with an inert non-empty reply.
 	// Capability enforcement happens before validation, so a speech authority
 	// that did not advertise motion cannot smuggle it through malformed output.
@@ -178,12 +171,13 @@ func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotRespon
 	}
 	preserveCurrentPatternSpeed(&validated, currentSpeed)
 	patternsEnabled := s.Capabilities.Motion && s.Capabilities.Patterns
-	if err := validateAssistantResponse(&validated, s.Patterns, patternsEnabled); err != nil {
+	dynamicEnabled := s.Capabilities.Motion && s.Capabilities.MotionMode == MotionModeDynamic
+	if err := validateAssistantResponse(&validated, s.Patterns, patternsEnabled, dynamicEnabled); err != nil {
 		return AutopilotResponse{}, err
 	}
 	if validated.Motion != nil && validated.Motion.Action != MotionActionNone &&
-		validated.Motion.Action != MotionActionTarget {
-		return AutopilotResponse{}, errors.New("autopilot motion action must be target or none")
+		validated.Motion.Action != MotionActionTarget && validated.Motion.Action != MotionActionUpdate {
+		return AutopilotResponse{}, errors.New("autopilot motion action must be target, update, or none")
 	}
 	response.Motion = validated.Motion
 	if err := normalizeAutopilotSpeechVariability(&response, kind); err != nil {
@@ -199,14 +193,13 @@ func decodeAutopilotResponse(raw string, kind AutopilotKind) (AutopilotResponse,
 			Motion      *MotionCommand  `json:"motion,omitempty"`
 			Next        AutopilotTiming `json:"next"`
 			Variability string          `json:"variability,omitempty"`
-			Arc         string          `json:"arc,omitempty"`
 		}
 		if err := decodeAutopilotJSON(raw, &wire); err != nil {
 			return AutopilotResponse{}, err
 		}
 		response := AutopilotResponse{
 			Motion: wire.Motion, Next: wire.Next,
-			Variability: strings.TrimSpace(wire.Variability), Arc: strings.TrimSpace(wire.Arc),
+			Variability: strings.TrimSpace(wire.Variability),
 		}
 		if !validAutopilotVariability(response.Variability) {
 			return AutopilotResponse{}, fmt.Errorf("unknown Autopilot variability %q", response.Variability)
@@ -218,14 +211,13 @@ func decodeAutopilotResponse(raw string, kind AutopilotKind) (AutopilotResponse,
 			Motion      *MotionCommand  `json:"motion,omitempty"`
 			Next        AutopilotTiming `json:"next"`
 			Variability string          `json:"variability,omitempty"`
-			Arc         string          `json:"arc,omitempty"`
 		}
 		if err := decodeAutopilotJSON(raw, &wire); err != nil {
 			return AutopilotResponse{}, err
 		}
 		response := AutopilotResponse{
 			Reply: strings.TrimSpace(wire.Reply), Motion: wire.Motion, Next: wire.Next,
-			Variability: strings.TrimSpace(wire.Variability), Arc: strings.TrimSpace(wire.Arc),
+			Variability: strings.TrimSpace(wire.Variability),
 		}
 		if response.Reply == "" {
 			return AutopilotResponse{}, errors.New("autopilot speech reply is required")
@@ -240,7 +232,7 @@ func normalizeAutopilotSpeechVariability(response *AutopilotResponse, kind Autop
 	if kind != AutopilotKindSpeech {
 		return nil
 	}
-	if response.Motion != nil && response.Motion.Action == MotionActionTarget {
+	if response.Motion != nil && (response.Motion.Action == MotionActionTarget || response.Motion.Action == MotionActionUpdate) {
 		if !validAutopilotVariability(response.Variability) {
 			return fmt.Errorf("autopilot speech target requires settled, normal, or restless variability, got %q", response.Variability)
 		}
@@ -272,10 +264,6 @@ func validAutopilotTiming(timing AutopilotTiming) bool {
 
 func validAutopilotVariability(variability string) bool {
 	return variability == "settled" || variability == "normal" || variability == "restless"
-}
-
-func validAutopilotArc(arc string) bool {
-	return arc == "advance" || arc == "ease" || arc == "hold"
 }
 
 func composeAutopilotSystem(
@@ -314,18 +302,29 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 	} else {
 		builder.WriteString(`The object requires "next":"soon"|"normal"|"later" and "variability":"settled"|"normal"|"restless". Do not include a "reply" field.`)
 	}
-	builder.WriteString("\nThe timing value is a relative preference only. Never emit seconds, a duration, or a deadline.\n")
-	builder.WriteString(`The optional "arc" value may be "advance", "ease", or "hold" only when this turn describes visible session buildup; otherwise omit it.`)
+	if capabilities.MotionMode == MotionModeDynamic && kind == AutopilotKindMotion {
+		builder.WriteString("\nThe timing value is a relative fallback preference. segment_seconds is allowed only inside dynamic motion and stays inside the supplied user bounds.\n")
+	} else {
+		builder.WriteString("\nThe timing value is a relative preference only. Never emit seconds, a duration, or a deadline.\n")
+	}
 	builder.WriteByte('\n')
 	if !capabilities.Motion {
 		builder.WriteString(`Motion control is unavailable for this turn. Do not include a "motion" field.`)
 		return builder.String()
 	}
-	builder.WriteString(`The optional "motion" value may be {"action":"none"} or use action "target" to change active motion. Never use "start" or "stop".`)
+	if capabilities.MotionMode == MotionModeDynamic {
+		builder.WriteString(`The optional "motion" value may be {"action":"none"} or use action "update" to change active dynamic motion. Never use "start", "target", or "stop".`)
+	} else {
+		builder.WriteString(`The optional "motion" value may be {"action":"none"} or use action "target" to change active motion. Never use "start", "update", or "stop".`)
+	}
 	if kind == AutopilotKindSpeech {
 		builder.WriteString(` A target motion requires "variability":"settled"|"normal"|"restless"; omit variability when motion is omitted or uses "none".`)
 	}
 	builder.WriteString("\nOmitted target fields preserve the live target. Never invent device commands, pattern IDs, URLs, or transport details.")
+	if capabilities.MotionMode == MotionModeDynamic {
+		builder.WriteString(` Dynamic updates may contain speed_percent, center_percent plus span_percent, 2-6 named anchors, variation_percent, and segment_seconds. Use anchors or center/span, never both.`)
+		return builder.String()
+	}
 	if capabilities.Patterns {
 		builder.WriteString(` Pattern selects shape and speed_percent selects pace. A pattern_id may omit speed_percent to preserve the live pace; include both only when changing both.`)
 	} else {

@@ -42,8 +42,11 @@ func TestSessionFactsAndArcAppearOnlyWhenEnabled(t *testing.T) {
 	if !strings.Contains(arc, "Session buildup: 60%") {
 		t.Fatalf("arc percent missing:\n%s", arc)
 	}
-	if !strings.Contains(arc, "allowed range itself never moves") {
-		t.Fatalf("the arc must state that limits do not move:\n%s", arc)
+	if !strings.Contains(arc, "clock and allowed range never move because of your response") {
+		t.Fatalf("the arc must state that model output cannot move its clock or limits:\n%s", arc)
+	}
+	if strings.Contains(arc, "Set arc") {
+		t.Fatalf("the prompt still lets the model accelerate buildup:\n%s", arc)
 	}
 	if !strings.Contains(arc, "variability") {
 		t.Fatalf("the variability instruction is missing:\n%s", arc)

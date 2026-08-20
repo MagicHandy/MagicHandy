@@ -509,6 +509,54 @@ func TestConnectionKeyAPIRequiresControllerAndNonEmptyKey(t *testing.T) {
 	}
 }
 
+func TestLLMMotionModeAPIUpdatesOnlyModelMotionVocabulary(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	before, _ := server.store.Snapshot()
+
+	recorder := httptest.NewRecorder()
+	request := withController(httptest.NewRequest(http.MethodPut, "/api/settings/llm-motion-mode", strings.NewReader(`{"mode":"dynamic"}`)))
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", recorder.Code, recorder.Body.String())
+	}
+	after, _ := server.store.Snapshot()
+	if after.LLM.MotionGenerationMode != config.LLMMotionModeDynamic || !after.LLM.Capabilities().Motion {
+		t.Fatalf("saved LLM motion settings = %+v", after.LLM)
+	}
+	offRecorder := httptest.NewRecorder()
+	offRequest := withController(httptest.NewRequest(http.MethodPut, "/api/settings/llm-motion-mode", strings.NewReader(`{"mode":"off"}`)))
+	server.Handler().ServeHTTP(offRecorder, offRequest)
+	if offRecorder.Code != http.StatusOK {
+		t.Fatalf("off status = %d, want 200: %s", offRecorder.Code, offRecorder.Body.String())
+	}
+	off, _ := server.store.Snapshot()
+	if off.LLM.MotionGenerationMode != config.LLMMotionModeOff || off.LLM.Capabilities().Motion {
+		t.Fatalf("saved Off LLM motion settings = %+v", off.LLM)
+	}
+	off.LLM = before.LLM
+	if !reflect.DeepEqual(off, before) {
+		t.Fatalf("scoped mode updates changed unrelated settings\nbefore: %+v\nafter: %+v", before, off)
+	}
+}
+
+func TestLLMMotionModeAPIRejectsInvalidAndReadOnlyRequests(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	for name, request := range map[string]*http.Request{
+		"read only": httptest.NewRequest(http.MethodPut, "/api/settings/llm-motion-mode", strings.NewReader(`{"mode":"off"}`)),
+		"invalid":   withController(httptest.NewRequest(http.MethodPut, "/api/settings/llm-motion-mode", strings.NewReader(`{"mode":"random"}`))),
+	} {
+		t.Run(name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			server.Handler().ServeHTTP(recorder, request)
+			if recorder.Code == http.StatusOK {
+				t.Fatalf("request unexpectedly succeeded: %s", recorder.Body.String())
+			}
+		})
+	}
+}
+
 func TestStaticShellIsServed(t *testing.T) {
 	server := newTestServer(t)
 

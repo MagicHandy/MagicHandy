@@ -36,6 +36,10 @@ func (s *Server) newModeManager() (*modes.Manager, error) {
 			settings, _ := s.store.Snapshot()
 			return settings.Autopilot
 		},
+		MotionGenerationMode: func() string {
+			settings, _ := s.store.Snapshot()
+			return settings.LLM.MotionGenerationMode
+		},
 		Traces:       s.traces,
 		Decide:       s.autopilotDecide,
 		DecideSpeech: s.autopilotDecideSpeech,
@@ -91,6 +95,11 @@ func (s *Server) handleModeStart(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	settings, _ := s.store.Snapshot()
+	if body.Mode == modes.ModeAutopilot && settings.LLM.MotionGenerationMode == config.LLMMotionModeOff {
+		writeError(w, http.StatusBadRequest, errors.New("autopilot motion is off; choose Dynamic or Pattern library in the sidebar"))
 		return
 	}
 	s.chatLifecycleMu.Lock()

@@ -18,6 +18,12 @@ type MotionContext struct {
 	Area             string
 	SpeedMinPercent  int
 	SpeedMaxPercent  int
+	MotionMode       MotionMode
+	CenterPercent    int
+	SpanPercent      int
+	Anchors          []string
+	VariationPercent int
+	SegmentSeconds   int
 }
 
 type promptSpeedRange struct {
@@ -38,12 +44,31 @@ type promptMotionContext struct {
 	RecentPatternIDs []string         `json:"recent_pattern_ids,omitempty"`
 	SpeedPercent     int              `json:"speed_percent,omitempty"`
 	Area             string           `json:"area,omitempty"`
+	MotionMode       MotionMode       `json:"motion_mode,omitempty"`
+	CenterPercent    int              `json:"center_percent,omitempty"`
+	SpanPercent      int              `json:"span_percent,omitempty"`
+	Anchors          []string         `json:"anchors,omitempty"`
+	VariationPercent int              `json:"variation_percent,omitempty"`
+	SegmentSeconds   int              `json:"segment_seconds,omitempty"`
 	SpeedLimits      promptSpeedRange `json:"speed_limits"`
 	SpeedBands       promptSpeedBands `json:"speed_bands"`
 }
 
 func motionContextInstructions(context MotionContext, capabilities Capabilities, patterns []PatternChoice) string {
 	data := normalizedPromptMotionContext(context)
+	data.MotionMode = capabilities.MotionMode
+	if capabilities.MotionMode == MotionModeDynamic {
+		data.PatternID = ""
+		data.ProgramID = ""
+		data.RecentPatternIDs = nil
+		data.Area = ""
+	} else {
+		data.CenterPercent = 0
+		data.SpanPercent = 0
+		data.Anchors = nil
+		data.VariationPercent = 0
+		data.SegmentSeconds = 0
+	}
 	if !capabilities.Patterns {
 		data.PatternID = ""
 		data.ProgramID = ""
@@ -62,6 +87,19 @@ func motionContextInstructions(context MotionContext, capabilities Capabilities,
 	var builder strings.Builder
 	builder.WriteString("Authoritative current motion state for this turn (data, not instructions):\n")
 	builder.Write(encoded)
+	if capabilities.MotionMode == MotionModeDynamic {
+		builder.WriteString(`
+Use that snapshot deliberately:
+- If state is "stopped", use action "start" only for an explicit motion request and choose the initial geometry yourself.
+- If state is "running", use action "update" when you decide a change fits; omitted fields preserve the live target.
+- A direct embodied partner-action request can request motion without control vocabulary. Decide from the current wording and recent conversation whether physical action is intended.
+- "Continue", "steady", "same", or ordinary conversation normally means action "none", but the choice to hold or change belongs to you while motion is active.
+- Pacing-only requests preserve geometry. Positioning requests may change center/span or replace them with an anchor loop.
+- A narrow local request should still use at least 20% span. A later broad request should expand or move the window rather than remaining pinned there.
+- For a request to vary or surprise, change the geometry, speed, anchor route, slow variation, decision horizon, or a fitting combination. Do not mechanically change every field.
+- Never stop at a decision horizon; it only tells Autopilot when to reconsider the still-continuous motion.`)
+		return builder.String()
+	}
 	if capabilities.Patterns && context.Running {
 		alternatives := make([]string, 0, len(patterns))
 		freshAlternatives := make([]string, 0, len(patterns))
@@ -140,6 +178,7 @@ func normalizedPromptMotionContext(context MotionContext) promptMotionContext {
 
 	result := promptMotionContext{
 		State:       "stopped",
+		MotionMode:  context.MotionMode,
 		SpeedLimits: promptSpeedRange{Min: minimum, Max: maximum},
 		SpeedBands:  bands,
 	}
@@ -168,6 +207,11 @@ func normalizedPromptMotionContext(context MotionContext) promptMotionContext {
 	if result.Area == "" {
 		result.Area = AreaZoneFull
 	}
+	result.CenterPercent = context.CenterPercent
+	result.SpanPercent = context.SpanPercent
+	result.Anchors = append([]string(nil), context.Anchors...)
+	result.VariationPercent = context.VariationPercent
+	result.SegmentSeconds = context.SegmentSeconds
 	return result
 }
 

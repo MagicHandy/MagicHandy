@@ -17,6 +17,8 @@ const (
 	MotionActionStart = "start"
 	// MotionActionTarget retargets already running motion through the motion engine.
 	MotionActionTarget = "target"
+	// MotionActionUpdate retargets active dynamic geometry through the motion engine.
+	MotionActionUpdate = "update"
 	// MotionActionStop stops motion through the motion engine.
 	MotionActionStop = "stop"
 )
@@ -78,6 +80,13 @@ type MotionCommand struct {
 	// bounded relative windows in deterministic code (the STGPT-RV area-focus
 	// lesson: zones, never raw model-authored depth numbers).
 	Area string `json:"area,omitempty"`
+	// Dynamic geometry is available only in Dynamic generation mode. Pointer
+	// fields preserve omitted running values without conflating zero with absent.
+	CenterPercent    *int     `json:"center_percent,omitempty"`
+	SpanPercent      *int     `json:"span_percent,omitempty"`
+	Anchors          []string `json:"anchors,omitempty"`
+	VariationPercent *int     `json:"variation_percent,omitempty"`
+	SegmentSeconds   *int     `json:"segment_seconds,omitempty"`
 }
 
 // Named area-focus zones the model may request. "full" explicitly clears an
@@ -92,6 +101,23 @@ const (
 // AreaZones lists the accepted area values in prompt order.
 func AreaZones() []string {
 	return []string{AreaZoneTip, AreaZoneShaft, AreaZoneBase, AreaZoneFull}
+}
+
+// Named dynamic anchors use MagicHandy's semantic direction: base is 0 and
+// tip is 100. The inset endpoints avoid repeatedly striking hard limits.
+var dynamicAnchorPositions = map[string]int{
+	"base": 8, "lower": 28, "middle": 50, "upper": 72, "tip": 92,
+}
+
+// DynamicAnchorNames lists the compact anchor vocabulary in travel order.
+func DynamicAnchorNames() []string {
+	return []string{"base", "lower", "middle", "upper", "tip"}
+}
+
+// DynamicAnchorPosition resolves one model-facing anchor to semantic position.
+func DynamicAnchorPosition(name string) (int, bool) {
+	position, ok := dynamicAnchorPositions[strings.ToLower(strings.TrimSpace(name))]
+	return position, ok
 }
 
 // PatternChoice is one enabled library entry exposed to the model as data.
@@ -133,13 +159,14 @@ func parseAssistantResponseForCapabilities(raw string, patterns []PatternChoice,
 		return AssistantResponse{}, err
 	}
 	patternsEnabled := capabilities.Motion && capabilities.Patterns
+	dynamicEnabled := capabilities.Motion && capabilities.MotionMode == MotionModeDynamic
 	var currentSpeed *int
 	if patternsEnabled && context != nil && context.Running && context.SpeedPercent >= 1 && context.SpeedPercent <= 100 {
 		speed := context.SpeedPercent
 		currentSpeed = &speed
 	}
 	preserveCurrentPatternSpeed(&response, currentSpeed)
-	if err := validateAssistantResponse(&response, patterns, patternsEnabled); err != nil {
+	if err := validateAssistantResponse(&response, patterns, patternsEnabled, dynamicEnabled); err != nil {
 		return AssistantResponse{}, err
 	}
 	return response, nil
@@ -151,7 +178,7 @@ func parseAssistantResponse(raw string, patterns []PatternChoice, curation bool,
 		return AssistantResponse{}, err
 	}
 	preserveCurrentPatternSpeed(&response, currentSpeed)
-	if err := validateAssistantResponse(&response, patterns, curation); err != nil {
+	if err := validateAssistantResponse(&response, patterns, curation, false); err != nil {
 		return AssistantResponse{}, err
 	}
 	return response, nil
@@ -202,7 +229,7 @@ func normalizePacing(motion *MotionCommand) {
 	motion.Intensity = nil
 }
 
-func validateAssistantResponse(response *AssistantResponse, patterns []PatternChoice, curation bool) error {
+func validateAssistantResponse(response *AssistantResponse, patterns []PatternChoice, curation bool, dynamic bool) error {
 	response.Reply = strings.TrimSpace(response.Reply)
 	if response.Reply == "" {
 		return errors.New("assistant response reply is required")
@@ -217,9 +244,12 @@ func validateAssistantResponse(response *AssistantResponse, patterns []PatternCh
 	response.Motion.Action = strings.ToLower(strings.TrimSpace(response.Motion.Action))
 	response.Motion.PatternID = strings.TrimSpace(response.Motion.PatternID)
 	response.Motion.Area = strings.ToLower(strings.TrimSpace(response.Motion.Area))
+	for index := range response.Motion.Anchors {
+		response.Motion.Anchors[index] = strings.ToLower(strings.TrimSpace(response.Motion.Anchors[index]))
+	}
 	normalizePacing(response.Motion)
 	switch response.Motion.Action {
-	case MotionActionNone, MotionActionStart, MotionActionTarget, MotionActionStop:
+	case MotionActionNone, MotionActionStart, MotionActionTarget, MotionActionUpdate, MotionActionStop:
 	default:
 		return fmt.Errorf("unknown motion action %q", response.Motion.Action)
 	}
@@ -236,7 +266,7 @@ func validateAssistantResponse(response *AssistantResponse, patterns []PatternCh
 	if err := validateMotionRanges(*response.Motion); err != nil {
 		return err
 	}
-	return validateMotionCombination(*response.Motion, curation)
+	return validateMotionCombination(*response.Motion, curation, dynamic)
 }
 
 func validateAssistantMood(response *AssistantResponse) error {
@@ -262,20 +292,106 @@ func validateMotionRanges(command MotionCommand) error {
 	if command.SpeedPercent != nil && (*command.SpeedPercent < 1 || *command.SpeedPercent > 100) {
 		return errors.New("motion speed_percent must be between 1 and 100")
 	}
+	if err := validateDynamicMotionRanges(command); err != nil {
+		return err
+	}
+	return validateDynamicAnchors(command.Anchors)
+}
+
+func validateDynamicMotionRanges(command MotionCommand) error {
+	if command.CenterPercent != nil && (*command.CenterPercent < 0 || *command.CenterPercent > 100) {
+		return errors.New("motion center_percent must be between 0 and 100")
+	}
+	if command.SpanPercent != nil && (*command.SpanPercent < 20 || *command.SpanPercent > 100) {
+		return errors.New("motion span_percent must be between 20 and 100")
+	}
+	if command.VariationPercent != nil && (*command.VariationPercent < 0 || *command.VariationPercent > 100) {
+		return errors.New("motion variation_percent must be between 0 and 100")
+	}
+	if command.SegmentSeconds != nil && (*command.SegmentSeconds < 4 || *command.SegmentSeconds > 120) {
+		return errors.New("motion segment_seconds must be between 4 and 120")
+	}
 	return nil
 }
 
-func validateMotionCombination(command MotionCommand, curation bool) error {
+func validateDynamicAnchors(anchors []string) error {
+	if len(anchors) > 0 {
+		if len(anchors) < 2 || len(anchors) > 6 {
+			return errors.New("motion anchors must contain between 2 and 6 names")
+		}
+		minimum, maximum := 100, 0
+		previous := -1
+		for _, name := range anchors {
+			position, ok := DynamicAnchorPosition(name)
+			if !ok {
+				return fmt.Errorf("unknown motion anchor %q", name)
+			}
+			if position == previous {
+				return errors.New("motion anchors cannot repeat consecutively")
+			}
+			previous = position
+			minimum = min(minimum, position)
+			maximum = max(maximum, position)
+		}
+		if maximum-minimum < 20 {
+			return errors.New("motion anchors must span at least 20 percent of travel")
+		}
+	}
+	return nil
+}
+
+func validateMotionCombination(command MotionCommand, curation bool, dynamic bool) error {
 	if command.PatternID != "" && curation && command.SpeedPercent == nil {
 		return errors.New("pattern_id requires speed_percent")
 	}
-	if command.Action == MotionActionNone && (command.PatternID != "" || command.Intensity != nil || command.SpeedPercent != nil || command.Area != "") {
-		return errors.New("motion action none cannot include target fields")
+	switch command.Action {
+	case MotionActionNone:
+		if hasMotionTargetFields(command) {
+			return errors.New("motion action none cannot include target fields")
+		}
+	case MotionActionStop:
+		if hasMotionTargetFields(command) {
+			return errors.New("motion action stop cannot include target fields")
+		}
 	}
-	if command.Action == MotionActionStop && (command.PatternID != "" || command.Intensity != nil || command.SpeedPercent != nil || command.Area != "") {
-		return errors.New("motion action stop cannot include target fields")
+	if dynamic {
+		return validateDynamicMotionCombination(command)
+	}
+	if hasDynamicMotionFields(command) || command.Action == MotionActionUpdate {
+		return errors.New("dynamic motion fields are not enabled")
 	}
 	return nil
+}
+
+func validateDynamicMotionCombination(command MotionCommand) error {
+	if command.PatternID != "" || command.Area != "" || command.Action == MotionActionTarget {
+		return errors.New("dynamic motion accepts update geometry, not pattern_id, area, or target")
+	}
+	if len(command.Anchors) > 0 && (command.CenterPercent != nil || command.SpanPercent != nil) {
+		return errors.New("dynamic motion accepts either anchors or center/span, not both")
+	}
+	if command.Action == MotionActionStart {
+		if command.SpeedPercent == nil {
+			return errors.New("dynamic motion start requires speed_percent")
+		}
+		if len(command.Anchors) == 0 && (command.CenterPercent == nil || command.SpanPercent == nil) {
+			return errors.New("dynamic motion start requires anchors or both center_percent and span_percent")
+		}
+	}
+	if command.Action == MotionActionUpdate && command.SpeedPercent == nil && !hasDynamicMotionFields(command) {
+		return errors.New("dynamic motion update requires at least one changed field")
+	}
+	return nil
+}
+
+func hasMotionTargetFields(command MotionCommand) bool {
+	return command.PatternID != "" || command.Intensity != nil || command.SpeedPercent != nil ||
+		command.Area != "" || hasDynamicMotionFields(command)
+}
+
+func hasDynamicMotionFields(command MotionCommand) bool {
+	return command.CenterPercent != nil || command.SpanPercent != nil || len(command.Anchors) > 0 ||
+		command.VariationPercent != nil || command.SegmentSeconds != nil
 }
 
 func oneOfZone(zone string) bool {

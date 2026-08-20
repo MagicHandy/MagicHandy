@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 build: 23,768,576 bytes plain and 17,088,000 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 Dynamic-mode build: 23,815,680 bytes plain and 17,148,928 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
 | Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.22` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.22 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
@@ -89,6 +89,9 @@ freehand authoring, and visible/reversible training feedback while keeping one
 backend-authoritative preview and motion path. Interactive LLM motion now also
 reads authoritative current state, preserves steady/pacing-only continuity,
 supports named area focus, and bounds explicit pattern variation.
+The selectable Dynamic mode adds bounded model-authored center/span or named-
+anchor geometry without a second motion path; Pattern Library remains the
+default pending managed-model and capped real-device A/B acceptance.
 Opted-in chat voice now also receives bounded persona/anatomy context, strict
 per-session model mood, and three canonical recent assistant lines while
 utility remains byte-identical and all motion gates remain unchanged.
@@ -112,9 +115,12 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,684,034 raw / 799,562 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 800,325 raw / 211,345 gzip bytes; all
-   HTML/CSS/JS is 1,239,798 raw / 362,165 gzip bytes. The localized Ollama
+   browser payload is 1,687,474 raw / 800,703 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 802,961 raw / 212,114 gzip bytes; all
+   HTML/CSS/JS is 1,243,238 raw / 363,306 gzip bytes. Selectable Dynamic motion,
+   mode-specific status, and the Chat control-sidebar list add 3,718 raw / 1,199
+   gzip bytes overall and 2,696 raw / 780 gzip bytes to the English startup
+   path against branch base `0d0a8348`; the artwork is unchanged. The localized Ollama
    compatibility state and stable repair-draft presentation add 448 raw / 212
    gzip bytes overall and 245 raw / 121 gzip bytes to the English startup path.
    The updater's
@@ -147,6 +153,21 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-20** - Added selectable Dynamic / Pattern Library / Off LLM motion
+  modes. Dynamic emits bounded semantic geometry and slow loop-closed variation
+  into the existing engine; tests cover strict prompt separation, parser bounds,
+  model-owned no-op decisions, interior-anchor pass-through velocity, reversal
+  dwell, velocity-aware retargeting, one shared transport Play, Autopilot
+  mapping, persistence, immediate Chat-sidebar selection, and status rendering.
+  Follow-up review removed the selector from global navigation and made buildup
+  duration authoritative: model planning turns can react to elapsed progress but
+  can no longer accelerate or rewind the bar.
+  Pattern remains the default until live-provider and capped hardware A/B
+  acceptance. Full Go and 398-test frontend suites, vet, lint, localization,
+  typecheck, production build, and pure-Go build pass. The local Windows race
+  run remains unavailable because the installed LLVM toolchain lacks a MinGW
+  UCRT sysroot; the Ubuntu CI race gate remains authoritative.
 
 - **2026-08-14** - Closed the normalized-pattern dwell regression found in a
   retained Cloud trace. `Hard and Regular` had no HSP timestamp gap, but its

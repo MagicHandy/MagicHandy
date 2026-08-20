@@ -46,6 +46,7 @@ const llmSettings = {
   request_timeout_ms: 120000,
   max_output_tokens: 256,
   reasoning_mode: "off",
+  motion_generation_mode: "pattern",
 } as PublicSettings["llm"];
 
 const emptyManager = {
@@ -128,18 +129,35 @@ describe("runtime panels", () => {
     });
   });
 
-  it("keeps dependent model controls visible but unavailable in chat-only mode", async () => {
+  it("uses the mode list for chat-only motion and hides pattern-only gates", async () => {
     llmModels.mockResolvedValue(emptyManager);
     renderModelPanel({
       ...llmSettings,
+      motion_generation_mode: "off",
       motion_capabilities: { motion: false, patterns: true, area_focus: true, experimental_patterns: true },
     });
 
     expect(await screen.findByText("No managed models.")).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: "Motion commands" })).toBeEnabled();
-    expect(screen.getByRole("checkbox", { name: "Pattern selection" })).toBeDisabled();
-    expect(screen.getByRole("checkbox", { name: "Area focus" })).toBeDisabled();
-    expect(screen.getByRole("checkbox", { name: "Experimental patterns" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "LLM motion" })).toHaveValue("off");
+    expect(screen.queryByRole("checkbox", { name: "Area focus" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Experimental patterns" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the selected mode and legacy motion master gate consistent", async () => {
+    llmModels.mockResolvedValue(emptyManager);
+    const patch = vi.fn();
+    renderModelPanel({
+      ...llmSettings,
+      motion_capabilities: { motion: true, patterns: true, area_focus: true, experimental_patterns: false },
+    }, patch);
+
+    await screen.findByText("No managed models.");
+    fireEvent.change(screen.getByRole("combobox", { name: "LLM motion" }), { target: { value: "off" } });
+
+    expect(patch).toHaveBeenCalledWith({
+      motion_generation_mode: "off",
+      motion_capabilities: { motion: false, patterns: true, area_focus: true, experimental_patterns: false },
+    });
   });
 
   it("keeps a large Ollama inventory collapsed until requested", async () => {
