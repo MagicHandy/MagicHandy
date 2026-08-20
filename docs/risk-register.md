@@ -601,6 +601,15 @@ Dynamic start and update issue only one transport Play. Pattern and Dynamic
 prompts are mutually exclusive, and an in-flight result is rejected if the
 persisted mode changed before dispatch.
 
+Status 2026-08-20 (alpha.25): a full-span Creative phrase at 96% variation
+reproduced a process-ending empty-curve sample after floating-point endpoint
+rounding reached `100.00000000000001`. The final semantic projection is now
+clamped, plan compilation errors remain attached to the plan, and every Engine
+admission/retarget path rejects them before transport work. Zero-value sampling
+also fails stationary rather than panicking. Exhaustive variation/profile tests
+cover the reduced case without adding a source-specific sampler or transport
+path.
+
 ## R15: Chat And Voice Delivery Ordering
 
 Level: Medium
@@ -1389,7 +1398,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.24 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.25 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1437,7 +1446,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.24, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.25, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit

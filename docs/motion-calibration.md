@@ -177,3 +177,25 @@ Until that exists, this change corrects the demonstrable schema/timing mismatch
 but does not close the real-device acceptance item or make Creative the default.
 The cross-cutting model-profile decision is recorded in
 [`ADR 0016`](decisions/0016-handy-model-speed-calibration.md).
+
+## Plan compilation is fail-safe
+
+Alpha.24 exposed a numerical edge at the boundary between Creative geometry and
+the strict curve validator. A full `0..100` span at 96% variation could produce
+the floating-point value `100.00000000000001`. Rejecting that point was correct;
+discarding the compiler error and retaining a zero-value curve was not. The next
+sample indexed an empty point list and could terminate the Go process.
+
+Alpha.25 applies three layers at the shared planner boundary:
+
+1. the final varied position is clamped after all center/span arithmetic, not
+   only while its conceptual window is calculated;
+2. plan compilation errors are retained, and Engine Start, Resume, retarget,
+   and settings refresh reject the plan before any transport work; and
+3. an empty curve samples as a stationary 50% midpoint with zero velocity, so a
+   future invariant failure remains process-safe while the engine reports the
+   compilation error.
+
+The fallback is not a second motion path and is not dispatched for a rejected
+engine plan. Tests compile and sample all 101 variation values against all three
+Handy profiles, including the exact 96% full-span regression.

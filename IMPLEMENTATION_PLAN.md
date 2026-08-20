@@ -1351,6 +1351,14 @@ authored time. See `docs/motion-calibration.md`.
 The device-profile boundary is recorded in
 `docs/decisions/0016-handy-model-speed-calibration.md`.
 
+Alpha.25 closes the reproduced Creative-plan crash: final center/span projection
+clamps floating-point endpoint overshoot before strict validation, compilation
+errors remain attached to the plan, and the engine rejects them before sampling
+or transport dispatch on Start, Resume, retarget, and settings refresh. A
+zero-value curve is a stationary diagnostic fallback rather than a process
+panic. The 96% full-span regression and all 101 variation values run through
+the same shared planner for all three Handy profiles.
+
 A 2026-07-20 motion-path audit closed additional engine-level jitter sources:
 buffered frames now preserve authored knots through a bounded adaptive sampler,
 loop PCHIP carries velocity through non-reversing seams, rapid <=2% reversal
