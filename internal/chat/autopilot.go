@@ -19,6 +19,14 @@ type AutopilotContext struct {
 	CurrentSpeed     int
 	CurrentArea      string
 	AreaFocusEnabled bool
+	MotionMode       MotionMode
+	CurrentCenter    int
+	CurrentSpan      int
+	CurrentAnchors   []string
+	CurrentVariation int
+	CurrentSegment   int
+	MotionMinSeconds int
+	MotionMaxSeconds int
 	// SessionTracking gates the three session facts below. When false they are
 	// omitted from the prompt entirely rather than rendered as zeros, so the model
 	// cannot reason from a number that means "unknown".
@@ -51,9 +59,8 @@ func writeSessionProgress(builder *strings.Builder, context AutopilotContext) {
 	}
 	if context.ArcEnabled {
 		fmt.Fprintf(builder,
-			"Session buildup: %d%% of the way along, and the user can see this progress. Aim higher within the allowed speed range as it fills and ease back as it empties. The allowed range itself never moves.\n",
+			"Session buildup: %d%% of the configured active-session duration, and the user can see this progress. Let it inform pacing within the allowed speed range. The clock and allowed range never move because of your response.\n",
 			context.ArcPercent)
-		builder.WriteString("Set arc to \"advance\" to move the buildup forward, \"ease\" to move it back, or \"hold\" to leave it. The app bounds each step.\n")
 	}
 }
 
@@ -70,6 +77,38 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "Autopilot motion decision %d. You are steering the device autonomously between chat turns.\n", context.SegmentIndex+1)
 	fmt.Fprintf(&builder, "Motion style preference: %s. Allowed speed range: %d-%d%%.\n", context.Style, context.SpeedMinPercent, context.SpeedMaxPercent)
+	if context.MotionMode == MotionModeDynamic {
+		minimumSeconds, maximumSeconds := context.MotionMinSeconds, context.MotionMaxSeconds
+		if minimumSeconds < 4 {
+			minimumSeconds = 4
+		}
+		if maximumSeconds < minimumSeconds {
+			maximumSeconds = 120
+		}
+		if context.CurrentSpeed > 0 {
+			fmt.Fprintf(&builder, "Current dynamic motion: %d%% speed, center %d%%, span %d%%, variation %d%%",
+				context.CurrentSpeed, context.CurrentCenter, context.CurrentSpan, context.CurrentVariation)
+			if len(context.CurrentAnchors) > 0 {
+				fmt.Fprintf(&builder, ", anchors %q", context.CurrentAnchors)
+			}
+			builder.WriteString(".\n")
+		} else {
+			builder.WriteString("No Dynamic target is active. To begin, use update with speed and either center/span or anchors; none leaves Autopilot waiting.\n")
+		}
+		writeSessionProgress(&builder, context)
+		builder.WriteString("Decide what happens for the next continuous stretch using the recent conversation as the user's ongoing direction:\n")
+		builder.WriteString("- Use action \"update\" only when a meaningful change fits. Omitted fields preserve the live dynamic target.\n")
+		builder.WriteString("- Use action \"none\" to deliberately continue. Holding is a first-class model decision, not a failure.\n")
+		builder.WriteString("- Change center/span or provide a new 2-6 anchor route; never provide both representations together. Interior anchors are pass-through positions, not pauses.\n")
+		builder.WriteString("- variation_percent controls slow multi-cycle drift. Use zero for settled motion and higher values for organic change, never for jitter.\n")
+		fmt.Fprintf(&builder, "- segment_seconds must be %d-%d and says when to reconsider, not when to stop. Vary it naturally rather than choosing one constant.\n",
+			minimumSeconds, maximumSeconds)
+		builder.WriteString("- Never use start or stop: the scheduler owns start and only the user stops motion.\n")
+		fmt.Fprintf(&builder, "- Use the width of %d-%d%% speed across the session. Easing down can make a later climb feel deliberate.\n",
+			context.SpeedMinPercent, context.SpeedMaxPercent)
+		builder.WriteString("- Set next to soon, normal, or later as a fallback timing preference. Set variability to settled, normal, or restless for speed drift independent of geometry.")
+		return builder.String()
+	}
 	area := strings.TrimSpace(context.CurrentArea)
 	if area == "" {
 		area = AreaZoneFull

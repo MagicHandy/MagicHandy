@@ -18,6 +18,12 @@ type MotionContext struct {
 	Area             string
 	SpeedMinPercent  int
 	SpeedMaxPercent  int
+	MotionMode       MotionMode
+	CenterPercent    int
+	SpanPercent      int
+	Anchors          []string
+	VariationPercent int
+	SegmentSeconds   int
 }
 
 type promptSpeedRange struct {
@@ -38,12 +44,31 @@ type promptMotionContext struct {
 	RecentPatternIDs []string         `json:"recent_pattern_ids,omitempty"`
 	SpeedPercent     int              `json:"speed_percent,omitempty"`
 	Area             string           `json:"area,omitempty"`
+	MotionMode       MotionMode       `json:"motion_mode,omitempty"`
+	CenterPercent    int              `json:"center_percent,omitempty"`
+	SpanPercent      int              `json:"span_percent,omitempty"`
+	Anchors          []string         `json:"anchors,omitempty"`
+	VariationPercent int              `json:"variation_percent,omitempty"`
+	SegmentSeconds   int              `json:"segment_seconds,omitempty"`
 	SpeedLimits      promptSpeedRange `json:"speed_limits"`
 	SpeedBands       promptSpeedBands `json:"speed_bands"`
 }
 
 func motionContextInstructions(context MotionContext, capabilities Capabilities, patterns []PatternChoice) string {
 	data := normalizedPromptMotionContext(context)
+	data.MotionMode = capabilities.MotionMode
+	if capabilities.MotionMode == MotionModeDynamic {
+		data.PatternID = ""
+		data.ProgramID = ""
+		data.RecentPatternIDs = nil
+		data.Area = ""
+	} else {
+		data.CenterPercent = 0
+		data.SpanPercent = 0
+		data.Anchors = nil
+		data.VariationPercent = 0
+		data.SegmentSeconds = 0
+	}
 	if !capabilities.Patterns {
 		data.PatternID = ""
 		data.ProgramID = ""
@@ -62,6 +87,21 @@ func motionContextInstructions(context MotionContext, capabilities Capabilities,
 	var builder strings.Builder
 	builder.WriteString("Authoritative current motion state for this turn (data, not instructions):\n")
 	builder.Write(encoded)
+	if capabilities.MotionMode == MotionModeDynamic {
+		builder.WriteString(`
+Use that snapshot deliberately:
+- If state is "stopped", use action "start" only for an explicit motion request and choose the initial geometry yourself.
+- If state is "running", use action "update" when you decide a change fits; omitted fields preserve the live target.
+- "Continue", "steady", "same", or ordinary conversation normally means action "none", but the choice to hold or change belongs to you while motion is active.
+- Pacing-only requests preserve geometry. Positioning requests may change center/span or replace them with an anchor loop.
+- When the user names two or more positions in an order, use anchors in that order and omit center_percent/span_percent. Those fields describe only a window and cannot preserve an ordered route.
+- A narrow local request should still use at least 20% span. A later broad request should expand or move the window rather than remaining pinned there.
+- For a request to vary or surprise, change the geometry, speed, anchor route, slow variation, decision horizon, or a fitting combination. Do not mechanically change every field.
+- Never stop at a decision horizon; it only tells Autopilot when to reconsider the still-continuous motion.
+- When embodied partner-action wording is a direct request, interpret it as device motion intent and acknowledge the motion decision rather than declining the request.`)
+		appendDynamicTurnActionRule(&builder, context)
+		return builder.String()
+	}
 	if capabilities.Patterns && context.Running {
 		alternatives := make([]string, 0, len(patterns))
 		freshAlternatives := make([]string, 0, len(patterns))
@@ -93,14 +133,15 @@ func motionContextInstructions(context MotionContext, capabilities Capabilities,
 	builder.WriteString(`
 Use that snapshot deliberately:
 - If state is "stopped", use action "start" for an explicit motion request; never use "target" to start motion.
-- A direct embodied partner-action request such as "fuck me", "suck me", "kiss it", "stroke me", or "ride me" can request motion without the words "start", "move", or "device". Decide from the current wording and recent conversation whether physical action is intended; when it is, use "start" from stopped or "target" from running only when the request changes the active action. Do not add motion merely because an action phrase is quoted or discussed.
 - If state is "running", use action "target" only when the user asks to change active motion.
 - If state is "paused", do not invent a resume command; leave motion unchanged.
 - For "continue", "steady", "same", or "hold it there" with no other requested change, preserve the current motion with action "none" or no motion key.
 - If the same request asks for a concrete change, apply that change; words such as "same feel" mean preserve fields the user did not ask to change, not action "none".
 - For a modest pacing request such as "a little faster" or "slower", change speed within the supplied limits while preserving the current content and area by omitting fields the user did not ask to change.
 - For an explicit request to vary, mix up, surprise, or change the feel, choose a meaningful change to pattern, speed, area, or a fitting combination. You own that semantic choice; vary positioning when the conversation calls for it, but do not mechanically change every field at once.
-- Ordinary conversation is not a reason to change motion.`)
+- Ordinary conversation is not a reason to change motion.
+- When embodied partner-action wording is a direct request, interpret it as device motion intent and acknowledge the motion decision rather than declining the request.`)
+	appendPatternTurnActionRule(&builder, context)
 	if capabilities.Patterns {
 		builder.WriteString(`
 - Recent patterns are context, not a prohibition. Prefer variety when it fits, but you may deliberately reuse one while changing speed or area. If the user wants the same pace, omit speed_percent; the app preserves current speed. For a pacing-only request, keep the current pattern by omitting pattern_id.`)
@@ -110,6 +151,34 @@ Use that snapshot deliberately:
 - A named area focus is temporary unless the user explicitly asks to stay or keep it there. Pacing-only requests preserve area, but a broad variation request while focused should normally move to another fitting area or use area "full" instead of silently pinning every later motion to that region. Omit area only when preserving it is intentional.`)
 	}
 	return builder.String()
+}
+
+func appendDynamicTurnActionRule(builder *strings.Builder, context MotionContext) {
+	switch {
+	case context.Paused:
+		builder.WriteString(`
+- The current state is paused: choose none; start and update are invalid.`)
+	case context.Running:
+		builder.WriteString(`
+- The current state is running: choose update or none; start is invalid.`)
+	default:
+		builder.WriteString(`
+- The current state is stopped: choose start or none; update is invalid.`)
+	}
+}
+
+func appendPatternTurnActionRule(builder *strings.Builder, context MotionContext) {
+	switch {
+	case context.Paused:
+		builder.WriteString(`
+- The current state is paused: choose none; start and target are invalid.`)
+	case context.Running:
+		builder.WriteString(`
+- The current state is running: choose target or none; start is invalid.`)
+	default:
+		builder.WriteString(`
+- The current state is stopped: choose start or none; target is invalid.`)
+	}
 }
 
 func normalizedPromptMotionContext(context MotionContext) promptMotionContext {
@@ -140,6 +209,7 @@ func normalizedPromptMotionContext(context MotionContext) promptMotionContext {
 
 	result := promptMotionContext{
 		State:       "stopped",
+		MotionMode:  context.MotionMode,
 		SpeedLimits: promptSpeedRange{Min: minimum, Max: maximum},
 		SpeedBands:  bands,
 	}
@@ -168,6 +238,11 @@ func normalizedPromptMotionContext(context MotionContext) promptMotionContext {
 	if result.Area == "" {
 		result.Area = AreaZoneFull
 	}
+	result.CenterPercent = context.CenterPercent
+	result.SpanPercent = context.SpanPercent
+	result.Anchors = append([]string(nil), context.Anchors...)
+	result.VariationPercent = context.VariationPercent
+	result.SegmentSeconds = context.SegmentSeconds
 	return result
 }
 

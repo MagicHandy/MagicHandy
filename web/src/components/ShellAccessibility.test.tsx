@@ -17,7 +17,12 @@ vi.mock("../api/client", () => ({
 vi.mock("../state/app-state", () => ({
   useHashRoute: () => app.route,
   useAppState: () => ({
-    state: { settings: { device: { hsp_dispatch_owner: "cloud_rest" } } },
+    state: {
+      settings: {
+        device: { hsp_dispatch_owner: "cloud_rest" },
+        llm: { motion_generation_mode: "pattern", motion_capabilities: { motion: true } },
+      },
+    },
     backendOnline: true,
     readOnly: false,
     motion: { engine: { running: false } },

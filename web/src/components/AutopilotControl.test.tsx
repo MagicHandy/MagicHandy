@@ -15,7 +15,7 @@ const app = vi.hoisted(() => ({
       speech_in_ms?: number;
       motion_planned?: boolean;
       speech_waiting_playback?: boolean;
-      session_arc?: { enabled: boolean; percent: number; minutes: number; intent?: string };
+      session_arc?: { enabled: boolean; percent: number; minutes: number };
     };
     settings: Record<string, unknown>;
   },

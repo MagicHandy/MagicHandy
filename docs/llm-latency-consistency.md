@@ -38,9 +38,12 @@ runner processes. Prompt quality was not the limiting factor in these samples.
 
 Settings > Model exposes two managed llama.cpp policies:
 
-- **At startup** (default): load in the background when the core starts. This
-  avoids making the first Chat or Autopilot request pay model-load time, but the
-  model reserves RAM/VRAM while the app is idle.
+- **At startup** (default): load in the background when the core starts. After
+  readiness, preload sends one bounded 16-token, non-thinking JSON warmup so
+  llama.cpp also performs its one-time generation-graph setup before the first
+  user turn. The warmup uses autonomous scheduler priority: a waiting Chat turn
+  cancels it and takes the model slot. The loaded model reserves RAM/VRAM while
+  the app is idle.
 - **On demand**: leave the model unloaded until requested. This saves idle
   memory, but the first request waits for the model to load.
 
@@ -129,6 +132,18 @@ short conversational tone. Three fresh stripped app launches reached health in
 on-demand skips it and releases a cached provider, and exact-path termination is
 controller-confirmed. Live shared-GPU Faster Qwen cancellation remains open; the
 user's active voice process was intentionally not altered for this run.
+
+The 2026-08-20 packaged-runtime run used the installed b9966 CUDA server,
+Gemma-4-26B-A4B-Abliterated Q3_K_S, and a 32K managed context. Before generation
+warmup, the first complete UI turn took 37,526 ms with its first token at
+37,372 ms; the immediately following turn took 344 ms total with its first token
+at 185 ms. Moving the one-time generation setup into startup preload took
+73,747 ms from process start through model load and warmup without blocking the
+HTTP UI. The first fresh user turn after that preload took 5,087 ms with its
+first token at 4,961 ms, and the next turn took 309 ms total with its first token
+at 183 ms. The remaining first-turn cost is the real production prompt prefill,
+not another model load or repair. The isolated database had no connection key,
+and both UI turns reported `motion=none`.
 
 Before merging a latency change:
 

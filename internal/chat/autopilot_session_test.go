@@ -42,8 +42,11 @@ func TestSessionFactsAndArcAppearOnlyWhenEnabled(t *testing.T) {
 	if !strings.Contains(arc, "Session buildup: 60%") {
 		t.Fatalf("arc percent missing:\n%s", arc)
 	}
-	if !strings.Contains(arc, "allowed range itself never moves") {
-		t.Fatalf("the arc must state that limits do not move:\n%s", arc)
+	if !strings.Contains(arc, "clock and allowed range never move because of your response") {
+		t.Fatalf("the arc must state that model output cannot move its clock or limits:\n%s", arc)
+	}
+	if strings.Contains(arc, "Set arc") {
+		t.Fatalf("the prompt still lets the model accelerate buildup:\n%s", arc)
 	}
 	if !strings.Contains(arc, "variability") {
 		t.Fatalf("the variability instruction is missing:\n%s", arc)
@@ -71,5 +74,30 @@ func TestAutopilotContractKeepsPatternAndSpeedIndependent(t *testing.T) {
 	}
 	if strings.Contains(contract, "include \"pattern_id\" and \"speed_percent\" together") {
 		t.Fatalf("autopilot contract still couples pattern and pace:\n%s", contract)
+	}
+}
+
+func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
+	startup := AutopilotMotionMessage(AutopilotContext{
+		MotionMode: MotionModeDynamic, SpeedMinPercent: 20, SpeedMaxPercent: 40,
+		MotionMinSeconds: 20, MotionMaxSeconds: 60,
+	})
+	for _, want := range []string{
+		"No Dynamic target is active",
+		"use update with speed and either center/span or anchors",
+		"none leaves Autopilot waiting",
+	} {
+		if !strings.Contains(startup, want) {
+			t.Fatalf("Dynamic startup prompt missing %q:\n%s", want, startup)
+		}
+	}
+
+	running := AutopilotMotionMessage(AutopilotContext{
+		MotionMode: MotionModeDynamic, CurrentSpeed: 30, CurrentCenter: 50,
+		CurrentSpan: 60, CurrentVariation: 10, SpeedMinPercent: 20,
+		SpeedMaxPercent: 40, MotionMinSeconds: 20, MotionMaxSeconds: 60,
+	})
+	if strings.Contains(running, "No Dynamic target is active") {
+		t.Fatalf("running Dynamic prompt still claims startup state:\n%s", running)
 	}
 }

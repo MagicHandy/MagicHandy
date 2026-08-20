@@ -133,6 +133,13 @@ const (
 	LLMReasoningAuto = "auto"
 	// LLMReasoningOff disables thinking when the provider/template supports it.
 	LLMReasoningOff = "off"
+
+	// LLMMotionModeDynamic lets the model author bounded motion geometry directly.
+	LLMMotionModeDynamic = "dynamic"
+	// LLMMotionModePattern lets the model select from enabled library patterns.
+	LLMMotionModePattern = "pattern"
+	// LLMMotionModeOff keeps the model chat-only.
+	LLMMotionModeOff = "off"
 )
 
 const (
@@ -301,6 +308,9 @@ type LLMSettings struct {
 	UserAnatomy        string `json:"user_anatomy"`
 	CustomAnatomy      string `json:"custom_anatomy"`
 	PersonaDescription string `json:"persona_description"`
+	// MotionGenerationMode selects the single model-facing motion vocabulary.
+	// Dynamic geometry and pattern IDs are never advertised together.
+	MotionGenerationMode string `json:"motion_generation_mode"`
 	// MotionCapabilities gates which motion control methods the model may
 	// use. A nil pointer means "never saved" and resolves to the defaults, so
 	// older payloads keep today's behavior; an explicit all-false is a valid
@@ -545,6 +555,7 @@ type PublicSettingsOptionHints struct {
 	LlamaCPPContextSizes    []int    `json:"llama_cpp_context_sizes"`
 	LLMReasoningModes       []string `json:"llm_reasoning_modes"`
 	LLMMaxOutputTokens      []int    `json:"llm_max_output_tokens"`
+	LLMMotionModes          []string `json:"llm_motion_modes"`
 	LLMChatVoices           []string `json:"llm_chat_voices"`
 	LLMUserAnatomies        []string `json:"llm_user_anatomies"`
 	LLMReactionStyles       []string `json:"llm_reaction_styles"`
@@ -583,6 +594,9 @@ type LLMUpdate struct {
 	UserAnatomy        *string `json:"user_anatomy,omitempty"`
 	CustomAnatomy      *string `json:"custom_anatomy,omitempty"`
 	PersonaDescription *string `json:"persona_description,omitempty"`
+	// MotionGenerationMode replaces the saved model motion vocabulary when
+	// present; omission preserves compatibility with older settings clients.
+	MotionGenerationMode *string `json:"motion_generation_mode,omitempty"`
 	// MotionCapabilities replaces the saved gates when present; omitted
 	// preserves the current persisted values (older clients keep working).
 	MotionCapabilities *LLMMotionCapabilities `json:"motion_capabilities,omitempty"`
@@ -607,6 +621,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 		UserAnatomy:          &settings.UserAnatomy,
 		CustomAnatomy:        &settings.CustomAnatomy,
 		PersonaDescription:   &settings.PersonaDescription,
+		MotionGenerationMode: &settings.MotionGenerationMode,
 		MotionCapabilities:   settings.MotionCapabilities,
 	}
 }
@@ -686,6 +701,9 @@ func DefaultSettings() Settings {
 			ReasoningMode:        LLMReasoningOff,
 			ChatVoice:            LLMChatVoiceUtility,
 			UserAnatomy:          LLMUserAnatomyPenis,
+			// Pattern remains the conservative default until Dynamic completes the
+			// real-device A/B acceptance described in docs/llm-control-surface.md.
+			MotionGenerationMode: LLMMotionModePattern,
 		},
 		Voice: VoiceSettings{
 			TTSProvider:        VoiceProviderNone,
@@ -1048,6 +1066,16 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 		settings.LLM.UserAnatomy = LLMUserAnatomyCustom
 		settings.LLM.CustomAnatomy = ""
 	}
+	// Motion generation mode is additive, so it does not force a schema
+	// migration. Preserve the established pattern behavior for existing files;
+	// a saved chat-only capability becomes Off. Brand-new stores retain the
+	// conservative Pattern default until Dynamic passes real-device acceptance.
+	if _, present := header.LLM["motion_generation_mode"]; !present {
+		settings.LLM.MotionGenerationMode = LLMMotionModePattern
+		if settings.LLM.MotionCapabilities != nil && !settings.LLM.MotionCapabilities.Motion {
+			settings.LLM.MotionGenerationMode = LLMMotionModeOff
+		}
+	}
 
 	localeFallback := false
 	if !IsSupportedLocale(strings.TrimSpace(settings.UI.Locale)) {
@@ -1232,6 +1260,9 @@ func applyMissingLLMDefaults(settings LLMSettings, defaults LLMSettings) LLMSett
 	if settings.ReasoningMode == "" {
 		settings.ReasoningMode = defaults.ReasoningMode
 	}
+	if settings.MotionGenerationMode == "" {
+		settings.MotionGenerationMode = defaults.MotionGenerationMode
+	}
 	return settings
 }
 
@@ -1288,84 +1319,6 @@ func validateIntifaceServerAddress(address string) error {
 	return nil
 }
 
-func validateLLMSettings(settings LLMSettings) error {
-	if !oneOf(settings.Provider, LLMProviderLlamaCPP, LLMProviderOllama) {
-		return fmt.Errorf("unknown LLM provider %q", settings.Provider)
-	}
-	if !oneOf(settings.LlamaCPPMode, LlamaCPPModeManaged, LlamaCPPModeExternal) {
-		return fmt.Errorf("unknown llama.cpp mode %q", settings.LlamaCPPMode)
-	}
-	if !oneOf(settings.ManagedLoadPolicy, LLMManagedLoadStartup, LLMManagedLoadOnDemand) {
-		return fmt.Errorf("unknown managed LLM load policy %q", settings.ManagedLoadPolicy)
-	}
-	if settings.LlamaCPPBaseURL == "" {
-		return errors.New("llama.cpp base URL is required")
-	}
-	if settings.OllamaBaseURL == "" {
-		return errors.New("ollama base URL is required")
-	}
-	if err := validateLLMBaseURL("llama.cpp", settings.LlamaCPPBaseURL); err != nil {
-		return err
-	}
-	if err := validateLLMBaseURL("Ollama", settings.OllamaBaseURL); err != nil {
-		return err
-	}
-	if !oneOfInt(settings.LlamaCPPContextSize, LlamaCPPContextSizes()...) {
-		return fmt.Errorf("unsupported managed llama.cpp context size %d", settings.LlamaCPPContextSize)
-	}
-	if settings.Model == "" {
-		return errors.New("LLM model is required")
-	}
-	// Prompt sets are dynamic (built-in templates plus user-created sets in
-	// the prompt library), so config only requires a non-empty identifier;
-	// the chat layer falls back to the bundled default if a selection is gone.
-	if settings.PromptSet == "" {
-		return errors.New("prompt set is required")
-	}
-	if settings.RequestTimeoutMillis < 1000 || settings.RequestTimeoutMillis > 300000 {
-		return errors.New("LLM request timeout must be between 1000 and 300000 milliseconds")
-	}
-	if settings.MaxOutputTokens < 64 || settings.MaxOutputTokens > 4096 {
-		return errors.New("LLM output limit must be between 64 and 4096 tokens")
-	}
-	if !oneOf(settings.ReasoningMode, LLMReasoningAuto, LLMReasoningOff) {
-		return fmt.Errorf("unknown LLM reasoning mode %q", settings.ReasoningMode)
-	}
-	if !ValidLLMChatVoice(settings.ChatVoice) {
-		return fmt.Errorf("unknown LLM chat voice %q", settings.ChatVoice)
-	}
-	if !oneOf(settings.UserAnatomy, LLMUserAnatomyPenis, LLMUserAnatomyVagina, LLMUserAnatomyCustom) {
-		return fmt.Errorf("unknown LLM user anatomy %q", settings.UserAnatomy)
-	}
-	if len([]rune(settings.CustomAnatomy)) > MaxLLMCustomAnatomyChars {
-		return fmt.Errorf("custom anatomy wording must be at most %d characters", MaxLLMCustomAnatomyChars)
-	}
-	if len([]rune(settings.PersonaDescription)) > MaxLLMPersonaDescriptionChars {
-		return fmt.Errorf("persona description must be at most %d characters", MaxLLMPersonaDescriptionChars)
-	}
-	return nil
-}
-
-func validateLLMBaseURL(label, value string) error {
-	parsed, err := url.Parse(value)
-	if err != nil || !parsed.IsAbs() || parsed.Hostname() == "" {
-		return fmt.Errorf("%s base URL must be an absolute HTTP URL with a host", label)
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("%s base URL scheme must be http or https", label)
-	}
-	if parsed.User != nil {
-		return fmt.Errorf("%s base URL must not include userinfo", label)
-	}
-	if parsed.RawQuery != "" || parsed.ForceQuery {
-		return fmt.Errorf("%s base URL must not include a query", label)
-	}
-	if parsed.Fragment != "" {
-		return fmt.Errorf("%s base URL must not include a fragment", label)
-	}
-	return nil
-}
-
 func cloneSettings(settings Settings) Settings {
 	settings.Media.LibraryPaths = append([]string{}, settings.Media.LibraryPaths...)
 	if settings.LLM.MotionCapabilities != nil {
@@ -1401,6 +1354,7 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.Model = strings.TrimSpace(settings.Model)
 	settings.PromptSet = strings.TrimSpace(settings.PromptSet)
 	settings.ReasoningMode = strings.TrimSpace(settings.ReasoningMode)
+	settings.MotionGenerationMode = strings.ToLower(strings.TrimSpace(settings.MotionGenerationMode))
 	settings.ChatVoice = strings.ToLower(strings.TrimSpace(settings.ChatVoice))
 	settings.UserAnatomy = strings.ToLower(strings.TrimSpace(settings.UserAnatomy))
 	settings.CustomAnatomy = strings.Join(strings.Fields(settings.CustomAnatomy), " ")

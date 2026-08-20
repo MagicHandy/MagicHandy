@@ -114,7 +114,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	motionContext := s.chatMotionContext(settings.Motion)
+	motionContext := s.chatMotionContext(settings.Motion, settings.LLM)
 	service := chat.Service{
 		Provider:              provider,
 		Prompt:                prompt,
@@ -582,6 +582,9 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 	if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
 		return chatMotionDispatch{Action: chat.MotionActionNone}, nil
 	}
+	if err := s.validateChatMotionMode(command.Action); err != nil {
+		return chatMotionDispatch{Action: command.Action}, err
+	}
 
 	switch command.Action {
 	case chat.MotionActionStart:
@@ -608,7 +611,7 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 			return engine.StartAtGeneration(ctx, target, settings.Motion, admission)
 		})
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, startErr
-	case chat.MotionActionTarget:
+	case chat.MotionActionTarget, chat.MotionActionUpdate:
 		engine := s.currentMotionEngine()
 		if engine == nil {
 			return chatMotionDispatch{Action: command.Action}, errors.New("motion is not running; use start to begin")
@@ -648,6 +651,29 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 	default:
 		return chatMotionDispatch{Action: command.Action}, fmt.Errorf("unsupported motion action %q", command.Action)
 	}
+}
+
+// validateChatMotionMode prevents a streamed result from crossing a mode
+// change. Stop is intentionally exempt: mode selection may close admission for
+// new LLM motion, but never the path that makes the device stop.
+func (s *Server) validateChatMotionMode(action string) error {
+	if action == chat.MotionActionStop {
+		return nil
+	}
+	settingsSnapshot, _ := s.store.Snapshot()
+	switch settingsSnapshot.LLM.MotionGenerationMode {
+	case config.LLMMotionModeOff:
+		return errors.New("LLM motion is switched off")
+	case config.LLMMotionModeDynamic:
+		if action == chat.MotionActionTarget {
+			return errors.New("the LLM motion mode changed before this pattern target could be applied")
+		}
+	case config.LLMMotionModePattern:
+		if action == chat.MotionActionUpdate {
+			return errors.New("the LLM motion mode changed before this dynamic update could be applied")
+		}
+	}
+	return nil
 }
 
 func (s *Server) applyChatTargetHandoff(
@@ -1039,6 +1065,10 @@ func (s *Server) writeChatStorageError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) (motion.MotionTarget, error) {
+	if command.Action == chat.MotionActionUpdate || command.CenterPercent != nil || command.SpanPercent != nil ||
+		len(command.Anchors) > 0 || command.VariationPercent != nil || command.SegmentSeconds != nil {
+		return dynamicChatMotionTarget(command, current), nil
+	}
 	patternID := motion.PatternID(command.PatternID)
 	speedPercent := 0
 	if command.SpeedPercent != nil {
@@ -1095,6 +1125,57 @@ func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.Ac
 	}, nil
 }
 
+func dynamicChatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) motion.MotionTarget {
+	var currentDynamic *motion.DynamicDefinition
+	if current.Running && current.Target.Dynamic != nil {
+		currentDynamic = current.Target.Dynamic
+	}
+	dynamic := dynamicDefinitionFromCommand(command, currentDynamic)
+	speed := 0
+	if command.SpeedPercent != nil {
+		speed = *command.SpeedPercent
+	} else if current.Running {
+		speed = current.Target.SpeedPercent
+	}
+	return motion.MotionTarget{
+		Label: "Chat", Source: "chat", SpeedPercent: speed, Dynamic: &dynamic,
+	}
+}
+
+func dynamicDefinitionFromCommand(command *chat.MotionCommand, current *motion.DynamicDefinition) motion.DynamicDefinition {
+	dynamic := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{})
+	if current != nil {
+		dynamic = motion.NormalizeDynamicDefinition(*current)
+		dynamic.Anchors = append([]motion.DynamicAnchor(nil), dynamic.Anchors...)
+	}
+	if len(command.Anchors) > 0 {
+		dynamic.Anchors = make([]motion.DynamicAnchor, 0, len(command.Anchors))
+		for _, name := range command.Anchors {
+			if position, ok := chat.DynamicAnchorPosition(name); ok {
+				dynamic.Anchors = append(dynamic.Anchors, motion.DynamicAnchor{Name: name, PositionPercent: position})
+			}
+		}
+	} else if command.CenterPercent != nil || command.SpanPercent != nil {
+		// A center/span update intentionally leaves an anchor route. The current
+		// normalized bounds provide sensible omitted-field preservation.
+		dynamic.Anchors = nil
+		if command.CenterPercent != nil {
+			dynamic.CenterPercent = *command.CenterPercent
+		}
+		if command.SpanPercent != nil {
+			dynamic.SpanPercent = *command.SpanPercent
+		}
+	}
+	if command.VariationPercent != nil {
+		dynamic.VariationPercent = *command.VariationPercent
+	}
+	if command.SegmentSeconds != nil {
+		dynamic.SegmentSeconds = *command.SegmentSeconds
+	}
+	dynamic = motion.NormalizeDynamicDefinition(dynamic)
+	return dynamic
+}
+
 // resolveAreaFocus maps a named zone onto the engine's bounded focus window.
 // An unset zone preserves the running target's focus (a focus persists until
 // changed — the STGPT-RV behavior); "full" explicitly clears it.
@@ -1131,10 +1212,11 @@ func zoneAreaFocus(zone string) (*motion.AreaFocus, bool) {
 	}
 }
 
-func (s *Server) chatMotionContext(settings config.MotionSettings) chat.MotionContext {
+func (s *Server) chatMotionContext(settings config.MotionSettings, llmSettings config.LLMSettings) chat.MotionContext {
 	context := chat.MotionContext{
 		SpeedMinPercent: settings.SpeedMinPercent,
 		SpeedMaxPercent: settings.SpeedMaxPercent,
+		MotionMode:      chatMotionMode(llmSettings.MotionGenerationMode),
 	}
 	engine := s.currentMotionEngine()
 	if engine == nil {
@@ -1151,7 +1233,31 @@ func (s *Server) chatMotionContext(settings config.MotionSettings) chat.MotionCo
 	context.RecentPatternIDs = s.recentChatPatternIDs(4)
 	context.SpeedPercent = snapshot.Target.SpeedPercent
 	context.Area = chatAreaZone(snapshot.Target.AreaFocus)
+	if context.MotionMode == chat.MotionModeDynamic {
+		dynamic := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{})
+		if snapshot.Target.Dynamic != nil {
+			dynamic = motion.NormalizeDynamicDefinition(*snapshot.Target.Dynamic)
+		}
+		context.CenterPercent = dynamic.CenterPercent
+		context.SpanPercent = dynamic.SpanPercent
+		context.VariationPercent = dynamic.VariationPercent
+		context.SegmentSeconds = dynamic.SegmentSeconds
+		for _, anchor := range dynamic.Anchors {
+			context.Anchors = append(context.Anchors, anchor.Name)
+		}
+	}
 	return context
+}
+
+func chatMotionMode(mode string) chat.MotionMode {
+	switch mode {
+	case config.LLMMotionModeDynamic:
+		return chat.MotionModeDynamic
+	case config.LLMMotionModeOff:
+		return chat.MotionModeOff
+	default:
+		return chat.MotionModePattern
+	}
 }
 
 func (s *Server) recentChatPatternIDs(limit int) []string {
@@ -1229,11 +1335,13 @@ func (s *Server) chatPatternChoicesFor(capabilities chat.Capabilities) ([]chat.P
 // capability the user did not switch on (docs/persona-page.md §3).
 func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat.Capabilities {
 	resolved := settings.Capabilities()
+	mode := chatMotionMode(settings.MotionGenerationMode)
 	capabilities := chat.Capabilities{
-		Motion:               resolved.Motion,
-		Patterns:             resolved.Patterns,
-		AreaFocus:            resolved.AreaFocus,
-		ExperimentalPatterns: resolved.ExperimentalPatterns,
+		Motion:               resolved.Motion && mode != chat.MotionModeOff,
+		MotionMode:           mode,
+		Patterns:             resolved.Motion && mode == chat.MotionModePattern && resolved.Patterns,
+		AreaFocus:            resolved.Motion && mode == chat.MotionModePattern && resolved.AreaFocus,
+		ExperimentalPatterns: resolved.Motion && mode == chat.MotionModePattern && resolved.ExperimentalPatterns,
 		Voice:                chatVoiceLevel(settings.ChatVoice),
 	}
 	if active != nil {

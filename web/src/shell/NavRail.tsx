@@ -31,7 +31,6 @@ export function NavRail() {
     browser_bluetooth: "Browser Bluetooth",
     intiface: "Intiface Central",
   }[owner] ?? owner.replace(/_/g, " ");
-
   return (
     <nav className="nav-rail" aria-label={t("Primary navigation")}>
       <div className="nav-brand">

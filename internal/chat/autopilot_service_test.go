@@ -38,7 +38,7 @@ func TestAutopilotContractRejectsStartAndNumericTiming(t *testing.T) {
 	if _, err := service.parse(
 		`{"motion":{"action":"start","speed_percent":30},"next":"soon","variability":"normal"}`,
 		AutopilotKindMotion,
-	); err == nil || !strings.Contains(err.Error(), "target or none") {
+	); err == nil || !strings.Contains(err.Error(), "target, update, or none") {
 		t.Fatalf("start error = %v", err)
 	}
 	if _, err := service.parse(
@@ -82,20 +82,17 @@ func TestAutopilotMotionContractRequiresModelOwnedVariability(t *testing.T) {
 	}
 }
 
-func TestAutopilotContractValidatesOptionalSessionBuildupIntent(t *testing.T) {
+func TestAutopilotContractRejectsBuildupMutation(t *testing.T) {
 	service := AutopilotService{Capabilities: FullCapabilities(), Patterns: defaultPatternChoices()}
-	response, err := service.parse(
-		`{"motion":{"action":"none"},"next":"normal","variability":"settled","arc":"ease"}`,
+	_, err := service.parse(
+		`{"motion":{"action":"none"},"next":"normal","variability":"settled","arc":"advance"}`,
 		AutopilotKindMotion,
 	)
-	if err != nil || response.Arc != "ease" {
-		t.Fatalf("response = %+v, error = %v", response, err)
+	if err == nil || !strings.Contains(err.Error(), `unknown field "arc"`) {
+		t.Fatalf("arc mutation error = %v, want strict unknown-field rejection", err)
 	}
-	if _, err := service.parse(
-		`{"motion":{"action":"none"},"next":"normal","variability":"settled","arc":"finish"}`,
-		AutopilotKindMotion,
-	); err == nil || !strings.Contains(err.Error(), "buildup intent") {
-		t.Fatalf("arc error = %v, want buildup validation", err)
+	if contract := autopilotContract(AutopilotKindMotion, FullCapabilities()); strings.Contains(contract, `"arc"`) {
+		t.Fatalf("autopilot contract still advertises buildup mutation:\n%s", contract)
 	}
 }
 
@@ -165,6 +162,32 @@ func TestComposeAutopilotMotionPromptHasNoInteractiveReplyContract(t *testing.T)
 	}
 	if strings.Contains(prompt, `Every response requires a non-empty "reply"`) {
 		t.Fatal("interactive reply contract leaked into motion prompt")
+	}
+}
+
+func TestComposeDynamicAutopilotPromptOmitsInteractiveMotionContract(t *testing.T) {
+	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	capabilities.AreaFocus = false
+	context := MotionContext{
+		MotionMode: MotionModeDynamic, SpeedMinPercent: 20, SpeedMaxPercent: 40,
+	}
+	prompt := composeAutopilotSystem(
+		set, nil, nil, capabilities, &context, nil, AutopilotKindMotion,
+	)
+	for _, forbidden := range []string{
+		"Authoritative current motion state",
+		`If state is "stopped", use action "start"`,
+		"ordinary conversation normally means",
+	} {
+		if strings.Contains(prompt, forbidden) {
+			t.Fatalf("interactive motion instruction %q leaked into Autopilot:\n%s", forbidden, prompt)
+		}
+	}
+	if !strings.Contains(prompt, "provide or change Dynamic motion") {
+		t.Fatalf("dedicated Dynamic Autopilot contract is missing:\n%s", prompt)
 	}
 }
 

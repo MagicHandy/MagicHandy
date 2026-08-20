@@ -258,12 +258,56 @@ func TestAutopilotVariability(t *testing.T) {
 		}
 		tally.timings[string(response.Next)]++
 		tally.variabits[strings.TrimSpace(response.Variability)]++
-		if a := strings.TrimSpace(response.Arc); a != "" {
-			tally.arcs[a]++
-		}
 		tally.applyDecision(t, turn, response, &current, &secondsAtSpeed)
 	}
 	tally.report(os.Getenv("LABEL")+" autopilot motion", bandLow, bandHigh)
+}
+
+func TestAutopilotDynamicStartup(t *testing.T) {
+	base := os.Getenv("LLAMACPP")
+	if base == "" {
+		t.Skip("set LLAMACPP")
+	}
+	_ = loopbackEndpoint(t, base)
+	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+		BaseURL: base, Model: "local-model", Timeout: 180 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	capabilities.AreaFocus = false
+	motionContext := MotionContext{
+		MotionMode: MotionModeDynamic, SpeedMinPercent: 20, SpeedMaxPercent: 40,
+	}
+	service := AutopilotService{
+		Provider: provider, Prompt: set, Model: "local-model", MaxTokens: 256,
+		ReasoningMode: "off", Capabilities: capabilities, MotionContext: &motionContext,
+	}
+	modelContext := AutopilotContext{
+		Style: "balanced", MotionMode: MotionModeDynamic,
+		SpeedMinPercent: 20, SpeedMaxPercent: 40,
+		MotionMinSeconds: 20, MotionMaxSeconds: 60,
+	}
+	response, err := service.Complete(
+		context.Background(), AutopilotKindMotion,
+		Request{Message: AutopilotMotionMessage(modelContext)},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := response.Motion
+	if command == nil || command.Action != MotionActionUpdate || command.SpeedPercent == nil {
+		t.Fatalf("Dynamic startup did not provide a startable update: %+v", response)
+	}
+	hasWindow := command.CenterPercent != nil && command.SpanPercent != nil
+	if !hasWindow && len(command.Anchors) < 2 {
+		t.Fatalf("Dynamic startup omitted both window and anchor geometry: %+v", command)
+	}
+	t.Logf("Dynamic startup: next=%s variability=%s motion=%+v", response.Next, response.Variability, command)
 }
 
 // applyDecision folds one response into the running session, so the test body
@@ -308,6 +352,6 @@ func (v *varTally) applyDecision(
 	v.speeds = append(v.speeds, current.CurrentSpeed)
 	v.patterns[current.CurrentPatternID]++
 	v.areas[current.CurrentArea]++
-	t.Logf("  turn %2d CHANGE  speed=%d pattern=%s area=%s next=%s var=%s arc=%s",
-		turn, current.CurrentSpeed, current.CurrentPatternID, current.CurrentArea, response.Next, response.Variability, response.Arc)
+	t.Logf("  turn %2d CHANGE  speed=%d pattern=%s area=%s next=%s var=%s",
+		turn, current.CurrentSpeed, current.CurrentPatternID, current.CurrentArea, response.Next, response.Variability)
 }

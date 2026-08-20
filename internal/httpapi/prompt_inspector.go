@@ -32,7 +32,7 @@ func (s *Server) handlePromptComposition(w http.ResponseWriter, r *http.Request)
 		s.writeLibraryStorageError(w, err)
 		return
 	}
-	motionContext := s.chatMotionContext(settings.Motion)
+	motionContext := s.chatMotionContext(settings.Motion, settings.LLM)
 	composition := chat.ComposePrompt(
 		prompt,
 		memories,

@@ -533,6 +533,8 @@ export const api = {
   // Settings.
   getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),
   saveSettings: (update: SettingsUpdate) => request("PUT", "/api/settings", update),
+  setLLMMotionMode: (mode: "dynamic" | "pattern" | "off") =>
+    request<{ settings: PublicSettings; mode: string }>("PUT", "/api/settings/llm-motion-mode", { mode }),
   pickHostPath: (kind: "executable" | "gguf" | "wav" | "file" | "directory", current: string) =>
     request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),
   saveConnectionKey: (connection_key: string) =>

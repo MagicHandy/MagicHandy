@@ -49,19 +49,25 @@ type PlannerScore struct {
 
 // MotionTraceTarget records semantic target context without raw transport shape.
 type MotionTraceTarget struct {
-	Label                     string `json:"label,omitempty"`
-	SpeedPercent              int    `json:"speed_percent,omitempty"`
-	StrokeMinPercent          int    `json:"stroke_min_percent,omitempty"`
-	StrokeMaxPercent          int    `json:"stroke_max_percent,omitempty"`
-	ReverseDirection          bool   `json:"reverse_direction,omitempty"`
-	PatternIdentifier         string `json:"pattern_id,omitempty"`
-	ProgramIdentifier         string `json:"program_id,omitempty"`
-	MediaIdentifier           string `json:"media_id,omitempty"`
-	MediaSpeedLimitEnabled    bool   `json:"media_speed_limit_enabled,omitempty"`
-	AreaMinPercent            int    `json:"area_min_percent,omitempty"`
-	AreaMaxPercent            int    `json:"area_max_percent,omitempty"`
-	SoftAnchorPositionPercent int    `json:"soft_anchor_position_percent,omitempty"`
-	SoftAnchorWeightPercent   int    `json:"soft_anchor_weight_percent,omitempty"`
+	Label                     string   `json:"label,omitempty"`
+	SpeedPercent              int      `json:"speed_percent,omitempty"`
+	StrokeMinPercent          int      `json:"stroke_min_percent,omitempty"`
+	StrokeMaxPercent          int      `json:"stroke_max_percent,omitempty"`
+	ReverseDirection          bool     `json:"reverse_direction,omitempty"`
+	PatternIdentifier         string   `json:"pattern_id,omitempty"`
+	ProgramIdentifier         string   `json:"program_id,omitempty"`
+	MediaIdentifier           string   `json:"media_id,omitempty"`
+	MediaSpeedLimitEnabled    bool     `json:"media_speed_limit_enabled,omitempty"`
+	AreaMinPercent            int      `json:"area_min_percent,omitempty"`
+	AreaMaxPercent            int      `json:"area_max_percent,omitempty"`
+	SoftAnchorPositionPercent int      `json:"soft_anchor_position_percent,omitempty"`
+	SoftAnchorWeightPercent   int      `json:"soft_anchor_weight_percent,omitempty"`
+	MotionKind                string   `json:"motion_kind,omitempty"`
+	DynamicCenterPercent      int      `json:"dynamic_center_percent,omitempty"`
+	DynamicSpanPercent        int      `json:"dynamic_span_percent,omitempty"`
+	DynamicAnchors            []string `json:"dynamic_anchors,omitempty"`
+	DynamicVariationPercent   int      `json:"dynamic_variation_percent,omitempty"`
+	DynamicSegmentSeconds     int      `json:"dynamic_segment_seconds,omitempty"`
 }
 
 // MotionTraceSample records a sampled transport-neutral motion point.

@@ -19,33 +19,27 @@ import (
 //     entirely rather than sending a zero — the model cannot act on a field it
 //     never saw, which is the same discipline the capability gates use.
 //   - Bounded. It is a percentage with a full mark, not a counter that grows.
-//   - Backend-owned. The model may ask to advance or ease by one clamped step; it
-//     can never write the value. So it cannot sprint the bar to full, and the
-//     trace shows every nudge.
+//   - Backend-owned. Active elapsed time is the only automatic input. The model
+//     can react to the percentage but cannot accelerate, rewind, or write it.
 //
 // What buildup does *not* do is widen anything. It positions intent inside the
 // user's existing speed band. Speed limits, focus range, and capability gates
 // stay exactly where the user set them, and the engine clamps regardless.
 type arcState struct {
-	// percent is the current fill, 0-100.
-	percent int
-	// startedAt anchors the time-driven component.
+	// startedAt anchors elapsed progress. Model decisions never rewrite it; the
+	// configured duration is therefore the actual time from empty to full.
 	startedAt time.Time
-	// lastNudge records the most recent model intent for the trace.
-	lastNudge string
 }
 
 // SessionArc is the UI-facing buildup snapshot. Its name preserves the API schema.
 type SessionArc struct {
-	Enabled bool   `json:"enabled"`
-	Percent int    `json:"percent"`
-	Minutes int    `json:"minutes"`
-	Intent  string `json:"intent,omitempty"`
+	Enabled bool `json:"enabled"`
+	Percent int  `json:"percent"`
+	Minutes int  `json:"minutes"`
 }
 
-// arcPercentLocked resolves the fill from elapsed time and accumulated nudges.
-// Time is the floor so the bar always progresses for a user who is simply
-// letting a session run; nudges let the model lead or lag that baseline.
+// arcPercentLocked resolves fill strictly from active elapsed time. The model
+// may react to this backend-owned value but cannot accelerate or rewind it.
 // Callers hold the lock.
 func (m *Manager) arcPercentLocked(now time.Time) int {
 	settings := m.options.AutopilotSettings()
@@ -63,49 +57,24 @@ func (m *Manager) arcPercentLocked(now time.Time) int {
 	if elapsed < 0 {
 		elapsed = 0
 	}
-	byTime := int(elapsed * 100 / (time.Duration(minutes) * time.Minute))
-	percent := byTime
-	if m.arc.percent > percent {
-		percent = m.arc.percent
-	}
-	return clampInt(percent, 0, 100)
-}
-
-// applyArcIntentLocked moves buildup by at most one clamped step. Callers hold
-// the lock.
-func (m *Manager) applyArcIntentLocked(now time.Time, intent string) {
-	settings := m.options.AutopilotSettings()
-	if !settings.SessionArc || !settings.SessionTracking {
-		return
-	}
-	if !config.ValidAutopilotArcIntent(intent) {
-		intent = config.AutopilotArcHold
-	}
-	current := m.arcPercentLocked(now)
-	m.arc.lastNudge = intent
-	switch intent {
-	case config.AutopilotArcAdvance:
-		m.placeArcPercentLocked(now, current+config.AutopilotArcNudgePercent)
-	case config.AutopilotArcEase:
-		// Re-anchor the time baseline so easing is visible instead of being
-		// immediately hidden by the pre-nudge elapsed-time floor. Time resumes
-		// progressing from the eased value on the next snapshot.
-		m.placeArcPercentLocked(now, current-config.AutopilotArcNudgePercent)
-	default:
-		m.arc.percent = current
-	}
+	// Millisecond scaling keeps the documented duration range exact enough for a
+	// percentage while avoiding elapsed*100 overflowing time.Duration.
+	elapsedUnits := elapsed / time.Millisecond
+	durationUnits := time.Duration(minutes) * time.Minute / time.Millisecond
+	byTime := int(elapsedUnits * 100 / durationUnits)
+	return clampInt(byTime, 0, 100)
 }
 
 // placeArcPercentLocked moves the visible value and re-anchors elapsed progress
 // at that same point. Callers hold the lock.
 func (m *Manager) placeArcPercentLocked(now time.Time, percent int) {
-	m.arc.percent = clampInt(percent, 0, 100)
+	percent = clampInt(percent, 0, 100)
 	settings := m.options.AutopilotSettings()
 	minutes := settings.SessionArcMinutes
 	if minutes < config.AutopilotMinimumArcMinutes {
 		minutes = config.AutopilotDefaultArcMinutes
 	}
-	offset := time.Duration(m.arc.percent) * time.Duration(minutes) * time.Minute / 100
+	offset := time.Duration(percent) * time.Duration(minutes) * time.Minute / 100
 	m.arc.startedAt = now.Add(-offset)
 }
 
@@ -117,7 +86,6 @@ func (m *Manager) SessionArcSnapshot() SessionArc {
 	arc := SessionArc{
 		Enabled: settings.SessionArc && settings.SessionTracking,
 		Minutes: settings.SessionArcMinutes,
-		Intent:  m.arc.lastNudge,
 	}
 	if arc.Enabled && m.mode == ModeAutopilot {
 		arc.Percent = m.arcPercentLocked(m.options.Now())
@@ -125,8 +93,8 @@ func (m *Manager) SessionArcSnapshot() SessionArc {
 	return arc
 }
 
-// ResetSessionArc returns buildup to empty. The user owns the progress as much as the
-// model does; a bar you cannot pull back is not really an override.
+// ResetSessionArc returns buildup to empty. A visible progression the user cannot
+// restart is not really under user control.
 //
 // It reports false when there is no Autopilot session to place buildup in. Start
 // clears buildup for a fresh run, so accepting a placement beforehand would store

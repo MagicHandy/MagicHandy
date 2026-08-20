@@ -46,6 +46,42 @@ describe("MotionVisualizer", () => {
     expect(screen.getByRole("img", { name: /pattern High-Low Blocks/i })).toBeInTheDocument();
   });
 
+  it("shows dynamic geometry, anchors, variation, and decision horizon", () => {
+    render(
+      <MotionVisualizer
+        motion={{
+          available: true,
+          engine: {
+            running: true,
+            paused: false,
+            target: {
+              pattern_name: "Dynamic",
+              source: "chat",
+              speed_percent: 32,
+              dynamic: {
+                center_percent: 50,
+                span_percent: 84,
+                anchors: [
+                  { name: "tip", position_percent: 92 },
+                  { name: "middle", position_percent: 50 },
+                  { name: "base", position_percent: 8 },
+                ],
+                variation_percent: 24,
+                segment_seconds: 18,
+              },
+            },
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Dynamic")).toBeInTheDocument();
+    expect(screen.getByText(/tip → middle → base · 18s · chat/)).toBeInTheDocument();
+    expect(screen.getByText("84%")).toBeInTheDocument();
+    expect(screen.getByText("24%")).toBeInTheDocument();
+    expect(screen.getByText("32%")).toBeInTheDocument();
+  });
+
   it("does not present retained target metadata as currently active after Stop", () => {
     render(
       <MotionVisualizer

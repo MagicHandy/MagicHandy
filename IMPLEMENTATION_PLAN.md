@@ -167,11 +167,15 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 - Streaming LLM chat (managed llama.cpp primary, external llama.cpp, Ollama
   secondary) with a strict JSON contract, one repair pass, malformed-response
   indication, bounded output, explicit automatic/off reasoning policy, and
-  chat-driven motion through the engine only. Each turn receives authoritative
-  engine state, limits, speed bands, area, and bounded recent pattern context;
-  explicit variation avoids recent choices while steady, ordinary, and
-  pacing-only turns preserve continuity. Model permissions independently gate
-  motion, patterns, named area focus, and experimental content. Provider-native
+  chat-driven motion through the engine only. A persisted sidebar list selects
+  **Dynamic**, **Pattern Library**, or **Off**. Pattern Library exposes enabled
+  opaque pattern handles and named focus; Dynamic exposes bounded center/span
+  or named-anchor geometry, slow variation, pace, and a decision horizon, with
+  no catalog in its prompt. Both compile through the same target, plan,
+  retarget, limit, transport, trace, and Stop path. Pattern remains the default
+  until Dynamic completes live-provider and real-device A/B acceptance (ADR
+  0015). Each turn receives the authoritative mode-specific engine snapshot and
+  user speed bands. Provider-native
   controls carry visible latency/quality warnings; no hardware tuning knob is
   promoted without measurement. Managed loading is an explicit startup versus
   on-demand memory choice; one request coordinator gives interactive Chat

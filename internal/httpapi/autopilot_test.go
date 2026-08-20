@@ -463,6 +463,42 @@ func TestMapAutopilotResultAppliesPartialChanges(t *testing.T) {
 	}
 }
 
+func TestMapAutopilotResultBuildsDynamicSegmentWithoutPatternFallback(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.LLM.MotionGenerationMode = config.LLMMotionModeDynamic
+		return settings
+	})
+	current := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 70, VariationPercent: 10, SegmentSeconds: 12,
+	})
+	input := modes.DecisionInput{
+		CurrentSpeed: 30, CurrentDynamic: &current, MotionMinSeconds: 4, MotionMaxSeconds: 60,
+	}
+	center, span, variation, seconds := 35, 50, 30, 18
+	decision, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{
+		Motion: &chat.MotionCommand{
+			Action: chat.MotionActionUpdate, CenterPercent: &center, SpanPercent: &span,
+			VariationPercent: &variation, SegmentSeconds: &seconds,
+		},
+	}}, input)
+	if err != nil || decision.Hold || decision.Segment.PatternID != "" || decision.Pattern != nil || decision.Segment.Dynamic == nil {
+		t.Fatalf("dynamic decision = %+v, %v", decision, err)
+	}
+	if dynamic := decision.Segment.Dynamic; dynamic.CenterPercent != center || dynamic.SpanPercent != span ||
+		dynamic.VariationPercent != variation || dynamic.SegmentSeconds != seconds {
+		t.Fatalf("dynamic segment = %+v", dynamic)
+	}
+
+	hold, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{
+		Motion: &chat.MotionCommand{Action: chat.MotionActionUpdate},
+	}}, input)
+	if err != nil || !hold.Hold {
+		t.Fatalf("unchanged dynamic target = %+v, %v; want hold", hold, err)
+	}
+}
+
 func TestAutopilotDecisionMessageFramesTheContract(t *testing.T) {
 	message := chat.AutopilotDecisionMessage(chat.AutopilotContext{
 		Style:            "balanced",

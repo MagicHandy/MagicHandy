@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"sync/atomic"
@@ -77,4 +78,38 @@ func (*autoloadTestProvider) Status(context.Context) llm.ProviderStatus {
 func (p *autoloadTestProvider) Close() error {
 	p.closed.Add(1)
 	return nil
+}
+
+func TestManagedLLMWarmupUsesBoundedNonThinkingRequest(t *testing.T) {
+	provider := &warmupTestProvider{err: llm.ErrOutputTruncated}
+	if err := warmManagedLLM(t.Context(), provider, "managed-model"); err != nil {
+		t.Fatalf("warmManagedLLM: %v", err)
+	}
+	request := provider.request
+	if request.Model != "managed-model" || request.MaxTokens != 16 || request.Temperature != 0 ||
+		request.ReasoningMode != "off" || len(request.Messages) != 2 {
+		t.Fatalf("warmup request = %+v", request)
+	}
+}
+
+func TestManagedLLMWarmupReportsProviderFailure(t *testing.T) {
+	want := errors.New("warmup failed")
+	provider := &warmupTestProvider{err: want}
+	if err := warmManagedLLM(t.Context(), provider, "managed-model"); !errors.Is(err, want) {
+		t.Fatalf("warmManagedLLM error = %v, want %v", err, want)
+	}
+}
+
+type warmupTestProvider struct {
+	request llm.ChatRequest
+	err     error
+}
+
+func (p *warmupTestProvider) StreamChat(_ context.Context, request llm.ChatRequest, _ func(string) error) (string, error) {
+	p.request = request
+	return "", p.err
+}
+
+func (*warmupTestProvider) Status(context.Context) llm.ProviderStatus {
+	return llm.ProviderStatus{Available: true}
 }

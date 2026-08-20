@@ -319,7 +319,7 @@ describe("SettingsRoute", () => {
     expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Model");
     expect(panel?.querySelectorAll(":scope > .group")).toHaveLength(3);
     expect(panel?.querySelectorAll(".group .group")).toHaveLength(0);
-    expect(screen.getByRole("group", { name: "Model permissions" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Motion generation" })).toBeInTheDocument();
   });
 
   it("saves managed llama.cpp context size through the shared dirty form", async () => {

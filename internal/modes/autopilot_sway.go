@@ -89,7 +89,7 @@ func (m *Manager) planSwayLocked(
 	choice segmentChoice,
 	generation uint64,
 ) []swayPoint {
-	if choice.segment.PatternID == "" || choice.segment.SpeedPercent <= 0 {
+	if !choice.segment.hasContent() || choice.segment.SpeedPercent <= 0 {
 		return nil
 	}
 	allowed := m.swayAllowanceLocked(duration, choice.variability)
@@ -251,7 +251,7 @@ func (m *Manager) applyDueSway(
 	segment := m.segment
 	pattern := m.pattern
 	m.mu.Unlock()
-	if segment.PatternID == "" {
+	if !segment.hasContent() {
 		return
 	}
 	if segment.SpeedPercent == point.speedPercent {

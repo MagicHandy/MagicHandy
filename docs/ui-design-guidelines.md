@@ -160,8 +160,10 @@ The current React status bar uses compact readouts; the retired legacy
 The one authoritative visualizer keeps a compact vertical Handy 2-inspired body
 and sleeve in the status bar and its detailed form in an attached motion-status
 band at the bottom of Chat's control rail. One component, engine-driven, with
-position labeled as a commanded estimate and the active pattern name resolved
-by the backend rather than inferred from client controls. It renders the
+position labeled as a commanded estimate and the active motion name resolved
+by the backend rather than inferred from client controls. Dynamic motion shows
+its anchor route (or center), span, speed, variation, decision horizon, and
+source without presenting it as a saved pattern. It renders the
 backend's clock-sampled current path point, projected through the active stroke
 window and direction; the buffered queue tail is diagnostics, not position.
 
@@ -291,6 +293,11 @@ window and direction; the buffered queue tail is diagnostics, not position.
 - The Chat route fills the remaining workspace beside the persistent nav rail.
   Its conversation and compact control sidebar share the available height; do
   not reapply the ordinary route max-width to this workspace.
+- The Chat Controls sidebar begins with a compact native `LLM motion` select for
+  Dynamic / Pattern Library / Off. This is conversational behavior, not global
+  navigation: do not put it in the permanent rail. The backend owns and
+  persists the value; read-only or offline clients see it disabled. Settings >
+  Model retains the secondary configuration surface.
 - Session tabs are a 43px restrained strip with the compact `Chat` route title
   attached at its leading edge, ordered by creation time so active changes do
   not move targets. The active tab uses one symmetric top-corner surface and a

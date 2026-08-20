@@ -38,6 +38,10 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 	if update.PersonaDescription != nil {
 		personaDescription = *update.PersonaDescription
 	}
+	motionGenerationMode := current.MotionGenerationMode
+	if update.MotionGenerationMode != nil {
+		motionGenerationMode = *update.MotionGenerationMode
+	}
 	capabilities := current.MotionCapabilities
 	if update.MotionCapabilities != nil {
 		copied := *update.MotionCapabilities
@@ -60,6 +64,7 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		UserAnatomy:          userAnatomy,
 		CustomAnatomy:        customAnatomy,
 		PersonaDescription:   personaDescription,
+		MotionGenerationMode: motionGenerationMode,
 		MotionCapabilities:   capabilities,
 	}), nil
 }

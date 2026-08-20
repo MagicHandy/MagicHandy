@@ -118,6 +118,12 @@ func enforceCapabilities(response *AssistantResponse, capabilities Capabilities)
 		response.Motion = nil
 		return
 	}
+	if capabilities.MotionMode == MotionModeDynamic {
+		response.Motion.PatternID = ""
+		response.Motion.Area = ""
+	} else {
+		clearDynamicMotionFields(response.Motion)
+	}
 	if !capabilities.AreaFocus {
 		response.Motion.Area = ""
 	}
@@ -128,6 +134,14 @@ func enforceCapabilities(response *AssistantResponse, capabilities Capabilities)
 		}
 		response.Motion.Intensity = nil
 	}
+}
+
+func clearDynamicMotionFields(command *MotionCommand) {
+	command.CenterPercent = nil
+	command.SpanPercent = nil
+	command.Anchors = nil
+	command.VariationPercent = nil
+	command.SegmentSeconds = nil
 }
 
 // Complete streams a model response, repairs malformed JSON once, and returns a validated result.
@@ -415,13 +429,21 @@ func (s Service) parseAndValidateResponse(raw string, capabilities Capabilities,
 	if err != nil {
 		return AssistantResponse{}, err
 	}
-	if response.Motion != nil && !s.TrustedMotionInput && !userAuthorizesMotion(userMessage, response.Motion.Action) {
+	if response.Motion != nil && !s.TrustedMotionInput &&
+		!userAuthorizesMotionForCapabilities(userMessage, response.Motion.Action, capabilities, s.MotionContext) {
 		response.Motion = nil
 		// An unauthorized model command is inert output. Return before semantic
 		// variation repair can synthesize a replacement command.
 		return response, nil
 	}
-	if response.Motion == nil && (!capabilities.Motion || (!s.TrustedMotionInput && !userAuthorizesMotion(userMessage, MotionActionTarget))) {
+	if response.Motion == nil && (!capabilities.Motion || (!s.TrustedMotionInput &&
+		!userAuthorizesMotionForCapabilities(userMessage, MotionActionTarget, capabilities, s.MotionContext))) {
+		return response, nil
+	}
+	if capabilities.MotionMode == MotionModeDynamic {
+		if response.Motion != nil && s.MotionContext != nil {
+			return response, validateRequestedSpeedBand(*response.Motion, *s.MotionContext, userMessage)
+		}
 		return response, nil
 	}
 	if err := validateMotionChange(response, s.MotionContext, userMessage); err != nil {
@@ -430,11 +452,19 @@ func (s Service) parseAndValidateResponse(raw string, capabilities Capabilities,
 	return response, nil
 }
 
+func userAuthorizesMotionForCapabilities(message, action string, capabilities Capabilities, context *MotionContext) bool {
+	if capabilities.MotionMode == MotionModeDynamic && action == MotionActionUpdate && context != nil && context.Running {
+		normalized := normalizeMotionIntent(message)
+		return normalized != "" && !motionIntentIsNegated(normalized)
+	}
+	return userAuthorizesMotion(message, action)
+}
+
 func userAuthorizesMotion(message, action string) bool {
 	switch action {
 	case MotionActionNone, MotionActionStop:
 		return true
-	case MotionActionStart, MotionActionTarget:
+	case MotionActionStart, MotionActionTarget, MotionActionUpdate:
 	default:
 		return false
 	}
@@ -737,7 +767,7 @@ func validateMotionChange(response AssistantResponse, context *MotionContext, us
 	if err := validateRequestedSpeedBand(*command, *context, userMessage); err != nil {
 		return err
 	}
-	if !context.Running || (command.Action != MotionActionTarget && command.Action != MotionActionStart) {
+	if !context.Running || (command.Action != MotionActionTarget && command.Action != MotionActionUpdate && command.Action != MotionActionStart) {
 		return nil
 	}
 	if !motionTargetMatchesContext(*command, *context) {
@@ -773,7 +803,7 @@ func motionSpeedMatchesContext(command MotionCommand, currentSpeed int) bool {
 }
 
 func validateRequestedSpeedBand(command MotionCommand, context MotionContext, userMessage string) error {
-	if command.Action != MotionActionStart && command.Action != MotionActionTarget {
+	if command.Action != MotionActionStart && command.Action != MotionActionTarget && command.Action != MotionActionUpdate {
 		return nil
 	}
 	label, band, ok := requestedSpeedBand(context, userMessage)

@@ -23,11 +23,12 @@ const (
 // semantic speed, optionally focused and optionally drifting to a second
 // speed mid-segment. A segment always runs long enough to establish a feel.
 type Segment struct {
-	PatternID           motion.PatternID  `json:"pattern_id"`
-	SpeedPercent        int               `json:"speed_percent"`
-	DriftToSpeedPercent int               `json:"drift_to_speed_percent,omitempty"`
-	AreaFocus           *motion.AreaFocus `json:"area_focus,omitempty"`
-	DurationMillis      int64             `json:"duration_ms"`
+	PatternID           motion.PatternID          `json:"pattern_id"`
+	Dynamic             *motion.DynamicDefinition `json:"dynamic,omitempty"`
+	SpeedPercent        int                       `json:"speed_percent"`
+	DriftToSpeedPercent int                       `json:"drift_to_speed_percent,omitempty"`
+	AreaFocus           *motion.AreaFocus         `json:"area_focus,omitempty"`
+	DurationMillis      int64                     `json:"duration_ms"`
 }
 
 // Arrangement is a bounded, inspectable sequence of segments. Planners and
@@ -40,7 +41,12 @@ type Arrangement struct {
 
 // NormalizeSegment clamps one segment into the bounded contract.
 func NormalizeSegment(segment Segment) Segment {
-	if segment.PatternID == "" {
+	if segment.Dynamic != nil {
+		dynamic := motion.NormalizeDynamicDefinition(*segment.Dynamic)
+		dynamic.Anchors = append([]motion.DynamicAnchor(nil), dynamic.Anchors...)
+		segment.Dynamic = &dynamic
+		segment.PatternID = ""
+	} else if segment.PatternID == "" {
 		segment.PatternID = motion.PatternStroke
 	}
 	segment.SpeedPercent = clampInt(segment.SpeedPercent, 1, 100)
@@ -74,7 +80,21 @@ func (s Segment) Target(label string, source string) motion.MotionTarget {
 		PatternID:    s.PatternID,
 		SpeedPercent: s.SpeedPercent,
 		AreaFocus:    s.AreaFocus,
+		Dynamic:      cloneDynamicDefinition(s.Dynamic),
 	}
+}
+
+func cloneDynamicDefinition(definition *motion.DynamicDefinition) *motion.DynamicDefinition {
+	if definition == nil {
+		return nil
+	}
+	cloned := *definition
+	cloned.Anchors = append([]motion.DynamicAnchor(nil), definition.Anchors...)
+	return &cloned
+}
+
+func (s Segment) hasContent() bool {
+	return s.PatternID != "" || s.Dynamic != nil
 }
 
 // DriftTarget is the optional mid-segment same-pattern speed nudge; phase is

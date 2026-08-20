@@ -338,6 +338,219 @@ func TestLiveDirectPartnerMotionChoice(t *testing.T) {
 	}
 }
 
+// TestLiveUtilityContextualMotionReply covers the reported failure where an
+// informal physical request was answered with a body-capability disclaimer.
+// It exercises prompt, parser, and authorization only; no engine or transport
+// is created, and the model remains free to update or hold motion.
+func TestLiveUtilityContextualMotionReply(t *testing.T) {
+	model := liveEvalModel(t)
+	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+		BaseURL: liveEvalLlamaURL,
+		Model:   model,
+		Timeout: 2 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	promptSet, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	capabilities.AreaFocus = false
+	capabilities.Voice = VoiceUtility
+	motionState := focusedDynamicContext()
+	service := Service{
+		Provider: provider, Prompt: promptSet, Model: model,
+		MaxTokens: 256, ReasoningMode: "off",
+		MotionContext: &motionState, Capabilities: &capabilities,
+	}
+	history := []llm.Message{
+		{Role: "user", Content: "just the tip"},
+		{Role: "assistant", Content: `{"reply":"Moving to just the tip.","motion":{"action":"update","center_percent":14,"span_percent":24}}`},
+	}
+	for run := 0; run < 4; run++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, completeErr := service.Complete(ctx, Request{Message: "suck me", History: history}, nil)
+		cancel()
+		if completeErr != nil {
+			t.Fatalf("run %d: %v", run+1, completeErr)
+		}
+		if result.Malformed || result.SemanticFallback || strings.TrimSpace(result.Response.Reply) == "" {
+			t.Fatalf("run %d unusable: %+v", run+1, result)
+		}
+		lower := strings.ToLower(result.Response.Reply)
+		for _, refusal := range []string{
+			"can't do that", "cannot do that", "cannot assist", "only control",
+			"body function", "not-body", "do not have a body", "don't have a body",
+		} {
+			if strings.Contains(lower, refusal) {
+				t.Fatalf("run %d returned capability disclaimer %q: %q", run+1, refusal, result.Response.Reply)
+			}
+		}
+		action := MotionActionNone
+		if result.Response.Motion != nil {
+			action = result.Response.Motion.Action
+		}
+		if action != MotionActionStart && (strings.Contains(lower, "start") || strings.Contains(lower, "begin")) {
+			t.Fatalf("run %d claimed a start for action %q: reply=%q raw=%s", run+1, action, result.Response.Reply, compactLiveEvalJSON(result.Raw))
+		}
+		if action == MotionActionNone {
+			for _, changeClaim := range []string{"i'm changing", "i am changing"} {
+				if strings.Contains(lower, changeClaim) {
+					t.Fatalf("run %d claimed a motion change while holding: reply=%q raw=%s", run+1, result.Response.Reply, compactLiveEvalJSON(result.Raw))
+				}
+			}
+		}
+		t.Logf("utility contextual reply run %d | motion=%+v | reply=%q | raw=%s", run+1, result.Response.Motion, result.Response.Reply, compactLiveEvalJSON(result.Raw))
+	}
+}
+
+// TestLiveDynamicMotionMatrix exercises the real Dynamic prompt, provider,
+// parser, authorization, semantic validation, and repair path. It deliberately
+// does not create a motion engine or transport, so the test cannot dispatch a
+// device command.
+func TestLiveDynamicMotionMatrix(t *testing.T) {
+	model := liveEvalModel(t)
+	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+		BaseURL: liveEvalLlamaURL,
+		Model:   model,
+		Timeout: 2 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	promptSet, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	capabilities.AreaFocus = false
+	capabilities.Voice = VoiceIntimate
+	capabilities.MoodTracking = true
+	conversation := ConversationContext{
+		PersonaName:        "MagicHandy",
+		PersonaDescription: "An attentive, responsive partner who varies pacing naturally.",
+		UserAnatomy:        "penis",
+		CurrentMood:        MoodIntimate,
+	}
+
+	tests := []struct {
+		name    string
+		message string
+		context MotionContext
+		action  string
+	}{
+		{
+			name: "explicit smooth start", message: "Start slowly with broad, smooth strokes.",
+			context: stoppedDynamicContext(), action: MotionActionStart,
+		},
+		{
+			name: "anchored start", message: "Start at the base, move through the middle, then reach the tip.",
+			context: stoppedDynamicContext(), action: MotionActionStart,
+		},
+		{
+			name: "chat only", message: "Tell me what you are thinking.",
+			context: runningDynamicContext(), action: MotionActionNone,
+		},
+		{
+			name: "negated motion", message: "Do not move yet; just talk to me.",
+			context: stoppedDynamicContext(), action: MotionActionNone,
+		},
+		{
+			name: "pacing update", message: "A little faster.",
+			context: runningDynamicContext(), action: MotionActionUpdate,
+		},
+		{
+			name: "focused update", message: "Just the base for a little while.",
+			context: runningDynamicContext(), action: MotionActionUpdate,
+		},
+		{
+			name: "broad variation", message: "Keep changing it up and use more of the full range.",
+			context: focusedDynamicContext(), action: MotionActionUpdate,
+		},
+		{
+			name: "continue unchanged", message: "Keep going just like that.",
+			context: runningDynamicContext(), action: MotionActionNone,
+		},
+		{
+			name: "stop", message: "Stop now.",
+			context: runningDynamicContext(), action: MotionActionStop,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := Service{
+				Provider: provider, Prompt: promptSet, Model: model,
+				MaxTokens: 256, ReasoningMode: "off",
+				MotionContext:       &test.context,
+				ConversationContext: &conversation,
+				Capabilities:        &capabilities,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			started := time.Now()
+			var firstDelta time.Duration
+			result, completeErr := service.Complete(ctx, Request{Message: test.message}, func(event StreamEvent) error {
+				if firstDelta == 0 && (event.Type == "delta" || event.Type == "repair_delta") && event.Text != "" {
+					firstDelta = time.Since(started)
+				}
+				return nil
+			})
+			elapsed := time.Since(started)
+			cancel()
+			if completeErr != nil {
+				t.Fatal(completeErr)
+			}
+			action := dynamicResultAction(result.Response)
+			t.Logf("action=%s repaired=%t fallback=%t first_delta=%s total=%s response=%s", action,
+				result.Repaired, result.SemanticFallback, firstDelta.Round(time.Millisecond),
+				elapsed.Round(time.Millisecond), compactLiveEvalJSON(result.Raw))
+			if result.Malformed {
+				t.Fatalf("dynamic response remained malformed: %s", result.MalformedError)
+			}
+			if result.Repaired {
+				t.Errorf("dynamic response required a repair pass; repair=%s", compactLiveEvalJSON(result.RepairRaw))
+			}
+			if action != test.action {
+				t.Errorf("action=%q, want %q", action, test.action)
+			}
+			if strings.TrimSpace(result.Response.Reply) == "" {
+				t.Error("reply is empty")
+			}
+		})
+	}
+}
+
+func stoppedDynamicContext() MotionContext {
+	return MotionContext{
+		MotionMode: MotionModeDynamic, SpeedMinPercent: 10, SpeedMaxPercent: 40,
+	}
+}
+
+func runningDynamicContext() MotionContext {
+	return MotionContext{
+		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 24,
+		CenterPercent: 50, SpanPercent: 76, VariationPercent: 18, SegmentSeconds: 14,
+		SpeedMinPercent: 10, SpeedMaxPercent: 40,
+	}
+}
+
+func focusedDynamicContext() MotionContext {
+	return MotionContext{
+		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 24,
+		CenterPercent: 14, SpanPercent: 24, VariationPercent: 8, SegmentSeconds: 18,
+		SpeedMinPercent: 10, SpeedMaxPercent: 40,
+	}
+}
+
+func dynamicResultAction(response AssistantResponse) string {
+	if response.Motion == nil || response.Motion.Action == MotionActionNone {
+		return MotionActionNone
+	}
+	return response.Motion.Action
+}
+
 // TestLiveFocusedMotionVariation exercises conversational variation through the
 // real Gemma/llama.cpp prompt and parser without creating an engine or transport.
 func TestLiveFocusedMotionVariation(t *testing.T) {

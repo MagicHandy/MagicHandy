@@ -229,27 +229,24 @@ properties, all load bearing:
 - **User-armed.** Off is the default, and off removes the buildup from the prompt
   entirely — the same discipline the capability gates use.
 - **Bounded.** A percentage with a full mark, not a counter that grows.
-- **Backend-owned.** The model may return `arc: advance|ease|hold` to move the
-  bar by at most 6 points per turn. It can never write the value, so it cannot
-  sprint the bar to full, and every nudge appears in the trace. A nudge is
-  applied only after the decision survives the current mode generation and is
-  admitted; canceled or superseded model output cannot move the bar.
+- **Backend-owned.** Active elapsed time is the only automatic input to the bar.
+  The model sees the percentage and may react to it, but its response cannot
+  advance, ease, or write the clock.
 
-The buildup positions intent *inside* the user's existing speed band. It never widens
-the band, the focus range, or any capability gate — asserted by
-`TestArcNudgeDoesNotTouchSpeedLimits`, which advances the bar 40 times and checks
-the motion settings are untouched.
+The buildup positions intent *inside* the user's existing speed band. It never
+widens the band, the focus range, or any capability gate.
 
-Time advances the bar when no nudge is made; an accepted nudge re-anchors that
-clock at its new bounded value so the model can lead or lag the prior baseline.
-`ease` exists so the bar is not a ratchet. The
-user can place or reset it. Duration accepts any positive whole number of
-minutes; there is no product-level maximum, only an implementation guard against
-overflowing Go's duration type. Placement is refused with a 409 while no
-Autopilot session exists — `Start` clears buildup for a fresh run, so accepting a
-placement beforehand would store a value discarded a moment later. Buildup
-requires session tracking; the settings validator rejects the combination rather
-than letting the document express a state the runtime would silently ignore.
+The configured duration is authoritative: absent pause or explicit user
+placement, a 30-minute buildup reaches 50% after 15 active minutes and 100% after
+30. Autopilot pause freezes the clock. The user can place or reset it; either
+operation re-anchors elapsed progress at that value. Duration accepts any
+positive whole number of minutes; there is no product-level maximum, only an
+implementation guard against overflowing Go's duration type. Placement is
+refused with a 409 while no Autopilot session exists — `Start` clears buildup for
+a fresh run, so accepting a placement beforehand would store a value discarded a
+moment later. Buildup requires session tracking; the settings validator rejects
+the combination rather than letting the document express a state the runtime
+would silently ignore.
 
 In the Chat control, Motion changes and Spoken check-ins reveal their custom
 timing rows directly beneath the corresponding selector. Session buildup and its

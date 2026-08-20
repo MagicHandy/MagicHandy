@@ -564,10 +564,12 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 	current := sampleMotionPath(previous, previousTransition, estimatedMillis)
 	handoffPosition := sampleMotionPath(previous, previousTransition, handoff).PositionPercent
 	handoffDirection := motionPathDirection(previous, previousTransition, handoff)
+	handoffVelocity := (sampleMotionPath(previous, previousTransition, handoff+25).PositionPercent -
+		sampleMotionPath(previous, previousTransition, handoff-25).PositionPercent) * 20
 	e.generation++
 	next := previous.retargetFromState(
 		e.planIDLocked(), target, e.settings, handoff,
-		handoffPosition, handoffDirection, now,
+		handoffPosition, handoffDirection, handoffVelocity, now,
 	)
 	bridgeInserted := transitionRequired(previous, previousTransition, next, handoff)
 	if bridgeInserted {

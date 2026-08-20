@@ -98,7 +98,7 @@ func TestPromptInspectorReturnsTheExactProductionComposition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve pattern choices: %v", err)
 	}
-	motionContext := server.chatMotionContext(settings.Motion)
+	motionContext := server.chatMotionContext(settings.Motion, settings.LLM)
 	expected := chat.ComposePrompt(
 		prompt,
 		memories,
