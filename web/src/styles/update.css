@@ -27,10 +27,18 @@
 }
 
 .update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-start;
+  gap: 8px;
 }
 
 .update-actions .btn {
+  min-height: 40px;
+  box-sizing: border-box;
+  padding-block: 8px;
+  line-height: 1.2;
   text-decoration: none;
 }
 
@@ -56,6 +64,14 @@
   overflow-wrap: anywhere;
   font-size: 0.8rem;
 }
+
+@media (max-width: 560px) {
+  .update-actions .btn {
+    flex: 1 1 160px;
+    justify-content: center;
+  }
+}
+
 .notification-preference-list {
   display: grid;
   gap: 10px;
