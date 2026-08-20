@@ -64,8 +64,10 @@ Use that snapshot deliberately:
 - If state is "running", use action "update" when you decide a change fits; omitted fields preserve the live target.
 - "Continue", "steady", "same", or ordinary conversation normally means action "none", but the choice to hold or change belongs to you while motion is active.
 - Pacing-only requests preserve geometry. Positioning requests may change center/span or replace them with an anchor loop.
+- A correction that says the current motion is not reaching or doing what was requested asks you to fix it; it is not a refusal to move. Do not merely repeat the claim in reply text.
+- When relocating a running window, return only action plus the geometry being changed unless the user names another axis. Positional "stay" does not mean a steady stroke length.
 - When the user names two or more positions in an order, use anchors in that order and omit center_percent/span_percent. Those fields describe only a window and cannot preserve an ordered route.
-- A narrow local request should still use at least 20% span. A later broad request should expand or move the window rather than remaining pinned there.
+- A narrow local request should still use at least 20% span. A later full-range request must recenter and widen the outer window across both endpoints rather than merely widening the old focused center.
 - span_percent or the anchor route defines the widest reach. span_min_percent plus breathe/wander/contrast varies stroke length inside the phrase; steady holds one length and clears that envelope.
 - Range-specific requests change span_min_percent/span_profile while preserving speed unless pace was also requested.
 - Choose every supplied speed_percent from this snapshot's speed_bands; numbers in contract examples are not defaults. A modifier of how geometry or its envelope evolves does not change device pace; change speed only when the user modifies speed or pace itself.

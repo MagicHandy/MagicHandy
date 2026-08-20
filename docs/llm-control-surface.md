@@ -253,6 +253,16 @@ coverage. A matched
 real-device feel comparison remains open, so Dynamic is selectable but not the
 default.
 
+The latest-conversation follow-up reproduced three failed position corrections:
+tip and full-length wording could receive reply-only output or geometry that did
+not cover the claimed region, and terse "still not" feedback lost the preceding
+axis during validation. Dynamic now validates claims against the effective
+running window, carries the preceding user position request into an elliptical
+correction, and scopes a position-only update to geometry. Unsolicited pace,
+span texture, variation, and horizon fields are discarded as unauthorized
+model noise. The exact sequence passed 9/9 repeated managed-model decisions;
+this is semantic validation, not deterministic phrase-to-motion planning.
+
 ## Ideas, ranked by leverage-to-risk
 
 Each idea notes whether it **restores** reference-app parity or is **net-new**,
@@ -341,9 +351,11 @@ compiles that request into ordinary sampled content and `MotionPlan`; the shared
 engine still owns startup, retargeting, limits, transport framing, and Stop.
 
 Interior anchor knots carry a non-zero tangent so they are pass-through points,
-not accidental stops. True route endpoints reverse. Variation is deterministic,
-bounded, loop-closed drift over several cycles; it cannot add high-frequency
-shake. Active retarget phase selection scores position, direction, and bounded
+not accidental stops. True route endpoints reverse with whole-leg
+shape-preserving easing. Variation is deterministic, bounded, and loop-closed,
+but its local center, span, and timing texture changes within a few cycles
+instead of holding one length across a long carrier phrase; it cannot add
+high-frequency shake. Active retarget phase selection scores position, direction, and bounded
 velocity mismatch, and the existing C1 handoff remains the only bridge. A
 horizon-only update preserves content identity and phase.
 

@@ -372,8 +372,11 @@ connection key.
   focus windows and loop seams; the 6.6 s routine floor still needs a capped
   real-device feel check because that threshold was hardware-derived.
 - Dynamic LLM geometry compiles to the same PCHIP content and shared engine.
-  Automated checks cover interior-anchor velocity, reversal dwell, bounded
-  loop-closed center/rhythm and span-profile variation, and adaptive
+  Its true endpoints use whole-leg shape-preserving easing while stored
+  patterns retain their shorter acceleration-budgeted reversal guides; both
+  remain under the exact runtime acceleration limiter. Automated checks cover
+  interior-anchor velocity, reversal dwell, short-window and loop-closed
+  center/rhythm and span-profile variation, buffered 1% output shape, and adaptive
   position/direction/velocity-aware retargeting. The installed managed model
   passed the transport-free prompt matrices; Ollama and capped real-device A/B
   feel evidence remain open, so Dynamic is selectable but Pattern Library

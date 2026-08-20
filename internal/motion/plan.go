@@ -90,7 +90,10 @@ func NewMotionPlan(
 		if target.Media != nil {
 			periodMillis = content.duration
 		} else {
-			periodMillis = focusedLoopPeriod(periodMillis, content.points, content.duration, content.loop, focus)
+			periodMillis = focusedLoopPeriod(
+				periodMillis, content.points, content.duration, content.loop, focus,
+				content.reversalProfile,
+			)
 		}
 		curve, compileErr = content.buildCurve(content.playbackScale(focus, periodMillis))
 	}
@@ -229,11 +232,12 @@ func (p MotionPlan) DirectionAt(streamMillis int64) int {
 // at, and the period is only known after the content duration is, so the curve
 // is the last thing the plan constructs.
 type resolvedContent struct {
-	points        []CurvePoint
-	duration      int64
-	loop          bool
-	linear        bool
-	maximumPoints int
+	points          []CurvePoint
+	duration        int64
+	loop            bool
+	linear          bool
+	maximumPoints   int
+	reversalProfile curveReversalProfile
 }
 
 func (c resolvedContent) validate() error {
@@ -255,7 +259,10 @@ func (c resolvedContent) buildCurve(scale playbackScale) (Curve, error) {
 	if maximumPoints <= 0 {
 		maximumPoints = maximumCurvePoints
 	}
-	return newCurve(c.points, c.duration, c.loop, c.linear, maximumPoints, scale)
+	return newCurveWithReversalProfile(
+		c.points, c.duration, c.loop, c.linear, maximumPoints, scale,
+		c.reversalProfile,
+	)
 }
 
 func (c resolvedContent) stationaryFallbackCurve() Curve {
@@ -455,6 +462,17 @@ func minimumSafeLoopPeriod(points []CurvePoint, authoredPeriod int64) int64 {
 }
 
 func minimumSafeLoopPeriodAtGain(points []CurvePoint, authoredPeriod int64, gain float64) int64 {
+	return minimumSafeLoopPeriodAtGainWithReversalProfile(
+		points, authoredPeriod, gain, curveReversalBoundedRamp,
+	)
+}
+
+func minimumSafeLoopPeriodAtGainWithReversalProfile(
+	points []CurvePoint,
+	authoredPeriod int64,
+	gain float64,
+	reversalProfile curveReversalProfile,
+) int64 {
 	minimum := int64(minimumBurstCycleMillis)
 	if authoredPeriod <= 0 || len(points) < 2 {
 		return minimum
@@ -468,12 +486,16 @@ func minimumSafeLoopPeriodAtGain(points []CurvePoint, authoredPeriod int64, gain
 			float64(authoredPeriod)*float64(runtimeMinimumReversalGapMillis)/float64(gap),
 		)))
 	}
-	if loopPeriodWithinRuntimeEnvelope(points, authoredPeriod, minimum, gain) {
+	if loopPeriodWithinRuntimeEnvelope(
+		points, authoredPeriod, minimum, gain, reversalProfile,
+	) {
 		return minimum
 	}
 
 	upper := max(authoredPeriod, minimum+1)
-	for !loopPeriodWithinRuntimeEnvelope(points, authoredPeriod, upper, gain) {
+	for !loopPeriodWithinRuntimeEnvelope(
+		points, authoredPeriod, upper, gain, reversalProfile,
+	) {
 		if upper > math.MaxInt64/2 {
 			return upper
 		}
@@ -482,7 +504,9 @@ func minimumSafeLoopPeriodAtGain(points []CurvePoint, authoredPeriod int64, gain
 	lower := minimum
 	for lower+1 < upper {
 		candidate := lower + (upper-lower)/2
-		if loopPeriodWithinRuntimeEnvelope(points, authoredPeriod, candidate, gain) {
+		if loopPeriodWithinRuntimeEnvelope(
+			points, authoredPeriod, candidate, gain, reversalProfile,
+		) {
 			upper = candidate
 		} else {
 			lower = candidate
@@ -491,12 +515,20 @@ func minimumSafeLoopPeriodAtGain(points []CurvePoint, authoredPeriod int64, gain
 	return upper
 }
 
-func loopPeriodWithinRuntimeEnvelope(points []CurvePoint, authoredPeriod, playedPeriod int64, gain float64) bool {
+func loopPeriodWithinRuntimeEnvelope(
+	points []CurvePoint,
+	authoredPeriod, playedPeriod int64,
+	gain float64,
+	reversalProfile curveReversalProfile,
+) bool {
 	scale := playbackScale{
 		timeFactor: float64(playedPeriod) / float64(authoredPeriod), amplitudeFactor: gain,
 		maxAccelerationPercentSecond2: runtimeMaxAccelerationPercentPerSecond2,
 	}
-	curve, err := newCurve(points, authoredPeriod, true, false, maximumCurvePoints, scale)
+	curve, err := newCurveWithReversalProfile(
+		points, authoredPeriod, true, false, maximumCurvePoints, scale,
+		reversalProfile,
+	)
 	if err != nil {
 		return false
 	}
@@ -515,13 +547,16 @@ func focusedLoopPeriod(
 	authoredPeriod int64,
 	loop bool,
 	focus focusProjection,
+	reversalProfile curveReversalProfile,
 ) int64 {
 	gain := focus.gain()
 	if !loop || gain <= 0 {
 		return period
 	}
 	adjusted := int64(math.Round(float64(period) * gain))
-	minimum := minimumSafeLoopPeriodAtGain(points, authoredPeriod, gain)
+	minimum := minimumSafeLoopPeriodAtGainWithReversalProfile(
+		points, authoredPeriod, gain, reversalProfile,
+	)
 	return max(adjusted, minimum)
 }
 

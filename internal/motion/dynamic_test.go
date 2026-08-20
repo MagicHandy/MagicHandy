@@ -306,6 +306,178 @@ func TestDynamicSpanProfilesProduceLongBoundedDistinctPhrases(t *testing.T) {
 	}
 }
 
+func TestDynamicEverydayProfilesVaryWithinShortPerceptualWindows(t *testing.T) {
+	for _, profile := range []string{DynamicSpanProfileWander, DynamicSpanProfileContrast} {
+		definition := NormalizeDynamicDefinition(DynamicDefinition{
+			CenterPercent: 46, SpanPercent: 92, SpanMinPercent: 20,
+			SpanProfile: profile, PhraseSeed: 1844129920,
+			VariationPercent: 25, SegmentSeconds: 30,
+		})
+		spans := dynamicTwoPointCycleSpans(dynamicContent(definition).points)
+		if len(spans) < 24 {
+			t.Fatalf("profile %s has only %d cycles", profile, len(spans))
+		}
+		window := 6
+		minimumRange := float64(definition.SpanPercent-definition.SpanMinPercent) * 0.18
+		for start := range spans {
+			minimum, maximum := math.MaxFloat64, 0.0
+			for offset := range window {
+				span := spans[(start+offset)%len(spans)]
+				minimum = math.Min(minimum, span)
+				maximum = math.Max(maximum, span)
+			}
+			if maximum-minimum < minimumRange {
+				t.Fatalf("profile %s cycles %d..%d vary only %.2f%% (%.2f..%.2f); want at least %.2f%%",
+					profile, start, start+window-1, maximum-minimum, minimum, maximum, minimumRange)
+			}
+		}
+		shortWindow := 4
+		minimumShortRange := float64(definition.SpanPercent-definition.SpanMinPercent) * 0.08
+		for start := range spans {
+			minimum, maximum := math.MaxFloat64, 0.0
+			for offset := range shortWindow {
+				span := spans[(start+offset)%len(spans)]
+				minimum = math.Min(minimum, span)
+				maximum = math.Max(maximum, span)
+			}
+			if maximum-minimum < minimumShortRange {
+				t.Fatalf("profile %s cycles %d..%d form a %.2f%% span plateau; want at least %.2f%%",
+					profile, start, start+shortWindow-1, maximum-minimum, minimumShortRange)
+			}
+		}
+	}
+}
+
+func TestDynamicReversalsEaseAcrossTheWholeLeg(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	definition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 80, SpanMinPercent: 80,
+		SpanProfile: DynamicSpanProfileSteady,
+	})
+	content := dynamicContent(definition)
+	plan := NewMotionPlan("whole-leg-easing", MotionTarget{
+		Dynamic: &definition, SpeedPercent: 85,
+	}, settings, 0, 0, time.Unix(0, 0))
+	if err := plan.compilationError(); err != nil {
+		t.Fatal(err)
+	}
+	legEnd := int64(math.Round(
+		float64(content.points[1].TimeMillis) / float64(content.duration) * float64(plan.PeriodMillis),
+	))
+	middleVelocity := math.Abs(dynamicPlayedVelocity(plan, legEnd/2))
+	approachVelocity := math.Abs(dynamicPlayedVelocity(plan, legEnd*9/10))
+	turnVelocity := math.Abs(plan.curve.velocityFloat(float64(content.points[1].TimeMillis)))
+	if middleVelocity <= 0 {
+		t.Fatal("dynamic leg has no mid-stroke velocity")
+	}
+	if ratio := approachVelocity / middleVelocity; ratio > 0.55 {
+		t.Fatalf("dynamic reversal retains %.1f%% of mid-stroke velocity at 90%% of the leg; want whole-leg braking",
+			ratio*100)
+	}
+	if turnVelocity > 1e-9 {
+		t.Fatalf("dynamic reversal authored velocity = %.9f%%/ms, want zero", turnVelocity)
+	}
+	if acceleration := maximumPlanAcceleration(plan); acceleration > runtimeMaxAccelerationPercentPerSecond2*1.002 {
+		t.Fatalf("dynamic eased acceleration %.1f exceeds %.1f", acceleration, runtimeMaxAccelerationPercentPerSecond2)
+	}
+}
+
+func TestDynamicWireFrameCarriesEasingToBufferedTransport(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	definition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 80, SpanMinPercent: 80,
+		SpanProfile: DynamicSpanProfileSteady,
+	})
+	content := dynamicContent(definition)
+	plan := NewMotionPlan("wire-easing", MotionTarget{
+		Dynamic: &definition, SpeedPercent: 85,
+	}, settings, 0, 0, time.Unix(0, 0))
+	legEnd := int64(math.Round(
+		float64(content.points[1].TimeMillis) / float64(content.duration) * float64(plan.PeriodMillis),
+	))
+	engine := &Engine{
+		plan: plan, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
+		preservePlanKnots: true, positionResolutionPercent: 1,
+		maximumChunkPoints: maximumAdaptiveChunkPoints,
+	}
+	samples, err := engine.nextMotionSamplesLocked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	peakSlope, finalSlope := 0.0, math.MaxFloat64
+	for index := 1; index < len(samples); index++ {
+		left, right := samples[index-1], samples[index]
+		if right.TimeMillis > legEnd || right.TimeMillis <= left.TimeMillis {
+			continue
+		}
+		slope := math.Abs(right.PositionPercent-left.PositionPercent) /
+			float64(right.TimeMillis-left.TimeMillis)
+		peakSlope = math.Max(peakSlope, slope)
+		if right.TimeMillis == legEnd {
+			finalSlope = slope
+		}
+	}
+	if peakSlope <= 0 || finalSlope == math.MaxFloat64 {
+		t.Fatalf("wire samples do not include the first eased reversal at %dms: %+v", legEnd, samples)
+	}
+	if ratio := finalSlope / peakSlope; ratio > 0.65 {
+		t.Fatalf("final wire segment retains %.1f%% of peak segment velocity; easing was flattened: %+v",
+			ratio*100, samples)
+	}
+}
+
+func dynamicPlayedVelocity(plan MotionPlan, streamMillis int64) float64 {
+	phase := plan.PhaseAt(streamMillis)
+	authoredMillis := phase * float64(plan.curve.duration)
+	return plan.curve.velocityFloat(authoredMillis) *
+		float64(plan.curve.duration) / float64(plan.PeriodMillis) * 1000 * plan.focus.gain()
+}
+
+func TestDynamicModerateVariationIsLocallyPerceptible(t *testing.T) {
+	definition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 46, SpanPercent: 92, SpanMinPercent: 20,
+		SpanProfile: DynamicSpanProfileContrast, PhraseSeed: 1844129920,
+		VariationPercent: 25, SegmentSeconds: 30,
+	})
+	points := dynamicContent(definition).points
+	const window = 16
+	for start := 1; start+window < len(points); start += window {
+		minimumRatio, maximumRatio := math.MaxFloat64, 0.0
+		for index := start; index < start+window; index++ {
+			distance := math.Abs(points[index].PositionPercent - points[index-1].PositionPercent)
+			if distance < MinimumDynamicSpanPercent {
+				continue
+			}
+			ratio := float64(points[index].TimeMillis-points[index-1].TimeMillis) / distance
+			minimumRatio = math.Min(minimumRatio, ratio)
+			maximumRatio = math.Max(maximumRatio, ratio)
+		}
+		if minimumRatio < math.MaxFloat64 && maximumRatio/minimumRatio < 1.10 {
+			t.Fatalf("legs %d..%d timing ratio %.3f is locally metronomic", start, start+window-1,
+				maximumRatio/minimumRatio)
+		}
+	}
+
+	steady := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 40, SpanMinPercent: 40,
+		SpanProfile: DynamicSpanProfileSteady, VariationPercent: 25,
+	})
+	centers := dynamicTwoPointCycleCenters(dynamicContent(steady).points)
+	minimum, maximum := math.MaxFloat64, 0.0
+	for _, center := range centers {
+		minimum = math.Min(minimum, center)
+		maximum = math.Max(maximum, center)
+	}
+	if maximum-minimum < 8 {
+		t.Fatalf("25%% variation moves the center only %.2f%% (%.2f..%.2f), want perceptible drift",
+			maximum-minimum, minimum, maximum)
+	}
+}
+
 func TestDynamicExplicitSteadySpanIsIndependentFromVariation(t *testing.T) {
 	definition := NormalizeDynamicDefinition(DynamicDefinition{
 		CenterPercent: 50, SpanPercent: 70, SpanMinPercent: 25,
@@ -428,11 +600,27 @@ func TestDynamicSpanEnvelopeAppearsInTraceTarget(t *testing.T) {
 }
 
 func dynamicTwoPointCycleSpanBounds(points []CurvePoint) (float64, float64) {
+	spans := dynamicTwoPointCycleSpans(points)
 	minimumSpan, maximumSpan := math.MaxFloat64, 0.0
-	for index := 0; index+1 < len(points)-1; index += 2 {
-		span := math.Abs(points[index+1].PositionPercent - points[index].PositionPercent)
+	for _, span := range spans {
 		minimumSpan = math.Min(minimumSpan, span)
 		maximumSpan = math.Max(maximumSpan, span)
 	}
 	return minimumSpan, maximumSpan
+}
+
+func dynamicTwoPointCycleSpans(points []CurvePoint) []float64 {
+	spans := make([]float64, 0, len(points)/2)
+	for index := 0; index+1 < len(points)-1; index += 2 {
+		spans = append(spans, math.Abs(points[index+1].PositionPercent-points[index].PositionPercent))
+	}
+	return spans
+}
+
+func dynamicTwoPointCycleCenters(points []CurvePoint) []float64 {
+	centers := make([]float64, 0, len(points)/2)
+	for index := 0; index+1 < len(points)-1; index += 2 {
+		centers = append(centers, (points[index+1].PositionPercent+points[index].PositionPercent)/2)
+	}
+	return centers
 }

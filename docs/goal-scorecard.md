@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-20, Creative span-envelope and LLM acceptance
+## Snapshot — 2026-08-20, Creative natural turns and local variability
 
 ### Goal 1: Maintainability
 
@@ -31,7 +31,7 @@ Scoring key:
 | --- | --- | --- | --- |
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 additionally gates installer syntax, localized catalog parity, state hygiene, plans, launcher quoting, and updater Git safety. Frontend tests gate catalog/placeholder/encoding parity, typed and static rendered strings, literal toasts/confirms, and adjacent-fragment hazards. |
 | Import boundaries | chat/llm/media/modes/persona never touch transport; persona never owns motion; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
-| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,436 lines, `internal/config/settings_test.go` 1,473, `internal/httpapi/chat.go` 1,334, `internal/httpapi/voice.go` 1,153, `internal/modes/manager.go` 1,012, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Setup/update tests and the release checker live in focused files; all enforced paths remain below the 1,500-line emergency ceiling. |
+| Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,436 lines, `internal/config/settings_test.go` 1,473, `internal/httpapi/chat.go` 1,334, `internal/httpapi/voice.go` 1,153, `internal/chat/service.go` 1,148, `internal/modes/manager.go` 1,012, `internal/motion/engine.go` 983, `internal/motion/engine_test.go` 1,215, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. New Dynamic correction/coverage policy lives in a focused `dynamic_intent.go`; all enforced paths remain below the 1,500-line emergency ceiling. |
 | Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,248 lines, `web/src/App.test.tsx` 1,485, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,446, `web/src/styles/shell.css` 1,068, and retired reference-only `web/legacy/app.css` 846. Setup and update UI use the canonical app and lazy locale chunks; `web/dist` remains the single shipped build. `App.test.tsx` is close to the 1,500-line emergency ceiling and must be split before more broad shell coverage lands there. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,374 physical lines and remains outside the Go/web architecture size test as a manually reviewed guideline exception. Optional Python/PyTorch speech setup lives in dedicated install/update scripts; the shared module owns bootstrap/state/process helpers used by source and GUI provisioning. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.26 candidate: 23,894,528 bytes plain and 17,212,416 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.27 candidate: 23,933,952 bytes plain and 17,241,088 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.26` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.26 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.27` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.27 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -75,7 +75,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Status | Evidence / Notes |
 | --- | --- | --- |
 | Engine retarget checklist on hardware | **Met** | Phase 7 via `cmd/retarget-validate` |
-| Full app path — Cloud REST | **Met** | A 2026-07-12 isolated Phase 14B app build at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation. Qualitative 2026-08-20 feedback that Dynamic felt robotic and 73% felt slow lacked transport/latency/trace evidence; the resulting shared calibration correction has not yet had a post-change hardware run (`docs/motion-calibration.md`). |
+| Full app path — Cloud REST | **Met** | A 2026-07-12 isolated Phase 14B app build at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation. The latest installed-session trace added 439 points/85 legs, ordinary 330–341 ms append acknowledgements, one network error, and a successful 330 ms user Stop; it exposed a long 31–35% Creative span plateau and abrupt endpoint shape. That trace predates alpha.27's correction, so matched post-change feel remains open (`docs/motion-calibration.md`). |
 | Full app path — Browser Bluetooth | **At Risk** | The 2026-07-02 visible Edge Web Bluetooth run moved and stopped the real device, but it predates the reverse-direction fix and was a short session. Revalidate reverse, unconditional Stop, and endurance on hardware. |
 | Full app path — Intiface | **At Risk** | The 2026-07-12 Handy workflow passed safety and lifecycle checks, but it predates the deadline-driven asynchronous-ACK pacer and measured queue admission rather than wire timing. Repeat the matched run with `motion_trace.v3` and record subjective feel (`docs/intiface.md`). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE, and explicit stop-first takeover with a globally locked handoff (`docs/controller-dispatch-semantics.md`) |
@@ -94,9 +94,12 @@ anchor geometry without a second motion path; Pattern Library remains the
 default pending supported-provider and capped real-device A/B acceptance. Its
 outer geometry can now carry an independent model-selected floor/profile, so
 stroke length changes across a long deterministic phrase while center/rhythm
-variation and pace remain separate. The installed managed 12B Gemma model
-passed 25/25 first-response Creative decisions without repair, engine, or
-transport. The shared 1–100 loop-speed scale is calibrated through the selected Original /
+variation and pace remain separate. Wander/contrast now explore that envelope
+within short perceptual windows, and Creative true reversals use whole-leg
+shape-preserving easing instead of a mostly linear leg with an endpoint brake.
+The installed managed 12B Gemma model passed 25/25 broader first-response
+Creative decisions and 9/9 repetitions of the reproduced position-correction
+sequence without an engine or transport. The shared 1–100 loop-speed scale is calibrated through the selected Original /
 Handy 2 Standard / Handy 2 Pro published travel and normal speed envelope, with
 a separate exact-curve runtime envelope.
 Opted-in chat voice now also receives bounded persona/anatomy context, strict
@@ -165,6 +168,32 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-20** - Separated Creative's remaining physical-feel defects into
+  local stroke-length regularity and endpoint velocity shape. Wander and
+  contrast now select correlated tight/middle/broad range levels at roughly
+  two-cycle cadence; tests require every circular six-cycle window to explore
+  at least 18% of the available band and prevent four-cycle plateaus below 8%.
+  Center and grouped leg timing add independent seeded texture with a
+  perceptual square-root response. Creative true reversals now use whole-leg
+  shape-preserving PCHIP easing; stored patterns retain their shorter
+  acceleration-budgeted guides, and both pass through the same exact runtime
+  limiter, engine, sampler, transport, and Stop path. A buffered 1%-resolution
+  regression retains gradual braking at the wire boundary. The latest
+  installed trace contained 439 points/85 legs and exposed the old 31–35% span
+  plateau across more than 30 reversals; no post-fix device command was issued.
+  Position-correction validation now checks effective tip/base/full coverage,
+  retains preceding context for terse follow-ups, and prevents a geometry-only
+  request from rewriting unrelated axes. The installed managed model passed
+  9/9 reproduced correction decisions and the broader 25/25 matrix without an
+  engine or transport. Full Go tests, vet, lint, 402 frontend tests,
+  localization, typecheck/build, PowerShell 5.1 installer tests, and plain/
+  stripped `CGO_ENABLED=0` builds pass. Local Windows race remains unavailable
+  because no C compiler is installed and remains a mandatory Linux CI gate.
+  The binary is 23,933,952 / 17,241,088 bytes. No frontend source changed, and
+  the canonical rebuilt browser payload remains 1,695,122 raw / 802,588 gzip
+  bytes. Alpha.27 extends the version-bound reviewed unsigned policy without
+  changing installer behavior or payload composition.
 
 - **2026-08-20** - Added explicit Creative stroke-length envelopes without a
   second motion or transport path. The model selects outer geometry, a bounded

@@ -148,6 +148,21 @@ func newCurve(
 	maximumPoints int,
 	scale playbackScale,
 ) (Curve, error) {
+	return newCurveWithReversalProfile(
+		points, durationMillis, loop, linear, maximumPoints, scale,
+		curveReversalBoundedRamp,
+	)
+}
+
+func newCurveWithReversalProfile(
+	points []CurvePoint,
+	durationMillis int64,
+	loop bool,
+	linear bool,
+	maximumPoints int,
+	scale playbackScale,
+	reversalProfile curveReversalProfile,
+) (Curve, error) {
 	if len(points) < 2 {
 		return Curve{}, errors.New("a motion curve requires at least two points")
 	}
@@ -160,7 +175,7 @@ func newCurve(
 	}
 	curvePoints := copyPoints
 	var guideSlopes map[int64]float64
-	if loop && !linear {
+	if loop && !linear && reversalProfile == curveReversalBoundedRamp {
 		curvePoints, guideSlopes = withBoundedLoopReversalGuides(copyPoints, scale)
 	}
 	minimum, maximum := curvePointBounds(copyPoints)

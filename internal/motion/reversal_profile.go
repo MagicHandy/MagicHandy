@@ -6,13 +6,13 @@ import (
 	"slices"
 )
 
-// A short velocity ramp preserves a true zero-velocity reversal without
-// spreading endpoint easing across the whole stroke body. Its length is an
+// Stored patterns use a short velocity ramp to preserve their authored stroke
+// body while still reaching zero velocity at a true reversal. Its length is an
 // acceleration budget rather than a constant: a fixed duration makes a slow or
 // narrowed stroke spend the same absolute time crawling through its turn as a
-// fast full-range one, which is felt as a stop at every reversal. Removing the
-// ramp entirely is not the alternative — without a guide the zero PCHIP slope
-// at the extremum eases the whole leg, which is worse.
+// fast full-range one. Creative deliberately selects whole-leg PCHIP easing
+// instead, because natural braking matters more there than retaining a catalog
+// waveform's constant-velocity body.
 const (
 	// These are played-time limits. Pattern authoring deliberately stays inside
 	// the quieter catalogMaxAcceleration/catalogMinReversalGap envelope, while
@@ -26,6 +26,18 @@ const (
 	// own headroom. playbackScale chooses the catalog ceiling for authoring and
 	// the wider runtime ceiling for an engine plan.
 	reversalAccelerationShare = 2.0 / 3.0
+)
+
+// curveReversalProfile selects how a generated curve approaches a true turn.
+// Stored patterns retain their short, acceleration-budgeted ramps so authored
+// rhythm is not silently rewritten. Creative content uses the natural PCHIP
+// profile: the whole leg participates in braking and acceleration, which avoids
+// a long constant-velocity run ending in a perceptibly abrupt direction swap.
+type curveReversalProfile uint8
+
+const (
+	curveReversalBoundedRamp curveReversalProfile = iota
+	curveReversalWholeLeg
 )
 
 // playbackScale describes how authored curve coordinates become played motion:

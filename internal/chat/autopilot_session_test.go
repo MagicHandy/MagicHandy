@@ -104,7 +104,7 @@ func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
 	for _, want := range []string{
 		`span floor 26%, span profile "wander"`,
 		"span_min_percent and choose span_profile breathe, wander, or contrast",
-		"variation_percent controls slow center and rhythm texture independently",
+		"variation_percent controls correlated center and rhythm texture independently",
 	} {
 		if !strings.Contains(running, want) {
 			t.Fatalf("running Dynamic prompt missing %q:\n%s", want, running)

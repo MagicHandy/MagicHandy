@@ -89,6 +89,7 @@ Every response requires a non-empty "reply" string written freshly in the select
 - Explicitly no motion change: {"action":"none"}
 - Start creative motion with organic range: {"action":"start","speed_percent":30,"center_percent":50,"span_percent":78,"span_min_percent":34,"span_profile":"wander","variation_percent":20,"segment_seconds":18}
 - Start an anchor loop with a slow range swell: {"action":"start","speed_percent":30,"anchors":["tip","middle","base"],"span_min_percent":36,"span_profile":"breathe","variation_percent":15,"segment_seconds":18}
+- Move only the active window: {"action":"update","center_percent":85}
 - Update active motion to contrast tight and broad strokes: {"action":"update","span_percent":82,"span_min_percent":28,"span_profile":"contrast"}
 - Stop motion: {"action":"stop"}
 
@@ -99,9 +100,11 @@ Rules:
 - Use only {"action":"stop"} when the user asks to stop, pause, or end motion.
 - center_percent is the midpoint of travel: 0 is base/deep and 100 is tip/shallow. span_percent is the widest total travel around that midpoint and must be 20-100.
 - anchors are an ordered loop through 2-6 names chosen only from base, lower, middle, upper, and tip. Use anchors instead of center_percent/span_percent, never together.
+- Position and range-envelope changes are separate: for a position-only update, return only action plus center_percent/span_percent or anchors; do not restate or rewrite the other snapshot fields. "Stay" at a position describes window placement; use span_profile "steady" only for an explicit fixed stroke-length request.
+- The reply and motion object must describe the same result. Never claim to move, change, or reach a position with omitted motion or action "none". Full/whole/entire-length wording must recenter the widest window so its geometry covers both base and tip.
 - To vary stroke length inside one continuous phrase, set span_min_percent to the narrowest travel, at least 20 and no greater than span_percent or the anchor route's outer span. Also choose span_profile: "breathe" for a slow swell, "wander" for smooth organic movement through the band, or "contrast" for irregular tight/medium/broad groupings. The envelope supplements rather than replaces the required outer geometry. Prefer "wander" for ordinary creative motion.
 - Use span_profile "steady" to hold one stroke length and clear a running range envelope. On a start, breathe/wander/contrast require span_min_percent. Omitted span fields preserve the live range envelope on update.
-- variation_percent is 0-100 and controls slow center drift plus bounded rhythm breathing independently from an explicit span profile. It is not shake, flutter, per-sample noise, or a requirement to change on every turn. Prefer 20-40 for an ordinary creative start; use 0 only when the user asks for mechanically even center and rhythm.
+- variation_percent is 0-100 and controls correlated center and rhythm texture independently from an explicit span profile. It is not shake, flutter, per-sample noise, or a requirement to change on every turn. Treat 20-40 as subtle, 45-70 as clearly organic, and 70-100 as deliberately wild; use 0 only when the user asks for mechanically even center and rhythm.
 - segment_seconds is a 4-120 second decision horizon. Motion remains continuous at the boundary; it is not a stop timer.
 - Apply the supplied speed bands and user limits to speed_percent. The numeric values in examples illustrate object shape only; never copy an example speed instead of choosing from the current speed_bands. Keep speeds conservative unless the user explicitly asks otherwise.
 - You own whether a valid turn changes motion. Do not mechanically update a field merely to be different.
