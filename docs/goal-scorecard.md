@@ -169,6 +169,27 @@ Ranked by threat to the stated goals:
   run remains unavailable because the installed LLVM toolchain lacks a MinGW
   UCRT sysroot; the Ubuntu CI race gate remains authoritative.
 
+- **2026-08-20** - Ran the first retained transport-free Dynamic live matrix
+  through packaged b9966 CUDA llama.cpp and the installed 26B Gemma GGUF. All
+  nine start/hold/update/Stop cases passed without repair after bounded anchor
+  precedence normalized the model's redundant anchor-plus-window output. Moving
+  the volatile motion snapshot near the final output guard increased reusable
+  prompt prefix coverage to roughly 74-97%; after the initial turn, first deltas
+  arrived in 109-286 ms and complete responses in 366 ms-1.161 s. GPU graph
+  warm-up also contributed to the end-to-end gain. The harness instantiated no
+  engine or transport and issued no device command. Real-device Dynamic A/B
+  acceptance remains open.
+
+- **2026-08-20** - Moved managed llama.cpp's first-generation GPU setup into
+  asynchronous startup preload. A bounded 16-token non-thinking warmup uses
+  autonomous scheduler priority, so interactive Chat cancels it rather than
+  waiting behind it. On packaged b9966 CUDA with the installed 26B Gemma and a
+  32K context, the pre-change first UI turn was 37,372 ms to first token /
+  37,526 ms total; after preload warmup the first fresh turn was 4,961 /
+  5,087 ms and the next was 183 / 309 ms. The HTTP UI remained available during
+  the 73,747 ms background load-plus-warmup. Both isolated turns selected no
+  motion and the review data contained no connection key.
+
 - **2026-08-14** - Closed the normalized-pattern dwell regression found in a
   retained Cloud trace. `Hard and Regular` had no HSP timestamp gap, but its
   short 100 -> 74 accent inherited nearly a full-stroke duration and remained

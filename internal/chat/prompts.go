@@ -498,10 +498,6 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 		sections = appendPromptSection(sections, "pattern_catalog", "Pattern catalog",
 			curationInstructions(patterns))
 	}
-	if capabilities.Motion && motionContext != nil {
-		sections = appendPromptSection(sections, "motion_context", "Motion context",
-			motionContextInstructions(*motionContext, capabilities, patterns))
-	}
 	if capabilities.Voice != VoiceUtility && conversationContext != nil {
 		if contextText := conversationContextInstructionsForLocale(locale, *conversationContext, capabilities); contextText != "" {
 			sections = appendPromptSection(sections, "conversation_context", "Conversation context", contextText)
@@ -525,6 +521,13 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 		finalVoiceCheckForLocale(locale, capabilities.Voice))
 	if languageReminder := replyLanguageReminderForPromptID(set.ID); languageReminder != "" {
 		sections = appendPromptSection(sections, "language_reminder", "Language reminder", languageReminder)
+	}
+	// The live snapshot changes on nearly every turn. Keep it after stable
+	// identity/profile sections so llama.cpp can reuse their common prompt
+	// prefix, while retaining the output guard as the final instruction.
+	if capabilities.Motion && motionContext != nil {
+		sections = appendPromptSection(sections, "motion_context", "Motion context",
+			motionContextInstructions(*motionContext, capabilities, patterns))
 	}
 	if capabilities.MoodTracking {
 		sections = appendPromptSection(sections, "output_guard", "Final output guard", finalOutputGuardWithMood)

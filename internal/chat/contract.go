@@ -160,6 +160,9 @@ func parseAssistantResponseForCapabilities(raw string, patterns []PatternChoice,
 	}
 	patternsEnabled := capabilities.Motion && capabilities.Patterns
 	dynamicEnabled := capabilities.Motion && capabilities.MotionMode == MotionModeDynamic
+	if dynamicEnabled {
+		normalizeDynamicGeometry(&response)
+	}
 	var currentSpeed *int
 	if patternsEnabled && context != nil && context.Running && context.SpeedPercent >= 1 && context.SpeedPercent <= 100 {
 		speed := context.SpeedPercent
@@ -170,6 +173,19 @@ func parseAssistantResponseForCapabilities(raw string, patterns []PatternChoice,
 		return AssistantResponse{}, err
 	}
 	return response, nil
+}
+
+// normalizeDynamicGeometry resolves one unambiguous local-model redundancy.
+// Named anchors are an ordered route and therefore carry more information than
+// a center/span window; the motion runtime already gives them precedence. Drop
+// copied window fields here so a valid anchor decision does not enter a repair
+// loop merely because the model repeated values from the adjacent start example.
+func normalizeDynamicGeometry(response *AssistantResponse) {
+	if response.Motion == nil || len(response.Motion.Anchors) == 0 {
+		return
+	}
+	response.Motion.CenterPercent = nil
+	response.Motion.SpanPercent = nil
 }
 
 func parseAssistantResponse(raw string, patterns []PatternChoice, curation bool, currentSpeed *int) (AssistantResponse, error) {

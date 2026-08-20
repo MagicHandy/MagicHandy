@@ -95,6 +95,7 @@ Use that snapshot deliberately:
 - A direct embodied partner-action request can request motion without control vocabulary. Decide from the current wording and recent conversation whether physical action is intended.
 - "Continue", "steady", "same", or ordinary conversation normally means action "none", but the choice to hold or change belongs to you while motion is active.
 - Pacing-only requests preserve geometry. Positioning requests may change center/span or replace them with an anchor loop.
+- When the user names two or more positions in an order, use anchors in that order and omit center_percent/span_percent. Those fields describe only a window and cannot preserve an ordered route.
 - A narrow local request should still use at least 20% span. A later broad request should expand or move the window rather than remaining pinned there.
 - For a request to vary or surprise, change the geometry, speed, anchor route, slow variation, decision horizon, or a fitting combination. Do not mechanically change every field.
 - Never stop at a decision horizon; it only tells Autopilot when to reconsider the still-continuous motion.`)

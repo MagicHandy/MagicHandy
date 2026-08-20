@@ -163,9 +163,46 @@ func (s *Server) startLLMAutoload(settings config.LLMSettings) {
 				"elapsed_ms", time.Since(started).Milliseconds(), "message", status.Message)
 			return
 		}
+		warmCtx, _, releaseWarmup, warmErr := s.llmRequests.acquire(loadCtx, llmRequestAutonomous)
+		if warmErr == nil {
+			warmErr = warmManagedLLM(warmCtx, provider, settings.Model)
+			releaseWarmup()
+		}
+		if loadCtx.Err() != nil {
+			return
+		}
+		if errors.Is(warmErr, context.Canceled) {
+			s.logger.Info("managed LLM startup warmup yielded to an interactive request",
+				"model", settings.Model, "elapsed_ms", time.Since(started).Milliseconds())
+			return
+		}
+		if warmErr != nil {
+			s.logger.Warn("managed LLM startup warmup failed; model remains available",
+				"model", settings.Model, "error", warmErr)
+		}
 		s.logger.Info("managed LLM startup preload complete",
 			"model", settings.Model, "elapsed_ms", time.Since(started).Milliseconds())
 	}()
+}
+
+// warmManagedLLM moves llama.cpp's one-time generation graph setup into the
+// asynchronous startup preload. The coordinator treats it as autonomous work,
+// so an interactive chat cancels the warmup and takes the single model slot.
+func warmManagedLLM(ctx context.Context, provider llm.Provider, model string) error {
+	_, err := provider.StreamChat(ctx, llm.ChatRequest{
+		Messages: []llm.Message{
+			{Role: "system", Content: "Return exactly one JSON object and no other text."},
+			{Role: "user", Content: `Return {"ready":true}.`},
+		},
+		Model:         model,
+		Temperature:   0,
+		MaxTokens:     16,
+		ReasoningMode: "off",
+	}, nil)
+	if errors.Is(err, llm.ErrOutputTruncated) {
+		return nil
+	}
+	return err
 }
 
 func (s *Server) stopLLMAutoload() {

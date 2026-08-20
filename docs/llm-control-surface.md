@@ -83,7 +83,11 @@ Library start or target cannot include Dynamic fields. `none` and `stop` carry
 no target fields in either mode. The decoder still accepts the retired
 `intensity` alias from old saved responses, immediately normalizes it to
 `speed_percent`, and never advertises it to a model. When both fields are
-present, `speed_percent` wins. A stopped engine accepts only `start`; neither
+present, `speed_percent` wins. If a Dynamic response supplies a valid ordered
+anchor route and also copies center/span window fields, anchors win and the
+window fields are discarded before validation. This is a bounded,
+information-preserving normalization: every anchor still passes the same name,
+count, duplicate, and minimum-span checks. A stopped engine accepts only `start`; neither
 `target` nor `update` starts motion as a side effect. A running Pattern Library
 shape change may omit pace, and a Dynamic update may omit any unchanged field.
 Disabled or unknown pattern ids are rejected. Dynamic never reads pattern
@@ -321,6 +325,25 @@ The remaining acceptance gate is empirical: compare Dynamic and Pattern Library
 on the same local models and real device at capped speed, including slow narrow
 motion, route reversals, repeated conversational updates, Autopilot handoffs,
 and Stop. Do not make Dynamic the default from simulation alone.
+
+The first transport-free provider gate passed on 2026-08-20 against the
+installed verified b9966 CUDA llama.cpp runtime and the installed
+Gemma-4-26B-A4B-Abliterated Q3_K_S model. Nine stopped/running cases covered
+explicit and ordered starts, chat-only and negated turns, pacing, local focus,
+broad variation, continue, and Stop. All final responses passed without repair;
+the ordered request resolved to `base` / `middle` / `tip`. No motion engine,
+transport, connection key, or device command was present in the harness.
+
+That gate also moved the volatile authoritative motion snapshot behind stable
+identity, profile, memory, and voice sections while retaining the final output
+guard last. llama.cpp could then retain roughly 74-97% of the prompt prefix on
+the measured state changes, re-evaluating 12-559 tokens after the initial turn
+instead of as many as about 1,865. In the final run, the first turn produced its
+first delta in 1.619 seconds and completed in 2.428 seconds; the eight warm turns
+produced first deltas in 109-286 ms and completed in 366 ms-1.161 seconds. GPU
+graph warm-up also improved generation throughput during the session, so the
+end-to-end reduction is not attributed to prompt order alone. Capped real-device
+A/B acceptance remains open.
 
 ### F. Chat Autopilot session controls (partially implemented; moderate)
 
