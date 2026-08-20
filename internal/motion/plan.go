@@ -1,6 +1,7 @@
 package motion
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -37,6 +38,10 @@ type MotionPlan struct {
 
 	curve Curve
 	focus focusProjection
+	// compileErr is never serialized. The engine rejects a plan carrying it;
+	// the safe stationary curve only keeps diagnostic/preview sampling total so
+	// malformed semantic content cannot panic the whole process.
+	compileErr error
 }
 
 // MotionSample is one transport-neutral semantic sample.
@@ -67,18 +72,32 @@ func NewMotionPlan(
 	if id == "" {
 		id = fmt.Sprintf("%s-%d", motionContentID(target), createdAt.UnixNano())
 	}
-	focus := newFocusProjection(target, content)
-	periodMillis := periodForContent(
-		content.points,
-		content.duration,
-		target.SpeedPercent,
-		content.loop,
-		settings.HandyModel,
-	)
-	if target.Media != nil {
-		periodMillis = content.duration
-	} else {
-		periodMillis = focusedLoopPeriod(periodMillis, content.points, content.duration, content.loop, focus)
+	compileErr := content.validate()
+	focus := focusProjection{sourceMin: 0, sourceSpan: 100, targetMin: 0, targetSpan: 100}
+	if compileErr == nil {
+		focus = newFocusProjection(target, content)
+	}
+	periodMillis := int64(minimumBurstCycleMillis)
+	var curve Curve
+	if compileErr == nil {
+		periodMillis = periodForContent(
+			content.points,
+			content.duration,
+			target.SpeedPercent,
+			content.loop,
+			settings.HandyModel,
+		)
+		if target.Media != nil {
+			periodMillis = content.duration
+		} else {
+			periodMillis = focusedLoopPeriod(periodMillis, content.points, content.duration, content.loop, focus)
+		}
+		curve, compileErr = content.buildCurve(content.playbackScale(focus, periodMillis))
+	}
+	if compileErr != nil {
+		compileErr = fmt.Errorf("compile motion plan: %w", compileErr)
+		periodMillis = minimumBurstCycleMillis
+		curve = content.stationaryFallbackCurve()
 	}
 	return MotionPlan{
 		ID:            id,
@@ -91,9 +110,14 @@ func NewMotionPlan(
 		PhaseOffset:   phaseForContent(phaseOffset, content.loop),
 		Loop:          content.loop,
 		CreatedAt:     createdAt.UTC().Format(time.RFC3339Nano),
-		curve:         content.buildCurve(content.playbackScale(focus, periodMillis)),
+		curve:         curve,
 		focus:         focus,
+		compileErr:    compileErr,
 	}
+}
+
+func (p MotionPlan) compilationError() error {
+	return p.compileErr
 }
 
 // SampleAt samples the plan at the given stream-relative time.
@@ -212,9 +236,45 @@ type resolvedContent struct {
 	maximumPoints int
 }
 
-func (c resolvedContent) buildCurve(scale playbackScale) Curve {
-	curve, _ := newCurve(c.points, c.duration, c.loop, c.linear, c.maximumPoints, scale)
-	return curve
+func (c resolvedContent) validate() error {
+	if len(c.points) < 2 {
+		return errors.New("a motion curve requires at least two points")
+	}
+	maximumPoints := c.maximumPoints
+	if maximumPoints <= 0 {
+		maximumPoints = maximumCurvePoints
+	}
+	if len(c.points) > maximumPoints {
+		return fmt.Errorf("a motion curve supports at most %d points", maximumPoints)
+	}
+	return validateCurvePoints(c.points, c.duration)
+}
+
+func (c resolvedContent) buildCurve(scale playbackScale) (Curve, error) {
+	maximumPoints := c.maximumPoints
+	if maximumPoints <= 0 {
+		maximumPoints = maximumCurvePoints
+	}
+	return newCurve(c.points, c.duration, c.loop, c.linear, maximumPoints, scale)
+}
+
+func (c resolvedContent) stationaryFallbackCurve() Curve {
+	position := 50.0
+	for _, point := range c.points {
+		if !math.IsNaN(point.PositionPercent) && !math.IsInf(point.PositionPercent, 0) {
+			position = math.Max(0, math.Min(100, point.PositionPercent))
+			break
+		}
+	}
+	points := []CurvePoint{
+		{TimeMillis: 0, PositionPercent: position},
+		{TimeMillis: minimumBurstCycleMillis, PositionPercent: position},
+	}
+	return Curve{
+		points: points, authoredKnots: append([]CurvePoint(nil), points...),
+		duration: minimumBurstCycleMillis, linear: true,
+		minPosition: position, maxPosition: position,
+	}
 }
 
 func (c resolvedContent) playbackScale(focus focusProjection, periodMillis int64) playbackScale {
@@ -551,6 +611,9 @@ func (f focusProjection) apply(percent float64) float64 {
 
 func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, current float64, currentDirection int, currentVelocity float64) float64 {
 	candidatePlan := NewMotionPlan("candidate", target, settings, 0, 0, time.Unix(0, 0))
+	if candidatePlan.compilationError() != nil {
+		return 0
+	}
 	bestPhase := 0.0
 	bestDistance := math.MaxFloat64
 	lastIndex := 63

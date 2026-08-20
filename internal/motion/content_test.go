@@ -476,6 +476,16 @@ func TestPlanUsesResolvedPatternAndFiniteProgram(t *testing.T) {
 	}
 }
 
+func TestEmptyCurveSamplingFailsStationaryInsteadOfPanicking(t *testing.T) {
+	curve := Curve{}
+	if position := curve.sampleFloat(0); position != 50 {
+		t.Fatalf("empty curve position = %g, want safe midpoint", position)
+	}
+	if velocity := curve.velocityFloat(0); velocity != 0 {
+		t.Fatalf("empty curve velocity = %g, want stationary", velocity)
+	}
+}
+
 func TestInvalidResolvedProgramFallsBackWithoutRetainingProgram(t *testing.T) {
 	invalid := ProgramDefinition{ID: "invalid", Name: "Invalid"}
 	plan := NewMotionPlan("fallback", MotionTarget{

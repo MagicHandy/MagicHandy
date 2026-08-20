@@ -430,6 +430,13 @@ func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel cont
 	e.transition = nil
 	e.frozenPhase = e.pausedPhase
 	plan := NewMotionPlan(e.planIDLocked(), e.pausedTarget, e.settings, e.pausedPhase, 0, e.startedAt)
+	if err := plan.compilationError(); err != nil {
+		e.runCtx = nil
+		e.cancel = nil
+		e.done = nil
+		e.lastError = err.Error()
+		return 0, 0, err
+	}
 	plan.PhasePreserved = true
 	e.plan = plan
 	e.captureCurrentSampleLocked(0)
@@ -535,7 +542,16 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 	e.cancel = cancel
 	e.runCtx = loopCtx
 	e.done = nil
-	e.plan = NewMotionPlan(e.planIDLocked(), target, settings, 0, 0, e.startedAt)
+	plan := NewMotionPlan(e.planIDLocked(), target, settings, 0, 0, e.startedAt)
+	if err := plan.compilationError(); err != nil {
+		e.runCtx = nil
+		e.cancel = nil
+		e.done = nil
+		e.starting = false
+		e.lastError = err.Error()
+		return 0, err
+	}
+	e.plan = plan
 	e.captureCurrentSampleLocked(0)
 	e.running = true
 	e.traceStateLocked("target_applied", "phase_preserved=false")
@@ -571,6 +587,10 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 		e.planIDLocked(), target, e.settings, handoff,
 		handoffPosition, handoffDirection, handoffVelocity, now,
 	)
+	if err := next.compilationError(); err != nil {
+		e.lastError = err.Error()
+		return err
+	}
 	bridgeInserted := transitionRequired(previous, previousTransition, next, handoff)
 	if bridgeInserted {
 		e.transition = newPlanTransition(previous, previousTransition, handoff)
@@ -605,8 +625,12 @@ func (e *Engine) refreshSettings(runEpoch uint64, settings config.MotionSettings
 	current := sampleMotionPath(previous, previousTransition, estimatedMillis)
 	target := NormalizeTarget(e.plan.Target, settings)
 	e.generation++
-	e.settings = settings
 	next := previous.Retarget(e.planIDLocked(), target, settings, handoff, now)
+	if err := next.compilationError(); err != nil {
+		e.lastError = err.Error()
+		return false, err
+	}
+	e.settings = settings
 	next.PhasePreserved = true
 	bridgeInserted := transitionRequired(previous, previousTransition, next, handoff)
 	if bridgeInserted {

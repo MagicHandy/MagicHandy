@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-20, motion calibration and visible set-point controls
+## Snapshot — 2026-08-20, Creative motion crash hardening
 
 ### Goal 1: Maintainability
 
@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 calibrated-motion build: 23,847,936 bytes plain and 17,176,064 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.25 crash-fix build: 23,859,712 bytes plain and 17,184,256 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.24` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.24 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.25` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.25 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -160,6 +160,19 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-20** - Reproduced the installed alpha.24 exit as a Creative-plan
+  panic: full-span geometry at 96% variation rounded one endpoint to
+  `100.00000000000001`; strict validation rejected it, the plan constructor
+  discarded that error, and sampling indexed an empty curve. Alpha.25 clamps
+  the final projection, retains compilation errors, rejects them across every
+  engine admission/retarget path before transport work, and makes empty-curve
+  sampling stationary rather than process-fatal. All 101 variation values now
+  compile and sample across all three Handy profiles. Full Go tests, vet, lint,
+  402 frontend tests, typecheck/build, the Windows PowerShell 5.1 installer
+  suite, and plain/stripped `CGO_ENABLED=0` builds pass. The binary changed from
+  23,847,936 / 17,176,064 bytes to 23,859,712 / 17,184,256 bytes, remaining
+  below budget. No hardware connection or motion command was issued.
 
 - **2026-08-20** - Recalibrated shared loop and optional media-limit speed
   semantics after qualitative hardware feedback found Dynamic robotic and 73%

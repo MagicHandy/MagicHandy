@@ -16,7 +16,10 @@ func TestDynamicAnchorLoopPassesThroughInteriorAnchors(t *testing.T) {
 		{Name: "tip", PositionPercent: 92},
 	}}
 	content := dynamicContent(definition)
-	curve := content.buildCurve(neutralPlaybackScale())
+	curve, err := content.buildCurve(neutralPlaybackScale())
+	if err != nil {
+		t.Fatalf("build dynamic curve: %v", err)
+	}
 	if len(content.points) != 5 {
 		t.Fatalf("dynamic points = %v, want forward/reverse traversal without duplicated reversals", content.points)
 	}
@@ -80,6 +83,47 @@ func TestDynamicVariationIsBoundedAndLoopClosed(t *testing.T) {
 	for _, point := range content.points {
 		if point.PositionPercent < 0 || point.PositionPercent > 100 {
 			t.Fatalf("dynamic variation point escaped semantic travel: %+v", point)
+		}
+	}
+}
+
+func TestDynamicFullSpanVariationAlwaysCompiles(t *testing.T) {
+	models := []string{
+		config.HandyModelOriginal,
+		config.HandyModel2Standard,
+		config.HandyModel2Pro,
+	}
+	for variation := 0; variation <= 100; variation++ {
+		definition := NormalizeDynamicDefinition(DynamicDefinition{
+			CenterPercent: 50, SpanPercent: 100, VariationPercent: variation,
+		})
+		content := dynamicContent(definition)
+		for index, point := range content.points {
+			if point.PositionPercent < 0 || point.PositionPercent > 100 ||
+				math.IsNaN(point.PositionPercent) || math.IsInf(point.PositionPercent, 0) {
+				t.Fatalf("variation=%d point=%d escaped bounds: %.17g", variation, index, point.PositionPercent)
+			}
+		}
+		for _, model := range models {
+			settings := config.DefaultSettings().Motion
+			settings.SpeedMinPercent = 1
+			settings.SpeedMaxPercent = 100
+			settings.HandyModel = model
+			plan := NewMotionPlan("full-span", MotionTarget{
+				Dynamic: &definition, SpeedPercent: 68,
+			}, settings, 0, 0, time.Unix(0, 0))
+			if err := plan.compilationError(); err != nil {
+				t.Fatalf("variation=%d model=%s: %v", variation, model, err)
+			}
+			if len(plan.curve.points) < 2 {
+				t.Fatalf("variation=%d model=%s compiled %d points", variation, model, len(plan.curve.points))
+			}
+			for _, at := range []int64{0, plan.PeriodMillis / 2, plan.PeriodMillis} {
+				position := plan.SampleAt(at).PositionPercent
+				if position < 0 || position > 100 || math.IsNaN(position) || math.IsInf(position, 0) {
+					t.Fatalf("variation=%d model=%s sample=%d position=%.17g", variation, model, at, position)
+				}
+			}
 		}
 	}
 }

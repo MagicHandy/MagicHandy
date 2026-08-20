@@ -237,7 +237,12 @@ func dynamicVariedPosition(position float64, base []float64, variation int, phas
 	)
 	variedCenter := center + 9*amount*centerWave
 	variedCenter = math.Max(variedSpan/2, math.Min(100-variedSpan/2, variedCenter))
-	return variedCenter + (position-center)*variedSpan/span
+	// The algebraic bounds above can still land a few ulps beyond an endpoint
+	// (for example, a full-span route at 96% variation produced
+	// 100.00000000000001). Curve validation is deliberately strict because its
+	// output reaches a real device, so clamp the final floating-point result as
+	// well as the conceptual center/span window.
+	return math.Max(0, math.Min(100, variedCenter+(position-center)*variedSpan/span))
 }
 
 func dynamicLegMillis(left, right float64, variation int, phase float64) int64 {

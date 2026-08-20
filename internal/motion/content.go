@@ -413,6 +413,9 @@ func (c Curve) normalizeTime(timeMillis int64) int64 {
 }
 
 func (c Curve) sampleFloat(at float64) float64 {
+	if len(c.points) == 0 {
+		return 50
+	}
 	left, right := c.interval(at)
 	if left == right {
 		return c.points[left].PositionPercent
@@ -432,6 +435,9 @@ func (c Curve) sampleFloat(at float64) float64 {
 }
 
 func (c Curve) velocityFloat(at float64) float64 {
+	if len(c.points) == 0 {
+		return 0
+	}
 	left, right := c.interval(at)
 	if left == right {
 		if c.linear {
