@@ -225,25 +225,26 @@ func dynamicContent(definition DynamicDefinition) resolvedContent {
 	for cycle := range cycles {
 		phase := float64(cycle) / float64(cycles)
 		for _, index := range indices {
-			position := dynamicVariedPosition(base[index], base, definition, phase)
+			position := dynamicVariedPosition(base[index], base, definition, phase, cycles)
 			if len(points) > 0 {
-				legPhase := (float64(len(points)-1) + 0.5) / float64(totalLegs)
 				elapsed += dynamicLegMillis(
 					points[len(points)-1].PositionPercent, position,
-					definition.VariationPercent, legPhase,
+					definition, len(points)-1, totalLegs,
 				)
 			}
 			points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: position})
 		}
 	}
-	closing := dynamicVariedPosition(base[0], base, definition, 1)
-	closingPhase := (float64(totalLegs) - 0.5) / float64(totalLegs)
+	closing := dynamicVariedPosition(base[0], base, definition, 1, cycles)
 	elapsed += dynamicLegMillis(
 		points[len(points)-1].PositionPercent, closing,
-		definition.VariationPercent, closingPhase,
+		definition, len(points)-1, totalLegs,
 	)
 	points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: closing})
-	return resolvedContent{points: points, duration: elapsed, loop: true, maximumPoints: maximumCurvePoints}
+	return resolvedContent{
+		points: points, duration: elapsed, loop: true, maximumPoints: maximumCurvePoints,
+		reversalProfile: curveReversalWholeLeg,
+	}
 }
 
 func dynamicVariationCycleCount(base []float64, variation int) int {
@@ -297,7 +298,7 @@ func dynamicPhraseTravel(base []float64, indices []int, definition DynamicDefini
 	for cycle := range cycles {
 		phase := float64(cycle) / float64(cycles)
 		for _, index := range indices {
-			position := dynamicVariedPosition(base[index], base, definition, phase)
+			position := dynamicVariedPosition(base[index], base, definition, phase, cycles)
 			if hasPrevious {
 				travel += math.Abs(position - previous)
 			}
@@ -305,7 +306,7 @@ func dynamicPhraseTravel(base []float64, indices []int, definition DynamicDefini
 			hasPrevious = true
 		}
 	}
-	closing := dynamicVariedPosition(base[0], base, definition, 1)
+	closing := dynamicVariedPosition(base[0], base, definition, 1, cycles)
 	return travel + math.Abs(closing-previous)
 }
 
@@ -335,7 +336,8 @@ func dynamicTraversalIndices(count int) []int {
 	return indices
 }
 
-func dynamicVariedPosition(position float64, base []float64, definition DynamicDefinition, phase float64) float64 {
+func dynamicVariedPosition(position float64, base []float64, definition DynamicDefinition, phase float64, cycles int) float64 {
+	phase -= math.Floor(phase)
 	variation := definition.VariationPercent
 	if variation <= 0 && !dynamicHasVariableSpanEnvelope(definition) {
 		return position
@@ -350,29 +352,40 @@ func dynamicVariedPosition(position float64, base []float64, definition DynamicD
 	if span <= 0 {
 		return position
 	}
-	amount := float64(variation) / 100
+	linearAmount := float64(variation) / 100
+	// A square-root response gives the lower half of the model-facing control a
+	// useful perceptual range. The previous linear map made the ordinary 20-40
+	// band almost indistinguishable from a mechanically even loop.
+	amount := math.Sqrt(linearAmount)
+	seed := definition.PhraseSeed
+	if seed == 0 {
+		seed = dynamicPhraseSeed(definition)
+	}
 	// A small harmonic field is deterministic and loop-closed like the former
-	// sine, but its mixed periods avoid a single obvious mechanical swell. It
-	// transforms the whole anchor route together, preserving order and spacing.
+	// sine. A correlated, faster phrase texture prevents the same center from
+	// repeating through a long envelope plateau without adding sample jitter.
 	centerWave := 0.58*math.Sin(2*math.Pi*phase+0.35) +
 		0.27*math.Sin(6*math.Pi*phase+1.10) +
 		0.15*math.Sin(10*math.Pi*phase+2.20)
+	centerTexture := 2*dynamicSeededPeriodicControl(
+		seed^0x8f4d3b21, phase, dynamicTextureKnotCount(cycles, 5, 8, 96),
+	) - 1
 	variedSpan := span
 	switch definition.SpanProfile {
 	case DynamicSpanProfileSteady:
 		// Explicit steady span separates range from center/rhythm texture.
 	case DynamicSpanProfileBreathe, DynamicSpanProfileWander, DynamicSpanProfileContrast:
-		variedSpan = dynamicSpanEnvelopeValue(definition, span, phase)
+		variedSpan = dynamicSpanEnvelopeValue(definition, span, phase, cycles)
 	default:
 		// Compatibility for alpha.25 targets that predate explicit envelopes.
 		spanWave := 0.68*math.Cos(2*math.Pi*phase+0.80) +
 			0.32*math.Sin(8*math.Pi*phase+0.15)
 		variedSpan = math.Max(
 			MinimumDynamicSpanPercent,
-			math.Min(100, span*(1+0.14*amount*spanWave)),
+			math.Min(100, span*(1+0.14*linearAmount*spanWave)),
 		)
 	}
-	variedCenter := center + 9*amount*centerWave
+	variedCenter := center + amount*(14*centerWave+6*centerTexture)
 	variedCenter = math.Max(variedSpan/2, math.Min(100-variedSpan/2, variedCenter))
 	// The algebraic bounds above can still land a few ulps beyond an endpoint
 	// (for example, a full-span route at 96% variation produced
@@ -390,79 +403,145 @@ func dynamicHasVariableSpanEnvelope(definition DynamicDefinition) bool {
 			definition.SpanProfile == DynamicSpanProfileContrast)
 }
 
-func dynamicSpanEnvelopeValue(definition DynamicDefinition, outerSpan, phase float64) float64 {
+func dynamicSpanEnvelopeValue(definition DynamicDefinition, outerSpan, phase float64, cycles int) float64 {
 	innerSpan := float64(definition.SpanMinPercent)
-	factor := dynamicSpanEnvelopeFactor(definition, phase)
+	factor := dynamicSpanEnvelopeFactor(definition, phase, cycles)
 	return math.Max(innerSpan, math.Min(outerSpan, innerSpan+(outerSpan-innerSpan)*factor))
 }
 
-func dynamicSpanEnvelopeFactor(definition DynamicDefinition, phase float64) float64 {
+func dynamicSpanEnvelopeFactor(definition DynamicDefinition, phase float64, cycles int) float64 {
 	phase -= math.Floor(phase)
 	switch definition.SpanProfile {
 	case DynamicSpanProfileBreathe:
 		// One asymmetric swell with smaller secondary breaths. All harmonics are
-		// periodic, so both value and slope match at the loop seam.
+		// periodic, so both value and slope match at the loop seam. A restrained
+		// faster layer keeps the carrier from becoming exact during the long swell.
 		value := 0.50 - 0.43*math.Cos(2*math.Pi*phase) +
 			0.08*math.Sin(4*math.Pi*phase+0.35) +
 			0.04*math.Sin(6*math.Pi*phase-0.60)
-		return math.Max(0.04, math.Min(0.96, value))
+		texture := dynamicSeededPeriodicControl(
+			definition.PhraseSeed^0x37c6a5d9, phase,
+			dynamicTextureKnotCount(cycles, 7, 6, 48),
+		)
+		return math.Max(0.03, math.Min(0.97, value+0.12*(texture-0.5)))
 	case DynamicSpanProfileContrast:
-		return dynamicContrastEnvelope(definition.PhraseSeed, phase)
+		return dynamicContrastEnvelope(definition.PhraseSeed, phase, cycles)
 	case DynamicSpanProfileWander:
-		return dynamicWanderEnvelope(definition.PhraseSeed, phase)
+		return dynamicWanderEnvelope(definition.PhraseSeed, phase, cycles)
 	default:
 		return 1
 	}
 }
 
-func dynamicWanderEnvelope(seed uint32, phase float64) float64 {
-	const knotCount uint64 = 13
-	values := make([]float64, knotCount)
-	minimum, maximum := 1.0, 0.0
-	for index := range knotCount {
-		values[index] = dynamicSeedUnit(seed, index)
-		minimum = math.Min(minimum, values[index])
-		maximum = math.Max(maximum, values[index])
-	}
-	for index := range values {
-		if maximum > minimum {
-			values[index] = (values[index] - minimum) / (maximum - minimum)
+func dynamicWanderEnvelope(seed uint32, phase float64, cycles int) float64 {
+	knotCount := dynamicTextureKnotCount(cycles, 2, 12, 128)
+	return dynamicPeriodicControl(phase, knotCount, func(index int) float64 {
+		// A seeded permutation visits lower, middle, and upper portions of the
+		// band every few strokes. Its narrower levels and smooth interpolation
+		// meander rather than making Contrast's tight-to-broad jumps.
+		// index is generated by dynamicPeriodicControl in [0, knotCount).
+		jitter := dynamicSeedUnit(seed^0x1b873593, uint64(index)) //nolint:gosec
+		switch dynamicControlCategory(seed^0x85ebca6b, index, knotCount) {
+		case 0:
+			return 0.10 + 0.20*jitter
+		case 1:
+			return 0.37 + 0.26*jitter
+		default:
+			return 0.70 + 0.20*jitter
 		}
-		// Spend most of the phrase away from hard bounds while still making
-		// occasional narrow and broad strokes perceptible.
-		values[index] = 0.08 + 0.84*values[index]
-	}
-	return periodicSmoothControl(values, phase)
+	})
 }
 
-func dynamicContrastEnvelope(seed uint32, phase float64) float64 {
-	values := [...]float64{
-		0.16, 0.18, 0.20, 0.54, 0.90, 0.88, 0.42, 0.24,
-		0.22, 0.72, 0.48, 0.92, 0.90, 0.34, 0.64, 0.18,
-	}
-	rotated := make([]float64, len(values))
-	offset := int(seed % uint32(len(values)))
-	reverse := seed&1 != 0
-	for index := range rotated {
-		source := (index + offset) % len(values)
-		if reverse {
-			source = (offset - index + len(values)) % len(values)
+func dynamicContrastEnvelope(seed uint32, phase float64, cycles int) float64 {
+	knotCount := dynamicTextureKnotCount(cycles, 2, 12, 160)
+	return dynamicPeriodicControl(phase, knotCount, func(index int) float64 {
+		// Each block is a seeded permutation of tight, medium, and broad. That
+		// creates short human-readable groupings without a literal repeating table
+		// or the former many-second plateau at one nearly identical span.
+		// index is generated by dynamicPeriodicControl in [0, knotCount).
+		jitter := dynamicSeedUnit(seed^0x63d83595, uint64(index)) //nolint:gosec
+		switch dynamicControlCategory(seed^0xa511e9b3, index, knotCount) {
+		case 0:
+			return 0.05 + 0.15*jitter
+		case 1:
+			return 0.38 + 0.24*jitter
+		default:
+			return 0.82 + 0.16*jitter
 		}
-		rotated[index] = values[source]
-	}
-	return periodicSmoothControl(rotated, phase)
+	})
 }
 
-func periodicSmoothControl(values []float64, phase float64) float64 {
-	if len(values) == 0 {
+func dynamicControlCategory(seed uint32, index, total int) int {
+	if total <= 0 {
 		return 1
 	}
-	scaled := (phase - math.Floor(phase)) * float64(len(values))
-	left := int(math.Floor(scaled)) % len(values)
-	right := (left + 1) % len(values)
+	index = (index%total + total) % total
+	category := dynamicLinearControlCategory(seed, index)
+	if index != total-1 || total <= 1 {
+		return category
+	}
+	first := dynamicLinearControlCategory(seed, 0)
+	if category != first {
+		return category
+	}
+	previous := dynamicLinearControlCategory(seed, index-1)
+	for candidate := range 3 {
+		if candidate != first && candidate != previous {
+			return candidate
+		}
+	}
+	return category
+}
+
+func dynamicLinearControlCategory(seed uint32, index int) int {
+	permutations := [...][3]int{
+		{0, 1, 2}, {0, 2, 1}, {1, 0, 2},
+		{1, 2, 0}, {2, 0, 1}, {2, 1, 0},
+	}
+	last := -1
+	selected := permutations[0]
+	for block := 0; block <= index/3; block++ {
+		choices := [6]int{}
+		choiceCount := 0
+		for permutationIndex, permutation := range permutations {
+			if permutation[0] == last {
+				continue
+			}
+			choices[choiceCount] = permutationIndex
+			choiceCount++
+		}
+		choice := int(dynamicSeedUnit(seed, uint64(block)) * float64(choiceCount))
+		selected = permutations[choices[min(choice, choiceCount-1)]]
+		last = selected[2]
+	}
+	return selected[index%3]
+}
+
+func dynamicPeriodicControl(phase float64, knotCount int, value func(int) float64) float64 {
+	if knotCount <= 0 {
+		return 0.5
+	}
+	scaled := (phase - math.Floor(phase)) * float64(knotCount)
+	left := int(math.Floor(scaled)) % knotCount
+	right := (left + 1) % knotCount
 	fraction := scaled - math.Floor(scaled)
 	smooth := fraction * fraction * (3 - 2*fraction)
-	return values[left] + (values[right]-values[left])*smooth
+	leftValue, rightValue := value(left), value(right)
+	return leftValue + (rightValue-leftValue)*smooth
+}
+
+func dynamicSeededPeriodicControl(seed uint32, phase float64, knotCount int) float64 {
+	return dynamicPeriodicControl(phase, knotCount, func(index int) float64 {
+		// index is generated by dynamicPeriodicControl in [0, knotCount).
+		return dynamicSeedUnit(seed, uint64(index)) //nolint:gosec
+	})
+}
+
+func dynamicTextureKnotCount(samples, samplesPerKnot, minimum, maximum int) int {
+	if samplesPerKnot <= 0 {
+		samplesPerKnot = 1
+	}
+	return clamp((max(1, samples)+samplesPerKnot-1)/samplesPerKnot, minimum, maximum)
 }
 
 func dynamicSeedUnit(seed uint32, index uint64) float64 {
@@ -473,24 +552,35 @@ func dynamicSeedUnit(seed uint32, index uint64) float64 {
 	return float64(value>>11) / float64(uint64(1)<<53)
 }
 
-func dynamicLegMillis(left, right float64, variation int, phase float64) int64 {
+func dynamicLegMillis(left, right float64, definition DynamicDefinition, legIndex, totalLegs int) int64 {
 	base := max(int64(180), int64(math.Round(math.Abs(right-left)*10)))
+	variation := definition.VariationPercent
 	if variation <= 0 {
 		return base
 	}
-	amount := float64(variation) / 100
+	amount := math.Sqrt(float64(variation) / 100)
+	phase := (float64(legIndex) + 0.5) / float64(max(1, totalLegs))
 	direction := 1.0
 	if right < left {
 		direction = -1
 	}
 	breathing := 0.64*math.Sin(2*math.Pi*phase+0.55) +
 		0.36*math.Sin(6*math.Pi*phase+1.75)
-	// Directional skew makes the two halves of a stroke subtly unequal, while
-	// a slower harmonic changes which half leads. The bound prevents variation
-	// from becoming a hidden speed multiplier or abrupt jitter.
+	seed := definition.PhraseSeed
+	if seed == 0 {
+		seed = dynamicPhraseSeed(definition)
+	}
+	rhythm := 2*dynamicContrastEnvelope(
+		seed^0xd1b54a35, phase,
+		dynamicTextureKnotCount(totalLegs, 4, 8, 160)*3,
+	) - 1
+	// Directional skew makes the two halves of a stroke unequal, while seeded
+	// grouped rhythm keeps a moderate setting from collapsing into a metronome.
+	// The exact curve still passes through the normal acceleration and reversal
+	// limiter, and the phrase remains loop-closed rather than using sample noise.
 	skew := direction * math.Sin(4*math.Pi*phase+0.90)
-	scale := 1 + amount*(0.18*breathing+0.09*skew)
-	scale = math.Max(0.75, math.Min(1.25, scale))
+	scale := 1 + amount*(0.14*breathing+0.10*skew+0.22*rhythm)
+	scale = math.Max(0.65, math.Min(1.45, scale))
 	return max(int64(120), int64(math.Round(float64(base)*scale)))
 }
 

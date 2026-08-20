@@ -1349,12 +1349,29 @@ retired `intensity` alias is accepted for old responses and immediately
 normalized. Creative motion now separates outer geometry, a model-selected span
 floor/profile, center/rhythm variation, pace, and decision horizon. Explicit
 breathe/wander/contrast span envelopes are deterministic, loop-closed phrases
-of at least about 30 seconds at maximum reference speed; legacy implicit span
-swell remains compatible. Engine phase samples retain fractional authored time,
-and long-curve retarget search scales with authored complexity. See
+of at least about 30 seconds at maximum reference speed, but their local span
+choices now change at roughly two-cycle cadence so that the long carrier does
+not become a long same-length plateau. Seeded category blocks cover tight,
+medium, and broad portions of the allowed band; center and leg timing use
+separate correlated texture with a perceptual square-root response. Creative
+true reversals use whole-leg shape-preserving PCHIP easing, while stored
+patterns retain short acceleration-budgeted guides and both remain inside the
+same exact runtime acceleration limiter. Legacy implicit span swell remains
+compatible. Engine phase samples retain fractional authored time, and long-
+curve retarget search scales with authored complexity. See
 `docs/motion-calibration.md`.
 The device-profile boundary is recorded in
 `docs/decisions/0016-handy-model-speed-calibration.md`.
+
+Interactive Creative validation now distinguishes a terse unsatisfied-result
+correction from a refusal, carries the preceding user position request into
+semantic validation, and checks claimed tip/base/full-length reach against the
+effective outer geometry. Position-only corrections preserve pace, range
+texture, variation, and horizon; unrelated model-emitted fields are treated as
+unauthorized noise rather than expanding the prompt with edge-case scripts.
+The reproduced recent correction sequence passed 9/9 managed-model decisions,
+and the broader range/intent matrix passed 25/25 without constructing an engine
+or transport.
 
 Alpha.25 closes the reproduced Creative-plan crash: final center/span projection
 clamps floating-point endpoint overshoot before strict validation, compilation

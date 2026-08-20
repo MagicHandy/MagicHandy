@@ -159,6 +159,30 @@ adaptive continuous retargets. The installed managed 12B Gemma model passed
 This reduces schema/prompt risk but does not establish physical feel: the
 matched-device trace/Stop run above and the supported Ollama matrix remain open.
 
+Status 2026-08-20 natural-turn follow-up: the latest installed Cloud REST trace
+provided the missing diagnostic separation. Across 439 points and 85 legs, the
+contrast envelope contracted from about 80% to about 32% and then spent more
+than 30 reversals inside roughly 31–35% span. Most successful append
+acknowledgements were about 330–341 ms; one network error occurred, and the
+user's Stop succeeded in 330 ms. The trace therefore showed both a
+stroke-length plateau and a piecewise-linear endpoint feel rather than
+high-frequency sample jitter alone. Creative now gives wander/contrast local
+seeded range choices at about two-cycle cadence and tests minimum exploration
+in every circular four- and six-cycle window. Its true turns use whole-leg
+shape-preserving PCHIP easing instead of compressing braking into the stored-
+pattern guide, while the same exact 7500%/s² planner limit, sampler, transport,
+and Stop path remain authoritative. Buffered 1%-resolution tests retain the
+easing at the transport boundary.
+
+The accompanying conversation review found reply/motion disagreement: a model
+could claim tip or full-length coverage while producing no accepted update or
+geometry that omitted an endpoint. Effective-window validation, elliptical
+correction context, and position-only axis scoping now reject or normalize
+those cases without a phrase-by-phrase prompt catalog. The reproduced sequence
+passed 9/9 managed-model decisions and the broader matrix retained 25/25. No
+new hardware command was issued, so the post-fix matched subjective run and
+supported Ollama matrix remain open.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -1417,7 +1441,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.26 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.27 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1465,7 +1489,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.26, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.27, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit

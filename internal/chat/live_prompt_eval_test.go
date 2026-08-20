@@ -659,6 +659,161 @@ func TestLiveDynamicSpanEnvelopeMatrix(t *testing.T) {
 	}
 }
 
+// TestLiveDynamicCorrectionFollowThrough reproduces the installed conversation
+// where the assistant twice claimed to move toward the requested position
+// without an accepted motion update, then interpreted "the full thing" as a
+// window that still omitted the tip. It exercises only provider output and the
+// semantic contract; no engine or transport is constructed.
+func TestLiveDynamicCorrectionFollowThrough(t *testing.T) {
+	model := liveEvalModel(t)
+	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+		BaseURL: liveEvalLlamaURL,
+		Model:   model,
+		Timeout: 2 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	promptSet, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	capabilities.AreaFocus = false
+	capabilities.Voice = VoiceWarm
+	capabilities.Style = StyleSubmissive
+	capabilities.MoodTracking = true
+	conversation := ConversationContext{
+		PersonaName:        "Hei",
+		PersonaDescription: "A restrained, patient partner with a low, calm voice.",
+		UserAnatomy:        "penis",
+		CurrentMood:        MoodSeductive,
+	}
+
+	tipContext := MotionContext{
+		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 15,
+		CenterPercent: 30, SpanPercent: 40, SpanMinPercent: 20,
+		SpanProfile: DynamicSpanProfileBreathe, VariationPercent: 5, SegmentSeconds: 45,
+		SpeedMinPercent: 1, SpeedMaxPercent: 88,
+	}
+	tests := []struct {
+		name        string
+		message     string
+		history     []llm.Message
+		context     MotionContext
+		wantTip     bool
+		wantFullRun bool
+	}{
+		{
+			name:    "position correction",
+			message: "you're not touching the tip >.<",
+			history: []llm.Message{{Role: "assistant", Content: "Your skin feels soft against my palm."}},
+			context: tipContext, wantTip: true,
+		},
+		{
+			name:    "elliptical correction",
+			message: "you're still not",
+			history: []llm.Message{
+				{Role: "user", Content: "you're not touching the tip >.<"},
+				{Role: "assistant", Content: "I will move my hand to the tip now. Stay still for me."},
+			},
+			context: tipContext, wantTip: true,
+		},
+		{
+			name:    "full length correction",
+			message: "The full thing",
+			history: []llm.Message{
+				{Role: "user", Content: "you're not touching the tip >.<"},
+				{Role: "assistant", Content: "I will move my hand to the tip now. Stay still for me."},
+				{Role: "user", Content: "you're still not"},
+				{Role: "assistant", Content: "My fingers are reaching the very tip now. You can feel my touch there."},
+			},
+			context: tipContext, wantFullRun: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := Service{
+				Provider: provider, Prompt: promptSet, Model: model,
+				MaxTokens: 256, ReasoningMode: "off",
+				MotionContext: &test.context, ConversationContext: &conversation,
+				Capabilities: &capabilities,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			result, completeErr := service.Complete(ctx, Request{Message: test.message, History: test.history}, nil)
+			cancel()
+			if completeErr != nil {
+				t.Fatal(completeErr)
+			}
+			rawResponse, rawErr := parseAssistantResponseForCapabilities(
+				result.Raw, nil, capabilities, &test.context,
+			)
+			t.Logf("accepted=%+v raw_motion=%+v raw_error=%v repaired=%t fallback=%t raw=%s repair=%s",
+				result.Response.Motion, rawResponse.Motion, rawErr, result.Repaired,
+				result.SemanticFallback, compactLiveEvalJSON(result.Raw), compactLiveEvalJSON(result.RepairRaw))
+			if result.Malformed || result.SemanticFallback {
+				t.Fatalf("correction was not recovered cleanly: malformed=%t fallback=%t error=%q repair=%s",
+					result.Malformed, result.SemanticFallback, result.MalformedError,
+					compactLiveEvalJSON(result.RepairRaw))
+			}
+			if result.Response.Motion == nil || result.Response.Motion.Action != MotionActionUpdate {
+				t.Fatalf("correction produced no accepted update: %+v", result.Response)
+			}
+			command := *result.Response.Motion
+			if command.SpeedPercent != nil && *command.SpeedPercent != test.context.SpeedPercent {
+				t.Fatalf("position-only correction changed speed to %d from %d", *command.SpeedPercent, test.context.SpeedPercent)
+			}
+			if command.SpanMinPercent != nil && *command.SpanMinPercent != test.context.SpanMinPercent {
+				t.Fatalf("position-only correction changed span floor to %d from %d", *command.SpanMinPercent, test.context.SpanMinPercent)
+			}
+			if command.SpanProfile != "" && command.SpanProfile != test.context.SpanProfile {
+				t.Fatalf("position-only correction changed span profile to %q from %q", command.SpanProfile, test.context.SpanProfile)
+			}
+			if command.VariationPercent != nil && *command.VariationPercent != test.context.VariationPercent {
+				t.Fatalf("position-only correction changed variation to %d from %d", *command.VariationPercent, test.context.VariationPercent)
+			}
+			minimum, maximum := liveDynamicCommandWindow(*result.Response.Motion, test.context)
+			if test.wantTip && maximum < 88 {
+				t.Fatalf("tip correction reaches %.0f%%, want at least 88%%", maximum)
+			}
+			if test.wantFullRun && (minimum > 12 || maximum < 88) {
+				t.Fatalf("full-length correction resolves to %.0f..%.0f%%, want both ends", minimum, maximum)
+			}
+		})
+	}
+}
+
+func liveDynamicCommandWindow(command MotionCommand, context MotionContext) (float64, float64) {
+	if len(command.Anchors) >= 2 {
+		minimum, maximum := 100, 0
+		for _, anchor := range command.Anchors {
+			position, _ := DynamicAnchorPosition(anchor)
+			minimum = min(minimum, position)
+			maximum = max(maximum, position)
+		}
+		return float64(minimum), float64(maximum)
+	}
+	center, span := context.CenterPercent, context.SpanPercent
+	if command.CenterPercent != nil {
+		center = *command.CenterPercent
+	}
+	if command.SpanPercent != nil {
+		span = *command.SpanPercent
+	}
+	minimum := center - span/2
+	maximum := minimum + span
+	if minimum < 0 {
+		maximum -= minimum
+		minimum = 0
+	}
+	if maximum > 100 {
+		minimum -= maximum - 100
+		maximum = 100
+	}
+	return float64(max(0, minimum)), float64(min(100, maximum))
+}
+
 func assertLiveVariableSpanEnvelope(t *testing.T, command MotionCommand, context MotionContext, wantedProfile string) {
 	t.Helper()
 	profile := command.SpanProfile

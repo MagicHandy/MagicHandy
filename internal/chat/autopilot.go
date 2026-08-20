@@ -108,7 +108,7 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 		builder.WriteString("- Use action \"none\" to deliberately continue. Holding is a first-class model decision, not a failure.\n")
 		builder.WriteString("- Change center/span or provide a new 2-6 anchor route; never provide both representations together. Interior anchors are pass-through positions, not pauses.\n")
 		builder.WriteString("- To vary stroke length inside the stretch, provide span_min_percent and choose span_profile breathe, wander, or contrast. The current widest span or anchor route remains the ceiling. Use steady to clear range variation.\n")
-		builder.WriteString("- variation_percent controls slow center and rhythm texture independently from an explicit span profile. Use zero for mechanically even motion, never for jitter.\n")
+		builder.WriteString("- variation_percent controls correlated center and rhythm texture independently from an explicit span profile: 20-40 is subtle, 45-70 clearly organic, and 70-100 deliberately wild. Use zero only for mechanically even motion, never for jitter.\n")
 		fmt.Fprintf(&builder, "- segment_seconds must be %d-%d and says when to reconsider, not when to stop. Vary it naturally rather than choosing one constant.\n",
 			minimumSeconds, maximumSeconds)
 		builder.WriteString("- Never use start or stop: the scheduler owns start and only the user stops motion.\n")

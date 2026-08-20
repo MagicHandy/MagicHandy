@@ -3,6 +3,8 @@ package chat
 import (
 	"strings"
 	"testing"
+
+	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
 func TestDynamicContractExcludesPatternVocabulary(t *testing.T) {
@@ -19,6 +21,8 @@ func TestDynamicContractExcludesPatternVocabulary(t *testing.T) {
 		`"action":"update"`, "center_percent", "span_percent", "span_min_percent",
 		"span_profile", "breathe", "wander", "contrast", "anchors", "segment_seconds",
 		"never copy an example speed", `"motion" must be a nested JSON object`,
+		"reply and motion object must describe the same result",
+		"current motion is not reaching or doing what was requested asks you to fix it",
 	} {
 		if !strings.Contains(system, required) {
 			t.Fatalf("dynamic prompt missing %q", required)
@@ -264,6 +268,24 @@ func TestDynamicUpdateAuthorizationScopesNegativeQualifiersToTheirAxis(t *testin
 			command: MotionCommand{Action: MotionActionUpdate, SpanProfile: DynamicSpanProfileSteady},
 			want:    true,
 		},
+		{
+			name:    "failed tip reach is a correction",
+			message: "You're not touching the tip.",
+			command: MotionCommand{Action: MotionActionUpdate, CenterPercent: intPointer(90)},
+			want:    true,
+		},
+		{
+			name:    "elliptical failed result is a correction",
+			message: "You're still not.",
+			command: MotionCommand{Action: MotionActionUpdate, CenterPercent: intPointer(90)},
+			want:    true,
+		},
+		{
+			name:    "prohibited movement remains a refusal",
+			message: "You're not allowed to move.",
+			command: MotionCommand{Action: MotionActionUpdate, CenterPercent: intPointer(90)},
+			want:    false,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -271,6 +293,117 @@ func TestDynamicUpdateAuthorizationScopesNegativeQualifiersToTheirAxis(t *testin
 				t.Fatalf("authorization = %t, want %t", got, test.want)
 			}
 		})
+	}
+}
+
+func TestDynamicPositionCorrectionsRepairMissingOrInsufficientGeometry(t *testing.T) {
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	capabilities.AreaFocus = false
+	context := MotionContext{
+		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 15,
+		CenterPercent: 30, SpanPercent: 40, SpanMinPercent: 20,
+		SpanProfile: DynamicSpanProfileBreathe, VariationPercent: 5, SegmentSeconds: 45,
+		SpeedMinPercent: 1, SpeedMaxPercent: 88,
+	}
+	tests := []struct {
+		name       string
+		message    string
+		history    []llm.Message
+		initial    string
+		repair     string
+		wantRepair bool
+		wantMin    int
+		wantMax    int
+	}{
+		{
+			name:    "tip correction preserves the range envelope",
+			message: "you're not touching the tip >.<",
+			initial: `{"reply":"I am moving to the tip.","motion":{"action":"update","center_percent":90,"span_min_percent":20,"span_profile":"steady"}}`,
+			repair:  `{"reply":"I am correcting my reach now.","motion":{"action":"update","center_percent":90}}`,
+			wantMin: 60, wantMax: 100,
+		},
+		{
+			name:       "full length must cover both ends",
+			message:    "The full thing",
+			initial:    `{"reply":"I am covering all of it.","motion":{"action":"update","span_percent":80}}`,
+			repair:     `{"reply":"I am covering the full length now.","motion":{"action":"update","center_percent":50,"span_percent":100}}`,
+			wantRepair: true,
+			wantMin:    0, wantMax: 100,
+		},
+		{
+			name:       "reply-only tip claim must become motion",
+			message:    "Touch the tip",
+			initial:    `{"reply":"I am touching the tip.","motion":{"action":"none"}}`,
+			repair:     `{"reply":"I am moving there now.","motion":{"action":"update","center_percent":90}}`,
+			wantRepair: true,
+			wantMin:    60, wantMax: 100,
+		},
+		{
+			name:    "elliptical correction preserves unrelated axes",
+			message: "you're still not",
+			history: []llm.Message{
+				{Role: "user", Content: "you're not touching the tip"},
+				{Role: "assistant", Content: "I will move there now."},
+			},
+			initial: `{"reply":"I am staying there.","motion":{"action":"update","center_percent":90,"span_min_percent":25,"span_profile":"steady"}}`,
+			repair:  `{"reply":"I am correcting it now.","motion":{"action":"update","center_percent":90}}`,
+			wantMin: 60,
+			wantMax: 100,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			provider := &scriptedProvider{responses: []string{test.initial, test.repair}}
+			service := Service{
+				Provider: provider, MotionContext: &context, Capabilities: &capabilities,
+				MaxTokens: 256,
+			}
+			result, err := service.Complete(t.Context(), Request{Message: test.message, History: test.history}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Malformed || result.Repaired != test.wantRepair || result.Response.Motion == nil {
+				t.Fatalf("correction result = %+v", result)
+			}
+			if command := result.Response.Motion; command.SpanMinPercent != nil || command.SpanProfile != "" ||
+				command.VariationPercent != nil || command.SegmentSeconds != nil {
+				t.Fatalf("position-only result retained unrelated axes: %+v", command)
+			}
+			minimum, maximum, ok := effectiveDynamicCommandWindow(result.Response.Motion, context)
+			if !ok || minimum != test.wantMin || maximum != test.wantMax {
+				t.Fatalf("effective window = %d..%d valid=%t, want %d..%d",
+					minimum, maximum, ok, test.wantMin, test.wantMax)
+			}
+			wantRequests := 1
+			if test.wantRepair {
+				wantRequests = 2
+			}
+			if len(provider.requests) != wantRequests {
+				t.Fatalf("provider calls = %d, want %d", len(provider.requests), wantRequests)
+			}
+		})
+	}
+}
+
+func TestDynamicOrdinaryContinuationStillAcceptsNone(t *testing.T) {
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	context := MotionContext{
+		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 24,
+		CenterPercent: 50, SpanPercent: 76, SpanMinPercent: 34,
+		SpanProfile: DynamicSpanProfileWander, SpeedMinPercent: 10, SpeedMaxPercent: 40,
+	}
+	provider := &scriptedProvider{responses: []string{
+		`{"reply":"I will keep going.","motion":{"action":"none"}}`,
+	}}
+	result, err := (Service{
+		Provider: provider, MotionContext: &context, Capabilities: &capabilities,
+	}).Complete(t.Context(), Request{Message: "keep going"}, nil)
+	if err != nil || result.Repaired || result.Response.Motion == nil ||
+		result.Response.Motion.Action != MotionActionNone || len(provider.requests) != 1 {
+		t.Fatalf("continuation result = %+v err=%v requests=%d", result, err, len(provider.requests))
 	}
 }
 

@@ -56,6 +56,9 @@ var (
 	errMotionNoChange        = errors.New("motion target repeats the current content, speed, and area; change one allowed target field or use action none")
 	errMotionVariationAbsent = errors.New("explicit variation requires a meaningful change to content, speed, or area")
 	errMotionSpeedBand       = errors.New("motion speed is outside the explicitly requested speed band")
+	errDynamicUpdateMissing  = errors.New("the user's position request requires a motion change; reply text alone cannot claim the change")
+	errDynamicCoverage       = errors.New("the dynamic geometry does not reach the position requested by the user")
+	errDynamicPositionScope  = errors.New("a position-only request must preserve unrelated motion axes")
 )
 
 // ValidateUserMessage normalizes one user turn before either persistence or
@@ -162,6 +165,10 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	}
 	capabilities := s.capabilities()
 	systemPrompt := composeSystem(prompt, s.Memories, s.Patterns, capabilities, s.MotionContext, s.ConversationContext)
+	validationMessage := userMessage
+	if capabilities.MotionMode == MotionModeDynamic {
+		validationMessage = contextualDynamicCorrectionIntent(userMessage, request.History)
+	}
 
 	messages := buildMessages(systemPrompt, request.History, userMessage)
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
@@ -182,7 +189,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return Result{}, err
 	}
 
-	response, parseErr := s.parseAndValidateResponse(raw, capabilities, userMessage)
+	response, parseErr := s.parseAndValidateResponse(raw, capabilities, validationMessage)
 	if parseErr == nil {
 		return Result{Response: response, Raw: raw}, nil
 	}
@@ -221,7 +228,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		raw:          raw,
 		parseErr:     parseErr,
 		truncated:    truncated,
-		userMessage:  userMessage,
+		userMessage:  validationMessage,
 		capabilities: capabilities,
 	}, emit)
 }
@@ -427,6 +434,9 @@ func (s Service) recoverSemanticRepair(response AssistantResponse, userMessage s
 }
 
 func (s Service) parseAndValidateResponse(raw string, capabilities Capabilities, userMessage string) (AssistantResponse, error) {
+	if capabilities.MotionMode == MotionModeDynamic && s.MotionContext != nil {
+		raw = normalizeDynamicPositionOnlyResponse(raw, userMessage)
+	}
 	response, err := parseAssistantResponseForCapabilities(raw, s.Patterns, capabilities, s.MotionContext)
 	if err != nil {
 		return AssistantResponse{}, err
@@ -440,13 +450,23 @@ func (s Service) parseAndValidateResponse(raw string, capabilities Capabilities,
 	}
 	if response.Motion == nil && (!capabilities.Motion || (!s.TrustedMotionInput &&
 		!userAuthorizesMotionForCapabilities(userMessage, MotionActionTarget, capabilities, s.MotionContext))) {
+		if capabilities.Motion && capabilities.MotionMode == MotionModeDynamic && s.MotionContext != nil {
+			if err := validateDynamicRequestedCoverage(nil, *s.MotionContext, userMessage); err != nil {
+				return response, err
+			}
+		}
 		return response, nil
 	}
 	if capabilities.MotionMode == MotionModeDynamic {
-		if response.Motion != nil && s.MotionContext != nil {
-			return response, validateRequestedSpeedBand(*response.Motion, *s.MotionContext, userMessage)
+		if s.MotionContext == nil {
+			return response, nil
 		}
-		return response, nil
+		if response.Motion != nil {
+			if err := validateRequestedSpeedBand(*response.Motion, *s.MotionContext, userMessage); err != nil {
+				return response, err
+			}
+		}
+		return response, validateDynamicRequestedCoverage(response.Motion, *s.MotionContext, userMessage)
 	}
 	if err := validateMotionChange(response, s.MotionContext, userMessage); err != nil {
 		return response, err
@@ -479,7 +499,7 @@ func userAuthorizesDynamicUpdate(message string, command MotionCommand, context 
 	if message == "" {
 		return false
 	}
-	if !motionIntentIsNegated(message) {
+	if dynamicUpdateBypassesNegationGate(message, command) {
 		return true
 	}
 
@@ -563,13 +583,17 @@ func requestsDynamicSpeedChange(message string) bool {
 }
 
 func requestsDynamicRangeChange(message string) bool {
+	if requestsFullDynamicRange(message) {
+		return true
+	}
 	rangeLanguage := hasIntentPhrase(message,
 		"range", "stroke length", "stroke lengths", "tight", "broad", "short", "deep",
 		"shallow", "base", "middle", "tip", "anchor", "anchors",
 	)
 	changeLanguage := hasIntentPhrase(message,
 		"change", "mix", "vary", "breathe", "wander", "contrast", "steady", "tight", "broad",
-		"short", "deep", "shallow", "use", "make", "keep", "let", "focus",
+		"short", "deep", "shallow", "use", "make", "keep", "let", "focus", "move",
+		"touch", "reach", "cover", "work", "stay",
 	)
 	return rangeLanguage && changeLanguage
 }

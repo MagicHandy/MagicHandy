@@ -172,6 +172,36 @@ path. The initiating report lacked transport, latency, and trace evidence, and
 no post-change device run has yet been captured, so the acceptance gate below
 remains open.
 
+## 2026-08-20 natural-turn and local-variability follow-up
+
+Review of the latest installed trace separated two remaining defects. Its
+contrast range spent more than 30 reversals inside an approximately 31–35%
+span, while its velocity profile remained nearly linear through most of each
+leg and compressed braking into a short endpoint guide. Creative now uses
+whole-leg shape-preserving PCHIP easing for true reversals; stored patterns keep
+their short acceleration-budgeted guides so this does not silently rewrite the
+catalog. Both profiles compile through the same curve, exact acceleration
+limiter, engine, sampler, transport stream, and Stop generation.
+
+The long loop-closed phrase remains useful for avoiding an obvious seam, but
+wander and contrast now make correlated seeded span choices at roughly
+two-cycle cadence and deliberately visit low, middle, and high portions of the
+allowed band. Center and leg timing receive independent seeded texture, with a
+square-root response so ordinary model-selected variation is perceptible.
+Determinism is retained for diagnostics; determinism no longer means a short
+repeated table or a long same-span plateau.
+
+The conversation review also found a model/validator mismatch: the assistant
+could claim that it reached the tip or full length while emitting no accepted
+update or geometry that omitted an endpoint. Terse follow-ups now inherit the
+last user position request for validation, explicit reach claims must cover the
+requested effective window, and a position-only correction is scoped to
+geometry. Unsolicited pace, span-texture, variation, and horizon fields are
+stripped as unauthorized model noise instead of requiring a growing catalog of
+phrase-specific instructions. The managed model passed 9/9 repetitions of the
+reproduced correction sequence plus the broader 25/25 Creative matrix without
+constructing an engine or transport.
+
 ## Rejected Alternatives
 
 - **Replace Pattern Library control.** Rejected until Dynamic has matched model

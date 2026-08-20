@@ -21,6 +21,13 @@ Slow finite plans had a separate quantization artifact: engine sampling rounded
 phase back to a whole authored millisecond, so one authored millisecond could
 become a visible plateau after time stretching.
 
+The first range-envelope follow-up fixed long-period repetition but left two
+independent physical-feel defects. An installed-session trace held almost the
+same 31–35% stroke length for more than 30 reversals, and each leg spent most of
+its time near constant velocity before a very short acceleration-budgeted guide
+braked at the endpoint. The result was regular in distance and unnaturally
+linear in velocity even though it was neither transport jitter nor sample noise.
+
 ## Comparison with other implementations
 
 No cross-device protocol defines one universal `speed_percent`, so the useful
@@ -47,6 +54,19 @@ comparison is the physical meaning each implementation gives its control:
   [motion-provider base](https://github.com/Yoooi0/MultiFunPlayer/blob/36c08fbb99ac9398a63ff1cca1bbf68cd2228a94/Source/MultiFunPlayer/MotionProvider/AbstractMotionProvider.cs),
   [pattern provider](https://github.com/Yoooi0/MultiFunPlayer/blob/36c08fbb99ac9398a63ff1cca1bbf68cd2228a94/Source/MultiFunPlayer/MotionProvider/ViewModels/PatternMotionProvider.cs),
   and [continuous-noise provider](https://github.com/Yoooi0/MultiFunPlayer/blob/36c08fbb99ac9398a63ff1cca1bbf68cd2228a94/Source/MultiFunPlayer/MotionProvider/ViewModels/RandomMotionProvider.cs).
+- StrokeGPT-ReVibed's non-pattern area-focus path emits full legs between
+  extrema and samples them with monotone PCHIP. That makes velocity naturally
+  fall to zero across the approach to a turn instead of preserving a linear
+  body until a tiny endpoint ramp. Its bounded shape is a useful comparison;
+  its client timer and separate motion path remain non-authoritative for this
+  architecture. See its
+  [non-pattern motion builder](https://github.com/mapledaemon/StrokeGPT-ReVibed/blob/02e6879d6235c27f786a072e5b1a0f59051cd232/strokegpt/motion.py)
+  and [monotone sampler](https://github.com/mapledaemon/StrokeGPT-ReVibed/blob/02e6879d6235c27f786a072e5b1a0f59051cd232/strokegpt/motion_patterns.py).
+- FunSync Player explicitly offers shape-preserving PCHIP for no-overshoot
+  curves and Makima as a less aggressive alternative for oscillatory data. It
+  reinforces that interpolation shape is a separate control from point timing,
+  not something transport buffering should invent. See its
+  [interpolation implementation](https://github.com/DaveMakesWaves/funsync-player/blob/main/renderer/js/interpolation.js).
 - `handy-ai-motion` derives mm/s from position delta and duration, clamps it to
   a configured physical range, and tells its model to maintain rhythm coherence
   and avoid unnecessary mechanical repetition. Its useful lesson is explicit
@@ -116,6 +136,13 @@ the exact maximum without probe-step error. Reversal-ramp caps are expressed in
 played milliseconds; a faster plan no longer shortens its physical ramp merely
 because its authored clock was compressed.
 
+Stored patterns keep those short ramps because they preserve authored waveform
+and cadence. Creative selects a different profile inside the same curve
+compiler: shape-preserving PCHIP eases across the whole leg, reaches exactly
+zero velocity at a true endpoint, and then accelerates away. The planner still
+lengthens the period against the same exact 7500%/s² runtime ceiling. This is a
+content-level interpolation choice, not a second engine or transport path.
+
 Catalog acceptance remains on the quieter envelope. This is not a relaxation of
 what may be stored or exposed to the model by default.
 
@@ -129,18 +156,25 @@ every job:
    vary stroke length coherently inside that reach; `steady` clears the
    envelope; and
 3. `variation_percent` controls loop-closed multi-harmonic center drift plus
-   bounded leg-time breathing and direction asymmetry, limited to 0.75–1.25×
-   local authored timing before global speed normalization.
+   seeded grouped rhythm and direction asymmetry, limited to 0.65–1.45× local
+   authored timing before global speed normalization. A square-root perceptual
+   response makes ordinary 20–40 values meaningfully different without changing
+   the model-facing 0–100 schema.
 
 The backend chooses enough cycles for center/rhythm variation to take at least
 about eight seconds and for an explicit span envelope to take at least about 30
-seconds at the maximum reference rate. Narrow spans consequently receive more
-cycles than broad spans. Breathe is one asymmetric long swell, wander is a
-seeded smooth correlated control phrase, and contrast groups irregular tight,
-medium, and broad strokes. All are deterministic, bounded, and loop-closed for
-traces, tests, and seamless playback; none is random per-sample noise. A zero
-variation can therefore keep center/rhythm even while an explicit span profile
-continues changing stroke length.
+seconds at the maximum reference rate. That remains the non-repeating carrier
+horizon, not the interval between visible changes. Narrow spans consequently
+receive more cycles than broad spans. Breathe is one asymmetric long swell with
+a restrained faster texture; wander and contrast choose new correlated range
+levels roughly every two cycles, and each seeded three-choice block visits
+tight, medium, and broad portions without repeating a fixed table. All are
+deterministic, bounded, smooth, and loop-closed for traces, tests, and seamless
+playback; none is random per-sample noise. Tests require every circular
+six-cycle wander/contrast window to explore at least 18% of the available
+floor-to-outer band and prevent a four-cycle window from settling below 8%.
+A zero center/rhythm variation can therefore coexist with a changing explicit
+span profile, while `steady` continues to mean a genuinely fixed stroke length.
 
 Older alpha.25 targets with no span profile retain their prior implicit small
 span swell. New model responses use the explicit envelope. The model selects
@@ -179,10 +213,24 @@ The initiating feedback was qualitative: Dynamic felt robotic and a selected
 73% felt slow. It did not include a transport, latency summary, or trace export.
 Automated tests now cover the calibration points, exact runtime acceleration,
 runtime reversal spacing, fractional sampling, all explicit Creative span
-profiles across all three Handy models, long deterministic phrases, stateful
-model updates, and the one-stream retarget path. The installed managed 12B
-Gemma model also passed 25/25 first-response Creative decisions across the new
-range and broader intent matrices without repair or transport dispatch.
+profiles across all three Handy models, short-window stroke-length diversity,
+whole-leg endpoint easing after 1% wire quantization, long deterministic
+phrases, stateful model updates, and the one-stream retarget path.
+
+A review of the latest installed Cloud REST session found 439 sampled points
+and 85 legs. Its contrast envelope contracted from about 80% to about 32%, then
+held within roughly 31–35% for more than 30 reversals; adjacent request
+acknowledgements were ordinarily about 330–341 ms, with one recorded network
+error and a successful 330 ms user Stop. This evidence separates the regular
+stroke-length plateau and linear endpoint shape from high-frequency jitter, but
+it predates the correction and therefore is diagnostic rather than acceptance.
+
+The installed managed 12B Gemma model passed the broader 25/25 first-response
+Creative decisions without repair or transport dispatch. The exact recent
+tip/full-length correction sequence then passed 9/9 repeated decisions after
+semantic validation: reply-only claims are repaired, requested base/tip
+coverage is checked against the effective geometry, and position-only
+corrections cannot silently rewrite pace, span texture, variation, or horizon.
 
 A capped matched-device A/B run must still record Handy model/profile,
 transport, selected outer/floor/profile and speed, command latency,
