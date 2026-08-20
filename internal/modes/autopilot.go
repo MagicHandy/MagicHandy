@@ -133,11 +133,14 @@ func (m *Manager) nextSegmentChoice(ctx context.Context, mode string) segmentCho
 	return m.runDecision(ctx, m.options.Decide, true)
 }
 
-// runDecision executes one model decision. Motion decisions fall back to the
-// deterministic planner; speech decisions return their error to the speech
-// scheduler so they can be postponed without disturbing motion.
+// runDecision executes one model decision. Pattern-mode motion may fall back to
+// the deterministic planner; Dynamic motion holds or waits because a catalog
+// segment would violate the selected control mode. Speech decisions return
+// their error so they can be postponed without disturbing motion.
 func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback bool) segmentChoice {
 	input := m.decisionInput()
+	dynamicMode := m.options.MotionGenerationMode != nil &&
+		m.options.MotionGenerationMode() == config.LLMMotionModeDynamic
 	decideCtx, cancel := context.WithTimeout(ctx, decisionTimeout)
 	started := m.options.Now()
 	decision, err := decide(decideCtx, input)
@@ -150,7 +153,7 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		if !fallback {
 			return segmentChoice{source: "speech_error", note: err.Error(), decisionLatency: latency}
 		}
-		if m.options.MotionGenerationMode != nil && m.options.MotionGenerationMode() == config.LLMMotionModeDynamic {
+		if dynamicMode {
 			if segment, pattern, ok := m.heldSegment(); ok {
 				return segmentChoice{
 					segment: segment, pattern: pattern, source: "hold", note: err.Error(),
@@ -177,7 +180,7 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 				decisionLatency: latency,
 			}
 		}
-		if !fallback {
+		if !fallback || dynamicMode {
 			return segmentChoice{
 				source: "hold", say: decision.Say, timing: timing,
 				variability: variability, decisionLatency: latency,

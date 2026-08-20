@@ -171,13 +171,23 @@ the model instead of a second hard-coded motion policy.
 
 Chat Autopilot reuses the selected contract at bounded decision boundaries. In
 Pattern Library mode it may curate an enabled pattern/speed or hold. In Dynamic
-mode it may start or update geometry, and its `segment_seconds` is clamped to
-the user's Autopilot motion-cadence range. Dynamic provider failure holds the
+mode its autonomous `update` supplies initial geometry or changes the live
+geometry, and `segment_seconds` is clamped to the user's Autopilot motion-cadence
+range. Dynamic provider failure holds the
 current Dynamic target or waits for a model decision; it never falls back to a
-deterministic library pattern. An accepted interactive chat target temporarily
-suspends decision dispatch and then becomes Autopilot's current segment. A
+deterministic library pattern. The same rule applies when a valid initial model
+decision chooses to hold before any Dynamic target exists: Autopilot remains
+waiting and asks again instead of substituting a catalog pattern. An accepted
+interactive chat target temporarily suspends decision dispatch and then becomes
+Autopilot's current segment. A
 generation token prevents late adoption after Stop or a mode change. This is
 orchestration of the shared engine, not a second motion loop.
+
+Autopilot composes its dedicated motion or speech decision message instead of
+reusing interactive Chat's state instructions. The latter require `start` from
+a stopped engine, while autonomous startup deliberately uses `update` to supply
+the scheduler's first Dynamic target. Keeping both blocks would create a
+contradictory prompt and make a hold disproportionately likely.
 
 ## What the engine already supports that the model cannot reach
 
@@ -221,11 +231,19 @@ provider paths with a 20–40% test envelope and no transport dispatch:
   the same five-turn variation sequence avoided immediate reuse and every speed
   stayed at or below 40%
 
-This closes the Pattern Library interactive provider/prompt evidence. Dynamic
-currently has parser, prompt-isolation, shared-engine, phase/velocity retarget,
-Autopilot, trace, and frontend coverage. It does not yet have a managed
-llama.cpp/Ollama model matrix or a matched real-device feel comparison, so it is
-selectable but not the default.
+This closes the Pattern Library interactive provider/prompt evidence. A
+2026-08-20 managed llama.cpp/Gemma Dynamic matrix then passed 9/9 interactive
+scenarios without repair or transport dispatch. A follow-up regression run on
+the reported Utility exchange produced four valid holds across four identical
+turns, preserving the active target with no capability disclaimer, and a
+separate no-current-target Autopilot turn produced a complete initial Dynamic
+update. The final output guard now keeps reply wording consistent with the
+selected motion action rather than attempting to enumerate conversational edge
+cases.
+Dynamic now has managed-provider, parser, prompt-isolation, shared-engine,
+phase/velocity retarget, Autopilot, trace, and frontend coverage. A matched
+real-device feel comparison remains open, so Dynamic is selectable but not the
+default.
 
 ## Ideas, ranked by leverage-to-risk
 

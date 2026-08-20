@@ -283,6 +283,12 @@ func composeAutopilotSystem(
 			sections = append(sections, autopilotContract(kind, capabilities))
 		case "output_guard":
 			sections = append(sections, autopilotOutputGuard(kind, capabilities))
+		case "motion_context":
+			// AutopilotMotionMessage and AutopilotSpeechMessage carry the
+			// authoritative state for their dedicated contracts. Interactive
+			// start/target instructions contradict Autopilot's update-only
+			// authority and must not enter this prompt.
+			continue
 		case "voice_identity", "reaction_style", "voice_check", "language_reminder":
 			if kind == AutopilotKindSpeech {
 				sections = append(sections, section.Text)
@@ -313,7 +319,7 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 		return builder.String()
 	}
 	if capabilities.MotionMode == MotionModeDynamic {
-		builder.WriteString(`The optional "motion" value may be {"action":"none"} or use action "update" to change active dynamic motion. Never use "start", "target", or "stop".`)
+		builder.WriteString(`The optional "motion" value may be {"action":"none"} or use action "update" to provide or change Dynamic motion. Never use "start", "target", or "stop".`)
 	} else {
 		builder.WriteString(`The optional "motion" value may be {"action":"none"} or use action "target" to change active motion. Never use "start", "update", or "stop".`)
 	}

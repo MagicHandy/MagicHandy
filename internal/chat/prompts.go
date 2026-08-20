@@ -361,10 +361,10 @@ func FullCapabilities() Capabilities {
 }
 
 const finalOutputGuard = `FINAL OUTPUT RULE:
-Return one JSON object matching the contract in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. If no motion change is clearly required, return an object containing only the reply field.`
+Return one JSON object matching the contract in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. Make the reply match motion.action: only "start" may claim motion is starting; {"action":"none"} or no motion continues unchanged; "update" or "target" changes active motion; "stop" ends motion. If no motion change is clearly required, return an object containing only the reply field.`
 
 const finalOutputGuardWithMood = `FINAL OUTPUT RULE:
-Return one JSON object matching the contract in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. If no motion change is clearly required, return an object containing the reply field and, when useful, optional new_mood.`
+Return one JSON object matching the contract in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. Make the reply match motion.action: only "start" may claim motion is starting; {"action":"none"} or no motion continues unchanged; "update" or "target" changes active motion; "stop" ends motion. If no motion change is clearly required, return an object containing the reply field and, when useful, optional new_mood.`
 
 var builtinPromptSets = []PromptSet{
 	{

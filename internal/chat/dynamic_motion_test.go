@@ -54,6 +54,35 @@ func TestDynamicPromptKeepsVolatileMotionContextNearEnd(t *testing.T) {
 	}
 }
 
+func TestMotionContextEndsWithCurrentStateActionSet(t *testing.T) {
+	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	dynamic := Capabilities{Motion: true, MotionMode: MotionModeDynamic}
+	pattern := FullCapabilities()
+	tests := []struct {
+		name         string
+		capabilities Capabilities
+		context      MotionContext
+		want         string
+	}{
+		{"Dynamic stopped", dynamic, MotionContext{}, "state is stopped: choose start or none; update is invalid"},
+		{"Dynamic running", dynamic, MotionContext{Running: true}, "state is running: choose update or none; start is invalid"},
+		{"Dynamic paused", dynamic, MotionContext{Paused: true}, "state is paused: choose none; start and update are invalid"},
+		{"pattern stopped", pattern, MotionContext{}, "state is stopped: choose start or none; target is invalid"},
+		{"pattern running", pattern, MotionContext{Running: true}, "state is running: choose target or none; start is invalid"},
+		{"pattern paused", pattern, MotionContext{Paused: true}, "state is paused: choose none; start and target are invalid"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			test.context.SpeedMinPercent = 20
+			test.context.SpeedMaxPercent = 40
+			prompt := ComposeSystemWithMotionContext(set, nil, nil, test.capabilities, test.context)
+			if !strings.Contains(prompt, test.want) {
+				t.Fatalf("state-specific action set missing %q:\n%s", test.want, prompt)
+			}
+		})
+	}
+}
+
 func TestDynamicParserAcceptsDirectGeometryAndNormalizesAnchorRoutes(t *testing.T) {
 	capabilities := Capabilities{Motion: true, MotionMode: MotionModeDynamic}
 	context := MotionContext{SpeedMinPercent: 20, SpeedMaxPercent: 40}

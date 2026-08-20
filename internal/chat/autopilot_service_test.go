@@ -165,6 +165,32 @@ func TestComposeAutopilotMotionPromptHasNoInteractiveReplyContract(t *testing.T)
 	}
 }
 
+func TestComposeDynamicAutopilotPromptOmitsInteractiveMotionContract(t *testing.T) {
+	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	capabilities.AreaFocus = false
+	context := MotionContext{
+		MotionMode: MotionModeDynamic, SpeedMinPercent: 20, SpeedMaxPercent: 40,
+	}
+	prompt := composeAutopilotSystem(
+		set, nil, nil, capabilities, &context, nil, AutopilotKindMotion,
+	)
+	for _, forbidden := range []string{
+		"Authoritative current motion state",
+		`If state is "stopped", use action "start"`,
+		"ordinary conversation normally means",
+	} {
+		if strings.Contains(prompt, forbidden) {
+			t.Fatalf("interactive motion instruction %q leaked into Autopilot:\n%s", forbidden, prompt)
+		}
+	}
+	if !strings.Contains(prompt, "provide or change Dynamic motion") {
+		t.Fatalf("dedicated Dynamic Autopilot contract is missing:\n%s", prompt)
+	}
+}
+
 func TestComposeAutopilotSpeechPromptMatchesMotionAuthority(t *testing.T) {
 	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
 	full := composeAutopilotSystem(set, nil, defaultPatternChoices(), FullCapabilities(), nil, nil, AutopilotKindSpeech)

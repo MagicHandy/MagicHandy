@@ -92,6 +92,8 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 				fmt.Fprintf(&builder, ", anchors %q", context.CurrentAnchors)
 			}
 			builder.WriteString(".\n")
+		} else {
+			builder.WriteString("No Dynamic target is active. To begin, use update with speed and either center/span or anchors; none leaves Autopilot waiting.\n")
 		}
 		writeSessionProgress(&builder, context)
 		builder.WriteString("Decide what happens for the next continuous stretch using the recent conversation as the user's ongoing direction:\n")

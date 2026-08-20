@@ -76,3 +76,28 @@ func TestAutopilotContractKeepsPatternAndSpeedIndependent(t *testing.T) {
 		t.Fatalf("autopilot contract still couples pattern and pace:\n%s", contract)
 	}
 }
+
+func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
+	startup := AutopilotMotionMessage(AutopilotContext{
+		MotionMode: MotionModeDynamic, SpeedMinPercent: 20, SpeedMaxPercent: 40,
+		MotionMinSeconds: 20, MotionMaxSeconds: 60,
+	})
+	for _, want := range []string{
+		"No Dynamic target is active",
+		"use update with speed and either center/span or anchors",
+		"none leaves Autopilot waiting",
+	} {
+		if !strings.Contains(startup, want) {
+			t.Fatalf("Dynamic startup prompt missing %q:\n%s", want, startup)
+		}
+	}
+
+	running := AutopilotMotionMessage(AutopilotContext{
+		MotionMode: MotionModeDynamic, CurrentSpeed: 30, CurrentCenter: 50,
+		CurrentSpan: 60, CurrentVariation: 10, SpeedMinPercent: 20,
+		SpeedMaxPercent: 40, MotionMinSeconds: 20, MotionMaxSeconds: 60,
+	})
+	if strings.Contains(running, "No Dynamic target is active") {
+		t.Fatalf("running Dynamic prompt still claims startup state:\n%s", running)
+	}
+}

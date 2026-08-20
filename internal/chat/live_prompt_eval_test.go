@@ -338,6 +338,74 @@ func TestLiveDirectPartnerMotionChoice(t *testing.T) {
 	}
 }
 
+// TestLiveUtilityContextualMotionReply covers the reported failure where an
+// informal physical request was answered with a body-capability disclaimer.
+// It exercises prompt, parser, and authorization only; no engine or transport
+// is created, and the model remains free to update or hold motion.
+func TestLiveUtilityContextualMotionReply(t *testing.T) {
+	model := liveEvalModel(t)
+	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+		BaseURL: liveEvalLlamaURL,
+		Model:   model,
+		Timeout: 2 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	promptSet, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	capabilities.AreaFocus = false
+	capabilities.Voice = VoiceUtility
+	motionState := focusedDynamicContext()
+	service := Service{
+		Provider: provider, Prompt: promptSet, Model: model,
+		MaxTokens: 256, ReasoningMode: "off",
+		MotionContext: &motionState, Capabilities: &capabilities,
+	}
+	history := []llm.Message{
+		{Role: "user", Content: "just the tip"},
+		{Role: "assistant", Content: `{"reply":"Moving to just the tip.","motion":{"action":"update","center_percent":14,"span_percent":24}}`},
+	}
+	for run := 0; run < 4; run++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		result, completeErr := service.Complete(ctx, Request{Message: "suck me", History: history}, nil)
+		cancel()
+		if completeErr != nil {
+			t.Fatalf("run %d: %v", run+1, completeErr)
+		}
+		if result.Malformed || result.SemanticFallback || strings.TrimSpace(result.Response.Reply) == "" {
+			t.Fatalf("run %d unusable: %+v", run+1, result)
+		}
+		lower := strings.ToLower(result.Response.Reply)
+		for _, refusal := range []string{
+			"can't do that", "cannot do that", "cannot assist", "only control",
+			"body function", "not-body", "do not have a body", "don't have a body",
+		} {
+			if strings.Contains(lower, refusal) {
+				t.Fatalf("run %d returned capability disclaimer %q: %q", run+1, refusal, result.Response.Reply)
+			}
+		}
+		action := MotionActionNone
+		if result.Response.Motion != nil {
+			action = result.Response.Motion.Action
+		}
+		if action != MotionActionStart && (strings.Contains(lower, "start") || strings.Contains(lower, "begin")) {
+			t.Fatalf("run %d claimed a start for action %q: reply=%q raw=%s", run+1, action, result.Response.Reply, compactLiveEvalJSON(result.Raw))
+		}
+		if action == MotionActionNone {
+			for _, changeClaim := range []string{"i'm changing", "i am changing"} {
+				if strings.Contains(lower, changeClaim) {
+					t.Fatalf("run %d claimed a motion change while holding: reply=%q raw=%s", run+1, result.Response.Reply, compactLiveEvalJSON(result.Raw))
+				}
+			}
+		}
+		t.Logf("utility contextual reply run %d | motion=%+v | reply=%q | raw=%s", run+1, result.Response.Motion, result.Response.Reply, compactLiveEvalJSON(result.Raw))
+	}
+}
+
 // TestLiveDynamicMotionMatrix exercises the real Dynamic prompt, provider,
 // parser, authorization, semantic validation, and repair path. It deliberately
 // does not create a motion engine or transport, so the test cannot dispatch a

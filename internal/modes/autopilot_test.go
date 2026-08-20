@@ -161,6 +161,39 @@ func TestAutopilotFallsBackToPlannerOnDecisionFailure(t *testing.T) {
 	}
 }
 
+func TestDynamicAutopilotHoldAtStartupNeverFallsBackToPattern(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	decider := &fakeDecider{decisions: []Decision{{
+		Hold: true, Next: TimingNormal, Variability: VariabilityNormal,
+	}}}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+	manager.options.MotionGenerationMode = func() string { return config.LLMMotionModeDynamic }
+
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitFor(t, time.Second, func() bool { return decider.callCount() >= 1 })
+
+	starts, retargets := engine.counts()
+	if starts != 0 || retargets != 0 {
+		t.Fatalf("Dynamic startup hold dispatched legacy motion: starts=%d retargets=%d", starts, retargets)
+	}
+	foundWaiting := false
+	for _, row := range manager.options.Traces.Rows() {
+		if row.Reason == "start_waiting_for_model" {
+			foundWaiting = true
+		}
+		if row.Planner != nil && row.Planner.PatternIdentifier != "" &&
+			row.Planner.PatternIdentifier != "dynamic" {
+			t.Fatalf("Dynamic startup trace contains catalog pattern: %+v", row.Planner)
+		}
+	}
+	if !foundWaiting {
+		t.Fatal("Dynamic startup hold did not enter the model-waiting retry path")
+	}
+}
+
 func TestAutopilotHoldKeepsCurrentSegmentWithoutDrift(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}
