@@ -616,20 +616,42 @@ func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, cur
 	}
 	bestPhase := 0.0
 	bestDistance := math.MaxFloat64
-	lastIndex := 63
+	// Short catalog motifs were well covered by the original 64-point search,
+	// but a Creative span envelope deliberately contains a much longer phrase.
+	// Scale the search with authored curve complexity so changing texture does
+	// not turn a long loop into a coarse position jump at the handoff.
+	searchSamples := clamp(len(candidatePlan.curve.authoredKnots)*4, 64, 4096)
+	lastIndex := searchSamples - 1
 	if !candidatePlan.Loop {
-		lastIndex = 64
+		lastIndex = searchSamples
 	}
 	for index := range lastIndex + 1 {
-		phase := float64(index) / 64
-		position := candidatePlan.SampleAt(int64(float64(candidatePlan.PeriodMillis) * phase)).PositionPercent
+		phase := float64(index) / float64(searchSamples)
+		candidateMillis := int64(math.Round(float64(candidatePlan.PeriodMillis) * phase))
+		position := candidatePlan.SampleAt(candidateMillis).PositionPercent
 		distance := math.Abs(position - current)
-		candidateDirection := candidatePlan.DirectionAt(int64(float64(candidatePlan.PeriodMillis) * phase))
-		candidateVelocity := candidatePlan.VelocityAt(int64(float64(candidatePlan.PeriodMillis) * phase))
+		// A replacement plan cannot sample before its handoff: PhaseAt clamps
+		// negative elapsed time to zero. Score the same forward-looking guide
+		// that DirectionAt and VelocityAt will observe at the new plan's first
+		// instant, rather than a centered guide that crosses a reversal the new
+		// plan has not actually played.
+		const guideMillis = int64(25)
+		forwardPosition := candidatePlan.SampleAt(candidateMillis + guideMillis).PositionPercent
+		candidateDirection := 0
+		switch {
+		case forwardPosition > position:
+			candidateDirection = 1
+		case forwardPosition < position:
+			candidateDirection = -1
+		}
+		candidateVelocity := (forwardPosition - position) * 1000 / float64(guideMillis*2)
 		score := handoffScore(distance, currentDirection, candidateDirection, currentVelocity, candidateVelocity)
 		if score < bestDistance {
 			bestDistance = score
-			bestPhase = phase
+			// Preserve the exact millisecond that was scored. Reconstructing the
+			// raw grid fraction can land on the other side of a reversal after
+			// period scaling and change the handoff direction.
+			bestPhase = float64(candidateMillis) / float64(candidatePlan.PeriodMillis)
 		}
 	}
 	return bestPhase
@@ -638,7 +660,11 @@ func chooseNearestPhase(target MotionTarget, settings config.MotionSettings, cur
 func handoffScore(distance float64, currentDirection, candidateDirection int, currentVelocity, candidateVelocity float64) float64 {
 	score := distance
 	if currentDirection != 0 && candidateDirection != 0 && candidateDirection != currentDirection {
-		score += 8
+		// Keep a nearby phase that continues travel ahead of an equally close
+		// reversal. This penalty must exceed the capped velocity tie-breaker
+		// below; otherwise a near-zero-speed opposite phase can win by a few
+		// thousandths of a percent on long Creative curves.
+		score += 12
 	}
 	if candidateDirection == 0 && distance > 2 {
 		score += 4

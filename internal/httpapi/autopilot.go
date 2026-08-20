@@ -111,6 +111,8 @@ func (s *Server) autopilotModelTurn(
 		dynamic := motion.NormalizeDynamicDefinition(*input.CurrentDynamic)
 		modelContext.CurrentCenter = dynamic.CenterPercent
 		modelContext.CurrentSpan = dynamic.SpanPercent
+		modelContext.CurrentSpanMin = dynamic.SpanMinPercent
+		modelContext.CurrentSpanProfile = dynamic.SpanProfile
 		modelContext.CurrentVariation = dynamic.VariationPercent
 		modelContext.CurrentSegment = dynamic.SegmentSeconds
 		for _, anchor := range dynamic.Anchors {
@@ -244,6 +246,8 @@ func sameDynamicDefinition(left, right motion.DynamicDefinition) bool {
 	left = motion.NormalizeDynamicDefinition(left)
 	right = motion.NormalizeDynamicDefinition(right)
 	if left.CenterPercent != right.CenterPercent || left.SpanPercent != right.SpanPercent ||
+		left.SpanMinPercent != right.SpanMinPercent || left.SpanProfile != right.SpanProfile ||
+		left.PhraseSeed != right.PhraseSeed ||
 		left.VariationPercent != right.VariationPercent || left.SegmentSeconds != right.SegmentSeconds ||
 		len(left.Anchors) != len(right.Anchors) {
 		return false

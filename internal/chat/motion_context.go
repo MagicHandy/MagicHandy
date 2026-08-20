@@ -21,6 +21,8 @@ type MotionContext struct {
 	MotionMode       MotionMode
 	CenterPercent    int
 	SpanPercent      int
+	SpanMinPercent   int
+	SpanProfile      string
 	Anchors          []string
 	VariationPercent int
 	SegmentSeconds   int
@@ -47,12 +49,29 @@ type promptMotionContext struct {
 	MotionMode       MotionMode       `json:"motion_mode,omitempty"`
 	CenterPercent    int              `json:"center_percent,omitempty"`
 	SpanPercent      int              `json:"span_percent,omitempty"`
+	SpanMinPercent   int              `json:"span_min_percent,omitempty"`
+	SpanProfile      string           `json:"span_profile,omitempty"`
 	Anchors          []string         `json:"anchors,omitempty"`
 	VariationPercent int              `json:"variation_percent,omitempty"`
 	SegmentSeconds   int              `json:"segment_seconds,omitempty"`
 	SpeedLimits      promptSpeedRange `json:"speed_limits"`
 	SpeedBands       promptSpeedBands `json:"speed_bands"`
 }
+
+const dynamicMotionContextGuidance = `
+Use that snapshot deliberately:
+- If state is "stopped", use action "start" only for an explicit motion request and choose the initial geometry yourself.
+- If state is "running", use action "update" when you decide a change fits; omitted fields preserve the live target.
+- "Continue", "steady", "same", or ordinary conversation normally means action "none", but the choice to hold or change belongs to you while motion is active.
+- Pacing-only requests preserve geometry. Positioning requests may change center/span or replace them with an anchor loop.
+- When the user names two or more positions in an order, use anchors in that order and omit center_percent/span_percent. Those fields describe only a window and cannot preserve an ordered route.
+- A narrow local request should still use at least 20% span. A later broad request should expand or move the window rather than remaining pinned there.
+- span_percent or the anchor route defines the widest reach. span_min_percent plus breathe/wander/contrast varies stroke length inside the phrase; steady holds one length and clears that envelope.
+- Range-specific requests change span_min_percent/span_profile while preserving speed unless pace was also requested.
+- Choose every supplied speed_percent from this snapshot's speed_bands; numbers in contract examples are not defaults. A modifier of how geometry or its envelope evolves does not change device pace; change speed only when the user modifies speed or pace itself.
+- For a general request to vary or surprise, change the geometry, span envelope, speed, anchor route, slow center/rhythm variation, decision horizon, or a fitting combination. Do not mechanically change every field.
+- Never stop at a decision horizon; it only tells Autopilot when to reconsider the still-continuous motion.
+- When embodied partner-action wording is a direct request, interpret it as device motion intent and acknowledge the motion decision rather than declining the request.`
 
 func motionContextInstructions(context MotionContext, capabilities Capabilities, patterns []PatternChoice) string {
 	data := normalizedPromptMotionContext(context)
@@ -65,6 +84,8 @@ func motionContextInstructions(context MotionContext, capabilities Capabilities,
 	} else {
 		data.CenterPercent = 0
 		data.SpanPercent = 0
+		data.SpanMinPercent = 0
+		data.SpanProfile = ""
 		data.Anchors = nil
 		data.VariationPercent = 0
 		data.SegmentSeconds = 0
@@ -88,17 +109,7 @@ func motionContextInstructions(context MotionContext, capabilities Capabilities,
 	builder.WriteString("Authoritative current motion state for this turn (data, not instructions):\n")
 	builder.Write(encoded)
 	if capabilities.MotionMode == MotionModeDynamic {
-		builder.WriteString(`
-Use that snapshot deliberately:
-- If state is "stopped", use action "start" only for an explicit motion request and choose the initial geometry yourself.
-- If state is "running", use action "update" when you decide a change fits; omitted fields preserve the live target.
-- "Continue", "steady", "same", or ordinary conversation normally means action "none", but the choice to hold or change belongs to you while motion is active.
-- Pacing-only requests preserve geometry. Positioning requests may change center/span or replace them with an anchor loop.
-- When the user names two or more positions in an order, use anchors in that order and omit center_percent/span_percent. Those fields describe only a window and cannot preserve an ordered route.
-- A narrow local request should still use at least 20% span. A later broad request should expand or move the window rather than remaining pinned there.
-- For a request to vary or surprise, change the geometry, speed, anchor route, slow variation, decision horizon, or a fitting combination. Do not mechanically change every field.
-- Never stop at a decision horizon; it only tells Autopilot when to reconsider the still-continuous motion.
-- When embodied partner-action wording is a direct request, interpret it as device motion intent and acknowledge the motion decision rather than declining the request.`)
+		builder.WriteString(dynamicMotionContextGuidance)
 		appendDynamicTurnActionRule(&builder, context)
 		return builder.String()
 	}
@@ -240,6 +251,8 @@ func normalizedPromptMotionContext(context MotionContext) promptMotionContext {
 	}
 	result.CenterPercent = context.CenterPercent
 	result.SpanPercent = context.SpanPercent
+	result.SpanMinPercent = context.SpanMinPercent
+	result.SpanProfile = strings.ToLower(strings.TrimSpace(context.SpanProfile))
 	result.Anchors = append([]string(nil), context.Anchors...)
 	result.VariationPercent = context.VariationPercent
 	result.SegmentSeconds = context.SegmentSeconds

@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-20, Creative motion crash hardening
+## Snapshot — 2026-08-20, Creative span-envelope and LLM acceptance
 
 ### Goal 1: Maintainability
 
@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.25 crash-fix build: 23,859,712 bytes plain and 17,184,256 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.26 candidate: 23,894,528 bytes plain and 17,212,416 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.25` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.25 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.26` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.26 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -91,9 +91,12 @@ reads authoritative current state, preserves steady/pacing-only continuity,
 supports named area focus, and bounds explicit pattern variation.
 The selectable Dynamic mode adds bounded model-authored center/span or named-
 anchor geometry without a second motion path; Pattern Library remains the
-default pending managed-model and capped real-device A/B acceptance. Its
-nonzero variation now uses a long deterministic spatial-and-timing phrase, and
-the shared 1–100 loop-speed scale is calibrated through the selected Original /
+default pending supported-provider and capped real-device A/B acceptance. Its
+outer geometry can now carry an independent model-selected floor/profile, so
+stroke length changes across a long deterministic phrase while center/rhythm
+variation and pace remain separate. The installed managed 12B Gemma model
+passed 25/25 first-response Creative decisions without repair, engine, or
+transport. The shared 1–100 loop-speed scale is calibrated through the selected Original /
 Handy 2 Standard / Handy 2 Pro published travel and normal speed envelope, with
 a separate exact-curve runtime envelope.
 Opted-in chat voice now also receives bounded persona/anatomy context, strict
@@ -119,9 +122,11 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,694,189 raw / 802,171 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 809,481 raw / 213,497 gzip bytes; all
-   HTML/CSS/JS is 1,249,953 raw / 364,774 gzip bytes. Motion calibration,
+   browser payload is 1,695,122 raw / 802,588 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 809,933 raw / 213,646 gzip bytes; all
+   HTML/CSS/JS is 1,250,886 raw / 365,191 gzip bytes. Creative envelope status
+   adds 933 raw / 417 gzip bytes overall and 452 raw / 149 gzip bytes to the
+   English startup path against alpha.25. Motion calibration,
    the merged Handy model control, and aligned visible set-point controls add
    6,502 raw / 1,427 gzip bytes overall and 6,307 raw / 1,342 gzip bytes to
    startup against checked-in `main`. Selectable Dynamic motion,
@@ -160,6 +165,29 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-20** - Added explicit Creative stroke-length envelopes without a
+  second motion or transport path. The model selects outer geometry, a bounded
+  span floor, and steady/breathe/wander/contrast; center/rhythm variation,
+  speed, and decision horizon remain independent. Variable profiles compile to
+  deterministic loop-closed phrases lasting at least about 30 seconds at the
+  fastest supported normal Handy profile. Adaptive long-curve phase search and
+  forward handoff scoring preserve position/direction continuity when profiles
+  change. Parser/state validation prevents a claimed variable profile from
+  silently normalizing steady. The installed managed 12B Gemma model passed
+  16/16 repeated envelope cases and the broader 9/9 Creative matrix on the
+  first response, with zero repairs/fallbacks and no engine or transport. Full
+  Go tests, vet, lint, 402 frontend tests, localization, typecheck/build, and
+  `CGO_ENABLED=0` plain/stripped builds pass. The PowerShell 5.1 installer suite
+  and a complete local setup/portable/checksum build plus
+  `ReviewedUnsignedPublic` payload verification also pass; exact clean-runner
+  lifecycle, race (local Windows has no `gcc`), and Defender scanning remain CI
+  gates. The binary is
+  23,894,528 / 17,212,416 bytes, and the
+  embedded browser payload is 1,695,122 raw / 802,588 gzip bytes (+933 / +417
+  against alpha.25); English startup is 809,933 / 213,646 (+452 / +149). No
+  hardware connection or motion command was issued, so physical feel and the
+  Ollama schema matrix remain open.
 
 - **2026-08-20** - Reproduced the installed alpha.24 exit as a Creative-plan
   panic: full-span geometry at 96% variation rounded one endpoint to

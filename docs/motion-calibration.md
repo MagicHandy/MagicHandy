@@ -121,20 +121,31 @@ what may be stored or exposed to the model by default.
 
 ## Organic Creative motion (`dynamic` schema)
 
-`variation_percent` remains one bounded semantic field instead of growing a
-second timing schema. It now controls two related properties:
+Creative exposes independent semantic axes instead of making one percentage do
+every job:
 
-1. a loop-closed multi-harmonic center/span transform applied to the complete
-   anchor route, preserving anchor order and avoiding hard-limit clipping; and
-2. bounded leg-time breathing and direction asymmetry, limited to 0.75–1.25×
-   the local authored timing before the plan's global speed normalization.
+1. `span_percent` or the named-anchor bounds set the outer reach;
+2. `span_min_percent` plus `span_profile` (`breathe`, `wander`, or `contrast`)
+   vary stroke length coherently inside that reach; `steady` clears the
+   envelope; and
+3. `variation_percent` controls loop-closed multi-harmonic center drift plus
+   bounded leg-time breathing and direction asymmetry, limited to 0.75–1.25×
+   local authored timing before global speed normalization.
 
-The backend chooses enough cycles for the variation phrase to take at least
-about eight seconds at the maximum reference rate. Narrow spans consequently
-receive more cycles than broad spans. The phrase is deterministic for traces,
-tests, and seamless looping; it is not random per-sample noise. A zero variation
-still means deliberately metronomic motion, while the Dynamic prompt recommends
-25–45 for an ordinary start unless the user asks for steady motion.
+The backend chooses enough cycles for center/rhythm variation to take at least
+about eight seconds and for an explicit span envelope to take at least about 30
+seconds at the maximum reference rate. Narrow spans consequently receive more
+cycles than broad spans. Breathe is one asymmetric long swell, wander is a
+seeded smooth correlated control phrase, and contrast groups irregular tight,
+medium, and broad strokes. All are deterministic, bounded, and loop-closed for
+traces, tests, and seamless playback; none is random per-sample noise. A zero
+variation can therefore keep center/rhythm even while an explicit span profile
+continues changing stroke length.
+
+Older alpha.25 targets with no span profile retain their prior implicit small
+span swell. New model responses use the explicit envelope. The model selects
+the floor and profile; deterministic code only normalizes bounds and derives a
+traceable phrase seed.
 
 Engine phase now remains fractional through curve sampling. This removes
 authored-millisecond stair steps without adding points, browser state, or a new
@@ -167,12 +178,15 @@ All values still come from and return to backend settings snapshots.
 The initiating feedback was qualitative: Dynamic felt robotic and a selected
 73% felt slow. It did not include a transport, latency summary, or trace export.
 Automated tests now cover the calibration points, exact runtime acceleration,
-runtime reversal spacing, fractional sampling, bounded/deterministic Dynamic
-variation, long variation period, and the one-stream retarget path.
+runtime reversal spacing, fractional sampling, all explicit Creative span
+profiles across all three Handy models, long deterministic phrases, stateful
+model updates, and the one-stream retarget path. The installed managed 12B
+Gemma model also passed 25/25 first-response Creative decisions across the new
+range and broader intent matrices without repair or transport dispatch.
 
 A capped matched-device A/B run must still record Handy model/profile,
-transport, selected span and speed, command latency, `motion_trace.v3`, Stop
-behavior, and subjective feel.
+transport, selected outer/floor/profile and speed, command latency,
+`motion_trace.v3`, Stop behavior, and subjective feel.
 Until that exists, this change corrects the demonstrable schema/timing mismatch
 but does not close the real-device acceptance item or make Creative the default.
 The cross-cutting model-profile decision is recorded in

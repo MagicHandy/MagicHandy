@@ -87,9 +87,9 @@ const contractDynamic = `Return exactly one JSON object and no markdown, code fe
 
 Every response requires a non-empty "reply" string written freshly in the selected chat voice. The optional "motion" value must be exactly one of these shapes:
 - Explicitly no motion change: {"action":"none"}
-- Start dynamic motion: {"action":"start","speed_percent":30,"center_percent":50,"span_percent":70,"variation_percent":20,"segment_seconds":12}
-- Start an anchor loop: {"action":"start","speed_percent":30,"anchors":["tip","middle","base"],"variation_percent":15,"segment_seconds":12}
-- Update active motion: {"action":"update","center_percent":25,"span_percent":40}
+- Start creative motion with organic range: {"action":"start","speed_percent":30,"center_percent":50,"span_percent":78,"span_min_percent":34,"span_profile":"wander","variation_percent":20,"segment_seconds":18}
+- Start an anchor loop with a slow range swell: {"action":"start","speed_percent":30,"anchors":["tip","middle","base"],"span_min_percent":36,"span_profile":"breathe","variation_percent":15,"segment_seconds":18}
+- Update active motion to contrast tight and broad strokes: {"action":"update","span_percent":82,"span_min_percent":28,"span_profile":"contrast"}
 - Stop motion: {"action":"stop"}
 
 Rules:
@@ -97,11 +97,13 @@ Rules:
 - Use "start" only for an explicit request to begin motion. Start requires speed_percent and either center_percent plus span_percent, or 2-6 anchors.
 - Use "update" only while motion is active. Include only fields you deliberately want to change; every omitted field preserves its live value.
 - Use only {"action":"stop"} when the user asks to stop, pause, or end motion.
-- center_percent is the midpoint of travel: 0 is base/deep and 100 is tip/shallow. span_percent is total travel around that midpoint and must be 20-100.
+- center_percent is the midpoint of travel: 0 is base/deep and 100 is tip/shallow. span_percent is the widest total travel around that midpoint and must be 20-100.
 - anchors are an ordered loop through 2-6 names chosen only from base, lower, middle, upper, and tip. Use anchors instead of center_percent/span_percent, never together.
-- variation_percent is 0-100 and controls slow organic spatial drift plus bounded rhythm breathing over a long loop. It is not shake, flutter, per-sample noise, or a requirement to change on every turn. Prefer 25-45 for an ordinary dynamic start; use 0 only when the user asks for steady or metronomic motion.
+- To vary stroke length inside one continuous phrase, set span_min_percent to the narrowest travel, at least 20 and no greater than span_percent or the anchor route's outer span. Also choose span_profile: "breathe" for a slow swell, "wander" for smooth organic movement through the band, or "contrast" for irregular tight/medium/broad groupings. The envelope supplements rather than replaces the required outer geometry. Prefer "wander" for ordinary creative motion.
+- Use span_profile "steady" to hold one stroke length and clear a running range envelope. On a start, breathe/wander/contrast require span_min_percent. Omitted span fields preserve the live range envelope on update.
+- variation_percent is 0-100 and controls slow center drift plus bounded rhythm breathing independently from an explicit span profile. It is not shake, flutter, per-sample noise, or a requirement to change on every turn. Prefer 20-40 for an ordinary creative start; use 0 only when the user asks for mechanically even center and rhythm.
 - segment_seconds is a 4-120 second decision horizon. Motion remains continuous at the boundary; it is not a stop timer.
-- Apply the supplied speed bands and user limits to speed_percent. Keep speeds conservative unless the user explicitly asks otherwise.
+- Apply the supplied speed bands and user limits to speed_percent. The numeric values in examples illustrate object shape only; never copy an example speed instead of choosing from the current speed_bands. Keep speeds conservative unless the user explicitly asks otherwise.
 - You own whether a valid turn changes motion. Do not mechanically update a field merely to be different.
 - Never invent pattern IDs, device commands, API calls, Bluetooth commands, URLs, phase values, or transport details.`
 
@@ -361,10 +363,10 @@ func FullCapabilities() Capabilities {
 }
 
 const finalOutputGuard = `FINAL OUTPUT RULE:
-Return one JSON object matching the contract in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. Make the reply match motion.action: only "start" may claim motion is starting; {"action":"none"} or no motion continues unchanged; "update" or "target" changes active motion; "stop" ends motion. If no motion change is clearly required, return an object containing only the reply field.`
+Return one JSON object matching the contract in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. When present, "motion" must be a nested JSON object, never a quoted or escaped JSON string. Make the reply match motion.action: only "start" may claim motion is starting; {"action":"none"} or no motion continues unchanged; "update" or "target" changes active motion; "stop" ends motion. If no motion change is clearly required, return an object containing only the reply field.`
 
 const finalOutputGuardWithMood = `FINAL OUTPUT RULE:
-Return one JSON object matching the contract in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. Make the reply match motion.action: only "start" may claim motion is starting; {"action":"none"} or no motion continues unchanged; "update" or "target" changes active motion; "stop" ends motion. If no motion change is clearly required, return an object containing the reply field and, when useful, optional new_mood.`
+Return one JSON object matching the contract in this prompt. No analysis, prose, markdown, comments, translated keys, or additional fields. When present, "motion" must be a nested JSON object, never a quoted or escaped JSON string. Make the reply match motion.action: only "start" may claim motion is starting; {"action":"none"} or no motion continues unchanged; "update" or "target" changes active motion; "stop" ends motion. If no motion change is clearly required, return an object containing the reply field and, when useful, optional new_mood.`
 
 var builtinPromptSets = []PromptSet{
 	{

@@ -48,7 +48,7 @@ Library fields are never advertised together:
 
 | Mode | Model surface | Runtime behavior |
 | --- | --- | --- |
-| **Dynamic** | speed plus center/span or an ordered named-anchor route, slow variation, and a decision horizon | compiles an ephemeral loop through the shared motion engine; no pattern catalog enters the prompt |
+| **Dynamic** | speed plus center/span or an ordered named-anchor route, an optional stroke-length envelope, slow center/rhythm variation, and a decision horizon | compiles an ephemeral loop through the shared motion engine; no pattern catalog enters the prompt |
 | **Pattern Library** | enabled opaque `pattern_id`, speed, and optional named area focus | resolves an authored library shape through the shared motion engine |
 | **Off** | reply text and optional mood only | rejects model motion while every user Stop path remains available |
 
@@ -72,8 +72,10 @@ after switching to Off.
 | `area` | `tip` / `shaft` / `base` / `full` | Pattern Library only: select a named stroke zone; `full` clears focus |
 | `center_percent` | 0–100 | Dynamic only: midpoint of the requested loop |
 | `span_percent` | 20–100 | Dynamic only: total travel around the midpoint; the floor avoids stall-prone micro-motion |
+| `span_min_percent` | 20–outer span | Dynamic only: lower bound for stroke length inside an explicit envelope |
+| `span_profile` | `steady` / `breathe` / `wander` / `contrast` | Dynamic only: fixed length, slow swell, organic correlated movement, or irregular tight/medium/broad grouping |
 | `anchors` | 2–6 of `base`, `lower`, `middle`, `upper`, `tip` | Dynamic only: ordered semantic route; consecutive duplicates and routes narrower than 20% are rejected |
-| `variation_percent` | 0–100 | Dynamic only: bounded deterministic drift over several cycles, never high-frequency noise |
+| `variation_percent` | 0–100 | Dynamic only: bounded deterministic center/rhythm texture, independent of an explicit span profile and never high-frequency noise |
 | `segment_seconds` | 4–120 | Dynamic only: model decision horizon, not a stop timer |
 
 Validation enforces the mode-specific combinations. A Dynamic start requires
@@ -103,11 +105,12 @@ After parsing, deterministic current-turn authorization strips `start` or a
 Pattern Library `target` unless the current user message contains a positive,
 action-specific motion request in one of the supported prompt languages.
 Dynamic `update` deliberately has broader admission while Dynamic motion is
-already running: any non-empty, non-negated current turn may carry the model's
-choice to update or not update. This keeps semantic taste and non-deterministic
-action/no-action ownership with the model instead of reconstructing the legacy
-phrase ruleset. Negation still blocks an update, and Dynamic `start` still
-requires explicit current-turn authority.
+already running: any non-empty current turn may carry the model's choice to
+update or not update. A scoped negative qualifier preserves only the named
+semantic axis; an unscoped refusal remains inert. This keeps semantic taste and
+non-deterministic action/no-action ownership with the model instead of
+reconstructing the legacy phrase ruleset. Dynamic `start` still requires
+explicit current-turn authority.
 An unauthorized command returns as inert reply text before semantic repair, so
 fallback cannot recreate it. Autopilot is the sole exception to the user-turn
 matcher: its decision message is generated inside the mode manager and carries
@@ -139,7 +142,8 @@ Each interactive turn also receives one authoritative runtime snapshot:
 stopped/running/paused state, current speed, and the persisted speed envelope
 split into low/middle/high bands. Pattern Library adds the active pattern/area
 and up to four recent chat-selected opaque handles. Dynamic instead adds the
-live center, span, ordered anchors, variation, and decision horizon. This state
+live center, outer span, span floor/profile, ordered anchors, center/rhythm
+variation, and decision horizon. This state
 is prompt data, not a second frontend motion model. It is derived from the
 engine snapshot and bounded trace ring, so it is runtime-only and requires no
 database migration.
@@ -240,8 +244,12 @@ separate no-current-target Autopilot turn produced a complete initial Dynamic
 update. The final output guard now keeps reply wording consistent with the
 selected motion action rather than attempting to enumerate conversational edge
 cases.
-Dynamic now has managed-provider, parser, prompt-isolation, shared-engine,
-phase/velocity retarget, Autopilot, trace, and frontend coverage. A matched
+The 2026-08-20 range-envelope follow-up added 16 repeated first-response cases
+on the installed managed 12B Gemma model, then reran the broader nine-case
+Creative matrix. All 25 passed without repair, fallback, an engine, or a
+transport. Dynamic now has managed-provider, parser, prompt-isolation,
+shared-engine, adaptive phase/velocity retarget, Autopilot, trace, and frontend
+coverage. A matched
 real-device feel comparison remains open, so Dynamic is selectable but not the
 default.
 

@@ -1066,7 +1066,8 @@ func (s *Server) writeChatStorageError(w http.ResponseWriter, err error) {
 
 func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) (motion.MotionTarget, error) {
 	if command.Action == chat.MotionActionUpdate || command.CenterPercent != nil || command.SpanPercent != nil ||
-		len(command.Anchors) > 0 || command.VariationPercent != nil || command.SegmentSeconds != nil {
+		command.SpanMinPercent != nil || command.SpanProfile != "" || len(command.Anchors) > 0 ||
+		command.VariationPercent != nil || command.SegmentSeconds != nil {
 		return dynamicChatMotionTarget(command, current), nil
 	}
 	patternID := motion.PatternID(command.PatternID)
@@ -1148,6 +1149,7 @@ func dynamicDefinitionFromCommand(command *chat.MotionCommand, current *motion.D
 		dynamic = motion.NormalizeDynamicDefinition(*current)
 		dynamic.Anchors = append([]motion.DynamicAnchor(nil), dynamic.Anchors...)
 	}
+	envelopeChanged := false
 	if len(command.Anchors) > 0 {
 		dynamic.Anchors = make([]motion.DynamicAnchor, 0, len(command.Anchors))
 		for _, name := range command.Anchors {
@@ -1155,6 +1157,7 @@ func dynamicDefinitionFromCommand(command *chat.MotionCommand, current *motion.D
 				dynamic.Anchors = append(dynamic.Anchors, motion.DynamicAnchor{Name: name, PositionPercent: position})
 			}
 		}
+		envelopeChanged = true
 	} else if command.CenterPercent != nil || command.SpanPercent != nil {
 		// A center/span update intentionally leaves an anchor route. The current
 		// normalized bounds provide sensible omitted-field preservation.
@@ -1165,12 +1168,28 @@ func dynamicDefinitionFromCommand(command *chat.MotionCommand, current *motion.D
 		if command.SpanPercent != nil {
 			dynamic.SpanPercent = *command.SpanPercent
 		}
+		envelopeChanged = true
+	}
+	if command.SpanMinPercent != nil {
+		dynamic.SpanMinPercent = *command.SpanMinPercent
+		if strings.TrimSpace(command.SpanProfile) == "" &&
+			(dynamic.SpanProfile == "" || dynamic.SpanProfile == motion.DynamicSpanProfileSteady) {
+			dynamic.SpanProfile = motion.DynamicSpanProfileWander
+		}
+		envelopeChanged = true
+	}
+	if strings.TrimSpace(command.SpanProfile) != "" {
+		dynamic.SpanProfile = strings.ToLower(strings.TrimSpace(command.SpanProfile))
+		envelopeChanged = true
 	}
 	if command.VariationPercent != nil {
 		dynamic.VariationPercent = *command.VariationPercent
 	}
 	if command.SegmentSeconds != nil {
 		dynamic.SegmentSeconds = *command.SegmentSeconds
+	}
+	if envelopeChanged {
+		dynamic.PhraseSeed = 0
 	}
 	dynamic = motion.NormalizeDynamicDefinition(dynamic)
 	return dynamic
@@ -1240,6 +1259,8 @@ func (s *Server) chatMotionContext(settings config.MotionSettings, llmSettings c
 		}
 		context.CenterPercent = dynamic.CenterPercent
 		context.SpanPercent = dynamic.SpanPercent
+		context.SpanMinPercent = dynamic.SpanMinPercent
+		context.SpanProfile = dynamic.SpanProfile
 		context.VariationPercent = dynamic.VariationPercent
 		context.SegmentSeconds = dynamic.SegmentSeconds
 		for _, anchor := range dynamic.Anchors {

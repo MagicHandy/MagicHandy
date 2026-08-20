@@ -471,15 +471,17 @@ func TestMapAutopilotResultBuildsDynamicSegmentWithoutPatternFallback(t *testing
 		return settings
 	})
 	current := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{
-		CenterPercent: 50, SpanPercent: 70, VariationPercent: 10, SegmentSeconds: 12,
+		CenterPercent: 50, SpanPercent: 70, SpanMinPercent: 34,
+		SpanProfile: motion.DynamicSpanProfileWander, VariationPercent: 10, SegmentSeconds: 12,
 	})
 	input := modes.DecisionInput{
 		CurrentSpeed: 30, CurrentDynamic: &current, MotionMinSeconds: 4, MotionMaxSeconds: 60,
 	}
-	center, span, variation, seconds := 35, 50, 30, 18
+	center, span, spanMin, variation, seconds := 35, 50, 24, 30, 18
 	decision, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{
 		Motion: &chat.MotionCommand{
 			Action: chat.MotionActionUpdate, CenterPercent: &center, SpanPercent: &span,
+			SpanMinPercent: &spanMin, SpanProfile: chat.DynamicSpanProfileContrast,
 			VariationPercent: &variation, SegmentSeconds: &seconds,
 		},
 	}}, input)
@@ -487,6 +489,7 @@ func TestMapAutopilotResultBuildsDynamicSegmentWithoutPatternFallback(t *testing
 		t.Fatalf("dynamic decision = %+v, %v", decision, err)
 	}
 	if dynamic := decision.Segment.Dynamic; dynamic.CenterPercent != center || dynamic.SpanPercent != span ||
+		dynamic.SpanMinPercent != spanMin || dynamic.SpanProfile != motion.DynamicSpanProfileContrast || dynamic.PhraseSeed == 0 ||
 		dynamic.VariationPercent != variation || dynamic.SegmentSeconds != seconds {
 		t.Fatalf("dynamic segment = %+v", dynamic)
 	}

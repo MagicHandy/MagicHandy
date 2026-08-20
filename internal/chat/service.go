@@ -139,6 +139,8 @@ func enforceCapabilities(response *AssistantResponse, capabilities Capabilities)
 func clearDynamicMotionFields(command *MotionCommand) {
 	command.CenterPercent = nil
 	command.SpanPercent = nil
+	command.SpanMinPercent = nil
+	command.SpanProfile = ""
 	command.Anchors = nil
 	command.VariationPercent = nil
 	command.SegmentSeconds = nil
@@ -430,7 +432,7 @@ func (s Service) parseAndValidateResponse(raw string, capabilities Capabilities,
 		return AssistantResponse{}, err
 	}
 	if response.Motion != nil && !s.TrustedMotionInput &&
-		!userAuthorizesMotionForCapabilities(userMessage, response.Motion.Action, capabilities, s.MotionContext) {
+		!userAuthorizesMotionCommandForCapabilities(userMessage, *response.Motion, capabilities, s.MotionContext) {
 		response.Motion = nil
 		// An unauthorized model command is inert output. Return before semantic
 		// variation repair can synthesize a replacement command.
@@ -452,12 +454,130 @@ func (s Service) parseAndValidateResponse(raw string, capabilities Capabilities,
 	return response, nil
 }
 
+func userAuthorizesMotionCommandForCapabilities(message string, command MotionCommand, capabilities Capabilities, context *MotionContext) bool {
+	if capabilities.MotionMode == MotionModeDynamic && command.Action == MotionActionUpdate &&
+		context != nil && context.Running {
+		return userAuthorizesDynamicUpdate(message, command, *context)
+	}
+	return userAuthorizesMotionForCapabilities(message, command.Action, capabilities, context)
+}
+
 func userAuthorizesMotionForCapabilities(message, action string, capabilities Capabilities, context *MotionContext) bool {
 	if capabilities.MotionMode == MotionModeDynamic && action == MotionActionUpdate && context != nil && context.Running {
 		normalized := normalizeMotionIntent(message)
 		return normalized != "" && !motionIntentIsNegated(normalized)
 	}
 	return userAuthorizesMotion(message, action)
+}
+
+// userAuthorizesDynamicUpdate keeps the active Creative model's freedom to
+// make a semantic update while respecting the scope of a user's negative
+// qualifier. "Do not change the pace" preserves one axis; it does not cancel a
+// simultaneous request to change stroke length. Unscoped refusals remain inert.
+func userAuthorizesDynamicUpdate(message string, command MotionCommand, context MotionContext) bool {
+	message = normalizeMotionIntent(message)
+	if message == "" {
+		return false
+	}
+	if !motionIntentIsNegated(message) {
+		return true
+	}
+
+	changesSpeed := command.SpeedPercent != nil && *command.SpeedPercent != context.SpeedPercent
+	changesRange := dynamicCommandChangesRange(command)
+	changesTexture := command.VariationPercent != nil
+	negatesSpeed := negatesDynamicSpeedChange(message)
+	negatesRange := negatesDynamicRangeChange(message)
+	if !negatesSpeed && !negatesRange {
+		// Only a recognized semantic-axis qualifier narrows the ordinary
+		// negation gate. A whole-motion refusal remains inert even if the model
+		// also emitted a plausible target.
+		return false
+	}
+
+	if changesSpeed && negatesSpeed {
+		return false
+	}
+	if changesRange && negatesRange {
+		// Negating range variation is itself an explicit request to clear an
+		// envelope. Negating a range change means preserve it exactly.
+		if command.SpanProfile != DynamicSpanProfileSteady ||
+			!negatesAxisMutation(message, []string{"range", "the range", "stroke length", "the stroke length"}, "vary") {
+			return false
+		}
+	}
+
+	requestedAxis := (changesSpeed && requestsDynamicSpeedChange(message)) ||
+		(changesRange && requestsDynamicRangeChange(message)) ||
+		(changesTexture && requestsDynamicTextureChange(message))
+	return requestedAxis
+}
+
+func dynamicCommandChangesRange(command MotionCommand) bool {
+	return command.CenterPercent != nil || command.SpanPercent != nil ||
+		command.SpanMinPercent != nil || command.SpanProfile != "" || len(command.Anchors) > 0
+}
+
+func negatesDynamicSpeedChange(message string) bool {
+	return negatesAxisMutation(message, []string{"pace", "the pace", "speed", "the speed"}, "change")
+}
+
+func negatesDynamicRangeChange(message string) bool {
+	return negatesAxisMutation(
+		message,
+		[]string{"range", "the range", "stroke length", "the stroke length"},
+		"change", "vary",
+	)
+}
+
+func negatesAxisMutation(message string, axes []string, verbs ...string) bool {
+	for _, axis := range axes {
+		for _, verb := range verbs {
+			continuous := verb + "ing"
+			switch verb {
+			case "change":
+				continuous = "changing"
+			case "vary":
+				continuous = "varying"
+			}
+			if hasIntentPhrase(message,
+				"do not "+verb+" "+axis,
+				"don't "+verb+" "+axis,
+				"dont "+verb+" "+axis,
+				"without "+continuous+" "+axis,
+				"stop "+continuous+" "+axis,
+				"no "+axis+" "+verb,
+			) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func requestsDynamicSpeedChange(message string) bool {
+	return hasIntentPhrase(message,
+		"faster", "slower", "quicker", "gentler", "harder", "speed up", "slow down",
+		"increase speed", "decrease speed", "change pace", "change speed",
+	)
+}
+
+func requestsDynamicRangeChange(message string) bool {
+	rangeLanguage := hasIntentPhrase(message,
+		"range", "stroke length", "stroke lengths", "tight", "broad", "short", "deep",
+		"shallow", "base", "middle", "tip", "anchor", "anchors",
+	)
+	changeLanguage := hasIntentPhrase(message,
+		"change", "mix", "vary", "breathe", "wander", "contrast", "steady", "tight", "broad",
+		"short", "deep", "shallow", "use", "make", "keep", "let", "focus",
+	)
+	return rangeLanguage && changeLanguage
+}
+
+func requestsDynamicTextureChange(message string) bool {
+	return hasIntentPhrase(message,
+		"variation", "vary", "rhythm", "timing", "center drift", "more organic", "less robotic",
+	)
 }
 
 func userAuthorizesMotion(message, action string) bool {
@@ -834,10 +954,11 @@ func requestedSpeedBand(context MotionContext, message string) (string, [2]int, 
 		return "", [2]int{}, false
 	}
 	low := hasIntentPhrase(message,
-		"gentle", "gently", "slow", "slow pace", "slowly", "low speed",
+		"gentle", "gently", "slow", "slow pace", "low speed",
 		"despacio", "lentamente", "suave", "suavemente", "ritmo lento", "velocidad baja",
 		"devagar", "ritmo lento", "velocidade baixa",
-	) || containsAny(message, "慢速", "缓慢", "緩慢", "慢慢", "轻柔", "輕柔", "温柔", "低速", "ゆっくり", "やさしく", "優しく", "穏やか", "低速")
+	) || (hasIntentPhrase(message, "slowly") && !requestsDynamicRangeChange(message)) ||
+		containsAny(message, "慢速", "缓慢", "緩慢", "慢慢", "轻柔", "輕柔", "温柔", "低速", "ゆっくり", "やさしく", "優しく", "穏やか", "低速")
 	middle := hasIntentPhrase(message,
 		"medium", "medium pace", "medium speed", "moderate", "moderately",
 		"medio", "media", "moderado", "moderada", "velocidad media",

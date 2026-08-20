@@ -207,6 +207,9 @@ func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnosti
 		trace.MotionKind = "dynamic"
 		trace.DynamicCenterPercent = dynamic.CenterPercent
 		trace.DynamicSpanPercent = dynamic.SpanPercent
+		trace.DynamicSpanMinPercent = dynamic.SpanMinPercent
+		trace.DynamicSpanProfile = dynamic.SpanProfile
+		trace.DynamicPhraseSeed = dynamic.PhraseSeed
 		trace.DynamicVariationPercent = dynamic.VariationPercent
 		trace.DynamicSegmentSeconds = dynamic.SegmentSeconds
 		for _, anchor := range dynamic.Anchors {
