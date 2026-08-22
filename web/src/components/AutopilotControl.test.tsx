@@ -53,7 +53,8 @@ const autopilotPreferences = {
   speech_cadence: "natural",
   speech_min_seconds: 35,
   speech_max_seconds: 120,
-  motion_cadence: "natural",
+  motion_cadence: "scaled",
+  motion_change_level: 4,
   motion_min_seconds: 20,
   motion_max_seconds: 60,
   adaptive_speech_timing: true,
@@ -163,12 +164,13 @@ describe("AutopilotControl", () => {
 
     expect(screen.getByText("Motion 31 s · Speech 1m 31s")).toBeInTheDocument();
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("Motion changes"), { target: { value: "2" } });
+      fireEvent.change(screen.getByLabelText("Motion changes"), { target: { value: "5" } });
     });
 
     expect(saveAutopilotPreferences).toHaveBeenCalledWith({
       ...autopilotPreferences,
-      motion_cadence: "dynamic",
+      motion_cadence: "scaled",
+      motion_change_level: 6,
     });
   });
 
@@ -184,18 +186,19 @@ describe("AutopilotControl", () => {
     render(<AutopilotControl />);
 
     const slider = screen.getByRole("slider", { name: "Motion changes" });
-    fireEvent.change(slider, { target: { value: "2" } });
-    fireEvent.change(slider, { target: { value: "3" } });
+    fireEvent.change(slider, { target: { value: "4" } });
+    fireEvent.change(slider, { target: { value: "6" } });
     expect(saveAutopilotPreferences).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      resolveFirst({ autopilot: { ...autopilotPreferences, motion_cadence: "dynamic" } });
+      resolveFirst({ autopilot: { ...autopilotPreferences, motion_change_level: 5 } });
       await Promise.resolve();
     });
     await waitFor(() => expect(saveAutopilotPreferences).toHaveBeenCalledTimes(2));
     expect(saveAutopilotPreferences).toHaveBeenLastCalledWith({
       ...autopilotPreferences,
-      motion_cadence: "custom",
+      motion_cadence: "scaled",
+      motion_change_level: 7,
     });
   });
 
@@ -270,13 +273,12 @@ describe("AutopilotControl", () => {
     }));
   });
 
-  it("shows custom cadence timing beside its selector without opening Advanced", () => {
+  it("shows custom speech timing beside its selector without opening Advanced", () => {
     app.state = {
       modes: { mode: "autopilot" },
       settings: {
         autopilot: {
           ...autopilotPreferences,
-          motion_cadence: "custom",
           speech_cadence: "custom",
         },
       },
@@ -284,16 +286,27 @@ describe("AutopilotControl", () => {
     render(<AutopilotControl />);
 
     const advanced = screen.getByText("Advanced").closest("details");
-    const motionSelector = screen.getByRole("slider", { name: "Motion changes" });
     const speechSelector = screen.getByRole("slider", { name: "Spoken check-ins" });
-    const motionMinimum = screen.getByRole("spinbutton", { name: "Motion minimum seconds" });
     const speechMinimum = screen.getByRole("spinbutton", { name: "Speech minimum seconds" });
-    expect(advanced).not.toContainElement(motionMinimum);
     expect(advanced).not.toContainElement(speechMinimum);
-    expect(motionSelector.parentElement?.nextElementSibling).toContainElement(motionMinimum);
     expect(speechSelector.parentElement?.nextElementSibling).toContainElement(speechMinimum);
-    expect(screen.getByText("Motion range")).toBeVisible();
     expect(screen.getByText("Speech range")).toBeVisible();
+  });
+
+  it("renders Motion changes as an explicit numbered 1-7 scale", () => {
+    app.state = {
+      modes: { mode: "autopilot" },
+      settings: { autopilot: autopilotPreferences },
+    };
+    render(<AutopilotControl />);
+
+    const slider = screen.getByRole("slider", { name: "Motion changes" });
+    expect(slider).toHaveAttribute("aria-valuetext", "4");
+    expect(screen.getByText("1 = fewer · 7 = more")).toBeVisible();
+    expect(Array.from(
+      slider.closest(".autopilot-setpoints")?.querySelectorAll(".setpoint-stop") ?? [],
+      (stop) => stop.textContent,
+    )).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
   });
 
   it.each([1, 24 * 60])("saves a %d minute custom buildup", async (minutes) => {

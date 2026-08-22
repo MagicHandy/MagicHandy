@@ -9,26 +9,28 @@ import (
 // AutopilotContext is bounded semantic context for an autonomous model turn.
 // It contains no transport or engine details.
 type AutopilotContext struct {
-	Style              string
-	SegmentIndex       int
-	RecentPatternIDs   []string
-	SpeedMinPercent    int
-	SpeedMaxPercent    int
-	LastSay            string
-	CurrentPatternID   string
-	CurrentSpeed       int
-	CurrentArea        string
-	AreaFocusEnabled   bool
-	MotionMode         MotionMode
-	CurrentCenter      int
-	CurrentSpan        int
-	CurrentSpanMin     int
-	CurrentSpanProfile string
-	CurrentAnchors     []string
-	CurrentVariation   int
-	CurrentSegment     int
-	MotionMinSeconds   int
-	MotionMaxSeconds   int
+	Style               string
+	SegmentIndex        int
+	RecentPatternIDs    []string
+	SpeedMinPercent     int
+	SpeedMaxPercent     int
+	LastSay             string
+	CurrentPatternID    string
+	CurrentSpeed        int
+	CurrentArea         string
+	AreaFocusEnabled    bool
+	MotionMode          MotionMode
+	CurrentCenter       int
+	CurrentSpan         int
+	CurrentSpanMin      int
+	CurrentSpanProfile  string
+	CurrentAnchors      []string
+	CurrentVariation    int
+	CurrentSegment      int
+	CurrentSectionCount int
+	MotionMinSeconds    int
+	MotionMaxSeconds    int
+	MotionChangeLevel   int
 	// SessionTracking gates the three session facts below. When false they are
 	// omitted from the prompt entirely rather than rendered as zeros, so the model
 	// cannot reason from a number that means "unknown".
@@ -98,17 +100,26 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 			if len(context.CurrentAnchors) > 0 {
 				fmt.Fprintf(&builder, ", anchors %q", context.CurrentAnchors)
 			}
+			if context.CurrentSectionCount > 0 {
+				fmt.Fprintf(&builder, ", %d-section phrase", context.CurrentSectionCount)
+			}
 			builder.WriteString(".\n")
 		} else {
-			builder.WriteString("No Dynamic target is active. To begin, use update with speed and either center/span or anchors; none leaves Autopilot waiting.\n")
+			builder.WriteString("No Dynamic target is active. To begin Creative motion, use update with speed and either center/span or anchors, or use a complete sections phrase; none leaves Autopilot waiting.\n")
 		}
 		writeSessionProgress(&builder, context)
 		builder.WriteString("Decide what happens for the next continuous stretch using the recent conversation as the user's ongoing direction:\n")
+		motionChangeLevel := context.MotionChangeLevel
+		if motionChangeLevel < 1 || motionChangeLevel > 7 {
+			motionChangeLevel = 4
+		}
+		fmt.Fprintf(&builder, "- The user's Motion changes preference is %d of 7; honor it through the supplied decision-horizon range and how often a genuinely new phrase is worthwhile.\n", motionChangeLevel)
 		builder.WriteString("- Use action \"update\" only when a meaningful change fits. Omitted fields preserve the live dynamic target.\n")
 		builder.WriteString("- Use action \"none\" to deliberately continue. Holding is a first-class model decision, not a failure.\n")
 		builder.WriteString("- Change center/span or provide a new 2-6 anchor route; never provide both representations together. Interior anchors are pass-through positions, not pauses.\n")
 		builder.WriteString("- To vary stroke length inside the stretch, provide span_min_percent and choose span_profile breathe, wander, or contrast. The current widest span or anchor route remains the ceiling. Use steady to clear range variation.\n")
 		builder.WriteString("- variation_percent controls correlated center and rhythm texture independently from an explicit span profile: 20-40 is subtle, 45-70 clearly organic, and 70-100 deliberately wild. Use zero only for mechanically even motion, never for jitter.\n")
+		builder.WriteString("- For a meaningful macro change, sections may replace the single geometry with 2-4 complete movement ideas, each with geometry, texture, and 2-12 cycles. Do not emit sections merely to restate the current phrase.\n")
 		fmt.Fprintf(&builder, "- segment_seconds must be %d-%d and says when to reconsider, not when to stop. Vary it naturally rather than choosing one constant.\n",
 			minimumSeconds, maximumSeconds)
 		builder.WriteString("- Never use start or stop: the scheduler owns start and only the user stops motion.\n")

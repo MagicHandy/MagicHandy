@@ -43,7 +43,6 @@ type Arrangement struct {
 func NormalizeSegment(segment Segment) Segment {
 	if segment.Dynamic != nil {
 		dynamic := motion.NormalizeDynamicDefinition(*segment.Dynamic)
-		dynamic.Anchors = append([]motion.DynamicAnchor(nil), dynamic.Anchors...)
 		segment.Dynamic = &dynamic
 		segment.PatternID = ""
 	} else if segment.PatternID == "" {
@@ -90,6 +89,11 @@ func cloneDynamicDefinition(definition *motion.DynamicDefinition) *motion.Dynami
 	}
 	cloned := *definition
 	cloned.Anchors = append([]motion.DynamicAnchor(nil), definition.Anchors...)
+	cloned.Sections = make([]motion.DynamicSection, len(definition.Sections))
+	for index, section := range definition.Sections {
+		cloned.Sections[index] = section
+		cloned.Sections[index].Anchors = append([]motion.DynamicAnchor(nil), section.Anchors...)
+	}
 	return &cloned
 }
 

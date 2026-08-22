@@ -26,6 +26,7 @@ type MotionContext struct {
 	Anchors          []string
 	VariationPercent int
 	SegmentSeconds   int
+	SectionCount     int
 }
 
 type promptSpeedRange struct {
@@ -54,6 +55,7 @@ type promptMotionContext struct {
 	Anchors          []string         `json:"anchors,omitempty"`
 	VariationPercent int              `json:"variation_percent,omitempty"`
 	SegmentSeconds   int              `json:"segment_seconds,omitempty"`
+	SectionCount     int              `json:"section_count,omitempty"`
 	SpeedLimits      promptSpeedRange `json:"speed_limits"`
 	SpeedBands       promptSpeedBands `json:"speed_bands"`
 }
@@ -72,6 +74,7 @@ Use that snapshot deliberately:
 - Range-specific requests change span_min_percent/span_profile while preserving speed unless pace was also requested.
 - Choose every supplied speed_percent from this snapshot's speed_bands; numbers in contract examples are not defaults. A modifier of how geometry or its envelope evolves does not change device pace; change speed only when the user modifies speed or pace itself.
 - For a general request to vary or surprise, change the geometry, span envelope, speed, anchor route, slow center/rhythm variation, decision horizon, or a fitting combination. Do not mechanically change every field.
+- section_count reports a running multi-section phrase. Omitted fields preserve that entire phrase; return a new complete sections array only when replacing it deliberately.
 - Never stop at a decision horizon; it only tells Autopilot when to reconsider the still-continuous motion.
 - When embodied partner-action wording is a direct request, interpret it as device motion intent and acknowledge the motion decision rather than declining the request.`
 
@@ -91,6 +94,7 @@ func motionContextInstructions(context MotionContext, capabilities Capabilities,
 		data.Anchors = nil
 		data.VariationPercent = 0
 		data.SegmentSeconds = 0
+		data.SectionCount = 0
 	}
 	if !capabilities.Patterns {
 		data.PatternID = ""
@@ -258,6 +262,7 @@ func normalizedPromptMotionContext(context MotionContext) promptMotionContext {
 	result.Anchors = append([]string(nil), context.Anchors...)
 	result.VariationPercent = context.VariationPercent
 	result.SegmentSeconds = context.SegmentSeconds
+	result.SectionCount = clampPromptPercent(context.SectionCount, 0, 4)
 	return result
 }
 

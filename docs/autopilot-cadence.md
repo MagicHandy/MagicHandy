@@ -72,15 +72,28 @@ Autopilot session without restarting motion.
 
 ### Motion evolution
 
-| Preset | Delay range |
+| Level | Delay range |
 | --- | --- |
-| Steady | 45-120 seconds |
-| Natural | 20-60 seconds |
-| Dynamic | 10-35 seconds |
-| Custom | 8-300 seconds |
+| 1 | 90-240 seconds |
+| 2 | 60-150 seconds |
+| 3 | 45-120 seconds |
+| 4 | 20-60 seconds |
+| 5 | 14-45 seconds |
+| 6 | 10-35 seconds |
+| 7 | 8-24 seconds |
 
-The default is `Natural` for both clocks. Custom minimums cannot exceed custom
-maximums. All non-off intervals have an eight-second floor.
+Motion changes defaults to level 4; Spoken check-ins defaults to `Natural`.
+Stored Steady/Natural/Dynamic values migrate to levels 3/4/6, and an old custom
+motion window migrates to the nearest level midpoint. Speech retains its custom
+minimum/maximum inputs. All non-off intervals have an eight-second floor.
+
+The numbered setting changes how often Autopilot asks for a genuinely new
+semantic target; it is not an acceleration or transport multiplier. Creative
+also receives the effective level and window as decision context, and its
+model-selected `segment_seconds` is clamped against that effective window. The
+previous implementation accidentally clamped Creative against the dormant
+saved custom fields even when another preset was selected; the scale has one
+backend-authoritative window now.
 
 ### Speech motion authority
 
@@ -152,7 +165,7 @@ segment interior:
   then scaled by the model's variability category. Edge guards, six-second
   spacing, and a one-second jitter reserve can lower that count when a short
   segment cannot fit genuinely sampled timing. This **self-balances against the
-  cadence preset**: a 10s Dynamic segment has no room and gets none because it
+  change level**: a 10s level-6 segment has no room and gets none because it
   is already changing constantly, while a 120s Steady segment earns the most
   because it is the one at risk of feeling static.
 - Amplitude is a share of the user's own speed band (14% normal, 26% restless),
@@ -171,14 +184,14 @@ segment interior:
 **Measured combined retarget rate** (one boundary plus earned waypoints; the
 pre-change loop produced roughly 4-9/min):
 
-| Preset | Segment | settled | normal | restless |
+| Legacy-equivalent level | Segment | settled | normal | restless |
 | --- | --- | --- | --- | --- |
-| Dynamic | 10s | 6.0 | 6.0 | 6.0 |
-| Dynamic | 35s | 1.7 | 5.1 | 6.9 |
-| Natural | 20s | 3.0 | 6.0 | 6.0 |
-| Natural | 60s | 1.0 | 4.0 | 7.0 |
-| Steady | 45s | 1.3 | 5.3 | 8.0 |
-| Steady | 120s | 0.5 | 2.0 | 3.5 |
+| 6 (Dynamic) | 10s | 6.0 | 6.0 | 6.0 |
+| 6 (Dynamic) | 35s | 1.7 | 5.1 | 6.9 |
+| 4 (Natural) | 20s | 3.0 | 6.0 | 6.0 |
+| 4 (Natural) | 60s | 1.0 | 4.0 | 7.0 |
+| 3 (Steady) | 45s | 1.3 | 5.3 | 8.0 |
+| 3 (Steady) | 120s | 0.5 | 2.0 | 3.5 |
 
 Worst case is 8.0/min, under the churn this work removed, and the texture lands
 where it was missing: a two-minute Steady target went from 0.5 changes/min to
@@ -248,9 +261,9 @@ moment later. Buildup requires session tracking; the settings validator rejects
 the combination rather than letting the document express a state the runtime
 would silently ignore.
 
-In the Chat control, Motion changes and Spoken check-ins are labeled set-point
-sliders and reveal their custom timing rows directly beneath the corresponding
-control. Session buildup and its
+In the Chat control, Motion changes is an explicit numbered 1–7 scale and
+Spoken check-ins is a labeled set-point slider. Speech reveals its custom timing
+row directly beneath that control. Session buildup and its
 duration are primary controls as well; only adaptive timing, speech-motion
 authority, and the lower-level tracking switch remain under Advanced.
 

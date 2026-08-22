@@ -671,6 +671,8 @@
   "Motion": "运动",
   "Motion behavior": "运动行为",
   "Motion changes": "运动变化",
+  "1 = fewer · 7 = more": "1 = 较少 · 7 = 较多",
+  "{count} sections": "{count} 个段落",
   "Motion command failed": "运动指令失败",
   "Motion commands": "运动命令",
   "Motion context": "运动上下文",

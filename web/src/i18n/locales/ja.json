@@ -671,6 +671,8 @@
   "Motion": "モーション",
   "Motion behavior": "モーションの動作",
   "Motion changes": "モーション変更",
+  "1 = fewer · 7 = more": "1 = 少ない · 7 = 多い",
+  "{count} sections": "{count}セクション",
   "Motion command failed": "モーションコマンドが失敗しました",
   "Motion commands": "モーションコマンド",
   "Motion context": "モーションコンテキスト",

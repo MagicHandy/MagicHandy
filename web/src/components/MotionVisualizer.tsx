@@ -71,18 +71,33 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
     : t("No active pattern");
   const rawSource = engine?.target?.source?.trim();
   const source = active && rawSource ? rawSource.replaceAll("_", " ") : "--";
+  const dynamicSections = dynamic?.sections ?? [];
   const dynamicAnchors = dynamic?.anchors?.map((anchor) => anchor.name).filter(Boolean) ?? [];
-  const dynamicSpan = dynamic && typeof dynamic.span_min_percent === "number" &&
-    dynamic.span_min_percent < dynamic.span_percent
-    ? `${dynamic.span_min_percent}-${dynamic.span_percent}%`
-    : dynamic ? `${dynamic.span_percent}%` : "";
+  const sectionOuterSpans = dynamicSections.map((section) => section.span_percent);
+  const sectionInnerSpans = dynamicSections.map((section) => section.span_min_percent ?? section.span_percent);
+  const outerSpan = dynamicSections.length ? Math.max(...sectionOuterSpans) : dynamic?.span_percent;
+  const innerSpan = dynamicSections.length ? Math.min(...sectionInnerSpans) : dynamic?.span_min_percent;
+  const dynamicSpan = dynamic && typeof outerSpan === "number"
+    ? typeof innerSpan === "number" && innerSpan < outerSpan ? `${innerSpan}-${outerSpan}%` : `${outerSpan}%`
+    : "";
   const dynamicSpanProfile = dynamic?.span_profile === "steady" ? t("Steady")
     : dynamic?.span_profile === "breathe" ? t("Breathe")
       : dynamic?.span_profile === "wander" ? t("Wander")
         : dynamic?.span_profile === "contrast" ? t("Contrast")
           : "";
+  const dynamicSectionLabel = dynamicSections.length
+    ? t("{count} sections", { count: dynamicSections.length })
+    : "";
+  const dynamicVariation = dynamicSections.length
+    ? (() => {
+      const values = dynamicSections.map((section) => section.variation_percent);
+      const minimum = Math.min(...values);
+      const maximum = Math.max(...values);
+      return minimum === maximum ? `${minimum}%` : `${minimum}-${maximum}%`;
+    })()
+    : dynamic ? `${dynamic.variation_percent}%` : "";
   const dynamicMeta = dynamic
-    ? `${dynamicAnchors.length ? dynamicAnchors.join(" → ") : `${t("Center")} ${dynamic.center_percent}%`} · ${dynamicSpanProfile ? `${dynamicSpanProfile} · ` : ""}${dynamic.segment_seconds}s · ${source}`
+    ? `${dynamicSectionLabel || (dynamicAnchors.length ? dynamicAnchors.join(" → ") : `${t("Center")} ${dynamic.center_percent}%`)} · ${!dynamicSectionLabel && dynamicSpanProfile ? `${dynamicSpanProfile} · ` : ""}${dynamic.segment_seconds}s · ${source}`
     : "";
   // The stroke channel and carriage ride on the device center axis. 100% is the
   // top of the channel.
@@ -149,10 +164,13 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
           </div>
           {dynamic ? (
             <dl className="viz-metrics dynamic-metrics">
-              <div><dt>{t("Center")}</dt><dd>{dynamic.center_percent}%</dd></div>
+              <div>
+                <dt>{dynamicSectionLabel ? t("Motion") : t("Center")}</dt>
+                <dd>{dynamicSectionLabel ? dynamicSectionLabel : <>{formatNumber(dynamic.center_percent)}%</>}</dd>
+              </div>
               <div><dt>{t("Span")}</dt><dd>{dynamicSpan}</dd></div>
               <div><dt>{t("Speed")}</dt><dd>{speed}</dd></div>
-              <div><dt>{t("Variation")}</dt><dd>{dynamic.variation_percent}%</dd></div>
+              <div><dt>{t("Variation")}</dt><dd>{dynamicVariation}</dd></div>
             </dl>
           ) : (
             <dl className="viz-metrics">

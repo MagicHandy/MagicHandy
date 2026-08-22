@@ -315,8 +315,11 @@ window and direction; the buffered queue tail is diagnostics, not position.
   visually centered in the rail.
 - The Chat Controls sidebar begins with a compact segmented `LLM motion` radio
   choice for Creative / Pattern Library / Off. `Creative` is the user-facing
-  name for the persisted `dynamic` mode. Ordered Motion changes, Spoken
-  check-ins, and motion Style controls use labeled discrete sliders; speech-
+  name for the persisted `dynamic` mode. Motion changes uses seven numbered
+  stops with a compact `1 = fewer · 7 = more` direction hint; Spoken check-ins
+  and motion Style use labeled discrete sliders. The backend maps the numbered
+  scale to its bounded timing windows and migrates legacy cadence presets;
+  speech-
   motion authority remains categorical and uses a segmented choice.
   The LLM-motion row remains one fixed 32px line when Advanced makes the
   sidebar scrollbar appear; localized visual text may ellipsize, while the

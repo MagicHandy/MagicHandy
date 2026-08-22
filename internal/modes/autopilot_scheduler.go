@@ -205,8 +205,9 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	if choice.segment.Dynamic != nil && choice.segment.Dynamic.SegmentSeconds > 0 {
 		requested := time.Duration(choice.segment.Dynamic.SegmentSeconds) * time.Second
 		settings := m.options.AutopilotSettings()
-		minimum := time.Duration(settings.MotionMinSeconds) * time.Second
-		maximum := time.Duration(settings.MotionMaxSeconds) * time.Second
+		minimumSeconds, maximumSeconds := settings.MotionWindow()
+		minimum := time.Duration(minimumSeconds) * time.Second
+		maximum := time.Duration(maximumSeconds) * time.Second
 		if minimum > 0 && requested < minimum {
 			requested = minimum
 		}

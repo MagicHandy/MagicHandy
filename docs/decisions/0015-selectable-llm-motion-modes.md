@@ -34,7 +34,8 @@ Stop lifecycle.
 MagicHandy has three persisted, mutually exclusive LLM motion modes:
 
 1. **Creative** (`dynamic` in settings/API): the model emits bounded semantic geometry (`center_percent` plus
-   `span_percent`, or an ordered route through named anchors),
+   `span_percent`, an ordered route through named anchors, or a compact phrase
+   of two to four complete semantic sections),
    an optional stroke-length envelope, `speed_percent`, slow center/rhythm
    `variation_percent`, and a `segment_seconds` decision horizon. The backend
    compiles this to ordinary loop content and a `MotionPlan`.
@@ -74,6 +75,9 @@ Dynamic geometry is bounded as follows:
   center drift plus bounded leg-time breathing over a route-sized phrase of at
   least about eight seconds at maximum reference speed;
 - the decision horizon is 4–120 seconds and does not stop motion at expiry.
+- a section phrase contains 2–4 complete movement ideas; each uses the same
+  bounded geometry/texture vocabulary plus 2–12 cycles. Sections compile to
+  one long engine curve, never a command queue or a second motion loop.
 
 The empty span profile preserves alpha.25's bounded implicit span swell for old
 in-memory targets. New model responses use the explicit vocabulary. A variable
@@ -82,7 +86,9 @@ boundaries; the backend never invents the amount of range variation. The
 backend-derived phrase seed is diagnostic/runtime state, not a model field.
 
 Interior route anchors are pass-through knots with a non-zero tangent. Only
-the true route endpoints reverse direction. Dynamic content enters the same
+the true route endpoints reverse direction. Creative uses a monotone C2
+quintic-Hermite profile whose neighboring legs share velocity and acceleration
+at every knot; its runtime plan also has a perceptual jerk budget. Dynamic content enters the same
 `MotionTarget`, normalization, sampler, transition, transport stream, and Stop
 generation as every other source. Content identity excludes the decision
 horizon so a timing-only update preserves phase. Cross-geometry handoff phase
@@ -201,6 +207,42 @@ stripped as unauthorized model noise instead of requiring a growing catalog of
 phrase-specific instructions. The managed model passed 9/9 repetitions of the
 reproduced correction sequence plus the broader 25/25 Creative matrix without
 constructing an engine or transport.
+
+## 2026-08-22 continuous-turn and phrase-variety follow-up
+
+Alpha.27's whole-leg PCHIP removed the short endpoint brake, but PCHIP is C1:
+velocity is continuous while acceleration can still jump at a reversal. Felt
+output remained abrupt, and a single long envelope could still express many
+variations of one route rather than a larger movement idea.
+
+Creative now renders its semantic knots with a monotone C2 quintic Hermite
+profile. True reversals share one bounded acceleration state across both legs;
+pass-through anchors retain a bounded nonzero velocity. The planner evaluates
+the exact quintic acceleration and jerk extrema and lengthens only the Creative
+period when either runtime quality envelope is exceeded. Catalog and imported
+curves retain their existing profiles.
+
+The model may also return two to four complete `sections`, each with geometry,
+texture, and 2–12 cycles. Deterministic code expands them into one loop-closed
+curve with at least 60 seconds of maximum-reference travel (or the longer
+decision horizon), uses C2 smootherstep for slow control envelopes, and derives
+new micro-timing for later occurrences. Replacing a phrase advances one bounded
+seed from the authoritative current target; no unbounded history or hidden
+random decision policy is introduced. Speed-only updates preserve every
+section, while a scalar geometry correction deliberately returns to the
+currently effective section.
+
+Cloud's required whole-percent wire encoding remains unchanged. The Creative-
+only fitter now scores both position error and inverse time-at-position error,
+then removes redundant quantized edges. This preserves a short eased stroke's
+timing shape without changing catalog, imported, or media simplification.
+
+The installed Ollama model passed the new four-case no-transport phrase matrix:
+multi-section start, running phrase replacement, pace-only preservation, and a
+failed-tip correction. The last case used the existing single repair turn to
+produce a real geometry change. Broader provider behavior remains stochastic,
+and no post-change hardware command was issued, so real-device acceptance is
+still open.
 
 ## Rejected Alternatives
 

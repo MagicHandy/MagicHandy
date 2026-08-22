@@ -671,6 +671,8 @@
   "Motion": "Movimiento",
   "Motion behavior": "Comportamiento de movimiento",
   "Motion changes": "Cambios de movimiento",
+  "1 = fewer · 7 = more": "1 = menos · 7 = más",
+  "{count} sections": "{count} secciones",
   "Motion command failed": "Falló el comando de movimiento",
   "Motion commands": "Comandos de movimiento",
   "Motion context": "Contexto de movimiento",

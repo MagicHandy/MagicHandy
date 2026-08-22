@@ -212,6 +212,7 @@ func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnosti
 		trace.DynamicPhraseSeed = dynamic.PhraseSeed
 		trace.DynamicVariationPercent = dynamic.VariationPercent
 		trace.DynamicSegmentSeconds = dynamic.SegmentSeconds
+		trace.DynamicSectionCount = len(dynamic.Sections)
 		for _, anchor := range dynamic.Anchors {
 			trace.DynamicAnchors = append(trace.DynamicAnchors, anchor.Name)
 		}
@@ -235,6 +236,7 @@ func cloneMotionTarget(target MotionTarget) MotionTarget {
 	if target.Dynamic != nil {
 		dynamic := *target.Dynamic
 		dynamic.Anchors = append([]DynamicAnchor(nil), target.Dynamic.Anchors...)
+		dynamic.Sections = cloneDynamicSections(target.Dynamic.Sections)
 		target.Dynamic = &dynamic
 	}
 	if target.Program != nil {

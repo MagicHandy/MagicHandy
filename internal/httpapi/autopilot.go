@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
@@ -84,19 +85,20 @@ func (s *Server) autopilotModelTurn(
 		Capabilities:          capabilities,
 	}
 	modelContext := chat.AutopilotContext{
-		Style:            input.Style,
-		SegmentIndex:     input.SegmentIndex,
-		RecentPatternIDs: input.RecentPatternIDs,
-		SpeedMinPercent:  input.SpeedMinPercent,
-		SpeedMaxPercent:  input.SpeedMaxPercent,
-		LastSay:          input.LastSay,
-		CurrentPatternID: string(input.CurrentPatternID),
-		CurrentSpeed:     input.CurrentSpeed,
-		CurrentArea:      chatAreaZone(input.CurrentAreaFocus),
-		AreaFocusEnabled: capabilities.AreaFocus,
-		MotionMode:       capabilities.MotionMode,
-		MotionMinSeconds: input.MotionMinSeconds,
-		MotionMaxSeconds: input.MotionMaxSeconds,
+		Style:             input.Style,
+		SegmentIndex:      input.SegmentIndex,
+		RecentPatternIDs:  input.RecentPatternIDs,
+		SpeedMinPercent:   input.SpeedMinPercent,
+		SpeedMaxPercent:   input.SpeedMaxPercent,
+		LastSay:           input.LastSay,
+		CurrentPatternID:  string(input.CurrentPatternID),
+		CurrentSpeed:      input.CurrentSpeed,
+		CurrentArea:       chatAreaZone(input.CurrentAreaFocus),
+		AreaFocusEnabled:  capabilities.AreaFocus,
+		MotionMode:        capabilities.MotionMode,
+		MotionMinSeconds:  input.MotionMinSeconds,
+		MotionMaxSeconds:  input.MotionMaxSeconds,
+		MotionChangeLevel: input.MotionChangeLevel,
 		// The manager already applied the tracking and arc switches when it built
 		// the input, so a disabled switch arrives as false here and the prompt
 		// omits the section entirely.
@@ -115,6 +117,7 @@ func (s *Server) autopilotModelTurn(
 		modelContext.CurrentSpanProfile = dynamic.SpanProfile
 		modelContext.CurrentVariation = dynamic.VariationPercent
 		modelContext.CurrentSegment = dynamic.SegmentSeconds
+		modelContext.CurrentSectionCount = len(dynamic.Sections)
 		for _, anchor := range dynamic.Anchors {
 			modelContext.CurrentAnchors = append(modelContext.CurrentAnchors, anchor.Name)
 		}
@@ -245,19 +248,7 @@ func mapDynamicAutopilotCommand(
 func sameDynamicDefinition(left, right motion.DynamicDefinition) bool {
 	left = motion.NormalizeDynamicDefinition(left)
 	right = motion.NormalizeDynamicDefinition(right)
-	if left.CenterPercent != right.CenterPercent || left.SpanPercent != right.SpanPercent ||
-		left.SpanMinPercent != right.SpanMinPercent || left.SpanProfile != right.SpanProfile ||
-		left.PhraseSeed != right.PhraseSeed ||
-		left.VariationPercent != right.VariationPercent || left.SegmentSeconds != right.SegmentSeconds ||
-		len(left.Anchors) != len(right.Anchors) {
-		return false
-	}
-	for index := range left.Anchors {
-		if left.Anchors[index] != right.Anchors[index] {
-			return false
-		}
-	}
-	return true
+	return reflect.DeepEqual(left, right)
 }
 
 // mapAutopilotResult keeps the old test/helper surface while all production

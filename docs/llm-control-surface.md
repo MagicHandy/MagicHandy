@@ -48,7 +48,7 @@ Library fields are never advertised together:
 
 | Mode | Model surface | Runtime behavior |
 | --- | --- | --- |
-| **Dynamic** | speed plus center/span or an ordered named-anchor route, an optional stroke-length envelope, slow center/rhythm variation, and a decision horizon | compiles an ephemeral loop through the shared motion engine; no pattern catalog enters the prompt |
+| **Dynamic** | speed plus one center/span or ordered-anchor route, or 2–4 complete semantic sections; optional stroke-length envelopes, slow center/rhythm variation, and a decision horizon | compiles one ephemeral C2 loop through the shared motion engine; no pattern catalog enters the prompt |
 | **Pattern Library** | enabled opaque `pattern_id`, speed, and optional named area focus | resolves an authored library shape through the shared motion engine |
 | **Off** | reply text and optional mood only | rejects model motion while every user Stop path remains available |
 
@@ -77,9 +77,12 @@ after switching to Off.
 | `anchors` | 2–6 of `base`, `lower`, `middle`, `upper`, `tip` | Dynamic only: ordered semantic route; consecutive duplicates and routes narrower than 20% are rejected |
 | `variation_percent` | 0–100 | Dynamic only: bounded deterministic center/rhythm texture, independent of an explicit span profile and never high-frequency noise |
 | `segment_seconds` | 4–120 | Dynamic only: model decision horizon, not a stop timer |
+| `sections` | 2–4 complete section objects | Dynamic only: replace the single top-level geometry/texture with several movement ideas; each section has one geometry, optional envelope/variation, and `cycles` 2–12 |
 
 Validation enforces the mode-specific combinations. A Dynamic start requires
-speed and either center plus span or anchors. A Dynamic update may omit fields
+speed and either center plus span, anchors, or complete sections. Sections are
+mutually exclusive with top-level geometry/texture; speed and the decision
+horizon remain phrase-wide. A Dynamic update may omit fields
 to preserve their live values but must change at least one value. A Pattern
 Library start or target cannot include Dynamic fields. `none` and `stop` carry
 no target fields in either mode. The decoder still accepts the retired
@@ -94,6 +97,16 @@ count, duplicate, and minimum-span checks. A stopped engine accepts only `start`
 shape change may omit pace, and a Dynamic update may omit any unchanged field.
 Disabled or unknown pattern ids are rejected. Dynamic never reads pattern
 storage or receives catalog names.
+
+A complete `start` object emitted while Creative is already running is
+unambiguously normalized to `update`; this preserves its semantic fields and
+keeps playback on the retarget path instead of spending the one repair turn on
+an action-word redundancy. The reverse is not inferred: a stopped `update`
+cannot start hardware. Pace-only interactive updates discard copied geometry,
+texture, section, and horizon fields before dispatch, while position-only
+updates discard copied pace/texture fields. An explicit pace request must
+actually move speed in the requested direction, and an unsatisfied position
+report must change geometry before reply text may claim success.
 
 Pattern choices describe shape and relative rhythm only. The prompt strips
 storage/status tags (`experimental`, `curated`, `imported`) and never exposes
@@ -143,7 +156,7 @@ stopped/running/paused state, current speed, and the persisted speed envelope
 split into low/middle/high bands. Pattern Library adds the active pattern/area
 and up to four recent chat-selected opaque handles. Dynamic instead adds the
 live center, outer span, span floor/profile, ordered anchors, center/rhythm
-variation, and decision horizon. This state
+variation, decision horizon, and the current section count. This state
 is prompt data, not a second frontend motion model. It is derived from the
 engine snapshot and bounded trace ring, so it is runtime-only and requires no
 database migration.
@@ -177,7 +190,9 @@ Chat Autopilot reuses the selected contract at bounded decision boundaries. In
 Pattern Library mode it may curate an enabled pattern/speed or hold. In Dynamic
 mode its autonomous `update` supplies initial geometry or changes the live
 geometry, and `segment_seconds` is clamped to the user's Autopilot motion-cadence
-range. Dynamic provider failure holds the
+range. The user-facing Motion changes control is a numbered 1–7 scale spanning
+90–240 seconds down to 8–24 seconds; level 4 preserves the former Natural
+20–60 second default. Dynamic provider failure holds the
 current Dynamic target or waits for a model decision; it never falls back to a
 deterministic library pattern. The same rule applies when a valid initial model
 decision chooses to hold before any Dynamic target exists: Autopilot remains
@@ -262,6 +277,17 @@ correction, and scopes a position-only update to geometry. Unsolicited pace,
 span texture, variation, and horizon fields are discarded as unauthorized
 model noise. The exact sequence passed 9/9 repeated managed-model decisions;
 this is semantic validation, not deterministic phrase-to-motion planning.
+
+The 2026-08-22 follow-up added a compact multi-section phrase instead of
+exposing arrays of timed points. Two to four model-selected sections compile to
+one loop-closed C2 curve with at least 60 seconds of maximum-reference travel.
+Successive section occurrences receive deterministic micro-timing variation,
+and an explicit replacement advances one bounded seed from the authoritative
+current target. Speed-only updates preserve the phrase; a scalar correction
+returns to the currently effective section. The locally installed Ollama model
+passed a focused four-case start/replace/pace/correction matrix without an
+engine or transport. This is focused evidence only; a broader supported-
+provider and real-device comparison remains open.
 
 ## Ideas, ranked by leverage-to-risk
 

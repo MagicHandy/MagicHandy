@@ -653,6 +653,18 @@ phrase seed. Long-phrase phase search now scales with authored curve complexity
 and scores the direction actually available after handoff; continuity tests
 cover profile-to-profile retargets through the existing transition path.
 
+Status 2026-08-22: multi-section Creative phrases remain one semantic
+`MotionTarget.Dynamic` and one compiled loop; sections are not mode segments,
+transport commands, goroutines, or queued playback owners. The Creative curve
+profile is now C2 quintic Hermite with exact acceleration/jerk fitting, and its
+whole-percent timing-aware simplifier still feeds the shared sampler and
+declared transport resolution. Catalog/imported fitting is deliberately
+unchanged. Focused tests cover C2 knot/seam continuity, monotonicity, all three
+Handy profiles, quantized short-stroke timing, section reversal-length
+diversity, one Play across retargets, and Stop-era lifecycle gates. No
+post-change device command was issued, so R1/R22 subjective feel and transport
+acceptance remain open.
+
 ## R15: Chat And Voice Delivery Ordering
 
 Level: Medium

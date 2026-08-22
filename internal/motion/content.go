@@ -109,6 +109,8 @@ type Curve struct {
 	points        []CurvePoint
 	authoredKnots []CurvePoint
 	slopes        []float64
+	accelerations []float64
+	quintics      []quinticSegment
 	duration      int64
 	loop          bool
 	linear        bool
@@ -189,10 +191,15 @@ func newCurveWithReversalProfile(
 		maxPosition:   maximum,
 	}
 	if !linear {
-		curve.slopes = monotoneSlopes(curvePoints, loop)
-		for index, point := range curvePoints {
-			if slope, ok := guideSlopes[point.TimeMillis]; ok {
-				curve.slopes[index] = slope
+		if reversalProfile == curveReversalC2Flow {
+			curve.slopes, curve.accelerations = flowingQuinticStates(curvePoints, loop)
+			curve.quintics = buildQuinticSegments(curvePoints, curve.slopes, curve.accelerations)
+		} else {
+			curve.slopes = monotoneSlopes(curvePoints, loop)
+			for index, point := range curvePoints {
+				if slope, ok := guideSlopes[point.TimeMillis]; ok {
+					curve.slopes[index] = slope
+				}
 			}
 		}
 	}
@@ -441,6 +448,9 @@ func (c Curve) sampleFloat(at float64) float64 {
 	if c.linear {
 		return y0 + (y1-y0)*u
 	}
+	if len(c.quintics) == len(c.points)-1 {
+		return clampFloat(c.quintics[left].position(u), 0, 100)
+	}
 	m0, m1 := c.slopes[left], c.slopes[right]
 	h00 := 2*u*u*u - 3*u*u + 1
 	h10 := u*u*u - 2*u*u + u
@@ -465,18 +475,50 @@ func (c Curve) velocityFloat(at float64) float64 {
 		return (c.points[right].PositionPercent - c.points[left].PositionPercent) / h
 	}
 	u := (at - float64(c.points[left].TimeMillis)) / h
+	if len(c.quintics) == len(c.points)-1 {
+		return c.quintics[left].velocity(u)
+	}
 	y0, y1 := c.points[left].PositionPercent, c.points[right].PositionPercent
 	m0, m1 := c.slopes[left], c.slopes[right]
 	return ((6*u*u-6*u)*y0+(-6*u*u+6*u)*y1)/h + (3*u*u-4*u+1)*m0 + (3*u*u-2*u)*m1
 }
 
+func (c Curve) accelerationFloat(at float64) float64 {
+	if len(c.points) == 0 || c.linear {
+		return 0
+	}
+	left, right := c.interval(at)
+	if left == right {
+		if len(c.accelerations) == len(c.points) {
+			return c.accelerations[left]
+		}
+		return 0
+	}
+	h := float64(c.points[right].TimeMillis - c.points[left].TimeMillis)
+	u := (at - float64(c.points[left].TimeMillis)) / h
+	if len(c.quintics) == len(c.points)-1 {
+		return c.quintics[left].acceleration(u)
+	}
+	y0, y1 := c.points[left].PositionPercent, c.points[right].PositionPercent
+	m0, m1 := c.slopes[left], c.slopes[right]
+	return ((12*u-6)*y0+(-12*u+6)*y1)/(h*h) +
+		((6*u-4)*m0+(6*u-2)*m1)/h
+}
+
 // maximumAccelerationPerMillis2 returns the exact peak magnitude of the
-// piecewise-cubic second derivative. A Hermite segment's acceleration is
-// linear, so an extremum occurs at one of its two ends; sampling is unnecessary
-// and would make a safety decision depend on an arbitrary probe interval.
+// rendered curve's second derivative. Cubic Hermite extrema occur at interval
+// ends; the Creative quintic profile additionally evaluates every jerk root.
+// Sampling would make a safety decision depend on an arbitrary probe interval.
 func (c Curve) maximumAccelerationPerMillis2() float64 {
 	if c.linear || len(c.points) < 2 {
 		return 0
+	}
+	if len(c.quintics) == len(c.points)-1 {
+		maximum := 0.0
+		for _, segment := range c.quintics {
+			maximum = math.Max(maximum, segment.maximumAcceleration())
+		}
+		return maximum
 	}
 	maximum := 0.0
 	for left := 0; left < len(c.points)-1; left++ {
@@ -489,6 +531,17 @@ func (c Curve) maximumAccelerationPerMillis2() float64 {
 				((6*u-4)*m0+(6*u-2)*m1)/h
 			maximum = math.Max(maximum, math.Abs(acceleration))
 		}
+	}
+	return maximum
+}
+
+func (c Curve) maximumJerkPerMillis3() float64 {
+	if len(c.quintics) != len(c.points)-1 {
+		return 0
+	}
+	maximum := 0.0
+	for _, segment := range c.quintics {
+		maximum = math.Max(maximum, segment.maximumJerk())
 	}
 	return maximum
 }

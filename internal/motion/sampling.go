@@ -9,6 +9,8 @@ import (
 
 const (
 	wireApproximationTolerance          = 0.3
+	wireTimingApproximationFraction     = 0.06
+	wireTimingApproximationFloorMillis  = int64(12)
 	maximumAdaptiveChunkPoints          = 128
 	maximumInternalProbePoints          = 512
 	bufferedProbeIntervalMillis         = int64(5)
@@ -198,6 +200,7 @@ func (e *Engine) fitMotionWindowLocked(
 			positionResolution,
 			wireApproximationTolerance+positionResolution/2,
 			mandatory,
+			e.plan.Target.Dynamic != nil,
 		)
 		if transitionInChunk {
 			samples = stabilizeTransitionSamples(samples, mandatory)
@@ -205,6 +208,9 @@ func (e *Engine) fitMotionWindowLocked(
 	}
 	if hasPreviousAnchor {
 		samples = samples[1:]
+	}
+	if positionResolution > 0 && !transitionInChunk && e.plan.Target.Dynamic != nil {
+		samples = removeRedundantQuantizedSamples(samples, positionResolution, mandatory)
 	}
 	return samples, mandatory
 }
@@ -429,6 +435,7 @@ func simplifyQuantizedMotionSamples(
 	resolution float64,
 	tolerance float64,
 	mandatory map[int64]struct{},
+	preserveTimingShape bool,
 ) []MotionSample {
 	if len(samples) <= 2 || resolution <= 0 {
 		return append([]MotionSample(nil), samples...)
@@ -445,7 +452,10 @@ func simplifyQuantizedMotionSamples(
 	for index := 1; index < len(anchors); index++ {
 		keep[anchors[index-1]] = true
 		keep[anchors[index]] = true
-		markQuantizedMotionSamples(samples, anchors[index-1], anchors[index], resolution, tolerance, keep)
+		markQuantizedMotionSamples(
+			samples, anchors[index-1], anchors[index], resolution, tolerance,
+			preserveTimingShape, keep,
+		)
 	}
 	result := make([]MotionSample, 0, len(samples))
 	for index, sample := range samples {
@@ -462,6 +472,7 @@ func markQuantizedMotionSamples(
 	end int,
 	resolution float64,
 	tolerance float64,
+	preserveTimingShape bool,
 	keep []bool,
 ) {
 	if end-start <= 1 {
@@ -470,23 +481,77 @@ func markQuantizedMotionSamples(
 	left := quantizedMotionPosition(samples[start].PositionPercent, resolution)
 	right := quantizedMotionPosition(samples[end].PositionPercent, resolution)
 	duration := samples[end].TimeMillis - samples[start].TimeMillis
-	maximumError := 0.0
+	maximumScore := 0.0
 	maximumIndex := -1
+	timingTolerance := math.Max(
+		float64(wireTimingApproximationFloorMillis),
+		float64(duration)*wireTimingApproximationFraction,
+	)
 	for index := start + 1; index < end; index++ {
 		fraction := float64(samples[index].TimeMillis-samples[start].TimeMillis) / float64(duration)
 		expected := left + (right-left)*fraction
-		errorValue := math.Abs(samples[index].PositionPercent - expected)
-		if errorValue > maximumError {
-			maximumError = errorValue
+		positionScore := math.Abs(samples[index].PositionPercent-expected) / tolerance
+		timingScore := 0.0
+		if preserveTimingShape && right != left {
+			positionFraction := clampFloat(
+				(samples[index].PositionPercent-left)/(right-left),
+				0, 1,
+			)
+			expectedTime := float64(samples[start].TimeMillis) + positionFraction*float64(duration)
+			timingScore = math.Abs(float64(samples[index].TimeMillis)-expectedTime) / timingTolerance
+		}
+		score := math.Max(positionScore, timingScore)
+		if score > maximumScore {
+			maximumScore = score
 			maximumIndex = index
 		}
 	}
-	if maximumIndex < 0 || maximumError <= tolerance {
+	if maximumIndex < 0 || maximumScore <= 1 {
 		return
 	}
 	keep[maximumIndex] = true
-	markQuantizedMotionSamples(samples, start, maximumIndex, resolution, tolerance, keep)
-	markQuantizedMotionSamples(samples, maximumIndex, end, resolution, tolerance, keep)
+	markQuantizedMotionSamples(samples, start, maximumIndex, resolution, tolerance, preserveTimingShape, keep)
+	markQuantizedMotionSamples(samples, maximumIndex, end, resolution, tolerance, preserveTimingShape, keep)
+}
+
+// removeRedundantQuantizedSamples removes stationary wire edges introduced by
+// owner rounding. A non-mandatory point that rounds to the same position as
+// its successor cannot convey curvature; retaining it only asks firmware to
+// hold before moving again. Authored knots remain protected so intentional
+// holds and exact reversals survive.
+func removeRedundantQuantizedSamples(
+	samples []MotionSample,
+	resolution float64,
+	mandatory map[int64]struct{},
+) []MotionSample {
+	if len(samples) <= 1 || resolution <= 0 {
+		return samples
+	}
+	result := make([]MotionSample, 0, len(samples))
+	for _, sample := range samples {
+		if len(result) == 0 ||
+			quantizedMotionPosition(result[len(result)-1].PositionPercent, resolution) !=
+				quantizedMotionPosition(sample.PositionPercent, resolution) {
+			result = append(result, sample)
+			continue
+		}
+		previous := result[len(result)-1]
+		_, previousMandatory := mandatory[previous.TimeMillis]
+		_, currentMandatory := mandatory[sample.TimeMillis]
+		switch {
+		case previousMandatory && currentMandatory:
+			result = append(result, sample)
+		case currentMandatory:
+			result[len(result)-1] = sample
+		case previousMandatory:
+			// The authored position already represents this wire unit.
+		default:
+			// The later timestamp more accurately describes when a monotonic
+			// approach finally leaves this quantized position.
+			result[len(result)-1] = sample
+		}
+	}
+	return result
 }
 
 func quantizedMotionPosition(position float64, resolution float64) float64 {

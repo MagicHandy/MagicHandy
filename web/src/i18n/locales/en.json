@@ -634,6 +634,8 @@
   "Motion": "Motion",
   "Motion behavior": "Motion behavior",
   "Motion changes": "Motion changes",
+  "1 = fewer · 7 = more": "1 = fewer · 7 = more",
+  "{count} sections": "{count} sections",
   "Motion command failed": "Motion command failed",
   "Motion commands": "Motion commands",
   "Motion context": "Motion context",

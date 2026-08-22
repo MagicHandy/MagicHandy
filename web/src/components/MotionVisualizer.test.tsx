@@ -85,6 +85,39 @@ describe("MotionVisualizer", () => {
     expect(screen.getByText("32%")).toBeInTheDocument();
   });
 
+  it("summarizes a backend-authored multi-section Creative phrase honestly", () => {
+		render(
+			<MotionVisualizer
+				motion={{
+					available: true,
+					engine: {
+						running: true,
+						paused: false,
+						target: {
+							source: "chat",
+							speed_percent: 36,
+							dynamic: {
+								center_percent: 50,
+								span_percent: 84,
+								variation_percent: 48,
+								segment_seconds: 40,
+								sections: [
+									{ center_percent: 50, span_percent: 84, span_min_percent: 30, variation_percent: 48, cycles: 4 },
+									{ center_percent: 68, span_percent: 54, span_min_percent: 24, variation_percent: 62, cycles: 3 },
+								],
+							},
+						},
+					},
+				}}
+			/>,
+		);
+
+		expect(screen.getAllByText("2 sections").length).toBeGreaterThan(0);
+		expect(screen.getByText(/2 sections · 40s · chat/)).toBeInTheDocument();
+		expect(screen.getByText("24-84%")).toBeInTheDocument();
+		expect(screen.getByText("48-62%")).toBeInTheDocument();
+	});
+
   it("does not present retained target metadata as currently active after Stop", () => {
     render(
       <MotionVisualizer

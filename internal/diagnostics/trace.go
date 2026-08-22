@@ -71,6 +71,7 @@ type MotionTraceTarget struct {
 	DynamicAnchors            []string `json:"dynamic_anchors,omitempty"`
 	DynamicVariationPercent   int      `json:"dynamic_variation_percent,omitempty"`
 	DynamicSegmentSeconds     int      `json:"dynamic_segment_seconds,omitempty"`
+	DynamicSectionCount       int      `json:"dynamic_section_count,omitempty"`
 }
 
 // MotionTraceSample records a sampled transport-neutral motion point.

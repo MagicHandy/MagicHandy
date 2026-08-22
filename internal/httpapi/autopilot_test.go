@@ -502,6 +502,50 @@ func TestMapAutopilotResultBuildsDynamicSegmentWithoutPatternFallback(t *testing
 	}
 }
 
+func TestDynamicPhraseMappingPreservesAndCollapsesSectionsDeliberately(t *testing.T) {
+	center, span, floor, variation := 68, 54, 24, 62
+	command := &chat.MotionCommand{
+		Action: chat.MotionActionUpdate,
+		Sections: []chat.DynamicSectionCommand{
+			{
+				Anchors: []string{"base", "middle", "tip"}, SpanMinPercent: intPtr(30),
+				VariationPercent: intPtr(48), Cycles: 4,
+			},
+			{
+				CenterPercent: &center, SpanPercent: &span, SpanMinPercent: &floor,
+				SpanProfile: chat.DynamicSpanProfileContrast, VariationPercent: &variation, Cycles: 3,
+			},
+		},
+	}
+	definition := dynamicDefinitionFromCommand(command, nil)
+	if len(definition.Sections) != 2 || definition.PhraseSeed == 0 ||
+		len(definition.Sections[0].Anchors) != 3 ||
+		definition.Sections[0].SpanProfile != motion.DynamicSpanProfileWander {
+		t.Fatalf("mapped section phrase = %+v", definition)
+	}
+	replaced := dynamicDefinitionFromCommand(command, &definition)
+	if replaced.PhraseSeed == definition.PhraseSeed || sameDynamicDefinition(replaced, definition) {
+		t.Fatalf("explicit phrase replacement did not refresh micro-motion: %d -> %d",
+			definition.PhraseSeed, replaced.PhraseSeed)
+	}
+
+	speedOnly := dynamicDefinitionFromCommand(&chat.MotionCommand{
+		Action: chat.MotionActionUpdate, SpeedPercent: intPtr(35),
+	}, &definition)
+	if len(speedOnly.Sections) != 2 || !sameDynamicDefinition(speedOnly, definition) {
+		t.Fatalf("speed-only update changed phrase: before=%+v after=%+v", definition, speedOnly)
+	}
+
+	newVariation := 35
+	collapsed := dynamicDefinitionFromCommand(&chat.MotionCommand{
+		Action: chat.MotionActionUpdate, VariationPercent: &newVariation,
+	}, &definition)
+	if len(collapsed.Sections) != 0 || collapsed.VariationPercent != newVariation ||
+		len(collapsed.Anchors) != len(definition.Sections[0].Anchors) {
+		t.Fatalf("scalar correction did not collapse to the effective section: %+v", collapsed)
+	}
+}
+
 func TestAutopilotDecisionMessageFramesTheContract(t *testing.T) {
 	message := chat.AutopilotDecisionMessage(chat.AutopilotContext{
 		Style:            "balanced",
