@@ -666,7 +666,7 @@ func TestDynamicDefinitionFromCommandPreservesAndClearsSpanEnvelope(t *testing.T
 	steady := dynamicDefinitionFromCommand(&chat.MotionCommand{
 		Action: chat.MotionActionUpdate, SpanProfile: chat.DynamicSpanProfileSteady,
 	}, &current)
-	if steady.SpanProfile != motion.DynamicSpanProfileSteady || steady.SpanMinPercent != steady.SpanPercent || steady.PhraseSeed != 0 {
+	if steady.SpanProfile != motion.DynamicSpanProfileSteady || steady.SpanMinPercent != steady.SpanPercent || steady.PhraseSeed == 0 {
 		t.Fatalf("steady update did not clear envelope: %+v", steady)
 	}
 

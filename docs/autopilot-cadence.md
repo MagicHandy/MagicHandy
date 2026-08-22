@@ -52,6 +52,9 @@ repeated timing values, and allow speech generation latency to disturb motion.
   freezing speech forever.
 - Runtime deadlines, pending choices, and playback acknowledgements are
   ephemeral. Only user preferences are persisted.
+- Status snapshots publish the backend observation time and absolute motion/
+  speech deadlines. A client may interpolate presentation between snapshots,
+  but it cannot select, extend, or rewrite those deadlines.
 - Every motion target still enters the one shared motion engine and all normal
   clamps remain authoritative.
 
@@ -114,6 +117,15 @@ enabled, the model returns `soon`, `normal`, or `later`; code maps that category
 to an overlapping portion of the selected range and samples a concrete delay.
 When disabled, code samples the full selected range. The model never emits
 seconds or a deadline.
+
+The status API carries `status_at`, `motion_change_due_at`, and
+`speech_due_at` as RFC3339 timestamps, with the former remaining-millisecond
+fields retained for compatibility. The Chat sidebar subtracts the backend
+observation time once, advances the display at 250 ms resolution, and replaces
+that local anchor on every ordinary two-second state poll. This is presentation
+only: the scheduler still fires solely from its backend `time.Time` deadline.
+Pause freezes the displayed remainder, including when its SSE state arrives
+before a fresh status poll; resume continues from the reconciled backend value.
 
 ### Autonomous target variation
 
@@ -248,6 +260,23 @@ target, and validation returns the complete invariant to the one-shot repair
 path so a narrow current span can be widened in the same update instead of
 producing repeated malformed plans.
 
+The model also receives a compact summary measured from the final compiled
+curve: commanded mean travel, peak carriage velocity, mean stroke length, and
+the least-varied 12-second stroke CV/range. Phrase freshness uses one normalized
+perceptual distance over compiled position bounds, stroke metrics, profile, and
+topology. Speed is intentionally excluded because pace age is tracked
+separately. Several small scalar edits are compared with the retained baseline
+and therefore cannot reset phrase age one by one; a materially different felt
+curve resets it. The exact values are recorded beside the decision's session
+facts in diagnostics.
+
+When the ongoing direction calls for several distinct or evolving sequences,
+the autonomous contract identifies `sections` as the matching 2–4-idea macro
+vocabulary. One geometry still means one coherent idea, and a section array is
+not required for an ordinary adjustment or hold. A semantically new textured
+single phrase receives a fresh deterministic bounded seed; speed-only,
+horizon-only, and semantic no-op updates preserve the current seed and plan.
+
 ### Session buildup
 
 A separate switch, **off by default**, that renders a visible fill bar and tells
@@ -280,6 +309,11 @@ a fresh run, so accepting a placement beforehand would store a value discarded a
 moment later. Buildup requires session tracking; the settings validator rejects
 the combination rather than letting the document express a state the runtime
 would silently ignore.
+
+The active-time regression also covers the reported 20-minute setting: it
+advances exactly one percentage point per 12 active seconds, reads 30% after six
+active minutes, remains 30% through five simulated paused minutes, and reaches
+60% only after another six active minutes.
 
 In the Chat control, Motion change rate is an explicit numbered 1–8 scale and
 Spoken check-ins is a labeled set-point slider. Speech reveals its custom timing

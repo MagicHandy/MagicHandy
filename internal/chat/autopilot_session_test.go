@@ -120,6 +120,8 @@ func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
 		CurrentSpan: 60, CurrentSpanMin: 26, CurrentSpanProfile: DynamicSpanProfileWander,
 		CurrentVariation: 10, CurrentSegment: 37, SpeedMinPercent: 20,
 		SpeedMaxPercent: 40, MotionMinSeconds: 20, MotionMaxSeconds: 60,
+		CommandedMeanTravel: 73, CommandedPeakSpeed: 119, MeanStrokeLength: 42,
+		LocalStrokeCV: 11, LocalStrokeRange: 17,
 	})
 	if strings.Contains(running, "No Dynamic target is active") {
 		t.Fatalf("running Dynamic prompt still claims startup state:\n%s", running)
@@ -130,6 +132,10 @@ func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
 		"span_min_percent (at least 20 and strictly below the widest span) and choose span_profile breathe, wander, or contrast",
 		"preserving the current 60% widest span, its usable span_min_percent range is 20-59",
 		"variation_percent controls correlated center and rhythm texture independently",
+		"Compiled feel: about 73% travel per second on average, 119%/s peak carriage velocity, 42% mean stroke length",
+		"least varied 12-second window has 17% length range with 11% coefficient of variation",
+		"measured from the engine curve, not inferred from the JSON fields",
+		"use sections with 2-4 complete movement ideas",
 	} {
 		if !strings.Contains(running, want) {
 			t.Fatalf("running Dynamic prompt missing %q:\n%s", want, running)

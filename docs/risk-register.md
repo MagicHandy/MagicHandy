@@ -201,6 +201,27 @@ gates remain necessary but cannot overrule direct physical curation. Startup
 reconciliation deletes only built-in-origin rows, and no post-change hardware
 motion was commanded.
 
+Status 2026-08-22 alpha.30 output-fidelity follow-up: historical command
+streams confirmed a speed plateau independent of the newer C2 change. The same
+Creative geometry compiled to about 109.8%/s mean travel at selected speeds 42,
+52, 62, and 72 because one unsafe interval globally slowed the entire phrase.
+Creative now fits intervals locally against exact peak velocity, acceleration,
+jerk, and reversal-gap extrema. The retained fixture's 42–72 mean rate rises
+from 103.8 to 167.5%/s while its peak follows the selected Original-Handy
+calibration from 167.6 to 269.0%/s. Breathe's additive/clamped shelf is replaced
+by a smooth bounded blend, and compiled 12-second diversity floors cover every
+span profile.
+
+The installed Gemma provider then passed three repeated five-decision exact-
+Autopilot runs: all 15 outputs used three sections, all compiled through the
+shared planner, and least-varied windows measured 9.5–26.4% stroke CV with
+15.9–57.1 points of length range. An explicit hold still won at max change rate
+and a simulated 180-second phrase age. This closes the demonstrated commanded-
+curve plateau and prompt/schema regressions, not subjective physical
+acceptance. The installed app, controller, and device were not modified; a
+matched capped Cloud run with current-source trace, latency, Stop, and felt
+comparison remains required.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -1471,7 +1492,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.29 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.30 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1519,7 +1540,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.29, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.30, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit

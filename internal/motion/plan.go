@@ -24,17 +24,18 @@ type handySpeedProfile struct {
 //
 //revive:disable-next-line:exported -- Phase 6 explicitly names this contract.
 type MotionPlan struct {
-	ID             string       `json:"id"`
-	Target         MotionTarget `json:"target"`
-	PatternID      PatternID    `json:"pattern_id,omitempty"`
-	ProgramID      string       `json:"program_id,omitempty"`
-	MediaID        string       `json:"media_id,omitempty"`
-	PeriodMillis   int64        `json:"period_ms"`
-	HandoffMillis  int64        `json:"handoff_ms"`
-	PhaseOffset    float64      `json:"phase_offset"`
-	PhasePreserved bool         `json:"phase_preserved"`
-	Loop           bool         `json:"loop"`
-	CreatedAt      string       `json:"created_at"`
+	ID             string            `json:"id"`
+	Target         MotionTarget      `json:"target"`
+	PatternID      PatternID         `json:"pattern_id,omitempty"`
+	ProgramID      string            `json:"program_id,omitempty"`
+	MediaID        string            `json:"media_id,omitempty"`
+	PeriodMillis   int64             `json:"period_ms"`
+	HandoffMillis  int64             `json:"handoff_ms"`
+	PhaseOffset    float64           `json:"phase_offset"`
+	PhasePreserved bool              `json:"phase_preserved"`
+	Loop           bool              `json:"loop"`
+	CreatedAt      string            `json:"created_at"`
+	Perceptual     PerceptualSummary `json:"perceptual"`
 
 	curve Curve
 	focus focusProjection
@@ -42,6 +43,9 @@ type MotionPlan struct {
 	// the safe stationary curve only keeps diagnostic/preview sampling total so
 	// malformed semantic content cannot panic the whole process.
 	compileErr error
+	// timingModel is retained only so a Dynamic retarget can tell whether the
+	// selected device calibration changed its locally fitted curve clock.
+	timingModel string
 }
 
 // MotionSample is one transport-neutral semantic sample.
@@ -69,10 +73,17 @@ func NewMotionPlan(
 	settings = normalizeMotionSettings(settings)
 	target = NormalizeTarget(target, settings)
 	target, content := resolveTargetContent(target, settings.HandyModel)
+	timingErr := error(nil)
+	if target.Dynamic != nil {
+		content, timingErr = retimeDynamicContent(content, target.SpeedPercent, settings.HandyModel)
+	}
 	if id == "" {
 		id = fmt.Sprintf("%s-%d", motionContentID(target), createdAt.UnixNano())
 	}
-	compileErr := content.validate()
+	compileErr := timingErr
+	if compileErr == nil {
+		compileErr = content.validate()
+	}
 	focus := focusProjection{sourceMin: 0, sourceSpan: 100, targetMin: 0, targetSpan: 100}
 	if compileErr == nil {
 		focus = newFocusProjection(target, content)
@@ -80,13 +91,17 @@ func NewMotionPlan(
 	periodMillis := int64(minimumBurstCycleMillis)
 	var curve Curve
 	if compileErr == nil {
-		periodMillis = periodForContent(
-			content.points,
-			content.duration,
-			target.SpeedPercent,
-			content.loop,
-			settings.HandyModel,
-		)
+		if content.timingResolved {
+			periodMillis = content.duration
+		} else {
+			periodMillis = periodForContent(
+				content.points,
+				content.duration,
+				target.SpeedPercent,
+				content.loop,
+				settings.HandyModel,
+			)
+		}
 		if target.Media != nil {
 			periodMillis = content.duration
 		} else {
@@ -102,6 +117,10 @@ func NewMotionPlan(
 		periodMillis = minimumBurstCycleMillis
 		curve = content.stationaryFallbackCurve()
 	}
+	perceptual := PerceptualSummary{}
+	if compileErr == nil && target.Dynamic != nil {
+		perceptual = summarizeMotionPlan(target, curve, focus, periodMillis)
+	}
 	return MotionPlan{
 		ID:            id,
 		Target:        target,
@@ -113,9 +132,11 @@ func NewMotionPlan(
 		PhaseOffset:   phaseForContent(phaseOffset, content.loop),
 		Loop:          content.loop,
 		CreatedAt:     createdAt.UTC().Format(time.RFC3339Nano),
+		Perceptual:    perceptual,
 		curve:         curve,
 		focus:         focus,
 		compileErr:    compileErr,
+		timingModel:   settings.HandyModel,
 	}
 }
 
@@ -194,6 +215,14 @@ func (p MotionPlan) retargetFromState(
 	target = NormalizeTarget(target, normalizeMotionSettings(settings))
 	phase := p.PhaseAt(streamMillis)
 	preserved := motionContentID(p.Target) == motionContentID(target)
+	if preserved && target.Dynamic != nil &&
+		(p.Target.SpeedPercent != target.SpeedPercent || p.timingModel != settings.HandyModel) {
+		// Creative fits unsafe intervals locally, so changing its requested
+		// carriage velocity or device profile changes the normalized timing of
+		// some legs. Match the current position and direction on that new clock
+		// rather than pretending the old phase has the same physical meaning.
+		preserved = false
+	}
 	if !preserved {
 		phase = chooseNearestPhase(target, settings, currentPosition, currentDirection, currentVelocity)
 	}
@@ -238,6 +267,7 @@ type resolvedContent struct {
 	linear          bool
 	maximumPoints   int
 	reversalProfile curveReversalProfile
+	timingResolved  bool
 }
 
 func (c resolvedContent) validate() error {

@@ -88,6 +88,11 @@ type DecisionInput struct {
 	// prompt entirely when disabled.
 	ArcEnabled bool
 	ArcPercent int
+	// CurrentPerceptual is computed from the shared engine's compiled curve,
+	// after selected-device speed and safety fitting. It lets the model reason
+	// from felt commanded motion rather than treating any changed JSON field as
+	// proof of novelty.
+	CurrentPerceptual *motion.PerceptualSummary
 }
 
 // Decision is one motion or speech curation outcome. Hold is scheduler-only:
@@ -132,6 +137,8 @@ type segmentChoice struct {
 	secondsAtCurrentPhrase   int
 	decisionsAtCurrentPhrase int
 	consecutiveHolds         int
+	decisionPerceptual       *motion.PerceptualSummary
+	appliedPerceptual        *motion.PerceptualSummary
 }
 
 // nextSegmentChoice picks the next segment for Freestyle or Autopilot.
@@ -159,6 +166,10 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		choice.secondsAtCurrentPhrase = input.SecondsAtCurrentPhrase
 		choice.decisionsAtCurrentPhrase = input.DecisionsAtCurrentPhrase
 		choice.consecutiveHolds = input.ConsecutiveHolds
+		if input.CurrentPerceptual != nil {
+			copied := *input.CurrentPerceptual
+			choice.decisionPerceptual = &copied
+		}
 	}()
 	dynamicMode := m.options.MotionGenerationMode != nil &&
 		m.options.MotionGenerationMode() == config.LLMMotionModeDynamic
@@ -223,17 +234,27 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 }
 
 func (choice segmentChoice) sessionTraceNote() string {
-	if !choice.sessionTracking {
-		return ""
+	note := ""
+	if choice.sessionTracking {
+		note = fmt.Sprintf(
+			" session=%ds speed_age=%ds phrase_age=%ds phrase_decisions=%d hold_streak=%d",
+			choice.sessionSeconds,
+			choice.secondsAtCurrentSpeed,
+			choice.secondsAtCurrentPhrase,
+			choice.decisionsAtCurrentPhrase,
+			choice.consecutiveHolds,
+		)
 	}
-	return fmt.Sprintf(
-		" session=%ds speed_age=%ds phrase_age=%ds phrase_decisions=%d hold_streak=%d",
-		choice.sessionSeconds,
-		choice.secondsAtCurrentSpeed,
-		choice.secondsAtCurrentPhrase,
-		choice.decisionsAtCurrentPhrase,
-		choice.consecutiveHolds,
-	)
+	if choice.decisionPerceptual != nil {
+		note += fmt.Sprintf(
+			" feel_mean=%.1f feel_peak=%.1f local_stroke_cv=%.3f local_stroke_range=%.1f",
+			choice.decisionPerceptual.CommandedMeanTravelPerSecond,
+			choice.decisionPerceptual.CommandedPeakVelocityPerSecond,
+			choice.decisionPerceptual.MinimumLocalStrokeCV,
+			choice.decisionPerceptual.MinimumLocalStrokeRange,
+		)
+	}
+	return note
 }
 
 func normalizeTiming(timing TimingPreference) TimingPreference {
@@ -261,11 +282,18 @@ func normalizeVariability(variability VariabilityPreference) VariabilityPreferen
 func (m *Manager) decisionInput() DecisionInput {
 	settings := m.options.Settings()
 	var current *motion.MotionTarget
+	var currentPerceptual *motion.PerceptualSummary
+	sessionMillis := int64(0)
 	if engine := m.options.Current(); engine != nil {
 		snapshot := engine.Snapshot()
+		sessionMillis = snapshot.RunningMillis
 		if (snapshot.Running || snapshot.Paused) && (snapshot.Target.PatternID != "" || snapshot.Target.Dynamic != nil) {
 			copied := cloneTarget(snapshot.Target)
 			current = &copied
+			if snapshot.Perceptual.CommandedPeakVelocityPerSecond > 0 {
+				perceptual := snapshot.Perceptual
+				currentPerceptual = &perceptual
+			}
 		}
 	}
 
@@ -273,10 +301,8 @@ func (m *Manager) decisionInput() DecisionInput {
 	// Session elapsed comes from the engine's own run clock rather than a mode
 	// counter, so a pause or a restart cannot inflate it.
 	sessionSeconds := 0
-	if engine := m.options.Current(); engine != nil {
-		if running := engine.Snapshot().RunningMillis; running > 0 {
-			sessionSeconds = int(running / 1000)
-		}
+	if sessionMillis > 0 {
+		sessionSeconds = int(sessionMillis / 1000)
 	}
 
 	now := m.options.Now()
@@ -326,6 +352,7 @@ func (m *Manager) decisionInput() DecisionInput {
 			input.CurrentAreaFocus = &focus
 		}
 		input.CurrentDynamic = cloneDynamicDefinition(current.Dynamic)
+		input.CurrentPerceptual = currentPerceptual
 	}
 	input.MotionMinSeconds, input.MotionMaxSeconds = autopilot.MotionWindow()
 	input.MotionChangeLevel = autopilot.MotionChangeLevel

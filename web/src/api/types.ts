@@ -417,12 +417,16 @@ export interface ModesStatus {
   running?: boolean;
   mode?: string;
   active_mode?: string;
+  status_at?: string;
   segment_index?: number;
   segment_ends_in_ms?: number;
+  segment_due_at?: string;
   decision_source?: string;
   last_say?: string;
   motion_change_in_ms?: number;
+  motion_change_due_at?: string;
   speech_in_ms?: number;
+  speech_due_at?: string;
   motion_planned?: boolean;
   speech_waiting_playback?: boolean;
   // Absent while the user has the bar switched off, so the UI renders nothing

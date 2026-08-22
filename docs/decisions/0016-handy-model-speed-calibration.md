@@ -57,6 +57,12 @@ the profile Stops that clock-locked run because accepted points cannot be
 rewritten; uncapped media is unaffected.
 
 The exact-curve runtime acceleration and reversal envelopes remain shared.
+Creative treats the calibrated result as its peak carriage-velocity target and
+fits each C2 interval independently against exact velocity, acceleration, jerk,
+and reversal-gap extrema. One hard interval may lengthen without globally
+slowing the rest of the phrase. This preserves the same semantic sample and
+transport contracts; it is a compiler timing policy inside the shared engine,
+not device-specific dispatch behavior.
 The Pro overclock range is not offered. A future per-model acceleration change
 requires manufacturer data or bounded instrumented hardware evidence and an
 explicit update to this decision.
@@ -67,6 +73,8 @@ Positive:
 
 - a percentage maps to a documented physical range instead of one historical
   pattern cadence;
+- Creative's commanded peak follows that selected calibration instead of
+  collapsing several higher settings onto one globally safety-limited period;
 - Original and Handy 2 Standard produce the same calculated mm/s at the same
   percentage despite different travel;
 - the model choice is visible beside the controls it calibrates and applies
@@ -95,7 +103,9 @@ Negative:
 
 Automated tests cover profile defaults and validation, endpoint conversion,
 equal physical rates for Original and Handy 2 Standard, plan-level use of the
-selected profile, immediate persistence, media-cap invalidation, and unchanged
-shared runtime safety bounds. No post-change hardware command was issued. The
+selected profile, immediate persistence, media-cap invalidation, exact Creative
+peak velocity across representative geometry/device profiles, monotonic mean
+rate, and unchanged shared runtime safety bounds. No post-change hardware
+command was issued. The
 matched acceptance run must record selected profile, actual device model,
 transport, speed/span, latency, trace, Stop behavior, and subjective feel.

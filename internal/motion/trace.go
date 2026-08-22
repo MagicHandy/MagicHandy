@@ -34,6 +34,7 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 		NextSampleMillis:           e.nextSampleMillis,
 		RecentCommandLatencyMillis: e.recentCommandLatencyMillisLocked(),
 		LastError:                  redactedError(e.lastError),
+		Perceptual:                 e.plan.Perceptual,
 	}
 	if !e.startedAt.IsZero() {
 		state.StartedAt = e.startedAt.UTC().Format(timeFormatRFC3339Nano)

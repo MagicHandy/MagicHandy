@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 
@@ -84,6 +85,26 @@ func (s *Server) autopilotModelTurn(
 		ConversationContext:   promptContext.ConversationContext,
 		Capabilities:          capabilities,
 	}
+	modelContext := autopilotPromptContext(input, capabilities)
+	message := chat.AutopilotMotionMessage(modelContext)
+	if kind == chat.AutopilotKindSpeech {
+		message = chat.AutopilotSpeechMessage(modelContext)
+	}
+	providerCtx, _, releaseLLM, err := s.llmRequests.acquire(ctx, llmRequestAutonomous)
+	if err != nil {
+		return chat.AutopilotResponse{}, err
+	}
+	defer releaseLLM()
+	return service.Complete(providerCtx, kind, chat.Request{
+		Message: message,
+		History: promptContext.History,
+	})
+}
+
+// autopilotPromptContext is the single adapter from scheduler state to the
+// bounded model-visible contract. Keeping it pure lets transport-free evals
+// exercise the exact context the app sends rather than reconstructing it.
+func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabilities) chat.AutopilotContext {
 	modelContext := chat.AutopilotContext{
 		Style:             input.Style,
 		SegmentIndex:      input.SegmentIndex,
@@ -112,6 +133,13 @@ func (s *Server) autopilotModelTurn(
 		ArcEnabled:               input.ArcEnabled,
 		ArcPercent:               input.ArcPercent,
 	}
+	if input.CurrentPerceptual != nil {
+		modelContext.CommandedMeanTravel = int(math.Round(input.CurrentPerceptual.CommandedMeanTravelPerSecond))
+		modelContext.CommandedPeakSpeed = int(math.Round(input.CurrentPerceptual.CommandedPeakVelocityPerSecond))
+		modelContext.MeanStrokeLength = int(math.Round(input.CurrentPerceptual.MeanStrokePercent))
+		modelContext.LocalStrokeCV = int(math.Round(input.CurrentPerceptual.MinimumLocalStrokeCV * 100))
+		modelContext.LocalStrokeRange = int(math.Round(input.CurrentPerceptual.MinimumLocalStrokeRange))
+	}
 	if input.CurrentDynamic != nil {
 		dynamic := motion.NormalizeDynamicDefinition(*input.CurrentDynamic)
 		modelContext.CurrentCenter = dynamic.CenterPercent
@@ -125,19 +153,7 @@ func (s *Server) autopilotModelTurn(
 			modelContext.CurrentAnchors = append(modelContext.CurrentAnchors, anchor.Name)
 		}
 	}
-	message := chat.AutopilotMotionMessage(modelContext)
-	if kind == chat.AutopilotKindSpeech {
-		message = chat.AutopilotSpeechMessage(modelContext)
-	}
-	providerCtx, _, releaseLLM, err := s.llmRequests.acquire(ctx, llmRequestAutonomous)
-	if err != nil {
-		return chat.AutopilotResponse{}, err
-	}
-	defer releaseLLM()
-	return service.Complete(providerCtx, kind, chat.Request{
-		Message: message,
-		History: promptContext.History,
-	})
+	return modelContext
 }
 
 func autopilotSpeechCapabilities(capabilities chat.Capabilities, authority string) chat.Capabilities {
@@ -232,6 +248,11 @@ func mapDynamicAutopilotCommand(
 	variability modes.VariabilityPreference,
 ) modes.Decision {
 	dynamic := dynamicDefinitionFromCommand(command, input.CurrentDynamic)
+	if input.CurrentDynamic != nil && len(command.Sections) == 0 &&
+		commandChangesSingleDynamicPhrase(command) &&
+		!sameDynamicPhraseSemantics(dynamic, *input.CurrentDynamic) {
+		dynamic = motion.AdvanceDynamicPhraseSeed(dynamic, input.CurrentDynamic.PhraseSeed)
+	}
 	speed := input.CurrentSpeed
 	if command.SpeedPercent != nil {
 		speed = *command.SpeedPercent
@@ -239,8 +260,12 @@ func mapDynamicAutopilotCommand(
 	if speed <= 0 {
 		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}
 	}
-	if input.CurrentDynamic != nil && speed == input.CurrentSpeed && sameDynamicDefinition(dynamic, *input.CurrentDynamic) {
-		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}
+	if input.CurrentDynamic != nil && speed == input.CurrentSpeed && len(command.Sections) == 0 &&
+		sameDynamicPhraseSemantics(dynamic, *input.CurrentDynamic) {
+		current := motion.NormalizeDynamicDefinition(*input.CurrentDynamic)
+		if dynamic.SegmentSeconds == current.SegmentSeconds {
+			return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}
+		}
 	}
 	return modes.Decision{
 		Segment: modes.Segment{SpeedPercent: speed, Dynamic: &dynamic, DurationMillis: int64(dynamic.SegmentSeconds) * 1000},
@@ -251,6 +276,16 @@ func mapDynamicAutopilotCommand(
 func sameDynamicDefinition(left, right motion.DynamicDefinition) bool {
 	left = motion.NormalizeDynamicDefinition(left)
 	right = motion.NormalizeDynamicDefinition(right)
+	return reflect.DeepEqual(left, right)
+}
+
+func sameDynamicPhraseSemantics(left, right motion.DynamicDefinition) bool {
+	left = motion.NormalizeDynamicDefinition(left)
+	right = motion.NormalizeDynamicDefinition(right)
+	left.PhraseSeed = 0
+	right.PhraseSeed = 0
+	left.SegmentSeconds = 0
+	right.SegmentSeconds = 0
 	return reflect.DeepEqual(left, right)
 }
 

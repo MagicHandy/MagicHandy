@@ -77,6 +77,39 @@ func TestThirtyMinuteArcHonorsConfiguredDuration(t *testing.T) {
 	}
 }
 
+func TestTwentyMinuteArcUsesActiveTimeAndFreezesWhilePaused(t *testing.T) {
+	manager := swayTestManager(t, arcSettings(true, true, 20))
+	now := time.Date(2026, time.August, 22, 12, 0, 0, 0, time.UTC)
+	manager.options.Now = func() time.Time { return now }
+	manager.options.Tick = time.Minute
+	manager.mu.Lock()
+	manager.mode = ModeAutopilot
+	manager.arc.startedAt = now
+	manager.mu.Unlock()
+
+	now = now.Add(12 * time.Second)
+	if got := manager.SessionArcSnapshot().Percent; got != 1 {
+		t.Fatalf("20-minute buildup after 12 active seconds = %d%%, want 1%%", got)
+	}
+	now = now.Add(5*time.Minute + 48*time.Second)
+	if got := manager.SessionArcSnapshot().Percent; got != 30 {
+		t.Fatalf("20-minute buildup after 6 active minutes = %d%%, want 30%%", got)
+	}
+
+	for range 5 {
+		now = now.Add(time.Minute)
+		manager.freezeDeadline()
+	}
+	if got := manager.SessionArcSnapshot().Percent; got != 30 {
+		t.Fatalf("five paused minutes advanced buildup to %d%%, want 30%%", got)
+	}
+
+	now = now.Add(6 * time.Minute)
+	if got := manager.SessionArcSnapshot().Percent; got != 60 {
+		t.Fatalf("buildup after another 6 active minutes = %d%%, want 60%%", got)
+	}
+}
+
 func TestMaximumArcDurationDoesNotOverflow(t *testing.T) {
 	manager := swayTestManager(t, arcSettings(true, true, config.AutopilotMaximumArcMinutes))
 	start := time.Unix(0, 0)
