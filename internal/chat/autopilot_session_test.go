@@ -20,6 +20,7 @@ func TestSessionFactsAndArcAppearOnlyWhenEnabled(t *testing.T) {
 	tracking := AutopilotMotionMessage(AutopilotContext{
 		Style: "balanced", SpeedMinPercent: 20, SpeedMaxPercent: 40,
 		SessionTracking: true, SessionSeconds: 900, SecondsAtCurrentSpeed: 200, SpeedTrend: "rising",
+		SecondsAtCurrentPhrase: 240, DecisionsAtCurrentPhrase: 6, ConsecutiveHolds: 3,
 		ArcPercent: 60,
 	})
 	if !strings.Contains(tracking, "Session so far: 15 minutes") {
@@ -30,6 +31,12 @@ func TestSessionFactsAndArcAppearOnlyWhenEnabled(t *testing.T) {
 	}
 	if !strings.Contains(tracking, "Speed has been rising") {
 		t.Fatalf("speed trend missing:\n%s", tracking)
+	}
+	if !strings.Contains(tracking, "motion phrase has remained materially unchanged for 4 minutes across 6 reconsiderations") {
+		t.Fatalf("motion phrase age missing:\n%s", tracking)
+	}
+	if !strings.Contains(tracking, "last 3 motion outcomes were holds") {
+		t.Fatalf("hold streak missing:\n%s", tracking)
 	}
 	if strings.Contains(tracking, "Session buildup") {
 		t.Fatalf("the arc leaked in while its own switch is off:\n%s", tracking)
@@ -77,6 +84,22 @@ func TestAutopilotContractKeepsPatternAndSpeedIndependent(t *testing.T) {
 	}
 }
 
+func TestDynamicAutopilotContractAdvertisesEveryAcceptedCreativePhraseField(t *testing.T) {
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	contract := autopilotContract(AutopilotKindMotion, capabilities)
+	for _, field := range []string{
+		"span_min_percent", "span_profile", "variation_percent", "segment_seconds", "sections", "cycles",
+	} {
+		if !strings.Contains(contract, field) {
+			t.Fatalf("dynamic Autopilot contract omitted %q:\n%s", field, contract)
+		}
+	}
+	if !strings.Contains(contract, "Sections replace single-phrase geometry") {
+		t.Fatalf("dynamic Autopilot contract does not explain section exclusivity:\n%s", contract)
+	}
+}
+
 func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
 	startup := AutopilotMotionMessage(AutopilotContext{
 		MotionMode: MotionModeDynamic, SpeedMinPercent: 20, SpeedMaxPercent: 40,
@@ -95,7 +118,7 @@ func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
 	running := AutopilotMotionMessage(AutopilotContext{
 		MotionMode: MotionModeDynamic, CurrentSpeed: 30, CurrentCenter: 50,
 		CurrentSpan: 60, CurrentSpanMin: 26, CurrentSpanProfile: DynamicSpanProfileWander,
-		CurrentVariation: 10, SpeedMinPercent: 20,
+		CurrentVariation: 10, CurrentSegment: 37, SpeedMinPercent: 20,
 		SpeedMaxPercent: 40, MotionMinSeconds: 20, MotionMaxSeconds: 60,
 	})
 	if strings.Contains(running, "No Dynamic target is active") {
@@ -103,7 +126,9 @@ func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
 	}
 	for _, want := range []string{
 		`span floor 26%, span profile "wander"`,
-		"span_min_percent and choose span_profile breathe, wander, or contrast",
+		"37-second decision horizon",
+		"span_min_percent (at least 20 and strictly below the widest span) and choose span_profile breathe, wander, or contrast",
+		"preserving the current 60% widest span, its usable span_min_percent range is 20-59",
 		"variation_percent controls correlated center and rhythm texture independently",
 	} {
 		if !strings.Contains(running, want) {

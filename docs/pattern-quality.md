@@ -1,11 +1,13 @@
 # What makes a motion pattern good or bad
 
-Status: working guideline (2026-08-20)
+Status: working guideline (2026-08-22)
 
-Two batches of patterns have now been rejected after being felt on hardware: the
+Three curation passes have now rejected patterns after they were felt on hardware: the
 descending/decaying shapes that were hand-authored into the catalog, and the
-funscript clips imported as curated built-ins. They failed for the same reason,
-and it is not the reason it looks like.
+funscript clips imported as curated built-ins, followed by six otherwise valid
+catalog entries disabled during sustained use. The first two batches failed for
+the same measurable reason; the latest pass is a reminder that passing a numeric
+floor does not establish preference.
 
 This is the short version of what went wrong and how to avoid repeating it.
 
@@ -26,6 +28,13 @@ Catalog names, descriptions, and tags therefore must not promise an absolute
 pace such as “fast,” “gentle,” or “intense.” Those words belong to the speed
 choice. The rules below ensure that a pattern remains coherent at its reference
 pace; a user may still deliberately request a very low playback speed.
+
+Alpha.29 therefore retires `Broad and Tight`, `Deep-Shallow Sequence`,
+`Flutter`, `High-Low Blocks`, `Lower Accents`, and `Three and One` from the
+shipped catalog. These six pass the envelope below but were all disabled in the
+installed alpha.28 profile; no disabled user-authored entry was included. Treat
+the envelope as a necessary rejection gate, not an algorithm that can overrule
+direct physical curation.
 
 ## Failure mode 1: the device stops
 
@@ -65,7 +74,7 @@ The pattern to avoid is **amplitude and duration both varying, independently and
 without repeating**. Every stroke ends up a different length *and* a different
 speed, and the body has nothing to lock onto. Compare the ones that work: they
 either hold a near-constant pace (`Drift`, `Stroke`) or change it in a phrase you
-can anticipate (`Flutter`, `Four-Level Circuit`, `Tease`).
+can anticipate (`Four-Level Circuit`, `Tease`).
 
 ## The trap that caused all of this
 

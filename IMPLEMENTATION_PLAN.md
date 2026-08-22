@@ -22,8 +22,8 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-07-31. MagicHandy is a source-runnable alpha, not a packaged or
-release-ready application. Phases 0 through 14, 14B, and 14C are merged to
+Updated 2026-08-22. MagicHandy is a source-runnable and packaged Windows alpha,
+not a finished application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent
 connection manager, and the current React shell are implemented. The LLM model
 manager (#55) and managed llama.cpp source-build lifecycle (#56) landed ahead
@@ -173,9 +173,9 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   or named-anchor geometry, an optional long stroke-length envelope, independent
   center/rhythm variation, pace, and a decision horizon, with no catalog in its
   prompt. Both compile through the same target, plan,
-  retarget, limit, transport, trace, and Stop path. Pattern remains the default
-  until Dynamic completes live-provider and real-device A/B acceptance (ADR
-  0015). Each turn receives the authoritative mode-specific engine snapshot and
+  retarget, limit, transport, trace, and Stop path. Creative is the default;
+  Pattern Library and Off remain persisted alternatives, while matched real-
+  device A/B acceptance stays open (ADR 0015). Each turn receives the authoritative mode-specific engine snapshot and
   user speed bands. Provider-native
   controls carry visible latency/quality warnings; no hardware tuning knob is
   promoted without measurement. Managed loading is an explicit startup versus
@@ -201,8 +201,8 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
 - SQLite-backed pattern and finite-program library with generated built-ins,
   share-file/funscript import and export, shared-engine playback, backend-sampled
   previews, sparse freehand authoring, and visible reversible preference
-  training. The catalog now has 87 built-ins: 31 model-visible by default and
-  56 clearly labeled experimental. The LLM can select only enabled opaque
+  training. The catalog now has 81 built-ins: 25 model-visible without the
+  experimental permission and 56 clearly labeled experimental. The LLM can select only enabled opaque
   pattern handles, with shape metadata separate from `speed_percent`, and falls
   back to the semantic speed-only contract when no library entry applies.
 - CI: gofmt, `go vet`, `golangci-lint`, tests, race tests, `CGO_ENABLED=0`
@@ -1332,7 +1332,7 @@ Explicit user imports remain user data and continue through the shared engine.
 Capped physical-feel checks for the retained generated catalog and the
 accepted-calibration-offset startup acquisition remain open.
 
-The current 87-pattern catalog uses normalized runtime speed semantics. The
+The current 81-pattern catalog uses normalized runtime speed semantics. The
 planner measures loop travel and maps 1–100 through the selected Handy model's
 published full travel and normal 32–400/450 mm/s range, with exact rendered-
 curve acceleration and reversal floors. The resulting supported semantic
@@ -1387,6 +1387,23 @@ Autopilot clamps its model horizon
 against that effective window rather than dormant custom fields. A focused
 four-case local Ollama section/pace/correction matrix passes without an engine
 or transport; matched real-device feel remains open.
+
+The alpha.29 scheduler follow-up makes semantic phrase age observable without
+making change deterministic. Autopilot now tracks elapsed time, autonomous
+reconsiderations, and explicit consecutive holds against semantic geometry and
+texture; speed, decision horizon, and backend phrase seeds do not reset that
+clock. The model also sees its current horizon and the full existing envelope/
+section contract. On the active Gemma llama.cpp model, short-age starts still
+held 3/3 while otherwise identical long-age/six-hold starts updated 3/3. A
+12-turn transport-free run yielded one hold, 11 semantic phrase changes, 11
+range envelopes, four horizons, and no repair/fallback. No threshold forces a
+change, and no new motion or transport path exists.
+
+Creative is now the default for fresh and pre-selector settings documents;
+explicit Pattern Library and Off choices persist. The six canonical built-ins
+disabled in the user's installed alpha.28 profile are retired from the active
+catalog. Startup reconciliation deletes only `origin = 'builtin'` rows for
+those IDs, so user-authored content remains untouched.
 
 Alpha.25 closes the reproduced Creative-plan crash: final center/span projection
 clamps floating-point endpoint overshoot before strict validation, compilation

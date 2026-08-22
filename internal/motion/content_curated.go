@@ -89,6 +89,16 @@ var retiredBuiltinPatternIDs = []PatternID{
 	PatternMidTopSwitch,
 	PatternMidrangeFullFinish,
 
+	// Retired from the alpha.28 installed catalog after the user disabled each
+	// one during physical use. Keep the stable IDs here so startup reconciliation
+	// removes only canonical built-in rows and leaves user-authored rows alone.
+	PatternBroadAndTight,
+	PatternDeepShallowSequence,
+	PatternFlutter,
+	PatternHighLowBlocks,
+	PatternLowerAccents,
+	PatternThreeAndOne,
+
 	// Retired after the user disabled all fifteen by hand. Measuring them found
 	// two failure modes, both traceable to the same authoring gap: positions and
 	// travel times were independent lists, so stroke velocity was never a

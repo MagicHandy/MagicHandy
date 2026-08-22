@@ -149,7 +149,14 @@ type Manager struct {
 	// model, so it can tell a deliberate plateau from an accidental one.
 	speedChangedAt time.Time
 	previousSpeed  int
-	arc            arcState
+	// phraseChangedAt and its counters describe accumulated semantic sameness.
+	// The phrase excludes speed and decision horizon, so small pace nudges cannot
+	// make a long-repeated shape look new to the model.
+	currentPhrase            Segment
+	phraseChangedAt          time.Time
+	decisionsAtCurrentPhrase int
+	consecutiveHolds         int
+	arc                      arcState
 
 	operationID     uint64
 	operationMode   string
@@ -256,6 +263,10 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 	m.swayPoints = nil
 	m.previousSpeed = 0
 	m.speedChangedAt = time.Time{}
+	m.currentPhrase = Segment{}
+	m.phraseChangedAt = time.Time{}
+	m.decisionsAtCurrentPhrase = 0
+	m.consecutiveHolds = 0
 	// A new run is a new arc: the bar measures this session, not the last one.
 	m.arc = arcState{startedAt: m.options.Now()}
 	m.deadline = time.Time{}
@@ -468,6 +479,7 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 			m.previousSpeed = previousSpeed
 			m.speedChangedAt = now
 		}
+		m.observeInteractivePhraseLocked(now, segment)
 		m.decisionSource = "interactive"
 		if segment.PatternID != "" {
 			m.recentPatternIDs = append(m.recentPatternIDs, string(segment.PatternID))
@@ -878,6 +890,9 @@ func (m *Manager) freezeDeadline() {
 	if !m.speedChangedAt.IsZero() {
 		m.speedChangedAt = m.speedChangedAt.Add(m.options.Tick)
 	}
+	if !m.phraseChangedAt.IsZero() {
+		m.phraseChangedAt = m.phraseChangedAt.Add(m.options.Tick)
+	}
 	if !m.arc.startedAt.IsZero() {
 		m.arc.startedAt = m.arc.startedAt.Add(m.options.Tick)
 	}
@@ -987,11 +1002,12 @@ func (m *Manager) tracePlanned(mode string, reason string, choice segmentChoice)
 		// Preserve source, semantic timing, and inference latency so a sampled
 		// dwell can be explained after either a planned or immediate decision.
 		note = strings.TrimSpace(fmt.Sprintf(
-			"%s %s next=%s latency=%s",
+			"%s %s next=%s latency=%s%s",
 			choice.source,
 			note,
 			normalizeTiming(choice.timing),
 			choice.decisionLatency,
+			choice.sessionTraceNote(),
 		))
 		if choice.say != "" {
 			note += " say"

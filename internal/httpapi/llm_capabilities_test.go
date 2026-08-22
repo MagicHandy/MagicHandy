@@ -106,7 +106,7 @@ func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 			t.Fatalf("experimental pattern %q leaked into the default catalog", id)
 		}
 	}
-	for _, id := range []motion.PatternID{motion.PatternRocking, motion.PatternFlutter, motion.PatternHighLowBlocks, motion.PatternHardAndRegular, motion.PatternPlayfulJerk, "curated-easy-drive-4"} {
+	for _, id := range []motion.PatternID{motion.PatternRocking, motion.PatternDrift, motion.PatternUpperAccents, motion.PatternHardAndRegular, motion.PatternPlayfulJerk, "curated-easy-drive-4"} {
 		if !gatedIDs[string(id)] {
 			t.Fatalf("accepted pattern %q was hidden by the experimental gate", id)
 		}

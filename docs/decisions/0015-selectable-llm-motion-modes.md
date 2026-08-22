@@ -2,11 +2,12 @@
 
 ## Status
 
-Accepted and implemented. The persisted/API identifier remains `dynamic`; the
-UI labels this mode `Creative` beginning with alpha.24. Creative remains opt-in
-until live-provider and real-device A/B acceptance supports changing the
-default. This is a presentation rename, not a settings migration or a second
-motion mode.
+Accepted and implemented; amended for alpha.29 to make Creative the default.
+The persisted/API identifier remains `dynamic`; the UI labels this mode
+`Creative` beginning with alpha.24. Pattern Library and Off remain explicit
+persisted alternatives. The default change is a product choice informed by
+iterative installed-session feedback and model evaluation, not a claim that the
+remaining real-device A/B acceptance is complete.
 
 ## Context
 
@@ -40,8 +41,7 @@ MagicHandy has three persisted, mutually exclusive LLM motion modes:
    `variation_percent`, and a `segment_seconds` decision horizon. The backend
    compiles this to ordinary loop content and a `MotionPlan`.
 2. **Pattern Library**: the model selects enabled opaque pattern handles, speed,
-   and optional named area focus. This remains the default while Dynamic
-   acceptance is open.
+   and optional named area focus. It remains an explicit selectable alternative.
 3. **Off**: the model is chat-only. Model-authored starts and updates are
    rejected, but user and model Stop paths remain unconditional.
 
@@ -107,9 +107,10 @@ existing autonomous authority; it clamps the model horizon to the user's motion
 cadence range. If Dynamic generation fails, it holds or waits rather than
 falling back to a deterministic pattern.
 
-The setting is additive inside the existing versioned settings JSON. Documents
-without it preserve Pattern Library behavior; a previously saved chat-only
-capability maps to Off. No database schema migration is required.
+The setting is additive inside the existing versioned settings JSON. Beginning
+with alpha.29, documents without it adopt Creative; a previously saved chat-only
+capability maps to Off. Explicit saved Pattern Library and Off choices remain
+unchanged. No database schema migration is required.
 
 ## Consequences
 
@@ -244,10 +245,35 @@ produce a real geometry change. Broader provider behavior remains stochastic,
 and no post-change hardware command was issued, so real-device acceptance is
 still open.
 
+## 2026-08-22 elapsed-phrase and default follow-up
+
+Read-only diagnosis of the installed alpha.28 max-rate session showed that the
+scheduler was already reconsidering at roughly 12-second intervals inside the
+configured 8–16 second range. The model chose six consecutive holds because it
+could see session age and speed age but not the age of the effective semantic
+phrase, its reconsideration count, its hold streak, or the current horizon. The
+autonomous contract also omitted the already accepted span-envelope and section
+fields.
+
+Autopilot now supplies and traces those facts. Semantic phrase identity excludes
+speed, horizon, and backend phrase seeds; only geometry or texture changes reset
+the clock. Motion change rate is described as a preference for more or less
+frequent meaningful differences, not a deadline. The active Gemma llama.cpp
+model kept 3/3 short-age holds, changed 3/3 otherwise identical long-age/six-
+hold cases, and completed a 12-decision transport-free run with one hold, 11
+semantic changes, 11 range envelopes, four horizons, and no repair/fallback.
+Sections remained optional.
+
+Creative becomes the fresh/pre-selector default on that evidence and the user's
+explicit product direction. This amendment does not alter the one-engine path,
+authorization, configured limits, transport boundary, or Stop semantics. It
+also does not treat a prompt harness as physical acceptance; the matched device
+comparison below remains required evidence.
+
 ## Rejected Alternatives
 
-- **Replace Pattern Library control.** Rejected until Dynamic has matched model
-  and hardware evidence; authored content remains useful and predictable.
+- **Remove Pattern Library control.** Rejected; authored content remains useful,
+  predictable, and explicitly selectable even though Creative is the default.
 - **Expose raw timed points or transport commands to the model.** Rejected by
   ADR 0002 and the one-motion-path safety invariant.
 - **Copy StrokeGPT-ReVibed's control loop.** Rejected because its parallel
@@ -258,13 +284,13 @@ still open.
 - **Infer the mode per turn.** Rejected because it makes capabilities and
   diagnostics ambiguous and can let stale responses cross vocabularies.
 
-## Acceptance
+## Remaining Acceptance
 
-Before Dynamic can become the default, run the same prompt matrix through the
-installed managed llama.cpp model and the supported Ollama path, then compare
-Dynamic and Pattern Library on the same real device below the agreed test speed.
+Run the same prompt matrix through the installed managed llama.cpp model and the
+supported Ollama path, then compare Dynamic and Pattern Library on the same real
+device below the agreed test speed.
 Include slow narrow loops, ordered-anchor pass-throughs, true reversals,
 repeated conversational updates, Autopilot handoffs, mode changes with an
 in-flight request, and Emergency Stop. Record `motion_trace.v3`, transport,
-latency, and subjective continuity. A failed feel check keeps Dynamic opt-in; it
-does not justify a transport-specific correction.
+latency, and subjective continuity. A failed feel check requires a Creative or
+default-policy correction; it does not justify a transport-specific bypass.

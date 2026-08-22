@@ -333,7 +333,7 @@ func TestLibraryPreservesUserPatternWithRetiredBuiltinID(t *testing.T) {
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	if err := library.insertPattern(Pattern{
-		ID: string(motion.PatternCradle), Name: "Personal cradle replacement", Origin: OriginUser,
+		ID: string(motion.PatternBroadAndTight), Name: "Personal contrast replacement", Origin: OriginUser,
 		Kind: motion.PatternKindRoutine, Enabled: true, Weight: 1,
 		CycleMillis: motion.RoutineCycleFloorMillis,
 		Points: []motion.CurvePoint{
@@ -354,11 +354,11 @@ func TestLibraryPreservesUserPatternWithRetiredBuiltinID(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
-	pattern, err := reopened.Pattern(string(motion.PatternCradle))
+	pattern, err := reopened.Pattern(string(motion.PatternBroadAndTight))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pattern.Origin != OriginUser || pattern.Name != "Personal cradle replacement" {
+	if pattern.Origin != OriginUser || pattern.Name != "Personal contrast replacement" {
 		t.Fatalf("user pattern with retired ID = %+v", pattern)
 	}
 }

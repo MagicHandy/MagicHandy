@@ -106,6 +106,16 @@ describe("ChatRoute", () => {
     await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("dynamic"));
   });
 
+  it("uses Creative while an older backend snapshot has no saved motion mode", async () => {
+    mocks.appState = { modes: {}, settings: { llm: { motion_capabilities: { motion: true } } } };
+    render(<ChatRoute />);
+
+    await screen.findByText("Conversation content");
+    const controls = screen.getByRole("complementary", { name: "Motion controls" });
+    const mode = within(controls).getByRole("radiogroup", { name: "LLM motion" });
+    expect(within(mode).getByRole("radio", { name: "Creative" })).toBeChecked();
+  });
+
   it("shows only the backend mood for the active session", async () => {
     mocks.appState = { modes: {}, chat: { active_session_id: "chat-test", current_mood: "Teasing" } };
     const view = render(<ChatRoute />);

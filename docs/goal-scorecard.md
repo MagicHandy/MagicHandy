@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-22, Creative C2 phrases and numbered motion changes
+## Snapshot — 2026-08-22, elapsed-aware Creative planning and catalog curation
 
 ### Goal 1: Maintainability
 
@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.28 candidate: 24,028,672 bytes plain and 17,311,744 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.29 candidate: 24,067,584 bytes plain and 17,321,472 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.28` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.28 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.29` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.29 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -89,9 +89,10 @@ freehand authoring, and visible/reversible training feedback while keeping one
 backend-authoritative preview and motion path. Interactive LLM motion now also
 reads authoritative current state, preserves steady/pacing-only continuity,
 supports named area focus, and bounds explicit pattern variation.
-The selectable Dynamic mode adds bounded model-authored center/span or named-
-anchor geometry without a second motion path; Pattern Library remains the
-default pending supported-provider and capped real-device A/B acceptance. Its
+The user-facing Creative mode adds bounded model-authored center/span or named-
+anchor geometry without a second motion path and is now the default; Pattern
+Library and Off remain explicit persisted alternatives. Supported-provider and
+capped real-device A/B acceptance remains open. Its
 outer geometry can now carry an independent model-selected floor/profile, so
 stroke length changes across a long deterministic phrase while center/rhythm
 variation and pace remain separate. Wander/contrast now explore that envelope
@@ -103,7 +104,12 @@ position as well as position-at-time so device quantization cannot silently
 linearize a short eased stroke.
 The installed managed 12B Gemma model passed 25/25 broader first-response
 Creative decisions and 9/9 repetitions of the reproduced position-correction
-sequence without an engine or transport. The shared 1–100 loop-speed scale is calibrated through the selected Original /
+sequence without an engine or transport. The alpha.29 phrase-age matrix kept
+3/3 short-age holds, changed 3/3 long-age/six-hold cases, and completed a
+12-decision run with one hold, 11 semantic changes, 11 range envelopes, four
+horizons, and no repair/fallback. The active catalog contains 81 built-ins: 25
+non-experimental and 56 experimental, after retiring the six canonical entries
+disabled in the installed alpha.28 profile. The shared 1–100 loop-speed scale is calibrated through the selected Original /
 Handy 2 Standard / Handy 2 Pro published travel and normal speed envelope, with
 a separate exact-curve runtime envelope.
 Opted-in chat voice now also receives bounded persona/anatomy context, strict
@@ -131,7 +137,9 @@ Ranked by threat to the stated goals:
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
    browser payload is 1,695,193 raw / 802,815 level-9 gzip bytes. Lazy loading
    limits the English startup path to 809,787 raw / 213,788 gzip bytes; all
-   HTML/CSS/JS is 1,250,957 raw / 365,418 gzip bytes. Creative C2 phrases,
+   HTML/CSS/JS is 1,250,957 raw / 365,418 gzip bytes. Alpha.29's Creative-
+   default fallbacks change the main bundle content but leave all three raw and
+   level-9 gzip totals byte-identical. Creative C2 phrases,
    section-aware status, and the eight-level Motion change rate control add 71
    raw bytes and 227 gzip bytes to the checked-in alpha.27 bundle;
    the English startup path is 146 raw bytes smaller and 142 gzip bytes larger.
@@ -176,6 +184,30 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-22** - Prepared alpha.29 after diagnosing the installed level-8
+  Creative session. The scheduler made decisions about every 12 seconds inside
+  its 8–16 second window, but six explicit model holds preserved one semantic
+  phrase for roughly 92 seconds. Autopilot now exposes/traces phrase age,
+  reconsiderations, hold streak, and current horizon; speed, horizon, and
+  backend phrase seeds do not reset semantic freshness. The full envelope and
+  section contract is available, but no threshold or section requirement forces
+  change. The active Gemma model kept 3/3 short-age holds, changed 3/3 otherwise
+  identical long-age/six-hold cases, and completed a 12-decision run with one
+  hold, 11 semantic changes, 11 range envelopes, four horizons, and no repair or
+  fallback. All probes were transport-free.
+  Creative is now the fresh/pre-selector default while explicit Pattern Library
+  and Off choices persist. Read-only catalog inspection found 87 built-ins, 81
+  enabled and six disabled, with no disabled user content. Those six are retired;
+  reconciliation deletes canonical built-in rows only, yielding 81 active
+  patterns (25 non-experimental, 56 experimental). Full Go tests, vet, lint,
+  405 frontend tests, localization, typecheck/build, the catalog designer, the
+  PowerShell 5.1 installer suite, and plain/stripped `CGO_ENABLED=0` builds pass.
+  Local Windows race remains unavailable because no C compiler is installed;
+  mandatory Ubuntu CI remains authoritative. The candidate measures 24,067,584
+  / 17,321,472 binary bytes. Browser totals remain byte-identical at 1,695,193
+  raw / 802,815 gzip overall and 809,787 / 213,788 for English startup. No
+  post-change device motion was commanded; matched physical feel remains open.
 
 - **2026-08-22** - Prepared alpha.28 with an eighth Motion change rate stop.
   Levels 1–7 retain their exact windows and level 8 tightens only the upper

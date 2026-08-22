@@ -715,9 +715,9 @@ func DefaultSettings() Settings {
 			ReasoningMode:        LLMReasoningOff,
 			ChatVoice:            LLMChatVoiceUtility,
 			UserAnatomy:          LLMUserAnatomyPenis,
-			// Pattern remains the conservative default until Dynamic completes the
-			// real-device A/B acceptance described in docs/llm-control-surface.md.
-			MotionGenerationMode: LLMMotionModePattern,
+			// Creative is the primary model-facing motion vocabulary. Pattern Library
+			// remains available as an explicit saved choice.
+			MotionGenerationMode: LLMMotionModeDynamic,
 		},
 		Voice: VoiceSettings{
 			TTSProvider:        VoiceProviderNone,
@@ -1081,11 +1081,11 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 		settings.LLM.CustomAnatomy = ""
 	}
 	// Motion generation mode is additive, so it does not force a schema
-	// migration. Preserve the established pattern behavior for existing files;
-	// a saved chat-only capability becomes Off. Brand-new stores retain the
-	// conservative Pattern default until Dynamic passes real-device acceptance.
+	// migration. Documents that predate the selector adopt the current Creative
+	// default; a saved chat-only capability becomes Off. Explicit saved Pattern
+	// Library and Off choices remain untouched.
 	if _, present := header.LLM["motion_generation_mode"]; !present {
-		settings.LLM.MotionGenerationMode = LLMMotionModePattern
+		settings.LLM.MotionGenerationMode = LLMMotionModeDynamic
 		if settings.LLM.MotionCapabilities != nil && !settings.LLM.MotionCapabilities.Motion {
 			settings.LLM.MotionGenerationMode = LLMMotionModeOff
 		}

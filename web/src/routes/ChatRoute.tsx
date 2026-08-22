@@ -63,7 +63,7 @@ export function ChatRoute() {
   const motionCapabilities = state?.settings?.llm?.motion_capabilities;
   const motionMode = savedMotionMode === "dynamic" || savedMotionMode === "pattern" || savedMotionMode === "off"
     ? savedMotionMode
-    : motionCapabilities?.motion === false ? "off" : "pattern";
+    : motionCapabilities?.motion === false ? "off" : "dynamic";
 
   useEffect(() => {
     if (!workspace || loading || operation || streaming) return;

@@ -318,24 +318,35 @@ func TestRetiredPatternsAreAbsentFromDefaultCatalog(t *testing.T) {
 	}
 }
 
+func TestInstalledDisabledBuiltinsAreRetired(t *testing.T) {
+	retired := RetiredBuiltinPatternIDs()
+	for _, id := range []PatternID{
+		PatternBroadAndTight,
+		PatternDeepShallowSequence,
+		PatternFlutter,
+		PatternHighLowBlocks,
+		PatternLowerAccents,
+		PatternThreeAndOne,
+	} {
+		if !slices.Contains(retired, id) {
+			t.Errorf("installed disabled built-in %q is not retired", id)
+		}
+	}
+}
+
 func TestSampledPatternsUseMotionSemanticNames(t *testing.T) {
 	want := map[PatternID]string{
 		PatternFourLevelCircuit:    "Four-Level Circuit",
-		PatternHighLowBlocks:       "High-Low Blocks",
-		PatternDeepShallowSequence: "Deep-Shallow Sequence",
 		PatternSlowFastFull:        "Tempo Ramp",
 		PatternDeepPartialSequence: "Deep-Partial Sequence",
 		PatternRisingReach:         "Rising Reach",
 		PatternEasingDown:          "Descending Window",
 		PatternBuildingUp:          "Ascending Window",
-		PatternBroadAndTight:       "Broad and Tight",
 		PatternUpperAccents:        "Upper Accents",
-		PatternLowerAccents:        "Lower Accents",
 		PatternSteadyDrift:         "Window Drift",
 		PatternNarrowing:           "Narrowing Window",
 		PatternOpeningUp:           "Widening Window",
 		PatternRocking:             "Rocking",
-		PatternThreeAndOne:         "Three and One",
 		PatternOffbeat:             "Offbeat",
 		PatternLongReturn:          "Long Return",
 		PatternSwell:               "Rising Window Arc",

@@ -574,8 +574,20 @@ func validateDynamicSpanEnvelopeState(command *MotionCommand, context *MotionCon
 	if !hasFloor {
 		return errors.New("a variable span_profile requires a usable span_min_percent")
 	}
+	if floor < 20 {
+		if hasOuter && outer <= 20 {
+			return fmt.Errorf("span_min_percent must be at least 20 and below the effective widest span; current span %d leaves no room, so include a larger span_percent in the same update", outer)
+		}
+		if hasOuter {
+			return fmt.Errorf("span_min_percent must be between 20 and %d for the effective widest span %d", outer-1, outer)
+		}
+		return errors.New("span_min_percent must be at least 20 and below the effective widest span")
+	}
 	if hasOuter && floor >= outer {
-		return errors.New("a variable span_profile requires span_min_percent below the outer span")
+		if outer <= 20 {
+			return fmt.Errorf("span_min_percent must be at least 20 and below the effective widest span; current span %d leaves no room, so include a larger span_percent in the same update", outer)
+		}
+		return fmt.Errorf("span_min_percent must be between 20 and %d for the effective widest span %d", outer-1, outer)
 	}
 	return nil
 }

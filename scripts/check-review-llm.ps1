@@ -71,7 +71,7 @@ try {
     } else {
         "$providerBaseUrl/v1/chat/completions"
     }
-    $completionBody = @{
+    $completionRequest = @{
         model = $model
         messages = @(
             @{
@@ -86,7 +86,15 @@ try {
         max_tokens = 64
         temperature = 0
         stream = $false
-    } | ConvertTo-Json -Depth 6 -Compress
+    }
+    # Match MagicHandy's llama.cpp provider when saved reasoning is off. Some
+    # thinking-capable local templates otherwise spend this deliberately small
+    # readiness budget entirely in reasoning_content and return empty visible
+    # content even though ordinary app generation is healthy.
+    if ($provider -eq 'llama_cpp') {
+        $completionRequest['chat_template_kwargs'] = @{ enable_thinking = $false }
+    }
+    $completionBody = $completionRequest | ConvertTo-Json -Depth 6 -Compress
 
     # This is a direct provider generation probe. It does not acquire a
     # controller lease, enter MagicHandy chat, or touch the motion engine.

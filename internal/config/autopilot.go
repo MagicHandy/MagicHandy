@@ -81,10 +81,10 @@ type AutopilotSettings struct {
 	AdaptiveSpeechTiming  bool   `json:"adaptive_speech_timing"`
 	AdaptiveMotionTiming  bool   `json:"adaptive_motion_timing"`
 	SpeechMotionAuthority string `json:"speech_motion_authority"`
-	// SessionTracking lets the model see elapsed session time, how long the
-	// current speed has held, and which way speed has been moving. Inert input:
-	// it informs decisions and authorizes nothing. Off removes the facts from the
-	// prompt entirely rather than sending zeros.
+	// SessionTracking lets the model see elapsed session time, speed history,
+	// and backend-measured phrase sameness (age, reconsiderations, and holds).
+	// Inert input: it informs decisions and authorizes nothing. Off removes the
+	// facts from the prompt entirely rather than sending zeros.
 	SessionTracking bool `json:"session_tracking"`
 	// SessionArc enables the visible elapsed-session fill bar supplied to the
 	// model as pacing context. It is a separate switch from SessionTracking
