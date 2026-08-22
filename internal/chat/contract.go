@@ -219,14 +219,26 @@ func parseAssistantResponseForCapabilities(raw string, patterns []PatternChoice,
 	return response, nil
 }
 
-// normalizeDynamicGeometry resolves one unambiguous local-model redundancy.
-// Named anchors are an ordered route and therefore carry more information than
-// a center/span window; the motion runtime already gives them precedence. Drop
-// copied window fields here so a valid anchor decision does not enter a repair
-// loop merely because the model repeated values from the adjacent start example.
+// normalizeDynamicGeometry resolves unambiguous local-model redundancies. A
+// single section is exactly one ordinary phrase with a redundant container, so
+// promote its fields rather than spending a second inference asking for the same
+// decision. Named anchors are an ordered route and therefore carry more
+// information than a center/span window; the motion runtime already gives them
+// precedence. Drop copied window fields so a valid anchor decision does not
+// enter a repair loop merely because the model repeated adjacent example data.
 func normalizeDynamicGeometry(response *AssistantResponse) {
 	if response.Motion == nil {
 		return
+	}
+	if len(response.Motion.Sections) == 1 && !hasSingleDynamicPhraseFields(*response.Motion) {
+		section := response.Motion.Sections[0]
+		response.Motion.CenterPercent = section.CenterPercent
+		response.Motion.SpanPercent = section.SpanPercent
+		response.Motion.SpanMinPercent = section.SpanMinPercent
+		response.Motion.SpanProfile = section.SpanProfile
+		response.Motion.Anchors = section.Anchors
+		response.Motion.VariationPercent = section.VariationPercent
+		response.Motion.Sections = nil
 	}
 	if len(response.Motion.Anchors) > 0 {
 		response.Motion.CenterPercent = nil
@@ -593,14 +605,18 @@ func validateDynamicSpanEnvelopeState(command *MotionCommand, context *MotionCon
 }
 
 func effectiveDynamicSpanProfile(command *MotionCommand, context *MotionContext) string {
-	profile := strings.ToLower(strings.TrimSpace(command.SpanProfile))
+	explicitProfile := strings.ToLower(strings.TrimSpace(command.SpanProfile))
+	profile := explicitProfile
 	if profile == "" && context != nil && context.Running {
 		profile = strings.ToLower(strings.TrimSpace(context.SpanProfile))
 	}
-	if command.SpanMinPercent != nil &&
+	if command.SpanMinPercent != nil && explicitProfile == "" &&
 		(profile == "" || profile == DynamicSpanProfileSteady) {
 		// A floor-only command intentionally selects ordinary organic movement
-		// at the HTTP boundary, so validate that same effective target.
+		// at the HTTP boundary, so validate that same effective target. An
+		// explicitly supplied steady profile still means clear the envelope; a
+		// copied floor is harmless because normalization collapses it to the
+		// outer span.
 		return DynamicSpanProfileWander
 	}
 	return profile

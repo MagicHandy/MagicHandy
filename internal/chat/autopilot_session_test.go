@@ -65,12 +65,23 @@ func TestAutopilotSpeechMessageDoesNotExposePatternStorageID(t *testing.T) {
 		CurrentPatternID: "curated-intense-drive-16",
 		CurrentSpeed:     40,
 		CurrentArea:      AreaZoneFull,
+		LastSay:          "I stay close in the quiet.",
 	})
 	if strings.Contains(message, "curated-intense-drive-16") {
 		t.Fatalf("speech prompt leaked persisted pattern ID:\n%s", message)
 	}
 	if !strings.Contains(message, "catalog pattern at 40% speed") {
 		t.Fatalf("speech prompt lost useful motion context:\n%s", message)
+	}
+	for _, want := range []string{
+		"avoid recycling an earlier line's sentence shape, action, image, or salient noun",
+		"Prefer an actual spoken reaction, observation, reassurance, or anticipation",
+		"narrate a new physical gesture only when the conversation calls for it",
+		"contributes a genuinely new beat",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("speech prompt is missing anti-repetition guidance %q:\n%s", want, message)
+		}
 	}
 }
 
@@ -120,9 +131,13 @@ func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
 		CurrentSpan: 60, CurrentSpanMin: 26, CurrentSpanProfile: DynamicSpanProfileWander,
 		CurrentVariation: 10, CurrentSegment: 37, SpeedMinPercent: 20,
 		SpeedMaxPercent: 40, MotionMinSeconds: 20, MotionMaxSeconds: 60,
+		MotionChangeLevel:   8,
 		CommandedMeanTravel: 73, CommandedPeakSpeed: 119, MeanStrokeLength: 42,
 		LocalStrokeCV: 11, LocalStrokeRange: 17,
 	})
+	if len(running) > maxUserMessageBytes {
+		t.Fatalf("running Dynamic Autopilot prompt is %d bytes, limit %d", len(running), maxUserMessageBytes)
+	}
 	if strings.Contains(running, "No Dynamic target is active") {
 		t.Fatalf("running Dynamic prompt still claims startup state:\n%s", running)
 	}
@@ -136,9 +151,38 @@ func TestDynamicAutopilotStartupPromptRequiresDynamicTarget(t *testing.T) {
 		"least varied 12-second window has 17% length range with 11% coefficient of variation",
 		"measured from the engine curve, not inferred from the JSON fields",
 		"use sections with 2-4 complete movement ideas",
+		"Autopilot authorizes bounded choices without a new chat message",
+		"biases the whole phrase, not each turn",
+		"frequent-contrast bias",
+		"pace alone keeps the same range",
+		"rotate contrast among pace, outer travel band, stroke-length envelope, texture, and sections",
+		"Rising phrase age means recent edits did not change felt output",
+		"change outer center/span, anchors, or sections",
+		"explicit request to keep motion unchanged always means none",
+		"combine a distinct outer band with envelope or texture, or use sections",
+		"nearby scalar steps are not contrast",
 	} {
 		if !strings.Contains(running, want) {
 			t.Fatalf("running Dynamic prompt missing %q:\n%s", want, running)
 		}
+	}
+}
+
+func TestDynamicAutopilotPromptFitsUserMessageBudgetWithTrackedSession(t *testing.T) {
+	const reserveBytes = 256
+	message := AutopilotMotionMessage(AutopilotContext{
+		Style: "balanced", MotionMode: MotionModeDynamic,
+		SpeedMinPercent: 20, SpeedMaxPercent: 80, CurrentSpeed: 58,
+		CurrentCenter: 50, CurrentSpan: 74, CurrentSpanMin: 52,
+		CurrentSpanProfile: DynamicSpanProfileBreathe, CurrentVariation: 25,
+		CurrentSegment: 14, MotionMinSeconds: 8, MotionMaxSeconds: 16,
+		MotionChangeLevel: 8, CommandedMeanTravel: 123, CommandedPeakSpeed: 201,
+		MeanStrokeLength: 42, LocalStrokeCV: 7, LocalStrokeRange: 9,
+		SessionTracking: true, SessionSeconds: 180, SecondsAtCurrentSpeed: 90,
+		SecondsAtCurrentPhrase: 90, DecisionsAtCurrentPhrase: 5, ConsecutiveHolds: 4,
+	})
+	if len(message) > maxUserMessageBytes-reserveBytes {
+		t.Fatalf("tracked Dynamic Autopilot prompt is %d bytes, want at most %d to preserve %d bytes of state headroom",
+			len(message), maxUserMessageBytes-reserveBytes, reserveBytes)
 	}
 }

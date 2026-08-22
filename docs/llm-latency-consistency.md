@@ -51,6 +51,14 @@ Changing the runtime, selected model, context size, or load policy closes the
 old managed provider before applying the new choice. Startup remains
 non-blocking: the HTTP UI is served while preload runs.
 
+The managed runner uses llama.cpp's low process/thread priority. Autonomous
+prompt prefill can otherwise consume the host scheduler long enough for the
+speech clock to appear to skip rendered seconds (the shorter motion clock is
+hidden behind its `planned` state during the same inference). The backend
+deadline remains authoritative either way; yielding to the app shell keeps the
+countdown, Stop, and other safety controls responsive at a small potential cost
+to generation latency.
+
 ### Interactive priority
 
 One coordinator admits local-model generation calls. Chat and Autopilot still

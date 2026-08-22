@@ -27,6 +27,11 @@ const (
 	// yielding to it. A brief cancellation overlap does not need another
 	// permanently allocated server slot.
 	managedLlamaParallelSlots = 1
+	// Managed inference must yield to the app shell, its safety controls, and
+	// visible backend-owned clocks. The pinned llama-server accepts -1 as low
+	// process/thread priority; model latency is preferable to starving the UI
+	// during frequent autonomous prompt prefill.
+	managedLlamaPriority = -1
 )
 
 // ManagedLlamaCPPOptions configures a managed llama-server process.
@@ -322,6 +327,7 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 		"--no-ui",
 		"--ctx-size", strconv.Itoa(p.contextSize),
 		"--parallel", strconv.Itoa(managedLlamaParallelSlots),
+		"--prio", strconv.Itoa(managedLlamaPriority),
 		"-m", p.modelPath,
 	}
 

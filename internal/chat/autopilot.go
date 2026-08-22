@@ -135,11 +135,11 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 		}
 		writeCompiledCreativeFeel(&builder, context)
 		writeSessionProgress(&builder, context)
-		builder.WriteString("Decide what happens for the next continuous stretch using the recent conversation as the user's ongoing direction:\n")
+		builder.WriteString("Choose the next continuous stretch. Autopilot authorizes bounded choices without a new chat message; conversation and explicit user directions still win.\n")
 		motionChangeLevel := normalizedMotionChangeLevel(context.MotionChangeLevel)
-		fmt.Fprintf(&builder, "- The user's motion change rate is %d of 8. Higher values mean they welcome more frequent meaningful differences; lower values favor continuity. It is a preference, not a requirement to change now.\n", motionChangeLevel)
-		builder.WriteString("- Use action \"update\" only when a meaningful change fits. Omitted fields preserve the live dynamic target.\n")
-		builder.WriteString("- Use action \"none\" to deliberately continue. Holding is a first-class model decision, not a failure.\n")
+		fmt.Fprintf(&builder, "- Motion change rate: %d/8 (%s). It biases the whole phrase, not each turn: high favors shorter repetition; low favors continuity. Any one hold may fit.\n", motionChangeLevel, motionChangeBias(motionChangeLevel))
+		builder.WriteString("- Use update only for meaningful change; omitted fields preserve the target. Use none for deliberate continuity, not simply because chat is quiet.\n")
+		builder.WriteString("- Rising phrase age means recent edits did not change felt output. When contrast fits, change outer center/span, anchors, or sections instead of only speed, variation, or the inner span envelope.\n")
 		builder.WriteString("- Change center/span or provide a new 2-6 anchor route; never provide both representations together. Interior anchors are pass-through positions, not pauses.\n")
 		writeDynamicSpanGuidance(&builder, context)
 		builder.WriteString("- variation_percent controls correlated center and rhythm texture independently from an explicit span profile: 20-40 is subtle, 45-70 clearly organic, and 70-100 deliberately wild. Use zero only for mechanically even motion, never for jitter.\n")
@@ -147,8 +147,9 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 		fmt.Fprintf(&builder, "- segment_seconds must be %d-%d and says when to reconsider, not when to stop. Vary it naturally rather than choosing one constant.\n",
 			minimumSeconds, maximumSeconds)
 		builder.WriteString("- Never use start or stop: the scheduler owns start and only the user stops motion.\n")
-		fmt.Fprintf(&builder, "- Use the width of %d-%d%% speed across the session. Easing down can make a later climb feel deliberate.\n",
+		fmt.Fprintf(&builder, "- Explore %d-%d%% speed across the session, but pace alone keeps the same range. Across changes, rotate contrast among pace, outer travel band, stroke-length envelope, texture, and sections.\n",
 			context.SpeedMinPercent, context.SpeedMaxPercent)
+		fmt.Fprintf(&builder, "- Apply the current %s. An explicit request to keep motion unchanged always means none. At a high rate, a new phrase should combine a distinct outer band with envelope or texture, or use sections; a deliberate hold remains valid, but nearby scalar steps are not contrast.\n", motionChangeBias(motionChangeLevel))
 		builder.WriteString("- Set next to soon, normal, or later as a fallback timing preference. Set variability to settled, normal, or restless for speed drift independent of geometry.")
 		return builder.String()
 	}
@@ -194,6 +195,17 @@ func normalizedMotionChangeLevel(level int) int {
 		return 4
 	}
 	return level
+}
+
+func motionChangeBias(level int) string {
+	switch {
+	case level <= 2:
+		return "strong-continuity bias"
+	case level <= 5:
+		return "balanced-continuity bias"
+	default:
+		return "frequent-contrast bias"
+	}
 }
 
 func writeCompiledCreativeFeel(builder *strings.Builder, context AutopilotContext) {
@@ -253,7 +265,7 @@ func AutopilotSpeechMessage(context AutopilotContext) string {
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "Autopilot spoken check-in after motion decision %d.\n", context.SegmentIndex)
 	if say := strings.TrimSpace(context.LastSay); say != "" {
-		fmt.Fprintf(&builder, "The last autonomous line was: %q. Do not repeat or paraphrase it.\n", say)
+		fmt.Fprintf(&builder, "The last autonomous line was: %q. Do not repeat or paraphrase it. Use recent history to avoid recycling an earlier line's sentence shape, action, image, or salient noun. Prefer an actual spoken reaction, observation, reassurance, or anticipation; narrate a new physical gesture only when the conversation calls for it.\n", say)
 	}
 	if context.CurrentPatternID != "" && context.CurrentSpeed > 0 {
 		area := strings.TrimSpace(context.CurrentArea)
@@ -263,7 +275,7 @@ func AutopilotSpeechMessage(context AutopilotContext) string {
 		fmt.Fprintf(&builder, "Current motion: a catalog pattern at %d%% speed in area %q.\n", context.CurrentSpeed, area)
 	}
 	writeSessionProgress(&builder, context)
-	builder.WriteString("Write one short in-character line that fits the recent conversation (under 150 characters and no question that demands an answer).\n")
+	builder.WriteString("Write one short in-character line that fits the recent conversation and contributes a genuinely new beat (under 150 characters and no question that demands an answer).\n")
 	builder.WriteString("Set next to soon, normal, or later for when another spoken check-in would feel natural. Do not provide seconds.")
 	return builder.String()
 }

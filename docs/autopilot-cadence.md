@@ -100,6 +100,15 @@ welcome, while lower values favor continuity. Its model-selected
 The live decision horizon is returned to the model on the next turn so a local
 model can vary it instead of repeatedly selecting the midpoint.
 
+Autopilot itself is the user's continuing authorization for bounded autonomous
+choices; an empty or quiet chat is not implicitly a request to hold. The rate is
+rendered to the model as a continuity bias over the whole felt phrase, not a
+per-decision command. At the high end, contrast may accumulate through smooth
+steps across pace, outer travel band, stroke envelope, texture, or sections;
+the retained perceptual baseline recognizes that cumulative change without
+requiring an abrupt jump. An explicit request to keep motion unchanged always
+wins and produces `action:none`, regardless of elapsed time or rate.
+
 ### Speech motion authority
 
 - `Chat only`: an autonomous line cannot change motion.
@@ -406,4 +415,13 @@ Acceptance requires:
 - pause preserves remaining time and Stop leaves no autonomous goroutine or
   voice request alive; and
 - frontend controls render backend snapshots and remain locked while offline or
-  read-only.
+  read-only;
+- the transport-free `TestLiveAutopilotCreativeHighRateAutonomy` scorecard uses
+  the production prompt, mapper, compiler, and retained phrase baseline, and
+  requires both a materially different felt curve and changed range character
+  over a short max-rate run without prescribing a turn on which either occurs;
+- `TestLiveAutopilotCreativeCompiledPhrase` still honors an explicit hold after
+  a long max-rate phrase; and
+- `TestLiveAutopilotSpeechNovelty` exercises the recent-line summary and rejects
+  repeated lines or monotonous sentence openings without prescribing persona
+  prose.
