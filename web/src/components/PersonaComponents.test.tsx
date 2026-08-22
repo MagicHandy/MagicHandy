@@ -140,7 +140,7 @@ describe("PersonaGrid", () => {
     expect(onImport).toHaveBeenCalledWith(file);
   });
 
-  it("always lists the Settings-backed MagicHandy default", () => {
+  it("opens the Settings-backed MagicHandy default in Prompts & memory", () => {
     render(
       <PersonaGrid
         personas={[]}
@@ -154,7 +154,7 @@ describe("PersonaGrid", () => {
     );
 
     const defaultTile = screen.getByRole("link", { name: "MagicHandy (Default)" });
-    expect(defaultTile).toHaveAttribute("href", "#/settings/model");
+    expect(defaultTile).toHaveAttribute("href", "#/settings/prompts");
     expect(defaultTile).toHaveAttribute("aria-current", "true");
     expect(screen.getByText("1 persona")).toBeInTheDocument();
   });
