@@ -179,6 +179,36 @@ func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 	}
 }
 
+func TestAutopilotPromptContextCarriesCompiledFeel(t *testing.T) {
+	definition := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{
+		CenterPercent: 52, SpanPercent: 76, SpanMinPercent: 30,
+		SpanProfile: motion.DynamicSpanProfileContrast, VariationPercent: 65,
+		SegmentSeconds: 14,
+	})
+	perceptual := motion.PerceptualSummary{
+		CommandedMeanTravelPerSecond:   93.6,
+		CommandedPeakVelocityPerSecond: 171.2,
+		MeanStrokePercent:              48.7,
+		MinimumLocalStrokeCV:           0.126,
+		MinimumLocalStrokeRange:        18.4,
+	}
+	capabilities := chat.FullCapabilities()
+	capabilities.MotionMode = chat.MotionModeDynamic
+	context := autopilotPromptContext(modes.DecisionInput{
+		CurrentDynamic: &definition, CurrentSpeed: 58, CurrentPerceptual: &perceptual,
+	}, capabilities)
+
+	if context.CommandedMeanTravel != 94 || context.CommandedPeakSpeed != 171 ||
+		context.MeanStrokeLength != 49 || context.LocalStrokeCV != 13 || context.LocalStrokeRange != 18 {
+		t.Fatalf("compiled prompt context = %+v", context)
+	}
+	message := chat.AutopilotMotionMessage(context)
+	if !strings.Contains(message, "Compiled feel: about 94% travel per second on average") ||
+		!strings.Contains(message, "least varied 12-second window has 18% length range with 13% coefficient of variation") {
+		t.Fatalf("compiled feel missing from prompt:\n%s", message)
+	}
+}
+
 func TestAutopilotDecisionCanCurateMotionDespiteStopProhibition(t *testing.T) {
 	provider := &scriptedLLMProvider{responses: []string{
 		`{"motion":{"action":"target","pattern_id":"stroke","intensity":45},"next":"soon","variability":"normal"}`,
@@ -543,6 +573,46 @@ func TestDynamicPhraseMappingPreservesAndCollapsesSectionsDeliberately(t *testin
 	if len(collapsed.Sections) != 0 || collapsed.VariationPercent != newVariation ||
 		len(collapsed.Anchors) != len(definition.Sections[0].Anchors) {
 		t.Fatalf("scalar correction did not collapse to the effective section: %+v", collapsed)
+	}
+}
+
+func TestDynamicAutopilotSingleReplacementRefreshesMicroMotionOnly(t *testing.T) {
+	current := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 38, SpanMinPercent: 20,
+		SpanProfile: motion.DynamicSpanProfileWander, VariationPercent: 62,
+		SegmentSeconds: 14,
+	})
+	center, span, floor, variation := 44, 42, 22, 70
+	decision := mapDynamicAutopilotCommand(&chat.MotionCommand{
+		Action: chat.MotionActionUpdate, CenterPercent: &center, SpanPercent: &span,
+		SpanMinPercent: &floor, SpanProfile: chat.DynamicSpanProfileContrast,
+		VariationPercent: &variation,
+	}, modes.DecisionInput{CurrentDynamic: &current, CurrentSpeed: 58}, "", modes.TimingNormal, modes.VariabilityRestless)
+	if decision.Hold || decision.Segment.Dynamic == nil {
+		t.Fatalf("single replacement mapped to hold: %+v", decision)
+	}
+	next := decision.Segment.Dynamic
+	if next.PhraseSeed == 0 || next.PhraseSeed == current.PhraseSeed {
+		t.Fatalf("single replacement did not refresh micro-motion: %d -> %d",
+			current.PhraseSeed, next.PhraseSeed)
+	}
+
+	speed := 64
+	paceOnly := mapDynamicAutopilotCommand(&chat.MotionCommand{
+		Action: chat.MotionActionUpdate, SpeedPercent: &speed,
+	}, modes.DecisionInput{CurrentDynamic: next, CurrentSpeed: 58}, "", modes.TimingNormal, modes.VariabilityNormal)
+	if paceOnly.Hold || paceOnly.Segment.Dynamic == nil || paceOnly.Segment.Dynamic.PhraseSeed != next.PhraseSeed {
+		t.Fatalf("pace-only update changed or discarded single phrase seed: %+v", paceOnly)
+	}
+
+	copied := mapDynamicAutopilotCommand(&chat.MotionCommand{
+		Action:        chat.MotionActionUpdate,
+		CenterPercent: &next.CenterPercent, SpanPercent: &next.SpanPercent,
+		SpanMinPercent: &next.SpanMinPercent, SpanProfile: next.SpanProfile,
+		VariationPercent: &next.VariationPercent,
+	}, modes.DecisionInput{CurrentDynamic: next, CurrentSpeed: speed}, "", modes.TimingNormal, modes.VariabilityNormal)
+	if !copied.Hold {
+		t.Fatalf("copied single geometry manufactured novelty instead of holding: %+v", copied)
 	}
 }
 

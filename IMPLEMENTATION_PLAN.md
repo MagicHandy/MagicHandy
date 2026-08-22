@@ -1399,6 +1399,28 @@ held 3/3 while otherwise identical long-age/six-hold starts updated 3/3. A
 range envelopes, four horizons, and no repair/fallback. No threshold forces a
 change, and no new motion or transport path exists.
 
+The alpha.30 output-fidelity follow-up corrects the compiled curve rather than
+adding another model-facing motion rule set. Creative locally retimes each C2
+interval to the selected Handy carriage-velocity calibration and exact shared
+velocity/acceleration/jerk/reversal envelope, so one hard interval cannot
+flatten the whole speed control. The final plan exposes a compact perceptual
+summary; Autopilot uses that summary for accumulated phrase freshness and model
+context, while pace remains independent. Breathe retains local stroke-length
+movement, and autonomous semantically new single phrases advance a
+deterministic texture seed. The existing `sections` schema is now the explicit
+macro vocabulary for an ongoing multi-sequence direction, not a required
+response to elapsed time.
+
+Transport-free runs against the installed Gemma llama.cpp model produced 15/15
+valid three-section decisions over three repeated sessions, compiled local
+12-second CV/range floors remained above 9.5%/15.9 points, and an explicit hold
+still won at max rate with a 180-second phrase age. Mode status now publishes
+absolute backend deadlines and observation time; the UI interpolates and
+reconciles those clocks without increasing global polling or owning scheduler
+state. A 20-minute buildup advances 1% per 12 active seconds and remains frozen
+during pause. All work remains inside the shared engine and existing transport
+owners; matched real-device feel remains open.
+
 Creative is now the default for fresh and pre-selector settings documents;
 explicit Pattern Library and Off choices persist. The six canonical built-ins
 disabled in the user's installed alpha.28 profile are retired from the active

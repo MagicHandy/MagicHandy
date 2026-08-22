@@ -76,11 +76,16 @@ type Options struct {
 
 // Status is the UI-facing mode state.
 type Status struct {
-	Active         bool   `json:"active"`
-	Mode           string `json:"mode,omitempty"`
-	Style          string `json:"style,omitempty"`
+	Active bool   `json:"active"`
+	Mode   string `json:"mode,omitempty"`
+	Style  string `json:"style,omitempty"`
+	// StatusAt and the absolute deadlines let a client render a smooth clock
+	// between backend snapshots without inventing its own schedule. The legacy
+	// remaining fields stay as a compatibility and clock-skew fallback.
+	StatusAt       string `json:"status_at,omitempty"`
 	SegmentIndex   int    `json:"segment_index,omitempty"`
 	SegmentEndsMs  int64  `json:"segment_ends_in_ms,omitempty"`
+	SegmentDueAt   string `json:"segment_due_at,omitempty"`
 	LastEvent      string `json:"last_event,omitempty"`
 	LastEventAt    string `json:"last_event_at,omitempty"`
 	WaitingForChat bool   `json:"waiting_for_chat,omitempty"`
@@ -92,10 +97,12 @@ type Status struct {
 	// repetition; the API retains it as diagnostic state while Chat owns display.
 	LastSay string `json:"last_say,omitempty"`
 	// MotionChangeMs and SpeechMs are independent backend-owned clocks.
-	MotionChangeMs        int64 `json:"motion_change_in_ms,omitempty"`
-	SpeechMs              int64 `json:"speech_in_ms,omitempty"`
-	MotionPlanned         bool  `json:"motion_planned,omitempty"`
-	SpeechWaitingPlayback bool  `json:"speech_waiting_playback,omitempty"`
+	MotionChangeMs        int64  `json:"motion_change_in_ms,omitempty"`
+	MotionChangeDueAt     string `json:"motion_change_due_at,omitempty"`
+	SpeechMs              int64  `json:"speech_in_ms,omitempty"`
+	SpeechDueAt           string `json:"speech_due_at,omitempty"`
+	MotionPlanned         bool   `json:"motion_planned,omitempty"`
+	SpeechWaitingPlayback bool   `json:"speech_waiting_playback,omitempty"`
 	// Arc is the visible session progression bar. Absent when the user has the
 	// switch off, so the UI shows nothing rather than an empty bar.
 	Arc *SessionArc `json:"session_arc,omitempty"`
@@ -153,6 +160,7 @@ type Manager struct {
 	// The phrase excludes speed and decision horizon, so small pace nudges cannot
 	// make a long-repeated shape look new to the model.
 	currentPhrase            Segment
+	currentPerceptual        *motion.PerceptualSummary
 	phraseChangedAt          time.Time
 	decisionsAtCurrentPhrase int
 	consecutiveHolds         int
@@ -200,6 +208,7 @@ func (m *Manager) Status() Status {
 	speechDeadline := m.speechDeadline
 	speechWaiting := m.speechWaitingID != ""
 	m.mu.Unlock()
+	now := m.options.Now()
 
 	status := Status{
 		Active:    mode != "",
@@ -208,13 +217,17 @@ func (m *Manager) Status() Status {
 	}
 	if mode != "" {
 		status.Style = m.options.Settings().Style
+		status.StatusAt = now.UTC().Format(time.RFC3339Nano)
 	}
 	if !lastEventAt.IsZero() {
 		status.LastEventAt = lastEventAt.UTC().Format(time.RFC3339Nano)
 	}
 	if mode == ModeFreestyle || mode == ModeAutopilot {
 		status.SegmentIndex = segmentIdx
-		if remaining := deadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
+		if !deadline.IsZero() {
+			status.SegmentDueAt = deadline.UTC().Format(time.RFC3339Nano)
+		}
+		if remaining := deadline.Sub(now).Milliseconds(); remaining > 0 {
 			status.SegmentEndsMs = remaining
 		}
 	}
@@ -226,10 +239,16 @@ func (m *Manager) Status() Status {
 		if arc := m.SessionArcSnapshot(); arc.Enabled {
 			status.Arc = &arc
 		}
-		if remaining := deadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
+		if !deadline.IsZero() {
+			status.MotionChangeDueAt = deadline.UTC().Format(time.RFC3339Nano)
+		}
+		if remaining := deadline.Sub(now).Milliseconds(); remaining > 0 {
 			status.MotionChangeMs = remaining
 		}
-		if remaining := speechDeadline.Sub(m.options.Now()).Milliseconds(); remaining > 0 {
+		if !speechDeadline.IsZero() {
+			status.SpeechDueAt = speechDeadline.UTC().Format(time.RFC3339Nano)
+		}
+		if remaining := speechDeadline.Sub(now).Milliseconds(); remaining > 0 {
 			status.SpeechMs = remaining
 		}
 	}
@@ -264,6 +283,7 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 	m.previousSpeed = 0
 	m.speedChangedAt = time.Time{}
 	m.currentPhrase = Segment{}
+	m.currentPerceptual = nil
 	m.phraseChangedAt = time.Time{}
 	m.decisionsAtCurrentPhrase = 0
 	m.consecutiveHolds = 0
@@ -444,6 +464,10 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 	// Re-evaluate an interactive target on the independent motion cadence.
 	segment, pattern, adoptable := segmentFromMotionTarget(copied, 0)
 	now := m.options.Now()
+	var perceptual *motion.PerceptualSummary
+	if engine := m.options.Current(); engine != nil {
+		perceptual = clonePerceptualSummary(engine.Snapshot().Perceptual)
+	}
 
 	m.mu.Lock()
 	if !m.chatTargetPending || m.generation != generation || m.userStopped {
@@ -479,7 +503,7 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 			m.previousSpeed = previousSpeed
 			m.speedChangedAt = now
 		}
-		m.observeInteractivePhraseLocked(now, segment)
+		m.observeInteractivePhraseLocked(now, segment, perceptual)
 		m.decisionSource = "interactive"
 		if segment.PatternID != "" {
 			m.recentPatternIDs = append(m.recentPatternIDs, string(segment.PatternID))
@@ -669,6 +693,7 @@ func (m *Manager) startNextSegment(ctx context.Context, mode string, reason stri
 		m.backoff(mode, generation, "start_failed", err)
 		return
 	}
+	choice.appliedPerceptual = clonePerceptualSummary(state.Perceptual)
 	m.finishSegmentChoice(operationCtx, mode, reason, choice, state.RecentCommandLatencyMillis, generation)
 }
 
@@ -693,6 +718,7 @@ func (m *Manager) applyNextSegment(ctx context.Context, engine Engine, mode stri
 		}
 		return
 	}
+	choice.appliedPerceptual = clonePerceptualSummary(state.Perceptual)
 	m.finishSegmentChoice(operationCtx, mode, reason, choice, state.RecentCommandLatencyMillis, generation)
 }
 

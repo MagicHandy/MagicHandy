@@ -212,16 +212,22 @@ func dynamicSectionPhraseSeed(sections []DynamicSection) uint32 {
 func AdvanceDynamicPhraseSeed(definition DynamicDefinition, previous uint32) DynamicDefinition {
 	definition.PhraseSeed = 0
 	definition = NormalizeDynamicDefinition(definition)
-	if len(definition.Sections) < minimumDynamicSections || previous == 0 {
+	if previous == 0 || !dynamicUsesSeededTexture(definition) {
 		return definition
 	}
+	salt := max(1, len(definition.Sections))
 	definition.PhraseSeed = dynamicOccurrenceSeed(
-		definition.PhraseSeed^previous, 0, len(definition.Sections),
+		definition.PhraseSeed^previous, 0, salt,
 	)
 	if definition.PhraseSeed == previous {
-		definition.PhraseSeed = dynamicOccurrenceSeed(definition.PhraseSeed, 1, len(definition.Sections))
+		definition.PhraseSeed = dynamicOccurrenceSeed(definition.PhraseSeed, 1, salt)
 	}
 	return definition
+}
+
+func dynamicUsesSeededTexture(definition DynamicDefinition) bool {
+	return len(definition.Sections) >= minimumDynamicSections ||
+		definition.VariationPercent > 0 || dynamicHasVariableSpanEnvelope(definition)
 }
 
 func normalizeDynamicSpanEnvelope(definition DynamicDefinition) DynamicDefinition {
@@ -232,22 +238,19 @@ func normalizeDynamicSpanEnvelope(definition DynamicDefinition) DynamicDefinitio
 		// direct targets still fail safe instead of inventing a new texture.
 		definition.SpanProfile = ""
 		definition.SpanMinPercent = 0
-		definition.PhraseSeed = 0
-		return definition
+		return normalizeDynamicTextureSeed(definition)
 	}
 	definition.SpanProfile = profile
 	if profile == DynamicSpanProfileSteady {
 		definition.SpanMinPercent = definition.SpanPercent
-		definition.PhraseSeed = 0
-		return definition
+		return normalizeDynamicTextureSeed(definition)
 	}
 	if definition.SpanMinPercent == 0 {
 		// A variable profile without a model-selected floor must not silently
 		// choose how much range to remove. It becomes an honest steady target.
 		definition.SpanProfile = DynamicSpanProfileSteady
 		definition.SpanMinPercent = definition.SpanPercent
-		definition.PhraseSeed = 0
-		return definition
+		return normalizeDynamicTextureSeed(definition)
 	}
 	definition.SpanMinPercent = clamp(
 		definition.SpanMinPercent,
@@ -256,6 +259,16 @@ func normalizeDynamicSpanEnvelope(definition DynamicDefinition) DynamicDefinitio
 	)
 	if definition.SpanMinPercent >= definition.SpanPercent {
 		definition.SpanProfile = DynamicSpanProfileSteady
+		return normalizeDynamicTextureSeed(definition)
+	}
+	if definition.PhraseSeed == 0 {
+		definition.PhraseSeed = dynamicPhraseSeed(definition)
+	}
+	return definition
+}
+
+func normalizeDynamicTextureSeed(definition DynamicDefinition) DynamicDefinition {
+	if definition.VariationPercent <= 0 {
 		definition.PhraseSeed = 0
 		return definition
 	}
@@ -660,11 +673,12 @@ func dynamicSpanEnvelopeFactor(definition DynamicDefinition, phase float64, cycl
 		value := 0.50 - 0.43*math.Cos(2*math.Pi*phase) +
 			0.08*math.Sin(4*math.Pi*phase+0.35) +
 			0.04*math.Sin(6*math.Pi*phase-0.60)
-		texture := dynamicSeededPeriodicControl(
-			definition.PhraseSeed^0x37c6a5d9, phase,
-			dynamicTextureKnotCount(cycles, 7, 6, 48),
-		)
-		return math.Max(0.03, math.Min(0.97, value+0.12*(texture-0.5)))
+		// Blend, rather than add and clamp, a faster correlated micro-breath.
+		// Addition created long flat shelves whenever the slow swell approached
+		// either bound; a bounded blend keeps the macro swell recognizable while
+		// every local window continues to change stroke length smoothly.
+		texture := dynamicWanderEnvelope(definition.PhraseSeed^0x37c6a5d9, phase, cycles)
+		return math.Max(0.03, math.Min(0.97, 0.55*value+0.45*texture))
 	case DynamicSpanProfileContrast:
 		return dynamicContrastEnvelope(definition.PhraseSeed, phase, cycles)
 	case DynamicSpanProfileWander:

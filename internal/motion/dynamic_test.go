@@ -75,6 +75,44 @@ func TestDynamicRetargetChoosesPositionAndVelocityCompatiblePhase(t *testing.T) 
 	}
 }
 
+func TestDynamicSpeedRetargetMatchesLocallyFittedCurveClock(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	definition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 48, SpanPercent: 72, SpanMinPercent: 22,
+		SpanProfile: DynamicSpanProfileWander, VariationPercent: 70,
+	})
+	previous := NewMotionPlan("slower", MotionTarget{
+		Dynamic: &definition, SpeedPercent: 42,
+	}, settings, 0, 0, time.Unix(0, 0))
+	for _, phase := range []float64{0.13, 0.31, 0.62, 0.84} {
+		at := int64(float64(previous.PeriodMillis) * phase)
+		next := previous.Retarget("faster", MotionTarget{
+			Dynamic: &definition, SpeedPercent: 72,
+		}, settings, at, time.Unix(1, 0))
+		if next.PhasePreserved {
+			t.Fatalf("phase %.2f marked locally retimed speed change as phase-preserving", phase)
+		}
+		if jump := math.Abs(next.SampleAt(at).PositionPercent - previous.SampleAt(at).PositionPercent); jump > 5 {
+			t.Fatalf("phase %.2f speed retarget position jump = %.2f, want <= 5", phase, jump)
+		}
+		left, right := previous.DirectionAt(at), next.DirectionAt(at)
+		if left != 0 && right != 0 && left != right {
+			t.Fatalf("phase %.2f speed retarget direction changed from %d to %d", phase, left, right)
+		}
+	}
+
+	horizonOnly := definition
+	horizonOnly.SegmentSeconds++
+	next := previous.Retarget("horizon", MotionTarget{
+		Dynamic: &horizonOnly, SpeedPercent: 42,
+	}, settings, previous.PeriodMillis/3, time.Unix(1, 0))
+	if !next.PhasePreserved {
+		t.Fatal("decision-horizon-only update did not preserve the fitted curve phase")
+	}
+}
+
 func TestDynamicVariationIsBoundedAndLoopClosed(t *testing.T) {
 	content := dynamicContent(DynamicDefinition{CenterPercent: 50, SpanPercent: 70, VariationPercent: 100})
 	if first, last := content.points[0], content.points[len(content.points)-1]; first.PositionPercent != last.PositionPercent {
@@ -207,8 +245,11 @@ func TestNormalizeDynamicSpanEnvelope(t *testing.T) {
 	legacy := NormalizeDynamicDefinition(DynamicDefinition{
 		CenterPercent: 50, SpanPercent: 80, VariationPercent: 30,
 	})
-	if legacy.SpanProfile != "" || legacy.SpanMinPercent != 0 || legacy.PhraseSeed != 0 {
+	if legacy.SpanProfile != "" || legacy.SpanMinPercent != 0 {
 		t.Fatalf("legacy definition gained an explicit envelope: %+v", legacy)
+	}
+	if legacy.PhraseSeed == 0 {
+		t.Fatalf("textured legacy definition has no deterministic phrase seed: %+v", legacy)
 	}
 
 	steady := NormalizeDynamicDefinition(DynamicDefinition{
@@ -356,19 +397,16 @@ func TestDynamicReversalsEaseAcrossTheWholeLeg(t *testing.T) {
 		CenterPercent: 50, SpanPercent: 80, SpanMinPercent: 80,
 		SpanProfile: DynamicSpanProfileSteady,
 	})
-	content := dynamicContent(definition)
 	plan := NewMotionPlan("whole-leg-easing", MotionTarget{
 		Dynamic: &definition, SpeedPercent: 85,
 	}, settings, 0, 0, time.Unix(0, 0))
 	if err := plan.compilationError(); err != nil {
 		t.Fatal(err)
 	}
-	legEnd := int64(math.Round(
-		float64(content.points[1].TimeMillis) / float64(content.duration) * float64(plan.PeriodMillis),
-	))
+	legEnd := firstPlanKnotStreamMillis(plan)
 	middleVelocity := math.Abs(dynamicPlayedVelocity(plan, legEnd/2))
 	approachVelocity := math.Abs(dynamicPlayedVelocity(plan, legEnd*9/10))
-	turnVelocity := math.Abs(plan.curve.velocityFloat(float64(content.points[1].TimeMillis)))
+	turnVelocity := math.Abs(plan.curve.velocityFloat(float64(plan.curve.authoredKnots[1].TimeMillis)))
 	if middleVelocity <= 0 {
 		t.Fatal("dynamic leg has no mid-stroke velocity")
 	}
@@ -474,13 +512,10 @@ func TestDynamicWireFrameCarriesEasingToBufferedTransport(t *testing.T) {
 		CenterPercent: 50, SpanPercent: 80, SpanMinPercent: 80,
 		SpanProfile: DynamicSpanProfileSteady,
 	})
-	content := dynamicContent(definition)
 	plan := NewMotionPlan("wire-easing", MotionTarget{
 		Dynamic: &definition, SpeedPercent: 85,
 	}, settings, 0, 0, time.Unix(0, 0))
-	legEnd := int64(math.Round(
-		float64(content.points[1].TimeMillis) / float64(content.duration) * float64(plan.PeriodMillis),
-	))
+	legEnd := firstPlanKnotStreamMillis(plan)
 	engine := &Engine{
 		plan: plan, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
 		preservePlanKnots: true, positionResolutionPercent: 1,
@@ -520,13 +555,10 @@ func TestDynamicWholePercentWireRetainsShortStrokeTimingShape(t *testing.T) {
 		CenterPercent: 50, SpanPercent: 20, SpanMinPercent: 20,
 		SpanProfile: DynamicSpanProfileSteady,
 	})
-	content := dynamicContent(definition)
 	plan := NewMotionPlan("short-wire-flow", MotionTarget{
 		Dynamic: &definition, SpeedPercent: 100,
 	}, settings, 0, 0, time.Unix(0, 0))
-	legEnd := int64(math.Round(
-		float64(content.points[1].TimeMillis) / float64(content.duration) * float64(plan.PeriodMillis),
-	))
+	legEnd := firstPlanKnotStreamMillis(plan)
 	engine := &Engine{
 		plan: plan, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
 		preservePlanKnots: true, positionResolutionPercent: 1,
@@ -553,6 +585,13 @@ func TestDynamicWholePercentWireRetainsShortStrokeTimingShape(t *testing.T) {
 				left, leg[index-1].TimeMillis, leg[index].TimeMillis, leg)
 		}
 	}
+}
+
+func firstPlanKnotStreamMillis(plan MotionPlan) int64 {
+	return int64(math.Round(
+		float64(plan.curve.authoredKnots[1].TimeMillis) /
+			float64(plan.curve.duration) * float64(plan.PeriodMillis),
+	))
 }
 
 func dynamicPlayedVelocity(plan MotionPlan, streamMillis int64) float64 {
@@ -904,6 +943,41 @@ func TestDynamicSectionReplacementAdvancesOnlyBoundedNoveltySeed(t *testing.T) {
 	replayed := AdvanceDynamicPhraseSeed(definition, definition.PhraseSeed)
 	if replayed.PhraseSeed != next.PhraseSeed {
 		t.Fatalf("novelty refresh is not deterministic: %d != %d", replayed.PhraseSeed, next.PhraseSeed)
+	}
+}
+
+func TestDynamicSingleReplacementAdvancesOnlyBoundedNoveltySeed(t *testing.T) {
+	definition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 46, SpanPercent: 72, SpanMinPercent: 22,
+		SpanProfile: DynamicSpanProfileWander, VariationPercent: 68,
+		SegmentSeconds: 14,
+	})
+	next := AdvanceDynamicPhraseSeed(definition, definition.PhraseSeed)
+	if next.PhraseSeed == 0 || next.PhraseSeed == definition.PhraseSeed {
+		t.Fatalf("single phrase seed did not advance: %d -> %d", definition.PhraseSeed, next.PhraseSeed)
+	}
+	beforeSeed, afterSeed := definition.PhraseSeed, next.PhraseSeed
+	definition.PhraseSeed, next.PhraseSeed = 0, 0
+	if !reflect.DeepEqual(next, definition) {
+		t.Fatalf("single novelty refresh changed semantic phrase: before=%+v after=%+v", definition, next)
+	}
+	definition.PhraseSeed, next.PhraseSeed = beforeSeed, afterSeed
+	if reflect.DeepEqual(dynamicContent(definition).points, dynamicContent(next).points) {
+		t.Fatal("fresh single phrase seed reproduced identical micro-motion")
+	}
+	replayed := AdvanceDynamicPhraseSeed(definition, beforeSeed)
+	if replayed.PhraseSeed != afterSeed {
+		t.Fatalf("single novelty refresh is not deterministic: %d != %d", replayed.PhraseSeed, afterSeed)
+	}
+
+	steady := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 50, SpanProfile: DynamicSpanProfileSteady,
+		VariationPercent: 60,
+	})
+	steadyNext := AdvanceDynamicPhraseSeed(steady, steady.PhraseSeed)
+	if steady.PhraseSeed == 0 || steadyNext.PhraseSeed == 0 || steadyNext.PhraseSeed == steady.PhraseSeed {
+		t.Fatalf("steady center/rhythm texture seed did not advance: %d -> %d",
+			steady.PhraseSeed, steadyNext.PhraseSeed)
 	}
 }
 

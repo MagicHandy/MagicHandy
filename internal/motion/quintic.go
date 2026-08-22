@@ -1,6 +1,9 @@
 package motion
 
-import "math"
+import (
+	"math"
+	"slices"
+)
 
 // flowingReversalAcceleration is the normalized endpoint acceleration of a
 // half-cosine leg. Keeping each shared reversal acceleration at or below this
@@ -93,6 +96,17 @@ func (s quinticSegment) maximumAcceleration() float64 {
 	return maximum
 }
 
+func (s quinticSegment) maximumVelocity() float64 {
+	candidates := []float64{0, 1}
+	c := s.coefficients
+	candidates = append(candidates, cubicRootsInUnitInterval(20*c[5], 12*c[4], 6*c[3], 2*c[2])...)
+	maximum := 0.0
+	for _, u := range candidates {
+		maximum = math.Max(maximum, math.Abs(s.velocity(u)))
+	}
+	return maximum
+}
+
 func (s quinticSegment) maximumJerk() float64 {
 	candidates := []float64{0, 1}
 	c := s.coefficients
@@ -121,6 +135,63 @@ func quadraticRoots(a, b, c float64) []float64 {
 	}
 	root := math.Sqrt(discriminant)
 	return []float64{(-b - root) / (2 * a), (-b + root) / (2 * a)}
+}
+
+// cubicRootsInUnitInterval isolates the roots of one cubic by splitting it at
+// its quadratic derivative extrema. Each resulting interval is monotone, so a
+// sign change has exactly one root and bisection is deterministic and robust.
+func cubicRootsInUnitInterval(a, b, c, d float64) []float64 {
+	if math.Abs(a) <= 1e-12 {
+		roots := quadraticRoots(b, c, d)
+		result := make([]float64, 0, len(roots))
+		for _, root := range roots {
+			if root > 0 && root < 1 {
+				result = append(result, root)
+			}
+		}
+		return result
+	}
+	boundaries := []float64{0, 1}
+	for _, root := range quadraticRoots(3*a, 2*b, c) {
+		if root > 0 && root < 1 {
+			boundaries = append(boundaries, root)
+		}
+	}
+	slices.Sort(boundaries)
+	value := func(u float64) float64 { return ((a*u+b)*u+c)*u + d }
+	result := make([]float64, 0, 3)
+	appendRoot := func(root float64) {
+		if root <= 0 || root >= 1 {
+			return
+		}
+		if len(result) == 0 || math.Abs(result[len(result)-1]-root) > 1e-9 {
+			result = append(result, root)
+		}
+	}
+	for index := 1; index < len(boundaries); index++ {
+		left, right := boundaries[index-1], boundaries[index]
+		leftValue, rightValue := value(left), value(right)
+		if math.Abs(leftValue) <= 1e-12 {
+			appendRoot(left)
+		}
+		if math.Abs(rightValue) <= 1e-12 {
+			appendRoot(right)
+		}
+		if leftValue*rightValue >= 0 {
+			continue
+		}
+		for range 60 {
+			middle := (left + right) / 2
+			middleValue := value(middle)
+			if leftValue*middleValue <= 0 {
+				right = middle
+			} else {
+				left, leftValue = middle, middleValue
+			}
+		}
+		appendRoot((left + right) / 2)
+	}
+	return result
 }
 
 // flowingQuinticStates derives one velocity and acceleration state per knot.

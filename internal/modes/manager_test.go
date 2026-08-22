@@ -122,6 +122,38 @@ func newTestManager(t *testing.T, engine *fakeEngine, clock *fakeClock, traces *
 	return manager
 }
 
+func TestStatusPublishesAuthoritativeDeadlinesFromOneSnapshot(t *testing.T) {
+	clock := &fakeClock{now: time.Date(2026, time.August, 22, 12, 0, 0, 250_000_000, time.UTC)}
+	manager := newTestManager(t, &fakeEngine{}, clock, diagnostics.NewTraceRing(16))
+	motionDue := clock.Now().Add(14*time.Second + 500*time.Millisecond)
+	speechDue := clock.Now().Add(47*time.Second + 250*time.Millisecond)
+	manager.mu.Lock()
+	manager.mode = ModeAutopilot
+	manager.segmentIdx = 3
+	manager.deadline = motionDue
+	manager.speechDeadline = speechDue
+	manager.mu.Unlock()
+
+	status := manager.Status()
+	if status.StatusAt != clock.Now().Format(time.RFC3339Nano) {
+		t.Fatalf("status observation = %q, want %q", status.StatusAt, clock.Now().Format(time.RFC3339Nano))
+	}
+	if status.MotionChangeDueAt != motionDue.Format(time.RFC3339Nano) ||
+		status.SegmentDueAt != motionDue.Format(time.RFC3339Nano) ||
+		status.SpeechDueAt != speechDue.Format(time.RFC3339Nano) {
+		t.Fatalf("absolute deadlines = %+v", status)
+	}
+	if status.MotionChangeMs != 14_500 || status.SegmentEndsMs != 14_500 || status.SpeechMs != 47_250 {
+		t.Fatalf("deadline fallbacks = %+v", status)
+	}
+
+	clock.Advance(500 * time.Millisecond)
+	updated := manager.Status()
+	if updated.MotionChangeDueAt != status.MotionChangeDueAt || updated.MotionChangeMs != 14_000 {
+		t.Fatalf("deadline changed instead of remaining time: before=%+v after=%+v", status, updated)
+	}
+}
+
 func waitFor(t *testing.T, timeout time.Duration, check func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)

@@ -97,6 +97,59 @@ function formatClock(milliseconds: number | undefined): string {
   return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
 }
 
+function deadlineDuration(
+  dueAt: string | undefined,
+  statusAt: string | undefined,
+  fallbackMilliseconds: number | undefined,
+): number {
+  const due = dueAt ? Date.parse(dueAt) : Number.NaN;
+  const observed = statusAt ? Date.parse(statusAt) : Number.NaN;
+  if (Number.isFinite(due) && Number.isFinite(observed)) {
+    return Math.max(0, due - observed);
+  }
+  return Math.max(0, fallbackMilliseconds ?? 0);
+}
+
+// The backend owns the deadline; this hook only presents elapsed time between
+// snapshots. Each poll replaces the local anchor, and pause disables local
+// passage so the UI cannot run ahead of the frozen backend schedule.
+function useDeadlineClock(
+  dueAt: string | undefined,
+  statusAt: string | undefined,
+  fallbackMilliseconds: number | undefined,
+  ticking: boolean,
+): number {
+  const initial = deadlineDuration(dueAt, statusAt, fallbackMilliseconds);
+  const [remaining, setRemaining] = useState(initial);
+  const remainingRef = useRef(initial);
+  const anchorRef = useRef({ remaining: initial, localAt: Date.now() });
+
+  useEffect(() => {
+    const reconciled = deadlineDuration(dueAt, statusAt, fallbackMilliseconds);
+    remainingRef.current = reconciled;
+    anchorRef.current = { remaining: reconciled, localAt: Date.now() };
+    setRemaining(reconciled);
+  }, [dueAt, statusAt, fallbackMilliseconds]);
+
+  useEffect(() => {
+    // Re-anchor to the currently displayed value on both pause and resume. A
+    // pause event can arrive before the next state poll; recomputing from that
+    // stale snapshot would make the clock jump backwards.
+    anchorRef.current = { remaining: remainingRef.current, localAt: Date.now() };
+    if (!ticking || remainingRef.current <= 0) return;
+    const update = () => {
+      const anchor = anchorRef.current;
+      const next = Math.max(0, anchor.remaining - (Date.now() - anchor.localAt));
+      remainingRef.current = next;
+      setRemaining(next);
+    };
+    const timer = window.setInterval(update, 250);
+    return () => window.clearInterval(timer);
+  }, [ticking]);
+
+  return remaining;
+}
+
 export function AutopilotControl() {
   const { state, backendOnline, readOnly, motion, refresh } = useAppState();
   const { show } = useToast();
@@ -109,6 +162,18 @@ export function AutopilotControl() {
   const locked = !backendOnline || !state || readOnly;
   const [pending, setPending] = useState<"start" | "stop" | "pause" | "resume" | "">("");
   const pendingRef = useRef(false);
+  const motionClock = useDeadlineClock(
+    modes?.motion_change_due_at,
+    modes?.status_at,
+    modes?.motion_change_in_ms,
+    active && !autopilotPaused && !modes?.motion_planned,
+  );
+  const speechClock = useDeadlineClock(
+    modes?.speech_due_at,
+    modes?.status_at,
+    modes?.speech_in_ms,
+    active && !autopilotPaused && !modes?.speech_waiting_playback,
+  );
 
   async function toggle() {
     if (pendingRef.current || locked) return;
@@ -183,10 +248,10 @@ export function AutopilotControl() {
       ? t("Off")
       : modes?.speech_waiting_playback
         ? t("after audio")
-        : formatClock(modes?.speech_in_ms);
+        : formatClock(speechClock);
     const motionDue = modes?.motion_planned
       ? t("planned")
-      : formatClock(modes?.motion_change_in_ms);
+      : formatClock(motionClock);
     clockStatus = t("Motion {motion} · Speech {speech}", { motion: motionDue, speech });
   }
 

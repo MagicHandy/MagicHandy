@@ -368,6 +368,77 @@ func TestInteractiveChatTargetSuspendsAndReplacesAutopilotState(t *testing.T) {
 	}
 }
 
+func TestPhraseAgeUsesAccumulatedPerceptualDifference(t *testing.T) {
+	manager := &Manager{}
+	baseDynamic := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 40, SpanMinPercent: 20,
+		SpanProfile: motion.DynamicSpanProfileWander, VariationPercent: 68,
+	})
+	baseSummary := &motion.PerceptualSummary{
+		PositionMinPercent: 30, PositionMaxPercent: 70,
+		MeanStrokePercent: 30, StrokeLengthCV: 0.18,
+		MinimumLocalStrokeCV: 0.11, MinimumLocalStrokeRange: 12,
+		SpanProfile:                    motion.DynamicSpanProfileWander,
+		CommandedPeakVelocityPerSecond: 220,
+	}
+	startedAt := time.Unix(100, 0)
+	manager.observeAutopilotPhraseLocked(startedAt, segmentChoice{
+		segment:           Segment{SpeedPercent: 52, Dynamic: &baseDynamic},
+		appliedPerceptual: baseSummary,
+	})
+
+	smallDynamic := baseDynamic
+	smallDynamic.CenterPercent += 2
+	smallDynamic.SpanPercent += 2
+	smallDynamic.PhraseSeed = 0
+	smallSummary := *baseSummary
+	smallSummary.PositionMinPercent = 31
+	smallSummary.PositionMaxPercent = 73
+	manager.observeAutopilotPhraseLocked(startedAt.Add(time.Minute), segmentChoice{
+		segment:           Segment{SpeedPercent: 54, Dynamic: &smallDynamic},
+		appliedPerceptual: &smallSummary,
+	})
+	if manager.phraseChangedAt != startedAt || manager.decisionsAtCurrentPhrase != 1 {
+		t.Fatalf("small felt edit reset phrase facts: changed=%s decisions=%d",
+			manager.phraseChangedAt, manager.decisionsAtCurrentPhrase)
+	}
+
+	largeDynamic := baseDynamic
+	largeDynamic.CenterPercent = 64
+	largeDynamic.SpanPercent = 68
+	largeDynamic.SpanProfile = motion.DynamicSpanProfileContrast
+	largeDynamic.PhraseSeed = 0
+	largeSummary := *baseSummary
+	largeSummary.PositionMinPercent = 30
+	largeSummary.PositionMaxPercent = 98
+	largeSummary.MeanStrokePercent = 48
+	largeSummary.StrokeLengthCV = 0.30
+	largeSummary.MinimumLocalStrokeRange = 24
+	largeSummary.SpanProfile = motion.DynamicSpanProfileContrast
+	changedAt := startedAt.Add(2 * time.Minute)
+	manager.observeAutopilotPhraseLocked(changedAt, segmentChoice{
+		segment:           Segment{SpeedPercent: 58, Dynamic: &largeDynamic},
+		appliedPerceptual: &largeSummary,
+	})
+	if manager.phraseChangedAt != changedAt || manager.decisionsAtCurrentPhrase != 0 {
+		t.Fatalf("macro felt edit did not reset phrase facts: changed=%s decisions=%d",
+			manager.phraseChangedAt, manager.decisionsAtCurrentPhrase)
+	}
+
+	seedOnly := largeDynamic
+	seedOnly.PhraseSeed++
+	seedSummary := largeSummary
+	seedSummary.MinimumLocalStrokeCV += 0.03
+	manager.observeAutopilotPhraseLocked(changedAt.Add(time.Minute), segmentChoice{
+		segment:           Segment{SpeedPercent: 58, Dynamic: &seedOnly},
+		appliedPerceptual: &seedSummary,
+	})
+	if manager.phraseChangedAt != changedAt || manager.decisionsAtCurrentPhrase != 1 {
+		t.Fatalf("seed-only micro refresh became a new semantic phrase: changed=%s decisions=%d",
+			manager.phraseChangedAt, manager.decisionsAtCurrentPhrase)
+	}
+}
+
 func TestAutopilotAnnouncementContextCancelsWithStop(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}

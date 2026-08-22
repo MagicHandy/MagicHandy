@@ -28,6 +28,15 @@ its time near constant velocity before a very short acceleration-budgeted guide
 braked at the endpoint. The result was regular in distance and unnaturally
 linear in velocity even though it was neither transport jitter nor sample noise.
 
+The alpha.29 follow-up exposed a third, separate timing defect. On one retained
+Creative fixture, selected speeds 42, 52, 62, and 72 all compiled to essentially
+the same 109.8 percentage-points/second mean travel. The planner first scaled the
+whole phrase toward the selected calibration and then applied one global
+slowdown for its single worst interval. Once that interval reached the shared
+acceleration/jerk ceiling, every higher speed landed on the same period. A
+correct calibration formula at the input therefore still produced a visibly
+false control at the commanded curve.
+
 ## Comparison with other implementations
 
 No cross-device protocol defines one universal `speed_percent`, so the useful
@@ -114,10 +123,30 @@ per-model acceleration limits. The selector therefore does not invent them
 from motor RPM or marketing descriptions; all three profiles retain the shared
 conservative runtime acceleration envelope below.
 
-The requested rate is not a promise that every shape can achieve it. The shared
-planner lengthens a loop when its actual rendered cubic curve would exceed the
-runtime envelope. The UI therefore continues to label position as a commanded
-estimate rather than physical feedback.
+For Creative, the calibrated rate is now the exact peak carriage-velocity
+target, matching the meaning of the Handy velocity control more closely than a
+whole-phrase average. The compiler first scales the phrase, then fits every C2
+quintic interval independently: an unsafe short or strongly curved interval is
+lengthened without slowing unrelated intervals. It evaluates exact polynomial
+velocity, acceleration, and jerk extrema plus true-reversal spacing, and the
+ordinary focused-plan check remains the final shared-engine fail-safe.
+
+The retained Original-Handy fixture now compiles as follows (small differences
+are numerical sampling tolerance):
+
+| selected | calibrated peak | compiled peak | compiled mean |
+| ---: | ---: | ---: | ---: |
+| 42% | 167.6%/s | 167.8%/s | 103.8%/s |
+| 52% | 201.4%/s | 201.6%/s | 124.7%/s |
+| 62% | 235.2%/s | 235.3%/s | 145.9%/s |
+| 72% | 269.0%/s | 269.3%/s | 167.5%/s |
+
+Mean travel remains below the peak because the whole leg eases into and out of
+a reversal; that is the intended non-linear feel, not lost speed. Shapes can
+still saturate a safety bound or the 500 ms minimum cycle before reaching the
+requested peak, especially very narrow high-speed loops. The UI therefore
+continues to label position as a commanded estimate rather than physical
+feedback.
 
 ## Two envelopes, for two jobs
 
@@ -182,6 +211,15 @@ floor-to-outer band and prevent a four-cycle window from settling below 8%.
 A zero center/rhythm variation can therefore coexist with a changing explicit
 span profile, while `steady` continues to mean a genuinely fixed stroke length.
 
+Breathe now blends its slow macro swell with a faster correlated seeded
+envelope instead of adding texture and clamping at the macro extrema. The old
+clamp created flat local shelves even while the full phrase varied. Compiled
+12-second regression windows now require at least 5% stroke-length coefficient
+of variation for Breathe, 8% for Wander/Contrast, six percentage points of
+length range, and five distinct whole-percent stroke lengths. Those are
+anti-regression floors, not per-sample randomness; all control knots remain
+smooth and deterministic.
+
 A section phrase is compiled as one C2, loop-closed engine curve. Its authored
 travel covers at least 60 seconds at the fastest supported reference rate, or
 the longer selected decision horizon, subject to the existing 4096-point cap.
@@ -205,7 +243,10 @@ media sampling keep their prior tolerances and shapes.
 Older alpha.25 targets with no span profile retain their prior implicit small
 span swell. New model responses use the explicit envelope. The model selects
 the floor and profile; deterministic code only normalizes bounds and derives a
-traceable phrase seed.
+traceable phrase seed. A semantically new autonomous single-geometry phrase now
+advances that bounded seed just as a section phrase does, while speed-only and
+horizon-only edits preserve it. This changes correlated micro-motion without
+turning a seed-only refresh into a falsely new semantic phrase.
 
 Engine phase now remains fractional through curve sampling. This removes
 authored-millisecond stair steps without adding points, browser state, or a new
@@ -264,6 +305,16 @@ semantic validation: reply-only claims are repaired, requested base/tip
 coverage is checked against the effective geometry, and position-only
 corrections cannot silently rewrite pace, span texture, variation, or horizon.
 
+The alpha.30 autonomous harness uses the exact app context adapter, strict
+Autopilot parser, dynamic command mapper, and final shared motion compiler. In
+three repeated five-decision runs against the installed Gemma llama.cpp model,
+all 15 decisions produced three-section phrases. Their compiled least-varied
+12-second windows measured 9.5–26.4% stroke-length CV and 15.9–57.1 percentage
+points of length range, with calibrated peak speed retained. A separate
+max-rate probe at a simulated 180-second phrase age obeyed the user's explicit
+request to hold and returned `action:none`; elapsed context still does not
+force a change. These evaluations created no engine or transport.
+
 On 2026-08-22 the locally installed Ollama model also passed a focused four-case
 section matrix without an engine or transport. Starts and running replacements
 produced two complete sections; pace-only copied geometry was normalized away
@@ -277,7 +328,9 @@ A capped matched-device A/B run must still record Handy model/profile,
 transport, selected outer/floor/profile and speed, command latency,
 `motion_trace.v3`, Stop behavior, and subjective feel.
 Until that exists, this change corrects the demonstrable schema/timing mismatch
-but does not close the real-device acceptance item or make Creative the default.
+but does not close the real-device acceptance item. Creative is already the
+default for fresh/pre-selector settings; explicit Pattern Library and Off
+choices remain unchanged.
 The cross-cutting model-profile decision is recorded in
 [`ADR 0016`](decisions/0016-handy-model-speed-calibration.md).
 

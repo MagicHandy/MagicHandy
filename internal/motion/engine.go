@@ -112,6 +112,9 @@ type ActiveMotionState struct {
 	LastSample                 *MotionSample            `json:"last_sample,omitempty"`
 	LastResult                 *transport.CommandResult `json:"last_result,omitempty"`
 	LastError                  string                   `json:"last_error,omitempty"`
+	// Perceptual is backend planning context. It stays out of the 8 Hz motion
+	// SSE snapshot; Autopilot records the compact values in decision traces.
+	Perceptual PerceptualSummary `json:"-"`
 }
 
 // NewEngine creates a motion engine bound to one transport dispatcher.

@@ -28,6 +28,11 @@ type AutopilotContext struct {
 	CurrentVariation    int
 	CurrentSegment      int
 	CurrentSectionCount int
+	CommandedMeanTravel int
+	CommandedPeakSpeed  int
+	MeanStrokeLength    int
+	LocalStrokeCV       int
+	LocalStrokeRange    int
 	MotionMinSeconds    int
 	MotionMaxSeconds    int
 	MotionChangeLevel   int
@@ -128,19 +133,17 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 		} else {
 			builder.WriteString("No Dynamic target is active. To begin Creative motion, use update with speed and either center/span or anchors, or use a complete sections phrase; none leaves Autopilot waiting.\n")
 		}
+		writeCompiledCreativeFeel(&builder, context)
 		writeSessionProgress(&builder, context)
 		builder.WriteString("Decide what happens for the next continuous stretch using the recent conversation as the user's ongoing direction:\n")
-		motionChangeLevel := context.MotionChangeLevel
-		if motionChangeLevel < 1 || motionChangeLevel > 8 {
-			motionChangeLevel = 4
-		}
+		motionChangeLevel := normalizedMotionChangeLevel(context.MotionChangeLevel)
 		fmt.Fprintf(&builder, "- The user's motion change rate is %d of 8. Higher values mean they welcome more frequent meaningful differences; lower values favor continuity. It is a preference, not a requirement to change now.\n", motionChangeLevel)
 		builder.WriteString("- Use action \"update\" only when a meaningful change fits. Omitted fields preserve the live dynamic target.\n")
 		builder.WriteString("- Use action \"none\" to deliberately continue. Holding is a first-class model decision, not a failure.\n")
 		builder.WriteString("- Change center/span or provide a new 2-6 anchor route; never provide both representations together. Interior anchors are pass-through positions, not pauses.\n")
 		writeDynamicSpanGuidance(&builder, context)
 		builder.WriteString("- variation_percent controls correlated center and rhythm texture independently from an explicit span profile: 20-40 is subtle, 45-70 clearly organic, and 70-100 deliberately wild. Use zero only for mechanically even motion, never for jitter.\n")
-		builder.WriteString("- For a meaningful macro change, sections may replace the single geometry with 2-4 complete movement ideas, each with geometry, texture, and 2-12 cycles. Do not emit sections merely to restate the current phrase.\n")
+		builder.WriteString("- When the ongoing direction asks for several distinct or evolving sequences, use sections with 2-4 complete movement ideas; one geometry cannot express a multiple-sequence phrase. Give each section geometry, texture, and 2-12 cycles. Otherwise use one geometry for one coherent idea, and do not emit sections merely to restate the current phrase.\n")
 		fmt.Fprintf(&builder, "- segment_seconds must be %d-%d and says when to reconsider, not when to stop. Vary it naturally rather than choosing one constant.\n",
 			minimumSeconds, maximumSeconds)
 		builder.WriteString("- Never use start or stop: the scheduler owns start and only the user stops motion.\n")
@@ -184,6 +187,23 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	builder.WriteString("- Set next to soon, normal, or later for when motion should next be reconsidered. Do not provide seconds. Vary it: back-to-back short stretches read as flat as one long one.\n")
 	builder.WriteString("- Set variability to settled, normal, or restless for how much the speed should wander before then. This is separate from next: a long stretch can still breathe, and a short one can stay flat.")
 	return builder.String()
+}
+
+func normalizedMotionChangeLevel(level int) int {
+	if level < 1 || level > 8 {
+		return 4
+	}
+	return level
+}
+
+func writeCompiledCreativeFeel(builder *strings.Builder, context AutopilotContext) {
+	if context.CommandedPeakSpeed <= 0 {
+		return
+	}
+	fmt.Fprintf(builder,
+		"Compiled feel: about %d%% travel per second on average, %d%%/s peak carriage velocity, %d%% mean stroke length, and the least varied 12-second window has %d%% length range with %d%% coefficient of variation. These are measured from the engine curve, not inferred from the JSON fields. A small numeric edit that leaves this feel similar is still continuity, not a fresh phrase.\n",
+		context.CommandedMeanTravel, context.CommandedPeakSpeed,
+		context.MeanStrokeLength, context.LocalStrokeRange, context.LocalStrokeCV)
 }
 
 func writeDynamicSpanGuidance(builder *strings.Builder, context AutopilotContext) {

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { AutopilotControl } from "./AutopilotControl";
 
@@ -9,10 +9,13 @@ const app = vi.hoisted(() => ({
   state: { modes: {}, settings: {} } as {
     modes: {
       mode?: string;
+      status_at?: string;
       segment_index?: number;
       decision_source?: string;
       motion_change_in_ms?: number;
+      motion_change_due_at?: string;
       speech_in_ms?: number;
+      speech_due_at?: string;
       motion_planned?: boolean;
       speech_waiting_playback?: boolean;
       session_arc?: { enabled: boolean; percent: number; minutes: number };
@@ -67,6 +70,7 @@ const autopilotPreferences = {
 
 describe("AutopilotControl", () => {
   beforeEach(() => {
+    vi.useRealTimers();
     app.backendOnline = true;
     app.readOnly = false;
     app.state = { modes: {}, settings: {} };
@@ -78,6 +82,10 @@ describe("AutopilotControl", () => {
     pauseMotion.mockReset();
     resumeMotion.mockReset();
     saveAutopilotPreferences.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("starts Autopilot from the Chat surface", async () => {
@@ -172,6 +180,51 @@ describe("AutopilotControl", () => {
       motion_cadence: "scaled",
       motion_change_level: 6,
     });
+  });
+
+  it("renders every countdown second between backend snapshots", () => {
+    vi.useFakeTimers();
+    app.state = {
+      modes: {
+        mode: "autopilot",
+        segment_index: 2,
+        status_at: "2026-08-22T12:00:00Z",
+        motion_change_due_at: "2026-08-22T12:00:14.5Z",
+        motion_change_in_ms: 14_500,
+      },
+      settings: { autopilot: { ...autopilotPreferences, speech_cadence: "off" } },
+    };
+    render(<AutopilotControl />);
+
+    expect(screen.getByText("Motion 15 s · Speech Off")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByText("Motion 14 s · Speech Off")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByText("Motion 13 s · Speech Off")).toBeInTheDocument();
+  });
+
+  it("freezes the interpolated clock without jumping when Autopilot is paused", () => {
+    vi.useFakeTimers();
+    app.state = {
+      modes: {
+        mode: "autopilot",
+        segment_index: 2,
+        status_at: "2026-08-22T12:00:00Z",
+        motion_change_due_at: "2026-08-22T12:00:14.5Z",
+        motion_change_in_ms: 14_500,
+      },
+      settings: { autopilot: { ...autopilotPreferences, speech_cadence: "off" } },
+    };
+    const result = render(<AutopilotControl />);
+
+    expect(screen.getByText("Motion 15 s · Speech Off")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(screen.getByText("Motion 13 s · Speech Off")).toBeInTheDocument();
+
+    app.motion = { engine: { running: false, paused: true, target: { source: "autopilot" } } };
+    result.rerender(<AutopilotControl />);
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(screen.getByText("Motion 13 s · Speech Off")).toBeInTheDocument();
   });
 
   it("serializes rapid set-point edits and persists the final choice", async () => {

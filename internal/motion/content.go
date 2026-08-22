@@ -535,6 +535,35 @@ func (c Curve) maximumAccelerationPerMillis2() float64 {
 	return maximum
 }
 
+func (c Curve) maximumVelocityPerMillis() float64 {
+	if len(c.points) < 2 {
+		return 0
+	}
+	if c.linear {
+		maximum := 0.0
+		for index := 1; index < len(c.points); index++ {
+			duration := float64(c.points[index].TimeMillis - c.points[index-1].TimeMillis)
+			if duration > 0 {
+				maximum = math.Max(maximum,
+					math.Abs(c.points[index].PositionPercent-c.points[index-1].PositionPercent)/duration)
+			}
+		}
+		return maximum
+	}
+	if len(c.quintics) == len(c.points)-1 {
+		maximum := 0.0
+		for _, segment := range c.quintics {
+			maximum = math.Max(maximum, segment.maximumVelocity())
+		}
+		return maximum
+	}
+	maximum := 0.0
+	for index := range c.points {
+		maximum = math.Max(maximum, math.Abs(c.slopes[index]))
+	}
+	return maximum
+}
+
 func (c Curve) maximumJerkPerMillis3() float64 {
 	if len(c.quintics) != len(c.points)-1 {
 		return 0

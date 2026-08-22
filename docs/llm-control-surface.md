@@ -310,6 +310,25 @@ chose valid updates in 3/3 otherwise identical long-age/six-hold probes. A
 Sections remained optional and were not forced. This evidence supports making
 Creative the default while leaving the matched physical-feel comparison open.
 
+The alpha.30 output-fidelity follow-up replaces schema-field freshness with a
+summary of the actual compiled curve. Autopilot now sees rounded commanded mean
+travel, peak carriage velocity, mean stroke length, and the least-varied
+12-second stroke CV/range. The scheduler compares accumulated changes against a
+retained perceptual baseline, excluding pace because speed age is already a
+separate fact. A renamed JSON field or tiny scalar nudge therefore cannot make a
+repeated felt phrase look new.
+
+The autonomous prompt uses one general phrase distinction: one geometry is one
+coherent movement idea, while an ongoing request for several distinct or
+evolving sequences uses the existing 2–4 `sections` vocabulary. It does not
+require a section or change at an elapsed threshold. Against the installed
+Gemma llama.cpp model, three repeated five-decision runs produced 15 valid
+three-section responses. Every response was mapped and compiled through the
+shared motion planner; least-varied local windows measured 9.5–26.4% stroke CV
+and 15.9–57.1 points of length range. The same max-rate context at a simulated
+180-second phrase age returned `action:none` when recent conversation asked to
+keep motion exactly unchanged. No eval created an engine or transport.
+
 ## Ideas, ranked by leverage-to-risk
 
 Each idea notes whether it **restores** reference-app parity or is **net-new**,

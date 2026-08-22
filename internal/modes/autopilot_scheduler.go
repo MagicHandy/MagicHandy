@@ -174,6 +174,7 @@ func (m *Manager) applyAutopilotChoice(
 		}
 		return
 	}
+	choice.appliedPerceptual = clonePerceptualSummary(state.Perceptual)
 	if !m.armAutopilotChoice(ModeAutopilot, &choice, generation) {
 		return
 	}
@@ -262,8 +263,11 @@ func (m *Manager) observeAutopilotPhraseLocked(now time.Time, choice segmentChoi
 	if !choice.segment.hasContent() {
 		return
 	}
-	if !m.currentPhrase.hasContent() || !sameMotionPhrase(m.currentPhrase, choice.segment) {
+	if !m.currentPhrase.hasContent() || !sameFeltMotionPhrase(
+		m.currentPhrase, choice.segment, m.currentPerceptual, choice.appliedPerceptual,
+	) {
 		m.currentPhrase = clonePhraseSegment(choice.segment)
+		m.currentPerceptual = clonePerceptualSummaryPointer(choice.appliedPerceptual)
 		m.phraseChangedAt = now
 		m.decisionsAtCurrentPhrase = 0
 		return
@@ -273,16 +277,52 @@ func (m *Manager) observeAutopilotPhraseLocked(now time.Time, choice segmentChoi
 
 // observeInteractivePhraseLocked adopts user-authored shape without counting
 // the chat turn as an autonomous reconsideration. Callers hold m.mu.
-func (m *Manager) observeInteractivePhraseLocked(now time.Time, segment Segment) {
+func (m *Manager) observeInteractivePhraseLocked(
+	now time.Time,
+	segment Segment,
+	perceptual *motion.PerceptualSummary,
+) {
 	m.consecutiveHolds = 0
 	if !segment.hasContent() {
 		return
 	}
-	if !m.currentPhrase.hasContent() || !sameMotionPhrase(m.currentPhrase, segment) {
+	if !m.currentPhrase.hasContent() || !sameFeltMotionPhrase(
+		m.currentPhrase, segment, m.currentPerceptual, perceptual,
+	) {
 		m.currentPhrase = clonePhraseSegment(segment)
+		m.currentPerceptual = clonePerceptualSummaryPointer(perceptual)
 		m.phraseChangedAt = now
 		m.decisionsAtCurrentPhrase = 0
 	}
+}
+
+func sameFeltMotionPhrase(
+	left, right Segment,
+	leftPerceptual, rightPerceptual *motion.PerceptualSummary,
+) bool {
+	if sameMotionPhrase(left, right) {
+		return true
+	}
+	if left.Dynamic == nil || right.Dynamic == nil || leftPerceptual == nil || rightPerceptual == nil {
+		return false
+	}
+	return !leftPerceptual.MateriallyDifferent(*rightPerceptual)
+}
+
+func clonePerceptualSummary(summary motion.PerceptualSummary) *motion.PerceptualSummary {
+	if summary.CommandedPeakVelocityPerSecond <= 0 {
+		return nil
+	}
+	cloned := summary
+	return &cloned
+}
+
+func clonePerceptualSummaryPointer(summary *motion.PerceptualSummary) *motion.PerceptualSummary {
+	if summary == nil {
+		return nil
+	}
+	cloned := *summary
+	return &cloned
 }
 
 func clonePhraseSegment(segment Segment) Segment {
@@ -370,16 +410,18 @@ func (m *Manager) applyAutopilotSpeechMotion(
 	motionChoice := choice
 	motionChoice.source = "speech"
 	motionChoice.timing = TimingNormal
-	if _, err := engine.ApplyTarget(
+	state, err := engine.ApplyTarget(
 		ctx,
 		m.choiceTarget(ModeAutopilot, motionChoice),
 		"autopilot_speech",
-	); err != nil {
+	)
+	if err != nil {
 		if ctx.Err() == nil {
 			m.trace(ModeAutopilot, "speech_motion_failed", nil, err.Error())
 		}
 		return
 	}
+	motionChoice.appliedPerceptual = clonePerceptualSummary(state.Perceptual)
 	if m.armAutopilotChoice(ModeAutopilot, &motionChoice, generation) {
 		m.rememberChoice(ModeAutopilot, motionChoice)
 		m.tracePlanned(ModeAutopilot, "autopilot_speech", motionChoice)
