@@ -399,9 +399,10 @@ Structure inside a tile:
 - **Active state** — `aria-current="true"` plus a 2px accent ring. The active
   persona must be identifiable at a glance in a grid of twelve.
 - **Default state** — the Settings-backed MagicHandy tile is always pinned
-  after New persona. It links to Model settings instead of opening the custom
-  persona editor, and is active whenever the session has no resolvable custom
-  persona.
+  after New persona. It links to **Settings > Prompts & memory**, which owns the
+  default prompt set, reply register, persona description, and memories, instead
+  of opening the custom persona editor. It is active whenever the session has no
+  resolvable custom persona.
 
 ### 5.3 The create/import tile
 

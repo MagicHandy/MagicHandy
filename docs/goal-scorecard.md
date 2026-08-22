@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.31 candidate: 24,137,728 bytes plain and 17,370,112 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.32 candidate: 24,137,728 bytes plain and 17,370,112 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.31` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.31 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.32` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.32 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -190,6 +190,20 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-22** - Prepared alpha.32 after reproducing the Settings-backed
+  default persona card opening `#/settings/model`. The card now deep-links to
+  `#/settings/prompts`, where the default prompt set, reply register, persona
+  description, anatomy context, prompt editor, and memory manager are actually
+  owned. The focused 25-test persona suite and full 408-test frontend suite,
+  localization, typecheck, and production build pass. A fresh isolated rendered
+  build confirmed the card href, clicked through to the Prompts & memory h2,
+  and found the Persona description control. The same build used fake transport
+  with zero commands, passed real llama.cpp generation readiness, and completed
+  a text-only chat turn with “The chat is working correctly.” Candidate binaries
+  remain 24,137,728 / 17,370,112 bytes; the corrected two-character route adds
+  2 raw / 1 level-9 gzip byte to the complete, code-only, and English-startup
+  browser measures. No physical motion was commanded.
 
 - **2026-08-22** - Prepared alpha.31 after inspecting the installed Hei session.
   Its initial Creative phrase survived nine autonomous decisions for roughly
