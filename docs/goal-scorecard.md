@@ -129,12 +129,12 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,695,046 raw / 802,784 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 809,640 raw / 213,757 gzip bytes; all
-   HTML/CSS/JS is 1,250,810 raw / 365,387 gzip bytes. Creative C2 phrases,
-   section-aware status, and the eight-level Motion change rate control reduce
-   the checked-in alpha.27 bundle by 76 raw bytes while adding 196 gzip bytes;
-   the English startup path is 293 raw bytes smaller and 111 gzip bytes larger.
+   browser payload is 1,695,193 raw / 802,815 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 809,787 raw / 213,788 gzip bytes; all
+   HTML/CSS/JS is 1,250,957 raw / 365,418 gzip bytes. Creative C2 phrases,
+   section-aware status, and the eight-level Motion change rate control add 71
+   raw bytes and 227 gzip bytes to the checked-in alpha.27 bundle;
+   the English startup path is 146 raw bytes smaller and 142 gzip bytes larger.
    Creative envelope status
    adds 933 raw / 417 gzip bytes overall and 452 raw / 149 gzip bytes to the
    English startup path against alpha.25. Motion calibration,
@@ -182,14 +182,17 @@ Ranked by threat to the stated goals:
   bound to 8–16 seconds; the old fewer/more explanation is removed. The
   backend validator, scheduler window, Creative decision context, visible
   set-point scale, five locales, migrations, and tests all use the same 1–8
-  contract. Review handoff now requires an available, loaded configured LLM and
+  contract. The session-buildup safety explanation now uses compact helper
+  typography beside a standard accessible reset icon, reducing that action row
+  from five lines to three at the shipped sidebar width. Review handoff now
+  requires an available, loaded configured LLM and
   a real provider generation; LLM-related changes additionally require one
   text-only MagicHandy turn without repair, fallback, or motion. Full Go tests,
   vet, lint, 404 frontend tests, localization, typecheck/build, the PowerShell
   5.1 installer suite, and plain/stripped `CGO_ENABLED=0` builds pass. Local
   Windows race remains unavailable because no C compiler is installed; the
   mandatory Ubuntu CI gate remains authoritative. The candidate measures
-  24,028,672 / 17,311,744 binary bytes and 1,695,046 raw / 802,784 level-9 gzip
+  24,028,672 / 17,311,744 binary bytes and 1,695,193 raw / 802,815 level-9 gzip
   browser bytes. No device was connected or commanded.
 
 - **2026-08-22** - Replaced Creative's C1 whole-leg reversal profile with a

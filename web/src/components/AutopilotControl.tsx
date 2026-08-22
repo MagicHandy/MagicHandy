@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { AutopilotSettings, SessionArc } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
-import { PauseIcon, PlayIcon } from "../shell/icons";
+import { PauseIcon, PlayIcon, RefreshIcon } from "../shell/icons";
 import { SegmentedChoice, SetpointSlider } from "./SetpointControls";
 import { useAppState, useToast } from "../state/app-state";
 import { ownsActiveMotion } from "../util/motion";
@@ -67,9 +67,18 @@ function SessionBuildup({
         <span className="autopilot-buildup-fill" style={{ width: `${arc.percent}%` }} />
       </div>
       <div className="autopilot-buildup-actions">
-        <span className="hint">{t("The assistant aims higher in your speed range as this fills. Your limits never move.")}</span>
-        <button type="button" className="btn btn-secondary" disabled={disabled} onClick={onReset}>
-          {t("Reset buildup")}
+        <small className="autopilot-buildup-hint">
+          {t("The assistant aims higher in your speed range as this fills. Your limits never move.")}
+        </small>
+        <button
+          type="button"
+          className="icon-button autopilot-buildup-reset"
+          aria-label={t("Reset buildup")}
+          title={t("Reset buildup")}
+          disabled={disabled}
+          onClick={onReset}
+        >
+          <RefreshIcon size={16} />
         </button>
       </div>
     </div>
