@@ -25,11 +25,11 @@ const (
 	AutopilotMotionDynamic = "dynamic"
 	// AutopilotMotionCustom uses the saved custom motion bounds.
 	AutopilotMotionCustom = "custom"
-	// AutopilotMotionScaled uses the numbered 1-7 motion-change preference.
+	// AutopilotMotionScaled uses the numbered 1-8 motion-change-rate preference.
 	AutopilotMotionScaled = "scaled"
 
 	autopilotMinimumMotionChangeLevel = 1
-	autopilotMaximumMotionChangeLevel = 7
+	autopilotMaximumMotionChangeLevel = 8
 	autopilotDefaultMotionChangeLevel = 4
 
 	// AutopilotSpeechMotionChatOnly prevents autonomous speech turns from
@@ -169,6 +169,8 @@ func motionChangeLevelWindow(level int) (minimum int, maximum int) {
 		return 10, 35
 	case 7:
 		return 8, 24
+	case 8:
+		return 8, 16
 	default:
 		return 20, 60
 	}

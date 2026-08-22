@@ -110,10 +110,10 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 		writeSessionProgress(&builder, context)
 		builder.WriteString("Decide what happens for the next continuous stretch using the recent conversation as the user's ongoing direction:\n")
 		motionChangeLevel := context.MotionChangeLevel
-		if motionChangeLevel < 1 || motionChangeLevel > 7 {
+		if motionChangeLevel < 1 || motionChangeLevel > 8 {
 			motionChangeLevel = 4
 		}
-		fmt.Fprintf(&builder, "- The user's Motion changes preference is %d of 7; honor it through the supplied decision-horizon range and how often a genuinely new phrase is worthwhile.\n", motionChangeLevel)
+		fmt.Fprintf(&builder, "- The user's motion change rate is %d of 8; honor it through the supplied decision-horizon range and how often a genuinely new phrase is worthwhile.\n", motionChangeLevel)
 		builder.WriteString("- Use action \"update\" only when a meaningful change fits. Omitted fields preserve the live dynamic target.\n")
 		builder.WriteString("- Use action \"none\" to deliberately continue. Holding is a first-class model decision, not a failure.\n")
 		builder.WriteString("- Change center/span or provide a new 2-6 anchor route; never provide both representations together. Interior anchors are pass-through positions, not pauses.\n")

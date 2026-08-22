@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 Creative-C2 candidate: 24,013,312 bytes plain and 17,311,744 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.28 candidate: 24,028,672 bytes plain and 17,311,744 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.27` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.27 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.28` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.28 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -129,12 +129,13 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,695,258 raw / 802,914 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 809,708 raw / 213,796 gzip bytes; all
-   HTML/CSS/JS is 1,251,022 raw / 365,517 gzip bytes. The numbered motion-change
-   control, section-aware status, and locale updates add 136 raw / 326 gzip
-   bytes overall while reducing the raw English startup path by 225 bytes
-   against the checked-in alpha.27 bundle. Creative envelope status
+   browser payload is 1,695,046 raw / 802,784 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 809,640 raw / 213,757 gzip bytes; all
+   HTML/CSS/JS is 1,250,810 raw / 365,387 gzip bytes. Creative C2 phrases,
+   section-aware status, and the eight-level Motion change rate control reduce
+   the checked-in alpha.27 bundle by 76 raw bytes while adding 196 gzip bytes;
+   the English startup path is 293 raw bytes smaller and 111 gzip bytes larger.
+   Creative envelope status
    adds 933 raw / 417 gzip bytes overall and 452 raw / 149 gzip bytes to the
    English startup path against alpha.25. Motion calibration,
    the merged Handy model control, and aligned visible set-point controls add
@@ -175,6 +176,21 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-22** - Prepared alpha.28 with an eighth Motion change rate stop.
+  Levels 1–7 retain their exact windows and level 8 tightens only the upper
+  bound to 8–16 seconds; the old fewer/more explanation is removed. The
+  backend validator, scheduler window, Creative decision context, visible
+  set-point scale, five locales, migrations, and tests all use the same 1–8
+  contract. Review handoff now requires an available, loaded configured LLM and
+  a real provider generation; LLM-related changes additionally require one
+  text-only MagicHandy turn without repair, fallback, or motion. Full Go tests,
+  vet, lint, 404 frontend tests, localization, typecheck/build, the PowerShell
+  5.1 installer suite, and plain/stripped `CGO_ENABLED=0` builds pass. Local
+  Windows race remains unavailable because no C compiler is installed; the
+  mandatory Ubuntu CI gate remains authoritative. The candidate measures
+  24,028,672 / 17,311,744 binary bytes and 1,695,046 raw / 802,784 level-9 gzip
+  browser bytes. No device was connected or commanded.
 
 - **2026-08-22** - Replaced Creative's C1 whole-leg reversal profile with a
   monotone C2 quintic-Hermite curve that shares velocity and acceleration at

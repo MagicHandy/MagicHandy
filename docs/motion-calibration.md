@@ -215,7 +215,7 @@ dispatch path.
 
 The compact Chat sidebar now distinguishes ordered and categorical settings:
 
-- Motion changes is a numbered 1–7 slider, spoken-check-in cadence and
+- Motion change rate is a numbered 1–8 slider, spoken-check-in cadence and
   Gentle/Balanced/Intense style remain named discrete sliders. Their
   marks use the handle's real inset travel: the first and last marks are the
   actual endpoints, and intermediate marks use `index / (count - 1)` rather
@@ -225,8 +225,9 @@ The compact Chat sidebar now distinguishes ordered and categorical settings:
   scalar slider would imply a false numeric relationship.
 - Speech custom timing remains directly below its cadence slider. Motion level
   1 maps to 90–240 seconds, level 4 to the former 20–60 second Natural window,
-  and level 7 to 8–24 seconds; intermediate points are explicit backend
-  windows. Legacy motion presets/custom bounds migrate to the nearest level.
+  level 7 to 8–24 seconds, and level 8 to a tighter 8–16 seconds; all earlier
+  points are unchanged explicit backend windows. Legacy motion presets/custom
+  bounds migrate to the nearest level.
   Rapid set-point changes are serialized so the final choice cannot be lost
   behind an in-flight save.
 - The global Connection menu contains one low-frequency three-part merged

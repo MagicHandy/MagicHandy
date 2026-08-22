@@ -1379,10 +1379,11 @@ The reproduced recent correction sequence passed 9/9 managed-model decisions,
 and the broader range/intent matrix passed 25/25 without constructing an engine
 or transport.
 
-The Motion changes control is now a backend-owned numbered 1–7 scale. It spans
-90–240 seconds at level 1 through 8–24 seconds at level 7, defaults to the
-former Natural 20–60 second window at level 4, and migrates legacy presets or a
-custom window to the nearest level. Creative Autopilot clamps its model horizon
+The Motion change rate control is now a backend-owned numbered 1–8 scale. It
+retains the existing level 1–7 windows, adds a tighter 8–16 second window at
+level 8, defaults to the former Natural 20–60 second window at level 4, and
+migrates legacy presets or a custom window to the nearest level. Creative
+Autopilot clamps its model horizon
 against that effective window rather than dormant custom fields. A focused
 four-case local Ollama section/pace/correction matrix passes without an engine
 or transport; matched real-device feel remains open.

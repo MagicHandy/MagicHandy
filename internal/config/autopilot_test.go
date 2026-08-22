@@ -48,7 +48,7 @@ func TestAutopilotPresetAndCustomWindows(t *testing.T) {
 
 func TestAutopilotMotionChangeScaleWidensBothEnds(t *testing.T) {
 	windows := [][2]int{
-		{90, 240}, {60, 150}, {45, 120}, {20, 60}, {14, 45}, {10, 35}, {8, 24},
+		{90, 240}, {60, 150}, {45, 120}, {20, 60}, {14, 45}, {10, 35}, {8, 24}, {8, 16},
 	}
 	settings := DefaultAutopilotSettings()
 	for index, want := range windows {
@@ -95,7 +95,7 @@ func TestValidateAutopilotSettingsRejectsUnsafeWindows(t *testing.T) {
 		{"short motion", func(s *AutopilotSettings) { s.MotionMinSeconds = 7 }, "between 8 and 300"},
 		{"reversed speech", func(s *AutopilotSettings) { s.SpeechMinSeconds = 90; s.SpeechMaxSeconds = 30 }, "minimum cannot exceed"},
 		{"unknown authority", func(s *AutopilotSettings) { s.SpeechMotionAuthority = "unbounded" }, "unknown Autopilot speech motion authority"},
-		{"motion level", func(s *AutopilotSettings) { s.MotionChangeLevel = 8 }, "motion change level"},
+		{"motion level", func(s *AutopilotSettings) { s.MotionChangeLevel = 9 }, "motion change level"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

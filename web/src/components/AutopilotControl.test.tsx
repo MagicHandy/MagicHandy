@@ -164,7 +164,7 @@ describe("AutopilotControl", () => {
 
     expect(screen.getByText("Motion 31 s · Speech 1m 31s")).toBeInTheDocument();
     await act(async () => {
-      fireEvent.change(screen.getByLabelText("Motion changes"), { target: { value: "5" } });
+      fireEvent.change(screen.getByLabelText("Motion change rate"), { target: { value: "5" } });
     });
 
     expect(saveAutopilotPreferences).toHaveBeenCalledWith({
@@ -185,9 +185,9 @@ describe("AutopilotControl", () => {
       .mockImplementation(async (next) => ({ autopilot: next }));
     render(<AutopilotControl />);
 
-    const slider = screen.getByRole("slider", { name: "Motion changes" });
+    const slider = screen.getByRole("slider", { name: "Motion change rate" });
     fireEvent.change(slider, { target: { value: "4" } });
-    fireEvent.change(slider, { target: { value: "6" } });
+    fireEvent.change(slider, { target: { value: "7" } });
     expect(saveAutopilotPreferences).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -198,7 +198,7 @@ describe("AutopilotControl", () => {
     expect(saveAutopilotPreferences).toHaveBeenLastCalledWith({
       ...autopilotPreferences,
       motion_cadence: "scaled",
-      motion_change_level: 7,
+      motion_change_level: 8,
     });
   });
 
@@ -293,20 +293,20 @@ describe("AutopilotControl", () => {
     expect(screen.getByText("Speech range")).toBeVisible();
   });
 
-  it("renders Motion changes as an explicit numbered 1-7 scale", () => {
+  it("renders Motion change rate as an explicit numbered 1-8 scale", () => {
     app.state = {
       modes: { mode: "autopilot" },
       settings: { autopilot: autopilotPreferences },
     };
     render(<AutopilotControl />);
 
-    const slider = screen.getByRole("slider", { name: "Motion changes" });
+    const slider = screen.getByRole("slider", { name: "Motion change rate" });
     expect(slider).toHaveAttribute("aria-valuetext", "4");
-    expect(screen.getByText("1 = fewer · 7 = more")).toBeVisible();
+    expect(screen.queryByText("1 = fewer · 7 = more")).not.toBeInTheDocument();
     expect(Array.from(
       slider.closest(".autopilot-setpoints")?.querySelectorAll(".setpoint-stop") ?? [],
       (stop) => stop.textContent,
-    )).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
+    )).toEqual(["1", "2", "3", "4", "5", "6", "7", "8"]);
   });
 
   it.each([1, 24 * 60])("saves a %d minute custom buildup", async (minutes) => {

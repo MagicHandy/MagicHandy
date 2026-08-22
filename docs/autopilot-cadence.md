@@ -81,8 +81,9 @@ Autopilot session without restarting motion.
 | 5 | 14-45 seconds |
 | 6 | 10-35 seconds |
 | 7 | 8-24 seconds |
+| 8 | 8-16 seconds |
 
-Motion changes defaults to level 4; Spoken check-ins defaults to `Natural`.
+Motion change rate defaults to level 4; Spoken check-ins defaults to `Natural`.
 Stored Steady/Natural/Dynamic values migrate to levels 3/4/6, and an old custom
 motion window migrates to the nearest level midpoint. Speech retains its custom
 minimum/maximum inputs. All non-off intervals have an eight-second floor.
@@ -261,7 +262,7 @@ moment later. Buildup requires session tracking; the settings validator rejects
 the combination rather than letting the document express a state the runtime
 would silently ignore.
 
-In the Chat control, Motion changes is an explicit numbered 1–7 scale and
+In the Chat control, Motion change rate is an explicit numbered 1–8 scale and
 Spoken check-ins is a labeled set-point slider. Speech reveals its custom timing
 row directly beneath that control. Session buildup and its
 duration are primary controls as well; only adaptive timing, speech-motion

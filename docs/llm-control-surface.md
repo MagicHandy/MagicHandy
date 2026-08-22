@@ -190,9 +190,10 @@ Chat Autopilot reuses the selected contract at bounded decision boundaries. In
 Pattern Library mode it may curate an enabled pattern/speed or hold. In Dynamic
 mode its autonomous `update` supplies initial geometry or changes the live
 geometry, and `segment_seconds` is clamped to the user's Autopilot motion-cadence
-range. The user-facing Motion changes control is a numbered 1–7 scale spanning
-90–240 seconds down to 8–24 seconds; level 4 preserves the former Natural
-20–60 second default. Dynamic provider failure holds the
+range. The user-facing Motion change rate control is a numbered 1–8 scale
+spanning 90–240 seconds down to a tighter 8–16 seconds; levels 1–7 retain their
+previous windows and level 4 preserves the former Natural 20–60 second default.
+Dynamic provider failure holds the
 current Dynamic target or waits for a model decision; it never falls back to a
 deterministic library pattern. The same rule applies when a valid initial model
 decision chooses to hold before any Dynamic target exists: Autopilot remains

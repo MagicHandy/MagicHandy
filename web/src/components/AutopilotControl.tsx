@@ -22,7 +22,7 @@ const speechOptions = [
   ["custom", "Custom"],
 ] as const satisfies ReadonlyArray<readonly [string, MessageKey]>;
 
-const motionChangeOptions = Array.from({ length: 7 }, (_, index) => {
+const motionChangeOptions = Array.from({ length: 8 }, (_, index) => {
   const value = String(index + 1);
   return { value, label: value };
 });
@@ -327,9 +327,8 @@ function AutopilotPreferences({
       <legend className="visually-hidden">{t("Autopilot timing")}</legend>
       <SetpointSlider
         className="autopilot-setpoints"
-        label={t("Motion changes")}
-        hint={t("1 = fewer · 7 = more")}
-        value={String(Math.min(7, Math.max(1, draft.motion_change_level || 4)))}
+        label={t("Motion change rate")}
+        value={String(Math.min(8, Math.max(1, draft.motion_change_level || 4)))}
         options={motionChangeOptions}
         disabled={controlsDisabled}
         onChange={(level) => void save({
