@@ -1354,9 +1354,15 @@ choices now change at roughly two-cycle cadence so that the long carrier does
 not become a long same-length plateau. Seeded category blocks cover tight,
 medium, and broad portions of the allowed band; center and leg timing use
 separate correlated texture with a perceptual square-root response. Creative
-true reversals use whole-leg shape-preserving PCHIP easing, while stored
-patterns retain short acceleration-budgeted guides and both remain inside the
-same exact runtime acceleration limiter. Legacy implicit span swell remains
+true reversals now use monotone C2 quintic-Hermite easing with shared velocity
+and acceleration at every knot, while stored patterns retain short
+acceleration-budgeted guides. Creative adds an exact polynomial jerk-quality
+envelope on top of the shared runtime acceleration limiter. A compact model
+phrase may contain 2–4 semantic sections with 2–12 cycles each; the backend
+expands them into one long loop with deterministic occurrence novelty rather
+than queuing several commands. Whole-percent Creative wire fitting preserves
+both position-at-time and time-at-position, so quantization cannot turn a short
+eased stroke back into a linear chord. Legacy implicit span swell remains
 compatible. Engine phase samples retain fractional authored time, and long-
 curve retarget search scales with authored complexity. See
 `docs/motion-calibration.md`.
@@ -1372,6 +1378,15 @@ unauthorized noise rather than expanding the prompt with edge-case scripts.
 The reproduced recent correction sequence passed 9/9 managed-model decisions,
 and the broader range/intent matrix passed 25/25 without constructing an engine
 or transport.
+
+The Motion change rate control is now a backend-owned numbered 1–8 scale. It
+retains the existing level 1–7 windows, adds a tighter 8–16 second window at
+level 8, defaults to the former Natural 20–60 second window at level 4, and
+migrates legacy presets or a custom window to the nearest level. Creative
+Autopilot clamps its model horizon
+against that effective window rather than dormant custom fields. A focused
+four-case local Ollama section/pace/correction matrix passes without an engine
+or transport; matched real-device feel remains open.
 
 Alpha.25 closes the reproduced Creative-plan crash: final center/span projection
 clamps floating-point endpoint overshoot before strict validation, compilation

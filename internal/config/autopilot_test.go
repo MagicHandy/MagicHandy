@@ -8,7 +8,8 @@ import (
 func TestDefaultAutopilotSettingsUseIndependentNaturalCadences(t *testing.T) {
 	settings := DefaultAutopilotSettings()
 	if settings.SpeechCadence != AutopilotSpeechNatural ||
-		settings.MotionCadence != AutopilotMotionNatural ||
+		settings.MotionCadence != AutopilotMotionScaled ||
+		settings.MotionChangeLevel != autopilotDefaultMotionChangeLevel ||
 		settings.SpeechMotionAuthority != AutopilotSpeechMotionChatOnly {
 		t.Fatalf("defaults = %+v", settings)
 	}
@@ -45,6 +46,36 @@ func TestAutopilotPresetAndCustomWindows(t *testing.T) {
 	}
 }
 
+func TestAutopilotMotionChangeScaleWidensBothEnds(t *testing.T) {
+	windows := [][2]int{
+		{90, 240}, {60, 150}, {45, 120}, {20, 60}, {14, 45}, {10, 35}, {8, 24}, {8, 16},
+	}
+	settings := DefaultAutopilotSettings()
+	for index, want := range windows {
+		settings.MotionChangeLevel = index + 1
+		minimum, maximum := settings.MotionWindow()
+		if minimum != want[0] || maximum != want[1] {
+			t.Fatalf("level %d window = %d..%d, want %d..%d",
+				index+1, minimum, maximum, want[0], want[1])
+		}
+	}
+}
+
+func TestLegacyMotionCadenceMigratesToNumberedScale(t *testing.T) {
+	for cadence, want := range map[string]int{
+		AutopilotMotionSteady: 3, AutopilotMotionNatural: 4, AutopilotMotionDynamic: 6,
+	} {
+		stored := DefaultAutopilotSettings()
+		stored.MotionCadence = cadence
+		stored.MotionChangeLevel = 0
+		resolved := applyMissingAutopilotDefaults(stored, DefaultAutopilotSettings())
+		if resolved.MotionCadence != AutopilotMotionScaled || resolved.MotionChangeLevel != want {
+			t.Fatalf("%s migrated to cadence=%s level=%d, want scaled/%d",
+				cadence, resolved.MotionCadence, resolved.MotionChangeLevel, want)
+		}
+	}
+}
+
 func TestNormalizeSettingsBackfillsAutopilotDocument(t *testing.T) {
 	normalized, err := NormalizeSettings(Settings{})
 	if err != nil {
@@ -64,6 +95,7 @@ func TestValidateAutopilotSettingsRejectsUnsafeWindows(t *testing.T) {
 		{"short motion", func(s *AutopilotSettings) { s.MotionMinSeconds = 7 }, "between 8 and 300"},
 		{"reversed speech", func(s *AutopilotSettings) { s.SpeechMinSeconds = 90; s.SpeechMaxSeconds = 30 }, "minimum cannot exceed"},
 		{"unknown authority", func(s *AutopilotSettings) { s.SpeechMotionAuthority = "unbounded" }, "unknown Autopilot speech motion authority"},
+		{"motion level", func(s *AutopilotSettings) { s.MotionChangeLevel = 9 }, "motion change level"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

@@ -59,6 +59,7 @@ var (
 	errDynamicUpdateMissing  = errors.New("the user's position request requires a motion change; reply text alone cannot claim the change")
 	errDynamicCoverage       = errors.New("the dynamic geometry does not reach the position requested by the user")
 	errDynamicPositionScope  = errors.New("a position-only request must preserve unrelated motion axes")
+	errDynamicPaceMissing    = errors.New("an explicit pace request requires a matching speed_percent change")
 )
 
 // ValidateUserMessage normalizes one user turn before either persistence or
@@ -147,6 +148,7 @@ func clearDynamicMotionFields(command *MotionCommand) {
 	command.Anchors = nil
 	command.VariationPercent = nil
 	command.SegmentSeconds = nil
+	command.Sections = nil
 }
 
 // Complete streams a model response, repairs malformed JSON once, and returns a validated result.
@@ -434,44 +436,147 @@ func (s Service) recoverSemanticRepair(response AssistantResponse, userMessage s
 }
 
 func (s Service) parseAndValidateResponse(raw string, capabilities Capabilities, userMessage string) (AssistantResponse, error) {
-	if capabilities.MotionMode == MotionModeDynamic && s.MotionContext != nil {
-		raw = normalizeDynamicPositionOnlyResponse(raw, userMessage)
-	}
+	raw = s.normalizeDynamicResponseRaw(raw, capabilities, userMessage)
 	response, err := parseAssistantResponseForCapabilities(raw, s.Patterns, capabilities, s.MotionContext)
 	if err != nil {
 		return AssistantResponse{}, err
 	}
-	if response.Motion != nil && !s.TrustedMotionInput &&
-		!userAuthorizesMotionCommandForCapabilities(userMessage, *response.Motion, capabilities, s.MotionContext) {
-		response.Motion = nil
-		// An unauthorized model command is inert output. Return before semantic
-		// variation repair can synthesize a replacement command.
+	if err := s.normalizeAndValidateDynamicAction(&response, capabilities); err != nil {
+		return response, err
+	}
+	if s.stripUnauthorizedMotion(&response, capabilities, userMessage) {
 		return response, nil
 	}
-	if response.Motion == nil && (!capabilities.Motion || (!s.TrustedMotionInput &&
-		!userAuthorizesMotionForCapabilities(userMessage, MotionActionTarget, capabilities, s.MotionContext))) {
-		if capabilities.Motion && capabilities.MotionMode == MotionModeDynamic && s.MotionContext != nil {
-			if err := validateDynamicRequestedCoverage(nil, *s.MotionContext, userMessage); err != nil {
-				return response, err
-			}
-		}
-		return response, nil
+	if handled, motionlessErr := s.validateMotionlessResponse(response, capabilities, userMessage); handled {
+		return response, motionlessErr
 	}
 	if capabilities.MotionMode == MotionModeDynamic {
-		if s.MotionContext == nil {
-			return response, nil
-		}
-		if response.Motion != nil {
-			if err := validateRequestedSpeedBand(*response.Motion, *s.MotionContext, userMessage); err != nil {
-				return response, err
-			}
-		}
-		return response, validateDynamicRequestedCoverage(response.Motion, *s.MotionContext, userMessage)
+		return s.validateDynamicResponse(response, userMessage)
 	}
 	if err := validateMotionChange(response, s.MotionContext, userMessage); err != nil {
 		return response, err
 	}
 	return response, nil
+}
+
+func (s Service) normalizeDynamicResponseRaw(raw string, capabilities Capabilities, userMessage string) string {
+	if capabilities.MotionMode != MotionModeDynamic || s.MotionContext == nil {
+		return raw
+	}
+	raw = normalizeDynamicPaceOnlyResponse(raw, userMessage)
+	return normalizeDynamicPositionOnlyResponse(raw, userMessage)
+}
+
+func (s Service) normalizeAndValidateDynamicAction(response *AssistantResponse, capabilities Capabilities) error {
+	if capabilities.MotionMode == MotionModeDynamic && !s.TrustedMotionInput {
+		normalizeInteractiveDynamicAction(response, s.MotionContext)
+		if err := validateInteractiveDynamicAction(response.Motion, s.MotionContext); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s Service) stripUnauthorizedMotion(
+	response *AssistantResponse,
+	capabilities Capabilities,
+	userMessage string,
+) bool {
+	if response.Motion == nil || s.TrustedMotionInput ||
+		userAuthorizesMotionCommandForCapabilities(userMessage, *response.Motion, capabilities, s.MotionContext) {
+		return false
+	}
+	response.Motion = nil
+	// An unauthorized model command is inert output. Return before semantic
+	// variation repair can synthesize a replacement command.
+	return true
+}
+
+func (s Service) validateMotionlessResponse(
+	response AssistantResponse,
+	capabilities Capabilities,
+	userMessage string,
+) (bool, error) {
+	if response.Motion != nil || capabilities.Motion && (s.TrustedMotionInput ||
+		userAuthorizesMotionForCapabilities(userMessage, MotionActionTarget, capabilities, s.MotionContext)) {
+		return false, nil
+	}
+	if capabilities.Motion && capabilities.MotionMode == MotionModeDynamic && s.MotionContext != nil {
+		if err := validateDynamicRequestedCoverage(nil, *s.MotionContext, userMessage); err != nil {
+			return true, err
+		}
+	}
+	return true, nil
+}
+
+func (s Service) validateDynamicResponse(response AssistantResponse, userMessage string) (AssistantResponse, error) {
+	if s.MotionContext == nil {
+		return response, nil
+	}
+	if err := validateDynamicRequestedPace(response.Motion, *s.MotionContext, userMessage); err != nil {
+		return response, err
+	}
+	if response.Motion != nil {
+		if err := validateRequestedSpeedBand(*response.Motion, *s.MotionContext, userMessage); err != nil {
+			return response, err
+		}
+	}
+	return response, validateDynamicRequestedCoverage(response.Motion, *s.MotionContext, userMessage)
+}
+
+func validateDynamicRequestedPace(command *MotionCommand, context MotionContext, userMessage string) error {
+	message := normalizeMotionIntent(userMessage)
+	if !context.Running || !requestsDynamicSpeedChange(message) {
+		return nil
+	}
+	increasing := hasIntentPhrase(message, "faster", "quicker", "harder", "speed up", "increase speed")
+	decreasing := hasIntentPhrase(message, "slower", "gentler", "slow down", "decrease speed")
+	if increasing && context.SpeedPercent >= context.SpeedMaxPercent ||
+		decreasing && context.SpeedPercent <= context.SpeedMinPercent {
+		return nil // The saved user limit is authoritative; a further change is impossible.
+	}
+	if command == nil || command.Action == MotionActionNone || command.SpeedPercent == nil {
+		return errDynamicPaceMissing
+	}
+	speed := *command.SpeedPercent
+	if increasing && speed <= context.SpeedPercent {
+		return fmt.Errorf("%w: faster must be above the current %d percent", errDynamicPaceMissing, context.SpeedPercent)
+	}
+	if decreasing && speed >= context.SpeedPercent {
+		return fmt.Errorf("%w: slower must be below the current %d percent", errDynamicPaceMissing, context.SpeedPercent)
+	}
+	if !increasing && !decreasing && speed == context.SpeedPercent {
+		return fmt.Errorf("%w: change pace must differ from the current %d percent", errDynamicPaceMissing, context.SpeedPercent)
+	}
+	return nil
+}
+
+func normalizeInteractiveDynamicAction(response *AssistantResponse, context *MotionContext) {
+	if response == nil || response.Motion == nil || context == nil {
+		return
+	}
+	if context.Running && response.Motion.Action == MotionActionStart {
+		// The target is already moving, so a complete model-authored "start"
+		// object is unambiguously a retarget. Normalizing this redundancy avoids
+		// a restart-shaped repair while preserving the exact semantic fields.
+		response.Motion.Action = MotionActionUpdate
+	}
+}
+
+func validateInteractiveDynamicAction(command *MotionCommand, context *MotionContext) error {
+	if command == nil || context == nil || command.Action == MotionActionNone || command.Action == MotionActionStop {
+		return nil
+	}
+	switch {
+	case context.Paused && (command.Action == MotionActionStart || command.Action == MotionActionUpdate):
+		return errors.New("paused Creative motion requires action none or stop; start and update are invalid")
+	case context.Running && command.Action == MotionActionStart:
+		return errors.New("creative motion is already running; use action update, not start")
+	case !context.Running && !context.Paused && command.Action == MotionActionUpdate:
+		return errors.New("creative motion is stopped; use action start, not update")
+	default:
+		return nil
+	}
 }
 
 func userAuthorizesMotionCommandForCapabilities(message string, command MotionCommand, capabilities Capabilities, context *MotionContext) bool {
@@ -535,7 +640,8 @@ func userAuthorizesDynamicUpdate(message string, command MotionCommand, context 
 
 func dynamicCommandChangesRange(command MotionCommand) bool {
 	return command.CenterPercent != nil || command.SpanPercent != nil ||
-		command.SpanMinPercent != nil || command.SpanProfile != "" || len(command.Anchors) > 0
+		command.SpanMinPercent != nil || command.SpanProfile != "" || len(command.Anchors) > 0 ||
+		len(command.Sections) > 0
 }
 
 func negatesDynamicSpeedChange(message string) bool {
@@ -638,14 +744,20 @@ func normalizeMotionIntent(message string) string {
 
 func motionIntentIsNegated(message string) bool {
 	if hasIntentPhrase(message,
-		"no", "not", "never", "don't", "dont", "do not", "without",
+		"no", "not", "never", "don't", "dont", "do not",
 		// Contracted negatives carry the same refusal as "do not" and must not
 		// leave an authorizing verb ("start moving") exposed behind them.
 		"didn't", "didnt", "doesn't", "doesnt", "won't", "wouldn't", "wouldnt",
 		"shouldn't", "shouldnt", "can't", "cant", "cannot", "isn't", "isnt",
 		"aren't", "arent", "stop", "stopped",
-		"nunca", "sin", "evita", "evitar", "não", "nao", "sem",
+		"nunca", "evita", "evitar", "não", "nao",
 		"tampoco", "pare", "para de", "deja de", "parar de",
+	) {
+		return true
+	}
+	if hasIntentPhrase(message,
+		"without motion", "without moving", "without movement",
+		"sin movimiento", "sin mover", "sem movimento", "sem mover",
 	) {
 		return true
 	}

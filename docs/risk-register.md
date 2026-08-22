@@ -653,6 +653,18 @@ phrase seed. Long-phrase phase search now scales with authored curve complexity
 and scores the direction actually available after handoff; continuity tests
 cover profile-to-profile retargets through the existing transition path.
 
+Status 2026-08-22: multi-section Creative phrases remain one semantic
+`MotionTarget.Dynamic` and one compiled loop; sections are not mode segments,
+transport commands, goroutines, or queued playback owners. The Creative curve
+profile is now C2 quintic Hermite with exact acceleration/jerk fitting, and its
+whole-percent timing-aware simplifier still feeds the shared sampler and
+declared transport resolution. Catalog/imported fitting is deliberately
+unchanged. Focused tests cover C2 knot/seam continuity, monotonicity, all three
+Handy profiles, quantized short-stroke timing, section reversal-length
+diversity, one Play across retargets, and Stop-era lifecycle gates. No
+post-change device command was issued, so R1/R22 subjective feel and transport
+acceptance remain open.
+
 ## R15: Chat And Voice Delivery Ordering
 
 Level: Medium
@@ -1441,7 +1453,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.27 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.28 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1489,7 +1501,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.27, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.28, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit

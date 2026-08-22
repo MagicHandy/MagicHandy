@@ -88,18 +88,19 @@ const contractDynamic = `Return exactly one JSON object and no markdown, code fe
 Every response requires a non-empty "reply" string written freshly in the selected chat voice. The optional "motion" value must be exactly one of these shapes:
 - Explicitly no motion change: {"action":"none"}
 - Start creative motion with organic range: {"action":"start","speed_percent":30,"center_percent":50,"span_percent":78,"span_min_percent":34,"span_profile":"wander","variation_percent":20,"segment_seconds":18}
-- Start an anchor loop with a slow range swell: {"action":"start","speed_percent":30,"anchors":["tip","middle","base"],"span_min_percent":36,"span_profile":"breathe","variation_percent":15,"segment_seconds":18}
+- Start a varied phrase: {"action":"start","speed_percent":30,"sections":[{"anchors":["base","middle","tip"],"span_min_percent":32,"span_profile":"wander","variation_percent":45,"cycles":4},{"center_percent":68,"span_percent":54,"span_min_percent":24,"span_profile":"contrast","variation_percent":60,"cycles":3}],"segment_seconds":40}
 - Move only the active window: {"action":"update","center_percent":85}
 - Update active motion to contrast tight and broad strokes: {"action":"update","span_percent":82,"span_min_percent":28,"span_profile":"contrast"}
 - Stop motion: {"action":"stop"}
 
 Rules:
 - Omit "motion" or use only {"action":"none"} when you decide the current motion should continue unchanged. Ordinary conversation is not a reason to change motion.
-- Use "start" only for an explicit request to begin motion. Start requires speed_percent and either center_percent plus span_percent, or 2-6 anchors.
+- Use "start" only for an explicit request to begin motion. Start requires speed_percent and either one center/span geometry, 2-6 anchors, or a complete sections phrase.
 - Use "update" only while motion is active. Include only fields you deliberately want to change; every omitted field preserves its live value.
 - Use only {"action":"stop"} when the user asks to stop, pause, or end motion.
 - center_percent is the midpoint of travel: 0 is base/deep and 100 is tip/shallow. span_percent is the widest total travel around that midpoint and must be 20-100.
 - anchors are an ordered loop through 2-6 names chosen only from base, lower, middle, upper, and tip. Use anchors instead of center_percent/span_percent, never together.
+- For an explicitly varied, evolving, or surprising request, sections may replace the single geometry with 2-4 complete movement ideas. Each section uses the same geometry and texture fields plus cycles from 2-12. Never mix sections with top-level geometry/texture fields; segment_seconds and speed remain phrase-wide.
 - Position and range-envelope changes are separate: for a position-only update, return only action plus center_percent/span_percent or anchors; do not restate or rewrite the other snapshot fields. "Stay" at a position describes window placement; use span_profile "steady" only for an explicit fixed stroke-length request.
 - The reply and motion object must describe the same result. Never claim to move, change, or reach a position with omitted motion or action "none". Full/whole/entire-length wording must recenter the widest window so its geometry covers both base and tip.
 - To vary stroke length inside one continuous phrase, set span_min_percent to the narrowest travel, at least 20 and no greater than span_percent or the anchor route's outer span. Also choose span_profile: "breathe" for a slow swell, "wander" for smooth organic movement through the band, or "contrast" for irregular tight/medium/broad groupings. The envelope supplements rather than replaces the required outer geometry. Prefer "wander" for ordinary creative motion.
@@ -873,7 +874,8 @@ func repairPromptFor(prompt PromptSet, parseError string, truncated bool) string
 	}
 	return fmt.Sprintf(`Repair your previous MagicHandy response.
 
-Return exactly one JSON object matching the contract from the system prompt. Do not add markdown, comments, code fences, or extra keys.%s
+Return exactly one JSON object matching the contract from the system prompt. Do not add markdown, comments, code fences, or extra keys.
+Correct the reported field or action while preserving every other valid requested field from your previous object; do not make the object less complete.%s
 %s
 
 Validation error:

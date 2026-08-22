@@ -82,13 +82,27 @@ type MotionCommand struct {
 	Area string `json:"area,omitempty"`
 	// Dynamic geometry is available only in Dynamic generation mode. Pointer
 	// fields preserve omitted running values without conflating zero with absent.
+	CenterPercent    *int                    `json:"center_percent,omitempty"`
+	SpanPercent      *int                    `json:"span_percent,omitempty"`
+	SpanMinPercent   *int                    `json:"span_min_percent,omitempty"`
+	SpanProfile      string                  `json:"span_profile,omitempty"`
+	Anchors          []string                `json:"anchors,omitempty"`
+	VariationPercent *int                    `json:"variation_percent,omitempty"`
+	SegmentSeconds   *int                    `json:"segment_seconds,omitempty"`
+	Sections         []DynamicSectionCommand `json:"sections,omitempty"`
+}
+
+// DynamicSectionCommand is one semantic movement idea in a compact Creative
+// phrase. It intentionally duplicates the small geometry vocabulary at the
+// chat boundary so the chat package remains independent of the motion engine.
+type DynamicSectionCommand struct {
 	CenterPercent    *int     `json:"center_percent,omitempty"`
 	SpanPercent      *int     `json:"span_percent,omitempty"`
 	SpanMinPercent   *int     `json:"span_min_percent,omitempty"`
 	SpanProfile      string   `json:"span_profile,omitempty"`
 	Anchors          []string `json:"anchors,omitempty"`
 	VariationPercent *int     `json:"variation_percent,omitempty"`
-	SegmentSeconds   *int     `json:"segment_seconds,omitempty"`
+	Cycles           int      `json:"cycles"`
 }
 
 const (
@@ -211,11 +225,20 @@ func parseAssistantResponseForCapabilities(raw string, patterns []PatternChoice,
 // copied window fields here so a valid anchor decision does not enter a repair
 // loop merely because the model repeated values from the adjacent start example.
 func normalizeDynamicGeometry(response *AssistantResponse) {
-	if response.Motion == nil || len(response.Motion.Anchors) == 0 {
+	if response.Motion == nil {
 		return
 	}
-	response.Motion.CenterPercent = nil
-	response.Motion.SpanPercent = nil
+	if len(response.Motion.Anchors) > 0 {
+		response.Motion.CenterPercent = nil
+		response.Motion.SpanPercent = nil
+	}
+	for index := range response.Motion.Sections {
+		section := &response.Motion.Sections[index]
+		if len(section.Anchors) > 0 {
+			section.CenterPercent = nil
+			section.SpanPercent = nil
+		}
+	}
 }
 
 func parseAssistantResponse(raw string, patterns []PatternChoice, curation bool, currentSpeed *int) (AssistantResponse, error) {
@@ -294,6 +317,13 @@ func validateAssistantResponse(response *AssistantResponse, patterns []PatternCh
 	for index := range response.Motion.Anchors {
 		response.Motion.Anchors[index] = strings.ToLower(strings.TrimSpace(response.Motion.Anchors[index]))
 	}
+	for sectionIndex := range response.Motion.Sections {
+		section := &response.Motion.Sections[sectionIndex]
+		section.SpanProfile = strings.ToLower(strings.TrimSpace(section.SpanProfile))
+		for anchorIndex := range section.Anchors {
+			section.Anchors[anchorIndex] = strings.ToLower(strings.TrimSpace(section.Anchors[anchorIndex]))
+		}
+	}
 	normalizePacing(response.Motion)
 	switch response.Motion.Action {
 	case MotionActionNone, MotionActionStart, MotionActionTarget, MotionActionUpdate, MotionActionStop:
@@ -355,7 +385,31 @@ func validateDynamicMotionRanges(command MotionCommand) error {
 	if command.SegmentSeconds != nil && (*command.SegmentSeconds < 4 || *command.SegmentSeconds > 120) {
 		return errors.New("motion segment_seconds must be between 4 and 120")
 	}
+	for index, section := range command.Sections {
+		sectionCommand := motionCommandFromSection(section)
+		if err := validateDynamicGeometryRanges(sectionCommand); err != nil {
+			return fmt.Errorf("motion section %d: %w", index+1, err)
+		}
+		if err := validateDynamicAnchors(section.Anchors); err != nil {
+			return fmt.Errorf("motion section %d: %w", index+1, err)
+		}
+		if section.VariationPercent != nil &&
+			(*section.VariationPercent < 0 || *section.VariationPercent > 100) {
+			return fmt.Errorf("motion section %d variation_percent must be between 0 and 100", index+1)
+		}
+		if section.Cycles < 2 || section.Cycles > 12 {
+			return fmt.Errorf("motion section %d cycles must be between 2 and 12", index+1)
+		}
+	}
 	return nil
+}
+
+func motionCommandFromSection(section DynamicSectionCommand) MotionCommand {
+	return MotionCommand{
+		CenterPercent: section.CenterPercent, SpanPercent: section.SpanPercent,
+		SpanMinPercent: section.SpanMinPercent, SpanProfile: section.SpanProfile,
+		Anchors: section.Anchors, VariationPercent: section.VariationPercent,
+	}
 }
 
 func validateDynamicGeometryRanges(command MotionCommand) error {
@@ -435,21 +489,66 @@ func validateDynamicMotionCombination(command MotionCommand) error {
 	if len(command.Anchors) > 0 && (command.CenterPercent != nil || command.SpanPercent != nil) {
 		return errors.New("dynamic motion accepts either anchors or center/span, not both")
 	}
+	if err := validateDynamicSectionsCombination(command); err != nil {
+		return err
+	}
 	if command.Action == MotionActionStart {
-		if command.SpeedPercent == nil {
-			return errors.New("dynamic motion start requires speed_percent")
-		}
-		if len(command.Anchors) == 0 && (command.CenterPercent == nil || command.SpanPercent == nil) {
-			return errors.New("dynamic motion start requires anchors or both center_percent and span_percent")
-		}
-		if variableDynamicSpanProfile(command.SpanProfile) && command.SpanMinPercent == nil {
-			return errors.New("a variable span_profile requires span_min_percent on dynamic motion start")
-		}
+		return validateDynamicStartCombination(command)
 	}
 	if command.Action == MotionActionUpdate && command.SpeedPercent == nil && !hasDynamicMotionFields(command) {
 		return errors.New("dynamic motion update requires at least one changed field")
 	}
 	return nil
+}
+
+func validateDynamicSectionsCombination(command MotionCommand) error {
+	if len(command.Sections) == 0 {
+		return nil
+	}
+	if len(command.Sections) < 2 || len(command.Sections) > 4 {
+		return errors.New("dynamic motion sections must contain between 2 and 4 movement ideas")
+	}
+	if hasSingleDynamicPhraseFields(command) {
+		return errors.New("dynamic motion accepts sections or single-phrase geometry, not both")
+	}
+	for index, section := range command.Sections {
+		if err := validateDynamicSectionCombination(section, index+1); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDynamicSectionCombination(section DynamicSectionCommand, number int) error {
+	if len(section.Anchors) == 0 && (section.CenterPercent == nil || section.SpanPercent == nil) {
+		return fmt.Errorf("motion section %d requires anchors or both center_percent and span_percent", number)
+	}
+	if len(section.Anchors) > 0 && (section.CenterPercent != nil || section.SpanPercent != nil) {
+		return fmt.Errorf("motion section %d accepts either anchors or center/span, not both", number)
+	}
+	if variableDynamicSpanProfile(section.SpanProfile) && section.SpanMinPercent == nil {
+		return fmt.Errorf("motion section %d variable span_profile requires span_min_percent", number)
+	}
+	return nil
+}
+
+func validateDynamicStartCombination(command MotionCommand) error {
+	if command.SpeedPercent == nil {
+		return errors.New("dynamic motion start requires speed_percent")
+	}
+	if len(command.Sections) == 0 && len(command.Anchors) == 0 &&
+		(command.CenterPercent == nil || command.SpanPercent == nil) {
+		return errors.New("dynamic motion start requires anchors or both center_percent and span_percent")
+	}
+	if variableDynamicSpanProfile(command.SpanProfile) && command.SpanMinPercent == nil {
+		return errors.New("a variable span_profile requires span_min_percent on dynamic motion start")
+	}
+	return nil
+}
+
+func hasSingleDynamicPhraseFields(command MotionCommand) bool {
+	return command.CenterPercent != nil || command.SpanPercent != nil || len(command.Anchors) > 0 ||
+		command.SpanMinPercent != nil || command.SpanProfile != "" || command.VariationPercent != nil
 }
 
 // validateDynamicSpanEnvelopeState checks the effective update, including
@@ -459,6 +558,10 @@ func validateDynamicMotionCombination(command MotionCommand) error {
 func validateDynamicSpanEnvelopeState(command *MotionCommand, context *MotionContext) error {
 	if command == nil || (command.Action != MotionActionStart && command.Action != MotionActionUpdate) {
 		return nil
+	}
+
+	if len(command.Sections) > 0 {
+		return nil // Every section's complete effective envelope was validated above.
 	}
 
 	profile := effectiveDynamicSpanProfile(command, context)
@@ -519,7 +622,7 @@ func hasMotionTargetFields(command MotionCommand) bool {
 func hasDynamicMotionFields(command MotionCommand) bool {
 	return command.CenterPercent != nil || command.SpanPercent != nil || len(command.Anchors) > 0 ||
 		command.SpanMinPercent != nil || command.SpanProfile != "" ||
-		command.VariationPercent != nil || command.SegmentSeconds != nil
+		command.VariationPercent != nil || command.SegmentSeconds != nil || len(command.Sections) > 0
 }
 
 func validDynamicSpanProfile(profile string) bool {

@@ -54,18 +54,19 @@ const (
 
 // DecisionInput is bounded, semantic context for one autonomous decision.
 type DecisionInput struct {
-	Style            string
-	SegmentIndex     int
-	RecentPatternIDs []string
-	SpeedMinPercent  int
-	SpeedMaxPercent  int
-	LastSay          string
-	CurrentPatternID motion.PatternID
-	CurrentSpeed     int
-	CurrentAreaFocus *motion.AreaFocus
-	CurrentDynamic   *motion.DynamicDefinition
-	MotionMinSeconds int
-	MotionMaxSeconds int
+	Style             string
+	SegmentIndex      int
+	RecentPatternIDs  []string
+	SpeedMinPercent   int
+	SpeedMaxPercent   int
+	LastSay           string
+	CurrentPatternID  motion.PatternID
+	CurrentSpeed      int
+	CurrentAreaFocus  *motion.AreaFocus
+	CurrentDynamic    *motion.DynamicDefinition
+	MotionMinSeconds  int
+	MotionMaxSeconds  int
+	MotionChangeLevel int
 	// SessionSeconds, SecondsAtCurrentSpeed, and SpeedTrend are backend-computed
 	// session facts. They are read-only input: the model cannot fabricate them,
 	// they appear in traces, and they authorize nothing on their own. This is
@@ -285,8 +286,8 @@ func (m *Manager) decisionInput() DecisionInput {
 		}
 		input.CurrentDynamic = cloneDynamicDefinition(current.Dynamic)
 	}
-	input.MotionMinSeconds = autopilot.MotionMinSeconds
-	input.MotionMaxSeconds = autopilot.MotionMaxSeconds
+	input.MotionMinSeconds, input.MotionMaxSeconds = autopilot.MotionWindow()
+	input.MotionChangeLevel = autopilot.MotionChangeLevel
 	return input
 }
 

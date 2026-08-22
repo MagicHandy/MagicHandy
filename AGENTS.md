@@ -143,6 +143,17 @@ encodes the safety architecture, not taste.
   review URL and visible state in the final response, and leave both the process
   and review tab running. Opening the review state is not permission to connect
   hardware or issue motion.
+- **A review build always has a working LLM.** Configure the exact review app
+  against a provider and model that are available on the review host; isolated
+  data must not silently fall back to the unavailable factory endpoint or copy
+  user credentials. Before handoff, run
+  `scripts/check-review-llm.ps1 -BaseUrl <review-url>` (or an equivalent probe
+  on non-Windows hosts). Provider/model discovery alone is insufficient: the
+  selected model must complete a real text generation. For chat, LLM-motion, or
+  Autopilot changes, also complete one text-only request through the app's chat
+  path and confirm a non-empty response without repair/fallback or motion. If no
+  working model endpoint exists, the review build is not handoff-ready; report
+  that blocker instead of presenting an LLM-disabled build as complete.
 - When real-device behavior is touched, capture the scenario, transport mode,
   latency summary, trace export, and what was intentionally left unchanged.
 

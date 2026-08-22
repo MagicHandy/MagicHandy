@@ -41,6 +41,7 @@ func TestPlainRequestsStillAuthorizeMotion(t *testing.T) {
 		"can you start moving?",
 		"please start the motion",
 		"begin moving now",
+		"start smooth motion with varied strokes without jitter",
 	} {
 		if !userAuthorizesMotion(message, MotionActionStart) {
 			t.Errorf("plain start request was refused: %q", message)

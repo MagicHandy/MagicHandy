@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { AutopilotSettings, SessionArc } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
-import { PauseIcon, PlayIcon } from "../shell/icons";
+import { PauseIcon, PlayIcon, RefreshIcon } from "../shell/icons";
 import { SegmentedChoice, SetpointSlider } from "./SetpointControls";
 import { useAppState, useToast } from "../state/app-state";
 import { ownsActiveMotion } from "../util/motion";
@@ -22,12 +22,10 @@ const speechOptions = [
   ["custom", "Custom"],
 ] as const satisfies ReadonlyArray<readonly [string, MessageKey]>;
 
-const motionOptions = [
-  ["steady", "Steady"],
-  ["natural", "Natural"],
-  ["dynamic", "Dynamic"],
-  ["custom", "Custom"],
-] as const satisfies ReadonlyArray<readonly [string, MessageKey]>;
+const motionChangeOptions = Array.from({ length: 8 }, (_, index) => {
+  const value = String(index + 1);
+  return { value, label: value };
+});
 
 const authorityOptions = [
   ["chat_only", "Chat only"],
@@ -69,9 +67,18 @@ function SessionBuildup({
         <span className="autopilot-buildup-fill" style={{ width: `${arc.percent}%` }} />
       </div>
       <div className="autopilot-buildup-actions">
-        <span className="hint">{t("The assistant aims higher in your speed range as this fills. Your limits never move.")}</span>
-        <button type="button" className="btn btn-secondary" disabled={disabled} onClick={onReset}>
-          {t("Reset buildup")}
+        <small className="autopilot-buildup-hint">
+          {t("The assistant aims higher in your speed range as this fills. Your limits never move.")}
+        </small>
+        <button
+          type="button"
+          className="icon-button autopilot-buildup-reset"
+          aria-label={t("Reset buildup")}
+          title={t("Reset buildup")}
+          disabled={disabled}
+          onClick={onReset}
+        >
+          <RefreshIcon size={16} />
         </button>
       </div>
     </div>
@@ -307,19 +314,17 @@ function AutopilotPreferences({
   }
 
   function saveNumber(
-    key: "speech_min_seconds" | "speech_max_seconds" | "motion_min_seconds" | "motion_max_seconds",
+    key: "speech_min_seconds" | "speech_max_seconds",
     raw: string,
   ) {
-    const speech = key.startsWith("speech");
-    const ceiling = speech ? 600 : 300;
     const parsed = Number.parseInt(raw, 10);
-    const number = Number.isFinite(parsed) ? Math.min(ceiling, Math.max(8, parsed)) : 8;
+    const number = Number.isFinite(parsed) ? Math.min(600, Math.max(8, parsed)) : 8;
     const next = { ...draftRef.current, [key]: number };
     if (key.endsWith("min_seconds")) {
-      const maxKey = speech ? "speech_max_seconds" : "motion_max_seconds";
+      const maxKey = "speech_max_seconds";
       next[maxKey] = Math.max(next[maxKey], number);
     } else {
-      const minKey = speech ? "speech_min_seconds" : "motion_min_seconds";
+      const minKey = "speech_min_seconds";
       next[minKey] = Math.min(next[minKey], number);
     }
     void save(next);
@@ -331,37 +336,16 @@ function AutopilotPreferences({
       <legend className="visually-hidden">{t("Autopilot timing")}</legend>
       <SetpointSlider
         className="autopilot-setpoints"
-        label={t("Motion changes")}
-        value={draft.motion_cadence}
-        options={motionOptions.map(([option, label]) => ({ value: option, label: translateKnown(label) }))}
+        label={t("Motion change rate")}
+        value={String(Math.min(8, Math.max(1, draft.motion_change_level || 4)))}
+        options={motionChangeOptions}
         disabled={controlsDisabled}
-        onChange={(motion_cadence) => void save({ ...draftRef.current, motion_cadence })}
+        onChange={(level) => void save({
+          ...draftRef.current,
+          motion_cadence: "scaled",
+          motion_change_level: Number(level),
+        })}
       />
-      {draft.motion_cadence === "custom" && (
-        <div className="autopilot-window autopilot-window-range">
-          <span>{t("Motion range")}</span>
-          <input
-            type="number"
-            min={8}
-            max={300}
-            value={draft.motion_min_seconds}
-            aria-label={t("Motion minimum seconds")}
-            onChange={(event) => edit({ ...draftRef.current, motion_min_seconds: Number(event.target.value) })}
-            onBlur={(event) => saveNumber("motion_min_seconds", event.target.value)}
-          />
-          <span aria-hidden="true">-</span>
-          <input
-            type="number"
-            min={8}
-            max={300}
-            value={draft.motion_max_seconds}
-            aria-label={t("Motion maximum seconds")}
-            onChange={(event) => edit({ ...draftRef.current, motion_max_seconds: Number(event.target.value) })}
-            onBlur={(event) => saveNumber("motion_max_seconds", event.target.value)}
-          />
-          <span>{t("seconds")}</span>
-        </div>
-      )}
       <SetpointSlider
         className="autopilot-setpoints"
         label={t("Spoken check-ins")}

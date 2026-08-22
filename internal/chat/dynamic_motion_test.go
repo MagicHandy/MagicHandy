@@ -19,7 +19,7 @@ func TestDynamicContractExcludesPatternVocabulary(t *testing.T) {
 	system := ComposeSystemWithMotionContext(set, nil, []PatternChoice{{ID: "pulse", Name: "Pulse"}}, capabilities, context)
 	for _, required := range []string{
 		`"action":"update"`, "center_percent", "span_percent", "span_min_percent",
-		"span_profile", "breathe", "wander", "contrast", "anchors", "segment_seconds",
+		"span_profile", "breathe", "wander", "contrast", "anchors", "sections", "cycles", "segment_seconds",
 		"never copy an example speed", `"motion" must be a nested JSON object`,
 		"reply and motion object must describe the same result",
 		"current motion is not reaching or doing what was requested asks you to fix it",
@@ -128,6 +128,32 @@ func TestDynamicParserAcceptsDirectGeometryAndNormalizesAnchorRoutes(t *testing.
 	}
 }
 
+func TestDynamicParserAcceptsCompactMultiSectionPhrases(t *testing.T) {
+	capabilities := Capabilities{Motion: true, MotionMode: MotionModeDynamic}
+	context := MotionContext{SpeedMinPercent: 20, SpeedMaxPercent: 40}
+	raw := `{"reply":"I will keep it evolving.","motion":{"action":"start","speed_percent":30,"sections":[{"anchors":["base","middle","tip"],"center_percent":50,"span_percent":84,"span_min_percent":30,"span_profile":"wander","variation_percent":48,"cycles":4},{"center_percent":68,"span_percent":54,"span_min_percent":24,"span_profile":"contrast","variation_percent":62,"cycles":3}],"segment_seconds":40}}`
+	response, err := parseAssistantResponseForCapabilities(raw, nil, capabilities, &context)
+	if err != nil || response.Motion == nil || len(response.Motion.Sections) != 2 {
+		t.Fatalf("section phrase = %+v, %v", response, err)
+	}
+	first := response.Motion.Sections[0]
+	if len(first.Anchors) != 3 || first.CenterPercent != nil || first.SpanPercent != nil || first.Cycles != 4 {
+		t.Fatalf("normalized first section = %+v", first)
+	}
+
+	for _, invalid := range []string{
+		`{"reply":"Bad.","motion":{"action":"start","speed_percent":30,"sections":[{"center_percent":50,"span_percent":70,"cycles":3}]}}`,
+		`{"reply":"Bad.","motion":{"action":"start","speed_percent":30,"center_percent":50,"sections":[{"center_percent":50,"span_percent":70,"cycles":3},{"center_percent":65,"span_percent":40,"cycles":3}]}}`,
+		`{"reply":"Bad.","motion":{"action":"start","speed_percent":30,"sections":[{"center_percent":50,"span_percent":70,"cycles":1},{"center_percent":65,"span_percent":40,"cycles":3}]}}`,
+		`{"reply":"Bad.","motion":{"action":"start","speed_percent":30,"sections":[{"center_percent":50,"span_percent":70,"span_profile":"wander","cycles":3},{"center_percent":65,"span_percent":40,"cycles":3}]}}`,
+		`{"reply":"Bad.","motion":{"action":"start","speed_percent":30,"sections":[{"center_percent":50,"cycles":3},{"center_percent":65,"span_percent":40,"cycles":3}]}}`,
+	} {
+		if _, err := parseAssistantResponseForCapabilities(invalid, nil, capabilities, &context); err == nil {
+			t.Fatalf("invalid section phrase accepted: %s", invalid)
+		}
+	}
+}
+
 func TestDynamicSpanEnvelopeParserAcceptsFixedAndVariableUpdates(t *testing.T) {
 	capabilities := Capabilities{Motion: true, MotionMode: MotionModeDynamic}
 	context := MotionContext{
@@ -179,13 +205,14 @@ func TestDynamicMotionContextIncludesEffectiveSpanEnvelope(t *testing.T) {
 		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 30,
 		CenterPercent: 50, SpanPercent: 82, SpanMinPercent: 28,
 		SpanProfile: DynamicSpanProfileContrast, VariationPercent: 24,
-		SegmentSeconds: 18, SpeedMinPercent: 20, SpeedMaxPercent: 40,
+		SegmentSeconds: 18, SectionCount: 3, SpeedMinPercent: 20, SpeedMaxPercent: 40,
 	}
 	system := ComposeSystemWithMotionContext(
 		set, nil, nil, Capabilities{Motion: true, MotionMode: MotionModeDynamic}, context,
 	)
 	for _, want := range []string{
 		`"span_percent":82`, `"span_min_percent":28`, `"span_profile":"contrast"`,
+		`"section_count":3`,
 		"span_percent or the anchor route defines the widest reach",
 	} {
 		if !strings.Contains(system, want) {
@@ -216,6 +243,90 @@ func TestDynamicModeKeepsValidNoneAndUpdateDecisionsModelOwned(t *testing.T) {
 	updated, err := service.Complete(t.Context(), Request{Message: "Tell me what you are thinking"}, nil)
 	if err != nil || updated.Response.Motion == nil || updated.Response.Motion.Action != MotionActionUpdate {
 		t.Fatalf("active dynamic model update was not admitted: result=%+v err=%v", updated, err)
+	}
+}
+
+func TestInteractiveDynamicRunningStartNormalizesToRetarget(t *testing.T) {
+	capabilities := Capabilities{Motion: true, MotionMode: MotionModeDynamic}
+	running := MotionContext{
+		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 24,
+		CenterPercent: 50, SpanPercent: 76, SpanMinPercent: 34,
+		SpanProfile: DynamicSpanProfileWander, VariationPercent: 18, SegmentSeconds: 14,
+		SpeedMinPercent: 10, SpeedMaxPercent: 40,
+	}
+	provider := &scriptedProvider{responses: []string{
+		`{"reply":"Replacing it.","motion":{"action":"start","speed_percent":24,"center_percent":55,"span_percent":72}}`,
+	}}
+	service := Service{Provider: provider, MotionContext: &running, Capabilities: &capabilities}
+	result, err := service.Complete(t.Context(), Request{Message: "Replace the current movement with a different smooth range."}, nil)
+	if err != nil || result.Repaired || result.Response.Motion == nil ||
+		result.Response.Motion.Action != MotionActionUpdate {
+		t.Fatalf("running start normalization = %+v, %v", result, err)
+	}
+	if len(provider.requests) != 1 {
+		t.Fatalf("running start used %d model calls, want one", len(provider.requests))
+	}
+}
+
+func TestPositionNoiseStillReachesSpecificCoverageRepair(t *testing.T) {
+	capabilities := Capabilities{Motion: true, MotionMode: MotionModeDynamic}
+	running := MotionContext{
+		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 24,
+		CenterPercent: 30, SpanPercent: 40, SpanMinPercent: 34,
+		SpanProfile: DynamicSpanProfileWander, VariationPercent: 18, SegmentSeconds: 14,
+		SpeedMinPercent: 10, SpeedMaxPercent: 40,
+	}
+	provider := &scriptedProvider{responses: []string{
+		`{"reply":"Reaching it.","motion":{"action":"update","speed_percent":24,"span_min_percent":34}}`,
+		`{"reply":"Reaching it.","motion":{"action":"update","center_percent":80,"span_percent":40}}`,
+	}}
+	service := Service{Provider: provider, MotionContext: &running, Capabilities: &capabilities}
+	result, err := service.Complete(t.Context(), Request{Message: "You are still not reaching the tip. Keep the pace the same."}, nil)
+	if err != nil || !result.Repaired || result.Response.Motion == nil {
+		t.Fatalf("position coverage repair = %+v, %v", result, err)
+	}
+	if len(provider.requests) != 2 || !strings.Contains(provider.requests[1].Messages[len(provider.requests[1].Messages)-1].Content, "must change center/span or anchors") {
+		t.Fatalf("repair prompt did not preserve the coverage error: %+v", provider.requests)
+	}
+}
+
+func TestDynamicPaceOnlyResponseDropsCopiedPhraseFields(t *testing.T) {
+	capabilities := Capabilities{Motion: true, MotionMode: MotionModeDynamic}
+	context := MotionContext{
+		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 24,
+		CenterPercent: 50, SpanPercent: 76, SpanMinPercent: 34,
+		SpanProfile: DynamicSpanProfileWander, VariationPercent: 18, SegmentSeconds: 14,
+		SectionCount: 3, SpeedMinPercent: 10, SpeedMaxPercent: 40,
+	}
+	provider := &scriptedProvider{responses: []string{
+		`{"reply":"A little faster.","motion":{"action":"update","speed_percent":30,"center_percent":50,"span_percent":76,"span_min_percent":34,"span_profile":"wander","variation_percent":18,"segment_seconds":14}}`,
+	}}
+	service := Service{Provider: provider, MotionContext: &context, Capabilities: &capabilities}
+	result, err := service.Complete(t.Context(), Request{Message: "A little faster, but keep the movement phrase exactly the same."}, nil)
+	if err != nil || result.Response.Motion == nil || result.Response.Motion.SpeedPercent == nil {
+		t.Fatalf("pace-only result = %+v, %v", result, err)
+	}
+	command := result.Response.Motion
+	if hasSingleDynamicPhraseFields(*command) || len(command.Sections) > 0 || command.SegmentSeconds != nil {
+		t.Fatalf("copied phrase fields survived pace-only normalization: %+v", command)
+	}
+}
+
+func TestDynamicExplicitPaceNoOpGetsOneRepair(t *testing.T) {
+	capabilities := Capabilities{Motion: true, MotionMode: MotionModeDynamic}
+	context := MotionContext{
+		Running: true, MotionMode: MotionModeDynamic, SpeedPercent: 24,
+		CenterPercent: 50, SpanPercent: 76, SpeedMinPercent: 10, SpeedMaxPercent: 40,
+	}
+	provider := &scriptedProvider{responses: []string{
+		`{"reply":"Keeping it there.","motion":{"action":"none"}}`,
+		`{"reply":"A little faster.","motion":{"action":"update","speed_percent":30}}`,
+	}}
+	service := Service{Provider: provider, MotionContext: &context, Capabilities: &capabilities}
+	result, err := service.Complete(t.Context(), Request{Message: "A little faster, but keep the phrase the same."}, nil)
+	if err != nil || !result.Repaired || result.Response.Motion == nil ||
+		result.Response.Motion.SpeedPercent == nil || *result.Response.Motion.SpeedPercent <= context.SpeedPercent {
+		t.Fatalf("pace no-op repair = %+v, %v", result, err)
 	}
 }
 

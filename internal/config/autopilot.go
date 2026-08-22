@@ -25,6 +25,12 @@ const (
 	AutopilotMotionDynamic = "dynamic"
 	// AutopilotMotionCustom uses the saved custom motion bounds.
 	AutopilotMotionCustom = "custom"
+	// AutopilotMotionScaled uses the numbered 1-8 motion-change-rate preference.
+	AutopilotMotionScaled = "scaled"
+
+	autopilotMinimumMotionChangeLevel = 1
+	autopilotMaximumMotionChangeLevel = 8
+	autopilotDefaultMotionChangeLevel = 4
 
 	// AutopilotSpeechMotionChatOnly prevents autonomous speech turns from
 	// changing motion.
@@ -69,6 +75,7 @@ type AutopilotSettings struct {
 	SpeechMinSeconds      int    `json:"speech_min_seconds"`
 	SpeechMaxSeconds      int    `json:"speech_max_seconds"`
 	MotionCadence         string `json:"motion_cadence"`
+	MotionChangeLevel     int    `json:"motion_change_level"`
 	MotionMinSeconds      int    `json:"motion_min_seconds"`
 	MotionMaxSeconds      int    `json:"motion_max_seconds"`
 	AdaptiveSpeechTiming  bool   `json:"adaptive_speech_timing"`
@@ -96,7 +103,8 @@ func DefaultAutopilotSettings() AutopilotSettings {
 		SpeechCadence:         AutopilotSpeechNatural,
 		SpeechMinSeconds:      AutopilotDefaultSpeechMinSeconds,
 		SpeechMaxSeconds:      AutopilotDefaultSpeechMaxSeconds,
-		MotionCadence:         AutopilotMotionNatural,
+		MotionCadence:         AutopilotMotionScaled,
+		MotionChangeLevel:     autopilotDefaultMotionChangeLevel,
 		MotionMinSeconds:      AutopilotDefaultMotionMinSeconds,
 		MotionMaxSeconds:      AutopilotDefaultMotionMaxSeconds,
 		AdaptiveSpeechTiming:  true,
@@ -130,6 +138,11 @@ func (s AutopilotSettings) SpeechWindow() (minimum int, maximum int, enabled boo
 
 // MotionWindow returns the effective motion-evolution bounds.
 func (s AutopilotSettings) MotionWindow() (minimum int, maximum int) {
+	if s.MotionCadence == AutopilotMotionScaled &&
+		s.MotionChangeLevel >= autopilotMinimumMotionChangeLevel &&
+		s.MotionChangeLevel <= autopilotMaximumMotionChangeLevel {
+		return motionChangeLevelWindow(s.MotionChangeLevel)
+	}
 	switch s.MotionCadence {
 	case AutopilotMotionSteady:
 		return 45, 120
@@ -137,6 +150,27 @@ func (s AutopilotSettings) MotionWindow() (minimum int, maximum int) {
 		return 10, 35
 	case AutopilotMotionCustom:
 		return s.MotionMinSeconds, s.MotionMaxSeconds
+	default:
+		return 20, 60
+	}
+}
+
+func motionChangeLevelWindow(level int) (minimum int, maximum int) {
+	switch level {
+	case 1:
+		return 90, 240
+	case 2:
+		return 60, 150
+	case 3:
+		return 45, 120
+	case 5:
+		return 14, 45
+	case 6:
+		return 10, 35
+	case 7:
+		return 8, 24
+	case 8:
+		return 8, 16
 	default:
 		return 20, 60
 	}
@@ -159,8 +193,14 @@ func validateAutopilotSettings(settings AutopilotSettings) error {
 		AutopilotMotionNatural,
 		AutopilotMotionDynamic,
 		AutopilotMotionCustom,
+		AutopilotMotionScaled,
 	) {
 		return fmt.Errorf("unknown Autopilot motion cadence %q", settings.MotionCadence)
+	}
+	if settings.MotionChangeLevel < autopilotMinimumMotionChangeLevel ||
+		settings.MotionChangeLevel > autopilotMaximumMotionChangeLevel {
+		return fmt.Errorf("autopilot motion change level must be between %d and %d",
+			autopilotMinimumMotionChangeLevel, autopilotMaximumMotionChangeLevel)
 	}
 	if !oneOf(
 		settings.SpeechMotionAuthority,
@@ -248,6 +288,10 @@ func applyMissingAutopilotDefaults(
 	if settings.MotionMaxSeconds == 0 {
 		settings.MotionMaxSeconds = defaults.MotionMaxSeconds
 	}
+	if settings.MotionChangeLevel == 0 {
+		settings.MotionChangeLevel = legacyMotionChangeLevel(settings)
+		settings.MotionCadence = AutopilotMotionScaled
+	}
 	// A bool cannot distinguish "absent" from "explicitly false", so the new buildup
 	// length doubles as the presence marker for this field group: it is zero only
 	// in a document written before the group existed. Without this, a document
@@ -259,4 +303,29 @@ func applyMissingAutopilotDefaults(
 		settings.SessionTracking = defaults.SessionTracking
 	}
 	return settings
+}
+
+func legacyMotionChangeLevel(settings AutopilotSettings) int {
+	switch settings.MotionCadence {
+	case AutopilotMotionSteady:
+		return 3
+	case AutopilotMotionDynamic:
+		return 6
+	case AutopilotMotionCustom:
+		midpoint := (settings.MotionMinSeconds + settings.MotionMaxSeconds) / 2
+		bestLevel, bestDistance := autopilotDefaultMotionChangeLevel, int(^uint(0)>>1)
+		for level := autopilotMinimumMotionChangeLevel; level <= autopilotMaximumMotionChangeLevel; level++ {
+			minimum, maximum := motionChangeLevelWindow(level)
+			distance := midpoint - (minimum+maximum)/2
+			if distance < 0 {
+				distance = -distance
+			}
+			if distance < bestDistance {
+				bestLevel, bestDistance = level, distance
+			}
+		}
+		return bestLevel
+	default:
+		return autopilotDefaultMotionChangeLevel
+	}
 }

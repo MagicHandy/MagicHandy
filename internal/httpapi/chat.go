@@ -1126,75 +1126,6 @@ func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.Ac
 	}, nil
 }
 
-func dynamicChatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) motion.MotionTarget {
-	var currentDynamic *motion.DynamicDefinition
-	if current.Running && current.Target.Dynamic != nil {
-		currentDynamic = current.Target.Dynamic
-	}
-	dynamic := dynamicDefinitionFromCommand(command, currentDynamic)
-	speed := 0
-	if command.SpeedPercent != nil {
-		speed = *command.SpeedPercent
-	} else if current.Running {
-		speed = current.Target.SpeedPercent
-	}
-	return motion.MotionTarget{
-		Label: "Chat", Source: "chat", SpeedPercent: speed, Dynamic: &dynamic,
-	}
-}
-
-func dynamicDefinitionFromCommand(command *chat.MotionCommand, current *motion.DynamicDefinition) motion.DynamicDefinition {
-	dynamic := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{})
-	if current != nil {
-		dynamic = motion.NormalizeDynamicDefinition(*current)
-		dynamic.Anchors = append([]motion.DynamicAnchor(nil), dynamic.Anchors...)
-	}
-	envelopeChanged := false
-	if len(command.Anchors) > 0 {
-		dynamic.Anchors = make([]motion.DynamicAnchor, 0, len(command.Anchors))
-		for _, name := range command.Anchors {
-			if position, ok := chat.DynamicAnchorPosition(name); ok {
-				dynamic.Anchors = append(dynamic.Anchors, motion.DynamicAnchor{Name: name, PositionPercent: position})
-			}
-		}
-		envelopeChanged = true
-	} else if command.CenterPercent != nil || command.SpanPercent != nil {
-		// A center/span update intentionally leaves an anchor route. The current
-		// normalized bounds provide sensible omitted-field preservation.
-		dynamic.Anchors = nil
-		if command.CenterPercent != nil {
-			dynamic.CenterPercent = *command.CenterPercent
-		}
-		if command.SpanPercent != nil {
-			dynamic.SpanPercent = *command.SpanPercent
-		}
-		envelopeChanged = true
-	}
-	if command.SpanMinPercent != nil {
-		dynamic.SpanMinPercent = *command.SpanMinPercent
-		if strings.TrimSpace(command.SpanProfile) == "" &&
-			(dynamic.SpanProfile == "" || dynamic.SpanProfile == motion.DynamicSpanProfileSteady) {
-			dynamic.SpanProfile = motion.DynamicSpanProfileWander
-		}
-		envelopeChanged = true
-	}
-	if strings.TrimSpace(command.SpanProfile) != "" {
-		dynamic.SpanProfile = strings.ToLower(strings.TrimSpace(command.SpanProfile))
-		envelopeChanged = true
-	}
-	if command.VariationPercent != nil {
-		dynamic.VariationPercent = *command.VariationPercent
-	}
-	if command.SegmentSeconds != nil {
-		dynamic.SegmentSeconds = *command.SegmentSeconds
-	}
-	if envelopeChanged {
-		dynamic.PhraseSeed = 0
-	}
-	dynamic = motion.NormalizeDynamicDefinition(dynamic)
-	return dynamic
-}
-
 // resolveAreaFocus maps a named zone onto the engine's bounded focus window.
 // An unset zone preserves the running target's focus (a focus persists until
 // changed — the STGPT-RV behavior); "full" explicitly clears it.
@@ -1263,6 +1194,7 @@ func (s *Server) chatMotionContext(settings config.MotionSettings, llmSettings c
 		context.SpanProfile = dynamic.SpanProfile
 		context.VariationPercent = dynamic.VariationPercent
 		context.SegmentSeconds = dynamic.SegmentSeconds
+		context.SectionCount = len(dynamic.Sections)
 		for _, anchor := range dynamic.Anchors {
 			context.Anchors = append(context.Anchors, anchor.Name)
 		}

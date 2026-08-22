@@ -22,7 +22,8 @@ export interface AutopilotSettings {
   speech_cadence: "off" | "quiet" | "natural" | "talkative" | "custom" | string;
   speech_min_seconds: number;
   speech_max_seconds: number;
-  motion_cadence: "steady" | "natural" | "dynamic" | "custom" | string;
+  motion_cadence: "scaled" | "steady" | "natural" | "dynamic" | "custom" | string;
+  motion_change_level: number;
   motion_min_seconds: number;
   motion_max_seconds: number;
   adaptive_speech_timing: boolean;
@@ -77,6 +78,15 @@ export interface EngineSnapshot {
       anchors?: Array<{ name: string; position_percent: number }>;
       variation_percent: number;
       segment_seconds: number;
+      sections?: Array<{
+        center_percent: number;
+        span_percent: number;
+        span_min_percent?: number;
+        span_profile?: "steady" | "breathe" | "wander" | "contrast" | string;
+        anchors?: Array<{ name: string; position_percent: number }>;
+        variation_percent: number;
+        cycles: number;
+      }>;
     };
   };
   current_sample?: MotionSample;

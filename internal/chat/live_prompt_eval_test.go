@@ -659,6 +659,117 @@ func TestLiveDynamicSpanEnvelopeMatrix(t *testing.T) {
 	}
 }
 
+// TestLiveDynamicMultiSectionPhraseMatrix checks that the installed model can
+// use the compact macro-phrase vocabulary without spraying it into unrelated
+// corrections. It exercises prompt, strict parsing, repair, and semantic scope
+// only; no engine or transport exists in this test.
+func TestLiveDynamicMultiSectionPhraseMatrix(t *testing.T) {
+	model := liveEvalModel(t)
+	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+		BaseURL: liveEvalLlamaURL, Model: model, Timeout: 2 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	promptSet, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	capabilities.AreaFocus = false
+	capabilities.Voice = VoiceUtility
+
+	tests := []struct {
+		name         string
+		message      string
+		context      MotionContext
+		action       string
+		wantSections bool
+		validate     func(*testing.T, MotionCommand, MotionContext)
+	}{
+		{
+			name:    "explicit evolving start",
+			message: "Start at a moderate pace with several distinct smooth movement sequences so the range and stroke lengths keep evolving without jitter.",
+			context: stoppedDynamicContext(), action: MotionActionStart, wantSections: true,
+		},
+		{
+			name:    "replace running macro phrase",
+			message: "Replace this with a multi-section phrase using different routes and irregular stroke lengths, but keep exactly the same pace.",
+			context: runningDynamicContext(), action: MotionActionUpdate, wantSections: true,
+			validate: func(t *testing.T, command MotionCommand, context MotionContext) {
+				assertLivePacePreserved(t, command, context)
+			},
+		},
+		{
+			name:    "pace only keeps phrase",
+			message: "A little faster, but keep the movement phrase exactly the same.",
+			context: func() MotionContext {
+				context := runningDynamicContext()
+				context.SectionCount = 3
+				return context
+			}(),
+			action: MotionActionUpdate,
+			validate: func(t *testing.T, command MotionCommand, context MotionContext) {
+				if command.SpeedPercent == nil || *command.SpeedPercent <= context.SpeedPercent {
+					t.Fatalf("speed update = %v, want above %d", command.SpeedPercent, context.SpeedPercent)
+				}
+				if len(command.Sections) > 0 || hasSingleDynamicPhraseFields(command) {
+					t.Fatalf("pace-only request rewrote the phrase: %+v", command)
+				}
+			},
+		},
+		{
+			name:    "position correction stays surgical",
+			message: "You are still not reaching the tip. Keep the pace and everything else the same.",
+			context: runningDynamicContext(), action: MotionActionUpdate,
+			validate: func(t *testing.T, command MotionCommand, context MotionContext) {
+				if len(command.Sections) > 0 {
+					t.Fatalf("position-only correction replaced the whole phrase: %+v", command)
+				}
+				assertLivePacePreserved(t, command, context)
+				_, maximum := liveDynamicCommandWindow(command, context)
+				if maximum < 88 {
+					t.Fatalf("tip correction reaches %.0f%%, want at least 88%%", maximum)
+				}
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			service := Service{
+				Provider: provider, Prompt: promptSet, Model: model,
+				MaxTokens: 256, ReasoningMode: "off",
+				MotionContext: &test.context, Capabilities: &capabilities,
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			started := time.Now()
+			result, completeErr := service.Complete(ctx, Request{Message: test.message}, nil)
+			elapsed := time.Since(started)
+			cancel()
+			if completeErr != nil {
+				t.Fatal(completeErr)
+			}
+			action := dynamicResultAction(result.Response)
+			t.Logf("action=%s repaired=%t fallback=%t total=%s response=%s repair=%s",
+				action, result.Repaired, result.SemanticFallback, elapsed.Round(time.Millisecond),
+				compactLiveEvalJSON(result.Raw), compactLiveEvalJSON(result.RepairRaw))
+			if result.Malformed || result.SemanticFallback || action != test.action || result.Response.Motion == nil {
+				t.Fatalf("unusable phrase decision: %+v", result)
+			}
+			command := *result.Response.Motion
+			if test.wantSections && (len(command.Sections) < 2 || len(command.Sections) > 4) {
+				t.Fatalf("section request produced %d sections: %+v", len(command.Sections), command)
+			}
+			if !test.wantSections && len(command.Sections) > 0 {
+				t.Fatalf("unrelated request produced sections: %+v", command)
+			}
+			if test.validate != nil {
+				test.validate(t, command, test.context)
+			}
+		})
+	}
+}
+
 // TestLiveDynamicCorrectionFollowThrough reproduces the installed conversation
 // where the assistant twice claimed to move toward the requested position
 // without an accepted motion update, then interpreted "the full thing" as a

@@ -1,7 +1,7 @@
 # Motion speed and organic-loop calibration
 
-Status: implemented calibration, awaiting matched real-device confirmation
-(2026-08-20)
+Status: implemented calibration and C2 Creative compiler, awaiting matched
+real-device confirmation (2026-08-22)
 
 ## Why this changed
 
@@ -138,10 +138,14 @@ because its authored clock was compressed.
 
 Stored patterns keep those short ramps because they preserve authored waveform
 and cadence. Creative selects a different profile inside the same curve
-compiler: shape-preserving PCHIP eases across the whole leg, reaches exactly
-zero velocity at a true endpoint, and then accelerates away. The planner still
-lengthens the period against the same exact 7500%/s² runtime ceiling. This is a
-content-level interpolation choice, not a second engine or transport path.
+compiler: a monotone quintic Hermite segment shares velocity and acceleration
+with its neighbors, reaches exactly zero velocity at a true endpoint, and
+retains nonzero velocity through a pass-through anchor. The planner evaluates
+the exact polynomial extrema, lengthening the period against the same exact
+7500%/s² runtime acceleration ceiling and a Creative-only 150000%/s³ perceptual
+jerk ceiling. The jerk number is a software quality bound, not an undocumented
+Handy hardware specification. This is a content-level interpolation choice,
+not a second engine or transport path.
 
 Catalog acceptance remains on the quieter envelope. This is not a relaxation of
 what may be stored or exposed to the model by default.
@@ -159,7 +163,9 @@ every job:
    seeded grouped rhythm and direction asymmetry, limited to 0.65–1.45× local
    authored timing before global speed normalization. A square-root perceptual
    response makes ordinary 20–40 values meaningfully different without changing
-   the model-facing 0–100 schema.
+   the model-facing 0–100 schema; and
+4. an optional `sections` phrase combines 2–4 complete movement ideas, each
+   carrying one bounded route/texture and 2–12 cycles.
 
 The backend chooses enough cycles for center/rhythm variation to take at least
 about eight seconds and for an explicit span envelope to take at least about 30
@@ -176,6 +182,26 @@ floor-to-outer band and prevent a four-cycle window from settling below 8%.
 A zero center/rhythm variation can therefore coexist with a changing explicit
 span profile, while `steady` continues to mean a genuinely fixed stroke length.
 
+A section phrase is compiled as one C2, loop-closed engine curve. Its authored
+travel covers at least 60 seconds at the fastest supported reference rate, or
+the longer selected decision horizon, subject to the existing 4096-point cap.
+Later passes keep the model's macro order but derive a different deterministic
+occurrence seed, preventing an exact micro-timing repeat. The range/rhythm
+control interpolation uses quintic smootherstep, whose first and second
+derivatives are zero at control knots, so long-horizon variability does not put
+an acceleration corner back underneath the C2 carrier. Automated acceptance
+requires at least six distinct whole-percent reversal lengths and reversal-
+length coefficient of variation above 0.15 for the retained mixed-section
+fixture; these are regression floors, not promises that every user phrase is
+equally wild.
+
+For whole-percent buffered transports, Creative's simplifier now measures two
+errors: position at time and inverse time at position. The second term retains
+the braking/acceleration timing of a short eased stroke even when its rounded
+positions fit a straight chord. Redundant equal-position quantized edges are
+then removed. This fitter is Creative-only; catalog, imported, program, and
+media sampling keep their prior tolerances and shapes.
+
 Older alpha.25 targets with no span profile retain their prior implicit small
 span swell. New model responses use the explicit envelope. The model selects
 the floor and profile; deterministic code only normalizes bounds and derives a
@@ -189,17 +215,21 @@ dispatch path.
 
 The compact Chat sidebar now distinguishes ordered and categorical settings:
 
-- Motion-change cadence, spoken-check-in cadence, and Gentle/Balanced/Intense
-  style are native discrete sliders with every named set point visible. Their
+- Motion change rate is a numbered 1–8 slider, spoken-check-in cadence and
+  Gentle/Balanced/Intense style remain named discrete sliders. Their
   marks use the handle's real inset travel: the first and last marks are the
   actual endpoints, and intermediate marks use `index / (count - 1)` rather
   than the centers of equal-width label cells.
 - Creative (`dynamic` in settings/API)/Pattern Library/Off and speech-motion
   authority are segmented radio choices, because rendering categories on a
   scalar slider would imply a false numeric relationship.
-- Custom timing inputs remain directly below their corresponding cadence
-  slider. Rapid set-point changes are serialized so the final choice cannot be
-  lost behind an in-flight save.
+- Speech custom timing remains directly below its cadence slider. Motion level
+  1 maps to 90–240 seconds, level 4 to the former 20–60 second Natural window,
+  level 7 to 8–24 seconds, and level 8 to a tighter 8–16 seconds; all earlier
+  points are unchanged explicit backend windows. Legacy motion presets/custom
+  bounds migrate to the nearest level.
+  Rapid set-point changes are serialized so the final choice cannot be lost
+  behind an in-flight save.
 - The global Connection menu contains one low-frequency three-part merged
   `Handy model` radio control. Its selected travel and normal maximum appear
   directly below the buttons, so the calibration choice remains visible
@@ -211,11 +241,13 @@ All values still come from and return to backend settings snapshots.
 
 The initiating feedback was qualitative: Dynamic felt robotic and a selected
 73% felt slow. It did not include a transport, latency summary, or trace export.
-Automated tests now cover the calibration points, exact runtime acceleration,
+Automated tests now cover the calibration points, exact runtime acceleration
+and Creative jerk extrema,
 runtime reversal spacing, fractional sampling, all explicit Creative span
 profiles across all three Handy models, short-window stroke-length diversity,
-whole-leg endpoint easing after 1% wire quantization, long deterministic
-phrases, stateful model updates, and the one-stream retarget path.
+C2 acceleration continuity, eased time-at-position after 1% wire quantization,
+multi-section reversal-length diversity, long deterministic phrases, stateful
+model updates, and the one-stream retarget path.
 
 A review of the latest installed Cloud REST session found 439 sampled points
 and 85 legs. Its contrast envelope contracted from about 80% to about 32%, then
@@ -231,6 +263,15 @@ tip/full-length correction sequence then passed 9/9 repeated decisions after
 semantic validation: reply-only claims are repaired, requested base/tip
 coverage is checked against the effective geometry, and position-only
 corrections cannot silently rewrite pace, span texture, variation, or horizon.
+
+On 2026-08-22 the locally installed Ollama model also passed a focused four-case
+section matrix without an engine or transport. Starts and running replacements
+produced two complete sections; pace-only copied geometry was normalized away
+so the current phrase survived; and an unsatisfied tip report had to change
+geometry before its reply could claim success. The live run issued no motion or
+device command. A broader legacy matrix remained stochastic, so this is focused
+evidence for the new contract rather than a claim that all provider acceptance
+is closed.
 
 A capped matched-device A/B run must still record Handy model/profile,
 transport, selected outer/floor/profile and speed, command latency,

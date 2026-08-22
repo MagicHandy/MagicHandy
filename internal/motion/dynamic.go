@@ -1,6 +1,7 @@
 package motion
 
 import (
+	"encoding/binary"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -29,6 +30,15 @@ const (
 	minimumDynamicSpanEnvelopeLoopSeconds = 30.0
 	minimumDynamicSpanEnvelopeCycles      = 24
 	maximumDynamicSpanEnvelopeCycles      = 512
+	// A model-authored section phrase is one continuous engine curve, not a
+	// queue of mini commands. Keep enough authored travel in that curve that it
+	// cannot fall back to an obvious short macro-loop before the scheduler's
+	// decision horizon, even at the fastest supported reference pace.
+	minimumDynamicSectionPhraseSeconds = 60.0
+	minimumDynamicSections             = 2
+	maximumDynamicSections             = 4
+	minimumDynamicSectionCycles        = 2
+	maximumDynamicSectionCycles        = 12
 )
 
 // DynamicSpanProfileSteady and its siblings are semantic texture choices, not
@@ -68,17 +78,32 @@ type DynamicAnchor struct {
 	PositionPercent int    `json:"position_percent"`
 }
 
-// DynamicDefinition is bounded geometry authored by the LLM and compiled by
-// the backend into ordinary MotionPlan content. It is not a transport payload.
-type DynamicDefinition struct {
+// DynamicSection is one compact movement idea inside a Creative phrase. It
+// deliberately uses the same semantic geometry as DynamicDefinition: the LLM
+// selects a few bounded sections and deterministic code turns them into one
+// smooth, loop-closed curve through the shared motion engine.
+type DynamicSection struct {
 	CenterPercent    int             `json:"center_percent"`
 	SpanPercent      int             `json:"span_percent"`
 	SpanMinPercent   int             `json:"span_min_percent,omitempty"`
 	SpanProfile      string          `json:"span_profile,omitempty"`
-	PhraseSeed       uint32          `json:"phrase_seed,omitempty"`
 	Anchors          []DynamicAnchor `json:"anchors,omitempty"`
 	VariationPercent int             `json:"variation_percent"`
-	SegmentSeconds   int             `json:"segment_seconds"`
+	Cycles           int             `json:"cycles"`
+}
+
+// DynamicDefinition is bounded geometry authored by the LLM and compiled by
+// the backend into ordinary MotionPlan content. It is not a transport payload.
+type DynamicDefinition struct {
+	CenterPercent    int              `json:"center_percent"`
+	SpanPercent      int              `json:"span_percent"`
+	SpanMinPercent   int              `json:"span_min_percent,omitempty"`
+	SpanProfile      string           `json:"span_profile,omitempty"`
+	PhraseSeed       uint32           `json:"phrase_seed,omitempty"`
+	Anchors          []DynamicAnchor  `json:"anchors,omitempty"`
+	VariationPercent int              `json:"variation_percent"`
+	SegmentSeconds   int              `json:"segment_seconds"`
+	Sections         []DynamicSection `json:"sections,omitempty"`
 }
 
 // NormalizeDynamicDefinition returns concrete, bounded geometry suitable for
@@ -89,6 +114,26 @@ func NormalizeDynamicDefinition(definition DynamicDefinition) DynamicDefinition 
 		definition.SegmentSeconds = defaultDynamicSegment
 	}
 	definition.SegmentSeconds = clamp(definition.SegmentSeconds, 4, 120)
+	definition.Sections = normalizeDynamicSections(definition.Sections)
+	if len(definition.Sections) >= minimumDynamicSections {
+		first := definition.Sections[0]
+		definition.CenterPercent = first.CenterPercent
+		definition.SpanPercent = first.SpanPercent
+		definition.SpanMinPercent = first.SpanMinPercent
+		definition.SpanProfile = first.SpanProfile
+		definition.Anchors = append([]DynamicAnchor(nil), first.Anchors...)
+		definition.VariationPercent = first.VariationPercent
+		if definition.PhraseSeed == 0 {
+			definition.PhraseSeed = dynamicSectionPhraseSeed(definition.Sections)
+		}
+		return definition
+	}
+	definition.Sections = nil
+	return normalizeDynamicSingleDefinition(definition)
+}
+
+func normalizeDynamicSingleDefinition(definition DynamicDefinition) DynamicDefinition {
+	definition.VariationPercent = clamp(definition.VariationPercent, 0, 100)
 	definition.Anchors = normalizeDynamicAnchors(definition.Anchors)
 	if len(definition.Anchors) >= 2 {
 		minimum, maximum := dynamicAnchorBounds(definition.Anchors)
@@ -106,6 +151,77 @@ func NormalizeDynamicDefinition(definition DynamicDefinition) DynamicDefinition 
 		definition.SpanPercent = maximum - minimum
 	}
 	return normalizeDynamicSpanEnvelope(definition)
+}
+
+func normalizeDynamicSections(sections []DynamicSection) []DynamicSection {
+	if len(sections) < minimumDynamicSections {
+		return nil
+	}
+	if len(sections) > maximumDynamicSections {
+		sections = sections[:maximumDynamicSections]
+	}
+	result := make([]DynamicSection, 0, len(sections))
+	for _, section := range sections {
+		normalized := normalizeDynamicSingleDefinition(DynamicDefinition{
+			CenterPercent: section.CenterPercent, SpanPercent: section.SpanPercent,
+			SpanMinPercent: section.SpanMinPercent, SpanProfile: section.SpanProfile,
+			Anchors:          append([]DynamicAnchor(nil), section.Anchors...),
+			VariationPercent: section.VariationPercent,
+		})
+		result = append(result, DynamicSection{
+			CenterPercent: normalized.CenterPercent, SpanPercent: normalized.SpanPercent,
+			SpanMinPercent: normalized.SpanMinPercent, SpanProfile: normalized.SpanProfile,
+			Anchors:          append([]DynamicAnchor(nil), normalized.Anchors...),
+			VariationPercent: normalized.VariationPercent,
+			Cycles:           clamp(section.Cycles, minimumDynamicSectionCycles, maximumDynamicSectionCycles),
+		})
+	}
+	return result
+}
+
+func cloneDynamicSections(sections []DynamicSection) []DynamicSection {
+	cloned := make([]DynamicSection, len(sections))
+	for index, section := range sections {
+		cloned[index] = section
+		cloned[index].Anchors = append([]DynamicAnchor(nil), section.Anchors...)
+	}
+	return cloned
+}
+
+func dynamicSectionPhraseSeed(sections []DynamicSection) uint32 {
+	hash := fnv.New32a()
+	for index, section := range sections {
+		_, _ = fmt.Fprintf(hash, "%d:%d:%d:%d:%s:%d:%d", index,
+			section.CenterPercent, section.SpanPercent, section.SpanMinPercent,
+			section.SpanProfile, section.VariationPercent, section.Cycles)
+		for _, anchor := range section.Anchors {
+			_, _ = fmt.Fprintf(hash, ":%s=%d", anchor.Name, anchor.PositionPercent)
+		}
+	}
+	seed := hash.Sum32()
+	if seed == 0 {
+		return 1
+	}
+	return seed
+}
+
+// AdvanceDynamicPhraseSeed gives an explicitly replaced phrase fresh
+// micro-timing while retaining deterministic replay from the authoritative
+// target. The current seed is the entire novelty memory: no unbounded history
+// or second motion model is introduced.
+func AdvanceDynamicPhraseSeed(definition DynamicDefinition, previous uint32) DynamicDefinition {
+	definition.PhraseSeed = 0
+	definition = NormalizeDynamicDefinition(definition)
+	if len(definition.Sections) < minimumDynamicSections || previous == 0 {
+		return definition
+	}
+	definition.PhraseSeed = dynamicOccurrenceSeed(
+		definition.PhraseSeed^previous, 0, len(definition.Sections),
+	)
+	if definition.PhraseSeed == previous {
+		definition.PhraseSeed = dynamicOccurrenceSeed(definition.PhraseSeed, 1, len(definition.Sections))
+	}
+	return definition
 }
 
 func normalizeDynamicSpanEnvelope(definition DynamicDefinition) DynamicDefinition {
@@ -211,6 +327,13 @@ func dynamicWindow(center, span int) (int, int) {
 
 func dynamicContent(definition DynamicDefinition) resolvedContent {
 	definition = NormalizeDynamicDefinition(definition)
+	if len(definition.Sections) >= minimumDynamicSections {
+		return dynamicSectionContent(definition)
+	}
+	return dynamicSingleContent(definition)
+}
+
+func dynamicSingleContent(definition DynamicDefinition) resolvedContent {
 	base := dynamicBasePositions(definition)
 	cycles := 1
 	if dynamicHasVariableSpanEnvelope(definition) {
@@ -243,8 +366,126 @@ func dynamicContent(definition DynamicDefinition) resolvedContent {
 	points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: closing})
 	return resolvedContent{
 		points: points, duration: elapsed, loop: true, maximumPoints: maximumCurvePoints,
-		reversalProfile: curveReversalWholeLeg,
+		reversalProfile: curveReversalC2Flow,
 	}
+}
+
+func dynamicSectionContent(definition DynamicDefinition) resolvedContent {
+	targetSeconds := math.Max(minimumDynamicSectionPhraseSeconds, float64(definition.SegmentSeconds))
+	targetTravel := targetSeconds * maximumSupportedReferenceTravelRatePercentPerSecond
+	points := make([]CurvePoint, 0, min(maximumCurvePoints, len(definition.Sections)*64))
+	travel := 0.0
+	var elapsed int64
+	phrasePass := 0
+	for travel < targetTravel && len(points) < maximumCurvePoints-1 {
+		passStart := len(points)
+		for sectionIndex, section := range definition.Sections {
+			sectionDefinition := dynamicDefinitionFromSection(section)
+			// A repeated macro arrangement should not reproduce the same micro
+			// timing and envelope values. Derive a deterministic occurrence seed
+			// so the phrase remains replayable while successive passes stay novel.
+			sectionDefinition.PhraseSeed = dynamicOccurrenceSeed(
+				definition.PhraseSeed, phrasePass, sectionIndex,
+			)
+			sectionPoints := dynamicSectionPoints(sectionDefinition, section.Cycles)
+			for localIndex, point := range sectionPoints {
+				if len(points) == 0 {
+					points = append(points, CurvePoint{PositionPercent: point.PositionPercent})
+					continue
+				}
+				previous := points[len(points)-1]
+				if localIndex == 0 && dynamicPositionsEqual(previous.PositionPercent, point.PositionPercent) {
+					continue
+				}
+				if len(points) >= maximumCurvePoints-1 {
+					break
+				}
+				delta := point.TimeMillis
+				if localIndex > 0 {
+					delta -= sectionPoints[localIndex-1].TimeMillis
+				} else {
+					delta = dynamicLegMillis(
+						previous.PositionPercent, point.PositionPercent,
+						sectionDefinition, phrasePass+sectionIndex, len(definition.Sections),
+					)
+				}
+				elapsed += max(int64(1), delta)
+				travel += math.Abs(point.PositionPercent - previous.PositionPercent)
+				points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: point.PositionPercent})
+			}
+			if len(points) >= maximumCurvePoints-1 {
+				break
+			}
+		}
+		phrasePass++
+		if len(points) == passStart {
+			break
+		}
+	}
+	if len(points) < 2 {
+		return dynamicSingleContent(normalizeDynamicSingleDefinition(DynamicDefinition{}))
+	}
+	first := points[0].PositionPercent
+	last := points[len(points)-1].PositionPercent
+	if !dynamicPositionsEqual(first, last) {
+		closingDefinition := dynamicDefinitionFromSection(definition.Sections[len(definition.Sections)-1])
+		closingDefinition.PhraseSeed = dynamicOccurrenceSeed(
+			definition.PhraseSeed, phrasePass, len(definition.Sections)-1,
+		)
+		elapsed += dynamicLegMillis(last, first, closingDefinition, len(points)-1, len(points))
+		points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: first})
+	}
+	return resolvedContent{
+		points: points, duration: elapsed, loop: true, maximumPoints: maximumCurvePoints,
+		reversalProfile: curveReversalC2Flow,
+	}
+}
+
+func dynamicPositionsEqual(left, right float64) bool {
+	return math.Abs(left-right) <= 1e-9
+}
+
+func dynamicDefinitionFromSection(section DynamicSection) DynamicDefinition {
+	return normalizeDynamicSingleDefinition(DynamicDefinition{
+		CenterPercent: section.CenterPercent, SpanPercent: section.SpanPercent,
+		SpanMinPercent: section.SpanMinPercent, SpanProfile: section.SpanProfile,
+		Anchors:          append([]DynamicAnchor(nil), section.Anchors...),
+		VariationPercent: section.VariationPercent,
+	})
+}
+
+func dynamicSectionPoints(definition DynamicDefinition, cycles int) []CurvePoint {
+	base := dynamicBasePositions(definition)
+	indices := dynamicTraversalIndices(len(base))
+	totalLegs := cycles * len(indices)
+	points := make([]CurvePoint, 0, totalLegs+1)
+	var elapsed int64
+	for cycle := range cycles {
+		phase := float64(cycle) / float64(cycles)
+		for _, index := range indices {
+			position := dynamicVariedPosition(base[index], base, definition, phase, cycles)
+			if len(points) > 0 {
+				elapsed += dynamicLegMillis(points[len(points)-1].PositionPercent, position,
+					definition, len(points)-1, totalLegs)
+			}
+			points = append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: position})
+		}
+	}
+	closing := dynamicVariedPosition(base[0], base, definition, 1, cycles)
+	elapsed += dynamicLegMillis(points[len(points)-1].PositionPercent, closing,
+		definition, len(points)-1, totalLegs)
+	return append(points, CurvePoint{TimeMillis: elapsed, PositionPercent: closing})
+}
+
+func dynamicOccurrenceSeed(seed uint32, pass, section int) uint32 {
+	hash := fnv.New64a()
+	_, _ = fmt.Fprintf(hash, "%d:%d:%d", seed, pass, section)
+	sum := hash.Sum(nil)
+	result := binary.BigEndian.Uint32(sum[:4]) ^ binary.BigEndian.Uint32(sum[4:])
+	if result == 0 {
+		return 1
+	}
+	return result
 }
 
 func dynamicVariationCycleCount(base []float64, variation int) int {
@@ -525,7 +766,10 @@ func dynamicPeriodicControl(phase float64, knotCount int, value func(int) float6
 	left := int(math.Floor(scaled)) % knotCount
 	right := (left + 1) % knotCount
 	fraction := scaled - math.Floor(scaled)
-	smooth := fraction * fraction * (3 - 2*fraction)
+	// Quintic smootherstep has zero first and second derivative at each knot.
+	// Range and rhythm envelopes therefore do not reintroduce an acceleration
+	// corner underneath the C2 trajectory used for the carrier motion.
+	smooth := fraction * fraction * fraction * (fraction*(fraction*6-15) + 10)
 	leftValue, rightValue := value(left), value(right)
 	return leftValue + (rightValue-leftValue)*smooth
 }
@@ -592,6 +836,14 @@ func dynamicContentID(definition DynamicDefinition) string {
 		definition.PhraseSeed, definition.VariationPercent)
 	for _, anchor := range definition.Anchors {
 		_, _ = fmt.Fprintf(&builder, ":%s=%d", anchor.Name, anchor.PositionPercent)
+	}
+	for index, section := range definition.Sections {
+		_, _ = fmt.Fprintf(&builder, "|section=%d:%d:%d:%d:%s:%d:%d", index,
+			section.CenterPercent, section.SpanPercent, section.SpanMinPercent,
+			section.SpanProfile, section.VariationPercent, section.Cycles)
+		for _, anchor := range section.Anchors {
+			_, _ = fmt.Fprintf(&builder, ":%s=%d", anchor.Name, anchor.PositionPercent)
+		}
 	}
 	return builder.String()
 }

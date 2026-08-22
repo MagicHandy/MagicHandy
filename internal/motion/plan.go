@@ -534,7 +534,15 @@ func loopPeriodWithinRuntimeEnvelope(
 	}
 	playedAcceleration := curve.maximumAccelerationPerMillis2() * gain /
 		(scale.timeFactor * scale.timeFactor) * 1e6
-	return playedAcceleration <= runtimeMaxAccelerationPercentPerSecond2*1.001
+	if playedAcceleration > runtimeMaxAccelerationPercentPerSecond2*1.001 {
+		return false
+	}
+	if reversalProfile != curveReversalC2Flow {
+		return true
+	}
+	playedJerk := curve.maximumJerkPerMillis3() * gain /
+		(scale.timeFactor * scale.timeFactor * scale.timeFactor) * 1e9
+	return playedJerk <= runtimeMaxJerkPercentPerSecond3*1.001
 }
 
 // focusedLoopPeriod keeps focus and soft anchoring from changing the requested

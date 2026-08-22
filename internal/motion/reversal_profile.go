@@ -10,18 +10,23 @@ import (
 // body while still reaching zero velocity at a true reversal. Its length is an
 // acceleration budget rather than a constant: a fixed duration makes a slow or
 // narrowed stroke spend the same absolute time crawling through its turn as a
-// fast full-range one. Creative deliberately selects whole-leg PCHIP easing
-// instead, because natural braking matters more there than retaining a catalog
-// waveform's constant-velocity body.
+// fast full-range one. Creative deliberately selects a whole-leg C2 quintic
+// profile instead, because natural braking and acceleration continuity matter
+// more there than retaining a catalog waveform's constant-velocity body.
 const (
 	// These are played-time limits. Pattern authoring deliberately stays inside
 	// the quieter catalogMaxAcceleration/catalogMinReversalGap envelope, while
 	// runtime playback may use the wider calibrated device envelope when the
 	// selected speed asks for it.
-	runtimeMaxAccelerationPercentPerSecond2       = 7500.0
-	runtimeMinimumReversalGapMillis               = int64(100)
-	maximumPatternReversalBlendMillis       int64 = 75
-	minimumPatternReversalBlendMillis       int64 = 4
+	runtimeMaxAccelerationPercentPerSecond2 = 7500.0
+	// The jerk ceiling is a perceptual runtime quality budget, not a claimed
+	// Handy hardware specification. It prevents a mathematically C2 Creative
+	// curve from concentrating its acceleration change into an imperceptibly
+	// short interval while model-specific acceleration data remains unpublished.
+	runtimeMaxJerkPercentPerSecond3         = 150000.0
+	runtimeMinimumReversalGapMillis         = int64(100)
+	maximumPatternReversalBlendMillis int64 = 75
+	minimumPatternReversalBlendMillis int64 = 4
 	// Two thirds of the selected curve ceiling leaves the rest of the curve its
 	// own headroom. playbackScale chooses the catalog ceiling for authoring and
 	// the wider runtime ceiling for an engine plan.
@@ -30,14 +35,14 @@ const (
 
 // curveReversalProfile selects how a generated curve approaches a true turn.
 // Stored patterns retain their short, acceleration-budgeted ramps so authored
-// rhythm is not silently rewritten. Creative content uses the natural PCHIP
-// profile: the whole leg participates in braking and acceleration, which avoids
-// a long constant-velocity run ending in a perceptibly abrupt direction swap.
+// rhythm is not silently rewritten. Creative content uses a flowing quintic
+// profile: the whole leg participates in braking, and adjacent legs share one
+// acceleration state at the turn instead of merely sharing zero velocity.
 type curveReversalProfile uint8
 
 const (
 	curveReversalBoundedRamp curveReversalProfile = iota
-	curveReversalWholeLeg
+	curveReversalC2Flow
 )
 
 // playbackScale describes how authored curve coordinates become played motion:

@@ -29,10 +29,7 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			AutopilotSpeechCustom,
 		},
 		AutopilotMotionCadences: []string{
-			AutopilotMotionSteady,
-			AutopilotMotionNatural,
-			AutopilotMotionDynamic,
-			AutopilotMotionCustom,
+			AutopilotMotionScaled,
 		},
 		AutopilotAuthorities: []string{
 			AutopilotSpeechMotionChatOnly,

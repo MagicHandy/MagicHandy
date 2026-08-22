@@ -30,7 +30,8 @@ func explicitlyRefusesDynamicMotion(message string) bool {
 }
 
 func dynamicUpdateBypassesNegationGate(message string, command MotionCommand) bool {
-	if !motionIntentIsNegated(message) {
+	if !motionIntentIsNegated(message) && !negatesDynamicSpeedChange(message) &&
+		!negatesDynamicRangeChange(message) {
 		return true
 	}
 	if !describesUnsatisfiedDynamicMotion(message) || explicitlyRefusesDynamicMotion(message) {
@@ -68,6 +69,9 @@ func validateDynamicRequestedCoverage(command *MotionCommand, context MotionCont
 		}
 		return errDynamicUpdateMissing
 	}
+	if positionRequested && !dynamicCommandChangesPosition(*command, context) {
+		return fmt.Errorf("%w: a position request must change center/span or anchors from the current target", errDynamicPositionScope)
+	}
 	if err := validateDynamicPositionChangeScope(*command, context, message); err != nil {
 		return err
 	}
@@ -80,6 +84,25 @@ func validateDynamicRequestedCoverage(command *MotionCommand, context MotionCont
 		return errDynamicCoverage
 	}
 	return validateDynamicWindowCoverage(minimum, maximum, message)
+}
+
+func dynamicCommandChangesPosition(command MotionCommand, context MotionContext) bool {
+	if len(command.Sections) > 0 {
+		return true
+	}
+	if len(command.Anchors) > 0 {
+		if len(command.Anchors) != len(context.Anchors) {
+			return true
+		}
+		for index, anchor := range command.Anchors {
+			if !strings.EqualFold(strings.TrimSpace(anchor), strings.TrimSpace(context.Anchors[index])) {
+				return true
+			}
+		}
+		return false
+	}
+	return command.CenterPercent != nil && *command.CenterPercent != context.CenterPercent ||
+		command.SpanPercent != nil && *command.SpanPercent != context.SpanPercent
 }
 
 func validateDynamicWindowCoverage(minimum, maximum int, message string) error {
@@ -119,6 +142,10 @@ func validateDynamicPositionChangeScope(command MotionCommand, context MotionCon
 	if !requestsDynamicSpeedChange(message) && command.SpeedPercent != nil &&
 		*command.SpeedPercent != context.SpeedPercent {
 		return fmt.Errorf("%w: omit speed_percent unless the user also changes pace", errDynamicPositionScope)
+	}
+	if len(command.Sections) > 0 && !requestsDynamicSpanEnvelopeChange(message) &&
+		!requestsDynamicTextureChange(message) {
+		return fmt.Errorf("%w: use one geometry for a position-only correction; sections replace multiple motion axes", errDynamicPositionScope)
 	}
 	if !requestsDynamicSpanEnvelopeChange(message) {
 		if command.SpanMinPercent != nil && *command.SpanMinPercent != context.SpanMinPercent {
@@ -177,25 +204,57 @@ func requestedDynamicPosition(message string) (int, string, bool) {
 }
 
 func effectiveDynamicCommandWindow(command *MotionCommand, context MotionContext) (int, int, bool) {
-	anchors := context.Anchors
-	if command != nil && len(command.Anchors) >= 2 {
-		anchors = command.Anchors
-	} else if command != nil && (command.CenterPercent != nil || command.SpanPercent != nil) {
-		anchors = nil
+	if command != nil && len(command.Sections) >= 2 {
+		return effectiveDynamicSectionsWindow(command.Sections)
 	}
+	anchors := effectiveDynamicAnchorNames(command, context)
 	if len(anchors) >= 2 {
-		minimum, maximum := 100, 0
-		for _, anchor := range anchors {
-			position, ok := DynamicAnchorPosition(anchor)
-			if !ok {
-				return 0, 0, false
-			}
-			minimum = min(minimum, position)
-			maximum = max(maximum, position)
-		}
-		return minimum, maximum, maximum-minimum >= 20
+		return dynamicAnchorNamesWindow(anchors)
 	}
+	return effectiveDynamicCenterSpanWindow(command, context)
+}
 
+func effectiveDynamicSectionsWindow(sections []DynamicSectionCommand) (int, int, bool) {
+	minimum, maximum := 100, 0
+	for _, section := range sections {
+		sectionCommand := motionCommandFromSection(section)
+		sectionMinimum, sectionMaximum, ok := effectiveDynamicCommandWindow(&sectionCommand, MotionContext{})
+		if !ok {
+			return 0, 0, false
+		}
+		minimum = min(minimum, sectionMinimum)
+		maximum = max(maximum, sectionMaximum)
+	}
+	return minimum, maximum, maximum-minimum >= 20
+}
+
+func effectiveDynamicAnchorNames(command *MotionCommand, context MotionContext) []string {
+	if command == nil {
+		return context.Anchors
+	}
+	if len(command.Anchors) >= 2 {
+		return command.Anchors
+	}
+	if command.CenterPercent != nil || command.SpanPercent != nil {
+		return nil
+	}
+	return context.Anchors
+}
+
+func dynamicAnchorNamesWindow(anchors []string) (int, int, bool) {
+	minimum, maximum := 100, 0
+	for _, anchor := range anchors {
+		position, ok := DynamicAnchorPosition(anchor)
+		if !ok {
+			return 0, 0, false
+		}
+		minimum = min(minimum, position)
+		maximum = max(maximum, position)
+	}
+	return minimum, maximum, maximum-minimum >= 20
+}
+
+func effectiveDynamicCenterSpanWindow(command *MotionCommand, context MotionContext) (int, int, bool) {
 	center, span := context.CenterPercent, context.SpanPercent
 	if command != nil {
 		if command.CenterPercent != nil {
@@ -242,6 +301,37 @@ func contextualDynamicCorrectionIntent(message string, history []llm.Message) st
 	return message
 }
 
+// normalizeDynamicPaceOnlyResponse prevents copied snapshot fields from
+// collapsing a running multi-section phrase. It is axis normalization, not a
+// motion decision: when the current turn asks only for pace, every geometry,
+// texture, and horizon field is inert model repetition and omitted values are
+// authoritatively preserved by the backend.
+func normalizeDynamicPaceOnlyResponse(raw, userMessage string) string {
+	message := normalizeMotionIntent(userMessage)
+	if !requestsDynamicSpeedChange(message) || requestsDynamicPositionChange(message) ||
+		requestsDynamicSpanEnvelopeChange(message) || requestsDynamicTextureChange(message) {
+		return raw
+	}
+	response, err := decodeAssistantResponse(raw)
+	if err != nil || response.Motion == nil ||
+		!strings.EqualFold(strings.TrimSpace(response.Motion.Action), MotionActionUpdate) {
+		return raw
+	}
+	response.Motion.CenterPercent = nil
+	response.Motion.SpanPercent = nil
+	response.Motion.SpanMinPercent = nil
+	response.Motion.SpanProfile = ""
+	response.Motion.Anchors = nil
+	response.Motion.VariationPercent = nil
+	response.Motion.SegmentSeconds = nil
+	response.Motion.Sections = nil
+	encoded, err := json.Marshal(response)
+	if err != nil {
+		return raw
+	}
+	return string(encoded)
+}
+
 // normalizeDynamicPositionOnlyResponse treats fields on unrelated axes as
 // inert model noise. The user authorized a geometry correction, not an
 // unsolicited rewrite of pace, range texture, or variation. Strict JSON and
@@ -268,6 +358,13 @@ func normalizeDynamicPositionOnlyResponse(raw, userMessage string) string {
 		response.Motion.VariationPercent = nil
 	}
 	response.Motion.SegmentSeconds = nil
+	if response.Motion.CenterPercent == nil && response.Motion.SpanPercent == nil &&
+		len(response.Motion.Anchors) == 0 && len(response.Motion.Sections) == 0 {
+		// Keep the original response so semantic coverage can report the actual
+		// missing position instead of reducing copied model noise to a generic
+		// fieldless-update error. That gives the one repair turn useful guidance.
+		return raw
+	}
 	encoded, err := json.Marshal(response)
 	if err != nil {
 		return raw
