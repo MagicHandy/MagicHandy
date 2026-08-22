@@ -140,9 +140,15 @@ func TestDynamicParserAcceptsCompactMultiSectionPhrases(t *testing.T) {
 	if len(first.Anchors) != 3 || first.CenterPercent != nil || first.SpanPercent != nil || first.Cycles != 4 {
 		t.Fatalf("normalized first section = %+v", first)
 	}
+	singleRaw := `{"reply":"I will trace one route.","motion":{"action":"start","speed_percent":30,"sections":[{"anchors":["base","middle","tip"],"span_min_percent":30,"span_profile":"wander","variation_percent":45,"cycles":4}],"segment_seconds":40}}`
+	single, err := parseAssistantResponseForCapabilities(singleRaw, nil, capabilities, &context)
+	if err != nil || single.Motion == nil || len(single.Motion.Sections) != 0 ||
+		len(single.Motion.Anchors) != 3 || single.Motion.SpanMinPercent == nil ||
+		*single.Motion.SpanMinPercent != 30 || single.Motion.SpanProfile != DynamicSpanProfileWander {
+		t.Fatalf("single section was not promoted to one phrase = %+v, %v", single, err)
+	}
 
 	for _, invalid := range []string{
-		`{"reply":"Bad.","motion":{"action":"start","speed_percent":30,"sections":[{"center_percent":50,"span_percent":70,"cycles":3}]}}`,
 		`{"reply":"Bad.","motion":{"action":"start","speed_percent":30,"center_percent":50,"sections":[{"center_percent":50,"span_percent":70,"cycles":3},{"center_percent":65,"span_percent":40,"cycles":3}]}}`,
 		`{"reply":"Bad.","motion":{"action":"start","speed_percent":30,"sections":[{"center_percent":50,"span_percent":70,"cycles":1},{"center_percent":65,"span_percent":40,"cycles":3}]}}`,
 		`{"reply":"Bad.","motion":{"action":"start","speed_percent":30,"sections":[{"center_percent":50,"span_percent":70,"span_profile":"wander","cycles":3},{"center_percent":65,"span_percent":40,"cycles":3}]}}`,
@@ -166,6 +172,7 @@ func TestDynamicSpanEnvelopeParserAcceptsFixedAndVariableUpdates(t *testing.T) {
 		`{"reply":"I will let the range breathe.","motion":{"action":"update","span_min_percent":28,"span_profile":"breathe"}}`,
 		`{"reply":"I will mix tight and broad strokes.","motion":{"action":"update","span_percent":82,"span_min_percent":25,"span_profile":"contrast"}}`,
 		`{"reply":"I will keep the stroke length steady.","motion":{"action":"update","span_profile":"steady"}}`,
+		`{"reply":"I will keep this shorter stroke steady.","motion":{"action":"update","span_percent":30,"span_min_percent":20,"span_profile":"steady"}}`,
 		`{"reply":"A little faster.","motion":{"action":"update","speed_percent":34}}`,
 	} {
 		response, err := parseAssistantResponseForCapabilities(raw, nil, capabilities, &context)

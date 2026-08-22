@@ -203,6 +203,43 @@ describe("AutopilotControl", () => {
     expect(screen.getByText("Motion 13 s · Speech Off")).toBeInTheDocument();
   });
 
+  it("renders every speech countdown second across slower backend polls", () => {
+    vi.useFakeTimers();
+    app.state = {
+      modes: {
+        mode: "autopilot",
+        segment_index: 2,
+        status_at: "2026-08-22T12:00:00Z",
+        motion_planned: true,
+        speech_due_at: "2026-08-22T12:01:34.5Z",
+        speech_in_ms: 94_500,
+      },
+      settings: { autopilot: autopilotPreferences },
+    };
+    const result = render(<AutopilotControl />);
+
+    expect(screen.getByText("Motion planned · Speech 1m 35s")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByText("Motion planned · Speech 1m 34s")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByText("Motion planned · Speech 1m 33s")).toBeInTheDocument();
+
+    // A two-second state poll reconciles to the same absolute deadline without
+    // falling back to a low-refresh countdown or double-consuming elapsed time.
+    app.state = {
+      ...app.state,
+      modes: {
+        ...app.state.modes,
+        status_at: "2026-08-22T12:00:02Z",
+        speech_in_ms: 92_500,
+      },
+    };
+    result.rerender(<AutopilotControl />);
+    expect(screen.getByText("Motion planned · Speech 1m 33s")).toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(screen.getByText("Motion planned · Speech 1m 32s")).toBeInTheDocument();
+  });
+
   it("freezes the interpolated clock without jumping when Autopilot is paused", () => {
     vi.useFakeTimers();
     app.state = {

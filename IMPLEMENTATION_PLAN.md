@@ -1421,6 +1421,26 @@ state. A 20-minute buildup advances 1% per 12 active seconds and remains frozen
 during pause. All work remains inside the shared engine and existing transport
 owners; matched real-device feel remains open.
 
+The alpha.31 follow-up addresses the remaining autonomy and host-responsiveness
+regressions observed in the installed Hei session. An enabled Autopilot is now
+described as continuing bounded authorization rather than waiting for another
+chat message, and the eight-level rate is a whole-phrase continuity bias. High
+rate favors meaningful contrast in outer band, stroke envelope, texture, or
+sections without forcing a change on any particular decision; explicit holds
+still win. Perceptual comparison stays anchored to the last materially distinct
+phrase so multiple smooth steps can accumulate into a real change without an
+abrupt range jump. Recent autonomous speech is summarized as anti-repetition
+context rather than a list of persona-specific lines.
+
+The strict chat boundary now losslessly promotes a lone `sections` entry to the
+equivalent single phrase, avoiding an otherwise deterministic repair call while
+still rejecting conflicting or genuinely incomplete geometry. Managed
+llama.cpp launches at low priority so CUDA prompt prefill yields to Stop, the app
+shell, and displayed backend clocks. These changes add no motion path, sampler,
+or transport authority. The active Gemma model passed the max-rate material-
+change, explicit-hold, Hei speech-novelty, and full interactive matrices without
+an engine or transport; matched real-device feel remains open.
+
 Creative is now the default for fresh and pre-selector settings documents;
 explicit Pattern Library and Off choices persist. The six canonical built-ins
 disabled in the user's installed alpha.28 profile are retired from the active

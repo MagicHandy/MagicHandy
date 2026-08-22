@@ -556,6 +556,7 @@ func TestManagedLlamaCPPEnsureStartedIsSerialized(t *testing.T) {
 		"local-model",
 		"--ctx-size\n65536",
 		"--parallel\n1",
+		"--prio\n-1",
 		"-m",
 		modelPath,
 	} {
@@ -563,7 +564,7 @@ func TestManagedLlamaCPPEnsureStartedIsSerialized(t *testing.T) {
 			t.Fatalf("runner arguments %q do not contain %q", arguments, required)
 		}
 	}
-	for _, option := range []string{"--ctx-size", "--parallel"} {
+	for _, option := range []string{"--ctx-size", "--parallel", "--prio"} {
 		if count := strings.Count(arguments, option); count != 1 {
 			t.Fatalf("runner arguments %q contain %q %d times, want once", arguments, option, count)
 		}

@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.30 candidate: 24,109,568 bytes plain and 17,368,064 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.31 candidate: 24,137,728 bytes plain and 17,370,112 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.30` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.30 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.31` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.31 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -190,6 +190,29 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-22** - Prepared alpha.31 after inspecting the installed Hei session.
+  Its initial Creative phrase survived nine autonomous decisions for roughly
+  two minutes at motion-change rate 8, and subsequent updates stayed inside one
+  narrow range character. Autopilot now treats its enabled state as continuing
+  bounded authorization, renders rate as a whole-phrase continuity bias, and
+  distinguishes meaningful outer-band/section contrast from nearby scalar
+  churn while preserving explicit holds. The retained perceptual baseline
+  recognizes smooth cumulative change without requiring abrupt jumps. Speech
+  prompts use recent lines to avoid recycling sentence shape, action, image, or
+  salient nouns, and managed llama.cpp runs at low priority so CUDA prefill
+  yields to Stop, the app shell, and backend-owned countdown presentation. A
+  redundant one-section model response is losslessly promoted to one ordinary
+  phrase instead of spending a second inference on repair. The active Gemma
+  model passed the max-rate material/range-change scorecard repeatedly, the
+  explicit-hold and four-line Hei speech-novelty cases, the full 9/9 interactive
+  matrix, and five repeated one-section first-pass regressions. Full Go tests,
+  vet, zero-issue lint, 408 frontend tests, localization, typecheck/build, and
+  pure-Go builds pass; local race remains unavailable without a C compiler and
+  CI is authoritative. A final isolated app completed a real chat turn in one
+  976 ms generation on the exact model with fake transport and zero commands.
+  Candidate size is 24,137,728 / 17,370,112 binary bytes; production browser
+  output is unchanged. No post-change physical motion was commanded.
 
 - **2026-08-22** - Prepared alpha.30 after reproducing two independent Creative
   regressions in compiled output: selected speeds 42–72 collapsed to the same
