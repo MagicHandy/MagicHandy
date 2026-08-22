@@ -466,6 +466,28 @@ same skepticism.
   ("likely too noisy without large-scale human input; treat as a research
   spike"). Record it here so it is not re-proposed as a quick win.
 
+## Review-build LLM readiness
+
+Every review build is handed off with a working configured LLM, including
+isolated-data builds. A healthy core and a populated model list are not enough:
+the selected provider must report the model available and loaded, and that
+model must complete a real text generation. On Windows, run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
+  scripts/check-review-llm.ps1 -BaseUrl http://127.0.0.1:<review-port>
+```
+
+The script reads the exact app's provider/model status and sends one direct
+OpenAI-compatible completion to that configured endpoint. It never acquires a
+controller lease, enters MagicHandy chat, persists a message, or reaches the
+motion engine. For changes to chat, LLM motion, or Autopilot, additionally send
+one text-only turn through the app and require a non-empty response without a
+semantic fallback, repair, or motion command. Configure isolated review data
+explicitly rather than copying installed settings or credentials. If the host
+has no working model endpoint, the build is not ready for review and the final
+handoff must say so.
+
 ## Cross-references
 
 - Current contract: `internal/chat/contract.go`; engine intent:
