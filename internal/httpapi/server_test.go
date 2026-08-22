@@ -649,6 +649,15 @@ func newTestServerWithRuntime(t *testing.T, runtime Runtime) *Server {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
+	// Most HTTP fixtures exercise the Pattern Library contract. Keep that mode
+	// explicit so changing the product's fresh-install default does not silently
+	// turn unrelated protocol tests into Creative tests; mode-specific cases save
+	// their own setting, and config tests assert the production default.
+	settings, _ := store.Snapshot()
+	settings.LLM.MotionGenerationMode = config.LLMMotionModePattern
+	if _, err := store.Save(settings); err != nil {
+		t.Fatalf("save HTTP test motion mode: %v", err)
+	}
 	return newTestServerWithStore(t, store, runtime)
 }
 

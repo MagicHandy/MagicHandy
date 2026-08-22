@@ -145,7 +145,7 @@ acceleration, reversal, continuity, Dynamic determinism, UI, and Stop lifecycle
 coverage is retained. No post-change hardware command was issued. A capped
 matched run must still record selected model/profile, transport, latency,
 trace, subjective continuity,
-and Emergency Stop before this risk or Dynamic's opt-in status changes. See
+and Emergency Stop before physical acceptance is claimed. See
 `docs/motion-calibration.md`.
 
 Status 2026-08-20 range-envelope follow-up: Creative now separates outer
@@ -182,6 +182,24 @@ those cases without a phrase-by-phrase prompt catalog. The reproduced sequence
 passed 9/9 managed-model decisions and the broader matrix retained 25/25. No
 new hardware command was issued, so the post-fix matched subjective run and
 supported Ollama matrix remain open.
+
+Status 2026-08-22 alpha.29 follow-up: the installed max-rate session showed the
+scheduler did reconsider inside its 8–16 second window, while the model chose
+six consecutive holds and preserved one semantic phrase for about 92 seconds.
+Autopilot now reports semantic phrase age, reconsideration count, hold streak,
+and current horizon without setting a forced-change threshold. The active Gemma
+model retained 3/3 short-age holds, changed 3/3 otherwise identical long-age
+cases, and completed a 12-turn transport-free run with one hold, 11 semantic
+changes, 11 range envelopes, four horizons, and no repair/fallback. Creative is
+now the product default by explicit choice; this model evidence does not close
+the matched physical-feel gate.
+
+The same installed profile had six disabled canonical built-ins and no disabled
+user-authored rows. Alpha.29 retires those six, reducing the active catalog from
+87 to 81 and the non-experimental model catalog from 31 to 25. Numeric catalog
+gates remain necessary but cannot overrule direct physical curation. Startup
+reconciliation deletes only built-in-origin rows, and no post-change hardware
+motion was commanded.
 
 ## R2: Two-Codebase Drift
 
@@ -1453,7 +1471,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.28 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.29 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1501,7 +1519,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.28, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.29, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit

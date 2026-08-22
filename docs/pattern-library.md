@@ -35,13 +35,13 @@ envelope that came out of it, and which script to reach for.
 
 ## Built-In Catalog
 
-The built-in catalog contains 87 patterns: three established patterns
-(`Stroke`, `Pulse`, and `Tease`), eight retained generated patterns, 15
+The built-in catalog contains 81 patterns: three established patterns
+(`Stroke`, `Pulse`, and `Tease`), five retained generated patterns, 12
 velocity-authored replacements, two user-curated patterns, and 59 generated
 Rockfire/Claude patterns that survived the quality pass. `experimental` is an
 active review state rather than a historical label. Six designed patterns and
-50 generated survivors carry it, leaving 31 patterns in the default model
-catalog and all 87 available when the user opts into experimental patterns.
+50 generated survivors carry it, leaving 25 patterns in the normal model
+catalog and all 81 available when the user opts into experimental patterns.
 
 The 59 `curated-*` files under `internal/motion/builtinpatterns/curated` are the
 survivors of a 171-file generated import. Nine clear the current source and
@@ -135,10 +135,19 @@ database, seed reconciliation transfers enabled state and weight from an exact
 name-and-curve match to the canonical built-in, then removes only that proven
 duplicate. Similar names or edited curves are left untouched.
 
-The seed also removes the six explicitly retired built-in IDs, including their
-cascading feedback rows, and inserts the six replacement IDs. No SQLite schema
-change is required. Seed reconciliation updates a built-in name only when it
-still equals a known older default; a user rename remains user-owned. Existing
+Alpha.29 adds a later installed-profile curation pass. A read-only snapshot of
+the user's alpha.28 library contained 87 built-ins, with exactly six disabled:
+`Broad and Tight`, `Deep-Shallow Sequence`, `Flutter`, `High-Low Blocks`,
+`Lower Accents`, and `Three and One`. All six were canonical built-ins; no
+disabled user-authored row was used as release input. They are now retired even
+though they pass the numeric catalog envelope: a safety/quality floor is not a
+substitute for sustained physical preference.
+
+Seed reconciliation removes every retired canonical row and its cascading
+feedback without a SQLite schema change. Deletion is restricted to
+`origin = 'builtin'`, so a user-created row that happens to reuse an old stable
+ID remains user-owned. Reconciliation updates a built-in name only when it still
+equals a known older default; a user rename remains user-owned. Existing
 enablement and weights are also preserved. The library's inline rename control changes the
 display name for any pattern and persists it across restart; IDs and built-in
 curve content remain immutable, so chat and playback keep a stable contract.
@@ -257,7 +266,7 @@ pattern is enabled, the semantic speed-only contract remains available.
 Model permissions further narrow that catalog. Turning pattern selection off
 removes pattern fields and skips the pattern-store read for the turn. Turning
 experimental patterns off (the default) excludes 56 experimental rows while
-retaining 31 accepted and user-curated built-ins. Area focus is
+retaining 25 accepted and user-curated built-ins. Area focus is
 independent of catalog storage. These permissions persist in the existing
 versioned settings document in SQLite and therefore do not add a table or
 schema migration.

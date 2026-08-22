@@ -445,7 +445,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
           <label className="field capability-mode">
             <span className="label">{t("LLM motion")}</span>
             <select
-              value={settings.motion_generation_mode || (capabilities.motion ? "pattern" : "off")}
+              value={settings.motion_generation_mode || (capabilities.motion ? "dynamic" : "off")}
               disabled={locked}
               onChange={(event) => patchMotionMode(event.target.value)}
             >
@@ -454,7 +454,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
               <option value="off">{t("Off")}</option>
             </select>
           </label>
-          {(settings.motion_generation_mode || "pattern") === "pattern" && (
+          {(settings.motion_generation_mode || "dynamic") === "pattern" && (
             <>
               <label className="capability-gate" title={t("Allow tip, shaft, base, and full-range targets")}>
                 <input

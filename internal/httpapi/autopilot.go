@@ -102,12 +102,15 @@ func (s *Server) autopilotModelTurn(
 		// The manager already applied the tracking and arc switches when it built
 		// the input, so a disabled switch arrives as false here and the prompt
 		// omits the section entirely.
-		SessionTracking:       input.SessionTracking,
-		SessionSeconds:        input.SessionSeconds,
-		SecondsAtCurrentSpeed: input.SecondsAtCurrentSpeed,
-		SpeedTrend:            input.SpeedTrend,
-		ArcEnabled:            input.ArcEnabled,
-		ArcPercent:            input.ArcPercent,
+		SessionTracking:          input.SessionTracking,
+		SessionSeconds:           input.SessionSeconds,
+		SecondsAtCurrentSpeed:    input.SecondsAtCurrentSpeed,
+		SecondsAtCurrentPhrase:   input.SecondsAtCurrentPhrase,
+		DecisionsAtCurrentPhrase: input.DecisionsAtCurrentPhrase,
+		ConsecutiveHolds:         input.ConsecutiveHolds,
+		SpeedTrend:               input.SpeedTrend,
+		ArcEnabled:               input.ArcEnabled,
+		ArcPercent:               input.ArcPercent,
 	}
 	if input.CurrentDynamic != nil {
 		dynamic := motion.NormalizeDynamicDefinition(*input.CurrentDynamic)

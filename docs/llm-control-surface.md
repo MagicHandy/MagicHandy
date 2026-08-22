@@ -2,10 +2,10 @@
 
 This document defines how the local LLM can drive the device, how users choose
 that control surface, what the engine can do that the model still cannot reach,
-and the remaining ideas for widening LLM control. Dynamic motion is implemented
-as a selectable alternative to Pattern Library control. Pattern Library remains
-the conservative default until Dynamic completes live-provider and real-device
-A/B acceptance.
+and the remaining ideas for widening LLM control. The user-facing **Creative**
+mode is the default and uses the internal Dynamic contract; Pattern Library and
+Off remain explicit persisted alternatives. Real-device comparison remains an
+open acceptance boundary rather than an excuse to hide that default status.
 
 It is grounded in two things: MagicHandy's current code
 (`internal/chat/contract.go`, `internal/motion/target.go`) and the reference
@@ -234,8 +234,9 @@ The sidebar and Settings > Model expose the persisted Dynamic / Pattern Library
 / Off mode list. Pattern mode additionally exposes area focus and experimental
 patterns. Disabled methods are absent from the prompt and stripped from model
 noise before dispatch. The setting lives in the existing versioned settings
-JSON document in SQLite; an older document without the field preserves Pattern
-Library behavior, except an existing chat-only capability maps to Off. No
+JSON document in SQLite; an older document without the field adopts Creative,
+except an existing chat-only capability maps to Off. Explicit saved Pattern
+Library or Off choices remain unchanged. No
 schema/table migration is needed.
 
 The 2026-07-20 live matrix exercised the final service against both supported
@@ -265,9 +266,7 @@ on the installed managed 12B Gemma model, then reran the broader nine-case
 Creative matrix. All 25 passed without repair, fallback, an engine, or a
 transport. Dynamic now has managed-provider, parser, prompt-isolation,
 shared-engine, adaptive phase/velocity retarget, Autopilot, trace, and frontend
-coverage. A matched
-real-device feel comparison remains open, so Dynamic is selectable but not the
-default.
+coverage. A matched real-device feel comparison remains open.
 
 The latest-conversation follow-up reproduced three failed position corrections:
 tip and full-length wording could receive reply-only output or geometry that did
@@ -289,6 +288,27 @@ returns to the currently effective section. The locally installed Ollama model
 passed a focused four-case start/replace/pace/correction matrix without an
 engine or transport. This is focused evidence only; a broader supported-
 provider and real-device comparison remains open.
+
+The alpha.29 follow-up diagnosed the installed max-rate session rather than
+adding a deterministic change timer. Level 8 was correctly reconsidering about
+every 12 seconds, but six consecutive model-authored holds preserved one phrase
+for roughly 92 seconds. The model could see session age and speed age, not the
+age of the effective motion phrase, how many times it had reconsidered that
+phrase, or its consecutive hold count. It also could not see the current
+decision horizon, and the autonomous Dynamic contract omitted already accepted
+span-envelope and section fields.
+
+Autopilot now supplies those observations and records their exact values in the
+trace. Phrase identity excludes pace, horizon, and backend novelty seeds, so a
+speed-only update cannot pretend the physical idea is new. The prompt explains
+that a higher Motion change rate welcomes more frequent meaningful differences
+but remains a preference, never a deadline or requirement to change. The active
+Gemma llama.cpp model still chose hold in 3/3 short-age initial probes, then
+chose valid updates in 3/3 otherwise identical long-age/six-hold probes. A
+12-decision transport-free run produced one hold, 11 semantic phrase changes,
+11 variable range envelopes, four decision horizons, and no repair or fallback.
+Sections remained optional and were not forced. This evidence supports making
+Creative the default while leaving the matched physical-feel comparison open.
 
 ## Ideas, ranked by leverage-to-risk
 
@@ -389,7 +409,9 @@ horizon-only update preserves content identity and phase.
 The remaining acceptance gate is empirical: compare Dynamic and Pattern Library
 on the same local models and real device at capped speed, including slow narrow
 motion, route reversals, repeated conversational updates, Autopilot handoffs,
-and Stop. Do not make Dynamic the default from simulation alone.
+and Stop. Creative is now the default by explicit product choice after iterative
+installed-session feedback; that choice does not turn transport-free evaluation
+into physical acceptance evidence.
 
 The first transport-free provider gate passed on 2026-08-20 against the
 installed verified b9966 CUDA llama.cpp runtime and the installed
@@ -482,7 +504,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
 The script reads the exact app's provider/model status and sends one direct
 OpenAI-compatible completion to that configured endpoint. It never acquires a
 controller lease, enters MagicHandy chat, persists a message, or reaches the
-motion engine. For changes to chat, LLM motion, or Autopilot, additionally send
+motion engine. For llama.cpp it disables the thinking template so the probe's
+small token budget measures visible generation instead of being consumed by
+hidden reasoning. For changes to chat, LLM motion, or Autopilot, additionally send
 one text-only turn through the app and require a non-empty response without a
 semantic fallback, repair, or motion command. Configure isolated review data
 explicitly rather than copying installed settings or credentials. If the host

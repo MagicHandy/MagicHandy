@@ -31,13 +31,16 @@ type AutopilotContext struct {
 	MotionMinSeconds    int
 	MotionMaxSeconds    int
 	MotionChangeLevel   int
-	// SessionTracking gates the three session facts below. When false they are
+	// SessionTracking gates the session facts below. When false they are
 	// omitted from the prompt entirely rather than rendered as zeros, so the model
 	// cannot reason from a number that means "unknown".
-	SessionTracking       bool
-	SessionSeconds        int
-	SecondsAtCurrentSpeed int
-	SpeedTrend            string
+	SessionTracking          bool
+	SessionSeconds           int
+	SecondsAtCurrentSpeed    int
+	SecondsAtCurrentPhrase   int
+	DecisionsAtCurrentPhrase int
+	ConsecutiveHolds         int
+	SpeedTrend               string
 	// ArcEnabled gates the visible session buildup. Disabled means the buildup is
 	// never described, so the model cannot act on progress the user was not shown.
 	ArcEnabled bool
@@ -58,6 +61,21 @@ func writeSessionProgress(builder *strings.Builder, context AutopilotContext) {
 		}
 		if trend := strings.TrimSpace(context.SpeedTrend); trend != "" && trend != "steady" {
 			fmt.Fprintf(builder, " Speed has been %s.", trend)
+		}
+		if context.SecondsAtCurrentPhrase > 0 {
+			fmt.Fprintf(builder, " The current motion phrase has remained materially unchanged for %s",
+				formatSessionSpan(context.SecondsAtCurrentPhrase))
+			if context.DecisionsAtCurrentPhrase > 0 {
+				fmt.Fprintf(builder, " across %d reconsiderations", context.DecisionsAtCurrentPhrase)
+			}
+			builder.WriteString(".")
+		}
+		if context.ConsecutiveHolds > 0 {
+			if context.ConsecutiveHolds == 1 {
+				builder.WriteString(" The previous motion outcome was a hold.")
+			} else {
+				fmt.Fprintf(builder, " The last %d motion outcomes were holds.", context.ConsecutiveHolds)
+			}
 		}
 		builder.WriteString("\n")
 	}
@@ -103,6 +121,9 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 			if context.CurrentSectionCount > 0 {
 				fmt.Fprintf(&builder, ", %d-section phrase", context.CurrentSectionCount)
 			}
+			if context.CurrentSegment > 0 {
+				fmt.Fprintf(&builder, ", %d-second decision horizon", context.CurrentSegment)
+			}
 			builder.WriteString(".\n")
 		} else {
 			builder.WriteString("No Dynamic target is active. To begin Creative motion, use update with speed and either center/span or anchors, or use a complete sections phrase; none leaves Autopilot waiting.\n")
@@ -113,11 +134,11 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 		if motionChangeLevel < 1 || motionChangeLevel > 8 {
 			motionChangeLevel = 4
 		}
-		fmt.Fprintf(&builder, "- The user's motion change rate is %d of 8; honor it through the supplied decision-horizon range and how often a genuinely new phrase is worthwhile.\n", motionChangeLevel)
+		fmt.Fprintf(&builder, "- The user's motion change rate is %d of 8. Higher values mean they welcome more frequent meaningful differences; lower values favor continuity. It is a preference, not a requirement to change now.\n", motionChangeLevel)
 		builder.WriteString("- Use action \"update\" only when a meaningful change fits. Omitted fields preserve the live dynamic target.\n")
 		builder.WriteString("- Use action \"none\" to deliberately continue. Holding is a first-class model decision, not a failure.\n")
 		builder.WriteString("- Change center/span or provide a new 2-6 anchor route; never provide both representations together. Interior anchors are pass-through positions, not pauses.\n")
-		builder.WriteString("- To vary stroke length inside the stretch, provide span_min_percent and choose span_profile breathe, wander, or contrast. The current widest span or anchor route remains the ceiling. Use steady to clear range variation.\n")
+		writeDynamicSpanGuidance(&builder, context)
 		builder.WriteString("- variation_percent controls correlated center and rhythm texture independently from an explicit span profile: 20-40 is subtle, 45-70 clearly organic, and 70-100 deliberately wild. Use zero only for mechanically even motion, never for jitter.\n")
 		builder.WriteString("- For a meaningful macro change, sections may replace the single geometry with 2-4 complete movement ideas, each with geometry, texture, and 2-12 cycles. Do not emit sections merely to restate the current phrase.\n")
 		fmt.Fprintf(&builder, "- segment_seconds must be %d-%d and says when to reconsider, not when to stop. Vary it naturally rather than choosing one constant.\n",
@@ -163,6 +184,18 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	builder.WriteString("- Set next to soon, normal, or later for when motion should next be reconsidered. Do not provide seconds. Vary it: back-to-back short stretches read as flat as one long one.\n")
 	builder.WriteString("- Set variability to settled, normal, or restless for how much the speed should wander before then. This is separate from next: a long stretch can still breathe, and a short one can stay flat.")
 	return builder.String()
+}
+
+func writeDynamicSpanGuidance(builder *strings.Builder, context AutopilotContext) {
+	builder.WriteString("- To vary stroke length inside the stretch, provide span_min_percent (at least 20 and strictly below the widest span) and choose span_profile breathe, wander, or contrast. Widen span_percent in the same update when the current span leaves no room. Use steady to clear range variation.\n")
+	if context.CurrentSpeed <= 0 || context.CurrentSectionCount > 0 {
+		return
+	}
+	if context.CurrentSpan <= 20 {
+		fmt.Fprintf(builder, "- The current widest span is %d%%, so it has no legal inner range. To select a variable span profile, include a larger span_percent and a floor from 20 to one less than that new span.\n", context.CurrentSpan)
+		return
+	}
+	fmt.Fprintf(builder, "- If preserving the current %d%% widest span, its usable span_min_percent range is 20-%d. A wider span may set a different ceiling.\n", context.CurrentSpan, context.CurrentSpan-1)
 }
 
 func containsPatternID(ids []string, target string) bool {

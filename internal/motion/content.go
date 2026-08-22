@@ -792,12 +792,6 @@ type catalogPatternSpec struct {
 // would divide every velocity by the same factor.
 var catalogPatternSpecs = []catalogPatternSpec{
 	{
-		ID: PatternFlutter, Name: "Flutter", Description: "Tight mid-span strokes open into one full sweep.",
-		Positions:    []float64{45, 70, 45, 70, 45, 70, 45, 70, 5, 95},
-		TravelMillis: []int64{500, 500, 500, 500, 500, 500, 500, 850, 900, 850},
-		Tags:         []string{"flutter", "contrast", "tight"},
-	},
-	{
 		ID: PatternDrift, Name: "Drift", Description: "A fixed-width stroke migrates upward and returns.",
 		Positions:    []float64{15, 45, 22, 55, 30, 65, 40, 78, 48, 82, 38, 68, 28, 55},
 		TravelMillis: []int64{520, 520, 540, 540, 560, 560, 580, 580, 560, 560, 540, 540, 520, 580},
@@ -818,25 +812,11 @@ var catalogPatternSpecs = []catalogPatternSpec{
 		Tags:         []string{"ascending-window", "fixed-width", "progressive"},
 	},
 	{
-		ID: PatternBroadAndTight, Name: "Broad and Tight",
-		Description:  "One wide sweep, then a run of tight centered strokes. Playful contrast.",
-		Positions:    []float64{6, 94, 34, 66, 34, 66, 6, 94, 34, 66, 34, 66},
-		TravelMillis: []int64{733, 500, 516, 516, 516, 968, 733, 500, 516, 516, 516, 968},
-		Tags:         []string{"contrast", "paired", "centered"},
-	},
-	{
 		ID: PatternUpperAccents, Name: "Upper Accents",
 		Description:  "Repeated upper-range accents are answered by one broad sweep.",
 		Positions:    []float64{8, 96, 62, 96, 62, 96, 8, 96, 62, 96, 62, 96},
 		TravelMillis: []int64{721, 486, 486, 486, 486, 721, 721, 486, 486, 486, 486, 721},
 		Tags:         []string{"upper", "accent", "teasing"},
-	},
-	{
-		ID: PatternLowerAccents, Name: "Lower Accents",
-		Description:  "Repeated lower-range accents are answered by one broad sweep.",
-		Positions:    []float64{92, 4, 38, 4, 38, 4, 92, 4, 38, 4, 38, 4},
-		TravelMillis: []int64{721, 486, 486, 486, 486, 721, 721, 486, 486, 486, 486, 721},
-		Tags:         []string{"lower", "accent", "deep"},
 	},
 	{
 		ID: PatternSteadyDrift, Name: "Window Drift",
@@ -865,13 +845,6 @@ var catalogPatternSpecs = []catalogPatternSpec{
 		Positions:    []float64{25, 75, 25, 75, 25, 75, 25, 75, 25, 75, 25, 75},
 		TravelMillis: []int64{556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 556},
 		Tags:         []string{"midrange", "even", "repeating"},
-	},
-	{
-		ID: PatternThreeAndOne, Name: "Three and One",
-		Description:  "Three tight strokes up high, then one full plunge and recovery.",
-		Positions:    []float64{95, 65, 95, 65, 95, 65, 95, 5, 95, 65, 95, 65, 95, 65, 95, 5},
-		TravelMillis: []int64{484, 484, 484, 484, 484, 484, 738, 738, 484, 484, 484, 484, 484, 484, 738, 738},
-		Tags:         []string{"grouped", "resolving", "upper"},
 	},
 	{
 		ID: PatternOffbeat, Name: "Offbeat",
@@ -913,18 +886,6 @@ var catalogPatternSpecs = []catalogPatternSpec{
 		Positions:    []float64{99, 0, 25, 0, 99, 74, 99, 0, 25, 0},
 		TravelMillis: []int64{942, 472, 471, 943, 472, 471, 943, 471, 472, 943},
 		Tags:         []string{"multi-level", "alternating", "full"},
-	},
-	{
-		ID: PatternHighLowBlocks, Name: "High-Low Blocks", Description: "Upper-zone pulses switch to lower-zone pulses between full sweeps.",
-		Positions:    []float64{0, 99, 70, 99, 70, 99, 70, 99, 0, 30, 0, 30},
-		TravelMillis: []int64{942, 472, 472, 471, 472, 472, 472, 942, 472, 471, 472, 470},
-		Tags:         []string{"zones", "grouped", "contrast"},
-	},
-	{
-		ID: PatternDeepShallowSequence, Name: "Deep-Shallow Sequence", Description: "Upper returns move between medium and full-depth strokes in an uneven phrase.",
-		Positions:    []float64{99, 63, 99, 0, 99, 63, 99, 0, 99, 63},
-		TravelMillis: []int64{446, 446, 1337, 625, 446, 446, 1337, 625, 446, 446},
-		Tags:         []string{"uneven", "deep", "upper-return"},
 	},
 	{
 		ID: PatternSlowFastFull, Name: "Tempo Ramp", Description: "Full-span strokes shorten their relative timing across the loop.",

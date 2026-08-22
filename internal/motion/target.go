@@ -36,7 +36,7 @@ const (
 	PatternWaves PatternID = "waves"
 	// PatternClimb identifies a retired ratcheting-build pattern.
 	PatternClimb PatternID = "climb"
-	// PatternFlutter is the shallow-flutter-with-sweep pattern.
+	// PatternFlutter identifies a retired shallow-flutter-with-sweep pattern.
 	PatternFlutter PatternID = "flutter"
 	// PatternSway identifies a retired asymmetric broad-arc pattern.
 	PatternSway PatternID = "sway"
@@ -58,9 +58,9 @@ const (
 	PatternSyncopate PatternID = "syncopate"
 	// PatternFourLevelCircuit cycles full and partial strokes across both zones.
 	PatternFourLevelCircuit PatternID = "four-level-circuit"
-	// PatternHighLowBlocks groups upper and lower zone pulses.
+	// PatternHighLowBlocks identifies retired grouped upper/lower zone pulses.
 	PatternHighLowBlocks PatternID = "high-low-blocks"
-	// PatternDeepShallowSequence mixes deep and medium upper-anchored strokes.
+	// PatternDeepShallowSequence identifies a retired upper-anchored sequence.
 	PatternDeepShallowSequence PatternID = "deep-shallow-sequence"
 	// PatternShortMediumSteps identifies a retired lower-anchored step pattern.
 	PatternShortMediumSteps PatternID = "short-medium-steps"
@@ -105,11 +105,11 @@ const (
 	PatternEasingDown PatternID = "easing-down"
 	// PatternBuildingUp steps the whole stroke window higher at a held pace.
 	PatternBuildingUp PatternID = "building-up"
-	// PatternBroadAndTight answers one wide sweep with tight centered strokes.
+	// PatternBroadAndTight identifies a retired wide/tight contrast pattern.
 	PatternBroadAndTight PatternID = "broad-and-tight"
 	// PatternUpperAccents keeps quick accents in the upper range.
 	PatternUpperAccents PatternID = "upper-accents"
-	// PatternLowerAccents keeps quick accents in the lower range.
+	// PatternLowerAccents identifies a retired lower-range accent pattern.
 	PatternLowerAccents PatternID = "lower-accents"
 	// PatternSteadyDrift holds one pace while the window wanders.
 	PatternSteadyDrift PatternID = "steady-drift"
@@ -127,7 +127,7 @@ const (
 	PatternRocking PatternID = "rocking"
 	// PatternSurgeAndSettle follows one full sweep with a long settled run.
 	PatternSurgeAndSettle PatternID = "surge-and-settle"
-	// PatternThreeAndOne resolves tight upper strokes with one full plunge.
+	// PatternThreeAndOne identifies a retired grouped upper/full-range pattern.
 	PatternThreeAndOne PatternID = "three-and-one"
 	// PatternCrosscut trades long blocks of broad and tight strokes.
 	PatternCrosscut PatternID = "crosscut"

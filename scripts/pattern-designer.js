@@ -158,24 +158,10 @@ const specs = [
     velocities: [85, 62, 85, 62, 85, 62, 85, 120],
   },
   {
-    id: "broad-and-tight", name: "Broad and Tight",
-    description: "One wide sweep, then a run of tight centered strokes. Playful contrast.",
-    tags: ["contrast", "paired", "centered"],
-    positions: [6, 94, 34, 66, 34, 66],
-    velocities: [120, 120, 62, 62, 62, 62],
-  },
-  {
     id: "upper-accents", name: "Upper Accents",
     description: "Repeated upper-range accents are answered by one broad sweep.",
     tags: ["upper", "accent", "teasing"],
     positions: [8, 96, 62, 96, 62, 96],
-    velocities: [122, 70, 70, 70, 70, 122],
-  },
-  {
-    id: "lower-accents", name: "Lower Accents",
-    description: "Repeated lower-range accents are answered by one broad sweep.",
-    tags: ["lower", "accent", "deep"],
-    positions: [92, 4, 38, 4, 38, 4],
     velocities: [122, 70, 70, 70, 70, 122],
   },
   {
@@ -233,13 +219,6 @@ const specs = [
     tags: ["full-sweep", "midrange-blocks", "repeating"],
     positions: [2, 98, 35, 68, 35, 68, 35, 68, 35, 68, 35, 68],
     velocities: [140, 110, 68, 68, 68, 68, 68, 68, 68, 68, 68, 112],
-  },
-  {
-    id: "three-and-one", name: "Three and One",
-    description: "Three tight strokes up high, then one full plunge and recovery.",
-    tags: ["grouped", "resolving", "upper"],
-    positions: [95, 65, 95, 65, 95, 65, 95, 5],
-    velocities: [62, 62, 62, 62, 62, 62, 122, 122],
   },
   {
     id: "crosscut", name: "Crosscut",

@@ -31,7 +31,7 @@ describe("MotionVisualizer", () => {
             running: true,
             paused: false,
             target: {
-              pattern_id: "high-low-blocks",
+              pattern_id: "four-level-circuit",
               pattern_name: "High-Low Blocks",
               source: "chat",
               speed_percent: 38,
@@ -127,7 +127,7 @@ describe("MotionVisualizer", () => {
             running: false,
             paused: false,
             target: {
-              pattern_id: "high-low-blocks",
+              pattern_id: "four-level-circuit",
               pattern_name: "High-Low Blocks",
               source: "chat",
               speed_percent: 38,

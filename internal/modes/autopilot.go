@@ -2,6 +2,8 @@ package modes
 
 import (
 	"context"
+	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -67,16 +69,18 @@ type DecisionInput struct {
 	MotionMinSeconds  int
 	MotionMaxSeconds  int
 	MotionChangeLevel int
-	// SessionSeconds, SecondsAtCurrentSpeed, and SpeedTrend are backend-computed
-	// session facts. They are read-only input: the model cannot fabricate them,
-	// they appear in traces, and they authorize nothing on their own. This is
-	// deliberately not a model-maintained score — an accumulating counter that
-	// feeds back into intensity is the hidden-escalation shape
-	// docs/goals-and-guardrails.md rules out.
-	SessionSeconds        int
-	SecondsAtCurrentSpeed int
-	SpeedTrend            string
-	// SessionTracking reports whether the three fields above are meaningful. When
+	// These session facts are backend-computed read-only input. Phrase age
+	// measures unchanged semantic shape/texture, excluding pace and the scheduler
+	// horizon; the decision counts let the model distinguish one sensible hold
+	// from accumulated sameness without requiring a change. None of these facts
+	// authorizes motion or feeds an automatic intensity score.
+	SessionSeconds           int
+	SecondsAtCurrentSpeed    int
+	SecondsAtCurrentPhrase   int
+	DecisionsAtCurrentPhrase int
+	ConsecutiveHolds         int
+	SpeedTrend               string
+	// SessionTracking reports whether the session fields above are meaningful. When
 	// it is false the prompt omits them rather than sending zeros, because a model
 	// cannot act on a field it never saw.
 	SessionTracking bool
@@ -120,6 +124,14 @@ type segmentChoice struct {
 	timing          TimingPreference
 	variability     VariabilityPreference
 	decisionLatency time.Duration
+	// Backend facts visible to the decision are retained with its trace so a
+	// hold or update can be audited against the exact accumulated context.
+	sessionTracking          bool
+	sessionSeconds           int
+	secondsAtCurrentSpeed    int
+	secondsAtCurrentPhrase   int
+	decisionsAtCurrentPhrase int
+	consecutiveHolds         int
 }
 
 // nextSegmentChoice picks the next segment for Freestyle or Autopilot.
@@ -138,8 +150,16 @@ func (m *Manager) nextSegmentChoice(ctx context.Context, mode string) segmentCho
 // the deterministic planner; Dynamic motion holds or waits because a catalog
 // segment would violate the selected control mode. Speech decisions return
 // their error so they can be postponed without disturbing motion.
-func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback bool) segmentChoice {
+func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback bool) (choice segmentChoice) {
 	input := m.decisionInput()
+	defer func() {
+		choice.sessionTracking = input.SessionTracking
+		choice.sessionSeconds = input.SessionSeconds
+		choice.secondsAtCurrentSpeed = input.SecondsAtCurrentSpeed
+		choice.secondsAtCurrentPhrase = input.SecondsAtCurrentPhrase
+		choice.decisionsAtCurrentPhrase = input.DecisionsAtCurrentPhrase
+		choice.consecutiveHolds = input.ConsecutiveHolds
+	}()
 	dynamicMode := m.options.MotionGenerationMode != nil &&
 		m.options.MotionGenerationMode() == config.LLMMotionModeDynamic
 	decideCtx, cancel := context.WithTimeout(ctx, decisionTimeout)
@@ -200,6 +220,20 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		source: "model", say: decision.Say, timing: timing,
 		variability: variability, decisionLatency: latency,
 	}
+}
+
+func (choice segmentChoice) sessionTraceNote() string {
+	if !choice.sessionTracking {
+		return ""
+	}
+	return fmt.Sprintf(
+		" session=%ds speed_age=%ds phrase_age=%ds phrase_decisions=%d hold_streak=%d",
+		choice.sessionSeconds,
+		choice.secondsAtCurrentSpeed,
+		choice.secondsAtCurrentPhrase,
+		choice.decisionsAtCurrentPhrase,
+		choice.consecutiveHolds,
+	)
 }
 
 func normalizeTiming(timing TimingPreference) TimingPreference {
@@ -264,6 +298,13 @@ func (m *Manager) decisionInput() DecisionInput {
 				input.SecondsAtCurrentSpeed = int(held / time.Second)
 			}
 		}
+		if !m.phraseChangedAt.IsZero() {
+			if held := now.Sub(m.phraseChangedAt); held > 0 {
+				input.SecondsAtCurrentPhrase = int(held / time.Second)
+			}
+		}
+		input.DecisionsAtCurrentPhrase = m.decisionsAtCurrentPhrase
+		input.ConsecutiveHolds = m.consecutiveHolds
 		if autopilot.SessionArc {
 			input.ArcEnabled = true
 			input.ArcPercent = m.arcPercentLocked(now)
@@ -289,6 +330,33 @@ func (m *Manager) decisionInput() DecisionInput {
 	input.MotionMinSeconds, input.MotionMaxSeconds = autopilot.MotionWindow()
 	input.MotionChangeLevel = autopilot.MotionChangeLevel
 	return input
+}
+
+// sameMotionPhrase compares semantic shape and texture while deliberately
+// ignoring speed and the scheduler's decision horizon. PhraseSeed is a backend
+// compilation detail; it can refresh micro-motion without representing a new
+// model-authored phrase.
+func sameMotionPhrase(left, right Segment) bool {
+	if left.PatternID != "" || right.PatternID != "" {
+		return left.PatternID == right.PatternID && samePhraseAreaFocus(left.AreaFocus, right.AreaFocus)
+	}
+	if left.Dynamic == nil || right.Dynamic == nil {
+		return left.Dynamic == nil && right.Dynamic == nil
+	}
+	leftDynamic := motion.NormalizeDynamicDefinition(*left.Dynamic)
+	rightDynamic := motion.NormalizeDynamicDefinition(*right.Dynamic)
+	leftDynamic.SegmentSeconds = 0
+	rightDynamic.SegmentSeconds = 0
+	leftDynamic.PhraseSeed = 0
+	rightDynamic.PhraseSeed = 0
+	return reflect.DeepEqual(leftDynamic, rightDynamic)
+}
+
+func samePhraseAreaFocus(left, right *motion.AreaFocus) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 // speedTrendLocked reports the direction of the last speed change. Callers hold

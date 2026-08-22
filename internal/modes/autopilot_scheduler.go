@@ -118,8 +118,9 @@ func (m *Manager) planAutopilotMotion(ctx context.Context, engine Engine, genera
 		m.pendingMotion = &copied
 		m.mu.Unlock()
 		m.trace(ModeAutopilot, "motion_planned", nil,
-			fmt.Sprintf("%s next=%s variability=%s latency=%s",
-				choice.source, choice.timing, normalizeVariability(choice.variability), choice.decisionLatency))
+			fmt.Sprintf("%s next=%s variability=%s latency=%s%s",
+				choice.source, choice.timing, normalizeVariability(choice.variability), choice.decisionLatency,
+				choice.sessionTraceNote()))
 		return
 	}
 	m.mu.Unlock()
@@ -201,6 +202,7 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	if choice.decisionLatency > 0 {
 		m.lastDecisionTime = choice.decisionLatency
 	}
+	m.observeAutopilotPhraseLocked(now, *choice)
 	duration := m.sampleMotionDelayLocked(choice.timing)
 	if choice.segment.Dynamic != nil && choice.segment.Dynamic.SegmentSeconds > 0 {
 		requested := time.Duration(choice.segment.Dynamic.SegmentSeconds) * time.Second
@@ -239,6 +241,62 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 		m.scheduleSpeechLocked(now, TimingNormal)
 	}
 	return true
+}
+
+// observeAutopilotPhraseLocked records what actually reached a segment
+// boundary. A hold and a speed/horizon-only update both preserve phrase age;
+// only a semantic shape/texture change resets it. Callers hold m.mu.
+func (m *Manager) observeAutopilotPhraseLocked(now time.Time, choice segmentChoice) {
+	if choice.source == "hold" {
+		if m.currentPhrase.hasContent() {
+			m.decisionsAtCurrentPhrase++
+		}
+		if choice.note == "" {
+			m.consecutiveHolds++
+		} else {
+			m.consecutiveHolds = 0
+		}
+		return
+	}
+	m.consecutiveHolds = 0
+	if !choice.segment.hasContent() {
+		return
+	}
+	if !m.currentPhrase.hasContent() || !sameMotionPhrase(m.currentPhrase, choice.segment) {
+		m.currentPhrase = clonePhraseSegment(choice.segment)
+		m.phraseChangedAt = now
+		m.decisionsAtCurrentPhrase = 0
+		return
+	}
+	m.decisionsAtCurrentPhrase++
+}
+
+// observeInteractivePhraseLocked adopts user-authored shape without counting
+// the chat turn as an autonomous reconsideration. Callers hold m.mu.
+func (m *Manager) observeInteractivePhraseLocked(now time.Time, segment Segment) {
+	m.consecutiveHolds = 0
+	if !segment.hasContent() {
+		return
+	}
+	if !m.currentPhrase.hasContent() || !sameMotionPhrase(m.currentPhrase, segment) {
+		m.currentPhrase = clonePhraseSegment(segment)
+		m.phraseChangedAt = now
+		m.decisionsAtCurrentPhrase = 0
+	}
+}
+
+func clonePhraseSegment(segment Segment) Segment {
+	return Segment{
+		PatternID: segment.PatternID,
+		Dynamic:   cloneDynamicDefinition(segment.Dynamic),
+		AreaFocus: func() *motion.AreaFocus {
+			if segment.AreaFocus == nil {
+				return nil
+			}
+			focus := *segment.AreaFocus
+			return &focus
+		}(),
+	}
 }
 
 func (m *Manager) tickAutopilotSpeech(ctx context.Context, engine Engine, generation uint64) {

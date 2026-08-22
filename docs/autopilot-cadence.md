@@ -1,6 +1,6 @@
 # Autopilot cadence and autonomy
 
-Status: implementation contract (2026-08-12)
+Status: implementation contract (2026-08-22)
 
 This document defines how Chat Autopilot decides when to change motion and when
 to speak. It is intentionally separate from motion-style scoring and from voice
@@ -88,13 +88,14 @@ Stored Steady/Natural/Dynamic values migrate to levels 3/4/6, and an old custom
 motion window migrates to the nearest level midpoint. Speech retains its custom
 minimum/maximum inputs. All non-off intervals have an eight-second floor.
 
-The numbered setting changes how often Autopilot asks for a genuinely new
-semantic target; it is not an acceleration or transport multiplier. Creative
-also receives the effective level and window as decision context, and its
-model-selected `segment_seconds` is clamped against that effective window. The
-previous implementation accidentally clamped Creative against the dormant
-saved custom fields even when another preset was selected; the scale has one
-backend-authoritative window now.
+The numbered setting changes how often Autopilot **reconsiders** the semantic
+target; it is not an acceleration or transport multiplier and never forces the
+model to change motion. Creative also receives the effective level as a user
+preference: higher values mean more frequent meaningful differences are
+welcome, while lower values favor continuity. Its model-selected
+`segment_seconds` is clamped against the level's backend-authoritative window.
+The live decision horizon is returned to the model on the next turn so a local
+model can vary it instead of repeatedly selecting the midpoint.
 
 ### Speech motion authority
 
@@ -223,11 +224,29 @@ silently acquire a backend-selected texture either.
 ### Session tracking
 
 An independent switch, on by default, that lets the model see elapsed session
-time, how long the current speed has held, and whether speed has been rising or
-easing. It is **inert read-only input**: backend-computed so the model cannot
-fabricate it, visible in traces, and authorizing nothing. Off omits the facts
-from the prompt entirely rather than sending zeros, because a model cannot reason
-from a number that means "unknown".
+time, how long the current speed has held, whether speed has been rising or
+easing, and accumulated motion sameness. The latter is expressed as the age of
+the current semantic phrase, how many reconsiderations preserved it, and the
+current consecutive hold count. Phrase identity includes spatial geometry,
+range envelope, texture, and section structure while excluding pace and the
+scheduler horizon; a small speed nudge therefore cannot disguise a repeated
+shape as a new phrase.
+
+These values are **inert read-only observations**. They are backend-computed,
+included with decision traces, and authorize nothing. There is no maximum hold
+duration and no deterministic "change now" threshold: the model remains free
+to hold at every age, while finally having enough context to recognize when a
+series of individually reasonable holds has accumulated into prolonged
+repetition. Off omits all of the facts from the prompt rather than sending
+zeros, because a model cannot reason from a number that means "unknown".
+
+Creative's strict autonomous JSON contract lists the same phrase fields as the
+semantic parser, including span envelopes and multi-section phrases. Variable
+span profiles require an inner span of at least 20 and strictly below the
+effective widest span. The prompt provides the usable range for the current
+target, and validation returns the complete invariant to the one-shot repair
+path so a narrow current span can be widened in the same update instead of
+producing repeated malformed plans.
 
 ### Session buildup
 

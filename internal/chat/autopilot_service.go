@@ -172,13 +172,17 @@ func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotRespon
 	preserveCurrentPatternSpeed(&validated, currentSpeed)
 	patternsEnabled := s.Capabilities.Motion && s.Capabilities.Patterns
 	dynamicEnabled := s.Capabilities.Motion && s.Capabilities.MotionMode == MotionModeDynamic
-	if err := validateAssistantResponse(&validated, s.Patterns, patternsEnabled, dynamicEnabled); err != nil {
-		return AutopilotResponse{}, err
-	}
+	// Give repair the complete effective-envelope invariant on its first failure.
+	// Running updates often preserve their outer span, which the field-local
+	// range validator cannot see; reporting only "20-100" led small local models
+	// to repair an inner floor into a still-invalid value above a narrow span.
 	if dynamicEnabled {
 		if err := validateDynamicSpanEnvelopeState(validated.Motion, s.MotionContext); err != nil {
 			return AutopilotResponse{}, err
 		}
+	}
+	if err := validateAssistantResponse(&validated, s.Patterns, patternsEnabled, dynamicEnabled); err != nil {
+		return AutopilotResponse{}, err
 	}
 	if validated.Motion != nil && validated.Motion.Action != MotionActionNone &&
 		validated.Motion.Action != MotionActionTarget && validated.Motion.Action != MotionActionUpdate {
@@ -333,7 +337,7 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 	}
 	builder.WriteString("\nOmitted target fields preserve the live target. Never invent device commands, pattern IDs, URLs, or transport details.")
 	if capabilities.MotionMode == MotionModeDynamic {
-		builder.WriteString(` Dynamic updates may contain speed_percent, center_percent plus span_percent, 2-6 named anchors, variation_percent, and segment_seconds. Use anchors or center/span, never both.`)
+		builder.WriteString(` Dynamic updates may contain speed_percent; center_percent with span_percent or 2-6 named anchors; span_min_percent with span_profile "breathe", "wander", "contrast", or "steady"; variation_percent; segment_seconds; or 2-4 sections. A variable span profile requires span_min_percent of at least 20 and strictly below the effective widest span; widen span_percent in the same update if needed. Each section uses center/span or anchors plus optional span envelope, variation_percent, and cycles. Sections replace single-phrase geometry. Use anchors or center/span, never both.`)
 		return builder.String()
 	}
 	if capabilities.Patterns {

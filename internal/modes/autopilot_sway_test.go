@@ -291,6 +291,7 @@ func TestPauseShiftsSwayScheduleWithTheSegmentDeadline(t *testing.T) {
 	manager.generation = 4
 	manager.deadline = now.Add(time.Minute)
 	manager.speedChangedAt = now.Add(-30 * time.Second)
+	manager.phraseChangedAt = now.Add(-45 * time.Second)
 	manager.arc.startedAt = now.Add(-time.Minute)
 	manager.swayPoints = []swayPoint{{
 		generation:   4,
@@ -305,6 +306,7 @@ func TestPauseShiftsSwayScheduleWithTheSegmentDeadline(t *testing.T) {
 	deadline := manager.deadline
 	waypointAt := manager.swayPoints[0].at
 	speedChangedAt := manager.speedChangedAt
+	phraseChangedAt := manager.phraseChangedAt
 	arcStartedAt := manager.arc.startedAt
 	tick := manager.options.Tick
 	manager.mu.Unlock()
@@ -316,6 +318,9 @@ func TestPauseShiftsSwayScheduleWithTheSegmentDeadline(t *testing.T) {
 	}
 	if !speedChangedAt.Equal(now.Add(-30*time.Second + tick)) {
 		t.Fatalf("paused speed history = %s, want one tick later", speedChangedAt)
+	}
+	if !phraseChangedAt.Equal(now.Add(-45*time.Second + tick)) {
+		t.Fatalf("paused phrase history = %s, want one tick later", phraseChangedAt)
 	}
 	if !arcStartedAt.Equal(now.Add(-time.Minute + tick)) {
 		t.Fatalf("paused arc clock = %s, want one tick later", arcStartedAt)

@@ -29,9 +29,9 @@ export interface AutopilotSettings {
   adaptive_speech_timing: boolean;
   adaptive_motion_timing: boolean;
   speech_motion_authority: "chat_only" | "style_only" | "full_motion" | string;
-  // Inert read-only context: elapsed session time, how long the current speed has
-  // held, and which way speed has been moving. Off omits the facts from the
-  // prompt rather than sending zeros.
+  // Inert read-only context: elapsed time, speed history, and backend-measured
+  // phrase sameness. Off omits the facts from the prompt rather than sending
+  // zeros.
   session_tracking: boolean;
   // The visible progression bar. Separate from tracking because knowing how long
   // a session has run and being encouraged to build through it are different

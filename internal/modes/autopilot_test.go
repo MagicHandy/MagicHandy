@@ -234,6 +234,67 @@ func TestAutopilotHoldKeepsCurrentSegmentWithoutDrift(t *testing.T) {
 	}
 }
 
+func TestAutopilotReportsAccumulatedPhraseSamenessWithoutForcingAChange(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(100, 0)}
+	initial := motion.DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 20, VariationPercent: 30, SegmentSeconds: 12,
+	}
+	samePhrase := initial
+	samePhrase.SegmentSeconds = 16
+	changedPhrase := initial
+	changedPhrase.VariationPercent = 55
+	decider := &fakeDecider{decisions: []Decision{
+		{Segment: Segment{SpeedPercent: 45, Dynamic: &initial}, Next: TimingNormal, Variability: VariabilityNormal},
+		{Hold: true, Next: TimingNormal, Variability: VariabilitySettled},
+		{Segment: Segment{SpeedPercent: 52, Dynamic: &samePhrase}, Next: TimingNormal, Variability: VariabilityNormal},
+		{Segment: Segment{SpeedPercent: 52, Dynamic: &changedPhrase}, Next: TimingNormal, Variability: VariabilityNormal},
+		{Hold: true, Next: TimingNormal, Variability: VariabilitySettled},
+	}}
+	manager := newAutopilotManager(t, engine, clock, decider, nil)
+	manager.options.MotionGenerationMode = func() string { return config.LLMMotionModeDynamic }
+
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+
+	for wantCalls := 2; wantCalls <= 5; wantCalls++ {
+		clock.Advance(150 * time.Second)
+		waitFor(t, time.Second, func() bool { return decider.callCount() >= wantCalls })
+	}
+
+	decider.mu.Lock()
+	inputs := append([]DecisionInput(nil), decider.inputs...)
+	decider.mu.Unlock()
+	if len(inputs) < 5 {
+		t.Fatalf("received %d decisions, want 5", len(inputs))
+	}
+	if inputs[1].SecondsAtCurrentPhrase != 150 || inputs[1].DecisionsAtCurrentPhrase != 0 || inputs[1].ConsecutiveHolds != 0 {
+		t.Fatalf("first reconsideration phrase facts = %+v", inputs[1])
+	}
+	if inputs[2].SecondsAtCurrentPhrase != 300 || inputs[2].DecisionsAtCurrentPhrase != 1 || inputs[2].ConsecutiveHolds != 1 {
+		t.Fatalf("facts after one hold = %+v", inputs[2])
+	}
+	if inputs[3].SecondsAtCurrentPhrase != 450 || inputs[3].DecisionsAtCurrentPhrase != 2 || inputs[3].ConsecutiveHolds != 0 {
+		t.Fatalf("speed/horizon-only update reset phrase facts = %+v", inputs[3])
+	}
+	if inputs[4].SecondsAtCurrentPhrase != 150 || inputs[4].DecisionsAtCurrentPhrase != 0 || inputs[4].ConsecutiveHolds != 0 {
+		t.Fatalf("semantic phrase change did not reset facts = %+v", inputs[4])
+	}
+	foundTraceFacts := false
+	for _, row := range manager.options.Traces.Rows() {
+		if row.Planner != nil && strings.Contains(row.Planner.Note,
+			"phrase_age=450s phrase_decisions=2 hold_streak=0") {
+			foundTraceFacts = true
+			break
+		}
+	}
+	if !foundTraceFacts {
+		t.Fatal("decision trace omitted the model-visible accumulated phrase facts")
+	}
+}
+
 func TestInteractiveChatTargetSuspendsAndReplacesAutopilotState(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}
