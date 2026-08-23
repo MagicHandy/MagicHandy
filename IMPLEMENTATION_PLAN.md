@@ -1452,6 +1452,30 @@ or transport authority. The active Gemma model passed the max-rate material-
 change, explicit-hold, Hei speech-novelty, and full interactive matrices without
 an engine or transport; matched real-device feel remains open.
 
+The alpha.34 follow-up makes the same autonomy contract system-authoritative:
+enabling Autopilot and choosing its bounded controls is the ongoing user request,
+so a hidden motion turn is not misread as unauthorized escalation merely because
+chat is quiet. Creative decisions receive the compiled current band plus four
+recent compiled bands as observations, name a short destination intent before
+geometry, and sample more broadly as Motion change rate rises. Cosmetic geometry
+updates become honest holds (or retain a simultaneous pace change without the
+cosmetic geometry); levels 6–8 receive one non-prescriptive quality retry that
+may still choose `none`. The aggregate admission gate still rejects nearby
+scalar nudges but no longer suppresses a compiled near-full expansion. Wander's
+smooth broad phase now approaches the selected outer span more often without
+endpoint pinning or sample noise. Spoken check-ins use an independent moderate
+sampling temperature so their language can vary without inheriting the motion
+rate.
+
+The same follow-up closes the live Pause/recovery race. The mode manager latches
+user pause intent before the transport Stop round-trip and cancels in-flight
+autonomous work, so the transient `running=false, paused=false` snapshot cannot
+enter recovery Start. Deadlines, phase, and the remaining sway schedule stay
+preserved until a successful explicit Resume. Stop remains the independent
+safety path. Repeated transport-free runs on the active installed Gemma model
+cover localized-to-near-full range evolution without a fixed broad-range target;
+matched-device feel and capped Pause/Resume/Stop confirmation remain open.
+
 Creative is now the default for fresh and pre-selector settings documents;
 explicit Pattern Library and Off choices persist. The six canonical built-ins
 disabled in the user's installed alpha.28 profile are retired from the active

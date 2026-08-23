@@ -93,6 +93,20 @@ type DecisionInput struct {
 	// from felt commanded motion rather than treating any changed JSON field as
 	// proof of novelty.
 	CurrentPerceptual *motion.PerceptualSummary
+	// RecentPositionBands is bounded memory of hidden autonomous outcomes. Chat
+	// history cannot supply it because motion-only decisions are intentionally
+	// not published as dialogue.
+	RecentPositionBands []PositionBand
+	// MotionFeedback is populated only for one semantic quality retry after a
+	// model-elected update compiled as continuity.
+	MotionFeedback string
+}
+
+// PositionBand describes the compiled position envelope of one recent target.
+// It is an observation for the model, never a target or transport payload.
+type PositionBand struct {
+	MinimumPercent float64
+	MaximumPercent float64
 }
 
 // Decision is one motion or speech curation outcome. Hold is scheduler-only:
@@ -308,13 +322,14 @@ func (m *Manager) decisionInput() DecisionInput {
 	now := m.options.Now()
 	m.mu.Lock()
 	input := DecisionInput{
-		Style:            settings.Style,
-		SegmentIndex:     m.segmentIdx,
-		RecentPatternIDs: append([]string(nil), m.recentPatternIDs...),
-		SpeedMinPercent:  settings.SpeedMinPercent,
-		SpeedMaxPercent:  settings.SpeedMaxPercent,
-		LastSay:          m.lastSay,
-		SessionTracking:  autopilot.SessionTracking,
+		Style:               settings.Style,
+		SegmentIndex:        m.segmentIdx,
+		RecentPatternIDs:    append([]string(nil), m.recentPatternIDs...),
+		RecentPositionBands: append([]PositionBand(nil), m.recentPositionBands...),
+		SpeedMinPercent:     settings.SpeedMinPercent,
+		SpeedMaxPercent:     settings.SpeedMaxPercent,
+		LastSay:             m.lastSay,
+		SessionTracking:     autopilot.SessionTracking,
 	}
 	if autopilot.SessionTracking {
 		input.SessionSeconds = sessionSeconds

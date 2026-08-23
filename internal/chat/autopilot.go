@@ -9,33 +9,37 @@ import (
 // AutopilotContext is bounded semantic context for an autonomous model turn.
 // It contains no transport or engine details.
 type AutopilotContext struct {
-	Style               string
-	SegmentIndex        int
-	RecentPatternIDs    []string
-	SpeedMinPercent     int
-	SpeedMaxPercent     int
-	LastSay             string
-	CurrentPatternID    string
-	CurrentSpeed        int
-	CurrentArea         string
-	AreaFocusEnabled    bool
-	MotionMode          MotionMode
-	CurrentCenter       int
-	CurrentSpan         int
-	CurrentSpanMin      int
-	CurrentSpanProfile  string
-	CurrentAnchors      []string
-	CurrentVariation    int
-	CurrentSegment      int
-	CurrentSectionCount int
-	CommandedMeanTravel int
-	CommandedPeakSpeed  int
-	MeanStrokeLength    int
-	LocalStrokeCV       int
-	LocalStrokeRange    int
-	MotionMinSeconds    int
-	MotionMaxSeconds    int
-	MotionChangeLevel   int
+	Style                string
+	SegmentIndex         int
+	RecentPatternIDs     []string
+	SpeedMinPercent      int
+	SpeedMaxPercent      int
+	LastSay              string
+	CurrentPatternID     string
+	CurrentSpeed         int
+	CurrentArea          string
+	AreaFocusEnabled     bool
+	MotionMode           MotionMode
+	CurrentCenter        int
+	CurrentSpan          int
+	CurrentSpanMin       int
+	CurrentSpanProfile   string
+	CurrentAnchors       []string
+	CurrentVariation     int
+	CurrentSegment       int
+	CurrentSectionCount  int
+	CommandedMeanTravel  int
+	CommandedPeakSpeed   int
+	CommandedPositionMin int
+	CommandedPositionMax int
+	MeanStrokeLength     int
+	LocalStrokeCV        int
+	LocalStrokeRange     int
+	RecentPositionBands  []PositionBand
+	MotionFeedback       string
+	MotionMinSeconds     int
+	MotionMaxSeconds     int
+	MotionChangeLevel    int
 	// SessionTracking gates the session facts below. When false they are
 	// omitted from the prompt entirely rather than rendered as zeros, so the model
 	// cannot reason from a number that means "unknown".
@@ -134,23 +138,24 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 			builder.WriteString("No Dynamic target is active. To begin Creative motion, use update with speed and either center/span or anchors, or use a complete sections phrase; none leaves Autopilot waiting.\n")
 		}
 		writeCompiledCreativeFeel(&builder, context)
+		writeRecentCreativeBands(&builder, context.RecentPositionBands)
 		writeSessionProgress(&builder, context)
 		builder.WriteString("Choose the next continuous stretch. Autopilot authorizes bounded choices without a new chat message; conversation and explicit user directions still win.\n")
 		motionChangeLevel := normalizedMotionChangeLevel(context.MotionChangeLevel)
-		fmt.Fprintf(&builder, "- Motion change rate: %d/8 (%s). It biases the whole phrase, not each turn: high favors shorter repetition; low favors continuity. Any one hold may fit.\n", motionChangeLevel, motionChangeBias(motionChangeLevel))
-		builder.WriteString("- Use update only for meaningful change; omitted fields preserve the target. Use none for deliberate continuity, not simply because chat is quiet.\n")
-		builder.WriteString("- Rising phrase age means recent edits did not change felt output. When contrast fits, change outer center/span, anchors, or sections instead of only speed, variation, or the inner span envelope.\n")
-		builder.WriteString("- Change center/span or provide a new 2-6 anchor route; never provide both representations together. Interior anchors are pass-through positions, not pauses.\n")
+		fmt.Fprintf(&builder, "- Motion change rate: %d/8 (%s). It shapes the session, not a mandatory change schedule: any one hold may fit, while high rates favor materially different phrases instead of nearby scalar edits.\n", motionChangeLevel, motionChangeBias(motionChangeLevel))
+		builder.WriteString("- Use none for deliberate continuity. Use update only when the result should feel different; omitted fields preserve the target. Phrase age and compiled feel are the source of truth when earlier JSON edits amounted to continuity.\n")
+		builder.WriteString("- Shape one continuous route with center/span or 2-6 named anchors, never both. Position 0% is base and 100% is tip; give both ends equal design weight. Broad motion approaches the full available position range rather than making a slightly wider midpoint band. Across the session, mix localized and broad routes and sometimes approach either end, without requiring endpoints, full range, or alternation on a schedule. Interior anchors are pass-through positions, not pauses.\n")
 		writeDynamicSpanGuidance(&builder, context)
-		builder.WriteString("- variation_percent controls correlated center and rhythm texture independently from an explicit span profile: 20-40 is subtle, 45-70 clearly organic, and 70-100 deliberately wild. Use zero only for mechanically even motion, never for jitter.\n")
-		builder.WriteString("- When the ongoing direction asks for several distinct or evolving sequences, use sections with 2-4 complete movement ideas; one geometry cannot express a multiple-sequence phrase. Give each section geometry, texture, and 2-12 cycles. Otherwise use one geometry for one coherent idea, and do not emit sections merely to restate the current phrase.\n")
+		builder.WriteString("- variation_percent adds smooth correlated center/rhythm texture: 20-40 is subtle, 45-70 clearly organic, and 70-100 deliberately wild; zero is mechanically even, never jitter.\n")
+		builder.WriteString("- Use 2-4 sections only for several distinct or evolving movement ideas; give each complete geometry, texture, and 2-12 cycles. Otherwise keep one coherent geometry.\n")
 		fmt.Fprintf(&builder, "- segment_seconds must be %d-%d and says when to reconsider, not when to stop. Vary it naturally rather than choosing one constant.\n",
 			minimumSeconds, maximumSeconds)
-		builder.WriteString("- Never use start or stop: the scheduler owns start and only the user stops motion.\n")
-		fmt.Fprintf(&builder, "- Explore %d-%d%% speed across the session, but pace alone keeps the same range. Across changes, rotate contrast among pace, outer travel band, stroke-length envelope, texture, and sections.\n",
+		fmt.Fprintf(&builder, "- Explore %d-%d%% speed across the session and rotate contrast among pace, outer travel band, stroke-length envelope, texture, and sections; pace alone does not change range.\n",
 			context.SpeedMinPercent, context.SpeedMaxPercent)
-		fmt.Fprintf(&builder, "- Apply the current %s. An explicit request to keep motion unchanged always means none. At a high rate, a new phrase should combine a distinct outer band with envelope or texture, or use sections; a deliberate hold remains valid, but nearby scalar steps are not contrast.\n", motionChangeBias(motionChangeLevel))
-		builder.WriteString("- Set next to soon, normal, or later as a fallback timing preference. Set variability to settled, normal, or restless for speed drift independent of geometry.")
+		builder.WriteString("- Name one brief destination intent before encoding fields, so the geometry follows a motion idea instead of incrementing toward it. Never use start or stop: the scheduler owns start and only the user stops motion. Set next for fallback timing and variability for speed drift independent of geometry.")
+		if feedback := strings.TrimSpace(context.MotionFeedback); feedback != "" {
+			fmt.Fprintf(&builder, "\nQuality feedback: %s", feedback)
+		}
 		return builder.String()
 	}
 	area := strings.TrimSpace(context.CurrentArea)
@@ -208,12 +213,35 @@ func motionChangeBias(level int) string {
 	}
 }
 
+// PositionBand is one previously compiled outer position envelope. Hidden
+// autonomous decisions are not part of chat history, so this compact bounded
+// memory lets the model see whether its recent range choices really differed.
+type PositionBand struct {
+	Minimum int
+	Maximum int
+}
+
+func writeRecentCreativeBands(builder *strings.Builder, bands []PositionBand) {
+	if len(bands) == 0 {
+		return
+	}
+	builder.WriteString("Recent compiled position bands, oldest to newest: ")
+	for index, band := range bands {
+		if index > 0 {
+			builder.WriteString(", ")
+		}
+		fmt.Fprintf(builder, "%d-%d%%", band.Minimum, band.Maximum)
+	}
+	builder.WriteString(". These are observations of actual engine curves, not required targets; use them to recognize when one range character has dominated.\n")
+}
+
 func writeCompiledCreativeFeel(builder *strings.Builder, context AutopilotContext) {
 	if context.CommandedPeakSpeed <= 0 {
 		return
 	}
 	fmt.Fprintf(builder,
-		"Compiled feel: about %d%% travel per second on average, %d%%/s peak carriage velocity, %d%% mean stroke length, and the least varied 12-second window has %d%% length range with %d%% coefficient of variation. These are measured from the engine curve, not inferred from the JSON fields. A small numeric edit that leaves this feel similar is still continuity, not a fresh phrase.\n",
+		"Compiled feel: position band %d-%d%%, about %d%% travel per second on average, %d%%/s peak carriage velocity, %d%% mean stroke length, and the least varied 12-second window has %d%% length range with %d%% coefficient of variation. These are measured from the engine curve, not inferred from the JSON fields. A small numeric edit that leaves this feel similar is still continuity, not a fresh phrase.\n",
+		context.CommandedPositionMin, context.CommandedPositionMax,
 		context.CommandedMeanTravel, context.CommandedPeakSpeed,
 		context.MeanStrokeLength, context.LocalStrokeRange, context.LocalStrokeCV)
 }

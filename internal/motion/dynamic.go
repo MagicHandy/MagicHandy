@@ -702,7 +702,11 @@ func dynamicWanderEnvelope(seed uint32, phase float64, cycles int) float64 {
 		case 1:
 			return 0.37 + 0.26*jitter
 		default:
-			return 0.70 + 0.20*jitter
+			// Let the selected outer span be a real, occasional reach rather
+			// than a limit Wander can never approach. The correlated quintic
+			// envelope still eases into and out of these broad strokes, and the
+			// seeded category sequence avoids any endpoint schedule or jitter.
+			return 0.82 + 0.16*jitter
 		}
 	})
 }

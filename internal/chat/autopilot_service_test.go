@@ -15,13 +15,13 @@ func TestAutopilotMotionContractRequiresTimingWithoutReply(t *testing.T) {
 		},
 	}
 	response, err := service.parse(
-		`{"motion":{"action":"target","pattern_id":"pulse","intensity":35},"next":"later","variability":"restless"}`,
+		`{"intent":"change to a stronger pulse","motion":{"action":"target","pattern_id":"pulse","intensity":35},"next":"later","variability":"restless"}`,
 		AutopilotKindMotion,
 	)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if response.Reply != "" || response.Next != AutopilotTimingLater ||
+	if response.Reply != "" || response.Intent != "change to a stronger pulse" || response.Next != AutopilotTimingLater ||
 		response.Variability != "restless" || response.Motion == nil || response.Motion.PatternID != "pulse" {
 		t.Fatalf("response = %+v", response)
 	}
@@ -151,6 +151,9 @@ func TestComposeAutopilotMotionPromptHasNoInteractiveReplyContract(t *testing.T)
 		AutopilotKindMotion,
 	)
 	for _, want := range []string{
+		"AUTOPILOT MOTION AUTHORITY",
+		"active Autopilot mode and saved controls are an ongoing request",
+		`"intent":"<one brief motion concept>"`,
 		`Do not include a "reply" field`,
 		`"next":"soon"|"normal"|"later"`,
 		`"variability":"settled"|"normal"|"restless"`,
@@ -162,6 +165,12 @@ func TestComposeAutopilotMotionPromptHasNoInteractiveReplyContract(t *testing.T)
 	}
 	if strings.Contains(prompt, `Every response requires a non-empty "reply"`) {
 		t.Fatal("interactive reply contract leaked into motion prompt")
+	}
+	speech := composeAutopilotSystem(
+		set, nil, defaultPatternChoices(), FullCapabilities(), nil, nil, AutopilotKindSpeech,
+	)
+	if strings.Contains(speech, "AUTOPILOT MOTION AUTHORITY") {
+		t.Fatal("motion-only autonomous authority leaked into the speech prompt")
 	}
 }
 

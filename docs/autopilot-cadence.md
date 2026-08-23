@@ -103,11 +103,29 @@ model can vary it instead of repeatedly selecting the midpoint.
 Autopilot itself is the user's continuing authorization for bounded autonomous
 choices; an empty or quiet chat is not implicitly a request to hold. The rate is
 rendered to the model as a continuity bias over the whole felt phrase, not a
-per-decision command. At the high end, contrast may accumulate through smooth
-steps across pace, outer travel band, stroke envelope, texture, or sections;
-the retained perceptual baseline recognizes that cumulative change without
-requiring an abrupt jump. An explicit request to keep motion unchanged always
-wins and produces `action:none`, regardless of elapsed time or rate.
+per-decision command. The same rate modestly widens the motion turn's sampling
+temperature, so high rates explore more readily without mapping a level to a
+fixed geometry. The code-owned motion system prompt states that the active mode
+and saved controls are the ongoing user request; this resolves the default
+behavior profile's otherwise-conservative reading of a hidden turn with no new
+chat message. An explicit request to keep motion unchanged always wins and
+produces `action:none`, regardless of elapsed time or rate.
+
+Spoken check-ins use one independent moderate sampling temperature rather than
+inheriting Motion change rate. This gives autonomous language more room to vary
+while leaving its strict JSON contract, persona context, recent-line memory,
+and separate speech cadence unchanged.
+
+Creative motion turns name one short destination intent before encoding
+numbers. The intent is diagnostic planning context, not executable motion. A
+model-elected geometry update is compiled through the ordinary planner before
+admission; if its normalized perceptual distance is still continuity, it
+becomes a true hold. A simultaneous pace change remains valid but retains the
+current geometry. The aggregate distance rejects nearby scalar nudges but still
+admits a combined near-full expansion in position, stroke length, and texture.
+At levels 6–8 the model gets one semantic quality retry that
+may choose `none` or reconsider the motion concept in one step. The retry never
+supplies coordinates, chooses a replacement, or requires a change.
 
 ### Speech motion authority
 
@@ -270,14 +288,17 @@ path so a narrow current span can be widened in the same update instead of
 producing repeated malformed plans.
 
 The model also receives a compact summary measured from the final compiled
-curve: commanded mean travel, peak carriage velocity, mean stroke length, and
-the least-varied 12-second stroke CV/range. Phrase freshness uses one normalized
-perceptual distance over compiled position bounds, stroke metrics, profile, and
-topology. Speed is intentionally excluded because pace age is tracked
-separately. Several small scalar edits are compared with the retained baseline
-and therefore cannot reset phrase age one by one; a materially different felt
-curve resets it. The exact values are recorded beside the decision's session
-facts in diagnostics.
+curve: commanded position band, mean travel, peak carriage velocity, mean
+stroke length, and the least-varied 12-second stroke CV/range. Hidden motion
+turns are not chat history, so the manager also retains the four most recent
+compiled position bands and labels them as observations rather than targets.
+That bounded memory lets the model recognize a repeated midpoint band or one
+range character dominating without a deterministic alternation schedule.
+Phrase freshness uses one normalized perceptual distance over compiled position
+bounds, stroke metrics, profile, and topology. Speed is intentionally excluded
+because pace age is tracked separately. Cosmetic scalar edits remain continuity;
+a materially different felt curve resets phrase age. The exact values are
+recorded beside the decision's session facts in diagnostics.
 
 When the ongoing direction calls for several distinct or evolving sequences,
 the autonomous contract identifies `sections` as the matching 2–4-idea macro
@@ -359,8 +380,13 @@ itself, and `/played` now accepts `done` or `failed` but still refuses
 it was always meant to be for.
 
 Pause freezes both cadence clocks, intra-segment waypoints, session progress,
-and speed-history time. Emergency Stop cancels both clocks, in-flight model
-work, pending speech, and playback exactly as it does today.
+and speed-history time. The mode manager latches user pause intent before the
+transport Stop round-trip, covering the interval where the engine is no longer
+running but has not yet published `paused=true`; recovery cannot mistake that
+gap for a transport failure and restart motion. A successful Resume releases
+the latch and preserves the remaining schedule. Emergency Stop cancels both
+clocks, in-flight model work, pending speech, and playback exactly as it does
+today.
 
 ## Model contracts
 

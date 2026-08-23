@@ -21,6 +21,9 @@ const (
 	AutopilotKindSpeech AutopilotKind = "speech"
 )
 
+const autopilotMotionAuthority = `AUTOPILOT MOTION AUTHORITY:
+The user's active Autopilot mode and saved controls are an ongoing request for autonomous motion choices inside those bounds. Do not treat the absence of a new chat message as a request to maintain motion or approach a destination through tiny steps. Recent conversation, explicit directions, and boundaries still win, and any individual hold may be appropriate.`
+
 // AutopilotTiming is a semantic timing preference. Deterministic scheduler code
 // maps it into the user's bounded cadence window; the model never emits seconds.
 type AutopilotTiming string
@@ -36,7 +39,11 @@ const (
 
 // AutopilotResponse is a validated motion-plan or speech-check-in response.
 type AutopilotResponse struct {
-	Reply  string
+	Reply string
+	// Intent is a short planning handle for motion-only turns. Asking the model
+	// to name a concept before numbers reduces copy-the-current-target behavior;
+	// it is diagnostic context, not executable motion.
+	Intent string
 	Motion *MotionCommand
 	Next   AutopilotTiming
 	// Variability is how much the target should wander before the next boundary.
@@ -55,11 +62,15 @@ type AutopilotService struct {
 	MaxTokens             int
 	ReasoningMode         string
 	ReasoningBudgetTokens int
-	Memories              []string
-	Patterns              []PatternChoice
-	MotionContext         *MotionContext
-	ConversationContext   *ConversationContext
-	Capabilities          Capabilities
+	// Temperature lets the motion-change preference widen or narrow model
+	// exploration without turning qualitative geometry into fixed presets.
+	// Zero preserves the ordinary chat-tuned default.
+	Temperature         float64
+	Memories            []string
+	Patterns            []PatternChoice
+	MotionContext       *MotionContext
+	ConversationContext *ConversationContext
+	Capabilities        Capabilities
 }
 
 // Complete runs one autonomous decision and repairs malformed output once.
@@ -88,10 +99,17 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		kind,
 	)
 	messages := buildMessages(system, request.History, message)
+	temperature := s.Temperature
+	if temperature <= 0 {
+		temperature = 0.45
+	}
+	if temperature > 1.2 {
+		temperature = 1.2
+	}
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
 		Messages:              messages,
 		Model:                 s.Model,
-		Temperature:           0.45,
+		Temperature:           temperature,
 		TopP:                  chatTopP,
 		RepeatPenalty:         chatRepeatPenalty,
 		RepeatLastN:           chatRepeatLastN,
@@ -199,6 +217,7 @@ func decodeAutopilotResponse(raw string, kind AutopilotKind) (AutopilotResponse,
 	switch kind {
 	case AutopilotKindMotion:
 		var wire struct {
+			Intent      string          `json:"intent,omitempty"`
 			Motion      *MotionCommand  `json:"motion,omitempty"`
 			Next        AutopilotTiming `json:"next"`
 			Variability string          `json:"variability,omitempty"`
@@ -207,7 +226,7 @@ func decodeAutopilotResponse(raw string, kind AutopilotKind) (AutopilotResponse,
 			return AutopilotResponse{}, err
 		}
 		response := AutopilotResponse{
-			Motion: wire.Motion, Next: wire.Next,
+			Intent: strings.TrimSpace(wire.Intent), Motion: wire.Motion, Next: wire.Next,
 			Variability: strings.TrimSpace(wire.Variability),
 		}
 		if !validAutopilotVariability(response.Variability) {
@@ -288,6 +307,11 @@ func composeAutopilotSystem(
 	sections := make([]string, 0, len(composition.Sections))
 	for _, section := range composition.Sections {
 		switch section.ID {
+		case "behavior":
+			sections = append(sections, section.Text)
+			if kind == AutopilotKindMotion {
+				sections = append(sections, autopilotMotionAuthority)
+			}
 		case "response_contract":
 			sections = append(sections, autopilotContract(kind, capabilities))
 		case "output_guard":
@@ -315,7 +339,7 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 	if kind == AutopilotKindSpeech {
 		builder.WriteString(`The object requires a non-empty "reply" string and "next":"soon"|"normal"|"later".`)
 	} else {
-		builder.WriteString(`The object requires "next":"soon"|"normal"|"later" and "variability":"settled"|"normal"|"restless". Do not include a "reply" field.`)
+		builder.WriteString(`The object requires "intent":"<one brief motion concept>", "next":"soon"|"normal"|"later", and "variability":"settled"|"normal"|"restless". Choose the intent before encoding motion fields. Do not include a "reply" field.`)
 	}
 	if capabilities.MotionMode == MotionModeDynamic && kind == AutopilotKindMotion {
 		builder.WriteString("\nThe timing value is a relative fallback preference. segment_seconds is allowed only inside dynamic motion and stays inside the supplied user bounds.\n")
@@ -360,7 +384,7 @@ func autopilotOutputGuard(kind AutopilotKind, capabilities Capabilities) string 
 		}
 		return `FINAL OUTPUT: return only {"reply":"<one short in-character line>","next":"soon|normal|later"} plus an optional "arc" field. No motion.`
 	}
-	return `FINAL OUTPUT: return only {"next":"soon|normal|later","variability":"settled|normal|restless"} plus optional allowed "motion" and "arc" fields. No reply text.`
+	return `FINAL OUTPUT: return only {"intent":"<brief motion concept>","next":"soon|normal|later","variability":"settled|normal|restless"} plus optional allowed "motion" and "arc" fields. No reply text.`
 }
 
 func autopilotRepairPrompt(promptID string, kind AutopilotKind, parseError error) string {

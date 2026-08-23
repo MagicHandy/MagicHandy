@@ -115,16 +115,22 @@ type Manager struct {
 
 	options Options
 
-	mode              string
-	cancel            context.CancelFunc
-	done              chan struct{}
-	planner           *Planner
-	segment           Segment
-	pattern           *motion.PatternDefinition
-	deadline          time.Time
-	driftAt           time.Time
-	driftDone         bool
-	wasPaused         bool
+	mode      string
+	cancel    context.CancelFunc
+	done      chan struct{}
+	planner   *Planner
+	segment   Segment
+	pattern   *motion.PatternDefinition
+	deadline  time.Time
+	driftAt   time.Time
+	driftDone bool
+	wasPaused bool
+	// userPaused closes the transport-stop race where Engine.Pause has stopped
+	// its loop but has not yet published Paused=true. The mode scheduler must
+	// honor the control intent before transport I/O begins, not infer it from a
+	// transient engine snapshot.
+	userPaused        bool
+	userPauseID       uint64
 	userStopped       bool
 	nextRetry         time.Time
 	chatTarget        *motion.MotionTarget
@@ -137,19 +143,20 @@ type Manager struct {
 	generation        uint64
 	chatVersion       uint64
 
-	recentPatternIDs []string
-	decisionSource   string
-	lastSay          string
-	motionPlanAt     time.Time
-	pendingMotion    *segmentChoice
-	speechDeadline   time.Time
-	speechWaitingID  string
-	speechFallbackAt time.Time
-	speechNextTiming TimingPreference
-	lastDecisionTime time.Duration
-	motionCadenceRNG *rand.Rand
-	speechCadenceRNG *rand.Rand
-	swayRNG          *rand.Rand
+	recentPatternIDs    []string
+	recentPositionBands []PositionBand
+	decisionSource      string
+	lastSay             string
+	motionPlanAt        time.Time
+	pendingMotion       *segmentChoice
+	speechDeadline      time.Time
+	speechWaitingID     string
+	speechFallbackAt    time.Time
+	speechNextTiming    TimingPreference
+	lastDecisionTime    time.Duration
+	motionCadenceRNG    *rand.Rand
+	speechCadenceRNG    *rand.Rand
+	swayRNG             *rand.Rand
 	// swayPoints is the remaining intra-segment speed schedule, in time order.
 	swayPoints []swayPoint
 	// speedChangedAt and previousSpeed back the session facts handed to the
@@ -274,6 +281,8 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 	m.generation++
 	m.chatVersion++
 	m.mode = mode
+	m.userPauseID++
+	m.userPaused = false
 	m.userStopped = false
 	m.chatTarget = nil
 	m.chatKeepalive = false
@@ -297,6 +306,7 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 		m.segment = Segment{}
 		m.pattern = nil
 		m.recentPatternIDs = nil
+		m.recentPositionBands = nil
 		m.decisionSource = ""
 		m.lastSay = ""
 		m.motionPlanAt = time.Time{}
@@ -342,6 +352,8 @@ func (m *Manager) stopLoop(reason string) {
 	done := m.done
 	m.generation++
 	m.cancelOperationLocked()
+	m.userPauseID++
+	m.userPaused = false
 	m.mode = ""
 	m.cancel = nil
 	m.done = nil
@@ -373,6 +385,8 @@ func (m *Manager) stopLoopAtGeneration(mode string, generation uint64, reason st
 	done := m.done
 	m.generation++
 	m.cancelOperationLocked()
+	m.userPauseID++
+	m.userPaused = false
 	m.mode = ""
 	m.cancel = nil
 	m.done = nil
@@ -394,12 +408,60 @@ func (m *Manager) NotifyUserStop() {
 	finish()
 }
 
+// BeginUserPause blocks autonomous recovery before Engine.Pause performs its
+// transport Stop. During that round-trip the engine is intentionally neither
+// running nor fully marked paused; relying on Snapshot alone lets a mode start
+// a replacement stream in that gap. The completion callback keeps the latch
+// when the engine reached a paused state and rolls it back after an ordinary
+// pause failure.
+func (m *Manager) BeginUserPause() func(keepPaused bool) {
+	m.mu.Lock()
+	m.userPauseID++
+	pauseID := m.userPauseID
+	latched := m.mode != ""
+	if latched {
+		m.userPaused = true
+		m.generation++
+		m.cancelOperationLocked()
+		for index := range m.swayPoints {
+			m.swayPoints[index].generation = m.generation
+		}
+	}
+	m.mu.Unlock()
+
+	var once sync.Once
+	return func(keepPaused bool) {
+		once.Do(func() {
+			if keepPaused || !latched {
+				return
+			}
+			m.mu.Lock()
+			if m.userPauseID == pauseID {
+				m.userPaused = false
+			}
+			m.mu.Unlock()
+		})
+	}
+}
+
+// NotifyUserResume releases the mode-level pause latch only after the engine
+// has successfully resumed. The next scheduler tick continues the preserved
+// phrase and clocks instead of creating a replacement start.
+func (m *Manager) NotifyUserResume() {
+	m.mu.Lock()
+	m.userPauseID++
+	m.userPaused = false
+	m.mu.Unlock()
+}
+
 // BeginUserStop marks autonomous work unable to restart and cancels its loop
 // without waiting. The caller can stop the motion engine first, then invoke the
 // returned function to drain and trace the mode goroutine.
 func (m *Manager) BeginUserStop() func() {
 	m.lifecycleMu.Lock()
 	m.mu.Lock()
+	m.userPauseID++
+	m.userPaused = false
 	m.userStopped = true
 	m.chatTarget = nil
 	m.chatKeepalive = false
@@ -535,6 +597,7 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 			m.speedChangedAt = now
 		}
 		m.observeInteractivePhraseLocked(now, segment, perceptual)
+		m.rememberPositionBandLocked(perceptual)
 		m.decisionSource = "interactive"
 		if segment.PatternID != "" {
 			m.recentPatternIDs = append(m.recentPatternIDs, string(segment.PatternID))
@@ -561,6 +624,8 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 func (m *Manager) NotifyChatStop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.userPauseID++
+	m.userPaused = false
 	m.chatTarget = nil
 	m.chatKeepalive = false
 	m.chatTargetPending = false
@@ -615,8 +680,7 @@ func (m *Manager) tickFreestyle(ctx context.Context, mode string) {
 
 	// A user pause suspends planning entirely: the segment clock freezes and
 	// nothing restarts motion until the user resumes.
-	if snapshot.Paused {
-		m.freezeDeadline()
+	if m.freezeIfPaused(mode, snapshot.Paused) {
 		return
 	}
 	m.thawDeadline()
@@ -809,7 +873,7 @@ func (m *Manager) armSegment(mode string, segment Segment, pattern *motion.Patte
 	now := m.options.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.mode != mode || m.generation != generation || m.userStopped || m.chatTargetPending {
+	if m.mode != mode || m.generation != generation || m.userStopped || m.userPaused || m.chatTargetPending {
 		return false
 	}
 	m.segment = segment
@@ -828,6 +892,9 @@ func (m *Manager) armSegment(mode string, segment Segment, pattern *motion.Patte
 
 func (m *Manager) tickChat(ctx context.Context) {
 	if ctx.Err() != nil || !m.modeActive(ModeChat) {
+		return
+	}
+	if m.userPauseActive(ModeChat) {
 		return
 	}
 	engine := m.options.Current()
@@ -908,7 +975,7 @@ func (m *Manager) modeActive(mode string) bool {
 func (m *Manager) modeGenerationActive(mode string, generation uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.mode == mode && m.generation == generation && !m.userStopped &&
+	return m.mode == mode && m.generation == generation && !m.userStopped && !m.userPaused &&
 		!m.chatTargetPending && (mode != ModeAutopilot || !m.chatActivity)
 }
 
@@ -916,7 +983,21 @@ func (m *Manager) chatOperationActive(generation, chatVersion uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.mode == ModeChat && m.generation == generation && m.chatVersion == chatVersion &&
-		m.chatTarget != nil && m.chatKeepalive && !m.userStopped && !m.chatTargetPending
+		m.chatTarget != nil && m.chatKeepalive && !m.userStopped && !m.userPaused && !m.chatTargetPending
+}
+
+func (m *Manager) userPauseActive(mode string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.mode == mode && m.userPaused
+}
+
+func (m *Manager) freezeIfPaused(mode string, enginePaused bool) bool {
+	if !enginePaused && !m.userPauseActive(mode) {
+		return false
+	}
+	m.freezeDeadline()
+	return true
 }
 
 func (m *Manager) freezeDeadline() {
@@ -1002,7 +1083,7 @@ func (m *Manager) beginStartOperation(
 	chatVersion uint64,
 ) (context.Context, func(), bool) {
 	m.mu.Lock()
-	if m.mode != mode || m.generation != generation || m.userStopped || m.chatTargetPending ||
+	if m.mode != mode || m.generation != generation || m.userStopped || m.userPaused || m.chatTargetPending ||
 		(mode == ModeAutopilot && m.chatActivity) ||
 		(mode == ModeChat && (m.chatVersion != chatVersion || m.chatTarget == nil || !m.chatKeepalive)) {
 		m.mu.Unlock()

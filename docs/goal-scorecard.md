@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.33 candidate: 24,116,224 bytes plain and 17,374,720 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.34 candidate: 24,167,936 bytes plain and 17,394,176 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.33` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.33 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.34` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.34 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -190,6 +190,29 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-22** - Prepared alpha.34 after the installed alpha.33 Cloud trace
+  showed 4,824 points over 403.5 seconds but only 1.46% of commanded time below
+  position 10 and 0.45% above 90. Its first 15 Creative phrases clustered at
+  center 48–52 / span 40–45 until explicit chat requested the base. Motion-only
+  system authority, bounded compiled-band history, intent-first planning,
+  rate-scaled sampling, aggregate perceptual admission, and one
+  non-prescriptive high-rate retry now let the active Gemma move from localized
+  to authored 45/68/82/92-span phrases without a numeric broad target or forced
+  schedule. Wander approaches its selected outer span more often through the
+  smooth correlated envelope. Two live Pauses had also restarted Autopilot
+  about 2.2 seconds into their Stop round-trips; a pre-I/O mode latch now covers
+  the exact idle/unpublished-paused gap and preserves the stream until explicit
+  Resume. The final ten-turn hands-off run, five-turn explicit three-section
+  run plus long-age hold, and three repeated Hei speech-novelty runs passed
+  transport-free on the installed 12B Gemma. A fresh isolated review app then
+  passed real provider generation and one no-repair/no-fallback text-only app
+  chat; fake transport stayed idle with zero commands and an empty trace.
+  Full local release gates pass except the unavailable Windows race toolchain;
+  Linux CI is authoritative. A capped device feel confirmation remains tracked
+  separately. Candidate binaries are 24,167,936 / 17,394,176 bytes; the
+  frontend is unchanged from alpha.33. No post-change physical motion was
+  commanded.
 
 - **2026-08-22** - Prepared alpha.33 after a read-only inspection of the
   installed alpha.32 Autopilot failure. The 97-row trace had no drops and
