@@ -270,6 +270,25 @@ does not affect it.
 No post-change physical motion was commanded; subjective feel, latency, Pause,
 Resume, and Stop on the capped installed device remain open under R1.
 
+Status 2026-08-23 alpha.35 fluidity follow-up: a read-only alpha.34 Cloud trace
+reproduced the reported stop-and-shudder feel as whole-percent stationary edges.
+Transition windows bypassed generated-motion quantization cleanup, retaining
+36-80 ms reversal plateaus, and ordinary appends could repeat the immutable
+previous wire endpoint. Post-Codex mode and intent changes did not alter the
+steady sampler; they were not the source of this running-motion defect.
+
+Generated-motion cleanup now applies to transition windows and compares each
+new append with the previous wire tail while preserving authored transition
+boundaries and fitted buffer coverage. Regressions replay the reported Wander
+seed, 95/40 span envelope, and 38-to-32 speed handoff, plus an all-one-wire-step
+transition. A user-driven current-source Cloud run at speed 65 / span 80 / floor
+20 then emitted 195 active points over 10.395 seconds with strictly increasing
+timestamps and no rounded duplicate edge. Ten of 11 appends succeeded at
+328-379 ms (343.1 ms average); one failed with a 15 ms network error, and user
+Stop completed in 328 ms. The trace was exported outside the repository. The
+shared engine, semantic curve, transport boundary, and Stop path are unchanged.
+Subjective feel was not reported, so matched physical acceptance remains open.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -1540,7 +1559,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.34 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.35 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1588,7 +1607,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.34, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.35, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit
@@ -1610,7 +1629,7 @@ amd64 payload and the solid `lzma2/ultra64` stream. The native-x64, non-solid
 `zip/9` candidate passed PE-machine checks, the isolated installer lifecycle,
 and a current Defender custom scan with no threats. Its larger approximately
 17.9 MB size is an accepted transparency tradeoff. Alpha.8 through alpha.11 and
-alpha.13 through alpha.34 may publish this hardened shape only through `ReviewedUnsignedPublic`,
+alpha.13 through alpha.35 may publish this hardened shape only through `ReviewedUnsignedPublic`,
 bound to the completed case, alpha.9-and-later exact-artifact Defender scan, and
 full lifecycle acceptance. This does not lower R28: each new hash is still
 unsigned and trusted Authenticode remains the production exit evidence.
