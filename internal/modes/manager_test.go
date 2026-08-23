@@ -294,7 +294,9 @@ func TestFreestyleSuspendsWhilePausedAndUserPauseIsNeverOverridden(t *testing.T)
 	}
 	waitForAutonomousStart(t, manager, engine)
 
-	engine.setState(false, true) // user paused
+	finishPause := manager.BeginUserPause()
+	engine.setState(false, true) // Engine.Pause completed.
+	finishPause(true)
 	clock.Advance(300 * time.Second)
 	time.Sleep(30 * time.Millisecond)
 	starts, retargets := engine.counts()
@@ -304,6 +306,7 @@ func TestFreestyleSuspendsWhilePausedAndUserPauseIsNeverOverridden(t *testing.T)
 
 	// Resume: the planner continues.
 	engine.setState(true, false)
+	manager.NotifyUserResume()
 	clock.Advance(300 * time.Second)
 	waitFor(t, time.Second, func() bool { return retargetCount(engine) >= 1 })
 }
