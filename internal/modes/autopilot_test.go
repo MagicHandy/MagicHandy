@@ -3,6 +3,7 @@ package modes
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
@@ -96,6 +97,42 @@ func TestAutopilotRequiresDecisionStep(t *testing.T) {
 
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err == nil {
 		t.Fatal("expected autopilot start to fail without a decision step")
+	}
+}
+
+func TestAutopilotStopsInsteadOfRetryingUnsafeStartupState(t *testing.T) {
+	engine := &fakeEngine{startErr: fmt.Errorf("%w: measured position is outside recoverable travel", motion.ErrUnsafeStartupState)}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	decider := &fakeDecider{decisions: []Decision{{
+		Segment: Segment{Dynamic: &motion.DynamicDefinition{
+			CenterPercent: 50,
+			SpanPercent:   30,
+		}, SpeedPercent: 28},
+	}}}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitFor(t, time.Second, func() bool { return !manager.Status().Active })
+	clock.Advance(time.Hour)
+	time.Sleep(20 * time.Millisecond)
+	if calls := decider.callCount(); calls != 1 {
+		t.Fatalf("unsafe startup decisions = %d, want one attempt with no retry loop", calls)
+	}
+
+	var sawFailure, sawCircuitOpen bool
+	for _, row := range manager.options.Traces.Rows() {
+		if row.Reason == "start_failed" && row.Planner != nil &&
+			strings.Contains(row.Planner.Note, motion.ErrUnsafeStartupState.Error()) {
+			sawFailure = true
+		}
+		if row.Reason == "mode_stopped" && row.Planner != nil && row.Planner.Note == "unsafe_startup_state" {
+			sawCircuitOpen = true
+		}
+	}
+	if !sawFailure || !sawCircuitOpen {
+		t.Fatalf("unsafe startup trace failure=%t circuit_open=%t rows=%+v", sawFailure, sawCircuitOpen, manager.options.Traces.Rows())
 	}
 }
 

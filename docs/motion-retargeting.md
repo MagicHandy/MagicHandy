@@ -112,6 +112,18 @@ cannot establish current geometry or settle within the bounded arrival window.
 It must not silently use the old unanchored first point. Failed arrival and
 post-Stop drift both issue a fail-safe Stop before Start returns.
 
+The stopped slider may be reported just beyond the full-travel endpoints
+inferred from the current stroke response. This is a different check from
+arrival at a point the app commanded. A finite excursion of at most 10% of
+inferred full travel is recoverable: the engine retains the raw observation for
+lead-in distance and timing, clamps only the acquisition point to the nearest
+valid boundary, and then requires the fresh stationary reading and strict 1%
+arrival check above. A larger excursion is classified as an unsafe startup
+state before any Play command. Autonomous and Chat keepalive loops end that
+mode instead of retrying unchanged unsafe geometry; a new explicit start may
+re-evaluate it after the device position or calibration changes. Transient
+transport and model failures keep their bounded retry behavior.
+
 ### Phase 14 content semantics
 
 Phase 14 adds two content shapes to the shared path:

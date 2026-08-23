@@ -187,6 +187,52 @@ func TestArmSegmentUsesLatencyAwareDwellFloor(t *testing.T) {
 	}
 }
 
+func TestTransientStartFailureRetainsRecoveryBackoff(t *testing.T) {
+	clock := &fakeClock{now: time.Unix(100, 0)}
+	manager := &Manager{
+		options:    Options{Now: clock.Now, Traces: diagnostics.NewTraceRing(8)},
+		mode:       ModeAutopilot,
+		generation: 7,
+	}
+	manager.handleStartFailure(ModeAutopilot, 7, "start_failed", errors.New("temporary transport timeout"))
+
+	manager.mu.Lock()
+	active := manager.mode == ModeAutopilot
+	retryAt := manager.nextRetry
+	manager.mu.Unlock()
+	if !active {
+		t.Fatal("transient start failure opened the unsafe-state circuit")
+	}
+	if got := retryAt.Sub(clock.Now()); got != restartBackoff {
+		t.Fatalf("transient retry delay = %v, want %v", got, restartBackoff)
+	}
+	rows := manager.options.Traces.Rows()
+	if len(rows) != 1 || rows[0].Reason != "start_failed" || rows[0].Planner == nil ||
+		rows[0].Planner.Note != "temporary transport timeout" {
+		t.Fatalf("transient failure trace = %+v", rows)
+	}
+}
+
+func TestTerminalFailureCannotStopNewerModeGeneration(t *testing.T) {
+	manager := &Manager{
+		options:    Options{Traces: diagnostics.NewTraceRing(8)},
+		mode:       ModeAutopilot,
+		generation: 8,
+	}
+	manager.stopLoopAtGeneration(ModeAutopilot, 7, "unsafe_startup_state")
+
+	manager.mu.Lock()
+	mode := manager.mode
+	generation := manager.generation
+	manager.mu.Unlock()
+	if mode != ModeAutopilot || generation != 8 {
+		t.Fatalf("stale terminal failure changed newer run: mode=%q generation=%d", mode, generation)
+	}
+	if rows := manager.options.Traces.Rows(); len(rows) != 0 {
+		t.Fatalf("stale terminal failure trace = %+v, want none", rows)
+	}
+}
+
 func TestFreestyleCrossesSegmentBoundariesWithoutRestarting(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}

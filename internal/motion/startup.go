@@ -27,10 +27,14 @@ const (
 	//
 	// One absolute unit is the measured device's quantization at the ends of its
 	// range, so this has to clear 1.02% with room rather than land just under it.
-	// The 3% boundary still rejects genuinely wrong geometry: the regression case
-	// sits at -15.3%. The value is clamped into 0-100 immediately after the check,
-	// so a small excursion was always meant to be absorbed rather than refused.
-	startupCalibrationTolerancePercent = 3.0
+	// A later live Handy Original reported a stationary 111.33 mm position against
+	// its own 5.00-102.83 mm full-stroke calibration: a self-consistent 8.7% park
+	// beyond the reported top. The device can recover that bounded excursion through
+	// the existing engine-owned lead-in, whose first point is clamped to the valid
+	// boundary and whose arrival is still verified at the strict 1% tolerance.
+	// Ten percent admits that measured recovery with margin while still rejecting
+	// the existing -15.3% invalid-geometry regression before any Play command.
+	startupCalibrationTolerancePercent = 10.0
 	startupStationarySpeedAbsolute     = 5.0
 	startupStationaryRetryDelay        = 150 * time.Millisecond
 	startupArrivalRetryDelay           = 150 * time.Millisecond
@@ -40,6 +44,12 @@ const (
 	startupStationaryAttempts          = 3
 	startupArrivalAttempts             = 6
 )
+
+// ErrUnsafeStartupState marks device geometry that the shared motion engine
+// cannot safely recover through its bounded startup lead-in. Autonomous modes
+// must not retry this unchanged state indefinitely; a new explicit start may be
+// attempted after the device position or calibration changes.
+var ErrUnsafeStartupState = errors.New("motion startup state is unsafe")
 
 type startupMotionProfile struct {
 	settings            transport.StrokeWindowCommand
@@ -257,9 +267,9 @@ func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.Moti
 		// refusal, so it belongs in the message. Without it the failure is a dead
 		// end: it names a calibration nobody can see.
 		return startupMotionProfile{}, fmt.Errorf(
-			"motion startup absolute position was outside calibrated full travel "+
+			"%w: motion startup absolute position was outside calibrated full travel "+
 				"(position %.2f maps to %.1f%% of travel; device reported slide %.1f-%.1f%% as %.2f-%.2f)",
-			state.PositionAbsolute, observedFullPercent,
+			ErrUnsafeStartupState, state.PositionAbsolute, observedFullPercent,
 			state.StrokeMinPercent, state.StrokeMaxPercent,
 			state.StrokeMinAbsolute, state.StrokeMaxAbsolute)
 	}
