@@ -209,8 +209,11 @@ func (e *Engine) fitMotionWindowLocked(
 	if hasPreviousAnchor {
 		samples = samples[1:]
 	}
-	if positionResolution > 0 && !transitionInChunk && e.plan.Target.Dynamic != nil {
+	if positionResolution > 0 && e.plan.Target.Dynamic != nil {
 		samples = removeRedundantQuantizedSamples(samples, positionResolution, mandatory)
+		if hasPreviousAnchor {
+			samples = removeLeadingQuantizedDuplicates(samples, *e.lastSample, positionResolution, mandatory)
+		}
 	}
 	return samples, mandatory
 }
@@ -517,8 +520,8 @@ func markQuantizedMotionSamples(
 // removeRedundantQuantizedSamples removes stationary wire edges introduced by
 // owner rounding. A non-mandatory point that rounds to the same position as
 // its successor cannot convey curvature; retaining it only asks firmware to
-// hold before moving again. Authored knots remain protected so intentional
-// holds and exact reversals survive.
+// hold before moving again. Authored knots and the fitted window tail remain
+// protected so intentional holds, exact reversals, and buffer coverage survive.
 func removeRedundantQuantizedSamples(
 	samples []MotionSample,
 	resolution float64,
@@ -528,7 +531,7 @@ func removeRedundantQuantizedSamples(
 		return samples
 	}
 	result := make([]MotionSample, 0, len(samples))
-	for _, sample := range samples {
+	for index, sample := range samples {
 		if len(result) == 0 ||
 			quantizedMotionPosition(result[len(result)-1].PositionPercent, resolution) !=
 				quantizedMotionPosition(sample.PositionPercent, resolution) {
@@ -538,6 +541,7 @@ func removeRedundantQuantizedSamples(
 		previous := result[len(result)-1]
 		_, previousMandatory := mandatory[previous.TimeMillis]
 		_, currentMandatory := mandatory[sample.TimeMillis]
+		currentMandatory = currentMandatory || index == len(samples)-1
 		switch {
 		case previousMandatory && currentMandatory:
 			result = append(result, sample)
@@ -552,6 +556,32 @@ func removeRedundantQuantizedSamples(
 		}
 	}
 	return result
+}
+
+// removeLeadingQuantizedDuplicates compares a new append with the immutable
+// previous wire tail. Mandatory transition boundaries remain explicit.
+func removeLeadingQuantizedDuplicates(
+	samples []MotionSample,
+	previous MotionSample,
+	resolution float64,
+	mandatory map[int64]struct{},
+) []MotionSample {
+	previousPosition := quantizedMotionPosition(previous.PositionPercent, resolution)
+	firstDifferent := 0
+	for firstDifferent < len(samples) &&
+		quantizedMotionPosition(samples[firstDifferent].PositionPercent, resolution) == previousPosition {
+		if _, protected := mandatory[samples[firstDifferent].TimeMillis]; protected {
+			break
+		}
+		firstDifferent++
+	}
+	if firstDifferent == 0 {
+		return samples
+	}
+	if firstDifferent == len(samples) {
+		return samples[len(samples)-1:]
+	}
+	return samples[firstDifferent:]
 }
 
 func quantizedMotionPosition(position float64, resolution float64) float64 {

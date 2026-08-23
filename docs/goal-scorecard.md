@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-22, compiled-output Creative fidelity and reconciled clocks
+## Snapshot — 2026-08-23, Creative whole-percent fluidity
 
 ### Goal 1: Maintainability
 
@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.34 candidate: 24,167,936 bytes plain and 17,394,176 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.35 candidate: 24,157,696 bytes plain and 17,404,928 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.34` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.34 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.35` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.35 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -101,7 +101,9 @@ quintic easing instead of a C1 acceleration corner, and compact 2–4-section
 phrases add long-horizon route, stroke-length, and timing diversity without a
 second motion path. The whole-percent Creative fitter preserves time-at-
 position as well as position-at-time so device quantization cannot silently
-linearize a short eased stroke.
+linearize a short eased stroke. Generated transition and append frames now also
+remove replaceable repeated wire positions without dropping transition
+boundaries or buffer coverage.
 The installed managed 12B Gemma model passed 25/25 broader first-response
 Creative decisions and 9/9 repetitions of the reproduced position-correction
 sequence without an engine or transport. The alpha.29 phrase-age matrix kept
@@ -190,6 +192,24 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-23** - Prepared alpha.35 after the installed alpha.34 Cloud trace
+  reproduced Creative stop-and-shudder behavior as 36-80 ms whole-percent
+  reversal plateaus. Generated transition windows had skipped the existing
+  stationary-edge cleanup, and append boundaries could repeat the immutable
+  previous wire endpoint. Cleanup now covers transitions and cross-append
+  boundaries while preserving exact transition endpoints and fitted buffer
+  coverage. Regressions replay the reported 95/40 Wander envelope, phrase seed,
+  and 38-to-32 speed handoff and passed 100 consecutive repetitions. A
+  user-driven current-source Cloud run then emitted 195 active points over
+  10.395 seconds with strictly increasing time and zero rounded duplicate edges;
+  ten successful appends measured 328-379 ms, one append hit a network error,
+  and user Stop completed in 328 ms. Subjective feel remains unreported. A
+  separate credential-free review app completed real provider generation and a
+  one-call text-only app chat with no motion, repair, or semantic fallback.
+  Local release gates pass except the unavailable Windows
+  race toolchain; Linux CI is authoritative. Candidate binaries are 24,157,696
+  / 17,404,928 bytes and the frontend is unchanged from alpha.34.
 
 - **2026-08-22** - Prepared alpha.34 after the installed alpha.33 Cloud trace
   showed 4,824 points over 403.5 seconds but only 1.46% of commanded time below

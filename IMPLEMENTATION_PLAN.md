@@ -1476,6 +1476,16 @@ safety path. Repeated transport-free runs on the active installed Gemma model
 cover localized-to-near-full range evolution without a fixed broad-range target;
 matched-device feel and capped Pause/Resume/Stop confirmation remain open.
 
+The alpha.35 fluidity follow-up keeps that semantic phrase and the 750 ms C2
+handoff unchanged while correcting its whole-percent wire representation.
+Generated transition windows now receive the same stationary-edge cleanup as
+steady Creative frames, and each append removes replaceable leading points that
+repeat the immutable previous wire tail. Authored transition boundaries and the
+fitted coverage endpoint remain protected. The reported Wander seed and speed
+handoff reproduce both regressions without a transport; a subsequent
+user-driven current-source Cloud trace contained no rounded duplicate edge.
+Subjective matched-device feel remains open.
+
 Creative is now the default for fresh and pre-selector settings documents;
 explicit Pattern Library and Off choices persist. The six canonical built-ins
 disabled in the user's installed alpha.28 profile are retired from the active

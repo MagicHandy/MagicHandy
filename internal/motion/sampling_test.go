@@ -415,6 +415,140 @@ func TestWholePercentPatternChunksDoNotEndAtFixedSamplerWindows(t *testing.T) {
 	}
 }
 
+func TestDynamicWholePercentSamplingDoesNotEmitStationaryWireEdges(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	definition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 95, SpanMinPercent: 40,
+		SpanProfile: DynamicSpanProfileWander, PhraseSeed: 2988185510,
+		VariationPercent: 68,
+	})
+	previous := NewMotionPlan("reported-wander-38", MotionTarget{
+		Dynamic: &definition, SpeedPercent: 38,
+	}, settings, 0, 0, time.Unix(0, 0))
+	const handoff = int64(200)
+
+	t.Run("chunk boundary", func(t *testing.T) {
+		previousWireSample := previous.SampleAt(handoff - 1)
+		engine := &Engine{
+			plan: previous, nextSampleMillis: handoff, lastSample: &previousWireSample,
+			chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
+			preservePlanKnots: true, positionResolutionPercent: 1,
+			maximumChunkPoints: 100,
+		}
+		chunk, err := engine.nextMotionSamplesLocked()
+		if err != nil {
+			t.Fatal(err)
+		}
+		samples := append([]MotionSample{previousWireSample}, chunk...)
+		assertNoStationaryWireEdges(t, "reported Wander chunk boundary", samples, 1)
+		assertQuantizedSamplesTrackPath(t, "reported Wander chunk boundary", samples, 1,
+			func(at int64) float64 { return previous.SampleAt(at).PositionPercent })
+	})
+
+	t.Run("retarget transition", func(t *testing.T) {
+		next := previous.retargetFromState(
+			"reported-wander-32",
+			MotionTarget{Dynamic: &definition, SpeedPercent: 32},
+			settings,
+			handoff,
+			previous.SampleAt(handoff).PositionPercent,
+			previous.DirectionAt(handoff),
+			previous.VelocityAt(handoff),
+			time.Unix(1, 0),
+		)
+		if !transitionRequired(previous, nil, next, handoff) {
+			t.Fatal("reported Wander speed handoff did not request a transition")
+		}
+		previousWireSample := previous.SampleAt(handoff - 1)
+		engine := &Engine{
+			plan: next, transition: newPlanTransition(previous, nil, handoff),
+			nextSampleMillis: handoff, lastSample: &previousWireSample,
+			chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
+			preservePlanKnots: true, positionResolutionPercent: 1,
+			maximumChunkPoints: 100,
+		}
+		transition := engine.transition
+		chunk, err := engine.nextMotionSamplesLocked()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if chunk[0].TimeMillis != handoff {
+			t.Fatalf("transition start = %dms, want retained handoff %dms", chunk[0].TimeMillis, handoff)
+		}
+		if _, ok := motionSampleAt(chunk, handoff+retargetTransitionMillis); !ok {
+			t.Fatalf("transition end %dms is missing: %+v", handoff+retargetTransitionMillis, chunk)
+		}
+		targetTail := handoff + int64(defaultChunkSize)*defaultSampleInterval.Milliseconds()
+		if tail := chunk[len(chunk)-1].TimeMillis; tail < targetTail {
+			t.Fatalf("transition chunk tail = %dms, want coverage through %dms", tail, targetTail)
+		}
+		assertNoStationaryWireEdges(t, "reported Wander transition", chunk, 1)
+		assertQuantizedSamplesTrackPath(t, "reported Wander transition", chunk, 1,
+			func(at int64) float64 { return sampleMotionPath(next, transition, at).PositionPercent })
+	})
+}
+
+func TestDynamicWholePercentStationaryTransitionRetainsBufferCoverage(t *testing.T) {
+	curve, err := NewCurve([]CurvePoint{
+		{TimeMillis: 0, PositionPercent: 50},
+		{TimeMillis: 1000, PositionPercent: 50},
+	}, 1000, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dynamic := DynamicDefinition{CenterPercent: 50, SpanPercent: 20}
+	previous := MotionPlan{
+		ID: "previous", Target: MotionTarget{Dynamic: &dynamic},
+		PeriodMillis: 1000, Loop: true, curve: curve,
+	}
+	next := previous
+	next.ID = "next"
+	engine := &Engine{
+		plan: next, transition: newPlanTransition(previous, nil, 0),
+		chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
+		preservePlanKnots: true, positionResolutionPercent: 1,
+		maximumChunkPoints: 100,
+	}
+	samples, err := engine.nextMotionSamplesLocked()
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetTail := int64(defaultChunkSize) * defaultSampleInterval.Milliseconds()
+	if tail := samples[len(samples)-1].TimeMillis; tail < targetTail {
+		t.Fatalf("stationary transition tail = %dms, want coverage through %dms: %+v", tail, targetTail, samples)
+	}
+}
+
+func assertNoStationaryWireEdges(t *testing.T, label string, samples []MotionSample, resolution float64) {
+	t.Helper()
+	for index := 1; index < len(samples); index++ {
+		left := quantizedMotionPosition(samples[index-1].PositionPercent, resolution)
+		right := quantizedMotionPosition(samples[index].PositionPercent, resolution)
+		if left == right {
+			t.Fatalf("%s held wire position %.0f at %d..%dms: %+v",
+				label, left, samples[index-1].TimeMillis, samples[index].TimeMillis, samples)
+		}
+	}
+}
+
+func assertQuantizedSamplesTrackPath(
+	t *testing.T,
+	label string,
+	samples []MotionSample,
+	resolution float64,
+	want func(int64) float64,
+) {
+	t.Helper()
+	for at := samples[0].TimeMillis; at <= samples[len(samples)-1].TimeMillis; at += bufferedProbeIntervalMillis {
+		got := interpolateQuantizedMotionSamples(samples, at, resolution)
+		if delta := math.Abs(got - want(at)); delta > wireApproximationTolerance+0.7*resolution {
+			t.Fatalf("%s wire error at %dms = %.3f%%: %+v", label, at, delta, samples)
+		}
+	}
+}
+
 func TestRetargetTransitionIsContinuousAndChains(t *testing.T) {
 	definition := PatternDefinition{
 		ID: "constant", Name: "Constant", Kind: PatternKindRoutine, CycleMillis: 6600,
