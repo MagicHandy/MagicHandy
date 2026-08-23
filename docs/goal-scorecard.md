@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.32 candidate: 24,137,728 bytes plain and 17,370,112 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.33 candidate: 24,116,224 bytes plain and 17,374,720 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.32` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.32 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.33` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.33 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -190,6 +190,25 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-22** - Prepared alpha.33 after a read-only inspection of the
+  installed alpha.32 Autopilot failure. The 97-row trace had no drops and
+  recorded 15 valid Creative targets followed by 15 startup Stops, 15
+  position-read failures, and 15 failed starts. The stationary Original Handy
+  reported 111.33 mm against a 5.00-102.83 mm full-stroke response, placing it
+  at 108.7% of inferred calibrated travel and beyond the old 3% recovery
+  allowance. Startup now admits at most a 10% initial excursion to the shared
+  speed-bounded lead-in while retaining the raw distance and strict stationary
+  1% arrival gate. Larger geometry ends only the failed mode generation instead
+  of retrying, and transient failures keep their backoff. Exact-geometry,
+  boundary, circuit, stale-generation, transient, and lifecycle regressions
+  pass with the full Go, vet, zero-issue lint, zero-CGo, PowerShell 5.1
+  installer, localization/typecheck/build, and 408-test frontend gates. A fresh
+  isolated alpha.33 app passed real llama.cpp generation and one no-repair,
+  no-fallback text-only app chat in 544 ms; fake transport stayed idle at zero
+  commands with motion unavailable and Autopilot off. Candidate binaries are
+  24,116,224 / 17,374,720 bytes, and the frontend is byte-identical to alpha.32.
+  No post-change physical motion was commanded.
 
 - **2026-08-22** - Prepared alpha.32 after reproducing the Settings-backed
   default persona card opening `#/settings/model`. The card now deep-links to

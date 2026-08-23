@@ -105,7 +105,11 @@ Automated tests cover profile defaults and validation, endpoint conversion,
 equal physical rates for Original and Handy 2 Standard, plan-level use of the
 selected profile, immediate persistence, media-cap invalidation, exact Creative
 peak velocity across representative geometry/device profiles, monotonic mean
-rate, and unchanged shared runtime safety bounds. No post-change hardware
-command was issued. The
+rate, and unchanged shared runtime safety bounds. A later read-only Original-
+Handy trace reported a stationary 111.33 mm position against a 5.00-102.83 mm
+full-stroke response. Startup handles that measured 8.7% endpoint discrepancy
+through the shared engine's bounded acquisition path and strict post-command
+arrival check; the selected model does not change transport payloads or create
+a private recovery path. No post-change hardware command was issued. The
 matched acceptance run must record selected profile, actual device model,
 transport, speed/span, latency, trace, Stop behavior, and subjective feel.

@@ -222,6 +222,25 @@ acceptance. The installed app, controller, and device were not modified; a
 matched capped Cloud run with current-source trace, latency, Stop, and felt
 comparison remains required.
 
+Status 2026-08-22 alpha.33 startup follow-up: the installed alpha.32 trace
+isolated a separate Autopilot retry loop. All 15 model decisions produced valid
+Creative targets, but all 15 starts stopped during position-aware preflight and
+failed before main Play. The stationary Original Handy reported 111.33 mm while
+its 0–100% stroke response reported 5.00–102.83 mm, mapping the park to 108.7%
+of inferred travel; the existing 3% calibration-excursion allowance rejected
+it. There were no trace drops, slider speed was zero, and failures recurred at
+roughly 5–15 second intervals as LLM latency and the three-second retry backoff
+combined. The shared engine now admits at most a 10% initial calibration
+excursion into its existing speed-bounded acquisition lead-in, retaining the
+raw distance and strict stationary 1% post-command arrival check. Larger
+excursions remain rejected before Play and end only the exact failed mode
+generation, preventing both an unchanged retry loop and a stale teardown of a
+new run. Transient transport/model failures retain their retry path. Automated
+tests replay the exact measured geometry, the tolerance boundaries, the
+unsafe-state circuit, stale-generation protection, transient recovery, and
+Stop lifecycle. No post-change physical motion was commanded; a capped
+installed-device confirmation remains open under R1.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -1492,7 +1511,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.32 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.33 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1540,7 +1559,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.32, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.33, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit

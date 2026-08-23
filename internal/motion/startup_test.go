@@ -512,16 +512,58 @@ func TestEngineStartsWhenTheDeviceRestsJustBelowItsReportedSlideMinimum(t *testi
 	}
 }
 
+// A live Handy Original reported this exact stationary geometry while Autopilot
+// repeatedly failed startup: full stroke 5.00-102.83 mm, parked at 111.33 mm.
+// The 8.7% top-side excursion is recoverable through the same bounded lead-in as
+// every other source; the strict arrival check still has to observe the target
+// before semantic motion begins.
+func TestEngineRecoversMeasuredHandyOriginalTopSidePark(t *testing.T) {
+	owner := &startupStateTransport{
+		Fake: transport.NewFake(),
+		states: []transport.MotionStartupState{
+			{
+				PositionWithinStrokePercent: 108.70,
+				PositionAbsolute:            111.33,
+				StrokeMinPercent:            0,
+				StrokeMaxPercent:            100,
+				StrokeMinAbsolute:           5.00,
+				StrokeMaxAbsolute:           102.83,
+			},
+			{
+				PositionWithinStrokePercent: 0,
+				PositionAbsolute:            5.00,
+				StrokeMinPercent:            0,
+				StrokeMaxPercent:            100,
+				StrokeMinAbsolute:           5.00,
+				StrokeMaxAbsolute:           102.83,
+			},
+		},
+	}
+	engine := newTestEngine(t, owner, diagnostics.NewTraceRing(32), time.Hour)
+	engine.startupWait = func(context.Context, time.Duration) error { return nil }
+
+	_, err := engine.Start(context.Background(), MotionTarget{
+		PatternID: PatternStroke, SpeedPercent: 28,
+	}, config.DefaultSettings().Motion)
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+	if err != nil {
+		t.Fatalf("recover measured Handy Original top-side park: %v", err)
+	}
+	if countCommands(owner.Commands(), transport.CommandKindPointsPlay) != 2 {
+		t.Fatalf("commands = %+v, want bounded startup acquisition before main Play", owner.Commands())
+	}
+}
+
 func TestStartupCalibrationToleranceBoundaries(t *testing.T) {
 	tests := []struct {
 		name          string
 		position      float64
 		wantRejection bool
 	}{
-		{name: "lower inside", position: -2.99},
-		{name: "lower outside", position: -3.01, wantRejection: true},
-		{name: "upper inside", position: 102.99},
-		{name: "upper outside", position: 103.01, wantRejection: true},
+		{name: "lower inside", position: -9.99},
+		{name: "lower outside", position: -10.01, wantRejection: true},
+		{name: "upper inside", position: 109.99},
+		{name: "upper outside", position: 110.01, wantRejection: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -584,6 +626,9 @@ func TestEngineRejectsStartupPositionOutsideCalibratedTravel(t *testing.T) {
 	}, settings)
 	if err == nil || !strings.Contains(err.Error(), "outside calibrated full travel") {
 		t.Fatalf("Start error = %v, want fail-closed absolute-position rejection", err)
+	}
+	if !errors.Is(err, ErrUnsafeStartupState) {
+		t.Fatalf("Start error = %v, want ErrUnsafeStartupState", err)
 	}
 	if countCommands(owner.Commands(), transport.CommandKindPointsPlay) != 0 {
 		t.Fatalf("commands = %+v, want no playback for invalid absolute geometry", owner.Commands())

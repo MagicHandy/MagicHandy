@@ -356,6 +356,37 @@ func (m *Manager) stopLoop(reason string) {
 	m.trace(mode, "mode_stopped", nil, reason)
 }
 
+// stopLoopAtGeneration is the asynchronous counterpart used when the mode loop
+// itself discovers a terminal condition. Binding teardown to the failed
+// generation prevents a delayed goroutine from stopping a newer user-started
+// run.
+func (m *Manager) stopLoopAtGeneration(mode string, generation uint64, reason string) {
+	m.lifecycleMu.Lock()
+	defer m.lifecycleMu.Unlock()
+
+	m.mu.Lock()
+	if m.mode != mode || m.generation != generation {
+		m.mu.Unlock()
+		return
+	}
+	cancel := m.cancel
+	done := m.done
+	m.generation++
+	m.cancelOperationLocked()
+	m.mode = ""
+	m.cancel = nil
+	m.done = nil
+	m.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		<-done
+	}
+	m.trace(mode, "mode_stopped", nil, reason)
+}
+
 // NotifyUserStop records an explicit user stop: the active mode ends and no
 // keepalive may restart motion afterwards.
 func (m *Manager) NotifyUserStop() {
@@ -690,7 +721,7 @@ func (m *Manager) startNextSegment(ctx context.Context, mode string, reason stri
 		if operationCtx.Err() != nil {
 			return
 		}
-		m.backoff(mode, generation, "start_failed", err)
+		m.handleStartFailure(mode, generation, "start_failed", err)
 		return
 	}
 	choice.appliedPerceptual = clonePerceptualSummary(state.Perceptual)
@@ -848,7 +879,7 @@ func (m *Manager) tickChat(ctx context.Context) {
 		if operationCtx.Err() != nil {
 			return
 		}
-		m.backoff(ModeChat, generation, "keepalive_failed", err)
+		m.handleStartFailure(ModeChat, generation, "keepalive_failed", err)
 		return
 	}
 	if !m.chatOperationActive(generation, chatVersion) {
@@ -939,6 +970,29 @@ func (m *Manager) backoff(mode string, generation uint64, event string, err erro
 	m.nextRetry = m.options.Now().Add(restartBackoff)
 	m.mu.Unlock()
 	m.trace(mode, event, nil, err.Error())
+}
+
+// handleStartFailure keeps transient transport/model failures retryable while
+// opening the circuit for physical geometry that the shared motion engine has
+// already classified as unsafe. Retrying unchanged unsafe state only repeats
+// Stop and read-only Cloud calls, flashes the UI between starting and idle, and
+// cannot make the slider position or calibration become safer.
+func (m *Manager) handleStartFailure(mode string, generation uint64, event string, err error) {
+	if !errors.Is(err, motion.ErrUnsafeStartupState) {
+		m.backoff(mode, generation, event, err)
+		return
+	}
+
+	m.mu.Lock()
+	active := m.mode == mode && m.generation == generation && !m.userStopped && !m.chatTargetPending
+	m.mu.Unlock()
+	if !active {
+		return
+	}
+	m.trace(mode, event, nil, err.Error())
+	// Stop waits for the mode loop, so it must run after this tick returns to the
+	// loop rather than waiting on its own goroutine.
+	go m.stopLoopAtGeneration(mode, generation, "unsafe_startup_state")
 }
 
 func (m *Manager) beginStartOperation(

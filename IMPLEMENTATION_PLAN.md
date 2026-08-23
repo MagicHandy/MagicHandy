@@ -1332,6 +1332,17 @@ Explicit user imports remain user data and continue through the shared engine.
 Capped physical-feel checks for the retained generated catalog and the
 accepted-calibration-offset startup acquisition remain open.
 
+An alpha.32 installed-session trace later captured 15 identical Autopilot
+startup failures with no dropped trace rows: the stationary Original Handy
+reported 111.33 mm against a 5.00-102.83 mm full-stroke response, so the old 3%
+calibration-excursion check rejected it at 108.7% and issued a fail-safe Stop on
+every retry. The shared startup path now accepts only a bounded 10% initial
+excursion, retains the raw position for a speed-bounded acquisition lead-in,
+and still requires strict stationary 1% arrival before main playback. Larger
+geometry opens a generation-bound autonomous circuit instead of retrying, while
+transient failures remain retryable. The exact trace geometry is retained as a
+two-Play startup/main regression; no post-change hardware motion was issued.
+
 The current 81-pattern catalog uses normalized runtime speed semantics. The
 planner measures loop travel and maps 1–100 through the selected Handy model's
 published full travel and normal 32–400/450 mm/s range, with exact rendered-
