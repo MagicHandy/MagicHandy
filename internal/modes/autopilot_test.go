@@ -308,7 +308,7 @@ func TestAutopilotReportsAccumulatedPhraseSamenessWithoutForcingAChange(t *testi
 
 	for wantCalls := 2; wantCalls <= 5; wantCalls++ {
 		clock.Advance(150 * time.Second)
-		waitFor(t, time.Second, func() bool { return decider.callCount() >= wantCalls })
+		waitFor(t, time.Second, func() bool { return autopilotDecisionSettled(manager, decider, clock, wantCalls) })
 	}
 
 	decider.mu.Lock()
@@ -340,6 +340,16 @@ func TestAutopilotReportsAccumulatedPhraseSamenessWithoutForcingAChange(t *testi
 	if !foundTraceFacts {
 		t.Fatal("decision trace omitted the model-visible accumulated phrase facts")
 	}
+}
+
+func autopilotDecisionSettled(manager *Manager, decider *fakeDecider, clock *fakeClock, wantCalls int) bool {
+	if decider.callCount() < wantCalls {
+		return false
+	}
+	now := clock.Now()
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	return manager.deadline.After(now)
 }
 
 func TestInteractiveChatTargetSuspendsAndReplacesAutopilotState(t *testing.T) {
@@ -881,7 +891,10 @@ func TestAutopilotUserPauseCoversTransientIdleGapWithoutRestart(t *testing.T) {
 	}}
 	manager.mu.Unlock()
 
-	finishPause := manager.BeginUserPause()
+	finishPause, admitted := manager.BeginUserPause()
+	if !admitted {
+		t.Fatal("initial Pause was not admitted")
+	}
 	manager.mu.Lock()
 	if len(manager.swayPoints) != 1 || manager.swayPoints[0].generation != manager.generation {
 		manager.mu.Unlock()
@@ -907,7 +920,11 @@ func TestAutopilotUserPauseCoversTransientIdleGapWithoutRestart(t *testing.T) {
 	}
 
 	engine.setState(true, false)
-	manager.NotifyUserResume()
+	finishResume, admitted := manager.BeginUserResume()
+	if !admitted {
+		t.Fatal("Resume was not admitted")
+	}
+	finishResume(true)
 	clock.Advance(5 * time.Minute)
 	waitFor(t, time.Second, func() bool { return retargetCount(engine) >= 1 })
 	if starts, _ := engine.counts(); starts != 1 {
@@ -927,7 +944,10 @@ func TestAutopilotFailedPauseReleasesRecoveryLatch(t *testing.T) {
 	}
 	waitForAutonomousStart(t, manager, engine)
 
-	finishPause := manager.BeginUserPause()
+	finishPause, admitted := manager.BeginUserPause()
+	if !admitted {
+		t.Fatal("Pause was not admitted")
+	}
 	engine.setState(false, false)
 	finishPause(false)
 	clock.Advance(5 * time.Minute)

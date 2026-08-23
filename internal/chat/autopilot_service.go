@@ -229,6 +229,9 @@ func decodeAutopilotResponse(raw string, kind AutopilotKind) (AutopilotResponse,
 			Intent: strings.TrimSpace(wire.Intent), Motion: wire.Motion, Next: wire.Next,
 			Variability: strings.TrimSpace(wire.Variability),
 		}
+		if response.Intent == "" {
+			return AutopilotResponse{}, errors.New("autopilot motion intent is required")
+		}
 		if !validAutopilotVariability(response.Variability) {
 			return AutopilotResponse{}, fmt.Errorf("unknown Autopilot variability %q", response.Variability)
 		}
@@ -380,11 +383,11 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 func autopilotOutputGuard(kind AutopilotKind, capabilities Capabilities) string {
 	if kind == AutopilotKindSpeech {
 		if capabilities.Motion {
-			return `FINAL OUTPUT: return only {"reply":"<one short in-character line>","next":"soon|normal|later"} plus optional "arc" or allowed target "motion" with matching "variability".`
+			return `FINAL OUTPUT: return only {"reply":"<one short in-character line>","next":"soon|normal|later"} plus optional allowed target "motion" with matching "variability".`
 		}
-		return `FINAL OUTPUT: return only {"reply":"<one short in-character line>","next":"soon|normal|later"} plus an optional "arc" field. No motion.`
+		return `FINAL OUTPUT: return only {"reply":"<one short in-character line>","next":"soon|normal|later"}. No motion.`
 	}
-	return `FINAL OUTPUT: return only {"intent":"<brief motion concept>","next":"soon|normal|later","variability":"settled|normal|restless"} plus optional allowed "motion" and "arc" fields. No reply text.`
+	return `FINAL OUTPUT: return only {"intent":"<brief motion concept>","next":"soon|normal|later","variability":"settled|normal|restless"} plus optional allowed "motion". No reply text.`
 }
 
 func autopilotRepairPrompt(promptID string, kind AutopilotKind, parseError error) string {

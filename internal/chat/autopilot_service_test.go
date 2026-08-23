@@ -26,23 +26,29 @@ func TestAutopilotMotionContractRequiresTimingWithoutReply(t *testing.T) {
 		t.Fatalf("response = %+v", response)
 	}
 	if _, err := service.parse(
-		`{"reply":"coupled speech","motion":{"action":"none"},"next":"normal","variability":"normal"}`,
+		`{"intent":"hold steady","reply":"coupled speech","motion":{"action":"none"},"next":"normal","variability":"normal"}`,
 		AutopilotKindMotion,
 	); err == nil {
 		t.Fatal("motion contract accepted a reply field")
+	}
+	if _, err := service.parse(
+		`{"motion":{"action":"none"},"next":"normal","variability":"normal"}`,
+		AutopilotKindMotion,
+	); err == nil || !strings.Contains(err.Error(), "intent is required") {
+		t.Fatalf("missing intent error = %v", err)
 	}
 }
 
 func TestAutopilotContractRejectsStartAndNumericTiming(t *testing.T) {
 	service := AutopilotService{Capabilities: FullCapabilities(), Patterns: defaultPatternChoices()}
 	if _, err := service.parse(
-		`{"motion":{"action":"start","speed_percent":30},"next":"soon","variability":"normal"}`,
+		`{"intent":"begin a steady stroke","motion":{"action":"start","speed_percent":30},"next":"soon","variability":"normal"}`,
 		AutopilotKindMotion,
 	); err == nil || !strings.Contains(err.Error(), "target, update, or none") {
 		t.Fatalf("start error = %v", err)
 	}
 	if _, err := service.parse(
-		`{"motion":{"action":"none"},"next":30,"variability":"normal"}`,
+		`{"intent":"hold steady","motion":{"action":"none"},"next":30,"variability":"normal"}`,
 		AutopilotKindMotion,
 	); err == nil {
 		t.Fatal("motion contract accepted numeric timing")
@@ -51,7 +57,7 @@ func TestAutopilotContractRejectsStartAndNumericTiming(t *testing.T) {
 
 func TestAutopilotCompleteSkipsIneffectiveRepairOutsideCurrentMenu(t *testing.T) {
 	provider := &scriptedProvider{responses: []string{
-		`{"motion":{"action":"target","pattern_id":"pulse","intensity":35},"next":"normal","variability":"normal"}`,
+		`{"intent":"switch to a pulse","motion":{"action":"target","pattern_id":"pulse","intensity":35},"next":"normal","variability":"normal"}`,
 	}}
 	service := AutopilotService{
 		Provider:     provider,
@@ -70,8 +76,8 @@ func TestAutopilotCompleteSkipsIneffectiveRepairOutsideCurrentMenu(t *testing.T)
 func TestAutopilotMotionContractRequiresModelOwnedVariability(t *testing.T) {
 	service := AutopilotService{Capabilities: FullCapabilities(), Patterns: defaultPatternChoices()}
 	for name, raw := range map[string]string{
-		"missing": `{"motion":{"action":"none"},"next":"later"}`,
-		"unknown": `{"motion":{"action":"none"},"next":"later","variability":"chaotic"}`,
+		"missing": `{"intent":"hold steady","motion":{"action":"none"},"next":"later"}`,
+		"unknown": `{"intent":"hold steady","motion":{"action":"none"},"next":"later","variability":"chaotic"}`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := service.parse(raw, AutopilotKindMotion); err == nil ||
@@ -85,7 +91,7 @@ func TestAutopilotMotionContractRequiresModelOwnedVariability(t *testing.T) {
 func TestAutopilotContractRejectsBuildupMutation(t *testing.T) {
 	service := AutopilotService{Capabilities: FullCapabilities(), Patterns: defaultPatternChoices()}
 	_, err := service.parse(
-		`{"motion":{"action":"none"},"next":"normal","variability":"settled","arc":"advance"}`,
+		`{"intent":"hold steady","motion":{"action":"none"},"next":"normal","variability":"settled","arc":"advance"}`,
 		AutopilotKindMotion,
 	)
 	if err == nil || !strings.Contains(err.Error(), `unknown field "arc"`) {
@@ -93,6 +99,11 @@ func TestAutopilotContractRejectsBuildupMutation(t *testing.T) {
 	}
 	if contract := autopilotContract(AutopilotKindMotion, FullCapabilities()); strings.Contains(contract, `"arc"`) {
 		t.Fatalf("autopilot contract still advertises buildup mutation:\n%s", contract)
+	}
+	for _, kind := range []AutopilotKind{AutopilotKindMotion, AutopilotKindSpeech} {
+		if guard := autopilotOutputGuard(kind, FullCapabilities()); strings.Contains(guard, `"arc"`) {
+			t.Fatalf("%s output guard still advertises buildup mutation:\n%s", kind, guard)
+		}
 	}
 }
 

@@ -1610,7 +1610,7 @@ amd64 payload and the solid `lzma2/ultra64` stream. The native-x64, non-solid
 `zip/9` candidate passed PE-machine checks, the isolated installer lifecycle,
 and a current Defender custom scan with no threats. Its larger approximately
 17.9 MB size is an accepted transparency tradeoff. Alpha.8 through alpha.11 and
-alpha.13 may publish this hardened shape only through `ReviewedUnsignedPublic`,
+alpha.13 through alpha.34 may publish this hardened shape only through `ReviewedUnsignedPublic`,
 bound to the completed case, alpha.9-and-later exact-artifact Defender scan, and
 full lifecycle acceptance. This does not lower R28: each new hash is still
 unsigned and trusted Authenticode remains the production exit evidence.
