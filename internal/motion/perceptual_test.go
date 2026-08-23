@@ -71,4 +71,18 @@ func TestPerceptualDifferenceAccumulatesSmallEditsButIgnoresPace(t *testing.T) {
 	if !base.MateriallyDifferent(large) {
 		t.Fatalf("macro reshape did not reset perceptual phrase age: base=%+v large=%+v", base, large)
 	}
+
+	wideDefinition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 42, SpanPercent: 80, SpanMinPercent: 30,
+		SpanProfile: DynamicSpanProfileContrast, VariationPercent: 75,
+	})
+	nearFullDefinition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 94, SpanMinPercent: 36,
+		SpanProfile: DynamicSpanProfileWander, VariationPercent: 82,
+	})
+	wide := plan(wideDefinition, 65).Perceptual
+	nearFull := plan(nearFullDefinition, 65).Perceptual
+	if !wide.MateriallyDifferent(nearFull) {
+		t.Fatalf("near-full combined expansion remained cosmetic: wide=%+v near_full=%+v", wide, nearFull)
+	}
 }

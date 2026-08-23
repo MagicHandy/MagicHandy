@@ -6,6 +6,7 @@ import (
 	"math"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -16,6 +17,14 @@ import (
 
 const maxAutopilotSayRunes = 150
 
+func autopilotCosmeticFeedback(input modes.DecisionInput) string {
+	return fmt.Sprintf(
+		"The previous update compiled as continuity. Motion change rate is %d/8; the same felt phrase has persisted for %d seconds across %d reconsiderations, with %d consecutive holds. Choose none only for genuinely fitting continuity; otherwise reconsider the motion concept and encode a materially different destination in one step. Another nearby numerical variant of the same idea is still continuity.",
+		input.MotionChangeLevel, input.SecondsAtCurrentPhrase,
+		input.DecisionsAtCurrentPhrase, input.ConsecutiveHolds,
+	)
+}
+
 // autopilotDecide runs the strict motion-only model contract. It never asks for
 // or publishes a chat line.
 func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput) (modes.Decision, error) {
@@ -23,7 +32,27 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 	if err != nil {
 		return modes.Decision{}, err
 	}
-	return s.mapAutopilotResponse(response, input)
+	decision, err := s.mapAutopilotResponse(response, input)
+	if err != nil {
+		return modes.Decision{}, err
+	}
+	settings, _ := s.store.Snapshot()
+	admitted, cosmetic := curateAutopilotPerceptualChange(decision, input, settings.Motion)
+	if !cosmetic || input.MotionChangeLevel < 6 {
+		return admitted, nil
+	}
+	retryInput := input
+	retryInput.MotionFeedback = autopilotCosmeticFeedback(input)
+	retryResponse, retryErr := s.autopilotModelTurn(ctx, retryInput, chat.AutopilotKindMotion)
+	if retryErr != nil {
+		return admitted, nil
+	}
+	retryDecision, retryErr := s.mapAutopilotResponse(retryResponse, retryInput)
+	if retryErr != nil {
+		return admitted, nil
+	}
+	retryAdmitted, _ := curateAutopilotPerceptualChange(retryDecision, retryInput, settings.Motion)
+	return retryAdmitted, nil
 }
 
 // autopilotDecideSpeech runs the independent spoken-check-in contract. Its
@@ -34,7 +63,44 @@ func (s *Server) autopilotDecideSpeech(ctx context.Context, input modes.Decision
 	if err != nil {
 		return modes.Decision{}, err
 	}
-	return s.mapAutopilotResponse(response, input)
+	decision, err := s.mapAutopilotResponse(response, input)
+	if err != nil {
+		return modes.Decision{}, err
+	}
+	settings, _ := s.store.Snapshot()
+	admitted, _ := curateAutopilotPerceptualChange(decision, input, settings.Motion)
+	return admitted, nil
+}
+
+// curateAutopilotPerceptualChange turns cosmetic geometry updates into honest
+// holds. It does not choose replacement geometry or require a change: the model
+// may hold, but an update must compile to a felt shape difference. A simultaneous
+// pace change remains valid while the ineffective geometry is stripped away.
+func curateAutopilotPerceptualChange(
+	decision modes.Decision,
+	input modes.DecisionInput,
+	settings config.MotionSettings,
+) (modes.Decision, bool) {
+	if decision.Hold || decision.Segment.Dynamic == nil || input.CurrentDynamic == nil ||
+		input.CurrentPerceptual == nil {
+		return decision, false
+	}
+	plan := motion.NewMotionPlan("autopilot-quality", motion.MotionTarget{
+		Label: "Autopilot", Source: "autopilot",
+		SpeedPercent: decision.Segment.SpeedPercent, Dynamic: decision.Segment.Dynamic,
+	}, settings, 0, 0, time.Unix(0, 0))
+	if plan.Perceptual.CommandedPeakVelocityPerSecond <= 0 ||
+		plan.Perceptual.MateriallyDifferent(*input.CurrentPerceptual) {
+		return decision, false
+	}
+	if decision.Segment.SpeedPercent != input.CurrentSpeed {
+		current := motion.NormalizeDynamicDefinition(*input.CurrentDynamic)
+		decision.Segment.Dynamic = &current
+		return decision, true
+	}
+	return modes.Decision{
+		Hold: true, Say: decision.Say, Next: decision.Next, Variability: decision.Variability,
+	}, true
 }
 
 func (s *Server) autopilotModelTurn(
@@ -72,6 +138,10 @@ func (s *Server) autopilotModelTurn(
 		return chat.AutopilotResponse{}, err
 	}
 	motionContext := s.chatMotionContext(settings.Motion, settings.LLM)
+	temperature := autopilotTemperature(kind, input.MotionChangeLevel)
+	if kind == chat.AutopilotKindMotion && strings.TrimSpace(input.MotionFeedback) != "" && temperature < 0.98 {
+		temperature = 0.98
+	}
 	service := chat.AutopilotService{
 		Provider:              provider,
 		Prompt:                prompt,
@@ -79,6 +149,7 @@ func (s *Server) autopilotModelTurn(
 		MaxTokens:             settings.LLM.MaxOutputTokens,
 		ReasoningMode:         settings.LLM.ReasoningMode,
 		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
+		Temperature:           temperature,
 		Memories:              memories,
 		Patterns:              patternChoices,
 		MotionContext:         &motionContext,
@@ -99,6 +170,21 @@ func (s *Server) autopilotModelTurn(
 		Message: message,
 		History: promptContext.History,
 	})
+}
+
+// autopilotTemperature turns Motion change rate into genuine sampling breadth
+// as well as cadence. It is deliberately probabilistic: the model still authors
+// the geometry, while a high rate is less likely to collapse onto its safest
+// repeated numbers. Speech uses one independent moderate value so it can vary
+// its language without inheriting the motion slider.
+func autopilotTemperature(kind chat.AutopilotKind, level int) float64 {
+	if kind != chat.AutopilotKindMotion {
+		return 0.55
+	}
+	if level < 1 || level > 8 {
+		level = 4
+	}
+	return 0.32 + float64(level-1)*0.07
 }
 
 // autopilotPromptContext is the single adapter from scheduler state to the
@@ -132,13 +218,22 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 		SpeedTrend:               input.SpeedTrend,
 		ArcEnabled:               input.ArcEnabled,
 		ArcPercent:               input.ArcPercent,
+		MotionFeedback:           input.MotionFeedback,
 	}
 	if input.CurrentPerceptual != nil {
+		modelContext.CommandedPositionMin = int(math.Round(input.CurrentPerceptual.PositionMinPercent))
+		modelContext.CommandedPositionMax = int(math.Round(input.CurrentPerceptual.PositionMaxPercent))
 		modelContext.CommandedMeanTravel = int(math.Round(input.CurrentPerceptual.CommandedMeanTravelPerSecond))
 		modelContext.CommandedPeakSpeed = int(math.Round(input.CurrentPerceptual.CommandedPeakVelocityPerSecond))
 		modelContext.MeanStrokeLength = int(math.Round(input.CurrentPerceptual.MeanStrokePercent))
 		modelContext.LocalStrokeCV = int(math.Round(input.CurrentPerceptual.MinimumLocalStrokeCV * 100))
 		modelContext.LocalStrokeRange = int(math.Round(input.CurrentPerceptual.MinimumLocalStrokeRange))
+	}
+	for _, band := range input.RecentPositionBands {
+		modelContext.RecentPositionBands = append(modelContext.RecentPositionBands, chat.PositionBand{
+			Minimum: int(math.Round(band.MinimumPercent)),
+			Maximum: int(math.Round(band.MaximumPercent)),
+		})
 	}
 	if input.CurrentDynamic != nil {
 		dynamic := motion.NormalizeDynamicDefinition(*input.CurrentDynamic)

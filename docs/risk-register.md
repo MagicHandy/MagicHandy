@@ -241,6 +241,35 @@ unsafe-state circuit, stale-generation protection, transient recovery, and
 Stop lifecycle. No post-change physical motion was commanded; a capped
 installed-device confirmation remains open under R1.
 
+Status 2026-08-22 range/pause follow-up: the installed alpha.33 Cloud trace
+contained 4,824 emitted points over 403.5 seconds. Only 1.46% of commanded time
+was below position 10 and 0.45% above 90; the first 15 retained Creative phrases
+clustered around center 48–52 and span 40–45 until explicit chat requested the
+base. The same trace captured two user Pauses whose transport Stops succeeded,
+followed about 2.2 seconds later by autonomous startup recovery and Play. Pause
+had killed the engine loop before `paused=true` was published, so the mode loop
+misread that transport-I/O gap as an unexpected idle engine.
+
+The mode manager now latches Pause before transport I/O and cancels in-flight
+autonomous work; repeated ticks over the exact `running=false, paused=false`
+gap cannot decide, Start, or retarget, while explicit Resume preserves the mode
+and phrase. Creative's motion-only system prompt now treats active Autopilot as
+the user's ongoing bounded request, carries four recent compiled position bands,
+and gives high-rate cosmetic updates one non-prescriptive semantic retry. The
+active installed 12B Gemma completed three repeated six-turn evaluations during
+tuning; the final qualitative prompt then completed an extended ten-turn
+transport-free evaluation, moving from localized motion to materially different
+base-reaching/near-full bands without giving the model a numeric broad-range
+target or forcing a change. Wander's smooth high envelope phase also approaches
+the model-selected outer span more often without reaching a forced endpoint.
+The final explicit-direction run produced five valid three-section phrases and
+still obeyed an explicit long-age hold. After one low-temperature Hei speech
+sample overused first-person openings, an independent moderate speech
+temperature passed three repeated four-line novelty runs; the motion slider
+does not affect it.
+No post-change physical motion was commanded; subjective feel, latency, Pause,
+Resume, and Stop on the capped installed device remain open under R1.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -1511,7 +1540,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.33 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.34 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1559,7 +1588,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.33, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.34, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit
@@ -1581,7 +1610,7 @@ amd64 payload and the solid `lzma2/ultra64` stream. The native-x64, non-solid
 `zip/9` candidate passed PE-machine checks, the isolated installer lifecycle,
 and a current Defender custom scan with no threats. Its larger approximately
 17.9 MB size is an accepted transparency tradeoff. Alpha.8 through alpha.11 and
-alpha.13 may publish this hardened shape only through `ReviewedUnsignedPublic`,
+alpha.13 through alpha.34 may publish this hardened shape only through `ReviewedUnsignedPublic`,
 bound to the completed case, alpha.9-and-later exact-artifact Defender scan, and
 full lifecycle acceptance. This does not lower R28: each new hash is still
 unsigned and trusted Authenticode remains the production exit evidence.

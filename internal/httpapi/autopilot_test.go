@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -135,7 +136,7 @@ func TestAutopilotFallsBackWithoutConfiguredLLM(t *testing.T) {
 
 func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"motion":{"action":"none"},"next":"normal","variability":"settled"}`,
+		`{"intent":"hold the current phrase","motion":{"action":"none"},"next":"normal","variability":"settled"}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 	t.Cleanup(server.Close)
@@ -186,6 +187,8 @@ func TestAutopilotPromptContextCarriesCompiledFeel(t *testing.T) {
 		SegmentSeconds: 14,
 	})
 	perceptual := motion.PerceptualSummary{
+		PositionMinPercent:             7.4,
+		PositionMaxPercent:             96.6,
 		CommandedMeanTravelPerSecond:   93.6,
 		CommandedPeakVelocityPerSecond: 171.2,
 		MeanStrokePercent:              48.7,
@@ -196,22 +199,141 @@ func TestAutopilotPromptContextCarriesCompiledFeel(t *testing.T) {
 	capabilities.MotionMode = chat.MotionModeDynamic
 	context := autopilotPromptContext(modes.DecisionInput{
 		CurrentDynamic: &definition, CurrentSpeed: 58, CurrentPerceptual: &perceptual,
+		RecentPositionBands: []modes.PositionBand{{MinimumPercent: 26.4, MaximumPercent: 73.6}},
 	}, capabilities)
 
-	if context.CommandedMeanTravel != 94 || context.CommandedPeakSpeed != 171 ||
+	if context.CommandedPositionMin != 7 || context.CommandedPositionMax != 97 ||
+		context.CommandedMeanTravel != 94 || context.CommandedPeakSpeed != 171 ||
 		context.MeanStrokeLength != 49 || context.LocalStrokeCV != 13 || context.LocalStrokeRange != 18 {
 		t.Fatalf("compiled prompt context = %+v", context)
 	}
+	if !reflect.DeepEqual(context.RecentPositionBands, []chat.PositionBand{{Minimum: 26, Maximum: 74}}) {
+		t.Fatalf("recent position bands = %+v", context.RecentPositionBands)
+	}
 	message := chat.AutopilotMotionMessage(context)
-	if !strings.Contains(message, "Compiled feel: about 94% travel per second on average") ||
+	if !strings.Contains(message, "Compiled feel: position band 7-97%, about 94% travel per second on average") ||
 		!strings.Contains(message, "least varied 12-second window has 18% length range with 13% coefficient of variation") {
 		t.Fatalf("compiled feel missing from prompt:\n%s", message)
 	}
 }
 
+func TestAutopilotMotionTemperatureFollowsChangeRateWithoutAffectingSpeech(t *testing.T) {
+	low := autopilotTemperature(chat.AutopilotKindMotion, 1)
+	balanced := autopilotTemperature(chat.AutopilotKindMotion, 4)
+	high := autopilotTemperature(chat.AutopilotKindMotion, 8)
+	if !(low < balanced && balanced < high) {
+		t.Fatalf("motion temperatures are not ordered: low=%.2f balanced=%.2f high=%.2f", low, balanced, high)
+	}
+	if high > 0.85 || low < 0.25 {
+		t.Fatalf("motion temperature bounds are too wide: low=%.2f high=%.2f", low, high)
+	}
+	if speech := autopilotTemperature(chat.AutopilotKindSpeech, 8); speech != 0.55 {
+		t.Fatalf("motion change rate altered speech temperature: %.2f", speech)
+	}
+}
+
+func TestAutopilotPerceptualCurationHoldsCosmeticGeometryButPreservesPace(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	current := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 30, SpanMinPercent: 20,
+		SpanProfile: motion.DynamicSpanProfileWander, VariationPercent: 45,
+	})
+	currentPlan := motion.NewMotionPlan("quality-current", motion.MotionTarget{
+		SpeedPercent: 45, Dynamic: &current,
+	}, settings, 0, 0, time.Unix(0, 0))
+	input := modes.DecisionInput{
+		CurrentSpeed: 45, CurrentDynamic: &current, CurrentPerceptual: &currentPlan.Perceptual,
+	}
+	cosmetic := current
+	cosmetic.SpanPercent += 2
+	cosmetic.PhraseSeed = 0
+	cosmetic = motion.NormalizeDynamicDefinition(cosmetic)
+
+	hold, rejected := curateAutopilotPerceptualChange(modes.Decision{
+		Segment: modes.Segment{SpeedPercent: 45, Dynamic: &cosmetic},
+		Next:    modes.TimingSoon, Variability: modes.VariabilityRestless,
+	}, input, settings)
+	if !rejected || !hold.Hold || hold.Next != modes.TimingSoon || hold.Variability != modes.VariabilityRestless {
+		t.Fatalf("cosmetic geometry curation = %+v rejected=%t", hold, rejected)
+	}
+
+	pace, rejected := curateAutopilotPerceptualChange(modes.Decision{
+		Segment: modes.Segment{SpeedPercent: 62, Dynamic: &cosmetic},
+	}, input, settings)
+	if !rejected || pace.Hold || pace.Segment.SpeedPercent != 62 || pace.Segment.Dynamic == nil ||
+		!reflect.DeepEqual(*pace.Segment.Dynamic, current) {
+		t.Fatalf("pace plus cosmetic geometry curation = %+v rejected=%t", pace, rejected)
+	}
+
+	broad := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{
+		CenterPercent: 45, SpanPercent: 82, SpanMinPercent: 24,
+		SpanProfile: motion.DynamicSpanProfileContrast, VariationPercent: 68,
+	})
+	changed, rejected := curateAutopilotPerceptualChange(modes.Decision{
+		Segment: modes.Segment{SpeedPercent: 45, Dynamic: &broad},
+	}, input, settings)
+	if rejected || changed.Hold || changed.Segment.Dynamic == nil ||
+		!reflect.DeepEqual(*changed.Segment.Dynamic, broad) {
+		t.Fatalf("material geometry was rejected: %+v rejected=%t", changed, rejected)
+	}
+}
+
+func TestAutopilotHighRateRetriesCosmeticGeometryWithoutChoosingAReplacement(t *testing.T) {
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"intent":"nudge the current wander","motion":{"action":"update","speed_percent":45,"center_percent":50,"span_percent":32,"span_min_percent":20,"span_profile":"wander","variation_percent":45,"segment_seconds":14},"next":"normal","variability":"normal"}`,
+		`{"intent":"a different travel character","motion":{"action":"update","speed_percent":45,"center_percent":45,"span_percent":82,"span_min_percent":24,"span_profile":"contrast","variation_percent":68,"segment_seconds":14},"next":"normal","variability":"restless"}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+	t.Cleanup(server.Close)
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.LLM.MotionGenerationMode = config.LLMMotionModeDynamic
+		settings.Motion.SpeedMinPercent = 1
+		settings.Motion.SpeedMaxPercent = 100
+		return settings
+	})
+	settings, _ := server.store.Snapshot()
+	current := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 30, SpanMinPercent: 20,
+		SpanProfile: motion.DynamicSpanProfileWander, VariationPercent: 45,
+	})
+	plan := motion.NewMotionPlan("retry-current", motion.MotionTarget{
+		SpeedPercent: 45, Dynamic: &current,
+	}, settings.Motion, 0, 0, time.Unix(0, 0))
+	decision, err := server.autopilotDecide(t.Context(), modes.DecisionInput{
+		Style: config.MotionStyleBalanced, SpeedMinPercent: 1, SpeedMaxPercent: 100,
+		CurrentSpeed: 45, CurrentDynamic: &current, CurrentPerceptual: &plan.Perceptual,
+		MotionMinSeconds: 8, MotionMaxSeconds: 16, MotionChangeLevel: 8,
+		SecondsAtCurrentPhrase: 48, DecisionsAtCurrentPhrase: 3, ConsecutiveHolds: 1,
+	})
+	if err != nil {
+		t.Fatalf("autopilotDecide: %v", err)
+	}
+	if decision.Hold || decision.Segment.Dynamic == nil || decision.Segment.Dynamic.SpanPercent != 82 ||
+		decision.Segment.Dynamic.SpanProfile != motion.DynamicSpanProfileContrast {
+		t.Fatalf("quality retry decision = %+v", decision)
+	}
+	provider.mu.Lock()
+	requests := append([]llm.ChatRequest(nil), provider.requests...)
+	provider.mu.Unlock()
+	if len(requests) != 2 {
+		t.Fatalf("provider requests = %d, want one decision plus one quality retry", len(requests))
+	}
+	lastUser := requests[1].Messages[len(requests[1].Messages)-1].Content
+	for _, want := range []string{
+		"Quality feedback:", "compiled as continuity", "Motion change rate is 8/8",
+		"reconsider the motion concept", "nearby numerical variant of the same idea is still continuity",
+	} {
+		if !strings.Contains(lastUser, want) {
+			t.Fatalf("quality retry prompt missing %q:\n%s", want, lastUser)
+		}
+	}
+}
+
 func TestAutopilotDecisionCanCurateMotionDespiteStopProhibition(t *testing.T) {
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"motion":{"action":"target","pattern_id":"stroke","intensity":45},"next":"soon","variability":"normal"}`,
+		`{"intent":"settle into a firmer stroke","motion":{"action":"target","pattern_id":"stroke","intensity":45},"next":"soon","variability":"normal"}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 	t.Cleanup(server.Close)

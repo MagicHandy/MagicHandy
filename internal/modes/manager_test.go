@@ -3,6 +3,7 @@ package modes
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -284,6 +285,17 @@ func retargetCount(engine *fakeEngine) int {
 	return targets
 }
 
+func userPauseLatched(manager *Manager) bool {
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	return manager.userPaused
+}
+
+type userControlResult struct {
+	finish   func(bool)
+	admitted bool
+}
+
 func TestFreestyleSuspendsWhilePausedAndUserPauseIsNeverOverridden(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}
@@ -294,7 +306,12 @@ func TestFreestyleSuspendsWhilePausedAndUserPauseIsNeverOverridden(t *testing.T)
 	}
 	waitForAutonomousStart(t, manager, engine)
 
-	engine.setState(false, true) // user paused
+	finishPause, admitted := manager.BeginUserPause()
+	if !admitted {
+		t.Fatal("Pause was not admitted")
+	}
+	engine.setState(false, true) // Engine.Pause completed.
+	finishPause(true)
 	clock.Advance(300 * time.Second)
 	time.Sleep(30 * time.Millisecond)
 	starts, retargets := engine.counts()
@@ -304,8 +321,137 @@ func TestFreestyleSuspendsWhilePausedAndUserPauseIsNeverOverridden(t *testing.T)
 
 	// Resume: the planner continues.
 	engine.setState(true, false)
+	finishResume, admitted := manager.BeginUserResume()
+	if !admitted {
+		t.Fatal("Resume was not admitted")
+	}
+	finishResume(true)
 	clock.Advance(300 * time.Second)
 	waitFor(t, time.Second, func() bool { return retargetCount(engine) >= 1 })
+}
+
+func TestOverlappingPauseFailureKeepsConfirmedLatch(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := newTestManager(t, engine, clock, diagnostics.NewTraceRing(64))
+	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+
+	firstPause, admitted := manager.BeginUserPause()
+	if !admitted {
+		t.Fatal("first Pause was not admitted")
+	}
+	manager.mu.Lock()
+	firstPauseID := manager.userPauseID
+	manager.mu.Unlock()
+
+	duplicate := make(chan userControlResult, 1)
+	go func() {
+		finish, ok := manager.BeginUserPause()
+		duplicate <- userControlResult{finish: finish, admitted: ok}
+	}()
+	waitFor(t, time.Second, func() bool {
+		manager.mu.Lock()
+		defer manager.mu.Unlock()
+		return manager.userPauseID == firstPauseID+1
+	})
+
+	engine.setState(false, false)
+	clock.Advance(5 * time.Minute)
+	time.Sleep(30 * time.Millisecond)
+	firstPause(true)
+	duplicateResult := <-duplicate
+	if !duplicateResult.admitted {
+		t.Fatal("newer duplicate Pause was not admitted")
+	}
+	// Even if the duplicate reports an ordinary failure, the earlier confirmed
+	// Pause still owns the latch.
+	duplicateResult.finish(false)
+	if !userPauseLatched(manager) {
+		t.Fatal("failed duplicate Pause released an earlier confirmed Pause")
+	}
+	if starts, retargets := engine.counts(); starts != 1 || retargets != 0 {
+		t.Fatalf("paused mode acted during overlapping Pause: starts=%d retargets=%d", starts, retargets)
+	}
+}
+
+func TestUserControlOrderingKeepsNewestPauseLatched(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := newTestManager(t, engine, clock, diagnostics.NewTraceRing(64))
+	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+	initialPause, admitted := manager.BeginUserPause()
+	if !admitted {
+		t.Fatal("initial Pause was not admitted")
+	}
+	engine.setState(false, true)
+	initialPause(true)
+
+	blocker, admitted := manager.BeginUserPause()
+	if !admitted {
+		t.Fatal("Pause blocker was not admitted")
+	}
+	manager.mu.Lock()
+	blockerID := manager.userPauseID
+	manager.mu.Unlock()
+
+	resumeReady := make(chan userControlResult, 1)
+	go func() {
+		finish, ok := manager.BeginUserResume()
+		resumeReady <- userControlResult{finish: finish, admitted: ok}
+	}()
+	waitFor(t, time.Second, func() bool {
+		manager.mu.Lock()
+		defer manager.mu.Unlock()
+		return manager.userPauseID == blockerID+1
+	})
+
+	pauseReady := make(chan userControlResult, 1)
+	go func() {
+		finish, ok := manager.BeginUserPause()
+		pauseReady <- userControlResult{finish: finish, admitted: ok}
+	}()
+	waitFor(t, time.Second, func() bool {
+		manager.mu.Lock()
+		defer manager.mu.Unlock()
+		return manager.userPauseID == blockerID+2
+	})
+
+	blocker(true)
+	for resumeReady != nil || pauseReady != nil {
+		select {
+		case result := <-resumeReady:
+			if result.admitted {
+				result.finish(false)
+				t.Fatal("stale Resume was admitted after a newer Pause")
+			}
+			result.finish(false)
+			resumeReady = nil
+		case result := <-pauseReady:
+			if !result.admitted {
+				result.finish(false)
+				t.Fatal("newest Pause was not admitted")
+			}
+			result.finish(true)
+			pauseReady = nil
+		case <-time.After(time.Second):
+			t.Fatal("queued Pause/Resume controls did not complete")
+		}
+	}
+
+	if !userPauseLatched(manager) {
+		t.Fatal("newest Pause did not retain the latch")
+	}
+	clock.Advance(5 * time.Minute)
+	time.Sleep(30 * time.Millisecond)
+	if starts, retargets := engine.counts(); starts != 1 || retargets != 0 {
+		t.Fatalf("paused mode acted after stale Resume: starts=%d retargets=%d", starts, retargets)
+	}
 }
 
 func TestFreestyleStopsAfterUserStopInsteadOfRestarting(t *testing.T) {
@@ -550,6 +696,115 @@ func TestBeginUserStopSerializesNextModeStartUntilDrained(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("next mode remained blocked after user Stop drained")
+	}
+}
+
+func TestUserStopInvalidatesModeStartQueuedBehindPause(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := newTestManager(t, engine, clock, diagnostics.NewTraceRing(64))
+	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
+		t.Fatal(err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+
+	blocker, admitted := manager.BeginUserPause()
+	if !admitted {
+		t.Fatal("Pause blocker was not admitted")
+	}
+	manager.mu.Lock()
+	blockerID := manager.userPauseID
+	manager.mu.Unlock()
+
+	startDone := make(chan error, 1)
+	go func() {
+		_, err := manager.Start(context.Background(), ModeChat)
+		startDone <- err
+	}()
+	waitFor(t, time.Second, func() bool {
+		manager.mu.Lock()
+		defer manager.mu.Unlock()
+		return manager.userPauseID == blockerID+1
+	})
+
+	// Stop does not wait for the Pause/Resume execution gate. It invalidates the
+	// queued start first and retains lifecycle authority through its drain.
+	finishStop := manager.BeginUserStop()
+	blocker(false)
+	finishStop()
+	select {
+	case err := <-startDone:
+		if err == nil || !strings.Contains(err.Error(), "superseded") {
+			t.Fatalf("queued start error = %v, want superseded", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("queued mode start remained blocked after user Stop")
+	}
+	if status := manager.Status(); status.Active {
+		t.Fatalf("mode restarted after user Stop: %+v", status)
+	}
+}
+
+func TestNewModeStartSupersedesQueuedResume(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	manager := newTestManager(t, engine, clock, diagnostics.NewTraceRing(64))
+	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
+		t.Fatal(err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+
+	blocker, admitted := manager.BeginUserPause()
+	if !admitted {
+		t.Fatal("Pause blocker was not admitted")
+	}
+	manager.mu.Lock()
+	blockerID := manager.userPauseID
+	manager.mu.Unlock()
+
+	type resumeResult struct {
+		finish   func(bool)
+		admitted bool
+	}
+	resumeReady := make(chan resumeResult, 1)
+	go func() {
+		finish, ok := manager.BeginUserResume()
+		resumeReady <- resumeResult{finish: finish, admitted: ok}
+	}()
+	waitFor(t, time.Second, func() bool {
+		manager.mu.Lock()
+		defer manager.mu.Unlock()
+		return manager.userPauseID == blockerID+1
+	})
+
+	startDone := make(chan error, 1)
+	go func() {
+		_, err := manager.Start(context.Background(), ModeChat)
+		startDone <- err
+	}()
+	waitFor(t, time.Second, func() bool {
+		manager.mu.Lock()
+		defer manager.mu.Unlock()
+		return manager.userPauseID == blockerID+2
+	})
+
+	blocker(true)
+	result := <-resumeReady
+	if result.admitted {
+		result.finish(false)
+		t.Fatal("queued Resume was admitted after a newer mode start")
+	}
+	result.finish(false)
+	select {
+	case err := <-startDone:
+		if err != nil {
+			t.Fatalf("newer mode start: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("newer mode start remained blocked")
+	}
+	if status := manager.Status(); status.Mode != ModeChat {
+		t.Fatalf("mode = %q, want chat", status.Mode)
 	}
 }
 

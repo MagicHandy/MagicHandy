@@ -210,7 +210,17 @@ func TestDynamicAutopilotHoldAtStartupNeverFallsBackToPattern(t *testing.T) {
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	waitFor(t, time.Second, func() bool { return decider.callCount() >= 1 })
+	waitFor(t, time.Second, func() bool {
+		if decider.callCount() < 1 {
+			return false
+		}
+		for _, row := range manager.options.Traces.Rows() {
+			if row.Reason == "start_waiting_for_model" {
+				return true
+			}
+		}
+		return false
+	})
 
 	starts, retargets := engine.counts()
 	if starts != 0 || retargets != 0 {
@@ -298,7 +308,7 @@ func TestAutopilotReportsAccumulatedPhraseSamenessWithoutForcingAChange(t *testi
 
 	for wantCalls := 2; wantCalls <= 5; wantCalls++ {
 		clock.Advance(150 * time.Second)
-		waitFor(t, time.Second, func() bool { return decider.callCount() >= wantCalls })
+		waitFor(t, time.Second, func() bool { return autopilotDecisionSettled(manager, decider, clock, wantCalls) })
 	}
 
 	decider.mu.Lock()
@@ -330,6 +340,16 @@ func TestAutopilotReportsAccumulatedPhraseSamenessWithoutForcingAChange(t *testi
 	if !foundTraceFacts {
 		t.Fatal("decision trace omitted the model-visible accumulated phrase facts")
 	}
+}
+
+func autopilotDecisionSettled(manager *Manager, decider *fakeDecider, clock *fakeClock, wantCalls int) bool {
+	if decider.callCount() < wantCalls {
+		return false
+	}
+	now := clock.Now()
+	manager.mu.Lock()
+	defer manager.mu.Unlock()
+	return manager.deadline.After(now)
 }
 
 func TestInteractiveChatTargetSuspendsAndReplacesAutopilotState(t *testing.T) {
@@ -473,6 +493,29 @@ func TestPhraseAgeUsesAccumulatedPerceptualDifference(t *testing.T) {
 	if manager.phraseChangedAt != changedAt || manager.decisionsAtCurrentPhrase != 1 {
 		t.Fatalf("seed-only micro refresh became a new semantic phrase: changed=%s decisions=%d",
 			manager.phraseChangedAt, manager.decisionsAtCurrentPhrase)
+	}
+}
+
+func TestRecentPositionBandMemoryIsBoundedAndObservational(t *testing.T) {
+	manager := &Manager{}
+	for index := range 6 {
+		manager.rememberPositionBandLocked(&motion.PerceptualSummary{
+			PositionMinPercent: float64(20 + index),
+			PositionMaxPercent: float64(70 + index),
+		})
+	}
+	want := []PositionBand{
+		{MinimumPercent: 22, MaximumPercent: 72},
+		{MinimumPercent: 23, MaximumPercent: 73},
+		{MinimumPercent: 24, MaximumPercent: 74},
+		{MinimumPercent: 25, MaximumPercent: 75},
+	}
+	if !reflect.DeepEqual(manager.recentPositionBands, want) {
+		t.Fatalf("recent position bands = %+v, want %+v", manager.recentPositionBands, want)
+	}
+	manager.rememberPositionBandLocked(&motion.PerceptualSummary{PositionMinPercent: 50, PositionMaxPercent: 50})
+	if !reflect.DeepEqual(manager.recentPositionBands, want) {
+		t.Fatalf("invalid band changed history: %+v", manager.recentPositionBands)
 	}
 }
 
@@ -823,6 +866,97 @@ func TestAutopilotUserStopEndsModeWithoutRestart(t *testing.T) {
 	}
 	if decider.callCount() != callsAfterStop {
 		t.Fatal("decision step ran again after user stop")
+	}
+}
+
+func TestAutopilotUserPauseCoversTransientIdleGapWithoutRestart(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	decider := &fakeDecider{decisions: []Decision{{
+		Segment: Segment{Dynamic: &motion.DynamicDefinition{
+			CenterPercent: 50, SpanPercent: 42, SpanMinPercent: 24,
+			SpanProfile: motion.DynamicSpanProfileWander, VariationPercent: 60,
+		}, SpeedPercent: 30},
+	}}}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+	callsBeforePause := decider.callCount()
+	manager.mu.Lock()
+	manager.swayPoints = []swayPoint{{
+		generation: manager.generation, at: clock.Now().Add(time.Minute), speedPercent: 34,
+	}}
+	manager.mu.Unlock()
+
+	finishPause, admitted := manager.BeginUserPause()
+	if !admitted {
+		t.Fatal("initial Pause was not admitted")
+	}
+	manager.mu.Lock()
+	if len(manager.swayPoints) != 1 || manager.swayPoints[0].generation != manager.generation {
+		manager.mu.Unlock()
+		t.Fatal("Pause invalidated the preserved intra-segment speed schedule")
+	}
+	manager.mu.Unlock()
+	// Engine.Pause has killed dispatch but is waiting for transport Stop. This
+	// is the exact live race: Running=false arrives before Paused=true.
+	engine.setState(false, false)
+	clock.Advance(5 * time.Minute)
+	time.Sleep(30 * time.Millisecond)
+	finishPause(true)
+	engine.setState(false, true)
+
+	if starts, retargets := engine.counts(); starts != 1 || retargets != 0 {
+		t.Fatalf("paused Autopilot acted during transient idle: starts=%d retargets=%d", starts, retargets)
+	}
+	if calls := decider.callCount(); calls != callsBeforePause {
+		t.Fatalf("paused Autopilot made %d decisions, want %d", calls, callsBeforePause)
+	}
+	if status := manager.Status(); !status.Active {
+		t.Fatalf("Pause ended Autopilot instead of suspending it: %+v", status)
+	}
+
+	engine.setState(true, false)
+	finishResume, admitted := manager.BeginUserResume()
+	if !admitted {
+		t.Fatal("Resume was not admitted")
+	}
+	finishResume(true)
+	clock.Advance(5 * time.Minute)
+	waitFor(t, time.Second, func() bool { return retargetCount(engine) >= 1 })
+	if starts, _ := engine.counts(); starts != 1 {
+		t.Fatalf("Resume replaced the preserved stream: starts=%d, want 1", starts)
+	}
+}
+
+func TestAutopilotFailedPauseReleasesRecoveryLatch(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	decider := &fakeDecider{decisions: []Decision{{
+		Segment: Segment{PatternID: motion.PatternStroke, SpeedPercent: 30},
+	}}}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+
+	finishPause, admitted := manager.BeginUserPause()
+	if !admitted {
+		t.Fatal("Pause was not admitted")
+	}
+	engine.setState(false, false)
+	finishPause(false)
+	clock.Advance(5 * time.Minute)
+	waitFor(t, time.Second, func() bool {
+		starts, _ := engine.counts()
+		return starts >= 2
+	})
+	if status := manager.Status(); !status.Active {
+		t.Fatalf("failed Pause ended Autopilot: %+v", status)
 	}
 }
 

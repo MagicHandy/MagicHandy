@@ -59,6 +59,9 @@ func TestLiveAutopilotCreativeCompiledPhrase(t *testing.T) {
 	input := modes.DecisionInput{
 		Style: "balanced", SpeedMinPercent: 20, SpeedMaxPercent: 80,
 		CurrentSpeed: speed, CurrentDynamic: &definition, CurrentPerceptual: &perceptual,
+		RecentPositionBands: []modes.PositionBand{{
+			MinimumPercent: perceptual.PositionMinPercent, MaximumPercent: perceptual.PositionMaxPercent,
+		}},
 		MotionMinSeconds: 8, MotionMaxSeconds: 16, MotionChangeLevel: 8,
 		SessionTracking: true, SessionSeconds: 180, SecondsAtCurrentSpeed: 90,
 		SecondsAtCurrentPhrase: 90, DecisionsAtCurrentPhrase: 5, ConsecutiveHolds: 4,
@@ -77,6 +80,7 @@ func TestLiveAutopilotCreativeCompiledPhrase(t *testing.T) {
 		service := chat.AutopilotService{
 			Provider: recorder, Prompt: prompt, Model: model, MaxTokens: 384,
 			ReasoningMode: "off", Capabilities: capabilities, MotionContext: &motionContext,
+			Temperature: autopilotTemperature(chat.AutopilotKindMotion, input.MotionChangeLevel),
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		response, completeErr := service.Complete(ctx, chat.AutopilotKindMotion, chat.Request{
@@ -95,6 +99,7 @@ func TestLiveAutopilotCreativeCompiledPhrase(t *testing.T) {
 				modes.VariabilityPreference(response.Variability),
 			)
 		}
+		decision, _ = curateAutopilotPerceptualChange(decision, input, settings)
 		if decision.Hold {
 			if turn == 0 {
 				t.Fatalf("explicit macro replacement was held: %+v", response)
@@ -224,17 +229,24 @@ func TestLiveAutopilotCreativeHighRateAutonomy(t *testing.T) {
 		SecondsAtCurrentPhrase: 9,
 	}
 
-	const turns = 6
+	const turns = 10
 	changes := 0
 	geometryChanges := 0
 	materialChanges := 0
 	rangeCharacterChanges := 0
+	baseReachingChanges := 0
+	broadBandChanges := 0
+	localizedBandChanges := 0
+	if perceptual.PositionMaxPercent-perceptual.PositionMinPercent <= 55 {
+		localizedBandChanges = 1
+	}
 	for turn := 0; turn < turns; turn++ {
 		input.SegmentIndex = turn + 2
 		motionContext := liveAutopilotMotionContext(input)
 		service := chat.AutopilotService{
 			Provider: recorder, Prompt: prompt, Model: model, MaxTokens: 384,
 			ReasoningMode: "off", Capabilities: capabilities, MotionContext: &motionContext,
+			Temperature: autopilotTemperature(chat.AutopilotKindMotion, input.MotionChangeLevel),
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		response, completeErr := service.Complete(ctx, chat.AutopilotKindMotion, chat.Request{
@@ -247,12 +259,34 @@ func TestLiveAutopilotCreativeHighRateAutonomy(t *testing.T) {
 		t.Logf("turn=%d phrase_age=%ds holds=%d raw=%s",
 			turn+1, input.SecondsAtCurrentPhrase, input.ConsecutiveHolds, recorder.LastRaw)
 
-		decision := modes.Decision{Hold: true}
-		if response.Motion != nil && response.Motion.Action == chat.MotionActionUpdate {
-			decision = mapDynamicAutopilotCommand(
-				response.Motion, input, "", modes.TimingPreference(response.Next),
-				modes.VariabilityPreference(response.Variability),
-			)
+		mapResponse := func(candidate chat.AutopilotResponse, candidateInput modes.DecisionInput) modes.Decision {
+			decision := modes.Decision{Hold: true}
+			if candidate.Motion != nil && candidate.Motion.Action == chat.MotionActionUpdate {
+				decision = mapDynamicAutopilotCommand(
+					candidate.Motion, candidateInput, "", modes.TimingPreference(candidate.Next),
+					modes.VariabilityPreference(candidate.Variability),
+				)
+			}
+			return decision
+		}
+		decision, cosmetic := curateAutopilotPerceptualChange(mapResponse(response, input), input, settings)
+		if cosmetic {
+			retryInput := input
+			retryInput.MotionFeedback = autopilotCosmeticFeedback(input)
+			retryMotionContext := liveAutopilotMotionContext(retryInput)
+			service.MotionContext = &retryMotionContext
+			service.Temperature = 0.98
+			retryCtx, retryCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			retryResponse, retryErr := service.Complete(retryCtx, chat.AutopilotKindMotion, chat.Request{
+				Message: chat.AutopilotMotionMessage(autopilotPromptContext(retryInput, capabilities)),
+			})
+			retryCancel()
+			if retryErr != nil {
+				t.Fatalf("turn %d quality retry: %v", turn+1, retryErr)
+			}
+			response = retryResponse
+			t.Logf("turn=%d quality_retry raw=%s", turn+1, recorder.LastRaw)
+			decision, _ = curateAutopilotPerceptualChange(mapResponse(response, retryInput), retryInput, settings)
 		}
 		if decision.Hold {
 			input.SessionSeconds += 12
@@ -284,6 +318,15 @@ func TestLiveAutopilotCreativeHighRateAutonomy(t *testing.T) {
 		if liveCreativeRangeCharacterChanged(nextPerceptual, phrasePerceptual) {
 			rangeCharacterChanges++
 		}
+		if nextPerceptual.PositionMinPercent <= 15 {
+			baseReachingChanges++
+		}
+		if nextPerceptual.PositionMaxPercent-nextPerceptual.PositionMinPercent >= 70 {
+			broadBandChanges++
+		}
+		if nextPerceptual.PositionMaxPercent-nextPerceptual.PositionMinPercent <= 55 {
+			localizedBandChanges++
+		}
 		t.Logf(
 			"turn=%d change geometry=%t material=%t speed=%d center=%d span=%d floor=%d profile=%s variation=%d sections=%d",
 			turn+1, geometryChanged, material, nextSpeed, nextDefinition.CenterPercent,
@@ -308,12 +351,21 @@ func TestLiveAutopilotCreativeHighRateAutonomy(t *testing.T) {
 		input.CurrentSpeed = nextSpeed
 		input.CurrentDynamic = &nextDefinition
 		input.CurrentPerceptual = &nextPerceptual
+		input.RecentPositionBands = append(input.RecentPositionBands, modes.PositionBand{
+			MinimumPercent: nextPerceptual.PositionMinPercent,
+			MaximumPercent: nextPerceptual.PositionMaxPercent,
+		})
+		if len(input.RecentPositionBands) > 4 {
+			input.RecentPositionBands = input.RecentPositionBands[len(input.RecentPositionBands)-4:]
+		}
 	}
 
-	if changes < 2 || geometryChanges == 0 || materialChanges == 0 || rangeCharacterChanges == 0 {
+	if changes < 2 || geometryChanges == 0 || materialChanges == 0 || rangeCharacterChanges == 0 ||
+		baseReachingChanges == 0 || broadBandChanges == 0 || localizedBandChanges == 0 {
 		t.Fatalf(
-			"high-rate autonomous run stayed too static: changes=%d/%d geometry_changes=%d material_changes=%d range_character_changes=%d",
+			"high-rate autonomous run stayed too static or range-bound: changes=%d/%d geometry_changes=%d material_changes=%d range_character_changes=%d base_reaching_changes=%d broad_band_changes=%d localized_band_changes=%d",
 			changes, turns, geometryChanges, materialChanges, rangeCharacterChanges,
+			baseReachingChanges, broadBandChanges, localizedBandChanges,
 		)
 	}
 }
@@ -380,6 +432,7 @@ func TestLiveAutopilotSpeechNovelty(t *testing.T) {
 			Provider: recorder, Prompt: prompt, Model: model, MaxTokens: 160,
 			ReasoningMode: "off", Capabilities: capabilities,
 			ConversationContext: conversation,
+			Temperature:         autopilotTemperature(chat.AutopilotKindSpeech, 8),
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		response, completeErr := service.Complete(ctx, chat.AutopilotKindSpeech, chat.Request{

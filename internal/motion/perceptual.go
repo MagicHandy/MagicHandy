@@ -169,5 +169,9 @@ func (s PerceptualSummary) MateriallyDifferent(other PerceptualSummary) bool {
 	for _, component := range components {
 		distanceSquared += component * component
 	}
-	return math.Sqrt(distanceSquared/float64(len(components))) >= 1
+	// A phrase boundary should represent a coherent combined change, not the
+	// accumulated effect of a few nearby scalar edits. Keep enough separation to
+	// reject numerical nudges without suppressing a compiled near-full expansion
+	// whose center, span, stroke length, and texture change together.
+	return math.Sqrt(distanceSquared/float64(len(components))) >= 1.1
 }

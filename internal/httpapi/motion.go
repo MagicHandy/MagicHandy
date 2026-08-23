@@ -403,12 +403,20 @@ func (s *Server) handleMotionPause(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	finishModePause, admitted := s.modes.BeginUserPause()
 	engine := s.currentMotionEngine()
 	if engine == nil {
+		finishModePause(false)
 		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
 		return
 	}
+	if !admitted {
+		finishModePause(false)
+		s.writeMotionResult(w, engine.Snapshot(), nil)
+		return
+	}
 	state, err := engine.Pause(r.Context(), "ui_pause")
+	finishModePause(state.Paused)
 	s.writeMotionResult(w, state, err)
 }
 
@@ -416,12 +424,20 @@ func (s *Server) handleMotionResume(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	finishModeResume, admitted := s.modes.BeginUserResume()
 	engine := s.currentMotionEngine()
 	if engine == nil {
+		finishModeResume(false)
 		writeError(w, http.StatusServiceUnavailable, errMotionUnavailable)
 		return
 	}
+	if !admitted {
+		finishModeResume(false)
+		s.writeMotionResult(w, engine.Snapshot(), nil)
+		return
+	}
 	state, err := engine.Resume(r.Context(), "ui_resume")
+	finishModeResume(err == nil && state.Running && !state.Paused)
 	s.writeMotionResult(w, state, err)
 }
 

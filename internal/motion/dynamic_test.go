@@ -347,6 +347,33 @@ func TestDynamicSpanProfilesProduceLongBoundedDistinctPhrases(t *testing.T) {
 	}
 }
 
+func TestDynamicWanderSmoothlyApproachesItsSelectedOuterSpan(t *testing.T) {
+	const samples = 4096
+	minimum, maximum := math.MaxFloat64, 0.0
+	nearOuter := 0
+	for index := range samples {
+		phase := float64(index) / samples
+		factor := dynamicWanderEnvelope(0x4d3c2b1a, phase, 96)
+		minimum = math.Min(minimum, factor)
+		maximum = math.Max(maximum, factor)
+		if factor >= 0.85 {
+			nearOuter++
+		}
+	}
+	if maximum < 0.95 {
+		t.Fatalf("Wander can only reach %.1f%% of the selected outer span; want an occasional near-outer reach", maximum*100)
+	}
+	if minimum > 0.30 {
+		t.Fatalf("Wander lost its localized strokes: minimum envelope factor %.3f", minimum)
+	}
+	if fraction := float64(nearOuter) / samples; fraction < 0.12 {
+		t.Fatalf("Wander spends only %.1f%% of its envelope near the selected outer span", fraction*100)
+	}
+	if maximum >= 1 {
+		t.Fatalf("Wander turned the outer limit into a forced endpoint: factor %.6f", maximum)
+	}
+}
+
 func TestDynamicEverydayProfilesVaryWithinShortPerceptualWindows(t *testing.T) {
 	for _, profile := range []string{DynamicSpanProfileWander, DynamicSpanProfileContrast} {
 		definition := NormalizeDynamicDefinition(DynamicDefinition{

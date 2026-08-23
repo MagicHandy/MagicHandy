@@ -33,8 +33,7 @@ func (m *Manager) tickAutopilot(ctx context.Context) {
 	if engine != nil {
 		snapshot = engine.Snapshot()
 	}
-	if snapshot.Paused {
-		m.freezeDeadline()
+	if m.freezeIfPaused(ModeAutopilot, snapshot.Paused) {
 		return
 	}
 	m.thawDeadline()
@@ -196,7 +195,7 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	now := m.options.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.mode != mode || m.generation != generation || m.userStopped || m.chatTargetPending {
+	if m.mode != mode || m.generation != generation || m.userStopped || m.userPaused || m.chatTargetPending {
 		return false
 	}
 	previousSpeed := m.segment.SpeedPercent
@@ -204,6 +203,7 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 		m.lastDecisionTime = choice.decisionLatency
 	}
 	m.observeAutopilotPhraseLocked(now, *choice)
+	m.rememberPositionBandLocked(choice.appliedPerceptual)
 	duration := m.sampleMotionDelayLocked(choice.timing)
 	if choice.segment.Dynamic != nil && choice.segment.Dynamic.SegmentSeconds > 0 {
 		requested := time.Duration(choice.segment.Dynamic.SegmentSeconds) * time.Second
@@ -242,6 +242,23 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 		m.scheduleSpeechLocked(now, TimingNormal)
 	}
 	return true
+}
+
+// rememberPositionBandLocked retains only enough compiled history for the
+// model to notice range sameness across hidden motion-only decisions. It does
+// not suggest, score, or alter a target. Callers hold m.mu.
+func (m *Manager) rememberPositionBandLocked(summary *motion.PerceptualSummary) {
+	if summary == nil || summary.PositionMaxPercent <= summary.PositionMinPercent {
+		return
+	}
+	m.recentPositionBands = append(m.recentPositionBands, PositionBand{
+		MinimumPercent: summary.PositionMinPercent,
+		MaximumPercent: summary.PositionMaxPercent,
+	})
+	const limit = 4
+	if len(m.recentPositionBands) > limit {
+		m.recentPositionBands = m.recentPositionBands[len(m.recentPositionBands)-limit:]
+	}
 }
 
 // observeAutopilotPhraseLocked records what actually reached a segment
