@@ -150,6 +150,10 @@
 .stop-button:active {
   transform: translateY(1px);
 }
+.stop-button-label {
+  font-size: 1.08rem;
+  line-height: 1;
+}
 .stop-button .kbd {
   margin-left: auto;
   padding: 2px 6px;
@@ -540,7 +544,7 @@ textarea:disabled {
   margin: 0;
 }
 .viz-metrics.dynamic-metrics {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr);
 }
 .viz-metrics > div {
   display: grid;

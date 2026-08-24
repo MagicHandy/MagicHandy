@@ -42,6 +42,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 
 	addr := flags.String("addr", "", "HTTP listen address override")
 	dataDir := flags.String("data-dir", "", "app data directory for settings and diagnostics")
+	simulateMotion := flags.Bool("simulate-motion", false, "route all motion to the in-process simulator instead of a configured device")
 	languageFlags := addLanguageFlags(flags)
 	browserFlags := addBrowserFlags(flags)
 	ttsFlags := addTTSModuleFlags(flags)
@@ -90,10 +91,9 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		logger.Info("settings using defaults", "data_dir", loadStatus.DataDir)
 	}
 
-	runtime := httpapi.Runtime{
-		Traces:         diagnostics.NewTraceRing(512),
-		Transport:      transport.NewFake(),
-		ExecutablePath: executablePath(),
+	runtime := applicationRuntime(*simulateMotion)
+	if *simulateMotion {
+		logger.Info("motion simulation enabled", "transport", runtime.MotionTransport.Diagnostics().Name)
 	}
 
 	api, err := httpapi.New(web.FS(), logger, store, runtime, httpapi.VersionInfo{
@@ -135,6 +135,23 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 
 	return shutdownHTTPServer(server, api, logger)
+}
+
+// applicationRuntime keeps motion simulation explicit. Production starts with
+// no injected motion transport so the selected device owner remains
+// authoritative; review and test processes can opt into a credential-free
+// in-process transport that exercises the complete shared motion engine.
+func applicationRuntime(simulateMotion bool) httpapi.Runtime {
+	fake := transport.NewFake()
+	runtime := httpapi.Runtime{
+		Traces:         diagnostics.NewTraceRing(512),
+		Transport:      fake,
+		ExecutablePath: executablePath(),
+	}
+	if simulateMotion {
+		runtime.MotionTransport = fake
+	}
+	return runtime
 }
 
 func prepareForUninstall(stdout io.Writer) error {

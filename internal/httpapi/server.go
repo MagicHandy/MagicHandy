@@ -358,6 +358,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.voiceRoutes(mux)
 	s.setupRoutes(mux)
 	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
+	mux.HandleFunc("GET /api/traces/last-motion", s.handleLastMotionTrace)
 	mux.HandleFunc("GET /", s.handleStatic)
 }
 
@@ -638,12 +639,7 @@ func (s *Server) handleTransportDiagnostics(w http.ResponseWriter, _ *http.Reque
 }
 
 func (s *Server) handleTraceExport(w http.ResponseWriter, _ *http.Request) {
-	export := s.traces.Export()
-	intifaceStatus := s.intifaceSnapshot().Status
-	export.IntifaceDispatches = intifaceStatus.RecentDispatches
-	export.IntifaceDispatchesDropped = intifaceStatus.RecentDispatchesDropped
-	export.IntifaceLinearSentCount = intifaceStatus.LinearSentCount
-	writeJSON(w, http.StatusOK, export)
+	writeJSON(w, http.StatusOK, s.currentTraceExport())
 }
 
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {

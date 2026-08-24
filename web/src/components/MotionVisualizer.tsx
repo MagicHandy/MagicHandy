@@ -19,6 +19,15 @@ const SLEEVE_X = DEVICE_CENTER_X - SLEEVE_WIDTH / 2;
 const SCREEN_WIDTH = 20;
 const SCREEN_X = DEVICE_CENTER_X - SCREEN_WIDTH / 2;
 
+function paceLimiterLabel(limiter: string): string {
+  if (limiter === "device_velocity") return t("device velocity");
+  if (limiter === "acceleration") return t("acceleration");
+  if (limiter === "jerk") return t("smoothness");
+  if (limiter === "reversal_spacing") return t("reversal spacing");
+  if (limiter === "curve_geometry") return t("curve geometry");
+  return limiter.replaceAll("_", " ");
+}
+
 export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo | null; mini?: boolean }) {
   const engine = motion?.engine;
   const running = engine?.running === true;
@@ -62,6 +71,20 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
     ? `${Math.round(clampPercent(engine.target.speed_percent, 0))}%`
     : "--";
   const dynamic = active ? engine?.target?.dynamic : undefined;
+  const pace = dynamic ? engine?.pace : undefined;
+  const paceEffective = pace && Number.isFinite(pace.effective_percent)
+    ? Math.round(clampPercent(pace.effective_percent, 0))
+    : undefined;
+  const paceRequested = pace && Number.isFinite(pace.requested_percent)
+    ? Math.round(clampPercent(pace.requested_percent, 0))
+    : undefined;
+  const paceDisplay = paceEffective !== undefined && paceRequested !== undefined
+    ? pace?.limited ? `${paceEffective}% / ${paceRequested}%` : `${paceEffective}%`
+    : speed;
+  const paceLimiterLabels = (pace?.limiters ?? []).map(paceLimiterLabel);
+  const paceTitle = paceEffective !== undefined && paceRequested !== undefined
+    ? `${t("Effective {effective}%; requested {requested}%.", { effective: paceEffective, requested: paceRequested })}${pace?.limited && paceLimiterLabels.length ? ` ${t("Limited by {limiters}.", { limiters: paceLimiterLabels.join(", ") })}` : ""}`
+    : "";
   const resolvedPatternName = engine?.target?.pattern_name?.trim() || engine?.target?.pattern_id?.trim();
   const resolvedMediaName = engine?.target?.source === "media"
     ? engine.target.label?.trim() || t("Video funscript")
@@ -169,7 +192,7 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
                 <dd>{dynamicSectionLabel ? dynamicSectionLabel : <>{formatNumber(dynamic.center_percent)}%</>}</dd>
               </div>
               <div><dt>{t("Span")}</dt><dd>{dynamicSpan}</dd></div>
-              <div><dt>{t("Speed")}</dt><dd>{speed}</dd></div>
+              <div><dt>{t("Pace")}</dt><dd title={paceTitle} aria-label={paceTitle || undefined}>{paceDisplay}</dd></div>
               <div><dt>{t("Variation")}</dt><dd>{dynamicVariation}</dd></div>
             </dl>
           ) : (

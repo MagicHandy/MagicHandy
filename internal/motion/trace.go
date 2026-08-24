@@ -36,6 +36,11 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 		LastError:                  redactedError(e.lastError),
 		Perceptual:                 e.plan.Perceptual,
 	}
+	if e.plan.Target.Dynamic != nil && e.plan.ID != "" {
+		pace := e.plan.Perceptual.Pace
+		pace.Limiters = append([]string(nil), pace.Limiters...)
+		state.Pace = &pace
+	}
 	if !e.startedAt.IsZero() {
 		state.StartedAt = e.startedAt.UTC().Format(timeFormatRFC3339Nano)
 	}
@@ -77,7 +82,7 @@ func (e *Engine) traceStateLocked(reason string, annotation string) {
 	e.traces.Add(diagnostics.MotionTraceRow{
 		Source:     e.plan.Target.Source,
 		Reason:     reason,
-		Target:     traceTarget(e.plan.Target, e.settings),
+		Target:     traceTargetWithPace(e.plan.Target, e.settings, e.plan.Perceptual.Pace),
 		Annotation: annotation,
 	})
 }
@@ -101,7 +106,7 @@ func (e *Engine) traceRetargetLocked(
 	e.traces.Add(diagnostics.MotionTraceRow{
 		Source:     next.Target.Source,
 		Reason:     reason,
-		Target:     traceTarget(next.Target, nextSettings),
+		Target:     traceTargetWithPace(next.Target, nextSettings, next.Perceptual.Pace),
 		Sample:     traceSample(&current),
 		Annotation: retargetAnnotation(next.PhasePreserved, bridgeInserted),
 		Retarget: &diagnostics.MotionTraceRetarget{
@@ -111,8 +116,8 @@ func (e *Engine) traceRetargetLocked(
 			NextPatternIdentifier:           string(next.PatternID),
 			PreviousProgramIdentifier:       previous.ProgramID,
 			NextProgramIdentifier:           next.ProgramID,
-			PreviousTarget:                  traceTarget(previous.Target, previousSettings),
-			NextTarget:                      traceTarget(next.Target, nextSettings),
+			PreviousTarget:                  traceTargetWithPace(previous.Target, previousSettings, previous.Perceptual.Pace),
+			NextTarget:                      traceTargetWithPace(next.Target, nextSettings, next.Perceptual.Pace),
 			EstimatedCurrentPositionPercent: current.PositionPercent,
 			EstimatedCurrentStreamMillis:    current.TimeMillis,
 			SelectedHandoffMillis:           handoffMillis,
@@ -180,10 +185,14 @@ func (e *Engine) traceSource() string {
 func (e *Engine) traceTargetSnapshot() *diagnostics.MotionTraceTarget {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return traceTarget(e.plan.Target, e.settings)
+	return traceTargetWithPace(e.plan.Target, e.settings, e.plan.Perceptual.Pace)
 }
 
 func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnostics.MotionTraceTarget {
+	return traceTargetWithPace(target, settings, PaceSummary{})
+}
+
+func traceTargetWithPace(target MotionTarget, settings config.MotionSettings, pace PaceSummary) *diagnostics.MotionTraceTarget {
 	trace := &diagnostics.MotionTraceTarget{
 		Label:                  target.Label,
 		SpeedPercent:           target.SpeedPercent,
@@ -216,6 +225,14 @@ func traceTarget(target MotionTarget, settings config.MotionSettings) *diagnosti
 		trace.DynamicSectionCount = len(dynamic.Sections)
 		for _, anchor := range dynamic.Anchors {
 			trace.DynamicAnchors = append(trace.DynamicAnchors, anchor.Name)
+		}
+		if pace.RequestedPercent > 0 {
+			trace.EffectiveSpeedPercent = pace.EffectivePercent
+			trace.PaceLimited = pace.Limited
+			trace.PaceLimiters = append([]string(nil), pace.Limiters...)
+			trace.CommandedMeanTravel = pace.CommandedMeanTravelPerSecond
+			trace.CommandedPeakVelocity = pace.CommandedPeakVelocityPerSecond
+			trace.DevicePeakVelocity = pace.DevicePeakVelocityPerSecond
 		}
 	}
 	return trace

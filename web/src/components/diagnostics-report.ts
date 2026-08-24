@@ -101,6 +101,7 @@ function applicationSection(state: AppState | null | undefined): ReportSection {
 
 function motionSection(state: AppState | null | undefined): ReportSection {
   const engine = state?.motion?.engine;
+  const pace = engine?.pace;
   const position = engine?.last_sample
     ? `${Math.round(engine.last_sample.position_percent)}%`
     : "—";
@@ -112,6 +113,10 @@ function motionSection(state: AppState | null | undefined): ReportSection {
       `- Estimated position: ${position}`,
       `- Stop sequence: ${text(state?.stop_sequence, "0")}`,
       `- Active mode: ${text(state?.modes?.active_mode, "none")}`,
+      ...(pace ? [
+        `- Creative pace: ${Math.round(pace.effective_percent)}% effective / ${Math.round(pace.requested_percent)}% requested` +
+          (pace.limited ? ` (limited by ${(pace.limiters ?? ["curve_geometry"]).join(", ")})` : ""),
+      ] : []),
       ...(state?.motion?.error ? [`- Error: ${state.motion.error}`] : []),
     ],
   };

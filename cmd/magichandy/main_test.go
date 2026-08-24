@@ -8,6 +8,21 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
+func TestApplicationRuntimeMotionSimulationIsExplicit(t *testing.T) {
+	production := applicationRuntime(false)
+	if production.MotionTransport != nil {
+		t.Fatal("production runtime unexpectedly bypasses the selected device owner")
+	}
+
+	review := applicationRuntime(true)
+	if review.MotionTransport == nil || review.MotionTransport.Diagnostics().Name != "fake_handy" {
+		t.Fatalf("review motion transport = %+v, want fake_handy", review.MotionTransport)
+	}
+	if review.Transport.Diagnostics().Name != "fake_handy" {
+		t.Fatalf("review diagnostics transport = %+v", review.Transport.Diagnostics())
+	}
+}
+
 func TestRunConfiguresLanguagesWithoutStartingServer(t *testing.T) {
 	dataDir := t.TempDir()
 	seed, err := config.OpenStore(dataDir)

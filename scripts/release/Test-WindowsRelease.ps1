@@ -48,7 +48,7 @@ if ($ArtifactPolicy -eq 'PortablePublic' -and ($ExerciseInstaller -or $ExerciseD
     throw 'PortablePublic artifacts intentionally contain no setup executable and cannot exercise installer lifecycle tests.'
 }
 $reviewedCaseID = '15c1e36d-fb35-4c5d-85de-83707169818a'
-$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35')
+$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36')
 if ($ArtifactPolicy -eq 'ReviewedUnsignedPublic') {
     if ($ReviewedFalsePositiveCaseID.Trim().ToLowerInvariant() -ne $reviewedCaseID) {
         throw "ReviewedUnsignedPublic requires Microsoft false-positive case $reviewedCaseID."
@@ -176,7 +176,15 @@ function Assert-UninstallEntry {
     )
     Assert-Release -Condition (Test-Path -LiteralPath $RegistryPath) -Message "Add/Remove Programs entry '$RegistryPath' should exist"
     $entry = Get-ItemProperty -LiteralPath $RegistryPath
-    Assert-Release -Condition ([string]$entry.DisplayName -eq 'MagicHandy') -Message 'Add/Remove Programs display name should be MagicHandy'
+    $displayName = [string]$entry.DisplayName
+    $allowedDisplayNames = @('MagicHandy')
+    $machineEntry = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$appID"
+    if ($RegistryPath.StartsWith('HKCU:\', [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $machineEntry)) {
+        # Inno Setup disambiguates a per-user install from an existing machine-wide
+        # install so Windows does not show two identically named entries.
+        $allowedDisplayNames += 'MagicHandy (Current user)'
+    }
+    Assert-Release -Condition ($displayName -in $allowedDisplayNames) -Message "Add/Remove Programs display name '$displayName' should be one of: $($allowedDisplayNames -join ', ')"
     Assert-Release -Condition ([string]$entry.DisplayVersion -eq $Version) -Message 'Add/Remove Programs version should match the package'
     Assert-Release -Condition ([System.IO.Path]::GetFullPath([string]$entry.InstallLocation).TrimEnd('\') -eq $InstallDirectory.TrimEnd('\')) -Message 'Add/Remove Programs install location should match the selected directory'
     Assert-Release -Condition (-not [string]::IsNullOrWhiteSpace([string]$entry.UninstallString)) -Message 'Add/Remove Programs should expose an uninstaller command'

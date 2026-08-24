@@ -57,10 +57,14 @@ the profile Stops that clock-locked run because accepted points cannot be
 rewritten; uncapped media is unaffected.
 
 The exact-curve runtime acceleration and reversal envelopes remain shared.
-Creative treats the calibrated result as its peak carriage-velocity target and
-fits each C2 interval independently against exact velocity, acceleration, jerk,
-and reversal-gap extrema. One hard interval may lengthen without globally
-slowing the rest of the phrase. This preserves the same semantic sample and
+Creative treats the calibrated result as its requested effective mean travel
+pace; the selected profile's 100% value remains the absolute instantaneous
+velocity ceiling. The compiler derives geometry-stable per-interval physical
+floors, then distributes the requested total clock above those floors according
+to authored rhythm while checking exact velocity, acceleration, jerk, and
+reversal-gap extrema. This makes higher requests monotonic. A saturated phrase
+publishes its lower calibrated equivalent and limiter reasons instead of
+claiming the target was achieved. This preserves the same semantic sample and
 transport contracts; it is a compiler timing policy inside the shared engine,
 not device-specific dispatch behavior.
 The Pro overclock range is not offered. A future per-model acceleration change
@@ -73,8 +77,9 @@ Positive:
 
 - a percentage maps to a documented physical range instead of one historical
   pattern cadence;
-- Creative's commanded peak follows that selected calibration instead of
-  collapsing several higher settings onto one globally safety-limited period;
+- Creative's commanded mean follows that selected calibration until one stable
+  physical saturation point, rather than making an eased mean substantially
+  lower by defining the percentage as its peak;
 - Original and Handy 2 Standard produce the same calculated mm/s at the same
   percentage despite different travel;
 - the model choice is visible beside the controls it calibrates and applies
@@ -103,9 +108,10 @@ Negative:
 
 Automated tests cover profile defaults and validation, endpoint conversion,
 equal physical rates for Original and Handy 2 Standard, plan-level use of the
-selected profile, immediate persistence, media-cap invalidation, exact Creative
-peak velocity across representative geometry/device profiles, monotonic mean
-rate, and unchanged shared runtime safety bounds. A later read-only Original-
+selected profile, immediate persistence, media-cap invalidation, Creative mean-
+pace fidelity until explicit saturation across representative geometry/device
+profiles, absolute peak velocity, monotonic mean rate, and unchanged shared
+runtime safety bounds. A later read-only Original-
 Handy trace reported a stationary 111.33 mm position against a 5.00-102.83 mm
 full-stroke response. Startup handles that measured 8.7% endpoint discrepancy
 through the shared engine's bounded acquisition path and strict post-command

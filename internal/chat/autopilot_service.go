@@ -202,15 +202,39 @@ func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotRespon
 	if err := validateAssistantResponse(&validated, s.Patterns, patternsEnabled, dynamicEnabled); err != nil {
 		return AutopilotResponse{}, err
 	}
-	if validated.Motion != nil && validated.Motion.Action != MotionActionNone &&
-		validated.Motion.Action != MotionActionTarget && validated.Motion.Action != MotionActionUpdate {
-		return AutopilotResponse{}, errors.New("autopilot motion action must be target, update, or none")
+	if err := validateAutopilotMotionChoice(kind, s.MotionContext, validated.Motion, dynamicEnabled); err != nil {
+		return AutopilotResponse{}, err
 	}
 	response.Motion = validated.Motion
 	if err := normalizeAutopilotSpeechVariability(&response, kind); err != nil {
 		return AutopilotResponse{}, err
 	}
 	return response, nil
+}
+
+func validateAutopilotMotionChoice(
+	kind AutopilotKind,
+	context *MotionContext,
+	command *MotionCommand,
+	dynamicEnabled bool,
+) error {
+	if command != nil {
+		switch command.Action {
+		case MotionActionNone, MotionActionTarget, MotionActionUpdate:
+		default:
+			return errors.New("autopilot motion action must be target, update, or none")
+		}
+	}
+	if kind != AutopilotKindMotion || context == nil || context.Running || context.Paused {
+		return nil
+	}
+	if command != nil && command.Action != MotionActionNone {
+		return nil
+	}
+	if dynamicEnabled {
+		return errors.New("autopilot cannot hold before its first motion target; provide a Dynamic update with speed and geometry")
+	}
+	return errors.New("autopilot cannot hold before its first motion target; provide an enabled pattern target")
 }
 
 func decodeAutopilotResponse(raw string, kind AutopilotKind) (AutopilotResponse, error) {

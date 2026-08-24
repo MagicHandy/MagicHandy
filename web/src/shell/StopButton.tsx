@@ -61,8 +61,8 @@ export function StopButton({ className = "" }: { className?: string }) {
       onClick={() => void stop()}
       aria-label={t("Emergency stop all motion")}
     >
-      <StopIcon />
-      <span>{t("Stop everything")}</span>
+      <StopIcon size={21} />
+      <span className="stop-button-label">{t("Stop")}</span>
       <span className="kbd" aria-hidden="true">{t("Esc")}</span>
     </button>
   );

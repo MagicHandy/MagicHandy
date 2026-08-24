@@ -55,6 +55,38 @@ func TestAutopilotContractRejectsStartAndNumericTiming(t *testing.T) {
 	}
 }
 
+func TestAutopilotMotionContractRejectsHoldBeforeFirstTarget(t *testing.T) {
+	capabilities := FullCapabilities()
+	capabilities.MotionMode = MotionModeDynamic
+	capabilities.Patterns = false
+	service := AutopilotService{
+		Capabilities: capabilities,
+		MotionContext: &MotionContext{
+			MotionMode: MotionModeDynamic, SpeedMinPercent: 20, SpeedMaxPercent: 40,
+		},
+	}
+	for name, raw := range map[string]string{
+		"omitted": `{"intent":"wait for the right moment","next":"normal","variability":"settled"}`,
+		"none":    `{"intent":"hold steady","motion":{"action":"none"},"next":"normal","variability":"settled"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := service.parse(raw, AutopilotKindMotion); err == nil ||
+				!strings.Contains(err.Error(), "before its first motion target") {
+				t.Fatalf("startup hold error = %v", err)
+			}
+		})
+	}
+
+	service.MotionContext.Running = true
+	service.MotionContext.SpeedPercent = 30
+	if _, err := service.parse(
+		`{"intent":"continue the active phrase","motion":{"action":"none"},"next":"normal","variability":"settled"}`,
+		AutopilotKindMotion,
+	); err != nil {
+		t.Fatalf("running hold should remain valid: %v", err)
+	}
+}
+
 func TestAutopilotCompleteSkipsIneffectiveRepairOutsideCurrentMenu(t *testing.T) {
 	provider := &scriptedProvider{responses: []string{
 		`{"intent":"switch to a pulse","motion":{"action":"target","pattern_id":"pulse","intensity":35},"next":"normal","variability":"normal"}`,

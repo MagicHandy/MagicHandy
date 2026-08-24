@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-23, Creative whole-percent fluidity
+## Snapshot — 2026-08-23, effective Creative pace and review-safe Autopilot
 
 ### Goal 1: Maintainability
 
@@ -58,9 +58,9 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.35 candidate: 24,157,696 bytes plain and 17,404,928 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.36 candidate: 24,205,824 bytes plain and 17,445,888 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.35` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.35 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.36` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.36 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
@@ -143,9 +143,12 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,696,068 raw / 803,095 level-9 gzip bytes. Lazy loading
-   limits the English startup path to 810,662 raw / 214,068 gzip bytes; all
-   HTML/CSS/JS is 1,251,832 raw / 365,698 gzip bytes. Alpha.30's reconciled
+   browser payload is 1,699,951 raw / 804,516 level-9 gzip bytes. Lazy loading
+   limits the English startup path to 812,618 raw / 214,675 gzip bytes; all
+   HTML/CSS/JS is 1,255,715 raw / 367,119 gzip bytes. Alpha.36's requested/
+   effective pace readout, stopped-trace export, and compact Stop treatment add
+   3,881 raw / 1,420 gzip bytes overall against alpha.35; the startup path adds
+   1,954 raw / 606 gzip bytes. Alpha.30's reconciled
    countdown adds 875 raw / 280 gzip bytes to each code-bearing measure; the
    compiled-motion changes are backend-only. Creative C2 phrases,
    section-aware status, and the eight-level Motion change rate control add 71
@@ -192,6 +195,22 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-23** - Prepared alpha.36 around felt Creative pace rather than a
+  misleading curve ceiling. Each requested percentage now targets calibrated
+  mean travel, per-interval timing retains authored rhythm, and the published
+  effective pace names device velocity, acceleration, jerk, reversal-spacing,
+  or curve-geometry saturation. Geometry-stable C2 reversals retain rounded
+  short strokes while long legs gain a cruise-like body. The last stopped run
+  is persisted as a bounded redacted trace, and the UI can export it after a
+  restart. Autopilot now rejects and repairs continuity before any first target
+  exists while preserving holds during an active phrase or engine recovery.
+  An explicit `-simulate-motion` process flag routes the full shared engine to
+  `fake_handy` for credential-free review. The exact review app used the 8B
+  Granite Ollama model, crossed multiple Creative segment boundaries, reported
+  `fake_handy` for every engine command, and retained zero Cloud commands with
+  no saved device key. Candidate binaries are 24,205,824 / 17,445,888 bytes;
+  the complete UI is 1,699,951 raw / 804,516 gzip bytes.
 
 - **2026-08-23** - Prepared alpha.35 after the installed alpha.34 Cloud trace
   reproduced Creative stop-and-shudder behavior as 36-80 ms whole-percent

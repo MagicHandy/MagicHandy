@@ -875,7 +875,13 @@ func (m *Manager) startNextSegment(ctx context.Context, mode string, reason stri
 		return
 	}
 	if !choice.segment.hasContent() {
-		m.backoff(mode, generation, "start_waiting_for_model", errors.New("model did not provide a startable motion target"))
+		detail := "model did not provide a startable motion target"
+		if note := strings.TrimSpace(choice.note); note != "" {
+			detail += ": " + note
+		} else if choice.source == "hold" {
+			detail += ": model chose continuity before any target was active"
+		}
+		m.backoff(mode, generation, "start_waiting_for_model", errors.New(detail))
 		return
 	}
 	state, err := engine.Start(operationCtx, m.choiceTarget(mode, choice), m.options.Settings())

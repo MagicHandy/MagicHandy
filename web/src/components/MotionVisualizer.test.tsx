@@ -118,6 +118,43 @@ describe("MotionVisualizer", () => {
 		expect(screen.getByText("48-62%")).toBeInTheDocument();
 	});
 
+	it("shows backend-effective Creative pace and its saturation reason", () => {
+		render(
+			<MotionVisualizer
+				motion={{
+					available: true,
+					engine: {
+						running: true,
+						paused: false,
+						target: {
+							source: "chat",
+							speed_percent: 72,
+							dynamic: {
+								center_percent: 50,
+								span_percent: 38,
+								variation_percent: 68,
+								segment_seconds: 24,
+							},
+						},
+						pace: {
+							requested_percent: 72,
+							effective_percent: 52.4,
+							requested_mean_travel_percent_per_second: 269,
+							commanded_mean_travel_percent_per_second: 202,
+							commanded_peak_velocity_percent_per_second: 361,
+							device_peak_velocity_percent_per_second: 363.6,
+							limited: true,
+							limiters: ["device_velocity", "jerk"],
+						},
+					},
+				}}
+			/>,
+		);
+
+		const pace = screen.getByText("52% / 72%");
+		expect(pace).toHaveAttribute("title", expect.stringMatching(/effective 52%; requested 72%.*device velocity, smoothness/i));
+	});
+
   it("does not present retained target metadata as currently active after Stop", () => {
     render(
       <MotionVisualizer

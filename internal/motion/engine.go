@@ -39,6 +39,10 @@ type EngineOptions struct {
 	DispatchInterval time.Duration
 	SampleInterval   time.Duration
 	StreamIDPrefix   string
+	// ArchiveTrace is notified after a completed Stop and after all engine and
+	// transport locks are released. firstSequence identifies this run inside
+	// the shared sanitized trace ring. Archival failure must never fail Stop.
+	ArchiveTrace func(reason string, firstSequence uint64)
 }
 
 // Engine owns one active semantic motion loop.
@@ -54,6 +58,7 @@ type Engine struct {
 	dispatchInterval time.Duration
 	sampleInterval   time.Duration
 	streamIDPrefix   string
+	archiveTrace     func(reason string, firstSequence uint64)
 
 	running                        bool
 	starting                       bool
@@ -88,6 +93,7 @@ type Engine struct {
 	runCtx                         context.Context
 	cancel                         context.CancelFunc
 	done                           chan struct{}
+	traceStartSequence             uint64
 }
 
 // ActiveMotionState is a safe snapshot of the current motion loop.
@@ -112,6 +118,9 @@ type ActiveMotionState struct {
 	LastSample                 *MotionSample            `json:"last_sample,omitempty"`
 	LastResult                 *transport.CommandResult `json:"last_result,omitempty"`
 	LastError                  string                   `json:"last_error,omitempty"`
+	// Pace is the compact backend-authoritative Creative output readout. It is
+	// safe for the motion SSE because it contains no curve points or payloads.
+	Pace *PaceSummary `json:"pace,omitempty"`
 	// Perceptual is backend planning context. It stays out of the 8 Hz motion
 	// SSE snapshot; Autopilot records the compact values in decision traces.
 	Perceptual PerceptualSummary `json:"-"`
@@ -130,6 +139,7 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 		dispatchInterval:   options.DispatchInterval,
 		sampleInterval:     options.SampleInterval,
 		streamIDPrefix:     options.StreamIDPrefix,
+		archiveTrace:       options.ArchiveTrace,
 		preservePlanKnots:  true,
 		maximumChunkPoints: maximumAdaptiveChunkPoints,
 		startupWait:        waitForMotionStartup,
@@ -494,10 +504,16 @@ func (e *Engine) Stop(ctx context.Context, reason string) (ActiveMotionState, er
 	e.mu.Lock()
 	e.paused = false
 	e.runMillisAccum = 0
+	firstTraceSequence := e.traceStartSequence
+	e.traceStartSequence = 0
 	e.endStopBarrierLocked()
 	e.mu.Unlock()
 	e.commandMu.Unlock()
-	return e.Snapshot(), err
+	state := e.Snapshot()
+	if e.archiveTrace != nil && firstTraceSequence > 0 {
+		e.archiveTrace(reason, firstTraceSequence)
+	}
+	return state, err
 }
 
 // Snapshot returns the current active motion state.
@@ -555,6 +571,9 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 		return 0, err
 	}
 	e.plan = plan
+	if e.traces != nil {
+		e.traceStartSequence = e.traces.LatestSequence() + 1
+	}
 	e.captureCurrentSampleLocked(0)
 	e.running = true
 	e.traceStateLocked("target_applied", "phase_preserved=false")

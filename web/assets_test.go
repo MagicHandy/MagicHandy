@@ -30,7 +30,7 @@ func TestEmbeddedCriticalHooksSurviveBuild(t *testing.T) {
 	// language, chat/motion endpoints, the read-only lock, and the honest
 	// commanded-estimate label.
 	for _, fragment := range []string{
-		"Stop everything",
+		"Emergency stop all motion",
 		"/api/motion/stop",
 		"/api/chat/stream",
 		"/api/motion/events",

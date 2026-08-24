@@ -7,7 +7,7 @@
       <stop offset="0" stop-color="#5b9dd9"/><stop offset="1" stop-color="#3a5a7c"/>
     </linearGradient>
     <linearGradient id="stop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ea5459"/><stop offset="1" stop-color="#c93b40"/>
+      <stop offset="0" stop-color="#d13f45"/><stop offset="1" stop-color="#b73339"/>
     </linearGradient>
     <linearGradient id="start" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#4fc06d"/><stop offset="1" stop-color="#3da55c"/>
@@ -54,7 +54,7 @@
     <!-- pinned Stop -->
     <rect x="14" y="578" width="204" height="44" rx="8" fill="url(#stop)"/>
     <rect x="34" y="593" width="14" height="14" rx="3" fill="#ffffff"/>
-    <text x="58" y="605" fill="#ffffff" font-size="16" font-weight="700">Stop everything</text>
+    <text x="58" y="605" fill="#ffffff" font-size="16" font-weight="700">Stop</text>
     <rect x="180" y="592" width="30" height="18" rx="5" fill="#ffffff" fill-opacity="0.18"/>
     <text x="195" y="605" fill="#ffffff" font-size="12" text-anchor="middle">Esc</text>
 

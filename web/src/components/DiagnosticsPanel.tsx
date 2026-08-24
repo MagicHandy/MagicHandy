@@ -88,6 +88,15 @@ export function DiagnosticsPanel({
     }
   }
 
+  async function exportLastMotionTrace() {
+    try {
+      const data = await api.exportLastMotionTrace();
+      download("magichandy-last-motion-trace.json", JSON.stringify(data, null, 2));
+    } catch (e) {
+      show(msg(e), "error");
+    }
+  }
+
   async function reset() {
     if (resetting) return;
     if (!confirmReset) {
@@ -130,7 +139,10 @@ export function DiagnosticsPanel({
       <div className="group">
         <h3 className="group-title">{t("Trace export")}</h3>
         <p className="hint-block">{t("A detailed machine-readable capture of recent runtime activity, for attaching to a bug report.")}</p>
-        <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void exportTrace()}>{t("Export trace")}</button>
+        <div className="row-actions">
+          <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void exportTrace()}>{t("Export live trace")}</button>
+          <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void exportLastMotionTrace()}>{t("Export last stopped trace")}</button>
+        </div>
       </div>
 
       <div className="group">
