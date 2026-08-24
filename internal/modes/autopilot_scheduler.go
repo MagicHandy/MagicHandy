@@ -331,6 +331,7 @@ func clonePerceptualSummary(summary motion.PerceptualSummary) *motion.Perceptual
 		return nil
 	}
 	cloned := summary
+	cloned.Pace.Limiters = append([]string(nil), summary.Pace.Limiters...)
 	return &cloned
 }
 
@@ -339,6 +340,7 @@ func clonePerceptualSummaryPointer(summary *motion.PerceptualSummary) *motion.Pe
 		return nil
 	}
 	cloned := *summary
+	cloned.Pace.Limiters = append([]string(nil), summary.Pace.Limiters...)
 	return &cloned
 }
 

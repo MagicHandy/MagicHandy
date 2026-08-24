@@ -669,6 +669,7 @@ export const api = {
   },
 
   exportTrace: () => request("GET", "/api/traces"),
+  exportLastMotionTrace: () => request("GET", "/api/traces/last-motion"),
 };
 
 async function importMotionContent(file: File, asKind: "pattern" | "program"): Promise<{ import: MotionImportResult }> {

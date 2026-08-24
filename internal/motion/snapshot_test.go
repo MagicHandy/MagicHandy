@@ -2,6 +2,8 @@ package motion
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -9,6 +11,44 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
+
+func TestEngineSnapshotPublishesCompactCreativePace(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	fake := transport.NewFake(transport.WithClock(func() time.Time { return now }))
+	engine, err := NewEngine(EngineOptions{
+		Transport: fake, Traces: diagnostics.NewTraceRing(32),
+		Now: func() time.Time { return now }, DispatchInterval: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent: 50, SpanPercent: 38, SpanMinPercent: 20,
+		SpanProfile: DynamicSpanProfileWander, VariationPercent: 68,
+	})
+	state, err := engine.Start(context.Background(), MotionTarget{
+		Source: "chat", Dynamic: &definition, SpeedPercent: 72,
+	}, config.DefaultSettings().Motion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "cleanup") })
+	if state.Pace == nil || state.Pace.RequestedPercent != 72 ||
+		state.Pace.EffectivePercent <= 0 || !state.Pace.Limited || len(state.Pace.Limiters) == 0 {
+		t.Fatalf("snapshot pace = %+v", state.Pace)
+	}
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"pace"`) || strings.Contains(string(encoded), `"perceptual"`) {
+		t.Fatalf("public snapshot did not keep pace compact: %s", encoded)
+	}
+	state.Pace.Limiters[0] = "mutated"
+	if next := engine.Snapshot(); next.Pace == nil || next.Pace.Limiters[0] == "mutated" {
+		t.Fatal("snapshot pace aliases the engine plan")
+	}
+}
 
 func TestEngineSnapshotSeparatesCurrentPlaybackFromBufferedTail(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)

@@ -138,6 +138,15 @@ func (s *Server) autopilotModelTurn(
 		return chat.AutopilotResponse{}, err
 	}
 	motionContext := s.chatMotionContext(settings.Motion, settings.LLM)
+	// During engine recovery the scheduler can still own a valid current
+	// segment while the transport-facing snapshot is temporarily idle. Keep the
+	// autonomous validator aligned with that semantic state: a hold can restart
+	// an owned segment, but it cannot start a brand-new Autopilot run.
+	if input.CurrentSpeed > 0 && (input.CurrentDynamic != nil || input.CurrentPatternID != "") {
+		motionContext.Running = true
+		motionContext.Paused = false
+		motionContext.SpeedPercent = input.CurrentSpeed
+	}
 	temperature := autopilotTemperature(kind, input.MotionChangeLevel)
 	if kind == chat.AutopilotKindMotion && strings.TrimSpace(input.MotionFeedback) != "" && temperature < 0.98 {
 		temperature = 0.98

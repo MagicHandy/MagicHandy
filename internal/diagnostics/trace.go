@@ -72,6 +72,12 @@ type MotionTraceTarget struct {
 	DynamicVariationPercent   int      `json:"dynamic_variation_percent,omitempty"`
 	DynamicSegmentSeconds     int      `json:"dynamic_segment_seconds,omitempty"`
 	DynamicSectionCount       int      `json:"dynamic_section_count,omitempty"`
+	EffectiveSpeedPercent     float64  `json:"effective_speed_percent,omitempty"`
+	PaceLimited               bool     `json:"pace_limited,omitempty"`
+	PaceLimiters              []string `json:"pace_limiters,omitempty"`
+	CommandedMeanTravel       float64  `json:"commanded_mean_travel_percent_per_second,omitempty"`
+	CommandedPeakVelocity     float64  `json:"commanded_peak_velocity_percent_per_second,omitempty"`
+	DevicePeakVelocity        float64  `json:"device_peak_velocity_percent_per_second,omitempty"`
 }
 
 // MotionTraceSample records a sampled transport-neutral motion point.
@@ -195,6 +201,15 @@ func (r *TraceRing) Summary() TraceSummary {
 	}
 }
 
+// LatestSequence returns the most recently assigned row sequence. It lets a
+// motion engine retain exactly its own stopped session without clearing or
+// taking ownership of the process-wide diagnostic ring.
+func (r *TraceRing) LatestSequence() uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.next
+}
+
 func (r *TraceRing) cloneRowsLocked() []MotionTraceRow {
 	clones := make([]MotionTraceRow, len(r.rows))
 	for index := range r.rows {
@@ -239,5 +254,6 @@ func cloneTraceTarget(target *MotionTraceTarget) *MotionTraceTarget {
 		return nil
 	}
 	clone := *target
+	clone.PaceLimiters = append([]string(nil), target.PaceLimiters...)
 	return &clone
 }

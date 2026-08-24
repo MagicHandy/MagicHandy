@@ -104,7 +104,7 @@ top to bottom:
 3. **Manual motion** — Start/Stop test, pattern, speed, **explicitly badged
    "testing"** with a hint that it drives the device directly to test the
    connection; normal motion comes from chat (and modes in Phase 11).
-4. **Stop everything** — full-width, red, at the bottom, with the Esc hint.
+4. **Stop** — full-width, red, at the bottom, with the Esc hint.
 
 The panel is never collapsible. On narrow viewports it stacks **above** the
 chat, and Stop detaches into a fixed bottom bar so it is always on screen.
@@ -380,7 +380,7 @@ hoc per-widget colors) are not.
 
 ## Emergency Stop
 
-- "Stop everything": full-width, red, at the bottom of the never-collapsible
+- "Stop": full-width, red, at the bottom of the never-collapsible
   sidebar panel (the old app's placement, minus its collapsibility flaw);
   large touch target; high contrast.
 - Always on screen: it renders above the settings backdrop (never dimmed or

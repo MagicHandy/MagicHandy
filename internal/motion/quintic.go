@@ -5,11 +5,17 @@ import (
 	"slices"
 )
 
-// flowingReversalAcceleration is the normalized endpoint acceleration of a
-// half-cosine leg. Keeping each shared reversal acceleration at or below this
-// value preserves monotonic travel while giving a repeating stroke a rounded
-// turn instead of a rest-to-rest minimum-jerk pause.
-const flowingReversalAcceleration = math.Pi * math.Pi / 2
+const (
+	// flowingReversalAcceleration is the normalized endpoint acceleration of a
+	// half-cosine leg. It is the quiet baseline for a short or constrained leg.
+	flowingReversalAcceleration = math.Pi * math.Pi / 2
+	// flowingCruiseAcceleration lengthens the near-constant-velocity body of a
+	// roomy leg without introducing a linear corner. Values beyond this begin
+	// to create a central velocity dip instead of a useful cruise plateau.
+	flowingCruiseAcceleration  = 8.0
+	flowingCruiseMinimumStroke = 18.0
+	flowingCruiseFullStroke    = 75.0
+)
 
 // quinticSegment stores one wall-time quintic Hermite interval. Coefficients
 // are expressed in normalized interval time u; duration converts derivatives
@@ -218,10 +224,8 @@ func flowingQuinticStates(points []CurvePoint, loop bool) ([]float64, []float64)
 		if previousDuration <= 0 || nextDuration <= 0 || previousDelta*nextDelta <= 0 {
 			slopes[index] = 0
 			if previousDelta*nextDelta < 0 {
-				previousNatural := flowingReversalAcceleration * math.Abs(previousDelta) /
-					(previousDuration * previousDuration)
-				nextNatural := flowingReversalAcceleration * math.Abs(nextDelta) /
-					(nextDuration * nextDuration)
+				previousNatural := flowingReversalAccelerationForLeg(previousDelta, previousDuration)
+				nextNatural := flowingReversalAccelerationForLeg(nextDelta, nextDuration)
 				accelerations[index] = math.Copysign(
 					math.Min(previousNatural, nextNatural), nextDelta,
 				)
@@ -240,6 +244,26 @@ func flowingQuinticStates(points []CurvePoint, loop bool) ([]float64, []float64)
 	slopes[len(slopes)-1] = slopes[0]
 	accelerations[len(accelerations)-1] = accelerations[0]
 	return slopes, accelerations
+}
+
+// flowingReversalAccelerationForLeg adapts the C2 turn to semantic stroke
+// length. Short legs retain the low-jerk cosine-like baseline; longer legs
+// spend less of their time continuously changing velocity and gain a smooth
+// cruise-like body. Geometry, not the selected clock, chooses the shape so
+// giving a leg more time can never make its safety fit more aggressive.
+func flowingReversalAccelerationForLeg(delta, duration float64) float64 {
+	if duration <= 0 || math.Abs(delta) <= 1e-9 {
+		return 0
+	}
+	progress := clampFloat(
+		(math.Abs(delta)-flowingCruiseMinimumStroke)/
+			(flowingCruiseFullStroke-flowingCruiseMinimumStroke),
+		0, 1,
+	)
+	progress = progress * progress * (3 - 2*progress)
+	normalized := flowingReversalAcceleration +
+		(flowingCruiseAcceleration-flowingReversalAcceleration)*progress
+	return normalized * math.Abs(delta) / (duration * duration)
 }
 
 func buildQuinticSegments(

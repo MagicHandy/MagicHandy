@@ -747,8 +747,9 @@ func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
 		return nil, 0, err
 	}
 	engine, err = motion.NewEngine(motion.EngineOptions{
-		Transport: commandTransport,
-		Traces:    s.traces,
+		Transport:    commandTransport,
+		Traces:       s.traces,
+		ArchiveTrace: s.persistLastMotionTrace,
 	})
 	if err != nil {
 		return nil, 0, err

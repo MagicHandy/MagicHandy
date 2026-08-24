@@ -1486,6 +1486,19 @@ handoff reproduce both regressions without a transport; a subsequent
 user-driven current-source Cloud trace contained no rounded duplicate edge.
 Subjective matched-device feel remains open.
 
+The 2026-08-23 effective-pace follow-up corrects another compiler-level
+mismatch without adding model instructions. Creative percentages now request
+calibrated mean travel rather than using the same number as an eased curve's
+instantaneous crest. A geometry-stable C2 reversal profile stays quiet on short
+strokes and gains a smooth cruise-like body on long strokes. The retimer derives
+one device/safety floor per phrase, distributes the requested clock above those
+floors, and removes only Creative's inherited 500 ms catalog floor; absolute
+device velocity, acceleration, jerk, reversal spacing, shared sampling, and Stop
+remain unchanged. Backend snapshots and the Chat status show effective versus
+requested pace and active limiter reasons. Stop also persists only that run's
+sanitized trace, bounded to 128 rows/1 MiB, so Diagnostics can export the last
+stopped run after restart without making trace I/O part of the safety result.
+
 Creative is now the default for fresh and pre-selector settings documents;
 explicit Pattern Library and Off choices persist. The six canonical built-ins
 disabled in the user's installed alpha.28 profile are retired from the active

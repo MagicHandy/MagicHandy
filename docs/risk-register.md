@@ -289,6 +289,21 @@ Stop completed in 328 ms. The trace was exported outside the repository. The
 shared engine, semantic curve, transport boundary, and Stop path are unchanged.
 Subjective feel was not reported, so matched physical acceptance remains open.
 
+Status 2026-08-23 effective-pace follow-up: alpha.35 still interpreted the
+selected percentage as the instantaneous crest of an eased stroke, so felt
+mean pace remained substantially lower, and timing-resolved Creative loops
+still inherited a generic 500 ms Pattern Library floor. Creative now requests
+calibrated mean travel, uses the selected profile's 100% rate only as its hard
+velocity ceiling, and derives one geometry-stable physical floor before
+distributing authored timing. Short strokes retain a quiet rounded turn; long
+strokes gain a cruise-like C2 body. Higher settings are monotonic and saturate
+honestly against device velocity, the shared 7500%/s² acceleration budget, the
+150000%/s³ smoothness budget, or 100 ms turn spacing. The backend publishes
+effective/requested pace and limiter names, and Stop retains that run's
+sanitized trace in a 128-row/1 MiB SQLite envelope exportable after restart.
+This is compiler/diagnostic evidence only; no device command was issued, so the
+matched capped subjective run remains open.
+
 ## R2: Two-Codebase Drift
 
 Level: High
@@ -1559,7 +1574,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.35 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.36 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1607,7 +1622,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.35, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.36, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit
@@ -1629,7 +1644,7 @@ amd64 payload and the solid `lzma2/ultra64` stream. The native-x64, non-solid
 `zip/9` candidate passed PE-machine checks, the isolated installer lifecycle,
 and a current Defender custom scan with no threats. Its larger approximately
 17.9 MB size is an accepted transparency tradeoff. Alpha.8 through alpha.11 and
-alpha.13 through alpha.35 may publish this hardened shape only through `ReviewedUnsignedPublic`,
+alpha.13 through alpha.36 may publish this hardened shape only through `ReviewedUnsignedPublic`,
 bound to the completed case, alpha.9-and-later exact-artifact Defender scan, and
 full lifecycle acceptance. This does not lower R28: each new hash is still
 unsigned and trusted Authenticode remains the production exit evidence.

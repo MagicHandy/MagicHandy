@@ -52,7 +52,7 @@ in `web/src/styles/tokens.css :root` and remain the no-settings fallback.
 | `--steel-deep` | `#3a5a7c` | Accent gradient partner (brand, avatar) |
 | `--ok` / `--ok-strong` / `--ok-ink` | `#4fc06d` / `#3da55c` / `#08130c` | **Running/go only**: Start, active visualizer, ok status |
 | `--warn` | `#d8b66a` | Warning / paused / pending |
-| `--danger` / `--danger-strong` | `#e5484d` / `#c93b40` | Stop / danger |
+| `--danger` / `--danger-strong` | `#d13f45` / `#b73339` | Stop / danger |
 | `--focus` | `#82b4e2` | Focus ring |
 | `--user-bubble` / `--user-bubble-line` | `#28303b` / `#3a4450` | User chat bubble |
 
@@ -162,8 +162,10 @@ and sleeve in the status bar and its detailed form in an attached motion-status
 band at the bottom of Chat's control rail. One component, engine-driven, with
 position labeled as a commanded estimate and the active motion name resolved
 by the backend rather than inferred from client controls. Dynamic motion shows
-its anchor route (or center), span, speed, variation, decision horizon, and
-source without presenting it as a saved pattern. It renders the
+its anchor route (or center), span, effective pace, variation, decision horizon,
+and source without presenting it as a saved pattern. A saturated pace shows the
+effective/requested pair and exposes the backend limiter reason instead of
+repeating the slider target as achieved output. It renders the
 backend's clock-sampled current path point, projected through the active stroke
 window and direction; the buffered queue tail is diagnostics, not position.
 

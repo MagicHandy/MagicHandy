@@ -532,6 +532,15 @@ explicitly rather than copying installed settings or credentials. If the host
 has no working model endpoint, the build is not ready for review and the final
 handoff must say so.
 
+When motion, LLM motion, or Autopilot itself must run in a review process, start
+that process with `-simulate-motion`. The flag injects the in-process
+`fake_handy` transport at the shared engine boundary for that process only; it
+does not change saved device ownership and cannot dispatch Cloud, Bluetooth, or
+Intiface motion. Before exercising motion, confirm that the isolated settings
+report no saved connection key. During the run, `/api/state` must identify the
+engine transport results as `fake_handy`; a Cloud or hardware transport result
+means the review is not isolated and must be stopped immediately.
+
 ## Cross-references
 
 - Current contract: `internal/chat/contract.go`; engine intent:

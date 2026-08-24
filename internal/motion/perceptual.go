@@ -4,22 +4,47 @@ import "math"
 
 const perceptualWindowMillis = int64(12_000)
 
+const (
+	paceLimiterDeviceVelocity   = "device_velocity"
+	paceLimiterAcceleration     = "acceleration"
+	paceLimiterJerk             = "jerk"
+	paceLimiterReversalSpacing  = "reversal_spacing"
+	paceLimiterCurveGeometry    = "curve_geometry"
+	paceLimitDetectionThreshold = 0.96
+)
+
+// PaceSummary explains how the selected Creative percentage became the
+// final transport-neutral trajectory. RequestedPercent is the control value;
+// EffectivePercent is the calibrated equivalent of commanded mean travel.
+// Limiters are observational diagnostics and never alter model authority.
+type PaceSummary struct {
+	RequestedPercent               int      `json:"requested_percent"`
+	EffectivePercent               float64  `json:"effective_percent"`
+	RequestedMeanTravelPerSecond   float64  `json:"requested_mean_travel_percent_per_second"`
+	CommandedMeanTravelPerSecond   float64  `json:"commanded_mean_travel_percent_per_second"`
+	CommandedPeakVelocityPerSecond float64  `json:"commanded_peak_velocity_percent_per_second"`
+	DevicePeakVelocityPerSecond    float64  `json:"device_peak_velocity_percent_per_second"`
+	Limited                        bool     `json:"limited"`
+	Limiters                       []string `json:"limiters,omitempty"`
+}
+
 // PerceptualSummary is a compact description of the curve that the
 // shared engine actually commands after speed calibration and safety fitting.
 // It contains no transport payload and is safe to expose to the mode planner
 // and diagnostics without retaining raw curve points.
 type PerceptualSummary struct {
-	PositionMinPercent             float64 `json:"position_min_percent"`
-	PositionMaxPercent             float64 `json:"position_max_percent"`
-	MeanStrokePercent              float64 `json:"mean_stroke_percent"`
-	StrokeLengthCV                 float64 `json:"stroke_length_cv"`
-	MinimumLocalStrokeCV           float64 `json:"minimum_local_stroke_cv"`
-	MinimumLocalStrokeRange        float64 `json:"minimum_local_stroke_range_percent"`
-	CommandedMeanTravelPerSecond   float64 `json:"commanded_mean_travel_percent_per_second"`
-	CommandedPeakVelocityPerSecond float64 `json:"commanded_peak_velocity_percent_per_second"`
-	AnchorCount                    int     `json:"anchor_count"`
-	SectionCount                   int     `json:"section_count"`
-	SpanProfile                    string  `json:"span_profile,omitempty"`
+	PositionMinPercent             float64     `json:"position_min_percent"`
+	PositionMaxPercent             float64     `json:"position_max_percent"`
+	MeanStrokePercent              float64     `json:"mean_stroke_percent"`
+	StrokeLengthCV                 float64     `json:"stroke_length_cv"`
+	MinimumLocalStrokeCV           float64     `json:"minimum_local_stroke_cv"`
+	MinimumLocalStrokeRange        float64     `json:"minimum_local_stroke_range_percent"`
+	CommandedMeanTravelPerSecond   float64     `json:"commanded_mean_travel_percent_per_second"`
+	CommandedPeakVelocityPerSecond float64     `json:"commanded_peak_velocity_percent_per_second"`
+	AnchorCount                    int         `json:"anchor_count"`
+	SectionCount                   int         `json:"section_count"`
+	SpanProfile                    string      `json:"span_profile,omitempty"`
+	Pace                           PaceSummary `json:"pace"`
 }
 
 func summarizeMotionPlan(
@@ -27,6 +52,7 @@ func summarizeMotionPlan(
 	curve Curve,
 	focus focusProjection,
 	periodMillis int64,
+	handyModel string,
 ) PerceptualSummary {
 	if len(curve.authoredKnots) < 2 || curve.duration <= 0 || periodMillis <= 0 {
 		return PerceptualSummary{}
@@ -46,6 +72,7 @@ func summarizeMotionPlan(
 	summary.CommandedMeanTravelPerSecond = travel * 1000 / float64(periodMillis)
 	timeFactor := float64(periodMillis) / float64(curve.duration)
 	summary.CommandedPeakVelocityPerSecond = curve.maximumVelocityPerMillis() * gain / timeFactor * 1000
+	summary.Pace = summarizeMotionPace(target, curve, gain, timeFactor, periodMillis, handyModel, summary)
 
 	reversals := perceptualReversals(curve, focus, periodMillis)
 	if len(reversals) < 2 {
@@ -97,6 +124,74 @@ func summarizeMotionPlan(
 		summary.MinimumLocalStrokeRange = minimumRange
 	}
 	return summary
+}
+
+func summarizeMotionPace(
+	target MotionTarget,
+	curve Curve,
+	gain float64,
+	timeFactor float64,
+	periodMillis int64,
+	handyModel string,
+	perceptual PerceptualSummary,
+) PaceSummary {
+	requestedPercent := clamp(target.SpeedPercent, 1, 100)
+	requestedMean := referenceTravelRateForSpeed(requestedPercent, handyModel)
+	devicePeak := referenceTravelRateForSpeed(100, handyModel)
+	pace := PaceSummary{
+		RequestedPercent:               requestedPercent,
+		EffectivePercent:               equivalentSpeedPercentForTravelRate(perceptual.CommandedMeanTravelPerSecond, handyModel),
+		RequestedMeanTravelPerSecond:   requestedMean,
+		CommandedMeanTravelPerSecond:   perceptual.CommandedMeanTravelPerSecond,
+		CommandedPeakVelocityPerSecond: perceptual.CommandedPeakVelocityPerSecond,
+		DevicePeakVelocityPerSecond:    devicePeak,
+	}
+	pace.Limited = requestedMean > 0 &&
+		perceptual.CommandedMeanTravelPerSecond < requestedMean*0.985
+	if !pace.Limited {
+		return pace
+	}
+
+	maximumAcceleration := curve.maximumAccelerationPerMillis2() * gain /
+		(timeFactor * timeFactor) * 1e6
+	maximumJerk := curve.maximumJerkPerMillis3() * gain /
+		(timeFactor * timeFactor * timeFactor) * 1e9
+	if perceptual.CommandedPeakVelocityPerSecond >= devicePeak*paceLimitDetectionThreshold {
+		pace.Limiters = append(pace.Limiters, paceLimiterDeviceVelocity)
+	}
+	if maximumAcceleration >= runtimeMaxAccelerationPercentPerSecond2*paceLimitDetectionThreshold {
+		pace.Limiters = append(pace.Limiters, paceLimiterAcceleration)
+	}
+	if maximumJerk >= runtimeMaxJerkPercentPerSecond3*paceLimitDetectionThreshold {
+		pace.Limiters = append(pace.Limiters, paceLimiterJerk)
+	}
+	if gap := reversalGap(curve.authoredKnots, curve.duration, true); gap > 0 {
+		playedGap := float64(gap) * float64(periodMillis) / float64(curve.duration)
+		if playedGap <= float64(runtimeMinimumReversalGapMillis)/paceLimitDetectionThreshold {
+			pace.Limiters = append(pace.Limiters, paceLimiterReversalSpacing)
+		}
+	}
+	if len(pace.Limiters) == 0 {
+		pace.Limiters = append(pace.Limiters, paceLimiterCurveGeometry)
+	}
+	return pace
+}
+
+// equivalentSpeedPercentForTravelRate inverts the selected Handy profile so a
+// commanded mean can be compared with the same 1..100 control scale. Values
+// below the profile's documented minimum remain visible between 0 and 1.
+func equivalentSpeedPercentForTravelRate(rate float64, handyModel string) float64 {
+	if rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
+		return 0
+	}
+	profile := handySpeedProfileFor(handyModel)
+	physicalRate := rate * profile.strokeMillimeters / 100
+	if physicalRate <= profile.minimumMMPerSecond {
+		return clampFloat(physicalRate/profile.minimumMMPerSecond, 0, 1)
+	}
+	progress := (physicalRate - profile.minimumMMPerSecond) /
+		(profile.maximumMMPerSecond - profile.minimumMMPerSecond)
+	return clampFloat(1+99*progress, 0, 100)
 }
 
 type perceptualReversal struct {

@@ -53,6 +53,17 @@ export interface MotionSample {
   time_ms: number;
 }
 
+export interface MotionPaceSummary {
+  requested_percent: number;
+  effective_percent: number;
+  requested_mean_travel_percent_per_second: number;
+  commanded_mean_travel_percent_per_second: number;
+  commanded_peak_velocity_percent_per_second: number;
+  device_peak_velocity_percent_per_second: number;
+  limited: boolean;
+  limiters?: Array<"device_velocity" | "acceleration" | "jerk" | "reversal_spacing" | "curve_geometry" | string>;
+}
+
 export interface EngineSnapshot {
   running: boolean;
   starting?: boolean;
@@ -91,6 +102,7 @@ export interface EngineSnapshot {
   };
   current_sample?: MotionSample;
   last_sample?: MotionSample;
+  pace?: MotionPaceSummary;
   settings?: MotionSettings;
   last_error?: string;
 }

@@ -39,12 +39,25 @@ func TestCreativeSpeedSelectionProducesDistinctCommandedRates(t *testing.T) {
 			first = rate
 		}
 		requested := referenceTravelRateForSpeed(speed, settings.HandyModel)
-		if peakVelocity < requested*0.995 || peakVelocity > requested*1.005 {
-			t.Errorf("speed %d peak %.1f%%/s does not represent selected carriage velocity %.1f%%/s",
-				speed, peakVelocity, requested)
+		if rate > requested*1.015 {
+			t.Errorf("speed %d mean %.1f%%/s exceeds selected effective pace %.1f%%/s",
+				speed, rate, requested)
 		}
-		if previous > 0 && rate < previous*1.08 {
-			t.Errorf("speed %d commanded rate %.1f%%/s after %.1f%%/s; want at least 8%% separation",
+		if rate < requested*0.985 {
+			if !plan.Perceptual.Pace.Limited || len(plan.Perceptual.Pace.Limiters) == 0 {
+				t.Errorf("speed %d mean %.1f%%/s is below request %.1f without saturation diagnostics: %+v",
+					speed, rate, requested, plan.Perceptual.Pace)
+			}
+		} else if plan.Perceptual.Pace.Limited {
+			t.Errorf("speed %d reached request but is marked limited: %+v", speed, plan.Perceptual.Pace)
+		}
+		devicePeak := referenceTravelRateForSpeed(100, settings.HandyModel)
+		if peakVelocity > devicePeak*1.005 {
+			t.Errorf("speed %d peak %.1f%%/s exceeds calibrated device peak %.1f%%/s",
+				speed, peakVelocity, devicePeak)
+		}
+		if previous > 0 && rate < previous*0.995 {
+			t.Errorf("speed %d commanded rate %.1f%%/s regressed after %.1f%%/s",
 				speed, rate, previous)
 		}
 		if acceleration > runtimeMaxAccelerationPercentPerSecond2*1.002 {
@@ -53,8 +66,8 @@ func TestCreativeSpeedSelectionProducesDistinctCommandedRates(t *testing.T) {
 		}
 		previous = rate
 	}
-	if previous < first*1.35 {
-		t.Fatalf("42-72%% Creative rate spread is only %.1f%% (%.1f to %.1f%%/s); want at least 35%%",
+	if previous < first*1.20 {
+		t.Fatalf("42-72%% Creative rate spread is only %.1f%% (%.1f to %.1f%%/s); want at least 20%% before saturation",
 			(previous/first-1)*100, first, previous)
 	}
 }
@@ -117,9 +130,15 @@ func TestCreativeVelocityFitAcrossHandyModelsAndPhrases(t *testing.T) {
 				requested := referenceTravelRateForSpeed(speed, model)
 				t.Logf("phrase=%s model=%s speed=%d mean=%.1f peak=%.1f requested=%.1f",
 					name, model, speed, rate, peak, requested)
-				if peak > requested*1.01 {
-					t.Errorf("phrase=%s model=%s speed=%d peak %.1f exceeds selected %.1f",
-						name, model, speed, peak, requested)
+				devicePeak := referenceTravelRateForSpeed(100, model)
+				if peak > devicePeak*1.01 {
+					t.Errorf("phrase=%s model=%s speed=%d peak %.1f exceeds device peak %.1f",
+						name, model, speed, peak, devicePeak)
+				}
+				limited := rate < requested*0.985
+				if limited && (!plan.Perceptual.Pace.Limited || len(plan.Perceptual.Pace.Limiters) == 0) {
+					t.Errorf("phrase=%s model=%s speed=%d effective mean %.1f is below request %.1f without diagnostics: %+v",
+						name, model, speed, rate, requested, plan.Perceptual.Pace)
 				}
 				if firstRate == 0 {
 					firstRate = rate
@@ -128,7 +147,7 @@ func TestCreativeVelocityFitAcrossHandyModelsAndPhrases(t *testing.T) {
 					t.Errorf("phrase=%s model=%s speed=%d mean %.1f regressed after %.1f",
 						name, model, speed, rate, previousRate)
 				}
-				if name != "narrow-steady" && speed <= 80 && previousRate > 0 && rate < previousRate*1.035 {
+				if name != "narrow-steady" && speed <= 80 && previousRate > 0 && !limited && rate < previousRate*1.035 {
 					t.Errorf("phrase=%s model=%s speed=%d mean %.1f after %.1f; want visible separation through the normal range",
 						name, model, speed, rate, previousRate)
 				}
@@ -147,6 +166,64 @@ func TestCreativeVelocityFitAcrossHandyModelsAndPhrases(t *testing.T) {
 					name, model, (previousRate/firstRate-1)*100)
 			}
 		}
+	}
+}
+
+func TestCreativeResolvedTimingDoesNotInheritPatternHalfSecondFloor(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	settings.HandyModel = config.HandyModelOriginal
+	definition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent:  50,
+		SpanPercent:    20,
+		SpanMinPercent: 20,
+		SpanProfile:    DynamicSpanProfileSteady,
+	})
+	plan := NewMotionPlan("creative-real-floor", MotionTarget{
+		Dynamic: &definition, SpeedPercent: 100,
+	}, settings, 0, 0, time.Unix(0, 0))
+	if err := plan.compilationError(); err != nil {
+		t.Fatal(err)
+	}
+	if plan.PeriodMillis >= minimumBurstCycleMillis {
+		t.Fatalf("Creative period = %dms, still pinned to generic %dms pattern floor",
+			plan.PeriodMillis, minimumBurstCycleMillis)
+	}
+	if plan.Perceptual.Pace.RequestedPercent != 100 ||
+		plan.Perceptual.Pace.EffectivePercent <= 0 ||
+		!plan.Perceptual.Pace.Limited || len(plan.Perceptual.Pace.Limiters) == 0 {
+		t.Fatalf("Creative pace diagnostics do not explain the physical limit: %+v", plan.Perceptual.Pace)
+	}
+}
+
+func TestCreativeLongStrokeHasCruiseLikeVelocityBody(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	settings.SpeedMinPercent = 1
+	settings.SpeedMaxPercent = 100
+	settings.HandyModel = config.HandyModelOriginal
+	definition := NormalizeDynamicDefinition(DynamicDefinition{
+		CenterPercent:  50,
+		SpanPercent:    86,
+		SpanMinPercent: 86,
+		SpanProfile:    DynamicSpanProfileSteady,
+	})
+	plan := NewMotionPlan("creative-cruise-body", MotionTarget{
+		Dynamic: &definition, SpeedPercent: 73,
+	}, settings, 0, 0, time.Unix(0, 0))
+	if err := plan.compilationError(); err != nil {
+		t.Fatal(err)
+	}
+	ratio := plan.Perceptual.CommandedPeakVelocityPerSecond /
+		plan.Perceptual.CommandedMeanTravelPerSecond
+	if ratio > 1.38 {
+		t.Fatalf("Creative velocity peak/mean ratio = %.3f, want a sustained stroke body rather than a rounded linear surge", ratio)
+	}
+	if acceleration := maximumPlanAcceleration(plan); acceleration > runtimeMaxAccelerationPercentPerSecond2*1.002 {
+		t.Fatalf("acceleration %.1f exceeds %.1f", acceleration, runtimeMaxAccelerationPercentPerSecond2)
+	}
+	if jerk := maximumPlanJerk(plan); jerk > runtimeMaxJerkPercentPerSecond3*1.002 {
+		t.Fatalf("jerk %.1f exceeds %.1f", jerk, runtimeMaxJerkPercentPerSecond3)
 	}
 }
 

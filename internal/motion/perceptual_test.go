@@ -17,15 +17,19 @@ func TestPerceptualSummaryDescribesCompiledCreativeOutput(t *testing.T) {
 		SpanProfile: DynamicSpanProfileBreathe, VariationPercent: 68,
 	})
 	plan := NewMotionPlan("perceptual", MotionTarget{
-		Dynamic: &definition, SpeedPercent: 58,
+		Dynamic: &definition, SpeedPercent: 40,
 	}, settings, 0, 0, time.Unix(0, 0))
 	summary := plan.Perceptual
 	if summary.CommandedMeanTravelPerSecond <= 0 || summary.CommandedPeakVelocityPerSecond <= 0 {
 		t.Fatalf("compiled summary omitted pace: %+v", summary)
 	}
-	requested := referenceTravelRateForSpeed(58, settings.HandyModel)
-	if math.Abs(summary.CommandedPeakVelocityPerSecond-requested) > requested*0.01 {
-		t.Fatalf("compiled peak %.1f does not represent selected %.1f", summary.CommandedPeakVelocityPerSecond, requested)
+	requested := referenceTravelRateForSpeed(40, settings.HandyModel)
+	if math.Abs(summary.CommandedMeanTravelPerSecond-requested) > requested*0.02 {
+		t.Fatalf("compiled mean %.1f does not represent selected effective pace %.1f", summary.CommandedMeanTravelPerSecond, requested)
+	}
+	if summary.Pace.RequestedPercent != 40 || math.Abs(summary.Pace.EffectivePercent-40) > 1 ||
+		summary.Pace.Limited || len(summary.Pace.Limiters) != 0 {
+		t.Fatalf("compiled pace summary is not an honest unconstrained request: %+v", summary.Pace)
 	}
 	if summary.MeanStrokePercent <= 0 || summary.MinimumLocalStrokeCV < 0.05 ||
 		summary.MinimumLocalStrokeRange < 6 || summary.SpanProfile != DynamicSpanProfileBreathe {

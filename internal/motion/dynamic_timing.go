@@ -5,7 +5,10 @@ import (
 	"math"
 )
 
-const maximumDynamicTimingFitPasses = 32
+const (
+	maximumDynamicTimingFitPasses          = 48
+	maximumDynamicTimingRedistributePasses = 32
+)
 
 // retimeDynamicContent fits each Creative interval independently at the
 // requested calibrated travel rate. The former planner applied one global
@@ -27,27 +30,110 @@ func retimeDynamicContent(
 	}
 
 	travel := totalCurveTravel(content.points)
-	requestedRate := referenceTravelRateForSpeed(speedPercent, handyModel)
-	if travel <= 0 || requestedRate <= 0 {
+	requestedMeanRate := referenceTravelRateForSpeed(speedPercent, handyModel)
+	devicePeakRate := referenceTravelRateForSpeed(100, handyModel)
+	if travel <= 0 || requestedMeanRate <= 0 || devicePeakRate <= 0 {
 		return content, nil
 	}
-	desiredDuration := travel * 1000 / requestedRate
-	globalScale := desiredDuration / float64(content.duration)
-	durations := make([]int64, len(content.points)-1)
-	for index := range durations {
-		authored := content.points[index+1].TimeMillis - content.points[index].TimeMillis
-		durations[index] = max(int64(1), int64(math.Round(float64(authored)*globalScale)))
+	// The selected percentage describes effective travel over time, not the
+	// instantaneous crest of an eased stroke. Reversals may exceed that mean,
+	// but never the selected device profile's absolute velocity ceiling.
+	desiredDuration := travel * 1000 / requestedMeanRate
+	authoredDurations := make([]int64, len(content.points)-1)
+	for index := range authoredDurations {
+		authoredDurations[index] = content.points[index+1].TimeMillis - content.points[index].TimeMillis
 	}
-	fitDynamicReversalGaps(content.points, durations)
+	targetDuration := max(int64(1), int64(math.Ceil(desiredDuration)))
+	durations, err := resolveDynamicDurations(
+		content, authoredDurations, targetDuration, devicePeakRate,
+	)
+	if err != nil {
+		return content, err
+	}
+	points, duration := dynamicPointsWithDurations(content.points, durations)
+	content.points = points
+	content.duration = duration
+	content.timingResolved = true
+	return content, nil
+}
 
-	for range maximumDynamicTimingFitPasses {
-		points, duration := dynamicPointsWithDurations(content.points, durations)
-		curve, err := newCurveWithReversalProfile(
-			points, duration, true, false, content.maximumPointLimit(),
-			neutralPlaybackScale(), curveReversalC2Flow,
+func resolveDynamicDurations(
+	content resolvedContent,
+	authoredDurations []int64,
+	targetDuration int64,
+	devicePeakRate float64,
+) ([]int64, error) {
+	physicalFloorSeed := make([]int64, len(authoredDurations))
+	for index := range physicalFloorSeed {
+		physicalFloorSeed[index] = 1
+	}
+	physicalFloors, err := fitDynamicDurationsToEnvelope(
+		content, physicalFloorSeed, devicePeakRate,
+	)
+	if err != nil {
+		return nil, err
+	}
+	var durations []int64
+	for range maximumDynamicTimingRedistributePasses {
+		if sumDynamicDurations(physicalFloors) >= targetDuration {
+			durations, err = fitDynamicDurationsToEnvelope(
+				content, physicalFloors, devicePeakRate,
+			)
+			if err != nil {
+				return nil, err
+			}
+			break
+		}
+		durations = distributeDynamicDurations(
+			physicalFloors, authoredDurations, targetDuration,
+		)
+		candidate := append([]int64(nil), durations...)
+		durations, err = fitDynamicDurationsToEnvelope(
+			content, durations, devicePeakRate,
 		)
 		if err != nil {
-			return content, err
+			return nil, err
+		}
+		if sumDynamicDurations(durations) <= targetDuration {
+			break
+		}
+		changed := false
+		for index := range physicalFloors {
+			if durations[index] > candidate[index] && durations[index] > physicalFloors[index] {
+				physicalFloors[index] = durations[index]
+				changed = true
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+	if len(durations) == 0 {
+		durations, err = fitDynamicDurationsToEnvelope(content, physicalFloors, devicePeakRate)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return durations, nil
+}
+
+func fitDynamicDurationsToEnvelope(
+	content resolvedContent,
+	durations []int64,
+	devicePeakRate float64,
+) ([]int64, error) {
+	durations = append([]int64(nil), durations...)
+	fitDynamicReversalGaps(content.points, durations)
+	for range maximumDynamicTimingFitPasses {
+		points, duration := dynamicPointsWithDurations(content.points, durations)
+		runtimeScale := neutralPlaybackScale()
+		runtimeScale.maxAccelerationPercentSecond2 = runtimeMaxAccelerationPercentPerSecond2
+		curve, err := newCurveWithReversalProfile(
+			points, duration, true, false, content.maximumPointLimit(),
+			runtimeScale, curveReversalC2Flow,
+		)
+		if err != nil {
+			return nil, err
 		}
 		changed := false
 		for index, segment := range curve.quintics {
@@ -55,8 +141,8 @@ func retimeDynamicContent(
 			acceleration := segment.maximumAcceleration() * 1e6
 			jerk := segment.maximumJerk() * 1e9
 			factor := 1.0
-			if velocity > requestedRate {
-				factor = math.Max(factor, velocity/requestedRate)
+			if velocity > devicePeakRate {
+				factor = math.Max(factor, velocity/devicePeakRate)
 			}
 			if acceleration > runtimeMaxAccelerationPercentPerSecond2 {
 				factor = math.Max(factor,
@@ -79,15 +165,55 @@ func retimeDynamicContent(
 		if fitDynamicReversalGaps(content.points, durations) {
 			changed = true
 		}
-		if changed {
-			continue
+		if !changed {
+			return durations, nil
 		}
-		content.points = points
-		content.duration = duration
-		content.timingResolved = true
-		return content, nil
 	}
-	return content, errors.New("creative timing did not converge inside the runtime envelope")
+	return nil, errors.New("creative timing did not converge inside the runtime envelope")
+}
+
+func sumDynamicDurations(durations []int64) int64 {
+	total := int64(0)
+	for _, duration := range durations {
+		total += duration
+	}
+	return total
+}
+
+func distributeDynamicDurations(floors, authored []int64, target int64) []int64 {
+	result := append([]int64(nil), floors...)
+	if len(result) == 0 || sumDynamicDurations(result) >= target {
+		return result
+	}
+	sumAtScale := func(scale float64) int64 {
+		total := int64(0)
+		for index, duration := range authored {
+			total += max(floors[index], int64(math.Floor(float64(duration)*scale)))
+		}
+		return total
+	}
+	lower, upper := 0.0, 1.0
+	for sumAtScale(upper) < target {
+		upper *= 2
+	}
+	for range 60 {
+		middle := (lower + upper) / 2
+		if sumAtScale(middle) <= target {
+			lower = middle
+		} else {
+			upper = middle
+		}
+	}
+	total := int64(0)
+	for index, duration := range authored {
+		result[index] = max(floors[index], int64(math.Floor(float64(duration)*lower)))
+		total += result[index]
+	}
+	for index := 0; total < target; index = (index + 1) % len(result) {
+		result[index]++
+		total++
+	}
+	return result
 }
 
 func (c resolvedContent) maximumPointLimit() int {

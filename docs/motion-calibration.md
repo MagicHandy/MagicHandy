@@ -1,7 +1,8 @@
 # Motion speed and organic-loop calibration
 
-Status: implemented calibration and C2 Creative compiler, awaiting matched
-real-device confirmation (2026-08-22)
+Status: implemented effective-pace calibration, C2 Creative compiler, and
+retained stopped-run diagnostics; awaiting matched real-device confirmation
+(2026-08-23)
 
 ## Why this changed
 
@@ -123,30 +124,43 @@ per-model acceleration limits. The selector therefore does not invent them
 from motor RPM or marketing descriptions; all three profiles retain the shared
 conservative runtime acceleration envelope below.
 
-For Creative, the calibrated rate is now the exact peak carriage-velocity
-target, matching the meaning of the Handy velocity control more closely than a
-whole-phrase average. The compiler first scales the phrase, then fits every C2
-quintic interval independently: an unsafe short or strongly curved interval is
-lengthened without slowing unrelated intervals. It evaluates exact polynomial
-velocity, acceleration, and jerk extrema plus true-reversal spacing, and the
-ordinary focused-plan check remains the final shared-engine fail-safe.
+For Creative, the calibrated rate is now the requested **effective mean travel
+pace**. Treating that same number as an instantaneous peak made an eased 73%
+stroke average much less than 73%, which is the observed slow-control defect.
+The compiler may crest above the requested mean while braking and accelerating,
+but never above the selected device profile's absolute 100% velocity. It first
+derives device-independent physical floors for each C2 interval, then distributes
+the requested total clock above those floors according to the authored rhythm.
+A demanding short interval therefore keeps the time it needs while easier legs
+absorb the remaining pace request. This removes target-dependent timing basins:
+higher settings cannot compile slower, and a phrase has one stable saturation
+point.
+
+The exact polynomial velocity, acceleration, and jerk extrema plus true-
+reversal spacing remain authoritative, with the ordinary focused-plan check as
+the final shared-engine fail-safe. Timing-resolved Creative loops no longer
+inherit the unrelated 500 ms Pattern Library burst floor; their lower bound is
+the real reversal/acceleration/jerk envelope. Pattern, program, and media floors
+are unchanged.
 
 The retained Original-Handy fixture now compiles as follows (small differences
 are numerical sampling tolerance):
 
-| selected | calibrated peak | compiled peak | compiled mean |
-| ---: | ---: | ---: | ---: |
-| 42% | 167.6%/s | 167.8%/s | 103.8%/s |
-| 52% | 201.4%/s | 201.6%/s | 124.7%/s |
-| 62% | 235.2%/s | 235.3%/s | 145.9%/s |
-| 72% | 269.0%/s | 269.3%/s | 167.5%/s |
+| selected | requested mean | compiled mean | compiled peak | result |
+| ---: | ---: | ---: | ---: | --- |
+| 42% | 167.6%/s | 167.6%/s | 347.6%/s | met |
+| 52% | 201.4%/s | 201.4%/s | 360.6%/s | met |
+| 62% | 235.2%/s | 201.8%/s | 360.7%/s | saturated |
+| 72% | 269.0%/s | 201.8%/s | 360.7%/s | saturated |
 
-Mean travel remains below the peak because the whole leg eases into and out of
-a reversal; that is the intended non-linear feel, not lost speed. Shapes can
-still saturate a safety bound or the 500 ms minimum cycle before reaching the
-requested peak, especially very narrow high-speed loops. The UI therefore
-continues to label position as a commanded estimate rather than physical
-feedback.
+This retained Wander fixture is deliberately demanding: at its saturation
+point, device velocity, acceleration, and the perceptual jerk budget are all
+active. Alpha.30 commanded only 167.5%/s mean at 72% for the same fixture; the
+new compiler reaches 201.8%/s without weakening an envelope. It does not claim
+269%/s when that curve cannot safely produce it. The engine publishes the
+compiled mean as an equivalent percentage on the same Handy calibration, and
+the Chat status shows `effective / requested` plus the active limiter names.
+Position remains labeled a commanded estimate rather than physical feedback.
 
 ## Two envelopes, for two jobs
 
@@ -169,12 +183,24 @@ Stored patterns keep those short ramps because they preserve authored waveform
 and cadence. Creative selects a different profile inside the same curve
 compiler: a monotone quintic Hermite segment shares velocity and acceleration
 with its neighbors, reaches exactly zero velocity at a true endpoint, and
-retains nonzero velocity through a pass-through anchor. The planner evaluates
-the exact polynomial extrema, lengthening the period against the same exact
-7500%/s² runtime acceleration ceiling and a Creative-only 150000%/s³ perceptual
-jerk ceiling. The jerk number is a software quality bound, not an undocumented
-Handy hardware specification. This is a content-level interpolation choice,
-not a second engine or transport path.
+retains nonzero velocity through a pass-through anchor. Short legs retain the
+quiet half-cosine-like reversal state. Longer legs progressively gain a flatter,
+cruise-like velocity body, capped before a central velocity dip can form. Stroke
+geometry—not selected speed or available time—chooses that shape, so slowing a
+curve can never make its safety fit more aggressive. The planner evaluates the
+exact polynomial extrema against the same 7500%/s² acceleration ceiling and a
+Creative-only 150000%/s³ perceptual jerk ceiling. The jerk number is a software
+quality bound, not an undocumented Handy hardware specification. This remains a
+content-level interpolation choice, not a second engine or transport path.
+
+Each stopped engine run is now retained as a bounded redacted diagnostic. The
+engine records the first shared-ring sequence for the run and notifies the HTTP
+owner only after Stop has completed and motion/transport locks are released.
+SQLite stores at most the newest 128 rows and 1 MiB under `app_kv`; transport
+commands have already passed the safe-command projection. A persistence error
+is logged but cannot fail Stop. Diagnostics exposes separate exports for the
+live ring and the last stopped run, and the latter survives restart. Effective
+pace, commanded mean/peak, and limiter names travel with each Creative target.
 
 Catalog acceptance remains on the quieter envelope. This is not a relaxation of
 what may be stored or exposed to the model by default.
@@ -275,6 +301,11 @@ The compact Chat sidebar now distinguishes ordered and categorical settings:
   `Handy model` radio control. Its selected travel and normal maximum appear
   directly below the buttons, so the calibration choice remains visible
   without introducing another list selector.
+- Creative's status metric is `Pace`, not an unqualified target `Speed`. An
+  unconstrained run shows its effective percentage; a saturated run shows
+  `effective / requested` and names device velocity, acceleration, smoothness,
+  reversal spacing, or curve geometry in the readout description. Both values
+  come from the backend plan snapshot.
 
 All values still come from and return to backend settings snapshots.
 
@@ -282,13 +313,15 @@ All values still come from and return to backend settings snapshots.
 
 The initiating feedback was qualitative: Dynamic felt robotic and a selected
 73% felt slow. It did not include a transport, latency summary, or trace export.
-Automated tests now cover the calibration points, exact runtime acceleration
-and Creative jerk extrema,
+Automated tests now cover effective-mean calibration until physical saturation,
+monotonic plateaus with explicit limiter reasons, the Creative-only removal of
+the Pattern Library 500 ms floor, exact runtime acceleration and Creative jerk extrema,
 runtime reversal spacing, fractional sampling, all explicit Creative span
 profiles across all three Handy models, short-window stroke-length diversity,
-C2 acceleration continuity, eased time-at-position after 1% wire quantization,
+C2 acceleration continuity, cruise-like long-stroke velocity, eased time-at-position after 1% wire quantization,
 multi-section reversal-length diversity, long deterministic phrases, stateful
-model updates, and the one-stream retarget path.
+model updates, the one-stream retarget path, public effective-pace serialization,
+and bounded redacted trace persistence across restart.
 
 A review of the latest installed Cloud REST session found 439 sampled points
 and 85 legs. Its contrast envelope contracted from about 80% to about 32%, then

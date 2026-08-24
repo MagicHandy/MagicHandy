@@ -105,9 +105,16 @@ func NewMotionPlan(
 		if target.Media != nil {
 			periodMillis = content.duration
 		} else {
-			periodMillis = focusedLoopPeriod(
+			minimumPeriod := int64(minimumBurstCycleMillis)
+			if content.timingResolved {
+				// Creative already has a locally fitted wall clock. Keep only the
+				// real reversal/acceleration/jerk envelope here; the 500 ms catalog
+				// burst floor is not a device constraint.
+				minimumPeriod = 1
+			}
+			periodMillis = focusedLoopPeriodWithMinimum(
 				periodMillis, content.points, content.duration, content.loop, focus,
-				content.reversalProfile,
+				content.reversalProfile, minimumPeriod,
 			)
 		}
 		curve, compileErr = content.buildCurve(content.playbackScale(focus, periodMillis))
@@ -119,7 +126,7 @@ func NewMotionPlan(
 	}
 	perceptual := PerceptualSummary{}
 	if compileErr == nil && target.Dynamic != nil {
-		perceptual = summarizeMotionPlan(target, curve, focus, periodMillis)
+		perceptual = summarizeMotionPlan(target, curve, focus, periodMillis, settings.HandyModel)
 	}
 	return MotionPlan{
 		ID:            id,
@@ -503,7 +510,19 @@ func minimumSafeLoopPeriodAtGainWithReversalProfile(
 	gain float64,
 	reversalProfile curveReversalProfile,
 ) int64 {
-	minimum := int64(minimumBurstCycleMillis)
+	return minimumSafeLoopPeriodAtGainWithReversalProfileAndMinimum(
+		points, authoredPeriod, gain, reversalProfile, minimumBurstCycleMillis,
+	)
+}
+
+func minimumSafeLoopPeriodAtGainWithReversalProfileAndMinimum(
+	points []CurvePoint,
+	authoredPeriod int64,
+	gain float64,
+	reversalProfile curveReversalProfile,
+	minimum int64,
+) int64 {
+	minimum = max(int64(1), minimum)
 	if authoredPeriod <= 0 || len(points) < 2 {
 		return minimum
 	}
@@ -579,21 +598,22 @@ func loopPeriodWithinRuntimeEnvelope(
 // mean travel rate. The requested period scales with played amplitude. The
 // safety floor treats acceleration and reversal cadence separately: amplitude
 // changes acceleration, but the minimum time between reversals does not shrink.
-func focusedLoopPeriod(
+func focusedLoopPeriodWithMinimum(
 	period int64,
 	points []CurvePoint,
 	authoredPeriod int64,
 	loop bool,
 	focus focusProjection,
 	reversalProfile curveReversalProfile,
+	minimumPeriod int64,
 ) int64 {
 	gain := focus.gain()
 	if !loop || gain <= 0 {
 		return period
 	}
 	adjusted := int64(math.Round(float64(period) * gain))
-	minimum := minimumSafeLoopPeriodAtGainWithReversalProfile(
-		points, authoredPeriod, gain, reversalProfile,
+	minimum := minimumSafeLoopPeriodAtGainWithReversalProfileAndMinimum(
+		points, authoredPeriod, gain, reversalProfile, minimumPeriod,
 	)
 	return max(adjusted, minimum)
 }
