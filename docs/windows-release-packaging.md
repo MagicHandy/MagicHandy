@@ -9,13 +9,14 @@ The setup EXE is a thin Inno Setup shell with a native x64 loader and non-solid
 `zip/9` payload compression. This avoids the 32-bit loader and opaque solid
 ultra-LZMA stream used by the withdrawn alpha.6 package. Microsoft completed its
 review of that exact alpha.6 file as `Not malware` and removed the detection.
-ADR 0014 therefore permits alpha.8 through alpha.11 and alpha.13 through alpha.37 setup
-publication through a dedicated policy bound to those versions and case.
-Alpha.9 through alpha.11 and alpha.13 through alpha.37 also add a Defender scan of the exact
-public artifact directory. Alpha.12's portable-only GitHub Release was withdrawn; its
-source tag remains immutable. A later unsigned setup fails closed until another
-explicit review decision. The exception does not establish publisher identity;
-trusted Authenticode remains the production target.
+ADR 0014 therefore permits alpha.8 through alpha.11 and alpha.13 through
+alpha.38 setup publication through a dedicated policy bound to those versions
+and case. Alpha.9 through alpha.11 and alpha.13 through alpha.38 also add a
+Defender scan of the exact public artifact directory. Alpha.12's portable-only
+GitHub Release was withdrawn; its source tag remains immutable. A later unsigned
+setup fails closed until another explicit review decision. The exception does
+not establish publisher identity; trusted Authenticode remains the production
+target.
 The portable archive contains the app, workers, optional-module helper scripts,
 license, source notice, and release manifest. It does not bundle models,
 Python, CUDA, llama.cpp, or Parakeet; those remain explicit setup choices.
@@ -143,15 +144,15 @@ $commit = (git rev-parse HEAD).Trim()
   -ExerciseInstaller
 ```
 
-`ReviewedUnsignedPublic` accepts only alpha.8 through alpha.11 and alpha.13 through alpha.37 with
-the recorded Microsoft case ID and checks the x64 unsigned setup, four x64
-payload executables, manifests, and both outer hashes. `SignedPublic` is the
-fail-closed long-term policy. It requires valid, timestamped Authenticode on the setup
-executable and all four
-payload executables, rejects self-signed certificates, and requires the
-approved certificate's 40-character thumbprint through
-`-ExpectedSignerThumbprint`. The current workflow does not select this policy
-because no protected signing identity has been provisioned.
+`ReviewedUnsignedPublic` accepts only alpha.8 through alpha.11 and alpha.13
+through alpha.38 with the recorded Microsoft case ID and checks the x64 unsigned
+setup, four x64 payload executables, manifests, and both outer hashes.
+`SignedPublic` is the fail-closed long-term policy. It requires valid,
+timestamped Authenticode on the setup executable and all four payload
+executables, rejects self-signed certificates, and requires the approved
+certificate's 40-character thumbprint through `-ExpectedSignerThumbprint`. The
+current workflow does not select this policy because no protected signing
+identity has been provisioned.
 
 `PortablePublic` rejects any setup executable and requires exactly the portable
 ZIP plus its one-entry checksum file. Pull-request packaging still builds and
