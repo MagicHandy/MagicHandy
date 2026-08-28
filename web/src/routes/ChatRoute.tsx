@@ -164,6 +164,7 @@ export function ChatRoute() {
             onNew={requestNew}
             onSave={saveSession}
             onDelete={deleteSession}
+            onPersonaChanged={() => void loadSessions()}
             assistantMood={assistantMood}
           />
           {loadError ? (
@@ -176,6 +177,7 @@ export function ChatRoute() {
             <ChatPanel
               key={active.id}
               sessionId={active.id}
+              personaName={active.persona_name}
               onBusyChange={setStreaming}
               onSessionChanged={loadSessions}
             />

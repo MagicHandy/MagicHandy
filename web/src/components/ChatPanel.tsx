@@ -24,6 +24,7 @@ interface Msg {
 
 interface Props {
   sessionId: string;
+  personaName?: string;
   onBusyChange?: (busy: boolean) => void;
   onSessionChanged?: () => void;
 }
@@ -31,7 +32,7 @@ interface Props {
 const uid = () => Math.random().toString(36).slice(2, 10);
 const message = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Conversation history request failed.");
 
-export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) {
+export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChanged }: Props) {
   const { backendOnline, readOnly, state, refresh } = useAppState();
   const { show } = useToast();
   const { queueSpeech } = useVoicePlayback();
@@ -171,6 +172,7 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
 
   const historyUnavailable = historyLoading || Boolean(historyError);
   const locked = !backendOnline || !state || readOnly || historyUnavailable;
+  const assistantName = personaName?.trim() || "MagicHandy";
 
   // Speech input shows only when it can work: voice on and an ASR provider
   // selected. A configured-but-stopped worker leaves the button disabled with
@@ -391,7 +393,7 @@ export function ChatPanel({ sessionId, onBusyChange, onSessionChanged }: Props) 
             maxLength={1000}
             value={draft}
             disabled={locked || voiceActive}
-            placeholder={historyError ? t("Conversation history unavailable.") : historyLoading ? t("Loading conversation…") : readOnly ? t("Read-only — this tab can't drive motion.") : t("Message MagicHandy…")}
+            placeholder={historyError ? t("Conversation history unavailable.") : historyLoading ? t("Loading conversation…") : readOnly ? t("Read-only — this tab can't drive motion.") : t("Message {name}…", { name: assistantName })}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

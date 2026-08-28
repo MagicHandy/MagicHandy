@@ -518,11 +518,50 @@ func TestClearingTheSelectionRestoresTheGlobalAxes(t *testing.T) {
 func TestDeletingABoundPersonaLeavesTheSessionReadable(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
+	type sessionView struct {
+		ID          string `json:"id"`
+		PersonaID   string `json:"persona_id"`
+		PersonaName string `json:"persona_name"`
+		Active      bool   `json:"active"`
+	}
+	activeSummary := func() sessionView {
+		t.Helper()
+		recorder := httptest.NewRecorder()
+		server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/chat/sessions", nil))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("list sessions: status %d body %s", recorder.Code, recorder.Body.String())
+		}
+		var payload struct {
+			Sessions []sessionView `json:"sessions"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode sessions: %v", err)
+		}
+		for _, session := range payload.Sessions {
+			if session.Active {
+				return session
+			}
+		}
+		t.Fatal("chat session response has no active session")
+		return sessionView{}
+	}
+
 	created := createPersonaVia(t, server, "Rowan")
 	_, payload := personaRequest(t, server, http.MethodGet, "/api/personas", nil)
 	sessionID := payload.ActiveSessionID
+	if initial := activeSummary(); initial.PersonaID != "" || initial.PersonaName != defaultPersonaName {
+		t.Fatalf("default session summary = %+v", initial)
+	}
 	personaRequest(t, server, http.MethodPut, "/api/chat/sessions/"+sessionID+"/persona",
 		map[string]any{"persona_id": created.ID})
+	if bound := activeSummary(); bound.PersonaID != created.ID || bound.PersonaName != "Rowan" {
+		t.Fatalf("bound session summary = %+v", bound)
+	}
+	personaRequest(t, server, http.MethodPatch, "/api/personas/"+created.ID,
+		map[string]any{"name": "Hei"})
+	if renamed := activeSummary(); renamed.PersonaName != "Hei" {
+		t.Fatalf("renamed session summary = %+v", renamed)
+	}
 
 	recorder, deleted := personaRequest(t, server, http.MethodDelete, "/api/personas/"+created.ID, nil)
 	if recorder.Code != http.StatusOK {
@@ -530,6 +569,9 @@ func TestDeletingABoundPersonaLeavesTheSessionReadable(t *testing.T) {
 	}
 	if deleted.ActivePersonaID != "" {
 		t.Fatalf("effective active persona = %q after deletion, want built-in default", deleted.ActivePersonaID)
+	}
+	if fallback := activeSummary(); fallback.PersonaID != created.ID || fallback.PersonaName != defaultPersonaName {
+		t.Fatalf("deleted-persona session summary = %+v", fallback)
 	}
 	storedID, err := server.chatLog.SessionPersona(sessionID)
 	if err != nil {

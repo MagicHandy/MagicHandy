@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ChatSessionsResponse } from "../api/types";
 import { ChatRoute } from "./ChatRoute";
 
 const mocks = vi.hoisted(() => ({
@@ -20,9 +21,9 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-const current = (messageCount = 0, saved = false) => ({
+const current = (messageCount = 0, saved = false, personaName = "MagicHandy"): ChatSessionsResponse => ({
   active_session_id: "chat-test",
-  sessions: [{ id: "chat-test", title: "Current chat", saved, active: true, message_count: messageCount, latest_seq: messageCount, created_at: "now", updated_at: "now" }],
+  sessions: [{ id: "chat-test", title: "Current chat", saved, persona_name: personaName, active: true, message_count: messageCount, latest_seq: messageCount, created_at: "now", updated_at: "now" }],
 });
 
 async function openNewChatDialog() {
@@ -36,7 +37,7 @@ vi.mock("../components/AutopilotControl", () => ({
   AutopilotControl: () => <div>Autopilot control</div>,
 }));
 vi.mock("../components/ChatPanel", () => ({
-  ChatPanel: () => <div>Conversation content</div>,
+  ChatPanel: ({ personaName }: { personaName?: string }) => <div>Conversation content <span data-testid="composer-persona">{personaName}</span></div>,
 }));
 vi.mock("../components/MotionVisualizer", () => ({
   MotionVisualizer: () => <div>Motion visualizer</div>,
@@ -86,6 +87,13 @@ describe("ChatRoute", () => {
     expect(within(conversation).queryByText("Autopilot control")).not.toBeInTheDocument();
     expect(within(controls).getByText("Autopilot control")).toBeInTheDocument();
     expect(screen.queryByText("Manual motion")).not.toBeInTheDocument();
+  });
+
+  it("passes the backend-resolved active persona name to the composer", async () => {
+    mocks.getChatSessions.mockResolvedValueOnce(current(0, false, "Hei"));
+    render(<ChatRoute />);
+
+    expect(await screen.findByTestId("composer-persona")).toHaveTextContent("Hei");
   });
 
   it("offers every LLM motion mode from the Chat control sidebar", async () => {

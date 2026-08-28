@@ -513,6 +513,9 @@ user's scroll position.
   and is displayed as active when the session's `persona_id` is empty or no
   longer resolves. Selecting it clears the stored ID; it does not copy settings
   into a persona row.
+- The composer placeholder uses the same backend-resolved persona name as the
+  switcher. It returns to `Message MagicHandy…` for the Settings-backed default
+  or a deleted persona rather than retaining a stale frontend name.
 - New sessions inherit the last explicit persona choice, including the
   Settings-backed default.
 - Switching mid-session is allowed, takes effect on the next turn, and is

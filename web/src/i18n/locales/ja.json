@@ -646,7 +646,7 @@
   "Memory unavailable.": "メモリが利用できません。",
   "Message": "メッセージ",
   "Message MagicHandy — chat can start, adjust, and stop motion": "MagicHandy にメッセージ — チャットでモーションの開始・調整・停止ができます",
-  "Message MagicHandy…": "MagicHandy にメッセージ…",
+  "Message {name}…": "{name} にメッセージ…",
   "Microphone": "マイク",
   "Microphone capture requires localhost or HTTPS in a supported browser.": "マイク入力には、対応ブラウザーで localhost または HTTPS を使用する必要があります。",
   "Microphone level {percent} percent": "マイクレベル {percent}%",

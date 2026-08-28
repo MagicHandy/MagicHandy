@@ -21,8 +21,8 @@ func (s *Server) chatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/chat/cursor", s.handleChatCursor)
 }
 
-func (s *Server) handleChatSessions(w http.ResponseWriter, _ *http.Request) {
-	s.writeChatSessions(w, http.StatusOK)
+func (s *Server) handleChatSessions(w http.ResponseWriter, r *http.Request) {
+	s.writeChatSessions(w, r, http.StatusOK)
 }
 
 func (s *Server) handleCreateChatSession(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,7 @@ func (s *Server) handleCreateChatSession(w http.ResponseWriter, r *http.Request)
 		s.writeChatSessionError(w, err)
 		return
 	}
-	s.writeChatSessions(w, http.StatusCreated)
+	s.writeChatSessions(w, r, http.StatusCreated)
 }
 
 func (s *Server) handleActivateChatSession(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +85,7 @@ func (s *Server) handleActivateChatSession(w http.ResponseWriter, r *http.Reques
 		s.writeChatSessionError(w, err)
 		return
 	}
-	s.writeChatSessions(w, http.StatusOK)
+	s.writeChatSessions(w, r, http.StatusOK)
 }
 
 func (s *Server) handleSaveChatSession(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +103,7 @@ func (s *Server) handleSaveChatSession(w http.ResponseWriter, r *http.Request) {
 		s.writeChatSessionError(w, err)
 		return
 	}
-	s.writeChatSessions(w, http.StatusOK)
+	s.writeChatSessions(w, r, http.StatusOK)
 }
 
 func (s *Server) handleDeleteChatSession(w http.ResponseWriter, r *http.Request) {
@@ -121,28 +121,44 @@ func (s *Server) handleDeleteChatSession(w http.ResponseWriter, r *http.Request)
 		s.writeChatSessionError(w, err)
 		return
 	}
-	s.writeChatSessions(w, http.StatusOK)
+	s.writeChatSessions(w, r, http.StatusOK)
 }
 
-func (s *Server) writeChatSessions(w http.ResponseWriter, status int) {
+type chatSessionView struct {
+	chat.Session
+	PersonaName string `json:"persona_name"`
+}
+
+func (s *Server) writeChatSessions(w http.ResponseWriter, r *http.Request, status int) {
 	sessions, err := s.chatLog.Sessions()
 	if err != nil {
 		s.writeChatStorageError(w, err)
 		return
 	}
+	personas, err := s.personas.List(r.Context())
+	if err != nil {
+		s.writePersonalizationStorageError(w, "persona", err)
+		return
+	}
+	personaNames := make(map[string]string, len(personas))
+	for _, item := range personas {
+		personaNames[item.ID] = item.Name
+	}
 	activeID := ""
+	views := make([]chatSessionView, 0, len(sessions))
 	for _, session := range sessions {
 		if session.Active {
 			activeID = session.ID
-			break
 		}
-	}
-	if sessions == nil {
-		sessions = []chat.Session{}
+		name := personaNames[session.PersonaID]
+		if name == "" {
+			name = defaultPersonaName
+		}
+		views = append(views, chatSessionView{Session: session, PersonaName: name})
 	}
 	writeJSON(w, status, map[string]any{
 		"active_session_id": activeID,
-		"sessions":          sessions,
+		"sessions":          views,
 	})
 }
 
