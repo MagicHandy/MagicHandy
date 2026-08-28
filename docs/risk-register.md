@@ -1574,7 +1574,7 @@ Mitigation:
 - keep the pull-request workflow read-only and artifact-only; label its unsigned
   setup output `unsigned-ci`, retain it briefly, and give it no release path
 - require `ReviewedUnsignedPublic` plus Microsoft's completed false-positive
-  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.36 versions for unsigned setup
+  case ID and the explicitly approved alpha.8 through alpha.11 and alpha.13 through alpha.37 versions for unsigned setup
   publication; build into a dedicated public directory and lifecycle-test that
   exact setup before publishing three explicit paths
 - retain `PortablePublic` as a fail-closed fallback: build no setup, verify the
@@ -1622,7 +1622,7 @@ Microsoft for analysis. Microsoft completed case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`,
 reported no current cloud or client detection, and removed the detection.
 ADR 0014 now separates pull-request `UnsignedCI`, version-bound reviewed alpha.8
-through alpha.11 and alpha.13 through alpha.36, withdrawn portable-only alpha.12, and timestamped
+through alpha.11 and alpha.13 through alpha.37, withdrawn portable-only alpha.12, and timestamped
 `SignedPublic` policies. Release acceptance still
 verifies every staged and outer hash, custom and Program Files installs,
 shortcut/ARP metadata, active-process over-install, retained settings, explicit
@@ -1644,7 +1644,7 @@ amd64 payload and the solid `lzma2/ultra64` stream. The native-x64, non-solid
 `zip/9` candidate passed PE-machine checks, the isolated installer lifecycle,
 and a current Defender custom scan with no threats. Its larger approximately
 17.9 MB size is an accepted transparency tradeoff. Alpha.8 through alpha.11 and
-alpha.13 through alpha.36 may publish this hardened shape only through `ReviewedUnsignedPublic`,
+alpha.13 through alpha.37 may publish this hardened shape only through `ReviewedUnsignedPublic`,
 bound to the completed case, alpha.9-and-later exact-artifact Defender scan, and
 full lifecycle acceptance. This does not lower R28: each new hash is still
 unsigned and trusted Authenticode remains the production exit evidence.
