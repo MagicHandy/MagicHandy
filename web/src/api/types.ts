@@ -1055,6 +1055,37 @@ export interface SetupStatus {
   helpers: { llama: boolean; parakeet: boolean; voice: boolean };
 }
 
+export type AccountRole = "admin" | "operator";
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  role: AccountRole;
+  disabled: boolean;
+  has_profile_image: boolean;
+  profile_updated_at?: string;
+  last_login_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ControlIdentity {
+  account: UserAccount;
+  relationship: "self" | "linked";
+  label: string;
+  selected: boolean;
+}
+
+export interface AuthenticationStatus {
+  initialized: boolean;
+  authentication_required: boolean;
+  authenticated: boolean;
+  bootstrap_available: boolean;
+  ui_locale: string;
+  account: UserAccount | null;
+  control_identities: ControlIdentity[] | null;
+}
+
 export interface ManagedLLMModel {
   id: string;
   display_name: string;

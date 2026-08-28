@@ -30,7 +30,7 @@ const AppStateContext = createContext<AppStateValue | null>(null);
 const POLL_MS = 2000;
 const STATE_TIMEOUT_MS = 8000;
 
-export function AppStateProvider({ children }: { children: ReactNode }) {
+export function AppStateProvider({ children, enabled = true }: { children: ReactNode; enabled?: boolean }) {
   const [state, setState] = useState<AppState | null>(null);
   const [backendOnline, setBackendOnline] = useState(true);
   const [stale, setStale] = useState(false);
@@ -40,6 +40,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const activeRequest = useRef<AbortController | null>(null);
 
   const performRefresh = useCallback((): Promise<void> => {
+    if (!enabled) return Promise.resolve();
     if (inFlight.current) return inFlight.current;
     const controller = new AbortController();
     activeRequest.current = controller;
@@ -69,7 +70,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     });
     inFlight.current = tracked;
     return tracked;
-  }, []);
+  }, [enabled]);
 
   const refresh = useCallback(async () => {
     if (inFlight.current) await inFlight.current;
@@ -77,6 +78,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   }, [performRefresh]);
 
   useEffect(() => {
+    if (!enabled) {
+      setState(null);
+      setLiveMotion(null);
+      setStale(false);
+      setStartupError("");
+      return;
+    }
     let stopped = false;
     let timer: number | undefined;
     const poll = async () => {
@@ -91,11 +99,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       activeRequest.current = null;
       controller?.abort();
     };
-  }, [performRefresh]);
+  }, [enabled, performRefresh]);
 
   // Live motion over SSE for a responsive visualizer; the poll snapshot remains
   // the source of truth and reconciles this between events.
   useEffect(() => {
+    if (!enabled) return;
     let source: EventSource | null = null;
     try {
       source = new EventSource(`/api/motion/events?client_id=${encodeURIComponent(clientId)}`);
@@ -111,7 +120,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       source = null;
     }
     return () => source?.close();
-  }, []);
+  }, [enabled]);
 
   const controller = state?.controller;
   const readOnly = controller ? controller.read_only === true : false;

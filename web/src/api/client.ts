@@ -56,6 +56,10 @@ import type {
   VoiceRequestSnapshot,
   VoiceState,
   VoiceWorkerStatus,
+  AuthenticationStatus,
+  UserAccount,
+  AccountRole,
+  ControlIdentity,
 } from "./types";
 
 const CLIENT_ID_KEY = "magichandy-controller-tab-id";
@@ -117,6 +121,7 @@ export function resolveControllerClientID(
 export const clientId = resolveControllerClientID(browserSessionStorage(), browserNavigationType());
 
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
+export const AUTHENTICATION_REQUIRED_EVENT = "magichandy:authentication-required";
 
 async function request<T>(
   method: string,
@@ -145,6 +150,9 @@ async function request<T>(
     }
   }
   if (!res.ok) {
+    if (res.status === 401 && !path.startsWith("/api/auth/")) {
+      window.dispatchEvent(new Event(AUTHENTICATION_REQUIRED_EVENT));
+    }
     let message = `Request failed (${res.status})`;
     if (parsed && typeof parsed === "object" && "error" in parsed) {
       message = String((parsed as { error: unknown }).error);
@@ -177,6 +185,7 @@ async function uploadVoiceTranscription(audio: Blob, format: string, stopSequenc
     }
   }
   if (!res.ok) {
+    if (res.status === 401) window.dispatchEvent(new Event(AUTHENTICATION_REQUIRED_EVENT));
     const message = parsed && typeof parsed === "object" && "error" in parsed
       ? String((parsed as { error: unknown }).error)
       : `Transcription upload failed (${res.status})`;
@@ -236,6 +245,32 @@ async function uploadPortrait(id: string, image: Blob): Promise<PersonasPayload>
     throw new ApiError(message, res.status, parsed);
   }
   return parsed as PersonasPayload;
+}
+
+async function uploadAccountProfileImage(image: Blob): Promise<{ account: UserAccount }> {
+  const path = "/api/auth/profile-image";
+  const res = await fetch(path, {
+    method: "PUT",
+    headers: { Accept: "application/json", "Content-Type": "image/jpeg", [CLIENT_HEADER]: clientId },
+    body: image,
+  });
+  const text = await res.text();
+  let parsed: unknown = null;
+  if (text) {
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      parsed = { error: text };
+    }
+  }
+  if (!res.ok) {
+    if (res.status === 401) window.dispatchEvent(new Event(AUTHENTICATION_REQUIRED_EVENT));
+    const message = parsed && typeof parsed === "object" && "error" in parsed
+      ? String((parsed as { error: unknown }).error)
+      : `Profile image upload failed (${res.status})`;
+    throw new ApiError(message, res.status, parsed);
+  }
+  return parsed as { account: UserAccount };
 }
 
 async function uploadPersonaArchive(file: File): Promise<PersonasPayload> {
@@ -337,6 +372,34 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  // Authentication. The HttpOnly session token never enters React; these
+  // methods only exchange credentials for backend-owned cookie state.
+  authStatus: (signal?: AbortSignal) =>
+    request<AuthenticationStatus>("GET", "/api/auth/status", undefined, signal),
+  authLogin: (username: string, password: string) =>
+    request<{ account: UserAccount; expires_at: string }>("POST", "/api/auth/login", { username, password }),
+  authBootstrap: (username: string, password: string) =>
+    request<{ account: UserAccount }>("POST", "/api/auth/bootstrap", { username, password }),
+  authLogout: () => request<null>("POST", "/api/auth/logout", {}),
+  authChangePassword: (currentPassword: string, newPassword: string) =>
+    request<null>("PUT", "/api/auth/password", { current_password: currentPassword, new_password: newPassword }),
+  accounts: () => request<{ accounts: UserAccount[] }>("GET", "/api/accounts"),
+  createAccount: (username: string, password: string, role: AccountRole) =>
+    request<{ account: UserAccount }>("POST", "/api/accounts", { username, password, role }),
+  resetAccountPassword: (id: string, password: string) =>
+    request<null>("PUT", `/api/accounts/${encodeURIComponent(id)}/password`, { password }),
+  setAccountDisabled: (id: string, disabled: boolean) =>
+    request<null>("PUT", `/api/accounts/${encodeURIComponent(id)}/disabled`, { disabled }),
+  controlIdentities: () =>
+    request<{ control_identities: ControlIdentity[] }>("GET", "/api/auth/control-identities"),
+  selectControlIdentity: (accountID: string) =>
+    request<{ control_identities: ControlIdentity[] }>("PUT", "/api/auth/control-identity", { account_id: accountID }),
+  accountProfileImageURL: (account: UserAccount) => account.has_profile_image
+    ? `/api/accounts/${encodeURIComponent(account.id)}/profile-image?v=${encodeURIComponent(account.profile_updated_at ?? "")}`
+    : "",
+  saveAccountProfileImage: (image: Blob) => uploadAccountProfileImage(image),
+  deleteAccountProfileImage: () => request<{ account: UserAccount }>("DELETE", "/api/auth/profile-image"),
+
   getState: (signal?: AbortSignal) => request<AppState>("GET", "/api/state", undefined, signal),
   takeControl: () => request<ControllerTakeoverResponse>("POST", "/api/controller/takeover", {}),
 
@@ -563,7 +626,7 @@ export const api = {
   installSetupPlan: (plan: SetupInstallPlan) =>
     request<{ installation: SetupJob }>("POST", "/api/setup/install", plan),
   cancelSetupInstall: () => request<{ installation: SetupJob }>("DELETE", "/api/setup/install"),
-  completeSetup: (allow_unready_llm = false) => request<{ settings: PublicSettings }>("POST", "/api/setup/complete", { allow_unready_llm }),
+  completeSetup: (allow_unready_llm = false) => request<{ settings: PublicSettings; signed_out?: boolean }>("POST", "/api/setup/complete", { allow_unready_llm }),
 
   // Provider checks are diagnostic-only. Cloud Connect/Disconnect own the
   // controller-gated command lifecycle.

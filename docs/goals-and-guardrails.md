@@ -105,6 +105,10 @@ These are enforced in CI from Phase 1, not aspirational.
   (pure-Go SQLite, builds under `CGO_ENABLED=0`) per ADR 0008 — never a CGo
   SQLite driver such as `mattn/go-sqlite3`. Its binary-size and RSS cost is
   tracked against the budgets above in `docs/goal-scorecard.md`.
+- Backend accounts use `golang.org/x/crypto/argon2`, a pure-Go BSD-licensed
+  implementation, because general-purpose hashes and the standard-library
+  PBKDF2 fallback do not provide Argon2id's memory-hard password defense. ADR
+  0017 fixes and bounds its parameters; the scorecard records the binary delta.
 - anything that genuinely needs native code (BLE, native audio) lives behind the
   browser bridge or a worker process, never in the core binary
 

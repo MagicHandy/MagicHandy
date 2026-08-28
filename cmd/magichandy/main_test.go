@@ -329,27 +329,36 @@ func TestRunConfiguresChatterboxDefaults(t *testing.T) {
 	}
 }
 
-func TestValidateListenAddressRejectsUnauthenticatedRemoteBinding(t *testing.T) {
+func TestValidateListenAddressRequiresAuthenticatedHTTPSForRemoteBinding(t *testing.T) {
 	for _, address := range []string{
 		"127.0.0.1:8080",
 		"127.12.34.56:8080",
 		"localhost:8080",
 		"[::1]:8080",
 	} {
-		if err := validateListenAddress(address); err != nil {
+		if err := validateListenAddress(address, false, false); err != nil {
 			t.Errorf("validateListenAddress(%q) = %v, want accepted loopback", address, err)
 		}
 	}
 	for _, address := range []string{
-		":8080",
 		"0.0.0.0:8080",
 		"[::]:8080",
-		"192.168.1.20:8080",
 		"magic-handy.local:8080",
 	} {
-		err := validateListenAddress(address)
-		if err == nil || !strings.Contains(err.Error(), "not loopback") {
-			t.Errorf("validateListenAddress(%q) = %v, want non-loopback rejection", address, err)
+		if err := validateListenAddress(address, true, true); err == nil {
+			t.Errorf("validateListenAddress(%q) = nil, want ambiguous binding rejection", address)
 		}
+	}
+	if err := validateListenAddress("192.168.1.20:8080", false, true); err == nil || !strings.Contains(err.Error(), "HTTPS") {
+		t.Fatalf("remote HTTP error = %v, want HTTPS requirement", err)
+	}
+	if err := validateListenAddress("192.168.1.20:8080", true, false); err == nil || !strings.Contains(err.Error(), "account") {
+		t.Fatalf("remote unauthenticated error = %v, want account requirement", err)
+	}
+	if err := validateListenAddress("192.168.1.20:8080", true, true); err != nil {
+		t.Fatalf("authenticated remote HTTPS error = %v", err)
+	}
+	if err := validateListenAddress("8.8.8.8:8080", true, true); err == nil || !strings.Contains(err.Error(), "internet-facing") {
+		t.Fatalf("public address error = %v, want internet-facing rejection", err)
 	}
 }

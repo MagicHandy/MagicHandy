@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 17
+	CurrentSchemaVersion = 19
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -507,6 +507,80 @@ var migrations = [][]string{
 	// table as well as the mode column so it can first repair any manually
 	// versioned database that still carries the Rockfire table name.
 	{`SELECT 1`},
+	// v17 -> v18: authenticated users and opaque server-side browser sessions.
+	// Password hashes and session-token digests are credentials and therefore
+	// remain in the private datastore; neither belongs in settings, diagnostics,
+	// logs, or browser-readable state.
+	{
+		`CREATE TABLE IF NOT EXISTS user_accounts (
+			id TEXT PRIMARY KEY,
+			username TEXT NOT NULL,
+			username_key TEXT NOT NULL,
+			role TEXT NOT NULL CHECK (role IN ('admin', 'operator')),
+			password_hash TEXT NOT NULL,
+			disabled INTEGER NOT NULL DEFAULT 0 CHECK (disabled IN (0, 1)),
+			last_login_at TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS user_accounts_username_key
+			ON user_accounts(username_key)`,
+		`CREATE TABLE IF NOT EXISTS user_sessions (
+			token_hash TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+			created_at TEXT NOT NULL,
+			last_seen_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS user_sessions_user_expiry
+			ON user_sessions(user_id, expires_at)`,
+	},
+	// v18 -> v19: account profile images and per-session control identity.
+	// Active account links are directional authorization records for a future
+	// pairing flow; this migration does not grant or infer any links.
+	{`SELECT 1`},
+}
+
+func migrateAccountProfiles(ctx context.Context, tx *sql.Tx) error {
+	profileColumn, err := columnExists(ctx, tx, "user_accounts", "profile_updated_at")
+	if err != nil {
+		return err
+	}
+	if !profileColumn {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE user_accounts
+			ADD COLUMN profile_updated_at TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add account profile timestamp: %w", err)
+		}
+	}
+	controlColumn, err := columnExists(ctx, tx, "user_sessions", "control_account_id")
+	if err != nil {
+		return err
+	}
+	if !controlColumn {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE user_sessions
+			ADD COLUMN control_account_id TEXT REFERENCES user_accounts(id) ON DELETE SET NULL`); err != nil {
+			return fmt.Errorf("add session control account: %w", err)
+		}
+	}
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS user_account_links (
+			owner_user_id TEXT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+			linked_user_id TEXT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+			label TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'revoked')),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY(owner_user_id, linked_user_id),
+			CHECK(owner_user_id <> linked_user_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS user_account_links_owner_status
+			ON user_account_links(owner_user_id, status, linked_user_id)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("create account control identity schema: %w", err)
+		}
+	}
+	return nil
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -780,6 +854,8 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		err = migratePersonas(ctx, tx)
 	case 17:
 		err = migratePersonaLore(ctx, tx)
+	case 19:
+		err = migrateAccountProfiles(ctx, tx)
 	default:
 		return nil
 	}

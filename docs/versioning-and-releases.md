@@ -57,7 +57,7 @@ the release manifest, `SOURCE.txt`, and `magichandy.exe -version`.
 
 ## Release Artifacts
 
-The reviewed unsigned Windows alpha.37 release contains exactly these
+The reviewed unsigned Windows alpha.38 release contains exactly these
 downloadable artifacts:
 
 - `MagicHandy-<version>-windows-amd64-setup.exe`
@@ -72,10 +72,10 @@ remains for provenance.
 
 Pull-request workflows continue to retain setup only as a short-lived
 `unsigned-ci` artifact and exercise its full lifecycle. The tag workflow uses
-`ReviewedUnsignedPublic`, limited to alpha.8 through alpha.11 and alpha.13 through alpha.37,
-scans the exact public directory with Defender, verifies the setup/ZIP manifests
-and two-entry outer checksum, exercises the exact setup lifecycle, and publishes
-three explicit assets.
+`ReviewedUnsignedPublic`, limited to alpha.8 through alpha.11 and alpha.13
+through alpha.38, scans the exact public directory with Defender, verifies the
+setup/ZIP manifests and two-entry outer checksum, exercises the exact setup
+lifecycle, and publishes three explicit assets.
 
 When trusted signing is provisioned, setup publication can resume under
 `SignedPublic`, restoring the signed setup/ZIP/checksum set. That gate requires

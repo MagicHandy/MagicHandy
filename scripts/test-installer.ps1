@@ -732,7 +732,7 @@ func main() {
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseVerifierSource.Contains("'ReviewedUnsignedPublic'")) -Message 'release verifier should expose the reviewed unsigned public policy'
     Assert-True -Condition ($releaseVerifierSource.Contains('ReviewedUnsignedPublic requires Microsoft false-positive case')) -Message 'reviewed unsigned publication should fail closed without the recorded Microsoft case'
-    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
+    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
             -Version '0.0.0-local' `
@@ -790,6 +790,10 @@ func main() {
     Assert-True -Condition ($innoSource.Contains('#define InstallerSolidCompression "no"')) -Message 'Windows setup payload compression should remain non-solid'
     Assert-True -Condition ($innoSource.Contains('DefaultDirName={autopf}\MagicHandy')) -Message 'Windows setup should default to Program Files'
     Assert-True -Condition ($innoSource.Contains('DisableDirPage=no')) -Message 'Windows setup should always expose the destination chooser'
+    Assert-True -Condition (-not [regex]::IsMatch($innoSource, '(?i)password|credential|user account')) -Message 'thin Inno Setup must never collect or transport account credentials'
+    $setupRouteSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'web\src\routes\SetupRoute.tsx'))
+    Assert-True -Condition ($setupRouteSource.Contains('Require an account and password')) -Message 'the embedded setup wizard should own the password-protection choice'
+    Assert-True -Condition ($setupRouteSource.Contains('await auth.bootstrap(')) -Message 'the embedded setup wizard should create the first account directly through the local auth API'
     Assert-True -Condition ($innoSource.Contains('Name: "desktopicon"')) -Message 'Windows setup should offer a desktop shortcut'
     Assert-True -Condition ($innoSource.Contains('Flags: unchecked')) -Message 'desktop shortcut should remain opt-in'
     Assert-True -Condition ($innoSource.Contains('Parameters: "-open-browser"; Description: "Open MagicHandy"')) -Message 'Windows setup should open the app and let backend first-run state select the setup route'

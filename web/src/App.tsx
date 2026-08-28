@@ -10,15 +10,18 @@ import { ChatRoute } from "./routes/ChatRoute";
 import { PersonasRoute } from "./routes/PersonasRoute";
 import { SettingsRoute } from "./routes/SettingsRoute";
 import { SetupRoute } from "./routes/SetupRoute";
+import { LoginRoute } from "./routes/LoginRoute";
 import { VideoRoute } from "./routes/VideoRoute";
 import { AppShell } from "./shell/AppShell";
 import { routeBase } from "./shell/NavRail";
 import { useAppState, useHashRoute } from "./state/app-state";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { normalizeTheme } from "./theme";
+import { useAuth } from "./state/auth";
 
 export function App() {
   useLocale();
+  const auth = useAuth();
   const route = useHashRoute();
   const base = routeBase(route);
   const { state, startupError, refresh, readOnly } = useAppState();
@@ -35,6 +38,7 @@ export function App() {
     : "";
   const managedLLMSelected = llmSettings?.provider === "llama_cpp" && llmSettings.llama_cpp_mode === "managed";
   const theme = normalizeTheme(state?.settings?.ui?.theme);
+  const authenticationLocked = Boolean(auth.status?.authentication_required && !auth.status.authenticated);
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = theme;
@@ -138,8 +142,23 @@ export function App() {
     }
   };
   return (
-    <AppShell>
-      {!state ? (
+    <AppShell
+      authenticationLocked={authenticationLocked}
+      authenticationStatus={auth.status}
+      onLogout={auth.logout}
+      onSelectControlIdentity={auth.selectControlIdentity}
+    >
+      {!auth.status ? (
+        <section className="startup-screen" aria-live="polite" aria-busy={auth.loading}>
+          <div className="startup-mark" aria-hidden="true">MH</div>
+          <h1>{t("MagicHandy")}</h1>
+          <p>{translateKnown(auth.error || "Checking access…")}</p>
+          {auth.error && <button type="button" className="btn btn-secondary" onClick={() => void auth.refresh()}>{t("Retry core connection")}</button>}
+          {!auth.error && <span className="startup-progress" aria-hidden="true" />}
+        </section>
+      ) : authenticationLocked ? (
+        <LoginRoute />
+      ) : !state ? (
         <section className="startup-screen" aria-live="polite" aria-busy={!startupError}>
           <div className="startup-mark" aria-hidden="true">MH</div>
           <h1>{t("MagicHandy")}</h1>

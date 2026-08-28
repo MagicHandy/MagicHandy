@@ -5,14 +5,14 @@ MagicHandy is a free, open-source, local-first app for controlling
 pattern library, and video funscript playback. App data stays on your machine, with
 cloud services available only when you enable them.
 
-[Download](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.37)
+[Download](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.38)
 | [Getting Started](docs/getting-started.md)
 | [Roadmap](IMPLEMENTATION_PLAN.md)
 | [Contributing](#contributing)
 
 > [!IMPORTANT]
 > MagicHandy is still in early development (alpha). The current
-> Windows build is `v0.1.0-alpha.37` and remains unsigned.
+> Windows build is `v0.1.0-alpha.38` and remains unsigned.
 
 ## Highlights
 
@@ -20,11 +20,15 @@ cloud services available only when you enable them.
 - Immediate speed, stroke, and direction controls with safe `Esc` Stop.
 - Handy Cloud, browser Bluetooth, and Intiface support.
 - Optional local speech input and output modules.
+- Opt-in authenticated HTTPS for one exact private-LAN address; loopback stays
+  the default. Setup and Settings can enable password-protected accounts; login,
+  profile images, administrator management, and a Self-by-default linked
+  control-profile selector are built. Certificate automation is not.
 
 ## Install On Windows
 
 Download the installer package from the
-[latest release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.37):
+[latest release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.38):
 
 - **Setup EXE:** standard installation, shortcuts, and Windows integration.
 - **Portable ZIP:** no installer or Windows integration.
@@ -67,6 +71,11 @@ flags, and validation commands.
 - All motion sources use the same bounded motion engine and selected limits.
 - The Handy connection key is private and excluded from UI readback, logs,
   diagnostics, and exports.
+- LAN mode fails closed unless HTTPS and an enabled backend account are both
+  configured; it is not intended for internet exposure or port forwarding.
+- Accounts gate entry but do not partition settings, chat, media, or libraries.
+  A linked control profile does not impersonate another user or transfer the
+  device-controller lease.
 - MagicHandy is for adults controlling an intimate device. Use it responsibly
   and at your own risk.
 
@@ -93,6 +102,8 @@ requests with green CI. Start with [AGENTS.md](AGENTS.md), then use the
 - [Video playback](docs/video-playback.md)
 - [LLM control surface](docs/llm-control-surface.md)
 - [UI design guidelines](docs/ui-design-guidelines.md)
+- [HTTPS and accounts](docs/https-and-accounts.md)
+- [Account UI and control-context design](docs/account-gui-design.md)
 - [Versioning and releases](docs/versioning-and-releases.md)
 
 ## License

@@ -5,121 +5,10 @@ import type { Persona, PersonaDraft, PersonasPayload, PromptSet } from "../api/t
 import { CloseIcon, DownloadIcon, PencilIcon, TrashIcon } from "../shell/icons";
 import { trapModalTab } from "../util/modal";
 import { codePointLength, limitCodePoints } from "../util/text";
+import { PROFILE_IMAGE_MAX_EDGE, resizeImageToJPEG } from "../util/profile-image";
 import { monogram } from "./PersonaGrid";
 import { PersonaLoreEditor } from "./PersonaLoreEditor";
 import { AREA_LABELS, STYLE_LABELS, VOICE_LABELS, personaOptionLabel } from "./persona-labels";
-
-// Portraits are downscaled in the browser. Server-side scaling would need a new
-// image dependency or FFmpeg, and FFmpeg is deliberately optional — a portrait
-// must not be what makes it mandatory (docs/persona-page.md §2.2).
-//
-// 640 matches the video-thumbnail store's edge, so the two local image stores
-// agree. Quality 0.92 rather than 0.85: a portrait is a few tens of kilobytes at
-// this size, so the bytes saved by a lower setting are not worth the ringing it
-// adds around hair and edges.
-const PORTRAIT_MAX_EDGE = 640;
-const PORTRAIT_QUALITY = 0.92;
-
-// fitWithin bounds the long edge while preserving the aspect ratio.
-function fitWithin(width: number, height: number, maxEdge: number) {
-  const scale = Math.min(1, maxEdge / Math.max(width, height));
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  };
-}
-
-function paint(source: CanvasImageSource, width: number, height: number): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("this browser could not prepare the image");
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-  context.drawImage(source, 0, 0, width, height);
-  return canvas;
-}
-
-// stepDown is the fallback resampler, and the reason the old output aliased.
-//
-// A single drawImage to a much smaller size is one bilinear sample: it reads a
-// 2x2 neighbourhood per output pixel, so reducing 2048px to 640px never looks at
-// roughly 90% of the source and turns fine detail into stair-stepping and moire.
-// Halving repeatedly keeps every step within 2x, where a 2x2 read is a true box
-// average of the pixels being merged, so no source detail is skipped.
-function stepDown(source: CanvasImageSource, sourceWidth: number, sourceHeight: number,
-  targetWidth: number, targetHeight: number): HTMLCanvasElement {
-  let width = sourceWidth;
-  let height = sourceHeight;
-  let current = source;
-  while (width > targetWidth * 2 && height > targetHeight * 2) {
-    width = Math.max(targetWidth, Math.floor(width / 2));
-    height = Math.max(targetHeight, Math.floor(height / 2));
-    current = paint(current, width, height);
-  }
-  return paint(current, targetWidth, targetHeight);
-}
-
-// resizeToJPEG bounds the chosen file and exports JPEG bytes. The result is what
-// the server validates; nothing trusts the original file's declared type.
-//
-// createImageBitmap resizes during decode with the browser's own high-quality
-// resampler, which is both better and cheaper than anything reachable from a
-// canvas. Its resize options are not universally supported, so a bitmap that
-// comes back at the wrong size falls through to the manual path rather than
-// being trusted.
-async function resizeToJPEG(file: File): Promise<Blob> {
-  let bitmap: ImageBitmap | null = null;
-  let canvas: HTMLCanvasElement | null = null;
-  try {
-    if (typeof createImageBitmap === "function") {
-      bitmap = await createImageBitmap(file).catch(() => null);
-    }
-    if (bitmap) {
-      const target = fitWithin(bitmap.width, bitmap.height, PORTRAIT_MAX_EDGE);
-      if (target.width !== bitmap.width || target.height !== bitmap.height) {
-        const resized = await createImageBitmap(file, {
-          resizeWidth: target.width,
-          resizeHeight: target.height,
-          resizeQuality: "high",
-        }).catch(() => null);
-        if (resized && resized.width === target.width && resized.height === target.height) {
-          bitmap.close();
-          bitmap = resized;
-          canvas = paint(bitmap, target.width, target.height);
-        } else {
-          resized?.close();
-          canvas = stepDown(bitmap, bitmap.width, bitmap.height, target.width, target.height);
-        }
-      } else {
-        canvas = paint(bitmap, target.width, target.height);
-      }
-    } else {
-      // No createImageBitmap at all: decode through an element instead.
-      const url = URL.createObjectURL(file);
-      try {
-        const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const element = new Image();
-          element.onload = () => resolve(element);
-          element.onerror = () => reject(new Error("that file could not be read as an image"));
-          element.src = url;
-        });
-        const target = fitWithin(image.naturalWidth, image.naturalHeight, PORTRAIT_MAX_EDGE);
-        canvas = stepDown(image, image.naturalWidth, image.naturalHeight, target.width, target.height);
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    }
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas?.toBlob(resolve, "image/jpeg", PORTRAIT_QUALITY);
-    });
-    if (!blob) throw new Error("the image could not be encoded");
-    return blob;
-  } finally {
-    bitmap?.close();
-  }
-}
 
 interface EditorProps {
   item: Persona;
@@ -228,7 +117,7 @@ export function PersonaEditor({
     if (!file) return;
     setBusy(true);
     try {
-      onApplied(await api.savePersonaPortrait(item.id, await resizeToJPEG(file)));
+      onApplied(await api.savePersonaPortrait(item.id, await resizeImageToJPEG(file)));
     } catch (error) {
       onError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -347,7 +236,7 @@ export function PersonaEditor({
             </div>
             {/* Ends the group with a hint, matching Voice and style and Behavior. */}
             <p className="hint">
-              {t("Scaled to {edge}px and stored locally beside your other app data.", { edge: PORTRAIT_MAX_EDGE })}
+              {t("Scaled to {edge}px and stored locally beside your other app data.", { edge: PROFILE_IMAGE_MAX_EDGE })}
             </p>
           </section>
 

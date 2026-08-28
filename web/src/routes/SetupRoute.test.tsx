@@ -3,12 +3,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { LLMModelManagerSnapshot, PublicSettings } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
+import { useAuth } from "../state/auth";
 import { setupFixture } from "../test/setup-fixture";
 import { SetupRoute } from "./SetupRoute";
+
+const bootstrapAccount = vi.fn(async () => undefined);
+const refreshAuthentication = vi.fn(async () => null);
 
 vi.mock("../state/app-state", () => ({
   useAppState: vi.fn(),
   useToast: vi.fn(),
+}));
+
+vi.mock("../state/auth", () => ({
+  useAuth: vi.fn(),
 }));
 
 const modelFixture = {
@@ -62,6 +70,8 @@ describe("SetupRoute", () => {
   let settings: PublicSettings;
 
   beforeEach(() => {
+    bootstrapAccount.mockClear();
+    refreshAuthentication.mockClear();
     settings = freshSettings();
     vi.mocked(useAppState).mockReturnValue({
       state: { settings },
@@ -70,6 +80,11 @@ describe("SetupRoute", () => {
       refresh: vi.fn(async () => undefined),
     } as unknown as ReturnType<typeof useAppState>);
     vi.mocked(useToast).mockReturnValue({ show: vi.fn() } as unknown as ReturnType<typeof useToast>);
+    vi.mocked(useAuth).mockReturnValue({
+      status: { initialized: false, authentication_required: false, authenticated: false, bootstrap_available: true, ui_locale: "en", account: null, control_identities: null },
+      bootstrap: bootstrapAccount,
+      refresh: refreshAuthentication,
+    } as unknown as ReturnType<typeof useAuth>);
     vi.spyOn(api, "setupStatus").mockResolvedValue(setupFixture);
     vi.spyOn(api, "llmModels").mockResolvedValue(modelFixture);
     vi.spyOn(api, "ollamaModels").mockResolvedValue({ available: true, models: [] });
@@ -111,6 +126,7 @@ describe("SetupRoute", () => {
         updated_at: "2026-08-02T12:00:00Z",
       },
     });
+    vi.spyOn(api, "completeSetup").mockResolvedValue({ settings, signed_out: true });
     vi.spyOn(api, "saveSetupPreferences").mockImplementation(async (update) => {
       if (update.ui_locale) settings = { ...settings, ui: { ...settings.ui, locale: update.ui_locale } };
       if (update.device_owner) settings = { ...settings, device: { ...settings.device, hsp_dispatch_owner: update.device_owner } };
@@ -123,10 +139,68 @@ describe("SetupRoute", () => {
     vi.restoreAllMocks();
   });
 
+  it("creates the first administrator inside the Access step before continuing", async () => {
+    render(<SetupRoute />);
+
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
+    fireEvent.click(screen.getByRole("radio", { name: /require an account and password/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Administrator username" }), { target: { value: "owner" } });
+    const password = screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!;
+    const confirmation = screen.getByText("Confirm password", { selector: ".label" }).closest("label")!.querySelector("input")!;
+    fireEvent.change(password, { target: { value: "eight888" } });
+    fireEvent.change(confirmation, { target: { value: "eight889" } });
+    expect(confirmation).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("The passwords do not match.")).toHaveAttribute("data-state", "mismatch");
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+
+    fireEvent.change(confirmation, { target: { value: "eight888" } });
+    expect(confirmation).toHaveAttribute("aria-invalid", "false");
+    expect(screen.getByText("Passwords match.")).toHaveAttribute("data-state", "match");
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => expect(bootstrapAccount).toHaveBeenCalledWith("owner", "eight888"));
+    expect(await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" })).toBeInTheDocument();
+  });
+
+  it("ends the temporary bootstrap session when protected setup finishes", async () => {
+    render(<SetupRoute />);
+
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
+    fireEvent.click(screen.getByRole("radio", { name: /require an account and password/i }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Administrator username" }), { target: { value: "owner" } });
+    const password = screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!;
+    fireEvent.change(password, { target: { value: "eight888" } });
+    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "eight888" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
+    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+    await screen.findByRole("heading", { name: "Choose your model runtime" });
+    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+    await screen.findByRole("heading", { name: "Add voice features" });
+    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+    await screen.findByRole("heading", { name: "Installing selected features" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await screen.findByRole("heading", { name: "Setup is ready" });
+    expect(screen.getByText("Sign-in required after setup")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Finish and sign in" }));
+
+    await waitFor(() => expect(api.completeSetup).toHaveBeenCalledWith(true));
+    expect(refreshAuthentication).toHaveBeenCalledOnce();
+    expect(window.location.hash).toBe("#/chat");
+  });
+
   it("persists a runtime choice before model selection can be skipped", async () => {
     render(<SetupRoute />);
 
     await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
@@ -144,6 +218,8 @@ describe("SetupRoute", () => {
     render(<SetupRoute />);
 
     await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
@@ -165,6 +241,8 @@ describe("SetupRoute", () => {
     workspace.scrollLeft = 25;
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
+    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
     expect(workspace.scrollTop).toBe(0);
     expect(workspace.scrollLeft).toBe(0);
@@ -176,6 +254,8 @@ describe("SetupRoute", () => {
     render(<SetupRoute />);
 
     await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
@@ -212,6 +292,8 @@ describe("SetupRoute", () => {
     render(<SetupRoute />);
 
     await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
     fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));

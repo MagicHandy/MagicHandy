@@ -5,7 +5,9 @@
 Accepted, with the public unsigned-artifact clause superseded by
 [ADR 0014](0014-public-windows-signing-gate.md). ADR 0014 now permits a narrow
 reviewed unsigned-alpha exception after Microsoft's completed false-positive
-determination; trusted Authenticode remains the production target.
+determination; trusted Authenticode remains the production target. The
+loopback-only exposure deferral is superseded by
+[ADR 0017](0017-authenticated-lan-https.md); packaged defaults remain loopback.
 
 ## Context
 
@@ -46,10 +48,11 @@ properties merely to imitate a conventional desktop application.
    loopback server and opens `#/setup`. A WebView2 shell may later improve
    presentation, but it must remain a view over the same server and must not
    duplicate settings, setup, controller, or motion logic.
-5. **Loopback only.** Packaged defaults bind to `127.0.0.1`. Documentation says
-   not to port-forward the app. LAN/mobile access is out of scope until there is
-   authenticated HTTPS, certificate lifecycle, origin policy, and an explicit
-   multi-client/controller threat model.
+5. **Loopback default.** Packaged defaults bind to `127.0.0.1` and documentation
+   says not to port-forward the app. This decision originally deferred all LAN
+   access; ADR 0017 now permits a separate operator-configured exact private-IP
+   HTTPS/account mode without changing installer defaults. Certificate
+   automation and supported mobile acceptance remain out of scope here.
 6. **Uninstall makes data disposition explicit.** Program files, shortcuts, and
    Add/Remove Programs metadata are always removed. Interactive uninstall asks
    whether to purge `%APPDATA%\MagicHandy`, recommends purge for a clean
@@ -76,7 +79,8 @@ Negative:
 - packaged users perform explicit over-install upgrades;
 - managed llama.cpp currently requires compiler tooling unless the user chooses
   existing Ollama, an external server, or no chat setup; and
-- localhost remains the supported UI origin for microphone and Web Bluetooth.
+- localhost remains the packaged, zero-configuration origin for microphone and
+  Web Bluetooth; ADR 0017's LAN backend is not a mobile-support claim.
 
 ## Revisit Triggers
 
@@ -84,7 +88,8 @@ Negative:
 - a signed update manifest with rollback and motion-stop acceptance tests;
 - published prebuilt llama.cpp CPU/CUDA bundles with licenses and checksums;
 - a WebView2 shell that adds no second application model; or
-- an approved LAN/mobile HTTPS architecture.
+- automatic certificate trust/renewal plus accepted real-mobile evidence for
+  ADR 0017's LAN architecture.
 
 ## Verification
 

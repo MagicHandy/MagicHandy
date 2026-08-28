@@ -183,6 +183,22 @@ window and direction; the buffered queue tail is diagnostics, not position.
 - Disabled: `opacity .45`, `--surface-2`, `--muted`, no shadow — visibly inert,
   with a reason nearby (never a silent no-op).
 
+### Top-bar control profile
+
+- Authenticated sessions show a compact profile image or monogram immediately
+  before notifications. The trigger is labeled **Control profile** and shows
+  **Self** for a normal new session.
+- The attached non-modal panel lists only backend-returned Self and active
+  linked accounts. It explains that selection labels this login session and
+  does not sign in as another account or transfer device control. The UI never
+  infers links or keeps a parallel allow-list.
+- Account imagery is content within the neutral graphite surface. It does not
+  introduce a decorative accent, glow, animated presence ring, or oversized
+  circular pill. A generated monogram is the missing-image fallback.
+- This disclosure participates in the one-open-shell-menu rule with
+  notifications and connection. Close focus returns to its trigger; Escape
+  remains reserved for Emergency Stop.
+
 ### Top-bar notification center
 
 - Shell-owned and route-independent. A compact bell sits immediately before the
@@ -205,8 +221,9 @@ window and direction; the buffered queue tail is diagnostics, not position.
   locking, or Emergency Stop. Consumed backend event keys survive reload in
   session storage even when their category is hidden, so a stale completion
   cannot reappear after a refresh.
-- Only one shell popover is open at a time. Opening notifications closes the
-  connection manager and vice versa; selecting a linked item closes the panel.
+- Only one shell popover is open at a time. Opening control profile,
+  notifications, or connection closes either of the others; selecting a linked
+  item closes the panel.
   The trigger and close button preserve keyboard focus.
 
 ### Top-bar connection manager

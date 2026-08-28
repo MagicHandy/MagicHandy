@@ -94,6 +94,16 @@ var requiredSchemaTables = []schemaTable{
 		"script_offset_ms:INTEGER", "thumbnail_generated_at:TEXT?", "compatibility:TEXT",
 		"video_codec:TEXT?", "audio_codec:TEXT?", "superseded:INTEGER",
 	), primaryKey: []string{"id"}},
+	{name: "user_accounts", columns: columns(
+		"id:TEXT", "username:TEXT", "username_key:TEXT", "role:TEXT", "password_hash:TEXT",
+		"disabled:INTEGER", "last_login_at:TEXT", "created_at:TEXT", "updated_at:TEXT", "profile_updated_at:TEXT",
+	), primaryKey: []string{"id"}},
+	{name: "user_sessions", columns: columns(
+		"token_hash:TEXT", "user_id:TEXT", "created_at:TEXT", "last_seen_at:TEXT", "expires_at:TEXT", "control_account_id:TEXT?",
+	), primaryKey: []string{"token_hash"}},
+	{name: "user_account_links", columns: columns(
+		"owner_user_id:TEXT", "linked_user_id:TEXT", "label:TEXT", "status:TEXT", "created_at:TEXT", "updated_at:TEXT",
+	), primaryKey: []string{"owner_user_id", "linked_user_id"}},
 }
 
 var requiredSchemaIndexes = []schemaIndex{
@@ -108,6 +118,9 @@ var requiredSchemaIndexes = []schemaIndex{
 	{table: "settings_recoveries", name: "settings_recoveries_recovered_at", columns: indexColumns("-recovered_at", "-id")},
 	{table: "media_videos", name: "media_videos_location_relative", unique: true, columns: indexColumns("location_path", "relative_path")},
 	{table: "media_videos", name: "media_videos_missing_name", columns: indexColumns("missing", "display_name", "id")},
+	{table: "user_accounts", name: "user_accounts_username_key", unique: true, columns: indexColumns("username_key")},
+	{table: "user_sessions", name: "user_sessions_user_expiry", columns: indexColumns("user_id", "expires_at")},
+	{table: "user_account_links", name: "user_account_links_owner_status", columns: indexColumns("owner_user_id", "status", "linked_user_id")},
 }
 
 var requiredSchemaForeignKeys = []schemaForeignKey{
@@ -122,6 +135,10 @@ var requiredSchemaForeignKeys = []schemaForeignKey{
 		parentColumn: "id",
 		onDelete:     "CASCADE",
 	},
+	{table: "user_sessions", column: "user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
+	{table: "user_sessions", column: "control_account_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "SET NULL"},
+	{table: "user_account_links", column: "owner_user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
+	{table: "user_account_links", column: "linked_user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
 }
 
 func (db *DB) validateSchema(ctx context.Context) error {

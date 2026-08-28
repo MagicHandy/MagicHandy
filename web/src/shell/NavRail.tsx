@@ -22,7 +22,7 @@ export function routeBase(hash: string): string {
   return LINKS.some((link) => link.base === candidate) ? candidate : "chat";
 }
 
-export function NavRail() {
+export function NavRail({ authenticationLocked = false }: { authenticationLocked?: boolean }) {
   const active = routeBase(useHashRoute());
   const { state } = useAppState();
   const owner = state?.settings?.device?.hsp_dispatch_owner ?? "cloud";
@@ -37,17 +37,17 @@ export function NavRail() {
         <span className="nav-brand-mark" aria-hidden="true">M</span>
         <span className="nav-brand-copy">
           <span className="nav-brand-name">{t("MagicHandy")}</span>
-          <span className="nav-brand-context">{t("local / {owner}", { owner: translateKnown(ownerLabel) })}</span>
+          <span className="nav-brand-context">{authenticationLocked ? t("sign-in required") : t("local / {owner}", { owner: translateKnown(ownerLabel) })}</span>
         </span>
       </div>
-      <div className="nav-links">
+      {!authenticationLocked && <div className="nav-links">
         {LINKS.map((l) => (
           <a key={l.base} className="nav-link" href={l.href} aria-label={translateKnown(l.label)} aria-current={active === l.base ? "page" : undefined}>
             <span className="icon"><l.Icon /></span>
             <span className="label">{translateKnown(l.label)}</span>
           </a>
         ))}
-      </div>
+      </div>}
       <div className="nav-spacer" />
       <StopButton className="nav-stop" />
     </nav>

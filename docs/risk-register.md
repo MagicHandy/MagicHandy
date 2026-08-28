@@ -987,14 +987,17 @@ saying "works on your phone".
 
 Mitigation:
 
-- treat localhost as the supported boundary; the app binds to 127.0.0.1 and
-  rejects wildcard, hostname, and LAN-IP `--addr` values while the local API has
-  no authentication
-- decide the LAN/mobile scope explicitly in Phase 13 (voice input) and record
-  the HTTPS/certificate decision in Phase 16's exposure decision doc
-- if LAN HTTPS is shipped, reuse the StrokeGPT lessons: generated local CA,
-  cert-helper flow for Android, exact-IP SANs, and docs that forbid
-  port-forwarding
+- keep localhost HTTP as the default boundary with no surprise login or
+  certificate requirement
+- allow LAN only as ADR 0017's atomic boundary: one exact private/link-local
+  address, TLS 1.2+, a currently valid matching IP SAN, an operator-trusted CA,
+  and at least one enabled backend account; reject wildcard, hostname, public,
+  plain-HTTP, and uninitialized-account configurations before serving
+- keep automatic local CA creation, renewal, client trust installation, and an
+  Android certificate helper out until a real mobile pass defines a supportable
+  lifecycle
+- retain exact same-origin/Host enforcement, login throttling, opaque secure
+  sessions, the controller lease, and authentication-independent Emergency Stop
 - never describe Bluetooth or voice features as LAN/mobile-capable before the
   secure-context story exists
 
@@ -1007,11 +1010,15 @@ Status 2026-07-09: Phase 13 records **localhost-only** microphone support.
 MagicHandy does not claim LAN/mobile voice input. HTTPS, local CA, exact-IP
 SANs, and Android certificate support remain a Phase 16 exposure decision.
 
-Status 2026-07-29: localhost-only is now enforced at startup. `localhost`,
-IPv4 loopback, and IPv6 loopback binds are accepted; wildcard and non-loopback
-binds fail before serving persona, lore, prompt-inspector, or other private API
-data. Any future LAN mode must replace this guard with authenticated HTTPS, not
-weaken it in isolation.
+Status 2026-08-28: Phase 20 and ADR 0017 implement the fail-closed backend
+foundation without changing the default. `localhost`, IPv4 loopback, and IPv6
+loopback HTTP remain available. An opt-in LAN listener requires an exact
+private/link-local IP, a valid certificate/key matching that IP, and an enabled
+account; every private route is authenticated, browser origins are exact, and
+expired sessions can still issue Stop. Wildcard/hostname/public/HTTP LAN binds
+fail before serving. Account GUI, automatic CA/trust lifecycle, and the real
+mobile exit run remain open, so MagicHandy still does not claim supported
+LAN/mobile microphone or Web Bluetooth behavior.
 
 ## R19: Datastore Migration And Budget Risk
 
@@ -1597,8 +1604,10 @@ Mitigation:
 - make uninstall data disposition explicit: recommend a bounded purge of the
   packaged `%APPDATA%\MagicHandy` root for clean reinstall, support explicit
   retention, and never infer or delete external/custom paths
-- keep packaged defaults on loopback and defer LAN/HTTPS and auto-update until
-  their authentication, signing, rollback, and motion-stop designs exist
+- keep packaged defaults on loopback; Phase 20's LAN HTTPS/account flags remain
+  explicit operator configuration outside the installer GUI until R18 mobile
+  trust/renewal evidence exists. Automatic update application remains deferred
+  until its signing, rollback, and motion-stop design exists
 - keep release discovery read-only and opt-out: query only the canonical GitHub
   release list, select the highest backend-compatible stable or progressive
   prerelease version, cache and conditionally revalidate it, construct the
@@ -1652,3 +1661,69 @@ unsigned and trusted Authenticode remains the production exit evidence.
 Alpha.12's portable-only GitHub Release was withdrawn and its immutable tag was
 retained. Alpha.13 is the corrected distribution and explicitly restores the
 three-artifact reviewed setup path without reusing or moving alpha.12.
+
+## R29: Authenticated LAN Session And Credential Risk
+
+Level: High
+
+Description:
+Opt-in LAN access moves private chat, personas, media metadata, model controls,
+device configuration, and physical commands beyond the operating-system user's
+loopback boundary. Weak passwords, credential stuffing, stolen cookies, an
+over-broad bind, a certificate mismatch, cross-origin requests, or confused
+controller/account authority could expose intimate data or command hardware.
+Adding login identities does not by itself make the shared installation safe
+for internet exposure or mutually untrusted tenants.
+
+Mitigation:
+
+- make LAN an atomic fail-closed startup mode: exact private/link-local address,
+  TLS 1.2+, valid matching SAN, and at least one enabled account; reject public,
+  wildcard, hostname, and plaintext bindings
+- store salted Argon2id hashes with bounded parameters and generic failures;
+  keep independent bounded per-IP and per-username login token buckets plus one
+  cancelable global hash slot so a request burst cannot multiply memory cost
+- enforce an eight-Unicode-character usability floor and a 1024-byte ceiling,
+  show exact confirmation feedback without exposing the value, and continue to
+  recommend a longer unique passphrase because the floor is not a strength claim
+- store only random-session digests, use host-only HttpOnly Secure
+  SameSite-Strict cookies, enforce idle/absolute/session-count bounds, and
+  revoke sessions after password changes or disabling
+- revoke the bootstrap session when protected first-run setup is saved so the
+  administrator password is exercised immediately; normal reconfiguration does
+  not silently revoke an independently authenticated session
+- keep browser scheme/host/port exact and retain the controller lease as a
+  second, separate authorization boundary; authentication never grants a new
+  motion path or bypasses stop-first takeover
+- leave the native host path picker loopback-only and keep raw passwords,
+  session tokens, and private-key contents out of logs, settings, diagnostics,
+  exports, and frontend storage
+- keep Emergency Stop authentication-independent while every start, retarget,
+  configuration write, private read, and takeover remains authenticated
+- keep signed-in identity, per-session linked control context, and the
+  controller lease separate; Self is the session default, inactive/unlinked
+  targets are rejected, and no current motion API consumes the context
+- bound profile images as decoded JPEGs, store them only under app-owned data,
+  authorize reads to the owner/admin/active link, and reconcile interrupted or
+  orphaned files at startup
+- document LAN-only scope and forbid port forwarding, tunnels, public binds,
+  reverse-proxy assumptions, and claims of per-user data isolation
+
+Exit evidence:
+
+- focused schema, credential, session, throttle, role, origin, startup, and Stop
+  tests pass under the race and pure-Go gates
+- a security review exercises CSRF, DNS/Host rebinding, JSON login/logout and
+  local bootstrap, brute-force throttling, cookie theft/replay, session revocation,
+  certificate expiration/renewal, and last-admin recovery
+- a real second-device LAN run proves authenticated read-only/controller
+  semantics and Stop without exposing the port outside the intended interface
+
+Status 2026-08-28: ADR 0017's backend foundation and ADR 0018's account GUI are
+implemented. Setup/Settings opt-in, React login/logout, session-expiry recovery,
+administrator management, profile-image bounds/visibility, and Self-by-default
+per-session linked context have focused automated coverage. Link invitations
+and motion grants, MFA/recovery, automatic certificate lifecycle, formal
+security review, race-suite evidence, and real second-device acceptance remain
+open. The feature must continue to be described as opt-in LAN support, not
+internet remote control or multi-tenant isolation.

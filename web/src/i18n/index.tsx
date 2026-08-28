@@ -84,12 +84,14 @@ const I18nContext = createContext<I18nContextValue>({
 export function I18nProvider({
   children,
   catalogLoader = loadCatalog,
+  fallbackLocale,
 }: {
   children: ReactNode;
   catalogLoader?: CatalogLoader;
+  fallbackLocale?: string;
 }) {
   const { state } = useAppState();
-  const requested = normalizeLocale(state?.settings?.ui?.locale);
+  const requested = normalizeLocale(state?.settings?.ui?.locale ?? fallbackLocale);
   const [loaded, setLoaded] = useState<{ locale: Locale; catalog: Catalog }>({
     locale: "en",
     catalog: english,
