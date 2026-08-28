@@ -83,6 +83,22 @@ describe("ChatPanel history", () => {
     expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled();
   });
 
+  it("addresses the active persona in the composer placeholder and keeps the default fallback", async () => {
+    getChatMessages.mockResolvedValue({
+      messages: [],
+      latest_seq: 0,
+      cursor: 0,
+      session_id: SESSION_ID,
+    });
+
+    const result = render(<ChatPanel sessionId={SESSION_ID} personaName="Hei" />);
+    const textbox = await screen.findByRole("textbox", { name: "Message" });
+    expect(textbox).toHaveAttribute("placeholder", "Message Hei…");
+
+    result.rerender(<ChatPanel sessionId={SESSION_ID} personaName="  " />);
+    expect(textbox).toHaveAttribute("placeholder", "Message MagicHandy…");
+  });
+
   it("retries a transient tail failure on the next state poll", async () => {
     getChatMessages
       .mockResolvedValueOnce({

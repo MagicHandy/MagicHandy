@@ -275,6 +275,9 @@ export interface ChatSession {
   // Which persona this conversation is held with, or absent for the global axis
   // values from Settings. It can name a persona that has since been deleted.
   persona_id?: string;
+  // Effective backend-resolved display name. Dangling and empty persona IDs
+  // deliberately resolve to the Settings-backed MagicHandy default.
+  persona_name?: string;
   active: boolean;
   message_count: number;
   latest_seq: number;

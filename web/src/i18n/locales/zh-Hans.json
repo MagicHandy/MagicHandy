@@ -646,7 +646,7 @@
   "Memory unavailable.": "内存不可用。",
   "Message": "消息",
   "Message MagicHandy — chat can start, adjust, and stop motion": "给 MagicHandy 发消息——聊天可以启动、调整和停止运动",
-  "Message MagicHandy…": "向 MagicHandy 发送消息…",
+  "Message {name}…": "向 {name} 发送消息…",
   "Microphone": "麦克风",
   "Microphone capture requires localhost or HTTPS in a supported browser.": "麦克风采集需要在受支持的浏览器中使用 localhost 或 HTTPS。",
   "Microphone level {percent} percent": "麦克风电平 {percent}%",

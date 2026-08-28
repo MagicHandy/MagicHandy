@@ -13,6 +13,7 @@ interface Props {
   onNew: () => void;
   onSave: (session: ChatSession) => void;
   onDelete: (session: ChatSession) => void;
+  onPersonaChanged?: () => void;
   assistantMood?: string;
 }
 
@@ -42,6 +43,7 @@ export function ChatTabs({
   onNew,
   onSave,
   onDelete,
+  onPersonaChanged,
   assistantMood,
 }: Props) {
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -129,7 +131,7 @@ export function ChatTabs({
   return (
     <header className="chat-tabs-bar">
       <h1 className="visually-hidden">{t("Chat")}</h1>
-      {activeId && <PersonaSwitcher sessionID={activeId} disabled={personaDisabled} />}
+      {activeId && <PersonaSwitcher sessionID={activeId} disabled={personaDisabled} onChanged={onPersonaChanged} />}
       {assistantMood && (
         <div className="chat-mood-readout" role="status" aria-label={t("Assistant mood: {mood}", { mood: translateKnown(assistantMood) })}>
           <span>{t("Mood")}</span>

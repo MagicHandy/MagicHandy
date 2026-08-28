@@ -39,6 +39,8 @@ type defaultPersonaView struct {
 	PromptSetID string `json:"prompt_set_id"`
 }
 
+const defaultPersonaName = "MagicHandy"
+
 // personasPayload is the whole page state in one response: the library, which
 // persona the active conversation is using, and the enum vocabularies.
 //
@@ -74,7 +76,7 @@ func (s *Server) personasPayload(ctx context.Context) (map[string]any, error) {
 	return map[string]any{
 		"personas": personas,
 		"default_persona": defaultPersonaView{
-			Name:        "MagicHandy",
+			Name:        defaultPersonaName,
 			Description: settings.LLM.PersonaDescription,
 			ChatVoice:   settings.LLM.ChatVoice,
 			PromptSetID: settings.LLM.PromptSet,

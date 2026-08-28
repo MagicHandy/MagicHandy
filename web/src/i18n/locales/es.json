@@ -646,7 +646,7 @@
   "Memory unavailable.": "Memoria no disponible.",
   "Message": "Mensaje",
   "Message MagicHandy — chat can start, adjust, and stop motion": "Escribe a MagicHandy: el chat puede iniciar, ajustar y detener el movimiento",
-  "Message MagicHandy…": "Escribe a MagicHandy…",
+  "Message {name}…": "Escribe a {name}…",
   "Microphone": "Micrófono",
   "Microphone capture requires localhost or HTTPS in a supported browser.": "La captura del micrófono requiere localhost o HTTPS en un navegador compatible.",
   "Microphone level {percent} percent": "Nivel de micrófono {percent} por ciento",
