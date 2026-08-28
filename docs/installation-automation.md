@@ -141,8 +141,8 @@ Still open:
 - curated checksum-pinned GGUF downloads and hardware-fit recommendations;
 - production code signing and publisher identity;
 - any automatic update implementation;
-- installer/account GUI and automatic CA/trust support for Phase 20's
-  operator-configured LAN HTTPS backend; and
+- automatic CA/trust support for Phase 20's operator-configured LAN HTTPS
+  backend (installer account opt-in and the account GUI are implemented); and
 - a Phase 15 legacy importer, so no migration step appears in setup.
 
 ## Acceptance

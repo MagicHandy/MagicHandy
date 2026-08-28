@@ -790,6 +790,10 @@ func main() {
     Assert-True -Condition ($innoSource.Contains('#define InstallerSolidCompression "no"')) -Message 'Windows setup payload compression should remain non-solid'
     Assert-True -Condition ($innoSource.Contains('DefaultDirName={autopf}\MagicHandy')) -Message 'Windows setup should default to Program Files'
     Assert-True -Condition ($innoSource.Contains('DisableDirPage=no')) -Message 'Windows setup should always expose the destination chooser'
+    Assert-True -Condition (-not [regex]::IsMatch($innoSource, '(?i)password|credential|user account')) -Message 'thin Inno Setup must never collect or transport account credentials'
+    $setupRouteSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'web\src\routes\SetupRoute.tsx'))
+    Assert-True -Condition ($setupRouteSource.Contains('Require an account and password')) -Message 'the embedded setup wizard should own the password-protection choice'
+    Assert-True -Condition ($setupRouteSource.Contains('await auth.bootstrap(')) -Message 'the embedded setup wizard should create the first account directly through the local auth API'
     Assert-True -Condition ($innoSource.Contains('Name: "desktopicon"')) -Message 'Windows setup should offer a desktop shortcut'
     Assert-True -Condition ($innoSource.Contains('Flags: unchecked')) -Message 'desktop shortcut should remain opt-in'
     Assert-True -Condition ($innoSource.Contains('Parameters: "-open-browser"; Description: "Open MagicHandy"')) -Message 'Windows setup should open the app and let backend first-run state select the setup route'

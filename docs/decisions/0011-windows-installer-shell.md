@@ -30,6 +30,10 @@ that requirement into a C++/CUDA compiler installation for packaged users.
    wizard arranges existing settings and API operations and remains re-runnable
    from Settings. It does not duplicate provider, model, migration, or consent
    logic in installer script.
+   Its Access step may create the first local administrator and enable password
+   protection through the loopback JSON API. Inno Setup never collects or
+   transports a password; no credential enters installer logs, arguments,
+   response files, registry state, or upgrade metadata.
 3. The portable zip and setup binary are built from the same versioned release
    payload. Inno Setup is a build-time dependency only.
 4. The wizard exposes checksum-pinned official llama.cpp CPU and CUDA bundles,
@@ -41,6 +45,9 @@ that requirement into a C++/CUDA compiler installation for packaged users.
    license, checksum verification, progress, cancellation, and atomic install.
 6. Production signing, auto-update, a WebView2 presentation shell, and LAN/HTTPS
    exposure remain separate Phase 16 decisions.
+7. Account creation and LAN exposure remain separate choices. Creating an
+   administrator protects local entry but does not bind a network interface or
+   provision/trust a certificate; ADRs 0017 and 0018 own those boundaries.
 
 ## Consequences
 

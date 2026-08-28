@@ -30,9 +30,10 @@ manager (#55) and managed llama.cpp source-build lifecycle (#56) landed ahead
 of Phase 16 and anchor its packaging story. The future Windows install binary
 remains a thin shell around the app's own first-run setup wizard (decision and
 design in `docs/gui-installer.md`). Phase 20 now provides an opt-in authenticated
-LAN HTTPS and backend-account foundation while preserving loopback HTTP
-defaults; automatic certificate trust, account GUI, and real mobile acceptance
-remain open. Of the two often-cited StrokeGPT-ReVibed parity milestones, LLM-driven
+LAN HTTPS, backend accounts, and the account GUI while preserving loopback HTTP
+defaults; automatic certificate trust, linked-account invitations/control
+grants, and real mobile acceptance remain open. Of the two often-cited
+StrokeGPT-ReVibed parity milestones, LLM-driven
 Chat Autopilot now has its initial implementation (conversation-aware LLM
 curation over the shared autonomous loop, with a visible deterministic planner
 fallback). Interactive chat motion now has live-provider evidence on the
@@ -105,7 +106,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0-M2 implemented; M3 hardware acceptance in progress** | #104 |
 | 19 | Personas — named presets over the personalization axes (design: `docs/persona-page.md`) | **Slices 1-7 and release-hardening review implemented; model-specific lore baselines, TTS voice, and preferred pattern tags remain open** | — |
-| 20 | Authenticated LAN HTTPS and backend user accounts (ADR 0017) | **Backend foundation implemented; account GUI, certificate automation, and real mobile acceptance open** | — |
+| 20 | Authenticated LAN HTTPS, backend user accounts, and account GUI (ADRs 0017–0018) | **Implemented; certificate automation, linked remote-control grants, formal review, and real mobile acceptance open** | — |
 | 16 | Windows packaging, first-run setup, release pipeline | **First unsigned alpha implemented; optional-runtime acceptance continues** | #55, #56, #61, #62, #64, #65 |
 | 17 | Final parity/default-app readiness review | Not started | — |
 
@@ -1774,7 +1775,8 @@ paths must remain available.
 
 Status 2026-08-02: **corrective alpha implemented; broader acceptance in progress**.
 The unsigned portable/setup artifacts, read-only PR packaging, tag-gated release
-publication, fresh-store detection, seven-step `#/setup` route, one optional
+publication, fresh-store detection, eight-step `#/setup` route with account
+access opt-in, one optional
 llama.cpp/Parakeet/TTS install-plan endpoint, and GUI-delegating source
 install/update scripts are implemented. Versioned builds also implement
 cached latest-stable GitHub release discovery, an automatic/manual preference,
@@ -2001,22 +2003,29 @@ guardrails (no transcoding, no media management, no new motion pathway).
 - transcoding or codec bundling (`.mkv` excluded), external players, media
   tagging/management, multi-axis funscript variants, network exposure
 
-# Phase 20: Authenticated LAN HTTPS And Backend Accounts
+# Phase 20: Authenticated LAN HTTPS, Accounts, And Account GUI
 
-## Suggested `/goal`
+## Goals
 
 `/goal Design and implement HTTPS support plus the backend foundation for user accounts in MagicHandy, without adding account GUI; update the architecture and security docs, preserve Stop/controller invariants, validate the pure-Go build, and leave a reviewable app.`
 
-Status: **backend foundation implemented 2026-08-28; account GUI, automatic
-certificate lifecycle, and real mobile acceptance remain open.** Design and
-operator workflow: [docs/https-and-accounts.md](docs/https-and-accounts.md).
-Decision: [ADR 0017](docs/decisions/0017-authenticated-lan-https.md).
+Foundation status: **implemented 2026-08-28.**
+
+`/goal Design and implement MagicHandy's user-account GUI and installer account setup flow on top of the published HTTPS/account backend: let installers opt into password-protected access and create the initial administrator safely; add backend-authoritative login, session, account-management, and logout UI without exposing secrets or blocking Emergency Stop; match the existing steel-azure visual system, update plans/docs/risks/localization, validate Go/frontend/installer gates, and leave a reviewable running app with a verified working LLM.`
+
+GUI status: **implemented 2026-08-28; automatic certificate
+lifecycle, link invitation/control grants, formal security review, and real
+mobile acceptance remain open.** Design and operator workflow:
+[docs/https-and-accounts.md](docs/https-and-accounts.md) and
+[docs/account-gui-design.md](docs/account-gui-design.md). Decisions:
+[ADR 0017](docs/decisions/0017-authenticated-lan-https.md) and
+[ADR 0018](docs/decisions/0018-account-gui-and-control-context.md).
 
 ## Objective
 
 Permit deliberate LAN secure-context use without weakening the trusted
 loopback default, and establish one backend-authoritative identity/session
-domain that a later GUI can consume. Accounts gate entry to the app; the
+domain consumed by the permanent GUI. Accounts gate entry to the app; the
 controller lease continues to gate which authenticated browser can command the
 device. Existing installation data remains shared rather than silently becoming
 multi-tenant.
@@ -2038,12 +2047,26 @@ multi-tenant.
 - one-time loopback bootstrap; JSON login/logout/status; administrator-only
   create/list/password/disable endpoints; password/disable session revocation;
   last-enabled-admin protection
+- creating the first account durably enables authentication on loopback and
+  flips the running middleware immediately; the public SPA shell renders JSON
+  login while private APIs stay protected, and the Basic bridge is retired
 - host-only HttpOnly SameSite-Strict sessions, `Secure`/`__Host-` on HTTPS,
   absolute and idle expiry, bounded per-user session count, and non-cacheable
   API/auth responses
-- transitional browser Basic prompt that exchanges valid credentials for the
-  same opaque server-side session, allowing the existing UI to run with no
-  account components
+- schema v19 profile-image metadata, directional pending/active/revoked account
+  links, and optional per-session control context; Self is the new-session
+  default and no current motion API consumes a linked context
+- browser-resized and server-validated private JPEG profile images with atomic
+  app-data files, cache stamps, visibility checks, reconciliation, and monogram
+  fallback
+- React login/logout and `401` expiry recovery; Settings > Access for own
+  profile/password plus administrator account create/reset/enable/disable
+- an eight-step installer-owned app wizard whose Access step defaults to local
+  no-login or creates the first administrator directly; Inno Setup never
+  receives credentials and account setup never enables LAN by itself
+- compact shell control-profile disclosure showing Self and backend-authorized
+  active linked accounts while remaining separate from login role and the
+  stop-first single-controller lease
 - exact same-origin/allowed-Host browser checks in LAN mode; the native server
   path picker remains loopback-only
 - authentication-independent `POST /api/motion/stop`, while all start,
@@ -2052,22 +2075,27 @@ multi-tenant.
 
 ## Validation
 
-- migration and schema-shape tests from v17 to v18
+- migration and schema-shape tests from v17 through v19
 - password hash/salt/parameter-bound, account lifecycle, role, session
   digest/expiry/revocation, and last-admin tests
-- HTTP bootstrap locality, cookie flags, Basic-to-session exchange, generic
-  login failure, throttling, role authorization, exact-origin, and expired-login
-  Stop tests
+- HTTP bootstrap locality, cookie flags, JSON login, generic login failure,
+  throttling, role authorization, exact-origin, profile visibility, linked
+  control-context rejection, and expired-login Stop tests
+- frontend localization/type checks and focused tests for setup bootstrap,
+  login, `401` recovery, profile rendering, account management, and per-session
+  control selection
 - startup matrix for loopback/LAN, wildcard/private/public addresses, missing
   account, incomplete TLS pair, expiration, and exact SAN
 - standard Go/frontend/pure-Go build gates and binary-size remeasurement
 
 ## Follow-up / Out Of Scope
 
-- React login, logout, session-expired, and account-administration screens
+- account-link invitation/acceptance/revocation UI and any linked context that
+  can affect motion or controller ownership
 - automatic local CA creation/trust, leaf renewal, Android/iOS trust helpers,
   DNS names, wildcard listening, reverse proxies, and internet exposure
-- password recovery, MFA, email identity, account deletion, audit-log UI, and
+- password recovery, MFA/passkeys, email identity, account deletion, role
+  mutation, audit-log UI, and
   per-user settings/history/library partitioning
 - claims of mobile voice or Bluetooth support before R18's real-device/browser
   acceptance matrix is recorded

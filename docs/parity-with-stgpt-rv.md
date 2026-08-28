@@ -68,7 +68,7 @@ Same vocabulary as the sweeps, plus one:
 | **Tip/base calibration (beyond stroke range)** | **Deferred** | STGPT-RV backlog #12; benefit unconfirmed vs current stroke-range behavior |
 | Model management + GPU/VRAM sizing | **Covered / exceeds** | Managed llama.cpp lifecycle + Ollama; curated download + VRAM-fit advice is Phase 16 |
 | Diagnostics + transport capture/trace | **Covered** | Diagnostics panel, trace export |
-| LAN / mobile HTTPS | **Backend implemented; acceptance open** | ADR 0017 / Phase 20 require exact private-address TLS and accounts; automatic CA trust, account GUI, and real mobile evidence remain R18 |
+| LAN / mobile HTTPS | **Backend + account GUI implemented; acceptance open** | ADRs 0017–0018 / Phase 20 require exact private-address TLS and accounts and provide permanent login/profile/admin UI; automatic CA trust and real mobile evidence remain R18 |
 | **Migration/import from STGPT-RV** | **Undecided** | See below and Phase 15 |
 | Story Mode (scripted/voiced scenes) | **Deferred** | STGPT-RV backlog #15; net-new, depends on reliable voice + arrangement |
 | Single-operator local app (no required account/tracking) | **Covered** | Loopback HTTP remains the default; accounts are opt-in locally and mandatory only for LAN |

@@ -14,6 +14,17 @@ vi.mock("./state/app-state", () => ({
   useAppState: () => ({ state: app.state, startupError: "", refresh: app.refresh, readOnly: false }),
 }));
 
+vi.mock("./state/auth", () => ({
+  useAuth: () => ({
+    status: { initialized: false, authentication_required: false, authenticated: false, account: null, control_identities: null },
+    loading: false,
+    error: "",
+    refresh: vi.fn(),
+    logout: vi.fn(),
+    selectControlIdentity: vi.fn(),
+  }),
+}));
+
 vi.mock("./shell/AppShell", () => ({
   AppShell: ({ children }: { children: ReactNode }) => <main id="workspace">{children}</main>,
 }));

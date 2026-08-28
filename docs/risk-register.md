@@ -1694,6 +1694,12 @@ Mitigation:
   exports, and frontend storage
 - keep Emergency Stop authentication-independent while every start, retarget,
   configuration write, private read, and takeover remains authenticated
+- keep signed-in identity, per-session linked control context, and the
+  controller lease separate; Self is the session default, inactive/unlinked
+  targets are rejected, and no current motion API consumes the context
+- bound profile images as decoded JPEGs, store them only under app-owned data,
+  authorize reads to the owner/admin/active link, and reconcile interrupted or
+  orphaned files at startup
 - document LAN-only scope and forbid port forwarding, tunnels, public binds,
   reverse-proxy assumptions, and claims of per-user data isolation
 
@@ -1701,14 +1707,17 @@ Exit evidence:
 
 - focused schema, credential, session, throttle, role, origin, startup, and Stop
   tests pass under the race and pure-Go gates
-- a security review exercises CSRF, DNS/Host rebinding, Basic-to-session
-  exchange, brute-force throttling, cookie theft/replay, session revocation,
+- a security review exercises CSRF, DNS/Host rebinding, JSON login/logout and
+  local bootstrap, brute-force throttling, cookie theft/replay, session revocation,
   certificate expiration/renewal, and last-admin recovery
 - a real second-device LAN run proves authenticated read-only/controller
   semantics and Stop without exposing the port outside the intended interface
 
-Status 2026-08-28: ADR 0017's backend foundation and automated focused tests
-are implemented. Account GUI, MFA/recovery, automatic certificate lifecycle,
-formal security review, race-suite evidence, and real second-device acceptance
-remain open. The feature must continue to be described as opt-in LAN support,
-not internet remote control or multi-tenant isolation.
+Status 2026-08-28: ADR 0017's backend foundation and ADR 0018's account GUI are
+implemented. Setup/Settings opt-in, React login/logout, session-expiry recovery,
+administrator management, profile-image bounds/visibility, and Self-by-default
+per-session linked context have focused automated coverage. Link invitations
+and motion grants, MFA/recovery, automatic certificate lifecycle, formal
+security review, race-suite evidence, and real second-device acceptance remain
+open. The feature must continue to be described as opt-in LAN support, not
+internet remote control or multi-tenant isolation.

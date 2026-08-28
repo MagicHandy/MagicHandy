@@ -6,8 +6,21 @@ import { useAppState } from "../state/app-state";
 import { VoicePlaybackProvider } from "../state/voice-playback";
 import { NavRail } from "./NavRail";
 import { StatusBar } from "./StatusBar";
+import type { AuthenticationStatus } from "../api/types";
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({
+  children,
+  authenticationLocked = false,
+  authenticationStatus = null,
+  onLogout,
+  onSelectControlIdentity,
+}: {
+  children: ReactNode;
+  authenticationLocked?: boolean;
+  authenticationStatus?: AuthenticationStatus | null;
+  onLogout?: () => Promise<void>;
+  onSelectControlIdentity?: (accountID: string) => Promise<void>;
+}) {
   const { backendOnline, state } = useAppState();
   const { loadError, requestedLocale, retry } = useI18n();
   const requestedLanguage = LOCALE_OPTIONS.find((option) => option.value === requestedLocale)?.label
@@ -15,8 +28,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <VoicePlaybackProvider>
       <div className="app-shell">
-        <NavRail />
-        <StatusBar />
+        <NavRail authenticationLocked={authenticationLocked} />
+        <StatusBar
+          authenticationLocked={authenticationLocked}
+          authenticationStatus={authenticationStatus}
+          onLogout={onLogout}
+          onSelectControlIdentity={onSelectControlIdentity}
+        />
         <main className="workspace" id="workspace">
           {!backendOnline && state && (
             <div className="backend-banner" role="alert">

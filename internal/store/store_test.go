@@ -854,7 +854,7 @@ func assertRockfirePersonaPreserved(t *testing.T, db *sql.DB) {
 	for _, table := range []string{
 		"messages", "client_cursors", "patterns", "programs", "pattern_feedback",
 		"llm_models", "personas", "personas_rockfire_legacy", "persona_lore",
-		"user_accounts", "user_sessions",
+		"user_accounts", "user_sessions", "user_account_links",
 	} {
 		assertTableExists(t, db, table)
 	}

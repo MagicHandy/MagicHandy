@@ -82,12 +82,11 @@ func resolveServerSecurity(address, certificatePath, privateKeyPath string, requ
 	if !loopback && enabledAccounts == 0 {
 		return serverSecurity{}, fmt.Errorf("at least one enabled user account is required for non-loopback listen address %q", address)
 	}
-	if requireAuth && enabledAccounts == 0 && !loopback {
-		return serverSecurity{}, errors.New("authentication is required but no enabled user account exists")
-	}
-
 	result := serverSecurity{
-		AuthenticationRequired: requireAuth || !loopback,
+		// Creating the first account is the durable local opt-in. An existing
+		// account must never become an inert credential merely because the next
+		// launch omitted -require-auth.
+		AuthenticationRequired: requireAuth || !loopback || enabledAccounts > 0,
 		BaseURL:                "http://" + address,
 	}
 	if loopback {

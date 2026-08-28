@@ -1,0 +1,475 @@
+/* Account access uses the existing graphite/steel-azure instrument language.
+   Emergency Stop remains in the shell and no identity surface uses go green. */
+
+.auth-workspace {
+  width: min(100%, 620px);
+  margin: clamp(12px, 5vh, 52px) auto;
+}
+
+.auth-panel {
+  display: grid;
+  gap: 18px;
+  padding: clamp(18px, 3vw, 28px);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.auth-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.auth-head h1,
+.auth-head p,
+.auth-intro,
+.auth-safety-note strong,
+.auth-safety-note span,
+.auth-notice strong,
+.auth-notice span {
+  margin: 0;
+}
+
+.auth-head h1 {
+  font-size: 1.35rem;
+}
+
+.auth-mark {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.auth-intro,
+.auth-safety-note,
+.auth-notice {
+  color: var(--muted);
+}
+
+.auth-form,
+.account-form {
+  display: grid;
+  gap: 12px;
+}
+
+.auth-submit {
+  justify-self: start;
+}
+
+.auth-safety-note,
+.auth-notice {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-inset);
+}
+
+.auth-safety-note strong,
+.auth-notice strong {
+  color: var(--text);
+}
+
+.auth-error {
+  color: var(--danger);
+}
+
+.account-avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.account-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.account-avatar-small {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+  font-size: 0.7rem;
+}
+
+.control-identity {
+  position: relative;
+  z-index: 24;
+  flex: 0 0 auto;
+}
+
+.control-identity-trigger {
+  display: grid;
+  min-width: 132px;
+  height: 38px;
+  grid-template-columns: 28px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+
+.control-identity-trigger:hover,
+.control-identity-trigger[aria-expanded="true"] {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.control-identity-trigger > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+}
+
+.control-identity-trigger small,
+.control-identity-trigger strong {
+  overflow: hidden;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-identity-trigger small {
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 400;
+}
+
+.control-identity-trigger strong {
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.control-identity-trigger > svg {
+  transition: transform 0.15s ease;
+}
+
+.control-identity-trigger > svg.chevron-open {
+  transform: rotate(180deg);
+}
+
+.control-identity-panel {
+  position: fixed;
+  top: calc(var(--status-h) + 8px);
+  right: clamp(8px, 2.4vw, 22px);
+  width: min(360px, calc(100vw - 16px));
+  max-height: calc(100vh - var(--status-h) - 16px);
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.control-identity-panel > header,
+.control-identity-panel > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.control-identity-panel > header > span {
+  display: grid;
+  min-width: 0;
+}
+
+.control-identity-panel header small,
+.control-identity-panel footer,
+.control-identity-note {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.control-identity-panel > footer {
+  border-top: 1px solid var(--line);
+}
+
+.control-identity-panel > footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.control-identity-options {
+  display: grid;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.control-identity-options > button {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 8px;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.control-identity-options > button:last-child {
+  border-bottom: 0;
+}
+
+.control-identity-options > button:hover:not(:disabled),
+.control-identity-options > button[aria-checked="true"] {
+  background: var(--accent-tint);
+}
+
+.control-identity-options > button > span:nth-child(2) {
+  display: grid;
+  min-width: 0;
+}
+
+.control-identity-options small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.control-identity-note {
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.settings-grid.two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.account-profile-editor {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.account-profile-preview {
+  position: relative;
+  display: block;
+  width: 112px;
+  height: 112px;
+  flex: 0 0 112px;
+}
+
+.account-profile-preview > .account-avatar {
+  width: 100%;
+  height: 100%;
+  font-size: 2rem;
+}
+
+.account-profile-actions {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  display: flex;
+  gap: 4px;
+}
+
+.account-profile-actions .icon-button {
+  width: 32px;
+  height: 32px;
+  background: var(--surface-3);
+}
+
+.account-profile-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.account-profile-copy > strong {
+  font-size: 1rem;
+}
+
+.account-profile-copy > span,
+.account-profile-copy > small {
+  color: var(--muted);
+}
+
+.account-create-form {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.account-create-form h4 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.account-list {
+  display: grid;
+  border-block: 1px solid var(--line);
+}
+
+.account-row {
+  border-bottom: 1px solid var(--line);
+}
+
+.account-row:last-child {
+  border-bottom: 0;
+}
+
+.account-row-summary {
+  display: grid;
+  grid-template-columns: 36px minmax(120px, 1fr) auto minmax(130px, auto) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.account-row-name {
+  display: grid;
+}
+
+.account-row-name small,
+.account-row-last,
+.account-row-status {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.account-row-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.account-reset-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 10px 0 14px 46px;
+}
+
+.linked-profile-list {
+  display: grid;
+}
+
+.linked-profile-list > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.linked-profile-list > div:last-child {
+  border-bottom: 0;
+}
+
+.linked-profile-list span {
+  display: grid;
+}
+
+.linked-profile-list small {
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .account-row-summary {
+    grid-template-columns: 36px minmax(120px, 1fr) auto;
+  }
+
+  .account-row-last,
+  .account-row-summary > .row-actions {
+    grid-column: 2 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .control-identity-trigger {
+    min-width: 38px;
+    width: 38px;
+    grid-template-columns: 28px;
+    padding-inline: 4px;
+  }
+
+  .control-identity-trigger > span:nth-child(2),
+  .control-identity-trigger > svg {
+    display: none;
+  }
+
+  .settings-grid.two,
+  .account-reset-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-reset-form {
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .auth-workspace {
+    margin-block: 8px;
+  }
+
+  .auth-panel {
+    padding: 16px;
+  }
+
+  .account-profile-editor {
+    align-items: flex-start;
+  }
+
+  .account-profile-preview {
+    width: 88px;
+    height: 88px;
+    flex-basis: 88px;
+  }
+
+  .account-row-summary {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .account-row-status,
+  .account-row-last,
+  .account-row-summary > .row-actions {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 860px) {
+  .control-identity-panel {
+    right: 8px;
+    max-height: calc(100vh - var(--status-h) - 124px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control-identity-trigger > svg {
+    transition: none;
+  }
+}

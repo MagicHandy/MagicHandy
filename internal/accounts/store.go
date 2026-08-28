@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	appstore "github.com/mapledaemon/MagicHandy/internal/store"
@@ -53,20 +54,33 @@ var (
 
 // Account is the non-secret public view of a user identity.
 type Account struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	Role        string `json:"role"`
-	Disabled    bool   `json:"disabled"`
-	LastLoginAt string `json:"last_login_at,omitempty"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID               string `json:"id"`
+	Username         string `json:"username"`
+	Role             string `json:"role"`
+	Disabled         bool   `json:"disabled"`
+	HasProfileImage  bool   `json:"has_profile_image"`
+	ProfileUpdatedAt string `json:"profile_updated_at,omitempty"`
+	LastLoginAt      string `json:"last_login_at,omitempty"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
 }
 
 // Session is an authenticated account plus the server-enforced absolute
 // expiration. The raw bearer token is returned only by NewSession.
 type Session struct {
-	Account   Account   `json:"account"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Account          Account   `json:"account"`
+	ControlAccountID string    `json:"control_account_id"`
+	ExpiresAt        time.Time `json:"expires_at"`
+}
+
+// ControlIdentity is an account this login session may represent in the
+// shell's control-context selector. It never changes authentication role or
+// grants controller ownership.
+type ControlIdentity struct {
+	Account      Account `json:"account"`
+	Relationship string  `json:"relationship"`
+	Label        string  `json:"label"`
+	Selected     bool    `json:"selected"`
 }
 
 // Store provides account operations over the process-owned datastore.
@@ -77,6 +91,7 @@ type Store struct {
 	idleLimit    time.Duration
 	randomBytes  func([]byte) error
 	passwordSlot chan struct{}
+	profileMu    sync.RWMutex
 }
 
 // New creates the account domain over an existing process-owned datastore.
@@ -84,7 +99,7 @@ func New(db *appstore.DB) (*Store, error) {
 	if db == nil {
 		return nil, errors.New("account datastore is required")
 	}
-	return &Store{
+	store := &Store{
 		db:        db,
 		now:       func() time.Time { return time.Now().UTC() },
 		lifetime:  DefaultSessionLifetime,
@@ -96,7 +111,11 @@ func New(db *appstore.DB) (*Store, error) {
 			_, err := rand.Read(buffer)
 			return err
 		},
-	}, nil
+	}
+	if err := store.reconcileProfileImages(context.Background()); err != nil {
+		return nil, err
+	}
+	return store, nil
 }
 
 // Initialized reports whether any account exists, including disabled rows.
@@ -171,8 +190,8 @@ func (s *Store) create(ctx context.Context, username, password, role string, boo
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO user_accounts(
 				id, username, username_key, role, password_hash, disabled,
-				last_login_at, created_at, updated_at
-			) VALUES(?, ?, ?, ?, ?, 0, '', ?, ?)
+				last_login_at, created_at, updated_at, profile_updated_at
+			) VALUES(?, ?, ?, ?, ?, 0, '', ?, ?, '')
 		`, id, username, usernameKey, role, passwordHash, now, now)
 		return err
 	})
@@ -186,7 +205,7 @@ func (s *Store) create(ctx context.Context, username, password, role string, boo
 // package, even to another backend package.
 func (s *Store) List(ctx context.Context) ([]Account, error) {
 	rows, err := s.db.SQL().QueryContext(ctx, `
-		SELECT id, username, role, disabled, last_login_at, created_at, updated_at
+		SELECT id, username, role, disabled, last_login_at, created_at, updated_at, profile_updated_at
 		FROM user_accounts
 		ORDER BY username_key, id
 	`)
@@ -218,14 +237,15 @@ func (s *Store) Authenticate(ctx context.Context, username, password string) (Ac
 	if found {
 		var disabled int
 		err := s.db.SQL().QueryRowContext(ctx, `
-			SELECT id, username, role, disabled, last_login_at, created_at, updated_at, password_hash
+			SELECT id, username, role, disabled, last_login_at, created_at, updated_at, profile_updated_at, password_hash
 			FROM user_accounts
 			WHERE username_key = ?
 		`, usernameKey).Scan(
 			&account.ID, &account.Username, &account.Role, &disabled,
-			&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt, &encoded,
+			&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt, &account.ProfileUpdatedAt, &encoded,
 		)
 		account.Disabled = disabled != 0
+		account.HasProfileImage = account.ProfileUpdatedAt != ""
 		if errors.Is(err, sql.ErrNoRows) {
 			found = false
 		} else if err != nil {
@@ -284,11 +304,11 @@ func (s *Store) NewSession(ctx context.Context, accountID string) (string, Sessi
 	err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 		var disabled int
 		if err := tx.QueryRowContext(ctx, `
-			SELECT id, username, role, disabled, last_login_at, created_at, updated_at
+			SELECT id, username, role, disabled, last_login_at, created_at, updated_at, profile_updated_at
 			FROM user_accounts WHERE id = ?
 		`, accountID).Scan(
 			&account.ID, &account.Username, &account.Role, &disabled,
-			&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt,
+			&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt, &account.ProfileUpdatedAt,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrNotFound
@@ -296,6 +316,7 @@ func (s *Store) NewSession(ctx context.Context, accountID string) (string, Sessi
 			return err
 		}
 		account.Disabled = disabled != 0
+		account.HasProfileImage = account.ProfileUpdatedAt != ""
 		if account.Disabled {
 			return ErrInvalidCredentials
 		}
@@ -319,7 +340,7 @@ func (s *Store) NewSession(ctx context.Context, accountID string) (string, Sessi
 	if err != nil {
 		return "", Session{}, fmt.Errorf("create user session: %w", err)
 	}
-	return token, Session{Account: account, ExpiresAt: expires}, nil
+	return token, Session{Account: account, ControlAccountID: account.ID, ExpiresAt: expires}, nil
 }
 
 // ResolveSession authenticates a token and advances its idle timestamp at most
@@ -330,17 +351,29 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 	}
 	var account Account
 	var disabled int
-	var lastSeenRaw, expiresRaw string
+	var lastSeenRaw, expiresRaw, controlAccountID string
 	err := s.db.SQL().QueryRowContext(ctx, `
 		SELECT a.id, a.username, a.role, a.disabled, a.last_login_at, a.created_at, a.updated_at,
-		       s.last_seen_at, s.expires_at
+		       a.profile_updated_at, s.last_seen_at, s.expires_at,
+		       CASE
+		         WHEN EXISTS (
+		           SELECT 1
+		           FROM user_account_links l
+		           JOIN user_accounts target ON target.id = l.linked_user_id
+		           WHERE l.owner_user_id = s.user_id
+		             AND l.linked_user_id = s.control_account_id
+		             AND l.status = 'active'
+		             AND target.disabled = 0
+		         ) THEN s.control_account_id
+		         ELSE ''
+		       END
 		FROM user_sessions s
 		JOIN user_accounts a ON a.id = s.user_id
 		WHERE s.token_hash = ?
 	`, hashSessionToken(token)).Scan(
 		&account.ID, &account.Username, &account.Role, &disabled,
 		&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt,
-		&lastSeenRaw, &expiresRaw,
+		&account.ProfileUpdatedAt, &lastSeenRaw, &expiresRaw, &controlAccountID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrInvalidSession
@@ -349,6 +382,7 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 		return Session{}, fmt.Errorf("read user session: %w", err)
 	}
 	account.Disabled = disabled != 0
+	account.HasProfileImage = account.ProfileUpdatedAt != ""
 	lastSeen, lastSeenErr := time.Parse(time.RFC3339Nano, lastSeenRaw)
 	expires, expiresErr := time.Parse(time.RFC3339Nano, expiresRaw)
 	now := s.now()
@@ -377,7 +411,10 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 			return Session{}, err
 		}
 	}
-	return Session{Account: account, ExpiresAt: expires}, nil
+	if controlAccountID == "" {
+		controlAccountID = account.ID
+	}
+	return Session{Account: account, ControlAccountID: controlAccountID, ExpiresAt: expires}, nil
 }
 
 // RevokeSession invalidates one opaque bearer token. It is idempotent.
@@ -520,9 +557,10 @@ func scanAccount(row rowScanner) (Account, error) {
 	var disabled int
 	err := row.Scan(
 		&account.ID, &account.Username, &account.Role, &disabled,
-		&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt,
+		&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt, &account.ProfileUpdatedAt,
 	)
 	account.Disabled = disabled != 0
+	account.HasProfileImage = account.ProfileUpdatedAt != ""
 	return account, err
 }
 

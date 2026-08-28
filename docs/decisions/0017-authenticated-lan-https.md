@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted. The backend foundation is implemented; account GUI, automatic
-certificate authority management, and real mobile-browser acceptance remain
-open follow-up work.
+Accepted. The backend foundation and account GUI are implemented; automatic
+certificate authority management and real mobile-browser acceptance remain
+open follow-up work. [ADR 0018](0018-account-gui-and-control-context.md)
+records the permanent login, installer, profile-image, and linked-session UI.
 
 ## Context
 
@@ -73,6 +74,11 @@ Schema v18 adds two tables to the one process-owned SQLite database:
 - `user_sessions`: only a SHA-256 digest of a 256-bit random token, account
   foreign key, last-seen timestamp, and absolute expiration.
 
+Schema v19 adds bounded profile-image metadata, an optional per-session control
+context, and directional account-link rows. Those additions do not partition
+shared application data or grant controller authority; ADR 0018 defines their
+scope.
+
 Passwords use Argon2id PHC strings with unique 16-byte salts and the OWASP
 minimum profile of 19 MiB memory, two passes, and one lane. Inputs are 12–1024
 bytes. Hash parameters are self-describing for future upgrades but are bounded
@@ -87,9 +93,10 @@ The last enabled administrator cannot be disabled.
 
 ### HTTP boundary
 
-Backend-only routes provide one-time loopback bootstrap, login/logout, session
-status, and administrator-only list/create/password/disable operations. No
-account controls are added to the React app in this slice.
+Routes provide one-time loopback bootstrap, login/logout, current-password
+change, session status/control context, profile-image operations, and
+administrator-only list/create/password/disable operations. The React app
+consumes those contracts without receiving the opaque session token.
 
 An authenticated session uses a host-only, path-rooted, `HttpOnly`,
 `SameSite=Strict` cookie; HTTPS uses the `__Host-` prefix and `Secure`. Login
@@ -100,15 +107,11 @@ Authentication errors do not disclose whether a username exists or is disabled.
 API responses are non-cacheable and HTTPS responses include HSTS plus narrow
 frame, referrer, MIME-sniffing, and CSP protections.
 
-Until the account GUI exists, HTTP Basic authentication is a transitional
-browser bridge: the browser's native credential prompt can authenticate the
-first protected navigation, after which MagicHandy issues the same opaque
-server-side session cookie. Password verification therefore does not run on
-every UI poll. The JSON login endpoint is the permanent backend contract; the
-Basic bridge may be retired after the GUI owns login.
-Native Basic credentials can remain cached by a browser independently of the
-opaque cookie, so closing that browser is the reliable bridge-mode logout; this
-is another reason the bridge is not the final account UX.
+The embedded SPA shell may load before authentication so React can render the
+login boundary. Private APIs remain protected. JSON login is the only password
+exchange and issues the opaque server-side session cookie; the transitional
+HTTP Basic bridge is retired so logout cannot be defeated by a browser's
+separate native credential cache.
 
 Allowed browser origins remain exact scheme/host/port matches. In LAN mode the
 Host must also match the configured listen IP. The native host-path picker
@@ -136,6 +139,8 @@ Positive:
 - The local install path and its trusted-loopback behavior do not change.
 - Account data uses the existing database lifecycle and serialized writer;
   there is no second store or frontend source of truth.
+- Users can opt into loopback password protection during in-app setup or later
+  in Settings without enabling LAN access.
 - Passwords, raw session tokens, and TLS private-key contents never enter
   settings readback, logs, diagnostics, traces, or exports.
 - Authentication cannot bypass the controller lease, shared motion engine,
@@ -145,8 +150,9 @@ Negative and open:
 
 - Operators must obtain and trust a certificate whose SAN matches the current
   LAN IP. DHCP address changes require a new certificate and launch address.
-- The browser-native Basic prompt is intentionally temporary and has limited
-  UX; there is no password recovery, MFA, email identity, or account GUI.
+- There is no password recovery, MFA, email identity, account deletion, or
+  per-user data partitioning. Linked-account invitations and grants are not
+  implemented.
 - Real phone/tablet secure-context behavior is not claimed until a trusted-CA
   run covers login, reconnect, microphone/Bluetooth capability, Stop, and
   certificate renewal.
@@ -177,8 +183,8 @@ Negative and open:
 
 ## Follow-up Gate
 
-Account GUI work may consume only these backend routes; it must not duplicate
-password or session state in React. Certificate automation requires its own
-review covering key storage, renewal, removal, mobile trust, and installer
-behavior. Internet exposure or per-user data partitioning requires another ADR
-and threat model.
+Certificate automation requires its own review covering key storage, renewal,
+removal, mobile trust, and installer behavior. Any linked control context that
+affects motion must pass ADR 0018's invitation, consent, revocation, controller,
+Stop, and audit gate. Internet exposure or per-user data partitioning requires
+another ADR and threat model.

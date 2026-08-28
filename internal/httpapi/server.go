@@ -512,7 +512,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 			"version":        settings.Version,
 		},
 		"features": map[string]string{
-			"accounts":  "backend_api_no_gui",
+			"accounts":  "sessions_profiles_and_gui",
 			"chat":      "local_llm_streaming",
 			"library":   "patterns_programs_authoring_media",
 			"motion":    "manual",
@@ -548,7 +548,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			"legacy_archived_path":     status.LegacyArchivedPath,
 		},
 		"features": map[string]string{
-			"accounts":  "backend_api_no_gui",
+			"accounts":  "sessions_profiles_and_gui",
 			"chat":      "local_llm_streaming",
 			"library":   "patterns_programs_authoring_media",
 			"motion":    "manual",

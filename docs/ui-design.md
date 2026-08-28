@@ -46,7 +46,8 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > [ui-navigation-redesign.md](ui-navigation-redesign.md): a nav rail
 > (Chat / Preset Modes / Pattern Library / Videos / Settings) with **Stop pinned to
 > the rail footer on every page**, a compact status-led top bar (dot+text
-> readouts, stopwatch, mini visualizer, and the connection disclosure), and
+> readouts, stopwatch, mini visualizer, account control context, notifications,
+> and the connection disclosure), and
 > workspaces as routed pages under a hash router. The shell-owned connection
 > manager stays available on every route and owns live provider actions plus
 > Handy model calibration, speed/stroke limits, and direction. Chat keeps Autopilot, motion style, and the
@@ -372,9 +373,9 @@ hoc per-widget colors) are not.
   <https://code.visualstudio.com/docs/editing/userinterface#_configure-notification-behavior>,
   <https://support.microsoft.com/en-us/windows/experience/notifications-and-do-not-disturb-in-windows>,
   and <https://slack.com/help/articles/201355156-Configure-your-Slack-notifications>.
-- The notification and connection disclosures occupy the top bar and are
-  mutually exclusive: opening either closes the other. Their panels link to the
-  owning Settings route and close after navigation.
+- The account-context, notification, and connection disclosures occupy the top
+  bar and are mutually exclusive: opening one closes the others. Their panels
+  link to the owning Settings route and close after navigation.
 - Errors state what failed and what to do, surfacing safe backend/transport
   detail (path, status) per the diagnostics contract, not a generic "error".
 
@@ -401,6 +402,14 @@ hoc per-widget colors) are not.
 
 ## Connection And Single-Controller
 
+- An authenticated session shows a compact account image/monogram and
+  **Control profile** selector in the top bar. Self is the default. Backend-
+  authorized linked accounts may appear, but selection is session attribution
+  only: it never changes the signed-in role, impersonates another account,
+  transfers the controller lease, or constructs a motion payload. This narrow
+  non-modal disclosure is the explicit shell-context exception to the general
+  rule that motion controls do not belong in the top bar. See
+  [account-gui-design.md](account-gui-design.md).
 - Connection/transport state is always visible in the floating manager trigger.
   Expanding it exposes actions for only the saved dispatch owner: Cloud REST
   Check plus Connect/Disconnect, browser-owned Bluetooth session, or Intiface

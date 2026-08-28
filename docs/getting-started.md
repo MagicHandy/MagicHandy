@@ -229,10 +229,11 @@ go run ./cmd/magichandy
 - The app serves its UI at <http://127.0.0.1:49717>; pass
   `-addr 127.0.0.1:PORT` to change the port.
 - Opt-in LAN use requires an exact private IP, a matching trusted certificate,
-  and a previously bootstrapped account. It adds no account GUI yet; follow
-  [HTTPS and backend accounts](https-and-accounts.md) for the one-time local
-  bootstrap, `-tls-cert` / `-tls-key` flags, native browser login bridge, and
-  security boundaries. Wildcard/public/plain-HTTP LAN listeners are rejected.
+  and a previously created account. Setup and Settings > Access can create the
+  first local administrator and enable password protection. Follow
+  [HTTPS and accounts](https-and-accounts.md) for the `-tls-cert` / `-tls-key`
+  flags, React login, and security boundaries. Wildcard/public/plain-HTTP LAN
+  listeners are rejected; account setup alone never enables LAN.
 - Your data lives under your OS config directory
   (`MagicHandy/magichandy.db`); pass `-data-dir .\.local-data` to keep it
   somewhere else.

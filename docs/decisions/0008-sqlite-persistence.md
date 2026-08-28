@@ -3,7 +3,8 @@
 ## Status
 
 Accepted for the rewrite plan. Implemented in Phase 11B; extended through
-schema v18 by the backend account/session foundation.
+schema v19 by the account GUI, profile-image metadata, and session control
+context.
 
 ## Context
 
@@ -82,6 +83,11 @@ only their durability substrate moves from JSON files to DB tables.
     `user_sessions`. Passwords are Argon2id hashes; only SHA-256 digests of
     already-random session tokens are stored. Both remain private credentials
     and are excluded from settings, diagnostics, and exports.
+  - (landed with the account GUI, schema v19) directional
+    `user_account_links`, account profile cache timestamps, and an optional
+    per-session linked control account. Link rows are authorization state for a
+    future invitation flow; the migration creates no relationship implicitly.
+    Profile JPEG bytes remain app-owned files, not database blobs.
 - **Settings stays a versioned document**, stored as one row in a `settings`
   document/kv table rather than exploded into columns. This preserves the
   existing `Settings` struct, `NormalizeSettings`, the migration hooks, and the
@@ -197,8 +203,13 @@ Schemas v14-v17 add paired-video calibration/media-tooling metadata and the
 canonical persona/lore tables described by their feature documents. Schema v18
 adds `user_accounts` and `user_sessions` for ADR 0017. Usernames are indexed by
 a case-insensitive normalized key, sessions cascade with their account, and
-only password hashes and random-token digests enter SQLite. Raw passwords and
-session tokens are never persisted.
+only password hashes and random-token digests enter SQLite. Schema v19 adds
+`user_accounts.profile_updated_at`, nullable
+`user_sessions.control_account_id`, and directional `user_account_links` with
+pending/active/revoked state. A selected linked context is scoped to one login
+session and does not change the authenticated principal or controller lease.
+Raw passwords, raw session tokens, and profile bytes are never persisted in
+SQLite.
 
 `messages.diagnostics_json` stores only bounded run provenance needed by the
 assistant-avatar tooltip and continuity: source, provider/model identifiers,

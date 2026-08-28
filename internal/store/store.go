@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 18
+	CurrentSchemaVersion = 19
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -535,6 +535,52 @@ var migrations = [][]string{
 		`CREATE INDEX IF NOT EXISTS user_sessions_user_expiry
 			ON user_sessions(user_id, expires_at)`,
 	},
+	// v18 -> v19: account profile images and per-session control identity.
+	// Active account links are directional authorization records for a future
+	// pairing flow; this migration does not grant or infer any links.
+	{`SELECT 1`},
+}
+
+func migrateAccountProfiles(ctx context.Context, tx *sql.Tx) error {
+	profileColumn, err := columnExists(ctx, tx, "user_accounts", "profile_updated_at")
+	if err != nil {
+		return err
+	}
+	if !profileColumn {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE user_accounts
+			ADD COLUMN profile_updated_at TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add account profile timestamp: %w", err)
+		}
+	}
+	controlColumn, err := columnExists(ctx, tx, "user_sessions", "control_account_id")
+	if err != nil {
+		return err
+	}
+	if !controlColumn {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE user_sessions
+			ADD COLUMN control_account_id TEXT REFERENCES user_accounts(id) ON DELETE SET NULL`); err != nil {
+			return fmt.Errorf("add session control account: %w", err)
+		}
+	}
+	for _, statement := range []string{
+		`CREATE TABLE IF NOT EXISTS user_account_links (
+			owner_user_id TEXT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+			linked_user_id TEXT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+			label TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL CHECK (status IN ('pending', 'active', 'revoked')),
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY(owner_user_id, linked_user_id),
+			CHECK(owner_user_id <> linked_user_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS user_account_links_owner_status
+			ON user_account_links(owner_user_id, status, linked_user_id)`,
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
+			return fmt.Errorf("create account control identity schema: %w", err)
+		}
+	}
+	return nil
 }
 
 func (db *DB) migrate(ctx context.Context) error {
@@ -808,6 +854,8 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		err = migratePersonas(ctx, tx)
 	case 17:
 		err = migratePersonaLore(ctx, tx)
+	case 19:
+		err = migrateAccountProfiles(ctx, tx)
 	default:
 		return nil
 	}

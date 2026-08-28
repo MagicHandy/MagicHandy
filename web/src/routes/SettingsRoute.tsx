@@ -19,6 +19,7 @@ import { useAppState, useHashRoute, useToast } from "../state/app-state";
 import type { MediaSettingsPayload } from "../api/types";
 import { DEFAULT_THEME, normalizeTheme } from "../theme";
 import { notificationCategories } from "../notification-preferences";
+import { AccountSettingsPanel } from "../components/AccountSettingsPanel";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
@@ -73,6 +74,7 @@ function notificationPreferenceOptions(): Array<{ category: NotificationCategory
 }
 const SECTIONS = [
   { id: "general", label: "General" },
+  { id: "access", label: "Access" },
   { id: "device", label: "Device" },
   { id: "media", label: "Media library" },
   { id: "model", label: "Model" },
@@ -380,6 +382,8 @@ export function SettingsRoute() {
       {loading && <p className="form-status" role="status">{t("Refreshing settings…")}</p>}
 
       <section className="panel">
+        {section === "access" && <AccountSettingsPanel backendOnline={backendOnline} />}
+
         {section === "general" && (
           <>
             <h2 className="section-title">{t("General")}</h2>
@@ -628,10 +632,10 @@ export function SettingsRoute() {
           </>
         )}
 
-        <div className="row-actions settings-actions">
+        {section !== "access" && <div className="row-actions settings-actions">
           <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving}>{saving ? t("Saving settings") : t("Save settings")}</button>
           {locked && <span className="form-status">{loading ? t("Refreshing settings") : backendOnline ? t("Read-only client") : t("Core offline")}</span>}
-        </div>
+        </div>}
       </section>
     </>
   );

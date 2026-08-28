@@ -46,8 +46,8 @@ row of their own.
 | **Curated starter voice pack** (STGPT-RV shipped Chatterbox sample voices; history 2026-04-21 asked for license-clean sources) | **Worth scoping.** Faster Qwen3-TTS requires a reference WAV+transcript and Chatterbox needs a reference voice, which creates a cold-start wall. One or two clearly licensed voices as an explicit, checksummed optional download would improve first-run TTS. |
 | **ASR model size choice** (faster-whisper presets tiny→distil-large; "larger Parakeet" request 2026-04-23) | **Worth scoping, later.** Managed Parakeet is single-model today; a second, larger checksummed option is cheap once curated downloads exist (Phase 16 machinery). |
 | **Firmware v3 selector / HAMP-HDSP legacy backends** | **Rejected** (ADR 0006) — recorded here so the settings-surface diff does not re-raise them. |
-| **LAN/HTTPS mobile use** (whole doc + certs + mobile fixes) | **Backend foundation implemented — R18 remains open.** ADR 0017 adds exact-address authenticated HTTPS and account/session APIs; account GUI, automated certificate trust/renewal, and real mobile acceptance are not complete. |
-| **Internet remote + multi-user sessions** (ROADMAP #17) | **Long-horizon, still not implied by Phase 20.** Login identities gate one shared LAN installation; internet exposure and per-user data partitioning remain separate decisions. |
+| **LAN/HTTPS mobile use** (whole doc + certs + mobile fixes) | **Backend and account GUI implemented — R18 remains open.** ADRs 0017–0018 add exact-address authenticated HTTPS, permanent login/account UI, profile images, and session-scoped linked context; automated certificate trust/renewal and real mobile acceptance are not complete. |
+| **Internet remote + multi-user sessions** (ROADMAP #17) | **Prepared, not granted.** Login identities gate one shared LAN installation; directional link rows and a Self-by-default session selector reserve the seam, but invitations, motion grants, internet exposure, and per-user data partitioning remain separate decisions. |
 
 ## B. Ideas voiced in the Codex history that never became tracked items
 

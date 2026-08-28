@@ -13,7 +13,8 @@ setup wizard") and feeds Phase 16.
 architecture decision; this document is the detailed implementation design.
 
 Status 2026-08-03: the thin Inno shell, portable payload, first-run detection,
-re-runnable seven-step GUI, unified optional llama.cpp/Parakeet/TTS install-plan
+re-runnable eight-step GUI, installer-time account opt-in, unified optional
+llama.cpp/Parakeet/TTS install-plan
 endpoint, release lifecycle tests, and tag-gated publication are implemented.
 The alpha.6 public setup was withdrawn after a severe Defender classification.
 Microsoft completed the exact-file review as `Not malware` and removed the
@@ -98,6 +99,10 @@ For the install binary itself, **Inno Setup** over WiX/NSIS/hand-rolled:
   all real interactivity lives in the app. The finish page launches
   MagicHandy at its normal route. Backend-confirmed fresh stores redirect to
   first-run setup; over-installs with preserved settings remain in the app.
+- Inno Setup never asks for or transports account credentials. The in-app
+  Access step sends a first-administrator password directly to the loopback
+  account API, so it cannot enter installer logs, command lines, answer files,
+  registry values, or upgrade metadata.
 - WiX/MSI is enterprise plumbing (GPO, transforms) no one asked for; NSIS
   offers nothing over Inno here; a pure-Go self-extracting stub would
   hand-roll uninstall/ARP semantics for purity points — recorded as the
@@ -128,22 +133,25 @@ screen anatomy, visual treatment, and branding slots — lives in
    or builds before the user selects components with size/license disclosure
    and explicitly continues to installation;
    nothing here ever commands the device.
-2. **Device** — connection key (write-only), dispatch owner, non-motion
+2. **Access** — keep loopback-only no-login access (Recommended), or create the
+   first local administrator and enable password-protected entry. This choice
+   does not enable LAN listening, generate a certificate, or install trust.
+3. **Device** — connection key (write-only), dispatch owner, non-motion
    connection check. Existing settings surface, embedded.
-3. **LLM runtime** — the Recommended fresh-install default is a pinned managed
+4. **LLM runtime** — the Recommended fresh-install default is a pinned managed
    **verified release** (backend auto/CPU/CUDA), with download and installed
    size visible. CPU downloads about 18 MiB. CUDA downloads about 628 MiB,
    installs about 1.1 GiB, and requires a compatible NVIDIA driver. Neither
    installs a compiler or CUDA Toolkit. **Use existing Ollama** is never
    selected implicitly and avoids that managed-runtime footprint; users may
    also choose an external compatible server or skip.
-4. **LLM model** — import a local GGUF into the checksummed managed store,
+5. **LLM model** — import a local GGUF into the checksummed managed store,
    scan an existing Ollama library and explicitly copy one compatible model,
    choose a model exposed by an Ollama daemon, enter an external server model
    ID, or skip.
    Curated checksum-pinned downloads and hardware-fit recommendations remain
    planned and are not represented as available actions.
-5. **Voice (optional)** — Parakeet ASR: download the pinned parakeet.cpp
+6. **Voice (optional)** — Parakeet ASR: download the pinned parakeet.cpp
    runner + model (sizes, licenses, SHA-256 — lifted from `install.ps1`
     into API endpoints so the wizard and the script share one checksummed
     path). Local TTS: choose Faster Qwen3-TTS for NVIDIA/CUDA, Chatterbox for
@@ -156,10 +164,10 @@ screen anatomy, visual treatment, and branding slots — lives in
     Settings > Voice. A managed install resets stale custom-worker overrides
     and is complete only when the runtime files and model snapshot satisfy the
     same readiness check shown on that page.
-6. **Install** — submit the selected local components once, then show the
+7. **Install** — submit the selected local components once, then show the
    backend-owned sequential queue, per-component state, bounded terminal
    output, cancellation, and retry.
-7. **Finish** — where things live (data dir, local URL), what was
+8. **Finish** — where things live (data dir, local URL), what was
    skipped and where to do it later.
 
 The Phase 15 importer does not exist, so setup contains no disabled or
@@ -186,6 +194,7 @@ where the logic lives.
 | Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Implemented with official `b9966` CPU and CUDA 12.4 assets |
 | Inno Setup script, destination/shortcut choices, explicit retain/purge uninstall | Implemented and covered by release lifecycle acceptance |
 | First-run detection, `#/setup`, re-run from Settings | Implemented |
+| Access choice, first local administrator, and credential-safe installer boundary | Implemented; LAN certificate provisioning remains separate |
 | Parakeet and managed TTS provisioning jobs | Implemented; full hardware/listening acceptance open |
 | Curated LLM downloads + hardware-fit recommendations | Open |
 | StrokeGPT-ReVibed importer API | Not implemented; therefore absent from setup |

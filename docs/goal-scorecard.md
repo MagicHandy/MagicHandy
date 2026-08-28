@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-28, authenticated LAN HTTPS and backend accounts
+## Snapshot — 2026-08-28, account access GUI, profiles, and control context
 
 ### Goal 1: Maintainability
 
@@ -32,11 +32,11 @@ Scoring key:
 | CI gates | gofmt, vet, golangci-lint (staticcheck, funlen, gocyclo, depguard), test, race, `CGO_ENABLED=0` build on every PR | **Met** | `.github/workflows/test.yml`; `.golangci.yml` (funlen 100/60, gocyclo 20). Windows PowerShell 5.1 additionally gates installer syntax, localized catalog parity, state hygiene, plans, launcher quoting, and updater Git safety. Frontend tests gate catalog/placeholder/encoding parity, typed and static rendered strings, literal toasts/confirms, and adjacent-fragment hazards. |
 | Import boundaries | chat/llm/media/modes/persona never touch transport; persona never owns motion; nothing depends on httpapi; no CGo | **Met** | depguard rules + `internal/architecture` boundary tests |
 | Size norms — Go core | no core file over ~600-800 lines | **At Risk** | Current advisory findings include `internal/config/settings.go` 1,434 lines, `internal/config/settings_test.go` 1,476, `internal/httpapi/chat.go` 1,395, `internal/httpapi/voice.go` 1,377, `internal/chat/service.go` 1,260, `internal/modes/manager.go` 1,036, `internal/motion/content.go` 1,087, `internal/motion/engine.go` 1,009, `internal/motion/dynamic.go` 849, `internal/transport/intiface.go` 1,209, and `internal/transport/intiface_test.go` 1,377. Dynamic HTTP compilation was extracted into focused `dynamic_motion.go`, and correction/coverage policy remains in `dynamic_intent.go`; every enforced path remains below the 1,500-line emergency ceiling. |
-| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,308 lines, `web/src/App.test.tsx` 1,487, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,459, `web/src/styles/shell.css` 1,089, and retired reference-only `web/legacy/app.css` 846. Setup and update UI use the canonical app and lazy locale chunks; `web/dist` remains the single shipped build. `App.test.tsx` is close to the 1,500-line emergency ceiling and must be split before more broad shell coverage lands there. |
+| Size norms — web | same norms for `web/` | **At Risk** | Current advisory findings include `web/src/api/types.ts` 1,358 lines, `web/src/App.test.tsx` 1,499, `web/src/components/SyncedVideoPlayer.tsx` 1,144, `web/src/styles/components.css` 1,463, `web/src/styles/shell.css` 1,089, and retired reference-only `web/legacy/app.css` 846. Setup and update UI use the canonical app and lazy locale chunks; `web/dist` remains the single shipped build. `App.test.tsx` is at the 1,500-line emergency boundary and must be split before more broad shell coverage lands there. |
 | Size norms — installer scripts | focused modules; review exceptions | **At Risk** | `scripts/installer/InstallerSupport.psm1` is 2,374 physical lines and remains outside the Go/web architecture size test as a manually reviewed guideline exception. Optional Python/PyTorch speech setup lives in dedicated install/update scripts; the shared module owns bootstrap/state/process helpers used by source and GUI provisioning. |
 | Size-norm enforcement | norms surface as findings, not manual review | **Met** | `internal/architecture.TestSourceFileLineBudgets` reports advisory findings above 800 lines and enforces the 1,500-line emergency ceiling for `cmd`, `internal`, and `web`; PowerShell remains manually reviewed. |
 | God-object avoidance | no single struct owning unrelated state | **Met** | Packages match the target architecture; pattern persistence/import/feedback live in `internal/patterns`, the explicit video catalog lives in `internal/media`, and the engine remains the sole owner of motion playback. |
-| Phase discipline | scoped PRs, tests, docs per phase | **Met** | Phase 18 M1-M2 reuse one bounded exact-name funscript document for the canvas and one shared-engine finite media target, keep host paths out of the API, and leave real-device timing claims to the explicit M3 acceptance gate. |
+| Phase discipline | scoped PRs, tests, docs per phase | **Met** | The Phase 20 account GUI builds on the separately published HTTPS/account foundation: setup owns the initial administrator choice, the backend remains authoritative for login/session/account/control identity, and remote grants plus concurrent multi-session control remain explicit follow-up work. |
 
 ### Goal 2: Core Memory
 
@@ -46,7 +46,7 @@ Full rows in `docs/perf-baseline.md`.
 | Item | Target | Status | Evidence |
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
-| Go core idle RSS | < 40 MB | **Violated (waived)** | The Phase 20 stripped build held 21.21 MiB working set / 54.08 MiB private bytes across three pre-auth samples. One Argon2id account bootstrap settled at 40.22 MiB / 72.83 MiB three seconds later; concurrent password work is serialized to one 19 MiB area. Earlier exact-final launches held 13.16-13.24 MiB idle / 47.27-47.58 MiB private. Windows residency remains too variable to close the SQLite waiver, but the current private sample stays below the ~80 MiB active budget. |
+| Go core idle RSS | < 40 MB | **Violated (waived)** | The exact account-GUI stripped build held 21.58 MiB working set / 54.16 MiB private bytes across three fresh-data samples after `/healthz`. The rendered review process held 25.61 MiB working set / 55.54 MiB private across five samples after serving the UI plus settings and LLM-status traffic. One earlier Argon2id account bootstrap settled at 40.22 MiB / 72.83 MiB; concurrent password work remains serialized to one 19 MiB area. Windows residency remains too variable to close the SQLite waiver, but current private samples stay below the ~80 MiB active budget. |
 | Go core active RSS | < 80 MB | **Unmeasured** | Model-manager reads settle at 53.40 MiB, but that is not the required active-motion + transport + SSE + chat scenario. Earlier real-device samples (16.75-16.76 MB Cloud REST; 17.52-17.53 MB Browser Bluetooth) predate SQLite and remain historical baselines only. |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Unmeasured** | The 2026-07-02 run measured 18.41-20.16 MB over 56 warmed samples (+9.53%), but it predates SQLite. Re-run the full scenario on the current build. |
 
@@ -58,8 +58,8 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 Phase 20 candidate: 25,047,040 bytes plain and 18,025,984 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath` (+837,632 / +577,536 from alpha.37). The increase covers account/session code and pure-Go `x/crypto/argon2`; the core remains 11,974,016 bytes below the 30,000,000-byte stripped budget. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
-| Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the Phase 20 stripped binary listened in 98.4-108.1 ms and completed `/healthz` in 99.9-132.5 ms total, including process spawn and loopback request. Managed preload was asynchronous; these fixtures had no installed model, account hash operation, or voice worker. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 account-GUI candidate: 25,175,552 bytes plain and 18,162,176 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath` (+966,144 / +713,728 from alpha.37; +128,512 / +136,192 from the Phase 20 foundation). The increase covers accounts, profiles, control context, and pure-Go `x/crypto/argon2`; the core remains 11,837,824 bytes below the 30,000,000-byte stripped budget. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the exact account-GUI stripped binary listened in 73.6-123.8 ms and completed `/healthz` in 77.8-124.9 ms total, including process spawn and loopback request. An immediately preceding first launch after rebuild was a 600.0 ms host outlier; the following four were 84.9-131.5 ms, so controlled release telemetry still owns the uncached boundary. Managed preload was asynchronous; these fixtures had no installed model, account hash operation, or voice worker. |
 | Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.37` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.37 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
@@ -136,21 +136,24 @@ Ranked by threat to the stated goals:
    preserving local teardown. An already-connected Browser Bluetooth owner now
    also invalidates fetched work and writes Stop directly during backend loss;
    current Cloud/Browser retry and teardown hardware evidence remains open.
-2. **Cold start at the boundary.** The current three-launch schema-v2 sample is
-   below budget with asynchronous managed-model preload. Host caching was not
-   separated, so Phase 16 still owns controlled release telemetry.
+2. **Cold start at the boundary.** The current five-launch fresh schema-v19
+   sample is below budget with asynchronous managed-model preload. Host caching
+   was not separated, so Phase 16 still owns controlled release telemetry.
 3. **Browser Bluetooth endurance.** The full short UI/chat path now passes, but
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,700,091 raw / 804,603 level-9 gzip bytes. Phase 20 adds
-   no frontend source or bundle bytes. Its backend account/session code plus
-   pure-Go Argon2id increase the release-style core by 577,536 bytes; one
+   browser payload is 1,774,857 raw / 823,883 level-9 gzip bytes. The account
+   GUI adds 74,766 raw / 19,280 gzip bytes over alpha.37 and the Phase 20
+   backend-only foundation. Backend account/session code plus pure-Go Argon2id
+   and the profile/control-context follow-up increase the release-style core by
+   713,216 bytes from alpha.37; one
    password operation leaves a measured 19.44 MiB working-set / 19.13 MiB
    private-byte increase in the sampled process, while a single admission slot
-   prevents concurrent requests from multiplying that work area. Lazy loading
-   limits the English startup path to 812,788 raw / 214,756 gzip bytes; all
-   HTML/CSS/JS is 1,255,855 raw / 367,206 gzip bytes. Alpha.37's localized,
+   prevents concurrent requests from multiplying that work area. Lazy locale
+   loading keeps the account-GUI English startup path at 854,268 raw / 223,825
+   gzip bytes (+41,480 / +9,069 from the foundation), while all HTML/CSS/JS is
+   1,330,621 raw / 386,486 gzip bytes. Alpha.37's localized,
    persona-addressed composer adds 140 raw / 87 gzip bytes overall and 170 raw
    / 81 gzip bytes to the English startup path against alpha.36, with no new
    dependency, asset, or browser-owned persona state. Alpha.36's requested/
@@ -203,6 +206,30 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-28** - Completed the account access GUI on its own branch over the
+  published Phase 20 foundation. The eight-step installer now asks whether to
+  keep loopback access open or create the initial administrator and require
+  sign-in; the native Inno layer never receives or persists a password, and
+  the screen states explicitly that LAN access still needs a private bind and
+  trusted HTTPS certificate. Startup, login, logout, expired-session recovery,
+  self-service password/profile image management, and administrator account
+  management render backend snapshots while Emergency Stop stays mounted and
+  public. Account images reuse the bounded persona crop/resize path and fall
+  back to a Unicode monogram. The top bar selects a per-session control context:
+  **Self** is first and default, and only active directional links to enabled
+  accounts are exposed; selection changes neither account role nor controller
+  lease. Schema v19 stores profile revisions, directional link lifecycle, and
+  the nullable session selection in preparation for later invitations,
+  concurrent sessions, and remote-control grants. All Go tests, vet, lint,
+  `CGO_ENABLED=0` builds, 422 frontend tests, typecheck, localization, production
+  build, and the complete Windows installer suite pass. The Windows race build
+  remains unavailable because this host has no `gcc`; Ubuntu CI is
+  authoritative. Candidate binaries are 25,175,552 / 18,162,176 bytes. The UI
+  is 1,774,857 raw / 823,883 gzip; five cold starts completed `/healthz` in
+  77.8-124.9 ms. An isolated `-simulate-motion` review app rendered the Access
+  step without visible errors and its configured Ollama model completed
+  a real non-empty readiness generation; no hardware motion was issued.
 
 - **2026-08-28** - Implemented Phase 20's backend-only authenticated LAN HTTPS
   foundation under ADR 0017. Loopback HTTP remains unchanged; a LAN listener

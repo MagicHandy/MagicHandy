@@ -15,12 +15,14 @@ import { OllamaLibraryImport } from "../components/OllamaLibraryImport";
 import { LOCALE_OPTIONS, t, translateKnown } from "../i18n";
 import { useAppState, useToast } from "../state/app-state";
 import { formatBytes } from "../util/format";
+import { useAuth } from "../state/auth";
 
-const STEPS = ["welcome", "device", "runtime", "model", "voice", "install", "finish"] as const;
+const STEPS = ["welcome", "access", "device", "runtime", "model", "voice", "install", "finish"] as const;
 type SetupStep = (typeof STEPS)[number];
 
 function setupStepLabel(step: SetupStep): string {
   if (step === "welcome") return t("Welcome");
+  if (step === "access") return t("Access");
   if (step === "device") return t("Device");
   if (step === "runtime") return t("Model runtime");
   if (step === "model") return t("Model library");
@@ -31,6 +33,7 @@ function setupStepLabel(step: SetupStep): string {
 
 type RuntimeChoice = "managed" | "ollama" | "external" | "skip";
 type VoiceChoice = "none" | "faster-qwen3-tts" | "chatterbox" | "external";
+type AccessChoice = "local" | "protected";
 
 const message = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Request failed");
 const activeJob = (job?: SetupJob) => job?.status === "queued" || job?.status === "running";
@@ -44,6 +47,7 @@ function initialRuntimeChoice(settings?: PublicSettings["llm"]): RuntimeChoice {
 }
 
 export function SetupRoute() {
+  const auth = useAuth();
   const { state, backendOnline, readOnly, refresh } = useAppState();
   const { show } = useToast();
   const [step, setStep] = useState(0);
@@ -57,6 +61,10 @@ export function SetupRoute() {
   const [voiceDevice, setVoiceDevice] = useState<"cpu" | "cuda">("cpu");
   const [voiceAutoLaunch, setVoiceAutoLaunch] = useState(true);
   const [parakeetSelected, setParakeetSelected] = useState(false);
+  const [accessChoice, setAccessChoice] = useState<AccessChoice>(auth.status?.initialized ? "protected" : "local");
+  const [administratorUsername, setAdministratorUsername] = useState("");
+  const [administratorPassword, setAdministratorPassword] = useState("");
+  const [administratorConfirmation, setAdministratorConfirmation] = useState("");
   const [connectionKey, setConnectionKey] = useState("");
   const [connectionResult, setConnectionResult] = useState<ConnectionCheckResult | null>(null);
   const [ggufPath, setGGUFPath] = useState("");
@@ -71,6 +79,7 @@ export function SetupRoute() {
   const installationActive = activeJob(setup?.installation);
   const installJob = setup?.installation?.id === installJobID ? setup.installation : undefined;
   const activeImport = models?.imports.find((job) => job.status === "queued" || job.status === "copying");
+  const currentStep = STEPS[step];
 
   const load = useCallback(async () => {
     try {
@@ -162,18 +171,28 @@ export function SetupRoute() {
 
   const saveCurrentStep = async () => {
     if (!settings) return;
-    if (step === 0) {
+    if (currentStep === "welcome") {
       await savePreferences({
         ui_locale: settings.ui?.locale ?? "en",
         chat_locale: promptLocale(settings.llm.prompt_set, settings.ui?.locale ?? "en"),
       });
-    } else if (step === 1) {
+    } else if (currentStep === "access" && accessChoice === "protected" && !auth.status?.initialized) {
+      if (new TextEncoder().encode(administratorPassword).byteLength < 12) {
+        throw new Error(t("Use a password or passphrase of at least 12 bytes."));
+      }
+      if (administratorPassword !== administratorConfirmation) {
+        throw new Error(t("The passwords do not match."));
+      }
+      await auth.bootstrap(administratorUsername.trim(), administratorPassword);
+      setAdministratorPassword("");
+      setAdministratorConfirmation("");
+    } else if (currentStep === "device") {
       await savePreferences({
         device_owner: settings.device.hsp_dispatch_owner,
         ...(connectionKey.trim() ? { connection_key: connectionKey.trim() } : {}),
       });
       setConnectionKey("");
-    } else if ((step === 2 || step === 3) && runtimeChoice !== "skip") {
+    } else if ((currentStep === "runtime" || currentStep === "model") && runtimeChoice !== "skip") {
       await savePreferences({ llm: settings.llm });
     }
   };
@@ -285,13 +304,19 @@ export function SetupRoute() {
     || (runtimeChoice === "managed" && managedModelReady)
     || ((runtimeChoice === "ollama" || runtimeChoice === "external") && Boolean(settings?.llm.model.trim()));
   const installationReady = installSubmitted && (!installJob || installJob.status === "complete");
-  const currentStepReady = step !== STEPS.indexOf("model") || modelChoiceReady;
+  const accessReady = accessChoice === "local" || Boolean(auth.status?.initialized) || (
+    Boolean(administratorUsername.trim()) &&
+    new TextEncoder().encode(administratorPassword).byteLength >= 12 &&
+    administratorPassword === administratorConfirmation
+  );
+  const currentStepReady = (currentStep !== "model" || modelChoiceReady) && (currentStep !== "access" || accessReady);
   const canFinish = runtimeChoice === "skip" || (
     modelChoiceReady && (runtimeChoice !== "managed" || Boolean(models?.runtime.installed && models.runtime.current))
   );
 
   const title = [
     t("Set up MagicHandy"),
+    t("Choose who can open MagicHandy"),
     t("Choose how MagicHandy reaches your device"),
     t("Choose your model runtime"),
     t("Choose a chat model"),
@@ -328,7 +353,19 @@ export function SetupRoute() {
 
         <div className="setup-body">
           {step === 0 && <WelcomeStep settings={settings} patch={(patch) => setSettings({ ...settings, ...patch })} />}
-          {step === 1 && <DeviceStep
+          {currentStep === "access" && <AccessStep
+            choice={accessChoice}
+            initialized={Boolean(auth.status?.initialized)}
+            username={administratorUsername}
+            password={administratorPassword}
+            confirmation={administratorConfirmation}
+            locked={locked}
+            setChoice={setAccessChoice}
+            setUsername={setAdministratorUsername}
+            setPassword={setAdministratorPassword}
+            setConfirmation={setAdministratorConfirmation}
+          />}
+          {currentStep === "device" && <DeviceStep
             settings={settings}
             connectionKey={connectionKey}
             connectionResult={connectionResult}
@@ -337,7 +374,7 @@ export function SetupRoute() {
             patchOwner={(owner) => setSettings({ ...settings, device: { ...settings.device, hsp_dispatch_owner: owner } })}
             verifyCloud={verifyCloud}
           />}
-          {step === 2 && <RuntimeStep
+          {currentStep === "runtime" && <RuntimeStep
             choice={runtimeChoice}
             backend={runtimeBackend}
             settings={settings.llm}
@@ -348,7 +385,7 @@ export function SetupRoute() {
             setBackend={setRuntimeBackend}
             patchLLM={patchLLM}
           />}
-          {step === 3 && <ModelStep
+          {currentStep === "model" && <ModelStep
             choice={runtimeChoice}
             settings={settings.llm}
             models={models}
@@ -363,7 +400,7 @@ export function SetupRoute() {
             mergeImport={mergeImport}
             refreshOllama={() => void loadOllama()}
           />}
-          {step === 4 && <VoiceStep
+          {currentStep === "voice" && <VoiceStep
             setup={setup}
             choice={voiceChoice}
             device={voiceDevice}
@@ -375,7 +412,7 @@ export function SetupRoute() {
             setAutoLaunch={setVoiceAutoLaunch}
             setParakeetSelected={setParakeetSelected}
           />}
-          {step === 5 && <InstallStep
+          {currentStep === "install" && <InstallStep
             job={installJob}
             submitted={installSubmitted}
             runtimeChoice={runtimeChoice}
@@ -384,7 +421,7 @@ export function SetupRoute() {
             cancel={cancelInstall}
             retry={() => void run("retry", beginInstall)}
           />}
-          {step === 6 && <FinishStep setup={setup} settings={settings} models={models} runtimeChoice={runtimeChoice} voiceChoice={voiceChoice} parakeetSelected={parakeetSelected} />}
+          {currentStep === "finish" && <FinishStep setup={setup} settings={settings} models={models} runtimeChoice={runtimeChoice} voiceChoice={voiceChoice} parakeetSelected={parakeetSelected} />}
 
           {activeImport && <p className="setup-inline-status" role="status">{t("Importing {name}: {copied} of {total}", {
             name: activeImport.display_name,
@@ -397,7 +434,7 @@ export function SetupRoute() {
         <footer className="setup-actions">
           <button type="button" className="btn btn-secondary" disabled={step === 0 || installationActive || Boolean(busy)} onClick={() => setStep((current) => current - 1)}>{t("Back")}</button>
           <span className="setup-action-spacer" />
-          {step < STEPS.length - 1 && step !== STEPS.indexOf("install") && <button type="button" className="btn btn-quiet" disabled={installationActive || Boolean(busy)} onClick={skipStep}>{t("Skip for now")}</button>}
+          {step < STEPS.length - 1 && currentStep !== "install" && currentStep !== "access" && <button type="button" className="btn btn-quiet" disabled={installationActive || Boolean(busy)} onClick={skipStep}>{t("Skip for now")}</button>}
           {step < STEPS.length - 1 ? (
             <button type="button" className="btn btn-primary" disabled={locked || installationActive || !currentStepReady || (step === STEPS.indexOf("install") && !installationReady)} onClick={continueStep}>{busy === "continue" ? t("Saving...") : t("Continue")}</button>
           ) : (
@@ -407,6 +444,60 @@ export function SetupRoute() {
       </div>
     </section>
   );
+}
+
+function AccessStep({
+  choice,
+  initialized,
+  username,
+  password,
+  confirmation,
+  locked,
+  setChoice,
+  setUsername,
+  setPassword,
+  setConfirmation,
+}: {
+  choice: AccessChoice;
+  initialized: boolean;
+  username: string;
+  password: string;
+  confirmation: string;
+  locked: boolean;
+  setChoice: (choice: AccessChoice) => void;
+  setUsername: (value: string) => void;
+  setPassword: (value: string) => void;
+  setConfirmation: (value: string) => void;
+}) {
+  return <div className="setup-copy">
+    <p>{t("Choose whether this installation opens directly or requires a MagicHandy account. This does not enable LAN access or configure certificates.")}</p>
+    <div className="setup-choices">
+      <Choice
+        selected={choice === "local"}
+        title={t("Only this computer")}
+        detail={t("Keep the current loopback-only behavior with no sign-in. You can enable password protection later from Settings.")}
+        badge={t("Recommended")}
+        disabled={initialized || locked}
+        onSelect={() => setChoice("local")}
+      />
+      <Choice
+        selected={choice === "protected"}
+        title={t("Require an account and password")}
+        detail={t("Create the first administrator and require sign-in immediately and on future launches.")}
+        disabled={locked}
+        onSelect={() => setChoice("protected")}
+      />
+    </div>
+    {initialized ? <div className="setup-notice"><strong>{t("Password protection is active.")}</strong><span>{t("Manage accounts, passwords, and your profile image from Settings > Access.")}</span></div> : choice === "protected" && <div className="setup-subsection account-setup-fields">
+      <label className="field"><span className="label">{t("Administrator username")}</span><input type="text" autoComplete="username" spellCheck={false} value={username} disabled={locked} onChange={(event) => setUsername(event.target.value)} /></label>
+      <div className="setup-fields two-columns">
+        <label className="field"><span className="label">{t("Password")}</span><input type="password" autoComplete="new-password" value={password} disabled={locked} onChange={(event) => setPassword(event.target.value)} /><span className="hint">{t("At least 12 bytes. A long, unique passphrase is recommended.")}</span></label>
+        <label className="field"><span className="label">{t("Confirm password")}</span><input type="password" autoComplete="new-password" value={confirmation} disabled={locked} onChange={(event) => setConfirmation(event.target.value)} /></label>
+      </div>
+      <p className="hint-block">{t("The password goes directly to the local account API. It is never written to installer logs, command lines, response files, or settings.")}</p>
+    </div>}
+    <div className="setup-notice"><strong>{t("Remote access remains off by default.")}</strong><span>{t("LAN login still requires an explicit private address and a trusted HTTPS certificate.")}</span></div>
+  </div>;
 }
 
 function WelcomeStep({ settings, patch }: { settings: PublicSettings; patch: (patch: Partial<PublicSettings>) => void }) {

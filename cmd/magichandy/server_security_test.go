@@ -28,6 +28,13 @@ func TestResolveServerSecurityKeepsLoopbackHTTPDefault(t *testing.T) {
 	if security.TLSConfig != nil || security.AuthenticationRequired || security.BaseURL != "http://127.0.0.1:49717" {
 		t.Fatalf("loopback security = %+v", security)
 	}
+	protected, err := resolveServerSecurity("127.0.0.1:49717", "", "", false, 1)
+	if err != nil {
+		t.Fatalf("resolve protected loopback security: %v", err)
+	}
+	if !protected.AuthenticationRequired {
+		t.Fatalf("existing account did not enable loopback authentication: %+v", protected)
+	}
 }
 
 func TestResolveServerSecurityRequiresAccountAndMatchingCertificateForLAN(t *testing.T) {

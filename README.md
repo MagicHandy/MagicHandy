@@ -21,7 +21,9 @@ cloud services available only when you enable them.
 - Handy Cloud, browser Bluetooth, and Intiface support.
 - Optional local speech input and output modules.
 - Opt-in authenticated HTTPS for one exact private-LAN address; loopback stays
-  the default and the account UI/certificate automation are not built yet.
+  the default. Setup and Settings can enable password-protected accounts; login,
+  profile images, administrator management, and a Self-by-default linked
+  control-profile selector are built. Certificate automation is not.
 
 ## Install On Windows
 
@@ -71,6 +73,9 @@ flags, and validation commands.
   diagnostics, and exports.
 - LAN mode fails closed unless HTTPS and an enabled backend account are both
   configured; it is not intended for internet exposure or port forwarding.
+- Accounts gate entry but do not partition settings, chat, media, or libraries.
+  A linked control profile does not impersonate another user or transfer the
+  device-controller lease.
 - MagicHandy is for adults controlling an intimate device. Use it responsibly
   and at your own risk.
 
@@ -97,7 +102,8 @@ requests with green CI. Start with [AGENTS.md](AGENTS.md), then use the
 - [Video playback](docs/video-playback.md)
 - [LLM control surface](docs/llm-control-surface.md)
 - [UI design guidelines](docs/ui-design-guidelines.md)
-- [HTTPS and backend accounts](docs/https-and-accounts.md)
+- [HTTPS and accounts](docs/https-and-accounts.md)
+- [Account UI and control-context design](docs/account-gui-design.md)
 - [Versioning and releases](docs/versioning-and-releases.md)
 
 ## License

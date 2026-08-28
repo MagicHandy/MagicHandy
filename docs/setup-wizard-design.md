@@ -2,7 +2,7 @@
 
 [gui-installer.md](gui-installer.md) records the architecture: Inno Setup is a
 thin Windows shell and the embedded app owns interactive setup at `#/setup`.
-This document describes the implemented seven-step experience and the remaining
+This document describes the implemented eight-step experience and the remaining
 work. The reference sketch is
 [setup-wizard-sketch.svg](setup-wizard-sketch.svg); it is illustrative rather
 than a second UI specification.
@@ -17,8 +17,11 @@ than a second UI specification.
    license, hardware constraint, and approximate disk impact before install.
 4. **Recoverable.** Setup is re-runnable from Settings and interrupted jobs can
    be cancelled or retried without reinstalling the core.
-5. **Backend authoritative.** Settings, job state, model inventory, hardware
-   detection, and connection results come from the backend.
+5. **Backend authoritative.** Account/session state, settings, job state, model
+   inventory, hardware detection, and connection results come from the backend.
+6. **Credential narrowness.** If password protection is selected, the password
+   goes directly from the in-app form to the local account API. The thin
+   installer never sees or persists it.
 
 ## Entry And Completion
 
@@ -40,19 +43,24 @@ including the always-reachable Emergency Stop.
    - app language
    - chat reply language
 
-2. Device
+2. Access
+   - Only this computer: loopback with no sign-in (default, Recommended)
+   - Require an account and password: create the first local administrator
+   - explain that this does not enable LAN access or configure certificates
+
+3. Device
    - Handy Cloud REST + write-only connection key + non-motion check
    - Browser Bluetooth
    - Intiface Central
    - skip
 
-3. Model runtime
+4. Model runtime
    - managed verified llama.cpp runtime: auto / CPU / CUDA (default, Recommended)
    - existing Ollama service
    - external compatible llama.cpp server
    - skip chat setup
 
-4. Model
+5. Model
    - select or import a GGUF for managed llama.cpp
    - scan an existing Ollama library and explicitly copy one compatible model
      into the managed store
@@ -60,16 +68,16 @@ including the always-reachable Emergency Stop.
    - enter the external server's model identifier
    - skip
 
-5. Voice (both optional)
+6. Voice (both optional)
    - output: none / Faster Qwen3-TTS / Chatterbox / external compatible server
    - input: install Parakeet or skip
 
-6. Install
+7. Install
    - review the selected local components as one plan
    - install sequentially with per-component state, progress, terminal output,
      Cancel, and Retry
 
-7. Finish
+8. Finish
    - data directory
    - selected runtime and voice path
    - local address and pre-motion reminder
@@ -78,6 +86,22 @@ including the always-reachable Emergency Stop.
 The Phase 15 StrokeGPT-ReVibed importer is not implemented, so no migration
 step or disabled placeholder is shown. Curated GGUF model downloads remain
 absent until a real model catalog, hashes, licenses, and download handlers exist.
+
+## Access Choice
+
+The local no-login path stays selected by default. Choosing protected access
+reveals username, password, and confirmation fields in the same graphite/steel
+setup surface. A passphrase must contain at least 12 UTF-8 bytes. Continue calls
+the one-time loopback bootstrap endpoint, then clears both password fields.
+Account existence durably enables the login wall for this process and future
+launches; reopening setup shows status rather than a second bootstrap form.
+
+The screen explicitly separates entry protection from network exposure. It
+does not change the listen address, generate a certificate, install a trust
+root, or promise internet remote control. A remote browser cannot bootstrap the
+first account and instead receives the login screen's local-setup guidance.
+The exact UX and future linked-session seam are specified in
+[account-gui-design.md](account-gui-design.md).
 
 ## Runtime Choice
 
@@ -133,7 +157,7 @@ the existing shell. The main pane has a small step label, task-sized heading,
 unframed explanatory copy, and flat radio choice rows. It does not use a
 marketing hero, gradients, nested cards, glow, or decorative animation.
 
-Below 780 px the progress rail becomes a seven-position top stepper. Below 560 px
+Below 780 px the progress rail becomes an eight-position top stepper. Below 560 px
 two-column fields collapse and action buttons wrap. The job indicator respects
 `prefers-reduced-motion`; all text and paths wrap rather than forcing horizontal
 overflow.
@@ -158,6 +182,9 @@ slots.
 
 - Fresh store redirects to setup; an existing store does not.
 - Keyboard-only navigation and radio selection work.
+- The Access step defaults to local/no-login, can create exactly one initial
+  administrator, never sends the password through installer-owned state, and
+  does not enable LAN exposure.
 - Runtime choice persists before model selection can be skipped.
 - Managed llama.cpp is the fresh-install Recommended default; Ollama is never
   selected implicitly.

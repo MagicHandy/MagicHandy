@@ -13,6 +13,7 @@ import type {
   TransportDiagnostics,
 } from "./api/types";
 import { AppStateProvider, ToastProvider } from "./state/app-state";
+import { AuthProvider } from "./state/auth";
 
 // These tests guard the safety-critical UI invariants from
 // docs/decisions/0009-react-frontend.md and docs/ui-design.md.
@@ -165,8 +166,17 @@ function installFetch(opts: InstallFetchOptions = {}) {
     diagnostics: {},
   };
   const fn = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
-    if (opts.fail) throw new Error("offline");
     const u = String(input);
+    if (u.includes("/api/auth/status")) return jsonRes({
+      initialized: false,
+      authentication_required: false,
+      authenticated: false,
+      bootstrap_available: true,
+      ui_locale: "en",
+      account: null,
+      control_identities: null,
+    });
+    if (opts.fail) throw new Error("offline");
     if (u.includes("/api/motion/stop")) {
       const status = opts.stopStatus ?? 200;
       return {
@@ -266,11 +276,13 @@ function go(hash: string) {
 
 function renderApp() {
   return render(
-    <AppStateProvider>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
-    </AppStateProvider>,
+    <AuthProvider>
+      <AppStateProvider>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </AppStateProvider>
+    </AuthProvider>,
   );
 }
 

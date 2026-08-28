@@ -10,10 +10,22 @@ import { formatClock } from "../util/format";
 import { ConnectionManager } from "./ConnectionManager";
 import { NotificationCenter } from "./NotificationCenter";
 import { ClockIcon, TakeControlIcon } from "./icons";
+import type { AuthenticationStatus } from "../api/types";
+import { ControlIdentitySelector } from "./ControlIdentitySelector";
 
-type ShellMenu = "connection" | "notifications" | null;
+type ShellMenu = "connection" | "notifications" | "identity" | null;
 
-export function StatusBar() {
+export function StatusBar({
+  authenticationLocked = false,
+  authenticationStatus = null,
+  onLogout,
+  onSelectControlIdentity,
+}: {
+  authenticationLocked?: boolean;
+  authenticationStatus?: AuthenticationStatus | null;
+  onLogout?: () => Promise<void>;
+  onSelectControlIdentity?: (accountID: string) => Promise<void>;
+}) {
   const { backendOnline, motion, readOnly, refresh, state } = useAppState();
   const { show } = useToast();
   const [openMenu, setOpenMenu] = useState<ShellMenu>(null);
@@ -35,6 +47,22 @@ export function StatusBar() {
       voiceSettings.tts_provider !== "none" &&
       !(voiceWorkers?.tts?.state === "running" && voiceWorkers?.tts?.model_state === "ready"),
   );
+  if (authenticationLocked) {
+    return (
+      <div className="status-bar" role="region" aria-label={t("Status")}>
+        <span className="status-readout">
+          <span className="status-dot" data-state="warn" />
+          <span className="status-text">{t("sign-in required")}</span>
+        </span>
+        <span className="status-divider" aria-hidden="true" />
+        <span className="status-readout">
+          <span className="status-dot" data-state="ok" />
+          <span className="status-text">{t("core ok")}</span>
+        </span>
+        <span className="status-spacer" />
+      </div>
+    );
+  }
   let phaseState = "idle";
   let phaseLabel = motion?.available === false ? "unavailable" : "idle";
   let phaseLabelIsUserAuthored = false;
@@ -135,6 +163,16 @@ export function StatusBar() {
       </span>
       <span className="status-spacer" />
       <MotionVisualizer motion={motion} mini />
+      {authenticationStatus?.authenticated && authenticationStatus.control_identities?.length && onLogout && onSelectControlIdentity ? (
+        <ControlIdentitySelector
+          identities={authenticationStatus.control_identities}
+          open={openMenu === "identity"}
+          restoreFocusOnClose={openMenu === null}
+          onOpenChange={(open) => setOpenMenu(open ? "identity" : null)}
+          onSelect={onSelectControlIdentity}
+          onLogout={onLogout}
+        />
+      ) : null}
       <NotificationCenter
         open={openMenu === "notifications"}
         restoreFocusOnClose={openMenu === null}
