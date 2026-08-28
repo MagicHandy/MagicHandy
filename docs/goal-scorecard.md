@@ -23,7 +23,7 @@ Scoring key:
 - **Unmeasured** — required evidence not yet captured.
 - **Pending** — owned by a future phase; not yet expected.
 
-## Snapshot — 2026-08-27, persona-addressed chat composer
+## Snapshot — 2026-08-28, authenticated LAN HTTPS and backend accounts
 
 ### Goal 1: Maintainability
 
@@ -46,7 +46,7 @@ Full rows in `docs/perf-baseline.md`.
 | Item | Target | Status | Evidence |
 | --- | --- | --- | --- |
 | Python baseline | measured before claims | **Met** | StrokeGPT-ReVibed core idle 524.75-524.81 MB (2026-07-01, commit `6c56985`) |
-| Go core idle RSS | < 40 MB | **Violated (waived)** | A conservative persistence-audit sample held 53.89 MiB after `/healthz` and 54.36 MiB after all six DB-backed reads. Three repeated exact-final launches later held only 13.16-13.24 MiB idle, but private bytes remained 47.27-47.58 MiB; Windows residency is therefore not stable enough to close the existing SQLite waiver. Re-evaluate with controlled CI telemetry if the conservative sample climbs past ~60 MiB. |
+| Go core idle RSS | < 40 MB | **Violated (waived)** | The Phase 20 stripped build held 21.21 MiB working set / 54.08 MiB private bytes across three pre-auth samples. One Argon2id account bootstrap settled at 40.22 MiB / 72.83 MiB three seconds later; concurrent password work is serialized to one 19 MiB area. Earlier exact-final launches held 13.16-13.24 MiB idle / 47.27-47.58 MiB private. Windows residency remains too variable to close the SQLite waiver, but the current private sample stays below the ~80 MiB active budget. |
 | Go core active RSS | < 80 MB | **Unmeasured** | Model-manager reads settle at 53.40 MiB, but that is not the required active-motion + transport + SSE + chat scenario. Earlier real-device samples (16.75-16.76 MB Cloud REST; 17.52-17.53 MB Browser Bluetooth) predate SQLite and remain historical baselines only. |
 | Sustained soak | 1 h RSS within +20% of active baseline | **Unmeasured** | The 2026-07-02 run measured 18.41-20.16 MB over 56 warmed samples (+9.53%), but it predates SQLite. Re-run the full scenario on the current build. |
 
@@ -58,8 +58,8 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 alpha.37 candidate: 24,209,408 bytes plain and 17,448,448 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath`; the packaged core remains well below 30 MB. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
-| Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the current stripped binary listened in 67.9-94.0 ms and completed `/healthz` in 68.7-119.5 ms total, including process spawn and loopback request. Managed preload is asynchronous; these fixtures had no installed model or voice worker. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 Phase 20 candidate: 25,047,040 bytes plain and 18,025,984 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath` (+837,632 / +577,536 from alpha.37). The increase covers account/session code and pure-Go `x/crypto/argon2`; the core remains 11,974,016 bytes below the 30,000,000-byte stripped budget. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the Phase 20 stripped binary listened in 98.4-108.1 ms and completed `/healthz` in 99.9-132.5 ms total, including process spawn and loopback request. Managed preload was asynchronous; these fixtures had no installed model, account hash operation, or voice worker. |
 | Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.37` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.37 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
@@ -143,7 +143,12 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,700,091 raw / 804,603 level-9 gzip bytes. Lazy loading
+   browser payload is 1,700,091 raw / 804,603 level-9 gzip bytes. Phase 20 adds
+   no frontend source or bundle bytes. Its backend account/session code plus
+   pure-Go Argon2id increase the release-style core by 577,536 bytes; one
+   password operation leaves a measured 19.44 MiB working-set / 19.13 MiB
+   private-byte increase in the sampled process, while a single admission slot
+   prevents concurrent requests from multiplying that work area. Lazy loading
    limits the English startup path to 812,788 raw / 214,756 gzip bytes; all
    HTML/CSS/JS is 1,255,855 raw / 367,206 gzip bytes. Alpha.37's localized,
    persona-addressed composer adds 140 raw / 87 gzip bytes overall and 170 raw
@@ -198,6 +203,26 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-28** - Implemented Phase 20's backend-only authenticated LAN HTTPS
+  foundation under ADR 0017. Loopback HTTP remains unchanged; a LAN listener
+  now requires one exact private/link-local IP, a valid matching certificate
+  and key, TLS 1.2+, and an enabled account, while wildcard, public, plaintext,
+  expired, mismatched, and uninitialized configurations fail before serving.
+  Schema v18 stores Argon2id account hashes and digests of opaque sessions in
+  the one SQLite pool. Loopback-only bootstrap, JSON auth/account APIs,
+  admin/operator roles, independent login throttles, a bounded hash slot,
+  secure host-only cookies, exact browser origins, and password/disable
+  revocation are covered without adding React state. Emergency Stop remains
+  callable after authentication expires; controller ownership and every motion
+  path are unchanged. The full Go suite, vet, pure-Go builds, frontend
+  typecheck, 412 tests, localization audit, and production build pass. The
+  Windows race gate could not compile because this host has no `gcc`; Linux CI
+  remains authoritative. Candidate binaries are 25,047,040 / 18,025,984 bytes.
+  Five cold starts completed `/healthz` in 99.9-132.5 ms. Pre-auth idle held
+  21.21 MiB working set / 54.08 MiB private; after one Argon2id bootstrap it
+  settled at 40.22 / 72.83 MiB. Account GUI, certificate automation, formal
+  security review, and real mobile acceptance remain R18/R29.
 
 - **2026-08-27** - Prepared alpha.37 so the Chat composer addresses the
   effective persona selected for the active conversation instead of always

@@ -8,9 +8,9 @@ Baseline: `origin/main` at `3a7ed0fb` (2026-07-20).
 
 | Subsystem | Status | Current evidence |
 | --- | --- | --- |
-| Configuration and persistence boundaries | Reviewed in dedicated pass; chat-workspace follow-up in schema v12 | One process-owned SQLite pool serves seven logical domains; writes share one transaction lock, schema v12 adds backend-owned chat sessions, per-session cursors, and bounded reply provenance on top of the v11 media catalog, while invalid settings are preserved, physical corruption is quarantined, logical damage fails clearly, and schema/version/permission/lifecycle behavior has focused coverage. |
+| Configuration and persistence boundaries | Reviewed in dedicated pass; account follow-up in schema v18 | One process-owned SQLite pool serves every logical domain; writes share one transaction lock. Schema v18 adds user accounts and opaque-session digests without a second datastore, while invalid settings are preserved, physical corruption is quarantined, logical damage fails clearly, and schema/version/permission/lifecycle behavior has focused coverage. |
 | Diagnostics and structured logging | Reviewed in first pass | Trace storage now overwrites in O(1) and returns independent snapshots. Logging volume and redaction need review with each provider/transport. |
-| HTTP and process lifecycle | Reviewed in first pass | Oversized JSON is rejected, response encoding cannot panic after committing headers, browser requests are loopback same-origin, mutating leases require headers, and shutdown quiesces device work before closing stores. |
+| HTTP and process lifecycle | Reviewed in first pass; authenticated-LAN follow-up | Oversized JSON is rejected, response encoding cannot panic after committing headers, browser requests require an exact allowed same origin, and non-loopback startup requires exact-address TLS plus an enabled account. Opaque sessions, role checks, and login throttles wrap the existing controller lease; Emergency Stop remains reachable after auth expiry; shutdown still quiesces device work before closing stores. |
 | Motion engine and transports | Reviewed in first pass | PR #87 serializes ownership and command admission, hardens transport teardown, and expands race and lifecycle coverage. Real-device behavior remains subject to the documented hardware validation matrix. |
 | Chat, LLM, memory, modes, patterns, library, validation | Reviewed in first pass; Autopilot follow-up in PR #101 | Storage failures are explicit, mutations are transactional, mode lifecycle and stale-operation races are covered, provider/runtime limits are bounded, managed-model inventory is crash-safe, and validation exports only the active run. Chat Autopilot now consumes bounded canonical conversation context, preserves resolved custom patterns across hold/drift, cancels announcements with the mode, and falls back visibly without creating a second motion path. Live-model and long-session acceptance remain open. |
 | Voice, workers, queues, and audio | Reviewed in first pass | Worker framing and deadlines, bounded request queues, cancellation, process-tree teardown, provider response limits, deterministic sampling, and reference-code validation have focused coverage. Representative listening, simultaneous GPU LLM/TTS load, and lower-VRAM acceptance remain open. |
@@ -27,6 +27,10 @@ Baseline: `origin/main` at `3a7ed0fb` (2026-07-20).
   response encoding could panic after headers were written.
 - Browser query IDs could authorize mutating controller work, and browser
   requests had no global loopback same-origin boundary.
+- Non-loopback access had no safe activation path. ADR 0017 now keeps loopback
+  as default and admits only an exact private/link-local HTTPS address with a
+  matching certificate and enabled account; wildcard, public, plaintext, and
+  uninitialized configurations fail before serving.
 - Concurrent starts could create multiple idle engines; owner transitions and
   shutdown could leave delayed starts targeting cleared engines.
 - Idle and completing engines were not consistently visible or stopped during

@@ -595,8 +595,10 @@ explicit default-persona inheritance, storage-error propagation, Autopilot
 mutation ordering, retryable portrait erasure with startup reconciliation,
 CJK-aware lore matching, backend-owned lore-mode/keyword bounds, code-point
 browser limits, and pre-commit response assembly for persona/lore mutations.
-The app remains localhost-only: non-loopback `--addr` values are rejected until
-authenticated HTTPS/LAN support has an explicit design.
+The default app remains localhost-only. Phase 20 and ADR 0017 now permit an
+explicit private-IP listener only with matching HTTPS and an enabled account;
+persona/lore APIs sit behind that account wall. Account GUI, automatic
+certificate trust, and real mobile acceptance remain open.
 
 The following design rows remain deliberately open rather than being implied
 by the editor:

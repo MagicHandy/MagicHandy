@@ -20,7 +20,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 17
+	CurrentSchemaVersion = 18
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -507,6 +507,34 @@ var migrations = [][]string{
 	// table as well as the mode column so it can first repair any manually
 	// versioned database that still carries the Rockfire table name.
 	{`SELECT 1`},
+	// v17 -> v18: authenticated users and opaque server-side browser sessions.
+	// Password hashes and session-token digests are credentials and therefore
+	// remain in the private datastore; neither belongs in settings, diagnostics,
+	// logs, or browser-readable state.
+	{
+		`CREATE TABLE IF NOT EXISTS user_accounts (
+			id TEXT PRIMARY KEY,
+			username TEXT NOT NULL,
+			username_key TEXT NOT NULL,
+			role TEXT NOT NULL CHECK (role IN ('admin', 'operator')),
+			password_hash TEXT NOT NULL,
+			disabled INTEGER NOT NULL DEFAULT 0 CHECK (disabled IN (0, 1)),
+			last_login_at TEXT NOT NULL DEFAULT '',
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS user_accounts_username_key
+			ON user_accounts(username_key)`,
+		`CREATE TABLE IF NOT EXISTS user_sessions (
+			token_hash TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+			created_at TEXT NOT NULL,
+			last_seen_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS user_sessions_user_expiry
+			ON user_sessions(user_id, expires_at)`,
+	},
 }
 
 func (db *DB) migrate(ctx context.Context) error {

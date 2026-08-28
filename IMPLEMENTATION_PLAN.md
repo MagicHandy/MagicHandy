@@ -22,16 +22,17 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
-Updated 2026-08-22. MagicHandy is a source-runnable and packaged Windows alpha,
+Updated 2026-08-28. MagicHandy is a source-runnable and packaged Windows alpha,
 not a finished application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent
 connection manager, and the current React shell are implemented. The LLM model
 manager (#55) and managed llama.cpp source-build lifecycle (#56) landed ahead
 of Phase 16 and anchor its packaging story. The future Windows install binary
 remains a thin shell around the app's own first-run setup wizard (decision and
-design in `docs/gui-installer.md`). Phase 13 deliberately supports microphone
-capture on localhost only; LAN/mobile HTTPS remains a Phase 16 packaging
-decision. Of the two often-cited StrokeGPT-ReVibed parity milestones, LLM-driven
+design in `docs/gui-installer.md`). Phase 20 now provides an opt-in authenticated
+LAN HTTPS and backend-account foundation while preserving loopback HTTP
+defaults; automatic certificate trust, account GUI, and real mobile acceptance
+remain open. Of the two often-cited StrokeGPT-ReVibed parity milestones, LLM-driven
 Chat Autopilot now has its initial implementation (conversation-aware LLM
 curation over the shared autonomous loop, with a visible deterministic planner
 fallback). Interactive chat motion now has live-provider evidence on the
@@ -104,6 +105,7 @@ status column and in "Known Gaps Carried Forward" below.
 | 15 | Migration importer and compatibility report | **Undecided — may not be built** | — |
 | 18 | Video library and synced funscript playback (design: `docs/video-playback.md`) | **M0-M2 implemented; M3 hardware acceptance in progress** | #104 |
 | 19 | Personas — named presets over the personalization axes (design: `docs/persona-page.md`) | **Slices 1-7 and release-hardening review implemented; model-specific lore baselines, TTS voice, and preferred pattern tags remain open** | — |
+| 20 | Authenticated LAN HTTPS and backend user accounts (ADR 0017) | **Backend foundation implemented; account GUI, certificate automation, and real mobile acceptance open** | — |
 | 16 | Windows packaging, first-run setup, release pipeline | **First unsigned alpha implemented; optional-runtime acceptance continues** | #55, #56, #61, #62, #64, #65 |
 | 17 | Final parity/default-app readiness review | Not started | — |
 
@@ -960,8 +962,10 @@ Status: **complete** for the supported localhost browser path.
   invalidates ASR/TTS results and playback, cancels in-flight LLM work, and
   combines request stamps with an engine Stop-admission generation so stale
   voice, typed-chat, manual, library, and mode starts cannot dispatch afterward.
-- `http://localhost` is the supported microphone origin. LAN/mobile use is not
-  promised until Phase 16 provides an HTTPS and certificate design.
+- `http://localhost` remains the zero-configuration microphone origin. Phase 20
+  adds explicit-IP authenticated HTTPS for an operator-provided trusted
+  certificate; phone/tablet microphone support is not claimed until the R18
+  real-mobile acceptance matrix passes.
 - Background auto-start and capture that continues without a visible user-owned
   session remain out of scope. Real-microphone calibration and first-word
   accuracy remain R24 release evidence.
@@ -1176,11 +1180,11 @@ UI rules learned from StrokeGPT-ReVibed:
 - physical Stop stays independent of recording/transcription/TTS latency
 
 Secure-context constraint: browser microphone capture (and Web Bluetooth)
-require HTTPS on non-localhost origins. Localhost use needs nothing; if
-LAN/mobile voice is in scope, it needs a deliberate HTTPS/certificate story
-(StrokeGPT required a local CA, an Android cert helper, and exact-IP SANs).
-Decide the scope explicitly here and document it; do not accidentally promise
-mobile voice (see risk R18).
+require HTTPS on non-localhost origins. Localhost use needs nothing. Phase 20
+implements the HTTPS/account boundary with exact-IP SAN validation and an
+operator-trusted CA, but automatic CA/Android trust support and real mobile
+evidence remain open; backend support alone does not prove mobile voice (see
+risk R18 and ADR 0017).
 
 ## Validation
 
@@ -1869,11 +1873,12 @@ Implement, as slices:
   non-destructive import. Exists only if the undecided Phase 15 importer is
   built (see its status note above)
 - preserve current structured file logging and print the local URL prominently
-- keep binding to localhost by default; document that the app is a
-  single-operator local controller and must not be port-forwarded
+- keep binding to localhost by default; Phase 20's separate opt-in LAN mode
+  requires exact-address HTTPS and accounts and still must not be port-forwarded
 - decision docs: ADR 0013 records unsigned artifact labeling, explicit
   over-install updates, optional worker/runtime separation, deferred WebView2,
-  explicit bounded uninstall cleanup, and loopback-only LAN/HTTPS policy
+  and explicit bounded uninstall cleanup. ADR 0017 supersedes its loopback-only
+  exposure deferral with a fail-closed, opt-in LAN HTTPS/account policy
 - check the binary-size (<30 MB) and cold-start (<500 ms) budgets from
   `docs/goals-and-guardrails.md` (the setup binary is a separate artifact
   with its own small overhead; the core binary budget is unchanged)
@@ -1995,6 +2000,77 @@ guardrails (no transcoding, no media management, no new motion pathway).
 
 - transcoding or codec bundling (`.mkv` excluded), external players, media
   tagging/management, multi-axis funscript variants, network exposure
+
+# Phase 20: Authenticated LAN HTTPS And Backend Accounts
+
+## Suggested `/goal`
+
+`/goal Design and implement HTTPS support plus the backend foundation for user accounts in MagicHandy, without adding account GUI; update the architecture and security docs, preserve Stop/controller invariants, validate the pure-Go build, and leave a reviewable app.`
+
+Status: **backend foundation implemented 2026-08-28; account GUI, automatic
+certificate lifecycle, and real mobile acceptance remain open.** Design and
+operator workflow: [docs/https-and-accounts.md](docs/https-and-accounts.md).
+Decision: [ADR 0017](docs/decisions/0017-authenticated-lan-https.md).
+
+## Objective
+
+Permit deliberate LAN secure-context use without weakening the trusted
+loopback default, and establish one backend-authoritative identity/session
+domain that a later GUI can consume. Accounts gate entry to the app; the
+controller lease continues to gate which authenticated browser can command the
+device. Existing installation data remains shared rather than silently becoming
+multi-tenant.
+
+## Implemented Scope
+
+- unchanged default `http://127.0.0.1`; optional `-require-auth` on loopback
+- `-tls-cert` + `-tls-key` HTTPS startup with TLS 1.2 minimum, pre-serve
+  certificate/key/time/SAN validation, and no insecure verification bypass
+- LAN binds only to one exact private/link-local IP; wildcard, hostname,
+  public-address, HTTP, missing-account, expired-cert, and SAN-mismatch cases
+  fail before serving
+- schema v18 `user_accounts` and `user_sessions` tables in the process-owned
+  SQLite database, including unique normalized usernames, `admin`/`operator`
+  roles, disabled state, token-digest sessions, indexes, and foreign keys
+- Argon2id password hashes with bounded PHC parsing, unique salts, generic
+  credential errors, independent bounded IP/username login throttles, and no
+  credential logging or readback
+- one-time loopback bootstrap; JSON login/logout/status; administrator-only
+  create/list/password/disable endpoints; password/disable session revocation;
+  last-enabled-admin protection
+- host-only HttpOnly SameSite-Strict sessions, `Secure`/`__Host-` on HTTPS,
+  absolute and idle expiry, bounded per-user session count, and non-cacheable
+  API/auth responses
+- transitional browser Basic prompt that exchanges valid credentials for the
+  same opaque server-side session, allowing the existing UI to run with no
+  account components
+- exact same-origin/allowed-Host browser checks in LAN mode; the native server
+  path picker remains loopback-only
+- authentication-independent `POST /api/motion/stop`, while all start,
+  retarget, configuration, private reads, and controller takeover stay behind
+  authentication and the existing lease
+
+## Validation
+
+- migration and schema-shape tests from v17 to v18
+- password hash/salt/parameter-bound, account lifecycle, role, session
+  digest/expiry/revocation, and last-admin tests
+- HTTP bootstrap locality, cookie flags, Basic-to-session exchange, generic
+  login failure, throttling, role authorization, exact-origin, and expired-login
+  Stop tests
+- startup matrix for loopback/LAN, wildcard/private/public addresses, missing
+  account, incomplete TLS pair, expiration, and exact SAN
+- standard Go/frontend/pure-Go build gates and binary-size remeasurement
+
+## Follow-up / Out Of Scope
+
+- React login, logout, session-expired, and account-administration screens
+- automatic local CA creation/trust, leaf renewal, Android/iOS trust helpers,
+  DNS names, wildcard listening, reverse proxies, and internet exposure
+- password recovery, MFA, email identity, account deletion, audit-log UI, and
+  per-user settings/history/library partitioning
+- claims of mobile voice or Bluetooth support before R18's real-device/browser
+  acceptance matrix is recorded
 
 # Cross-Phase Testing Requirements
 

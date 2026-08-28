@@ -3,7 +3,7 @@
 ## Status
 
 Accepted for the rewrite plan. Implemented in Phase 11B; extended through
-schema v13 by atomic chat-reply visibility.
+schema v18 by the backend account/session foundation.
 
 ## Context
 
@@ -78,6 +78,10 @@ only their durability substrate moves from JSON files to DB tables.
   - (landed with the model manager, schema v9) `llm_models`, a searchable
     inventory of managed model metadata and import lineage. Multi-gigabyte GGUF
     bytes remain ordinary files in the app data model store, never DB blobs.
+  - (landed with authenticated LAN HTTPS, schema v18) `user_accounts` and
+    `user_sessions`. Passwords are Argon2id hashes; only SHA-256 digests of
+    already-random session tokens are stored. Both remain private credentials
+    and are excluded from settings, diagnostics, and exports.
 - **Settings stays a versioned document**, stored as one row in a `settings`
   document/kv table rather than exploded into columns. This preserves the
   existing `Settings` struct, `NormalizeSettings`, the migration hooks, and the
@@ -188,6 +192,13 @@ and TTS. Stop publishes its epoch without taking the database path or waiting on
 SQLite; only the bounded in-memory TTS submission shares a mutex with voice
 invalidation. Startup removes any staged row left by a process interruption.
 Existing rows migrate as committed.
+
+Schemas v14-v17 add paired-video calibration/media-tooling metadata and the
+canonical persona/lore tables described by their feature documents. Schema v18
+adds `user_accounts` and `user_sessions` for ADR 0017. Usernames are indexed by
+a case-insensitive normalized key, sessions cascade with their account, and
+only password hashes and random-token digests enter SQLite. Raw passwords and
+session tokens are never persisted.
 
 `messages.diagnostics_json` stores only bounded run provenance needed by the
 assistant-avatar tooltip and continuity: source, provider/model identifiers,

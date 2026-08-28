@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"path"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/accounts"
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
@@ -56,6 +58,13 @@ type Runtime struct {
 	ExecutablePath      string
 	UpdateHTTPClient    *http.Client
 	UpdateReleaseAPIURL string
+	// Accounts is the process account domain. Nil creates one over Store's
+	// shared datastore. AuthenticationRequired protects every route except the
+	// deliberately public health, login/bootstrap, and Emergency Stop edges.
+	Accounts               *accounts.Store
+	AuthenticationRequired bool
+	SecureCookies          bool
+	AllowedBrowserHosts    []string
 }
 
 // Server owns the local HTTP routes and embedded static asset serving.
@@ -63,6 +72,8 @@ type Server struct {
 	static              fs.FS
 	logger              *slog.Logger
 	store               *config.Store
+	accounts            *accounts.Store
+	auth                authenticationRuntime
 	traces              *diagnostics.TraceRing
 	transport           transport.DiagnosticsProvider
 	cloud               cloudRuntime
@@ -126,6 +137,10 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		logger = slog.Default()
 	}
 	runtime = normalizeRuntime(runtime)
+	accountStore, authRuntime, err := newAuthenticationComponents(store, runtime)
+	if err != nil {
+		return nil, err
+	}
 
 	// Settings owns the one process database handle. Every sibling persistence
 	// domain borrows it so pooling, writer serialization, and shutdown have one
@@ -157,6 +172,8 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		static:          static,
 		logger:          logger,
 		store:           store,
+		accounts:        accountStore,
+		auth:            authRuntime,
 		traces:          runtime.Traces,
 		transport:       runtime.Transport,
 		cloud:           newCloudRuntime(runtime),
@@ -209,14 +226,20 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		return nil, err
 	}
 
-	mux := http.NewServeMux()
-	server.routes(mux)
-	server.handler = logRequests(logger, protectBrowserRequests(mux))
-	server.startLLMAutoload(settings.LLM)
-	server.startVoiceAutoload(settings.Voice)
-	server.startMediaAutoScan(settings.Media)
-
+	server.activate(runtime, settings)
 	return server, nil
+}
+
+func (s *Server) activate(runtime Runtime, settings config.Settings) {
+	mux := http.NewServeMux()
+	s.routes(mux)
+	s.handler = logRequests(s.logger, securityHeaders(
+		runtime.SecureCookies,
+		protectBrowserRequests(runtime.AllowedBrowserHosts, s.authenticateRequests(mux)),
+	))
+	s.startLLMAutoload(settings.LLM)
+	s.startVoiceAutoload(settings.Voice)
+	s.startMediaAutoScan(settings.Media)
 }
 
 func normalizeRuntime(runtime Runtime) Runtime {
@@ -303,6 +326,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", s.handleHealth)
+	s.authenticationRoutes(mux)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("GET /api/state", s.handleState)
 	mux.HandleFunc("GET /api/controller", s.handleControllerState)
@@ -488,6 +512,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 			"version":        settings.Version,
 		},
 		"features": map[string]string{
+			"accounts":  "backend_api_no_gui",
 			"chat":      "local_llm_streaming",
 			"library":   "patterns_programs_authoring_media",
 			"motion":    "manual",
@@ -523,6 +548,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			"legacy_archived_path":     status.LegacyArchivedPath,
 		},
 		"features": map[string]string{
+			"accounts":  "backend_api_no_gui",
 			"chat":      "local_llm_streaming",
 			"library":   "patterns_programs_authoring_media",
 			"motion":    "manual",
@@ -783,14 +809,35 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 	})
 }
 
-func protectBrowserRequests(next http.Handler) http.Handler {
+func protectBrowserRequests(allowedHosts []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isBrowserRequest(r) && (!isLoopbackHost(r.Host) || !isSameOriginBrowserRequest(r)) {
-			writeError(w, http.StatusForbidden, errors.New("browser requests must use the local MagicHandy origin"))
+		if isBrowserRequest(r) && (!isAllowedBrowserHost(r.Host, allowedHosts) || !isSameOriginBrowserRequest(r)) {
+			writeError(w, http.StatusForbidden, errors.New("browser requests must use an allowed MagicHandy origin"))
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isAllowedBrowserHost(host string, allowedHosts []string) bool {
+	if len(allowedHosts) == 0 {
+		return isLoopbackHost(host)
+	}
+	host = hostWithoutPort(host)
+	for _, allowed := range allowedHosts {
+		if strings.EqualFold(host, hostWithoutPort(allowed)) {
+			return true
+		}
+	}
+	return false
+}
+
+func hostWithoutPort(hostPort string) string {
+	host := strings.TrimSpace(hostPort)
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		host = parsed
+	}
+	return strings.Trim(strings.ToLower(host), "[]")
 }
 
 func isBrowserRequest(r *http.Request) bool {

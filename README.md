@@ -20,6 +20,8 @@ cloud services available only when you enable them.
 - Immediate speed, stroke, and direction controls with safe `Esc` Stop.
 - Handy Cloud, browser Bluetooth, and Intiface support.
 - Optional local speech input and output modules.
+- Opt-in authenticated HTTPS for one exact private-LAN address; loopback stays
+  the default and the account UI/certificate automation are not built yet.
 
 ## Install On Windows
 
@@ -67,6 +69,8 @@ flags, and validation commands.
 - All motion sources use the same bounded motion engine and selected limits.
 - The Handy connection key is private and excluded from UI readback, logs,
   diagnostics, and exports.
+- LAN mode fails closed unless HTTPS and an enabled backend account are both
+  configured; it is not intended for internet exposure or port forwarding.
 - MagicHandy is for adults controlling an intimate device. Use it responsibly
   and at your own risk.
 
@@ -93,6 +97,7 @@ requests with green CI. Start with [AGENTS.md](AGENTS.md), then use the
 - [Video playback](docs/video-playback.md)
 - [LLM control surface](docs/llm-control-surface.md)
 - [UI design guidelines](docs/ui-design-guidelines.md)
+- [HTTPS and backend accounts](docs/https-and-accounts.md)
 - [Versioning and releases](docs/versioning-and-releases.md)
 
 ## License

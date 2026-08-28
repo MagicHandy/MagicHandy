@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -41,6 +40,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	flags.SetOutput(stderr)
 
 	addr := flags.String("addr", "", "HTTP listen address override")
+	securityFlags := addServerSecurityFlags(flags)
 	dataDir := flags.String("data-dir", "", "app data directory for settings and diagnostics")
 	simulateMotion := flags.Bool("simulate-motion", false, "route all motion to the in-process simulator instead of a configured device")
 	languageFlags := addLanguageFlags(flags)
@@ -80,20 +80,17 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	if handled, err := configureTTSModuleAndExit(store, loadStatus, ttsConfiguration, stdout); handled {
 		return err
 	}
-	if loadStatus.Recovered {
-		logger.Warn(
-			"settings or datastore recovered",
-			"source", loadStatus.Source,
-			"message", loadStatus.Message,
-			"datastore_backup", loadStatus.DatastoreRecoveredPath,
-		)
-	} else if loadStatus.UsingDefaults {
-		logger.Info("settings using defaults", "data_dir", loadStatus.DataDir)
-	}
+	logSettingsLoadStatus(logger, loadStatus)
 
 	runtime := applicationRuntime(*simulateMotion)
 	if *simulateMotion {
 		logger.Info("motion simulation enabled", "transport", runtime.MotionTransport.Diagnostics().Name)
+	}
+
+	runtime, security, address, err := prepareServerRuntime(store, settings, *addr, securityFlags, runtime)
+	if err != nil {
+		_ = store.Close()
+		return err
 	}
 
 	api, err := httpapi.New(web.FS(), logger, store, runtime, httpapi.VersionInfo{
@@ -106,20 +103,17 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 	defer api.Close()
 
-	server, err := newHTTPServer(listenAddress(config.Default().Server.Address, settings.Server.Port, *addr), api.Handler())
-	if err != nil {
-		return err
-	}
+	server := newHTTPServer(address, api.Handler(), security.TLSConfig)
 
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("server starting", "addr", server.Addr)
-		errCh <- server.ListenAndServe()
+		logger.Info("server starting", "url", security.BaseURL, "authentication_required", security.AuthenticationRequired)
+		errCh <- serveHTTP(server)
 	}()
-	launchBrowserWhenReady(*browserFlags.open, *browserFlags.setup, server.Addr, logger)
+	launchBrowserWhenReady(*browserFlags.open, *browserFlags.setup, security.BaseURL, logger)
 
 	select {
 	case <-ctx.Done():
@@ -135,6 +129,19 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	}
 
 	return shutdownHTTPServer(server, api, logger)
+}
+
+func logSettingsLoadStatus(logger *slog.Logger, status config.LoadStatus) {
+	if status.Recovered {
+		logger.Warn(
+			"settings or datastore recovered",
+			"source", status.Source,
+			"message", status.Message,
+			"datastore_backup", status.DatastoreRecoveredPath,
+		)
+	} else if status.UsingDefaults {
+		logger.Info("settings using defaults", "data_dir", status.DataDir)
+	}
 }
 
 // applicationRuntime keeps motion simulation explicit. Production starts with
@@ -388,37 +395,6 @@ func listenAddress(defaultAddress string, settingsPort int, override string) str
 		return fmt.Sprintf("127.0.0.1:%d", settingsPort)
 	}
 	return defaultAddress
-}
-
-func validateListenAddress(address string) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return fmt.Errorf("invalid HTTP listen address %q: %w", address, err)
-	}
-	if strings.EqualFold(host, "localhost") {
-		return nil
-	}
-	ip := net.ParseIP(host)
-	if ip == nil || !ip.IsLoopback() {
-		return fmt.Errorf(
-			"HTTP listen address %q is not loopback; LAN access is unavailable until authentication and HTTPS support are implemented",
-			address,
-		)
-	}
-	return nil
-}
-
-func newHTTPServer(address string, handler http.Handler) (*http.Server, error) {
-	if err := validateListenAddress(address); err != nil {
-		return nil, err
-	}
-	return &http.Server{
-		Addr:              address,
-		Handler:           handler,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       30 * time.Second,
-		IdleTimeout:       2 * time.Minute,
-	}, nil
 }
 
 func configureLanguagesAndExit(store *config.Store, loadStatus config.LoadStatus, uiLocale, chatLocale string, completeSetup bool, stdout io.Writer) (bool, error) {

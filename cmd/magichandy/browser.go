@@ -21,11 +21,11 @@ func addBrowserFlags(flags *flag.FlagSet) browserLaunchFlags {
 	}
 }
 
-func launchBrowserWhenReady(open, setup bool, address string, logger *slog.Logger) {
+func launchBrowserWhenReady(open, setup bool, baseURL string, logger *slog.Logger) {
 	if !open {
 		return
 	}
-	go openLocalAppWhenReady(address, browserLaunchRoute(setup), logger)
+	go openLocalAppWhenReady(baseURL, browserLaunchRoute(setup), logger)
 }
 
 func browserLaunchRoute(setup bool) string {
@@ -36,20 +36,16 @@ func browserLaunchRoute(setup bool) string {
 	return route
 }
 
-func openLocalAppWhenReady(address, route string, logger *slog.Logger) {
-	host := address
-	if strings.HasPrefix(host, ":") {
-		host = "127.0.0.1" + host
-	}
-	baseURL := "http://" + host
+func openLocalAppWhenReady(baseURL, route string, logger *slog.Logger) {
+	baseURL = strings.TrimRight(baseURL, "/")
 	client := &http.Client{Timeout: time.Second}
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		response, err := client.Get(baseURL + "/healthz") // #nosec G107 -- the address is the validated loopback listener.
+		response, err := client.Get(baseURL + "/healthz") // #nosec G107 -- startup produced the validated server URL.
 		if err == nil {
 			_ = response.Body.Close()
 			if response.StatusCode == http.StatusOK {
-				if err := openSystemBrowser(fmt.Sprintf("%s/%s", strings.TrimRight(baseURL, "/"), route)); err != nil {
+				if err := openSystemBrowser(fmt.Sprintf("%s/%s", baseURL, route)); err != nil {
 					logger.Warn("default browser did not open", "error", err, "url", baseURL)
 				}
 				return

@@ -207,8 +207,10 @@ are marked as GitHub prereleases.
   runs an installer. See [Release Checks And Update Handoff](update-checks.md).
 - There is no silent in-app updater. Source users run `update.ps1`; packaged
   users install a reviewed newer package over the existing app.
-- The app binds loopback by default. Do not port-forward it; authenticated HTTPS
-  and LAN/mobile access are separate future work.
+- The app binds loopback by default. Do not port-forward it. Phase 20 provides
+  an operator-configured exact-address HTTPS/account mode for a private LAN,
+  outside the installer GUI; automatic certificate trust and supported mobile
+  acceptance remain separate work under R18.
 - Optional external runtimes are downloaded or installed only after an explicit
   GUI action. Managed llama.cpp uses official checksum-pinned CPU/CUDA bundles
   and no compiler toolchain; its files do not inflate the core release payload.
