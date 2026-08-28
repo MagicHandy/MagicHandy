@@ -80,9 +80,11 @@ shared application data or grant controller authority; ADR 0018 defines their
 scope.
 
 Passwords use Argon2id PHC strings with unique 16-byte salts and the OWASP
-minimum profile of 19 MiB memory, two passes, and one lane. Inputs are 12–1024
-bytes. Hash parameters are self-describing for future upgrades but are bounded
-when parsed so a damaged or hostile database cannot demand unbounded memory.
+minimum profile of 19 MiB memory, two passes, and one lane. Inputs require at
+least 8 Unicode characters and are capped at 1024 UTF-8 bytes; the UI continues
+to recommend a longer unique passphrase. Hash parameters are self-describing for
+future upgrades but are bounded when parsed so a damaged or hostile database
+cannot demand unbounded memory.
 Missing, disabled, and wrong-password cases perform the same password-hash work
 and return one generic error.
 
@@ -97,6 +99,10 @@ Routes provide one-time loopback bootstrap, login/logout, current-password
 change, session status/control context, profile-image operations, and
 administrator-only list/create/password/disable operations. The React app
 consumes those contracts without receiving the opaque session token.
+Bootstrap creates a temporary session so protected setup can finish after the
+live wall closes. The backend revokes the current session and clears its cookie
+on the first transition to completed setup, forcing the first ordinary login
+without exposing the token to React or depending on page-local state.
 
 An authenticated session uses a host-only, path-rooted, `HttpOnly`,
 `SameSite=Strict` cookie; HTTPS uses the `__Host-` prefix and `Secure`. Login

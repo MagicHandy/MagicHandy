@@ -12,9 +12,11 @@ import type {
 } from "../api/types";
 import { HostPathField } from "../components/HostPathField";
 import { OllamaLibraryImport } from "../components/OllamaLibraryImport";
+import { PasswordConfirmationField } from "../components/PasswordConfirmationField";
 import { LOCALE_OPTIONS, t, translateKnown } from "../i18n";
 import { useAppState, useToast } from "../state/app-state";
 import { formatBytes } from "../util/format";
+import { passwordMeetsMinimum } from "../util/password";
 import { useAuth } from "../state/auth";
 
 const STEPS = ["welcome", "access", "device", "runtime", "model", "voice", "install", "finish"] as const;
@@ -65,6 +67,7 @@ export function SetupRoute() {
   const [administratorUsername, setAdministratorUsername] = useState("");
   const [administratorPassword, setAdministratorPassword] = useState("");
   const [administratorConfirmation, setAdministratorConfirmation] = useState("");
+  const [createdAdministrator, setCreatedAdministrator] = useState(false);
   const [connectionKey, setConnectionKey] = useState("");
   const [connectionResult, setConnectionResult] = useState<ConnectionCheckResult | null>(null);
   const [ggufPath, setGGUFPath] = useState("");
@@ -177,13 +180,14 @@ export function SetupRoute() {
         chat_locale: promptLocale(settings.llm.prompt_set, settings.ui?.locale ?? "en"),
       });
     } else if (currentStep === "access" && accessChoice === "protected" && !auth.status?.initialized) {
-      if (new TextEncoder().encode(administratorPassword).byteLength < 12) {
-        throw new Error(t("Use a password or passphrase of at least 12 bytes."));
+      if (!passwordMeetsMinimum(administratorPassword)) {
+        throw new Error(t("Use a password or passphrase of at least 8 characters."));
       }
       if (administratorPassword !== administratorConfirmation) {
         throw new Error(t("The passwords do not match."));
       }
       await auth.bootstrap(administratorUsername.trim(), administratorPassword);
+      setCreatedAdministrator(true);
       setAdministratorPassword("");
       setAdministratorConfirmation("");
     } else if (currentStep === "device") {
@@ -293,9 +297,10 @@ export function SetupRoute() {
   });
 
   const finish = () => void run("finish", async () => {
-    await api.completeSetup(runtimeChoice === "skip");
-    await refresh();
+    const result = await api.completeSetup(runtimeChoice === "skip");
     window.location.hash = "#/chat";
+    if (result.signed_out) await auth.refresh();
+    else await refresh();
   });
 
   const managedModels = models?.models.filter((model) => model.state === "ready") ?? [];
@@ -306,12 +311,15 @@ export function SetupRoute() {
   const installationReady = installSubmitted && (!installJob || installJob.status === "complete");
   const accessReady = accessChoice === "local" || Boolean(auth.status?.initialized) || (
     Boolean(administratorUsername.trim()) &&
-    new TextEncoder().encode(administratorPassword).byteLength >= 12 &&
+    passwordMeetsMinimum(administratorPassword) &&
     administratorPassword === administratorConfirmation
   );
   const currentStepReady = (currentStep !== "model" || modelChoiceReady) && (currentStep !== "access" || accessReady);
   const canFinish = runtimeChoice === "skip" || (
     modelChoiceReady && (runtimeChoice !== "managed" || Boolean(models?.runtime.installed && models.runtime.current))
+  );
+  const requiresSignInAfterSetup = createdAdministrator || Boolean(
+    auth.status?.authentication_required && auth.status.authenticated && !settings?.ui?.setup_completed,
   );
 
   const title = [
@@ -421,7 +429,7 @@ export function SetupRoute() {
             cancel={cancelInstall}
             retry={() => void run("retry", beginInstall)}
           />}
-          {currentStep === "finish" && <FinishStep setup={setup} settings={settings} models={models} runtimeChoice={runtimeChoice} voiceChoice={voiceChoice} parakeetSelected={parakeetSelected} />}
+          {currentStep === "finish" && <FinishStep setup={setup} settings={settings} models={models} runtimeChoice={runtimeChoice} voiceChoice={voiceChoice} parakeetSelected={parakeetSelected} requiresSignIn={requiresSignInAfterSetup} />}
 
           {activeImport && <p className="setup-inline-status" role="status">{t("Importing {name}: {copied} of {total}", {
             name: activeImport.display_name,
@@ -438,7 +446,7 @@ export function SetupRoute() {
           {step < STEPS.length - 1 ? (
             <button type="button" className="btn btn-primary" disabled={locked || installationActive || !currentStepReady || (step === STEPS.indexOf("install") && !installationReady)} onClick={continueStep}>{busy === "continue" ? t("Saving...") : t("Continue")}</button>
           ) : (
-            <button type="button" className="btn btn-primary" disabled={locked || !canFinish} onClick={finish}>{busy === "finish" ? t("Finishing setup...") : t("Open MagicHandy")}</button>
+            <button type="button" className="btn btn-primary" disabled={locked || !canFinish} onClick={finish}>{busy === "finish" ? t("Finishing setup...") : requiresSignInAfterSetup ? t("Finish and sign in") : t("Open MagicHandy")}</button>
           )}
         </footer>
       </div>
@@ -491,8 +499,8 @@ function AccessStep({
     {initialized ? <div className="setup-notice"><strong>{t("Password protection is active.")}</strong><span>{t("Manage accounts, passwords, and your profile image from Settings > Access.")}</span></div> : choice === "protected" && <div className="setup-subsection account-setup-fields">
       <label className="field"><span className="label">{t("Administrator username")}</span><input type="text" autoComplete="username" spellCheck={false} value={username} disabled={locked} onChange={(event) => setUsername(event.target.value)} /></label>
       <div className="setup-fields two-columns">
-        <label className="field"><span className="label">{t("Password")}</span><input type="password" autoComplete="new-password" value={password} disabled={locked} onChange={(event) => setPassword(event.target.value)} /><span className="hint">{t("At least 12 bytes. A long, unique passphrase is recommended.")}</span></label>
-        <label className="field"><span className="label">{t("Confirm password")}</span><input type="password" autoComplete="new-password" value={confirmation} disabled={locked} onChange={(event) => setConfirmation(event.target.value)} /></label>
+        <label className="field"><span className="label">{t("Password")}</span><input type="password" autoComplete="new-password" value={password} disabled={locked} onChange={(event) => setPassword(event.target.value)} /><span className="hint">{t("At least 8 characters. A long, unique passphrase is recommended.")}</span></label>
+        <PasswordConfirmationField password={password} confirmation={confirmation} disabled={locked} onChange={setConfirmation} />
       </div>
       <p className="hint-block">{t("The password goes directly to the local account API. It is never written to installer logs, command lines, response files, or settings.")}</p>
     </div>}
@@ -661,9 +669,9 @@ function InstallStep({ job, submitted, runtimeChoice, voiceChoice, parakeetSelec
   </div>;
 }
 
-function FinishStep({ setup, settings, models, runtimeChoice, voiceChoice, parakeetSelected }: {
+function FinishStep({ setup, settings, models, runtimeChoice, voiceChoice, parakeetSelected, requiresSignIn }: {
   setup: SetupStatus; settings: PublicSettings; models: LLMModelManagerSnapshot | null;
-  runtimeChoice: RuntimeChoice; voiceChoice: VoiceChoice; parakeetSelected: boolean;
+  runtimeChoice: RuntimeChoice; voiceChoice: VoiceChoice; parakeetSelected: boolean; requiresSignIn: boolean;
 }) {
   const selectedModel = models?.models.find((model) => model.id === settings.llm.model);
   const runtimeSummary = runtimeChoice === "skip"
@@ -680,6 +688,7 @@ function FinishStep({ setup, settings, models, runtimeChoice, voiceChoice, parak
       <div><dt>{t("Speech input")}</dt><dd>{parakeetSelected ? t("Parakeet installed") : t("Not selected")}</dd></div>
       <div><dt>{t("Local address")}</dt><dd>{window.location.origin}</dd></div>
     </dl>
+    {requiresSignIn && <div className="setup-notice"><strong>{t("Sign-in required after setup")}</strong><span>{t("Finishing setup ends the temporary setup session. Sign in with the administrator password you just created.")}</span></div>}
     <div className="setup-notice"><strong>{t("Before commanding motion")}</strong><span>{t("Connect The Handy, confirm the active transport, and review speed and stroke limits in the top-bar connection manager.")}</span></div>
   </div>;
 }

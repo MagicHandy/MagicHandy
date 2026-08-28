@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/argon2"
 )
 
 const (
-	// MinPasswordBytes is the minimum accepted UTF-8 password length.
-	MinPasswordBytes = 12
+	// MinPasswordCharacters is the minimum accepted Unicode password length.
+	MinPasswordCharacters = 8
 	// MaxPasswordBytes bounds password-hashing work and request memory.
 	MaxPasswordBytes = 1024
 
@@ -48,12 +49,15 @@ var currentPasswordParameters = passwordParameters{
 // composition rules that encourage predictable substitutions; callers should
 // use a long, unique passphrase.
 func ValidatePassword(password string) error {
-	length := len([]byte(password))
-	if length < MinPasswordBytes {
-		return fmt.Errorf("%w: password must contain at least %d bytes", ErrInvalidPassword, MinPasswordBytes)
-	}
-	if length > MaxPasswordBytes {
+	lengthBytes := len(password)
+	if lengthBytes > MaxPasswordBytes {
 		return fmt.Errorf("%w: password exceeds %d bytes", ErrInvalidPassword, MaxPasswordBytes)
+	}
+	if !utf8.ValidString(password) {
+		return fmt.Errorf("%w: password must be valid UTF-8", ErrInvalidPassword)
+	}
+	if utf8.RuneCountInString(password) < MinPasswordCharacters {
+		return fmt.Errorf("%w: password must contain at least %d characters", ErrInvalidPassword, MinPasswordCharacters)
 	}
 	return nil
 }

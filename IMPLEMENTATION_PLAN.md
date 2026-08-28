@@ -2042,8 +2042,9 @@ multi-tenant.
   SQLite database, including unique normalized usernames, `admin`/`operator`
   roles, disabled state, token-digest sessions, indexes, and foreign keys
 - Argon2id password hashes with bounded PHC parsing, unique salts, generic
-  credential errors, independent bounded IP/username login throttles, and no
-  credential logging or readback
+  credential errors, an eight-Unicode-character minimum plus 1024-byte maximum,
+  independent bounded IP/username login throttles, and no credential logging or
+  readback
 - one-time loopback bootstrap; JSON login/logout/status; administrator-only
   create/list/password/disable endpoints; password/disable session revocation;
   last-enabled-admin protection
@@ -2060,10 +2061,13 @@ multi-tenant.
   app-data files, cache stamps, visibility checks, reconciliation, and monogram
   fallback
 - React login/logout and `401` expiry recovery; Settings > Access for own
-  profile/password plus administrator account create/reset/enable/disable
+  profile/password plus administrator account create/reset/enable/disable;
+  every new-password surface shares live accessible match/mismatch feedback
 - an eight-step installer-owned app wizard whose Access step defaults to local
   no-login or creates the first administrator directly; Inno Setup never
-  receives credentials and account setup never enables LAN by itself
+  receives credentials, protected completion revokes its temporary bootstrap
+  session and requires an ordinary password login, and account setup never
+  enables LAN by itself
 - compact shell control-profile disclosure showing Self and backend-authorized
   active linked accounts while remaining separate from login role and the
   stop-first single-controller lease

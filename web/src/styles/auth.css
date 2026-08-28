@@ -83,6 +83,48 @@
   color: var(--danger);
 }
 
+.password-match-feedback {
+  display: inline-flex;
+  min-height: 1rem;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.password-match-feedback:not([data-state="empty"])::before {
+  display: inline-grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  content: "✓";
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.password-match-feedback[data-state="match"] {
+  color: var(--accent);
+}
+
+.password-match-feedback[data-state="mismatch"] {
+  color: var(--warn);
+}
+
+.password-match-feedback[data-state="mismatch"]::before {
+  content: "!";
+}
+
+.field input[data-match-state="match"] {
+  border-color: var(--accent);
+}
+
+.field input[data-match-state="mismatch"] {
+  border-color: var(--warn);
+}
+
 .account-avatar {
   display: grid;
   width: 36px;

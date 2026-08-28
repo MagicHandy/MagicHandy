@@ -48,11 +48,14 @@ Access step. On an existing unprotected install, open Settings > Access and
 choose **Enable password protection**. Both forms call the same one-time local
 API. Creating the first account turns the account wall on immediately and on
 future loopback launches; it does not enable LAN listening or create a
-certificate.
+certificate. The wizard keeps a temporary authenticated session only long
+enough to finish protected setup, then revokes it and opens the normal sign-in
+screen so the new administrator password is exercised immediately.
 
 For automation, bootstrap remains a one-time API available only from the
 computer running MagicHandy. Start the app on its ordinary loopback address and
-use a unique passphrase of at least 12 bytes. The password is present only in
+use a unique passphrase of at least 8 Unicode characters; a longer passphrase is
+strongly recommended. The password is present only in
 PowerShell process memory and the loopback request body; it is not placed in
 shell history, an argument, a file, or MagicHandy logs.
 

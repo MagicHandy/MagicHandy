@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { PasswordConfirmationField } from "../components/PasswordConfirmationField";
 import { t, translateKnown } from "../i18n";
 import { useAuth } from "../state/auth";
-
-const passwordBytes = (value: string) => new TextEncoder().encode(value).byteLength;
+import { passwordMeetsMinimum } from "../util/password";
 
 export function LoginRoute() {
   const auth = useAuth();
@@ -20,8 +20,8 @@ export function LoginRoute() {
     event.preventDefault();
     if (busy) return;
     const normalized = username.trim();
-    if (bootstrap && passwordBytes(password) < 12) {
-      setError(t("Use a password or passphrase of at least 12 bytes."));
+    if (bootstrap && !passwordMeetsMinimum(password)) {
+      setError(t("Use a password or passphrase of at least 8 characters."));
       return;
     }
     if (bootstrap && password !== confirmation) {
@@ -88,21 +88,15 @@ export function LoginRoute() {
                 disabled={busy}
                 onChange={(event) => setPassword(event.target.value)}
               />
-              {bootstrap && <span className="hint">{t("At least 12 bytes. A long, unique passphrase is recommended.")}</span>}
+              {bootstrap && <span className="hint">{t("At least 8 characters. A long, unique passphrase is recommended.")}</span>}
             </label>
-            {bootstrap && (
-              <label className="field">
-                <span className="label">{t("Confirm password")}</span>
-                <input
-                  type="password"
-                  name="password-confirmation"
-                  autoComplete="new-password"
-                  value={confirmation}
-                  disabled={busy}
-                  onChange={(event) => setConfirmation(event.target.value)}
-                />
-              </label>
-            )}
+            {bootstrap && <PasswordConfirmationField
+              password={password}
+              confirmation={confirmation}
+              name="password-confirmation"
+              disabled={busy}
+              onChange={setConfirmation}
+            />}
             {error && <p className="form-status auth-error" role="alert">{error}</p>}
             <button className="btn btn-primary auth-submit" type="submit" disabled={busy || !username.trim() || !password}>
               {busy ? t("Checking…") : bootstrap ? t("Create administrator") : t("Sign in")}

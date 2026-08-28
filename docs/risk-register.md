@@ -1683,9 +1683,15 @@ Mitigation:
 - store salted Argon2id hashes with bounded parameters and generic failures;
   keep independent bounded per-IP and per-username login token buckets plus one
   cancelable global hash slot so a request burst cannot multiply memory cost
+- enforce an eight-Unicode-character usability floor and a 1024-byte ceiling,
+  show exact confirmation feedback without exposing the value, and continue to
+  recommend a longer unique passphrase because the floor is not a strength claim
 - store only random-session digests, use host-only HttpOnly Secure
   SameSite-Strict cookies, enforce idle/absolute/session-count bounds, and
   revoke sessions after password changes or disabling
+- revoke the bootstrap session when protected first-run setup is saved so the
+  administrator password is exercised immediately; normal reconfiguration does
+  not silently revoke an independently authenticated session
 - keep browser scheme/host/port exact and retain the controller lease as a
   second, separate authorization boundary; authentication never grants a new
   motion path or bypasses stop-first takeover

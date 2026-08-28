@@ -626,7 +626,7 @@ export const api = {
   installSetupPlan: (plan: SetupInstallPlan) =>
     request<{ installation: SetupJob }>("POST", "/api/setup/install", plan),
   cancelSetupInstall: () => request<{ installation: SetupJob }>("DELETE", "/api/setup/install"),
-  completeSetup: (allow_unready_llm = false) => request<{ settings: PublicSettings }>("POST", "/api/setup/complete", { allow_unready_llm }),
+  completeSetup: (allow_unready_llm = false) => request<{ settings: PublicSettings; signed_out?: boolean }>("POST", "/api/setup/complete", { allow_unready_llm }),
 
   // Provider checks are diagnostic-only. Cloud Connect/Disconnect own the
   // controller-gated command lifecycle.

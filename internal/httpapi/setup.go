@@ -739,7 +739,10 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	session, hasSession := authenticatedSession(r)
+	signOutAfterFirstCompletion := false
 	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
+		signOutAfterFirstCompletion = !current.UI.SetupCompleted && hasSession
 		current.UI.SetupCompleted = true
 		return current, nil
 	})
@@ -756,6 +759,15 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusBadGateway
 			payload["error"] = "setup was saved, but an active runtime could not apply the final settings"
 		}
+	}
+	if signOutAfterFirstCompletion {
+		if err := s.accounts.RevokeSession(r.Context(), session.token); err != nil {
+			writeError(w, http.StatusInternalServerError, errors.New("setup was saved, but the temporary setup session could not be revoked"))
+			return
+		}
+		s.clearSessionCookie(w)
+		w.Header().Set("Clear-Site-Data", `"cookies"`)
+		payload["signed_out"] = true
 	}
 	writeJSON(w, status, payload)
 }

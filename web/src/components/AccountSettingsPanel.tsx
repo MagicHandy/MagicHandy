@@ -6,9 +6,10 @@ import { useAuth } from "../state/auth";
 import { useToast } from "../state/app-state";
 import { PencilIcon, TrashIcon } from "../shell/icons";
 import { PROFILE_IMAGE_MAX_EDGE, resizeImageToJPEG } from "../util/profile-image";
+import { passwordMeetsMinimum } from "../util/password";
 import { AccountAvatar } from "./AccountAvatar";
+import { PasswordConfirmationField } from "./PasswordConfirmationField";
 
-const byteLength = (value: string) => new TextEncoder().encode(value).byteLength;
 const errorMessage = (reason: unknown) => reason instanceof Error ? translateKnown(reason.message) : t("Request failed");
 
 export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean }) {
@@ -106,9 +107,9 @@ function BootstrapAccountForm({ disabled, onCreated }: {
       <div className="settings-grid two">
         <label className="field"><span className="label">{t("Administrator username")}</span><input type="text" autoComplete="username" spellCheck={false} value={username} disabled={disabled || busy} onChange={(event) => setUsername(event.target.value)} /></label>
         <label className="field"><span className="label">{t("New password")}</span><input type="password" autoComplete="new-password" value={password} disabled={disabled || busy} onChange={(event) => setPassword(event.target.value)} /></label>
-        <label className="field"><span className="label">{t("Confirm password")}</span><input type="password" autoComplete="new-password" value={confirmation} disabled={disabled || busy} onChange={(event) => setConfirmation(event.target.value)} /></label>
+        <PasswordConfirmationField password={password} confirmation={confirmation} disabled={disabled || busy} onChange={setConfirmation} />
       </div>
-      <p className="hint-block">{t("Use at least 12 bytes and a unique passphrase. MagicHandy never stores or returns the plaintext password.")}</p>
+      <p className="hint-block">{t("Use at least 8 characters and a unique passphrase. MagicHandy never stores or returns the plaintext password.")}</p>
       {error && <p className="form-status auth-error" role="alert">{error}</p>}
       <button className="btn btn-primary" type="submit" disabled={disabled || busy || !username.trim() || !password}>{busy ? t("Creating…") : t("Enable password protection")}</button>
     </form>
@@ -212,7 +213,7 @@ function PasswordGroup({ disabled, onChanged }: { disabled: boolean; onChanged: 
         <div className="settings-grid two">
           <label className="field"><span className="label">{t("Current password")}</span><input type="password" autoComplete="current-password" value={current} disabled={disabled || busy} onChange={(event) => setCurrent(event.target.value)} /></label>
           <label className="field"><span className="label">{t("New password")}</span><input type="password" autoComplete="new-password" value={password} disabled={disabled || busy} onChange={(event) => setPassword(event.target.value)} /></label>
-          <label className="field"><span className="label">{t("Confirm password")}</span><input type="password" autoComplete="new-password" value={confirmation} disabled={disabled || busy} onChange={(event) => setConfirmation(event.target.value)} /></label>
+          <PasswordConfirmationField password={password} confirmation={confirmation} disabled={disabled || busy} onChange={setConfirmation} />
         </div>
         <p className="hint-block">{t("Changing your password signs out every browser session for this account.")}</p>
         {error && <p className="form-status auth-error" role="alert">{error}</p>}
@@ -297,7 +298,7 @@ function AccountList({ current, accounts, onChanged }: {
           </div>
           {resetID === account.id && <form className="account-reset-form" onSubmit={(event) => void reset(event, account)}>
             <label className="field"><span className="label">{t("New password for {username}", { username: account.username })}</span><input type="password" autoComplete="new-password" value={password} disabled={Boolean(busy)} onChange={(event) => setPassword(event.target.value)} /></label>
-            <label className="field"><span className="label">{t("Confirm password")}</span><input type="password" autoComplete="new-password" value={confirmation} disabled={Boolean(busy)} onChange={(event) => setConfirmation(event.target.value)} /></label>
+            <PasswordConfirmationField password={password} confirmation={confirmation} disabled={Boolean(busy)} onChange={setConfirmation} />
             <button className="btn btn-primary" type="submit" disabled={Boolean(busy) || !password}>{busy ? t("Saving…") : t("Save new password")}</button>
           </form>}
         </div>
@@ -345,7 +346,7 @@ function CreateAccountForm({ disabled, onCreated }: { disabled: boolean; onCreat
         <label className="field"><span className="label">{t("Username")}</span><input type="text" autoComplete="off" spellCheck={false} value={username} disabled={disabled || busy} onChange={(event) => setUsername(event.target.value)} /></label>
         <label className="field"><span className="label">{t("Role")}</span><select value={role} disabled={disabled || busy} onChange={(event) => setRole(event.target.value as AccountRole)}><option value="operator">{t("Operator")}</option><option value="admin">{t("Administrator")}</option></select></label>
         <label className="field"><span className="label">{t("Password")}</span><input type="password" autoComplete="new-password" value={password} disabled={disabled || busy} onChange={(event) => setPassword(event.target.value)} /></label>
-        <label className="field"><span className="label">{t("Confirm password")}</span><input type="password" autoComplete="new-password" value={confirmation} disabled={disabled || busy} onChange={(event) => setConfirmation(event.target.value)} /></label>
+        <PasswordConfirmationField password={password} confirmation={confirmation} disabled={disabled || busy} onChange={setConfirmation} />
       </div>
       {error && <p className="form-status auth-error" role="alert">{error}</p>}
       <button className="btn btn-primary" type="submit" disabled={disabled || busy || !username.trim() || !password}>{busy ? t("Creating…") : t("Create account")}</button>
@@ -354,7 +355,7 @@ function CreateAccountForm({ disabled, onCreated }: { disabled: boolean; onCreat
 }
 
 function newPasswordError(password: string, confirmation: string): string {
-  if (byteLength(password) < 12) return t("Use a password or passphrase of at least 12 bytes.");
+  if (!passwordMeetsMinimum(password)) return t("Use a password or passphrase of at least 8 characters.");
   if (password !== confirmation) return t("The passwords do not match.");
   return "";
 }

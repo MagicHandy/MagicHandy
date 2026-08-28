@@ -68,6 +68,109 @@ func TestAuthenticationBootstrapIsLoopbackOnlyAndSetsStrictSession(t *testing.T)
 	}
 }
 
+func TestSetupCompletionSignsOutBootstrapSessionOnLoopbackHTTP(t *testing.T) {
+	server, _ := newAuthenticationTestServer(t, false, false, nil)
+
+	bootstrap := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", strings.NewReader(`{
+		"username":"owner","password":"eight888"
+	}`))
+	bootstrap.Header.Set("Content-Type", "application/json")
+	bootstrap.Host = "127.0.0.1:49717"
+	bootstrap.RemoteAddr = "127.0.0.1:50000"
+	bootstrapRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(bootstrapRecorder, bootstrap)
+	if bootstrapRecorder.Code != http.StatusCreated {
+		t.Fatalf("bootstrap status = %d, want %d: %s", bootstrapRecorder.Code, http.StatusCreated, bootstrapRecorder.Body.String())
+	}
+	cookies := bootstrapRecorder.Result().Cookies()
+	if len(cookies) != 1 || cookies[0].Name != loopbackSessionCookieName {
+		t.Fatalf("bootstrap cookies = %+v, want loopback session", cookies)
+	}
+	bootstrapCookie := cookies[0]
+
+	complete := withController(httptest.NewRequest(http.MethodPost, "/api/setup/complete", strings.NewReader(`{
+		"allow_unready_llm":true
+	}`)))
+	complete.Header.Set("Content-Type", "application/json")
+	complete.Host = "127.0.0.1:49717"
+	complete.RemoteAddr = "127.0.0.1:50000"
+	complete.AddCookie(bootstrapCookie)
+	completeRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(completeRecorder, complete)
+	if completeRecorder.Code != http.StatusOK {
+		t.Fatalf("complete status = %d, want %d: %s", completeRecorder.Code, http.StatusOK, completeRecorder.Body.String())
+	}
+	if !strings.Contains(completeRecorder.Body.String(), `"signed_out":true`) {
+		t.Fatalf("complete body = %s, want signed_out", completeRecorder.Body.String())
+	}
+	cleared := completeRecorder.Result().Cookies()
+	if len(cleared) != 1 || cleared[0].Name != loopbackSessionCookieName || cleared[0].MaxAge >= 0 {
+		t.Fatalf("completion cookies = %+v, want expired loopback session", cleared)
+	}
+
+	status := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	status.Host = "127.0.0.1:49717"
+	status.RemoteAddr = "127.0.0.1:50001"
+	status.AddCookie(bootstrapCookie)
+	statusRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(statusRecorder, status)
+	if statusRecorder.Code != http.StatusOK ||
+		!strings.Contains(statusRecorder.Body.String(), `"authentication_required":true`) ||
+		!strings.Contains(statusRecorder.Body.String(), `"authenticated":false`) {
+		t.Fatalf("post-setup status = %d: %s", statusRecorder.Code, statusRecorder.Body.String())
+	}
+
+	private := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	private.Host = "127.0.0.1:49717"
+	private.RemoteAddr = "127.0.0.1:50002"
+	privateRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(privateRecorder, private)
+	if privateRecorder.Code != http.StatusUnauthorized {
+		t.Fatalf("post-setup state status = %d, want %d: %s", privateRecorder.Code, http.StatusUnauthorized, privateRecorder.Body.String())
+	}
+}
+
+func TestCompletedSetupReconfigurationPreservesOrdinarySession(t *testing.T) {
+	server, accountStore := newAuthenticationTestServer(t, true, false, nil)
+	admin, err := accountStore.BootstrapAdmin(t.Context(), "owner", "eight888")
+	if err != nil {
+		t.Fatalf("BootstrapAdmin: %v", err)
+	}
+	saveSettings(t, server.store, func(current config.Settings) config.Settings {
+		current.UI.SetupCompleted = true
+		return current
+	})
+	token, _, err := accountStore.NewSession(t.Context(), admin.ID)
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	// #nosec G124 -- request fixture; AddCookie serializes name/value only.
+	cookie := &http.Cookie{Name: loopbackSessionCookieName, Value: token}
+
+	reconfigure := withController(httptest.NewRequest(http.MethodPost, "/api/setup/complete", strings.NewReader(`{
+		"allow_unready_llm":true
+	}`)))
+	reconfigure.Header.Set("Content-Type", "application/json")
+	reconfigure.Host = "127.0.0.1:49717"
+	reconfigure.RemoteAddr = "127.0.0.1:50003"
+	reconfigure.AddCookie(cookie)
+	reconfigureRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(reconfigureRecorder, reconfigure)
+	if reconfigureRecorder.Code != http.StatusOK || strings.Contains(reconfigureRecorder.Body.String(), `"signed_out":true`) {
+		t.Fatalf("reconfigure status = %d: %s", reconfigureRecorder.Code, reconfigureRecorder.Body.String())
+	}
+
+	status := httptest.NewRequest(http.MethodGet, "/api/auth/status", nil)
+	status.Host = "127.0.0.1:49717"
+	status.RemoteAddr = "127.0.0.1:50003"
+	status.AddCookie(cookie)
+	statusRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(statusRecorder, status)
+	if statusRecorder.Code != http.StatusOK || !strings.Contains(statusRecorder.Body.String(), `"authenticated":true`) {
+		t.Fatalf("reconfigure auth status = %d: %s", statusRecorder.Code, statusRecorder.Body.String())
+	}
+}
+
 func TestRequiredAuthenticationLoadsLoginShellThenUsesJSONSession(t *testing.T) {
 	server, accountStore := newAuthenticationTestServer(t, true, true, []string{"192.168.1.20"})
 	admin, err := accountStore.BootstrapAdmin(t.Context(), "owner", "correct horse battery staple")

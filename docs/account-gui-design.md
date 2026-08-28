@@ -45,11 +45,17 @@ The in-app wizard now has an **Access** step immediately after Welcome:
    values, or settings.
 
 Creating the first account is the durable opt-in. The backend turns on the
-authentication wall immediately, creates the initial browser session, and
-requires login on later launches even if the process is restarted without
-`-require-auth`. This choice alone does not bind a LAN address or configure a
-certificate. Remote login still requires an explicit private listen IP and a
-trusted matching HTTPS certificate.
+authentication wall immediately and creates a temporary browser session so the
+same tab can finish protected setup. On the first transition from incomplete to
+complete setup, the backend saves completion, revokes the current setup session,
+clears its cookie, and returns the user to the password screen. This remains
+true if the wizard page was reloaded after account creation. Later launches also
+require login even if the process is restarted without `-require-auth`. An
+administrator who deliberately reopens setup while
+already signed in is not logged out, because the saved setup is already complete.
+This choice alone does not bind a LAN address or configure a certificate. Remote
+login still requires an explicit private listen IP and a trusted matching HTTPS
+certificate.
 
 ### Login and session expiry
 
@@ -140,9 +146,13 @@ running/healthy state; solid red remains Emergency Stop.
 The login screen is one quiet bounded panel inside the permanent shell, not a
 marketing hero. Settings follows the existing section/group grammar. The
 top-bar trigger stays compact and collapses gracefully at narrow widths. Every
-form uses native labels and password autocomplete semantics; disclosures move
-focus to Close and restore the trigger when closed. No identity animation is
-required, including under `prefers-reduced-motion`.
+form uses native labels and password autocomplete semantics. New-password forms
+share an eight-Unicode-character minimum and show live textual confirmation:
+steel azure with a check for an exact match, or amber with an exclamation mark
+and `aria-invalid` for a mismatch. The polite live region is always present, so
+the state is announced without relying on color or adding motion. Disclosures
+move focus to Close and restore the trigger when closed. No identity animation
+is required, including under `prefers-reduced-motion`.
 
 ## Current Acceptance
 

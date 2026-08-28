@@ -31,17 +31,22 @@ func TestPasswordHashRoundTripAndUniqueSalt(t *testing.T) {
 
 func TestPasswordValidationBounds(t *testing.T) {
 	for _, test := range []struct {
+		name     string
 		password string
 		wantErr  bool
 	}{
-		{password: strings.Repeat("a", MinPasswordBytes-1), wantErr: true},
-		{password: strings.Repeat("a", MinPasswordBytes)},
-		{password: strings.Repeat("a", MaxPasswordBytes)},
-		{password: strings.Repeat("a", MaxPasswordBytes+1), wantErr: true},
+		{name: "seven ASCII characters", password: strings.Repeat("a", MinPasswordCharacters-1), wantErr: true},
+		{name: "eight ASCII characters", password: strings.Repeat("a", MinPasswordCharacters)},
+		{name: "eight multibyte characters", password: strings.Repeat("密", MinPasswordCharacters)},
+		{name: "maximum bytes", password: strings.Repeat("a", MaxPasswordBytes)},
+		{name: "over maximum bytes", password: strings.Repeat("a", MaxPasswordBytes+1), wantErr: true},
+		{name: "invalid UTF-8", password: string([]byte{0xff, 0xfe, 0xfd, 0xfc, 0xfb, 0xfa, 0xf9, 0xf8}), wantErr: true},
 	} {
-		if err := ValidatePassword(test.password); (err != nil) != test.wantErr {
-			t.Errorf("ValidatePassword(length=%d) = %v, wantErr %t", len(test.password), err, test.wantErr)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			if err := ValidatePassword(test.password); (err != nil) != test.wantErr {
+				t.Errorf("ValidatePassword(bytes=%d) = %v, wantErr %t", len(test.password), err, test.wantErr)
+			}
+		})
 	}
 }
 

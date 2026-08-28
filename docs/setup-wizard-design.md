@@ -91,10 +91,19 @@ absent until a real model catalog, hashes, licenses, and download handlers exist
 
 The local no-login path stays selected by default. Choosing protected access
 reveals username, password, and confirmation fields in the same graphite/steel
-setup surface. A passphrase must contain at least 12 UTF-8 bytes. Continue calls
-the one-time loopback bootstrap endpoint, then clears both password fields.
+setup surface. A passphrase must contain at least 8 Unicode characters, with a
+longer unique passphrase still recommended. Confirmation reports match or
+mismatch as text and a compact icon while the user types, uses `aria-live` and
+`aria-invalid`, and does not rely on color alone. Continue calls the one-time
+loopback bootstrap endpoint, then clears both password fields.
 Account existence durably enables the login wall for this process and future
-launches; reopening setup shows status rather than a second bootstrap form.
+launches. The bootstrap cookie exists only to authorize the remaining protected
+wizard steps: on the first transition to completed setup, **Finish and sign in**
+saves setup, revokes the current session, clears the cookie, and presents the
+ordinary password screen—even if the page was reloaded after account creation.
+Reopening an already completed setup shows status rather than a second bootstrap
+form and does not sign out an administrator who entered through the normal login
+screen.
 
 The screen explicitly separates entry protection from network exposure. It
 does not change the listen address, generate a certificate, install a trust
@@ -184,7 +193,8 @@ slots.
 - Keyboard-only navigation and radio selection work.
 - The Access step defaults to local/no-login, can create exactly one initial
   administrator, never sends the password through installer-owned state, and
-  does not enable LAN exposure.
+  does not enable LAN exposure. Finishing a protected first run revokes the
+  temporary setup session and requires the new password through the login UI.
 - Runtime choice persists before model selection can be skipped.
 - Managed llama.cpp is the fresh-install Recommended default; Ollama is never
   selected implicitly.

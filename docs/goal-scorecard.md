@@ -58,7 +58,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Item | Target | Status | Evidence / Notes |
 | --- | --- | --- | --- |
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
-| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 account-GUI candidate: 25,175,552 bytes plain and 18,162,176 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath` (+966,144 / +713,728 from alpha.37; +128,512 / +136,192 from the Phase 20 foundation). The increase covers accounts, profiles, control context, and pure-Go `x/crypto/argon2`; the core remains 11,837,824 bytes below the 30,000,000-byte stripped budget. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
+| Binary size | < 30 MB | **Met** | Current local Go 1.26.4 account-GUI candidate: 25,180,672 bytes plain and 18,167,296 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath` (+5,120 each for the shared eight-character policy, feedback, and protected-setup session closeout; +971,264 / +718,848 from alpha.37). The increase covers accounts, profiles, control context, pure-Go `x/crypto/argon2`, and the shared password/session contract; the core remains 11,832,704 bytes below the 30,000,000-byte stripped budget. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the exact account-GUI stripped binary listened in 73.6-123.8 ms and completed `/healthz` in 77.8-124.9 ms total, including process spawn and loopback request. An immediately preceding first launch after rebuild was a 600.0 ms host outlier; the following four were 84.9-131.5 ms, so controlled release telemetry still owns the uncached boundary. Managed preload was asynchronous; these fixtures had no installed model, account hash operation, or voice worker. |
 | Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.37` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.37 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
@@ -143,7 +143,9 @@ Ranked by threat to the stated goals:
    Web Bluetooth still depends on an active Edge tab, user-driven pairing, and
    browser GATT stability. Do not treat the short run as a one-hour BLE soak.
 4. **Feature growth vs binary/memory/browser budgets.** The complete embedded
-   browser payload is 1,774,857 raw / 823,883 level-9 gzip bytes. The account
+   browser payload is 1,777,902 raw / 824,834 level-9 gzip bytes. The password
+   policy, shared confirmation feedback, and explicit protected-setup sign-in
+   follow-up add 3,045 raw / 951 gzip bytes. The account
    GUI adds 74,766 raw / 19,280 gzip bytes over alpha.37 and the Phase 20
    backend-only foundation. Backend account/session code plus pure-Go Argon2id
    and the profile/control-context follow-up increase the release-style core by
@@ -151,9 +153,9 @@ Ranked by threat to the stated goals:
    password operation leaves a measured 19.44 MiB working-set / 19.13 MiB
    private-byte increase in the sampled process, while a single admission slot
    prevents concurrent requests from multiplying that work area. Lazy locale
-   loading keeps the account-GUI English startup path at 854,268 raw / 223,825
-   gzip bytes (+41,480 / +9,069 from the foundation), while all HTML/CSS/JS is
-   1,330,621 raw / 386,486 gzip bytes. Alpha.37's localized,
+   loading keeps the account-GUI English startup path at 855,507 raw / 224,270
+   gzip bytes (+1,239 / +445 for this follow-up), while all HTML/CSS/JS is
+   1,333,666 raw / 387,437 gzip bytes. Alpha.37's localized,
    persona-addressed composer adds 140 raw / 87 gzip bytes overall and 170 raw
    / 81 gzip bytes to the English startup path against alpha.36, with no new
    dependency, asset, or browser-owned persona state. Alpha.36's requested/
@@ -206,6 +208,20 @@ Ranked by threat to the stated goals:
    documented fallback.
 
 ## History
+
+- **2026-08-28** - Reduced the account password floor from 12 UTF-8 bytes to
+  eight Unicode characters while retaining the 1024-byte hashing cap, Argon2id,
+  generic login failures, throttling, and the recommendation for a longer unique
+  passphrase. Setup, first-account bootstrap, own-password changes,
+  administrator resets, and account creation now share live confirmation text,
+  icon, input border, `aria-live`, and `aria-invalid` behavior. Match uses the
+  existing accent; mismatch uses amber, so neither consumes running green or
+  Emergency Stop red. Protected first-run completion now also revokes its
+  temporary bootstrap session and presents the ordinary password screen; the
+  backend derives this from saved setup state so a page reload cannot bypass it,
+  while later reconfiguration preserves its ordinary login session. The complete
+  UI is 1,777,902 raw / 824,834 gzip bytes (+3,045 / +951), and plain/stripped
+  binaries are 25,180,672 / 18,167,296 bytes (+5,120 each), all within budget.
 
 - **2026-08-28** - Completed the account access GUI on its own branch over the
   published Phase 20 foundation. The eight-step installer now asks whether to
