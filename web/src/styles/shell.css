@@ -833,6 +833,7 @@
   flex-direction: column;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: clamp(16px, 2.4vw, 26px);
 }
 .workspace > :not(.backend-banner) {

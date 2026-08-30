@@ -200,6 +200,8 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		server.applyInstalledVoiceModule,
 		server.applyInstalledParakeet,
 	)
+	server.setup.prepareParakeet = server.prepareParakeetRepair
+	server.setup.restoreParakeet = server.restoreParakeetAfterRepair
 
 	manager, err := server.newModeManager()
 	if err != nil {

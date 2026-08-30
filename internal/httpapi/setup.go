@@ -114,6 +114,8 @@ type setupJob struct {
 	Steps          []setupJobStep `json:"steps,omitempty"`
 	CompletedSteps int            `json:"completed_steps,omitempty"`
 	TotalSteps     int            `json:"total_steps,omitempty"`
+	BytesCompleted int64          `json:"bytes_completed,omitempty"`
+	BytesTotal     int64          `json:"bytes_total,omitempty"`
 	StartedAt      string         `json:"started_at"`
 	UpdatedAt      string         `json:"updated_at"`
 }
@@ -132,16 +134,21 @@ type setupJobState struct {
 }
 
 type setupManager struct {
-	ctx            context.Context
-	cancel         context.CancelFunc
-	dataDir        string
-	executablePath string
-	logger         *slog.Logger
-	onInstalled    func(context.Context, setupVoiceInstallResult) error
-	onParakeet     func(context.Context, setupParakeetInstallResult) error
-	hardwareMu     sync.Mutex
-	hardwareOnce   sync.Once
-	hardware       map[string]any
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	dataDir              string
+	executablePath       string
+	logger               *slog.Logger
+	onInstalled          func(context.Context, setupVoiceInstallResult) error
+	onParakeet           func(context.Context, setupParakeetInstallResult) error
+	prepareParakeet      func(context.Context) (bool, error)
+	restoreParakeet      func(context.Context) error
+	preflightParakeet    func(string) error
+	downloadParakeet     func(context.Context, string) error
+	runParakeetInstaller func(context.Context, string, setupParakeetInstallResult) error
+	hardwareMu           sync.Mutex
+	hardwareOnce         sync.Once
+	hardware             map[string]any
 
 	mu     sync.Mutex
 	job    *setupJobState
@@ -158,11 +165,16 @@ func newSetupManager(
 	onParakeet func(context.Context, setupParakeetInstallResult) error,
 ) *setupManager {
 	ctx, cancel := context.WithCancel(parent)
-	return &setupManager{
+	manager := &setupManager{
 		ctx: ctx, cancel: cancel, dataDir: dataDir, executablePath: executablePath,
 		logger: logger, onInstalled: onInstalled, onParakeet: onParakeet,
 		hardware: map[string]any{"platform": runtime.GOOS + "/" + runtime.GOARCH, "nvidia": false, "cuda": false},
 	}
+	manager.preflightParakeet = preflightParakeetInstall
+	manager.downloadParakeet = manager.downloadParakeetAssets
+	manager.runParakeetInstaller = manager.runParakeetPowerShellInstaller
+	manager.loadPersistedSetupJob()
+	return manager
 }
 
 func (m *setupManager) HardwareSnapshot() map[string]any {
@@ -428,8 +440,8 @@ func (m *setupManager) finishJob(ctx context.Context, id string, err error, subj
 
 func (m *setupManager) updateJob(id, status, message, output string) {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.job == nil || m.job.ID != id {
+		m.mu.Unlock()
 		return
 	}
 	m.job.Status = status
@@ -441,6 +453,34 @@ func (m *setupManager) updateJob(id, status, message, output string) {
 		if line := lastSetupOutputLine(output); line != "" {
 			m.job.Message = line
 		}
+	}
+	m.job.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
+	terminal := status == setupJobComplete || status == setupJobFailed || status == setupJobCancelled
+	job := cloneSetupJob(m.job.setupJob)
+	m.mu.Unlock()
+	if terminal {
+		m.persistSetupJob(job)
+	}
+}
+
+func (m *setupManager) updateJobProgress(id, label string, completed, total int64) {
+	if completed < 0 {
+		completed = 0
+	}
+	if total < 0 {
+		total = 0
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.job == nil || m.job.ID != id {
+		return
+	}
+	m.job.BytesCompleted = completed
+	m.job.BytesTotal = total
+	if total > 0 {
+		m.job.Message = fmt.Sprintf("%s: %.1f MiB of %.1f MiB.", label, float64(completed)/(1<<20), float64(total)/(1<<20))
+	} else {
+		m.job.Message = fmt.Sprintf("%s: %.1f MiB downloaded.", label, float64(completed)/(1<<20))
 	}
 	m.job.UpdatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 }
@@ -509,7 +549,7 @@ func resolvePackagedSetupScript(executablePath, name string) (string, error) {
 			return filepath.Abs(candidate)
 		}
 	}
-	return "", fmt.Errorf("setup helper %s is unavailable; repair MagicHandy or use the packaged scripts manually", safeName)
+	return "", fmt.Errorf("setup helper %s is unavailable; repair the MagicHandy installation", safeName)
 }
 
 func resolveSetupPowerShell() (string, error) {
@@ -683,6 +723,9 @@ func (s *Server) handleSetupPreferences(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleSetupStatus(w http.ResponseWriter, _ *http.Request) {
 	settings, status := s.store.Snapshot()
+	parakeet := setupParakeet
+	parakeetStatus := inspectParakeetAppModule(settings.Voice.ASRWorkerPath, s.voiceExecutable, status.DataDir)
+	parakeet.Preselected = shouldPreselectParakeet(settings.Voice, parakeetStatus)
 	helpers := map[string]bool{
 		"llama":    setupScriptPresent(s.voiceExecutable, "install-llama-runtime.ps1"),
 		"parakeet": setupScriptPresent(s.voiceExecutable, "install-parakeet-module.ps1"),
@@ -694,11 +737,16 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, _ *http.Request) {
 		"hardware":        s.setup.HardwareSnapshot(),
 		"voice_modules":   setupVoiceModules,
 		"llama_runtime":   setupLlamaRuntime,
-		"parakeet":        setupParakeet,
+		"parakeet":        parakeet,
 		"installation":    s.setup.Snapshot(),
 		"scripts_present": helpers["llama"] && helpers["parakeet"] && helpers["voice"],
 		"helpers":         helpers,
 	})
+}
+
+func shouldPreselectParakeet(settings config.VoiceSettings, status voiceModuleStatus) bool {
+	return (settings.ASRProvider == config.VoiceASRProviderParakeet && settings.ParakeetSource == config.ParakeetSourceApp) ||
+		voiceModuleFlag(status.RunnerInstalled) || voiceModuleFlag(status.ModelInstalled) || voiceModuleFlag(status.ResumablePartial)
 }
 
 func (s *Server) handleSetupVoiceInstall(w http.ResponseWriter, r *http.Request) {

@@ -50,6 +50,35 @@ func TestSetupStatusDescribesOptionalInstallersWithoutSecrets(t *testing.T) {
 	}
 }
 
+func TestParakeetSetupPreselectionRecognizesSavedRuntimeAndPartialState(t *testing.T) {
+	base := config.DefaultSettings().Voice
+	for name, testCase := range map[string]struct {
+		settings config.VoiceSettings
+		status   voiceModuleStatus
+	}{
+		"saved managed provider": {
+			settings: func() config.VoiceSettings {
+				value := base
+				value.ASRProvider = config.VoiceASRProviderParakeet
+				value.ParakeetSource = config.ParakeetSourceApp
+				return value
+			}(),
+		},
+		"existing runner":   {settings: base, status: voiceModuleStatus{RunnerInstalled: optionalBool(true)}},
+		"existing model":    {settings: base, status: voiceModuleStatus{ModelInstalled: optionalBool(true)}},
+		"resumable partial": {settings: base, status: voiceModuleStatus{ResumablePartial: optionalBool(true)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !shouldPreselectParakeet(testCase.settings, testCase.status) {
+				t.Fatal("Parakeet was not preselected")
+			}
+		})
+	}
+	if shouldPreselectParakeet(base, voiceModuleStatus{}) {
+		t.Fatal("fresh unselected Parakeet was preselected")
+	}
+}
+
 func TestSetupPreferencesSaveScopedChoicesAndRedactKey(t *testing.T) {
 	server := newTestServer(t)
 	settings, _ := server.store.Snapshot()

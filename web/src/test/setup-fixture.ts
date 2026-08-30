@@ -20,7 +20,7 @@ export const setupFixture: SetupStatus = {
   },
   parakeet: {
     name: "Parakeet", summary: "Local speech recognition.", runner_license: "MIT", model_license: "CC-BY-4.0",
-    download_size: "About 646 MiB", runner_version: "fixture", model: "TDT 0.6B v3 Q4_K",
+    download_size: "About 646 MiB", runner_version: "fixture", model: "TDT 0.6B v3 Q4_K", preselected: false,
   },
   scripts_present: true,
   helpers: { llama: true, parakeet: true, voice: true },

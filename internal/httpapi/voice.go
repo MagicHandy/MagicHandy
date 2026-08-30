@@ -575,6 +575,10 @@ type voiceModuleStatus struct {
 	Installed        bool   `json:"installed"`
 	WorkerInstalled  bool   `json:"worker_installed"`
 	RuntimeInstalled bool   `json:"runtime_installed"`
+	RunnerInstalled  *bool  `json:"runner_installed,omitempty"`
+	ModelInstalled   *bool  `json:"model_installed,omitempty"`
+	ResumablePartial *bool  `json:"resumable_partial,omitempty"`
+	PartialBytes     int64  `json:"partial_bytes,omitempty"`
 	RuntimeBackend   string `json:"runtime_backend,omitempty"`
 	Message          string `json:"message"`
 }
@@ -583,12 +587,18 @@ func inspectParakeetAppModule(workerOverride, executablePath, dataDir string) vo
 	worker := resolveWorkerBinary(workerOverride, executablePath, dataDir, "voice-parakeet-worker")
 	serverPath, modelPath := parakeetAppPaths(dataDir)
 	workerInstalled := isRegularFile(worker)
-	runtimeInstalled := isRegularFile(serverPath) && isRegularFile(modelPath)
+	runnerInstalled := isRegularFile(serverPath)
+	modelInstalled := isRegularFile(modelPath)
+	runtimeInstalled := runnerInstalled && modelInstalled
+	partialBytes, resumablePartial := inspectParakeetPartial(dataDir)
 	status := voiceModuleStatus{
 		State:            "missing",
 		WorkerInstalled:  workerInstalled,
 		RuntimeInstalled: runtimeInstalled,
-		Message:          "Parakeet is not installed by MagicHandy. Rerun update.ps1 with Parakeet enabled.",
+		RunnerInstalled:  optionalBool(runnerInstalled),
+		ModelInstalled:   optionalBool(modelInstalled),
+		ResumablePartial: optionalBool(resumablePartial),
+		PartialBytes:     partialBytes,
 	}
 	if workerInstalled && runtimeInstalled {
 		status.State = "ready"
@@ -596,11 +606,32 @@ func inspectParakeetAppModule(workerOverride, executablePath, dataDir string) vo
 		status.Message = "MagicHandy's Parakeet worker, runner, and model are installed."
 		return status
 	}
-	if workerInstalled || runtimeInstalled {
+	missing := make([]string, 0, 3)
+	if !workerInstalled {
+		missing = append(missing, "worker")
+	}
+	if !runnerInstalled {
+		missing = append(missing, "runner")
+	}
+	if !modelInstalled {
+		missing = append(missing, "model")
+	}
+	status.Message = "Parakeet needs repair. Missing: " + strings.Join(missing, ", ") + "."
+	if resumablePartial {
+		status.Message += fmt.Sprintf(" Resumable download saved: %.1f MiB.", float64(partialBytes)/(1<<20))
+	}
+	if workerInstalled || runnerInstalled || modelInstalled || resumablePartial {
 		status.State = "incomplete"
-		status.Message = "The MagicHandy Parakeet module is incomplete. Rerun update.ps1 with Parakeet enabled."
 	}
 	return status
+}
+
+func optionalBool(value bool) *bool {
+	return &value
+}
+
+func voiceModuleFlag(value *bool) bool {
+	return value != nil && *value
 }
 
 func inspectTTSModule(settings config.VoiceSettings, executablePath, dataDir string) voiceModuleStatus {
@@ -619,7 +650,7 @@ func inspectTTSModule(settings config.VoiceSettings, executablePath, dataDir str
 		WorkerInstalled:  isRegularFile(worker),
 		RuntimeInstalled: runtimeInstalled,
 		RuntimeBackend:   settings.TTSDevice,
-		Message:          name + " is not installed. Run scripts/install-tts-module.ps1.",
+		Message:          name + " is not installed.",
 	}
 	if status.WorkerInstalled && runtimeInstalled {
 		if settings.TTSProvider == config.VoiceTTSProviderFasterQwen &&
@@ -639,7 +670,7 @@ func inspectTTSModule(settings config.VoiceSettings, executablePath, dataDir str
 		case !status.WorkerInstalled:
 			status.Message = name + " cannot find the bundled OpenAI-compatible worker. Repair or reinstall MagicHandy."
 		case runtimeErr != nil:
-			status.Message = name + " is incomplete: " + runtimeErr.Error() + ". Rerun scripts/update-tts-module.ps1 or retry from Setup."
+			status.Message = name + " is incomplete: " + runtimeErr.Error() + "."
 		}
 	}
 	return status

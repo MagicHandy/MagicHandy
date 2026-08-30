@@ -391,30 +391,40 @@ func TestManagedTTSAutoLaunchCanBeDisabled(t *testing.T) {
 func TestInspectTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
 	root := t.TempDir()
 	appDir := filepath.Join(root, "app")
-	worker := managedTestFile(t, filepath.Join(appDir, workerBinaryName("voice-openai-tts-worker")))
 	settings := config.DefaultSettings().Voice
 	settings.TTSProvider = config.VoiceTTSProviderFasterQwen
 	settings.TTSModuleRoot = filepath.Join(root, "module")
 	settings.TTSModel = config.DefaultFasterQwenModel
 
 	status := inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
-	if status.State != "incomplete" || !status.WorkerInstalled || status.RuntimeInstalled {
-		t.Fatalf("adapter-only module status = %+v (worker %q)", status, worker)
+	requireVoiceModuleState(t, "missing module", status, "missing", false, false, false)
+	if status.Message != "Faster Qwen3-TTS is not installed." {
+		t.Fatalf("missing module status = %+v", status)
 	}
+	if strings.Contains(status.Message, ".ps1") {
+		t.Fatalf("managed recovery message exposed a script: %q", status.Message)
+	}
+
+	worker := managedTestFile(t, filepath.Join(appDir, workerBinaryName("voice-openai-tts-worker")))
+	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
+	requireVoiceModuleState(t, "adapter-only module "+worker, status, "incomplete", false, true, false)
 
 	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, ".venv", managedPythonDirectory(), managedPythonName()))
 	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, "source", "examples", "openai_server.py"))
 	managedTestFile(t, filepath.Join(settings.TTSModuleRoot, "magichandy-faster-qwen-server.py"))
 	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
-	if status.State != "incomplete" || status.Installed || status.RuntimeInstalled ||
-		!strings.Contains(status.Message, "Rerun") {
+	requireVoiceModuleState(t, "pre-model module", status, "incomplete", false, true, false)
+	if !strings.Contains(status.Message, "incomplete") {
 		t.Fatalf("pre-model module status = %+v", status)
+	}
+	if strings.Contains(status.Message, ".ps1") {
+		t.Fatalf("managed recovery message exposed a script: %q", status.Message)
 	}
 
 	managedFasterQwenSnapshot(t, settings.TTSModuleRoot, settings.TTSModel, "abc123")
 	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
-	if status.State != "incomplete" || status.Installed || !status.RuntimeInstalled ||
-		!strings.Contains(status.Message, "Voice settings") {
+	requireVoiceModuleState(t, "pre-reference module", status, "incomplete", false, true, true)
+	if !strings.Contains(status.Message, "Voice settings") {
 		t.Fatalf("pre-reference module status = %+v", status)
 	}
 
@@ -422,8 +432,30 @@ func TestInspectTTSModuleSeparatesAdapterAndRuntime(t *testing.T) {
 	settings.TTSReferenceWAV = filepath.Join(root, "reference.wav")
 	managedTestFile(t, settings.TTSReferenceWAV)
 	status = inspectTTSModule(settings, filepath.Join(appDir, "magichandy.exe"), "")
-	if status.State != "ready" || !status.Installed || !status.RuntimeInstalled {
-		t.Fatalf("complete module status = %+v", status)
+	requireVoiceModuleState(t, "complete module", status, "ready", true, true, true)
+}
+
+func requireVoiceModuleState(
+	t *testing.T,
+	label string,
+	status voiceModuleStatus,
+	state string,
+	installed bool,
+	workerInstalled bool,
+	runtimeInstalled bool,
+) {
+	t.Helper()
+	if status.State != state {
+		t.Fatalf("%s state = %q, want %q", label, status.State, state)
+	}
+	if status.Installed != installed {
+		t.Fatalf("%s installed = %t, want %t", label, status.Installed, installed)
+	}
+	if status.WorkerInstalled != workerInstalled {
+		t.Fatalf("%s worker installed = %t, want %t", label, status.WorkerInstalled, workerInstalled)
+	}
+	if status.RuntimeInstalled != runtimeInstalled {
+		t.Fatalf("%s runtime installed = %t, want %t", label, status.RuntimeInstalled, runtimeInstalled)
 	}
 }
 
@@ -657,33 +689,35 @@ func TestInspectParakeetAppModuleSeparatesAdapterAndRuntime(t *testing.T) {
 	root := t.TempDir()
 	appDir := filepath.Join(root, "app")
 	dataDir := filepath.Join(root, "data")
-	if err := os.MkdirAll(appDir, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	workerName := "voice-parakeet-worker"
-	if runtime.GOOS == "windows" {
-		workerName += ".exe"
-	}
-	workerPath := filepath.Join(appDir, workerName)
-	if err := os.WriteFile(workerPath, []byte("worker"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	managedTestFile(t, filepath.Join(appDir, workerBinaryName("voice-parakeet-worker")))
 
 	status := inspectParakeetAppModule("", filepath.Join(appDir, "magichandy.exe"), dataDir)
-	if status.State != "incomplete" || !status.WorkerInstalled || status.RuntimeInstalled {
+	requireVoiceModuleState(t, "adapter-only Parakeet", status, "incomplete", false, true, false)
+	if voiceModuleFlag(status.RunnerInstalled) || voiceModuleFlag(status.ModelInstalled) {
+		t.Fatalf("adapter-only Parakeet reported runtime components: %+v", status)
+	}
+	if !strings.Contains(status.Message, "runner, model") {
 		t.Fatalf("adapter-only status = %+v", status)
 	}
-	serverPath, modelPath := parakeetAppPaths(dataDir)
-	if err := os.MkdirAll(filepath.Dir(serverPath), 0o750); err != nil {
+	modelAsset := parakeetDownloadAssets(dataDir)[1]
+	partial := managedTestFile(t, parakeetPartialPath(modelAsset))
+	if err := os.WriteFile(partial, []byte("resumable"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	status = inspectParakeetAppModule("", filepath.Join(appDir, "magichandy.exe"), dataDir)
+	if !voiceModuleFlag(status.ResumablePartial) || status.PartialBytes != int64(len("resumable")) {
+		t.Fatalf("partial download diagnostics = %+v", status)
+	}
+	if !strings.Contains(status.Message, "Resumable download") {
+		t.Fatalf("partial download status = %+v", status)
+	}
+	serverPath, modelPath := parakeetAppPaths(dataDir)
 	for _, path := range []string{serverPath, modelPath} {
-		if err := os.WriteFile(path, []byte("fixture"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		managedTestFile(t, path)
 	}
 	status = inspectParakeetAppModule("", filepath.Join(appDir, "magichandy.exe"), dataDir)
-	if !status.Installed || status.State != "ready" || !status.RuntimeInstalled {
+	requireVoiceModuleState(t, "complete Parakeet", status, "ready", true, true, true)
+	if !voiceModuleFlag(status.RunnerInstalled) || !voiceModuleFlag(status.ModelInstalled) {
 		t.Fatalf("complete status = %+v", status)
 	}
 }

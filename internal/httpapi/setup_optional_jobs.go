@@ -14,6 +14,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
+	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
 type setupLlamaInstallRequest struct {
@@ -62,6 +63,7 @@ type setupParakeetCatalog struct {
 	DownloadSize  string `json:"download_size"`
 	RunnerVersion string `json:"runner_version"`
 	Model         string `json:"model"`
+	Preselected   bool   `json:"preselected"`
 }
 
 var setupParakeet = setupParakeetCatalog{
@@ -165,7 +167,60 @@ func (m *setupManager) runParakeetInstall(ctx context.Context, id string) {
 }
 
 func (m *setupManager) installParakeet(ctx context.Context, id string) error {
-	m.updateJob(id, setupJobRunning, "Preparing the verified Parakeet download.", "")
+	m.updateJob(id, setupJobRunning, "Checking Parakeet storage and worker state.", "")
+	if m.preflightParakeet == nil {
+		return errors.New("managed Parakeet preflight is unavailable")
+	}
+	if err := m.preflightParakeet(m.dataDir); err != nil {
+		return err
+	}
+	wasRunning := false
+	if m.prepareParakeet != nil {
+		var err error
+		wasRunning, err = m.prepareParakeet(ctx)
+		if err != nil {
+			return fmt.Errorf("prepare active Parakeet worker for repair: %w", err)
+		}
+		if wasRunning {
+			m.updateJob(id, setupJobRunning, "Stopped the app-owned Parakeet worker for verified repair.", "")
+		}
+	}
+	if m.downloadParakeet == nil {
+		return errors.New("managed Parakeet downloader is unavailable")
+	}
+	if err := m.downloadParakeet(ctx, id); err != nil {
+		return err
+	}
+	result := parakeetInstallPaths(m.dataDir)
+	if m.runParakeetInstaller == nil {
+		return errors.New("managed Parakeet installer is unavailable")
+	}
+	if err := m.runParakeetInstaller(ctx, id, result); err != nil {
+		return err
+	}
+	if err := verifyRegularFiles(result.ServerPath, result.ModelPath); err != nil {
+		return err
+	}
+	if ctx.Err() == nil && m.onParakeet != nil {
+		if err := m.onParakeet(context.WithoutCancel(ctx), result); err != nil {
+			return err
+		}
+	}
+	if wasRunning && m.restoreParakeet != nil {
+		m.updateJob(id, setupJobRunning, "Parakeet verified; restoring its previous running state.", "")
+		if err := m.restoreParakeet(context.WithoutCancel(ctx)); err != nil {
+			return fmt.Errorf("restore Parakeet worker after verified repair: %w", err)
+		}
+	}
+	return nil
+}
+
+func (m *setupManager) runParakeetPowerShellInstaller(
+	ctx context.Context,
+	id string,
+	_ setupParakeetInstallResult,
+) error {
+	m.updateJob(id, setupJobRunning, "Activating the verified Parakeet runner and model.", "")
 	script, err := resolvePackagedSetupScript(m.executablePath, "install-parakeet-module.ps1")
 	if err != nil {
 		return err
@@ -189,16 +244,6 @@ func (m *setupManager) installParakeet(ctx context.Context, id string) error {
 	}
 	err = command.Run()
 	m.detachCommand(id, command)
-	result := setupParakeetInstallResult{
-		ServerPath: filepath.Join(m.dataDir, "voice", "parakeet", "runner", "parakeet-server.exe"),
-		ModelPath:  filepath.Join(m.dataDir, "voice", "parakeet", "tdt-0.6b-v3-q4_k.gguf"),
-	}
-	if err == nil {
-		err = verifyRegularFiles(result.ServerPath, result.ModelPath)
-	}
-	if err == nil && ctx.Err() == nil && m.onParakeet != nil {
-		err = m.onParakeet(context.WithoutCancel(ctx), result)
-	}
 	return err
 }
 
@@ -371,4 +416,35 @@ func (s *Server) applyInstalledParakeet(ctx context.Context, result setupParakee
 		return current, nil
 	})
 	return errors.Join(saveErr, runtimeErr)
+}
+
+func (s *Server) prepareParakeetRepair(ctx context.Context) (bool, error) {
+	if s.voice == nil {
+		return false, nil
+	}
+	settings, _ := s.store.Snapshot()
+	if settings.Voice.ASRProvider != config.VoiceASRProviderParakeet ||
+		settings.Voice.ParakeetSource != config.ParakeetSourceApp {
+		return false, nil
+	}
+	worker := s.voice.Worker(voice.RoleASR)
+	state := worker.Status().State
+	if state != voice.StateRunning && state != voice.StateStarting {
+		return false, nil
+	}
+	stopCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := worker.Stop(stopCtx); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *Server) restoreParakeetAfterRepair(ctx context.Context) error {
+	if s.voice == nil {
+		return nil
+	}
+	loadCtx, cancel := context.WithTimeout(ctx, voiceModelLoadTimeout)
+	defer cancel()
+	return ensureVoiceWorkerReady(loadCtx, s.voice.Worker(voice.RoleASR))
 }

@@ -57,7 +57,7 @@ the release manifest, `SOURCE.txt`, and `magichandy.exe -version`.
 
 ## Release Artifacts
 
-The reviewed unsigned Windows alpha.38 release contains exactly these
+The reviewed unsigned Windows alpha.39 release contains exactly these
 downloadable artifacts:
 
 - `MagicHandy-<version>-windows-amd64-setup.exe`
@@ -73,7 +73,7 @@ remains for provenance.
 Pull-request workflows continue to retain setup only as a short-lived
 `unsigned-ci` artifact and exercise its full lifecycle. The tag workflow uses
 `ReviewedUnsignedPublic`, limited to alpha.8 through alpha.11 and alpha.13
-through alpha.38, scans the exact public directory with Defender, verifies the
+through alpha.39, scans the exact public directory with Defender, verifies the
 setup/ZIP manifests and two-entry outer checksum, exercises the exact setup
 lifecycle, and publishes three explicit assets.
 
@@ -107,6 +107,21 @@ produce a normal release. The in-app checker selects the highest published
 semantic version compatible with the running channel. Stable builds ignore
 prereleases; alpha can advance to alpha/beta/RC/stable, beta to
 beta/RC/stable, and RC to RC/stable.
+
+## Release Notes Policy
+
+Public release notes are a concise, user-facing changelog. Beginning with
+`v0.1.0-alpha.39`, each file under `docs/releases/` contains only its release
+title and one `## Changelog` section with 1–12 top-level bullets. The complete
+file is limited to 60 lines and 350 words. Bullets name visible changes and any
+material limitation a user needs before updating; they do not reproduce the
+implementation narrative, diagnosis, test transcript, measurements, security
+analysis, or release-policy rationale.
+
+That detailed evidence belongs in the pull request description, linked design
+documents, tests, and ADRs. `internal/architecture.TestReleaseNotesStayConcise`
+enforces the public-note shape for alpha.39 and later releases while preserving
+older notes as historical records.
 
 ## Data And Uninstall Compatibility
 

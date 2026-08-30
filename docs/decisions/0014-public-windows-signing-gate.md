@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted; amended 2026-08-28 after Microsoft completed the false-positive
+Accepted; amended 2026-08-29 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.38 package-preserving releases.
+reviewed alpha.14 through alpha.39 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
@@ -63,7 +63,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.38 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.39 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -106,9 +106,12 @@ VirusTotal report:
    decisions. Alpha.37 retains it while making the Chat composer follow the
    effective conversation persona. Alpha.38 retains it while adding the
    authenticated HTTPS foundation, account access GUI, profile images, linked
-   control-profile selector, and protected-setup login handoff. None of these
-   changes modifies installer behavior or payload composition; Inno Setup never
-   receives or stores an account password.
+   control-profile selector, and protected-setup login handoff. Alpha.39 retains
+   it while simplifying managed Voice settings and hardening the optional
+   Parakeet repair path with app-owned download verification. Alpha.39 changes
+   optional-module behavior inside the existing payload, but does not change
+   the Inno Setup loader, compression, artifact set, or payload composition.
+   Inno Setup never receives or stores an account password.
    The tag workflow scans each exact candidate directory with Microsoft
    Defender before lifecycle verification. The
    verifier rejects every other version, so a later unsigned setup requires a
@@ -174,11 +177,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.38 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.39 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.38 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.39 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,

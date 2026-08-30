@@ -10,6 +10,7 @@ import type {
   LLMModelManagerSnapshot,
   ManagedLLMDuplicateSnapshot,
   MediaSummary,
+  SetupJob,
   TransportDiagnostics,
 } from "./api/types";
 import { AppStateProvider, ToastProvider } from "./state/app-state";
@@ -154,6 +155,7 @@ interface InstallFetchOptions {
   library?: typeof libraryFixture;
   modelManager?: LLMModelManagerSnapshot;
   pickedPath?: string;
+  setupInstallation?: SetupJob;
 }
 
 function installFetch(opts: InstallFetchOptions = {}) {
@@ -217,6 +219,12 @@ function installFetch(opts: InstallFetchOptions = {}) {
     if (u.includes("/api/chat/messages")) return jsonRes({ messages: chatLog, latest_seq: chatLog.length, cursor: 0, session_id: "chat-test" });
     if (u.includes("/api/chat/cursor")) return jsonRes({ cursor: chatLog.length, session_id: "chat-test" });
     if (u.includes("/api/voice/status")) return jsonRes(opts.voiceStatus ?? {});
+    if (u.includes("/api/setup/parakeet/install")) return jsonRes({ installation: {
+      id: "parakeet-repair", kind: "parakeet", module: "parakeet", device: "cpu", status: "queued",
+      message: "Parakeet installation queued.", started_at: "now", updated_at: "now",
+    } });
+    if (u.includes("/api/setup/install") && _init?.method === "DELETE") return jsonRes({ installation: opts.setupInstallation });
+    if (u.endsWith("/api/setup")) return jsonRes({ installation: opts.setupInstallation });
     if (u.includes("/api/host/path-picker")) return jsonRes({ path: opts.pickedPath ?? "C:\\selected\\file.exe", canceled: false });
     if (u.includes("/api/library")) return jsonRes({ library: opts.library ?? libraryFixture });
     if (u.includes("/api/llm/ollama/scan")) return jsonRes(ollamaScanFixture);
@@ -945,12 +953,13 @@ describe("app shell safety invariants", () => {
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/voice");
     expect(await screen.findByRole("heading", { name: /^voice$/i })).toBeInTheDocument();
-    // Both roles are visible with a dot+text state, even with voice off. The
-    // worker rows sit inside the role sections, so they are labeled "Worker".
+    // Provider choices remain visible, but an unconfigured role does not add a
+    // second, redundant status card below its provider field.
     expect(screen.getAllByText(/speech output \(tts\)/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/speech input \(asr\)/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/^worker$/i).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText(/^disabled$/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText(/^status$/i)).toBeNull();
+    expect(screen.queryByText(/^disabled$/i)).toBeNull();
+    expect(screen.queryByRole("region", { name: /voice queue/i })).toBeNull();
     // A missing/disabled worker never blocks the app or adds a row of unusable controls.
     expect(screen.queryByRole("button", { name: /^(start|stop|restart|load model|unload model|send test)$/i })).toBeNull();
     expect(screen.getByRole("button", { name: /emergency stop/i })).toBeEnabled();
@@ -964,7 +973,7 @@ describe("app shell safety invariants", () => {
         voice: { ...baseState.settings.voice, asr_provider: "parakeet_managed", parakeet_source: "app_managed" },
       },
     };
-    installFetch({
+    const fetch = installFetch({
       state,
       voiceStatus: {
         voice: {
@@ -980,13 +989,16 @@ describe("app shell safety invariants", () => {
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/voice");
 
-    const source = await screen.findByRole("combobox", { name: /runtime source/i });
-    expect(source).toHaveValue("app_managed");
+    expect(await screen.findByRole("combobox", { name: /speech input provider/i })).toHaveValue("parakeet_managed");
+    expect(screen.queryByText(/runtime source/i)).toBeNull();
     expect(await screen.findByRole("status", { name: /magichandy parakeet module/i })).toHaveTextContent(/worker, runner, and model are installed/i);
+    fireEvent.click(screen.getByRole("button", { name: /repair parakeet/i }));
+    await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => String(url).includes("/api/setup/parakeet/install") && (init as RequestInit | undefined)?.method === "POST")).toBe(true));
     expect(screen.getByText(/enable voice workers and save; start will appear/i)).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: /custom parakeet-server path/i })).toBeNull();
 
-    fireEvent.change(source, { target: { value: "custom_local" } });
+    fireEvent.click(screen.getByText("Advanced"));
+    fireEvent.click(screen.getByRole("checkbox", { name: /custom local server/i }));
     expect(screen.getByRole("textbox", { name: /custom parakeet-server path/i })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /custom gguf model path/i })).toBeInTheDocument();
   });
@@ -1020,70 +1032,19 @@ describe("app shell safety invariants", () => {
     ]);
   });
 
-  it("discloses only fields for the selected voice provider and keeps status visible", async () => {
-    installFetch({
-      voiceStatus: {
-        voice: {
-          workers: {},
-          modules: {
-            tts: {
-              state: "incomplete",
-              installed: false,
-              worker_installed: true,
-              runtime_installed: true,
-              message: "Faster Qwen3-TTS is installed. Add a reference WAV and its exact transcript in Voice settings, then save.",
-            },
-          },
-        },
-        requests: [],
-      },
-    });
-    renderApp();
-    await screen.findByRole("button", { name: /emergency stop/i });
-    go("#/settings/voice");
-    const providers = await screen.findAllByRole("combobox", { name: /provider/i });
-
-    expect(screen.queryByLabelText(/^api key/i)).toBeNull();
-    fireEvent.change(providers[1], { target: { value: "elevenlabs" } });
-    expect(screen.getByLabelText(/^api key/i)).toHaveAttribute("type", "password");
-    expect(screen.getByLabelText(/voice id/i)).toBeInTheDocument();
-    expect(screen.queryByLabelText(/reference transcript/i)).toBeNull();
-
-    fireEvent.change(providers[1], { target: { value: "faster_qwen3_tts" } });
-    expect(screen.getByRole("textbox", { name: /module folder/i })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: /reference wav/i })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: /exact reference transcript/i })).toBeInTheDocument();
-    expect(screen.getByRole("checkbox", { name: /launch this module/i })).not.toBeChecked();
-    expect(screen.getByRole("status", { name: /checking the faster qwen3-tts module/i })).toHaveTextContent(/add a reference wav/i);
-    expect(screen.getByLabelText(/^device$/i)).toHaveValue("cuda");
-    expect(screen.queryByLabelText(/^api key/i)).toBeNull();
-
-    fireEvent.change(providers[1], { target: { value: "chatterbox_tts" } });
-    expect(screen.getByLabelText(/voice name/i)).toHaveValue("Emily.wav");
-    fireEvent.click(screen.getByText("Advanced"));
-    const chatterboxFormats = screen.getByLabelText(/response format/i);
-    expect(within(chatterboxFormats).getByRole("option", { name: "OPUS" })).toBeInTheDocument();
-    expect(within(chatterboxFormats).queryByRole("option", { name: "FLAC" })).toBeNull();
-    expect(screen.getByLabelText(/health path/i)).toHaveValue("/api/model-info");
-
-    fireEvent.change(providers[1], { target: { value: "openai_compatible" } });
-    expect(screen.getByLabelText(/base url/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/^api key/i)).toHaveAttribute("placeholder", "Optional bearer key");
-    expect(screen.queryByLabelText(/reference wav/i)).toBeNull();
-  });
-
-  it("uses host path pickers for a managed TTS module and reference WAV", async () => {
-    const fetch = installFetch({ pickedPath: "C:\\Voice\\faster-qwen3-tts" });
+  it("uses a host path picker for the managed TTS reference WAV", async () => {
+    const fetch = installFetch({ pickedPath: "C:\\Voice\\sample.wav" });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/voice");
     const providers = await screen.findAllByRole("combobox", { name: /provider/i });
     fireEvent.change(providers[1], { target: { value: "faster_qwen3_tts" } });
 
-    fireEvent.click(screen.getByRole("button", { name: /browse for module folder/i }));
-    await waitFor(() => expect(screen.getByRole("textbox", { name: /module folder/i })).toHaveValue("C:\\Voice\\faster-qwen3-tts"));
+    expect(screen.queryByRole("button", { name: /browse for module folder/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /browse for reference wav/i }));
+    await waitFor(() => expect(screen.getByRole("textbox", { name: /reference wav/i })).toHaveValue("C:\\Voice\\sample.wav"));
     const pickerCall = fetch.mock.calls.find(([url]) => String(url).includes("/api/host/path-picker"));
-    expect(JSON.parse(String((pickerCall?.[1] as RequestInit).body))).toEqual({ kind: "directory", current: "" });
+    expect(JSON.parse(String((pickerCall?.[1] as RequestInit).body))).toEqual({ kind: "wav", current: "" });
   });
 
   it("hides the chat voice controls when voice is not configured", async () => {
