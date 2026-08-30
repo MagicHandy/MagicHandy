@@ -353,6 +353,14 @@ in-memory settings snapshot cannot overwrite the correction.
 - process ownership, controller takeover, Stop, and relaunch behavior; and
 - unsafe dirty-tree/update-state failures.
 
+Parakeet source and packaged repairs share `setup-last-install.json`, a bounded
+sanitized terminal-result record in the selected app data directory. This lets a
+packaged installation display the original source-install failure without
+persisting full command output. The in-app job downloads the checksum-pinned
+runner and revision-pinned model through Go HTTPS with byte-range resume and
+progress; PowerShell retains staged runner activation and the source-only
+fallback path.
+
 Release acceptance still requires a clean Windows VM run because a plan test
 cannot prove WinGet repair, third-party package availability, CUDA driver
 compatibility, multi-gigabyte model download reliability, or local TTS

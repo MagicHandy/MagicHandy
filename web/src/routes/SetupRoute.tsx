@@ -63,6 +63,7 @@ export function SetupRoute() {
   const [voiceDevice, setVoiceDevice] = useState<"cpu" | "cuda">("cpu");
   const [voiceAutoLaunch, setVoiceAutoLaunch] = useState(true);
   const [parakeetSelected, setParakeetSelected] = useState(false);
+  const parakeetSelectionInitialized = useRef(false);
   const [accessChoice, setAccessChoice] = useState<AccessChoice>(auth.status?.initialized ? "protected" : "local");
   const [administratorUsername, setAdministratorUsername] = useState("");
   const [administratorPassword, setAdministratorPassword] = useState("");
@@ -126,6 +127,12 @@ export function SetupRoute() {
     if (!setup?.hardware.nvidia) return;
     setVoiceDevice("cuda");
   }, [setup?.hardware.nvidia]);
+
+  useEffect(() => {
+    if (!setup || parakeetSelectionInitialized.current) return;
+    parakeetSelectionInitialized.current = true;
+    setParakeetSelected(setup.parakeet.preselected);
+  }, [setup]);
 
   useEffect(() => {
     if (!installationActive && !activeImport) return;

@@ -27,6 +27,15 @@ describe("VoiceRequestQueue", () => {
     vi.mocked(api.voiceRequestCancel).mockResolvedValue({ request: { ...requests[0], state: "canceled" } });
   });
 
+  it("stays out of the settings page when there is no active work", () => {
+    const { container } = render(
+      <VoiceRequestQueue locked={false} requests={[requests[2]]} refresh={vi.fn(async () => undefined)} />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole("region", { name: "Voice queue" })).not.toBeInTheDocument();
+  });
+
   it("renders ASR and TTS work in one labeled queue", () => {
     render(<VoiceRequestQueue locked={false} requests={requests} refresh={vi.fn(async () => undefined)} />);
 

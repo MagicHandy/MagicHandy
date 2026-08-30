@@ -30,6 +30,8 @@ export function VoiceRequestQueue({
       return Date.parse(left.created_at) - Date.parse(right.created_at);
     });
 
+  if (active.length === 0) return null;
+
   async function cancel(requestId: string) {
     try {
       await api.voiceRequestCancel(requestId);
@@ -48,9 +50,7 @@ export function VoiceRequestQueue({
         <span className="voice-request-count" aria-label={active.length === 1 ? t("1 voice request waiting") : t("{count} voice requests waiting", { count: active.length })}>{active.length}</span>
       </header>
       <div className="voice-request-list" aria-live="polite">
-        {active.length === 0 ? (
-          <p className="voice-request-empty">{t("No voice requests waiting.")}</p>
-        ) : active.map((request) => (
+        {active.map((request) => (
           <div key={request.id} className="voice-request-row">
             <span className="status-dot" data-state={request.state === "active" ? "active" : "pending"} />
             <span className="voice-request-description">

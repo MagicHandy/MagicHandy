@@ -550,6 +550,7 @@ export function SettingsRoute() {
           setNewOpenAIKey={(value) => { setNewOpenAITTSKey(value); if (value.trim()) setClearOpenAITTSKey(false); }}
           clearOpenAIKey={clearOpenAITTSKey}
           setClearOpenAIKey={(value) => { setClearOpenAITTSKey(value); if (value) setNewOpenAITTSKey(""); }}
+          onRuntimeChanged={() => { void load(); }}
         />}
 
         {section === "prompts" && (

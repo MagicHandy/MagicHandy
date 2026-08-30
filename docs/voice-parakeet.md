@@ -43,21 +43,54 @@ preserves this choice unless the user elects to reconfigure it:
 
 The installer does not enable or start voice. In
 **Settings > Voice**, enable voice workers, select **Parakeet (managed, local)**
-as the Speech input provider, and keep **Runtime source > MagicHandy module**.
-The backend discovers the installer-owned `parakeet-server.exe`, GGUF model, and
-`voice-parakeet-worker.exe`; no custom paths are required. The module status
-distinguishes a complete installation from an adapter-only or otherwise
-incomplete setup and directs the user back to `update.ps1` when repair is
-needed. Save settings, then use **Start** in the Speech input row for immediate
-use; Start also loads the model and succeeds only when ASR is ready. On later
-app launches, enabled speech input starts and loads its configured ASR worker
-automatically. The default managed port is `127.0.0.1:8990` under Advanced.
+as the Speech input provider, and save. The backend discovers the
+installer-owned `parakeet-server.exe`, GGUF model, and
+`voice-parakeet-worker.exe`; the normal managed-module UI does not expose paths,
+ports, or a runtime-source selector. Its single module readout distinguishes a
+complete installation from an adapter-only or otherwise incomplete setup and
+names the missing worker, runner, and/or model plus any resumable partial. The
+same readout owns **Repair Parakeet**, its byte progress, and cancellation; the
+action starts the existing backend setup job directly instead of sending the
+user to a script or another settings page. Use **Start** in the Speech input
+status row for immediate use; Start also loads the model and succeeds only when
+ASR is ready. On later app launches, enabled speech input starts and loads its
+configured ASR worker automatically. The managed endpoint remains fixed to
+loopback and uses the installer-owned default port `127.0.0.1:8990`.
 
 Installation, enablement, and process start remain separate actions: the
 installer writes files only and voice remains opt-in. Startup autoload is driven
 only by saved enabled/provider settings; installing assets alone does not start
 a worker. The installer prints the exact Settings > Voice sequence after
 provisioning.
+
+### Repair and fresh-machine resilience
+
+The in-app repair path performs these operations in order:
+
+1. creates and write-probes the app-owned Parakeet directory;
+2. checks the remaining volume space against the model, runner staging, and any
+   resumable bytes already present;
+3. detects an active app-managed ASR worker and stops it before replacing files;
+4. downloads the pinned runner and model through Go's HTTPS client, with byte
+   ranges, bounded retries, visible byte progress, and retained partial files;
+5. verifies both SHA-256 values before the existing PowerShell helper performs
+   the runner archive's staged activation;
+6. verifies the final runner and model, applies the app-managed settings, and
+   only then restores a worker that had been running before repair.
+
+This makes the packaged app independent of Windows PowerShell's Schannel path
+for the large network transfers while retaining the same extraction and
+rollback logic used by source installations. The Hugging Face model URL is
+pinned to repository revision
+`bf0af9f425fa01809cadec671b3cb672709d13e9` as well as the model SHA-256;
+`main` is never used as an install identity.
+
+Terminal setup results are stored as a small `setup-last-install.json` record in
+the app data directory. Only bounded, control-character-sanitized job metadata
+is retained; command output is not. The source installer writes the same schema,
+so a failure remains visible after installing or opening the packaged app. On a
+setup rerun, Parakeet is preselected when its managed provider was saved, either
+runtime asset exists, or a resumable partial exists.
 
 The first installer path intentionally uses the portable CPU runner. Users can
 replace it with a compatible parakeet.cpp CUDA or Vulkan runner later without
@@ -72,8 +105,9 @@ Build the worker:
 go build -o voice-parakeet-worker.exe ./cmd/voice-parakeet-worker
 ```
 
-For a manual parakeet.cpp setup, choose **Runtime source > Custom local server**
-and provide the server/model paths. The worker launches:
+For a manual parakeet.cpp setup, expand **Advanced**, enable **Custom local
+server**, and provide the server/model paths. This exception stays out of the
+default managed-module path. The worker launches:
 
 ```text
 parakeet-server --model <local GGUF> --host 127.0.0.1 --port 8990

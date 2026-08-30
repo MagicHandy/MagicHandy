@@ -4,7 +4,7 @@ import { t, translateKnown, type MessageKey } from "../i18n";
 // queue render one coherent backend snapshot.
 import { useState } from "react";
 import { api } from "../api/client";
-import type { VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
+import type { SetupJob, VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
 import { useToast } from "../state/app-state";
 import { useVoicePlayback } from "../state/voice-playback";
 
@@ -48,6 +48,13 @@ interface Props {
   showParakeetModule?: boolean;
   showTTSModule?: boolean;
   ttsModuleName?: string;
+  parakeetRepair?: {
+    job?: SetupJob;
+    setupBusy: boolean;
+    error: string;
+    repair: () => Promise<void>;
+    cancel: () => Promise<void>;
+  };
   workers: Record<string, VoiceWorkerStatus>;
   requests: VoiceRequestSnapshot[];
   modules: Record<string, VoiceModuleStatus>;
@@ -65,6 +72,7 @@ export function VoiceWorkers({
   showParakeetModule,
   showTTSModule,
   ttsModuleName,
+  parakeetRepair,
   workers,
   requests,
   modules,
@@ -110,24 +118,44 @@ export function VoiceWorkers({
   const roles: ("tts" | "asr")[] = selectedRole ? [selectedRole] : ["tts", "asr"];
   const parakeetModule = modules.parakeet;
   const ttsModule = modules.tts;
+  const ttsNeedsSetup = !dirty && ttsModule?.installed === false &&
+    (ttsModule.worker_installed === false || ttsModule.runtime_installed === false);
+  const parakeetRepairActive = parakeetRepair?.job?.status === "queued" || parakeetRepair?.job?.status === "running";
+  const parakeetRepairMessage = parakeetModule?.installed
+    ? parakeetModule.message
+    : parakeetRepair?.error || (parakeetRepair?.job && parakeetRepair.job.status !== "complete" ? parakeetRepair.job.message : "") || parakeetModule?.message;
+
+  if (selectedRole && providerSelected === false) return null;
 
   return (
     <div className="voice-workers">
       {showParakeetModule && (
-        <div className="voice-module-readout" role="status" aria-label={t("MagicHandy Parakeet module")}>
-          <span className="status-dot" data-state={parakeetModule?.installed ? "ok" : parakeetModule?.state === "incomplete" ? "warn" : "idle"} />
-          <span>{parakeetModule?.message ? translateKnown(parakeetModule.message) : t("Checking the MagicHandy Parakeet module.")}</span>
+        <div className="voice-module-readout" role="status" aria-live="polite" aria-busy={parakeetRepairActive || undefined} aria-label={t("MagicHandy Parakeet module")}>
+          <span className="status-dot" data-state={parakeetRepair?.error ? "error" : parakeetRepairActive ? "pending" : parakeetModule?.installed ? "ok" : parakeetModule?.state === "incomplete" ? "warn" : "idle"} />
+          <span className="voice-module-message">
+            <span>{parakeetRepairMessage ? translateKnown(parakeetRepairMessage) : t("Checking the MagicHandy Parakeet module.")}</span>
+            {parakeetRepairActive && (parakeetRepair?.job?.bytes_total ?? 0) > 0 && <progress aria-label={t("Installation progress")} max={parakeetRepair?.job?.bytes_total} value={parakeetRepair?.job?.bytes_completed ?? 0} />}
+          </span>
+          {parakeetRepair && <span className="voice-module-actions">
+            {parakeetRepairActive && <button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void parakeetRepair.cancel()}>{t("Cancel")}</button>}
+            <button type="button" className="btn btn-secondary" disabled={locked || parakeetRepair.setupBusy} onClick={() => void parakeetRepair.repair()}>{t("Repair")} {t("Parakeet")}</button>
+          </span>}
         </div>
       )}
       {showTTSModule && (
         <div className="voice-module-readout" role="status" aria-label={t("Checking the {module} module.", { module: ttsModuleName ?? "TTS" })}>
-          <span className="status-dot" data-state={ttsModule?.installed ? "ok" : ttsModule?.state === "incomplete" ? "warn" : "idle"} />
-          <span>{ttsModule?.message ? translateKnown(ttsModule.message) : t("Checking the {module} module.", { module: ttsModuleName ?? "TTS" })}</span>
+          <span className="status-dot" data-state={dirty ? "idle" : ttsModule?.installed ? "ok" : ttsModule?.state === "incomplete" ? "warn" : "idle"} />
+          <span>{dirty ? t("Save settings before runtime actions.") : ttsModule?.message ? translateKnown(ttsModule.message) : t("Checking the {module} module.", { module: ttsModuleName ?? "TTS" })}</span>
+          {ttsNeedsSetup && <a className="voice-module-setup-link" href="#/setup/reconfigure">{t("Run setup again")}</a>}
         </div>
       )}
       {roles.map((role) => {
         const worker = workers[role];
         const state = worker?.state ?? "disabled";
+        const managedModuleUnavailable = role === "asr"
+          ? Boolean(showParakeetModule && parakeetModule && !parakeetModule.installed)
+          : Boolean(showTTSModule && ttsModule && !ttsModule.installed);
+        if (managedModuleUnavailable || (dirty && state === "disabled")) return null;
         const canControl = !locked && !dirty && busyRole !== role && state !== "disabled" && state !== "not_configured";
         const modelLoaded = worker?.model_state === "ready";
         const isRunning = state === "running";
@@ -139,7 +167,7 @@ export function VoiceWorkers({
         return (
           <div key={role} className="voice-worker-row">
             <div className="voice-worker-head">
-              <span className="voice-worker-name">{selectedRole ? t("Worker") : translateKnown(ROLE_LABEL[role] ?? role)}</span>
+              <span className="voice-worker-name">{selectedRole ? t("Status") : translateKnown(ROLE_LABEL[role] ?? role)}</span>
               <span className="status-readout">
                 <span className="status-dot" data-state={modelFailed ? "error" : dotState(state)} />
                 <span className="status-text">{modelFailed ? t("Not ready") : translateKnown(STATE_LABEL[state] ?? state)}</span>

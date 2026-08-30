@@ -150,6 +150,9 @@ try {
     Assert-True -Condition ($installerModuleSource.Contains('function Invoke-MagicHandyPowerShellScript')) -Message 'main installer should isolate managed TTS scripts in a child PowerShell process'
     Assert-True -Condition ($installerModuleSource.Contains('-NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments')) -Message 'TTS process isolation should preserve script paths and argument boundaries'
     Assert-True -Condition ($installerModuleSource.Contains('Installed TTS module repair')) -Message 'main installer should repair an unhealthy saved TTS runtime instead of silently reusing it'
+    Assert-True -Condition ($installerModuleSource.Contains('resolve/bf0af9f425fa01809cadec671b3cb672709d13e9/tdt-0.6b-v3-q4_k.gguf')) -Message 'Parakeet model downloads must pin the Hugging Face repository revision'
+    Assert-True -Condition ($installerModuleSource.Contains('function Invoke-MagicHandyParakeetInstall')) -Message 'source and packaged Parakeet installs should share the persistent-result wrapper'
+    Assert-True -Condition ($installerModuleSource.Contains("Join-Path `$DataDir 'setup-last-install.json'")) -Message 'Parakeet failures should survive a later packaged installer run'
     $nonASCIIBytes = @([System.IO.File]::ReadAllBytes($installerModulePath) | Where-Object { $_ -gt 127 })
     Assert-Equal -Expected 0 -Actual $nonASCIIBytes.Count -Message 'InstallerSupport.psm1 must remain ASCII-safe for Windows PowerShell 5.1'
 
@@ -732,7 +735,7 @@ func main() {
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseVerifierSource.Contains("'ReviewedUnsignedPublic'")) -Message 'release verifier should expose the reviewed unsigned public policy'
     Assert-True -Condition ($releaseVerifierSource.Contains('ReviewedUnsignedPublic requires Microsoft false-positive case')) -Message 'reviewed unsigned publication should fail closed without the recorded Microsoft case'
-    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
+    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
             -Version '0.0.0-local' `

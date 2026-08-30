@@ -310,4 +310,24 @@ describe("SetupRoute", () => {
     expect(screen.getByRole("log", { name: "Installation terminal output" })).toBeInTheDocument();
     expect(screen.getByRole("log", { name: "Installation terminal output" })).toHaveTextContent("Waiting for installer output...");
   });
+
+  it("preselects Parakeet when the backend finds a saved runtime or resumable partial", async () => {
+    vi.mocked(api.setupStatus).mockResolvedValue({
+      ...setupFixture,
+      parakeet: { ...setupFixture.parakeet, preselected: true },
+    });
+    render(<SetupRoute />);
+
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
+    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+    await screen.findByRole("heading", { name: "Choose your model runtime" });
+    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+
+    await screen.findByRole("heading", { name: "Add voice features" });
+    expect(screen.getByRole("radio", { name: /Parakeet/i })).toBeChecked();
+  });
 });

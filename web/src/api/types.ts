@@ -855,6 +855,10 @@ export interface VoiceModuleStatus {
   installed: boolean;
   worker_installed: boolean;
   runtime_installed: boolean;
+  runner_installed?: boolean;
+  model_installed?: boolean;
+  resumable_partial?: boolean;
+  partial_bytes?: number;
   runtime_backend?: "cpu" | "cuda" | "custom" | string;
   message: string;
 }
@@ -993,6 +997,8 @@ export interface SetupJob {
   }>;
   completed_steps?: number;
   total_steps?: number;
+  bytes_completed?: number;
+  bytes_total?: number;
   started_at: string;
   updated_at: string;
 }
@@ -1049,6 +1055,7 @@ export interface SetupStatus {
     download_size: string;
     runner_version: string;
     model: string;
+    preselected: boolean;
   };
   installation?: SetupJob;
   scripts_present: boolean;

@@ -195,7 +195,7 @@ where the logic lives.
 | Inno Setup script, destination/shortcut choices, explicit retain/purge uninstall | Implemented and covered by release lifecycle acceptance |
 | First-run detection, `#/setup`, re-run from Settings | Implemented |
 | Access choice, first local administrator, and credential-safe installer boundary | Implemented; LAN certificate provisioning remains separate |
-| Parakeet and managed TTS provisioning jobs | Implemented; full hardware/listening acceptance open |
+| Parakeet and managed TTS provisioning jobs | Implemented; Parakeet repair is directly available from Voice settings with Go-owned revision-pinned/resumable downloads, preflight checks, persistent failure evidence, and verified stop/restore lifecycle; full hardware/listening acceptance remains open |
 | Curated LLM downloads + hardware-fit recommendations | Open |
 | StrokeGPT-ReVibed importer API | Not implemented; therefore absent from setup |
 | Signing / auto-update / WebView2 / LAN policy | ADR 0014 permits a reviewed unsigned-alpha setup exception; trusted Authenticode and silent update remain open |

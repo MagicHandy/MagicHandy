@@ -44,6 +44,16 @@ Choose a managed module in `install.ps1`, or run
    auto-launch choice are persisted in SQLite. Faster Qwen reference fields
    remain empty until the user completes them in Settings > Voice.
 
+Settings > Voice treats these as self-managed modules. It exposes choices that
+change the resulting voice (reference audio, transcript, language, tone, seed,
+or selected Chatterbox voice) and one live module-health readout. Installer
+folders, model identifiers, devices, ports, health endpoints, response formats,
+worker overrides, and process-ownership switches remain installer/backend
+details instead of normal form fields. When installed assets are missing or
+incomplete, the readout links to guided setup for installation or repair.
+External OpenAI-compatible and Custom worker providers continue to expose the
+connection fields they genuinely require.
+
 No preinstalled Python, uv, PyTorch, Git, or compiler is required. Faster Qwen
 uses managed Python 3.11. The pinned Chatterbox dependency set uses Python 3.10
 because its supported Windows Torch, torchvision, and ONNX packages are
@@ -150,15 +160,15 @@ when the worker model is loaded. It waits for the configured health endpoint and
 stops only the child process it created. If the port is occupied, startup fails
 instead of attaching to or killing an unknown process.
 
-Settings that change process ownership or model conditioning, such as the
-provider, module, device, port, reference WAV, or reference transcript, stop the
-old worker and asynchronously restore every role whose auto-launch policy says
-it should be ready. Faster Qwen seed mode, seed value, and tone instruction are
-request controls instead: saving them does not reload the model or discard its
-reference cache. A health check also verifies the managed server child rather
-than trusting the Go adapter's cached state. If that child exits, the worker is
-reported as not ready, the failure remains visible until reload or deliberate
-unload, and the next explicit Start can launch and load it again.
+Saved changes to process ownership or model conditioning, such as the provider,
+installer-selected module/device/port, reference WAV, or reference transcript,
+stop the old worker and asynchronously restore every role whose auto-launch
+policy says it should be ready. Faster Qwen seed mode, seed value, and tone
+instruction are request controls instead: saving them does not reload the model
+or discard its reference cache. A health check also verifies the managed server
+child rather than trusting the Go adapter's cached state. If that child exits,
+the worker is reported as not ready, the failure remains visible until reload
+or deliberate unload, and the next explicit Start can launch and load it again.
 
 For Chatterbox, readiness is not inferred from HTTP status alone. MagicHandy
 probes `GET /api/model-info` and requires its `loaded` field to be `true`.
@@ -371,8 +381,9 @@ per playable clip (about 2 minutes 55 seconds of 24 kHz mono 16-bit WAV) and at
 most nine clips, for a 72 MiB worst-case retained-audio ceiling. Larger output
 fails explicitly instead of growing process memory without bound.
 The scripted Faster Qwen server is limited to WAV, and the scripted
-Chatterbox server is limited to WAV, MP3, or Opus. Settings enforces those
-provider-specific format lists.
+Chatterbox server is limited to WAV, MP3, or Opus. Their managed launch
+configuration pins a supported format; users only choose response formats for
+external OpenAI-compatible endpoints.
 
 The managed Chatterbox launcher suppresses the upstream server's automatic
 browser opening. MagicHandy remains the only user interface while the pinned

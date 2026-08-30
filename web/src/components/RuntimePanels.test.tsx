@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { LLMModelManagerSnapshot, LLMProviderStatus, PublicSettings } from "../api/types";
 import { ModelSettingsPanel } from "./ModelSettingsPanel";
@@ -75,6 +75,10 @@ const providerStatus = {
 } as LLMProviderStatus;
 
 describe("runtime panels", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
     app.show.mockReset();
     llmModels.mockReset();
@@ -275,7 +279,35 @@ describe("runtime panels", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("voice endpoint unavailable");
   });
 
-  it("does not present unsupported CPU execution for Faster Qwen", async () => {
+  it("does not flash the initial voice loading row during background polls", async () => {
+    vi.useFakeTimers();
+    const snapshot = { voice: { enabled: false, protocol_version: 1, workers: {}, modules: {} }, requests: [] };
+    voiceStatus.mockResolvedValueOnce(snapshot).mockImplementation(() => new Promise(() => undefined));
+    const view = render(
+      <VoiceSettingsPanel
+        settings={voiceSettings()}
+        locked={false}
+        dirty={false}
+        patch={vi.fn()}
+        newKey=""
+        setNewKey={vi.fn()}
+        clearKey={false}
+        setClearKey={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Checking voice runtime...")).toBeInTheDocument();
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.queryByText("Checking voice runtime...")).not.toBeInTheDocument();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(voiceStatus).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("Checking voice runtime...")).not.toBeInTheDocument();
+
+    view.unmount();
+  });
+
+  it("hides managed execution settings for Faster Qwen", async () => {
     voiceStatus.mockImplementation(() => new Promise(() => undefined));
     const settings = voiceSettings();
     settings.voice = {
@@ -298,13 +330,71 @@ describe("runtime panels", () => {
     );
 
     expect(screen.getByText("Faster Qwen3-TTS requires an NVIDIA GPU with CUDA.")).toBeInTheDocument();
-    const device = screen.getByRole("combobox", { name: "Device" });
-    expect(device).toHaveTextContent("NVIDIA CUDA");
-    expect(device).not.toHaveTextContent("CPU");
+    expect(screen.queryByRole("combobox", { name: "Device" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Module folder" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("spinbutton", { name: "Server port" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Launch this module with MagicHandy" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByText("Advanced"));
-    const responseFormat = screen.getByRole("combobox", { name: "Response format" });
-    expect(responseFormat).toHaveTextContent("WAV");
-    expect(responseFormat).not.toHaveTextContent("MP3");
+    expect(screen.getByRole("checkbox", { name: "Repeatable voice generation" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Response format" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Health path" })).not.toBeInTheDocument();
+  });
+
+  it("selects managed providers with their self-managed launch policy", async () => {
+    voiceStatus.mockImplementation(() => new Promise(() => undefined));
+    const patch = vi.fn();
+    render(
+      <VoiceSettingsPanel
+        settings={voiceSettings()}
+        locked={false}
+        dirty={false}
+        patch={patch}
+        newKey=""
+        setNewKey={vi.fn()}
+        clearKey={false}
+        setClearKey={vi.fn()}
+      />,
+    );
+
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Speech output provider" }), "faster_qwen3_tts");
+    expect(patch).toHaveBeenCalledWith(expect.objectContaining({
+      tts_provider: "faster_qwen3_tts",
+      tts_auto_launch: true,
+    }));
+  });
+
+  it("keeps provider-specific fields while hiding managed runtime plumbing", async () => {
+    voiceStatus.mockImplementation(() => new Promise(() => undefined));
+    const settings = voiceSettings();
+    const props = (current: PublicSettings) => (
+      <VoiceSettingsPanel
+        settings={current}
+        locked={false}
+        dirty={false}
+        patch={vi.fn()}
+        newKey=""
+        setNewKey={vi.fn()}
+        clearKey={false}
+        setClearKey={vi.fn()}
+      />
+    );
+    settings.voice = { ...settings.voice, tts_provider: "chatterbox_tts", tts_voice: "Emily.wav" };
+    const view = render(props(settings));
+
+    expect(screen.getByRole("textbox", { name: "Reference WAV" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Voice name" })).toHaveValue("Emily.wav");
+    expect(screen.queryByText("Advanced")).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Module folder" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("spinbutton", { name: "Server port" })).not.toBeInTheDocument();
+
+    settings.voice = { ...settings.voice, tts_provider: "openai_compatible" };
+    view.rerender(props(settings));
+    expect(screen.getByRole("textbox", { name: "Base URL" })).toBeInTheDocument();
+    expect(screen.getByLabelText("API key")).toHaveAttribute("placeholder", "Optional bearer key");
+    expect(screen.queryByRole("textbox", { name: "Reference WAV" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText("Advanced"));
+    expect(screen.getByRole("combobox", { name: "Response format" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Health path" })).toBeInTheDocument();
   });
 
   it("offers fixed and varied Faster Qwen seed controls", async () => {

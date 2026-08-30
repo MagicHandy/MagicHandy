@@ -26,4 +26,4 @@ Import-Module $supportPath -Force -DisableNameChecking
 
 $resolvedDataDir = [System.IO.Path]::GetFullPath($DataDir)
 New-Item -ItemType Directory -Force -Path $resolvedDataDir | Out-Null
-InstallerSupport\Install-MagicHandyParakeet -DataDir $resolvedDataDir
+InstallerSupport\Invoke-MagicHandyParakeetInstall -DataDir $resolvedDataDir
