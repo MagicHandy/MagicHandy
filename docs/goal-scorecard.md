@@ -209,6 +209,20 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-09-05 — Creative v2 continuous flow:** replaces local/full groups with
+  correlated reach and timing, integrates rebound recovery, and fits shared
+  reversal acceleration. Gesture retargets keep nearby stroke context. No new
+  dependencies or motion path. Local `CGO_ENABLED=0 -trimpath` binary is
+  26,259,456 bytes; stripped `-s -w` is 19,071,488 (+10,752 from the llama.cpp
+  integration build). Initial JS is 750.83 / 207.64 kB gzip; lazy Labs JS is
+  51.95 / 14.58. Three fresh-data stripped launches reached the listener in
+  136.4–167.9 ms and health in 138.3–208.3 ms. One-second launch snapshots were
+  22.09–65.20 MiB working set / 54.07–54.98 MiB private, excluding model and
+  browser. Windows residency varies; these do not close the idle waiver or
+  measure active hardware/soak budgets. Only help text/localizations changed in
+  the UI. Detailed engine,
+  model and visual evidence: [flow review](creative-v2-flow-review-2026-09-05.md).
+
 - **2026-09-05 — llama.cpp session and Autopilot integration:** fixes continuous
   response/history formats, retains bounded longer context, enables autonomous
   score authoring and supplies active semantic speech facts. No new Go or UI

@@ -61,10 +61,10 @@ func writeGestureSpeechFacts(b *strings.Builder, f motion.FlowSpec) {
 	case 100:
 		fmt.Fprintf(b, "Only localized strokes in the %s, with a nominal width of %d percentage points. No broad groups are mixed in.\n", region, g.FocusWidthPercent)
 	default:
-		fmt.Fprintf(b, "Broad strokes across %d–%d%% are interspersed with local groups in the %s, whose nominal width is %d percentage points. Both broad and local work are active.\n", f.MinPercent, f.MaxPercent, region, g.FocusWidthPercent)
+		fmt.Fprintf(b, "Reach varies through widths between the broad %d–%d%% band and local work in the %s, whose nominal width is %d percentage points. The mix biases this changing reach; it does not schedule separate groups or guarantee full-band strokes.\n", f.MinPercent, f.MaxPercent, region, g.FocusWidthPercent)
 	}
 	if g.FocusMixPercent > 0 && g.ReboundCount > 0 {
-		b.WriteString("Shrinking rebound returns are enabled during local groups where their width fits.\n")
+		b.WriteString("Shrinking returns and gradual recovery are enabled as local reach contracts, where their width fits.\n")
 	}
 	if g.FasterDirection != "even" && g.ContrastPercent > 0 {
 		fmt.Fprintf(b, "Travel toward the %s is faster than the return direction.\n", g.FasterDirection)

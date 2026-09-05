@@ -29,18 +29,22 @@ and transport. It owns no motion goroutine, clock or raw device payload. A nil
 Gesture retains the existing continuous Flow compiler. Mode admission rejects
 a mismatched score, including a reply arriving after the mode changed.
 
-The generator creates 32 primary cycles by default. Seeded groups vary local
-excursions among full strokes, with a broad stroke after at most six local
-primary cycles for an intermediate mix. Rebounds contract geometrically at
-the chosen anchor. Tails below 10 percentage points are omitted. Rebound count
-is an upper bound, and mix is a preference rather than an exact fraction of
-elapsed time. Bounces add cycles to local groups, so dense settings can make
-the local work dominate. All destinations stay inside the outer requested band.
+The September 5 flow refactor replaces the initial local/full group scheduler
+with correlated reach and clock fields over 64 cycles. Intermediate mix values
+travel through intermediate widths; 0 and 100 preserve full-only and local-only
+constraints. There is no forced full stroke after a fixed number of cycles.
+Rebound decay affects successive excursions and gradually recovers into the
+same stream instead of inserting another group. Tails below 10 percentage
+points are omitted. Count remains an upper bound; the reach blend can soften
+its visible decay. Destinations stay inside the outer requested band.
 
-Each stroke uses a monotonic time warp of a minimum-jerk quintic primitive.
-Inertia moves the velocity crest later within travel; it does not simulate
-force, collision or accurate ball physics. Quintic Hermite intervals preserve
-position, velocity and acceleration at knots. The actual interpolant is
+Each stroke uses a monotonic time warp of a rounded oscillator half-cycle.
+Adjacent strokes share nonzero reversal acceleration instead of settling to
+rest at every endpoint. A quintic correction distributes that shared-turn
+adjustment across the whole stroke, avoiding a braking shoulder at the last
+interpolation interval. Inertia moves the velocity crest later within travel;
+it does not simulate force, collision or accurate ball physics. Quintic
+Hermite intervals preserve position, velocity and acceleration. The interpolant is
 checked for finite coefficients and unintended reversals using exact velocity
 extrema. Stroke timing is fitted locally, so a short rebound does not slow the
 whole score. When the faster direction saturates, the slower direction retains
@@ -60,8 +64,12 @@ are not a complete natural-language intent verifier.
 
 Fresh initialization and explicit `evolve` choose a new nonzero realization
 seed; the model never selects a seed. Captured scores remain reproducible.
-Production and Lab Autopilot refresh the realization while preserving every
-gesture control, pace and outer band. Exact-hold requests take priority.
+Production and Lab Autopilot preserve human-requested character; empty sessions
+may develop compatible controls within saved limits. Exact-hold requests take
+priority. Gesture-to-gesture edits search near the current stroke in the reach
+field instead of restarting elsewhere in the phrase after a global nearest-point
+match. This is phase selection inside the existing plan, not another motion loop;
+the shared transition and sanitizer continue to own the executed handoff.
 Continuation still goes through one ordinary inference and conditional engine
 retarget, with no repair or library fallback. The finite score repeats when it
 is not refreshed. Lab scheduling adds jitter above the configured minimum quiet
@@ -76,7 +84,7 @@ definitions are unchanged; the new travel vocabulary belongs to Creative v2.
 
 This adds an independent motion vocabulary without a second playback path or
 new runtime dependencies. The model has fewer compositional responsibilities,
-but short stroke speed saturation, finite repeat periods, dense local groups
+but short stroke speed saturation, finite repeat periods, strong directional bias
 and model omissions remain visible limitations. Plots establish commanded
 character, not physical comfort or device tracking. Stop, controller ownership,
 transport boundaries and user limits retain their existing authority.
@@ -84,3 +92,5 @@ transport boundaries and user limits retain their existing authority.
 See [the Creative v2 review](../creative-v2-motion-review-2026-09-05.md) for
 all prompt iterations, failed production selections, shared-engine plots,
 fake-transport traces, tests, budgets and remaining physical acceptance.
+The [flow refactor review](../creative-v2-flow-review-2026-09-05.md) records the
+user-stopped Cloud session and the subsequent generator/handoff evaluation.

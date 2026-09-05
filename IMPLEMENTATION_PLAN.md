@@ -2,6 +2,11 @@
 
 ## Core Direction
 
+The September 5 Creative v2 flow refactor replaces local/full blocks with
+correlated reach and timing, shared reversal acceleration and nearby-stroke
+handoffs. It remains semantic content inside the single shared engine. See
+[the evaluation](docs/creative-v2-flow-review-2026-09-05.md).
+
 MagicHandy is a Go-first ground-up rewrite of StrokeGPT-ReVibed.
 
 The rewrite is justified by maintainability, cleaner architecture, future binary releases, lower non-ML baseline overhead, simpler long-running concurrency, and fewer Python environment failures in the core install path. Go alone will not fix Handy cloud latency, local LLM memory, CUDA memory, or all motion smoothness bugs. Motion quality must come from a better motion model, transport scheduler, retargeting algorithm, diagnostics, and real-device validation.

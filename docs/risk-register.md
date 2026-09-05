@@ -1,5 +1,15 @@
 # MagicHandy Risk Register
 
+## 2026-09-05 Creative v2 flow refactor
+
+Physical feedback identified separated pattern blocks despite smooth position
+joins. The refactor removes binary local/full scheduling, shares reversal
+acceleration, and keeps score edits near the current stroke. Kinematic fitting,
+sanitization, Stop and dispatch ownership remain unchanged. Finite repetition,
+large model-selected changes of intent and imperfect descriptions remain risks;
+the command plots do not establish physical feel. See the
+[flow review](creative-v2-flow-review-2026-09-05.md).
+
 ## 2026-09-05 continuous-mode session review
 
 Full-build llama.cpp tests found contradictory continuous reply/history

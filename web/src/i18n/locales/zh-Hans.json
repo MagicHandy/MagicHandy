@@ -1952,6 +1952,6 @@
   "autopilot motion is off; choose a motion mode in the sidebar": "自动驾驶运动已关闭；请在侧栏选择运动模式",
   "Creative v2": "创意 v2",
   "Generate asymmetric sweeps, localized strokes and shrinking rebounds. Edit focus, sweep, rebounds or inertia while preserving other controls. Switching to or from this generator starts a new Lab score.": "生成不对称往返、局部行程和逐渐缩小的回弹。编辑位置、往返速度差、回弹或惯性，同时保留其他控制。切换到此生成方式或从中切出会开始新的实验室动作方案。",
-  "Creative v2 uses 32 primary cycles with optional local rebounds. Mixed focus returns to full reach after at most six local cycles. Tiny rebound tails are omitted. Inertia shapes the velocity crest; it does not simulate impacts. Safety limits can reduce timing contrast.": "Creative v2 使用32个主周期，可附加局部回弹。混合模式在最多六个局部周期后恢复全范围行程。过小的回弹尾段会被省略。惯性调整速度峰值，不模拟冲击。安全限制可能减小往返时间差。",
+  "Creative v2 develops reach and timing continuously across 64 cycles. Mixed focus moves through intermediate widths; it does not schedule local and full-stroke blocks. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. The finite realization repeats until evolved; safety limits still apply.": "Creative v2 在 64 个周期内连续改变行程范围和节奏。混合聚焦会经过中间行程宽度，而不是安排局部与全行程的动作块。回弹在连续运动中逐步收缩并恢复。惯性塑造运动过程，不模拟碰撞。这段有限的运动会循环播放，直到更新其变化细节；安全限制始终生效。",
   "Creative v2 also refreshes its realization during Autopilot, preserving the requested character. Without continuation the finite score repeats. Exact repetition requests keep the current realization.": "Creative v2 在 Autopilot 期间也会更新变化，同时保留所要求的动作特点。没有持续生成时，有限的方案会重复。要求精确重复时，会保留当前变化。"
 }
