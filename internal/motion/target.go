@@ -160,12 +160,14 @@ type MotionTarget struct {
 	AreaFocus              *AreaFocus         `json:"area_focus,omitempty"`
 	SoftAnchor             *SoftAnchor        `json:"soft_anchor,omitempty"`
 	Dynamic                *DynamicDefinition `json:"dynamic,omitempty"`
+	Flow                   *FlowSpec          `json:"flow,omitempty"`
 
 	// Resolved content is backend-owned and never serialized to clients. The
 	// public IDs above remain the authoritative snapshot vocabulary.
-	Pattern *PatternDefinition       `json:"-"`
-	Program *ProgramDefinition       `json:"-"`
-	Media   *MediaTimelineDefinition `json:"-"`
+	Pattern  *PatternDefinition       `json:"-"`
+	Program  *ProgramDefinition       `json:"-"`
+	Media    *MediaTimelineDefinition `json:"-"`
+	prepared *preparedMotion
 }
 
 // NormalizeTarget clamps semantic intent without applying physical stroke settings.
@@ -179,8 +181,22 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 	target.ProgramID = strings.TrimSpace(target.ProgramID)
 	target.MediaID = strings.TrimSpace(target.MediaID)
 	target.MediaSpeedLimitEnabled = false
+	if target.Flow != nil {
+		return normalizeFlowTarget(target, settings)
+	}
+	if target.prepared != nil {
+		target.Dynamic, target.Pattern, target.Program, target.Media = nil, nil, nil, nil
+		if target.prepared.libraryID == "" {
+			target.AreaFocus, target.SoftAnchor = nil, nil
+		}
+		target.PatternID, target.PatternName = PatternID(target.prepared.id), target.prepared.name
+		target.ProgramID, target.MediaID = "", ""
+	}
 	if target.Dynamic != nil {
 		dynamic := NormalizeDynamicDefinition(*target.Dynamic)
+		if target.Source != TargetSourceMotionLab {
+			dynamic.Experiment = nil
+		}
 		target.Dynamic = &dynamic
 		target.PatternID = ""
 		target.PatternName = DynamicMotionName
@@ -218,7 +234,7 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 		target.Program = nil
 	}
 	if target.Dynamic == nil && target.PatternID == "" && target.ProgramID == "" && target.MediaID == "" {
-		target.PatternID = PatternStroke
+		target.PatternID = PatternFullSweeps
 	}
 	if target.SpeedPercent == 0 {
 		target.SpeedPercent = defaultSpeedPercent

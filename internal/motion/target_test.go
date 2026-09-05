@@ -25,8 +25,8 @@ func TestMotionTargetClamping(t *testing.T) {
 		},
 	}, settings)
 
-	if target.PatternID != PatternStroke {
-		t.Fatalf("pattern = %q, want default stroke", target.PatternID)
+	if target.PatternID != PatternFullSweeps {
+		t.Fatalf("pattern = %q, want default continuous full sweeps", target.PatternID)
 	}
 	if target.SpeedPercent != 60 {
 		t.Fatalf("speed = %d, want clamped max 60", target.SpeedPercent)

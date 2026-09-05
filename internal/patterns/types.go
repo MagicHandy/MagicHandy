@@ -65,6 +65,8 @@ type Pattern struct {
 	Origin      string              `json:"origin"`
 	Kind        string              `json:"kind"`
 	Enabled     bool                `json:"enabled"`
+	Deprecated  bool                `json:"deprecated,omitempty"`
+	Continuous  bool                `json:"continuous,omitempty"`
 	Weight      float64             `json:"weight"`
 	CycleMillis int64               `json:"cycle_ms"`
 	Points      []motion.CurvePoint `json:"points"`
@@ -78,6 +80,12 @@ type Pattern struct {
 
 // Definition converts a stored row to engine-owned semantic content.
 func (p Pattern) Definition() motion.PatternDefinition {
+	if p.Origin == OriginBuiltin {
+		if definition, ok := motion.ContinuousPatternDefinition(motion.PatternID(p.ID)); ok {
+			definition.Name = p.Name
+			return definition
+		}
+	}
 	return motion.PatternDefinition{
 		ID:          motion.PatternID(p.ID),
 		Name:        p.Name,

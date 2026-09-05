@@ -51,6 +51,12 @@ func (p *OllamaProvider) StreamChat(ctx context.Context, request ChatRequest, on
 			"temperature": request.Temperature,
 		},
 	}
+	if len(request.JSONSchema) > 0 {
+		if !json.Valid(request.JSONSchema) {
+			return "", errors.New("invalid response JSON schema")
+		}
+		body.Format = request.JSONSchema
+	}
 	if request.TopP > 0 {
 		body.Options["top_p"] = request.TopP
 	}
@@ -166,7 +172,7 @@ type ollamaChatRequest struct {
 	Model    string         `json:"model"`
 	Messages []Message      `json:"messages"`
 	Stream   bool           `json:"stream"`
-	Format   string         `json:"format"`
+	Format   any            `json:"format"`
 	Think    *bool          `json:"think,omitempty"`
 	Options  map[string]any `json:"options,omitempty"`
 }

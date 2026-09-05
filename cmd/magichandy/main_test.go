@@ -10,11 +10,14 @@ import (
 
 func TestApplicationRuntimeMotionSimulationIsExplicit(t *testing.T) {
 	production := applicationRuntime(false)
-	if production.MotionTransport != nil {
+	if production.MotionTransport != nil || production.MotionSimulated {
 		t.Fatal("production runtime unexpectedly bypasses the selected device owner")
 	}
 
 	review := applicationRuntime(true)
+	if !review.MotionSimulated {
+		t.Fatal("review runtime does not disclose motion simulation")
+	}
 	if review.MotionTransport == nil || review.MotionTransport.Diagnostics().Name != "fake_handy" {
 		t.Fatalf("review motion transport = %+v, want fake_handy", review.MotionTransport)
 	}

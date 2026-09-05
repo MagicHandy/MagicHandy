@@ -28,9 +28,9 @@ type styleProfile struct {
 var styleProfiles = map[string]styleProfile{
 	config.MotionStyleGentle: {
 		patternWeights: map[motion.PatternID]float64{
-			motion.PatternStroke: 0.50,
-			motion.PatternTease:  0.40,
-			motion.PatternPulse:  0.10,
+			motion.PatternFullSweeps:    0.50,
+			motion.PatternBaseVariation: 0.40,
+			motion.PatternPaceWave:      0.10,
 		},
 		speedBias:         0.25,
 		minDurationMillis: 12_000,
@@ -40,9 +40,9 @@ var styleProfiles = map[string]styleProfile{
 	},
 	config.MotionStyleBalanced: {
 		patternWeights: map[motion.PatternID]float64{
-			motion.PatternStroke: 0.40,
-			motion.PatternPulse:  0.30,
-			motion.PatternTease:  0.30,
+			motion.PatternFullSweeps:    0.40,
+			motion.PatternPaceWave:      0.30,
+			motion.PatternBaseVariation: 0.30,
 		},
 		speedBias:         0.50,
 		minDurationMillis: 8_000,
@@ -52,9 +52,9 @@ var styleProfiles = map[string]styleProfile{
 	},
 	config.MotionStyleIntense: {
 		patternWeights: map[motion.PatternID]float64{
-			motion.PatternPulse:  0.50,
-			motion.PatternStroke: 0.35,
-			motion.PatternTease:  0.15,
+			motion.PatternPaceWave:      0.50,
+			motion.PatternFullSweeps:    0.35,
+			motion.PatternBaseVariation: 0.15,
 		},
 		speedBias:         0.80,
 		minDurationMillis: 6_000,
@@ -104,7 +104,7 @@ func (p *Planner) NextSegment(settings config.MotionSettings) (Segment, []diagno
 		profile = styleProfiles[config.MotionStyleBalanced]
 	}
 
-	patterns := []motion.PatternID{motion.PatternStroke, motion.PatternPulse, motion.PatternTease}
+	patterns := []motion.PatternID{motion.PatternFullSweeps, motion.PatternPaceWave, motion.PatternBaseVariation}
 	scores := make([]diagnostics.PlannerScore, 0, len(patterns))
 	var chosen motion.PatternID
 	best := -1.0

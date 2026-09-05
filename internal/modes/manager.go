@@ -1218,6 +1218,7 @@ func (m *Manager) cancelOperationLocked() {
 }
 
 func cloneTarget(target motion.MotionTarget) motion.MotionTarget {
+	target.Flow = motion.CloneFlowSpec(target.Flow)
 	if target.AreaFocus != nil {
 		focus := *target.AreaFocus
 		target.AreaFocus = &focus
@@ -1282,6 +1283,12 @@ func (m *Manager) tracePlanned(mode string, reason string, choice segmentChoice)
 }
 
 func segmentContentIdentifier(segment Segment) string {
+	if segment.Flow != nil {
+		if segment.Flow.Gesture != nil {
+			return "creative_v2"
+		}
+		return "layered"
+	}
 	if segment.Dynamic != nil {
 		return "dynamic"
 	}

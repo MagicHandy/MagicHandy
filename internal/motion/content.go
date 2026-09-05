@@ -60,6 +60,7 @@ type PatternDefinition struct {
 	CycleMillis int64        `json:"cycle_ms"`
 	Points      []CurvePoint `json:"points"`
 	Tags        []string     `json:"tags,omitempty"`
+	recipeID    PatternID
 }
 
 // ProgramDefinition is finite, non-looping motion content.
@@ -132,7 +133,10 @@ func buildBuiltinPatternCatalog() []PatternDefinition {
 	definitions = append(definitions, generateCatalogPatterns()...)
 	definitions = append(definitions, PromotedBuiltinPatternDefinitions()...)
 	definitions = append(definitions, loadCuratedBuiltinPatterns()...)
-	return definitions
+	for index := range definitions {
+		definitions[index].Tags = append(definitions[index].Tags, TagDeprecated)
+	}
+	return append(buildContinuousPatternDefinitions(), definitions...)
 }
 
 // NewCurve validates points and builds PCHIP-style wall-time derivatives.
@@ -260,6 +264,12 @@ func BuiltinPatternDefinition(id PatternID) (PatternDefinition, bool) {
 
 // NormalizePatternDefinition validates, closes, and floor-stretches loop data.
 func NormalizePatternDefinition(definition PatternDefinition) (PatternDefinition, error) {
+	if definition.recipeID != "" {
+		if err := validateCurvePoints(definition.Points, definition.CycleMillis); err != nil {
+			return PatternDefinition{}, err
+		}
+		return definition, nil
+	}
 	definition.ID = PatternID(strings.TrimSpace(string(definition.ID)))
 	definition.Name = strings.TrimSpace(definition.Name)
 	definition.Description = strings.TrimSpace(definition.Description)

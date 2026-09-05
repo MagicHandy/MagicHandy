@@ -137,15 +137,18 @@ func (s *Server) autopilotModelTurn(
 	if err != nil {
 		return chat.AutopilotResponse{}, err
 	}
-	motionContext := s.chatMotionContext(settings.Motion, settings.LLM)
+	motionContext := s.contextualChatMotion(settings, promptContext.UserRequests)
 	// During engine recovery the scheduler can still own a valid current
 	// segment while the transport-facing snapshot is temporarily idle. Keep the
 	// autonomous validator aligned with that semantic state: a hold can restart
 	// an owned segment, but it cannot start a brand-new Autopilot run.
-	if input.CurrentSpeed > 0 && (input.CurrentDynamic != nil || input.CurrentPatternID != "") {
+	if input.CurrentSpeed > 0 && (input.CurrentDynamic != nil || input.CurrentFlow != nil || input.CurrentPatternID != "") {
 		motionContext.Running = true
 		motionContext.Paused = false
 		motionContext.SpeedPercent = input.CurrentSpeed
+	}
+	if input.CurrentFlow != nil {
+		motionContext.Layered = motion.CloneFlowSpec(input.CurrentFlow)
 	}
 	temperature := autopilotTemperature(kind, input.MotionChangeLevel)
 	if kind == chat.AutopilotKindMotion && strings.TrimSpace(input.MotionFeedback) != "" && temperature < 0.98 {
@@ -290,6 +293,9 @@ func (s *Server) mapAutopilotResponse(
 		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
 	}
 	settings, _ := s.store.Snapshot()
+	if continuousChatMode(settings.LLM.MotionGenerationMode) {
+		return mapContinuousAutopilotCommand(command, settings, say, next)
+	}
 	if settings.LLM.MotionGenerationMode == config.LLMMotionModeDynamic {
 		return mapDynamicAutopilotCommand(command, input, say, next, variability), nil
 	}
@@ -355,7 +361,7 @@ func mapDynamicAutopilotCommand(
 	if input.CurrentDynamic != nil && len(command.Sections) == 0 &&
 		commandChangesSingleDynamicPhrase(command) &&
 		!sameDynamicPhraseSemantics(dynamic, *input.CurrentDynamic) {
-		dynamic = motion.AdvanceDynamicPhraseSeed(dynamic, input.CurrentDynamic.PhraseSeed)
+		dynamic = motion.FreshDynamicPhrase(dynamic, input.CurrentDynamic.PhraseSeed)
 	}
 	speed := input.CurrentSpeed
 	if command.SpeedPercent != nil {

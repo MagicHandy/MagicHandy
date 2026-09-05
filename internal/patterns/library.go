@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -30,7 +31,7 @@ const patternByIDQuery = `
 `
 
 // Open opens the library and seeds code-generated built-ins without replacing
-// user names, enablement, or feedback-derived weights.
+// user names or feedback-derived weights. Retired built-ins are disabled on upgrade.
 func Open(dataDir string) (*Library, error) {
 	database, err := dbstore.Open(dataDir)
 	if err != nil {
@@ -98,7 +99,7 @@ func (l *Library) Summary() (Summary, error) {
 	ctx := context.Background()
 	summary := Summary{Available: true}
 	if err := l.db.SQL().QueryRowContext(ctx, `
-		SELECT COUNT(*), COALESCE(SUM(enabled), 0) FROM patterns
+		SELECT COUNT(*), COALESCE(SUM(CASE WHEN tags_json NOT LIKE '%"deprecated"%' THEN enabled ELSE 0 END), 0) FROM patterns
 	`).Scan(&summary.PatternCount, &summary.EnabledPatternCount); err != nil {
 		return Summary{}, err
 	}
@@ -119,7 +120,7 @@ func (l *Library) ListPatterns() ([]Pattern, error) {
 		SELECT id, name, description, origin, kind, enabled, weight, cycle_ms,
 		       points_json, tags_json, created_at, updated_at
 		FROM patterns
-		ORDER BY CASE origin WHEN 'builtin' THEN 0 ELSE 1 END, name, id
+		ORDER BY CASE WHEN tags_json LIKE '%"deprecated"%' THEN 2 WHEN origin = 'builtin' THEN 0 ELSE 1 END, name, id
 	`)
 	if err != nil {
 		return nil, err
@@ -151,7 +152,7 @@ func (l *Library) Pattern(id string) (Pattern, error) {
 // ResolveEnabled returns engine content only when the entry remains enabled.
 func (l *Library) ResolveEnabled(id string) (motion.PatternDefinition, bool, error) {
 	pattern, err := l.Pattern(id)
-	if errors.Is(err, ErrPatternNotFound) || (err == nil && !pattern.Enabled) {
+	if errors.Is(err, ErrPatternNotFound) || (err == nil && (!pattern.Enabled || pattern.Deprecated)) {
 		return motion.PatternDefinition{}, false, nil
 	}
 	if err != nil {
@@ -184,6 +185,9 @@ func (l *Library) EnabledChoices() ([]CurationChoice, error) {
 		}
 		if err := json.Unmarshal([]byte(tagsJSON), &choice.Tags); err != nil {
 			return nil, err
+		}
+		if slices.Contains(choice.Tags, motion.TagDeprecated) {
+			continue
 		}
 		choices = append(choices, choice)
 	}
@@ -237,6 +241,9 @@ func (l *Library) UpdatePattern(id string, patch PatternPatch) (Pattern, error) 
 		}
 		if current.Origin == OriginBuiltin && patchChangesBuiltinContent(patch) {
 			return ErrBuiltinPattern
+		}
+		if current.Deprecated && patch.Enabled != nil && *patch.Enabled {
+			return fmt.Errorf("%w: legacy built-ins are retired and cannot be enabled", ErrInvalidContent)
 		}
 		next, err = applyPatternPatch(current, patch)
 		if err != nil {
@@ -462,6 +469,15 @@ func (l *Library) seedBuiltins(ctx context.Context) error {
 			}
 			for _, duplicateID := range promotion.duplicateIDs {
 				if _, err := tx.ExecContext(ctx, `DELETE FROM patterns WHERE id = ? AND origin = 'user'`, duplicateID); err != nil {
+					return err
+				}
+			}
+		}
+		// Idempotent upgrade migration, after preference promotion: legacy rows
+		// remain exportable but cannot regain enablement through old preferences.
+		for _, definition := range motion.BuiltinPatternDefinitions() {
+			if slices.Contains(definition.Tags, motion.TagDeprecated) {
+				if _, err := tx.ExecContext(ctx, `UPDATE patterns SET enabled = 0 WHERE id = ? AND origin = 'builtin'`, definition.ID); err != nil {
 					return err
 				}
 			}
@@ -705,6 +721,15 @@ func scanPattern(scanner interface{ Scan(...any) error }) (Pattern, error) {
 }
 
 func withPatternPreview(pattern Pattern) (Pattern, error) {
+	pattern.Deprecated = pattern.Origin == OriginBuiltin && slices.Contains(pattern.Tags, motion.TagDeprecated)
+	if pattern.Origin == OriginBuiltin {
+		if samples, duration, ok := motion.ContinuousPatternPreview(motion.PatternID(pattern.ID)); ok {
+			pattern.Continuous = true
+			pattern.PreviewSamples, pattern.CycleMillis = samples, duration
+			pattern.Points = append([]motion.CurvePoint(nil), samples...)
+			return pattern, nil
+		}
+	}
 	definition, err := motion.NormalizePatternDefinition(pattern.Definition())
 	if err != nil {
 		return Pattern{}, err

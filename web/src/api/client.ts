@@ -62,6 +62,7 @@ import type {
   ControlIdentity,
 } from "./types";
 
+
 const CLIENT_ID_KEY = "magichandy-controller-tab-id";
 const STOP_SEQUENCE_HEADER = "X-MagicHandy-Stop-Sequence";
 
@@ -123,7 +124,7 @@ export const clientId = resolveControllerClientID(browserSessionStorage(), brows
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
 export const AUTHENTICATION_REQUIRED_EVENT = "magichandy:authentication-required";
 
-async function request<T>(
+export async function request<T>(
   method: string,
   path: string,
   body?: unknown,
@@ -405,7 +406,7 @@ export const api = {
 
   // Motion — semantic commands only.
   stopMotion: () => request<{ error?: string }>("POST", "/api/motion/stop", {}),
-  // Manual test target — the strict decoder accepts only these two fields.
+  // Manual test target uses semantic pattern and speed fields.
   startManualTest: (body: { pattern: string; speed_percent: number }) =>
     request("POST", "/api/motion/start", body),
   pauseMotion: () => request("POST", "/api/motion/pause", {}),
@@ -598,7 +599,8 @@ export const api = {
   // Settings.
   getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),
   saveSettings: (update: SettingsUpdate) => request("PUT", "/api/settings", update),
-  setLLMMotionMode: (mode: "dynamic" | "pattern" | "off") =>
+  setLabsEnabled: (enabled:boolean) => request<{enabled:boolean}>("PUT", "/api/settings/labs", {enabled}),
+  setLLMMotionMode: (mode: "dynamic" | "pattern" | "layered" | "creative_v2" | "off") =>
     request<{ settings: PublicSettings; mode: string }>("PUT", "/api/settings/llm-motion-mode", { mode }),
   pickHostPath: (kind: "executable" | "gguf" | "wav" | "file" | "directory", current: string) =>
     request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),

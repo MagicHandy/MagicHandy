@@ -47,6 +47,7 @@ type Runtime struct {
 	Traces                 *diagnostics.TraceRing
 	Transport              transport.DiagnosticsProvider
 	MotionTransport        transport.Transport
+	MotionSimulated        bool
 	LLMProvider            llm.Provider
 	LLMHTTPClient          *http.Client
 	CloudBaseURL           string
@@ -80,6 +81,7 @@ type Server struct {
 	bluetooth           bluetoothRuntime
 	intiface            intifaceRuntime
 	motion              motionRuntime
+	lab                 llmLabRuntime
 	llm                 llmRuntime
 	llmRequests         llmRequestCoordinator
 	llmAutoloadMu       sync.Mutex
@@ -368,6 +370,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/transport/intiface/diagnostics", s.handleIntifaceDiagnostics)
 	mux.HandleFunc("GET /api/motion/state", s.handleMotionState)
 	mux.HandleFunc("GET /api/motion/events", s.handleMotionEvents)
+	s.motionLabRoutes(mux)
 	mux.HandleFunc("POST /api/motion/start", s.handleMotionStart)
 	mux.HandleFunc("POST /api/motion/target", s.handleMotionTarget)
 	mux.HandleFunc("POST /api/motion/quick", s.handleMotionQuick)
@@ -391,6 +394,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 func (s *Server) settingsAndUpdateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	mux.HandleFunc("PUT /api/settings/labs", s.handleSetLabsEnabled)
 	mux.HandleFunc("PUT /api/settings/llm-motion-mode", s.handlePutLLMMotionMode)
 	mux.HandleFunc("GET /api/update", s.handleUpdateStatus)
 	mux.HandleFunc("PUT /api/settings/device/connection-key", s.handlePutConnectionKey)
@@ -409,7 +413,7 @@ func (s *Server) handlePutLLMMotionMode(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	body.Mode = strings.ToLower(strings.TrimSpace(body.Mode))
-	if body.Mode != config.LLMMotionModeDynamic && body.Mode != config.LLMMotionModePattern && body.Mode != config.LLMMotionModeOff {
+	if body.Mode != config.LLMMotionModeDynamic && body.Mode != config.LLMMotionModePattern && body.Mode != config.LLMMotionModeLayered && body.Mode != config.LLMMotionModeCreativeV2 && body.Mode != config.LLMMotionModeOff {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("unknown LLM motion generation mode %q", body.Mode))
 		return
 	}
@@ -566,6 +570,8 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"library":             s.libraryState(),
 		"media":               s.mediaState(r.Context()),
 		"motion":              s.motionState(),
+		"motion_simulated":    s.motion.simulated,
+		"labs_enabled":        settings.Labs.Enabled,
 		"transport":           transportDiagnostics,
 		"cloud_transport":     s.cloudDiagnostics(),
 		"bluetooth_transport": s.bluetoothDiagnostics(),
@@ -672,6 +678,12 @@ func (s *Server) handleTraceExport(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	name := cleanAssetName(r.URL.Path)
+	// Missing API routes must not look like successful calls by returning the
+	// SPA document, including development endpoints absent from public builds.
+	if name == "api" || strings.HasPrefix(name, "api/") {
+		writeError(w, http.StatusNotFound, errors.New("API endpoint not found"))
+		return
+	}
 	data, err := fs.ReadFile(s.static, name)
 	if err != nil {
 		if strings.Contains(path.Base(name), ".") {

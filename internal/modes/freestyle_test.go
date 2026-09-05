@@ -137,7 +137,7 @@ func TestNormalizeArrangementBoundsSegments(t *testing.T) {
 		t.Fatalf("NormalizeArrangement: %v", err)
 	}
 	segment := arrangement.Segments[0]
-	if segment.DurationMillis != minSegmentMillis || segment.SpeedPercent != 100 || segment.PatternID != motion.PatternStroke {
+	if segment.DurationMillis != minSegmentMillis || segment.SpeedPercent != 100 || segment.PatternID != motion.PatternFullSweeps {
 		t.Fatalf("segment not normalized: %+v", segment)
 	}
 }

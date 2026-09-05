@@ -31,6 +31,7 @@ type motionRuntime struct {
 	engine      *motion.Engine
 	owner       string
 	transport   transport.Transport
+	simulated   bool
 }
 
 // admittedMotionEngine carries the Stop epoch captured while the server still
@@ -46,22 +47,41 @@ func (engine admittedMotionEngine) Start(ctx context.Context, target motion.Moti
 }
 
 func newMotionRuntime(runtime Runtime) motionRuntime {
-	return motionRuntime{transport: runtime.MotionTransport}
+	return motionRuntime{transport: runtime.MotionTransport, simulated: runtime.MotionSimulated}
 }
 
 // motionRequest is the optional body for start/target control.
 type motionRequest struct {
-	Pattern      string `json:"pattern,omitempty"`
-	SpeedPercent int    `json:"speed_percent,omitempty"`
+	Pattern      string           `json:"pattern,omitempty"`
+	SpeedPercent int              `json:"speed_percent,omitempty"`
+	Lab          *motion.LabStart `json:"lab,omitempty"`
 }
 
-func (r motionRequest) target() motion.MotionTarget {
+func (r motionRequest) target(settings config.MotionSettings) (motion.MotionTarget, error) {
+	if r.Lab != nil {
+		if r.Pattern != "" || r.SpeedPercent != 0 {
+			return motion.MotionTarget{}, errors.New("motion lab and manual pattern fields cannot be mixed")
+		}
+		if r.Lab.SettingsKey != motion.LabSettingsKey(settings) {
+			return motion.MotionTarget{}, errors.New("motion settings changed; refresh the lab preview before starting")
+		}
+		if r.Lab.Flow != nil {
+			if r.Lab.Method != "flow" || r.Lab.Request != (motion.LabRequest{}) {
+				return motion.MotionTarget{}, errors.New("flow and legacy lab fields cannot be mixed")
+			}
+			return motion.FlowTarget(*r.Lab.Flow, settings)
+		}
+		return r.Lab.Request.Target(r.Lab.Method)
+	}
+	if definition, ok := motion.BuiltinPatternDefinition(motion.PatternID(r.Pattern)); ok && slices.Contains(definition.Tags, motion.TagDeprecated) {
+		return motion.MotionTarget{}, errors.New("legacy built-ins are disabled; select a continuous pattern")
+	}
 	return motion.MotionTarget{
 		Label:        "Manual",
 		Source:       motion.TargetSourceManualUI,
 		PatternID:    motion.PatternID(r.Pattern),
 		SpeedPercent: r.SpeedPercent,
-	}
+	}, nil
 }
 
 // motionState returns a UI-facing snapshot; the "available" flag lets the
@@ -136,6 +156,8 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	finishLab := s.cancelLabSession()
+	defer finishLab()
 	stopSequence := s.stopSequence.Load()
 
 	var body motionRequest
@@ -144,6 +166,20 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
+	}
+	if body.Lab != nil {
+		ctx, finish, err := s.beginLabMotion(r.Context())
+		if err != nil {
+			writeError(w, http.StatusForbidden, err)
+			return
+		}
+		defer finish()
+		r = r.WithContext(ctx)
+	}
+	settings, _ := s.store.Snapshot()
+	if _, err := body.target(settings.Motion); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
 	}
 	finishModeStop := func() {}
 	if s.modes != nil {
@@ -166,12 +202,19 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, errors.New(s.safeMotionErrorMessage(err)))
 		return
 	}
-	settings, _ := s.store.Snapshot()
+	settings, _ = s.store.Snapshot()
+	// Revalidate after draining prior work; a settings edit may have occurred
+	// during that wait. Stop epochs are checked independently below.
+	target, err := body.target(settings.Motion)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
 	if s.stopSequence.Load() != stopSequence {
 		writeError(w, http.StatusConflict, errors.New("motion start was invalidated by Emergency Stop"))
 		return
 	}
-	state, err := engine.StartAtGeneration(r.Context(), body.target(), settings.Motion, admission)
+	state, err := engine.StartAtGeneration(r.Context(), target, settings.Motion, admission)
 	s.writeMotionResult(w, state, err)
 }
 
@@ -199,7 +242,17 @@ func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	updated, err := engine.ApplyTarget(r.Context(), body.target(), "ui_target")
+	if body.Lab != nil {
+		writeError(w, http.StatusBadRequest, errors.New("motion lab requires an explicit start"))
+		return
+	}
+	settings, _ := s.store.Snapshot()
+	target, err := body.target(settings.Motion)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	updated, err := engine.ApplyTarget(r.Context(), target, "ui_target")
 	s.writeMotionResult(w, updated, err)
 }
 
@@ -368,6 +421,7 @@ func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (tran
 
 func (s *Server) invalidateWorkForStop(reason string) func() {
 	s.stopSequence.Add(1)
+	finishLab := s.cancelLabSession()
 	if s.mediaSync != nil {
 		s.mediaSync.Invalidate(reason)
 	}
@@ -381,6 +435,7 @@ func (s *Server) invalidateWorkForStop(reason string) func() {
 	pendingASR := s.voice.InvalidateAll(voice.RoleASR)
 	pendingTTS := s.voice.InvalidateAll(voice.RoleTTS)
 	return func() {
+		finishLab()
 		s.voice.CancelInvalidated(voice.RoleASR, pendingASR)
 		s.voice.CancelInvalidated(voice.RoleTTS, pendingTTS)
 	}
@@ -512,6 +567,9 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 		s.modes.NotifyAutopilotSettingsChanged()
 	}
 	var runtimeErr error
+	if previous.Labs.Enabled && !next.Labs.Enabled {
+		runtimeErr = s.disableLabs(ctx)
+	}
 	if s.media != nil && !slices.Equal(previous.Media.LibraryPaths, next.Media.LibraryPaths) {
 		if _, err := s.media.RetainLocations(ctx, next.Media.LibraryPaths); err != nil {
 			runtimeErr = errors.Join(runtimeErr, fmt.Errorf("apply media library settings: %w", err))

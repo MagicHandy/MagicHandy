@@ -59,6 +59,12 @@ func (p *LlamaCPPProvider) StreamChat(ctx context.Context, request ChatRequest, 
 	if request.ReasoningMode == "off" {
 		body.ChatTemplateKwargs = &openAIChatTemplateKwargs{EnableThinking: false}
 	}
+	if len(request.JSONSchema) > 0 {
+		if !json.Valid(request.JSONSchema) {
+			return "", errors.New("invalid response JSON schema")
+		}
+		body.ResponseFormat.Schema = request.JSONSchema
+	}
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("encode llama.cpp chat request: %w", err)
@@ -218,7 +224,8 @@ type openAIChatTemplateKwargs struct {
 }
 
 type openAIResponseFormat struct {
-	Type string `json:"type"`
+	Type   string          `json:"type"`
+	Schema json.RawMessage `json:"schema,omitempty"`
 }
 
 type openAIChatChunk struct {

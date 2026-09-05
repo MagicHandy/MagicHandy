@@ -122,6 +122,12 @@ export function StatusBar({
         <span className="status-text">{phaseLabelIsUserAuthored ? phaseLabel : translateKnown(phaseLabel)}</span>
       </span>
       <span className="status-divider" aria-hidden="true" />
+      {state?.motion_simulated && (
+        <span className="status-readout" title={t("Simulation is active. Motion commands go to the simulator; connected devices will not move.")}>
+          <span className="status-dot" data-state="warn" />
+          <span className="status-text">{t("Motion simulator")}</span>
+        </span>
+      )}
       <span className="status-readout">
         <span className="status-dot" data-state={coreState} />
         <span className="status-text">{translateKnown(coreLabel)}</span>

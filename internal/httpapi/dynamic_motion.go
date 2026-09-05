@@ -35,7 +35,11 @@ func dynamicDefinitionFromCommand(command *chat.MotionCommand, current *motion.D
 	if len(dynamic.Sections) > 0 && commandChangesSingleDynamicPhrase(command) {
 		dynamic = collapseDynamicPhrase(dynamic)
 	}
-	return applySingleDynamicCommand(command, dynamic)
+	next := applySingleDynamicCommand(command, dynamic)
+	if current == nil || commandChangesSingleDynamicPhrase(command) {
+		next = motion.FreshDynamicPhrase(next, dynamic.PhraseSeed)
+	}
+	return next
 }
 
 func dynamicDefinitionFromSections(
@@ -51,11 +55,11 @@ func dynamicDefinitionFromSections(
 	if command.SegmentSeconds != nil {
 		dynamic.SegmentSeconds = *command.SegmentSeconds
 	}
-	normalized := motion.NormalizeDynamicDefinition(dynamic)
+	previous := uint32(0)
 	if current != nil {
-		normalized = motion.AdvanceDynamicPhraseSeed(normalized, current.PhraseSeed)
+		previous = current.PhraseSeed
 	}
-	return normalized
+	return motion.FreshDynamicPhrase(dynamic, previous)
 }
 
 // collapseDynamicPhrase edits the currently effective first section. Speed-

@@ -3,6 +3,7 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -37,6 +38,8 @@ type ChatRequest struct {
 	RepeatLastN   int
 	MaxTokens     int
 	ReasoningMode string
+	// JSONSchema optionally constrains generation; callers still validate semantics.
+	JSONSchema json.RawMessage
 	// ReasoningBudgetTokens is used only by providers with an explicit bounded-thinking API.
 	ReasoningBudgetTokens int
 }

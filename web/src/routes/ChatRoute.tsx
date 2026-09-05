@@ -61,7 +61,7 @@ export function ChatRoute() {
   const locked = !backendOnline || readOnly || loading || operation || streaming;
   const savedMotionMode = state?.settings?.llm?.motion_generation_mode;
   const motionCapabilities = state?.settings?.llm?.motion_capabilities;
-  const motionMode = savedMotionMode === "dynamic" || savedMotionMode === "pattern" || savedMotionMode === "off"
+  const motionMode = savedMotionMode === "dynamic" || savedMotionMode === "pattern" || savedMotionMode === "layered" || savedMotionMode === "creative_v2" || savedMotionMode === "off"
     ? savedMotionMode
     : motionCapabilities?.motion === false ? "off" : "dynamic";
 
@@ -137,7 +137,7 @@ export function ChatRoute() {
     void applyWorkspace(() => api.deleteChatSession(session.id), "Chat deleted.");
   }
 
-  async function changeMotionMode(mode: "dynamic" | "pattern" | "off") {
+  async function changeMotionMode(mode: "dynamic" | "pattern" | "layered" | "creative_v2" | "off") {
     if (mode === motionMode || changingMotionMode || !backendOnline || readOnly) return;
     setChangingMotionMode(true);
     try {
@@ -196,8 +196,11 @@ export function ChatRoute() {
               options={[
                 { value: "dynamic", label: t("Creative") },
                 { value: "pattern", label: t("Pattern library") },
+                { value: "layered", label: t("Layered") },
+                { value: "creative_v2", label: t("Creative v2") },
                 { value: "off", label: t("Off") },
               ]}
+              emptySlots={1}
               disabled={!backendOnline || readOnly || changingMotionMode}
               onChange={(mode) => void changeMotionMode(mode)}
             />

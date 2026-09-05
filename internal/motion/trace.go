@@ -36,7 +36,7 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 		LastError:                  redactedError(e.lastError),
 		Perceptual:                 e.plan.Perceptual,
 	}
-	if e.plan.Target.Dynamic != nil && e.plan.ID != "" {
+	if e.plan.Target.continuousCurve() && e.plan.ID != "" {
 		pace := e.plan.Perceptual.Pace
 		pace.Limiters = append([]string(nil), pace.Limiters...)
 		state.Pace = &pace
@@ -239,6 +239,7 @@ func traceTargetWithPace(target MotionTarget, settings config.MotionSettings, pa
 }
 
 func cloneMotionTarget(target MotionTarget) MotionTarget {
+	target.Flow = CloneFlowSpec(target.Flow)
 	if target.AreaFocus != nil {
 		area := *target.AreaFocus
 		target.AreaFocus = &area

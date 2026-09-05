@@ -348,6 +348,7 @@ func clonePhraseSegment(segment Segment) Segment {
 	return Segment{
 		PatternID: segment.PatternID,
 		Dynamic:   cloneDynamicDefinition(segment.Dynamic),
+		Flow:      motion.CloneFlowSpec(segment.Flow),
 		AreaFocus: func() *motion.AreaFocus {
 			if segment.AreaFocus == nil {
 				return nil

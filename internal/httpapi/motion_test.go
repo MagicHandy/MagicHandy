@@ -223,7 +223,7 @@ func TestMotionStartStateStop(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
 
-	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":60}`)
+	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-full-sweeps","speed_percent":60}`)
 	if !started.Available || !started.Engine.Running {
 		t.Fatalf("expected running motion after start, got %+v", started)
 	}
@@ -233,8 +233,8 @@ func TestMotionStartStateStop(t *testing.T) {
 	if started.Engine.Target.Source != motion.TargetSourceManualUI {
 		t.Fatalf("target source = %q, want manual_ui", started.Engine.Target.Source)
 	}
-	restarted := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"pulse","speed_percent":30}`)
-	if !restarted.Engine.Running || restarted.Engine.Target.PatternID != motion.PatternPulse {
+	restarted := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-pace-wave","speed_percent":30}`)
+	if !restarted.Engine.Running || restarted.Engine.Target.PatternID != motion.PatternPaceWave {
 		t.Fatalf("manual motion did not restart with the replacement target: %+v", restarted.Engine)
 	}
 
@@ -379,7 +379,7 @@ func TestManualMotionStartEndsActiveMode(t *testing.T) {
 		t.Fatal("freestyle did not start motion before manual takeover")
 	}
 
-	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"pulse","speed_percent":30}`)
+	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-pace-wave","speed_percent":30}`)
 	if status := server.modes.Status(); status.Active {
 		t.Fatalf("mode survived manual motion start: %+v", status)
 	}
@@ -411,7 +411,7 @@ func TestManualTargetCannotRelabelAutopilotMotion(t *testing.T) {
 		t.Fatalf("autopilot did not own motion before retarget: %+v", engine)
 	}
 
-	request := httptest.NewRequest(http.MethodPost, "/api/motion/target", strings.NewReader(`{"pattern":"pulse","speed_percent":30}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/motion/target", strings.NewReader(`{"pattern":"flow-pace-wave","speed_percent":30}`))
 	request = withController(request)
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
@@ -428,10 +428,10 @@ func TestManualTargetRequiresRunningManualTest(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
 
-	callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":30}`)
+	callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-full-sweeps","speed_percent":30}`)
 	callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
 
-	request := httptest.NewRequest(http.MethodPost, "/api/motion/target", strings.NewReader(`{"pattern":"pulse","speed_percent":25}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/motion/target", strings.NewReader(`{"pattern":"flow-pace-wave","speed_percent":25}`))
 	request = withController(request)
 	request.Header.Set("Content-Type", "application/json")
 	recorder := httptest.NewRecorder()
@@ -439,7 +439,7 @@ func TestManualTargetRequiresRunningManualTest(t *testing.T) {
 	if recorder.Code != http.StatusConflict {
 		t.Fatalf("idle manual retarget status = %d, want %d: %s", recorder.Code, http.StatusConflict, recorder.Body.String())
 	}
-	if state := server.currentMotionEngine().Snapshot(); state.Running || state.Target.PatternID != motion.PatternStroke {
+	if state := server.currentMotionEngine().Snapshot(); state.Running || state.Target.PatternID != motion.PatternFullSweeps {
 		t.Fatalf("idle engine changed after rejected retarget: %+v", state)
 	}
 }
@@ -558,7 +558,7 @@ func TestMotionStateReportsPausedEngine(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
 
-	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":60}`)
+	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-full-sweeps","speed_percent":60}`)
 	if !started.Engine.Running {
 		t.Fatalf("expected running motion after start, got %+v", started)
 	}
@@ -644,7 +644,7 @@ func TestMotionStartUsesSelectedCloudTransport(t *testing.T) {
 	t.Cleanup(server.Close)
 	saveCloudSettings(t, server)
 
-	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":35}`)
+	started := callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-full-sweeps","speed_percent":35}`)
 	if !started.Available || !started.Engine.Running {
 		t.Fatalf("expected Cloud-backed motion to run, got %+v", started)
 	}

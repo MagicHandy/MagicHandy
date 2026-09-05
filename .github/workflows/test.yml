@@ -95,3 +95,24 @@ jobs:
       - name: PowerShell 5.1 installer tests
         shell: powershell
         run: .\scripts\test-installer.ps1
+
+  labs:
+    name: Optional Labs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build release UI with optional Labs
+        working-directory: web
+        run: npm ci && npm run build:labs
+      - name: Test runtime Labs gates and shared motion path
+        run: go test -race ./internal/motion ./internal/chat ./internal/httpapi ./web
+      - name: CGO-free release build
+        run: CGO_ENABLED=0 go build ./cmd/magichandy

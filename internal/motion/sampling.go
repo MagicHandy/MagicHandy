@@ -190,6 +190,7 @@ func (e *Engine) fitMotionWindowLocked(
 	if transitionInChunk {
 		samples = stabilizeTransitionSamples(samples, mandatory)
 	}
+	referenceSamples := samples
 	samples = simplifyMotionSamples(samples, wireApproximationTolerance, mandatory)
 	if transitionInChunk {
 		samples = stabilizeTransitionSamples(samples, mandatory)
@@ -200,7 +201,7 @@ func (e *Engine) fitMotionWindowLocked(
 			positionResolution,
 			wireApproximationTolerance+positionResolution/2,
 			mandatory,
-			e.plan.Target.Dynamic != nil,
+			e.plan.Target.continuousCurve(),
 		)
 		if transitionInChunk {
 			samples = stabilizeTransitionSamples(samples, mandatory)
@@ -209,10 +210,23 @@ func (e *Engine) fitMotionWindowLocked(
 	if hasPreviousAnchor {
 		samples = samples[1:]
 	}
-	if positionResolution > 0 && e.plan.Target.Dynamic != nil {
+	if positionResolution > 0 && e.plan.Target.continuousCurve() {
 		samples = removeRedundantQuantizedSamples(samples, positionResolution, mandatory)
 		if hasPreviousAnchor {
 			samples = removeLeadingQuantizedDuplicates(samples, *e.lastSample, positionResolution, mandatory)
+		}
+		// Removing duplicate wire positions can erase easing near a reversal.
+		// Restore distinct positions against the original path, including the
+		// immutable previous append tail, without reintroducing stationary edges.
+		if hasPreviousAnchor {
+			samples = append([]MotionSample{*e.lastSample}, samples...)
+		}
+		samples = refineQuantizedMotionSamples(samples, referenceSamples, positionResolution)
+		if transitionInChunk {
+			samples = stabilizeTransitionSamples(samples, mandatory)
+		}
+		if hasPreviousAnchor {
+			samples = samples[1:]
 		}
 	}
 	return samples, mandatory

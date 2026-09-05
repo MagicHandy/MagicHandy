@@ -29,7 +29,7 @@ func configuredLiveEvalLlamaURL() string {
 
 func TestLivePromptParity(t *testing.T) {
 	model := liveEvalModel(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveEvalProvider(llm.HTTPProviderOptions{
 		BaseURL: liveEvalLlamaURL,
 		Model:   model,
 		Timeout: 2 * time.Minute,
@@ -86,7 +86,7 @@ func TestLivePromptParity(t *testing.T) {
 // not create a motion engine or transport, so no device command can be sent.
 func TestLivePromptLocalizationGemma(t *testing.T) {
 	model := liveEvalModel(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveEvalProvider(llm.HTTPProviderOptions{
 		BaseURL: liveEvalLlamaURL,
 		Model:   model,
 		Timeout: 2 * time.Minute,
@@ -277,7 +277,7 @@ func assertLiveReplyLanguage(t *testing.T, locale promptLocale, reply string) {
 // owns the action/no-action choice; deterministic code must not synthesize one.
 func TestLiveDirectPartnerMotionChoice(t *testing.T) {
 	model := liveEvalModel(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveEvalProvider(llm.HTTPProviderOptions{
 		BaseURL: liveEvalLlamaURL,
 		Model:   model,
 		Timeout: 2 * time.Minute,
@@ -344,7 +344,7 @@ func TestLiveDirectPartnerMotionChoice(t *testing.T) {
 // is created, and the model remains free to update or hold motion.
 func TestLiveUtilityContextualMotionReply(t *testing.T) {
 	model := liveEvalModel(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveEvalProvider(llm.HTTPProviderOptions{
 		BaseURL: liveEvalLlamaURL,
 		Model:   model,
 		Timeout: 2 * time.Minute,
@@ -412,7 +412,7 @@ func TestLiveUtilityContextualMotionReply(t *testing.T) {
 // device command.
 func TestLiveDynamicMotionMatrix(t *testing.T) {
 	model := liveEvalModel(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveEvalProvider(llm.HTTPProviderOptions{
 		BaseURL: liveEvalLlamaURL,
 		Model:   model,
 		Timeout: 2 * time.Minute,
@@ -528,7 +528,7 @@ func TestLiveDynamicMotionMatrix(t *testing.T) {
 // transport, so it cannot dispatch motion to a device.
 func TestLiveDynamicSpanEnvelopeMatrix(t *testing.T) {
 	model := liveEvalModel(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveEvalProvider(llm.HTTPProviderOptions{
 		BaseURL: liveEvalLlamaURL,
 		Model:   model,
 		Timeout: 2 * time.Minute,
@@ -665,7 +665,7 @@ func TestLiveDynamicSpanEnvelopeMatrix(t *testing.T) {
 // only; no engine or transport exists in this test.
 func TestLiveDynamicMultiSectionPhraseMatrix(t *testing.T) {
 	model := liveEvalModel(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveEvalProvider(llm.HTTPProviderOptions{
 		BaseURL: liveEvalLlamaURL, Model: model, Timeout: 2 * time.Minute,
 	})
 	if err != nil {
@@ -777,7 +777,7 @@ func TestLiveDynamicMultiSectionPhraseMatrix(t *testing.T) {
 // semantic contract; no engine or transport is constructed.
 func TestLiveDynamicCorrectionFollowThrough(t *testing.T) {
 	model := liveEvalModel(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveEvalProvider(llm.HTTPProviderOptions{
 		BaseURL: liveEvalLlamaURL,
 		Model:   model,
 		Timeout: 2 * time.Minute,
@@ -927,6 +927,25 @@ func liveDynamicCommandWindow(command MotionCommand, context MotionContext) (flo
 
 func assertLiveVariableSpanEnvelope(t *testing.T, command MotionCommand, context MotionContext, wantedProfile string) {
 	t.Helper()
+	if len(command.Sections) > 0 {
+		variableSections := 0
+		widths := make(map[int]bool)
+		for _, section := range command.Sections {
+			part := MotionCommand{CenterPercent: section.CenterPercent, SpanPercent: section.SpanPercent,
+				Anchors: section.Anchors, SpanMinPercent: section.SpanMinPercent, SpanProfile: section.SpanProfile}
+			if width, ok := commandDynamicOuterSpan(part); ok {
+				widths[width] = true
+			}
+			if wantedProfile != "" || variableDynamicSpanProfile(section.SpanProfile) {
+				assertLiveVariableSpanEnvelope(t, part, MotionContext{}, wantedProfile)
+				variableSections++
+			}
+		}
+		if variableSections == 0 && len(widths) < 2 {
+			t.Fatal("section phrase provides neither a variable envelope nor distinct stroke spans")
+		}
+		return
+	}
 	profile := command.SpanProfile
 	if profile == "" {
 		profile = context.SpanProfile
@@ -1006,7 +1025,7 @@ func dynamicResultAction(response AssistantResponse) string {
 // real Gemma/llama.cpp prompt and parser without creating an engine or transport.
 func TestLiveFocusedMotionVariation(t *testing.T) {
 	model := liveEvalModel(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveEvalProvider(llm.HTTPProviderOptions{
 		BaseURL: liveEvalLlamaURL,
 		Model:   model,
 		Timeout: 2 * time.Minute,
@@ -1079,6 +1098,14 @@ func liveEvalModel(t *testing.T) string {
 	}
 	if len(payload.Data) == 0 || strings.TrimSpace(payload.Data[0].ID) == "" {
 		t.Fatal("local llama.cpp server reported no model")
+	}
+	if selected := strings.TrimSpace(os.Getenv("MAGICHANDY_LIVE_MODEL")); selected != "" {
+		for _, available := range payload.Data {
+			if available.ID == selected {
+				return selected
+			}
+		}
+		t.Fatalf("requested live evaluation model %q is not available", selected)
 	}
 	return strings.TrimSpace(payload.Data[0].ID)
 }
@@ -1284,4 +1311,16 @@ FINAL CHAT VOICE CHECK:
 func Example_livePromptEval() {
 	fmt.Println("go test -tags liveeval -run TestLivePromptParity -v ./internal/chat")
 	// Output: go test -tags liveeval -run TestLivePromptParity -v ./internal/chat
+}
+
+// newLiveEvalProvider uses the same provider protocol as the reviewed app.
+func newLiveEvalProvider(options llm.HTTPProviderOptions) (llm.Provider, error) {
+	switch strings.TrimSpace(os.Getenv("MAGICHANDY_LIVE_PROVIDER")) {
+	case "ollama":
+		return llm.NewOllamaProvider(options)
+	case "", "llama_cpp":
+		return llm.NewLlamaCPPProvider(options)
+	default:
+		return nil, fmt.Errorf("unsupported live provider %q", os.Getenv("MAGICHANDY_LIVE_PROVIDER"))
+	}
 }

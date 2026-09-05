@@ -65,7 +65,7 @@ func validateLLMBehaviorSettings(settings LLMSettings) error {
 	if !oneOf(settings.ReasoningMode, LLMReasoningAuto, LLMReasoningOff) {
 		return fmt.Errorf("unknown LLM reasoning mode %q", settings.ReasoningMode)
 	}
-	if !oneOf(settings.MotionGenerationMode, LLMMotionModeDynamic, LLMMotionModePattern, LLMMotionModeOff) {
+	if !oneOf(settings.MotionGenerationMode, LLMMotionModeDynamic, LLMMotionModePattern, LLMMotionModeLayered, LLMMotionModeCreativeV2, LLMMotionModeOff) {
 		return fmt.Errorf("unknown LLM motion generation mode %q", settings.MotionGenerationMode)
 	}
 	if !ValidLLMChatVoice(settings.ChatVoice) {

@@ -157,6 +157,7 @@ func applicationRuntime(simulateMotion bool) httpapi.Runtime {
 	}
 	if simulateMotion {
 		runtime.MotionTransport = fake
+		runtime.MotionSimulated = true
 	}
 	return runtime
 }

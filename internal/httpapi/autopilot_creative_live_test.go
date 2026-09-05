@@ -5,6 +5,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"os"
@@ -25,7 +26,7 @@ import (
 // a device command.
 func TestLiveAutopilotCreativeCompiledPhrase(t *testing.T) {
 	baseURL, model := liveAutopilotProvider(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveAutopilotProvider(llm.HTTPProviderOptions{
 		BaseURL: baseURL, Model: model, Timeout: 2 * time.Minute,
 	})
 	if err != nil {
@@ -193,7 +194,7 @@ func TestLiveAutopilotCreativeCompiledPhrase(t *testing.T) {
 // instead of treating speed-only edits as the whole Creative vocabulary.
 func TestLiveAutopilotCreativeHighRateAutonomy(t *testing.T) {
 	baseURL, model := liveAutopilotProvider(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveAutopilotProvider(llm.HTTPProviderOptions{
 		BaseURL: baseURL, Model: model, Timeout: 2 * time.Minute,
 	})
 	if err != nil {
@@ -390,7 +391,7 @@ func liveCreativeRangeCharacterChanged(left, right motion.PerceptualSummary) boo
 // dialogue edge cases. No engine or transport is constructed.
 func TestLiveAutopilotSpeechNovelty(t *testing.T) {
 	baseURL, model := liveAutopilotProvider(t)
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{
+	provider, err := newLiveAutopilotProvider(llm.HTTPProviderOptions{
 		BaseURL: baseURL, Model: model, Timeout: 2 * time.Minute,
 	})
 	if err != nil {
@@ -553,5 +554,25 @@ func liveAutopilotProvider(t *testing.T) (string, string) {
 	if len(payload.Data) == 0 || strings.TrimSpace(payload.Data[0].ID) == "" {
 		t.Fatal("llama.cpp reported no active model")
 	}
+	if selected := strings.TrimSpace(os.Getenv("MAGICHANDY_LIVE_MODEL")); selected != "" {
+		for _, available := range payload.Data {
+			if available.ID == selected {
+				return baseURL, selected
+			}
+		}
+		t.Fatalf("requested live evaluation model %q is not available", selected)
+	}
 	return baseURL, strings.TrimSpace(payload.Data[0].ID)
+}
+
+// newLiveAutopilotProvider uses the same provider protocol as the reviewed app.
+func newLiveAutopilotProvider(options llm.HTTPProviderOptions) (llm.Provider, error) {
+	switch strings.TrimSpace(os.Getenv("MAGICHANDY_LIVE_PROVIDER")) {
+	case "ollama":
+		return llm.NewOllamaProvider(options)
+	case "", "llama_cpp":
+		return llm.NewLlamaCPPProvider(options)
+	default:
+		return nil, fmt.Errorf("unsupported live provider %q", os.Getenv("MAGICHANDY_LIVE_PROVIDER"))
+	}
 }

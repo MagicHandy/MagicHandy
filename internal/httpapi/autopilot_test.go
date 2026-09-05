@@ -52,10 +52,10 @@ func TestAutopilotDrivesRealEngineWithCuratedDecisions(t *testing.T) {
 		Decide: func(_ context.Context, input modes.DecisionInput) (modes.Decision, error) {
 			// Alternate enabled builtins so each scripted check-in is a real
 			// curation rather than an intentional no-op Hold.
-			patternID := "pulse"
+			patternID := "flow-pace-wave"
 			intensity := 33
 			if input.SegmentIndex%2 == 1 {
-				patternID = "stroke"
+				patternID = "flow-full-sweeps"
 				intensity = 35
 			}
 			result := chat.Result{Response: chat.AssistantResponse{
@@ -333,7 +333,7 @@ func TestAutopilotHighRateRetriesCosmeticGeometryWithoutChoosingAReplacement(t *
 
 func TestAutopilotDecisionCanCurateMotionDespiteStopProhibition(t *testing.T) {
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"intent":"settle into a firmer stroke","motion":{"action":"target","pattern_id":"stroke","intensity":45},"next":"soon","variability":"normal"}`,
+		`{"intent":"settle into a firmer stroke","motion":{"action":"target","pattern_id":"flow-full-sweeps","intensity":45},"next":"soon","variability":"normal"}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 	t.Cleanup(server.Close)
@@ -346,7 +346,7 @@ func TestAutopilotDecisionCanCurateMotionDespiteStopProhibition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("autopilotDecide: %v", err)
 	}
-	if decision.Hold || decision.Pattern == nil || decision.Segment.PatternID != motion.PatternStroke || decision.Segment.SpeedPercent != 45 {
+	if decision.Hold || decision.Pattern == nil || decision.Segment.PatternID != motion.PatternFullSweeps || decision.Segment.SpeedPercent != 45 {
 		t.Fatalf("Autopilot target was stripped: %+v", decision)
 	}
 }
@@ -592,15 +592,16 @@ func TestMapAutopilotResultAppliesPartialChanges(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
 	input := autopilotMapInput()
+	input.CurrentPatternID = motion.PatternFullSweeps
 
 	curated, err := server.mapAutopilotResult(chat.Result{Response: chat.AssistantResponse{
 		Reply:  "picking up",
-		Motion: &chat.MotionCommand{Action: chat.MotionActionTarget, PatternID: "stroke", Intensity: intPtr(45)},
+		Motion: &chat.MotionCommand{Action: chat.MotionActionTarget, PatternID: "flow-full-sweeps", Intensity: intPtr(45)},
 	}}, input)
 	if err != nil {
 		t.Fatalf("curated: %v", err)
 	}
-	if curated.Hold || string(curated.Segment.PatternID) != "stroke" || curated.Segment.SpeedPercent != 45 ||
+	if curated.Hold || string(curated.Segment.PatternID) != "flow-full-sweeps" || curated.Segment.SpeedPercent != 45 ||
 		curated.Pattern == nil || !sameAreaFocus(curated.Segment.AreaFocus, input.CurrentAreaFocus) {
 		t.Fatalf("curated => %+v; want resolved stroke segment preserving the live area", curated)
 	}
@@ -609,7 +610,7 @@ func TestMapAutopilotResultAppliesPartialChanges(t *testing.T) {
 		Reply:  "opening up",
 		Motion: &chat.MotionCommand{Action: chat.MotionActionTarget, Area: chat.AreaZoneFull},
 	}}, input)
-	if err != nil || areaOnly.Hold || areaOnly.Segment.PatternID != motion.PatternStroke ||
+	if err != nil || areaOnly.Hold || areaOnly.Segment.PatternID != motion.PatternFullSweeps ||
 		areaOnly.Segment.SpeedPercent != 30 || areaOnly.Segment.AreaFocus != nil {
 		t.Fatalf("area-only result => %+v, %v; want current pattern and speed at full area", areaOnly, err)
 	}

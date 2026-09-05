@@ -20,6 +20,7 @@ import type { MediaSettingsPayload } from "../api/types";
 import { DEFAULT_THEME, normalizeTheme } from "../theme";
 import { notificationCategories } from "../notification-preferences";
 import { AccountSettingsPanel } from "../components/AccountSettingsPanel";
+import { LabsSettings } from "../components/LabsSettings";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
@@ -89,7 +90,8 @@ export function SettingsRoute() {
   const { show } = useToast();
   const hash = useHashRoute();
   const requestedSection = hash.split("/")[2] || "general";
-  const section = SECTIONS.some((item) => item.id === requestedSection) ? requestedSection : "general";
+  const sections = SECTIONS;
+  const section = sections.some((item) => item.id === requestedSection) ? requestedSection : "general";
   const [s, setS] = useState<PublicSettings | null>(null);
   // The last-saved snapshot, kept to detect unsaved voice edits: worker
   // controls act on the saved config and lock while the form is dirty.
@@ -367,7 +369,7 @@ export function SettingsRoute() {
     <>
       <WorkspaceHead title={t("Settings")} />
       <nav className="settings-nav" aria-label={t("Settings sections")}>
-        {SECTIONS.map((sec) => (
+        {sections.map((sec) => (
           <a key={sec.id} href={`#/settings/${sec.id}`} aria-current={section === sec.id ? "page" : undefined}>{translateKnown(sec.label)}</a>
         ))}
       </nav>
@@ -410,6 +412,7 @@ export function SettingsRoute() {
                 onChange={(theme) => patchUI({ theme })}
               />
             </div>
+            <LabsSettings/>
             <div className="group">
               <h3 className="group-title">{t("Updates")}</h3>
               <UpdateSettingsPanel
@@ -632,6 +635,7 @@ export function SettingsRoute() {
             <DiagnosticsPanel locked={locked} onReset={applyReset} />
           </>
         )}
+
 
         {section !== "access" && <div className="row-actions settings-actions">
           <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving}>{saving ? t("Saving settings") : t("Save settings")}</button>

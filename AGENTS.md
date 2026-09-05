@@ -156,6 +156,11 @@ encodes the safety architecture, not taste.
   that blocker instead of presenting an LLM-disabled build as complete.
 - When real-device behavior is touched, capture the scenario, transport mode,
   latency summary, trace export, and what was intentionally left unchanged.
+- For changes to motion character or LLM motion mapping, follow
+  `docs/motion-visual-review.md`: render every evaluated pattern and accepted
+  proposal from the shared engine, retain failed model selections, inspect the
+  overview and detailed outliers, and record findings alongside numerical
+  checks. Visual review complements physical feedback; it does not replace it.
 
 ## 7. Where the details live
 

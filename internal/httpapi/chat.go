@@ -38,6 +38,7 @@ type chatMotionDispatch struct {
 }
 
 type interactiveChatPromptContext struct {
+	UserRequests        []string
 	Capabilities        chat.Capabilities
 	History             []llm.Message
 	ConversationContext *chat.ConversationContext
@@ -114,7 +115,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	motionContext := s.chatMotionContext(settings.Motion, settings.LLM)
+	motionContext := s.contextualChatMotion(settings, promptContext.UserRequests)
 	service := chat.Service{
 		Provider:              provider,
 		Prompt:                prompt,
@@ -270,6 +271,12 @@ func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings con
 		Capabilities: chatCapabilities(settings, active),
 		History:      make([]llm.Message, 0, len(loggedHistory)),
 		Persona:      active,
+	}
+	if result.Capabilities.MotionMode == chat.MotionModeLayered || result.Capabilities.MotionMode == chat.MotionModeCreativeV2 {
+		result.UserRequests, err = s.chatLog.RecentUserRequests(sessionID)
+		if err != nil {
+			return interactiveChatPromptContext{}, err
+		}
 	}
 	for _, message := range loggedHistory {
 		result.History = append(result.History, llm.Message{Role: message.Role, Content: message.Content})
@@ -582,7 +589,7 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 	if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
 		return chatMotionDispatch{Action: chat.MotionActionNone}, nil
 	}
-	if err := s.validateChatMotionMode(command.Action); err != nil {
+	if err := s.validateChatMotionMode(command); err != nil {
 		return chatMotionDispatch{Action: command.Action}, err
 	}
 
@@ -656,11 +663,19 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 // validateChatMotionMode prevents a streamed result from crossing a mode
 // change. Stop is intentionally exempt: mode selection may close admission for
 // new LLM motion, but never the path that makes the device stop.
-func (s *Server) validateChatMotionMode(action string) error {
+func (s *Server) validateChatMotionMode(command *chat.MotionCommand) error {
+	action := command.Action
 	if action == chat.MotionActionStop {
 		return nil
 	}
 	settingsSnapshot, _ := s.store.Snapshot()
+	continuous := settingsSnapshot.LLM.MotionGenerationMode == config.LLMMotionModeLayered || settingsSnapshot.LLM.MotionGenerationMode == config.LLMMotionModeCreativeV2
+	if continuous != (command.Layered != nil) {
+		return errors.New("the LLM motion mode changed before this motion could be applied")
+	}
+	if command.Layered != nil && ((command.Layered.Gesture != nil) != (settingsSnapshot.LLM.MotionGenerationMode == config.LLMMotionModeCreativeV2)) {
+		return errors.New("the continuous motion interface changed before this motion could be applied")
+	}
 	switch settingsSnapshot.LLM.MotionGenerationMode {
 	case config.LLMMotionModeOff:
 		return errors.New("LLM motion is switched off")
@@ -1065,65 +1080,21 @@ func (s *Server) writeChatStorageError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) (motion.MotionTarget, error) {
+	if command.Layered != nil {
+		settings, _ := s.store.Snapshot()
+		target, err := motion.FlowTarget(*command.Layered, settings.Motion)
+		target.Label, target.Source = "Layered", "chat"
+		if command.Layered.Gesture != nil {
+			target.Label = "Creative v2"
+		}
+		return target, err
+	}
 	if command.Action == chat.MotionActionUpdate || command.CenterPercent != nil || command.SpanPercent != nil ||
 		command.SpanMinPercent != nil || command.SpanProfile != "" || len(command.Anchors) > 0 ||
 		command.VariationPercent != nil || command.SegmentSeconds != nil {
 		return dynamicChatMotionTarget(command, current), nil
 	}
-	patternID := motion.PatternID(command.PatternID)
-	speedPercent := 0
-	if command.SpeedPercent != nil {
-		speedPercent = *command.SpeedPercent
-	} else if command.Intensity != nil {
-		speedPercent = *command.Intensity
-	}
-	var definition *motion.PatternDefinition
-	var programDefinition *motion.ProgramDefinition
-	var programID string
-	if patternID != "" {
-		resolved, ok, err := s.patterns.ResolveEnabled(string(patternID))
-		if err != nil {
-			return motion.MotionTarget{}, fmt.Errorf("resolve chat pattern: %w", err)
-		}
-		if ok {
-			definition = &resolved
-		} else {
-			// The enabled set may change while the model is streaming. Never apply
-			// a now-disabled selection; fall back to the deterministic target.
-			patternID = ""
-		}
-	}
-	if current.Running {
-		if patternID == "" {
-			if current.Target.Program != nil {
-				copied := *current.Target.Program
-				copied.Points = append([]motion.CurvePoint(nil), current.Target.Program.Points...)
-				programDefinition = &copied
-				programID = current.Target.ProgramID
-			} else {
-				patternID = current.Target.PatternID
-			}
-			if programDefinition == nil && current.Target.Pattern != nil {
-				copied := *current.Target.Pattern
-				copied.Points = append([]motion.CurvePoint(nil), current.Target.Pattern.Points...)
-				copied.Tags = append([]string(nil), current.Target.Pattern.Tags...)
-				definition = &copied
-			}
-		}
-		if speedPercent == 0 {
-			speedPercent = current.Target.SpeedPercent
-		}
-	}
-	return motion.MotionTarget{
-		Label:        "Chat",
-		Source:       "chat",
-		PatternID:    patternID,
-		ProgramID:    programID,
-		SpeedPercent: speedPercent,
-		Pattern:      definition,
-		Program:      programDefinition,
-		AreaFocus:    resolveAreaFocus(command.Area, current),
-	}, nil
+	return s.patternChatMotionTarget(command, current)
 }
 
 // resolveAreaFocus maps a named zone onto the engine's bounded focus window.
@@ -1167,6 +1138,7 @@ func (s *Server) chatMotionContext(settings config.MotionSettings, llmSettings c
 		SpeedMinPercent: settings.SpeedMinPercent,
 		SpeedMaxPercent: settings.SpeedMaxPercent,
 		MotionMode:      chatMotionMode(llmSettings.MotionGenerationMode),
+		Envelope:        motion.CurrentPlanningEnvelope(settings),
 	}
 	engine := s.currentMotionEngine()
 	if engine == nil {
@@ -1183,6 +1155,7 @@ func (s *Server) chatMotionContext(settings config.MotionSettings, llmSettings c
 	context.RecentPatternIDs = s.recentChatPatternIDs(4)
 	context.SpeedPercent = snapshot.Target.SpeedPercent
 	context.Area = chatAreaZone(snapshot.Target.AreaFocus)
+	context.Layered = motion.CloneFlowSpec(snapshot.Target.Flow)
 	if context.MotionMode == chat.MotionModeDynamic {
 		dynamic := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{})
 		if snapshot.Target.Dynamic != nil {
@@ -1206,6 +1179,10 @@ func chatMotionMode(mode string) chat.MotionMode {
 	switch mode {
 	case config.LLMMotionModeDynamic:
 		return chat.MotionModeDynamic
+	case config.LLMMotionModeLayered:
+		return chat.MotionModeLayered
+	case config.LLMMotionModeCreativeV2:
+		return chat.MotionModeCreativeV2
 	case config.LLMMotionModeOff:
 		return chat.MotionModeOff
 	default:
@@ -1342,10 +1319,13 @@ func isChatStopMessage(message string) bool {
 	normalized = strings.Join(strings.FieldsFunc(normalized, func(r rune) bool {
 		return unicode.IsSpace(r) || unicode.IsPunct(r) || unicode.IsSymbol(r)
 	}), " ")
+	normalized = strings.TrimSuffix(normalized, " right now")
+	normalized = strings.TrimSuffix(normalized, " now")
 	switch normalized {
 	case "stop", "stop motion", "stop the motion", "pause", "pause motion", "pause the motion",
 		"end", "end motion", "end the motion", "emergency stop", "please stop", "stop please",
 		"please stop motion", "please stop the motion", "stop motion please", "stop the motion please", "stop everything",
+		"stop moving", "please stop moving", "stop the device", "turn motion off", "turn off motion", "enough", "that s enough", "thats enough",
 		"para", "detén", "deten", "detener", "detén el movimiento", "deten el movimiento", "detener el movimiento", "para el movimiento", "detener todo",
 		"pausa", "pausa el movimiento", "parada de emergencia", "por favor detén el movimiento",
 		"pare", "parar", "pare o movimento", "parar o movimento", "parar tudo", "pause o movimento",

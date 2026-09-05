@@ -25,6 +25,7 @@ const (
 type Segment struct {
 	PatternID           motion.PatternID          `json:"pattern_id"`
 	Dynamic             *motion.DynamicDefinition `json:"dynamic,omitempty"`
+	Flow                *motion.FlowSpec          `json:"flow,omitempty"`
 	SpeedPercent        int                       `json:"speed_percent"`
 	DriftToSpeedPercent int                       `json:"drift_to_speed_percent,omitempty"`
 	AreaFocus           *motion.AreaFocus         `json:"area_focus,omitempty"`
@@ -41,12 +42,16 @@ type Arrangement struct {
 
 // NormalizeSegment clamps one segment into the bounded contract.
 func NormalizeSegment(segment Segment) Segment {
-	if segment.Dynamic != nil {
+	if segment.Flow != nil {
+		segment.Flow = motion.CloneFlowSpec(segment.Flow)
+		segment.Dynamic, segment.PatternID, segment.AreaFocus = nil, "", nil
+		segment.DriftToSpeedPercent = 0
+	} else if segment.Dynamic != nil {
 		dynamic := motion.NormalizeDynamicDefinition(*segment.Dynamic)
 		segment.Dynamic = &dynamic
 		segment.PatternID = ""
 	} else if segment.PatternID == "" {
-		segment.PatternID = motion.PatternStroke
+		segment.PatternID = motion.PatternFullSweeps
 	}
 	segment.SpeedPercent = clampInt(segment.SpeedPercent, 1, 100)
 	if segment.DriftToSpeedPercent != 0 {
@@ -80,6 +85,7 @@ func (s Segment) Target(label string, source string) motion.MotionTarget {
 		SpeedPercent: s.SpeedPercent,
 		AreaFocus:    s.AreaFocus,
 		Dynamic:      cloneDynamicDefinition(s.Dynamic),
+		Flow:         motion.CloneFlowSpec(s.Flow),
 	}
 }
 
@@ -98,7 +104,7 @@ func cloneDynamicDefinition(definition *motion.DynamicDefinition) *motion.Dynami
 }
 
 func (s Segment) hasContent() bool {
-	return s.PatternID != "" || s.Dynamic != nil
+	return s.PatternID != "" || s.Dynamic != nil || s.Flow != nil
 }
 
 // DriftTarget is the optional mid-segment same-pattern speed nudge; phase is

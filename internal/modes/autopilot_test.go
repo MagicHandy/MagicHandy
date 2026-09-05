@@ -189,7 +189,7 @@ func TestAutopilotFallsBackToPlannerOnDecisionFailure(t *testing.T) {
 	engine.mu.Lock()
 	target := engine.starts[0]
 	engine.mu.Unlock()
-	builtin := map[motion.PatternID]bool{motion.PatternStroke: true, motion.PatternPulse: true, motion.PatternTease: true}
+	builtin := map[motion.PatternID]bool{motion.PatternFullSweeps: true, motion.PatternPaceWave: true, motion.PatternBaseVariation: true}
 	if !builtin[target.PatternID] {
 		t.Fatalf("fallback target pattern = %q, want a deterministic builtin", target.PatternID)
 	}

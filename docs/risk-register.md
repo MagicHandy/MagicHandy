@@ -2,6 +2,27 @@
 
 ## Purpose
 
+The replacement library is public under ADR 0020; ten continuous recipes replace
+81 deprecated built-ins in model/default selection. Saved content remains
+manually available. Exact derivative and wire checks cover the new path, while
+an inert visual atlas exposes acceleration seams and model intent failures.
+Granite still misses some valid movement requests despite schema constraints.
+The [library review](motion-library-review-2026-09-04.md) records those failures,
+current build evidence and the disconnected-device limit on physical acceptance.
+
+Natural-motion follow-up: [the redesign review](motion-lab-redesign-2026-09-04.md)
+records the user's rejection of directional timing, its near-ceiling commanded
+peaks, and remaining model/schema failures. Continuous flow replaces the
+experimental authoring framework while retaining one engine; final quantized
+path checks preserve easing after duplicate removal. Optional Motion
+Lab and LLM Lab keep previews inert, check saved limits before audition, expose
+raw failures and cancel trials on Stop. Schemas constrain syntax, not intent;
+successful compilation does not establish natural physical feel. Every release
+now includes Labs behind a saved setting that defaults off (ADR 0021).
+Backend gates reject disabled requests and auditions. Disabling cancels pending
+lab work and stops lab motion; completed observations remain inert review data.
+Real-device acceptance remains open.
+
 This register tracks rewrite risks that should survive between phases. A risk stays open until it is explicitly accepted, mitigated, or closed with evidence.
 
 ## Risk Levels
@@ -676,6 +697,28 @@ the repair pass from looking like repeated generation. Fixture and UI regression
 tests cover both paths; R13 remains High for the existing open work.
 
 ## R14: Per-Source Motion Path Divergence
+
+Status 2026-09-05 (Creative v2 review): a native stroke vocabulary compiles into
+the same prepared motion plan, sampler, sanitizer and conditional retargeting
+path. It owns no additional motion loop or transport policy. Its local timing
+uses the existing Creative runtime envelope; shared safety constants and
+historical Flow fitting are unchanged. New seed selection happens on authored
+edits/evolution, not during sampling. Mode changes, controller handoff and Stop
+invalidate late replies. Two local models were evaluated with all failed
+selections retained; Granite still omits compound requested edits, so schema
+validity is not treated as intent verification. No new physical-device claim
+is made. See [the Creative v2 evidence](creative-v2-motion-review-2026-09-05.md).
+
+Status 2026-09-05 (Layered review): production chat, production Autopilot and
+LLM Lab now carry cloned semantic Flow scores into the existing engine. There
+is no independent motion loop or transport policy. Layered continuations
+preserve the active score on failure and do not fall back to library patterns
+or the legacy extra pace modulation. Fresh seeds change the realization;
+captured seeds reproduce it. Shared-engine/fake-transport tests cover real model
+responses, continuous retargeting, late mode changes and Stop; global Stop also
+recognizes "Stop motion now" without waiting for inference. Planned motion and
+captured wire output are reviewed separately from physical feel, which remains
+open under R1. See [the Layered evidence](layered-motion-review-2026-09-05.md).
 
 Level: High
 

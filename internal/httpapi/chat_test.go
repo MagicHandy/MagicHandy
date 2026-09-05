@@ -164,7 +164,7 @@ func TestManagedLlamaReasoningBudgetRequiresCurrentPinnedRuntime(t *testing.T) {
 func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"reply":"Starting.","motion":{"action":"start","pattern_id":"pulse","speed_percent":30}}`,
+		`{"reply":"Starting.","motion":{"action":"start","pattern_id":"flow-pace-wave","speed_percent":30}}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{
 		Transport:       fake,
@@ -173,7 +173,7 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 	})
 	t.Cleanup(server.Close)
 
-	body := postChatStream(t, server, `{"message":"start a pulse at 30 percent"}`)
+	body := postChatStream(t, server, `{"message":"start a pace wave at 30 percent"}`)
 	if !strings.Contains(body, `"reply":"Starting."`) {
 		t.Fatalf("chat stream missing assistant message:\n%s", body)
 	}
@@ -319,7 +319,7 @@ func TestChatStopBypassesLLMAndStopsMotion(t *testing.T) {
 	})
 	t.Cleanup(server.Close)
 
-	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":30}`)
+	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-full-sweeps","speed_percent":30}`)
 	body := postChatStream(t, server, `{"message":"stop"}`)
 	if !strings.Contains(body, `"reply":"Stopping motion."`) {
 		t.Fatalf("chat stop response missing deterministic reply:\n%s", body)
@@ -342,7 +342,7 @@ func TestChatStopRemainsAvailableWhenLLMMotionIsOff(t *testing.T) {
 	})
 	t.Cleanup(server.Close)
 
-	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":30}`)
+	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-full-sweeps","speed_percent":30}`)
 	_, _, err := server.store.Update(func(settings config.Settings) (config.Settings, error) {
 		settings.LLM.MotionGenerationMode = config.LLMMotionModeOff
 		return settings, nil
@@ -366,6 +366,7 @@ func TestChatStopRemainsAvailableWhenLLMMotionIsOff(t *testing.T) {
 
 func TestChatStopMatcherCoversBuiltInPromptLanguages(t *testing.T) {
 	for _, message := range []string{
+		"Stop motion now.", "Please stop the motion right now!", "Stop moving.", "That’s enough.",
 		"Please stop the motion.",
 		"Por favor, detén el movimiento.",
 		"Por favor, pare o movimento.",
@@ -683,7 +684,7 @@ func TestChatNoneLeavesActiveMotionUnchanged(t *testing.T) {
 	fake := transport.NewFake()
 	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
 	t.Cleanup(server.Close)
-	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"pulse","speed_percent":30}`)
+	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-pace-wave","speed_percent":30}`)
 	engine := server.currentMotionEngine()
 	before := engine.Snapshot()
 	dispatch, err := server.dispatchChatMotion(context.Background(), &chat.MotionCommand{Action: chat.MotionActionNone})

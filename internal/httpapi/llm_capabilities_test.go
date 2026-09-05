@@ -9,6 +9,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
+	"github.com/mapledaemon/MagicHandy/internal/patterns"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -88,6 +89,11 @@ func anyExperimentalCuratedID(t *testing.T) string {
 func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 	server := newTestServer(t)
 	t.Cleanup(server.Close)
+	experimental, err := server.patterns.CreatePattern(patterns.PatternInput{Name: "User experiment", CycleMillis: 2000,
+		Points: []motion.CurvePoint{{TimeMillis: 0, PositionPercent: 0}, {TimeMillis: 1000, PositionPercent: 100}, {TimeMillis: 2000, PositionPercent: 0}}, Tags: []string{motion.TagExperimental}})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	defaults := chatCapabilities(config.LLMSettings{}, nil)
 	if defaults.ExperimentalPatterns {
@@ -101,12 +107,15 @@ func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 	for _, choice := range gated {
 		gatedIDs[choice.ID] = true
 	}
+	if gatedIDs[experimental.ID] {
+		t.Fatal("user experimental content bypassed the capability gate")
+	}
 	for _, id := range []motion.PatternID{motion.PatternRisingReach, motion.PatternOffbeat, motion.PatternLongReturn, motion.PatternSwell, motion.PatternSurgeAndSettle, motion.PatternCrosscut, motion.PatternID(anyExperimentalCuratedID(t))} {
 		if gatedIDs[string(id)] {
 			t.Fatalf("experimental pattern %q leaked into the default catalog", id)
 		}
 	}
-	for _, id := range []motion.PatternID{motion.PatternRocking, motion.PatternDrift, motion.PatternUpperAccents, motion.PatternHardAndRegular, motion.PatternPlayfulJerk, "curated-easy-drive-4"} {
+	for _, id := range []motion.PatternID{motion.PatternFullSweeps, motion.PatternBaseVariation, motion.PatternPaceWave, "flow-upper-strokes"} {
 		if !gatedIDs[string(id)] {
 			t.Fatalf("accepted pattern %q was hidden by the experimental gate", id)
 		}
@@ -121,12 +130,15 @@ func TestChatPatternChoicesGateExperimentalPatterns(t *testing.T) {
 		found[choice.ID] = true
 	}
 	for _, want := range []motion.PatternID{motion.PatternRisingReach, motion.PatternOffbeat, motion.PatternLongReturn, motion.PatternSwell, motion.PatternSurgeAndSettle, motion.PatternCrosscut, motion.PatternID(anyExperimentalCuratedID(t))} {
-		if !found[string(want)] {
-			t.Fatalf("experimental pattern %q missing with the gate enabled", want)
+		if found[string(want)] {
+			t.Fatalf("deprecated pattern %q returned when experimental content was enabled", want)
 		}
 	}
-	if !found[string(motion.PatternStroke)] {
-		t.Fatal("builtin stroke missing from the catalog")
+	if !found[string(motion.PatternFullSweeps)] {
+		t.Fatal("continuous full sweeps missing from the catalog")
+	}
+	if !found[experimental.ID] {
+		t.Fatal("opted-in user experimental content was incorrectly deprecated")
 	}
 }
 

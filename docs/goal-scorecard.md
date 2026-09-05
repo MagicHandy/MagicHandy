@@ -209,6 +209,184 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-09-05 — Creative v2 native strokes:** adds an independent semantic
+  travel vocabulary through the shared engine, paired atomic model edits,
+  production/Lab Autopilot and original Creative realization refreshes. No new
+  runtime/frontend dependencies. Final ordinary `CGO_ENABLED=0` binary:
+  26,241,024 bytes (+110,080 from the Layered build); stripped `-trimpath -s -w`:
+  19,033,088 (+93,184). Initial JS is 750.72 / 207.61 kB gzip (+1.57 / +0.33);
+  lazy Labs JS is 51.89 / 14.54 (+1.03 / +0.34). CSS remains 137.02 / 25.03
+  and 12.08 / 2.86. Three fresh-data launches of the final stripped binary:
+  listener 132.6–183.0 ms, health 134.7–212.5 ms, working set 21.91–22.46 MiB,
+  private memory 53.87–55.39 MiB. These are Windows launch snapshots excluding
+  browser/model memory; they do not close the idle-memory waiver or measure an
+  active hardware session/soak. The development atlas, Python tooling, live
+  reports and traces are ignored and unembedded. See the
+  [Creative v2 review](creative-v2-motion-review-2026-09-05.md).
+
+- **2026-09-05 — Persistent Layered motion:** adds a production mode, the same
+  Lab contract, cloned Flow targets, explicit geometry/delta edits and fresh
+  runtime variation. No new runtime/frontend dependencies. The final ordinary
+  `CGO_ENABLED=0` binary is 26,130,944 bytes (+155,648); stripped
+  `-trimpath -s -w` is 18,939,904 (+129,536). Initial JS is 749.15 / 207.28 kB
+  gzip (+1.46 / +0.36); lazy Labs JS is 50.86 / 14.20 (+0.57 / +0.22).
+  Initial CSS is 137.02 / 25.03 (+0.29 / +0.03); Labs CSS stays 12.08 / 2.86.
+  Three fresh-data launches of this final stripped build: listener
+  126.7–171.1 ms, health 128.6–186.0 ms, working set 21.82–22.43 MiB and private
+  memory 54.02–55.11 MiB. These Windows launch snapshots exclude model memory
+  and do not close the idle-memory waiver, active-hardware or soak measurements.
+  Generated atlas/report files remain ignored and unembedded. See the
+  [Layered review](layered-motion-review-2026-09-05.md) for live model results,
+  the rejected Gemma-regressing prompt and the effective-pace limitations.
+
+- **2026-09-05 — Conversation Lab and catalog retirement:** title-bar test
+  modes, shared-engine live sessions, backend Autopilot scheduling, and a Help
+  tab; 17 continuous recipes and an idempotent migration disabling 81 legacy
+  built-ins. No new runtime/frontend dependencies. The ordinary `CGO_ENABLED=0`
+  binary is 25,975,296 bytes (+95,232); release-style `-trimpath -s -w` is
+  18,810,368 bytes (+81,408). Initial JS is 747.69 / 206.92 kB gzip
+  (+4.00 / +0.79); lazy Labs JS is 50.29 / 13.98 kB (+3.58 / +1.22).
+  Initial CSS remains 136.73 / 25.00 kB; Labs CSS is 12.08 / 2.86 kB
+  (+1.72 / +0.33). Three fresh-data launches of the final stripped binary:
+  listener 121.8–179.0 ms, health 126.9–210.4 ms, working set 21.92–22.40 MiB,
+  private memory 54.25–55.05 MiB. These are Windows launch snapshots, excluding
+  model memory; they do not close the idle-memory waiver, active-motion or
+  soak measurements. Atlas/report outputs remain ignored and unembedded.
+  Current model context uses refreshed numeric limits instead of hardware
+  names. All failures and physical-review limits are recorded in the
+  [conversation review](lab-conversation-review-2026-09-05.md).
+
+- **2026-09-04 — Additional motion experiments:** optional correlated drift,
+  symmetric turn softness, cadence hold and relative/layer LLM edits, with a
+  five-round guided comparison. No new runtime/frontend dependencies. Ordinary
+  CGO-disabled binary: 25,880,064 bytes plain (+65,536); trimpath stripped:
+  18,728,960 bytes (+56,320). Initial JS: 743.69 kB / 206.13 kB gzip
+  (+2.58 / +0.60 kB, primarily English copy). Lazy Labs JS: 46.71 kB /
+  12.76 kB gzip (+1.89 / +0.51 kB). Initial CSS remains 136.73 / 25.00 kB;
+  Labs CSS remains 10.36 / 2.53 kB. Three fresh-data stripped launches:
+  listener 85.4–119.9 ms, health 88.9–158.1 ms, working set 21.36–22.55 MiB,
+  private memory 53.62–54.89 MiB. Host launch snapshots, not steady-state or
+  physical-playback measurements. Model memory is external. Review-only
+  matplotlib/atlas artifacts are ignored and not embedded. Evidence uses
+  `.scratch/motion-ideas-`; detailed model failures, numeric bounds and visual
+  findings are in [the experiment review](motion-ideas-review-2026-09-04.md).
+
+- **2026-09-04 — Guided Lab tests:** one round at a time with saved progress,
+  ratings, comments, skips and a completion summary. Presets capture motion
+  method comparisons or LLM before/after results; authored sequences use the
+  same validated API. Frozen previews and feedback use the existing SQLite
+  store, bounded to 20 sequences / 12 steps each / 16 MiB total. No new
+  dependencies or motion loop. Initial JS is 741.11 kB / 205.53 kB gzip
+  (+5.37 kB raw, mainly localized copy); initial CSS stays 136.73 kB / 25.00 kB
+  gzip. The optional Labs chunk is 44.82 kB JS / 12.25 kB gzip and 10.36 kB
+  CSS / 2.53 kB gzip (+12.16 / +2.06 kB raw). Pure-Go Windows binary is
+  25,814,528 bytes plain / 18,672,640 stripped, increases of 104,448 / 68,608
+  bytes; the stripped binary remains below 30 MB. Three fresh-data stripped
+  launches on a warm host listened in 90.5–125.4 ms and completed health checks
+  in 91.9–163.8 ms using bounded asynchronous TCP probes. Post-health working
+  set was 21.90–22.25 MiB, private memory 54.39–54.97 MiB. This does not close
+  the existing SQLite memory waiver or establish hardware/soak performance.
+  Full Go tests and race suite passed, with the changed packages checked again
+  after final refinements; vet, lint, frontend type/localization checks and
+  468 frontend tests passed. Live UI review covered all three generator
+  previews, saved comments, a retained skip, completion, and a live LLM
+  before/after comparison (596 ms, one call, only `anchor_percent` changed).
+  Its captured run and partial progress survived a real app restart unchanged.
+  Final provider readiness and text-only production chat passed (375 ms, one
+  call, no repair/fallback/motion). No hardware audition was issued. Evidence
+  is retained under `.scratch/guided-tests-`; see the
+  [workspace guide](labs-workspace.md).
+
+- **2026-09-04 — Optional Labs in every release:** replaces the earlier
+  build-time exclusion with a saved, default-off setting in General Settings
+  (ADR 0021). One canonical release UI includes the workspace as an on-demand
+  chunk; no new dependencies. Initial JS is 735.74 kB / 204.33 kB gzip,
+  about 15.95 kB raw above the preceding public build. Initial CSS remains
+  136.73 kB / 25.00 kB gzip. Opening Labs adds 32.66 kB JS / 9.30 kB gzip and
+  8.30 kB CSS / 2.17 kB gzip. Pure-Go Windows binary is 25,710,080 bytes plain
+  and 18,604,032 stripped, increases of 307,200 / 268,288 bytes respectively;
+  the stripped binary remains below 30 MB. Three fresh-data launches of the
+  stripped build on a warm host listened in 89.2–107.4 ms and completed
+  `/healthz` in 90.6–109.3 ms, measured with bounded asynchronous TCP probes.
+  Post-health idle samples were 21.14–24.25 MiB working set and 53.77–57.00 MiB
+  private memory. This does not close the existing SQLite memory waiver or
+  establish active-hardware/soak performance. An earlier synchronous TCP
+  measurement included Windows connection-refusal wait time; it is retained
+  separately and is not the reported cold-start result. Full Go tests, race,
+  vet and lint passed; frontend type/localization checks and 459 tests passed.
+  The ordinary review build persisted the UI toggle through a real restart,
+  passed provider readiness, and completed production text-only chat (343 ms,
+  one call, no repair/fallback/motion) and LLM Lab chat (3,195 ms, one call,
+  valid, no score changes). No hardware audition was issued. Ignored evidence
+  uses `.scratch/labs-release-` and `.scratch/labs-setting-`; see the
+  [workspace guide](labs-workspace.md) for behavior and verification.
+
+- **2026-09-04 — Labs workspace refactor:** development-only sidebar page with
+  chat, motion and observation tabs; no new dependencies. Release JS is
+  719.79 kB / CSS 136.73 kB; the development JS is 765.61 kB / CSS 145.03 kB
+  (212.10 / 26.60 kB gzip). Compared with the preceding continuous-library
+  review, release JS grows about 0.15 kB and CSS is unchanged; lab UI, styles,
+  translations and endpoints remain excluded. Pure-Go public binary is
+  25,402,880 bytes plain / 18,335,744 stripped; development binary is
+  25,676,800 bytes. Public linker/byte inspection finds no observation API,
+  storage key, handler, lab prompt or Labs route. The isolated review process
+  after live chat, previews and two saved observations sampled 74.03 MiB
+  working set / 57.42 MiB private; this is a review-workload sample, not a fresh
+  idle baseline or active-hardware soak, and does not close the SQLite waiver.
+  Observation storage uses the existing database, capped at 200 records and
+  4 MiB with no automatic eviction. Full Go tests, race suites, vet and lint
+  passed for both build modes; frontend localization/type checks and 455 tests
+  passed. Final app-path text reply completed in 291 ms without repair or
+  fallback; the LLM Lab request completed in 539 ms, one call, changing only
+  the anchor. No hardware audition was issued. See [Labs workspace](labs-workspace.md).
+
+- **2026-09-04 — Continuous library and visual review:** the public binary now
+  includes ten continuous recipes and the shared compiler, while both labs and
+  their callable handlers are excluded. Pure-Go Windows builds are 25,375,744
+  bytes plain and 18,313,216 bytes stripped (Met: <30 MB); the development build
+  is approximately 25.57 MB. Relative to the earlier continuous-labs candidate,
+  the public plain/stripped increases are 83,456 / 66,048 bytes. Public initial
+  JS is 719.64 kB (200.07 kB gzip), CSS 136.73 kB (25.00 kB gzip); development JS
+  is approximately 742.9 kB and CSS 140.45 kB. The atlas and matplotlib/numpy are
+  ignored, optional tooling with no app payload or runtime dependency.
+  Five fresh-data stripped launches on a warm host listened in 91.4–131.7 ms
+  and completed health in 93.6–145.5 ms (Met: <500 ms). An earlier HTTP-polling
+  measurement gave 512.6–588.0 ms because failed connection retries delayed the
+  probe; separate socket readiness distinguishes that harness delay. Fresh
+  samples span 21.61–64.64 MiB working set / 53.87–54.33 MiB private. The rendered
+  development review after previews and text chat measured 79.67 MiB working
+  set / 59.08 MiB private. These variable Windows residency samples do not close
+  the existing idle-memory waiver or establish active-device/soak acceptance.
+  No device motion was issued; current Cloud readiness reports disconnected.
+  Artifacts: `.scratch/library-final-performance.json`,
+  `.scratch/library-final-cold-start-tcp.json`, build/test logs and the
+  [library review](motion-library-review-2026-09-04.md).
+
+- **2026-09-04 — Motion Lab:** no new runtime or frontend dependencies. Against
+  the alpha.39 baseline, all shipped JS/CSS grew from 1,332,492 to 1,366,272 bytes
+  (+33,780 raw; +11,112 gzip including four lazy locale bundles). The initial
+  JS/CSS pair grew by 18,013 raw / 4,742 gzip bytes. The panel uses ordinary SVG
+  and existing React. The stripped pure-Go Windows binary measures 18,295,296
+  bytes (17.45 MiB), below the binary budget; the exact unstripped review app is
+  25,348,608 bytes. One observed localhost launch took 556 ms including process
+  creation and readiness polling; this is not a controlled cold-start pass and
+  does not establish the <500 ms target. Initial review working set was
+  24.59 MiB; after preview generation, UI traffic and a text-only LLM request it
+  was 74.06 MiB working set / 57.00 MiB private. These are local simulator
+  observations, not the required real-motion/transport/soak workload. Existing
+  idle waiver and unmeasured active/soak statuses remain. Full Go/race checks
+  and frontend tests pass; see the
+  [review](motion-lab-review-2026-09-04.md) for separate live-model limitations.
+
+  Simulator-disclosure follow-up: the persistent runtime readout, notices,
+  start label and five locale updates add 2,377 raw / 626 gzip bytes to the
+  shipped JS/CSS, now 1,368,649 raw / 398,038 gzip bytes. The initial JS/CSS
+  pair adds 1,099 raw / 209 gzip bytes. CSS and dependencies are unchanged.
+  The final pure-Go binary is 18,317,312 bytes stripped (17.47 MiB) and
+  25,377,280 bytes unstripped. The review now uses the user's saved Cloud
+  connection with simulation disabled and motion stopped; its 612 ms HSP
+  readiness probe is not a physical-motion latency measurement.
+
 - **2026-08-28** - Reduced the account password floor from 12 UTF-8 bytes to
   eight Unicode characters while retaining the 1024-byte hashing cap, Argon2id,
   generic login failures, throttling, and the recommendation for a longer unique
