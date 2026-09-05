@@ -1,5 +1,16 @@
 # Autopilot cadence and autonomy
 
+## Continuous motion follow-up
+
+Layered and Creative v2 distinguish an autonomous session with no human motion
+direction from continuation of a requested character. The former can author
+controls within saved limits; the latter preserves the character and refreshes
+its realization. Exact repetition forbids evolution. Questions do not erase
+earlier directions from the retained session. The adapter forwards session
+observations and sampling preferences. Speech gets mode-specific semantic
+controls even with chat-only authority. See the
+[full-build review](llama-autopilot-review-2026-09-05.md).
+
 Status: implementation contract (2026-08-22)
 
 This document defines how Chat Autopilot decides when to change motion and when

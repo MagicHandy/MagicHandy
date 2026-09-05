@@ -2,6 +2,15 @@
 
 ## Core Direction
 
+The September 5 Creative v2 flow refactor replaces local/full blocks with
+correlated reach and timing, shared reversal acceleration and nearby-stroke
+handoffs. It remains semantic content inside the single shared engine. See
+[the evaluation](docs/creative-v2-flow-review-2026-09-05.md).
+The follow-up removes the default tip anchor and specific example recipes.
+Independent focus roaming moves both endpoints without a prescribed region
+sequence; explicit saved anchors remain valid. See
+[the roaming review](docs/creative-v2-roaming-review-2026-09-05.md).
+
 MagicHandy is a Go-first ground-up rewrite of StrokeGPT-ReVibed.
 
 The rewrite is justified by maintainability, cleaner architecture, future binary releases, lower non-ML baseline overhead, simpler long-running concurrency, and fewer Python environment failures in the core install path. Go alone will not fix Handy cloud latency, local LLM memory, CUDA memory, or all motion smoothness bugs. Motion quality must come from a better motion model, transport scheduler, retargeting algorithm, diagnostics, and real-device validation.
@@ -21,6 +30,25 @@ the normal install path. See ADRs 0003, 0007, and 0012.
 Local LLM support is quality-first. The primary MagicHandy LLM path is a managed llama.cpp runtime for Windows/NVIDIA systems, using curated GGUF models and explicit model management. Ollama remains supported as the secondary pathway. See `docs/decisions/0005-local-llm-runtime.md` and `docs/model-management.md`.
 
 ## Status
+
+### 2026-09-05 Autopilot mode-switch crash correction
+
+Active continuous scores retain their own schema while the selected control
+mode changes. This prevents a Layered-to-Creative-v2 prompt panic without
+altering motion compilation or Stop. API regressions and a live llama.cpp
+switching run cover both directions. See the
+[incident review](docs/autopilot-mode-switch-crash-2026-09-05.md).
+
+### 2026-09-05 llama.cpp session and Autopilot follow-up
+
+Continuous-mode history and final guards now match their edit formats.
+Bounded history retains up to 64 messages / 24,000 bytes. Autopilot distinguishes
+exploration without human motion directions from continuation of a requested
+character, forwards session/sampling context and grounds speech in the active
+mode. Full-build simulator harnesses cover conversation, controls, direct
+vocabulary, autonomous output and shared-engine atlases. See the
+[llama.cpp review](docs/llama-autopilot-review-2026-09-05.md) for evidence,
+remaining model errors and update preparation.
 
 ### 2026-09-05 Creative v2 native stroke generation
 

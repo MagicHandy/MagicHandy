@@ -18,15 +18,24 @@ func (s *Server) validateLabTrial(trial chat.LLMLabTrial, state llmLabState) cha
 	if !trial.Valid {
 		trial.Changed = []string{}
 	}
-	if trial.Autopilot && trial.Valid && !labAutopilotWithinRequest(trial.Before, trial.After) {
+	return validateLabAutopilot(trial, labHumanRequests(state.DirectiveTurns))
+}
+
+func validateLabAutopilot(trial chat.LLMLabTrial, requests []string) chat.LLMLabTrial {
+	if !trial.Autopilot || !trial.Valid {
+		return trial
+	}
+	guided := chat.HasMotionDirection(requests)
+	continuous := trial.Method == "layered" || trial.Method == "creative_v2"
+	if (!continuous || guided) && !labAutopilotWithinRequest(trial.Before, trial.After) {
 		trial.Valid, trial.After, trial.Changed = false, trial.Before, []string{}
 		trial.Error = "Autopilot cannot increase speed or widen the requested band."
 	}
-	if trial.Autopilot && trial.Method == "creative_v2" && trial.Valid && !chat.CreativeV2CharacterUnchanged(trial.Before, trial.After) {
+	if trial.Method == "creative_v2" && trial.Valid && guided && !chat.CreativeV2CharacterUnchanged(trial.Before, trial.After) {
 		trial.Valid, trial.After, trial.Changed = false, trial.Before, []string{}
 		trial.Error = "Creative v2 Autopilot changed the requested character."
 	}
-	if trial.Autopilot && (trial.Method == "layered" || trial.Method == "creative_v2") && trial.Valid && len(trial.Changed) > 0 && chat.LayeredExactHoldRequested(labHumanRequests(state.DirectiveTurns)) {
+	if continuous && trial.Valid && len(trial.Changed) > 0 && chat.LayeredExactHoldRequested(requests) {
 		trial.Valid, trial.After, trial.Changed = false, trial.Before, []string{}
 		trial.Error = "Autopilot changed an explicitly fixed score."
 	}

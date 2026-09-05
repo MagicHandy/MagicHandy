@@ -249,7 +249,11 @@ func (p MotionPlan) retargetFromState(
 		preserved = false
 	}
 	if !preserved {
-		phase = chooseNearestPhase(target, settings, currentPosition, currentDirection, currentVelocity)
+		if p.Target.Flow != nil && p.Target.Flow.Gesture != nil && target.Flow != nil && target.Flow.Gesture != nil {
+			phase = chooseGesturePhase(p, target, settings, streamMillis, currentPosition, currentDirection, currentVelocity)
+		} else {
+			phase = chooseNearestPhase(target, settings, currentPosition, currentDirection, currentVelocity)
+		}
 	}
 	next := NewMotionPlan(id, target, settings, phase, streamMillis, createdAt)
 	next.PhasePreserved = preserved

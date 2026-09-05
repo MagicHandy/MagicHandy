@@ -24,6 +24,7 @@ func main() {
 	experiments := flag.Bool("experiments", false, "include the guided flow experiment roster and a maximum-softness case")
 	creativeV2 := flag.Bool("creative-v2", false, "include the native gesture matrix at 10/45/85 across all device profiles, plus original Creative comparisons")
 	reports := flag.String("llm", "", "comma-separated live LLM report paths")
+	sessions := flag.String("sessions", "", "comma-separated full-app Autopilot captures")
 	flag.Parse()
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMinPercent, settings.SpeedMaxPercent = 10, 43
@@ -63,6 +64,11 @@ func main() {
 			continue
 		}
 		entries = append(entries, readTrials(path, settings)...)
+	}
+	for _, path := range strings.Split(*sessions, ",") {
+		if path != "" {
+			entries = append(entries, readAutopilotSessions(path)...)
+		}
 	}
 	data, err := json.MarshalIndent(map[string]any{"schema": "magichandy.motion-atlas.v1", "settings": settings, "entries": entries}, "", "  ")
 	must(err)

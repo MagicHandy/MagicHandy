@@ -22,6 +22,9 @@ func FreshCreativeV2Score(speed int) motion.FlowSpec {
 }
 
 func creativeV2ScoreContext(spec motion.FlowSpec) map[string]any {
+	if spec.Gesture == nil {
+		return nil
+	}
 	encoded, _ := json.Marshal(spec.Gesture)
 	fields := map[string]any{}
 	_ = json.Unmarshal(encoded, &fields)
@@ -127,7 +130,7 @@ func applyCreativeV2Edits(items []map[string]json.RawMessage, current motion.Flo
 
 var creativeV2Groups = map[string]map[string]string{
 	"range":    {"min_percent": "min_percent", "max_percent": "max_percent"},
-	"focus":    {"position_percent": "focus_percent", "width_percent": "focus_width_percent", "mix_percent": "focus_mix_percent"},
+	"focus":    {"position_percent": "focus_percent", "width_percent": "focus_width_percent", "mix_percent": "focus_mix_percent", "roam_percent": "focus_roam_percent"},
 	"sweep":    {"faster_direction": "faster_direction", "contrast_percent": "contrast_percent"},
 	"rebounds": {"count": "rebound_count", "retained_width_percent": "rebound_decay_percent"},
 }
@@ -138,6 +141,13 @@ func applyCreativeV2Group(name string, raw json.RawMessage, next *motion.FlowSpe
 		return err
 	}
 	keys := creativeV2Groups[name]
+	// Historical focus edits described a fixed anchor. Keep those imported
+	// transactions usable; current constrained model output supplies all four.
+	if name == "focus" && len(group) == len(keys)-1 {
+		if _, exists := group["roam_percent"]; !exists {
+			group["roam_percent"] = json.RawMessage("0")
+		}
+	}
 	if len(group) != len(keys) {
 		return fmt.Errorf("%s requires all its paired fields", name)
 	}
@@ -171,7 +181,7 @@ func CreativeV2ResponseSchema(limits config.MotionSettings, mood bool) json.RawM
 	}
 	edits := map[string]any{
 		"min_percent": integer(0, 90), "max_percent": integer(10, 100), "speed_percent": integer(limits.SpeedMinPercent, limits.SpeedMaxPercent),
-		"focus_percent": integer(0, 100), "focus_width_percent": integer(10, 100), "focus_mix_percent": integer(0, 100),
+		"focus_percent": integer(0, 100), "focus_width_percent": integer(10, 100), "focus_mix_percent": integer(0, 100), "focus_roam_percent": integer(0, 100),
 		"faster_direction": map[string]any{"type": "string", "enum": []string{"even", "tip", "base"}},
 		"contrast_percent": integer(0, 80), "inertia_percent": integer(0, 100), "rebound_count": integer(0, 4),
 		"rebound_decay_percent": integer(25, 85), "variation_percent": integer(0, 100), "evolve": map[string]any{"type": "boolean"},
@@ -258,7 +268,7 @@ func creativeV2UserMayEdit(message string, running bool, before, after motion.Fl
 			message = strings.ReplaceAll(message, phrase, "remove inertia")
 		}
 	}
-	return !motionIntentIsNegated(message) && hasIntentPhrase(message, "bounce", "bounces", "rebound", "rebounds", "sweep", "sweeps", "inertia", "momentum", "upward", "downward", "stroke", "strokes")
+	return !motionIntentIsNegated(message) && hasIntentPhrase(message, "bounce", "bounces", "rebound", "rebounds", "sweep", "sweeps", "inertia", "momentum", "upward", "downward", "stroke", "strokes", "roam", "roaming", "focus", "working location")
 }
 
 // CreativeV2CharacterUnchanged is shared by scheduled Lab and production turns.

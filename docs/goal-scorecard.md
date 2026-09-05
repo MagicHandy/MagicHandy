@@ -209,6 +209,55 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-09-05 — Autopilot mode-switch crash:** active-score formatting now
+  follows the retained score's schema while the selected grammar changes.
+  Regression, full Go/race, vet and lint checks pass. No motion or frontend
+  implementation changes and no new dependencies. The local Go 1.26.4
+  CGO-free stripped binary remains 19,076,096 bytes; the plain build is
+  26,264,576 bytes. Existing launch/memory measurements and their limitations
+  remain applicable; this does not close the idle waiver or active/soak gaps.
+  See the [incident review](autopilot-mode-switch-crash-2026-09-05.md).
+
+- **2026-09-05 — Creative v2 roaming focus:** removes the default tip bias and
+  adds independent, bounded location drift through the shared compiler. No
+  new runtime or frontend dependencies. The local `CGO_ENABLED=0 -trimpath`
+  build is 26,265,088 bytes; release-style `-s -w` is 19,076,096 (+4,608 from
+  the continuous-flow refactor). Initial JS is 750.86 / 207.64 kB gzip and
+  lazy Labs JS 51.96 / 14.58. Three fresh-data launches reached the listener
+  in 133.3–176.3 ms and health in 138.4–205.9 ms. One-second launch snapshots
+  were 21.99–65.68 MiB working set / 54.32–55.31 MiB private, excluding browser
+  and model workers. Variable Windows residency does not close the idle
+  waiver; active hardware and soak budgets remain unmeasured. See the
+  [roaming review](creative-v2-roaming-review-2026-09-05.md).
+
+- **2026-09-05 — Creative v2 continuous flow:** replaces local/full groups with
+  correlated reach and timing, integrates rebound recovery, and fits shared
+  reversal acceleration. Gesture retargets keep nearby stroke context. No new
+  dependencies or motion path. Local `CGO_ENABLED=0 -trimpath` binary is
+  26,259,456 bytes; stripped `-s -w` is 19,071,488 (+10,752 from the llama.cpp
+  integration build). Initial JS is 750.83 / 207.64 kB gzip; lazy Labs JS is
+  51.95 / 14.58. Three fresh-data stripped launches reached the listener in
+  136.4–167.9 ms and health in 138.3–208.3 ms. One-second launch snapshots were
+  22.09–65.20 MiB working set / 54.07–54.98 MiB private, excluding model and
+  browser. Windows residency varies; these do not close the idle waiver or
+  measure active hardware/soak budgets. Only help text/localizations changed in
+  the UI. Detailed engine,
+  model and visual evidence: [flow review](creative-v2-flow-review-2026-09-05.md).
+
+- **2026-09-05 — llama.cpp session and Autopilot integration:** fixes continuous
+  response/history formats, retains bounded longer context, enables autonomous
+  score authoring and supplies active semantic speech facts. No new Go or UI
+  dependencies. Current local stripped `-trimpath -s -w` binary is 19,060,736
+  bytes (+27,648 against the Creative v2 baseline); unstripped `-trimpath` binary
+  is 26,246,144. The canonical UI remains 750.72 / 207.61 kB gzip with lazy Labs
+  51.89 / 14.54. Three isolated native-probe launches reached the listener in
+  126.8–138.6 ms and health in 148.7–163.8 ms. Launch snapshots were 29.70–32.06
+  MiB working set / 54.85–54.91 MiB private, excluding the model and browser.
+  Initial PowerShell HTTP attempts included failed-connect retry delays of
+  roughly half a second; the native probe separates that from listener startup.
+  These measurements do not close the existing idle waiver, active hardware
+  or soak budgets. See [the review](llama-autopilot-review-2026-09-05.md).
+
 - **2026-09-05 — Creative v2 native strokes:** adds an independent semantic
   travel vocabulary through the shared engine, paired atomic model edits,
   production/Lab Autopilot and original Creative realization refreshes. No new

@@ -1,5 +1,45 @@
 # MagicHandy Risk Register
 
+## 2026-09-05 Autopilot mode-switch crash
+
+A retained Layered score was formatted as Creative v2 after changing the
+selected mode, causing a nil-map panic in the scheduler goroutine and closing
+the app. Motion facts now follow the active score's schema, distinguish it from
+the selected edit grammar, and handle absent gestures without a panic. Both
+switch directions have production-path coverage and a live llama.cpp test with
+the previous score retained. See the [incident and validation](autopilot-mode-switch-crash-2026-09-05.md).
+
+## 2026-09-05 Creative v2 example and endpoint bias
+
+The default 100% focus, fixed-anchor variation and specific prompt examples
+reinforced upper-end repetition. Fresh scores now roam without a preferred
+end, and independent location control can release a temporary anchor. Prompt
+examples teach edit mechanics. Tests distinguish parameter changes from actual
+space to move and retain missed model selections. Narrowing the outer band can
+still limit variation; no deterministic itinerary or safety exception was
+introduced. See the [roaming review](creative-v2-roaming-review-2026-09-05.md).
+
+## 2026-09-05 Creative v2 flow refactor
+
+Physical feedback identified separated pattern blocks despite smooth position
+joins. The refactor removes binary local/full scheduling, shares reversal
+acceleration, and keeps score edits near the current stroke. Kinematic fitting,
+sanitization, Stop and dispatch ownership remain unchanged. Finite repetition,
+large model-selected changes of intent and imperfect descriptions remain risks;
+the command plots do not establish physical feel. See the
+[flow review](creative-v2-flow-review-2026-09-05.md).
+
+## 2026-09-05 continuous-mode session review
+
+Full-build llama.cpp tests found contradictory continuous reply/history
+contracts, seed-only autonomous choices and ungrounded spoken check-ins.
+Mode-specific history/guards, bounded longer context and active semantic speech
+facts address these defects. Compound mapping remains model-dependent,
+especially with Granite 3B; phase descriptions and very long session recall can
+still be wrong. Simulated curves are not physical telemetry. No motion-path or
+kinematic-limit exception was introduced. See the
+[review evidence](llama-autopilot-review-2026-09-05.md), including retained failures.
+
 ## Purpose
 
 The replacement library is public under ADR 0020; ten continuous recipes replace

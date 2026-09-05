@@ -37,7 +37,7 @@ export function LabHelp() {
           <dt>{t("New library")}</dt><dd>{t("Compare action names, descriptive IDs and opaque handles for the same pattern catalog. The three modes change naming, not motion.")}</dd>
         </dl>
         <p>{t("Legacy built-ins are disabled on update and cannot be re-enabled. Their saved names and weights remain available with their exports.")}</p>
-        <p>{t("Creative v2 uses 32 primary cycles with optional local rebounds. Mixed focus returns to full reach after at most six local cycles. Tiny rebound tails are omitted. Inertia shapes the velocity crest; it does not simulate impacts. Safety limits can reduce timing contrast.")}</p>
+        <p>{t("Creative v2 develops reach, timing and location continuously across 64 cycles. Focus roaming moves both endpoints; set it to zero to hold a location. Mixed focus changes stroke width. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. The finite realization repeats until evolved; safety limits still apply.")}</p>
       </>}
       {topic==="autopilot"&&<>
         <p>{t("Enable Autopilot and press Start test. It continues this Lab conversation using the selected model, prompt and schema after each quiet interval. You can test it with or without Live motion.")}</p>
