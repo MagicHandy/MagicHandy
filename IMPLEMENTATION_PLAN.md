@@ -22,6 +22,20 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-05 Creative v2 native stroke generation
+
+Creative v2 adds native asymmetric sweeps, localized strokes mixed with broad
+travel, shrinking rebounds and a late velocity crest to main chat and LLM Lab.
+It compiles semantic controls through the shared engine. The model edits
+independent parameter groups, with fresh realizations and character-preserving
+Autopilot; it does not author a preset playback sequence. Original Creative
+also refreshes intentionally authored texture realizations. All six prompt
+iterations were compared on Gemma and Granite. Repeated Granite production
+omissions remain visible and explicit focus mismatches are rejected. See
+[ADR 0024](docs/decisions/0024-native-creative-strokes.md) and
+[the review](docs/creative-v2-motion-review-2026-09-05.md). Physical feel remains
+subject to user testing; no release or merge is authorized.
+
 ### 2026-09-04 additional Lab experiments
 
 Correlated drift, symmetric turn softness and cadence hold are optional

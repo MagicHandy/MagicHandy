@@ -10,6 +10,9 @@ import (
 // LLMLabSchema constrains syntax, field names and numeric ranges, not intent.
 // The same strict semantic parser still runs for schema-guided and plain JSON.
 func LLMLabSchema(method string, limits config.MotionSettings) json.RawMessage {
+	if method == "creative_v2" {
+		return CreativeV2ResponseSchema(limits, false)
+	}
 	if method == "layered" {
 		return LayeredResponseSchema(limits, false)
 	}

@@ -1949,5 +1949,9 @@
   "Layered": "分层",
   "The production Layered contract: edit reach, location and pace independently. Partial edits preserve other layers. Drift varies irregularly; alternation reaches both extremes. Evolve refreshes the details without replacing the geometry.": "正式聊天使用的分层控制方式：独立编辑行程宽度、位置和节奏。局部编辑会保留其他层。漂移产生不规则变化，交替变化会到达两端。演变会更新细节，同时保留几何设置。",
   "Layered starts with fresh variation and refreshes it during Autopilot. Exact repetition requests take priority. Four recent human requests remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.": "Layered 每次以新的变化开始，并在 Autopilot 运行期间刷新。精确重复的要求优先。最近四条用户请求会独立于自动回复保留。每个动作谱都是有限的；实验室中的 Layered 续接会随机增加最多半个等待间隔的延迟。",
-  "autopilot motion is off; choose a motion mode in the sidebar": "自动驾驶运动已关闭；请在侧栏选择运动模式"
+  "autopilot motion is off; choose a motion mode in the sidebar": "自动驾驶运动已关闭；请在侧栏选择运动模式",
+  "Creative v2": "创意 v2",
+  "Generate asymmetric sweeps, localized strokes and shrinking rebounds. Edit focus, sweep, rebounds or inertia while preserving other controls. Switching to or from this generator starts a new Lab score.": "生成不对称往返、局部行程和逐渐缩小的回弹。编辑位置、往返速度差、回弹或惯性，同时保留其他控制。切换到此生成方式或从中切出会开始新的实验室动作方案。",
+  "Creative v2 uses 32 primary cycles with optional local rebounds. Mixed focus returns to full reach after at most six local cycles. Tiny rebound tails are omitted. Inertia shapes the velocity crest; it does not simulate impacts. Safety limits can reduce timing contrast.": "Creative v2 使用32个主周期，可附加局部回弹。混合模式在最多六个局部周期后恢复全范围行程。过小的回弹尾段会被省略。惯性调整速度峰值，不模拟冲击。安全限制可能减小往返时间差。",
+  "Creative v2 also refreshes its realization during Autopilot, preserving the requested character. Without continuation the finite score repeats. Exact repetition requests keep the current realization.": "Creative v2 在 Autopilot 期间也会更新变化，同时保留所要求的动作特点。没有持续生成时，有限的方案会重复。要求精确重复时，会保留当前变化。"
 }

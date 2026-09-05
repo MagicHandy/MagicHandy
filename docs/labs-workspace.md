@@ -27,11 +27,19 @@ Emergency Stop remains mounted regardless of the route or controller status.
 ## Conversation testing
 
 The title bar's **Test mode** selects the response contract and default prompt:
-Layered, relative and layer edits, direct controls, ordered sections, simultaneous layers,
+Creative v2, Layered, relative and layer edits, direct controls, ordered sections, simultaneous layers,
 or the catalog using action names, descriptive IDs, or opaque handles. The three
 catalog interfaces use identical motion content. **Configure** contains the
 model override, schema constraint, prompt editor and Autopilot interval.
 Configuration is held fixed while a test session is active.
+
+**Creative v2** tests the same native stroke contract as its main-chat mode.
+Ask for a focus location and width, local/full mixing, a fast direction with a
+slower return, shrinking rebounds, inertia or variation. Follow-up edits retain
+unmentioned groups. Inertia shifts the velocity crest within a stroke; it does
+not mean force or measured ball physics. There are no runtime named presets.
+Changing into or out of this mode starts a new compatible Lab score through
+the backend. See [the Creative v2 review](creative-v2-motion-review-2026-09-05.md).
 
 **Layered** tests the same contract as the production chat mode. It edits one
 persistent score: range changes width, center changes location, and pace changes
@@ -61,7 +69,7 @@ The main production motion mode can remain Off while Lab contracts are tested.
 Enable **Autopilot** with or without Live motion. After a quiet interval (20
 seconds by default; configurable 5–120), the backend requests a continuation
 with the same model, prompt, schema, current score and matching conversation.
-Layered adds a random delay of up to half the quiet interval, always respecting
+Layered and Creative v2 add a random delay of up to half the quiet interval, always respecting
 the configured minimum. It starts with a fresh variation seed and can refresh
 that seed on continuation without replacing the requested geometry or pace.
 Drift and unequal smooth dwell times vary the motion inside those constraints.

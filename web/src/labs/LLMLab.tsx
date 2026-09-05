@@ -30,7 +30,7 @@ export function LLMLab({initialDraft="",draftUsed=()=>{}}:{initialDraft?:string;
   async function send() {if(await lab.send(message.trim())){setMessage("");composer.current?.focus();}}
   async function stop() {try{await api.stopMotion();}catch(reason){show(String(reason),"error");}finally{refresh();}}
   const candidate=preview?.candidates.find(item=>item.flow);
-  const modes=[["layered",t("Layered")],["edits",t("Relative and layer edits")],["controls",t("Single controls")],["sequence",t("Sequence")],["layers",t("Layers")],["library_actions",t("Library · action names")],["library_descriptive",t("Library · descriptive IDs")],["library",t("Library · opaque handles")]];
+  const modes=[["creative_v2",t("Creative v2")],["layered",t("Layered")],["edits",t("Relative and layer edits")],["controls",t("Single controls")],["sequence",t("Sequence")],["layers",t("Layers")],["library_actions",t("Library · action names")],["library_descriptive",t("Library · descriptive IDs")],["library",t("Library · opaque handles")]];
   return <div className="llm-lab-workspace">
     <section className="lab-chat" aria-label={t("LLM Lab conversation")}>
       <div className="lab-chat-toolbar">

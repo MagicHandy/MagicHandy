@@ -5,6 +5,7 @@ import type { MotionSettings } from "../api/types";
 export interface FlowStep { min_percent: number; max_percent: number; speed_percent: number; cycles: number }
 export interface FlowLayer { axis: "range" | "center" | "pace"; amount_percent: number; period_cycles: number; phase_percent: number; shape?: "wave" | "drift" | "alternate" }
 export interface FlowSpec {
+	gesture?: {focus_percent:number;focus_width_percent:number;focus_mix_percent:number;faster_direction:string;contrast_percent:number;inertia_percent:number;rebound_count:number;rebound_decay_percent:number;variation_percent:number};
   min_percent: number; max_percent: number; speed_percent: number; range_floor_percent: number;
   anchor_percent: number; memory_cycles: number; pace_variation_percent: number; seed: number;
   steps?: FlowStep[]; layers?: FlowLayer[];

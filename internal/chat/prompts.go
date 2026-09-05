@@ -137,6 +137,13 @@ func contractInstructions(capabilities Capabilities) string {
 		}
 		return text
 	}
+	if capabilities.MotionMode == MotionModeCreativeV2 {
+		text := creativeV2Contract
+		if capabilities.MoodTracking {
+			text += "\n" + moodContractInstructions()
+		}
+		return text
+	}
 	if capabilities.MotionMode == MotionModeDynamic {
 		text := contractDynamic
 		if capabilities.MoodTracking {
@@ -188,6 +195,8 @@ const (
 	MotionModePattern MotionMode = "pattern"
 	// MotionModeLayered edits one persistent score with independent modulation layers.
 	MotionModeLayered MotionMode = "layered"
+	// MotionModeCreativeV2 generates strokes with asymmetric travel and rebounds.
+	MotionModeCreativeV2 MotionMode = "creative_v2"
 	// MotionModeOff keeps the model chat-only.
 	MotionModeOff MotionMode = "off"
 )

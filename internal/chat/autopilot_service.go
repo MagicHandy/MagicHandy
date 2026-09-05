@@ -85,7 +85,7 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	if err != nil {
 		return AutopilotResponse{}, err
 	}
-	if s.Capabilities.Motion && s.Capabilities.MotionMode == MotionModeLayered {
+	if s.Capabilities.Motion && (s.Capabilities.MotionMode == MotionModeLayered || s.Capabilities.MotionMode == MotionModeCreativeV2) {
 		return s.completeLayeredAutopilot(ctx, kind, request)
 	}
 	prompt := s.Prompt

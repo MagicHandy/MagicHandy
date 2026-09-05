@@ -53,7 +53,7 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			LLMReasoningAuto,
 		},
 		LLMMaxOutputTokens: []int{128, 256, 512, 1024},
-		LLMMotionModes:     []string{LLMMotionModeDynamic, LLMMotionModePattern, LLMMotionModeLayered, LLMMotionModeOff},
+		LLMMotionModes:     []string{LLMMotionModeDynamic, LLMMotionModePattern, LLMMotionModeLayered, LLMMotionModeCreativeV2, LLMMotionModeOff},
 		LLMChatVoices:      LLMChatVoices(),
 		LLMUserAnatomies: []string{
 			LLMUserAnatomyPenis,

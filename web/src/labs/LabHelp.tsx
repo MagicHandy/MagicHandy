@@ -28,7 +28,8 @@ export function LabHelp() {
       </>}
       {topic==="modes"&&<>
         <p>{t("Changing the interface loads its default prompt. The next reply uses the selected model, prompt and matching conversation history.")}</p>
-        <dl><dt>{t("Layered")}</dt><dd>{t("The production Layered contract: edit reach, location and pace independently. Partial edits preserve other layers. Drift varies irregularly; alternation reaches both extremes. Evolve refreshes the details without replacing the geometry.")}</dd>
+        <dl><dt>{t("Creative v2")}</dt><dd>{t("Generate asymmetric sweeps, localized strokes and shrinking rebounds. Edit focus, sweep, rebounds or inertia while preserving other controls. Switching to or from this generator starts a new Lab score.")}</dd>
+          <dt>{t("Layered")}</dt><dd>{t("The production Layered contract: edit reach, location and pace independently. Partial edits preserve other layers. Drift varies irregularly; alternation reaches both extremes. Evolve refreshes the details without replacing the geometry.")}</dd>
           <dt>{t("Relative and layer edits")}</dt><dd>{t("Ask for relative changes or edit one layer. Existing layers and section differences are preserved unless you explicitly change them.")}</dd>
           <dt>{t("Single controls")}</dt><dd>{t("Test direct changes to range, anchor, pace and variation.")}</dd>
           <dt>{t("Sequence")}</dt><dd>{t("Test an ordered list of sections. New sections replace the previous sequence.")}</dd>
@@ -36,12 +37,14 @@ export function LabHelp() {
           <dt>{t("New library")}</dt><dd>{t("Compare action names, descriptive IDs and opaque handles for the same pattern catalog. The three modes change naming, not motion.")}</dd>
         </dl>
         <p>{t("Legacy built-ins are disabled on update and cannot be re-enabled. Their saved names and weights remain available with their exports.")}</p>
+        <p>{t("Creative v2 uses 32 primary cycles with optional local rebounds. Mixed focus returns to full reach after at most six local cycles. Tiny rebound tails are omitted. Inertia shapes the velocity crest; it does not simulate impacts. Safety limits can reduce timing contrast.")}</p>
       </>}
       {topic==="autopilot"&&<>
         <p>{t("Enable Autopilot and press Start test. It continues this Lab conversation using the selected model, prompt and schema after each quiet interval. You can test it with or without Live motion.")}</p>
         <p>{t("Sending a message interrupts an Autopilot reply. Failed output pauses Autopilot for inspection. Stop ends the session and cancels pending replies, even without a connected device.")}</p>
         <p>{t("Lab Autopilot tests the selected conversation contract. Production Autopilot has additional planning policies and is not changed by these settings.")}</p>
         <p>{t("Layered starts with fresh variation and refreshes it during Autopilot. Exact repetition requests take priority. Four recent human requests remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.")}</p>
+        <p>{t("Creative v2 also refreshes its realization during Autopilot, preserving the requested character. Without continuation the finite score repeats. Exact repetition requests keep the current realization.")}</p>
       </>}
       {topic==="motion"&&<>
         <p>{t("This generator plays the continuous score below.")}</p>

@@ -187,7 +187,7 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		}
 	}()
 	dynamicMode := m.options.MotionGenerationMode != nil &&
-		(m.options.MotionGenerationMode() == config.LLMMotionModeDynamic || m.options.MotionGenerationMode() == config.LLMMotionModeLayered)
+		(m.options.MotionGenerationMode() == config.LLMMotionModeDynamic || m.options.MotionGenerationMode() == config.LLMMotionModeLayered || m.options.MotionGenerationMode() == config.LLMMotionModeCreativeV2)
 	decideCtx, cancel := context.WithTimeout(ctx, decisionTimeout)
 	started := m.options.Now()
 	decision, err := decide(decideCtx, input)

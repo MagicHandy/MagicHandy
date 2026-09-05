@@ -140,6 +140,8 @@ const (
 	LLMMotionModePattern = "pattern"
 	// LLMMotionModeLayered edits persistent continuous modulation layers.
 	LLMMotionModeLayered = "layered"
+	// LLMMotionModeCreativeV2 generates asymmetric strokes and localized rebounds.
+	LLMMotionModeCreativeV2 = "creative_v2"
 	// LLMMotionModeOff keeps the model chat-only.
 	LLMMotionModeOff = "off"
 )

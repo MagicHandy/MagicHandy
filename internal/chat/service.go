@@ -160,7 +160,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	if err != nil {
 		return Result{}, err
 	}
-	if s.capabilities().Motion && s.capabilities().MotionMode == MotionModeLayered {
+	if s.capabilities().Motion && (s.capabilities().MotionMode == MotionModeLayered || s.capabilities().MotionMode == MotionModeCreativeV2) {
 		request.Message = userMessage
 		return s.completeLayered(ctx, request, emit)
 	}

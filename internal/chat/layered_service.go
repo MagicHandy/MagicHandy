@@ -25,22 +25,29 @@ func layeredContextScore(state *MotionContext) (motion.FlowSpec, config.MotionSe
 		if state.SpeedPercent > 0 {
 			speed = state.SpeedPercent
 		}
-		if state.Layered != nil {
+		if state.Layered != nil && ((state.Layered.Gesture != nil) == (state.MotionMode == MotionModeCreativeV2)) {
 			return *motion.CloneFlowSpec(state.Layered), limits
 		}
+	}
+	if state != nil && state.MotionMode == MotionModeCreativeV2 {
+		return FreshCreativeV2Score(max(limits.SpeedMinPercent, min(speed, limits.SpeedMaxPercent))), limits
 	}
 	return FreshLayeredScore(max(limits.SpeedMinPercent, min(speed, limits.SpeedMaxPercent))), limits
 }
 
 func layeredContextInstructions(state MotionContext) string {
 	score, limits := layeredContextScore(&state)
+	var scoreContext any = layeredScoreContext(score)
+	if state.MotionMode == MotionModeCreativeV2 {
+		scoreContext = creativeV2ScoreContext(score)
+	}
 	encoded, _ := json.Marshal(map[string]any{
-		"current_score": layeredScoreContext(score), "running": state.Running, "paused": state.Paused,
+		"current_score": scoreContext, "running": state.Running, "paused": state.Paused,
 		"saved_limits":                      map[string]int{"speed_min_percent": limits.SpeedMinPercent, "speed_max_percent": limits.SpeedMaxPercent},
 		"engine_envelope":                   state.Envelope,
 		"recent_user_requests_oldest_first": state.UserRequests,
 	})
-	return "Authoritative Layered state, refreshed for this turn:\n" + string(encoded) + "\n" + labPlanningContextGuide +
+	return "Authoritative continuous motion state, refreshed for this turn:\n" + string(encoded) + "\n" + labPlanningContextGuide +
 		"A stopped device starts only for a direct motion request; a paused device cannot be resumed by model edits. Ordinary conversation and questions require reply only."
 }
 
@@ -54,10 +61,16 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if s.MotionContext != nil {
 		state = *s.MotionContext
 	}
-	state.MotionMode = MotionModeLayered
-	system := composeSystem(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext)
+	state.MotionMode = capabilities.MotionMode
 	current, limits := layeredContextScore(&state)
+	// The prompt and parser must share the same freshly seeded starting score.
+	state.Layered = &current
+	system := composeSystem(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext)
 	schema := LayeredResponseSchema(limits, capabilities.MoodTracking)
+	parser := ParseLayeredReply
+	if capabilities.MotionMode == MotionModeCreativeV2 {
+		schema, parser = CreativeV2ResponseSchema(limits, capabilities.MoodTracking), ParseCreativeV2Reply
+	}
 	if !capabilities.Motion {
 		schema = nil
 	}
@@ -74,14 +87,14 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if err != nil {
 		return result, err
 	}
-	response, next, changed, err := ParseLayeredReply(raw, current, limits)
+	response, next, changed, err := parser(raw, current, limits)
 	if err == nil {
 		err = s.authorizeLayeredReply(&response, current, next, changed, request.Message, state)
 	}
 	if err != nil {
 		result.Malformed, result.InitialMalformed, result.MalformedError = true, true, err.Error()
 		_ = emitEvent(emit, StreamEvent{Type: "malformed", Phase: "initial", Error: err.Error()})
-		return result, fmt.Errorf("layered response rejected: %w", err)
+		return result, fmt.Errorf("%s response rejected: %w", capabilities.MotionMode, err)
 	}
 	if !capabilities.MoodTracking {
 		response.NewMood = nil
@@ -94,6 +107,11 @@ func (s Service) authorizeLayeredReply(response *AssistantResponse, before, afte
 	if !s.capabilities().Motion {
 		return nil
 	}
+	if state.MotionMode == MotionModeCreativeV2 && !s.TrustedMotionInput {
+		if err := creativeV2EditScope(message, before, after); err != nil {
+			return err
+		}
+	}
 	if state.Paused {
 		if len(changed) > 0 {
 			return errors.New("layered motion is paused; edits cannot resume it")
@@ -101,6 +119,9 @@ func (s Service) authorizeLayeredReply(response *AssistantResponse, before, afte
 		return nil
 	}
 	authorized := s.TrustedMotionInput || layeredUserMayEdit(message, state.Running, before, after)
+	if state.MotionMode == MotionModeCreativeV2 {
+		authorized = s.TrustedMotionInput || creativeV2UserMayEdit(message, state.Running, before, after)
+	}
 	if !authorized {
 		if len(changed) > 0 {
 			return errors.New("the response changed motion outside the current request")
@@ -146,6 +167,9 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 			requests = s.MotionContext.UserRequests
 		}
 		request.Message = LayeredContinuationMessage(requests)
+		if s.Capabilities.MotionMode == MotionModeCreativeV2 {
+			request.Message = CreativeV2ContinuationMessage(requests)
+		}
 	}
 	result, err := service.completeLayered(ctx, request, nil)
 	if err != nil {
@@ -162,6 +186,9 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 		before, after := s.MotionContext.Layered, command.Layered
 		if after.SpeedPercent > before.SpeedPercent || after.MinPercent < before.MinPercent || after.MaxPercent > before.MaxPercent {
 			return AutopilotResponse{}, errors.New("layered Autopilot cannot raise speed or widen the requested band")
+		}
+		if s.Capabilities.MotionMode == MotionModeCreativeV2 && !CreativeV2CharacterUnchanged(*before, *after) {
+			return AutopilotResponse{}, errors.New("creative v2 Autopilot changed the requested character")
 		}
 	}
 	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled"}, nil

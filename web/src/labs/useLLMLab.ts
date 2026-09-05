@@ -78,7 +78,18 @@ export function useLLMLab() {
     catch(reason) {if(mounted.current)setError(String(reason));}
     finally {if(mounted.current)setBusy(false);}
   }
-  function chooseMethod(value:string) {setMethod(value);setPrompt(state?.prompts[value]??"");setSchemaGuided(value!=="controls");}
+  async function chooseMethod(value:string) {
+    if(locked||state?.session?.active)return;
+    // A different generator needs its own authoritative starting score. Never
+    // project a second score in the browser or erase a running test's state.
+    if(value==="creative_v2"||state?.current.gesture){
+      setBusy(true);setError("");
+      try {setState(await labApi.reset(undefined,value));}
+      catch(reason){setError(String(reason));return;}
+      finally {setBusy(false);}
+    }
+    setMethod(value);setPrompt(state?.prompts[value]??"");setSchemaGuided(value!=="controls");
+  }
   async function startSession(live:boolean,autopilot:boolean,interval:number) {
     if(locked)return;setBusy(true);setError("");
     try {setState(await labApi.session({live,autopilot,interval_seconds:interval,method,prompt,model,schema_guided:schemaGuided}));}

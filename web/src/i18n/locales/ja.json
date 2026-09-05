@@ -1949,5 +1949,9 @@
   "Layered": "レイヤー",
   "The production Layered contract: edit reach, location and pace independently. Partial edits preserve other layers. Drift varies irregularly; alternation reaches both extremes. Evolve refreshes the details without replacing the geometry.": "通常チャットでも使えるレイヤー方式です。ストローク幅、位置、ペースを個別に編集します。部分編集では他のレイヤーを保持します。ドリフトは不規則に変化し、交互変化は両端に到達します。Evolveは形状の設定を保ったまま変化の細部を更新します。",
   "Layered starts with fresh variation and refreshes it during Autopilot. Exact repetition requests take priority. Four recent human requests remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.": "Layeredは毎回新しい変化から始まり、Autopilot中に更新されます。完全な繰り返しの要求が優先されます。直近4件のユーザーの要求は、自動応答とは別に保持されます。各スコアの長さは有限です。LayeredのLab継続では、待機時間の最大半分をランダムに加算します。",
-  "autopilot motion is off; choose a motion mode in the sidebar": "オートパイロットの動作はオフです。サイドバーで動作モードを選択してください"
+  "autopilot motion is off; choose a motion mode in the sidebar": "オートパイロットの動作はオフです。サイドバーで動作モードを選択してください",
+  "Creative v2": "クリエイティブ v2",
+  "Generate asymmetric sweeps, localized strokes and shrinking rebounds. Edit focus, sweep, rebounds or inertia while preserving other controls. Switching to or from this generator starts a new Lab score.": "非対称の往復、局所的なストローク、次第に小さくなるリバウンドを生成します。他の設定を維持しながら、位置、往復速度差、リバウンド、慣性を編集できます。この生成方式への切り替えや他の方式への変更で、新しいラボスコアを開始します。",
+  "Creative v2 uses 32 primary cycles with optional local rebounds. Mixed focus returns to full reach after at most six local cycles. Tiny rebound tails are omitted. Inertia shapes the velocity crest; it does not simulate impacts. Safety limits can reduce timing contrast.": "Creative v2 は32の基本サイクルに任意の局所リバウンドを加えます。混合設定では、局所動作が最大6サイクル続くと全範囲のストロークに戻ります。小さすぎるリバウンドは省略します。慣性は速度ピークを調整するもので、衝撃を再現しません。安全制限により往復の速度差が小さくなる場合があります。",
+  "Creative v2 also refreshes its realization during Autopilot, preserving the requested character. Without continuation the finite score repeats. Exact repetition requests keep the current realization.": "Creative v2 も Autopilot 中に、要求された動作の特徴を維持しながら変化を更新します。継続生成しなければ有限のスコアが繰り返されます。完全な繰り返しを要求すると現在の変化を維持します。"
 }

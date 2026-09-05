@@ -698,6 +698,17 @@ tests cover both paths; R13 remains High for the existing open work.
 
 ## R14: Per-Source Motion Path Divergence
 
+Status 2026-09-05 (Creative v2 review): a native stroke vocabulary compiles into
+the same prepared motion plan, sampler, sanitizer and conditional retargeting
+path. It owns no additional motion loop or transport policy. Its local timing
+uses the existing Creative runtime envelope; shared safety constants and
+historical Flow fitting are unchanged. New seed selection happens on authored
+edits/evolution, not during sampling. Mode changes, controller handoff and Stop
+invalidate late replies. Two local models were evaluated with all failed
+selections retained; Granite still omits compound requested edits, so schema
+validity is not treated as intent verification. No new physical-device claim
+is made. See [the Creative v2 evidence](creative-v2-motion-review-2026-09-05.md).
+
 Status 2026-09-05 (Layered review): production chat, production Autopilot and
 LLM Lab now carry cloned semantic Flow scores into the existing engine. There
 is no independent motion loop or transport policy. Layered continuations

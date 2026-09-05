@@ -22,7 +22,11 @@ func (s *Server) validateLabTrial(trial chat.LLMLabTrial, state llmLabState) cha
 		trial.Valid, trial.After, trial.Changed = false, trial.Before, []string{}
 		trial.Error = "Autopilot cannot increase speed or widen the requested band."
 	}
-	if trial.Autopilot && trial.Method == "layered" && trial.Valid && len(trial.Changed) > 0 && chat.LayeredExactHoldRequested(labHumanRequests(state.DirectiveTurns)) {
+	if trial.Autopilot && trial.Method == "creative_v2" && trial.Valid && !chat.CreativeV2CharacterUnchanged(trial.Before, trial.After) {
+		trial.Valid, trial.After, trial.Changed = false, trial.Before, []string{}
+		trial.Error = "Creative v2 Autopilot changed the requested character."
+	}
+	if trial.Autopilot && (trial.Method == "layered" || trial.Method == "creative_v2") && trial.Valid && len(trial.Changed) > 0 && chat.LayeredExactHoldRequested(labHumanRequests(state.DirectiveTurns)) {
 		trial.Valid, trial.After, trial.Changed = false, trial.Before, []string{}
 		trial.Error = "Autopilot changed an explicitly fixed score."
 	}

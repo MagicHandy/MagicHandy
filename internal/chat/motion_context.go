@@ -84,7 +84,8 @@ Use that snapshot deliberately:
 - When embodied partner-action wording is a direct request, interpret it as device motion intent and acknowledge the motion decision rather than declining the request.`
 
 func motionContextInstructions(context MotionContext, capabilities Capabilities, patterns []PatternChoice) string {
-	if capabilities.MotionMode == MotionModeLayered {
+	if capabilities.MotionMode == MotionModeLayered || capabilities.MotionMode == MotionModeCreativeV2 {
+		context.MotionMode = capabilities.MotionMode
 		return layeredContextInstructions(context)
 	}
 	data := normalizedPromptMotionContext(context)

@@ -209,11 +209,22 @@ func (s *Server) runLabAutopilot(ctx context.Context, options labConversationSes
 
 func labAutopilotDelay(options labConversationSession) time.Duration {
 	delay := time.Duration(options.IntervalSeconds) * time.Second
-	if options.Method == "layered" {
+	if options.Method == "layered" || options.Method == "creative_v2" {
 		// #nosec G404 -- Scheduling jitter; never shorter than the user's quiet interval.
 		delay += time.Duration(rand.Float64() * 0.5 * float64(delay))
 	}
 	return delay
+}
+
+func labContinuationMessage(method, fallback string, turns []chat.LLMLabTrial) string {
+	switch method {
+	case "layered":
+		return chat.LayeredContinuationMessage(labHumanRequests(turns))
+	case "creative_v2":
+		return chat.CreativeV2ContinuationMessage(labHumanRequests(turns))
+	default:
+		return fallback
+	}
 }
 
 func (s *Server) applyLabConversationTarget(ctx context.Context, stopSequence uint64, spec motion.FlowSpec) (bool, string) {

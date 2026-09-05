@@ -123,3 +123,31 @@ Autopilot decision is generated and compiled, then a plain-text Stop is tested.
 The Autopilot decision is not dispatched by this particular fixture. Include
 the report with `-llm` and `--captured`, and keep rejected prompt iterations as
 well. See [the Layered review](layered-motion-review-2026-09-05.md).
+
+For Creative v2, `-catalog=false -creative-v2` exports 108 cases: nine native
+gesture parameter combinations at 10/45/85 on all three device profiles, plus
+three original Creative realizations at the same speeds/profiles. These are
+review fixtures, not runtime presets. This matrix sets its own 1–100 test
+limits; the ordinary catalog comparison remains 10–43. For example:
+
+```powershell
+go run -tags magichandy_labs ./cmd/motion-atlas -catalog=false -creative-v2 `
+  -output .scratch/creative-v2-atlas.json
+python scripts/render-motion-atlas.py .scratch/creative-v2-atlas.json .scratch/creative-v2-atlas
+```
+
+`TestCreativeV2LiveMapping` in `internal/chat/creative_v2_live_test.go` requires
+`liveeval` and `MAGICHANDY_LAB_MODELS`. It records 16 sequential/independent
+requests per model, with actual intent checks and raw failed selections; its
+test status alone is not the score. Inspect each report's `intent_pass`.
+`MAGICHANDY_EXPERIMENT_CAPTURE` chooses the ignored JSON destination.
+
+`TestCreativeV2LiveProductionConversation` in
+`internal/httpapi/creative_v2_live_test.go` requires `liveeval,magichandy_labs`
+and `MAGICHANDY_LIVE_MODEL`. It tests five real production chat turns through
+one shared-engine/fake-transport stream, one generated (unscheduled) Autopilot
+decision and plain-text Stop. Accepted targets are captured before checking
+intent, so a failed selection still has a plot. Rejected responses have an
+explicit non-moving record. Pass reports to `-llm` and `--captured`; retain
+failed runs as well as successful ones. See the
+[Creative v2 review](creative-v2-motion-review-2026-09-05.md).

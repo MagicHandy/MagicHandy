@@ -142,7 +142,8 @@ def captured_transport_charts(paths, destination, start_index):
             name = f"captured-{len(items)+1:02d}.png"
             fig.savefig(destination/name, dpi=130, bbox_inches="tight")
             plt.close(fig)
-            items.append({"index": start_index+len(items)+1, "id": stream, "name": "Captured app motion timeline", "group": "llm-output", "request": " / ".join(t.get("request", t.get("message", "")) for t in source.get("turns", [])), "raw": "", "model": source.get("model", ""), "error": "", "outcome": "Actual test dispatch, including queued transitions and Stop", "speed": speed_label, "plot": name})
+            outcome = "Actual test dispatch; Stop captured and queued remainder canceled" if stop else "Partial test dispatch; no Stop command present in this capture"
+            items.append({"index": start_index+len(items)+1, "id": stream, "name": "Captured app motion timeline", "group": "llm-output", "request": " / ".join(t.get("request", t.get("message", "")) for t in source.get("turns", [])), "raw": "", "model": source.get("model", ""), "error": "", "outcome": outcome, "speed": speed_label, "plot": name})
     return items
 
 

@@ -92,8 +92,9 @@ type MotionCommand struct {
 	VariationPercent *int                    `json:"variation_percent,omitempty"`
 	SegmentSeconds   *int                    `json:"segment_seconds,omitempty"`
 	Sections         []DynamicSectionCommand `json:"sections,omitempty"`
-	// Layered contains the validated complete score, resolved from a partial
-	// model edit by the Layered contract. Other contracts cannot populate it.
+	// Layered contains a complete continuous score resolved by the Layered or
+	// Creative v2 contract. Gesture distinguishes v2 at admission. The original
+	// geometry/library contracts cannot populate this internal handoff field.
 	Layered *motion.FlowSpec `json:"layered,omitempty"`
 }
 

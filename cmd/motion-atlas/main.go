@@ -22,6 +22,7 @@ func main() {
 	legacy := flag.Bool("legacy", true, "include deprecated built-ins")
 	catalog := flag.Bool("catalog", true, "include built-in library patterns")
 	experiments := flag.Bool("experiments", false, "include the guided flow experiment roster and a maximum-softness case")
+	creativeV2 := flag.Bool("creative-v2", false, "include the native gesture matrix at 10/45/85 across all device profiles, plus original Creative comparisons")
 	reports := flag.String("llm", "", "comma-separated live LLM report paths")
 	flag.Parse()
 	settings := config.DefaultSettings().Motion
@@ -53,6 +54,9 @@ func main() {
 	}
 	if *experiments {
 		entries = append(entries, renderExperiments(comparisonSpeeds, settings)...)
+	}
+	if *creativeV2 {
+		entries = append(entries, renderCreativeV2Matrix()...)
 	}
 	for _, path := range strings.Split(*reports, ",") {
 		if path == "" {
@@ -111,17 +115,27 @@ func unwrapTrials(data []byte, path string) ([]byte, []motion.Review) {
 		var turns []struct {
 			Request, Response string
 			Motion            *motion.Review
+			IntentPass        *bool `json:"intent_pass"`
 		}
 		must(json.Unmarshal(report.Turns, &turns))
 		if len(turns) > 0 && turns[0].Motion != nil {
 			entries := []motion.Review{}
 			for _, turn := range turns {
 				if turn.Motion == nil {
-					must(fmt.Errorf("%s: mixed captured and uncaptured turns", path))
+					entries = append(entries, motion.Review{Group: "llm-output", Model: report.Model, Request: turn.Request, Raw: turn.Response,
+						Name: "Uncaptured model turn", Error: "No accepted motion target captured for this turn; inspect the original response.", Outcome: "Failed live selection retained"})
+					continue
 				}
 				entry := *turn.Motion
 				entry.Group, entry.Model, entry.Request, entry.Raw = "llm-output", report.Model, turn.Request, turn.Response
-				entry.Outcome = "Live app path: target verified, one provider call, captured transport"
+				entry.Outcome = "Live app path: captured target; inspect the response and fixture result for intent"
+				if turn.IntentPass != nil {
+					if *turn.IntentPass {
+						entry.Outcome = "Intent pass: live app target and captured transport"
+					} else {
+						entry.Outcome = "Intent failure: accepted live target retained for review"
+					}
+				}
 				entries = append(entries, entry)
 			}
 			return nil, entries

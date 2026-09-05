@@ -124,6 +124,9 @@ func rejectLayeredNulls(raw string) error {
 // ApplyLayeredEdit merges an edit transactionally. A rejected edit never mutates
 // the original score, including its layer backing array.
 func ApplyLayeredEdit(edit LayeredEdit, current motion.FlowSpec, limits config.MotionSettings) (motion.FlowSpec, error) {
+	if current.Gesture != nil {
+		return current, errors.New("start a new Layered score before using this interface")
+	}
 	if len(current.Steps) != 0 {
 		return current, errors.New("layered mode needs a continuous score without ordered sections; start a new Layered score")
 	}

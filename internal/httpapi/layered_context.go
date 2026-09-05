@@ -23,3 +23,14 @@ func mapLayeredAutopilotCommand(command *chat.MotionCommand, settings config.Mot
 	}
 	return modes.Decision{Segment: modes.Segment{Flow: motion.CloneFlowSpec(command.Layered), SpeedPercent: command.Layered.SpeedPercent}, Say: say, Next: next, Variability: modes.VariabilitySettled}, nil
 }
+
+func continuousChatMode(mode string) bool {
+	return mode == config.LLMMotionModeLayered || mode == config.LLMMotionModeCreativeV2
+}
+
+func mapContinuousAutopilotCommand(command *chat.MotionCommand, settings config.Settings, say string, next modes.TimingPreference) (modes.Decision, error) {
+	if command.Layered != nil && ((command.Layered.Gesture != nil) != (settings.LLM.MotionGenerationMode == config.LLMMotionModeCreativeV2)) {
+		return modes.Decision{}, errors.New("continuous motion mode changed during Autopilot generation")
+	}
+	return mapLayeredAutopilotCommand(command, settings.Motion, say, next)
+}

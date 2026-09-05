@@ -31,6 +31,19 @@ describe("separate LLM Lab",()=>{
     app.readOnly=true;render(<LLMLab/>);await screen.findByText("Describe the motion you want to test");
     expect(screen.getByRole("button",{name:"Send"})).toBeDisabled();expect(screen.getByRole("button",{name:"Start test"})).toBeDisabled();
   });
+  it("loads an authoritative new score when selecting Creative v2",async()=>{
+    const next=labState();next.prompts.creative_v2="gesture-prompt";
+    vi.mocked(labApi.state).mockResolvedValue(next);
+    vi.mocked(labApi.reset).mockResolvedValue({...next,revision:1});
+    vi.mocked(labApi.chat).mockResolvedValue({...next,revision:2});
+    render(<LLMLab/>);await screen.findByText("Describe the motion you want to test");
+    fireEvent.change(screen.getByRole("combobox",{name:"Test mode"}),{target:{value:"creative_v2"}});
+    await waitFor(()=>expect(labApi.reset).toHaveBeenCalledWith(undefined,"creative_v2"));
+    await waitFor(()=>expect(screen.getByRole("combobox",{name:"Test mode"})).toHaveValue("creative_v2"));
+    fireEvent.change(screen.getByRole("textbox",{name:"Message"}),{target:{value:"Mix full strokes with base rebounds."}});
+    fireEvent.click(screen.getByRole("button",{name:"Send"}));
+    await waitFor(()=>expect(labApi.chat).toHaveBeenCalledWith(expect.objectContaining({method:"creative_v2",prompt:"gesture-prompt",revision:1}),expect.any(AbortSignal)));
+  });
   it("sends the selected library naming contract with its matching prompt",async()=>{
     vi.mocked(labApi.chat).mockResolvedValue(labState());
     render(<LLMLab/>);await screen.findByText("Describe the motion you want to test");

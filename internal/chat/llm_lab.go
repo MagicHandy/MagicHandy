@@ -30,6 +30,7 @@ Always preserve the distinction between range, pace, and timing of variation.`
 // LLMLabPrompts isolates experimental control interfaces from production prompting.
 func LLMLabPrompts() map[string]string {
 	return map[string]string{
+		"creative_v2":         labPlanningContextGuide + creativeV2Contract,
 		"layered":             labPlanningContextGuide + layeredContract,
 		"library":             libraryLabPrompt("library"),
 		"library_descriptive": libraryLabPrompt("library_descriptive"),
@@ -83,6 +84,9 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 	if method == "layered" {
 		score = layeredScoreContext(current)
 	}
+	if method == "creative_v2" {
+		score = creativeV2ScoreContext(current)
+	}
 	contextJSON, _ := json.Marshal(map[string]any{
 		"current_score": score, "current_recipe": recipeID,
 		"saved_limits":    map[string]int{"speed_min_percent": limits.SpeedMinPercent, "speed_max_percent": limits.SpeedMaxPercent},
@@ -109,6 +113,9 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 		return trial
 	}
 	trial.Reply, trial.After, trial.Changed, err = ParseLLMLab(raw, method, current, limits)
+	if err == nil && method == "creative_v2" {
+		err = creativeV2EditScope(message, current, trial.After)
+	}
 	if err != nil {
 		trial.After = current
 		trial.Changed = []string{}
@@ -122,6 +129,13 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 
 // ParseLLMLab merges only explicit valid changes into the authoritative score.
 func ParseLLMLab(raw, method string, current motion.FlowSpec, limits config.MotionSettings) (string, motion.FlowSpec, []string, error) {
+	if method == "creative_v2" {
+		response, next, changed, err := ParseCreativeV2Reply(raw, current, limits)
+		return response.Reply, next, changed, err
+	}
+	if current.Gesture != nil {
+		return "", current, nil, errors.New("start a new score when leaving Creative v2")
+	}
 	if method == "layered" {
 		response, next, changed, err := ParseLayeredReply(raw, current, limits)
 		return response.Reply, next, changed, err

@@ -99,6 +99,9 @@ func (s *Server) handleLLMLabReset(w http.ResponseWriter, r *http.Request) {
 		if body.Method == "layered" {
 			initial = chat.FreshLayeredScore(25)
 		}
+		if body.Method == "creative_v2" {
+			initial = chat.FreshCreativeV2Score(25)
+		}
 		initial.SpeedPercent = max(settings.Motion.SpeedMinPercent, min(initial.SpeedPercent, settings.Motion.SpeedMaxPercent))
 		body.Spec = &initial
 	}
@@ -217,8 +220,8 @@ func (s *Server) runLabChat(parent context.Context, body labChatRequest, automat
 		return llmLabState{}, err
 	}
 	history := labConversationHistory(state.DirectiveTurns, body)
-	if automatic && body.Method == "layered" {
-		body.Message = chat.LayeredContinuationMessage(labHumanRequests(state.DirectiveTurns))
+	if automatic {
+		body.Message = labContinuationMessage(body.Method, body.Message, state.DirectiveTurns)
 	}
 	trial := chat.RunLLMLab(ctx, provider, settings.LLM.Model, body.Method, body.Prompt, body.Message, state.Current, settings.Motion, history, body.SchemaGuided)
 	trial.Autopilot = automatic

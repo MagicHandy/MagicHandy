@@ -293,8 +293,8 @@ func (s *Server) mapAutopilotResponse(
 		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
 	}
 	settings, _ := s.store.Snapshot()
-	if settings.LLM.MotionGenerationMode == config.LLMMotionModeLayered {
-		return mapLayeredAutopilotCommand(command, settings.Motion, say, next)
+	if continuousChatMode(settings.LLM.MotionGenerationMode) {
+		return mapContinuousAutopilotCommand(command, settings, say, next)
 	}
 	if settings.LLM.MotionGenerationMode == config.LLMMotionModeDynamic {
 		return mapDynamicAutopilotCommand(command, input, say, next, variability), nil
@@ -361,7 +361,7 @@ func mapDynamicAutopilotCommand(
 	if input.CurrentDynamic != nil && len(command.Sections) == 0 &&
 		commandChangesSingleDynamicPhrase(command) &&
 		!sameDynamicPhraseSemantics(dynamic, *input.CurrentDynamic) {
-		dynamic = motion.AdvanceDynamicPhraseSeed(dynamic, input.CurrentDynamic.PhraseSeed)
+		dynamic = motion.FreshDynamicPhrase(dynamic, input.CurrentDynamic.PhraseSeed)
 	}
 	speed := input.CurrentSpeed
 	if command.SpeedPercent != nil {

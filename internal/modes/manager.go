@@ -1284,6 +1284,9 @@ func (m *Manager) tracePlanned(mode string, reason string, choice segmentChoice)
 
 func segmentContentIdentifier(segment Segment) string {
 	if segment.Flow != nil {
+		if segment.Flow.Gesture != nil {
+			return "creative_v2"
+		}
 		return "layered"
 	}
 	if segment.Dynamic != nil {

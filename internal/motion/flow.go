@@ -14,21 +14,22 @@ import (
 // It does not use DynamicDefinition, span profiles, authored reversal routes,
 // or the Creative interval fitter. All values are semantic, never wire points.
 type FlowSpec struct {
-	MinPercent           int         `json:"min_percent"`
-	MaxPercent           int         `json:"max_percent"`
-	SpeedPercent         int         `json:"speed_percent"`
-	RangeFloorPercent    int         `json:"range_floor_percent"`
-	RangeCeilingPercent  int         `json:"range_ceiling_percent,omitempty"`
-	AnchorPercent        int         `json:"anchor_percent"`
-	MemoryCycles         int         `json:"memory_cycles"`
-	PaceVariationPercent int         `json:"pace_variation_percent"`
-	VariationMode        string      `json:"variation_mode,omitempty"`
-	TurnSoftnessPercent  int         `json:"turn_softness_percent,omitempty"`
-	CadenceHoldPercent   int         `json:"cadence_hold_percent,omitempty"`
-	Seed                 uint32      `json:"seed"`
-	LoopCycles           int         `json:"loop_cycles,omitempty"`
-	Steps                []FlowStep  `json:"steps,omitempty"`
-	Layers               []FlowLayer `json:"layers,omitempty"`
+	Gesture              *GestureSpec `json:"gesture,omitempty"`
+	MinPercent           int          `json:"min_percent"`
+	MaxPercent           int          `json:"max_percent"`
+	SpeedPercent         int          `json:"speed_percent"`
+	RangeFloorPercent    int          `json:"range_floor_percent"`
+	RangeCeilingPercent  int          `json:"range_ceiling_percent,omitempty"`
+	AnchorPercent        int          `json:"anchor_percent"`
+	MemoryCycles         int          `json:"memory_cycles"`
+	PaceVariationPercent int          `json:"pace_variation_percent"`
+	VariationMode        string       `json:"variation_mode,omitempty"`
+	TurnSoftnessPercent  int          `json:"turn_softness_percent,omitempty"`
+	CadenceHoldPercent   int          `json:"cadence_hold_percent,omitempty"`
+	Seed                 uint32       `json:"seed"`
+	LoopCycles           int          `json:"loop_cycles,omitempty"`
+	Steps                []FlowStep   `json:"steps,omitempty"`
+	Layers               []FlowLayer  `json:"layers,omitempty"`
 }
 
 // FlowStep is a section of one continuous score, not a separate motion run.
@@ -59,6 +60,9 @@ func DefaultFlowSpec() FlowSpec {
 // Validate rejects ambiguous or out-of-bounds scores rather than silently
 // clipping model output. Physical speed limits remain backend authoritative.
 func (s FlowSpec) Validate(settings config.MotionSettings) error {
+	if err := s.validateGesture(); err != nil {
+		return err
+	}
 	if err := s.validateControls(settings); err != nil {
 		return err
 	}
@@ -69,7 +73,7 @@ func (s FlowSpec) Validate(settings config.MotionSettings) error {
 }
 
 func (s FlowSpec) validateControls(settings config.MotionSettings) error {
-	if s.MinPercent < 0 || s.MaxPercent > 100 || s.MaxPercent-s.MinPercent < 10 ||
+	if s.MinPercent < 0 || s.MinPercent > 90 || s.MaxPercent < 10 || s.MaxPercent > 100 || s.MaxPercent-s.MinPercent < 10 ||
 		s.RangeFloorPercent < 10 || s.RangeFloorPercent > s.MaxPercent-s.MinPercent ||
 		s.AnchorPercent < 0 || s.AnchorPercent > 100 || s.MemoryCycles < 2 || s.MemoryCycles > 32 ||
 		s.PaceVariationPercent < 0 || s.PaceVariationPercent > 40 || s.Seed == 0 ||
@@ -130,7 +134,15 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 	if err := spec.Validate(settings); err != nil {
 		return MotionTarget{}, err
 	}
-	curve, err := compileFlowCurve(spec, settings.HandyModel)
+	var curve Curve
+	var err error
+	name := "Continuous flow"
+	if spec.Gesture != nil {
+		curve, err = compileGestureCurve(spec, settings.HandyModel)
+		name = "Creative v2"
+	} else {
+		curve, err = compileFlowCurve(spec, settings.HandyModel)
+	}
 	if err != nil {
 		return MotionTarget{}, err
 	}
@@ -142,10 +154,15 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 	for _, step := range spec.Steps {
 		peakSpeed = max(peakSpeed, step.SpeedPercent)
 	}
-	content := &preparedMotion{id: id, name: "Continuous flow", curve: curve,
+	content := &preparedMotion{id: id, name: name, curve: curve,
 		referenceRate: referenceTravelRateForSpeed(peakSpeed, settings.HandyModel),
 		acceleration:  flowAccelerationBudget, jerk: flowJerkBudget}
-	return MotionTarget{Label: "Continuous flow", Source: TargetSourceMotionLab,
+	if spec.Gesture != nil {
+		// The new grammar uses Creative's existing runtime envelope. Historical
+		// flow comparisons keep their quieter authoring budget unchanged.
+		content.acceleration, content.jerk = runtimeMaxAccelerationPercentPerSecond2, runtimeMaxJerkPercentPerSecond3
+	}
+	return MotionTarget{Label: name, Source: TargetSourceMotionLab,
 		SpeedPercent: peakSpeed, Flow: CloneFlowSpec(&spec), prepared: content}, nil
 }
 

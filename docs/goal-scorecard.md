@@ -209,6 +209,21 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-09-05 — Creative v2 native strokes:** adds an independent semantic
+  travel vocabulary through the shared engine, paired atomic model edits,
+  production/Lab Autopilot and original Creative realization refreshes. No new
+  runtime/frontend dependencies. Final ordinary `CGO_ENABLED=0` binary:
+  26,241,024 bytes (+110,080 from the Layered build); stripped `-trimpath -s -w`:
+  19,033,088 (+93,184). Initial JS is 750.72 / 207.61 kB gzip (+1.57 / +0.33);
+  lazy Labs JS is 51.89 / 14.54 (+1.03 / +0.34). CSS remains 137.02 / 25.03
+  and 12.08 / 2.86. Three fresh-data launches of the final stripped binary:
+  listener 132.6–183.0 ms, health 134.7–212.5 ms, working set 21.91–22.46 MiB,
+  private memory 53.87–55.39 MiB. These are Windows launch snapshots excluding
+  browser/model memory; they do not close the idle-memory waiver or measure an
+  active hardware session/soak. The development atlas, Python tooling, live
+  reports and traces are ignored and unembedded. See the
+  [Creative v2 review](creative-v2-motion-review-2026-09-05.md).
+
 - **2026-09-05 — Persistent Layered motion:** adds a production mode, the same
   Lab contract, cloned Flow targets, explicit geometry/delta edits and fresh
   runtime variation. No new runtime/frontend dependencies. The final ordinary

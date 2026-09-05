@@ -451,6 +451,8 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
             >
               <option value="dynamic">{t("Creative")}</option>
               <option value="pattern">{t("Pattern library")}</option>
+              <option value="layered">{t("Layered")}</option>
+              <option value="creative_v2">{t("Creative v2")}</option>
               <option value="off">{t("Off")}</option>
             </select>
           </label>

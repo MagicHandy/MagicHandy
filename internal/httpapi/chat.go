@@ -272,7 +272,7 @@ func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings con
 		History:      make([]llm.Message, 0, len(loggedHistory)),
 		Persona:      active,
 	}
-	if result.Capabilities.MotionMode == chat.MotionModeLayered {
+	if result.Capabilities.MotionMode == chat.MotionModeLayered || result.Capabilities.MotionMode == chat.MotionModeCreativeV2 {
 		result.UserRequests, err = s.chatLog.RecentUserRequests(sessionID)
 		if err != nil {
 			return interactiveChatPromptContext{}, err
@@ -669,8 +669,12 @@ func (s *Server) validateChatMotionMode(command *chat.MotionCommand) error {
 		return nil
 	}
 	settingsSnapshot, _ := s.store.Snapshot()
-	if (settingsSnapshot.LLM.MotionGenerationMode == config.LLMMotionModeLayered) != (command.Layered != nil) {
+	continuous := settingsSnapshot.LLM.MotionGenerationMode == config.LLMMotionModeLayered || settingsSnapshot.LLM.MotionGenerationMode == config.LLMMotionModeCreativeV2
+	if continuous != (command.Layered != nil) {
 		return errors.New("the LLM motion mode changed before this motion could be applied")
+	}
+	if command.Layered != nil && ((command.Layered.Gesture != nil) != (settingsSnapshot.LLM.MotionGenerationMode == config.LLMMotionModeCreativeV2)) {
+		return errors.New("the continuous motion interface changed before this motion could be applied")
 	}
 	switch settingsSnapshot.LLM.MotionGenerationMode {
 	case config.LLMMotionModeOff:
@@ -1080,6 +1084,9 @@ func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.Ac
 		settings, _ := s.store.Snapshot()
 		target, err := motion.FlowTarget(*command.Layered, settings.Motion)
 		target.Label, target.Source = "Layered", "chat"
+		if command.Layered.Gesture != nil {
+			target.Label = "Creative v2"
+		}
 		return target, err
 	}
 	if command.Action == chat.MotionActionUpdate || command.CenterPercent != nil || command.SpanPercent != nil ||
@@ -1174,6 +1181,8 @@ func chatMotionMode(mode string) chat.MotionMode {
 		return chat.MotionModeDynamic
 	case config.LLMMotionModeLayered:
 		return chat.MotionModeLayered
+	case config.LLMMotionModeCreativeV2:
+		return chat.MotionModeCreativeV2
 	case config.LLMMotionModeOff:
 		return chat.MotionModeOff
 	default:
