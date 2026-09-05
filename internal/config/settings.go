@@ -138,6 +138,8 @@ const (
 	LLMMotionModeDynamic = "dynamic"
 	// LLMMotionModePattern lets the model select from enabled library patterns.
 	LLMMotionModePattern = "pattern"
+	// LLMMotionModeLayered edits persistent continuous modulation layers.
+	LLMMotionModeLayered = "layered"
 	// LLMMotionModeOff keeps the model chat-only.
 	LLMMotionModeOff = "off"
 )

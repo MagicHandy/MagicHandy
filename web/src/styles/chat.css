@@ -68,14 +68,20 @@
 }
 
 .chat-motion-mode .segmented-option span {
-  display: block;
-  height: 32px;
+  display: grid;
+  height: 40px;
   padding-inline: 4px;
-  overflow: hidden;
-  line-height: 22px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.15;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
+
+.chat-motion-mode .segmented-choice {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.chat-motion-mode .segmented-option:nth-child(3n) { border-right: 0; }
+.chat-motion-mode .segmented-option:nth-child(n+4) { border-top: 1px solid var(--line); }
+.chat-motion-mode .segmented-placeholder { cursor: default; pointer-events: none; }
 
 .chat-sidebar-controls > .divider {
   margin-block: 10px;

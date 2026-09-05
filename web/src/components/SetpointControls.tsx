@@ -82,6 +82,7 @@ interface SegmentedChoiceProps<Value extends string> {
   disabled?: boolean;
   onChange: (value: Value) => void;
   className?: string;
+  emptySlots?: number;
 }
 
 // Categorical choices are intentionally not rendered as a slider: spatial
@@ -93,6 +94,7 @@ export function SegmentedChoice<Value extends string>({
   disabled = false,
   onChange,
   className = "",
+  emptySlots = 0,
 }: SegmentedChoiceProps<Value>) {
   const name = useId();
 
@@ -112,6 +114,7 @@ export function SegmentedChoice<Value extends string>({
             <span>{option.label}</span>
           </label>
         ))}
+        {Array.from({length:emptySlots},(_,index)=><span className="segmented-option segmented-placeholder" aria-hidden="true" key={`reserved-${index}`}><span /></span>)}
       </div>
     </fieldset>
   );

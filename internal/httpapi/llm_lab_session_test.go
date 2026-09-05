@@ -53,7 +53,7 @@ func awaitLabTrial(t *testing.T, server *Server, count int) llmLabState {
 func TestLabConversationRetargetsOneSharedRun(t *testing.T) {
 	fake := transport.NewFake()
 	traces := diagnostics.NewTraceRing(512)
-	provider := &scriptedLLMProvider{responses: []string{`{"reply":"Shorter reach, same pace.","controls":{"range_floor_percent":20}}`}}
+	provider := &scriptedLLMProvider{responses: []string{`{"reply":"Shorter reach, same pace.","controls":{"range_floor_percent":15}}`}}
 	server := newEnabledLabServer(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: provider, Traces: traces})
 	t.Cleanup(server.Close)
 	state := startConversationTest(t, server, true, false)
@@ -68,7 +68,7 @@ func TestLabConversationRetargetsOneSharedRun(t *testing.T) {
 		t.Fatal(response.Body.String())
 	}
 	state = server.labState()
-	if len(state.Turns) != 1 || !state.Turns[0].MotionApplied || state.Turns[0].Method != "edits" || state.Current.RangeFloorPercent != 20 {
+	if len(state.Turns) != 1 || !state.Turns[0].MotionApplied || state.Turns[0].Method != "edits" || state.Current.RangeFloorPercent != 15 {
 		t.Fatalf("live reply: %+v", state)
 	}
 	plays := 0

@@ -109,9 +109,15 @@ describe("ChatRoute", () => {
     expect(within(mode).getByRole("radio", { name: "Creative" })).not.toBeChecked();
     expect(within(mode).getByRole("radio", { name: "Pattern library" })).toBeChecked();
     expect(within(mode).getByRole("radio", { name: "Off" })).toBeInTheDocument();
+	  expect(within(mode).getByRole("radio", { name: "Layered" })).not.toBeChecked();
+	  expect(mode.children).toHaveLength(6);
+	  expect(within(mode).getAllByRole("radio")).toHaveLength(4);
+	  expect(mode.querySelectorAll('[aria-hidden="true"]')).toHaveLength(2);
 
     fireEvent.click(within(mode).getByRole("radio", { name: "Creative" }));
     await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("dynamic"));
+	  fireEvent.click(within(mode).getByRole("radio", { name: "Layered" }));
+	  await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("layered"));
   });
 
   it("uses Creative while an older backend snapshot has no saved motion mode", async () => {

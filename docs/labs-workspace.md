@@ -27,11 +27,20 @@ Emergency Stop remains mounted regardless of the route or controller status.
 ## Conversation testing
 
 The title bar's **Test mode** selects the response contract and default prompt:
-relative and layer edits, direct controls, ordered sections, simultaneous layers,
+Layered, relative and layer edits, direct controls, ordered sections, simultaneous layers,
 or the catalog using action names, descriptive IDs, or opaque handles. The three
 catalog interfaces use identical motion content. **Configure** contains the
 model override, schema constraint, prompt editor and Autopilot interval.
 Configuration is held fixed while a test session is active.
+
+**Layered** tests the same contract as the production chat mode. It edits one
+persistent score: range changes width, center changes location, and pace changes
+travel rate. Unmentioned controls and layer attributes survive each edit. Named
+geometry edits make coupled requests explicit; a separate relative timing field
+distinguishes changing a period *by* a value from setting it *to* that value.
+Turn softness is not offered to this model contract. See [the Layered review](
+layered-motion-review-2026-09-05.md) and [ADR 0023](
+decisions/0023-persistent-layered-motion.md).
 
 Each inference request receives the current score, saved numeric speed bounds,
 and the engine's semantic coordinate range and profile-derived peak velocity
@@ -52,6 +61,13 @@ The main production motion mode can remain Off while Lab contracts are tested.
 Enable **Autopilot** with or without Live motion. After a quiet interval (20
 seconds by default; configurable 5–120), the backend requests a continuation
 with the same model, prompt, schema, current score and matching conversation.
+Layered adds a random delay of up to half the quiet interval, always respecting
+the configured minimum. It starts with a fresh variation seed and can refresh
+that seed on continuation without replacing the requested geometry or pace.
+Drift and unequal smooth dwell times vary the motion inside those constraints.
+Each score still has a finite repeat period; fresh realizations require an
+accepted evolution edit, normally from Autopilot. Explicit exact-repetition
+requests take priority. Seeds are retained in exports for reproducible review.
 A manual message cancels an in-flight automatic turn and restarts the quiet
 interval. There is one inference request per turn, without repair or fallback.
 Malformed output and automatic proposals that increase speed or widen the
@@ -97,6 +113,12 @@ The most recent 20 Lab turns and current score live in backend memory. New chat
 or restart clears that conversation. Production chat history, persona prompts
 and saved preferences are separate. Export the conversation to retain raw
 responses and prompts.
+
+Layered also retains the four latest human requests independently of automatic
+replies, so long Autopilot exchanges do not displace the intended character.
+This context follows the same session lifetime. Production Layered obtains its
+human context from the existing retained chat; it creates no second history
+store and does not import Lab conversations or observations automatically.
 
 Observations, their captured sources, test sequences and submitted ratings or
 comments persist in the app's SQLite database across restarts. The actual path

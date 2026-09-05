@@ -698,6 +698,17 @@ tests cover both paths; R13 remains High for the existing open work.
 
 ## R14: Per-Source Motion Path Divergence
 
+Status 2026-09-05 (Layered review): production chat, production Autopilot and
+LLM Lab now carry cloned semantic Flow scores into the existing engine. There
+is no independent motion loop or transport policy. Layered continuations
+preserve the active score on failure and do not fall back to library patterns
+or the legacy extra pace modulation. Fresh seeds change the realization;
+captured seeds reproduce it. Shared-engine/fake-transport tests cover real model
+responses, continuous retargeting, late mode changes and Stop; global Stop also
+recognizes "Stop motion now" without waiting for inference. Planned motion and
+captured wire output are reviewed separately from physical feel, which remains
+open under R1. See [the Layered evidence](layered-motion-review-2026-09-05.md).
+
 Level: High
 
 Description:

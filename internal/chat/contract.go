@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
 const (
@@ -90,6 +92,9 @@ type MotionCommand struct {
 	VariationPercent *int                    `json:"variation_percent,omitempty"`
 	SegmentSeconds   *int                    `json:"segment_seconds,omitempty"`
 	Sections         []DynamicSectionCommand `json:"sections,omitempty"`
+	// Layered contains the validated complete score, resolved from a partial
+	// model edit by the Layered contract. Other contracts cannot populate it.
+	Layered *motion.FlowSpec `json:"layered,omitempty"`
 }
 
 // DynamicSectionCommand is one semantic movement idea in a compact Creative
@@ -311,6 +316,9 @@ func normalizePacing(motion *MotionCommand) {
 }
 
 func validateAssistantResponse(response *AssistantResponse, patterns []PatternChoice, curation bool, dynamic bool) error {
+	if response.Motion != nil && response.Motion.Layered != nil {
+		return errors.New("layered scores require the Layered control contract")
+	}
 	response.Reply = strings.TrimSpace(response.Reply)
 	if response.Reply == "" {
 		return errors.New("assistant response reply is required")

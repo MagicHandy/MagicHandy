@@ -413,7 +413,7 @@ func (s *Server) handlePutLLMMotionMode(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	body.Mode = strings.ToLower(strings.TrimSpace(body.Mode))
-	if body.Mode != config.LLMMotionModeDynamic && body.Mode != config.LLMMotionModePattern && body.Mode != config.LLMMotionModeOff {
+	if body.Mode != config.LLMMotionModeDynamic && body.Mode != config.LLMMotionModePattern && body.Mode != config.LLMMotionModeLayered && body.Mode != config.LLMMotionModeOff {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("unknown LLM motion generation mode %q", body.Mode))
 		return
 	}

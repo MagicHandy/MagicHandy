@@ -1945,5 +1945,9 @@
   "Test direct changes to range, anchor, pace and variation.": "Teste mudanças diretas de faixa, âncora, ritmo e variação.",
   "Test mode": "Modo de teste",
   "Test modes": "Modos de teste",
-  "Test simultaneous range, center and pace modulation on one carrier.": "Teste a modulação simultânea de faixa, centro e ritmo sobre um único movimento base."
+  "Test simultaneous range, center and pace modulation on one carrier.": "Teste a modulação simultânea de faixa, centro e ritmo sobre um único movimento base.",
+  "Layered": "Em camadas",
+  "The production Layered contract: edit reach, location and pace independently. Partial edits preserve other layers. Drift varies irregularly; alternation reaches both extremes. Evolve refreshes the details without replacing the geometry.": "O contrato do modo Em camadas: edite alcance, posição e ritmo independentemente. Edições parciais preservam as outras camadas. A deriva varia irregularmente; a alternância alcança os dois extremos. Evoluir renova os detalhes sem substituir a geometria.",
+  "Layered starts with fresh variation and refreshes it during Autopilot. Exact repetition requests take priority. Four recent human requests remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.": "Layered começa com uma variação nova e a renova durante o Autopilot. Pedidos de repetição exata têm prioridade. Os quatro pedidos humanos mais recentes permanecem disponíveis independentemente das respostas automáticas. Cada sequência é finita; as continuações de Layered no laboratório acrescentam uma variação de tempo de até metade do intervalo de espera.",
+  "autopilot motion is off; choose a motion mode in the sidebar": "o movimento do piloto automático está desativado; escolha um modo de movimento na barra lateral"
 }

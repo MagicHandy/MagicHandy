@@ -62,7 +62,14 @@ def render(entry, path):
 
 
 def contact_sheets(entries, destination):
-    chosen = [(i, e) for i, e in enumerate(entries) if e.get("samples") and e["group"] != "llm-output" and e["speed_percent"] == 25]
+    chosen, seen = [], set()
+    for index, entry in enumerate(entries):
+        if not entry.get("samples"):
+            continue
+        signature = hashlib.sha256(json.dumps(entry["samples"], separators=(",", ":")).encode()).hexdigest()
+        if signature not in seen:
+            chosen.append((index, entry))
+            seen.add(signature)
     pages = []
     for start in range(0, len(chosen), 16):
         page = chosen[start:start + 16]
@@ -70,13 +77,14 @@ def contact_sheets(entries, destination):
         for axis, (index, entry) in zip(axes.flat, page):
             data = np.array(entry["samples"])
             axis.plot(data[:, 0], data[:, 1], color=BLUE, lw=.8)
-            axis.set(title=f"{index+1}. {entry['name']}", ylim=(-4, 104), xlabel="Seconds")
+            label = entry.get("request") or entry["name"]
+            axis.set(title=f"{index+1}. {label[:52]}\n{entry['speed_percent']}% · {entry['handy_model']}", ylim=(-4, 104), xlabel="Seconds")
             axis.tick_params(labelsize=7)
             axis.title.set_fontsize(9)
             axis.grid(alpha=.15)
         for axis in list(axes.flat)[len(page):]:
             axis.set_visible(False)
-        fig.suptitle("Motion character atlas · evaluated patterns at requested 25% · commanded position", fontsize=14)
+        fig.suptitle("Motion character atlas · every distinct evaluated output · commanded position", fontsize=14)
         name = f"contact-{len(pages)+1:02d}.png"
         fig.savefig(destination / name, dpi=135)
         plt.close(fig)
@@ -93,6 +101,12 @@ def captured_transport_charts(paths, destination, start_index):
     items = []
     for path in paths:
         source = json.loads(path.read_text(encoding="utf-8-sig"))
+        speeds = []
+        for turn in source.get("turns", []):
+            speed = turn.get("motion", {}).get("speed_percent")
+            if speed is not None and (not speeds or speed != speeds[-1]):
+                speeds.append(speed)
+        speed_label = source.get("speed", " → ".join(map(str, speeds)) or "not recorded")
         streams, plays, stops = {}, {}, []
         for command in source.get("commands", []):
             if command["kind"] == "points_add":
@@ -128,7 +142,7 @@ def captured_transport_charts(paths, destination, start_index):
             name = f"captured-{len(items)+1:02d}.png"
             fig.savefig(destination/name, dpi=130, bbox_inches="tight")
             plt.close(fig)
-            items.append({"index": start_index+len(items)+1, "id": stream, "name": "Captured app motion timeline", "group": "llm-output", "request": " / ".join(t.get("request", t.get("message", "")) for t in source.get("turns", [])), "raw": "", "model": source.get("model", ""), "error": "", "outcome": "Actual test dispatch, including queued transitions and Stop", "speed": source.get("speed", "25 → 30"), "plot": name})
+            items.append({"index": start_index+len(items)+1, "id": stream, "name": "Captured app motion timeline", "group": "llm-output", "request": " / ".join(t.get("request", t.get("message", "")) for t in source.get("turns", [])), "raw": "", "model": source.get("model", ""), "error": "", "outcome": "Actual test dispatch, including queued transitions and Stop", "speed": speed_label, "plot": name})
     return items
 
 
@@ -159,12 +173,13 @@ def main():
         esc = lambda value: html.escape(str(value))
         figure = f'<a href="{item["plot"]}"><img loading="lazy" src="{item["plot"]}" alt="Motion plots"></a>' if "plot" in item else ""
         details = f'<details><summary>Raw model output</summary><pre>{esc(item["raw"])}</pre></details>' if item["raw"] else ""
-        cards.append(f'<article data-group="{item["group"]}"><h2>{item["index"]}. {esc(item["name"])} · {item["speed"]}%</h2><p>{esc(item["id"])} · {esc(item["group"])} · {esc(item["model"])}</p><p>{esc(item["request"])}</p><p>{esc(item["outcome"])} {esc(item["error"])}</p>{figure}{details}</article>')
+        speed_label = f' · {esc(item["speed"])}%' if item["speed"] != "not recorded" else ""
+        cards.append(f'<article data-group="{item["group"]}"><h2>{item["index"]}. {esc(item["name"])}{speed_label}</h2><p>{esc(item["id"])} · {esc(item["group"])} · {esc(item["model"])}</p><p>{esc(item["request"])}</p><p>{esc(item["outcome"])} {esc(item["error"])}</p>{figure}{details}</article>')
     overview = "".join(f'<a href="{name}"><img src="{name}" alt="Library contact sheet"></a>' for name in pages)
     document = f'''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Motion character atlas</title>
 <style>body{{font:16px/1.5 system-ui;margin:24px auto;max-width:1500px;padding:0 20px;color:#222;background:#f7f8fa}}img{{max-width:100%;height:auto}}article{{padding:24px;margin:24px 0;background:white;border:1px solid #ccd1d7}}pre{{white-space:pre-wrap;overflow-wrap:anywhere}}nav{{position:sticky;top:0;background:#f7f8fa;padding:12px;border-bottom:1px solid #ccd1d7}}button{{padding:8px 14px;margin:4px;border:1px solid #357bb7;cursor:pointer}}h2{{font-size:20px}}</style>
 <h1>Motion character atlas</h1><p>{len(entries)} steady motion cases, {len(seen)} distinct rendered steady outputs, {len(manifest)-len(entries)} captured timelines. Every model reply has a record; rejected replies and Stop have no moving plot. Identical outputs share a figure. These are commanded estimates, not physical feedback.</p>
-<details open><summary>Overview of evaluated patterns at 25%</summary>{overview}</details>
+<details open><summary>Overview of all distinct evaluated outputs</summary>{overview}</details>
 <nav><label>Filter <input id="query" placeholder="Name, request or model"></label><button data-filter="flow-experiments">Flow experiments</button><button data-filter="new-library">New library</button><button data-filter="legacy-library">Legacy library</button><button data-filter="llm-output">LLM outputs</button><button data-filter="">All cases</button></nav>{''.join(cards)}
 <script>let group=document.querySelector('article')?.dataset.group||'';function filter(){{const q=document.querySelector('#query').value.toLowerCase();document.querySelectorAll('article').forEach(a=>a.hidden=(group&&a.dataset.group!==group)||!a.textContent.toLowerCase().includes(q))}}document.querySelectorAll('button').forEach(b=>b.onclick=()=>{{group=b.dataset.filter;filter()}});document.querySelector('#query').oninput=filter;filter();</script></html>'''
     (args.output / "index.html").write_text(document, encoding="utf-8")

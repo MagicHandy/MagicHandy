@@ -3,12 +3,15 @@ package chat
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
 // MotionContext is the transport-neutral motion state supplied to one model
 // turn. It contains only semantic state and the user's configured speed band;
 // the model never receives device or transport details.
 type MotionContext struct {
+	UserRequests     []string
 	Running          bool
 	Paused           bool
 	PatternID        string
@@ -27,6 +30,8 @@ type MotionContext struct {
 	VariationPercent int
 	SegmentSeconds   int
 	SectionCount     int
+	Layered          *motion.FlowSpec
+	Envelope         motion.PlanningEnvelope
 }
 
 type promptSpeedRange struct {
@@ -79,6 +84,9 @@ Use that snapshot deliberately:
 - When embodied partner-action wording is a direct request, interpret it as device motion intent and acknowledge the motion decision rather than declining the request.`
 
 func motionContextInstructions(context MotionContext, capabilities Capabilities, patterns []PatternChoice) string {
+	if capabilities.MotionMode == MotionModeLayered {
+		return layeredContextInstructions(context)
+	}
 	data := normalizedPromptMotionContext(context)
 	data.MotionMode = capabilities.MotionMode
 	if capabilities.MotionMode == MotionModeDynamic {

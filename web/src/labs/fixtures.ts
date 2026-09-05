@@ -12,4 +12,4 @@ export function labPreview(spec:FlowSpec):FlowPreview {
     samples:[{time_ms:0,position_percent:5,velocity_percent_per_second:0},{time_ms:1000,position_percent:95,velocity_percent_per_second:0}],
   }))};
 }
-export function labState():LLMLabState {return {current:{...initialFlow},turns:[],revision:0,busy:false,prompts:{edits:"edit-prompt",controls:"control-prompt",sequence:"sequence-prompt",layers:"layer-prompt",library:"library-prompt",library_descriptive:"descriptive-prompt",library_actions:"actions-prompt"},model:"local-model",settings_key:"saved-limits",limits:labLimits};}
+export function labState():LLMLabState {return {current:{...initialFlow},turns:[],revision:0,busy:false,prompts:{layered:"layered-prompt",edits:"edit-prompt",controls:"control-prompt",sequence:"sequence-prompt",layers:"layer-prompt",library:"library-prompt",library_descriptive:"descriptive-prompt",library_actions:"actions-prompt"},model:"local-model",settings_key:"saved-limits",limits:labLimits};}

@@ -949,7 +949,7 @@ export interface PublicSettings {
     custom_anatomy?: string;
     persona_description?: string;
     motion_capabilities?: LLMMotionCapabilities;
-		motion_generation_mode: "dynamic" | "pattern" | "off" | string;
+		motion_generation_mode: "dynamic" | "pattern" | "layered" | "off" | string;
   };
   voice: VoiceSettings;
   chat?: {

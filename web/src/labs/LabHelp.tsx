@@ -28,7 +28,8 @@ export function LabHelp() {
       </>}
       {topic==="modes"&&<>
         <p>{t("Changing the interface loads its default prompt. The next reply uses the selected model, prompt and matching conversation history.")}</p>
-        <dl><dt>{t("Relative and layer edits")}</dt><dd>{t("Ask for relative changes or edit one layer. Existing layers and section differences are preserved unless you explicitly change them.")}</dd>
+        <dl><dt>{t("Layered")}</dt><dd>{t("The production Layered contract: edit reach, location and pace independently. Partial edits preserve other layers. Drift varies irregularly; alternation reaches both extremes. Evolve refreshes the details without replacing the geometry.")}</dd>
+          <dt>{t("Relative and layer edits")}</dt><dd>{t("Ask for relative changes or edit one layer. Existing layers and section differences are preserved unless you explicitly change them.")}</dd>
           <dt>{t("Single controls")}</dt><dd>{t("Test direct changes to range, anchor, pace and variation.")}</dd>
           <dt>{t("Sequence")}</dt><dd>{t("Test an ordered list of sections. New sections replace the previous sequence.")}</dd>
           <dt>{t("Layers")}</dt><dd>{t("Test simultaneous range, center and pace modulation on one carrier.")}</dd>
@@ -40,6 +41,7 @@ export function LabHelp() {
         <p>{t("Enable Autopilot and press Start test. It continues this Lab conversation using the selected model, prompt and schema after each quiet interval. You can test it with or without Live motion.")}</p>
         <p>{t("Sending a message interrupts an Autopilot reply. Failed output pauses Autopilot for inspection. Stop ends the session and cancels pending replies, even without a connected device.")}</p>
         <p>{t("Lab Autopilot tests the selected conversation contract. Production Autopilot has additional planning policies and is not changed by these settings.")}</p>
+        <p>{t("Layered starts with fresh variation and refreshes it during Autopilot. Exact repetition requests take priority. Four recent human requests remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.")}</p>
       </>}
       {topic==="motion"&&<>
         <p>{t("This generator plays the continuous score below.")}</p>

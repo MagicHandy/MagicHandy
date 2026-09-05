@@ -209,6 +209,21 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-09-05 — Persistent Layered motion:** adds a production mode, the same
+  Lab contract, cloned Flow targets, explicit geometry/delta edits and fresh
+  runtime variation. No new runtime/frontend dependencies. The final ordinary
+  `CGO_ENABLED=0` binary is 26,130,944 bytes (+155,648); stripped
+  `-trimpath -s -w` is 18,939,904 (+129,536). Initial JS is 749.15 / 207.28 kB
+  gzip (+1.46 / +0.36); lazy Labs JS is 50.86 / 14.20 (+0.57 / +0.22).
+  Initial CSS is 137.02 / 25.03 (+0.29 / +0.03); Labs CSS stays 12.08 / 2.86.
+  Three fresh-data launches of this final stripped build: listener
+  126.7–171.1 ms, health 128.6–186.0 ms, working set 21.82–22.43 MiB and private
+  memory 54.02–55.11 MiB. These Windows launch snapshots exclude model memory
+  and do not close the idle-memory waiver, active-hardware or soak measurements.
+  Generated atlas/report files remain ignored and unembedded. See the
+  [Layered review](layered-motion-review-2026-09-05.md) for live model results,
+  the rejected Gemma-regressing prompt and the effective-pace limitations.
+
 - **2026-09-05 — Conversation Lab and catalog retirement:** title-bar test
   modes, shared-engine live sessions, backend Autopilot scheduling, and a Help
   tab; 17 continuous recipes and an idempotent migration disabling 81 legacy

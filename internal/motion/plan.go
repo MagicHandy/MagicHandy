@@ -72,6 +72,9 @@ func NewMotionPlan(
 ) MotionPlan {
 	settings = normalizeMotionSettings(settings)
 	target = NormalizeTarget(target, settings)
+	if target.Flow != nil {
+		return flowPlan(id, target, settings, phaseOffset, handoffMillis, createdAt)
+	}
 	if target.prepared != nil && target.prepared.libraryID == "" {
 		return preparedPlan(id, target, settings, phaseOffset, handoffMillis, createdAt)
 	}

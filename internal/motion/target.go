@@ -160,6 +160,7 @@ type MotionTarget struct {
 	AreaFocus              *AreaFocus         `json:"area_focus,omitempty"`
 	SoftAnchor             *SoftAnchor        `json:"soft_anchor,omitempty"`
 	Dynamic                *DynamicDefinition `json:"dynamic,omitempty"`
+	Flow                   *FlowSpec          `json:"flow,omitempty"`
 
 	// Resolved content is backend-owned and never serialized to clients. The
 	// public IDs above remain the authoritative snapshot vocabulary.
@@ -180,6 +181,9 @@ func NormalizeTarget(target MotionTarget, settings config.MotionSettings) Motion
 	target.ProgramID = strings.TrimSpace(target.ProgramID)
 	target.MediaID = strings.TrimSpace(target.MediaID)
 	target.MediaSpeedLimitEnabled = false
+	if target.Flow != nil {
+		return normalizeFlowTarget(target, settings)
+	}
 	if target.prepared != nil {
 		target.Dynamic, target.Pattern, target.Program, target.Media = nil, nil, nil, nil
 		if target.prepared.libraryID == "" {

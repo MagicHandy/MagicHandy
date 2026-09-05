@@ -160,6 +160,10 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	if err != nil {
 		return Result{}, err
 	}
+	if s.capabilities().Motion && s.capabilities().MotionMode == MotionModeLayered {
+		request.Message = userMessage
+		return s.completeLayered(ctx, request, emit)
+	}
 
 	prompt := s.Prompt
 	if strings.TrimSpace(prompt.ID) == "" {

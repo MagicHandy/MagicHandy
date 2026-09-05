@@ -1,12 +1,12 @@
 import {useEffect,useRef,useState} from "react";
 import {t} from "../i18n";
 import {useAppState} from "../state/app-state";
-import {initialFlow,labApi,type FlowPreview,type LLMLabState} from "./api";
+import {labApi,type FlowPreview,type LLMLabState} from "./api";
 
 export function useLLMLab() {
   const {state:app,backendOnline,readOnly}=useAppState();
   const [state,setState]=useState<LLMLabState|null>(null);
-  const [method,setMethod]=useState("edits");
+  const [method,setMethod]=useState("layered");
   const [prompt,setPrompt]=useState("");
   const [model,setModel]=useState("");
   const [schemaGuided,setSchemaGuided]=useState(false);
@@ -25,8 +25,8 @@ export function useLLMLab() {
     void labApi.state().then(next=>{if(live){
       const last=next.turns[next.turns.length-1];
       const config=next.session?.active?next.session:last;
-      setState(next);setModel(config?.model||next.model);setMethod(config?.method||"edits");
-      setPrompt(config?.prompt||next.prompts.edits);setSchemaGuided(config?.schema_guided??true);setError("");
+      setState(next);setModel(config?.model||next.model);setMethod(config?.method||"layered");
+      setPrompt(config?.prompt||next.prompts.layered);setSchemaGuided(config?.schema_guided??true);setError("");
     }}).catch(reason=>{if(live)setError(String(reason));});
     const stop=()=>active.current?.abort();
     window.addEventListener("magichandy:emergency-stop",stop);
@@ -74,7 +74,7 @@ export function useLLMLab() {
   }
   async function reset() {
     if(!state||locked)return;setBusy(true);setError("");
-    try {const next=await labApi.reset({...initialFlow,speed_percent:Math.max(state.limits.speed_min_percent,Math.min(25,state.limits.speed_max_percent))});if(mounted.current)setState(next);}
+    try {const next=await labApi.reset(undefined,method);if(mounted.current)setState(next);}
     catch(reason) {if(mounted.current)setError(String(reason));}
     finally {if(mounted.current)setBusy(false);}
   }

@@ -39,7 +39,8 @@ reports; `MAGICHANDY_EXPERIMENT_CAPTURE` optionally exports the five-round
 shared-engine/fake-transport test from `lab_experiments_test.go`.
 
 The output contains `index.html`, `manifest.json`, distinct plot PNGs and
-overview sheets. Every input has a manifest record. Identical sampled output
+overview sheets covering all distinct outputs, including every evaluated speed
+and LLM result. Every input has a manifest record. Identical sampled output
 shares an image while each request, model, raw response and result keeps its
 own card. Invalid responses and Stop have explicit records without a moving
 plot. The page filters the new catalog, legacy catalog and LLM output, with
@@ -105,3 +106,20 @@ separately from the expected selection. Capture the shared live-retarget path
 with `MAGICHANDY_EXPERIMENT_CAPTURE` and
 `TestLabConversationRetargetsOneSharedRun`; pass it to the renderer's
 `--captured` option. See the September 5 evaluation document for an example.
+
+For the production Layered contract, use `scripts/evaluate-layered.py` with the
+same arguments. Its 23 cases per model include the user's four-turn sequence,
+eight scheduled continuations, a question, exact-repetition continuation and
+eight independent formulations/refinements. It renews the controller lease
+while waiting. Use a separate isolated app: the harness takes ownership, resets
+the Lab score and issues Stop, although every session is preview-only.
+
+`TestLayeredLiveProductionConversationAndAutopilot` in
+`internal/httpapi/layered_live_test.go` requires both `liveeval` and
+`magichandy_labs`, plus `MAGICHANDY_LIVE_MODEL`. Set
+`MAGICHANDY_EXPERIMENT_CAPTURE` to an ignored output path. Four real production
+chat replies retarget one shared-engine/fake-transport run; one production
+Autopilot decision is generated and compiled, then a plain-text Stop is tested.
+The Autopilot decision is not dispatched by this particular fixture. Include
+the report with `-llm` and `--captured`, and keep rejected prompt iterations as
+well. See [the Layered review](layered-motion-review-2026-09-05.md).

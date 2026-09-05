@@ -600,7 +600,7 @@ export const api = {
   getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),
   saveSettings: (update: SettingsUpdate) => request("PUT", "/api/settings", update),
   setLabsEnabled: (enabled:boolean) => request<{enabled:boolean}>("PUT", "/api/settings/labs", {enabled}),
-  setLLMMotionMode: (mode: "dynamic" | "pattern" | "off") =>
+  setLLMMotionMode: (mode: "dynamic" | "pattern" | "layered" | "off") =>
     request<{ settings: PublicSettings; mode: string }>("PUT", "/api/settings/llm-motion-mode", { mode }),
   pickHostPath: (kind: "executable" | "gguf" | "wav" | "file" | "directory", current: string) =>
     request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),

@@ -46,6 +46,7 @@ type FlowLayer struct {
 	AmountPercent int    `json:"amount_percent"`
 	PeriodCycles  int    `json:"period_cycles"`
 	PhasePercent  int    `json:"phase_percent"`
+	Shape         string `json:"shape,omitempty"`
 }
 
 // DefaultFlowSpec supplies a reproducible starting comparison.
@@ -111,7 +112,8 @@ func (s FlowSpec) validateLayers() error {
 	for _, layer := range s.Layers {
 		if (layer.Axis != "range" && layer.Axis != "center" && layer.Axis != "pace") || seen[layer.Axis] ||
 			layer.AmountPercent < 0 || layer.AmountPercent > 100 || layer.PeriodCycles < 2 || layer.PeriodCycles > 32 ||
-			layer.PhasePercent < 0 || layer.PhasePercent > 100 {
+			layer.PhasePercent < 0 || layer.PhasePercent > 100 ||
+			(layer.Shape != "" && layer.Shape != "wave" && layer.Shape != "drift" && layer.Shape != "alternate") {
 			return errors.New("flow layers require distinct range/center/pace axes and bounded modulation")
 		}
 		seen[layer.Axis] = true
@@ -144,7 +146,7 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 		referenceRate: referenceTravelRateForSpeed(peakSpeed, settings.HandyModel),
 		acceleration:  flowAccelerationBudget, jerk: flowJerkBudget}
 	return MotionTarget{Label: "Continuous flow", Source: TargetSourceMotionLab,
-		SpeedPercent: peakSpeed, prepared: content}, nil
+		SpeedPercent: peakSpeed, Flow: CloneFlowSpec(&spec), prepared: content}, nil
 }
 
 func (s FlowSpec) cycleCount() float64 {
@@ -224,10 +226,14 @@ func (s FlowSpec) signal(u float64, handyModel string) (position, millisPerCycle
 	pace := 1 - paceVariation + paceVariation*s.field(u, 0x85ebca6b)
 	for _, layer := range s.Layers {
 		amount := float64(layer.AmountPercent) / 100
-		wave := 0.5 + 0.5*flowWave(u, s.cycleCount(), float64(layer.PeriodCycles), float64(layer.PhasePercent)/100)
+		wave := s.layerEnvelope(u, layer)
 		switch layer.Axis {
 		case "range":
-			span = floor + (span-floor)*(1-amount+amount*wave)
+			if layer.Shape == "" {
+				span = floor + (span-floor)*(1-amount+amount*wave)
+			} else {
+				span = (1-amount)*span + amount*(floor+(ceiling-floor)*wave)
+			}
 		case "center":
 			anchor = (1-amount)*anchor + amount*wave
 		case "pace":

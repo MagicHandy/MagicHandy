@@ -30,6 +30,7 @@ Always preserve the distinction between range, pace, and timing of variation.`
 // LLMLabPrompts isolates experimental control interfaces from production prompting.
 func LLMLabPrompts() map[string]string {
 	return map[string]string{
+		"layered":             labPlanningContextGuide + layeredContract,
 		"library":             libraryLabPrompt("library"),
 		"library_descriptive": libraryLabPrompt("library_descriptive"),
 		"library_actions":     libraryLabPrompt("library_actions"),
@@ -78,8 +79,12 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 		return trial
 	}
 	recipeID, _ := labCurrentRecipe(method, current)
+	var score any = current
+	if method == "layered" {
+		score = layeredScoreContext(current)
+	}
 	contextJSON, _ := json.Marshal(map[string]any{
-		"current_score": current, "current_recipe": recipeID,
+		"current_score": score, "current_recipe": recipeID,
 		"saved_limits":    map[string]int{"speed_min_percent": limits.SpeedMinPercent, "speed_max_percent": limits.SpeedMaxPercent},
 		"engine_envelope": motion.CurrentPlanningEnvelope(limits),
 	})
@@ -117,12 +122,20 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 
 // ParseLLMLab merges only explicit valid changes into the authoritative score.
 func ParseLLMLab(raw, method string, current motion.FlowSpec, limits config.MotionSettings) (string, motion.FlowSpec, []string, error) {
+	if method == "layered" {
+		response, next, changed, err := ParseLayeredReply(raw, current, limits)
+		return response.Reply, next, changed, err
+	}
 	if method == "edits" {
 		return parseLabEdits(raw, current, limits)
 	}
 	if strings.HasPrefix(method, "library") {
 		return parseLibraryLab(raw, method, current, limits)
 	}
+	return parseStandardLab(raw, method, current, limits)
+}
+
+func parseStandardLab(raw, method string, current motion.FlowSpec, limits config.MotionSettings) (string, motion.FlowSpec, []string, error) {
 	var proposal struct {
 		Reply    string                     `json:"reply"`
 		Controls map[string]json.RawMessage `json:"controls"`

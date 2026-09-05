@@ -85,6 +85,9 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	if err != nil {
 		return AutopilotResponse{}, err
 	}
+	if s.Capabilities.Motion && s.Capabilities.MotionMode == MotionModeLayered {
+		return s.completeLayeredAutopilot(ctx, kind, request)
+	}
 	prompt := s.Prompt
 	if strings.TrimSpace(prompt.ID) == "" {
 		prompt, _ = BuiltinPromptSetByID(DefaultPromptSetID)

@@ -89,7 +89,7 @@ func (m *Manager) planSwayLocked(
 	choice segmentChoice,
 	generation uint64,
 ) []swayPoint {
-	if !choice.segment.hasContent() || choice.segment.SpeedPercent <= 0 {
+	if choice.segment.Flow != nil || !choice.segment.hasContent() || choice.segment.SpeedPercent <= 0 {
 		return nil
 	}
 	allowed := m.swayAllowanceLocked(duration, choice.variability)

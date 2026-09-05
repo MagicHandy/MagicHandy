@@ -1945,5 +1945,9 @@
   "Test direct changes to range, anchor, pace and variation.": "範囲、アンカー、ペース、変化の直接調整をテストします。",
   "Test mode": "テストモード",
   "Test modes": "テストモード一覧",
-  "Test simultaneous range, center and pace modulation on one carrier.": "1つの基本動作で範囲、中心、ペースを同時に変調するテストです。"
+  "Test simultaneous range, center and pace modulation on one carrier.": "1つの基本動作で範囲、中心、ペースを同時に変調するテストです。",
+  "Layered": "レイヤー",
+  "The production Layered contract: edit reach, location and pace independently. Partial edits preserve other layers. Drift varies irregularly; alternation reaches both extremes. Evolve refreshes the details without replacing the geometry.": "通常チャットでも使えるレイヤー方式です。ストローク幅、位置、ペースを個別に編集します。部分編集では他のレイヤーを保持します。ドリフトは不規則に変化し、交互変化は両端に到達します。Evolveは形状の設定を保ったまま変化の細部を更新します。",
+  "Layered starts with fresh variation and refreshes it during Autopilot. Exact repetition requests take priority. Four recent human requests remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.": "Layeredは毎回新しい変化から始まり、Autopilot中に更新されます。完全な繰り返しの要求が優先されます。直近4件のユーザーの要求は、自動応答とは別に保持されます。各スコアの長さは有限です。LayeredのLab継続では、待機時間の最大半分をランダムに加算します。",
+  "autopilot motion is off; choose a motion mode in the sidebar": "オートパイロットの動作はオフです。サイドバーで動作モードを選択してください"
 }

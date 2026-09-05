@@ -239,6 +239,7 @@ func traceTargetWithPace(target MotionTarget, settings config.MotionSettings, pa
 }
 
 func cloneMotionTarget(target MotionTarget) MotionTarget {
+	target.Flow = CloneFlowSpec(target.Flow)
 	if target.AreaFocus != nil {
 		area := *target.AreaFocus
 		target.AreaFocus = &area

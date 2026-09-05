@@ -130,6 +130,13 @@ func contractInstructions(capabilities Capabilities) string {
 		}
 		return contractChatOnly
 	}
+	if capabilities.MotionMode == MotionModeLayered {
+		text := layeredContract
+		if capabilities.MoodTracking {
+			text += "\n" + moodContractInstructions()
+		}
+		return text
+	}
 	if capabilities.MotionMode == MotionModeDynamic {
 		text := contractDynamic
 		if capabilities.MoodTracking {
@@ -179,6 +186,8 @@ const (
 	MotionModeDynamic MotionMode = "dynamic"
 	// MotionModePattern exposes enabled library pattern curation.
 	MotionModePattern MotionMode = "pattern"
+	// MotionModeLayered edits one persistent score with independent modulation layers.
+	MotionModeLayered MotionMode = "layered"
 	// MotionModeOff keeps the model chat-only.
 	MotionModeOff MotionMode = "off"
 )

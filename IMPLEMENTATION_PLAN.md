@@ -2243,3 +2243,16 @@ continuous recipes, and upgrade retirement of all legacy built-ins. See
 [ADR 0022](docs/decisions/0022-lab-conversation-sessions.md),
 [workflow](docs/labs-workspace.md), and
 [model/motion evidence](docs/lab-conversation-review-2026-09-05.md).
+
+## September 5 Layered motion follow-up
+
+Implemented for review: production Layered mode and the matching Lab contract,
+a six-slot mode selector, persistent partial layer edits, explicit coupled
+geometry operations, relative period changes and separate human-request
+context. Fresh runtime seeds and smooth irregular envelopes develop variation;
+Autopilot refreshes the realization without resetting requested geometry or
+pace. Every accepted score remains reproducible from its captured seed and
+travels through the shared engine. Prompt changes are compared on Gemma and
+Granite, retaining failed iterations and requiring no observed Gemma regression.
+See [ADR 0023](docs/decisions/0023-persistent-layered-motion.md) and
+[evaluation and limits](docs/layered-motion-review-2026-09-05.md).

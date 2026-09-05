@@ -66,6 +66,7 @@ type DecisionInput struct {
 	CurrentSpeed      int
 	CurrentAreaFocus  *motion.AreaFocus
 	CurrentDynamic    *motion.DynamicDefinition
+	CurrentFlow       *motion.FlowSpec
 	MotionMinSeconds  int
 	MotionMaxSeconds  int
 	MotionChangeLevel int
@@ -186,7 +187,7 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		}
 	}()
 	dynamicMode := m.options.MotionGenerationMode != nil &&
-		m.options.MotionGenerationMode() == config.LLMMotionModeDynamic
+		(m.options.MotionGenerationMode() == config.LLMMotionModeDynamic || m.options.MotionGenerationMode() == config.LLMMotionModeLayered)
 	decideCtx, cancel := context.WithTimeout(ctx, decisionTimeout)
 	started := m.options.Now()
 	decision, err := decide(decideCtx, input)
@@ -367,6 +368,7 @@ func (m *Manager) decisionInput() DecisionInput {
 			input.CurrentAreaFocus = &focus
 		}
 		input.CurrentDynamic = cloneDynamicDefinition(current.Dynamic)
+		input.CurrentFlow = motion.CloneFlowSpec(current.Flow)
 		input.CurrentPerceptual = currentPerceptual
 	}
 	input.MotionMinSeconds, input.MotionMaxSeconds = autopilot.MotionWindow()
@@ -379,6 +381,9 @@ func (m *Manager) decisionInput() DecisionInput {
 // compilation detail; it can refresh micro-motion without representing a new
 // model-authored phrase.
 func sameMotionPhrase(left, right Segment) bool {
+	if left.Flow != nil || right.Flow != nil {
+		return sameFlowPhrase(left.Flow, right.Flow)
+	}
 	if left.PatternID != "" || right.PatternID != "" {
 		return left.PatternID == right.PatternID && samePhraseAreaFocus(left.AreaFocus, right.AreaFocus)
 	}
@@ -433,7 +438,7 @@ func (m *Manager) heldSegment() (Segment, *motion.PatternDefinition, bool) {
 }
 
 func segmentFromMotionTarget(target motion.MotionTarget, durationMillis int64) (Segment, *motion.PatternDefinition, bool) {
-	if (target.PatternID == "" && target.Dynamic == nil) || target.SpeedPercent <= 0 {
+	if (target.PatternID == "" && target.Dynamic == nil && target.Flow == nil) || target.SpeedPercent <= 0 {
 		return Segment{}, nil, false
 	}
 	copied := cloneTarget(target)
@@ -442,6 +447,7 @@ func segmentFromMotionTarget(target motion.MotionTarget, durationMillis int64) (
 		SpeedPercent:   copied.SpeedPercent,
 		AreaFocus:      copied.AreaFocus,
 		Dynamic:        copied.Dynamic,
+		Flow:           motion.CloneFlowSpec(copied.Flow),
 		DurationMillis: durationMillis,
 	})
 	return segment, copied.Pattern, true

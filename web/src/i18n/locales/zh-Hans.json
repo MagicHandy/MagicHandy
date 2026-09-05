@@ -1945,5 +1945,9 @@
   "Test direct changes to range, anchor, pace and variation.": "测试范围、锚点、节奏和变化的直接调整。",
   "Test mode": "测试模式",
   "Test modes": "测试模式列表",
-  "Test simultaneous range, center and pace modulation on one carrier.": "在单一基础运动上测试范围、中心和节奏的同时调制。"
+  "Test simultaneous range, center and pace modulation on one carrier.": "在单一基础运动上测试范围、中心和节奏的同时调制。",
+  "Layered": "分层",
+  "The production Layered contract: edit reach, location and pace independently. Partial edits preserve other layers. Drift varies irregularly; alternation reaches both extremes. Evolve refreshes the details without replacing the geometry.": "正式聊天使用的分层控制方式：独立编辑行程宽度、位置和节奏。局部编辑会保留其他层。漂移产生不规则变化，交替变化会到达两端。演变会更新细节，同时保留几何设置。",
+  "Layered starts with fresh variation and refreshes it during Autopilot. Exact repetition requests take priority. Four recent human requests remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.": "Layered 每次以新的变化开始，并在 Autopilot 运行期间刷新。精确重复的要求优先。最近四条用户请求会独立于自动回复保留。每个动作谱都是有限的；实验室中的 Layered 续接会随机增加最多半个等待间隔的延迟。",
+  "autopilot motion is off; choose a motion mode in the sidebar": "自动驾驶运动已关闭；请在侧栏选择运动模式"
 }

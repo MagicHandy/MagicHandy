@@ -3,7 +3,7 @@ import type { MotionLabCandidate, MotionLabRequest } from "../api/motion-lab";
 import type { MotionSettings } from "../api/types";
 
 export interface FlowStep { min_percent: number; max_percent: number; speed_percent: number; cycles: number }
-export interface FlowLayer { axis: "range" | "center" | "pace"; amount_percent: number; period_cycles: number; phase_percent: number }
+export interface FlowLayer { axis: "range" | "center" | "pace"; amount_percent: number; period_cycles: number; phase_percent: number; shape?: "wave" | "drift" | "alternate" }
 export interface FlowSpec {
   min_percent: number; max_percent: number; speed_percent: number; range_floor_percent: number;
   anchor_percent: number; memory_cycles: number; pace_variation_percent: number; seed: number;
@@ -48,7 +48,7 @@ export const labApi = {
   status: () => request<Pick<LLMLabState,"revision"|"busy"|"session">>("GET", "/api/labs/llm/status"),
   session: (body:Omit<LabSession,"active">) => request<LLMLabState>("POST", "/api/labs/llm/session", body),
   chat: (body: {message:string;method:string;prompt:string;model:string;revision:number;schema_guided:boolean}, signal?: AbortSignal) => request<LLMLabState>("POST", "/api/labs/llm/chat", body, signal),
-  reset: (spec: FlowSpec) => request<LLMLabState>("POST", "/api/labs/llm/reset", {spec}),
+  reset: (spec?: FlowSpec, method?:string) => request<LLMLabState>("POST", "/api/labs/llm/reset", {spec,method}),
   start: (preview: FlowPreview, candidate: FlowCandidate) => {
     if (candidate.flow) return request("POST", "/api/motion/start", {lab:{method:"flow",flow:candidate.flow,settings_key:preview.settings_key}});
     const spec = preview.spec;

@@ -17,34 +17,36 @@ import (
 // The lab owns a separate, bounded in-memory conversation. Production chat,
 // personas and saved prompts are not its memory or persistence mechanism.
 type llmLabRuntime struct {
-	mu            sync.Mutex
-	startMu       sync.Mutex
-	requests      map[uint64]context.CancelFunc
-	nextRequest   uint64
-	current       *motion.FlowSpec
-	turns         []chat.LLMLabTrial
-	revision      uint64
-	busy          bool
-	session       labConversationSession
-	sessionCtx    context.Context
-	sessionCancel context.CancelFunc
-	sessionDone   chan struct{}
-	sessionEngine *motion.Engine
-	autoCancel    context.CancelFunc
-	autoDone      chan struct{}
-	lastActivity  time.Time
+	mu             sync.Mutex
+	startMu        sync.Mutex
+	requests       map[uint64]context.CancelFunc
+	nextRequest    uint64
+	current        *motion.FlowSpec
+	turns          []chat.LLMLabTrial
+	directiveTurns []chat.LLMLabTrial
+	revision       uint64
+	busy           bool
+	session        labConversationSession
+	sessionCtx     context.Context
+	sessionCancel  context.CancelFunc
+	sessionDone    chan struct{}
+	sessionEngine  *motion.Engine
+	autoCancel     context.CancelFunc
+	autoDone       chan struct{}
+	lastActivity   time.Time
 }
 
 type llmLabState struct {
-	Current     motion.FlowSpec        `json:"current"`
-	Turns       []chat.LLMLabTrial     `json:"turns"`
-	Revision    uint64                 `json:"revision"`
-	Busy        bool                   `json:"busy"`
-	Prompts     map[string]string      `json:"prompts"`
-	Model       string                 `json:"model"`
-	SettingsKey string                 `json:"settings_key"`
-	Limits      config.MotionSettings  `json:"limits"`
-	Session     labConversationSession `json:"session"`
+	Current        motion.FlowSpec        `json:"current"`
+	Turns          []chat.LLMLabTrial     `json:"turns"`
+	DirectiveTurns []chat.LLMLabTrial     `json:"-"`
+	Revision       uint64                 `json:"revision"`
+	Busy           bool                   `json:"busy"`
+	Prompts        map[string]string      `json:"prompts"`
+	Model          string                 `json:"model"`
+	SettingsKey    string                 `json:"settings_key"`
+	Limits         config.MotionSettings  `json:"limits"`
+	Session        labConversationSession `json:"session"`
 }
 
 func (s *Server) labState() llmLabState {
@@ -52,12 +54,13 @@ func (s *Server) labState() llmLabState {
 	s.lab.mu.Lock()
 	defer s.lab.mu.Unlock()
 	if s.lab.current == nil {
-		initial := motion.DefaultFlowSpec()
+		initial := chat.FreshLayeredScore(25)
 		initial.SpeedPercent = max(settings.Motion.SpeedMinPercent, min(initial.SpeedPercent, settings.Motion.SpeedMaxPercent))
 		s.lab.current = &initial
 	}
 	return llmLabState{Current: *s.lab.current, Turns: append([]chat.LLMLabTrial{}, s.lab.turns...),
-		Revision: s.lab.revision, Busy: s.lab.busy, Prompts: chat.LLMLabPrompts(), Model: settings.LLM.Model,
+		DirectiveTurns: append([]chat.LLMLabTrial{}, s.lab.directiveTurns...),
+		Revision:       s.lab.revision, Busy: s.lab.busy, Prompts: chat.LLMLabPrompts(), Model: settings.LLM.Model,
 		SettingsKey: motion.LabSettingsKey(settings.Motion), Limits: settings.Motion, Session: s.lab.session}
 }
 
@@ -83,13 +86,22 @@ func (s *Server) handleLLMLabReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Spec motion.FlowSpec `json:"spec"`
+		Spec   *motion.FlowSpec `json:"spec"`
+		Method string           `json:"method,omitempty"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	settings, _ := s.store.Snapshot()
+	if body.Spec == nil {
+		initial := motion.DefaultFlowSpec()
+		if body.Method == "layered" {
+			initial = chat.FreshLayeredScore(25)
+		}
+		initial.SpeedPercent = max(settings.Motion.SpeedMinPercent, min(initial.SpeedPercent, settings.Motion.SpeedMaxPercent))
+		body.Spec = &initial
+	}
 	if err := body.Spec.Validate(settings.Motion); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -100,7 +112,8 @@ func (s *Server) handleLLMLabReset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, errors.New("a lab reply is still active"))
 		return
 	}
-	s.lab.current, s.lab.turns = &body.Spec, nil
+	s.lab.current, s.lab.turns = motion.CloneFlowSpec(body.Spec), nil
+	s.lab.directiveTurns = nil
 	s.lab.revision++
 	s.lab.mu.Unlock()
 	writeJSON(w, http.StatusOK, s.labState())
@@ -203,7 +216,10 @@ func (s *Server) runLabChat(parent context.Context, body labChatRequest, automat
 	if err != nil {
 		return llmLabState{}, err
 	}
-	history := labConversationHistory(state.Turns, body)
+	history := labConversationHistory(state.DirectiveTurns, body)
+	if automatic && body.Method == "layered" {
+		body.Message = chat.LayeredContinuationMessage(labHumanRequests(state.DirectiveTurns))
+	}
 	trial := chat.RunLLMLab(ctx, provider, settings.LLM.Model, body.Method, body.Prompt, body.Message, state.Current, settings.Motion, history, body.SchemaGuided)
 	trial.Autopilot = automatic
 	if ctx.Err() != nil || s.stopSequence.Load() != stopSequence {
@@ -213,22 +229,7 @@ func (s *Server) runLabChat(parent context.Context, body labChatRequest, automat
 }
 
 func (s *Server) recordLabTrial(ctx context.Context, stopSequence uint64, trial chat.LLMLabTrial, state llmLabState) (llmLabState, error) {
-	latestSettings, _ := s.store.Snapshot()
-	if motion.LabSettingsKey(latestSettings.Motion) != state.SettingsKey {
-		trial.Valid, trial.After, trial.Error = false, state.Current, "motion limits changed during generation; retry the trial"
-	}
-	if trial.Valid {
-		if _, err := motion.FlowTarget(trial.After, latestSettings.Motion); err != nil {
-			trial.Valid, trial.After, trial.Error = false, state.Current, err.Error()
-		}
-	}
-	if !trial.Valid {
-		trial.Changed = []string{}
-	}
-	if trial.Autopilot && trial.Valid && !labAutopilotWithinRequest(trial.Before, trial.After) {
-		trial.Valid, trial.After, trial.Changed = false, trial.Before, []string{}
-		trial.Error = "Autopilot cannot increase speed or widen the requested band."
-	}
+	trial = s.validateLabTrial(trial, state)
 	if trial.Valid && len(trial.Changed) > 0 && state.Session.Active && state.Session.Live {
 		trial.MotionApplied, trial.MotionError = s.applyLabConversationTarget(ctx, stopSequence, trial.After)
 	}
@@ -241,6 +242,12 @@ func (s *Server) recordLabTrial(ctx context.Context, stopSequence uint64, trial 
 		s.lab.current = &trial.After
 	}
 	s.lab.turns = append(s.lab.turns, trial)
+	if !trial.Autopilot {
+		s.lab.directiveTurns = append(s.lab.directiveTurns, trial)
+		if len(s.lab.directiveTurns) > 4 {
+			s.lab.directiveTurns = s.lab.directiveTurns[len(s.lab.directiveTurns)-4:]
+		}
+	}
 	if len(s.lab.turns) > 20 {
 		s.lab.turns = s.lab.turns[len(s.lab.turns)-20:]
 	}
@@ -257,4 +264,12 @@ func labConversationHistory(turns []chat.LLMLabTrial, body labChatRequest) []llm
 		}
 	}
 	return history
+}
+
+func labHumanRequests(turns []chat.LLMLabTrial) []string {
+	requests := make([]string, 0, len(turns))
+	for _, turn := range turns {
+		requests = append(requests, turn.Message)
+	}
+	return requests
 }

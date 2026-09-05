@@ -23,9 +23,9 @@ describe("separate LLM Lab",()=>{
     fireEvent.click(screen.getByRole("checkbox",{name:"Live motion"}));
     fireEvent.click(screen.getByRole("button",{name:"Start test"}));
     await screen.findByText("Live test running");
-    expect(labApi.session).toHaveBeenCalledWith(expect.objectContaining({live:true,autopilot:false,method:"edits"}));
+    expect(labApi.session).toHaveBeenCalledWith(expect.objectContaining({live:true,autopilot:false,method:"layered"}));
     expect(screen.getByRole("combobox",{name:"Test mode"})).toBeDisabled();
-    expect(vi.mocked(labApi.chat).mock.calls[0][0]).toMatchObject({schema_guided:true,revision:0,method:"edits"});
+    expect(vi.mocked(labApi.chat).mock.calls[0][0]).toMatchObject({schema_guided:true,revision:0,method:"layered"});
   });
   it("keeps generation disabled for read-only clients",async()=>{
     app.readOnly=true;render(<LLMLab/>);await screen.findByText("Describe the motion you want to test");
@@ -78,11 +78,11 @@ describe("separate LLM Lab",()=>{
     expect(used).toHaveBeenCalled();expect(labApi.chat).not.toHaveBeenCalled();expect(labApi.start).not.toHaveBeenCalled();
   });
   it("starts Autopilot with the same mode and prompt without enabling live motion",async()=>{
-    vi.mocked(labApi.session).mockResolvedValue({...labState(),session:{active:true,live:false,autopilot:true,method:"edits",prompt:"edit-prompt",model:"local-model",schema_guided:true,interval_seconds:20}});
+    vi.mocked(labApi.session).mockResolvedValue({...labState(),session:{active:true,live:false,autopilot:true,method:"layered",prompt:"layered-prompt",model:"local-model",schema_guided:true,interval_seconds:20}});
     render(<LLMLab/>);await screen.findByText("Describe the motion you want to test");
     fireEvent.click(screen.getByRole("checkbox",{name:"Autopilot"}));fireEvent.click(screen.getByRole("button",{name:"Start test"}));
     await screen.findByText("Preview test running");
-    expect(labApi.session).toHaveBeenCalledWith(expect.objectContaining({live:false,autopilot:true,method:"edits",prompt:"edit-prompt"}));
+    expect(labApi.session).toHaveBeenCalledWith(expect.objectContaining({live:false,autopilot:true,method:"layered",prompt:"layered-prompt"}));
     expect(labApi.start).not.toHaveBeenCalled();
     expect(screen.getAllByRole("link",{name:"Help"}).some(link=>link.getAttribute("href")==="#/labs/help/autopilot")).toBe(true);
   });

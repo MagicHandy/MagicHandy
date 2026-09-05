@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"math/rand"
 	"net/http"
 	"strings"
 	"time"
@@ -167,6 +168,7 @@ func (s *Server) runLabAutopilot(ctx context.Context, options labConversationSes
 	}
 	timer := time.NewTicker(time.Second)
 	defer timer.Stop()
+	delay := labAutopilotDelay(options)
 	for {
 		select {
 		case <-ctx.Done():
@@ -174,7 +176,7 @@ func (s *Server) runLabAutopilot(ctx context.Context, options labConversationSes
 		case <-timer.C:
 		}
 		s.lab.mu.Lock()
-		ready := !s.lab.busy && time.Since(s.lab.lastActivity) >= time.Duration(options.IntervalSeconds)*time.Second
+		ready := !s.lab.busy && time.Since(s.lab.lastActivity) >= delay
 		if !ready {
 			s.lab.mu.Unlock()
 			continue
@@ -183,12 +185,17 @@ func (s *Server) runLabAutopilot(ctx context.Context, options labConversationSes
 		done := make(chan struct{})
 		s.lab.autoCancel, s.lab.autoDone = cancel, done
 		s.lab.mu.Unlock()
-		state, err := s.runLabChat(turnCtx, labChatRequest{Message: "Continue the conversation as Autopilot. Respect the user's latest requested limits and character. You may hold the current motion or make one small appropriate change. Never increase speed or widen the requested band without permission. Briefly describe what you actually change."}, true)
+		message := "Continue the conversation as Autopilot. Respect the user's latest requested limits and character. You may hold the current motion or make one small appropriate change. Never increase speed or widen the requested band without permission. Briefly describe what you actually change."
+		if options.Method == "layered" {
+			message = chat.LayeredAutopilotMessage()
+		}
+		state, err := s.runLabChat(turnCtx, labChatRequest{Message: message}, true)
 		canceled := turnCtx.Err() != nil
 		cancel()
 		s.lab.mu.Lock()
 		s.lab.autoCancel, s.lab.autoDone = nil, nil
 		close(done)
+		delay = labAutopilotDelay(options)
 		if !canceled && (err != nil || (len(state.Turns) > 0 && !state.Turns[len(state.Turns)-1].Valid)) {
 			s.lab.session.Autopilot = false
 			s.lab.session.Error = "Autopilot paused after a failed reply. Inspect the response and restart the test."
@@ -198,6 +205,15 @@ func (s *Server) runLabAutopilot(ctx context.Context, options labConversationSes
 		}
 		s.lab.mu.Unlock()
 	}
+}
+
+func labAutopilotDelay(options labConversationSession) time.Duration {
+	delay := time.Duration(options.IntervalSeconds) * time.Second
+	if options.Method == "layered" {
+		// #nosec G404 -- Scheduling jitter; never shorter than the user's quiet interval.
+		delay += time.Duration(rand.Float64() * 0.5 * float64(delay))
+	}
+	return delay
 }
 
 func (s *Server) applyLabConversationTarget(ctx context.Context, stopSequence uint64, spec motion.FlowSpec) (bool, string) {

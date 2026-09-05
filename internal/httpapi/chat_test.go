@@ -366,6 +366,7 @@ func TestChatStopRemainsAvailableWhenLLMMotionIsOff(t *testing.T) {
 
 func TestChatStopMatcherCoversBuiltInPromptLanguages(t *testing.T) {
 	for _, message := range []string{
+		"Stop motion now.", "Please stop the motion right now!", "Stop moving.", "That’s enough.",
 		"Please stop the motion.",
 		"Por favor, detén el movimiento.",
 		"Por favor, pare o movimento.",
