@@ -209,6 +209,18 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-09-05 — Creative v2 roaming focus:** removes the default tip bias and
+  adds independent, bounded location drift through the shared compiler. No
+  new runtime or frontend dependencies. The local `CGO_ENABLED=0 -trimpath`
+  build is 26,265,088 bytes; release-style `-s -w` is 19,076,096 (+4,608 from
+  the continuous-flow refactor). Initial JS is 750.86 / 207.64 kB gzip and
+  lazy Labs JS 51.96 / 14.58. Three fresh-data launches reached the listener
+  in 133.3–176.3 ms and health in 138.4–205.9 ms. One-second launch snapshots
+  were 21.99–65.68 MiB working set / 54.32–55.31 MiB private, excluding browser
+  and model workers. Variable Windows residency does not close the idle
+  waiver; active hardware and soak budgets remain unmeasured. See the
+  [roaming review](creative-v2-roaming-review-2026-09-05.md).
+
 - **2026-09-05 — Creative v2 continuous flow:** replaces local/full groups with
   correlated reach and timing, integrates rebound recovery, and fits shared
   reversal acceleration. Gesture retargets keep nearby stroke context. No new

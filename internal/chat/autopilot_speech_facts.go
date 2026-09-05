@@ -48,12 +48,20 @@ func writeAutopilotSpeechFacts(b *strings.Builder, c AutopilotContext) {
 
 func writeGestureSpeechFacts(b *strings.Builder, f motion.FlowSpec) {
 	g := f.Gesture
+	canRoam := f.MaxPercent-f.MinPercent > 10 && (g.FocusWidthPercent < f.MaxPercent-f.MinPercent || g.VariationPercent > 0 || g.ReboundCount > 0)
 	position := f.MinPercent + (f.MaxPercent-f.MinPercent)*g.FocusPercent/100
 	region := "middle region"
 	if position <= 33 {
 		region = "lower region"
 	} else if position >= 67 {
 		region = "upper region"
+	}
+	if g.FocusRoamPercent > 0 && !canRoam {
+		region = "active band with no remaining space to change location"
+	} else if g.FocusRoamPercent == 100 {
+		region = "freely changing regions within the active band"
+	} else if g.FocusRoamPercent > 0 {
+		region = "changing locations biased toward the " + region
 	}
 	switch g.FocusMixPercent {
 	case 0:
@@ -65,6 +73,9 @@ func writeGestureSpeechFacts(b *strings.Builder, f motion.FlowSpec) {
 	}
 	if g.FocusMixPercent > 0 && g.ReboundCount > 0 {
 		b.WriteString("Shrinking returns and gradual recovery are enabled as local reach contracts, where their width fits.\n")
+	}
+	if g.FocusMixPercent > 0 && g.FocusRoamPercent > 0 && canRoam {
+		b.WriteString("The local working location roams gradually; both endpoints can move. Do not describe a fixed anchor.\n")
 	}
 	if g.FasterDirection != "even" && g.ContrastPercent > 0 {
 		fmt.Fprintf(b, "Travel toward the %s is faster than the return direction.\n", g.FasterDirection)

@@ -19,6 +19,18 @@ func renderCreativeV2Matrix() []motion.Review {
 		edit func(*motion.FlowSpec)
 	}
 	cases := []scenario{
+		{"Free roaming mixed reach", func(s *motion.FlowSpec) {
+			s.Gesture.FocusPercent, s.Gesture.FocusRoamPercent = 50, 100
+		}},
+		{"Roaming narrow strokes", func(s *motion.FlowSpec) {
+			s.Gesture.FocusRoamPercent, s.Gesture.FocusMixPercent = 100, 100
+			s.Gesture.FocusWidthPercent = 10
+		}},
+		{"Roaming with directional contrast", func(s *motion.FlowSpec) {
+			s.Gesture.FocusRoamPercent, s.Gesture.FocusMixPercent = 100, 65
+			s.Gesture.FasterDirection, s.Gesture.ContrastPercent = "base", 40
+			s.Gesture.ReboundCount, s.Gesture.FocusWidthPercent = 2, 45
+		}},
 		{"Even full strokes", func(s *motion.FlowSpec) {
 			s.Gesture.FocusMixPercent = 0
 			s.Gesture.InertiaPercent = 0
@@ -87,6 +99,7 @@ func renderCreativeV2Matrix() []motion.Review {
 			for _, sc := range cases {
 				s := motion.DefaultFlowSpec()
 				g := motion.DefaultGestureSpec()
+				g.FocusPercent, g.FocusRoamPercent = 100, 0 // Preserve explicit anchored comparisons.
 				s.Gesture = &g
 				s.RangeFloorPercent = 10
 				s.SpeedPercent = speed

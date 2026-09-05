@@ -57,11 +57,13 @@ def cases(mode):
                 lambda b, s: s.get("min_percent") == 0
                 and s.get("max_percent") == 100
                 and s.get("speed_percent") == 30
-                and s.get("gesture", {}).get("focus_percent") == 50,
+                and s.get("gesture", {}).get("focus_percent") == 50
+                and s.get("gesture", {}).get("focus_roam_percent", 0) == 0,
             ),
             (
                 "Keep this pace. Mix short strokes at the lower end with two shrinking rebounds and full strokes.",
                 lambda b, s: s.get("gesture", {}).get("focus_percent") == 0
+                and s.get("gesture", {}).get("focus_roam_percent", 0) == 0
                 and s.get("gesture", {}).get("rebound_count") == 2
                 and s.get("speed_percent") == b.get("speed_percent"),
             ),

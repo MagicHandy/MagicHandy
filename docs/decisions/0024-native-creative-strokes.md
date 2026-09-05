@@ -23,6 +23,11 @@ defaults and modes remain valid. Model Settings exposes all five modes.
 
 `GestureSpec` describes focus position, local width, local/full mixing, faster
 direction and contrast, inertia, rebound count/retained width, and variation.
+Focus roaming independently controls whether the location is held or can move
+within the active band. Fresh scores roam fully with no preferred endpoint.
+Zero roaming retains an explicit anchor; old saved scores and historical
+three-field focus edits keep that meaning. A periodic bound on location change
+keeps neighboring narrow windows overlapping in the shared compiler.
 An optional Gesture field on `FlowSpec` carries that semantic content through
 the existing `FlowTarget`, prepared plan, shared sampler, sanitizer, retargeting
 and transport. It owns no motion goroutine, clock or raw device payload. A nil
@@ -94,3 +99,6 @@ all prompt iterations, failed production selections, shared-engine plots,
 fake-transport traces, tests, budgets and remaining physical acceptance.
 The [flow refactor review](../creative-v2-flow-review-2026-09-05.md) records the
 user-stopped Cloud session and the subsequent generator/handoff evaluation.
+The [roaming review](../creative-v2-roaming-review-2026-09-05.md) records the
+default tip bias, removal of specific example recipes, general roaming control
+and the retained prompt failures.

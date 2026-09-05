@@ -12,7 +12,7 @@ func TestCreativeV2PartialEditsAndRejectInvalidTransactions(t *testing.T) {
 	s := FreshCreativeV2Score(25)
 	limits := config.DefaultSettings().Motion
 	_, next, _, err := ParseCreativeV2Reply(`{"edits":[{"focus":{"position_percent":0,"width_percent":45,"mix_percent":40}},{"rebounds":{"count":3,"retained_width_percent":75}}],"reply":"Base rebounds."}`, s, limits)
-	if err != nil || next.Gesture.FocusPercent != 0 || next.Gesture.ReboundCount != 3 || next.SpeedPercent != 25 || s.Gesture.FocusPercent != 100 {
+	if err != nil || next.Gesture.FocusPercent != 0 || next.Gesture.FocusRoamPercent != 0 || next.Gesture.ReboundCount != 3 || next.SpeedPercent != 25 || s.Gesture.FocusPercent != 50 {
 		t.Fatalf("partial edits %v %+v", err, next)
 	}
 	_, hold, changed, err := ParseCreativeV2Reply(`{"edits":[],"reply":"Holding."}`, next, limits)
@@ -58,6 +58,25 @@ func TestCreativeV2RejectsExplicitCoverageMismatch(t *testing.T) {
 		if err := creativeV2RequestedCoverage(tc.message, s); (err != nil) != tc.reject {
 			t.Fatalf("%s: %v", tc.message, err)
 		}
+	}
+}
+
+func TestCreativeV2RoamingIsAnIndependentAtomicControl(t *testing.T) {
+	s := FreshCreativeV2Score(25)
+	s.Gesture.FocusPercent, s.Gesture.FocusRoamPercent = 100, 0
+	_, next, _, err := ParseCreativeV2Reply(`{"edits":[{"focus":{"position_percent":100,"width_percent":25,"mix_percent":40,"roam_percent":100}}],"reply":"The location can roam."}`, s, config.DefaultSettings().Motion)
+	if err != nil || next.Gesture.FocusRoamPercent != 100 || s.Gesture.FocusRoamPercent != 0 || next.SpeedPercent != s.SpeedPercent {
+		t.Fatalf("roam edit: %+v %v", next, err)
+	}
+	want := s
+	gesture := *s.Gesture
+	gesture.FocusRoamPercent = 100
+	want.Gesture = &gesture
+	if !reflect.DeepEqual(next, want) {
+		t.Fatal("roaming replaced unrelated motion controls")
+	}
+	if creativeV2ScoreContext(s)["focus"].(map[string]any)["roam_percent"] != float64(0) {
+		t.Fatal("held focus vanished from model context")
 	}
 }
 

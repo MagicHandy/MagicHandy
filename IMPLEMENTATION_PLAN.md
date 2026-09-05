@@ -6,6 +6,10 @@ The September 5 Creative v2 flow refactor replaces local/full blocks with
 correlated reach and timing, shared reversal acceleration and nearby-stroke
 handoffs. It remains semantic content inside the single shared engine. See
 [the evaluation](docs/creative-v2-flow-review-2026-09-05.md).
+The follow-up removes the default tip anchor and specific example recipes.
+Independent focus roaming moves both endpoints without a prescribed region
+sequence; explicit saved anchors remain valid. See
+[the roaming review](docs/creative-v2-roaming-review-2026-09-05.md).
 
 MagicHandy is a Go-first ground-up rewrite of StrokeGPT-ReVibed.
 

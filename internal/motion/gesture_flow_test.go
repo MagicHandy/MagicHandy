@@ -89,6 +89,7 @@ func TestGestureFlowAcrossNarrowBandsAndUnequalTurns(t *testing.T) {
 		s.MemoryCycles, s.LoopCycles = 2+i%31, []int{0, 4, 64}[i%3]
 		g := s.Gesture
 		g.FocusPercent, g.FocusMixPercent = i*17%101, i*19%101
+		g.FocusRoamPercent = i * 43 % 101
 		g.FocusWidthPercent = 10 + i*23%(width-9)
 		g.FasterDirection, g.ContrastPercent = []string{"even", "base", "tip"}[i%3], i*11%81
 		g.InertiaPercent, g.VariationPercent = i*13%101, i*31%101

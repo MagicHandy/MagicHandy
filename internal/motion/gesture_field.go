@@ -18,7 +18,8 @@ func gestureBands(s FlowSpec) []gestureBand {
 	s.LoopCycles, s.MemoryCycles = cycles, max(2, s.MemoryCycles/2)
 	g := s.Gesture
 	full := float64(s.MaxPercent - s.MinPercent)
-	anchor, mix, variation := float64(g.FocusPercent)/100, float64(g.FocusMixPercent)/100, float64(g.VariationPercent)/100
+	anchors := gestureAnchors(s, cycles)
+	mix, variation := float64(g.FocusMixPercent)/100, float64(g.VariationPercent)/100
 	locality := make([]float64, cycles)
 	impulse := make([]float64, cycles)
 	for i := range cycles {
@@ -48,9 +49,38 @@ func gestureBands(s FlowSpec) []gestureBand {
 			scale += (1 - scale) * 0.45
 		}
 		span := full + (math.Max(10, width*scale)-full)*locality[i]
-		low := float64(s.MinPercent) + (full-span)*anchor
+		low := float64(s.MinPercent) + (full-span)*anchors[i]
 		bands[i] = gestureBand{low: low, high: low + span,
 			pace: 1 + 0.4*variation*(2*s.driftField(float64(i), 0x46a32)-1)}
 	}
 	return bands
+}
+
+// Roaming changes the working location independently of width and pace.
+// At full roam the old focus carries no directional preference. At zero roam
+// saved anchored scores retain their geometry. There is no region itinerary.
+func gestureAnchors(s FlowSpec, cycles int) []float64 {
+	g := s.Gesture
+	anchor, roam := float64(g.FocusPercent)/100, float64(g.FocusRoamPercent)/100
+	raw := make([]float64, cycles)
+	s.MemoryCycles = max(8, s.MemoryCycles*2)
+	for i := range raw {
+		raw[i] = anchor*(1-roam) + roam*s.driftField(float64(i), 0x31d59)
+	}
+	// A periodic Lipschitz projection keeps neighboring windows overlapping,
+	// including the seam and the narrowest legal stroke. Both envelopes are
+	// bounded and reflection-symmetric; neither favors an end or a direction.
+	step := 5 / float64(s.MaxPercent-s.MinPercent)
+	anchors := make([]float64, cycles)
+	for i := range anchors {
+		low, high := raw[i], raw[i]
+		for j, value := range raw {
+			distance := math.Abs(float64(i - j))
+			allowance := step * math.Min(distance, float64(cycles)-distance)
+			low = math.Min(low, value+allowance)
+			high = math.Max(high, value-allowance)
+		}
+		anchors[i] = (low + high) / 2
+	}
+	return anchors
 }

@@ -20,7 +20,7 @@ func HasMotionDirection(requests []string) bool {
 		if motionIntentIsConversation(message) {
 			continue
 		}
-		if hasIntentPhrase(message, "motion", "move", "moving", "stroke", "strokes", "pace", "speed", "range", "reach", "tip", "base", "layer", "layers", "pattern", "score", "repeating", "unchanged", "vary", "variation", "evolve", "bounce", "rebounds", "sweep", "slower", "faster", "gentler", "gentle", "stop changing", "velocidad", "velocidade", "ritmo", "movimiento", "movimento", "punta", "ponta", "manten", "mantem", "manter") {
+		if hasIntentPhrase(message, "motion", "move", "moving", "stroke", "strokes", "pace", "speed", "range", "reach", "tip", "base", "layer", "layers", "pattern", "score", "repeating", "unchanged", "vary", "variation", "evolve", "bounce", "rebounds", "sweep", "roam", "roaming", "focus", "working location", "slower", "faster", "gentler", "gentle", "stop changing", "velocidad", "velocidade", "ritmo", "movimiento", "movimento", "punta", "ponta", "manten", "mantem", "manter") {
 			return true
 		}
 	}

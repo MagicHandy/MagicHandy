@@ -1,5 +1,15 @@
 # MagicHandy Risk Register
 
+## 2026-09-05 Creative v2 example and endpoint bias
+
+The default 100% focus, fixed-anchor variation and specific prompt examples
+reinforced upper-end repetition. Fresh scores now roam without a preferred
+end, and independent location control can release a temporary anchor. Prompt
+examples teach edit mechanics. Tests distinguish parameter changes from actual
+space to move and retain missed model selections. Narrowing the outer band can
+still limit variation; no deterministic itinerary or safety exception was
+introduced. See the [roaming review](creative-v2-roaming-review-2026-09-05.md).
+
 ## 2026-09-05 Creative v2 flow refactor
 
 Physical feedback identified separated pattern blocks despite smooth position

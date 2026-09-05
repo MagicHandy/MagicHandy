@@ -9,6 +9,7 @@ type GestureSpec struct {
 	FocusPercent        int    `json:"focus_percent"`
 	FocusWidthPercent   int    `json:"focus_width_percent"`
 	FocusMixPercent     int    `json:"focus_mix_percent"`
+	FocusRoamPercent    int    `json:"focus_roam_percent"`
 	FasterDirection     string `json:"faster_direction"`
 	ContrastPercent     int    `json:"contrast_percent"`
 	InertiaPercent      int    `json:"inertia_percent"`
@@ -19,7 +20,7 @@ type GestureSpec struct {
 
 // DefaultGestureSpec is a neutral vocabulary starting point, not a named path.
 func DefaultGestureSpec() GestureSpec {
-	return GestureSpec{FocusPercent: 100, FocusWidthPercent: 25, FocusMixPercent: 40,
+	return GestureSpec{FocusPercent: 50, FocusWidthPercent: 25, FocusMixPercent: 40, FocusRoamPercent: 100,
 		FasterDirection: "even", InertiaPercent: 25, ReboundDecayPercent: 60, VariationPercent: 35}
 }
 
@@ -35,7 +36,7 @@ func (s FlowSpec) validateGesture() error {
 		return errors.New("creative v2 sweep direction must be even, tip or base")
 	}
 	for _, bound := range [][3]int{{g.FocusPercent, 0, 100}, {g.FocusWidthPercent, 10, s.MaxPercent - s.MinPercent},
-		{g.FocusMixPercent, 0, 100}, {g.ContrastPercent, 0, 80}, {g.InertiaPercent, 0, 100},
+		{g.FocusMixPercent, 0, 100}, {g.FocusRoamPercent, 0, 100}, {g.ContrastPercent, 0, 80}, {g.InertiaPercent, 0, 100},
 		{g.ReboundCount, 0, 4}, {g.ReboundDecayPercent, 25, 85}, {g.VariationPercent, 0, 100}} {
 		if bound[0] < bound[1] || bound[0] > bound[2] {
 			return errors.New("creative v2 controls exceed their supported bounds; focus width must fit inside the outer band")

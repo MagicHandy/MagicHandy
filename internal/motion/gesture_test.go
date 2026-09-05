@@ -13,6 +13,7 @@ import (
 func gestureFixture() FlowSpec {
 	s := DefaultFlowSpec()
 	g := DefaultGestureSpec()
+	g.FocusPercent, g.FocusRoamPercent = 100, 0 // Explicit anchored reference.
 	s.Gesture, s.RangeFloorPercent = &g, 10
 	return s
 }

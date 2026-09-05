@@ -131,8 +131,8 @@ The Autopilot decision is not dispatched by this particular fixture. Include
 the report with `-llm` and `--captured`, and keep rejected prompt iterations as
 well. See [the Layered review](layered-motion-review-2026-09-05.md).
 
-For Creative v2, `-catalog=false -creative-v2` exports 108 cases: nine native
-gesture parameter combinations at 10/45/85 on all three device profiles, plus
+For Creative v2, `-catalog=false -creative-v2` exports 135 cases: twelve native
+gesture combinations, including roaming, at 10/45/85 on all three device profiles, plus
 three original Creative realizations at the same speeds/profiles. These are
 review fixtures, not runtime presets. This matrix sets its own 1–100 test
 limits; the ordinary catalog comparison remains 10–43. For example:
