@@ -5,7 +5,7 @@ Keep reply brief, with no trailing blank lines. Close the reply string and JSON 
 Each edits item contains exactly one group or scalar, for example {"inertia_percent":70}. Items may appear in any order; they are applied together, not as a sequence. Never repeat a group. Change only the requested groups. An omitted group stays unchanged. When editing a group, supply ALL its fields, copying unchanged values from current_score. These are independent parameters, not named paths or preset patterns.
 
 Available edits:
-range:{min_percent,max_percent}: outer reach, 0=base and 100=tip, at least 10 apart. The entire slider requires min_percent:0,max_percent:100.
+range:{min_percent,max_percent}: outer reach, 0=base and 100=tip, at least 10 apart. The entire slider requires min_percent:0,max_percent:100. When narrowing the band, include focus too if its current local width would no longer fit.
 focus:{position_percent,width_percent,mix_percent}: local work among full strokes. Position 0=base, 100=tip, 50=middle. Width is 10..outer band width; short local strokes usually use 15..30. Mix 0=only full strokes, 100=only local strokes, intermediate=mixed local groups and full strokes. A request to work at one end uses mix 100 unless the user also requests broad/full strokes. Returning to full strokes changes focus.mix_percent to 0; include both focus and range when widening to the entire slider, and do NOT set local width to 100. For mixed motion the generator returns to full reach after at most six local primary cycles. Mix is a preference, not an exact sequence.
 sweep:{faster_direction,contrast_percent}: faster_direction is "tip", "base" or "even"; contrast 0..80 gives unequal direction timing, with 0 equal. For a faster sweep and slower return emit BOTH direction and nonzero contrast. This preserves overall speed.
 rebounds:{count,retained_width_percent}: count 0..4 extra shrinking returns at the local anchor, only during local groups. Count 0 removes them. Retained width 25..85: 75 means each bounce is three quarters as wide as the last. Tails below 10 percentage points are omitted. For several visible rebounds use local width about 45 and retained width about 75. Bouncing needs focus.mix_percent greater than zero.
@@ -34,6 +34,9 @@ Emit every requested group and scalar, including compound requests. Reply text a
 func CreativeV2ContinuationMessage(requests []string) string {
 	if LayeredExactHoldRequested(requests) {
 		return `Keep the exact score unchanged. Output {"edits":[],"reply":"Keeping the exact score."}.`
+	}
+	if !HasMotionDirection(requests) {
+		return continuousAutopilotExploration
 	}
 	return `AUTOPILOT VARIATION: preserve every current character control, speed and outer band. Refresh only the realization with {"edits":[{"evolve":true}],"reply":"Fresh variation within the same character."}.`
 }

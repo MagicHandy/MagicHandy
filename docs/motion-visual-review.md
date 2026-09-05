@@ -7,6 +7,13 @@ can hide timing distortion, additional reversals and quantization artifacts.
 
 ## Reproduce an atlas
 
+Production captures from `scripts/evaluate-app-autopilot.py` use
+`-sessions .scratch/autopilot.json` (comma-separated paths supported). The
+exporter recompiles every captured semantic target under its captured limits
+and retains failed decisions from that trace run. It does not infer geometry
+from chat. Interactive reports from `scripts/evaluate-app-controls.py` use
+`-llm`. See the [full-build review](llama-autopilot-review-2026-09-05.md).
+
 The exporter is development tooling, compiled only with `magichandy_labs`. It
 creates no transport and starts no playback goroutine. Run from the repository
 root after building the development UI when package embedding requires it:

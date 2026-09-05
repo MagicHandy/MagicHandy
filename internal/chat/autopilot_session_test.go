@@ -70,14 +70,14 @@ func TestAutopilotSpeechMessageDoesNotExposePatternStorageID(t *testing.T) {
 	if strings.Contains(message, "curated-intense-drive-16") {
 		t.Fatalf("speech prompt leaked persisted pattern ID:\n%s", message)
 	}
-	if !strings.Contains(message, "catalog pattern at 40% speed") {
+	if !strings.Contains(message, "40%") || !strings.Contains(message, "catalog pattern") {
 		t.Fatalf("speech prompt lost useful motion context:\n%s", message)
 	}
 	for _, want := range []string{
-		"avoid recycling an earlier line's sentence shape, action, image, or salient noun",
-		"Prefer an actual spoken reaction, observation, reassurance, or anticipation",
-		"narrate a new physical gesture only when the conversation calls for it",
-		"contributes a genuinely new beat",
+		"Continue the same conversation naturally",
+		"without repeating this line or restarting the session",
+		"Do not invent a scene",
+		"one specific current fact",
 	} {
 		if !strings.Contains(message, want) {
 			t.Fatalf("speech prompt is missing anti-repetition guidance %q:\n%s", want, message)

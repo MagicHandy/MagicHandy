@@ -22,6 +22,17 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-05 llama.cpp session and Autopilot follow-up
+
+Continuous-mode history and final guards now match their edit formats.
+Bounded history retains up to 64 messages / 24,000 bytes. Autopilot distinguishes
+exploration without human motion directions from continuation of a requested
+character, forwards session/sampling context and grounds speech in the active
+mode. Full-build simulator harnesses cover conversation, controls, direct
+vocabulary, autonomous output and shared-engine atlases. See the
+[llama.cpp review](docs/llama-autopilot-review-2026-09-05.md) for evidence,
+remaining model errors and update preparation.
+
 ### 2026-09-05 Creative v2 native stroke generation
 
 Creative v2 adds native asymmetric sweeps, localized strokes mixed with broad

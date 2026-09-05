@@ -20,7 +20,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/voice"
 )
 
-const interactiveChatHistoryLimit = 12
+const interactiveChatHistoryLimit = chat.PromptHistoryLimit
 
 type chatStreamRequest struct {
 	SessionID string `json:"session_id,omitempty"`

@@ -554,11 +554,7 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 		sections = appendPromptSection(sections, "motion_context", "Motion context",
 			motionContextInstructions(*motionContext, capabilities, patterns))
 	}
-	if capabilities.MoodTracking {
-		sections = appendPromptSection(sections, "output_guard", "Final output guard", finalOutputGuardWithMood)
-	} else {
-		sections = appendPromptSection(sections, "output_guard", "Final output guard", finalOutputGuard)
-	}
+	sections = appendPromptSection(sections, "output_guard", "Final output guard", promptOutputGuard(capabilities))
 	texts := make([]string, 0, len(sections))
 	for _, section := range sections {
 		texts = append(texts, section.Text)

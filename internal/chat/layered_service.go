@@ -78,8 +78,13 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if maxTokens <= 0 {
 		maxTokens = 1536
 	}
-	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Messages: buildMessages(system, request.History, request.Message),
-		Model: s.Model, Temperature: 0.15, MaxTokens: maxTokens, ReasoningMode: s.ReasoningMode,
+	temperature := chatTemperature
+	if s.TrustedMotionInput && s.AutonomousTemperature > 0 {
+		temperature = min(s.AutonomousTemperature, 1.2)
+	}
+	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Messages: continuousMessages(system, request.History, request.Message, capabilities.MotionMode),
+		Model: s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
+		MaxTokens: maxTokens, ReasoningMode: s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens, JSONSchema: schema}, func(delta string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: delta})
 	})
@@ -154,42 +159,60 @@ func layeredUserMayEdit(message string, running bool, before, after motion.FlowS
 		}
 	}
 	return !motionIntentIsNegated(message) && (userAuthorizesMotion(message, MotionActionUpdate) || hasIntentPhrase(message,
-		"alternate", "alternating", "vary", "varying", "variation", "layer", "layers", "reach", "range", "stroke", "strokes", "jerk", "tip", "base", "center", "gentle", "gently", "gentler", "slower", "faster", "natural", "organic", "rhythm", "evolve"))
+		"alternate", "alternating", "vary", "varying", "variation", "layer", "layers", "reach", "range", "stroke", "strokes", "jerk", "tip", "base", "center", "gentle", "gently", "gentler", "slower", "faster", "natural", "organic", "rhythm", "evolve",
+		"increase speed", "increase the speed", "decrease speed", "decrease the speed", "reduce speed", "reduce the speed", "increase pace", "decrease pace", "reduce pace"))
 }
 
 func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind AutopilotKind, request Request) (AutopilotResponse, error) {
 	service := Service{Provider: s.Provider, Prompt: s.Prompt, Model: s.Model, MaxTokens: s.MaxTokens,
 		ReasoningMode: s.ReasoningMode, ReasoningBudgetTokens: s.ReasoningBudgetTokens, Memories: s.Memories,
-		MotionContext: s.MotionContext, ConversationContext: s.ConversationContext, Capabilities: &s.Capabilities, TrustedMotionInput: true}
+		MotionContext: s.MotionContext, ConversationContext: s.ConversationContext, Capabilities: &s.Capabilities, TrustedMotionInput: true,
+		AutonomousTemperature: s.Temperature}
 	if kind == AutopilotKindMotion {
 		var requests []string
 		if s.MotionContext != nil {
 			requests = s.MotionContext.UserRequests
 		}
-		request.Message = LayeredContinuationMessage(requests)
+		continuation := LayeredContinuationMessage(requests)
 		if s.Capabilities.MotionMode == MotionModeCreativeV2 {
-			request.Message = CreativeV2ContinuationMessage(requests)
+			continuation = CreativeV2ContinuationMessage(requests)
 		}
+		request.Message = request.Message + "\n\n" + continuation
+	} else {
+		request.Message = strings.TrimSuffix(request.Message, autopilotSpeechTimingInstruction) +
+			"Use this continuous mode's edits/reply contract. Omit timing fields; its scheduler retains normal bounded timing."
 	}
 	result, err := service.completeLayered(ctx, request, nil)
 	if err != nil {
 		return AutopilotResponse{}, err
 	}
 	command := result.Response.Motion
-	if kind == AutopilotKindMotion && command != nil && s.MotionContext != nil && LayeredExactHoldRequested(s.MotionContext.UserRequests) {
-		return AutopilotResponse{}, errors.New("layered Autopilot changed an explicitly fixed score")
+	if kind == AutopilotKindMotion {
+		if err := s.validateContinuousAutopilot(command); err != nil {
+			return AutopilotResponse{}, err
+		}
 	}
 	if command != nil {
 		command.Action = MotionActionUpdate
 	}
-	if kind == AutopilotKindMotion && command != nil && command.Layered != nil && s.MotionContext != nil && s.MotionContext.Layered != nil {
+	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled"}, nil
+}
+
+func (s AutopilotService) validateContinuousAutopilot(command *MotionCommand) error {
+	if command == nil || s.MotionContext == nil {
+		return nil
+	}
+	if LayeredExactHoldRequested(s.MotionContext.UserRequests) {
+		return errors.New("layered Autopilot changed an explicitly fixed score")
+	}
+	if command.Layered != nil && s.MotionContext.Layered != nil && HasMotionDirection(s.MotionContext.UserRequests) {
 		before, after := s.MotionContext.Layered, command.Layered
 		if after.SpeedPercent > before.SpeedPercent || after.MinPercent < before.MinPercent || after.MaxPercent > before.MaxPercent {
-			return AutopilotResponse{}, errors.New("layered Autopilot cannot raise speed or widen the requested band")
+			return errors.New("layered Autopilot cannot raise speed or widen the requested band")
 		}
 		if s.Capabilities.MotionMode == MotionModeCreativeV2 && !CreativeV2CharacterUnchanged(*before, *after) {
-			return AutopilotResponse{}, errors.New("creative v2 Autopilot changed the requested character")
+			return errors.New("creative v2 Autopilot changed the requested character")
 		}
 	}
-	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled"}, nil
+	return nil
 }

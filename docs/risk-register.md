@@ -1,5 +1,16 @@
 # MagicHandy Risk Register
 
+## 2026-09-05 continuous-mode session review
+
+Full-build llama.cpp tests found contradictory continuous reply/history
+contracts, seed-only autonomous choices and ungrounded spoken check-ins.
+Mode-specific history/guards, bounded longer context and active semantic speech
+facts address these defects. Compound mapping remains model-dependent,
+especially with Granite 3B; phase descriptions and very long session recall can
+still be wrong. Simulated curves are not physical telemetry. No motion-path or
+kinematic-limit exception was introduced. See the
+[review evidence](llama-autopilot-review-2026-09-05.md), including retained failures.
+
 ## Purpose
 
 The replacement library is public under ADR 0020; ten continuous recipes replace
