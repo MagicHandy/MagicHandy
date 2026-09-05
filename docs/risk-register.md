@@ -1,5 +1,14 @@
 # MagicHandy Risk Register
 
+## 2026-09-05 Autopilot mode-switch crash
+
+A retained Layered score was formatted as Creative v2 after changing the
+selected mode, causing a nil-map panic in the scheduler goroutine and closing
+the app. Motion facts now follow the active score's schema, distinguish it from
+the selected edit grammar, and handle absent gestures without a panic. Both
+switch directions have production-path coverage and a live llama.cpp test with
+the previous score retained. See the [incident and validation](autopilot-mode-switch-crash-2026-09-05.md).
+
 ## 2026-09-05 Creative v2 example and endpoint bias
 
 The default 100% focus, fixed-anchor variation and specific prompt examples

@@ -22,6 +22,9 @@ func FreshCreativeV2Score(speed int) motion.FlowSpec {
 }
 
 func creativeV2ScoreContext(spec motion.FlowSpec) map[string]any {
+	if spec.Gesture == nil {
+		return nil
+	}
 	encoded, _ := json.Marshal(spec.Gesture)
 	fields := map[string]any{}
 	_ = json.Unmarshal(encoded, &fields)

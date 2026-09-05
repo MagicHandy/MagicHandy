@@ -209,6 +209,15 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-09-05 — Autopilot mode-switch crash:** active-score formatting now
+  follows the retained score's schema while the selected grammar changes.
+  Regression, full Go/race, vet and lint checks pass. No motion or frontend
+  implementation changes and no new dependencies. The local Go 1.26.4
+  CGO-free stripped binary remains 19,076,096 bytes; the plain build is
+  26,264,576 bytes. Existing launch/memory measurements and their limitations
+  remain applicable; this does not close the idle waiver or active/soak gaps.
+  See the [incident review](autopilot-mode-switch-crash-2026-09-05.md).
+
 - **2026-09-05 — Creative v2 roaming focus:** removes the default tip bias and
   adds independent, bounded location drift through the shared compiler. No
   new runtime or frontend dependencies. The local `CGO_ENABLED=0 -trimpath`

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; amended 2026-08-29 after Microsoft completed the false-positive
+Accepted; amended 2026-09-05 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
@@ -12,12 +12,15 @@ publication.
 
 ## Context
 
-### Alpha.40 amendment for review
+### Alpha.40 amendment
 
-The proposed alpha.40 update preserves the package layout and release process
+The alpha.40 update preserves the package layout and release process
 while adding the merged motion/Labs work and the llama.cpp conversation and
-Autopilot corrections. Its explicit version is added to the reviewed unsigned
-allowlist for PR review. This grants no standing permission to later versions.
+Autopilot corrections, including the continuous-mode handoff crash fix. Its
+explicit version is included in the reviewed unsigned allowlist. Publication
+was requested on 2026-09-05 after fixing the reported crash; the source still
+reaches main through the reviewed PR and green CI. This grants no standing
+permission to later versions.
 Defender scanning, exact-package verification, installer lifecycle, main-tip
 tag provenance and explicit publication approval remain required. See the
 [evaluation evidence](../llama-autopilot-review-2026-09-05.md).

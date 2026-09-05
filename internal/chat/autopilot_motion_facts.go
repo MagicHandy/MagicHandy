@@ -20,13 +20,20 @@ func writeAutopilotMotionFacts(builder *strings.Builder, context AutopilotContex
 			builder.WriteString("The next continuous score has not been chosen yet.\n")
 			return
 		}
+		// A mode switch changes the next decision's grammar before it replaces
+		// the active segment. Describe that segment by its actual score type.
+		activeMode := MotionModeLayered
 		var score any = layeredScoreContext(*context.CurrentFlow)
-		if context.MotionMode == MotionModeCreativeV2 {
+		if context.CurrentFlow.Gesture != nil {
+			activeMode = MotionModeCreativeV2
 			score = creativeV2ScoreContext(*context.CurrentFlow)
 		}
 		encoded, _ := json.Marshal(score)
-		fmt.Fprintf(builder, "Current continuous score (%s): %s\n", context.MotionMode, encoded)
-		if context.MotionMode == MotionModeCreativeV2 {
+		fmt.Fprintf(builder, "Current continuous score (%s): %s\n", activeMode, encoded)
+		if activeMode != context.MotionMode {
+			fmt.Fprintf(builder, "The active score still belongs to %s; the selected control mode is %s. Use the selected mode's current_score from the authoritative state for edits. These facts describe the preceding motion until a new update is accepted.\n", activeMode, context.MotionMode)
+		}
+		if activeMode == MotionModeCreativeV2 {
 			builder.WriteString("Focus position locates local work; width is its travel distance; mix blends local work with broad strokes. Rebounds apply only during local work. Sweep contrast changes relative direction timing. This mode has no separately editable pace, center or range layers.\n")
 		} else {
 			builder.WriteString("The anchor is a reference for stroke placement; a center layer moves that working region. Pace layers vary travel rate, and range layers vary stroke length.\n")

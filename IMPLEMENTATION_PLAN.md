@@ -31,6 +31,14 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-05 Autopilot mode-switch crash correction
+
+Active continuous scores retain their own schema while the selected control
+mode changes. This prevents a Layered-to-Creative-v2 prompt panic without
+altering motion compilation or Stop. API regressions and a live llama.cpp
+switching run cover both directions. See the
+[incident review](docs/autopilot-mode-switch-crash-2026-09-05.md).
+
 ### 2026-09-05 llama.cpp session and Autopilot follow-up
 
 Continuous-mode history and final guards now match their edit formats.
