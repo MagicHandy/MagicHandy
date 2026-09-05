@@ -20,12 +20,14 @@ interface Props {
 
 export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, onPlay, onFeedback, onExport, onDelete }: Props) {
   const [query, setQuery] = useState("");
+  const [showLegacy, setShowLegacy] = useState(false);
   const [activeTags, setActiveTags] = useState<ReadonlySet<string>>(() => new Set());
-  const availableTags = useMemo(() => collectPatternTags(patterns), [patterns]);
+  const visible = useMemo(() => patterns.filter(pattern => showLegacy || !pattern.deprecated), [patterns, showLegacy]);
+  const availableTags = useMemo(() => collectPatternTags(visible), [visible]);
   const filtered = useMemo(() => {
-    return patterns.filter((pattern) => patternMatchesQuery(pattern, query) && patternMatchesTags(pattern, activeTags));
-  }, [activeTags, patterns, query]);
-  const enabled = patterns.filter((pattern) => pattern.enabled).length;
+    return visible.filter((pattern) => patternMatchesQuery(pattern, query) && patternMatchesTags(pattern, activeTags));
+  }, [activeTags, visible, query]);
+  const enabled = patterns.filter((pattern) => pattern.enabled && !pattern.deprecated).length;
 
   function toggleTag(tag: string) {
     setActiveTags((current) => {
@@ -52,6 +54,11 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("Search patterns")} />
         </label>
       </div>
+
+      {patterns.some(pattern => pattern.deprecated) && <label className="field">
+        <span><input type="checkbox" checked={showLegacy} onChange={event => {setShowLegacy(event.target.checked);setActiveTags(new Set());}} />{t("Show legacy patterns")}</span>
+        <span className="hint">{t("Legacy patterns remain available for manual playback and saved content. LLM selection uses the new library.")}</span>
+      </label>}
 
       {availableTags.length > 0 && (
         <div className="tag-filter-bar" role="group" aria-label={t("Filter by tags")}>
@@ -89,6 +96,8 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
             <div className="pattern-copy">
               <PatternNameEditor pattern={pattern} locked={locked || mutating} onCommit={(name) => onPatch(pattern.id, { name })} />
               {pattern.description && <p>{pattern.description}</p>}
+              {pattern.continuous && <p className="hint">{t("Continuous motion · preview at 25% pace · playback follows saved limits")}</p>}
+              {pattern.deprecated && <p className="hint">{t("Legacy · excluded from LLM selection")}</p>}
               <div className="pattern-meta"><span>{t("{seconds} s", { seconds: (pattern.cycle_ms / 1000).toFixed(1) })}</span><span>{pattern.kind}</span><span>{t("{count} knots", { count: pattern.points.length })}</span></div>
               {tags.length > 0 && <div className="tag-list">{tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
             </div>

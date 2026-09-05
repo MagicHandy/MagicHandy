@@ -2,6 +2,12 @@
 
 ## Purpose
 
+The opt-in [Motion Lab](motion-lab-review-2026-09-04.md) evaluates range anchoring
+and per-stroke directional timing before the shared C2 fitter. Preview controls
+never retarget live output; explicit auditions use existing admission and Stop.
+Neutral controls produce the existing Creative baseline, and non-lab sources
+strip experimental fields.
+
 This spec defines how MagicHandy changes active motion while a device is already moving. It exists because hard resets, stationary bridge holds, stale buffer assumptions, and phase-zero restarts caused repeated motion regressions in StrokeGPT-ReVibed.
 
 The goal is not to make every retarget invisible. The goal is to keep motion continuous, bounded, explainable, and recoverable.

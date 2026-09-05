@@ -164,7 +164,7 @@ func TestManagedLlamaReasoningBudgetRequiresCurrentPinnedRuntime(t *testing.T) {
 func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"reply":"Starting.","motion":{"action":"start","pattern_id":"pulse","speed_percent":30}}`,
+		`{"reply":"Starting.","motion":{"action":"start","pattern_id":"flow-pace-wave","speed_percent":30}}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{
 		Transport:       fake,
@@ -173,7 +173,7 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 	})
 	t.Cleanup(server.Close)
 
-	body := postChatStream(t, server, `{"message":"start a pulse at 30 percent"}`)
+	body := postChatStream(t, server, `{"message":"start a pace wave at 30 percent"}`)
 	if !strings.Contains(body, `"reply":"Starting."`) {
 		t.Fatalf("chat stream missing assistant message:\n%s", body)
 	}

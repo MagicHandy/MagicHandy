@@ -237,6 +237,7 @@ type Settings struct {
 	Version     int                 `json:"version"`
 	Server      ServerSettings      `json:"server"`
 	UI          UISettings          `json:"ui"`
+	Labs        LabsSettings        `json:"labs"`
 	Media       MediaSettings       `json:"media"`
 	Device      DeviceSettings      `json:"device"`
 	Motion      MotionSettings      `json:"motion"`
@@ -531,6 +532,7 @@ type PublicSettings struct {
 	Version     int                       `json:"version"`
 	Server      ServerSettings            `json:"server"`
 	UI          UISettings                `json:"ui"`
+	Labs        LabsSettings              `json:"labs"`
 	Media       MediaSettings             `json:"media"`
 	Device      PublicDeviceSettings      `json:"device"`
 	Motion      MotionSettings            `json:"motion"`
@@ -643,6 +645,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 type SettingsUpdate struct {
 	Server             ServerSettings      `json:"server"`
 	UI                 *UISettings         `json:"ui,omitempty"`
+	Labs               *LabsSettings       `json:"labs,omitempty"`
 	Media              *MediaUpdate        `json:"media,omitempty"`
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
@@ -756,6 +759,7 @@ func (s Settings) Public() PublicSettings {
 		Version: s.Version,
 		Server:  s.Server,
 		UI:      s.UI,
+		Labs:    s.Labs,
 		// Every MediaSettings field has to be copied explicitly here. A field
 		// added to the struct but missed in this projection saves correctly and
 		// then reads back as its zero value, which unit tests over ApplyUpdate
@@ -844,6 +848,9 @@ func publicVoiceSettings(settings VoiceSettings) PublicVoiceSettings {
 func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next := s
 	next.Version = CurrentSettingsVersion
+	if update.Labs != nil {
+		next.Labs = *update.Labs
+	}
 	next.Server = update.Server
 	if update.UI != nil {
 		next.UI.Locale = strings.TrimSpace(update.UI.Locale)

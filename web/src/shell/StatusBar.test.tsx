@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     readOnly: true,
     refresh: vi.fn(),
     state: {
+      motion_simulated: false,
       controller: {
         active: false,
         read_only: true,
@@ -51,6 +52,7 @@ describe("StatusBar controller handoff", () => {
     mocks.app.backendOnline = true;
     mocks.app.readOnly = true;
     mocks.app.state = {
+      motion_simulated: false,
       controller: {
         active: false,
         read_only: true,
@@ -82,6 +84,14 @@ describe("StatusBar controller handoff", () => {
     expect(emergencyStop).toHaveBeenCalledOnce();
     expect(mocks.show).toHaveBeenCalledWith("This tab now controls MagicHandy.", "success");
     window.removeEventListener("magichandy:emergency-stop", emergencyStop);
+  });
+
+  it("discloses simulator routing independently of the motion phase", () => {
+    mocks.app.state.motion_simulated = true;
+    render(<StatusBar />);
+
+    expect(screen.getByText("Motion simulator")).toBeInTheDocument();
+    expect(screen.getByTitle(/connected devices will not move/)).toBeInTheDocument();
   });
 
   it("does not request control when confirmation is declined", () => {

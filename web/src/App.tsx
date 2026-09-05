@@ -18,6 +18,7 @@ import { useAppState, useHashRoute } from "./state/app-state";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { normalizeTheme } from "./theme";
 import { useAuth } from "./state/auth";
+import {LAB_BASE,LabsRoute,legacyLabRoute} from "@labs";
 
 export function App() {
   useLocale();
@@ -59,6 +60,10 @@ export function App() {
   const setupRoutePath = route.replace(/^#\/?/, "").split("?")[0].replace(/\/+$/, "");
   const explicitSetup = setupRoutePath === "setup/reconfigure";
   const contentBase = setupComplete && base === "setup" && !explicitSetup ? "chat" : base;
+  useEffect(()=>{
+    const destination=legacyLabRoute(route);
+    if(state?.labs_enabled&&destination)window.location.hash=destination;
+  },[route,state?.labs_enabled]);
   const askBeforeSetup = setupPending && !freshStore && base !== "setup" && !setupPromptDismissed;
   useEffect(() => {
     if (setupPending && freshStore && base !== "setup") {
@@ -180,6 +185,8 @@ export function App() {
           <VideoRoute />
         ) : contentBase === "settings" ? (
           <SettingsRoute />
+        ) : contentBase === LAB_BASE ? (
+          <LabsRoute />
         ) : (
           <ChatRoute />
         )}

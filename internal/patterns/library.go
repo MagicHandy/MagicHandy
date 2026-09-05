@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -98,7 +99,7 @@ func (l *Library) Summary() (Summary, error) {
 	ctx := context.Background()
 	summary := Summary{Available: true}
 	if err := l.db.SQL().QueryRowContext(ctx, `
-		SELECT COUNT(*), COALESCE(SUM(enabled), 0) FROM patterns
+		SELECT COUNT(*), COALESCE(SUM(CASE WHEN tags_json NOT LIKE '%"deprecated"%' THEN enabled ELSE 0 END), 0) FROM patterns
 	`).Scan(&summary.PatternCount, &summary.EnabledPatternCount); err != nil {
 		return Summary{}, err
 	}
@@ -119,7 +120,7 @@ func (l *Library) ListPatterns() ([]Pattern, error) {
 		SELECT id, name, description, origin, kind, enabled, weight, cycle_ms,
 		       points_json, tags_json, created_at, updated_at
 		FROM patterns
-		ORDER BY CASE origin WHEN 'builtin' THEN 0 ELSE 1 END, name, id
+		ORDER BY CASE WHEN tags_json LIKE '%"deprecated"%' THEN 2 WHEN origin = 'builtin' THEN 0 ELSE 1 END, name, id
 	`)
 	if err != nil {
 		return nil, err
@@ -184,6 +185,9 @@ func (l *Library) EnabledChoices() ([]CurationChoice, error) {
 		}
 		if err := json.Unmarshal([]byte(tagsJSON), &choice.Tags); err != nil {
 			return nil, err
+		}
+		if slices.Contains(choice.Tags, motion.TagDeprecated) {
+			continue
 		}
 		choices = append(choices, choice)
 	}
@@ -705,6 +709,15 @@ func scanPattern(scanner interface{ Scan(...any) error }) (Pattern, error) {
 }
 
 func withPatternPreview(pattern Pattern) (Pattern, error) {
+	pattern.Deprecated = pattern.Origin == OriginBuiltin && slices.Contains(pattern.Tags, motion.TagDeprecated)
+	if pattern.Origin == OriginBuiltin {
+		if samples, duration, ok := motion.ContinuousPatternPreview(motion.PatternID(pattern.ID)); ok {
+			pattern.Continuous = true
+			pattern.PreviewSamples, pattern.CycleMillis = samples, duration
+			pattern.Points = append([]motion.CurvePoint(nil), samples...)
+			return pattern, nil
+		}
+	}
 	definition, err := motion.NormalizePatternDefinition(pattern.Definition())
 	if err != nil {
 		return Pattern{}, err

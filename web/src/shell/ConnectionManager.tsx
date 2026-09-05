@@ -187,6 +187,8 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
 
         <ConnectionArtwork phase={phase} />
 
+        {state?.motion_simulated && <p className="hint-block" role="status">{t("Simulation is active. Motion commands go to the simulator; connected devices will not move.")}</p>}
+
         <div className="connection-current" aria-live="polite">
           <span className="status-dot" data-state={phase === "connected" ? "ok" : phase === "connecting" || phase === "initializing" ? "pending" : phase === "error" ? "error" : "idle"} aria-hidden="true" />
           <span className="connection-current-copy">

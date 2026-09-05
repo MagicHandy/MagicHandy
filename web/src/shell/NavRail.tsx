@@ -4,6 +4,7 @@ import { t, translateKnown } from "../i18n";
 import { useAppState, useHashRoute } from "../state/app-state";
 import { ChatIcon, LibraryIcon, ModesIcon, PersonaIcon, SettingsIcon, VideoIcon } from "./icons";
 import { StopButton } from "./StopButton";
+import {LAB_BASE,LabsNavLink} from "@labs";
 
 // Personas sits second, directly under Chat: a persona is chat furniture, closer
 // to the conversation than the content libraries are (docs/persona-page.md §5.1).
@@ -19,6 +20,7 @@ const LINKS = [
 export function routeBase(hash: string): string {
   const candidate = hash.replace(/^#\/?/, "").split("/")[0] || "chat";
   if (candidate === "setup") return "setup";
+  if (candidate === LAB_BASE) return candidate;
   return LINKS.some((link) => link.base === candidate) ? candidate : "chat";
 }
 
@@ -47,6 +49,7 @@ export function NavRail({ authenticationLocked = false }: { authenticationLocked
             <span className="label">{translateKnown(l.label)}</span>
           </a>
         ))}
+        <LabsNavLink active={active} enabled={Boolean(state?.labs_enabled)} />
       </div>}
       <div className="nav-spacer" />
       <StopButton className="nav-stop" />

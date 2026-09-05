@@ -456,6 +456,8 @@ export interface CurvePoint {
 }
 
 export interface LibraryPattern {
+	deprecated?: boolean;
+	continuous?: boolean;
   id: string;
   name: string;
   description?: string;
@@ -909,6 +911,7 @@ export interface OptionHints {
 
 export interface PublicSettings {
   version: number;
+  labs?: {enabled:boolean};
   server: { port: number };
   ui?: {
     locale: string;
@@ -1332,6 +1335,8 @@ export interface AppState {
   settings_status?: Record<string, unknown>;
   controller?: ControllerSnapshot;
   motion?: MotionInfo;
+  motion_simulated?: boolean;
+  labs_enabled?: boolean;
   modes?: ModesStatus;
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;

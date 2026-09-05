@@ -22,6 +22,55 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-04 additional Lab experiments
+
+Correlated drift, symmetric turn softness and cadence hold are optional
+continuous-score axes, with a five-round guided comparison and shared-engine
+atlas roster. LLM Lab adds relative numeric edits and per-axis layer
+upserts/removal. Exact-score live checks retain incorrect selections and a
+separate continuation scenario; the 3B model improves but remains unreliable,
+and both models missed one multi-control continuation. Production recipe
+defaults are unchanged. See [the experiment review](docs/motion-ideas-review-2026-09-04.md)
+for research, rejected ideas, motion tradeoffs and current evidence.
+
+### 2026-09-04 natural motion review
+
+The active public library now uses ten continuous recipes; the 81 prior
+built-ins are deprecated for model selection and hidden by default, with manual
+compatibility and saved preferences preserved. Default semantic motion and
+fallback pools use the new catalog. Its geometry and pace compile independently
+of Creative/PCHIP authoring. LLM Lab also compares three recipe naming contracts.
+Every evaluated output is rendered through the shared engine for visual review.
+See [the library review](docs/motion-library-review-2026-09-04.md),
+[the visual process](docs/motion-visual-review.md), and ADR 0020.
+
+The optional Labs sidebar workspace has LLM Lab, Motion Lab, Guided tests and
+Observations tabs; the former Settings bookmarks redirect to these pages.
+Chat is the primary LLM interface, with a persistent composer and secondary
+experiment setup. Observations save locally with exact source context and are
+only sent to an LLM through an explicit editable chat draft. See
+[the workspace guide](docs/labs-workspace.md).
+
+Guided tests adds persisted, bounded sequences with frozen engine previews and
+LLM trials, per-round ratings, comments, skips and a completion summary.
+Motion and reply shortcuts create method comparisons or before/after tests;
+the API also accepts authored sequences. Progress is backend-authoritative,
+duplicate saves are rejected, and no round starts motion automatically.
+Feedback remains local review evidence with explicit export and database path.
+
+Motion Lab now compares Creative, anchored range
+and an independent continuous carrier with spectral modulation and blended
+sections. It retains the shared engine, sampler and Stop path. A separate LLM
+Lab tests editable prompts, simple controls, sequences and modulation layers
+with preview-only replies and explicit auditions. Every release includes Labs,
+enabled through Settings > General and disabled by default. The backend gates
+lab requests and auditions against the saved setting; disabling cancels lab
+work and stops lab motion. The workspace loads on demand from the canonical UI.
+See ADR 0021. Production Creative remains available; the shared
+quantized sampler preserves easing after duplicate removal. See
+[the redesign review](docs/motion-lab-redesign-2026-09-04.md) and ADR 0019 for
+conversation/physical evidence, model failures and open physical acceptance.
+
 Updated 2026-08-28. MagicHandy is a source-runnable and packaged Windows alpha,
 not a finished application. Phases 0 through 14, 14B, and 14C are merged to
 `main`: persisted patterns/programs, Intiface dispatch, the route-independent

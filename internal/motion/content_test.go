@@ -12,7 +12,9 @@ import (
 )
 
 func TestGeneratedCatalogMeetsHardwareBudgets(t *testing.T) {
-	definitions := BuiltinPatternDefinitions()
+	// These are stored PCHIP authoring budgets. Continuous recipes are checked
+	// through their actual compiled kinematics in continuous_catalog_test.go.
+	definitions := legacyPointCatalogForTest()
 	if len(definitions) < 3 {
 		t.Fatalf("catalog size = %d, want baseline patterns", len(definitions))
 	}
@@ -216,7 +218,7 @@ const (
 )
 
 func TestCatalogPatternsHoldTheMeasuredSpeedEnvelope(t *testing.T) {
-	for _, definition := range BuiltinPatternDefinitions() {
+	for _, definition := range legacyPointCatalogForTest() {
 		if strings.HasPrefix(string(definition.ID), "curated-") && slices.Contains(definition.Tags, TagExperimental) {
 			continue
 		}
@@ -506,8 +508,8 @@ func TestInvalidResolvedProgramFallsBackWithoutRetainingProgram(t *testing.T) {
 	if plan.ProgramID != "" || plan.Target.Program != nil || plan.Target.ProgramID != "" {
 		t.Fatalf("fallback plan retained invalid program: %+v", plan)
 	}
-	if plan.PatternID != PatternStroke || plan.Target.Pattern == nil {
-		t.Fatalf("fallback plan = %+v, want resolved stroke pattern", plan)
+	if plan.PatternID != PatternFullSweeps || plan.Target.prepared == nil {
+		t.Fatalf("fallback pattern = %s, want compiled full sweeps", plan.PatternID)
 	}
 }
 

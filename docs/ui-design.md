@@ -2,6 +2,55 @@
 
 ## Purpose
 
+The pattern browser leads with ten continuous recipes and hides the 81
+deprecated built-ins behind Show legacy patterns. Legacy entries are labeled
+as excluded from LLM selection; saved manual preferences remain intact.
+Continuous previews use actual engine output at a labeled 25% reference pace.
+LLM Lab's New library interface exposes opaque, descriptive and action-name
+contracts in a separate naming selector. See
+[the library review](motion-library-review-2026-09-04.md).
+
+Every release includes an optional Labs sidebar entry with LLM Lab, Motion Lab,
+Guided tests and Observations tabs. Settings > General > Enable Labs toggles the workspace
+immediately; the saved app-wide setting defaults off. The previous Settings
+lab routes redirect to the enabled workspace.
+Motion Lab compares Creative, anchored range and continuous flow using
+backend-computed curves and estimates. LLM Lab owns a separate conversation,
+editable experimental prompts, simple/sequence/layer/relative-edit contracts, raw replies
+and applied-field diagnostics. Chat and its composer fill the main column;
+the current preview, experiment setup and storage details live beside it.
+Accepted changes are labeled “Preview updated,” without claiming confirmed
+intent or physical quality. Replies and score edits affect previews only; Start or
+Audition explicitly begins motion. The permanent Stop stays reachable.
+The workspace and its CSS load on demand. Disabled lab endpoints and auditions
+are rejected by the backend; disabling Labs cancels pending lab work and stops
+lab auditions through the shared engine. Guided tests presents one captured
+result at a time, with neutral progress, three ratings, review basis and an
+optional comment. Saving or skipping advances only after the backend confirms
+the answer; progress survives restart. Completion distinguishes reviews from
+skips and does not reward positive ratings. Auditions require an explicit
+action and Stop before advancing; no round starts automatically. Old captures
+cannot be auditioned from the guide after limits or compiled output change.
+Continuous flow additionally exposes waves/drift, turn softness and steady
+beat. Hints explain repeatability, middle-stroke concentration and lower
+effective pace. Compare motion experiments captures a labeled five-round
+reference/drift/softness/beat/combined sequence using the selected score.
+Historical generators hide these inapplicable controls. Relative and layer
+edits is an LLM experiment setup choice with matching prompt/schema defaults;
+applied-field diagnostics remain separate from the model's prose.
+See ADR 0021,
+[the redesign review](motion-lab-redesign-2026-09-04.md) and
+[the workspace guide](labs-workspace.md). Observations are saved review records
+with explicit source and database location. They have no automatic effect on
+prompts, preferences or motion; Use in chat opens a draft that the user sends.
+
+The backend explicitly reports `motion_simulated` when launched with
+`--simulate-motion`. A persistent Motion simulator readout, a connection
+manager notice, and a Motion Lab notice and Start simulated test label expose
+this routing even when a physical device is connected. Lab exports retain
+the flag; a healthy Cloud/Bluetooth connection does not prove that motion is
+being dispatched to it.
+
 This defines the MagicHandy UI. It is designed to avoid the specific UI flaws
 observed in StrokeGPT-ReVibed, not to reproduce its layout. It complements
 ADR 0004 (frontend rebuilt fresh, minimal-first, backend-state-driven) and is

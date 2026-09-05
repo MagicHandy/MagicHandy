@@ -116,6 +116,7 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		MaxTokens:             s.MaxTokens,
 		ReasoningMode:         s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens,
+		JSONSchema:            autopilotPatternSchema(s.Patterns, s.Capabilities, s.MotionContext, kind),
 	}, nil)
 	truncated := errors.Is(err, llm.ErrOutputTruncated)
 	if err != nil && !truncated {
@@ -153,6 +154,7 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		Temperature:   0,
 		MaxTokens:     s.MaxTokens,
 		ReasoningMode: "off",
+		JSONSchema:    autopilotPatternSchema(s.Patterns, s.Capabilities, s.MotionContext, kind),
 	}, nil)
 	if repairErr != nil && !errors.Is(repairErr, llm.ErrOutputTruncated) {
 		return AutopilotResponse{}, fmt.Errorf("repair Autopilot response: %w", repairErr)
@@ -341,6 +343,8 @@ func composeAutopilotSystem(
 			}
 		case "response_contract":
 			sections = append(sections, autopilotContract(kind, capabilities))
+		case "pattern_catalog":
+			sections = append(sections, autopilotCatalog(patterns, kind))
 		case "output_guard":
 			sections = append(sections, autopilotOutputGuard(kind, capabilities))
 		case "motion_context":

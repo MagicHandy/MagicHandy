@@ -46,7 +46,7 @@ func NormalizeSegment(segment Segment) Segment {
 		segment.Dynamic = &dynamic
 		segment.PatternID = ""
 	} else if segment.PatternID == "" {
-		segment.PatternID = motion.PatternStroke
+		segment.PatternID = motion.PatternFullSweeps
 	}
 	segment.SpeedPercent = clampInt(segment.SpeedPercent, 1, 100)
 	if segment.DriftToSpeedPercent != 0 {

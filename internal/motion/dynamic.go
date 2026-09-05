@@ -104,11 +104,15 @@ type DynamicDefinition struct {
 	VariationPercent int              `json:"variation_percent"`
 	SegmentSeconds   int              `json:"segment_seconds"`
 	Sections         []DynamicSection `json:"sections,omitempty"`
+	// Experiment is opt-in Motion Lab intent. The production LLM contract does
+	// not accept it; ordinary Creative targets retain their existing behavior.
+	Experiment *DynamicExperiment `json:"experiment,omitempty"`
 }
 
 // NormalizeDynamicDefinition returns concrete, bounded geometry suitable for
 // engine sampling. Named anchors take precedence over center/span geometry.
 func NormalizeDynamicDefinition(definition DynamicDefinition) DynamicDefinition {
+	definition.Experiment = normalizeDynamicExperiment(definition.Experiment)
 	definition.VariationPercent = clamp(definition.VariationPercent, 0, 100)
 	if definition.SegmentSeconds == 0 {
 		definition.SegmentSeconds = defaultDynamicSegment
@@ -116,6 +120,7 @@ func NormalizeDynamicDefinition(definition DynamicDefinition) DynamicDefinition 
 	definition.SegmentSeconds = clamp(definition.SegmentSeconds, 4, 120)
 	definition.Sections = normalizeDynamicSections(definition.Sections)
 	if len(definition.Sections) >= minimumDynamicSections {
+		definition.Experiment = nil // section composition is outside this experiment
 		first := definition.Sections[0]
 		definition.CenterPercent = first.CenterPercent
 		definition.SpanPercent = first.SpanPercent
@@ -380,6 +385,7 @@ func dynamicSingleContent(definition DynamicDefinition) resolvedContent {
 	return resolvedContent{
 		points: points, duration: elapsed, loop: true, maximumPoints: maximumCurvePoints,
 		reversalProfile: curveReversalC2Flow,
+		preserveRhythm:  definition.Experiment != nil && definition.Experiment.OutboundTimePercent != 50,
 	}
 }
 
@@ -640,6 +646,14 @@ func dynamicVariedPosition(position float64, base []float64, definition DynamicD
 		)
 	}
 	variedCenter := center + amount*(14*centerWave+6*centerTexture)
+	if expression := definition.Experiment; expression != nil {
+		anchor := float64(expression.RangeAnchorPercent) / 100
+		// Contract the route about an explicit point within its outer window.
+		// At either extreme one endpoint remains fixed. Center drift fades out
+		// towards those extremes so it cannot undo the requested anchoring.
+		variedCenter = minimum + variedSpan/2 + (span-variedSpan)*anchor +
+			amount*(14*centerWave+6*centerTexture)*4*anchor*(1-anchor)
+	}
 	variedCenter = math.Max(variedSpan/2, math.Min(100-variedSpan/2, variedCenter))
 	// The algebraic bounds above can still land a few ulps beyond an endpoint
 	// (for example, a full-span route at 96% variation produced
@@ -818,7 +832,7 @@ func dynamicLegMillis(left, right float64, definition DynamicDefinition, legInde
 	base := max(int64(180), int64(math.Round(math.Abs(right-left)*10)))
 	variation := definition.VariationPercent
 	if variation <= 0 {
-		return base
+		return dynamicExperimentalLegMillis(base, left, right, definition.Experiment)
 	}
 	amount := math.Sqrt(float64(variation) / 100)
 	phase := (float64(legIndex) + 0.5) / float64(max(1, totalLegs))
@@ -843,7 +857,7 @@ func dynamicLegMillis(left, right float64, definition DynamicDefinition, legInde
 	skew := direction * math.Sin(4*math.Pi*phase+0.90)
 	scale := 1 + amount*(0.14*breathing+0.10*skew+0.22*rhythm)
 	scale = math.Max(0.65, math.Min(1.45, scale))
-	return max(int64(120), int64(math.Round(float64(base)*scale)))
+	return dynamicExperimentalLegMillis(max(int64(120), int64(math.Round(float64(base)*scale))), left, right, definition.Experiment)
 }
 
 func dynamicContentID(definition DynamicDefinition) string {
@@ -862,6 +876,9 @@ func dynamicContentID(definition DynamicDefinition) string {
 		for _, anchor := range section.Anchors {
 			_, _ = fmt.Fprintf(&builder, ":%s=%d", anchor.Name, anchor.PositionPercent)
 		}
+	}
+	if expression := definition.Experiment; expression != nil {
+		_, _ = fmt.Fprintf(&builder, "|experiment=%d:%d", expression.RangeAnchorPercent, expression.OutboundTimePercent)
 	}
 	return builder.String()
 }

@@ -94,16 +94,29 @@ try {
     if ($provider -eq 'llama_cpp') {
         $completionRequest['chat_template_kwargs'] = @{ enable_thinking = $false }
     }
+    if ($provider -eq 'ollama') {
+        # Use the same native protocol as the app. Ollama's compatibility API
+        # does not apply llama.cpp's thinking-template option and may exhaust
+        # this small budget without producing visible text.
+        $completionUrl = "$providerBaseUrl/api/chat"
+        $completionRequest.Remove('max_tokens')
+        $completionRequest['options'] = @{ num_predict = 64; temperature = 0 }
+        $completionRequest['think'] = $false
+    }
     $completionBody = $completionRequest | ConvertTo-Json -Depth 6 -Compress
 
     # This is a direct provider generation probe. It does not acquire a
     # controller lease, enter MagicHandy chat, or touch the motion engine.
     $completion = Invoke-RestMethod -Method Post -Uri $completionUrl `
         -ContentType 'application/json' -Body $completionBody -TimeoutSec $TimeoutSeconds
-    $choices = @(Get-OptionalProperty $completion 'choices')
-    Assert-ReviewCondition ($choices.Count -gt 0 -and $null -ne $choices[0]) `
-        "The configured review model '$model' returned no completion choice."
-    $completionMessage = Get-OptionalProperty $choices[0] 'message'
+    if ($provider -eq 'ollama') {
+        $completionMessage = Get-OptionalProperty $completion 'message'
+    } else {
+        $choices = @(Get-OptionalProperty $completion 'choices')
+        Assert-ReviewCondition ($choices.Count -gt 0 -and $null -ne $choices[0]) `
+            "The configured review model '$model' returned no completion choice."
+        $completionMessage = Get-OptionalProperty $choices[0] 'message'
+    }
     Assert-ReviewCondition ($null -ne $completionMessage) `
         "The configured review model '$model' returned no completion message."
     $reply = [string](Get-OptionalProperty $completionMessage 'content')

@@ -72,8 +72,23 @@ func NewMotionPlan(
 ) MotionPlan {
 	settings = normalizeMotionSettings(settings)
 	target = NormalizeTarget(target, settings)
+	if target.prepared != nil && target.prepared.libraryID == "" {
+		return preparedPlan(id, target, settings, phaseOffset, handoffMillis, createdAt)
+	}
 	target, content := resolveTargetContent(target, settings.HandyModel)
+	preparedTarget, prepareErr := prepareContinuousRecipe(target, settings)
+	if prepareErr == nil {
+		target = preparedTarget
+	}
+	if target.prepared != nil {
+		plan := preparedPlan(id, target, settings, phaseOffset, handoffMillis, createdAt)
+		plan.compileErr = prepareErr
+		return plan
+	}
 	timingErr := error(nil)
+	if prepareErr != nil {
+		timingErr = prepareErr
+	}
 	if target.Dynamic != nil {
 		content, timingErr = retimeDynamicContent(content, target.SpeedPercent, settings.HandyModel)
 	}
@@ -275,6 +290,7 @@ type resolvedContent struct {
 	maximumPoints   int
 	reversalProfile curveReversalProfile
 	timingResolved  bool
+	preserveRhythm  bool
 }
 
 func (c resolvedContent) validate() error {
@@ -389,8 +405,8 @@ func resolveTargetContent(target MotionTarget, handyModel string) (MotionTarget,
 	}
 	definition, ok := BuiltinPatternDefinition(target.PatternID)
 	if !ok {
-		definition, _ = BuiltinPatternDefinition(PatternStroke)
-		target.PatternID = PatternStroke
+		definition, _ = BuiltinPatternDefinition(PatternFullSweeps)
+		target.PatternID = PatternFullSweeps
 	}
 	target.Pattern = &definition
 	target.PatternName = definition.Name

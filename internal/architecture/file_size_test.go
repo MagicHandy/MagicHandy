@@ -74,7 +74,7 @@ func checkSourceBudget(t *testing.T, repo string, budget sourceBudget) {
 			// hand-written source is size-governed (the React build output and
 			// node_modules are neither authored nor shipped as source).
 			switch entry.Name() {
-			case "node_modules", "dist", ".vite":
+			case "node_modules", "dist", ".labs-dist", ".vite":
 				return filepath.SkipDir
 			}
 			return nil

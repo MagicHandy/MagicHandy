@@ -183,6 +183,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		MaxTokens:             s.MaxTokens,
 		ReasoningMode:         s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens,
+		JSONSchema:            PatternResponseSchema(s.Patterns, capabilities, s.MotionContext),
 	}, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: text})
 	})
@@ -265,6 +266,7 @@ func (s Service) repairResponse(ctx context.Context, in repairInput, emit func(S
 		Temperature:   0,
 		MaxTokens:     s.MaxTokens,
 		ReasoningMode: "off",
+		JSONSchema:    PatternResponseSchema(s.Patterns, in.capabilities, s.MotionContext),
 	}, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "repair_delta", Phase: "repair", Text: text})
 	})
@@ -483,7 +485,8 @@ func (s Service) stripUnauthorizedMotion(
 	userMessage string,
 ) bool {
 	if response.Motion == nil || s.TrustedMotionInput ||
-		userAuthorizesMotionCommandForCapabilities(userMessage, *response.Motion, capabilities, s.MotionContext) {
+		userAuthorizesMotionCommandForCapabilities(userMessage, *response.Motion, capabilities, s.MotionContext) ||
+		authorizesNamedContinuousStart(userMessage, *response.Motion, capabilities, s.MotionContext) {
 		return false
 	}
 	response.Motion = nil
@@ -580,6 +583,9 @@ func validateInteractiveDynamicAction(command *MotionCommand, context *MotionCon
 }
 
 func userAuthorizesMotionCommandForCapabilities(message string, command MotionCommand, capabilities Capabilities, context *MotionContext) bool {
+	if authorizesPreservedPatternPace(message, command, capabilities, context) {
+		return true
+	}
 	if capabilities.MotionMode == MotionModeDynamic && command.Action == MotionActionUpdate &&
 		context != nil && context.Running {
 		return userAuthorizesDynamicUpdate(message, command, *context)

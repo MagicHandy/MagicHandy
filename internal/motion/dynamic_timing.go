@@ -63,6 +63,9 @@ func resolveDynamicDurations(
 	targetDuration int64,
 	devicePeakRate float64,
 ) ([]int64, error) {
+	if content.preserveRhythm {
+		return resolveExperimentalRhythm(content, authoredDurations, targetDuration, devicePeakRate)
+	}
 	physicalFloorSeed := make([]int64, len(authoredDurations))
 	for index := range physicalFloorSeed {
 		physicalFloorSeed[index] = 1

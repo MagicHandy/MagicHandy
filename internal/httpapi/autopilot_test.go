@@ -333,7 +333,7 @@ func TestAutopilotHighRateRetriesCosmeticGeometryWithoutChoosingAReplacement(t *
 
 func TestAutopilotDecisionCanCurateMotionDespiteStopProhibition(t *testing.T) {
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"intent":"settle into a firmer stroke","motion":{"action":"target","pattern_id":"stroke","intensity":45},"next":"soon","variability":"normal"}`,
+		`{"intent":"settle into a firmer stroke","motion":{"action":"target","pattern_id":"flow-full-sweeps","intensity":45},"next":"soon","variability":"normal"}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
 	t.Cleanup(server.Close)
@@ -346,7 +346,7 @@ func TestAutopilotDecisionCanCurateMotionDespiteStopProhibition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("autopilotDecide: %v", err)
 	}
-	if decision.Hold || decision.Pattern == nil || decision.Segment.PatternID != motion.PatternStroke || decision.Segment.SpeedPercent != 45 {
+	if decision.Hold || decision.Pattern == nil || decision.Segment.PatternID != motion.PatternFullSweeps || decision.Segment.SpeedPercent != 45 {
 		t.Fatalf("Autopilot target was stripped: %+v", decision)
 	}
 }

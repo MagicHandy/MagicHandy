@@ -250,7 +250,7 @@ func TestReversalRampShortensWithSpeedAndFocus(t *testing.T) {
 // Promoted user curves bypass authoring fit; runtime playback safety is covered
 // separately for every built-in at the requested speed.
 func TestReversalRampStaysInsideItsAccelerationBudget(t *testing.T) {
-	for _, definition := range BuiltinPatternDefinitions() {
+	for _, definition := range legacyPointCatalogForTest() {
 		if slices.Contains(definition.Tags, TagCurated) {
 			continue
 		}
