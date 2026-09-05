@@ -15,7 +15,7 @@ import (
 
 const (
 	maxUserMessageBytes = 4096
-	maxHistoryMessages  = 12
+	maxHistoryMessages  = PromptHistoryLimit
 	emptyRepairContext  = `{"_malformed":"empty_or_truncated_output"}`
 )
 
@@ -99,6 +99,9 @@ type Service struct {
 	// TrustedMotionInput is reserved for backend-generated Autopilot decision
 	// messages. Interactive user chat must leave this false.
 	TrustedMotionInput bool
+	// AutonomousTemperature is supplied only by the backend scheduler. Ordinary
+	// chat keeps its reviewed sampling controls.
+	AutonomousTemperature float64
 }
 
 func (s Service) capabilities() Capabilities {
@@ -1222,7 +1225,14 @@ func sanitizeHistory(history []llm.Message) []llm.Message {
 		}
 		messages = append(messages, llm.Message{Role: role, Content: content})
 	}
-	return messages
+	// Bound bytes as well as turns. Keep complete recent messages; truncating a
+	// serialized assistant reply here could teach the model malformed JSON.
+	bytes, start := 0, len(messages)
+	for start > 0 && bytes+len(messages[start-1].Content) <= maxPromptHistoryBytes {
+		start--
+		bytes += len(messages[start].Content)
+	}
+	return messages[start:]
 }
 
 func truncateUTF8Bytes(value string, limit int) string {

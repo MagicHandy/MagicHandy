@@ -209,6 +209,20 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-09-05 — llama.cpp session and Autopilot integration:** fixes continuous
+  response/history formats, retains bounded longer context, enables autonomous
+  score authoring and supplies active semantic speech facts. No new Go or UI
+  dependencies. Current local stripped `-trimpath -s -w` binary is 19,060,736
+  bytes (+27,648 against the Creative v2 baseline); unstripped `-trimpath` binary
+  is 26,246,144. The canonical UI remains 750.72 / 207.61 kB gzip with lazy Labs
+  51.89 / 14.54. Three isolated native-probe launches reached the listener in
+  126.8–138.6 ms and health in 148.7–163.8 ms. Launch snapshots were 29.70–32.06
+  MiB working set / 54.85–54.91 MiB private, excluding the model and browser.
+  Initial PowerShell HTTP attempts included failed-connect retry delays of
+  roughly half a second; the native probe separates that from listener startup.
+  These measurements do not close the existing idle waiver, active hardware
+  or soak budgets. See [the review](llama-autopilot-review-2026-09-05.md).
+
 - **2026-09-05 — Creative v2 native strokes:** adds an independent semantic
   travel vocabulary through the shared engine, paired atomic model edits,
   production/Lab Autopilot and original Creative realization refreshes. No new

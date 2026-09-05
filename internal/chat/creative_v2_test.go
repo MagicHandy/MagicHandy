@@ -68,6 +68,10 @@ func TestCreativeV2AuthorityAndContractIsolation(t *testing.T) {
 	}{
 		{"Start moving with shrinking base rebounds.", `{"edits":[{"focus":{"position_percent":0,"width_percent":45,"mix_percent":55}},{"rebounds":{"count":2,"retained_width_percent":75}}],"reply":"Starting."}`, false, false, false, true},
 		{"Keep varying the motion.", `{"edits":[{"evolve":true}],"reply":"Fresh details."}`, true, false, false, true},
+		{"Increase speed by exactly 5 percentage points.", `{"edits":[{"speed_percent":30}],"reply":"Five points faster."}`, true, false, false, true},
+		{"Do not increase speed.", `{"edits":[{"speed_percent":30}],"reply":"Faster."}`, true, false, true, false},
+		{"What happens if we increase speed?", `{"edits":[{"speed_percent":30}],"reply":"Faster."}`, true, false, true, false},
+		{"Increase speed by exactly 5 percentage points.", `{"edits":[{"speed_percent":30}],"reply":"Faster."}`, false, false, true, false},
 		{"What does inertia do?", `{"edits":[],"reply":"It shapes travel."}`, true, false, false, false},
 		{"What does inertia do?", `{"edits":[{"inertia_percent":70}],"reply":"Changed."}`, true, false, true, false},
 		{"Vary the motion.", `{"edits":[{"evolve":true}],"reply":"Changed."}`, true, true, true, false},

@@ -215,6 +215,7 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 		CurrentArea:       chatAreaZone(input.CurrentAreaFocus),
 		AreaFocusEnabled:  capabilities.AreaFocus,
 		MotionMode:        capabilities.MotionMode,
+		CurrentFlow:       motion.CloneFlowSpec(input.CurrentFlow),
 		MotionMinSeconds:  input.MotionMinSeconds,
 		MotionMaxSeconds:  input.MotionMaxSeconds,
 		MotionChangeLevel: input.MotionChangeLevel,
