@@ -2,6 +2,7 @@ import {useEffect,useState} from "react";
 import {t,translateKnown} from "../i18n";
 import {useAppState} from "../state/app-state";
 import {exportLabReport,labApi,type LabObservation,type LabObservations,type ObservationTarget} from "./api";
+import {LabHelpLink} from "./LabHelp";
 import {methodLabel} from "./FlowComparison";
 
 export function ObservationEditor({target,label,close}:{target:ObservationTarget;label:string;close:()=>void}) {
@@ -17,15 +18,15 @@ export function ObservationEditor({target,label,close}:{target:ObservationTarget
     finally {setBusy(false);}
   }
   return <section className="lab-observation-editor" aria-label={t("Record an observation")}>
-    <strong>{t("Observations")}</strong>
+    <strong>{t("Observations")}</strong> <LabHelpLink section="storage"/>
     <p className="hint">{t("Attached to: {source}",{source:label})}</p>
     {saved?<>
       <p role="status">{t("Observation saved.")} <a href="#/labs/observations">{t("View saved observations")}</a></p>
       <p className="hint">{t("Saved in this app’s local database:")} <code className="lab-storage-path">{saved.storage_path}</code></p>
     </>:<>
       <label className="field"><span className="label">{t("Your observation")}</span><textarea rows={3} maxLength={2000} value={text} disabled={busy||readOnly} onChange={event=>setText(event.target.value)}/></label>
-      <p className="hint">{t("Save keeps this observation and its source in the app’s local database. It does not change prompts, preferences or motion. Use in chat copies it to a draft for you to send.")}</p>
-      <p className="hint">{t("Describe whether you reviewed the plotted estimate or felt a device audition, and include the transport when relevant.")}</p>
+
+
       {error&&<p className="form-status" role="alert">{translateKnown(error)}</p>}
     </>}
     <div className="row-actions">
@@ -63,12 +64,7 @@ export function ObservationsPage({useInChat}:{useInChat:(text:string)=>void}) {
     <div className="lab-panel-heading"><div><h2>{t("Saved observations")}</h2><p className="hint">{t("Review records attached to a motion preview or an LLM reply.")}</p></div>
       <button className="btn btn-secondary" disabled={!data?.observations.length} onClick={()=>exportLabReport("lab-observations.json",{observations:data?.observations,exported_at:new Date().toISOString()})}>{t("Export observations")}</button>
     </div>
-    <details className="lab-storage" open><summary>{t("Storage and use")}</summary>
-      <p>{t("Observations stay in this app’s local database across restarts and new lab chats. They are review evidence, not model training or automatic instructions.")}</p>
-      {data&&<p><span>{t("Database")}</span> <code className="lab-storage-path">{data.storage_path}</code></p>}
-      <p>{t("Use in chat opens an editable message. Only sending that message shares the observation with the selected LLM. Export creates a JSON file with the observation and its captured source.")}</p>
-      <p className="hint">{t("Older unsaved observation fields were export-only; they cannot be recovered here.")}</p>
-    </details>
+    <p className="hint">{t("Saved in this app’s local database:")} <code className="lab-storage-path">{data?.storage_path}</code> <LabHelpLink section="storage"/></p>
     {error&&<p role="alert" className="form-status">{translateKnown(error)} <button className="btn btn-secondary" onClick={()=>setReload(value=>value+1)}>{t("Retry")}</button></p>}
     {!data&&!error&&<p role="status">{t("Loading…")}</p>}
     {data?.observations.length===0&&<div className="lab-empty"><h3>{t("No observations yet")}</h3><p>{t("Choose Observe preview in Motion Lab or Observe reply beside an LLM response, then save your observation.")}</p><a href="#/labs/chat">{t("Open LLM Lab")}</a></div>}

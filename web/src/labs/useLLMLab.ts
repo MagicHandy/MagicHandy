@@ -6,7 +6,7 @@ import {initialFlow,labApi,type FlowPreview,type LLMLabState} from "./api";
 export function useLLMLab() {
   const {state:app,backendOnline,readOnly}=useAppState();
   const [state,setState]=useState<LLMLabState|null>(null);
-  const [method,setMethod]=useState("controls");
+  const [method,setMethod]=useState("edits");
   const [prompt,setPrompt]=useState("");
   const [model,setModel]=useState("");
   const [schemaGuided,setSchemaGuided]=useState(false);
@@ -17,25 +17,38 @@ export function useLLMLab() {
   const [reload,setReload]=useState(0);
   const active=useRef<AbortController|null>(null);
   const mounted=useRef(true);
+	const stateRef=useRef(state);stateRef.current=state;
   const scoreKey=JSON.stringify(state?.current);
   const savedLimits=JSON.stringify(app?.settings?.motion);
   useEffect(()=>{
     let live=true;mounted.current=true;
     void labApi.state().then(next=>{if(live){
       const last=next.turns[next.turns.length-1];
-      setState(next);setModel(last?.model||next.model);setMethod(last?.method||"controls");
-      setPrompt(last?.prompt||next.prompts.controls);setSchemaGuided(last?.schema_guided??false);setError("");
+      const config=next.session?.active?next.session:last;
+      setState(next);setModel(config?.model||next.model);setMethod(config?.method||"edits");
+      setPrompt(config?.prompt||next.prompts.edits);setSchemaGuided(config?.schema_guided??true);setError("");
     }}).catch(reason=>{if(live)setError(String(reason));});
     const stop=()=>active.current?.abort();
     window.addEventListener("magichandy:emergency-stop",stop);
     return()=>{live=false;mounted.current=false;active.current?.abort();window.removeEventListener("magichandy:emergency-stop",stop);};
   },[reload]);
   useEffect(()=>{
-    if(!state?.busy||busy)return;
+    if(busy)return;
     let live=true;
-    const timer=window.setInterval(()=>void labApi.state().then(next=>{if(live)setState(next);}).catch(()=>{}),1500);
+    let polling=false;
+    const timer=window.setInterval(()=>{
+      if(polling)return;polling=true;
+      void labApi.status().then(status=>{
+        const current=stateRef.current;
+        if(current&&current.revision===status.revision&&current.busy===status.busy&&JSON.stringify(current.session)===JSON.stringify(status.session))return;
+        return labApi.state().then(next=>{if(live){
+      setState(next);
+      if(next.session?.active){setMethod(next.session.method);setPrompt(next.session.prompt);setModel(next.session.model||next.model);setSchemaGuided(next.session.schema_guided);}
+        }});
+      }).catch(()=>{}).finally(()=>{polling=false;});
+    },1500);
     return()=>{live=false;window.clearInterval(timer);};
-  },[state?.busy,busy]);
+  },[busy]);
   useEffect(()=>{
     if(!state||!backendOnline)return;
     const controller=new AbortController();setPreview(null);
@@ -43,7 +56,7 @@ export function useLLMLab() {
       .catch(reason=>{if(!controller.signal.aborted)setError(String(reason));});
     return()=>controller.abort();
   },[scoreKey,savedLimits,backendOnline]);
-  const locked=readOnly||!backendOnline||!state||busy||Boolean(state?.busy);
+  const locked=readOnly||!backendOnline||!state||busy||Boolean(state?.busy&&!state?.session?.autopilot);
   async function send(message:string):Promise<boolean> {
     if(!state||locked||!message.trim()||!prompt.trim()||active.current)return false;
     const controller=new AbortController();active.current=controller;setBusy(true);setPendingMessage(message);setError("");
@@ -66,7 +79,13 @@ export function useLLMLab() {
     finally {if(mounted.current)setBusy(false);}
   }
   function chooseMethod(value:string) {setMethod(value);setPrompt(state?.prompts[value]??"");setSchemaGuided(value!=="controls");}
+  async function startSession(live:boolean,autopilot:boolean,interval:number) {
+    if(locked)return;setBusy(true);setError("");
+    try {setState(await labApi.session({live,autopilot,interval_seconds:interval,method,prompt,model,schema_guided:schemaGuided}));}
+    catch(reason){setError(reason instanceof Error?reason.message:t("Request failed"));}
+    finally {setBusy(false);}
+  }
   return {state,method,prompt,model,schemaGuided,busy,pendingMessage,preview,error,locked,
     fresh:!!preview&&JSON.stringify(preview.spec)===scoreKey&&JSON.stringify(preview.settings)===savedLimits,
-    setPrompt,setModel,setSchemaGuided,chooseMethod,send,reset,cancel:()=>active.current?.abort(),retry:()=>setReload(value=>value+1)};
+    setPrompt,setModel,setSchemaGuided,chooseMethod,send,reset,startSession,cancel:()=>active.current?.abort(),retry:()=>setReload(value=>value+1)};
 }

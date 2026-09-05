@@ -13,10 +13,11 @@ vi.mock("./TestRuns",()=>({TestRuns:()=> <div>Guided testing workspace</div>}));
 vi.mock("../components/WorkspaceHead",()=>({WorkspaceHead:()=> <h1>Labs</h1>}));
 describe("development Labs navigation",()=>{
   beforeEach(()=>{route.hash="#/labs/chat";});
-  it("has four page links and renders only the selected workspace",()=>{
+  it("includes a dedicated Help tab and renders only the selected workspace",()=>{
     route.hash="#/labs/motion";render(<LabsRoute/>);
     expect(screen.getByRole("link",{name:"Motion Lab"})).toHaveAttribute("aria-current","page");
-    expect(screen.getAllByRole("link")).toHaveLength(4);
+    expect(screen.getAllByRole("link")).toHaveLength(5);
+    expect(screen.getByRole("link",{name:"Help"})).toHaveAttribute("href","#/labs/help");
     expect(screen.getByText("Motion workspace")).toBeInTheDocument();
     expect(screen.queryByText("Chat workspace")).not.toBeInTheDocument();
   });

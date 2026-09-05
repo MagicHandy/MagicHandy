@@ -5,6 +5,7 @@ import { useAppState, useToast } from "../state/app-state";
 import { exportLabReport, initialFlow, labApi, type FlowPreview, type FlowSpec, type ObservationTarget } from "../labs/api";
 import { FlowComparison, auditionLabel } from "../labs/FlowComparison";
 import { ObservationEditor } from "../labs/Observations";
+import { LabHelpLink } from "../labs/LabHelp";
 import { CreateTestSequence } from "../labs/CreateTestSequence";
 import "../styles/motion-lab.css";
 
@@ -74,22 +75,22 @@ export function MotionLab() {
   const continuous=method==="flow";
   const minimumSpan=continuous?10:20;
   return <div className="motion-lab">
-    <p className="lab-intro hint">{t("Shape a preview, compare its motion, then start a test when ready.")}</p>
+
     {state?.motion_simulated&&<p className="hint-block" role="status">{t("Simulation is active. Motion commands go to the simulator; connected devices will not move.")}</p>}
     <div className="motion-lab-grid">
       <div className="lab-panel motion-lab-controls">
-        <h2>{t("Motion controls")}</h2>
+        <div className="lab-panel-heading"><h2>{t("Motion controls")}</h2><LabHelpLink section="motion"/></div>
         <label className="field"><span className="label">{t("Test generator")}</span><select value={method} onChange={event=>setMethod(event.target.value)}>
           <option value="flow">{t("Continuous flow")}</option>
           <option value="creative" disabled={!preview?.candidates.some(candidate=>candidate.method==="creative")}>{t("Creative baseline")}</option>
           <option value="anchored" disabled={!preview?.candidates.some(candidate=>candidate.method==="anchored")}>{t("Anchored range")}</option>
         </select></label>
-        <p className="hint">{continuous?t("This generator plays the continuous score below."):t("Historical reference: shares pace, outer band, shortest span and seed. Continuous layers, sections and gradual variation do not apply.")}</p>
+
         {continuous?<fieldset><legend>{t("Score examples")}</legend><div className="row-actions">
           <button className="btn btn-secondary" onClick={()=>example("flow")}>{t("Single section")}</button>
           <button className="btn btn-secondary" onClick={()=>example("layers")}>{t("Layered score")}</button>
           <button className="btn btn-secondary" onClick={()=>example("sequence")}>{t("Section sequence")}</button>
-        </div><p className="hint">{t("These load arrangements for Continuous flow; the generator stays the same.")}</p></fieldset>
+        </div></fieldset>
           :<p className="hint">{t("Historical settings: wander profile, 30% variation, minimum span 20.")}</p>}
         <fieldset><legend>{t("Pace and range")}</legend>
         <LabSlider label={t("Speed")} value={draft.speed_percent} min={state?.settings?.motion?.speed_min_percent??1} max={state?.settings?.motion?.speed_max_percent??100} disabled={continuous&&sequenced} change={value=>patch("speed_percent",value)}/>
@@ -97,23 +98,23 @@ export function MotionLab() {
         <LabSlider label={t("Outer maximum")} value={draft.max_percent} min={draft.min_percent+minimumSpan} max={100} disabled={continuous&&sequenced} change={value=>patch("max_percent",value)}/>
         <LabSlider label={t("Shortest span")} value={Math.max(minimumSpan,draft.range_floor_percent)} min={minimumSpan} max={draft.max_percent-draft.min_percent} change={value=>patch("range_floor_percent",value)}/>
         <LabSlider label={t("Range anchor")} value={method==="creative"?50:draft.anchor_percent} min={0} max={100} disabled={method==="creative"} change={value=>patch("anchor_percent",value)}/>
-        <p className="hint">{method==="creative"?t("Creative baseline fixes the anchor at the center. Choose Anchored range to control it."):t("0 holds the base end; 50 contracts around the center; 100 holds the tip end.")}</p>
+        <LabHelpLink section="motion"/>
         {continuous&&sequenced&&<p className="hint">{t("Section ranges and speeds are defined in Score JSON.")}</p>}
         </fieldset>{continuous&&<fieldset><legend>{t("Gradual variation")}</legend>
         <label className="field"><span className="label">{t("Variation source")}</span><select value={draft.variation_mode||"waves"} onChange={event=>patch("variation_mode",event.target.value as "waves"|"drift")}><option value="waves">{t("Smooth waves")}</option><option value="drift">{t("Correlated drift")}</option></select></label>
         <LabSlider label={t("Range memory (cycles)")} value={draft.memory_cycles} min={2} max={32} change={value=>patch("memory_cycles",value)}/>
         <LabSlider label={t("Pace variation")} value={draft.pace_variation_percent} min={0} max={40} change={value=>patch("pace_variation_percent",value)}/>
-        <p className="hint">{t("Drift uses reproducible irregular trends. Both sources repeat at the end of the score.")}</p>
+
         </fieldset>}
         {continuous&&<fieldset><legend>{t("Motion experiments")}</legend>
           <LabSlider label={t("Turn softness")} value={draft.turn_softness_percent??0} min={0} max={100} change={value=>patch("turn_softness_percent",value)}/>
-          <p className="hint">{t("Higher values linger near both turnarounds, with more travel in the middle of each stroke.")}</p>
+
           <LabSlider label={t("Steady beat")} value={draft.cadence_hold_percent??0} min={0} max={100} change={value=>patch("cadence_hold_percent",value)}/>
-          <p className="hint">{t("Keep a steadier cycle time when reach changes. This can lower effective pace; use the preview readout to compare.")}</p>
+
         </fieldset>}
         <label className="field"><span className="label">{t("Repeatable seed")}</span><input type="number" min={1} max={2147483647} value={draft.seed} onChange={event=>patch("seed",Math.max(1,Math.min(2147483647,Math.trunc(Number(event.target.value))||1)))}/></label>
         {continuous&&<details className="lab-score"><summary>{t("Score JSON")}</summary>
-          <p className="hint">{t("Section bands and speeds are edited in the score. Layers modulate one carrier; they do not add independent position commands.")}</p>
+
           <textarea aria-label={t("Score JSON")} rows={14} spellCheck={false} value={scoreText||JSON.stringify(draft,null,2)} onChange={event=>setScoreText(event.target.value)}/>
           <button className="btn btn-secondary" disabled={!scoreText} onClick={()=>void applyJSON()}>{t("Apply score")}</button>
         </details>}
@@ -128,7 +129,7 @@ export function MotionLab() {
             <button className="btn btn-secondary" onClick={()=>void api.stopMotion().catch(reason=>show(String(reason),"error")).finally(refresh)}>{t("Stop")}</button>
             <button className="btn btn-secondary" disabled={!fresh} onClick={()=>exportLabReport("motion-lab-flow.json",{preview,selected:method,motion_simulated:state?.motion_simulated,exported_at:new Date().toISOString()})}>{t("Export comparison")}</button>
           </div>
-          <p className="hint">{t("Start replaces current motion and repeats the selected test until Stop. Saved motion limits apply.")}</p>
+
           <div><button className="btn btn-secondary" disabled={!fresh||readOnly||!backendOnline} onClick={()=>setObserved({target:{source:"motion",method,spec:preview.spec,settings_key:preview.settings_key},label:`${auditionLabel(method,preview.spec)} · ${preview.spec.min_percent}–${preview.spec.max_percent} · ${preview.spec.speed_percent}%`})}>{t("Observe preview")}</button></div>
           {observed&&<ObservationEditor key={JSON.stringify(observed.target)} target={observed.target} label={observed.label} close={()=>setObserved(null)}/>}
           <div><CreateTestSequence disabled={!fresh} target={{source:"motion",method,spec:preview.spec,settings_key:preview.settings_key}}/></div>

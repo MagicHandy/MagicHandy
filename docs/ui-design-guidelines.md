@@ -472,6 +472,12 @@ Don't:
 
 ## Relationship To Other Docs
 
+Labs uses a conversation-first layout: the title bar holds the test-mode list,
+with model and prompt configuration collapsed. Live motion and Autopilot are
+explicit session controls, and the global Stop remains reachable. Detailed
+instructions belong in the Help tab; nearby links open the relevant topic.
+Response details and motion plots stay available without displacing the chat.
+
 - [ui-navigation-redesign.md](ui-navigation-redesign.md): the shell IA these
   tokens dress.
 - [ui-design.md](ui-design.md): the safety/accessibility/parity rules these

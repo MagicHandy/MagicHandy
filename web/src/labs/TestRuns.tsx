@@ -3,6 +3,7 @@ import {api} from "../api/client";
 import {t,translateKnown} from "../i18n";
 import {useAppState,useHashRoute} from "../state/app-state";
 import {exportLabReport,labApi} from "./api";
+import {LabHelpLink} from "./LabHelp";
 import {FlowComparison} from "./FlowComparison";
 import {openTestRun,testApi,type ReviewBasis,type TestRunList,type TestRunView,type TestStep} from "./test-api";
 
@@ -32,13 +33,13 @@ function TestRunHome() {
     finally {setBusy(false);}
   }
   return <section className="lab-tests-page">
-    <div className="lab-panel lab-test-welcome"><span className="lab-eyebrow">{t("Guided tests")}</span><h2>{t("Small rounds. Useful feedback.")}</h2>
+    <div className="lab-panel lab-test-welcome"><span className="lab-eyebrow">{t("Guided tests")}</span> <LabHelpLink section="feedback"/><h2>{t("Small rounds. Useful feedback.")}</h2>
       <p>{t("Follow a sequence, rate each result and add a comment. Every answer helps, including problems and skipped tests.")}</p>
       <button className="btn btn-primary" disabled={busy||readOnly||!backendOnline} onClick={()=>void create()}>{busy?t("Preparing tests…"):t("Start a motion feel check")}</button>
       <button className="btn btn-secondary" disabled={busy||readOnly||!backendOnline} onClick={()=>void create(true)}>{t("Compare motion experiments")}</button>
-      <p className="hint">{t("Five rounds compare a continuous reference, correlated drift, softer reversals, a steadier beat and their combination.")}</p>
-      <p className="hint">{t("Compare the available generators using the current lab score. Creating a sequence does not start motion.")}</p>
-      <p className="hint">{t("For a specific change, choose Create test sequence beside a motion preview or an LLM reply.")}</p>
+
+
+
     </div>
     {error&&<p role="alert" className="form-status">{translateKnown(error)} <button className="btn btn-secondary" onClick={()=>setReload(value=>value+1)}>{t("Retry")}</button></p>}
     {!data&&!error&&<p role="status">{t("Loading…")}</p>}
@@ -151,5 +152,5 @@ function TestSource({step}:{step:TestStep}) {
   return <details className="lab-score"><summary>{t("Captured source")}</summary><pre>{JSON.stringify({method:step.source.method,spec:step.source.spec,limits:step.source.settings,trial:step.source.trial},null,2)}</pre></details>;
 }
 function TestStorage({path}:{path?:string}) {
-  return <details className="lab-storage"><summary>{t("Where feedback is saved")}</summary><p>{t("Sequences, captured previews and saved answers stay in this app’s database across restarts. Unsaved comments stay only on this page.")}</p>{path&&<code className="lab-storage-path">{path}</code>}<p>{t("Feedback is available for review and JSON export. It does not automatically change prompts or motion, or get sent to a model.")}</p></details>;
+  return <p className="hint">{t("Saved in this app’s local database:")} {path&&<code className="lab-storage-path">{path}</code>} <LabHelpLink section="storage"/></p>;
 }

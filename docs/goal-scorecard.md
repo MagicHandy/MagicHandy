@@ -209,6 +209,23 @@ Ranked by threat to the stated goals:
 
 ## History
 
+- **2026-09-05 — Conversation Lab and catalog retirement:** title-bar test
+  modes, shared-engine live sessions, backend Autopilot scheduling, and a Help
+  tab; 17 continuous recipes and an idempotent migration disabling 81 legacy
+  built-ins. No new runtime/frontend dependencies. The ordinary `CGO_ENABLED=0`
+  binary is 25,975,296 bytes (+95,232); release-style `-trimpath -s -w` is
+  18,810,368 bytes (+81,408). Initial JS is 747.69 / 206.92 kB gzip
+  (+4.00 / +0.79); lazy Labs JS is 50.29 / 13.98 kB (+3.58 / +1.22).
+  Initial CSS remains 136.73 / 25.00 kB; Labs CSS is 12.08 / 2.86 kB
+  (+1.72 / +0.33). Three fresh-data launches of the final stripped binary:
+  listener 121.8–179.0 ms, health 126.9–210.4 ms, working set 21.92–22.40 MiB,
+  private memory 54.25–55.05 MiB. These are Windows launch snapshots, excluding
+  model memory; they do not close the idle-memory waiver, active-motion or
+  soak measurements. Atlas/report outputs remain ignored and unembedded.
+  Current model context uses refreshed numeric limits instead of hardware
+  names. All failures and physical-review limits are recorded in the
+  [conversation review](lab-conversation-review-2026-09-05.md).
+
 - **2026-09-04 — Additional motion experiments:** optional correlated drift,
   symmetric turn softness, cadence hold and relative/layer LLM edits, with a
   five-round guided comparison. No new runtime/frontend dependencies. Ordinary

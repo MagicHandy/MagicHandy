@@ -12,10 +12,12 @@ import (
 
 func (s *Server) motionLabRoutes(mux *http.ServeMux) {
 	s.labTestRoutes(mux)
+	mux.HandleFunc("POST /api/labs/llm/session", s.withLabs(s.handleLabConversationStart))
 	mux.HandleFunc("POST /api/motion/lab/preview", s.withLabs(s.handleLabPreview))
 	mux.HandleFunc("POST /api/motion/lab/proposal", s.withLabs(s.handleMotionLabProposal))
 	mux.HandleFunc("POST /api/motion/lab/flow", s.withLabs(s.handleFlowPreview))
 	mux.HandleFunc("GET /api/labs/llm", s.withLabs(s.handleLLMLabState))
+	mux.HandleFunc("GET /api/labs/llm/status", s.withLabs(s.handleLLMLabStatus))
 	mux.HandleFunc("POST /api/labs/llm/chat", s.withLabs(s.handleLLMLabChat))
 	mux.HandleFunc("POST /api/labs/llm/reset", s.withLabs(s.handleLLMLabReset))
 	mux.HandleFunc("GET /api/labs/observations", s.withLabs(s.handleLabObservations))

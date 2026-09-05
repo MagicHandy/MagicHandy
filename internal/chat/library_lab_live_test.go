@@ -39,6 +39,13 @@ func TestLibraryLabLive(t *testing.T) {
 					id      motion.PatternID
 					speed   int
 				}{
+					{"Return to base with slowly changing irregular reach and long variation memory. Keep pace.", "flow-base-drift", 25},
+					{"Return to tip with slowly changing irregular reach and long variation memory. Keep pace.", "flow-tip-drift", 25},
+					{"Keep the center fixed while stroke width wanders irregularly. Keep pace.", "flow-centered-drift", 25},
+					{"Use full-length strokes with longer softer turnarounds at both ends. Keep pace.", "flow-soft-sweeps", 25},
+					{"Vary width irregularly around the middle but maintain an even cycle beat. Keep pace.", "flow-even-beat", 25},
+					{"Four lower cycles, four middle, four upper, four middle, repeating. Keep pace.", "flow-zone-tour", 25},
+					{"Move a varying-width window through the band. Width wanders between 20 and 65. Keep pace.", "flow-breathing-window", 25},
 					{"Gradually vary stroke length while returning to the tip on every stroke. Keep the pace setting.", "flow-tip-anchored", 25},
 					{"Increase speed to 35. Preserve this exact movement shape.", "flow-tip-anchored", 35},
 					{"Keep stroke width fixed and move the whole window gradually between lower and upper regions. Keep speed.", "flow-traveling-window", 35},

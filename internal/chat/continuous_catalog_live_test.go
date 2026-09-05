@@ -26,18 +26,7 @@ type catalogTrial struct {
 	Command                                                        *MotionCommand
 }
 
-var actionHandles = map[motion.PatternID]string{
-	motion.PatternFullSweeps:    "sweep_full_range",
-	"flow-lower-strokes":        "stroke_lower_region",
-	"flow-middle-strokes":       "stroke_middle_region",
-	"flow-upper-strokes":        "stroke_upper_region",
-	motion.PatternBaseVariation: "vary_reach_from_base",
-	"flow-tip-anchored":         "vary_reach_from_tip",
-	"flow-centered-variety":     "vary_width_around_middle",
-	"flow-traveling-window":     "move_fixed_width_window",
-	"flow-wide-narrow":          "alternate_full_and_middle",
-	motion.PatternPaceWave:      "wave_pace_keep_full_range",
-}
+var actionHandles = libraryActionHandles
 
 func TestContinuousCatalogLiveNaming(t *testing.T) {
 	models := strings.Split(os.Getenv("MAGICHANDY_LAB_MODELS"), "|")

@@ -7,6 +7,11 @@ Availability update: [ADR 0021](0021-optional-labs-in-release-builds.md)
 supersedes this document's development-only Labs boundary. The library decision
 remains current; Labs can now be enabled in Settings in every release.
 
+September 5 update: [ADR 0022](0022-lab-conversation-sessions.md) expands the
+catalog to 17 recipes, disables legacy built-ins on update, and introduces
+explicit live conversation/Autopilot sessions. It supersedes the manual legacy
+playback and preview-only Lab statements below.
+
 ## Context
 
 The user asked to deprecate the current library after repeated poor motion feel

@@ -245,13 +245,23 @@ func (e *Engine) StartAtGeneration(ctx context.Context, target MotionTarget, set
 
 // ApplyTarget retargets active motion without stopping the active stream.
 func (e *Engine) ApplyTarget(ctx context.Context, target MotionTarget, reason string) (ActiveMotionState, error) {
+	return e.applyTarget(ctx, target, reason, "")
+}
+
+// ApplyTargetIfCurrent rejects a late semantic update after Stop/replacement,
+// including one waiting behind another target operation. It never starts motion.
+func (e *Engine) ApplyTargetIfCurrent(ctx context.Context, target MotionTarget, reason string, planID string) (ActiveMotionState, error) {
+	return e.applyTarget(ctx, target, reason, planID)
+}
+
+func (e *Engine) applyTarget(ctx context.Context, target MotionTarget, reason string, planID string) (ActiveMotionState, error) {
 	e.targetMu.Lock()
 	defer e.targetMu.Unlock()
 
 	if reason == "" {
 		reason = "target_applied"
 	}
-	runEpoch, err := e.activeRunEpoch()
+	runEpoch, err := e.activeRunEpoch(planID)
 	if err != nil {
 		return e.Snapshot(), err
 	}

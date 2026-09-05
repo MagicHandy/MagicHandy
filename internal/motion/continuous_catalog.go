@@ -15,7 +15,7 @@ const (
 	PatternBaseVariation PatternID = "flow-base-anchored"
 	// PatternPaceWave varies pace without changing full-band geometry.
 	PatternPaceWave PatternID = "flow-pace-wave"
-	// TagDeprecated keeps legacy content playable but out of model selection.
+	// TagDeprecated identifies retired built-ins retained only for export.
 	TagDeprecated = "deprecated"
 )
 
@@ -54,6 +54,20 @@ func ContinuousRecipes(speed int) []ContinuousRecipe {
 	contrast.Steps = []FlowStep{{0, 100, speed, 4}, {30, 70, speed, 4}}
 	pace := base
 	pace.Layers = []FlowLayer{{Axis: "pace", AmountPercent: 70, PeriodCycles: 8}}
+	drift := func(anchor int) FlowSpec {
+		spec := variable(anchor)
+		spec.VariationMode, spec.MemoryCycles, spec.LoopCycles = "drift", 12, 64
+		return spec
+	}
+	soft := base
+	soft.TurnSoftnessPercent = 65
+	beat := drift(50)
+	beat.CadenceHoldPercent = 100
+	tour := base
+	tour.Steps = []FlowStep{{0, 35, speed, 4}, {32, 68, speed, 4}, {65, 100, speed, 4}, {32, 68, speed, 4}}
+	breathing := drift(50)
+	breathing.RangeFloorPercent, breathing.RangeCeilingPercent = 20, 65
+	breathing.Layers = []FlowLayer{{Axis: "center", AmountPercent: 70, PeriodCycles: 32}}
 	return []ContinuousRecipe{
 		{PatternFullSweeps, "Full sweeps", "Repeat smooth full-length strokes from base 0 to tip 100. Fixed reach and even pace.", base},
 		{"flow-lower-strokes", "Lower strokes", "Repeat smooth fixed-width strokes only in the lower/base region, 0–40. Even pace.", fixed(0, 40)},
@@ -65,6 +79,13 @@ func ContinuousRecipes(speed int) []ContinuousRecipe {
 		{"flow-traveling-window", "Traveling window", "Keep a 40-wide stroke window and gradually move it from lower to middle to upper and back. Preserve stroke width.", travel},
 		{"flow-wide-narrow", "Wide then narrow", "Repeat four full-width cycles, then four middle-width cycles. Blend between the two sections; keep the pace setting.", contrast},
 		{PatternPaceWave, "Pace wave", "Keep every stroke full-length while pace gradually slows and rises over eight cycles. Reach does not change.", pace},
+		{"flow-base-drift", "Base-anchored drift", "Return to base 0 while reach wanders gradually and irregularly. Longer variation memory; pace stays independent.", drift(0)},
+		{"flow-tip-drift", "Tip-anchored drift", "Return to tip 100 while reach wanders gradually and irregularly. Longer variation memory; pace stays independent.", drift(100)},
+		{"flow-centered-drift", "Centered drift", "Keep the middle fixed while stroke width wanders gradually and irregularly. Both endpoints move symmetrically.", drift(50)},
+		{"flow-soft-sweeps", "Soft turnarounds", "Keep full-length strokes and even pace with longer, gentler turnarounds at both ends. Reach does not vary.", soft},
+		{"flow-even-beat", "Even-beat variety", "Vary width irregularly around the middle while holding a steadier cycle beat. Short strokes travel more slowly.", beat},
+		{"flow-zone-tour", "Three-zone tour", "Repeat four lower cycles, four middle, four upper, then four middle. Blend each transition; retain short strokes.", tour},
+		{"flow-breathing-window", "Breathing window", "Gradually move a varying-width window through the band. Width wanders between 20 and 65; neither endpoint stays anchored.", breathing},
 	}
 }
 
@@ -82,7 +103,7 @@ func ContinuousRecipeByID(id PatternID, speed int) (ContinuousRecipe, bool) {
 }
 
 func buildContinuousPatternDefinitions() []PatternDefinition {
-	definitions := make([]PatternDefinition, 0, 10)
+	definitions := make([]PatternDefinition, 0, len(ContinuousRecipes(25)))
 	for _, recipe := range ContinuousRecipes(25) {
 		curve, err := compileFlowCurve(recipe.Spec, config.HandyModelOriginal)
 		if err != nil {

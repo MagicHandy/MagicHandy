@@ -16,6 +16,10 @@ var libraryActionHandles = map[motion.PatternID]string{
 	motion.PatternBaseVariation: "vary_reach_from_base", "flow-tip-anchored": "vary_reach_from_tip",
 	"flow-centered-variety": "vary_width_around_middle", "flow-traveling-window": "move_fixed_width_window",
 	"flow-wide-narrow": "alternate_full_and_middle", motion.PatternPaceWave: "wave_pace_keep_full_range",
+	"flow-base-drift": "drift_reach_from_base", "flow-tip-drift": "drift_reach_from_tip",
+	"flow-centered-drift": "drift_width_around_middle", "flow-soft-sweeps": "soften_full_range_turns",
+	"flow-even-beat": "vary_width_keep_even_beat", "flow-zone-tour": "tour_lower_middle_upper",
+	"flow-breathing-window": "move_and_resize_window",
 }
 
 func libraryLabHandle(method string, id motion.PatternID) string {
@@ -31,7 +35,14 @@ func libraryLabHandle(method string, id motion.PatternID) string {
 
 func libraryLabPrompt(method string) string {
 	var prompt strings.Builder
-	prompt.WriteString(`Design a preview using this movement library. Nothing you return starts a device. Return one JSON object with a brief "reply", optional "recipe_id", and optional "speed_percent". No action, controls, steps, layers, raw points or extra fields.
+	prompt.WriteString(labPlanningContextGuide)
+	fmt.Fprintf(&prompt, `First decide whether the user asks to change movement shape. If yes, copy the single best catalog ID into recipe_id BEFORE writing reply. An ID in reply does NOT select any motion. Do not set speed_percent for a request that says keep pace unchanged.
+Select the most specific complete recipe: soft turnarounds already include full sweeps; irregular drift differs from repeating width waves; a fixed-width traveling window differs from a varying-width breathing window. Do not combine recipe names.
+Complete shape-change example: {"recipe_id":"%s","reply":"Switching to fixed middle strokes."}
+Complete no-change example: {"reply":"Keeping the current motion."}
+Now follow the complete contract and choose from the catalog below.
+`, libraryLabHandle(method, "flow-middle-strokes"))
+	prompt.WriteString(`You are the conversational assistant in a motion testing session. Reply naturally to the user, including questions that need no motion change. The app may apply accepted semantic changes during a live test. Return one JSON object with a brief "reply", optional "recipe_id", and optional "speed_percent". No action, controls, steps, layers, raw points or extra fields.
 Choose a recipe only when a movement change is requested. Omitted recipe_id preserves the CURRENT SCORE. A pace-only request uses speed_percent alone and preserves the movement shape. Omitted speed_percent preserves the current pace setting. Speed stays inside SAVED LIMITS. If there is no requested change, return only reply.
 Fixed-region motion contains both endpoints in one zone. Varying anchored reach holds one endpoint while length changes. A traveling window moves both endpoints together. These describe different movements; pace is independent.
 The catalog rows are id | name | behavior. Copy exactly one supplied id when selecting a recipe.

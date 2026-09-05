@@ -89,7 +89,7 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
           const tags = visiblePatternTags(pattern.tags);
           return <article className="pattern-row" key={pattern.id} data-disabled={!pattern.enabled || undefined}>
             <label className="toggle pattern-enable" title={pattern.enabled ? t("Disable pattern") : t("Enable pattern")}>
-              <input type="checkbox" checked={pattern.enabled} disabled={locked || mutating} aria-label={t("Enable {name}", { name: pattern.name })} onChange={(event) => void onPatch(pattern.id, { enabled: event.target.checked })} />
+              <input type="checkbox" checked={pattern.enabled} disabled={locked || mutating || pattern.deprecated} aria-label={t("Enable {name}", { name: pattern.name })} onChange={(event) => void onPatch(pattern.id, { enabled: event.target.checked })} />
               <span className="track" aria-hidden="true" />
             </label>
             <PatternCurve points={pattern.preview_samples} knots={pattern.points} label={t("Backend-sampled curve for {name}", { name: pattern.name })} />
@@ -97,13 +97,13 @@ export function PatternBrowser({ patterns, locked, offline, busyKeys, onPatch, o
               <PatternNameEditor pattern={pattern} locked={locked || mutating} onCommit={(name) => onPatch(pattern.id, { name })} />
               {pattern.description && <p>{pattern.description}</p>}
               {pattern.continuous && <p className="hint">{t("Continuous motion · preview at 25% pace · playback follows saved limits")}</p>}
-              {pattern.deprecated && <p className="hint">{t("Legacy · excluded from LLM selection")}</p>}
+              {pattern.deprecated && <p className="hint">{t("Legacy · disabled")}</p>}
               <div className="pattern-meta"><span>{t("{seconds} s", { seconds: (pattern.cycle_ms / 1000).toFixed(1) })}</span><span>{pattern.kind}</span><span>{t("{count} knots", { count: pattern.points.length })}</span></div>
               {tags.length > 0 && <div className="tag-list">{tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
             </div>
             <WeightEditor pattern={pattern} locked={locked || mutating} onCommit={(weight) => onPatch(pattern.id, { weight })} />
             <div className="pattern-actions">
-              <button type="button" className="icon-button" title={t("Audition pattern")} aria-label={t("Audition {name}", { name: pattern.name })} disabled={locked || !pattern.enabled || mutating || startingMotion} onClick={() => void onPlay(pattern.id)}><PlayIcon /></button>
+              <button type="button" className="icon-button" title={t("Audition pattern")} aria-label={t("Audition {name}", { name: pattern.name })} disabled={locked || !pattern.enabled || pattern.deprecated || mutating || startingMotion} onClick={() => void onPlay(pattern.id)}><PlayIcon /></button>
               <button type="button" className="icon-button" title={t("Rate up")} aria-label={t("Rate {name} up", { name: pattern.name })} disabled={locked || mutating} onClick={() => void onFeedback(pattern.id, 1)}><ThumbUpIcon /></button>
               <button type="button" className="icon-button" title={t("Rate down")} aria-label={t("Rate {name} down", { name: pattern.name })} disabled={locked || mutating} onClick={() => void onFeedback(pattern.id, -1)}><ThumbDownIcon /></button>
               <button type="button" className="icon-button" title={t("Export pattern")} aria-label={t("Export {name}", { name: pattern.name })} disabled={offline || busyKeys.has(libraryActionKey.exportPattern(pattern.id))} onClick={() => void onExport(pattern.id)}><DownloadIcon /></button>

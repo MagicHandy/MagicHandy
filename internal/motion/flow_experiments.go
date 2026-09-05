@@ -84,5 +84,7 @@ func (s FlowSpec) carrier(u float64) float64 {
 	if phase >= 0.5 {
 		septic = 1 - flowSeptic(2*phase-1)
 	}
-	return cosine + float64(s.TurnSoftnessPercent)/100*(septic-cosine)
+	// Roundoff in the septic blend can escape [0,1] by a few ulps at
+	// full-band endpoints. Keep the analytic carrier inside its domain.
+	return max(0, min(1, cosine+float64(s.TurnSoftnessPercent)/100*(septic-cosine)))
 }

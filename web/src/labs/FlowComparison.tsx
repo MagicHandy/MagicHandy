@@ -1,5 +1,6 @@
 import {useState} from "react";
 import {t} from "../i18n";
+import {LabHelpLink} from "./LabHelp";
 import type {FlowCandidate,FlowPreview,FlowSpec} from "./api";
 
 const number=(value:number)=>value.toLocaleString(undefined,{maximumFractionDigits:1});
@@ -25,17 +26,17 @@ export function FlowComparison({preview,selected,compact=false}:{preview:FlowPre
     </svg>
     <dl className="lab-preview-readouts"><div><dt>{t("Reach")}</dt><dd>{number(selected.perceptual.position_min_percent)}–{number(selected.perceptual.position_max_percent)}</dd></div><div><dt>{t("Effective pace")}</dt><dd>{number(selected.perceptual.pace.effective_percent)}%</dd></div></dl>
     <p className="hint">{t("Planned position, base 0 to tip 100. Estimates are not device feedback.")}</p>
-    <details className="lab-comparison-details" onToggle={event=>setReferences(event.currentTarget.open)}><summary>{t("Compare methods and dynamics")}</summary>
-      <p className="hint">{t("Continuous flow uses a new carrier and gradual modulation. Creative and anchored motion are historical references.")}</p>
+    <details className="lab-comparison-details" onToggle={event=>setReferences(event.currentTarget.open)}><summary>{t("Compare methods and dynamics")}</summary><LabHelpLink section="motion"/>
+
       <div className="lab-table-scroll"><table className="motion-lab-table"><caption>{t("Full-phrase estimates")}</caption><thead><tr><th>{t("Method")}</th><th>{t("Effective pace")}</th><th>{t("Reach")}</th><th>{t("Peak acceleration")}</th><th>{t("Peak jerk")}</th></tr></thead>
         <tbody>{preview.candidates.map(candidate=><tr key={candidate.method}>
           <td>{methodLabel(candidate.method)}</td>
           <td>{number(candidate.perceptual.pace.effective_percent)}%</td><td>{number(candidate.perceptual.position_min_percent)}–{number(candidate.perceptual.position_max_percent)}</td><td>{number(candidate.maximum_acceleration)}</td><td>{number(candidate.maximum_jerk)}</td>
         </tr>)}</tbody></table></div>
-      <p className="hint">{t("First 12 seconds, semantic position: base 0, tip 100. Dashed line shows the baseline.")}</p>
+
       <svg className="motion-lab-chart" viewBox="0 0 760 250" role="img" aria-label={t("Velocity estimate")}><line x1={40} x2={740} y1={125} y2={125}/>
         <text x={40} y={18}>{t("{n} %/s",{n:number(velocityMax)})}</text>{baseline&&<polyline className="motion-lab-baseline" points={path(baseline,true)}/>}<polyline className="motion-lab-selected" points={path(selected,true)}/></svg>
-      <p className="hint">{t("Experimental smoothness limits can lower effective pace. Estimates are not physical feedback.")}</p>
+
     </details>
   </div>;
 }

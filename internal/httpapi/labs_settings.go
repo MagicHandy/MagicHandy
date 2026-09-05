@@ -94,6 +94,8 @@ func (s *Server) beginLabMotion(parent context.Context) (context.Context, func()
 }
 
 func (s *Server) disableLabs(ctx context.Context) error {
+	finishLab := s.cancelLabSession()
+	defer finishLab()
 	s.lab.mu.Lock()
 	for _, cancel := range s.lab.requests {
 		cancel()

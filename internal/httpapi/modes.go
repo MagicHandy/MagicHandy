@@ -89,6 +89,8 @@ func (s *Server) handleModeStart(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	finishLab := s.cancelLabSession()
+	defer finishLab()
 	stopSequence := s.stopSequence.Load()
 	var body struct {
 		Mode string `json:"mode"`

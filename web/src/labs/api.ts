@@ -14,13 +14,19 @@ export interface FlowSpec {
 export interface FlowCandidate extends Omit<MotionLabCandidate, "method"> { method: string; flow?: FlowSpec }
 export interface FlowPreview { spec: FlowSpec; settings: MotionSettings; settings_key: string; candidates: FlowCandidate[] }
 export interface LabTrial {
+	  autopilot?:boolean; motion_applied?:boolean; motion_error?:string;
   message: string; reply: string; raw: string; error?: string; valid: boolean; changed: string[];
   model: string; method: string; prompt: string; elapsed_ms: number; provider_calls: number; schema_guided?: boolean; before: FlowSpec; after: FlowSpec;
   recipe_name?: string; limits?: MotionSettings;
 }
 export interface LLMLabState {
+	  session?:LabSession;
   current: FlowSpec; turns: LabTrial[]; revision: number; busy: boolean; prompts: Record<string,string>;
   model: string; settings_key: string; limits: MotionSettings;
+}
+export interface LabSession {
+  active:boolean; live:boolean; autopilot:boolean; method:string; prompt:string; model:string;
+  schema_guided:boolean; interval_seconds:number; error?:string;
 }
 export interface ObservationTarget {
   source:"motion"|"llm"; settings_key:string; method?:string; spec?:FlowSpec; revision?:number; turn_index?:number;
@@ -39,6 +45,8 @@ export const labApi = {
   deleteObservation: (id:string) => request<LabObservations>("DELETE", `/api/labs/observations/${encodeURIComponent(id)}`),
   preview: (spec: FlowSpec, signal?: AbortSignal) => request<FlowPreview>("POST", "/api/motion/lab/flow", spec, signal),
   state: () => request<LLMLabState>("GET", "/api/labs/llm"),
+  status: () => request<Pick<LLMLabState,"revision"|"busy"|"session">>("GET", "/api/labs/llm/status"),
+  session: (body:Omit<LabSession,"active">) => request<LLMLabState>("POST", "/api/labs/llm/session", body),
   chat: (body: {message:string;method:string;prompt:string;model:string;revision:number;schema_guided:boolean}, signal?: AbortSignal) => request<LLMLabState>("POST", "/api/labs/llm/chat", body, signal),
   reset: (spec: FlowSpec) => request<LLMLabState>("POST", "/api/labs/llm/reset", {spec}),
   start: (preview: FlowPreview, candidate: FlowCandidate) => {

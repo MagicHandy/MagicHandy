@@ -2232,3 +2232,14 @@ Do not start by porting every feature. Start with a better motion and
 transport foundation, preserve the hard-won HSP constraints as tests, validate
 on real hardware early — through the app users actually run — then make chat
 and modes call into the new core.
+
+
+## September 5 Lab conversation follow-up
+
+Implemented for PR review, without merging or publishing a release: a title-bar
+LLM test-mode selector, backend-owned live conversation and Autopilot sessions,
+conditional shared-engine retargeting, a separate Help tab, seven additional
+continuous recipes, and upgrade retirement of all legacy built-ins. See
+[ADR 0022](docs/decisions/0022-lab-conversation-sessions.md),
+[workflow](docs/labs-workspace.md), and
+[model/motion evidence](docs/lab-conversation-review-2026-09-05.md).

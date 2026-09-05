@@ -319,7 +319,7 @@ func TestLibraryReconcilesRetiredAndPromotedBuiltins(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if canonical.Origin != OriginBuiltin || canonical.Enabled != (index == 1) || canonical.Weight != 1.7+float64(index)/10 {
+		if canonical.Origin != OriginBuiltin || canonical.Enabled || canonical.Weight != 1.7+float64(index)/10 {
 			t.Fatalf("promoted canonical %q = %+v", definition.ID, canonical)
 		}
 	}

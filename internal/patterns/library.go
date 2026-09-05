@@ -31,7 +31,7 @@ const patternByIDQuery = `
 `
 
 // Open opens the library and seeds code-generated built-ins without replacing
-// user names, enablement, or feedback-derived weights.
+// user names or feedback-derived weights. Retired built-ins are disabled on upgrade.
 func Open(dataDir string) (*Library, error) {
 	database, err := dbstore.Open(dataDir)
 	if err != nil {
@@ -152,7 +152,7 @@ func (l *Library) Pattern(id string) (Pattern, error) {
 // ResolveEnabled returns engine content only when the entry remains enabled.
 func (l *Library) ResolveEnabled(id string) (motion.PatternDefinition, bool, error) {
 	pattern, err := l.Pattern(id)
-	if errors.Is(err, ErrPatternNotFound) || (err == nil && !pattern.Enabled) {
+	if errors.Is(err, ErrPatternNotFound) || (err == nil && (!pattern.Enabled || pattern.Deprecated)) {
 		return motion.PatternDefinition{}, false, nil
 	}
 	if err != nil {
@@ -241,6 +241,9 @@ func (l *Library) UpdatePattern(id string, patch PatternPatch) (Pattern, error) 
 		}
 		if current.Origin == OriginBuiltin && patchChangesBuiltinContent(patch) {
 			return ErrBuiltinPattern
+		}
+		if current.Deprecated && patch.Enabled != nil && *patch.Enabled {
+			return fmt.Errorf("%w: legacy built-ins are retired and cannot be enabled", ErrInvalidContent)
 		}
 		next, err = applyPatternPatch(current, patch)
 		if err != nil {
@@ -466,6 +469,15 @@ func (l *Library) seedBuiltins(ctx context.Context) error {
 			}
 			for _, duplicateID := range promotion.duplicateIDs {
 				if _, err := tx.ExecContext(ctx, `DELETE FROM patterns WHERE id = ? AND origin = 'user'`, duplicateID); err != nil {
+					return err
+				}
+			}
+		}
+		// Idempotent upgrade migration, after preference promotion: legacy rows
+		// remain exportable but cannot regain enablement through old preferences.
+		for _, definition := range motion.BuiltinPatternDefinitions() {
+			if slices.Contains(definition.Tags, motion.TagDeprecated) {
+				if _, err := tx.ExecContext(ctx, `UPDATE patterns SET enabled = 0 WHERE id = ? AND origin = 'builtin'`, definition.ID); err != nil {
 					return err
 				}
 			}

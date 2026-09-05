@@ -118,11 +118,11 @@ func (l *Library) UndoFeedback(id int64) (Feedback, Pattern, error) {
 		now := time.Now().UTC().Format(time.RFC3339Nano)
 		pattern = current
 		pattern.Weight = feedback.WeightBefore
-		pattern.Enabled = feedback.EnabledBefore
+		pattern.Enabled = feedback.EnabledBefore && !pattern.Deprecated
 		pattern.UpdatedAt = now
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE patterns SET weight = ?, enabled = ?, updated_at = ? WHERE id = ?
-		`, feedback.WeightBefore, boolInt(feedback.EnabledBefore), now, patternID); err != nil {
+		`, feedback.WeightBefore, boolInt(pattern.Enabled), now, patternID); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `

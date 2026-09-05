@@ -73,6 +73,9 @@ func (r motionRequest) target(settings config.MotionSettings) (motion.MotionTarg
 		}
 		return r.Lab.Request.Target(r.Lab.Method)
 	}
+	if definition, ok := motion.BuiltinPatternDefinition(motion.PatternID(r.Pattern)); ok && slices.Contains(definition.Tags, motion.TagDeprecated) {
+		return motion.MotionTarget{}, errors.New("legacy built-ins are disabled; select a continuous pattern")
+	}
 	return motion.MotionTarget{
 		Label:        "Manual",
 		Source:       motion.TargetSourceManualUI,
@@ -153,6 +156,8 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	finishLab := s.cancelLabSession()
+	defer finishLab()
 	stopSequence := s.stopSequence.Load()
 
 	var body motionRequest
@@ -416,6 +421,7 @@ func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (tran
 
 func (s *Server) invalidateWorkForStop(reason string) func() {
 	s.stopSequence.Add(1)
+	finishLab := s.cancelLabSession()
 	if s.mediaSync != nil {
 		s.mediaSync.Invalidate(reason)
 	}
@@ -429,6 +435,7 @@ func (s *Server) invalidateWorkForStop(reason string) func() {
 	pendingASR := s.voice.InvalidateAll(voice.RoleASR)
 	pendingTTS := s.voice.InvalidateAll(voice.RoleTTS)
 	return func() {
+		finishLab()
 		s.voice.CancelInvalidated(voice.RoleASR, pendingASR)
 		s.voice.CancelInvalidated(voice.RoleTTS, pendingTTS)
 	}

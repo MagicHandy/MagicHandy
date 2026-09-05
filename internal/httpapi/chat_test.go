@@ -319,7 +319,7 @@ func TestChatStopBypassesLLMAndStopsMotion(t *testing.T) {
 	})
 	t.Cleanup(server.Close)
 
-	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":30}`)
+	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-full-sweeps","speed_percent":30}`)
 	body := postChatStream(t, server, `{"message":"stop"}`)
 	if !strings.Contains(body, `"reply":"Stopping motion."`) {
 		t.Fatalf("chat stop response missing deterministic reply:\n%s", body)
@@ -342,7 +342,7 @@ func TestChatStopRemainsAvailableWhenLLMMotionIsOff(t *testing.T) {
 	})
 	t.Cleanup(server.Close)
 
-	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"stroke","speed_percent":30}`)
+	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-full-sweeps","speed_percent":30}`)
 	_, _, err := server.store.Update(func(settings config.Settings) (config.Settings, error) {
 		settings.LLM.MotionGenerationMode = config.LLMMotionModeOff
 		return settings, nil
@@ -683,7 +683,7 @@ func TestChatNoneLeavesActiveMotionUnchanged(t *testing.T) {
 	fake := transport.NewFake()
 	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
 	t.Cleanup(server.Close)
-	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"pulse","speed_percent":30}`)
+	_ = callMotion(t, server, http.MethodPost, "/api/motion/start", `{"pattern":"flow-pace-wave","speed_percent":30}`)
 	engine := server.currentMotionEngine()
 	before := engine.Snapshot()
 	dispatch, err := server.dispatchChatMotion(context.Background(), &chat.MotionCommand{Action: chat.MotionActionNone})

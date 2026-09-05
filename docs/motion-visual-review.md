@@ -93,3 +93,15 @@ through the HTTP chat path into a fake transport, verifies actual engine
 targets, one-call generation, append/play continuity and Stop, then exports
 commands, trace rows and steady plans for the atlas. No physical device is
 used by any of these harnesses.
+
+
+For live Lab session evaluation, run `scripts/evaluate-lab-conversation.py` with
+`--base-url` pointing to a fresh isolated review app, one or more `--model`
+arguments, and `--output` under `.scratch`. It takes controller ownership,
+tests catalog naming and multi-turn edits, and runs preview-only Autopilot.
+The report retains wrong choices as `expected_recipe`/`intent_pass`, alongside
+raw output. The atlas reads these fields and labels actual compiled motion
+separately from the expected selection. Capture the shared live-retarget path
+with `MAGICHANDY_EXPERIMENT_CAPTURE` and
+`TestLabConversationRetargetsOneSharedRun`; pass it to the renderer's
+`--captured` option. See the September 5 evaluation document for an example.

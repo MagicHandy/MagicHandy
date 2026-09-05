@@ -356,7 +356,7 @@ func (e *Engine) abortStartup(ctx context.Context, runEpoch uint64, reason strin
 	e.commandMu.Unlock()
 }
 
-func (e *Engine) activeRunEpoch() (uint64, error) {
+func (e *Engine) activeRunEpoch(planID string) (uint64, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if !e.running {
@@ -364,6 +364,9 @@ func (e *Engine) activeRunEpoch() (uint64, error) {
 	}
 	if e.starting {
 		return 0, errors.New("motion is still starting")
+	}
+	if planID != "" && e.plan.ID != planID {
+		return 0, errRunInvalidated
 	}
 	return e.runEpoch, nil
 }

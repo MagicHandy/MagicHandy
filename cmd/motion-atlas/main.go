@@ -134,6 +134,9 @@ func unwrapTrials(data []byte, path string) ([]byte, []motion.Review) {
 func renderTrials(data []byte, settings config.MotionSettings) []motion.Review {
 	var rows []struct {
 		Model, Method, Message, Request, Raw, Error, Selected, Expected string
+		RecipeName                                                      string `json:"recipe_name"`
+		ExpectedRecipe                                                  string `json:"expected_recipe"`
+		IntentPass                                                      *bool  `json:"intent_pass"`
 		Intent                                                          bool
 		Command                                                         *struct {
 			Area         string `json:"area"`
@@ -147,6 +150,12 @@ func renderTrials(data []byte, settings config.MotionSettings) []motion.Review {
 	must(json.Unmarshal(data, &rows))
 	entries := make([]motion.Review, 0, len(rows))
 	for index, row := range rows {
+		if row.Expected == "" {
+			row.Expected = row.ExpectedRecipe
+		}
+		if row.IntentPass != nil {
+			row.Intent = *row.IntentPass
+		}
 		entry := motion.Review{ID: fmt.Sprintf("trial-%d", index+1), Name: fmt.Sprintf("LLM trial %d", index+1)}
 		switch {
 		case !row.Valid:
@@ -185,14 +194,17 @@ func renderTrials(data []byte, settings config.MotionSettings) []motion.Review {
 			entry.Error = "No compiled action recorded"
 		}
 		entry.Group, entry.Model, entry.Raw = "llm-output", row.Model, row.Raw
-		if row.Method != "" {
-			entry.Name = row.Method + " · " + row.Expected
+		if row.RecipeName != "" {
+			entry.Name = row.RecipeName
 		}
 		if row.Expected != "" {
-			entry.Outcome = "Intent mismatch"
+			entry.Outcome = "Intent mismatch; expected " + row.Expected
 			if row.Intent {
 				entry.Outcome = "Intent check passed"
 			}
+		}
+		if row.Method != "" {
+			entry.Outcome = row.Method + ": " + entry.Outcome
 		}
 		if !row.Valid {
 			entry.Outcome = "Rejected structure"

@@ -15,16 +15,19 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
-const labControlGuide = `You design hypothetical motion scores in a developer lab. Nothing you return starts a device. Output only one JSON object, with a brief "reply" and optional changes defined below. Do not claim a physical improvement has been proven. No markdown, tool calls, action, timestamps or raw point arrays.
+const labPlanningContextGuide = `Each request supplies current numeric planning data, refreshed from the backend. saved_limits bounds the selectable speed_percent. engine_envelope describes semantic position coordinates and a profile-derived peak velocity ceiling in percentage points per second; it is a planning reference, not measured device performance or a requested speed. The backend owns hardware calibration and physical stroke-window mapping. Do not infer device versions, change these limits, or compensate speed automatically.
+`
+
+const labControlGuide = labPlanningContextGuide + `You are the conversational assistant in a motion testing session. Reply naturally to the user, including questions that need no motion change. The app may apply accepted semantic changes during a live test. Output only one JSON object, with a brief "reply" and optional changes defined below. Do not claim a physical improvement has been proven. No markdown, tool calls, action, timestamps or raw point arrays.
 The CURRENT SCORE and SAVED LIMITS are authoritative starting data. Preserve all controls the user did not ask to change. Only emitted fields take effect: include every field needed for a requested change; the reply alone changes nothing. If there is no motion request, return only reply. You may explain an unsupported request instead of inventing fields.
-"controls" is a partial object with any of: min_percent, max_percent, speed_percent, range_floor_percent, range_ceiling_percent, anchor_percent, memory_cycles, pace_variation_percent.
+"controls" is a partial object with any of: min_percent, max_percent, speed_percent, range_floor_percent, range_ceiling_percent, anchor_percent, memory_cycles, pace_variation_percent, variation_mode, turn_softness_percent, cadence_hold_percent. Every change claimed in reply must have its matching field in the output. For example, a requested softness value belongs in controls.turn_softness_percent even when changing other controls in the same reply.
 min_percent and max_percent define the outer band, base=0 and tip=100, at least 10 apart. range_floor_percent is the shortest stroke, 10..(max_percent-min_percent). anchor_percent 0 holds the base end during range variation; 100 holds the tip; 50 contracts around the center. memory_cycles 2..32 is the time scale of gradual range changes (higher means longer trends, not more randomness). pace_variation_percent 0..40 adds slow pace changes. Speed must stay inside SAVED LIMITS. Seed is fixed by the lab.
 Example of an independent range change: {"reply":"I will hold the base end in this preview.","controls":{"anchor_percent":0}}.
 range_ceiling_percent optionally limits the widest span within the outer band: zero uses the whole band, otherwise floor..outer width. Floor and ceiling do not move the outer band; min_percent and max_percent do. Change a span ceiling only if the user requests a widest-stroke limit. Equal floor and ceiling keep width fixed while a center layer moves the window. Omit controls entirely when changing only steps or layers. loop_cycles and seed are fixed by the lab. When sections exist, change their ranges using the sequence interface; global range edits alone are rejected. A global speed change also updates every existing section's speed unless a new sequence is supplied.
 Optional lab controls: variation_mode is "waves" (the original smooth spectral envelope) or "drift" (seeded correlated irregular variation). Neither changes the band or speed; both eventually repeat with the score. turn_softness_percent 0..100 redistributes travel symmetrically, from the original cosine at 0 to longer, gentler turnarounds at 100. cadence_hold_percent 0..100 moves from compensating stroke length to keeping a steadier beat as length changes. A higher cadence hold may reduce effective mean pace; do not change speed to compensate unless asked. These are hypotheses, not proven physical improvements. Omitted controls remain unchanged.
 Always preserve the distinction between range, pace, and timing of variation.`
 
-// LLMLabPrompts isolates three control interfaces from production prompting.
+// LLMLabPrompts isolates experimental control interfaces from production prompting.
 func LLMLabPrompts() map[string]string {
 	return map[string]string{
 		"library":             libraryLabPrompt("library"),
@@ -41,6 +44,9 @@ Example: {"reply":"A slow range swell over the carrier.","layers":[{"axis":"rang
 
 // LLMLabTrial retains raw failures as evidence, without repair or fallback.
 type LLMLabTrial struct {
+	Autopilot     bool                  `json:"autopilot,omitempty"`
+	MotionApplied bool                  `json:"motion_applied,omitempty"`
+	MotionError   string                `json:"motion_error,omitempty"`
 	Message       string                `json:"message"`
 	Reply         string                `json:"reply"`
 	Raw           string                `json:"raw"`
@@ -72,7 +78,11 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 		return trial
 	}
 	recipeID, _ := labCurrentRecipe(method, current)
-	contextJSON, _ := json.Marshal(map[string]any{"current_score": current, "current_recipe": recipeID, "saved_limits": limits})
+	contextJSON, _ := json.Marshal(map[string]any{
+		"current_score": current, "current_recipe": recipeID,
+		"saved_limits":    map[string]int{"speed_min_percent": limits.SpeedMinPercent, "speed_max_percent": limits.SpeedMaxPercent},
+		"engine_envelope": motion.CurrentPlanningEnvelope(limits),
+	})
 	messages := []llm.Message{{Role: "system", Content: prompt}}
 	if len(history) > 8 {
 		history = history[len(history)-8:]
