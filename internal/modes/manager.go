@@ -612,6 +612,14 @@ func (m *Manager) handleStartFailure(mode string, generation uint64, event strin
 
 	m.mu.Lock()
 	active := m.loop.mode == mode && m.loop.generation == generation && !m.user.stopped && !m.chat.pending
+	if active {
+		// Revoke work before handing teardown to another goroutine. A ready
+		// tick must not retry while teardown waits for the lifecycle lock.
+		m.cancelOperationLocked()
+		if m.loop.cancel != nil {
+			m.loop.cancel()
+		}
+	}
 	m.mu.Unlock()
 	if !active {
 		return
@@ -629,7 +637,7 @@ func (m *Manager) beginStartOperation(
 	chatVersion uint64,
 ) (context.Context, func(), bool) {
 	m.mu.Lock()
-	if m.loop.mode != mode || m.loop.generation != generation || m.user.stopped || m.user.paused || m.chat.pending ||
+	if parent.Err() != nil || m.loop.mode != mode || m.loop.generation != generation || m.user.stopped || m.user.paused || m.chat.pending ||
 		(mode == ModeAutopilot && m.chat.activity) ||
 		(mode == ModeChat && (m.chat.version != chatVersion || m.chat.target == nil || !m.chat.keepalive)) {
 		m.mu.Unlock()

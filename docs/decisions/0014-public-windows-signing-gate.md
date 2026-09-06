@@ -6,11 +6,29 @@ Accepted; amended 2026-09-06 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.41 package-preserving releases.
+reviewed alpha.14 through alpha.42 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.42 amendment
+
+On 2026-09-06 the user explicitly approved publishing alpha.42 under the
+existing reviewed-unsigned Windows policy, with only this version added to
+the allowlist. PRs #253–#257 merged lifecycle/state, datastore/observation,
+video-seeking and funscript-filter improvements. The release preparation also
+fixes the unsafe-startup cancellation race found by the post-merge Go check;
+see the [failure investigation](../alpha42-release-validation-2026-09-06.md).
+
+The package layout, native x64 loader, compression, dependencies and installer
+lifecycle are preserved. No later version is authorized. The release PR and
+merged main must pass the existing checks before an immutable tag is pushed.
+Defender must scan the exact release directory; manifests, checksums, installer
+lifecycle and main-tip provenance must verify before publication. Microsoft's
+completed case concerns its original alpha.6 artifact, not advance clearance
+for these new hashes. Physical video/filter acceptance remains open as recorded
+in the [filter review](../funscript-filter-review-2026-09-06.md).
 
 ### Alpha.41 amendment
 
@@ -90,7 +108,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.41 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.42 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -204,11 +222,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.41 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.42 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.41 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.42 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
