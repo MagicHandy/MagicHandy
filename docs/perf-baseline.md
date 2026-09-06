@@ -582,19 +582,21 @@ working-set samples 400 ms apart, as in the previous follow-up's fixture.
 | Measurement | Parent | Candidate |
 | --- | ---: | ---: |
 | Stripped binary bytes | 19,097,600 | 19,107,328 |
-| Main JS bytes / gzip level 9 | 751,511 / 207,331 | 751,738 / 207,389 |
-| Lazy Labs JS bytes / gzip level 9 | 52,019 / 14,541 | 52,019 / 14,546 |
+| Main JS bytes / gzip level 9 | 751,511 / 207,331 | 751,811 / 207,414 |
+| Lazy Labs JS bytes / gzip level 9 | 52,019 / 14,541 | 52,019 / 14,545 |
 | Startup ms, two launches | 568.6 / 519.8 | 517.4 / 520.7 |
 | Working-set MiB, launches 1 / 2 | 32.79 / 32.78 | 32.98 / 32.60 |
 | Private committed MiB, launches 1 / 2 | 54.45 / 54.20 | 55.44 / 53.84 |
 
 All three working-set samples within each launch were identical. The final
-binary grows 9,728 bytes (0.051%), and browser JS grows 227 raw / 63 gzip bytes
+binary grows 9,728 bytes (0.051%), and browser JS grows 300 raw / 87 gzip bytes
 in total. No dependency or duplicated asset is added. Main/Labs hash changes
 replace their predecessors in the single canonical embed. Source byte lengths
 and compressed sizes were measured with Node buffers, not JavaScript character
 counts. Raw evidence is under `.scratch/data-observation/perf-final-*.json` and
 `bundle-size.json`; earlier candidate samples are retained separately.
+Stopped-server samples precede the final browser-title-only bundle cleanup,
+which keeps the stripped binary size unchanged.
 
 These stopped-server observations do not measure the full active workload or
 close the existing SQLite RSS waiver. All startup samples exceed the 500 ms

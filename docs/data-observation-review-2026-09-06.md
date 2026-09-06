@@ -52,6 +52,10 @@ connection. Model metadata parsing now receives the request context.
    wrapper formatted the underlying error with `%v`, so `errors.Is` could not
    distinguish cancellation from a storage failure. Its failing regression now
    passes with both the inventory sentinel and cancellation cause preserved.
+3. **Stale browser title after route navigation.** Live acceptance showed
+   “Preset modes” remaining in the browser title after returning to Chat.
+   `WorkspaceHead` now releases the title it owns on unmount, restoring the
+   default title when the next route supplies its own conversation header.
 
 The review traced writer release/rollback, request versus durable lifetimes,
 chat admission/Stop cleanup, selected-file invalidation, API status meanings,
@@ -100,6 +104,8 @@ pure-Go build, frontend typecheck/build, all **479 frontend tests in 66 files**,
 and the PowerShell installer suite pass locally. Race checks for chatapp and
 HTTP are repeated after the final preflight/status lifetime extension. Existing
 gate thresholds and dependencies are unchanged; only canonical `web/dist` ships.
+The frontend suite and build were repeated after the title cleanup found in
+browser acceptance.
 
 The isolated review app is at `http://127.0.0.1:49939/#/chat`, using the simulator
 and local Ollama `huihui_ai/granite4.1-abliterated:3b`. The real provider readiness

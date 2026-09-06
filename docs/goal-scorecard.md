@@ -5,7 +5,8 @@
 Audit follow-ups 3–5 are implemented: cancellation-aware single-writer admission,
 request-scoped conversation/prompt reads, separate motion subscriptions and
 compact model status. A second review adds shutdown-before-registration and
-inventory cancellation-classification regressions. Full Go test/race/vet/lint,
+inventory cancellation-classification regressions, plus browser-title cleanup
+after navigation. Full Go test/race/vet/lint,
 import/goleak gates, pure-Go build, 479 frontend tests/typecheck/build and installer
 checks pass. The simulator and real local LLM chat pass; see
 [the implementation review](data-observation-review-2026-09-06.md).
@@ -14,7 +15,7 @@ The 128-file model fixture reduces selected status from 2.46–4.87 ms to
 41.5–41.9 microseconds; the two 500-row React fixtures avoid all 80 motion-only
 rerenders while live observers retain the stream. These are scoped performance
 results, not a whole-app throughput or frame-rate claim. The stripped binary
-is 19,107,328 bytes (+9,728); browser JS adds 227 raw / 63 gzip bytes, with no
+is 19,107,328 bytes (+9,728); browser JS adds 300 raw / 87 gzip bytes, with no
 dependency change. Stopped working sets are 32.79/32.78 MiB parent versus
 32.98/32.60 MiB candidate; private committed memory overlaps around 54–55 MiB.
 The existing SQLite waiver remains. Startup observations are 517–569 ms across
