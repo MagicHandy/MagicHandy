@@ -827,7 +827,7 @@ input[type="search"] {
   .media-funscript-head {
     align-items: flex-start;
   }
-  .media-funscript-head > div {
+  .media-funscript-title {
     align-items: flex-start;
     flex-direction: column;
     gap: 2px;

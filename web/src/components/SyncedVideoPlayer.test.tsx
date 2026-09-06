@@ -340,7 +340,7 @@ describe("SyncedVideoPlayer", () => {
     pause.mockClear();
     mediaSync.mockClear();
 
-    fireEvent.click(screen.getByRole("button", { name: "Sync 0 ms" }));
+    fireEvent.click(screen.getByRole("button", { name: "Playback settings for Paired session" }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Round peaks/ }));
 
     expect(pause).toHaveBeenCalledOnce();
@@ -372,7 +372,7 @@ describe("SyncedVideoPlayer", () => {
     Object.defineProperty(player, "paused", { configurable: true, value: false });
     mediaSync.mockClear();
     play.mockClear();
-    fireEvent.click(screen.getByRole("button", { name: "Sync 0 ms" }));
+    fireEvent.click(screen.getByRole("button", { name: "Playback settings for Paired session" }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Round peaks/ }));
     await screen.findByText("Settings write failed");
     expect(mediaSync.mock.calls.some(([event]) => event.state === "paused")).toBe(true);

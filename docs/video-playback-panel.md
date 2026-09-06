@@ -206,8 +206,11 @@ compiled filtered curve remains a separate follow-up, not an implied feature.
 
 ## Placement and behavior
 
-- **Trigger** in the funscript strip's header row, beside `Hide timeline`, so it
-  sits with the other playback-scoped controls rather than in the app chrome.
+- **Trigger** is a compact gear at the far right of the funscript title/action
+  row. The timeline collapse chevron sits beside it; both use 30 px square
+  buttons with localized accessible labels and tooltips. The gear tooltip
+  retains the effective sync offset, and its active state marks an open panel.
+  The controls stay together on narrow screens while the title and metadata wrap.
   It carries the active offset as its label (`Sync −150 ms`) so the value is
   visible without opening anything.
 - **Panel** anchored to the trigger, same visual treatment as

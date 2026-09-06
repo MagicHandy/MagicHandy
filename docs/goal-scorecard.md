@@ -2,6 +2,14 @@
 
 ## 2026-09-06 — funscript filter quality
 
+Toolbar follow-up: the funscript header uses two 30 px icon buttons at its right
+edge, with a gear for sync/filter settings. Compared with `2977a2c9`, main JS
+adds 809 raw / 230 gzip bytes and CSS adds 274 raw / 37 gzip bytes; the stripped
+binary is 19,114,496 B (+1,024). No dependency changes. Frontend typecheck,
+497 tests, localization and production build pass; the simulator browser
+confirms timeline collapse/expand and gear-panel behavior, with a real LLM
+readiness generation passing at `http://127.0.0.1:49951`.
+
 Video filters now use conservative chatter selection, continuous local shared-
 engine rounding and backend measurements/readback. Full Go/race/vet/lint,
 pure-Go, architecture/goleak, frontend typecheck/build and 497 frontend tests
