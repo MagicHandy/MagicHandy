@@ -26,6 +26,8 @@ linters:
           deny:
             - pkg: github.com/mapledaemon/MagicHandy/internal/httpapi
               desc: HTTP API is an edge adapter; core packages must not depend on it.
+            - pkg: github.com/mapledaemon/MagicHandy/internal/chatapp
+              desc: Conversation application orchestration stays above the core domains.
         no-transport-from-semantic-clients:
           files:
             - internal/chat/**/*.go

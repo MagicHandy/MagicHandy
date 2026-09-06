@@ -20,6 +20,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
 	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/chatapp"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
@@ -110,11 +111,8 @@ type Server struct {
 	quiesceOnce         sync.Once
 	closeOnce           sync.Once
 	settingsLifecycleMu sync.Mutex
-	chatLifecycleMu     sync.Mutex
 	personaMutationMu   sync.Mutex
-	chatCancelMu        sync.Mutex
-	chatCancels         map[uint64]context.CancelFunc
-	nextChatID          uint64
+	chatWorkspace       *chatapp.Workspace
 	chatSpeechMu        sync.Mutex
 	chatSpeechRequests  map[int64]string
 	hostPathPicker      hostPathPicker
@@ -276,6 +274,7 @@ func (s *Server) openPersistentDomains(mediaLocations []string, chatSettings con
 		return err
 	}
 	s.chatLog = chatLog
+	s.chatWorkspace = chatapp.NewWorkspace(s.lifecycleCtx, chatLog, s.autopilotActive)
 
 	patternLibrary, err := patterns.OpenWithDatabase(s.store.Datastore())
 	if err != nil {

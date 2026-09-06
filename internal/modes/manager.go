@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -114,73 +113,14 @@ type Manager struct {
 	userIntentMu  sync.Mutex
 	userControlMu sync.Mutex
 	mu            sync.Mutex
-
-	options Options
-
-	mode      string
-	cancel    context.CancelFunc
-	done      chan struct{}
-	planner   *Planner
-	segment   Segment
-	pattern   *motion.PatternDefinition
-	deadline  time.Time
-	driftAt   time.Time
-	driftDone bool
-	wasPaused bool
-	// userPaused closes the transport-stop race where Engine.Pause has stopped
-	// its loop but has not yet published Paused=true. The mode scheduler must
-	// honor the control intent before transport I/O begins, not infer it from a
-	// transient engine snapshot.
-	userPaused          bool
-	userPauseID         uint64
-	userPauseConfirmed  uint64
-	userResumeConfirmed uint64
-	userPausePending    map[uint64]struct{}
-	userStopped         bool
-	nextRetry           time.Time
-	chatTarget          *motion.MotionTarget
-	chatKeepalive       bool
-	chatTargetPending   bool
-	chatActivity        bool
-	lastEvent           string
-	lastEventAt         time.Time
-	segmentIdx          int
-	generation          uint64
-	chatVersion         uint64
-
-	recentPatternIDs    []string
-	recentPositionBands []PositionBand
-	decisionSource      string
-	lastSay             string
-	motionPlanAt        time.Time
-	pendingMotion       *segmentChoice
-	speechDeadline      time.Time
-	speechWaitingID     string
-	speechFallbackAt    time.Time
-	speechNextTiming    TimingPreference
-	lastDecisionTime    time.Duration
-	motionCadenceRNG    *rand.Rand
-	speechCadenceRNG    *rand.Rand
-	swayRNG             *rand.Rand
-	// swayPoints is the remaining intra-segment speed schedule, in time order.
-	swayPoints []swayPoint
-	// speedChangedAt and previousSpeed back the session facts handed to the
-	// model, so it can tell a deliberate plateau from an accidental one.
-	speedChangedAt time.Time
-	previousSpeed  int
-	// phraseChangedAt and its counters describe accumulated semantic sameness.
-	// The phrase excludes speed and decision horizon, so small pace nudges cannot
-	// make a long-repeated shape look new to the model.
-	currentPhrase            Segment
-	currentPerceptual        *motion.PerceptualSummary
-	phraseChangedAt          time.Time
-	decisionsAtCurrentPhrase int
-	consecutiveHolds         int
-	arc                      arcState
-
-	operationID     uint64
-	operationMode   string
-	operationCancel context.CancelFunc
+	options       Options
+	loop          modeLoopState
+	user          userControlState
+	chat          chatRecoveryState
+	motion        motionScheduleState
+	speech        speechScheduleState
+	history       motionHistoryState
+	events        modeEventState
 }
 
 // NewManager creates an idle mode manager.
@@ -203,71 +143,6 @@ func NewManager(options Options) (*Manager, error) {
 		options.CanAnnounce = func() bool { return true }
 	}
 	return &Manager{options: options}, nil
-}
-
-// Status returns the UI-facing mode state.
-func (m *Manager) Status() Status {
-	m.mu.Lock()
-	mode := m.mode
-	lastEvent := m.lastEvent
-	lastEventAt := m.lastEventAt
-	segmentIdx := m.segmentIdx
-	deadline := m.deadline
-	waitingForChat := m.chatTarget == nil
-	decisionSource := m.decisionSource
-	lastSay := m.lastSay
-	pendingMotion := m.pendingMotion != nil
-	speechDeadline := m.speechDeadline
-	speechWaiting := m.speechWaitingID != ""
-	m.mu.Unlock()
-	now := m.options.Now()
-
-	status := Status{
-		Active:    mode != "",
-		Mode:      mode,
-		LastEvent: lastEvent,
-	}
-	if mode != "" {
-		status.Style = m.options.Settings().Style
-		status.StatusAt = now.UTC().Format(time.RFC3339Nano)
-	}
-	if !lastEventAt.IsZero() {
-		status.LastEventAt = lastEventAt.UTC().Format(time.RFC3339Nano)
-	}
-	if mode == ModeFreestyle || mode == ModeAutopilot {
-		status.SegmentIndex = segmentIdx
-		if !deadline.IsZero() {
-			status.SegmentDueAt = deadline.UTC().Format(time.RFC3339Nano)
-		}
-		if remaining := deadline.Sub(now).Milliseconds(); remaining > 0 {
-			status.SegmentEndsMs = remaining
-		}
-	}
-	if mode == ModeAutopilot {
-		status.DecisionSource = decisionSource
-		status.LastSay = lastSay
-		status.MotionPlanned = pendingMotion
-		status.SpeechWaitingPlayback = speechWaiting
-		if arc := m.SessionArcSnapshot(); arc.Enabled {
-			status.Arc = &arc
-		}
-		if !deadline.IsZero() {
-			status.MotionChangeDueAt = deadline.UTC().Format(time.RFC3339Nano)
-		}
-		if remaining := deadline.Sub(now).Milliseconds(); remaining > 0 {
-			status.MotionChangeMs = remaining
-		}
-		if !speechDeadline.IsZero() {
-			status.SpeechDueAt = speechDeadline.UTC().Format(time.RFC3339Nano)
-		}
-		if remaining := speechDeadline.Sub(now).Milliseconds(); remaining > 0 {
-			status.SpeechMs = remaining
-		}
-	}
-	if mode == ModeChat {
-		status.WaitingForChat = waitingForChat
-	}
-	return status
 }
 
 // Start activates a mode, replacing any active one.
@@ -301,9 +176,9 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 	m.mu.Lock()
 	m.resetForModeStartLocked(mode)
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	m.cancel = cancel
+	m.loop.cancel = cancel
 	done := make(chan struct{})
-	m.done = done
+	m.loop.done = done
 	m.mu.Unlock()
 
 	m.trace(mode, "mode_started", nil, "")
@@ -320,8 +195,8 @@ func (m *Manager) beginModeStart() (func(), bool) {
 	// it revive motion after the newer intent.
 	m.userIntentMu.Lock()
 	m.mu.Lock()
-	m.userPauseID++
-	startID := m.userPauseID
+	m.user.intentID++
+	startID := m.user.intentID
 	m.mu.Unlock()
 	m.userIntentMu.Unlock()
 
@@ -332,7 +207,7 @@ func (m *Manager) beginModeStart() (func(), bool) {
 	m.lifecycleMu.Lock()
 	m.userIntentMu.Lock()
 	m.mu.Lock()
-	admitted := m.userPauseID == startID
+	admitted := m.user.intentID == startID
 	m.mu.Unlock()
 	return func() {
 		m.userIntentMu.Unlock()
@@ -351,19 +226,19 @@ func (m *Manager) Stop(reason string) {
 
 func (m *Manager) stopLoop(reason string) {
 	m.mu.Lock()
-	if m.mode == "" {
+	if m.loop.mode == "" {
 		m.mu.Unlock()
 		return
 	}
-	mode := m.mode
-	cancel := m.cancel
-	done := m.done
-	m.generation++
+	mode := m.loop.mode
+	cancel := m.loop.cancel
+	done := m.loop.done
+	m.loop.generation++
 	m.cancelOperationLocked()
 	m.resetUserPauseLocked()
-	m.mode = ""
-	m.cancel = nil
-	m.done = nil
+	m.loop.mode = ""
+	m.loop.cancel = nil
+	m.loop.done = nil
 	m.mu.Unlock()
 
 	if cancel != nil {
@@ -384,18 +259,18 @@ func (m *Manager) stopLoopAtGeneration(mode string, generation uint64, reason st
 	defer m.lifecycleMu.Unlock()
 
 	m.mu.Lock()
-	if m.mode != mode || m.generation != generation {
+	if m.loop.mode != mode || m.loop.generation != generation {
 		m.mu.Unlock()
 		return
 	}
-	cancel := m.cancel
-	done := m.done
-	m.generation++
+	cancel := m.loop.cancel
+	done := m.loop.done
+	m.loop.generation++
 	m.cancelOperationLocked()
 	m.resetUserPauseLocked()
-	m.mode = ""
-	m.cancel = nil
-	m.done = nil
+	m.loop.mode = ""
+	m.loop.cancel = nil
+	m.loop.done = nil
 	m.mu.Unlock()
 
 	if cancel != nil {
@@ -405,306 +280,6 @@ func (m *Manager) stopLoopAtGeneration(mode string, generation uint64, reason st
 		<-done
 	}
 	m.trace(mode, "mode_stopped", nil, reason)
-}
-
-// NotifyUserStop records an explicit user stop: the active mode ends and no
-// keepalive may restart motion afterwards.
-func (m *Manager) NotifyUserStop() {
-	finish := m.BeginUserStop()
-	finish()
-}
-
-// BeginUserPause blocks autonomous recovery before Engine.Pause performs its
-// transport Stop. During that round-trip the engine is intentionally neither
-// running nor fully marked paused; relying on Snapshot alone lets a mode start
-// a replacement stream in that gap. The completion callback keeps the latch
-// when the engine reached a paused state and rolls it back after an ordinary
-// pause failure. The admission result is false when a newer Pause, Resume, or
-// Stop superseded this request while it waited for another control operation.
-func (m *Manager) BeginUserPause() (func(keepPaused bool), bool) {
-	m.userIntentMu.Lock()
-	m.mu.Lock()
-	m.userPauseID++
-	pauseID := m.userPauseID
-	latched := m.mode != ""
-	if latched {
-		if m.userPausePending == nil {
-			m.userPausePending = make(map[uint64]struct{})
-		}
-		m.userPausePending[pauseID] = struct{}{}
-		m.userPaused = true
-		m.generation++
-		m.cancelOperationLocked()
-		for index := range m.swayPoints {
-			m.swayPoints[index].generation = m.generation
-		}
-	}
-	m.mu.Unlock()
-	m.userIntentMu.Unlock()
-
-	// Pause and Resume transport operations execute one at a time. Intent is
-	// recorded before waiting so a newer control can invalidate a queued older
-	// one; Emergency Stop intentionally bypasses this gate.
-	m.userControlMu.Lock()
-	m.mu.Lock()
-	admitted := m.userPauseID == pauseID
-	m.mu.Unlock()
-
-	var once sync.Once
-	return func(keepPaused bool) {
-		once.Do(func() {
-			defer m.userControlMu.Unlock()
-			if !latched {
-				return
-			}
-			m.mu.Lock()
-			defer m.mu.Unlock()
-			if _, pending := m.userPausePending[pauseID]; !pending {
-				return
-			}
-			delete(m.userPausePending, pauseID)
-			if admitted && keepPaused && pauseID > m.userResumeConfirmed && pauseID > m.userPauseConfirmed {
-				m.userPauseConfirmed = pauseID
-			}
-			m.refreshUserPauseLocked()
-		})
-	}, admitted
-}
-
-// BeginUserResume returns a completion callback that releases the mode-level
-// latch only when the engine successfully resumes and no newer Pause intent is
-// pending. The next scheduler tick then continues the preserved phrase and
-// clocks instead of creating a replacement start. A false admission result
-// means the engine call must be skipped because a newer control intent won.
-func (m *Manager) BeginUserResume() (func(resumed bool), bool) {
-	m.userIntentMu.Lock()
-	m.mu.Lock()
-	m.userPauseID++
-	resumeID := m.userPauseID
-	m.mu.Unlock()
-	m.userIntentMu.Unlock()
-
-	m.userControlMu.Lock()
-	m.mu.Lock()
-	admitted := m.userPauseID == resumeID
-	m.mu.Unlock()
-
-	var once sync.Once
-	return func(resumed bool) {
-		once.Do(func() {
-			defer m.userControlMu.Unlock()
-			if !admitted || !resumed {
-				return
-			}
-			m.mu.Lock()
-			defer m.mu.Unlock()
-			if resumeID > m.userResumeConfirmed {
-				m.userResumeConfirmed = resumeID
-			}
-			m.refreshUserPauseLocked()
-		})
-	}, admitted
-}
-
-func (m *Manager) refreshUserPauseLocked() {
-	paused := m.userPauseConfirmed > m.userResumeConfirmed
-	if !paused {
-		for pauseID := range m.userPausePending {
-			if pauseID > m.userResumeConfirmed {
-				paused = true
-				break
-			}
-		}
-	}
-	m.userPaused = m.mode != "" && paused
-}
-
-func (m *Manager) resetUserPauseLocked() {
-	m.userPauseID++
-	m.userPauseConfirmed = 0
-	m.userResumeConfirmed = m.userPauseID
-	m.userPausePending = nil
-	m.userPaused = false
-}
-
-// BeginUserStop marks autonomous work unable to restart and cancels its loop
-// without waiting. The caller can stop the motion engine first, then invoke the
-// returned function to drain and trace the mode goroutine.
-func (m *Manager) BeginUserStop() func() {
-	m.lifecycleMu.Lock()
-	m.mu.Lock()
-	m.resetUserPauseLocked()
-	m.userStopped = true
-	m.chatTarget = nil
-	m.chatKeepalive = false
-	m.chatTargetPending = false
-	m.chatActivity = false
-	m.chatVersion++
-	m.generation++
-	m.cancelOperationLocked()
-	if m.mode == "" {
-		m.mu.Unlock()
-		m.lifecycleMu.Unlock()
-		return func() {}
-	}
-	mode := m.mode
-	cancel := m.cancel
-	done := m.done
-	m.mode = ""
-	m.cancel = nil
-	m.done = nil
-	m.mu.Unlock()
-	if cancel != nil {
-		cancel()
-	}
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			defer m.lifecycleMu.Unlock()
-			if done != nil {
-				<-done
-			}
-			m.trace(mode, "mode_stopped", nil, "user_stop")
-		})
-	}
-}
-
-// PrepareChatTarget blocks new mode work and invalidates any in-flight decision
-// before an interactive target enters the shared engine.
-func (m *Manager) PrepareChatTarget() uint64 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.chatTargetPending = true
-	m.generation++
-	m.cancelOperationLocked()
-	m.swayPoints = nil
-	return m.generation
-}
-
-// NotifyChatActivity invalidates stale autonomous planning and postpones the
-// independent speech clock even when the interactive turn does not change
-// motion.
-func (m *Manager) NotifyChatActivity() {
-	now := m.options.Now()
-	m.mu.Lock()
-	m.chatActivity = true
-	if m.mode != ModeAutopilot || m.userStopped {
-		m.mu.Unlock()
-		return
-	}
-	m.generation++
-	m.cancelOperationLocked()
-	m.pendingMotion = nil
-	m.swayPoints = nil
-	m.speechWaitingID = ""
-	m.speechFallbackAt = time.Time{}
-	m.scheduleSpeechLocked(now, TimingNormal)
-	m.mu.Unlock()
-	m.trace(ModeAutopilot, "chat_activity", nil, "autonomous speech postponed")
-}
-
-// NotifyChatActivityComplete releases autonomous planning after the canonical
-// interactive turn has finished. beginChat serializes interactive turns, so a
-// boolean is sufficient and cannot release a newer chat request.
-func (m *Manager) NotifyChatActivityComplete() {
-	m.mu.Lock()
-	m.chatActivity = false
-	m.mu.Unlock()
-}
-
-// CancelChatTarget releases a failed interactive handoff so the active mode can
-// resume planning on its next tick.
-func (m *Manager) CancelChatTarget(generation uint64) {
-	m.mu.Lock()
-	if m.chatTargetPending && m.generation == generation {
-		m.chatTargetPending = false
-	}
-	m.mu.Unlock()
-}
-
-// NotifyChatTarget adopts a successfully applied chat target for keepalive and
-// as Autopilot's authoritative current segment.
-func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget) bool {
-	copied := cloneTarget(target)
-	// Re-evaluate an interactive target on the independent motion cadence.
-	segment, pattern, adoptable := segmentFromMotionTarget(copied, 0)
-	now := m.options.Now()
-	var perceptual *motion.PerceptualSummary
-	if engine := m.options.Current(); engine != nil {
-		perceptual = clonePerceptualSummary(engine.Snapshot().Perceptual)
-	}
-
-	m.mu.Lock()
-	if !m.chatTargetPending || m.generation != generation || m.userStopped {
-		m.mu.Unlock()
-		return false
-	}
-	m.chatTargetPending = false
-	m.chatVersion++
-	m.generation++
-	m.cancelOperationLocked()
-	m.chatTarget = &copied
-	// Only reusable loop patterns are recovery targets. Programs and media are
-	// finite; an idle engine means they completed rather than lost transport.
-	m.chatKeepalive = adoptable
-	adopted := m.mode == ModeAutopilot && adoptable
-	if adopted {
-		previousSpeed := m.segment.SpeedPercent
-		duration := m.sampleMotionDelayLocked(TimingSoon)
-		if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
-			duration = m.options.MaxSegmentDuration
-		}
-		segment.DurationMillis = duration.Milliseconds()
-		m.segment = segment
-		m.pattern = pattern
-		m.segmentIdx++
-		m.deadline = now.Add(duration)
-		m.motionPlanAt = m.deadline.Add(-m.planningLeadLocked(duration))
-		m.pendingMotion = nil
-		m.swayPoints = nil
-		m.driftDone = true
-		m.nextRetry = time.Time{}
-		if segment.SpeedPercent != previousSpeed {
-			m.previousSpeed = previousSpeed
-			m.speedChangedAt = now
-		}
-		m.observeInteractivePhraseLocked(now, segment, perceptual)
-		m.rememberPositionBandLocked(perceptual)
-		m.decisionSource = "interactive"
-		if segment.PatternID != "" {
-			m.recentPatternIDs = append(m.recentPatternIDs, string(segment.PatternID))
-			if len(m.recentPatternIDs) > 4 {
-				m.recentPatternIDs = m.recentPatternIDs[len(m.recentPatternIDs)-4:]
-			}
-		}
-	}
-	m.mu.Unlock()
-
-	if adopted {
-		m.trace(ModeAutopilot, "interactive_target_adopted", &diagnostics.MotionTracePlanner{
-			Mode:              ModeAutopilot,
-			Event:             "interactive_target_adopted",
-			PatternIdentifier: segmentContentIdentifier(segment),
-			SpeedPercent:      segment.SpeedPercent,
-			DurationMillis:    segment.DurationMillis,
-		}, "chat")
-	}
-	return true
-}
-
-// NotifyChatStop clears the keepalive target after a chat-driven stop.
-func (m *Manager) NotifyChatStop() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.resetUserPauseLocked()
-	m.chatTarget = nil
-	m.chatKeepalive = false
-	m.chatTargetPending = false
-	m.chatActivity = false
-	m.userStopped = true
-	m.chatVersion++
-	m.generation++
-	m.cancelOperationLocked()
 }
 
 // Shutdown stops the loop at process exit.
@@ -758,9 +333,9 @@ func (m *Manager) tickFreestyle(ctx context.Context, mode string) {
 
 	if !snapshot.Running {
 		m.mu.Lock()
-		stopped := m.userStopped
-		retryAt := m.nextRetry
-		generation := m.generation
+		stopped := m.user.stopped
+		retryAt := m.motion.nextRetry
+		generation := m.loop.generation
 		m.mu.Unlock()
 		if stopped {
 			// The user stopped motion; the autonomous mode ends rather than
@@ -777,13 +352,13 @@ func (m *Manager) tickFreestyle(ctx context.Context, mode string) {
 
 	now := m.options.Now()
 	m.mu.Lock()
-	deadline := m.deadline
-	driftAt := m.driftAt
-	driftDone := m.driftDone
-	segment := m.segment
-	pattern := m.pattern
-	retryAt := m.nextRetry
-	generation := m.generation
+	deadline := m.motion.deadline
+	driftAt := m.motion.driftAt
+	driftDone := m.motion.driftDone
+	segment := m.motion.segment
+	pattern := m.motion.pattern
+	retryAt := m.motion.nextRetry
+	generation := m.loop.generation
 	m.mu.Unlock()
 
 	if !driftDone && now.After(driftAt) {
@@ -809,8 +384,8 @@ func (m *Manager) tickFreestyle(ctx context.Context, mode string) {
 			return
 		}
 		m.mu.Lock()
-		if m.mode == mode && m.generation == generation && !m.chatTargetPending {
-			m.driftDone = true
+		if m.loop.mode == mode && m.loop.generation == generation && !m.chat.pending {
+			m.motion.driftDone = true
 		}
 		m.mu.Unlock()
 		return
@@ -924,12 +499,12 @@ func (m *Manager) finishSegmentChoice(_ context.Context, mode string, reason str
 
 func (m *Manager) nextPlannedSegment() (Segment, []diagnostics.PlannerScore) {
 	m.mu.Lock()
-	planner := m.planner
+	planner := m.motion.planner
 	m.mu.Unlock()
 	if planner == nil {
 		planner = NewPlanner(m.options.Seed)
 		m.mu.Lock()
-		m.planner = planner
+		m.motion.planner = planner
 		m.mu.Unlock()
 	}
 	return planner.NextSegment(m.options.Settings())
@@ -950,123 +525,41 @@ func (m *Manager) armSegment(mode string, segment Segment, pattern *motion.Patte
 	now := m.options.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.mode != mode || m.generation != generation || m.userStopped || m.userPaused || m.chatTargetPending {
+	if m.loop.mode != mode || m.loop.generation != generation || m.user.stopped || m.user.paused || m.chat.pending {
 		return false
 	}
-	m.segment = segment
-	m.pattern = pattern
-	m.segmentIdx++
-	m.deadline = now.Add(duration)
+	m.motion.segment = segment
+	m.motion.pattern = pattern
+	m.motion.segmentIdx++
+	m.motion.deadline = now.Add(duration)
 	if segment.DriftToSpeedPercent != 0 {
-		m.driftAt = now.Add(duration / 2)
-		m.driftDone = false
+		m.motion.driftAt = now.Add(duration / 2)
+		m.motion.driftDone = false
 	} else {
-		m.driftDone = true
+		m.motion.driftDone = true
 	}
-	m.nextRetry = time.Time{}
+	m.motion.nextRetry = time.Time{}
 	return true
-}
-
-func (m *Manager) tickChat(ctx context.Context) {
-	if ctx.Err() != nil || !m.modeActive(ModeChat) {
-		return
-	}
-	if m.userPauseActive(ModeChat) {
-		return
-	}
-	engine := m.options.Current()
-	var snapshot motion.ActiveMotionState
-	if engine != nil {
-		snapshot = engine.Snapshot()
-	}
-	if snapshot.Running || snapshot.Paused {
-		// Paused chat motion stays paused: keepalive never overrides the user.
-		return
-	}
-
-	m.mu.Lock()
-	var target *motion.MotionTarget
-	if m.chatTarget != nil && m.chatKeepalive {
-		copied := cloneTarget(*m.chatTarget)
-		target = &copied
-	}
-	stopped := m.userStopped
-	retryAt := m.nextRetry
-	generation := m.generation
-	chatVersion := m.chatVersion
-	m.mu.Unlock()
-	if target == nil || stopped {
-		return
-	}
-	if m.options.Now().Before(retryAt) {
-		return
-	}
-
-	// Motion is idle with a live chat target and no user stop: this is a
-	// transport recovery stop, so keep the session moving. As above, the
-	// engine loop never inherits the mode loop's cancellation.
-	operationCtx, finish, ok := m.beginStartOperation(ctx, ModeChat, generation, chatVersion)
-	if !ok {
-		return
-	}
-	defer finish()
-
-	engineForStart, err := m.options.Ensure(operationCtx)
-	if err != nil {
-		if operationCtx.Err() != nil {
-			return
-		}
-		m.backoff(ModeChat, generation, "keepalive_unavailable", err)
-		return
-	}
-	if _, err := engineForStart.Start(operationCtx, *target, m.options.Settings()); err != nil {
-		if operationCtx.Err() != nil {
-			return
-		}
-		m.handleStartFailure(ModeChat, generation, "keepalive_failed", err)
-		return
-	}
-	if !m.chatOperationActive(generation, chatVersion) {
-		return
-	}
-	m.trace(ModeChat, "chat_keepalive_restart", &diagnostics.MotionTracePlanner{
-		Mode:  ModeChat,
-		Event: "chat_keepalive_restart",
-		PatternIdentifier: func() string {
-			if target.Dynamic != nil {
-				return "dynamic"
-			}
-			return string(target.PatternID)
-		}(),
-		SpeedPercent: target.SpeedPercent,
-	}, "")
 }
 
 func (m *Manager) modeActive(mode string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.mode == mode && !m.userStopped && !m.chatTargetPending &&
-		(mode != ModeAutopilot || !m.chatActivity)
+	return m.loop.mode == mode && !m.user.stopped && !m.chat.pending &&
+		(mode != ModeAutopilot || !m.chat.activity)
 }
 
 func (m *Manager) modeGenerationActive(mode string, generation uint64) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.mode == mode && m.generation == generation && !m.userStopped && !m.userPaused &&
-		!m.chatTargetPending && (mode != ModeAutopilot || !m.chatActivity)
-}
-
-func (m *Manager) chatOperationActive(generation, chatVersion uint64) bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.mode == ModeChat && m.generation == generation && m.chatVersion == chatVersion &&
-		m.chatTarget != nil && m.chatKeepalive && !m.userStopped && !m.userPaused && !m.chatTargetPending
+	return m.loop.mode == mode && m.loop.generation == generation && !m.user.stopped && !m.user.paused &&
+		!m.chat.pending && (mode != ModeAutopilot || !m.chat.activity)
 }
 
 func (m *Manager) userPauseActive(mode string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.mode == mode && m.userPaused
+	return m.loop.mode == mode && m.user.paused
 }
 
 func (m *Manager) freezeIfPaused(mode string, enginePaused bool) bool {
@@ -1080,52 +573,28 @@ func (m *Manager) freezeIfPaused(mode string, enginePaused bool) bool {
 func (m *Manager) freezeDeadline() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !m.wasPaused {
-		m.wasPaused = true
+	if !m.loop.wasPaused {
+		m.loop.wasPaused = true
 	}
 	// Shift the clock forward every paused tick so remaining time is intact.
-	if !m.deadline.IsZero() {
-		m.deadline = m.deadline.Add(m.options.Tick)
-	}
-	if !m.driftAt.IsZero() {
-		m.driftAt = m.driftAt.Add(m.options.Tick)
-	}
-	if !m.motionPlanAt.IsZero() {
-		m.motionPlanAt = m.motionPlanAt.Add(m.options.Tick)
-	}
-	if !m.speechDeadline.IsZero() {
-		m.speechDeadline = m.speechDeadline.Add(m.options.Tick)
-	}
-	if !m.speechFallbackAt.IsZero() {
-		m.speechFallbackAt = m.speechFallbackAt.Add(m.options.Tick)
-	}
-	for index := range m.swayPoints {
-		m.swayPoints[index].at = m.swayPoints[index].at.Add(m.options.Tick)
-	}
-	if !m.speedChangedAt.IsZero() {
-		m.speedChangedAt = m.speedChangedAt.Add(m.options.Tick)
-	}
-	if !m.phraseChangedAt.IsZero() {
-		m.phraseChangedAt = m.phraseChangedAt.Add(m.options.Tick)
-	}
-	if !m.arc.startedAt.IsZero() {
-		m.arc.startedAt = m.arc.startedAt.Add(m.options.Tick)
-	}
+	m.motion.postpone(m.options.Tick)
+	m.speech.postpone(m.options.Tick)
+	m.history.postpone(m.options.Tick)
 }
 
 func (m *Manager) thawDeadline() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.wasPaused = false
+	m.loop.wasPaused = false
 }
 
 func (m *Manager) backoff(mode string, generation uint64, event string, err error) {
 	m.mu.Lock()
-	if m.mode != mode || m.generation != generation || m.userStopped || m.chatTargetPending {
+	if m.loop.mode != mode || m.loop.generation != generation || m.user.stopped || m.chat.pending {
 		m.mu.Unlock()
 		return
 	}
-	m.nextRetry = m.options.Now().Add(restartBackoff)
+	m.motion.nextRetry = m.options.Now().Add(restartBackoff)
 	m.mu.Unlock()
 	m.trace(mode, event, nil, err.Error())
 }
@@ -1142,7 +611,7 @@ func (m *Manager) handleStartFailure(mode string, generation uint64, event strin
 	}
 
 	m.mu.Lock()
-	active := m.mode == mode && m.generation == generation && !m.userStopped && !m.chatTargetPending
+	active := m.loop.mode == mode && m.loop.generation == generation && !m.user.stopped && !m.chat.pending
 	m.mu.Unlock()
 	if !active {
 		return
@@ -1160,33 +629,33 @@ func (m *Manager) beginStartOperation(
 	chatVersion uint64,
 ) (context.Context, func(), bool) {
 	m.mu.Lock()
-	if m.mode != mode || m.generation != generation || m.userStopped || m.userPaused || m.chatTargetPending ||
-		(mode == ModeAutopilot && m.chatActivity) ||
-		(mode == ModeChat && (m.chatVersion != chatVersion || m.chatTarget == nil || !m.chatKeepalive)) {
+	if m.loop.mode != mode || m.loop.generation != generation || m.user.stopped || m.user.paused || m.chat.pending ||
+		(mode == ModeAutopilot && m.chat.activity) ||
+		(mode == ModeChat && (m.chat.version != chatVersion || m.chat.target == nil || !m.chat.keepalive)) {
 		m.mu.Unlock()
 		return nil, nil, false
 	}
 	operationCtx, cancel := context.WithCancel(parent)
-	m.operationID++
-	id := m.operationID
-	m.operationMode = mode
-	m.operationCancel = cancel
+	m.loop.operationID++
+	id := m.loop.operationID
+	m.loop.operationMode = mode
+	m.loop.operationCancel = cancel
 	m.mu.Unlock()
 
 	return operationCtx, func() {
 		cancel()
 		m.mu.Lock()
-		if m.operationID == id {
-			m.operationMode = ""
-			m.operationCancel = nil
+		if m.loop.operationID == id {
+			m.loop.operationMode = ""
+			m.loop.operationCancel = nil
 		}
 		m.mu.Unlock()
 	}, true
 }
 
 func (m *Manager) cancelOperationLocked() {
-	if m.operationCancel != nil {
-		m.operationCancel()
+	if m.loop.operationCancel != nil {
+		m.loop.operationCancel()
 	}
 }
 
@@ -1220,7 +689,7 @@ func cloneTarget(target motion.MotionTarget) motion.MotionTarget {
 func (m *Manager) tracePlanned(mode string, reason string, choice segmentChoice) {
 	planner := m.plannerSnapshot()
 	m.mu.Lock()
-	segmentIndex := m.segmentIdx
+	segmentIndex := m.motion.segmentIdx
 	m.mu.Unlock()
 	row := &diagnostics.MotionTracePlanner{
 		Mode:              mode,
@@ -1271,13 +740,13 @@ func segmentContentIdentifier(segment Segment) string {
 func (m *Manager) plannerSnapshot() *Planner {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.planner
+	return m.motion.planner
 }
 
 func (m *Manager) trace(mode string, event string, planner *diagnostics.MotionTracePlanner, note string) {
 	m.mu.Lock()
-	m.lastEvent = event
-	m.lastEventAt = m.options.Now()
+	m.events.lastEvent = event
+	m.events.lastEventAt = m.options.Now()
 	m.mu.Unlock()
 
 	if m.options.Traces == nil {

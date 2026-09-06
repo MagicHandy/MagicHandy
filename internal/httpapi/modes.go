@@ -104,8 +104,8 @@ func (s *Server) handleModeStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("autopilot motion is off; choose a motion mode in the sidebar"))
 		return
 	}
-	s.chatLifecycleMu.Lock()
-	defer s.chatLifecycleMu.Unlock()
+	finishSessionChange := s.chatWorkspace.BeginModeChange()
+	defer finishSessionChange()
 	s.personaMutationMu.Lock()
 	defer s.personaMutationMu.Unlock()
 	status, err := s.modes.Start(r.Context(), body.Mode)
@@ -131,8 +131,8 @@ func (s *Server) handleModeStop(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	s.chatLifecycleMu.Lock()
-	defer s.chatLifecycleMu.Unlock()
+	finishSessionChange := s.chatWorkspace.BeginModeChange()
+	defer finishSessionChange()
 	s.personaMutationMu.Lock()
 	defer s.personaMutationMu.Unlock()
 	stopMotion := true

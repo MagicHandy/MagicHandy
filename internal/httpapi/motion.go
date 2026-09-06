@@ -425,7 +425,7 @@ func (s *Server) invalidateWorkForStop(reason string) func() {
 	if s.mediaSync != nil {
 		s.mediaSync.Invalidate(reason)
 	}
-	s.cancelActiveChats()
+	s.chatWorkspace.CancelTurns()
 	// No lock is taken around invalidation: the epoch above is already
 	// published, so a chat turn that submits speech concurrently either lands
 	// before this sweep and is invalidated here, or observes the new epoch and
@@ -756,11 +756,9 @@ func (s *Server) Close() {
 		}
 		if s.chatLog != nil {
 			settings, _ := s.store.Snapshot()
-			s.chatLifecycleMu.Lock()
-			if err := s.chatLog.ReconcileShutdown(settings.Chat.KeepUnsavedOnExit); err != nil {
+			if err := s.chatWorkspace.ReconcileShutdown(settings.Chat.KeepUnsavedOnExit); err != nil {
 				s.logger.Warn("chat workspace did not reconcile cleanly during shutdown", "error", err)
 			}
-			s.chatLifecycleMu.Unlock()
 			_ = s.chatLog.Close()
 		}
 		if s.patterns != nil {

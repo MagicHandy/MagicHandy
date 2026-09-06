@@ -64,7 +64,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		s.handleChatStopFastPath(w, r, body.SessionID, body.Message, settings.LLM)
 		return
 	}
-	sessionID, err := s.resolveActiveChatSession(body.SessionID)
+	sessionID, err := s.chatWorkspace.ResolveActive(body.SessionID)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
@@ -81,14 +81,14 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
-	chatCtx, finishChat, err := s.beginChat(r.Context(), sessionID)
+	chatCtx, finishChat, err := s.chatWorkspace.BeginTurn(r.Context(), sessionID)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
 	defer finishChat()
-	s.modes.NotifyChatActivity()
-	defer s.modes.NotifyChatActivityComplete()
+	activityID := s.modes.NotifyChatActivity()
+	defer s.modes.NotifyChatActivityComplete(activityID)
 	started := time.Now()
 	s.interruptChatSpeech(settings.Voice)
 
@@ -721,51 +721,6 @@ func (s *Server) requestStopSequence(r *http.Request) (uint64, error) {
 	return expected, nil
 }
 
-func (s *Server) beginChat(parent context.Context, sessionID string) (context.Context, context.CancelFunc, error) {
-	s.chatLifecycleMu.Lock()
-	defer s.chatLifecycleMu.Unlock()
-	activeID, err := s.chatLog.ActiveSessionID()
-	if err != nil {
-		return nil, nil, errors.New("chat session is unavailable")
-	}
-	if activeID != sessionID {
-		return nil, nil, errors.New("the selected chat is no longer active; refresh the conversation tabs")
-	}
-	ctx, cancel := context.WithCancel(parent)
-	s.chatCancelMu.Lock()
-	if len(s.chatCancels) > 0 {
-		s.chatCancelMu.Unlock()
-		cancel()
-		return nil, nil, errors.New("one chat reply is already active")
-	}
-	s.nextChatID++
-	id := s.nextChatID
-	if s.chatCancels == nil {
-		s.chatCancels = make(map[uint64]context.CancelFunc)
-	}
-	s.chatCancels[id] = cancel
-	s.chatCancelMu.Unlock()
-	return ctx, func() {
-		cancel()
-		s.chatCancelMu.Lock()
-		delete(s.chatCancels, id)
-		s.chatCancelMu.Unlock()
-	}, nil
-}
-
-func (s *Server) cancelActiveChats() {
-	s.chatCancelMu.Lock()
-	cancels := make([]context.CancelFunc, 0, len(s.chatCancels))
-	for id, cancel := range s.chatCancels {
-		cancels = append(cancels, cancel)
-		delete(s.chatCancels, id)
-	}
-	s.chatCancelMu.Unlock()
-	for _, cancel := range cancels {
-		cancel()
-	}
-}
-
 func (s *Server) prepareChatTarget() uint64 {
 	if s.modes != nil {
 		return s.modes.PrepareChatTarget()
@@ -785,18 +740,6 @@ func (s *Server) notifyChatTarget(generation uint64, target motion.MotionTarget)
 	}
 }
 
-func (s *Server) resolveActiveChatSession(requested string) (string, error) {
-	activeID, err := s.chatLog.ActiveSessionID()
-	if err != nil {
-		return "", errors.New("chat session is unavailable")
-	}
-	requested = strings.TrimSpace(requested)
-	if requested != "" && requested != activeID {
-		return "", errors.New("the selected chat is no longer active; refresh the conversation tabs")
-	}
-	return activeID, nil
-}
-
 func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, requestedSessionID string, message string, settings config.LLMSettings) {
 	finishInvalidation := s.invalidateWorkForStop("chat_stop")
 	defer finishInvalidation()
@@ -805,41 +748,18 @@ func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, 
 	dispatch, motionErr := s.dispatchChatMotion(stopCtx, command)
 	stopCancel()
 	reply := chatStopReply(settings.PromptSet)
-	sessionID := ""
-	var userSeq, replySeq int64
 	diagnostics := chat.MessageDiagnostics{
-		Source:       "deterministic_stop",
-		Provider:     settings.Provider,
-		Model:        settings.Model,
+		Source: "deterministic_stop", Provider: settings.Provider, Model: settings.Model,
 		MotionAction: chat.MotionActionStop,
 	}
-	func() {
-		s.chatLifecycleMu.Lock()
-		defer s.chatLifecycleMu.Unlock()
-		activeID, err := s.chatLog.ActiveSessionID()
-		if err != nil {
-			s.logger.Warn("deterministic Stop chat session unavailable", "error", err)
-			return
-		}
-		requestedSessionID = strings.TrimSpace(requestedSessionID)
-		if requestedSessionID != "" && requestedSessionID != activeID {
-			s.logger.Warn("deterministic Stop skipped stale chat history", "requested_session", requestedSessionID)
-			return
-		}
-		sessionID = activeID
-		userSeq = s.appendChatMessageTo(sessionID, chat.MessageRoleUser, message, clientIDFromRequest(r), nil)
-		// The deterministic reply is never spoken, and physical Stop has already
-		// completed or timed out before history is touched.
-		if chatVoiceLevel(settings.ChatVoice) != chat.VoiceUtility {
-			promptContext, contextErr := s.chatLog.PromptContext(sessionID)
-			if contextErr != nil {
-				s.logger.Warn("read deterministic Stop chat mood", "error", contextErr)
-			} else {
-				diagnostics.Mood = promptContext.CurrentMood
-			}
-		}
-		replySeq = s.appendChatMessageTo(sessionID, chat.MessageRoleAssistant, reply, "", &diagnostics)
-	}()
+	// Device Stop has completed or timed out before entering conversation storage.
+	record, historyErr := s.chatWorkspace.RecordStoppedReply(requestedSessionID, message, reply,
+		clientIDFromRequest(r), chatVoiceLevel(settings.ChatVoice) != chat.VoiceUtility, diagnostics)
+	if historyErr != nil {
+		s.logger.Warn("deterministic Stop chat history unavailable", "error", historyErr)
+	}
+	sessionID, userSeq, replySeq := record.SessionID, record.UserSeq, record.ReplySeq
+	diagnostics = record.Diagnostics
 	setSSEHeaders(w)
 	emit := func(event string, payload any) error {
 		return writeSSE(w, event, payload)
@@ -876,18 +796,6 @@ func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, 
 	_ = emit("done", map[string]any{
 		"ok": motionErr == nil,
 	})
-}
-
-func (s *Server) appendChatMessageTo(sessionID string, role string, content string, clientID string, diagnostics *chat.MessageDiagnostics) int64 {
-	if s.chatLog == nil {
-		return 0
-	}
-	seq, err := s.chatLog.AppendTo(sessionID, role, content, clientID, diagnostics)
-	if err != nil {
-		s.logger.Warn("chat log append failed", "role", role, "error", err)
-		return 0
-	}
-	return seq
 }
 
 func (s *Server) deletePendingChatReply(seq int64) {
@@ -942,28 +850,17 @@ func (s *Server) enqueueSpeechAt(ctx context.Context, stopSequence uint64, reply
 
 // chatState is the /api/state block other tabs poll for continuity.
 func (s *Server) chatState() map[string]any {
-	if s.chatLog == nil {
+	if s.chatWorkspace == nil {
 		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": "", "current_mood": ""}
-	}
-	s.chatLifecycleMu.Lock()
-	defer s.chatLifecycleMu.Unlock()
-	activeID, err := s.chatLog.ActiveSessionID()
-	if err != nil {
-		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": "", "current_mood": ""}
-	}
-	latest, err := s.chatLog.LatestSeqSession(activeID)
-	if err != nil {
-		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": activeID, "current_mood": ""}
 	}
 	settings, _ := s.store.Snapshot()
-	if settings.LLM.ChatVoice == config.LLMChatVoiceUtility {
-		return map[string]any{"available": true, "latest_seq": latest, "active_session_id": activeID, "current_mood": ""}
+	state, err := s.chatWorkspace.Observe(settings.LLM.ChatVoice != config.LLMChatVoiceUtility)
+	var mood any = ""
+	if state.CurrentMood != "" {
+		mood = state.CurrentMood
 	}
-	promptContext, err := s.chatLog.PromptContext(activeID)
-	if err != nil {
-		return map[string]any{"available": false, "latest_seq": latest, "active_session_id": activeID, "current_mood": ""}
-	}
-	return map[string]any{"available": true, "latest_seq": latest, "active_session_id": activeID, "current_mood": promptContext.CurrentMood}
+	return map[string]any{"available": err == nil, "latest_seq": state.LatestSeq,
+		"active_session_id": state.ActiveSessionID, "current_mood": mood}
 }
 
 // handleChatMessages reads the shared log non-destructively. Reads never

@@ -525,16 +525,12 @@ func (s *Server) handleChatSessionPersona(w http.ResponseWriter, r *http.Request
 	if !s.requireController(w, r) {
 		return
 	}
-	s.chatLifecycleMu.Lock()
-	defer s.chatLifecycleMu.Unlock()
-	if s.chatGenerationActive() {
-		writeError(w, http.StatusConflict, errors.New("wait for the active reply to finish before changing personas"))
+	finishSessionChange, err := s.chatWorkspace.BeginPersonaChange()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
 		return
 	}
-	if s.autopilotActive() {
-		writeError(w, http.StatusConflict, errors.New("stop Autopilot before changing personas"))
-		return
-	}
+	defer finishSessionChange()
 	sessionID := strings.TrimSpace(r.PathValue("id"))
 	if sessionID == "" {
 		writeError(w, http.StatusBadRequest, errors.New("a chat session id is required"))
@@ -613,21 +609,15 @@ func (s *Server) preparePersonasMutation(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) beginPersonaMutation(w http.ResponseWriter) (func(), bool) {
-	s.chatLifecycleMu.Lock()
-	if s.chatGenerationActive() {
-		s.chatLifecycleMu.Unlock()
-		writeError(w, http.StatusConflict, errors.New("wait for the active reply to finish before changing personas"))
-		return nil, false
-	}
-	if s.autopilotActive() {
-		s.chatLifecycleMu.Unlock()
-		writeError(w, http.StatusConflict, errors.New("stop Autopilot before changing personas"))
+	finishSessionChange, err := s.chatWorkspace.BeginPersonaChange()
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
 		return nil, false
 	}
 	s.personaMutationMu.Lock()
 	return func() {
 		s.personaMutationMu.Unlock()
-		s.chatLifecycleMu.Unlock()
+		finishSessionChange()
 	}, true
 }
 

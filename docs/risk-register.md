@@ -1,5 +1,18 @@
 # MagicHandy Risk Register
 
+## 2026-09-06 conversation ownership and mode state follow-up
+
+An older canceled chat completion could clear activity belonging to a newer
+reply and allow Autopilot planning during that reply. A failing regression
+reproduced this; activity IDs now fence completion to its owner. Conversation
+admission/cancellation moves behind an application service, with tests proving
+Stop does not wait for blocked session storage and rejects overtaken admission.
+Mode state is grouped by responsibility under the original mutex; seeded
+cadence, control-order, teardown and race tests remain green. The
+[implementation review](chat-mode-boundaries-2026-09-06.md) records simulator and
+text-only LLM acceptance. Cancellable datastore admission, further HTTP
+orchestration extraction, and physical-device acceptance remain open.
+
 ## 2026-09-06 request and observation lifecycle audit
 
 Canceled starts could survive mode admission waits and launch a persistent

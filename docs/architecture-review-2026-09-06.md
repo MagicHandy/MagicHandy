@@ -63,11 +63,17 @@ maintenance debt is gone.
    behind narrow application interfaces, beginning with chat lifecycle, while
    keeping HTTP decoding and responses at the edge. Preserve Stop ordering and
    the existing import rules; a wholesale rewrite would be hard to review.
+   **Implemented first use case:** `chatapp.Workspace` now owns conversation
+   session policy, admission/cancellation, observations and Stop history. Other
+   domains remain follow-ups; see the [implementation review](chat-mode-boundaries-2026-09-06.md).
 2. **P2 — Reduce the mode manager's state surface.** Even after the startup
    extraction it still combines user-control admission, chat keepalive, motion
    cadence, speech cadence, arc state, and variation history. Group lifecycle
    state by owner and separate scheduling decisions from state transitions.
    Existing control-order and teardown tests should accompany each extraction.
+   **Implemented:** explicit state records, focused control/chat/status modules,
+   pure work selection and owned pause-clock updates; all share the original
+   manager mutex. The same follow-up fixes stale chat completion ownership.
 3. **P2 — Make datastore writer admission cancellable.** `DB.WithTx(ctx)` waits
    on `writeMu.Lock()` before reaching `BeginTx(ctx)`. The context cannot end
    that wait. Several persistence APIs also replace caller lifetimes with

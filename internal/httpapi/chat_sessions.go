@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/chatapp"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
 )
 
@@ -29,16 +30,6 @@ func (s *Server) handleCreateChatSession(w http.ResponseWriter, r *http.Request)
 	if !s.requireController(w, r) {
 		return
 	}
-	s.chatLifecycleMu.Lock()
-	defer s.chatLifecycleMu.Unlock()
-	if s.chatGenerationActive() {
-		writeError(w, http.StatusConflict, errors.New("wait for the active reply to finish before starting a new chat"))
-		return
-	}
-	if s.autopilotActive() {
-		writeError(w, http.StatusConflict, errors.New("stop Autopilot before starting a new chat"))
-		return
-	}
 	var body struct {
 		DiscardCurrentUnsaved bool `json:"discard_current_unsaved"`
 	}
@@ -46,25 +37,16 @@ func (s *Server) handleCreateChatSession(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if _, err := s.chatLog.CreateSession(body.DiscardCurrentUnsaved); err != nil {
+	sessions, err := s.chatWorkspace.Create(body.DiscardCurrentUnsaved)
+	if err != nil {
 		s.writeChatSessionError(w, err)
 		return
 	}
-	s.writeChatSessions(w, r, http.StatusCreated)
+	s.writeChatSessionViews(w, r, http.StatusCreated, sessions)
 }
 
 func (s *Server) handleActivateChatSession(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
-		return
-	}
-	s.chatLifecycleMu.Lock()
-	defer s.chatLifecycleMu.Unlock()
-	if s.chatGenerationActive() {
-		writeError(w, http.StatusConflict, errors.New("wait for the active reply to finish before switching chats"))
-		return
-	}
-	if s.autopilotActive() {
-		writeError(w, http.StatusConflict, errors.New("stop Autopilot before switching chats"))
 		return
 	}
 	id := strings.TrimSpace(r.PathValue("id"))
@@ -81,47 +63,46 @@ func (s *Server) handleActivateChatSession(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	if _, err := s.chatLog.ActivateSession(id, discard); err != nil {
+	sessions, err := s.chatWorkspace.Activate(id, discard)
+	if err != nil {
 		s.writeChatSessionError(w, err)
 		return
 	}
-	s.writeChatSessions(w, r, http.StatusOK)
+	s.writeChatSessionViews(w, r, http.StatusOK, sessions)
 }
 
 func (s *Server) handleSaveChatSession(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	s.chatLifecycleMu.Lock()
-	defer s.chatLifecycleMu.Unlock()
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		writeError(w, http.StatusBadRequest, errors.New("a chat session id is required"))
 		return
 	}
-	if _, err := s.chatLog.SaveSession(id); err != nil {
+	sessions, err := s.chatWorkspace.Save(id)
+	if err != nil {
 		s.writeChatSessionError(w, err)
 		return
 	}
-	s.writeChatSessions(w, r, http.StatusOK)
+	s.writeChatSessionViews(w, r, http.StatusOK, sessions)
 }
 
 func (s *Server) handleDeleteChatSession(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	s.chatLifecycleMu.Lock()
-	defer s.chatLifecycleMu.Unlock()
 	id := strings.TrimSpace(r.PathValue("id"))
 	if id == "" {
 		writeError(w, http.StatusBadRequest, errors.New("a chat session id is required"))
 		return
 	}
-	if err := s.chatLog.DeleteSession(id); err != nil {
+	sessions, err := s.chatWorkspace.Delete(id)
+	if err != nil {
 		s.writeChatSessionError(w, err)
 		return
 	}
-	s.writeChatSessions(w, r, http.StatusOK)
+	s.writeChatSessionViews(w, r, http.StatusOK, sessions)
 }
 
 type chatSessionView struct {
@@ -130,11 +111,15 @@ type chatSessionView struct {
 }
 
 func (s *Server) writeChatSessions(w http.ResponseWriter, r *http.Request, status int) {
-	sessions, err := s.chatLog.Sessions()
+	sessions, err := s.chatWorkspace.Sessions()
 	if err != nil {
 		s.writeChatStorageError(w, err)
 		return
 	}
+	s.writeChatSessionViews(w, r, status, sessions)
+}
+
+func (s *Server) writeChatSessionViews(w http.ResponseWriter, r *http.Request, status int, sessions []chat.Session) {
 	personas, err := s.personas.List(r.Context())
 	if err != nil {
 		s.writePersonalizationStorageError(w, "persona", err)
@@ -164,6 +149,8 @@ func (s *Server) writeChatSessions(w http.ResponseWriter, r *http.Request, statu
 
 func (s *Server) writeChatSessionError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, chatapp.ErrReplyActive), errors.Is(err, chatapp.ErrAutopilotActive):
+		writeError(w, http.StatusConflict, err)
 	case errors.Is(err, chat.ErrChatSessionNotFound):
 		writeError(w, http.StatusNotFound, errors.New("chat session not found"))
 	case errors.Is(err, chat.ErrActiveSessionDelete):
@@ -173,12 +160,6 @@ func (s *Server) writeChatSessionError(w http.ResponseWriter, err error) {
 	default:
 		s.writeChatStorageError(w, err)
 	}
-}
-
-func (s *Server) chatGenerationActive() bool {
-	s.chatCancelMu.Lock()
-	defer s.chatCancelMu.Unlock()
-	return len(s.chatCancels) > 0
 }
 
 func (s *Server) autopilotActive() bool {

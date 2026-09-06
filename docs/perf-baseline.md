@@ -532,3 +532,39 @@ memory waiver.
 Cold-start figures are observations, not a statistically significant speed
 comparison. Commands, process identities and measurements are retained in
 `.scratch/continuous-request-validation/*performance*.json` and build logs.
+
+## 2026-09-06 — chat and mode state boundaries
+
+Windows/amd64, Go 1.26.4, `CGO_ENABLED=0`, release flags `-trimpath -ldflags
+'-s -w'`. Parent `a44281be` is the architecture/lifecycle audit build; candidate
+adds the conversation application service and mode-state boundaries. Each
+observation starts a separate process with fresh isolated data, simulator
+transport, no browser, and no model/voice worker. Startup includes spawn and
+the first successful `/healthz` response. Four `/api/state` requests, 500 ms
+apart, precede three working-set samples, 400 ms apart. Only processes owned
+by the measurement script are stopped.
+
+| Measurement | Parent | Candidate |
+| --- | ---: | ---: |
+| Stripped binary bytes | 19,080,192 | 19,097,600 |
+| Process-to-health ms, three launches | 554.1 / 544.5 / 519.6 | 545.2 / 520.2 / 524.2 |
+| Working-set MiB, launch 1 (all three samples) | 25.16 | 65.59 |
+| Working-set MiB, launch 2 (all three samples) | 24.45 | 32.94 |
+| Working-set MiB, launch 3 (all three samples) | 25.08 | 33.42 |
+| Private committed MiB, launches 2 / 3 | 54.04 / 55.22 | 55.18 / 54.91 |
+
+The binary grows 17,408 bytes (0.091%), with no new dependency or browser
+payload. An import-group cleanup after measurement produces the same final
+binary size. Working-set variability prompted two additional interleaved pairs
+and private-memory readings; the first pair did not record private memory.
+The candidate's working set is higher in these observations, while paired
+private commitments overlap. This limited fixture does not establish a retained
+allocation regression or an efficiency gain, and it is not the full active
+motion/transport/SSE/chat workload. The existing SQLite idle-memory waiver
+remains. All six startup observations exceed 500 ms; the cold-start risk also
+remains. Budgets are unchanged.
+
+Local reproducible script and all samples:
+`.scratch/chat-mode-boundaries/measure.ps1` and `perf-*.json`. The final review
+process uses the same source at port 49935 and is excluded from these fixture
+measurements. See [validation and limits](chat-mode-boundaries-2026-09-06.md).

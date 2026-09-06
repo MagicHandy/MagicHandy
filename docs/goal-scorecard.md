@@ -1,5 +1,24 @@
 # Goal Scorecard
 
+## 2026-09-06 — chat and mode state boundaries
+
+Conversation lifecycle now has a tested application boundary above persistence;
+mode state has explicit owners and pure work selection. The mode manager file
+falls from 1,297 to 766 lines, and HTTP chat from 1,375 to 1,272. Additional HTTP
+orchestration remains maintainability debt. Full Go test/race/vet/lint, import
+and goleak gates, pure-Go build, frontend checks (478 tests), and installer
+checks pass. A current simulator and real local text-only LLM chat pass; see
+[the implementation evidence](chat-mode-boundaries-2026-09-06.md).
+
+Stripped size is 19,097,600 bytes (+17,408, 0.091%) against the same-toolchain
+parent, within the 30 MB budget. No dependency or browser payload change.
+Stopped-server working sets vary (parent 24.45–25.16 MiB; candidate
+32.94–65.59 MiB); paired private-memory observations overlap at approximately
+54–55 MiB. These fixtures do not close the existing SQLite RSS waiver or measure
+the active workload. Startup samples, parent 519.6–554.1 ms / candidate
+520.2–545.2 ms, exceed 500 ms and retain the existing startup risk. See the
+[performance details](perf-baseline.md#2026-09-06--chat-and-mode-state-boundaries).
+
 ## 2026-09-06 — architecture and lifecycle audit
 
 The [cross-domain audit](architecture-review-2026-09-06.md) fixes canceled mode
