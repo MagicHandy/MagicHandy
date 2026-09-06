@@ -1,5 +1,17 @@
 # MagicHandy Risk Register
 
+## 2026-09-06 request and observation lifecycle audit
+
+Canceled starts could survive mode admission waits and launch a persistent
+loop; already-canceled chat could preempt live autonomous inference. Both now
+check cancellation at admission, with mode checks repeated after previous-loop
+teardown. Browser refreshes and SSE callbacks are fenced to the active
+subscription, and completed polls reconcile older motion observations. New
+regressions cover these gaps while preserving accepted mode lifetimes and the
+existing Stop path. The [architecture audit](architecture-review-2026-09-06.md)
+records remaining coordination and polling debt. R9, R12, R15, and R23 retain
+their broader scope, including outstanding physical-device validation.
+
 ## 2026-09-06 continuous-chat request interpretation
 
 English keyword/negation rules rejected valid compound requests and

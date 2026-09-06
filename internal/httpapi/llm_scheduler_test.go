@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -9,6 +10,39 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
+
+func TestLLMRequestCoordinatorRejectsAlreadyCanceledRequests(t *testing.T) {
+	for _, priority := range []llmRequestPriority{llmRequestAutonomous, llmRequestInteractive} {
+		var coordinator llmRequestCoordinator
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		leaseCtx, _, release, err := coordinator.acquire(ctx, priority)
+		if release != nil {
+			release()
+		}
+		if !errors.Is(err, context.Canceled) || leaseCtx != nil {
+			t.Fatalf("priority %d acquired canceled request: context=%v, error=%v", priority, leaseCtx, err)
+		}
+	}
+}
+
+func TestCanceledChatDoesNotPreemptAutonomousInference(t *testing.T) {
+	var coordinator llmRequestCoordinator
+	autonomousCtx, _, release, err := coordinator.acquire(context.Background(), llmRequestAutonomous)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, _, err = coordinator.acquire(ctx, llmRequestInteractive)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled chat error = %v", err)
+	}
+	if autonomousCtx.Err() != nil {
+		t.Fatal("already-canceled chat interrupted valid autonomous inference")
+	}
+}
 
 func TestLLMRequestCoordinatorPrioritizesWaitingChat(t *testing.T) {
 	var coordinator llmRequestCoordinator

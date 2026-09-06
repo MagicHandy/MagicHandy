@@ -38,18 +38,25 @@ export function AppStateProvider({ children, enabled = true }: { children: React
   const [startupError, setStartupError] = useState("");
   const inFlight = useRef<Promise<void> | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
+  const pollingEnabled = useRef(false);
+  const lifecycle = useRef(0);
+  const motionRevision = useRef(0);
 
   const performRefresh = useCallback((): Promise<void> => {
-    if (!enabled) return Promise.resolve();
+    if (!enabled || !pollingEnabled.current) return Promise.resolve();
     if (inFlight.current) return inFlight.current;
     const controller = new AbortController();
     activeRequest.current = controller;
+    const revisionAtStart = motionRevision.current;
     const timeout = window.setTimeout(() => controller.abort(), STATE_TIMEOUT_MS);
     const task = (async () => {
       try {
         const next = await api.getState(controller.signal);
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || activeRequest.current !== controller) return;
         setState(next);
+        // Reconcile an older SSE observation, but keep an event received
+        // while this request was in flight because its ordering is unknown.
+        if (motionRevision.current === revisionAtStart) setLiveMotion(null);
         setBackendOnline(true);
         setStale(false);
         setStartupError("");
@@ -73,11 +80,15 @@ export function AppStateProvider({ children, enabled = true }: { children: React
   }, [enabled]);
 
   const refresh = useCallback(async () => {
+    const admittedLifecycle = lifecycle.current;
     if (inFlight.current) await inFlight.current;
+    if (lifecycle.current !== admittedLifecycle) return;
     await performRefresh();
   }, [performRefresh]);
 
   useEffect(() => {
+    lifecycle.current++;
+    pollingEnabled.current = enabled;
     if (!enabled) {
       setState(null);
       setLiveMotion(null);
@@ -94,9 +105,12 @@ export function AppStateProvider({ children, enabled = true }: { children: React
     void poll();
     return () => {
       stopped = true;
+      pollingEnabled.current = false;
+      lifecycle.current++;
       window.clearTimeout(timer);
       const controller = activeRequest.current;
       activeRequest.current = null;
+      inFlight.current = null;
       controller?.abort();
     };
   }, [enabled, performRefresh]);
@@ -106,20 +120,24 @@ export function AppStateProvider({ children, enabled = true }: { children: React
   useEffect(() => {
     if (!enabled) return;
     let source: EventSource | null = null;
+    let closed = false;
     try {
       source = new EventSource(`/api/motion/events?client_id=${encodeURIComponent(clientId)}`);
       source.addEventListener("motion", (ev) => {
+        if (closed) return;
         try {
-          setLiveMotion(JSON.parse((ev as MessageEvent).data) as MotionInfo);
+          const next = JSON.parse((ev as MessageEvent).data) as MotionInfo;
+          motionRevision.current++;
+          setLiveMotion(next);
         } catch {
           /* ignore */
         }
       });
-      source.onerror = () => setLiveMotion(null);
+      source.onerror = () => { if (!closed) setLiveMotion(null); };
     } catch {
       source = null;
     }
-    return () => source?.close();
+    return () => { closed = true; source?.close(); };
   }, [enabled]);
 
   const controller = state?.controller;
