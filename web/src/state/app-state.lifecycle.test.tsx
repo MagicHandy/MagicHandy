@@ -2,7 +2,7 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { AppState, MotionInfo } from "../api/types";
-import { AppStateProvider, useAppState } from "./app-state";
+import { AppStateProvider, useAppState, useMotionState } from "./app-state";
 
 vi.mock("../api/client", () => ({ api: { getState: vi.fn() }, clientId: "test-tab" }));
 
@@ -26,8 +26,8 @@ function deferred<T>() {
 const idle = { available: true } as MotionInfo;
 const running = { available: true, engine: { running: true } } as MotionInfo;
 const snapshot = (version = "current") => ({ version, controller: { read_only: false }, motion: idle }) as AppState;
-let current: ReturnType<typeof useAppState>;
-function Harness() { current = useAppState(); return null; }
+let current: ReturnType<typeof useAppState> & { motion: MotionInfo | null };
+function Harness() { current = { ...useAppState(), motion: useMotionState() }; return null; }
 const view = (enabled = true) => <AppStateProvider enabled={enabled}><Harness /></AppStateProvider>;
 
 beforeEach(() => {

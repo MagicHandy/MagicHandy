@@ -5,14 +5,15 @@ import { t, translateKnown } from "../i18n";
 import { useRef, useState } from "react";
 import { api } from "../api/client";
 import { WorkspaceHead } from "../components/WorkspaceHead";
-import { useAppState, useToast } from "../state/app-state";
+import { useAppState, useToast , useMotionState } from "../state/app-state";
 
 const STYLES = ["gentle", "balanced", "intense"] as const;
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 
 export function PresetModesRoute() {
-  const { state, backendOnline, readOnly, motion, refresh } = useAppState();
+  const { state, backendOnline, readOnly, refresh } = useAppState();
+  const motion = useMotionState();
   const { show } = useToast();
   const locked = !backendOnline || readOnly;
   const modes = state?.modes;

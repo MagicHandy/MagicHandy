@@ -60,6 +60,7 @@ vi.mock("../api/client", () => ({
   },
 }));
 vi.mock("../state/app-state", () => ({
+  useMotionState: () => ({}),
   useAppState: () => ({ backendOnline: true, readOnly: false, state: mocks.appState, motion: {}, refresh: mocks.refresh }),
   useToast: () => ({ show: mocks.show }),
 }));

@@ -1,6 +1,7 @@
 package chatapp
 
 import (
+	"context"
 	"errors"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
@@ -14,20 +15,22 @@ type Observation struct {
 }
 
 // Observe reads status without letting a session switch split the observation.
-func (w *Workspace) Observe(trackMood bool) (Observation, error) {
+func (w *Workspace) Observe(ctx context.Context, trackMood bool) (Observation, error) {
+	ctx, cancel := w.withLifetime(ctx)
+	defer cancel()
 	w.lifecycleMu.Lock()
 	defer w.lifecycleMu.Unlock()
 	var state Observation
 	var err error
-	state.ActiveSessionID, err = w.sessions.ActiveSessionID()
+	state.ActiveSessionID, err = w.sessions.ActiveSessionIDContext(ctx)
 	if err != nil {
 		return state, err
 	}
-	state.LatestSeq, err = w.sessions.LatestSeqSession(state.ActiveSessionID)
+	state.LatestSeq, err = w.sessions.LatestSeqSessionContext(ctx, state.ActiveSessionID)
 	if err != nil || !trackMood {
 		return state, err
 	}
-	prompt, err := w.sessions.PromptContext(state.ActiveSessionID)
+	prompt, err := w.sessions.ReadPromptContext(ctx, state.ActiveSessionID)
 	if err == nil {
 		state.CurrentMood = prompt.CurrentMood
 	}
@@ -49,14 +52,14 @@ func (w *Workspace) RecordStoppedReply(requestedID, message, reply, clientID str
 	w.lifecycleMu.Lock()
 	defer w.lifecycleMu.Unlock()
 	record := StopRecord{Diagnostics: diagnostics}
-	activeID, err := w.resolveActive(requestedID)
+	activeID, err := w.resolveActive(context.Background(), requestedID)
 	if err != nil {
 		return record, err
 	}
 	record.SessionID = activeID
 	record.UserSeq, err = w.sessions.AppendTo(activeID, chat.MessageRoleUser, message, clientID, nil)
 	if trackMood {
-		prompt, moodErr := w.sessions.PromptContext(activeID)
+		prompt, moodErr := w.sessions.ReadPromptContext(context.Background(), activeID)
 		if moodErr == nil {
 			record.Diagnostics.Mood = prompt.CurrentMood
 		}

@@ -80,18 +80,29 @@ maintenance debt is gone.
    `context.Background()`. A follow-up should introduce cancellable admission
    without losing one serialized writer and explicitly distinguish durable
    commits from cancelable request reads. Do not merely remove serialization.
+   **Implemented:** a context-aware admission channel preserves one writer;
+   conversation and prompt reads carry request/turn lifetimes. Accepted durable
+   commits keep their previous lifetime. See the [follow-up review](data-observation-review-2026-09-06.md).
 4. **P2 — Isolate high-frequency browser subscriptions.** The 125 ms motion
    stream updates the same React context consumed for settings, controller
    status, and notifications. Per-tab streams also repeat backend snapshot
    work. Profile a large chat/library view, then consider separate motion and
    slower app-state subscriptions or selectors. Preserve backend authority;
    this review does not claim a measured frame-rate defect.
+   **Implemented:** separate slow app and live-motion contexts, with leaf
+   subscriptions for Chat's visualizer and library playback. An 80-event,
+   500-row-per-view fixture falls from 80 extra renders per view to zero while
+   its live observer receives all events. Per-tab backend streams remain.
 5. **P3 — Give model status a compact inventory query.** `llmState` obtains a
    full model-manager snapshot on each `/api/state` poll; `List` checks model
    files as it reads rows. A summary should count inventory/imports and inspect
    only the selected model, with explicit invalidation when files change.
    Measure with multiple installed models and a slower disk before choosing a
    cache policy.
+   **Implemented without a new cache:** aggregate inventory counts, bounded
+   in-memory import counts and validation of only the selected managed model.
+   Selected file state is refreshed each call with the existing size/mtime
+   compatibility validation. The full inventory UI remains available on demand.
 6. **P3 — Split large files at behavioral boundaries as they change.** Baseline
    examples include settings (1,445 lines), HTTP voice (1,408), HTTP chat
    (1,375), mode manager (1,324), chat service (1,280), and synchronized video

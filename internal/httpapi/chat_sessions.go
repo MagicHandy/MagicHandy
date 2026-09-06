@@ -111,7 +111,7 @@ type chatSessionView struct {
 }
 
 func (s *Server) writeChatSessions(w http.ResponseWriter, r *http.Request, status int) {
-	sessions, err := s.chatWorkspace.Sessions()
+	sessions, err := s.chatWorkspace.Sessions(r.Context())
 	if err != nil {
 		s.writeChatStorageError(w, err)
 		return

@@ -64,7 +64,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		s.handleChatStopFastPath(w, r, body.SessionID, body.Message, settings.LLM)
 		return
 	}
-	sessionID, err := s.chatWorkspace.ResolveActive(body.SessionID)
+	sessionID, err := s.chatWorkspace.ResolveActive(r.Context(), body.SessionID)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
@@ -92,13 +92,13 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	s.interruptChatSpeech(settings.Voice)
 
-	promptContext, err := s.loadInteractiveChatPromptContext(sessionID, settings.LLM, body.Message)
+	promptContext, err := s.loadInteractiveChatPromptContext(chatCtx, sessionID, settings.LLM, body.Message)
 	if err != nil {
 		s.writeChatStorageError(w, err)
 		return
 	}
 	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, promptContext.Persona)
-	prompt, memories, storageDomain, err := s.resolveInteractiveChatPersonalization(promptID)
+	prompt, memories, storageDomain, err := s.resolveInteractiveChatPersonalization(chatCtx, promptID)
 	if err != nil {
 		s.writePersonalizationStorageError(w, storageDomain, err)
 		return
@@ -241,8 +241,8 @@ func decodeChatStreamRequest(w http.ResponseWriter, r *http.Request) (chatStream
 	return body, true
 }
 
-func (s *Server) resolveInteractiveChatPersonalization(promptID string) (chat.PromptSet, []string, string, error) {
-	prompt, ok, err := s.personalization.prompts.Resolve(promptID)
+func (s *Server) resolveInteractiveChatPersonalization(ctx context.Context, promptID string) (chat.PromptSet, []string, string, error) {
+	prompt, ok, err := s.personalization.prompts.ResolveContext(ctx, promptID)
 	if err != nil {
 		return chat.PromptSet{}, nil, "prompt set", err
 	}
@@ -251,19 +251,19 @@ func (s *Server) resolveInteractiveChatPersonalization(promptID string) (chat.Pr
 		// chat keeps working; the status event reports what actually ran.
 		prompt, _ = chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
 	}
-	memories, err := s.personalization.memory.PromptTexts()
+	memories, err := s.personalization.memory.PromptTextsContext(ctx)
 	if err != nil {
 		return chat.PromptSet{}, nil, "memory", err
 	}
 	return prompt, memories, "", nil
 }
 
-func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings config.LLMSettings, currentMessage ...string) (interactiveChatPromptContext, error) {
-	loggedHistory, err := s.chatLog.RecentSession(sessionID, interactiveChatHistoryLimit)
+func (s *Server) loadInteractiveChatPromptContext(ctx context.Context, sessionID string, settings config.LLMSettings, currentMessage ...string) (interactiveChatPromptContext, error) {
+	loggedHistory, err := s.chatLog.RecentSessionContext(ctx, sessionID, interactiveChatHistoryLimit)
 	if err != nil {
 		return interactiveChatPromptContext{}, err
 	}
-	active, err := s.sessionPersona(sessionID)
+	active, err := s.sessionPersonaContext(ctx, sessionID)
 	if err != nil {
 		return interactiveChatPromptContext{}, err
 	}
@@ -273,7 +273,7 @@ func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings con
 		Persona:      active,
 	}
 	if result.Capabilities.MotionMode == chat.MotionModeLayered || result.Capabilities.MotionMode == chat.MotionModeCreativeV2 {
-		result.UserRequests, err = s.chatLog.RecentUserRequests(sessionID)
+		result.UserRequests, err = s.chatLog.RecentUserRequestsContext(ctx, sessionID)
 		if err != nil {
 			return interactiveChatPromptContext{}, err
 		}
@@ -284,7 +284,7 @@ func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings con
 	if result.Capabilities.Voice == chat.VoiceUtility {
 		return result, nil
 	}
-	persisted, err := s.chatLog.PromptContext(sessionID)
+	persisted, err := s.chatLog.ReadPromptContext(ctx, sessionID)
 	if err != nil {
 		return interactiveChatPromptContext{}, err
 	}
@@ -307,7 +307,7 @@ func (s *Server) loadInteractiveChatPromptContext(sessionID string, settings con
 		if len(currentMessage) > 0 && strings.TrimSpace(currentMessage[0]) != "" {
 			recentText = append(recentText, currentMessage[0])
 		}
-		result.Lore, err = s.personas.SelectLore(context.Background(), active.ID, recentText)
+		result.Lore, err = s.personas.SelectLore(ctx, active.ID, recentText)
 		if err != nil {
 			return interactiveChatPromptContext{}, fmt.Errorf("resolve persona lore: %w", err)
 		}
@@ -348,17 +348,21 @@ func applyPersonaStartingArea(result *chat.Result, capabilities chat.Capabilitie
 // a selected conservative persona cannot silently become the global language
 // profile for one turn.
 func (s *Server) sessionPersona(sessionID string) (*persona.Persona, error) {
+	return s.sessionPersonaContext(context.Background(), sessionID)
+}
+
+func (s *Server) sessionPersonaContext(ctx context.Context, sessionID string) (*persona.Persona, error) {
 	if s.personas == nil || s.chatLog == nil {
 		return nil, errors.New("persona store is unavailable")
 	}
-	personaID, err := s.chatLog.SessionPersona(sessionID)
+	personaID, err := s.chatLog.SessionPersonaContext(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("read chat session persona: %w", err)
 	}
 	if personaID == "" {
 		return nil, nil
 	}
-	item, err := s.personas.Get(context.Background(), personaID)
+	item, err := s.personas.Get(ctx, personaID)
 	if errors.Is(err, persona.ErrNotFound) {
 		return nil, nil
 	}
@@ -849,12 +853,12 @@ func (s *Server) enqueueSpeechAt(ctx context.Context, stopSequence uint64, reply
 }
 
 // chatState is the /api/state block other tabs poll for continuity.
-func (s *Server) chatState() map[string]any {
+func (s *Server) chatState(ctx context.Context) map[string]any {
 	if s.chatWorkspace == nil {
 		return map[string]any{"available": false, "latest_seq": int64(0), "active_session_id": "", "current_mood": ""}
 	}
 	settings, _ := s.store.Snapshot()
-	state, err := s.chatWorkspace.Observe(settings.LLM.ChatVoice != config.LLMChatVoiceUtility)
+	state, err := s.chatWorkspace.Observe(ctx, settings.LLM.ChatVoice != config.LLMChatVoiceUtility)
 	var mood any = ""
 	if state.CurrentMood != "" {
 		mood = state.CurrentMood
@@ -869,13 +873,13 @@ func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 	if sessionID == "" {
 		var err error
-		sessionID, err = s.chatLog.ActiveSessionID()
+		sessionID, err = s.chatLog.ActiveSessionIDContext(r.Context())
 		if err != nil {
 			s.writeChatStorageError(w, err)
 			return
 		}
 	}
-	if _, err := s.chatLog.Session(sessionID); err != nil {
+	if _, err := s.chatLog.SessionContext(r.Context(), sessionID); err != nil {
 		s.writeChatSessionError(w, err)
 		return
 	}
@@ -902,7 +906,7 @@ func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
 	// short lock with that delivery path prevents a client from observing and
 	// advancing past the row before its optional speech request ID is attached.
 	s.chatSpeechMu.Lock()
-	messages, err := s.chatLog.AfterSession(sessionID, after, limit)
+	messages, err := s.chatLog.AfterSessionContext(r.Context(), sessionID, after, limit)
 	if err == nil {
 		for index := range messages {
 			messages[index].SpeechRequestID = s.chatSpeechRequests[messages[index].Seq]
@@ -913,12 +917,12 @@ func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
 		s.writeChatStorageError(w, err)
 		return
 	}
-	latest, err := s.chatLog.LatestSeqSession(sessionID)
+	latest, err := s.chatLog.LatestSeqSessionContext(r.Context(), sessionID)
 	if err != nil {
 		s.writeChatStorageError(w, err)
 		return
 	}
-	cursor, err := s.chatLog.CursorSession(clientIDFromRequest(r), sessionID)
+	cursor, err := s.chatLog.CursorSessionContext(r.Context(), clientIDFromRequest(r), sessionID)
 	if err != nil {
 		s.writeChatStorageError(w, err)
 		return

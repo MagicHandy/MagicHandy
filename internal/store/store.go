@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -48,7 +47,7 @@ const (
 type DB struct {
 	sql *sql.DB
 
-	writeMu  sync.Mutex
+	writer   chan struct{}
 	recovery RecoveryStatus
 
 	dataDir string
@@ -118,13 +117,27 @@ func (db *DB) Recovery() RecoveryStatus {
 	return db.recovery
 }
 
-// WithTx runs fn in one SQL transaction.
+// WithTx runs fn in one serialized SQL transaction. Waiting for the writer is
+// cancellable, and a canceled waiter never invokes fn. Callers choose the
+// lifetime: request contexts for cancelable work, process/durable contexts for
+// accepted commits that must survive an HTTP disconnect.
 func (db *DB) WithTx(ctx context.Context, fn func(*sql.Tx) error) error {
 	if fn == nil {
 		return errors.New("SQLite transaction callback is required")
 	}
-	db.writeMu.Lock()
-	defer db.writeMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	select {
+	case db.writer <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	defer func() { <-db.writer }()
+	// Cancellation and an available writer can become ready together.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	tx, err := db.sql.BeginTx(ctx, nil)
 	if err != nil {

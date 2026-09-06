@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from "react";
 import {api} from "../api/client";
 import {t,translateKnown} from "../i18n";
-import {useAppState,useToast} from "../state/app-state";
+import {useAppState,useToast, useMotionState } from "../state/app-state";
 import {exportLabReport,type ObservationTarget} from "./api";
 import {FlowComparison} from "./FlowComparison";
 import {ObservationEditor} from "./Observations";
@@ -10,7 +10,8 @@ import {CreateTestSequence} from "./CreateTestSequence";
 import {LabHelpLink} from "./LabHelp";
 
 export function LLMLab({initialDraft="",draftUsed=()=>{}}:{initialDraft?:string;draftUsed?:()=>void}) {
-  const {state:app,motion,refresh}=useAppState();
+  const { state:app, refresh } = useAppState();
+  const motion = useMotionState();
   const {show}=useToast();
   const lab=useLLMLab();
   const [message,setMessage]=useState("");

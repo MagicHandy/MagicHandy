@@ -54,10 +54,13 @@ model runtime, or engine. A persistence test double can deliberately stall a
 read and prove that Stop remains independent of it. Existing API integration
 tests continue to cover wire behavior and controller/persona contracts.
 
-The persistence port still contains non-contextual methods. This change rejects
-canceled work after admission waits; it does not make those waits cancellable.
-Datastore writer admission remains audit follow-up 3. Likewise this is the
-first application use case extracted from the HTTP server, not a claim that
+The [subsequent datastore/observation follow-up](../data-observation-review-2026-09-06.md)
+adds request contexts to the persistence read port and cancellable datastore
+writer admission. Preflight resolution, status reads, and turn admission link
+the process lifetime before touching SQL. Durable mutations and their post-commit
+session lists retain their existing lifetime. The session/persona coordination
+leases still serialize accepted mutations; they are not cancellable mutex waits.
+This remains the first application use case extracted from the HTTP server, not a claim that
 all cross-domain orchestration has moved. The explicit mode/persona leases are
 an incremental composition seam, not a public general-purpose locking API.
 

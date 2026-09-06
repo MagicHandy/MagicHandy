@@ -22,6 +22,7 @@ vi.mock("../api/client", () => ({
 }));
 
 vi.mock("../state/app-state", () => ({
+  useMotionState: () => ({ engine: { paused: false } }),
   useAppState: () => ({
     state: app.state,
     backendOnline: true,

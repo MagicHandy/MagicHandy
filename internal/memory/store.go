@@ -145,10 +145,14 @@ func (s *Store) Snapshot() (Snapshot, error) {
 // PromptTexts returns the enabled memory texts for prompt injection, or nil
 // when the global switch is off — chat must work identically without them.
 func (s *Store) PromptTexts() ([]string, error) {
+	return s.PromptTextsContext(context.Background())
+}
+
+// PromptTextsContext reads prompt memories with the caller's lifetime.
+func (s *Store) PromptTextsContext(ctx context.Context) ([]string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	ctx := context.Background()
 	enabled, err := s.memoryEnabledLocked(ctx)
 	if err != nil {
 		return nil, err

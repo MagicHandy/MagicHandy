@@ -109,16 +109,16 @@ func (s *Server) autopilotModelTurn(
 	kind chat.AutopilotKind,
 ) (chat.AutopilotResponse, error) {
 	settings, _ := s.store.Snapshot()
-	sessionID, err := s.chatLog.ActiveSessionID()
+	sessionID, err := s.chatLog.ActiveSessionIDContext(ctx)
 	if err != nil {
 		return chat.AutopilotResponse{}, fmt.Errorf("resolve active chat: %w", err)
 	}
-	promptContext, err := s.loadInteractiveChatPromptContext(sessionID, settings.LLM)
+	promptContext, err := s.loadInteractiveChatPromptContext(ctx, sessionID, settings.LLM)
 	if err != nil {
 		return chat.AutopilotResponse{}, fmt.Errorf("resolve conversation context: %w", err)
 	}
 	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, promptContext.Persona)
-	prompt, memories, _, err := s.resolveInteractiveChatPersonalization(promptID)
+	prompt, memories, _, err := s.resolveInteractiveChatPersonalization(ctx, promptID)
 	if err != nil {
 		return chat.AutopilotResponse{}, fmt.Errorf("resolve personalization: %w", err)
 	}

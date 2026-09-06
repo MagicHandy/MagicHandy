@@ -189,10 +189,23 @@ func (m *ModelManager) List(ctx context.Context) ([]ModelRecord, error) {
 		if scanErr != nil {
 			return nil, modelInventoryError("scan managed model", scanErr)
 		}
-		models = append(models, m.modelFileState(record))
+		models = append(models, record)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, modelInventoryError("read managed models", err)
+	}
+	// Release the SQLite connection before potentially slow filesystem checks.
+	if err := rows.Close(); err != nil {
+		return nil, modelInventoryError("close managed model rows", err)
+	}
+	for i := range models {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		models[i] = m.modelFileStateContext(ctx, models[i])
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return models, nil
 }
@@ -211,11 +224,12 @@ func (m *ModelManager) Model(ctx context.Context, id string) (ModelRecord, error
 	if err != nil {
 		return ModelRecord{}, modelInventoryError("read managed model", err)
 	}
-	return m.modelFileState(record), nil
+	record = m.modelFileStateContext(ctx, record)
+	return record, ctx.Err()
 }
 
 func modelInventoryError(operation string, err error) error {
-	return fmt.Errorf("%w: %s: %v", ErrModelInventoryUnavailable, operation, err)
+	return fmt.Errorf("%w: %s: %w", ErrModelInventoryUnavailable, operation, err)
 }
 
 // Delete removes only a MagicHandy-owned model copy. The selected model is
@@ -399,6 +413,10 @@ func scanModelRecord(scanner modelScanner) (ModelRecord, error) {
 }
 
 func (m *ModelManager) modelFileState(record ModelRecord) ModelRecord {
+	return m.modelFileStateContext(context.Background(), record)
+}
+
+func (m *ModelManager) modelFileStateContext(ctx context.Context, record ModelRecord) ModelRecord {
 	if _, err := m.modelDirectory(record); err != nil {
 		record.State = modelStateMissing
 		record.Message = "model inventory path is invalid"
@@ -416,7 +434,7 @@ func (m *ModelManager) modelFileState(record ModelRecord) ModelRecord {
 		record.State = modelStateChanged
 		record.Message = "model file size changed after import"
 	default:
-		if reason := m.modelCompatibilityReason(record.ModelPath, info); reason != "" {
+		if reason := m.modelCompatibilityReason(ctx, record.ModelPath, info); reason != "" {
 			record.State = modelStateUnsupported
 			record.Message = reason
 		} else {
@@ -426,7 +444,7 @@ func (m *ModelManager) modelFileState(record ModelRecord) ModelRecord {
 	return record
 }
 
-func (m *ModelManager) modelCompatibilityReason(path string, info os.FileInfo) string {
+func (m *ModelManager) modelCompatibilityReason(ctx context.Context, path string, info os.FileInfo) string {
 	m.compatibilityMu.Lock()
 	if cached, ok := m.compatibility[path]; ok &&
 		cached.size == info.Size() && cached.modifiedNanos == info.ModTime().UnixNano() {
@@ -443,7 +461,7 @@ func (m *ModelManager) modelCompatibilityReason(path string, info os.FileInfo) s
 	if err != nil || openedInfo.Size() != info.Size() || openedInfo.ModTime() != info.ModTime() {
 		return "model file changed while compatibility was checked"
 	}
-	err = inspectManagedGGUF(context.Background(), file, openedInfo.Size())
+	err = inspectManagedGGUF(ctx, file, openedInfo.Size())
 	reason := ""
 	if err != nil {
 		reason = err.Error()

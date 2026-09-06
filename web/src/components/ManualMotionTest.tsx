@@ -3,11 +3,12 @@ import { t, translateKnown } from "../i18n";
 // check the connection. Normal motion comes from chat and modes.
 import { useId, useState } from "react";
 import { api } from "../api/client";
-import { useAppState, useToast } from "../state/app-state";
+import { useAppState, useToast , useMotionState } from "../state/app-state";
 import { ownsActiveMotion } from "../util/motion";
 
 export function ManualMotionTest() {
-  const { backendOnline, readOnly, motion, refresh } = useAppState();
+  const { backendOnline, readOnly, refresh } = useAppState();
+  const motion = useMotionState();
   const { show } = useToast();
   const locked = !backendOnline || readOnly;
   const engine = motion?.engine;

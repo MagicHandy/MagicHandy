@@ -11,6 +11,16 @@ their server ordering is unknown. These are backend observations, never a
 parallel frontend motion model. See the
 [lifecycle audit](architecture-review-2026-09-06.md).
 
+`useAppState` subscribes to the slower app snapshot and connection/controller
+status. `useMotionState` subscribes separately to reconciled live motion.
+Components that render live motion opt into that hook; Chat's visualizer and
+the library's program player subscribe below their route so stream events do
+not invalidate the conversation or pattern browser. The slower context value
+is memoized. No second engine model or client-side state prediction is added,
+and each tab retains its existing poll/SSE lifecycle and controller heartbeat.
+The [subscription profile](data-observation-review-2026-09-06.md) records the
+large-view fixture and the limits of that measurement.
+
 ## Purpose
 
 The pattern browser leads with ten continuous recipes and hides the 81

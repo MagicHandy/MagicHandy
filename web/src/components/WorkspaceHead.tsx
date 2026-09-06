@@ -8,8 +8,12 @@ import { useEffect, useRef } from "react";
 export function WorkspaceHead({ title, lede, wide }: { title: string; lede?: string; wide?: boolean }) {
   const ref = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    document.title = `${title} | MagicHandy`;
+    const pageTitle = `${title} | MagicHandy`;
+    document.title = pageTitle;
     ref.current?.focus();
+    return () => {
+      if (document.title === pageTitle) document.title = "MagicHandy";
+    };
   }, [title]);
   return (
     <header className="workspace-head" data-wide={wide || undefined}>

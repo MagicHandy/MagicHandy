@@ -25,6 +25,7 @@ vi.mock("../api/client", () => ({
 }));
 
 vi.mock("../state/app-state", () => ({
+  useMotionState: () => app.motion,
   useAppState: () => app,
   useToast: () => ({ show: app.show }),
 }));

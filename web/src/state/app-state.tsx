@@ -19,13 +19,13 @@ interface AppStateValue {
   state: AppState | null;
   backendOnline: boolean;
   stale: boolean;
-  motion: MotionInfo | null;
   readOnly: boolean;
   startupError: string;
   refresh: () => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateValue | null>(null);
+const MotionStateContext = createContext<MotionInfo | null>(null);
 
 const POLL_MS = 2000;
 const STATE_TIMEOUT_MS = 8000;
@@ -143,10 +143,12 @@ export function AppStateProvider({ children, enabled = true }: { children: React
   const controller = state?.controller;
   const readOnly = controller ? controller.read_only === true : false;
   const motion = liveMotion ?? state?.motion ?? null;
+  const appValue = useMemo(() => ({ state, backendOnline, stale, readOnly, startupError, refresh }),
+    [state, backendOnline, stale, readOnly, startupError, refresh]);
 
   return (
-    <AppStateContext.Provider value={{ state, backendOnline, stale, motion, readOnly, startupError, refresh }}>
-      {children}
+    <AppStateContext.Provider value={appValue}>
+      <MotionStateContext.Provider value={motion}>{children}</MotionStateContext.Provider>
     </AppStateContext.Provider>
   );
 }
@@ -155,6 +157,12 @@ export function useAppState(): AppStateValue {
   const value = useContext(AppStateContext);
   if (!value) throw new Error("useAppState must be used within AppStateProvider");
   return value;
+}
+
+// Subscribe only where a live backend motion observation is rendered. Keeping
+// this separate prevents 125 ms events from invalidating settings/chat consumers.
+export function useMotionState(): MotionInfo | null {
+  return useContext(MotionStateContext);
 }
 
 // ---- Feedback: transient toast plus bounded notification history ----

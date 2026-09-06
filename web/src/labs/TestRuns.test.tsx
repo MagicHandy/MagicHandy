@@ -8,7 +8,8 @@ import {CreateTestSequence} from "./CreateTestSequence";
 import {testApi,type TestRunView} from "./test-api";
 
 const app=vi.hoisted(()=>({hash:"#/labs/tests/run-1",state:{settings:{motion:{}},motion_simulated:false},motion:{available:true,engine:{running:false,paused:false}},backendOnline:true,readOnly:false,refresh:vi.fn()}));
-vi.mock("../state/app-state",()=>({useAppState:()=>app,useHashRoute:()=>app.hash}));
+vi.mock("../state/app-state",()=>({useMotionState: () => app.motion,
+  useAppState:()=>app,useHashRoute:()=>app.hash}));
 vi.mock("../api/client",()=>({api:{stopMotion:vi.fn()}}));
 vi.mock("./api",async original=>({...await original<typeof import("./api")>(),labApi:{start:vi.fn()}}));
 vi.mock("./test-api",async original=>({...await original<typeof import("./test-api")>(),testApi:{list:vi.fn(),get:vi.fn(),create:vi.fn(),feedback:vi.fn(),remove:vi.fn()}}));

@@ -60,7 +60,7 @@ func initializeDatastore(dataDir, path string) (*DB, error) {
 	}
 	handle.SetMaxOpenConns(maxOpenConnections)
 	handle.SetMaxIdleConns(maxIdleConnections)
-	db := &DB{sql: handle, dataDir: dataDir, path: path}
+	db := &DB{sql: handle, writer: make(chan struct{}, 1), dataDir: dataDir, path: path}
 	closeOnError := func(err error) (*DB, error) {
 		return nil, errors.Join(err, handle.Close())
 	}

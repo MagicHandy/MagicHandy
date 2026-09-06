@@ -133,11 +133,18 @@ implementation does not rediscover them:
 - The pool allows at most four open connections and retains one idle
   connection. This permits bounded concurrent reads without reconnecting for
   every operation.
-- Single-writer discipline: SQLite allows one writer at a time. One mutex is
-  associated with the shared database and every logical store writes through
+- Single-writer discipline: SQLite allows one writer at a time. One admission
+  channel is associated with the shared database and every logical store writes through
   `WithTx`; `busy_timeout` also protects standalone tools that open the same
   file. This prevents the app's own concurrency from surfacing `database is
   locked`.
+- Writer admission honors the caller's context before waiting and after the
+  slot is acquired, including cancellation racing with slot availability. The
+  callback/transaction releases the slot on success, error, or panic. Accepted
+  durable settings/session/transcript mutations retain their existing lifetime;
+  request and model-turn reads propagate their context to SQL. Cancellation of
+  a waiting request does not cancel a different transaction already committing.
+  See the [September 6 follow-up](../data-observation-review-2026-09-06.md).
 - Each logical mutation is one transaction. A settings reset that must leave
   memories and prompt sets untouched is a scoped transaction on the settings
   table only — the current "reset does not touch memory or prompt sets"

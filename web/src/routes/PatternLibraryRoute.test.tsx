@@ -32,6 +32,7 @@ vi.mock("../api/client", () => ({
 }));
 
 vi.mock("../state/app-state", () => ({
+  useMotionState: () => null,
   useAppState: () => ({
     backendOnline: true,
     readOnly: false,

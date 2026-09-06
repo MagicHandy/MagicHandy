@@ -46,6 +46,7 @@ vi.mock("../api/client", () => ({
 }));
 
 vi.mock("../state/app-state", () => ({
+  useMotionState: () => ({ engine: { running: true, target: { source: "autopilot" } } }),
   useAppState: () => ({
     backendOnline: true,
     readOnly: false,

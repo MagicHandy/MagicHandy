@@ -10,19 +10,19 @@ import (
 // the active conversation. It is intentionally read-only and available to a
 // read-only client: inspectability must not require device-control ownership.
 func (s *Server) handlePromptComposition(w http.ResponseWriter, r *http.Request) {
-	sessionID, err := s.chatWorkspace.ResolveActive(r.URL.Query().Get("session_id"))
+	sessionID, err := s.chatWorkspace.ResolveActive(r.Context(), r.URL.Query().Get("session_id"))
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	promptContext, err := s.loadInteractiveChatPromptContext(sessionID, settings.LLM)
+	promptContext, err := s.loadInteractiveChatPromptContext(r.Context(), sessionID, settings.LLM)
 	if err != nil {
 		s.writeChatStorageError(w, err)
 		return
 	}
 	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, promptContext.Persona)
-	prompt, memories, storageDomain, err := s.resolveInteractiveChatPersonalization(promptID)
+	prompt, memories, storageDomain, err := s.resolveInteractiveChatPersonalization(r.Context(), promptID)
 	if err != nil {
 		s.writePersonalizationStorageError(w, storageDomain, err)
 		return

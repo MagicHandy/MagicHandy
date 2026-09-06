@@ -565,7 +565,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"memory":              s.memoryState(r.Context()),
 		"modes":               s.modes.Status(),
 		"voice":               s.voiceState(),
-		"chat":                s.chatState(),
+		"chat":                s.chatState(r.Context()),
 		"library":             s.libraryState(),
 		"media":               s.mediaState(r.Context()),
 		"motion":              s.motionState(),

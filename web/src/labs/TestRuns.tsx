@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState} from "react";
 import {api} from "../api/client";
 import {t,translateKnown} from "../i18n";
-import {useAppState,useHashRoute} from "../state/app-state";
+import {useAppState,useHashRoute, useMotionState } from "../state/app-state";
 import {exportLabReport,labApi} from "./api";
 import {LabHelpLink} from "./LabHelp";
 import {FlowComparison} from "./FlowComparison";
@@ -53,7 +53,8 @@ function TestRunHome() {
 }
 
 function TestRunPage({id}:{id:string}) {
-  const {state,backendOnline,readOnly,motion,refresh}=useAppState();
+  const { state, backendOnline, readOnly, refresh } = useAppState();
+  const motion = useMotionState();
   const [view,setView]=useState<TestRunView|null>(null);
   const [error,setError]=useState("");
   const [busy,setBusy]=useState(false);
@@ -107,7 +108,8 @@ function TestRunPage({id}:{id:string}) {
 }
 
 function TestRound({view,locked,moving,saveView,setBusy,setError,stop}:{view:TestRunView;locked:boolean;moving:boolean;saveView:(view:TestRunView)=>void;setBusy:(busy:boolean)=>void;setError:(error:string)=>void;stop:()=>Promise<void>}) {
-  const {state,motion,refresh}=useAppState();
+  const { state, refresh } = useAppState();
+  const motion = useMotionState();
   const step=view.run.steps[view.next_index];
   const [rating,setRating]=useState<number|null>(null);
   const [basis,setBasis]=useState<ReviewBasis|"">("");

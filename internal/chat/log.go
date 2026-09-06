@@ -218,45 +218,12 @@ func (l *MessageLog) ReconcileShutdown(keepUnsaved bool) error {
 
 // ActiveSessionID returns the singleton workspace's selected session.
 func (l *MessageLog) ActiveSessionID() (string, error) {
-	var id string
-	err := l.db.SQL().QueryRowContext(context.Background(), `
-		SELECT active_session_id FROM chat_workspace WHERE id = 'current'
-	`).Scan(&id)
-	if err == sql.ErrNoRows {
-		return "", ErrChatSessionNotFound
-	}
-	if err != nil {
-		return "", fmt.Errorf("read active chat session: %w", err)
-	}
-	return id, nil
+	return l.ActiveSessionIDContext(context.Background())
 }
 
 // Sessions lists retained tabs in stable creation order.
 func (l *MessageLog) Sessions() ([]Session, error) {
-	rows, err := l.db.SQL().QueryContext(context.Background(), `
-		SELECT s.id, s.title, s.saved, s.persona_id, s.id = w.active_session_id,
-			COUNT(m.seq), COALESCE(MAX(m.seq), 0), s.created_at, s.updated_at
-		FROM chat_sessions s
-		CROSS JOIN chat_workspace w
-		LEFT JOIN messages m ON m.session_id = s.id AND m.committed = 1
-		WHERE w.id = 'current'
-		GROUP BY s.id, s.title, s.saved, s.persona_id, w.active_session_id, s.created_at, s.updated_at
-		ORDER BY s.created_at ASC, s.id ASC
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("list chat sessions: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	var sessions []Session
-	for rows.Next() {
-		var session Session
-		if err := rows.Scan(&session.ID, &session.Title, &session.Saved, &session.PersonaID, &session.Active,
-			&session.MessageCount, &session.LatestSeq, &session.CreatedAt, &session.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scan chat session: %w", err)
-		}
-		sessions = append(sessions, session)
-	}
-	return sessions, rows.Err()
+	return l.SessionsContext(context.Background())
 }
 
 // SetSessionPersona records which persona a conversation is held with. An empty
@@ -301,8 +268,13 @@ func (l *MessageLog) SetSessionPersona(sessionID, personaID string) (Session, er
 
 // SessionPersona returns the persona bound to one session, or empty.
 func (l *MessageLog) SessionPersona(sessionID string) (string, error) {
+	return l.SessionPersonaContext(context.Background(), sessionID)
+}
+
+// SessionPersonaContext reads a session's binding with the caller's lifetime.
+func (l *MessageLog) SessionPersonaContext(ctx context.Context, sessionID string) (string, error) {
 	var personaID string
-	err := l.db.SQL().QueryRowContext(context.Background(),
+	err := l.db.SQL().QueryRowContext(ctx,
 		`SELECT persona_id FROM chat_sessions WHERE id = ?`, sessionID).Scan(&personaID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrChatSessionNotFound
@@ -315,24 +287,7 @@ func (l *MessageLog) SessionPersona(sessionID string) (string, error) {
 
 // Session returns one retained tab and its current summary.
 func (l *MessageLog) Session(id string) (Session, error) {
-	var session Session
-	err := l.db.SQL().QueryRowContext(context.Background(), `
-		SELECT s.id, s.title, s.saved, s.persona_id, s.id = w.active_session_id,
-			COUNT(m.seq), COALESCE(MAX(m.seq), 0), s.created_at, s.updated_at
-		FROM chat_sessions s
-		CROSS JOIN chat_workspace w
-		LEFT JOIN messages m ON m.session_id = s.id AND m.committed = 1
-		WHERE s.id = ? AND w.id = 'current'
-		GROUP BY s.id, s.title, s.saved, s.persona_id, w.active_session_id, s.created_at, s.updated_at
-	`, id).Scan(&session.ID, &session.Title, &session.Saved, &session.PersonaID, &session.Active,
-		&session.MessageCount, &session.LatestSeq, &session.CreatedAt, &session.UpdatedAt)
-	if err == sql.ErrNoRows {
-		return Session{}, ErrChatSessionNotFound
-	}
-	if err != nil {
-		return Session{}, fmt.Errorf("read chat session: %w", err)
-	}
-	return session, nil
+	return l.SessionContext(context.Background(), id)
 }
 
 // CreateSession selects a new unsaved conversation. discardCurrentUnsaved is
@@ -703,21 +658,7 @@ func (l *MessageLog) After(after int64, limit int) ([]LogMessage, error) {
 
 // AfterSession returns selected-session messages after a sequence number.
 func (l *MessageLog) AfterSession(sessionID string, after int64, limit int) ([]LogMessage, error) {
-	if limit <= 0 || limit > MessageLogCap {
-		limit = MessageLogCap
-	}
-	rows, err := l.db.SQL().QueryContext(context.Background(), `
-		SELECT seq, role, content, client_id, diagnostics_json, created_at
-		FROM messages
-		WHERE session_id = ? AND committed = 1 AND seq > ?
-		ORDER BY seq ASC
-		LIMIT ?
-	`, sessionID, after, limit)
-	if err != nil {
-		return nil, fmt.Errorf("read chat messages: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	return scanLogMessages(rows)
+	return l.AfterSessionContext(context.Background(), sessionID, after, limit)
 }
 
 // Recent returns the active session's newest messages in chronological order.
@@ -731,77 +672,14 @@ func (l *MessageLog) Recent(limit int) ([]LogMessage, error) {
 
 // RecentSession returns one session's newest messages in chronological order.
 func (l *MessageLog) RecentSession(sessionID string, limit int) ([]LogMessage, error) {
-	if limit <= 0 || limit > MessageLogCap {
-		limit = MessageLogCap
-	}
-	rows, err := l.db.SQL().QueryContext(context.Background(), `
-		SELECT seq, role, content, client_id, diagnostics_json, created_at
-		FROM (
-			SELECT seq, role, content, client_id, diagnostics_json, created_at
-			FROM messages WHERE session_id = ? AND committed = 1 ORDER BY seq DESC LIMIT ?
-		) AS recent
-		ORDER BY seq ASC
-	`, sessionID, limit)
-	if err != nil {
-		return nil, fmt.Errorf("read recent chat messages: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	return scanLogMessages(rows)
+	return l.RecentSessionContext(context.Background(), sessionID, limit)
 }
 
 // PromptContext returns the effective mood and latest assistant lines for one
 // session. Values are projected and bounded for prompts; stored replies remain
 // unchanged.
 func (l *MessageLog) PromptContext(sessionID string) (SessionPromptContext, error) {
-	rows, err := l.db.SQL().QueryContext(context.Background(), `
-		SELECT content, diagnostics_json
-		FROM messages
-		WHERE session_id = ? AND role = ? AND committed = 1
-		ORDER BY seq DESC
-		LIMIT ?
-	`, sessionID, MessageRoleAssistant, MessageLogCap)
-	if err != nil {
-		return SessionPromptContext{}, fmt.Errorf("read chat prompt context: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var contextSnapshot SessionPromptContext
-	var fallbackMood Mood
-	for rows.Next() {
-		var content, diagnosticsJSON string
-		if err := rows.Scan(&content, &diagnosticsJSON); err != nil {
-			return SessionPromptContext{}, fmt.Errorf("scan chat prompt context: %w", err)
-		}
-		if len(contextSnapshot.RecentAssistantReplies) < maxRecentAssistantReplies {
-			if line := boundedPromptData(content, maxRecentAssistantRunes); line != "" {
-				contextSnapshot.RecentAssistantReplies = append(contextSnapshot.RecentAssistantReplies, line)
-			}
-		}
-		if contextSnapshot.CurrentMood == "" && diagnosticsJSON != "" && diagnosticsJSON != "{}" {
-			var diagnostics MessageDiagnostics
-			if err := json.Unmarshal([]byte(diagnosticsJSON), &diagnostics); err != nil {
-				return SessionPromptContext{}, fmt.Errorf("decode chat prompt diagnostics: %w", err)
-			}
-			if mood, ok := validMood(diagnostics.Mood); ok {
-				if fallbackMood == "" {
-					fallbackMood = mood
-				}
-				if diagnostics.MoodChanged {
-					contextSnapshot.CurrentMood = mood
-				}
-			}
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return SessionPromptContext{}, fmt.Errorf("read chat prompt context: %w", err)
-	}
-	if contextSnapshot.CurrentMood == "" {
-		contextSnapshot.CurrentMood = fallbackMood
-	}
-	for left, right := 0, len(contextSnapshot.RecentAssistantReplies)-1; left < right; left, right = left+1, right-1 {
-		contextSnapshot.RecentAssistantReplies[left], contextSnapshot.RecentAssistantReplies[right] = contextSnapshot.RecentAssistantReplies[right], contextSnapshot.RecentAssistantReplies[left]
-	}
-	return contextSnapshot, nil
+	return l.ReadPromptContext(context.Background(), sessionID)
 }
 
 func scanLogMessages(rows *sql.Rows) ([]LogMessage, error) {
@@ -835,14 +713,7 @@ func (l *MessageLog) LatestSeq() (int64, error) {
 
 // LatestSeqSession returns one session's newest sequence number.
 func (l *MessageLog) LatestSeqSession(sessionID string) (int64, error) {
-	var seq sql.NullInt64
-	err := l.db.SQL().QueryRowContext(context.Background(), `
-		SELECT MAX(seq) FROM messages WHERE session_id = ? AND committed = 1
-	`, sessionID).Scan(&seq)
-	if err != nil {
-		return 0, fmt.Errorf("read chat session head: %w", err)
-	}
-	return seq.Int64, nil
+	return l.LatestSeqSessionContext(context.Background(), sessionID)
 }
 
 // Cursor returns a client's read position for the active session.
@@ -856,20 +727,7 @@ func (l *MessageLog) Cursor(clientID string) (int64, error) {
 
 // CursorSession returns a client's read position for one session.
 func (l *MessageLog) CursorSession(clientID, sessionID string) (int64, error) {
-	if clientID == "" {
-		return 0, nil
-	}
-	var seq int64
-	err := l.db.SQL().QueryRowContext(context.Background(), `
-		SELECT last_seq FROM chat_session_cursors WHERE client_id = ? AND session_id = ?
-	`, clientID, sessionID).Scan(&seq)
-	if err == sql.ErrNoRows {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, fmt.Errorf("read chat cursor: %w", err)
-	}
-	return seq, nil
+	return l.CursorSessionContext(context.Background(), clientID, sessionID)
 }
 
 // AdvanceCursor moves a client's active-session cursor monotonically forward.

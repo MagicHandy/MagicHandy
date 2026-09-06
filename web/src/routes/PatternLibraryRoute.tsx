@@ -6,7 +6,7 @@ import { MotionImport } from "../components/MotionImport";
 import { PatternAuthoring } from "../components/PatternAuthoring";
 import { PatternBrowser } from "../components/PatternBrowser";
 import { PatternTraining } from "../components/PatternTraining";
-import { ProgramLibrary } from "../components/ProgramLibrary";
+import { LiveProgramLibrary } from "../components/LiveProgramLibrary";
 import { libraryActionKey } from "../components/library-actions";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState, useToast } from "../state/app-state";
@@ -17,7 +17,7 @@ const views: readonly View[] = ["browse", "programs", "import", "author", "train
 const emptyLibrary: PatternLibrary = { patterns: [], programs: [], feedback: [], auto_disable: false };
 
 export function PatternLibraryRoute() {
-  const { backendOnline, readOnly, motion, state, refresh } = useAppState();
+  const { backendOnline, readOnly, state, refresh } = useAppState();
   const { show } = useToast();
   const [view, setView] = useState<View>("browse");
   const [library, setLibrary] = useState<PatternLibrary>(emptyLibrary);
@@ -271,9 +271,8 @@ export function PatternLibraryRoute() {
               <PatternBrowser patterns={library.patterns} locked={locked} offline={!backendOnline} busyKeys={busyKeys} onPatch={patchPattern} onPlay={playPattern} onFeedback={ratePattern} onExport={exportPatternFile} onDelete={removePattern} />
             </div>
             <div role="tabpanel" id="library-programs-panel" aria-labelledby="library-programs-tab" hidden={view !== "programs"}>
-              <ProgramLibrary
+              <LiveProgramLibrary
                 programs={library.programs}
-                engine={motion?.engine}
                 locked={locked}
                 offline={!backendOnline}
                 busyKeys={busyKeys}
