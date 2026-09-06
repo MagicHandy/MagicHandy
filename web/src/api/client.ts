@@ -39,6 +39,7 @@ import type {
   MediaToolStatus,
   MediaSyncEvent,
   MediaSyncStatus,
+  MediaPlaybackSettings,
   MediaVideo,
   OllamaModelInfo,
   OllamaModelScan,
@@ -468,7 +469,7 @@ export const api = {
     script_smoothing_percent: number;
     peak_rounding_ms: number;
     apply_video_speed_limit: boolean;
-  }>) => request("POST", "/api/media/playback", patch),
+  }>) => request<MediaPlaybackSettings>("POST", "/api/media/playback", patch),
 
   // Session buildup is the user's as much as the model's: progress you can
   // see but not move would be a readout, not an override.

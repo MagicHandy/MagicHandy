@@ -1953,5 +1953,12 @@
   "Creative v2": "クリエイティブ v2",
   "Generate asymmetric sweeps, localized strokes and shrinking rebounds. Edit focus, sweep, rebounds or inertia while preserving other controls. Switching to or from this generator starts a new Lab score.": "非対称の往復、局所的なストローク、次第に小さくなるリバウンドを生成します。他の設定を維持しながら、位置、往復速度差、リバウンド、慣性を編集できます。この生成方式への切り替えや他の方式への変更で、新しいラボスコアを開始します。",
   "Creative v2 also refreshes its realization during Autopilot, preserving the requested character. Without continuation the finite score repeats. Exact repetition requests keep the current realization.": "Creative v2 も Autopilot 中に、要求された動作の特徴を維持しながら変化を更新します。継続生成しなければ有限のスコアが繰り返されます。完全な繰り返しを要求すると現在の変化を維持します。",
-  "Creative v2 develops reach, timing and location continuously across 64 cycles. Focus roaming moves both endpoints; set it to zero to hold a location. Mixed focus changes stroke width. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. The finite realization repeats until evolved; safety limits still apply.": "Creative v2 は64サイクルにわたり、範囲・タイミング・位置を連続的に変化させます。フォーカスの移動は両端を動かします。位置を固定するにはゼロに設定します。フォーカスの混合はストローク幅を変えます。リバウンドはその流れの中で縮小し、回復します。慣性は移動の形を変え、衝撃は再現しません。有限の動作は更新されるまで繰り返され、安全制限は引き続き適用されます。"
+  "Creative v2 develops reach, timing and location continuously across 64 cycles. Focus roaming moves both endpoints; set it to zero to hold a location. Mixed focus changes stroke width. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. The finite realization repeats until evolved; safety limits still apply.": "Creative v2 は64サイクルにわたり、範囲・タイミング・位置を連続的に変化させます。フォーカスの移動は両端を動かします。位置を固定するにはゼロに設定します。フォーカスの混合はストローク幅を変えます。リバウンドはその流れの中で縮小し、回復します。慣性は移動の形を変え、衝撃は再現しません。有限の動作は更新されるまで繰り返され、安全制限は引き続き適用されます。",
+  "Filter changes are being applied.": "フィルターの変更を適用しています。",
+  "Filters off; authored motion is preserved.": "フィルターはオフです。元の動きを維持します。",
+  "{count} corners rounded": "{count} 箇所の折り返しを丸めました",
+  "Peak timing shifts up to {milliseconds} ms": "ピーク時刻のずれは最大 {milliseconds} ミリ秒です",
+  "{count} corners use shorter windows": "{count} 箇所で短い時間幅を使用しています",
+  "{count} corners too short to round": "{count} 箇所は短すぎるため丸められません",
+  "No eligible script changes at these settings.": "この設定では変更対象の動きがありません。"
 }

@@ -23,6 +23,7 @@ func main() {
 	catalog := flag.Bool("catalog", true, "include built-in library patterns")
 	experiments := flag.Bool("experiments", false, "include the guided flow experiment roster and a maximum-softness case")
 	creativeV2 := flag.Bool("creative-v2", false, "include the native gesture matrix at 10/45/85 across all device profiles, plus original Creative comparisons")
+	mediaFilters := flag.Bool("media-filters", false, "include inert paired-script filter, rate and device-limit comparisons")
 	reports := flag.String("llm", "", "comma-separated live LLM report paths")
 	sessions := flag.String("sessions", "", "comma-separated full-app Autopilot captures")
 	flag.Parse()
@@ -58,6 +59,9 @@ func main() {
 	}
 	if *creativeV2 {
 		entries = append(entries, renderCreativeV2Matrix()...)
+	}
+	if *mediaFilters {
+		entries = append(entries, renderMediaFilters()...)
 	}
 	for _, path := range strings.Split(*reports, ",") {
 		if path == "" {

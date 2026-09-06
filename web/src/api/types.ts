@@ -632,9 +632,24 @@ export interface MediaSyncStatus {
   requires_reanchor?: boolean;
   expected_media_time_ms?: number;
   script_offset_ms?: number;
-  filter_effect?: { actions_removed?: number; peak_reduction_percent?: number };
+  filter_effect?: {
+    actions_removed?: number;
+    peak_reduction_percent?: number;
+    rounded_corners?: number;
+    rounding_limited_corners?: number;
+    rounding_skipped_corners?: number;
+    peak_shift_ms?: number;
+    smoothing_percent?: number;
+    rounding_ms?: number;
+    speed_limit_enabled?: boolean;
+  };
   message?: string;
   updated_at?: string;
+}
+
+export interface MediaPlaybackSettings {
+  media: Pick<MediaSettingsPayload, "script_smoothing_percent" | "peak_rounding_ms">;
+  motion: Pick<MotionSettings, "apply_video_speed_limit">;
 }
 
 export interface MediaScanIssue {

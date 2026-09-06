@@ -117,98 +117,59 @@ to a heartbeat later.
 
 ### 2. Script filters — applied when the run re-arms
 
-Each filter changes the points the device receives, and accepted HSP points
-cannot be rewritten. So every filter change stops an active run, the same way a
-speed-policy change does. The panel says so once, at the group heading, rather
-than on each control.
-
-The panel writes to `POST /api/media/playback`, which runs the same settings
-transition a full save does, so an active run stops the way a speed-policy
-change already stopped it. Whether the player's existing resync makes that gap
-seamless enough, or whether the group eventually wants an explicit Apply, is a
-question for real use rather than for review.
-
-**Every filter is off by default and the defaults are authored-exact.** This is
-not a style preference; it is a recorded lesson. A media amplitude transform was
-shipped once, and it "collapsed ordinary subtle strokes toward the device's
-resolution floor and made each true zero-velocity reversal feel like a dwell"
-([motion pathway review](motion-pathway-review-2026-07-20.md), 2026-07-22). A
-filter that quietly makes scripts worse is worse than no filter.
+All filters are off by default. With them off, the authored timeline stays exact.
+Accepted buffered points cannot be rewritten, so the player freezes its clock,
+stops the active run, serializes the settings write, and re-arms at the held
+timestamp. A failed write leaves playback stopped and restores backend values.
+Closing the panel preserves an already requested save; an old player's queued
+save cannot manipulate the next player. Stop and controller loss still revoke
+pending resumptions.
 
 #### Smoothing (jitter removal)
 
-Removes rapid, insignificant extrema — the noise in motion-tracked and
-auto-generated scripts — while leaving deliberate detail alone.
+`motion.SmoothMediaReversals` reuses the shared O(n log n) reversal bookkeeping
+with a conservative media predicate: both sides of a removed excursion must be
+at most the selected 1–5 percentage points, and both adjacent flanks must be at
+most 250 ms. A tiny dip beside a major peak cannot remove that peak first. Slow
+subtle excursions and long holds are preserved. The local time window no longer
+depends on total remaining script duration. Playback rate scales flank duration;
+seeking can still change the immediate slice boundary.
 
-`motion.StabilizePatternReversals(points, prominence)` already does exactly
-this and is already exported: it drops an extremum only when its prominence is
-below the threshold **and** its shorter flank is under 250 ms, so a slow
-deliberate 2% excursion survives while a 2% spike does not. Pattern import uses
-it at a fixed 2.0; the panel exposes the threshold over a small range (roughly
-1–5 percentage points) with the readout in percentage points, not an abstract
-"strength".
-
-The honest framing in the UI is "removes jitter smaller than N%", because that
-is precisely what it does.
+Pattern-library stabilization retains its existing predicate. Media smoothing
+does not apply an amplitude floor, center contraction, or loop retiming.
 
 #### Round peaks
 
-Media curves are linear by design — funscript segments interpolate linearly,
-matching the authored format. Every reversal is therefore a perfect corner.
+The 0–200 ms window controls local interpolation around direct direction changes.
+The shared engine uses its existing Hermite polynomial evaluator to join each
+linear body with continuous position, velocity and acceleration, with zero
+acceleration at both joins. This replaces the earlier five-point quadratic
+approximation, whose straight-line segments still jumped in velocity.
 
-That is right for a script tracking real motion on screen, where the corners are
-what actually happened. It is often wrong for a script that is really a *pattern*
-— a hand-written sawtooth or triangle, which reverses instantly at every peak in
-a way no body does. This filter is for those: it rounds the vertex so the stroke
-approaches its extreme and turns, moving a triangle toward a sine.
+Each symmetric window is limited to 40% of its shorter adjacent leg, retaining
+at least 20% exact linear travel between neighboring windows. Windows below
+4 ms are skipped and counted. Deliberate plateau/dwell shoulders remain exact;
+they are not claimed to be smooth. The overall video clock and source points
+do not change, and rounding cannot raise the incoming/outgoing peak rate.
 
-A slider sets the rounding window in milliseconds — how much time either side of
-each direction change is smoothed. Small values barely soften the tip; large
-values make the whole stroke sinusoidal. Each corner is capped at a fraction of
-its shorter adjacent leg, so dense fast sections round proportionally less than
-sparse slow ones without the user managing that.
+Rounding reduces peak reach. Unequal incoming/outgoing slopes can shift the
+local apex in time, so the readout reports both costs. The optional speed cap
+applies to authored deltas first; rounding then joins the resulting limited
+curve. This keeps the two controls independent, but the combined result can
+reach less far than the previous cap-after-inserted-points implementation.
 
-The vertex is replaced by a quadratic fillet, emitted as ordinary knots so
-linear interpolation stays intact:
+Sparse polynomial windows and fitter landmarks are compiled separately from the
+bounded 100,000 source points. Dense scripts no longer silently lose rounding
+because inserted source points would exceed that limit. Work remains linear for
+rounding; sampling locates each window by binary search. This is still the one
+engine/sampler/sanitizer/transport path, with no new background loop.
 
-```
-   authored:  A ────────→ B(peak) ────────→ C     corner, instant reversal
-   rounded:   A ──────→ ⌒⌒⌒⌒⌒⌒⌒ ──────→ C        peak approached and turned
-                        └─ r ─┘
-```
-
-Properties, and the ways this one can go wrong:
-
-- **Timestamps are unchanged.** Only knots are inserted between them.
-- **Peak velocity does not increase.** The straight body keeps its authored
-  slope and the fillet only reduces speed toward the turn, so the fastest
-  moment of the stroke is no faster than before and acceleration becomes finite
-  where it was unbounded. This filter asks *less* of the device, not more.
-- **Peak position is reduced, and that is the real cost.** A corner cannot be
-  rounded without cutting it; the fillet's apex sits short of the authored
-  extreme by an amount proportional to the window and the approach slope. Bound
-  it, and show it: the readout states the largest reduction the current setting
-  produces, in percentage points. This is *not* the removed 2026-07-22 amplitude
-  defect — that contracted every position toward the centre and flattened subtle
-  strokes everywhere; this touches only the neighbourhood of a direction change
-  and leaves the body of the stroke exact — but it is adjacent enough that the
-  cost has to be visible rather than argued.
-- **Point count grows.** Each rounded corner costs several knots instead of one.
-  Bounded against `MaximumMediaTimelinePoints`; a script dense enough to exceed
-  it gets fewer knots per corner, or the filter declines with a clear reason
-  rather than silently degrading.
-- **It makes tracked-motion scripts mushy.** Applying it where the corners were
-  real is exactly the wrong use. Off by default, and the timeline overlay is how
-  someone sees that before feeling it.
-
-An earlier draft of this section proposed the opposite mechanism: the bounded
-trapezoid `withBoundedLoopReversalGuides` uses for loop patterns, which
-*preserves* the peak exactly and pays for it with faster mid-stroke travel. That
-is the right tool for a pattern whose amplitude is the point, and the wrong one
-here — it keeps the harshness the user is trying to remove, and it raises
-velocity on exactly the fast scripts where that is least affordable. Recorded so
-the two do not get confused: patterns ramp velocity to keep their reach; media
-rounds position to lose the corner.
+The continuous plan is a commanded estimate. Whole-percent buffered output can
+flatten tiny tips and has piecewise-linear velocity. There is no promise that
+arbitrary fast scripts meet a global acceleration/jerk envelope. Physical feel
+and alignment remain hardware acceptance work. See
+[ADR 0027](decisions/0027-media-filter-interpolation.md) and the
+[numerical and visual review](funscript-filter-review-2026-09-06.md).
 
 #### Limit speed to the motion maximum
 
@@ -228,16 +189,20 @@ preserved under a lower speed ceiling.
 
 ### 3. Effect readout
 
-One line under the group: how many of the script's actions the current filters
-change, e.g. `1,842 actions · smoothing removes 214`. Computed from the same
-transform the engine will apply, not estimated.
+The backend reports the applied smoothing, rounding and speed-limit policy with
+the active run's measurements: removed actions, rounded corners, peak reach
+reduction in percentage points, peak timing shift in milliseconds, shortened
+windows and skipped corners. Rounding measurements come from the compiled
+speed-limited curve. Compact results survive engine snapshots without copying
+the entire media timeline on every poll.
 
-This is the panel's honesty mechanism. A filter that reports "changes 0 actions"
-tells the user it is doing nothing on this script; one that reports "changes
-1,600 of 1,842" tells them it is rewriting the script, and they can decide
-whether that is what they wanted. It also gives the timeline strip something to
-draw against later — showing filtered vs authored on the same curve is the
-obvious next step once the numbers exist.
+The panel distinguishes filters off, a pending settings write, waiting for a
+matching active run, measured zero, and measured changes. Old measurements are
+not attributed to newly displayed settings. Controls follow backend snapshots
+and save responses; a late response cannot overwrite a newer draft.
+
+The timeline strip continues to display authored content. An overlay of the
+compiled filtered curve remains a separate follow-up, not an implied feature.
 
 ## Placement and behavior
 
@@ -277,56 +242,13 @@ obvious next step once the numbers exist.
 
 ## What shipped
 
-All four slices landed together rather than as four PRs, because the panel is
-not usable without the offset being live and the offset is not worth a panel
-without something to calibrate against.
-
-- **Panel** — trigger in the funscript strip carrying the effective offset as
-  its label; a fixed overlay layer (`pointer-events: none`) with the panel
-  inside it, so it covers the workspace without blocking anything it does not
-  occupy. Measured 288x321 px against the sketch's 374x514. Escape and outside
-  click close it, and a read-only tab sees every control disabled.
-- **Per-video offset** — schema v14 column, `POST /api/media/script-offset`,
-  written on a 180 ms debounce so a drag is one request. Verified live: dragging
-  saved -180 for the file, the trigger label followed, and the panel reported
-  `this video -180 ms · setup 0 ms`.
-- **Live offset** — the calibration moved out of the slice point and into the
-  sync runtime's anchor, so `expected_media_time_ms` and the drift comparison
-  both carry it. Changing it during playback does not stop motion; the response
-  recomputes the projection so the video moves on release rather than up to a
-  heartbeat later.
-- **Filters** — smoothing reuses `motion.StabilizePatternReversals`; peak
-  rounding is the quadratic fillet described above. Both re-arm the run, both
-  report their measured effect, and the zero value is authored-exact.
-
-Peak rounding was measured rather than argued: tests pin that it never raises
-peak velocity, that its reduction grows with the window and stays bounded, that
-each corner is capped by its own shorter leg, and that a script too dense for
-the fillets plays unrounded instead of being thinned to fit.
-
-Not verified on hardware. How much rounding feels right, and whether smoothing
-helps or flattens a given script, are subjective and need a device.
-
-### Slice order as built
-
-Each was one reviewable step; all landed in one PR.
-
-1. **Panel shell and the per-video offset.** Trigger, floating panel,
-   focus/dismiss behavior, read-only gating, schema v14 column, and the slider
-   over `setup + this video` with today's re-arm behavior. Ships something
-   usable and proves both the shell and the storage.
-2. **Live offset.** Move the offset from the slice point to the engine-clock
-   projection and the drift baseline; make the slider live. Regression test that
-   drift stays near zero with a non-zero offset.
-3. **Smoothing.** Wire `StabilizePatternReversals` into media timeline
-   construction behind the setting, plus the effect readout.
-4. **Peak rounding.** The fillet, its per-corner cap, the point-count bound, and
-   the peak-reduction readout. Wants a measurement over real scripts — the
-   largest peak reduction and the point growth at each end of the slider — but
-   that is characterisation, not a gate it can fail.
-
-All four are independently valuable. Slice 2 is what makes the panel worth
-opening; slice 4 is the one whose cost has to stay visible in the UI.
+The floating panel, additive setup/per-video offset, independent opt-in filters
+and backend effect report are implemented. The offset adjusts the video clock
+without rewriting accepted points; filter changes use a coordinated restart.
+The September 6 filter review replaces coarse point rounding with continuous
+local interpolation, protects major authored reversals during smoothing, and
+makes save/readback and measured-zero states explicit. See the linked review
+for test, atlas, simulator and performance evidence.
 
 ## Open questions
 

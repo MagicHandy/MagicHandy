@@ -20,6 +20,7 @@ type reversalFilter struct {
 	candidates                 reversalCandidates
 	minimumProminence          float64
 	flankMillis                int64
+	preserveStrongReversals    bool
 }
 
 type reversalCandidates []int
@@ -36,6 +37,20 @@ func (q *reversalCandidates) Pop() any {
 }
 
 func filterPatternReversals(points []CurvePoint, minimumProminence float64) []CurvePoint {
+	if len(points) < 3 {
+		return append([]CurvePoint(nil), points...)
+	}
+	return filterReversals(points, minimumProminence, patternChatterFlankMillis(points), false)
+}
+
+// SmoothMediaReversals removes only small excursions with two short flanks.
+// A large authored reversal beside a small spike remains an anchor. The fixed
+// wall-time window is independent of how much script remains after a seek.
+func SmoothMediaReversals(points []CurvePoint, minimumProminence float64) []CurvePoint {
+	return filterReversals(points, minimumProminence, 250, true)
+}
+
+func filterReversals(points []CurvePoint, minimumProminence float64, flank int64, preserveStrong bool) []CurvePoint {
 	n := len(points)
 	if n < 3 || minimumProminence <= 0 {
 		return append([]CurvePoint(nil), points...)
@@ -43,9 +58,8 @@ func filterPatternReversals(points []CurvePoint, minimumProminence float64) []Cu
 	// Most authored scripts have nothing to remove. Avoid the working indexes
 	// entirely in that case (including media played with smoothing off).
 	anchors := curveReversalAnchors(points)
-	flank := patternChatterFlankMillis(points)
 	eligible := func(left, current, right int) bool {
-		return reversalIsChatter(points[left], points[current], points[right], minimumProminence, flank)
+		return reversalIsChatter(points[left], points[current], points[right], minimumProminence, flank, preserveStrong)
 	}
 	queue := make(reversalCandidates, 0)
 	for i := 1; i < len(anchors)-1; i++ {
@@ -62,6 +76,7 @@ func filterPatternReversals(points []CurvePoint, minimumProminence float64) []Cu
 		anchorPrevious: make([]int, n), anchorNext: make([]int, n),
 		direction: make([]int, n), anchor: make([]bool, n), queued: make([]bool, n),
 		candidates: queue, minimumProminence: minimumProminence, flankMillis: flank,
+		preserveStrongReversals: preserveStrong,
 	}
 	lastEdge := -1
 	for i := range points {
@@ -108,7 +123,11 @@ func filterPatternReversals(points []CurvePoint, minimumProminence float64) []Cu
 	return result
 }
 
-func reversalIsChatter(left, current, right CurvePoint, prominence float64, flank int64) bool {
+func reversalIsChatter(left, current, right CurvePoint, prominence float64, flank int64, preserveStrong bool) bool {
+	if preserveStrong {
+		return math.Max(math.Abs(current.PositionPercent-left.PositionPercent), math.Abs(current.PositionPercent-right.PositionPercent)) <= prominence &&
+			max(current.TimeMillis-left.TimeMillis, right.TimeMillis-current.TimeMillis) <= flank
+	}
 	return math.Min(math.Abs(current.PositionPercent-left.PositionPercent), math.Abs(current.PositionPercent-right.PositionPercent)) <= prominence &&
 		min(current.TimeMillis-left.TimeMillis, right.TimeMillis-current.TimeMillis) <= flank
 }
@@ -118,7 +137,7 @@ func (f *reversalFilter) eligible(at int) bool {
 		return false
 	}
 	left, right := f.anchorPrevious[at], f.anchorNext[at]
-	return left >= 0 && right >= 0 && reversalIsChatter(f.points[left], f.points[at], f.points[right], f.minimumProminence, f.flankMillis)
+	return left >= 0 && right >= 0 && reversalIsChatter(f.points[left], f.points[at], f.points[right], f.minimumProminence, f.flankMillis, f.preserveStrongReversals)
 }
 
 func (f *reversalFilter) removeAnchor(at int) {

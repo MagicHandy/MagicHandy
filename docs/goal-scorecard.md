@@ -1,5 +1,22 @@
 # Goal Scorecard
 
+## 2026-09-06 — funscript filter quality
+
+Video filters now use conservative chatter selection, continuous local shared-
+engine rounding and backend measurements/readback. Full Go/race/vet/lint,
+pure-Go, architecture/goleak, frontend typecheck/build and 497 frontend tests
+pass. The 216-case atlas and simulator filter/seek/Stop review pass, with local
+rounding limits and physical acceptance explicitly retained. See the
+[review](funscript-filter-review-2026-09-06.md).
+
+Stripped binary is 19,113,472 B (−9,728); main JS adds 2,089 raw / 587 gzip
+bytes plus 201–214 gzip bytes per lazy locale. Dense rounding now remains active
+at the source limit, costing about 3.3 ms / 9.22 MB for 50k remaining actions.
+Stopped working sets are 32.27/32.43 MiB parent/candidate; private commitments
+remain near 56 MiB. Startup 593.9/582.2 ms retains the 500 ms risk; the SQLite
+RSS waiver and R25/M3 hardware acceptance remain open. See the
+[budget measurements](perf-baseline.md#2026-09-06--funscript-filter-quality).
+
 ## 2026-09-06 — video playback and live seeking
 
 Pending seek/Stop, controller-loss, heartbeat ordering, metadata and canceled-arm

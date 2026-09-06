@@ -71,18 +71,24 @@ type mediaSyncStatus struct {
 // mediaFilterEffect is the measured cost of the active filters, reported so the
 // user can see what a filter did rather than trust that it helped.
 type mediaFilterEffect struct {
-	ActionsRemoved       int     `json:"actions_removed,omitempty"`
-	PeakReductionPercent float64 `json:"peak_reduction_percent,omitempty"`
+	ActionsRemoved int `json:"actions_removed,omitempty"`
+	motion.MediaRoundingEffect
+	SmoothingPercent  int  `json:"smoothing_percent"`
+	RoundingMillis    int  `json:"rounding_ms"`
+	SpeedLimitEnabled bool `json:"speed_limit_enabled"`
 }
 
-func filterEffect(effect media.Effect) *mediaFilterEffect {
-	if effect.ActionsRemoved == 0 && effect.PeakReductionPercent <= 0 {
-		return nil
+func filterEffect(effect media.Effect, filters media.Filters, target motion.MotionTarget) *mediaFilterEffect {
+	report := &mediaFilterEffect{
+		ActionsRemoved:    effect.ActionsRemoved,
+		SmoothingPercent:  filters.SmoothingPercent,
+		RoundingMillis:    filters.PeakRoundingMillis,
+		SpeedLimitEnabled: target.MediaSpeedLimitEnabled,
 	}
-	return &mediaFilterEffect{
-		ActionsRemoved:       effect.ActionsRemoved,
-		PeakReductionPercent: math.Round(effect.PeakReductionPercent*10) / 10,
-	}
+	report.MediaRoundingEffect = target.MediaRoundingEffect
+	report.PeakReductionPercent = math.Round(report.PeakReductionPercent*10) / 10
+	report.PeakShiftMillis = math.Round(report.PeakShiftMillis*10) / 10
+	return report
 }
 
 // anchorWithOffset folds the calibration into the clock the video follows. The
@@ -281,7 +287,7 @@ func (m *mediaSyncRuntime) arm(ctx context.Context, event mediaSyncEvent, stopSe
 		PlaybackRate:       event.PlaybackRate,
 		MotionSpeedLimit:   mediaMotionSpeedLimit(state.Target),
 		ScriptOffsetMillis: offsetMillis,
-		FilterEffect:       filterEffect(effect),
+		FilterEffect:       filterEffect(effect, filters, state.Target),
 		// The engine's timeline clock started at transport play, before the held
 		// video resumes; the browser aligns the video to this projection.
 		ExpectedMediaTimeMillis: engineMediaTimeMillis(anchorWithOffset(event.MediaTimeMillis, offsetMillis), state.RunningMillis, event.PlaybackRate),

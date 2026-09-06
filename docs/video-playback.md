@@ -733,6 +733,13 @@ stands unchanged. A file that already plays is never converted.
 
 ## Cross-references
 
+The September 6 [filter-quality review](funscript-filter-review-2026-09-06.md)
+adds conservative media chatter removal, local continuous rounding inside the
+shared curve and compiled effect reports. Filter saves reconcile backend values
+and failed writes cannot auto-resume. The authored timeline strip is unchanged;
+the review atlas shows compiled/quantized output. R25/M3 physical acceptance
+remains open.
+
 - [video-playback-panel.md](video-playback-panel.md) — the floating playback
   panel: per-video offset, smoothing, and peak rounding.
 - [media-tooling.md](media-tooling.md) — proposed thumbnails, optional FFmpeg,

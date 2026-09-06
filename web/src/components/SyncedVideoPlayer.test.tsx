@@ -90,7 +90,10 @@ describe("SyncedVideoPlayer", () => {
     });
     pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     mediaFunscript.mockResolvedValue({ funscript: script });
-    saveMediaPlayback.mockResolvedValue({ status: "saved" });
+    saveMediaPlayback.mockImplementation(async (patch) => ({
+      media: {script_smoothing_percent: patch.script_smoothing_percent ?? 0, peak_rounding_ms: patch.peak_rounding_ms ?? 0},
+      motion: {apply_video_speed_limit: patch.apply_video_speed_limit ?? false},
+    }));
     refreshAppState.mockResolvedValue(undefined);
     mediaSync.mockImplementation(async (event) => ({
       sync: event.state === "playing" ? { ...following, last_event: event.event } : {
@@ -357,6 +360,25 @@ describe("SyncedVideoPlayer", () => {
     ));
     expect(mediaSync.mock.calls.filter(([event]) => event.state === "paused")).toHaveLength(1);
     expect(mediaSync.mock.calls.filter(([event]) => event.state === "playing")).toHaveLength(1);
+  });
+
+  it("keeps playback stopped when a filter write fails", async () => {
+    saveMediaPlayback.mockRejectedValueOnce(new Error("Settings write failed"));
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={16} />);
+    const player = await screen.findByLabelText("Paired session") as HTMLVideoElement;
+    Object.defineProperty(player, "currentTime", { configurable: true, writable: true, value: 2.75 });
+    fireEvent.click(await screen.findByRole("button", { name: "Play video with paired motion" }));
+    await waitFor(() => expect(screen.getByText("Device following video")).toBeInTheDocument());
+    Object.defineProperty(player, "paused", { configurable: true, value: false });
+    mediaSync.mockClear();
+    play.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Sync 0 ms" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Round peaks/ }));
+    await screen.findByText("Settings write failed");
+    expect(mediaSync.mock.calls.some(([event]) => event.state === "paused")).toBe(true);
+    expect(mediaSync.mock.calls.some(([event]) => event.state === "playing")).toBe(false);
+    expect(play).not.toHaveBeenCalled();
+    expect(screen.getByRole("checkbox", { name: /Round peaks/ })).not.toBeChecked();
   });
 
   it("locks the held video onto the engine clock before resuming playback", async () => {

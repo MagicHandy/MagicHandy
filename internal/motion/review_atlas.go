@@ -27,6 +27,7 @@ type Review struct {
 	PeakAcceleration float64           `json:"peak_acceleration"`
 	PeakJerk         float64           `json:"peak_jerk"`
 	AccelerationJump float64           `json:"acceleration_jump"`
+	VelocityJump     float64           `json:"velocity_jump"`
 	Outcome          string            `json:"outcome,omitempty"`
 	Samples          [][4]float64      `json:"samples"`
 	Wire             []CurvePoint      `json:"wire"`
@@ -47,11 +48,15 @@ func ReviewMotionOutput(target MotionTarget, settings config.MotionSettings) Rev
 	gain := plan.focus.gain()
 	review.PeakAcceleration = plan.curve.maximumAccelerationPerMillis2() * gain * 1e6 / (factor * factor)
 	review.PeakJerk = plan.curve.maximumJerkPerMillis3() * gain * 1e9 / (factor * factor * factor)
-	for _, point := range plan.curve.points {
+	for _, point := range append(append([]CurvePoint(nil), plan.curve.points...), plan.curve.authoredKnots...) {
 		at := float64(point.TimeMillis)
+		if !plan.Loop && (point.TimeMillis == 0 || point.TimeMillis == plan.curve.duration) {
+			continue
+		}
 		before, after := positiveModulo(at-0.000001, float64(plan.curve.duration)), positiveModulo(at+0.000001, float64(plan.curve.duration))
 		jump := math.Abs(plan.curve.accelerationFloat(after)-plan.curve.accelerationFloat(before)) * gain * 1e6 / (factor * factor)
 		review.AccelerationJump = math.Max(review.AccelerationJump, jump)
+		review.VelocityJump = math.Max(review.VelocityJump, math.Abs(plan.curve.velocityFloat(after)-plan.curve.velocityFloat(before))*gain*1000/factor)
 	}
 	for index := 0; index <= 1600; index++ {
 		at := float64(plan.PeriodMillis) * float64(index) / 1600

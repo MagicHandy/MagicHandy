@@ -8,6 +8,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
 const (
@@ -80,6 +82,9 @@ type MediaTimelineDefinition struct {
 	Name           string       `json:"name"`
 	DurationMillis int64        `json:"duration_ms"`
 	Points         []CurvePoint `json:"points"`
+	// RoundingMillis is opt-in local C2 corner interpolation. The authored
+	// timestamps and linear bodies remain unchanged; zero is authored-exact.
+	RoundingMillis int `json:"rounding_ms,omitempty"`
 }
 
 // CurveMetrics exposes generator budget measurements for tests and diagnostics.
@@ -115,6 +120,8 @@ type Curve struct {
 	duration      int64
 	loop          bool
 	linear        bool
+	mediaFillets  []mediaFillet
+	mediaRounding MediaRoundingEffect
 	// minPosition and maxPosition bound the authored span. Shape-preserving
 	// interpolation never overshoots a knot, so the authored extremes are the
 	// curve's extremes.
@@ -328,6 +335,7 @@ func NormalizeProgramDefinition(definition ProgramDefinition) (ProgramDefinition
 // NormalizeMediaTimelineDefinition validates a bounded feature-length media
 // curve without applying pattern-library normalization or loop closure.
 func NormalizeMediaTimelineDefinition(definition MediaTimelineDefinition) (MediaTimelineDefinition, error) {
+	definition.RoundingMillis = clamp(definition.RoundingMillis, 0, config.MaxPeakRoundingMillis)
 	definition.ID = strings.TrimSpace(definition.ID)
 	definition.Name = strings.TrimSpace(definition.Name)
 	if definition.ID == "" || definition.Name == "" {
@@ -455,6 +463,9 @@ func (c Curve) normalizeTime(timeMillis int64) int64 {
 }
 
 func (c Curve) sampleFloat(at float64) float64 {
+	if segment, u, ok := c.mediaFilletAt(at); ok {
+		return segment.position(u)
+	}
 	if len(c.points) == 0 {
 		return 50
 	}
@@ -480,6 +491,9 @@ func (c Curve) sampleFloat(at float64) float64 {
 }
 
 func (c Curve) velocityFloat(at float64) float64 {
+	if segment, u, ok := c.mediaFilletAt(at); ok {
+		return segment.velocity(u)
+	}
 	if len(c.points) == 0 {
 		return 0
 	}
@@ -504,6 +518,9 @@ func (c Curve) velocityFloat(at float64) float64 {
 }
 
 func (c Curve) accelerationFloat(at float64) float64 {
+	if segment, u, ok := c.mediaFilletAt(at); ok {
+		return segment.acceleration(u)
+	}
 	if len(c.points) == 0 || c.linear {
 		return 0
 	}
@@ -530,6 +547,13 @@ func (c Curve) accelerationFloat(at float64) float64 {
 // ends; the Creative quintic profile additionally evaluates every jerk root.
 // Sampling would make a safety decision depend on an arbitrary probe interval.
 func (c Curve) maximumAccelerationPerMillis2() float64 {
+	if len(c.mediaFillets) > 0 {
+		maximum := 0.0
+		for _, fillet := range c.mediaFillets {
+			maximum = math.Max(maximum, fillet.segment.maximumAcceleration())
+		}
+		return maximum
+	}
 	if c.linear || len(c.points) < 2 {
 		return 0
 	}
@@ -585,6 +609,13 @@ func (c Curve) maximumVelocityPerMillis() float64 {
 }
 
 func (c Curve) maximumJerkPerMillis3() float64 {
+	if len(c.mediaFillets) > 0 {
+		maximum := 0.0
+		for _, fillet := range c.mediaFillets {
+			maximum = math.Max(maximum, fillet.segment.maximumJerk())
+		}
+		return maximum
+	}
 	if len(c.quintics) != len(c.points)-1 {
 		return 0
 	}

@@ -1,7 +1,7 @@
 import { formatNumber, t, translateKnown } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError } from "../api/client";
-import type { MediaFunscript, MediaSyncEvent, MediaSyncStatus, MediaVideo } from "../api/types";
+import type { MediaFunscript, MediaPlaybackSettings, MediaSyncEvent, MediaSyncStatus, MediaVideo } from "../api/types";
 import { ChevronUpIcon } from "../shell/icons";
 import { formatTimelineTime } from "./ImportTimeline";
 import { FunscriptTimeline } from "./FunscriptTimeline";
@@ -113,7 +113,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
   const controlledRestartID = useRef(0);
   const seekGesture = useRef<ControlledRestart | null>(null);
   const filterRestart = useRef<ControlledRestart | null>(null);
-  const filterWriteChain = useRef<Promise<void>>(Promise.resolve());
+  const filterWriteChain = useRef<Promise<unknown>>(Promise.resolve());
 
   const invalidatePlaybackRequests = useCallback(() => {
     generation.current += 1;
@@ -593,30 +593,35 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     filterRestart.current = { id, mediaTimeMillis: atMillis, resume, stop };
   }, [clearMediaReadyPoll, holdVideoAt, invalidatePlaybackRequests, locked, script, stopPlaybackMotion]);
 
-  const applyPlaybackFilters = useCallback((patch: MediaPlaybackPatch): Promise<void> => {
+  const applyPlaybackFilters = useCallback((patch: MediaPlaybackPatch): Promise<MediaPlaybackSettings> => {
     const operation = async () => {
-      if (!filterRestart.current) beginFilterChange();
-      const restart = filterRestart.current;
+      const ownsPlayer = mounted.current && activeSessionID.current === session.id;
+      if (ownsPlayer && !filterRestart.current) beginFilterChange();
+      const restart = ownsPlayer ? filterRestart.current : null;
       if (!restart) {
-        await api.saveMediaPlayback(patch);
+        const saved = await api.saveMediaPlayback(patch);
         await refresh();
-        return;
+        return saved;
       }
 
       let writeError: unknown;
+      let saved!: MediaPlaybackSettings;
       let stopped = false;
       try {
         stopped = await restart.stop;
-        await api.saveMediaPlayback(patch);
+        saved = await api.saveMediaPlayback(patch);
         await refresh();
       } catch (reason) {
         writeError = reason;
+        // A runtime error can follow a successful settings save. Reconcile
+        // the actual backend values while keeping the original failure visible.
+        await refresh().catch(() => undefined);
       }
 
-      if (mounted.current && filterRestart.current?.id === restart.id) {
+      if (mounted.current && activeSessionID.current === session.id && filterRestart.current?.id === restart.id) {
         filterRestart.current = null;
         const player = playerRef.current ?? lastPlayer.current;
-        if (player && restart.resume && stopped) {
+        if (player && restart.resume && stopped && !writeError) {
           holdVideoAt(player, restart.mediaTimeMillis);
           setDesiredPlayback(true);
           setSyncOperation({ kind: "resyncing", mediaTimeMillis: restart.mediaTimeMillis });
@@ -627,12 +632,13 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
         }
       }
       if (writeError) throw writeError;
+      return saved;
     };
 
     const queued = filterWriteChain.current.then(operation, operation);
     filterWriteChain.current = queued.catch(() => undefined);
     return queued;
-  }, [armPlayback, beginFilterChange, holdVideoAt, refresh, setDesiredPlayback]);
+  }, [armPlayback, beginFilterChange, holdVideoAt, refresh, session.id, setDesiredPlayback]);
 
   // The media clock advancing is the first honest evidence that playback really
   // resumed, so it is where the tighter post-resume alignment belongs.
