@@ -34,8 +34,8 @@ func TestLayeredChatStartEvolveModeChangeAndStopUseOneEngine(t *testing.T) {
 	fake := transport.NewFake()
 	traces := diagnostics.NewTraceRing(2048)
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"edits":{"stroke_width":{"min_percent":20,"max_percent":90},"controls":{"anchor_percent":100},"layers":[{"axis":"range","amount_percent":100,"period_cycles":8,"shape":"alternate"}],"remove_layers":["center"]},"reply":"Starting broad and tip strokes."}`,
-		`{"edits":{"evolve":true},"reply":"Fresh variation."}`,
+		`{"action":"start","edits":{"stroke_width":{"min_percent":20,"max_percent":90},"controls":{"anchor_percent":100},"layers":[{"axis":"range","amount_percent":100,"period_cycles":8,"shape":"alternate"}],"remove_layers":["center"]},"reply":"Starting broad and tip strokes."}`,
+		`{"action":"update","edits":{"evolve":true},"reply":"Fresh variation."}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: provider, Traces: traces})
 	t.Cleanup(server.Close)

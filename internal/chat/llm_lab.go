@@ -113,9 +113,6 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 		return trial
 	}
 	trial.Reply, trial.After, trial.Changed, err = ParseLLMLab(raw, method, current, limits)
-	if err == nil && method == "creative_v2" {
-		err = creativeV2EditScope(message, current, trial.After)
-	}
 	if err != nil {
 		trial.After = current
 		trial.Changed = []string{}

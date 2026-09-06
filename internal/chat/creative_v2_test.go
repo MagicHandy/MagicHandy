@@ -39,28 +39,6 @@ func TestCreativeV2PartialEditsAndRejectInvalidTransactions(t *testing.T) {
 	}
 }
 
-func TestCreativeV2RejectsExplicitCoverageMismatch(t *testing.T) {
-	for _, tc := range []struct {
-		message    string
-		focus, mix int
-		reject     bool
-	}{
-		{"Mix full strokes with shrinking rebounds at the base.", 100, 55, true},
-		{"Mix full strokes with shrinking rebounds at the base.", 0, 100, true},
-		{"Mix full strokes with shrinking rebounds at the base.", 0, 55, false},
-		{"Add tip rebounds.", 0, 55, true},
-		{"Add tip rebounds.", 100, 55, false},
-		{"What are base rebounds?", 100, 55, false},
-		{"Do not move. Explain base rebounds.", 100, 55, false},
-	} {
-		s := FreshCreativeV2Score(25)
-		s.Gesture.FocusPercent, s.Gesture.FocusMixPercent = tc.focus, tc.mix
-		if err := creativeV2RequestedCoverage(tc.message, s); (err != nil) != tc.reject {
-			t.Fatalf("%s: %v", tc.message, err)
-		}
-	}
-}
-
 func TestCreativeV2RoamingIsAnIndependentAtomicControl(t *testing.T) {
 	s := FreshCreativeV2Score(25)
 	s.Gesture.FocusPercent, s.Gesture.FocusRoamPercent = 100, 0
@@ -85,16 +63,16 @@ func TestCreativeV2AuthorityAndContractIsolation(t *testing.T) {
 		message, raw                     string
 		running, paused, reject, applied bool
 	}{
-		{"Start moving with shrinking base rebounds.", `{"edits":[{"focus":{"position_percent":0,"width_percent":45,"mix_percent":55}},{"rebounds":{"count":2,"retained_width_percent":75}}],"reply":"Starting."}`, false, false, false, true},
-		{"Keep varying the motion.", `{"edits":[{"evolve":true}],"reply":"Fresh details."}`, true, false, false, true},
-		{"Increase speed by exactly 5 percentage points.", `{"edits":[{"speed_percent":30}],"reply":"Five points faster."}`, true, false, false, true},
-		{"Do not increase speed.", `{"edits":[{"speed_percent":30}],"reply":"Faster."}`, true, false, true, false},
-		{"What happens if we increase speed?", `{"edits":[{"speed_percent":30}],"reply":"Faster."}`, true, false, true, false},
-		{"Increase speed by exactly 5 percentage points.", `{"edits":[{"speed_percent":30}],"reply":"Faster."}`, false, false, true, false},
-		{"What does inertia do?", `{"edits":[],"reply":"It shapes travel."}`, true, false, false, false},
-		{"What does inertia do?", `{"edits":[{"inertia_percent":70}],"reply":"Changed."}`, true, false, true, false},
-		{"Vary the motion.", `{"edits":[{"evolve":true}],"reply":"Changed."}`, true, true, true, false},
-		{"Do not move.", `{"edits":[{"evolve":true}],"reply":"Changed."}`, false, false, true, false},
+		{"Start moving with shrinking base rebounds.", `{"action":"start","edits":[{"focus":{"position_percent":0,"width_percent":45,"mix_percent":55}},{"rebounds":{"count":2,"retained_width_percent":75}}],"reply":"Starting."}`, false, false, false, true},
+		{"Keep varying the motion.", `{"action":"update","edits":[{"evolve":true}],"reply":"Fresh details."}`, true, false, false, true},
+		{"Increase speed by exactly 5 percentage points.", `{"action":"update","edits":[{"speed_percent":30}],"reply":"Five points faster."}`, true, false, false, true},
+		{"Do not increase speed.", `{"action":"none","edits":[{"speed_percent":30}],"reply":"Faster."}`, true, false, true, false},
+		{"What happens if we increase speed?", `{"action":"none","edits":[{"speed_percent":30}],"reply":"Faster."}`, true, false, true, false},
+		{"Increase speed by exactly 5 percentage points.", `{"action":"update","edits":[{"speed_percent":30}],"reply":"Faster."}`, false, false, true, false},
+		{"What does inertia do?", `{"action":"none","edits":[],"reply":"It shapes travel."}`, true, false, false, false},
+		{"What does inertia do?", `{"action":"none","edits":[{"inertia_percent":70}],"reply":"Changed."}`, true, false, true, false},
+		{"Vary the motion.", `{"action":"update","edits":[{"evolve":true}],"reply":"Changed."}`, true, true, true, false},
+		{"Do not move.", `{"action":"none","edits":[{"evolve":true}],"reply":"Changed."}`, false, false, true, false},
 	} {
 		provider := &layeredTestProvider{raw: tc.raw}
 		s := FreshCreativeV2Score(25)

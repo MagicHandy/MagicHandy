@@ -10,10 +10,10 @@ import (
 
 func TestContinuousHistoryRetainsVoiceAndUsesCurrentContract(t *testing.T) {
 	for _, mode := range []MotionMode{MotionModeLayered, MotionModeCreativeV2} {
-		raw := `{"edits":{},"reply":"No change."}`
+		raw := `{"action":"none","edits":{},"reply":"No change."}`
 		score := DefaultLayeredScore(25)
 		if mode == MotionModeCreativeV2 {
-			raw = `{"edits":[],"reply":"No change."}`
+			raw = `{"action":"none","edits":[],"reply":"No change."}`
 			score = FreshCreativeV2Score(25)
 		}
 		provider := &layeredTestProvider{raw: raw}

@@ -1,5 +1,17 @@
 # MagicHandy Risk Register
 
+## 2026-09-06 continuous-chat request interpretation
+
+English keyword/negation rules rejected valid compound requests and
+translations in Creative v2 and Layered. Live chat now declares an action;
+backend-state schema branches and runtime validation enforce holds, paused
+state, start/update boundaries and valid scores. No user-text classifier
+grants these continuous edits. Model interpretation still makes mistakes:
+E4B can confuse pace with layer variation or choose an imperceptible local
+mix, and even Gemma 12B misses some compound requests. Structural acceptance
+is not proof of request fidelity or physical feel. All failed experiments and
+accepted mismatches remain in the [review evidence](continuous-request-review-2026-09-06.md).
+
 ## 2026-09-05 Autopilot mode-switch crash
 
 A retained Layered score was formatted as Creative v2 after changing the

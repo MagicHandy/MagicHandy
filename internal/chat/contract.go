@@ -68,6 +68,9 @@ type AssistantResponse struct {
 	Reply   string         `json:"reply"`
 	NewMood *Mood          `json:"new_mood,omitempty"`
 	Motion  *MotionCommand `json:"motion,omitempty"`
+	// continuousAction is the model's live-chat decision before state checks.
+	// Only the validated Motion command is exposed to the rest of the app.
+	continuousAction string
 }
 
 // MotionCommand is semantic motion intent, not a transport command.
