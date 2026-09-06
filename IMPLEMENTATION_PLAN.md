@@ -40,6 +40,18 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-06 video playback and live seeking review
+
+Paired playback now fences pending seeks against Stop/controller loss, ignores
+obsolete heartbeat results, retains Stop barriers across replacement seeks and
+buffering, and keeps live sessions intact when metadata changes. Timeline keys
+coalesce into one gesture; decoder `seeked` can immediately admit a ready arm.
+Shared smoothing uses incremental reversal indexes with identical point
+selection, replacing quadratic rescanning. Canonical media normalization avoids
+duplicate copies while retaining validation. The 100,000-action chatter fixture
+falls from 9.99 s to about 14 ms; full Go/race/frontend gates pass. See the
+[review and limits](docs/video-playback-review-2026-09-06.md).
+
 ### 2026-09-06 datastore admission and observation efficiency
 
 Audit follow-ups 3–5 are implemented: cancellable admission to the one SQLite

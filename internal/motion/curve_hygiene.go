@@ -1,7 +1,5 @@
 package motion
 
-import "math"
-
 // MinimumPatternReversalProminence is the smallest adjacent swing treated as
 // an intentional loop reversal. Smaller extrema are positional chatter.
 const MinimumPatternReversalProminence = 2.0
@@ -14,34 +12,7 @@ const (
 // StabilizePatternReversals removes rapid, insignificant extrema while
 // preserving monotonic detail, endpoints, dwell timing, and slow subtle motion.
 func StabilizePatternReversals(points []CurvePoint, minimumProminence float64) []CurvePoint {
-	result := append([]CurvePoint(nil), points...)
-	if minimumProminence <= 0 {
-		return result
-	}
-	for len(result) > 2 {
-		anchors := curveReversalAnchors(result)
-		removed := false
-		for index := 1; index < len(anchors)-1; index++ {
-			left := result[anchors[index-1]].PositionPercent
-			current := result[anchors[index]].PositionPercent
-			right := result[anchors[index+1]].PositionPercent
-			prominence := math.Min(math.Abs(current-left), math.Abs(current-right))
-			leftMillis := result[anchors[index]].TimeMillis - result[anchors[index-1]].TimeMillis
-			rightMillis := result[anchors[index+1]].TimeMillis - result[anchors[index]].TimeMillis
-			if prominence > minimumProminence ||
-				min(leftMillis, rightMillis) > patternChatterFlankMillis(result) {
-				continue
-			}
-			pointIndex := anchors[index]
-			result = append(result[:pointIndex], result[pointIndex+1:]...)
-			removed = true
-			break
-		}
-		if !removed {
-			break
-		}
-	}
-	return result
+	return filterPatternReversals(points, minimumProminence)
 }
 
 func patternChatterFlankMillis(points []CurvePoint) int64 {

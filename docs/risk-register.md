@@ -1622,6 +1622,18 @@ filter writes use the same freeze/stop/re-arm lifecycle. Focused browser tests
 cover these paths, but no new real-device run was authorized for this pass, so
 R25 remains High and M3 is unchanged.
 
+Review update 2026-09-06: pending scrub/filter continuations are revoked on Stop
+and controller loss; obsolete heartbeat results cannot overwrite current
+playback. Failed Stop barriers cannot auto-resume, repeated buffering preserves
+the outstanding barrier, metadata does not reset a live session, and canceled
+backend arms are rejected before replacing motion. Decoder `seeked` readiness,
+latest-commit ordering, and held keyboard gestures have regression coverage.
+Equivalent incremental smoothing removes a reproduced 9.99-second maximum-size
+seek stall without changing filter policy. Simulator browser seeks and Stop,
+full race/goleak gates, and 10,000 filter-equivalence fixtures pass. See the
+[review](video-playback-review-2026-09-06.md). R25 remains High; no new physical
+transport or subjective-alignment evidence is claimed.
+
 Relates to R1 (real-device validation), R3 (transport behavior), R9 (UI safety
 regression), R14 (one motion path), and R23 (Stop delivery).
 

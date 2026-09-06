@@ -604,3 +604,40 @@ target; no startup improvement is claimed from these few host observations.
 Budgets are unchanged. The separate 128-model query benchmark and 500-row-view
 React profile in [the review](data-observation-review-2026-09-06.md) establish
 the specific reductions in filesystem/SQL work and render propagation.
+
+## 2026-09-06 — video playback and live seeking
+
+Windows/amd64, Go 1.26.4, `CGO_ENABLED=0`, `-trimpath -ldflags '-s -w'`.
+Parent `e16ee9f9` is PR #255. Two interleaved pairs use the same fresh-data,
+stopped-simulator fixture as above, without a browser or inference attached to
+the measured process. Four state polls precede three working-set samples per
+launch. Existing review processes remain running. These pairs were taken after
+the test suites completed; an earlier pair during concurrent test activity is
+retained separately and excluded from this comparison.
+
+| Measurement | Parent | Candidate |
+| --- | ---: | ---: |
+| Stripped binary bytes | 19,107,328 | 19,123,200 |
+| Main JS bytes / gzip level 9 | 751,811 / 207,414 | 752,331 / 207,653 |
+| Lazy Labs JS bytes / gzip level 9 | 52,019 / 14,545 | 52,019 / 14,545 |
+| Startup ms, two launches | 559.5 / 521.7 | 516.5 / 524.9 |
+| Working-set MiB, launches 1 / 2 | 33.01 / 32.71 | 24.35 / 25.00 |
+| Private committed MiB, launches 1 / 2 | 54.94 / 53.85 | 54.30 / 55.21 |
+
+All three working-set samples within each tabulated launch were identical.
+The binary grows 15,872 bytes (0.083%), and the browser adds 520 raw / 239 gzip
+bytes. No dependency or duplicated asset is added. The lower observed working
+sets do not establish a retained-memory improvement: private commitments still
+overlap, and the excluded concurrent-test candidate fluctuated from 23.08 to
+65.80 MiB. These are stopped-server samples, not the full active workload.
+The SQLite memory waiver and 500 ms startup risk remain; budgets are unchanged.
+The final frontend-only guard for unpaired playback retains the same binary
+size; process observations precede that small guard and byte counts include it.
+
+The [video review](video-playback-review-2026-09-06.md) records the specific
+seek/filter improvements. Maximum-size dense smoothing fell from 9.99 seconds
+to 14–15 ms, while ordinary start/middle/end seek processing allocates half as
+many bytes. Those are bounded CPU/allocation benchmarks, not wire, decoder,
+display-presentation or physical-device latency measurements. Raw process
+measurements are `.scratch/video-seek-review/perf-{parent,candidate}{2,3}.json`;
+byte-accurate browser measurements are in `bundle-size.json` in that directory.

@@ -333,6 +333,16 @@ func NormalizeMediaTimelineDefinition(definition MediaTimelineDefinition) (Media
 	if definition.ID == "" || definition.Name == "" {
 		return MediaTimelineDefinition{}, errors.New("media timeline id and name are required")
 	}
+	// Sliced media already has ordered, bounded points spanning its exact
+	// duration. Validate every point, then take one owned copy; sorting,
+	// deduplicating, and constructing a throwaway curve would copy a feature-
+	// length script three times on every seek. Noncanonical callers retain the
+	// same normalization below, and the engine still validates its own input.
+	if len(definition.Points) >= 2 && len(definition.Points) <= MaximumMediaTimelinePoints &&
+		validateCurvePoints(definition.Points, definition.DurationMillis) == nil {
+		definition.Points = slices.Clone(definition.Points)
+		return definition, nil
+	}
 	points, duration, err := normalizePointsWithLimit(
 		definition.Points,
 		definition.DurationMillis,
@@ -344,7 +354,7 @@ func NormalizeMediaTimelineDefinition(definition MediaTimelineDefinition) (Media
 	}
 	definition.DurationMillis = duration
 	definition.Points = points
-	if _, err := newCurve(points, duration, false, true, MaximumMediaTimelinePoints, neutralPlaybackScale()); err != nil {
+	if err := validateCurvePoints(points, duration); err != nil {
 		return MediaTimelineDefinition{}, err
 	}
 	return definition, nil

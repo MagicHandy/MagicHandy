@@ -284,6 +284,14 @@ The same applies to the video player: `.media-player` owns a flow gap so the
 incompatible-file notice, the playback error row, and the funscript timeline
 cannot render flush against the picture.
 
+Paired-video seeking owns an explicit gesture. Pointer release and keyboard
+release/blur commit one final target; key repeats preview within that gesture.
+The prior motion Stop and video decoder seek can overlap, but both must finish
+before a ready synchronized arm. Stop, controller loss, or a failed Stop barrier
+revokes automatic resume. Persisting decoder duration metadata updates the
+controls without resetting a live session. See the
+[September 6 playback review](video-playback-review-2026-09-06.md).
+
 `#/settings/device|media|model|chat|voice|prompts|diagnostics` are sibling sections
 of the routed Settings page — deep-linkable, no window, no stacked overlays.
 Stop lives in the nav-rail footer on every route (plus Escape), outside the

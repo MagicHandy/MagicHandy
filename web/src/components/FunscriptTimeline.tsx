@@ -23,6 +23,7 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek, onSeekC
   const baseRef = useRef<HTMLCanvasElement>(null);
   const playheadRef = useRef<HTMLCanvasElement>(null);
   const dragging = useRef(false);
+  const keyboardSeeking = useRef(false);
   const previewTimeRef = useRef<number | null>(null);
   const [previewTime, setPreviewTime] = useState<number | null>(null);
   const duration = Math.max(1, script.duration_ms);
@@ -123,7 +124,7 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek, onSeekC
 
   function keyboardSeek(event: ReactKeyboardEvent<HTMLDivElement>) {
     const step = event.shiftKey ? 30_000 : 5_000;
-    let next = currentTime;
+    let next = previewTimeRef.current ?? currentTime;
     switch (event.key) {
       case "ArrowLeft":
       case "ArrowDown":
@@ -143,8 +144,21 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek, onSeekC
         return;
     }
     event.preventDefault();
-    onSeekStart?.();
-    onSeek(Math.max(0, Math.min(duration, next)));
+    if (!keyboardSeeking.current) {
+      keyboardSeeking.current = true;
+      onSeekStart?.();
+    }
+    previewTimeRef.current = Math.max(0, Math.min(duration, next));
+    setPreviewTime(previewTimeRef.current);
+  }
+
+  function finishKeyboardSeek() {
+    if (!keyboardSeeking.current) return;
+    keyboardSeeking.current = false;
+    const next = previewTimeRef.current;
+    previewTimeRef.current = null;
+    setPreviewTime(null);
+    if (next !== null) onSeek(next);
   }
 
   if (hidden) {
@@ -172,6 +186,10 @@ export function FunscriptTimeline({ script, currentTime, hidden, onSeek, onSeekC
       onPointerCancel={cancelSeek}
       onLostPointerCapture={cancelSeek}
       onKeyDown={keyboardSeek}
+      onKeyUp={(event) => {
+        if (["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) finishKeyboardSeek();
+      }}
+      onBlur={finishKeyboardSeek}
     >
       <canvas ref={baseRef} className="media-timeline-canvas" aria-hidden="true" />
       <canvas ref={playheadRef} className="media-timeline-playhead" aria-hidden="true" />

@@ -152,8 +152,17 @@ func (m *mediaSyncRuntime) Status() mediaSyncStatus {
 }
 
 func (m *mediaSyncRuntime) Handle(ctx context.Context, event mediaSyncEvent, stopSequence uint64) (mediaSyncStatus, error) {
+	if event.State == "playing" && ctx.Err() != nil {
+		return m.Status(), ctx.Err()
+	}
 	m.lifecycleMu.Lock()
 	defer m.lifecycleMu.Unlock()
+	// A superseded seek must not replace current motion or consume a session
+	// fence after waiting for another lifecycle operation. Stop events still
+	// drain through the shared engine even if their HTTP client disconnected.
+	if event.State == "playing" && ctx.Err() != nil {
+		return m.Status(), ctx.Err()
+	}
 	if !m.acceptEvent(event) {
 		return m.Status(), nil
 	}

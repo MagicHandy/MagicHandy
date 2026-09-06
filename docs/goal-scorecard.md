@@ -1,5 +1,24 @@
 # Goal Scorecard
 
+## 2026-09-06 — video playback and live seeking
+
+Pending seek/Stop, controller-loss, heartbeat ordering, metadata and canceled-arm
+regressions are fixed. Shared smoothing preserves the original point selection
+while replacing quadratic rescanning with O(n log n) work; the 100,000-action
+chatter fixture falls from 9.99 s to about 14 ms. Ordinary seeks cut allocated
+bytes in half, and decoder readiness can resume directly on `seeked`. Full Go
+test/race/vet/lint, pure-Go, import/goleak and frontend gates (492 tests) pass.
+The isolated simulator browser and real local LLM readiness probe pass. See the
+[review, benchmarks and remaining limits](video-playback-review-2026-09-06.md).
+
+The stripped binary is 19,123,200 bytes (+15,872, 0.083%); browser JS adds 520
+raw / 239 gzip bytes, without a dependency change. Stopped working sets were
+33.01/32.71 MiB parent versus 24.35/25.00 MiB candidate, with overlapping private
+commitments near 54–55 MiB. This does not close the SQLite RSS waiver. Startup
+observations of 517–560 ms retain the 500 ms risk. Budgets and R25's remaining
+real-device validation requirements are unchanged. See the
+[measurement details](perf-baseline.md#2026-09-06--video-playback-and-live-seeking).
+
 ## 2026-09-06 — datastore and observation efficiency
 
 Audit follow-ups 3–5 are implemented: cancellation-aware single-writer admission,
