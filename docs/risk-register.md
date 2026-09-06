@@ -203,6 +203,13 @@ remains open under R1; closing it requires either reliable position feedback or
 a conservative owner contract whose first command is bounded for worst-case
 travel by the configured speed.
 
+Status 2026-09-06: the installed alpha.42 Cloud REST seek failure compared
+measured arrival against an unencoded fractional endpoint. The shared engine
+now projects the owner's encoded target for the temporary/final window before
+checking the unchanged 1% arrival bound. Captured-state regressions, failed-
+arrival Stop checks and the full race suite pass; post-fix hardware confirmation
+remains open. See the [startup-arrival review](startup-arrival-review-2026-09-06.md).
+
 Status 2026-08-01: a read-only trace for a reported speed-limit regression
 showed the target correctly clamped to the configured 35% maximum, but the
 selected generated `curated-fast-drive-20` curve contained 40 ms reversals that

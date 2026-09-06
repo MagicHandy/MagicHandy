@@ -79,7 +79,7 @@ type CloudRESTTransport struct {
 var _ MotionStartupStateProvider = (*CloudRESTTransport)(nil)
 
 // MotionSamplingCapabilities reports API v3's whole-percent HSP endpoint
-// resolution. The shared engine uses this only to reduce redundant wire knots;
+// resolution. The shared engine uses this to fit wire knots and verify startup;
 // CloudRESTTransport remains a mapping/dispatch owner.
 func (*CloudRESTTransport) MotionSamplingCapabilities() MotionSamplingCapabilities {
 	return MotionSamplingCapabilities{

@@ -1,5 +1,14 @@
 # Goal Scorecard
 
+## 2026-09-06 — encoded startup arrival
+
+The installed alpha.42 Cloud REST trace exposed verification against an
+unencoded fractional seek target. Startup now compares with the endpoint the
+owner can encode, retaining the 1% arrival bound and all stationary/Stop gates.
+Captured-state regressions and full Go/race/vet/lint checks pass. The stripped
+candidate is 19,116,032 B (+512); dependencies and browser assets are unchanged.
+See the [diagnosis and physical-review limits](startup-arrival-review-2026-09-06.md).
+
 ## 2026-09-06 — alpha.42 release preparation
 
 PRs #253–#257 are merged. Investigation of the subsequent main Go failure
