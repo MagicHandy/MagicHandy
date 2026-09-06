@@ -1,5 +1,15 @@
 # Goal Scorecard
 
+## 2026-09-06 — alpha.43 release preparation
+
+PR #259's encoded startup-arrival correction is merged with all nine PR checks
+green. The user explicitly approved the single alpha.43 reviewed-unsigned
+publication exception and an update/restart of the installed instance with
+existing data retained. Release preparation changes only notes, current version
+references and that version's allowlist entry; packaging and all release gates
+remain unchanged. The fix's 512-byte binary increase and captured-state
+validation are recorded below. Post-update physical confirmation remains open.
+
 ## 2026-09-06 — encoded startup arrival
 
 The installed alpha.42 Cloud REST trace exposed verification against an
@@ -206,7 +216,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Pure-Go core | `CGO_ENABLED=0` build always works | **Met** | CI gate; depguard denies `C` |
 | Binary size | < 30 MB | **Met** | Current local Go 1.26.4 account-GUI candidate: 25,180,672 bytes plain and 18,167,296 bytes release-style stripped with `CGO_ENABLED=0` and `-trimpath` (+5,120 each for the shared eight-character policy, feedback, and protected-setup session closeout; +971,264 / +718,848 from alpha.37). The increase covers accounts, profiles, control context, pure-Go `x/crypto/argon2`, and the shared password/session contract; the core remains 11,832,704 bytes below the 30,000,000-byte stripped budget. Tag CI uses the `go.mod` 1.25 toolchain and remains authoritative for published artifacts. |
 | Cold start to serving UI | < 500 ms | **Met** | Five fresh isolated-data launches of the exact account-GUI stripped binary listened in 73.6-123.8 ms and completed `/healthz` in 77.8-124.9 ms total, including process spawn and loopback request. An immediately preceding first launch after rebuild was a 600.0 ms host outlier; the following four were 84.9-131.5 ms, so controlled release telemetry still owns the uncached boundary. Managed preload was asynchronous; these fixtures had no installed model, account hash operation, or voice worker. |
-| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.42` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.42 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
+| Release pipeline | setup exe, portable zip, versioning, release workflow | **Met** | `v0.1.0-alpha.43` uses `ReviewedUnsignedPublic`: the tag workflow Defender-scans the exact public directory, verifies setup/ZIP manifests and two-entry checksums, exercises custom and Program Files lifecycle, and publishes three explicit assets. The policy is limited to alpha.8 through alpha.11 and alpha.13 through alpha.43 with Microsoft case `15c1e36d-fb35-4c5d-85de-83707169818a`; withdrawn alpha.12 remains rejected. Pull requests remain short-lived `UnsignedCI`, and `SignedPublic` remains the long-term publisher-identity gate. |
 
 ### Safety Gate: Motion Goroutine Lifecycle
 
