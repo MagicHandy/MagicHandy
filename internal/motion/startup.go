@@ -52,20 +52,21 @@ const (
 var ErrUnsafeStartupState = errors.New("motion startup state is unsafe")
 
 type startupMotionProfile struct {
-	settings            transport.StrokeWindowCommand
-	observedFullPercent float64
-	currentFullPercent  float64
-	targetFullPercent   float64
-	targetAbsolute      float64
-	finalMinAbsolute    float64
-	finalMaxAbsolute    float64
-	fullTravelAbsolute  float64
-	currentSemantic     float64
-	targetSemantic      float64
-	unionWindow         transport.StrokeWindowCommand
-	leadInDuration      time.Duration
-	startupStreamID     string
-	finalWindowReady    bool
+	settings              transport.StrokeWindowCommand
+	observedFullPercent   float64
+	currentFullPercent    float64
+	targetFullPercent     float64
+	targetAbsolute        float64
+	mainTargetFullPercent float64
+	finalMinAbsolute      float64
+	finalMaxAbsolute      float64
+	fullTravelAbsolute    float64
+	currentSemantic       float64
+	targetSemantic        float64
+	unionWindow           transport.StrokeWindowCommand
+	leadInDuration        time.Duration
+	startupStreamID       string
+	finalWindowReady      bool
 }
 
 // prepareMotionStartup anchors a new stream to measured physical state when
@@ -93,7 +94,7 @@ func (e *Engine) prepareMotionStartup(ctx context.Context, runEpoch uint64, pref
 	currentInsideFinalWindow := profile.observedFullPercent >= float64(profile.settings.MinPercent) &&
 		profile.observedFullPercent <= float64(profile.settings.MaxPercent)
 	if currentInsideFinalWindow &&
-		math.Abs(profile.targetFullPercent-profile.observedFullPercent) <= startupPositionTolerancePercent {
+		math.Abs(profile.mainTargetFullPercent-profile.observedFullPercent) <= startupPositionTolerancePercent {
 		return e.setStrokeWindowCommand(ctx, runEpoch, prefix+"_stroke_window", profile.settings, false)
 	}
 
@@ -285,22 +286,45 @@ func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.Moti
 		return startupMotionProfile{}, errors.New("motion startup could not construct a valid physical stroke window")
 	}
 
+	targetSemantic := semanticPositionForPhysical(targetFullPercent, union)
+	// Arrival must match the point the owner can encode in the temporary
+	// window. Keep the semantic point and lead-in timing unchanged; quantizing
+	// early would discard precision for other owners and alter authored motion.
+	commandedFullPercent := e.startupCommandFullPercent(targetSemantic, union)
 	delta := math.Abs(targetFullPercent - observedFullPercent)
 	return startupMotionProfile{
-		settings:            settings,
-		observedFullPercent: observedFullPercent,
-		currentFullPercent:  currentFullPercent,
-		targetFullPercent:   targetFullPercent,
-		targetAbsolute:      calibration.absoluteAt(targetFullPercent),
-		finalMinAbsolute:    calibration.absoluteAt(float64(settings.MinPercent)),
-		finalMaxAbsolute:    calibration.absoluteAt(float64(settings.MaxPercent)),
-		fullTravelAbsolute:  calibration.fullTravelAbsolute,
-		currentSemantic:     semanticPositionForPhysical(currentFullPercent, union),
-		targetSemantic:      semanticPositionForPhysical(targetFullPercent, union),
-		unionWindow:         union,
-		leadInDuration:      startupLeadInDuration(delta, e.plan.Target.SpeedPercent),
-		startupStreamID:     e.streamID + "-startup",
+		settings:              settings,
+		observedFullPercent:   observedFullPercent,
+		currentFullPercent:    currentFullPercent,
+		targetFullPercent:     commandedFullPercent,
+		targetAbsolute:        calibration.absoluteAt(commandedFullPercent),
+		mainTargetFullPercent: e.startupCommandFullPercent(first, settings),
+		finalMinAbsolute:      calibration.absoluteAt(float64(settings.MinPercent)),
+		finalMaxAbsolute:      calibration.absoluteAt(float64(settings.MaxPercent)),
+		fullTravelAbsolute:    calibration.fullTravelAbsolute,
+		currentSemantic:       semanticPositionForPhysical(currentFullPercent, union),
+		targetSemantic:        targetSemantic,
+		unionWindow:           union,
+		leadInDuration:        startupLeadInDuration(delta, e.plan.Target.SpeedPercent),
+		startupStreamID:       e.streamID + "-startup",
 	}, nil
+}
+
+// startupCommandFullPercent uses the owner's declared output resolution to
+// project the expected physical endpoint, as the sampler already does when
+// fitting encoded knots. Reverse direction and temporary/final windows must be
+// applied in the same order as the owner. This only changes arrival comparison;
+// semantic commands still reach the transport at their original precision.
+func (e *Engine) startupCommandFullPercent(position float64, window transport.StrokeWindowCommand) float64 {
+	resolution := e.positionResolutionPercent
+	if resolution > 0 && !e.resolutionAfterStrokeWindow {
+		position = quantizedMotionPosition(position, resolution)
+	}
+	fullPercent := physicalPositionForSemantic(position, window)
+	if resolution > 0 && e.resolutionAfterStrokeWindow {
+		fullPercent = quantizedMotionPosition(fullPercent, resolution)
+	}
+	return fullPercent
 }
 
 func (e *Engine) readMotionStartupState(
@@ -393,7 +417,9 @@ func (e *Engine) appendStartupLeadIn(
 	}
 	result, err := e.transport.AppendPoints(commandCtx, command)
 	cleanup()
-	e.recordTransportResult(reason, nil, transport.Command{Kind: transport.CommandKindPointsAdd, PointsAdd: &command}, result, err)
+	annotation := fmt.Sprintf("commanded_target_full_percent=%.4f;commanded_target_absolute=%.4f;arrival_tolerance_absolute=%.4f",
+		profile.targetFullPercent, profile.targetAbsolute, profile.fullTravelAbsolute*startupPositionTolerancePercent/100)
+	e.recordTransportResultWithAnnotation(reason, nil, transport.Command{Kind: transport.CommandKindPointsAdd, PointsAdd: &command}, result, err, annotation)
 	e.rememberResult(result, err)
 	return err
 }

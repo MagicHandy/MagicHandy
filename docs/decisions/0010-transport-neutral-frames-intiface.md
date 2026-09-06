@@ -94,6 +94,12 @@ transport-neutral frame. An Intiface owner fits behind the existing
   Cloud declares its 1% endpoint resolution to the shared engine, which may
   remove redundant rounded knots under a combined 0.8% wire-error bound. This
   keeps curve fitting in the one shared motion path rather than in the owner.
+  Startup arrival also projects the expected endpoint using the declared
+  resolution, in the owner's mapping order. It compares the measured slider
+  against the encoded target in the temporary lead-in window; the no-lead-in
+  path compares against the encoded first point in the final window. Semantic
+  floats still reach the owner unchanged, and the 1% physical arrival tolerance
+  is not enlarged. See the [installed-instance investigation](../startup-arrival-review-2026-09-06.md).
 
 **3. Per-owner obligations.** Consistent output across owners is a contract,
 not an accident. Every dispatch owner — Cloud REST, Browser Bluetooth,

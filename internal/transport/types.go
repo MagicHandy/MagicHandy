@@ -67,7 +67,8 @@ type MotionTimingCapabilitiesProvider interface {
 }
 
 // MotionSamplingCapabilities describes owner encoding limits that affect how
-// the shared engine reduces a semantic frame before the owner quantizes it.
+// the shared engine reduces a semantic frame and verifies startup endpoints.
+// The owner still performs the actual encoding at dispatch.
 type MotionSamplingCapabilities struct {
 	PositionResolutionPercent   float64
 	ResolutionAfterStrokeWindow bool
