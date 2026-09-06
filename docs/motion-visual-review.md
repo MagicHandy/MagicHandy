@@ -56,6 +56,13 @@ the atlas directory on loopback; it has no app/device API access.
 
 ## What to examine
 
+For video filters, export with `-catalog=false -media-filters`. This covers six
+authored shapes, four filter combinations, three playback rates and all three
+Handy profiles. Check velocity jumps as well as acceleration: straight segments
+have zero finite-segment acceleration even when their joins are abrupt. Use a
+fresh output directory after changing renderer captions, since existing plot
+files are reused. See the [filter review](funscript-filter-review-2026-09-06.md).
+
 1. **Whole-loop position:** inspect both endpoints, range trends, resetting
    behavior, repetition and the seam. Confirm fixed-region, anchored-return,
    changing width, traveling center and pace variation are actually distinct.

@@ -141,6 +141,9 @@ func NewMotionPlan(
 		compileErr = fmt.Errorf("compile motion plan: %w", compileErr)
 		periodMillis = minimumBurstCycleMillis
 		curve = content.stationaryFallbackCurve()
+	} else if target.Media != nil {
+		curve.roundMediaCorners(target.Media.RoundingMillis)
+		target.MediaRoundingEffect = curve.mediaRounding
 	}
 	perceptual := PerceptualSummary{}
 	if compileErr == nil && target.Dynamic != nil {

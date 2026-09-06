@@ -209,12 +209,14 @@ func (f Funscript) TimelineFrom(
 	if len(points) < 2 || points[len(points)-1].TimeMillis <= 0 {
 		return motion.MediaTimelineDefinition{}, Effect{}, ErrFunscriptComplete
 	}
-	points, effect := filters.apply(points, MaxMediaFunscriptActions)
+	filters = filters.normalized()
+	points, effect := filters.apply(points)
 	definition, err := motion.NormalizeMediaTimelineDefinition(motion.MediaTimelineDefinition{
 		ID:             f.VideoID,
 		Name:           f.Name,
 		DurationMillis: points[len(points)-1].TimeMillis,
 		Points:         points,
+		RoundingMillis: filters.PeakRoundingMillis,
 	})
 	if err != nil {
 		return motion.MediaTimelineDefinition{}, Effect{}, err

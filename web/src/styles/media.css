@@ -359,7 +359,8 @@
   border-top: 1px solid var(--line);
 }
 .media-funscript-head,
-.media-funscript-head > div,
+.media-funscript-title,
+.media-funscript-actions,
 .media-sync-readout,
 .media-sync-state {
   display: flex;
@@ -367,11 +368,27 @@
 }
 .media-funscript-head {
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
 }
-.media-funscript-head > div {
+.media-funscript-title {
   min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   gap: 9px;
+}
+.media-funscript-actions {
+  flex: 0 0 auto;
+  gap: 4px;
+  margin-left: auto;
+}
+.media-funscript-actions .icon-button {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+}
+.media-playback-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .media-funscript-head strong {
   font-size: 0.82rem;

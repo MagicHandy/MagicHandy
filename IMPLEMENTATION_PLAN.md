@@ -2,6 +2,13 @@
 
 ## Core Direction
 
+The September 6 funscript-filter review applies the continuous LLM motion
+lessons to media: conservative chatter removal, opt-in local C2 interpolation
+inside the shared curve, and backend measurements of actual filter effects.
+Source timing, independent controls, dense-script bounds and Stop/restart
+ownership remain explicit. See [ADR 0027](docs/decisions/0027-media-filter-interpolation.md)
+and the [evaluation](docs/funscript-filter-review-2026-09-06.md).
+
 The September 6 continuous-chat review replaces word-based request permissions
 in Creative v2 and Layered with a model-declared action and a backend-state
 output grammar. A no-change action permits no edits; paused state, saved limits

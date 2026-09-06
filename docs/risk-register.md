@@ -1637,6 +1637,14 @@ transport or subjective-alignment evidence is claimed.
 Relates to R1 (real-device validation), R3 (transport behavior), R9 (UI safety
 regression), R14 (one motion path), and R23 (Stop delivery).
 
+Filter-quality review 2026-09-06: local shared-engine rounding now joins
+position/velocity/acceleration; conservative smoothing preserves major peaks,
+and backend reports expose reduced reach, shifted apex times and skipped
+corners. The 216-case compiled/wire atlas and simulator filter/seek/Stop trace
+are retained in the [review](funscript-filter-review-2026-09-06.md). Deliberate
+hold shoulders, short skipped corners and quantization remain explicit limits.
+R25 remains High; no physical alignment or smoothness acceptance is claimed.
+
 ## R26: Library Auto-Scan And Catalog Cleanup
 
 Level: Medium

@@ -30,7 +30,7 @@ def render(entry, path):
     detail, phase = fig.add_subplot(grid[1, 0]), fig.add_subplot(grid[1, 1])
     speed, accel = fig.add_subplot(grid[2, 0]), fig.add_subplot(grid[2, 1])
     whole.plot(seconds, position, color=BLUE, lw=1.25)
-    whole.set(title="Whole loop · commanded position", ylabel="Position (%)", ylim=(-3, 103))
+    whole.set(title="Whole timeline · commanded position" if entry.get("group") == "media-filters" else "Whole loop · commanded position", ylabel="Position (%)", ylim=(-3, 103))
     end = min(12, seconds[-1])
     chosen = seconds <= end
     detail.plot(seconds[chosen], position[chosen], color=BLUE, label="Planned")
@@ -54,7 +54,7 @@ def render(entry, path):
     caption = (f"{entry['name']} · requested {entry['speed_percent']}% · {entry['handy_model']}\n"
                f"mean {summary['commanded_mean_travel_percent_per_second']:.1f}%/s · peak {summary['commanded_peak_velocity_percent_per_second']:.1f}%/s · "
                f"acceleration {entry['peak_acceleration']:.0f}%/s² · finite-segment jerk {entry['peak_jerk']:.0f}%/s³ · span CV {summary['stroke_length_cv']:.3f}\n"
-               f"Largest acceleration discontinuity at a knot: {entry.get('acceleration_jump', float('nan')):.2f}%/s²")
+               f"Largest knot jumps: velocity {entry.get('velocity_jump', float('nan')):.2f}%/s · acceleration {entry.get('acceleration_jump', float('nan')):.2f}%/s²")
     fig.suptitle(caption, fontsize=13, fontweight="bold")
     fig.text(.5, -.015, "Commanded estimates; wire interpolation is not carriage feedback. Steady playback only; startup and retargeting have separate tests.", ha="center", fontsize=9)
     fig.savefig(path, dpi=130, bbox_inches="tight")

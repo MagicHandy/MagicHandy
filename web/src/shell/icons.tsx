@@ -44,6 +44,12 @@ export const SettingsIcon = ({ size = 18, className }: P) => (
     <circle cx="9" cy="17" r="2" />
   </svg>
 );
+export const GearIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <polygon points="9.95,5.31 10.35,2.64 13.65,2.64 14.05,5.31 15.29,5.82 17.45,4.22 19.78,6.55 18.18,8.71 18.69,9.95 21.36,10.35 21.36,13.65 18.69,14.05 18.18,15.29 19.78,17.45 17.45,19.78 15.29,18.18 14.05,18.69 13.65,21.36 10.35,21.36 9.95,18.69 8.71,18.18 6.55,19.78 4.22,17.45 5.82,15.29 5.31,14.05 2.64,13.65 2.64,10.35 5.31,9.95 5.82,8.71 4.22,6.55 6.55,4.22 8.71,5.82" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
 export const StopIcon = ({ size = 18, className }: P) => (
   <svg {...base(size, className)} fill="currentColor" stroke="none">
     <rect x="6" y="6" width="12" height="12" rx="2" />

@@ -1,12 +1,13 @@
-import { formatNumber, t } from "../i18n";
+import { t } from "../i18n";
 // Floating playback panel for the video currently open in the player. It
 // overlays the workspace rather than reflowing it, because its whole purpose is
 // to be adjusted while watching: calibration you cannot see the effect of is
 // just a settings form in a worse place.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { MediaSyncStatus, MediaVideo } from "../api/types";
+import type { MediaPlaybackSettings, MediaSyncStatus, MediaVideo } from "../api/types";
 import { CloseIcon } from "../shell/icons";
+import { PlaybackFilterEffect } from "./PlaybackFilterEffect";
 
 // Mirror config.MaxScriptOffsetMillis / MaxScriptSmoothingPercent / MaxPeakRoundingMillis.
 const MAX_OFFSET_MILLIS = 2000;
@@ -32,7 +33,7 @@ interface Props {
   onClose: () => void;
   onVideoUpdate?: (video: MediaVideo) => void;
   onFiltersChanging?: () => void;
-  onFiltersChanged?: (patch: MediaPlaybackPatch) => Promise<void>;
+  onFiltersChanged?: (patch: MediaPlaybackPatch) => Promise<MediaPlaybackSettings>;
 }
 
 export function PlaybackPanel({
@@ -59,6 +60,19 @@ export function PlaybackPanel({
   const filterTimer = useRef<number>();
   const pendingFilters = useRef<MediaPlaybackPatch>({});
   const mounted = useRef(true);
+  const filterRevision = useRef(0);
+  const filterRequests = useRef<Promise<unknown>>(Promise.resolve());
+  const filtersPending = useRef(false);
+  const [savingFilters, setSavingFilters] = useState(false);
+  const backendFilters = useRef({ smoothingPercent, roundingMillis, limitSpeed });
+  backendFilters.current = { smoothingPercent, roundingMillis, limitSpeed };
+
+  useEffect(() => {
+    if (filtersPending.current) return;
+    setSmoothing(smoothingPercent);
+    setRounding(roundingMillis);
+    setSpeedLimit(limitSpeed);
+  }, [smoothingPercent, roundingMillis, limitSpeed]);
 
   useEffect(() => {
     mounted.current = true;
@@ -108,19 +122,35 @@ export function PlaybackPanel({
   }, [onVideoUpdate, video]);
 
   const writeFilters = useCallback((patch: MediaPlaybackPatch) => {
+    const revision = ++filterRevision.current;
+    filtersPending.current = true;
+    setSavingFilters(true);
     onFiltersChanging?.();
     pendingFilters.current = { ...pendingFilters.current, ...patch };
     window.clearTimeout(filterTimer.current);
     filterTimer.current = window.setTimeout(() => {
       const next = pendingFilters.current;
       pendingFilters.current = {};
-      const write = onFiltersChanged ? onFiltersChanged(next) : api.saveMediaPlayback(next).then(() => undefined);
+      const write = filterRequests.current.then(() => onFiltersChanged ? onFiltersChanged(next) : api.saveMediaPlayback(next));
+      filterRequests.current = write.catch(() => undefined);
       void write
-        .then(() => {
-          if (mounted.current) setError("");
+        .then((saved) => {
+          if (!mounted.current || filterRevision.current !== revision) return;
+          setSmoothing(saved.media.script_smoothing_percent ?? 0);
+          setRounding(saved.media.peak_rounding_ms ?? 0);
+          setSpeedLimit(saved.motion.apply_video_speed_limit ?? false);
+          setError("");
         })
         .catch((reason: unknown) => {
-          if (mounted.current) setError(reason instanceof Error ? reason.message : "Filters could not be saved.");
+          if (!mounted.current || filterRevision.current !== revision) return;
+          setSmoothing(backendFilters.current.smoothingPercent);
+          setRounding(backendFilters.current.roundingMillis);
+          setSpeedLimit(backendFilters.current.limitSpeed);
+          setError(reason instanceof Error ? reason.message : "Filters could not be saved.");
+        }).finally(() => {
+          if (filterRevision.current !== revision) return;
+          filtersPending.current = false;
+          if (mounted.current) setSavingFilters(false);
         });
     }, WRITE_DEBOUNCE_MILLIS);
   }, [onFiltersChanged, onFiltersChanging]);
@@ -140,11 +170,6 @@ export function PlaybackPanel({
   }
 
   const effective = clamp(setupOffsetMillis + offset, -MAX_OFFSET_MILLIS, MAX_OFFSET_MILLIS);
-  const effect = sync.filter_effect;
-  const actionsRemoved = effect?.actions_removed ?? 0;
-  const peakReductionPercent = effect?.peak_reduction_percent ?? 0;
-  const hasMeasuredEffect = actionsRemoved > 0 || peakReductionPercent > 0;
-  const filtered = smoothing > 0 || rounding > 0 || speedLimit;
 
   return (
     <div className="playback-panel-layer">
@@ -259,19 +284,7 @@ export function PlaybackPanel({
         </fieldset>
 
         <footer className="playback-panel-foot">
-          <p className="playback-panel-effect" role="status">
-            {!filtered && t("Playing the script exactly as authored.")}
-            {filtered && !hasMeasuredEffect && speedLimit && t("Travel is capped at {percent}% without changing the video clock.", { percent: speedLimitPercent })}
-            {filtered && !hasMeasuredEffect && !speedLimit && t("Filters on; effect is measured when motion re-arms.")}
-            {filtered && hasMeasuredEffect && (actionsRemoved > 0 && peakReductionPercent > 0
-              ? t("{count} actions removed · peaks up to {percent}% lower", {
-                count: formatNumber(actionsRemoved),
-                percent: peakReductionPercent,
-              })
-              : actionsRemoved > 0
-                ? t("{count} actions removed", { count: formatNumber(actionsRemoved) })
-                : t("Peaks up to {percent}% lower", { percent: peakReductionPercent }))}
-          </p>
+          <PlaybackFilterEffect sync={sync} smoothing={smoothing} rounding={rounding} speedLimit={speedLimit} speedLimitPercent={speedLimitPercent} pending={savingFilters} />
           <button type="button" className="btn btn-secondary compact-command" disabled={locked} onClick={reset}>{t("Reset")}</button>
         </footer>
         {error && <p className="form-status media-playback-error" role="alert">{error}</p>}

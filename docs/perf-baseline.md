@@ -1,5 +1,48 @@
 # Performance Baseline
 
+## 2026-09-06 — funscript filter quality
+
+Parent `72f8a9be`, candidate continuous media filters; Go 1.26.4,
+Windows/amd64, Ryzen 9 9950X3D, `CGO_ENABLED=0`, `-trimpath -ldflags '-s -w'`.
+No new runtime dependencies. See the [review](funscript-filter-review-2026-09-06.md).
+
+| Measurement | Parent | Candidate |
+| --- | ---: | ---: |
+| Stripped binary | 19,123,200 B | 19,113,472 B (−9,728) |
+| Main JS, raw / gzip level 9 | 752,331 / 207,653 B | 754,420 / 208,240 B (+2,089 / +587) |
+| Labs JS, raw / gzip level 9 | 52,019 / 14,545 B | unchanged |
+| Lazy locale JS growth (four non-English locales) | — | 592–696 B raw / 201–214 B gzip each |
+| Fresh launch through `/healthz` | 593.9 ms | 582.2 ms |
+| Stopped working set (three equal samples each) | 33,841,152 B | 34,000,896 B |
+| Stopped private commitment | 58,294,272 B | 58,437,632 B |
+
+RSS follows four state warmups spaced 500 ms apart and three samples spaced
+400 ms apart; separate fresh isolated simulator processes, no browser or model
+loaded. Both samples exceed the 500 ms startup target; no startup or SQLite
+RSS waiver is closed. These single-launch observations do not measure active
+hardware or a distribution. They are approximately 32.27/32.43 MiB working sets.
+
+The existing 100k-action `BenchmarkMediaSeek` includes slicing, filters and shared
+plan compilation, excluding video decoder and transport. Ordinary candidate
+seeks retain eight allocations: start 1.58–1.80 ms / 6.42 MB, middle 0.99–1.27 ms
+/ 3.21 MB, near end 0.17–0.21 ms / 0.66 MB. The 100k chatter smoothing case
+takes 15.31–16.10 ms / 18.85 MB (prior observation approximately 14 ms), retaining
+O(n log n) bookkeeping with a more conservative media predicate.
+
+Rounding 50k remaining actions now takes **3.272 / 3.281 / 3.335 ms**,
+**9,216,207–9,216,222 B / 10 allocations**. The parent approximately 1.1 ms /
+4.39 MB result silently skipped rounding because inserted points exceeded its
+point budget. The new result performs rounding for every eligible corner; it
+is an explicit cost of actually applying the filter. A 100k-point regression
+checks that no eligible corner is silently dropped. Exact preallocation and a
+closed-form apex solve reduced the first continuous implementation's 27.5–32.3
+ms / 29.54 MB / 40 allocations to the numbers above. This optimization is not
+claimed as a speedup against the parent no-op result.
+
+Evidence: `.scratch/funscript-filter-quality/{bundle-size.json,measure-parent.json,
+measure-candidate.json,benchmarks.txt,benchmarks-rounded-optimized.txt}`. Runtime
+evidence stays ignored; only canonical `web/dist` is embedded and committed.
+
 ## 2026-09-06 — architecture and lifecycle audit
 
 Baseline `df3d4a73` and the architecture-audit candidate use Go 1.26.4 on
