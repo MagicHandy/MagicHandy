@@ -276,23 +276,16 @@ func (s *Server) llmState(ctx context.Context) any {
 		managedRuntimeInstalled = runtimeStatus.Installed
 	}
 	if s.models != nil {
-		if snapshot, err := s.models.Snapshot(ctx); err == nil {
+		selectedID := ""
+		if managed && managedRuntimeInstalled {
+			selectedID = settings.LLM.Model
+		}
+		if summary, err := s.models.Summary(ctx, selectedID); err == nil {
 			state["model_manager_available"] = true
-			activeImports := 0
-			for _, job := range snapshot.Imports {
-				if job.Status == llm.ImportStatusQueued || job.Status == llm.ImportStatusCopying {
-					activeImports++
-				}
-			}
-			state["managed_model_count"] = len(snapshot.Models)
-			state["active_import_count"] = activeImports
+			state["managed_model_count"] = summary.ModelCount
+			state["active_import_count"] = summary.ActiveImportCount
 			if managed && managedRuntimeInstalled {
-				for _, model := range snapshot.Models {
-					if model.ID == settings.LLM.Model {
-						state["managed_ready"] = model.State == "ready"
-						break
-					}
-				}
+				state["managed_ready"] = summary.SelectedReady
 			}
 		}
 	}

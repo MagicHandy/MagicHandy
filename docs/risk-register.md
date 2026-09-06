@@ -1,5 +1,21 @@
 # MagicHandy Risk Register
 
+## 2026-09-06 datastore and observation follow-up
+
+Canceled/expired writers no longer wait behind an unrelated transaction before
+returning; the single writer, rollback and panic-release contracts remain.
+The second lifecycle review reproduced shutdown leaving an unregistered chat
+read waiting. Conversation preflight, admission and status now link the process
+lifetime before SQL, and chat prompt preparation carries its turn context.
+Model-inventory errors preserve cancellation classification, and full inventory
+reads release SQL rows before filesystem checks.
+
+Motion-only browser events no longer invalidate the slow app context. Compact
+model status avoids unselected file inspection and checks selected-file changes
+without adding a stale status cache. Regression/profile evidence is in the
+[follow-up review](data-observation-review-2026-09-06.md). Existing hardware
+acceptance, memory waiver, cold-start risk, and broader orchestration debt remain.
+
 ## 2026-09-06 conversation ownership and mode state follow-up
 
 An older canceled chat completion could clear activity belonging to a newer

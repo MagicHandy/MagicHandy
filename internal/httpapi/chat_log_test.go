@@ -121,7 +121,7 @@ func TestChatStreamUsesCanonicalVoiceContextAndPersistsMood(t *testing.T) {
 	if last.Diagnostics == nil || last.Diagnostics.Mood != chat.MoodTeasing || !last.Diagnostics.MoodChanged {
 		t.Fatalf("persisted reply diagnostics = %+v", last.Diagnostics)
 	}
-	state := server.chatState()
+	state := server.chatState(t.Context())
 	if state["current_mood"] != chat.MoodTeasing {
 		t.Fatalf("chat state mood = %#v, want %q", state["current_mood"], chat.MoodTeasing)
 	}
@@ -129,14 +129,14 @@ func TestChatStreamUsesCanonicalVoiceContextAndPersistsMood(t *testing.T) {
 	if _, err := server.store.Save(settings); err != nil {
 		t.Fatalf("save utility voice: %v", err)
 	}
-	if state := server.chatState(); state["current_mood"] != "" {
+	if state := server.chatState(t.Context()); state["current_mood"] != "" {
 		t.Fatalf("utility state exposed prior mood: %#v", state["current_mood"])
 	}
 	settings.LLM.ChatVoice = config.LLMChatVoiceIntimate
 	if _, err := server.store.Save(settings); err != nil {
 		t.Fatalf("restore intimate voice: %v", err)
 	}
-	if state := server.chatState(); state["current_mood"] != chat.MoodTeasing {
+	if state := server.chatState(t.Context()); state["current_mood"] != chat.MoodTeasing {
 		t.Fatalf("restored voice mood = %#v, want %q", state["current_mood"], chat.MoodTeasing)
 	}
 }
@@ -255,7 +255,7 @@ func TestDeterministicStopCarriesSessionMood(t *testing.T) {
 	if last.Diagnostics == nil || last.Diagnostics.Mood != chat.MoodConfident {
 		t.Fatalf("deterministic Stop diagnostics = %+v, want carried mood", last.Diagnostics)
 	}
-	if state := server.chatState(); state["current_mood"] != chat.MoodConfident {
+	if state := server.chatState(t.Context()); state["current_mood"] != chat.MoodConfident {
 		t.Fatalf("chat state mood = %#v, want %q", state["current_mood"], chat.MoodConfident)
 	}
 }
@@ -527,7 +527,7 @@ func TestChatLogStorageFailureIsExplicitAndRedacted(t *testing.T) {
 	if got := recorder.Body.String(); !strings.Contains(got, "chat history storage is unavailable") || strings.Contains(got, "closed") {
 		t.Fatalf("chat history response exposed storage details: %s", got)
 	}
-	state := server.chatState()
+	state := server.chatState(t.Context())
 	if available, ok := state["available"].(bool); !ok || available {
 		t.Fatalf("chat state availability = %#v, want false", state["available"])
 	}

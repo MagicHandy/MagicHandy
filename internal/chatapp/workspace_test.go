@@ -56,7 +56,7 @@ func TestSessionUseCasesRespectTurnAndAutopilotAdmission(t *testing.T) {
 	if len(sessions) != 2 {
 		t.Fatalf("sessions after create = %d", len(sessions))
 	}
-	active, err := w.ResolveActive("")
+	active, err := w.ResolveActive(t.Context(), "")
 	if err != nil || active == original {
 		t.Fatalf("new active session = %q, %v", active, err)
 	}
@@ -67,7 +67,7 @@ func TestSessionUseCasesRespectTurnAndAutopilotAdmission(t *testing.T) {
 	if _, err := w.Activate(original, true); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := w.ResolveActive(""); got != original {
+	if got, _ := w.ResolveActive(t.Context(), ""); got != original {
 		t.Fatalf("active = %q", got)
 	}
 }
@@ -127,10 +127,10 @@ type blockedSessions struct {
 // Alias the embedded port so its Sessions method remains promoted.
 type sessionPort interface{ Sessions }
 
-func (s *blockedSessions) ActiveSessionID() (string, error) {
+func (s *blockedSessions) ActiveSessionIDContext(ctx context.Context) (string, error) {
 	s.once.Do(func() { close(s.entered) })
 	<-s.release
-	return s.sessionPort.ActiveSessionID()
+	return s.sessionPort.ActiveSessionIDContext(ctx)
 }
 
 func TestTurnAdmissionInvalidatedDuringStorageRead(t *testing.T) {
@@ -196,8 +196,69 @@ func TestStopHistoryPreservesSessionAndObservation(t *testing.T) {
 	if err != nil || record.UserSeq <= 0 || record.ReplySeq <= record.UserSeq {
 		t.Fatalf("stop record = %+v, %v", record, err)
 	}
-	state, err := w.Observe(false)
+	state, err := w.Observe(t.Context(), false)
 	if err != nil || state.ActiveSessionID != session || state.LatestSeq != record.ReplySeq {
 		t.Fatalf("observation = %+v, %v", state, err)
+	}
+}
+
+type shutdownSessions struct {
+	sessionPort
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (s *shutdownSessions) ActiveSessionIDContext(ctx context.Context) (string, error) {
+	close(s.entered)
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-s.release:
+		return s.sessionPort.ActiveSessionIDContext(ctx)
+	}
+}
+
+func TestShutdownCancelsStorageReadBeforeTurnRegistration(t *testing.T) {
+	for _, kind := range []string{"turn", "preflight", "observation"} {
+		t.Run(kind, func(t *testing.T) { testShutdownRead(t, kind) })
+	}
+}
+
+func testShutdownRead(t *testing.T, kind string) {
+	t.Helper()
+	w, log, session := testWorkspace(t, nil)
+	blocked := &shutdownSessions{sessionPort: log, entered: make(chan struct{}), release: make(chan struct{})}
+	w.sessions = blocked
+	lifetime, stop := context.WithCancel(t.Context())
+	defer stop()
+	w.lifetime = lifetime
+	done := make(chan error, 1)
+	go func() {
+		var err error
+		switch kind {
+		case "preflight":
+			_, err = w.ResolveActive(t.Context(), session)
+		case "observation":
+			_, err = w.Observe(t.Context(), false)
+		case "turn":
+			var finish context.CancelFunc
+			_, finish, err = w.BeginTurn(t.Context(), session)
+			if finish != nil {
+				finish()
+			}
+		}
+		done <- err
+	}()
+	<-blocked.entered
+	stop()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("shutdown admission = %v", err)
+		}
+	case <-time.After(time.Second):
+		close(blocked.release)
+		<-done
+		t.Fatal("application shutdown did not cancel pending admission storage")
 	}
 }

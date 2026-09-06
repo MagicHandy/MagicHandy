@@ -16,6 +16,7 @@ vi.mock("../api/client", () => ({
 
 vi.mock("../state/app-state", () => ({
   useHashRoute: () => app.route,
+  useMotionState: () => ({ engine: { running: false } }),
   useAppState: () => ({
     state: {
       settings: {

@@ -84,11 +84,11 @@ func TestPromptInspectorReturnsTheExactProductionComposition(t *testing.T) {
 	}
 
 	settings, _ := server.store.Snapshot()
-	context, err := server.loadInteractiveChatPromptContext(payload.ActiveSessionID, settings.LLM)
+	context, err := server.loadInteractiveChatPromptContext(t.Context(), payload.ActiveSessionID, settings.LLM)
 	if err != nil {
 		t.Fatalf("load production context: %v", err)
 	}
-	prompt, memories, _, err := server.resolveInteractiveChatPersonalization(
+	prompt, memories, _, err := server.resolveInteractiveChatPersonalization(t.Context(),
 		effectivePersonaPromptSet(settings.LLM.PromptSet, context.Persona),
 	)
 	if err != nil {

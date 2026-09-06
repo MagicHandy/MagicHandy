@@ -568,3 +568,37 @@ Local reproducible script and all samples:
 `.scratch/chat-mode-boundaries/measure.ps1` and `perf-*.json`. The final review
 process uses the same source at port 49935 and is excluded from these fixture
 measurements. See [validation and limits](chat-mode-boundaries-2026-09-06.md).
+
+## 2026-09-06 — datastore and observation efficiency
+
+Windows/amd64, Go 1.26.4, `CGO_ENABLED=0`, `-trimpath -ldflags '-s -w'`.
+Parent `56c49ec9` is PR #254; candidate includes cancellable admission/reads,
+isolated motion subscriptions and compact inventory status. Two interleaved
+parent/candidate pairs use fresh isolated data, the in-process simulator,
+no browser, and no model or voice inference. Startup includes spawn and the
+first `/healthz` result. Four `/api/state` polls 500 ms apart precede three
+working-set samples 400 ms apart, as in the previous follow-up's fixture.
+
+| Measurement | Parent | Candidate |
+| --- | ---: | ---: |
+| Stripped binary bytes | 19,097,600 | 19,107,328 |
+| Main JS bytes / gzip level 9 | 751,511 / 207,331 | 751,738 / 207,389 |
+| Lazy Labs JS bytes / gzip level 9 | 52,019 / 14,541 | 52,019 / 14,546 |
+| Startup ms, two launches | 568.6 / 519.8 | 517.4 / 520.7 |
+| Working-set MiB, launches 1 / 2 | 32.79 / 32.78 | 32.98 / 32.60 |
+| Private committed MiB, launches 1 / 2 | 54.45 / 54.20 | 55.44 / 53.84 |
+
+All three working-set samples within each launch were identical. The final
+binary grows 9,728 bytes (0.051%), and browser JS grows 227 raw / 63 gzip bytes
+in total. No dependency or duplicated asset is added. Main/Labs hash changes
+replace their predecessors in the single canonical embed. Source byte lengths
+and compressed sizes were measured with Node buffers, not JavaScript character
+counts. Raw evidence is under `.scratch/data-observation/perf-final-*.json` and
+`bundle-size.json`; earlier candidate samples are retained separately.
+
+These stopped-server observations do not measure the full active workload or
+close the existing SQLite RSS waiver. All startup samples exceed the 500 ms
+target; no startup improvement is claimed from these few host observations.
+Budgets are unchanged. The separate 128-model query benchmark and 500-row-view
+React profile in [the review](data-observation-review-2026-09-06.md) establish
+the specific reductions in filesystem/SQL work and render propagation.

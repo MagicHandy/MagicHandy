@@ -24,14 +24,14 @@ var (
 // Sessions is the persistence port used by conversation lifecycle operations.
 // Message generation, transport payloads, and HTTP responses are outside it.
 type Sessions interface {
-	ActiveSessionID() (string, error)
-	Sessions() ([]chat.Session, error)
+	ActiveSessionIDContext(context.Context) (string, error)
+	SessionsContext(context.Context) ([]chat.Session, error)
 	CreateSession(bool) (chat.Session, error)
 	ActivateSession(string, bool) (chat.Session, error)
 	SaveSession(string) (chat.Session, error)
 	DeleteSession(string) error
-	LatestSeqSession(string) (int64, error)
-	PromptContext(string) (chat.SessionPromptContext, error)
+	LatestSeqSessionContext(context.Context, string) (int64, error)
+	ReadPromptContext(context.Context, string) (chat.SessionPromptContext, error)
 	AppendTo(string, string, string, string, *chat.MessageDiagnostics) (int64, error)
 	ReconcileShutdown(bool) error
 }
@@ -61,6 +61,15 @@ func NewWorkspace(lifetime context.Context, sessions Sessions, autopilotActive f
 
 // BeginTurn admits one interactive request against the canonical active session.
 func (w *Workspace) BeginTurn(parent context.Context, sessionID string) (context.Context, context.CancelFunc, error) {
+	// Admission itself may wait on SQLite; link shutdown before that read, not
+	// only after the turn has entered the active slot.
+	ctx, cancel := w.withLifetime(parent)
+	admitted := false
+	defer func() {
+		if !admitted {
+			cancel()
+		}
+	}()
 	w.turnsMu.Lock()
 	admission := w.epoch
 	w.turnsMu.Unlock()
@@ -72,7 +81,7 @@ func (w *Workspace) BeginTurn(parent context.Context, sessionID string) (context
 	if err := w.lifetime.Err(); err != nil {
 		return nil, nil, err
 	}
-	if _, err := w.resolveActive(sessionID); err != nil {
+	if _, err := w.resolveActive(ctx, sessionID); err != nil {
 		return nil, nil, err
 	}
 	w.turnsMu.Lock()
@@ -89,13 +98,11 @@ func (w *Workspace) BeginTurn(parent context.Context, sessionID string) (context
 	if w.activeCancel != nil {
 		return nil, nil, errors.New("one chat reply is already active")
 	}
-	ctx, cancel := context.WithCancel(parent)
-	stopLifetime := context.AfterFunc(w.lifetime, cancel)
 	w.nextID++
 	id := w.nextID
 	w.activeID, w.activeCancel = id, cancel
+	admitted = true
 	return ctx, sync.OnceFunc(func() {
-		stopLifetime()
 		cancel()
 		w.turnsMu.Lock()
 		if w.activeID == id {
@@ -103,6 +110,12 @@ func (w *Workspace) BeginTurn(parent context.Context, sessionID string) (context
 		}
 		w.turnsMu.Unlock()
 	}), nil
+}
+
+func (w *Workspace) withLifetime(parent context.Context) (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(parent)
+	stopLifetime := context.AfterFunc(w.lifetime, cancel)
+	return ctx, func() { stopLifetime(); cancel() }
 }
 
 // CancelTurns never waits on the session gate, persistence, or mode teardown.
@@ -157,15 +170,20 @@ func (w *Workspace) requireIdle(action string) error {
 }
 
 // ResolveActive checks an optional requested ID against the canonical session.
-func (w *Workspace) ResolveActive(requested string) (string, error) {
+func (w *Workspace) ResolveActive(ctx context.Context, requested string) (string, error) {
+	ctx, cancel := w.withLifetime(ctx)
+	defer cancel()
 	w.lifecycleMu.Lock()
 	defer w.lifecycleMu.Unlock()
-	return w.resolveActive(requested)
+	return w.resolveActive(ctx, requested)
 }
 
-func (w *Workspace) resolveActive(requested string) (string, error) {
-	activeID, err := w.sessions.ActiveSessionID()
+func (w *Workspace) resolveActive(ctx context.Context, requested string) (string, error) {
+	activeID, err := w.sessions.ActiveSessionIDContext(ctx)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return "", err
+		}
 		return "", errors.New("chat session is unavailable")
 	}
 	requested = strings.TrimSpace(requested)
@@ -176,10 +194,12 @@ func (w *Workspace) resolveActive(requested string) (string, error) {
 }
 
 // Sessions returns a stable list with one canonical active session.
-func (w *Workspace) Sessions() ([]chat.Session, error) {
+func (w *Workspace) Sessions(ctx context.Context) ([]chat.Session, error) {
+	ctx, cancel := w.withLifetime(ctx)
+	defer cancel()
 	w.lifecycleMu.Lock()
 	defer w.lifecycleMu.Unlock()
-	return w.sessions.Sessions()
+	return w.sessions.SessionsContext(ctx)
 }
 
 // Create starts a conversation only when neither chat nor Autopilot owns it.
@@ -220,7 +240,7 @@ func (w *Workspace) mutate(idleAction string, apply func() error) ([]chat.Sessio
 	if err := apply(); err != nil {
 		return nil, err
 	}
-	return w.sessions.Sessions()
+	return w.sessions.SessionsContext(context.Background())
 }
 
 // ReconcileShutdown applies the saved retention policy after work is quiesced.

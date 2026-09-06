@@ -5,7 +5,8 @@ import {labLimits,labPreview,labState} from "./fixtures";
 import {LLMLab} from "./LLMLab";
 
 const app=vi.hoisted(()=>({state:{settings:{motion:{}}},backendOnline:true,readOnly:false,refresh:vi.fn(),show:vi.fn()}));
-vi.mock("../state/app-state",()=>({useAppState:()=>app,useToast:()=>({show:app.show})}));
+vi.mock("../state/app-state",()=>({useMotionState: () => null,
+  useAppState:()=>app,useToast:()=>({show:app.show})}));
 vi.mock("../api/client",()=>({api:{stopMotion:vi.fn()}}));
 vi.mock("./api",async importOriginal=>({...await importOriginal<typeof import("./api")>(),labApi:{state:vi.fn(),status:vi.fn(),preview:vi.fn(),chat:vi.fn(),reset:vi.fn(),start:vi.fn(),session:vi.fn()}}));
 describe("separate LLM Lab",()=>{

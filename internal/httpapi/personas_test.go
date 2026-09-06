@@ -631,7 +631,7 @@ func TestPersonaWithoutADescriptionKeepsTheGlobalOne(t *testing.T) {
 		map[string]any{"persona_id": created.ID})
 
 	settings, _ := server.store.Snapshot()
-	resolved, err := server.loadInteractiveChatPromptContext(payload.ActiveSessionID, settings.LLM)
+	resolved, err := server.loadInteractiveChatPromptContext(t.Context(), payload.ActiveSessionID, settings.LLM)
 	if err != nil {
 		t.Fatalf("load prompt context: %v", err)
 	}
@@ -664,7 +664,7 @@ func TestPersonaDescriptionReplacesRatherThanJoinsTheGlobalOne(t *testing.T) {
 		map[string]any{"persona_id": created.ID})
 
 	settings, _ := server.store.Snapshot()
-	resolved, err := server.loadInteractiveChatPromptContext(payload.ActiveSessionID, settings.LLM)
+	resolved, err := server.loadInteractiveChatPromptContext(t.Context(), payload.ActiveSessionID, settings.LLM)
 	if err != nil {
 		t.Fatalf("load prompt context: %v", err)
 	}
@@ -683,7 +683,7 @@ func TestAssistantProvenanceRecordsThePersona(t *testing.T) {
 		map[string]any{"persona_id": created.ID})
 
 	settings, _ := server.store.Snapshot()
-	resolved, err := server.loadInteractiveChatPromptContext(payload.ActiveSessionID, settings.LLM)
+	resolved, err := server.loadInteractiveChatPromptContext(t.Context(), payload.ActiveSessionID, settings.LLM)
 	if err != nil {
 		t.Fatalf("load prompt context: %v", err)
 	}
@@ -929,12 +929,12 @@ func TestABoundPersonaChangesTheComposedPrompt(t *testing.T) {
 	sessionID := payload.ActiveSessionID
 
 	settings, _ := server.store.Snapshot()
-	promptSet, memories, _, err := server.resolveInteractiveChatPersonalization(settings.LLM.PromptSet)
+	promptSet, memories, _, err := server.resolveInteractiveChatPersonalization(t.Context(), settings.LLM.PromptSet)
 	if err != nil {
 		t.Fatalf("resolve personalization: %v", err)
 	}
 	compose := func() string {
-		resolved, loadErr := server.loadInteractiveChatPromptContext(sessionID, settings.LLM)
+		resolved, loadErr := server.loadInteractiveChatPromptContext(t.Context(), sessionID, settings.LLM)
 		if loadErr != nil {
 			t.Fatalf("load prompt context: %v", loadErr)
 		}

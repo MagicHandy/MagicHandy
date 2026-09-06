@@ -8,7 +8,12 @@ import (
 // RecentUserRequests keeps bounded human intent available independently of
 // automated assistant check-ins. The session's normal message retention applies.
 func (l *MessageLog) RecentUserRequests(sessionID string) ([]string, error) {
-	rows, err := l.db.SQL().QueryContext(context.Background(), `SELECT content FROM messages WHERE session_id = ? AND role = ? AND committed = 1 ORDER BY seq ASC`, sessionID, MessageRoleUser)
+	return l.RecentUserRequestsContext(context.Background(), sessionID)
+}
+
+// RecentUserRequestsContext reads bounded human intent with the caller's lifetime.
+func (l *MessageLog) RecentUserRequestsContext(ctx context.Context, sessionID string) ([]string, error) {
+	rows, err := l.db.SQL().QueryContext(ctx, `SELECT content FROM messages WHERE session_id = ? AND role = ? AND committed = 1 ORDER BY seq ASC`, sessionID, MessageRoleUser)
 	if err != nil {
 		return nil, fmt.Errorf("read user requests: %w", err)
 	}

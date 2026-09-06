@@ -40,6 +40,16 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-06 datastore admission and observation efficiency
+
+Audit follow-ups 3–5 are implemented: cancellable admission to the one SQLite
+writer, request-context reads for conversation state and prompt preparation,
+separate live-motion React subscriptions, and compact model-manager status
+queries. A second bug pass fixes shutdown during pre-registration chat reads
+and preserves model-inventory cancellation errors. Existing mode/Stop, browser
+lifecycle, persistence and import-boundary tests accompany the combined work.
+See the [review and measurements](docs/data-observation-review-2026-09-06.md).
+
 ### 2026-09-06 chat application and mode state boundaries
 
 The first two audit follow-ups now have focused implementations. Conversation

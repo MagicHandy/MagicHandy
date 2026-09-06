@@ -109,13 +109,21 @@ func (l *PromptLibrary) Close() error {
 // Resolve returns a built-in or user prompt set by identifier. A missing set is
 // reported as found=false; storage failures are returned separately.
 func (l *PromptLibrary) Resolve(id string) (set PromptSet, found bool, err error) {
+	return l.ResolveContext(context.Background(), id)
+}
+
+// ResolveContext reads a prompt set with the caller's lifetime.
+func (l *PromptLibrary) ResolveContext(ctx context.Context, id string) (set PromptSet, found bool, err error) {
+	if err := ctx.Err(); err != nil {
+		return PromptSet{}, false, err
+	}
 	if set, ok := BuiltinPromptSetByID(id); ok {
 		return set, true, nil
 	}
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
-	set, err = l.resolveUserLocked(context.Background(), strings.TrimSpace(id))
+	set, err = l.resolveUserLocked(ctx, strings.TrimSpace(id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return PromptSet{}, false, nil
 	}

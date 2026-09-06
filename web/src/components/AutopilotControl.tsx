@@ -4,7 +4,7 @@ import type { AutopilotSettings, SessionArc } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { PauseIcon, PlayIcon, RefreshIcon } from "../shell/icons";
 import { SegmentedChoice, SetpointSlider } from "./SetpointControls";
-import { useAppState, useToast } from "../state/app-state";
+import { useAppState, useToast , useMotionState } from "../state/app-state";
 import { ownsActiveMotion } from "../util/motion";
 
 const decisionSourceCopy: Partial<Record<string, MessageKey>> = {
@@ -151,7 +151,8 @@ function useDeadlineClock(
 }
 
 export function AutopilotControl() {
-  const { state, backendOnline, readOnly, motion, refresh } = useAppState();
+  const { state, backendOnline, readOnly, refresh } = useAppState();
+  const motion = useMotionState();
   const { show } = useToast();
   const modes = state?.modes;
   const active = modes?.mode === "autopilot" || modes?.active_mode === "autopilot";

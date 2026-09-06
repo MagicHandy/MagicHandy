@@ -6,7 +6,8 @@ import {labLimits,labPreview} from "../labs/fixtures";
 import {MotionLab} from "./MotionLab";
 
 const app=vi.hoisted(()=>({backendOnline:true,readOnly:false,state:{motion_simulated:false,settings:{motion:{}}},refresh:vi.fn(),show:vi.fn()}));
-vi.mock("../state/app-state",()=>({useAppState:()=>app,useToast:()=>({show:app.show})}));
+vi.mock("../state/app-state",()=>({useMotionState: () => null,
+  useAppState:()=>app,useToast:()=>({show:app.show})}));
 vi.mock("../api/client",()=>({api:{stopMotion:vi.fn()}}));
 vi.mock("../labs/api",async importOriginal=>({...await importOriginal<typeof import("../labs/api")>(),labApi:{preview:vi.fn(),start:vi.fn()}}));
 

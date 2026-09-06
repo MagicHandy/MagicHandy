@@ -4,7 +4,7 @@ import { t, translateKnown } from "../i18n";
 // disclosures. Motion controls remain in their routed workspaces.
 import { api, ApiError } from "../api/client";
 import { MotionVisualizer } from "../components/MotionVisualizer";
-import { useAppState, useToast } from "../state/app-state";
+import { useAppState, useToast , useMotionState } from "../state/app-state";
 import { stopAllAudioPlayback } from "../util/audio";
 import { formatClock } from "../util/format";
 import { ConnectionManager } from "./ConnectionManager";
@@ -26,7 +26,8 @@ export function StatusBar({
   onLogout?: () => Promise<void>;
   onSelectControlIdentity?: (accountID: string) => Promise<void>;
 }) {
-  const { backendOnline, motion, readOnly, refresh, state } = useAppState();
+  const { backendOnline, readOnly, refresh, state } = useAppState();
+  const motion = useMotionState();
   const { show } = useToast();
   const [openMenu, setOpenMenu] = useState<ShellMenu>(null);
   const [takingControl, setTakingControl] = useState(false);

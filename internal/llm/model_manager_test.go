@@ -678,7 +678,7 @@ func writeOllamaFixture(t *testing.T, root string, options ollamaFixtureOptions)
 	return ollamaFixture{modelPath: modelPath, modelData: modelData, modelSHA: strings.TrimPrefix(modelDigest, "sha256:")}
 }
 
-func testGGUFData(t *testing.T, options ggufFixtureOptions) []byte {
+func testGGUFData(t testing.TB, options ggufFixtureOptions) []byte {
 	t.Helper()
 	var payload bytes.Buffer
 	writeNumber := func(value any) {

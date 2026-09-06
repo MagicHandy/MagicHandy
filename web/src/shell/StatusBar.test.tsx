@@ -33,6 +33,7 @@ vi.mock("../components/MotionVisualizer", () => ({
   MotionVisualizer: () => <div>Motion visualizer</div>,
 }));
 vi.mock("../state/app-state", () => ({
+  useMotionState: () => mocks.app.motion,
   useAppState: () => mocks.app,
   useToast: () => ({ show: mocks.show }),
 }));

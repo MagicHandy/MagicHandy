@@ -6,7 +6,7 @@ import { AutopilotControl } from "../components/AutopilotControl";
 import { ChatPanel } from "../components/ChatPanel";
 import { ChatSessionDialog } from "../components/ChatSessionDialog";
 import { ChatTabs } from "../components/ChatTabs";
-import { MotionVisualizer } from "../components/MotionVisualizer";
+import { LiveMotionVisualizer } from "../components/LiveMotionVisualizer";
 import { QuickSettings } from "../components/QuickSettings";
 import { SegmentedChoice } from "../components/SetpointControls";
 import { VoiceQuickControls } from "../components/VoiceQuickControls";
@@ -17,7 +17,7 @@ type PendingChange = { action: "new" } | { action: "switch"; target: ChatSession
 const errorMessage = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Chat session request failed.");
 
 export function ChatRoute() {
-  const { backendOnline, readOnly, state, motion, refresh } = useAppState();
+  const { backendOnline, readOnly, state, refresh } = useAppState();
   const { show } = useToast();
   const mounted = useRef(true);
   const loadGeneration = useRef(0);
@@ -212,7 +212,7 @@ export function ChatRoute() {
           </div>
           <div className="chat-motion-status">
             <h3 className="group-title">{t("Motion status")}</h3>
-            <MotionVisualizer motion={motion} />
+            <LiveMotionVisualizer />
           </div>
         </aside>
       </div>

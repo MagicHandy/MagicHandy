@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../api/client";
 import { t, translateKnown } from "../i18n";
-import { useAppState, useToast } from "../state/app-state";
+import { useAppState, useToast , useMotionState } from "../state/app-state";
 import { exportLabReport, initialFlow, labApi, type FlowPreview, type FlowSpec, type ObservationTarget } from "../labs/api";
 import { FlowComparison, auditionLabel } from "../labs/FlowComparison";
 import { ObservationEditor } from "../labs/Observations";
@@ -10,7 +10,8 @@ import { CreateTestSequence } from "../labs/CreateTestSequence";
 import "../styles/motion-lab.css";
 
 export function MotionLab() {
-  const {state, motion, backendOnline, readOnly, refresh} = useAppState();
+  const { state, backendOnline, readOnly, refresh } = useAppState();
+  const motion = useMotionState();
   const {show} = useToast();
   const [draft,setDraft] = useState<FlowSpec>(()=>({...initialFlow, speed_percent:Math.max(state?.settings?.motion?.speed_min_percent??1,Math.min(25,state?.settings?.motion?.speed_max_percent??100))}));
   const [preview,setPreview] = useState<FlowPreview|null>(null);
