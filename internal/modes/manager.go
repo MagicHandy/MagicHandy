@@ -272,6 +272,9 @@ func (m *Manager) Status() Status {
 
 // Start activates a mode, replacing any active one.
 func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
+	if err := ctx.Err(); err != nil {
+		return m.Status(), err
+	}
 	if mode != ModeFreestyle && mode != ModeAutopilot && mode != ModeChat {
 		return m.Status(), fmt.Errorf("unknown mode %q", mode)
 	}
@@ -281,52 +284,22 @@ func (m *Manager) Start(ctx context.Context, mode string) (Status, error) {
 
 	finishStart, startAdmitted := m.beginModeStart()
 	defer finishStart()
+	// Admission can wait behind a user control. Check again before stopping
+	// the current mode, then after draining it, before detaching the new loop
+	// from the HTTP request's lifetime.
+	if err := ctx.Err(); err != nil {
+		return m.Status(), err
+	}
 	if !startAdmitted {
 		return m.Status(), errors.New("mode start was superseded by a newer user control")
 	}
 	m.stopLoop("mode_switch")
+	if err := ctx.Err(); err != nil {
+		return m.Status(), err
+	}
 
 	m.mu.Lock()
-	m.generation++
-	m.chatVersion++
-	m.mode = mode
-	m.resetUserPauseLocked()
-	m.userStopped = false
-	m.chatTarget = nil
-	m.chatKeepalive = false
-	m.chatTargetPending = false
-	m.driftDone = true
-	m.swayPoints = nil
-	m.previousSpeed = 0
-	m.speedChangedAt = time.Time{}
-	m.currentPhrase = Segment{}
-	m.currentPerceptual = nil
-	m.phraseChangedAt = time.Time{}
-	m.decisionsAtCurrentPhrase = 0
-	m.consecutiveHolds = 0
-	// A new run is a new arc: the bar measures this session, not the last one.
-	m.arc = arcState{startedAt: m.options.Now()}
-	m.deadline = time.Time{}
-	m.nextRetry = time.Time{}
-	if mode == ModeFreestyle || mode == ModeAutopilot {
-		m.planner = NewPlanner(m.options.Seed)
-		m.segmentIdx = 0
-		m.segment = Segment{}
-		m.pattern = nil
-		m.recentPatternIDs = nil
-		m.recentPositionBands = nil
-		m.decisionSource = ""
-		m.lastSay = ""
-		m.motionPlanAt = time.Time{}
-		m.pendingMotion = nil
-		m.speechDeadline = time.Time{}
-		m.speechWaitingID = ""
-		m.speechFallbackAt = time.Time{}
-		m.speechNextTiming = TimingNormal
-		m.lastDecisionTime = 0
-		m.motionCadenceRNG = nil
-		m.speechCadenceRNG = nil
-	}
+	m.resetForModeStartLocked(mode)
 	loopCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	m.cancel = cancel
 	done := make(chan struct{})

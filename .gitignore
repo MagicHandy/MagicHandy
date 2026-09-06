@@ -26,6 +26,9 @@ coverage.out
 /Start-MagicHandy.ps1
 
 # Logs and diagnostics generated locally
+*.db
+*.db-wal
+*.db-shm
 *.log
 /diagnostics/
 /traces/

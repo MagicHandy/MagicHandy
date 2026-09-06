@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -42,8 +43,8 @@ func (p personalizationRuntime) Close() {
 // --- Memory -------------------------------------------------------------------
 
 // memoryState is the compact aggregate-state view (counts, not contents).
-func (s *Server) memoryState() map[string]any {
-	snapshot, err := s.personalization.memory.Snapshot()
+func (s *Server) memoryState(ctx context.Context) map[string]any {
+	summary, err := s.personalization.memory.Summary(ctx)
 	if err != nil {
 		return map[string]any{
 			"available":     false,
@@ -52,17 +53,11 @@ func (s *Server) memoryState() map[string]any {
 			"enabled_count": 0,
 		}
 	}
-	enabledCount := 0
-	for _, item := range snapshot.Memories {
-		if item.Enabled {
-			enabledCount++
-		}
-	}
 	return map[string]any{
 		"available":     true,
-		"enabled":       snapshot.Enabled,
-		"count":         len(snapshot.Memories),
-		"enabled_count": enabledCount,
+		"enabled":       summary.Enabled,
+		"count":         summary.Count,
+		"enabled_count": summary.EnabledCount,
 	}
 }
 

@@ -1,5 +1,27 @@
 # Goal Scorecard
 
+## 2026-09-06 — architecture and lifecycle audit
+
+The [cross-domain audit](architecture-review-2026-09-06.md) fixes canceled mode
+and LLM admission, stale browser refresh/SSE callbacks, and memory status
+materialization. Mode-state initialization is separated from admission; broader
+coordination debt remains explicitly tracked. No dependency or safety-gate
+change is introduced.
+
+With 200 maximum-length memory entries, aggregate status reads allocate 1,232
+bytes instead of about 475,990 bytes and take 33–34 microseconds instead of
+467–505 microseconds. The same-toolchain stripped binary grows 3,584 bytes
+(19,076,608 to 19,080,192). Main JS grows 241 raw / 102 gzip bytes. Comparable
+stopped-simulator RSS is 64.30 / 64.82 MiB; startup observations are 596.2 /
+555.5 ms. The SQLite RSS waiver remains and these startup samples exceed the
+500 ms target. See the [measurement details](perf-baseline.md#2026-09-06--architecture-and-lifecycle-audit).
+
+Go test/race/vet/lint, import/goleak checks, pure-Go build, frontend checks
+(478 tests), and Windows installer checks pass locally. The isolated simulator
+also passes real local LLM generation and text-only app chat without repair,
+fallback, or motion. Hardware acceptance and the architectural follow-ups
+remain open.
+
 ## 2026-09-06 — continuous request validation
 
 The action/state grammar replaces Creative v2 and Layered keyword gates while

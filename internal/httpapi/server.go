@@ -563,7 +563,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		},
 		"llm":                 s.llmState(r.Context()),
 		"controller":          s.controllerState(r),
-		"memory":              s.memoryState(),
+		"memory":              s.memoryState(r.Context()),
 		"modes":               s.modes.Status(),
 		"voice":               s.voiceState(),
 		"chat":                s.chatState(),

@@ -41,6 +41,16 @@ func (c *llmRequestCoordinator) acquire(
 
 	for {
 		c.mu.Lock()
+		// Cancellation wins over an available slot or a simultaneous release.
+		// A dead interactive request must not preempt valid autonomous work.
+		if err := ctx.Err(); err != nil {
+			if registered {
+				c.interactiveWaiters--
+				c.signalLocked()
+			}
+			c.mu.Unlock()
+			return nil, time.Since(started), nil, err
+		}
 		if c.changed == nil {
 			c.changed = make(chan struct{})
 		}
@@ -80,13 +90,6 @@ func (c *llmRequestCoordinator) acquire(
 
 		select {
 		case <-ctx.Done():
-			c.mu.Lock()
-			if registered {
-				c.interactiveWaiters--
-				c.signalLocked()
-			}
-			c.mu.Unlock()
-			return nil, time.Since(started), nil, ctx.Err()
 		case <-changed:
 		}
 	}

@@ -1,5 +1,16 @@
 # UI Design
 
+## Backend observation lifecycle
+
+State polling and live motion subscriptions belong to the current enabled app
+session. Disabling access cancels its poll, releases the request slot, and
+ignores queued events and waiting refreshes from that session. Re-enabling
+starts a fresh poll. A completed state poll supersedes live motion observed
+before that poll started; an event received during the poll is retained because
+their server ordering is unknown. These are backend observations, never a
+parallel frontend motion model. See the
+[lifecycle audit](architecture-review-2026-09-06.md).
+
 ## Purpose
 
 The pattern browser leads with ten continuous recipes and hides the 81

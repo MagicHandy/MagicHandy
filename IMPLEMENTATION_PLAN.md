@@ -40,6 +40,17 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-06 architecture and lifecycle audit
+
+The cross-domain review fixes canceled mode startup and LLM admission,
+subscription-scoped browser refresh/SSE handling, and unnecessary full memory
+reads in status polling. Mode initialization is separated from admission.
+Negative regressions document the previously passing suite's gaps; the
+[audit](docs/architecture-review-2026-09-06.md) records coverage, measurements,
+and prioritized follow-ups for HTTP orchestration, mode state, cancellable
+datastore admission, and narrower browser subscriptions. The shared engine,
+transport boundaries, and mandatory gates remain intact.
+
 ### 2026-09-05 Autopilot mode-switch crash correction
 
 Active continuous scores retain their own schema while the selected control

@@ -1,5 +1,49 @@
 # Performance Baseline
 
+## 2026-09-06 — architecture and lifecycle audit
+
+Baseline `df3d4a73` and the architecture-audit candidate use Go 1.26.4 on
+Windows/amd64 (Ryzen 9 9950X3D). Both binaries were built with
+`CGO_ENABLED=0 go build -trimpath -ldflags '-s -w' ./cmd/magichandy`.
+The [audit](architecture-review-2026-09-06.md) describes behavior and remaining
+maintenance work.
+
+| Measurement | Baseline | Candidate |
+| --- | --- | --- |
+| Stripped binary | 19,076,608 bytes | 19,080,192 bytes (+3,584) |
+| Main JS, raw UTF-8 | 751,270 bytes | 751,511 bytes (+241) |
+| Main JS, gzip | 207,642 bytes | 207,744 bytes (+102) |
+| Fresh-data launch through successful `/healthz` | 596.2 ms | 555.5 ms |
+| Stopped simulator working set, three samples | 67,424,256 / 67,424,256 / 67,424,256 bytes | 67,969,024 / 67,969,024 / 67,969,024 bytes |
+
+Each startup is one local observation including process spawn and HTTP polling,
+not a distribution or proof of uncached performance. Both exceed the 500 ms
+target on this host. Working sets are 64.30 and 64.82 MiB; the existing SQLite
+idle-memory waiver remains. There is no new memory-budget exception. RSS samples
+follow four `/api/state` warmup reads spaced 500 ms apart and are 400 ms apart.
+They measure only the Go process, exclude the browser and model/voice workers,
+and use fresh isolated data with no motion or installed managed model. No
+browser was opened on these measurement processes. Their own temporary
+processes were stopped afterward; existing user sessions were preserved.
+
+The actual handoff app uses separate isolated review data with a working local
+Ollama model and an open browser. It is not the fresh-data RSS fixture.
+
+`go test ./internal/memory -run '^$' -bench BenchmarkMemoryStateRead -benchmem
+-count=3` compares 200 records of 2,000 ASCII characters each:
+
+| Method | ns/op, three runs | B/op | allocs/op |
+| --- | --- | --- | --- |
+| Full snapshot | 477,604 / 467,474 / 504,978 | 475,992 / 475,987 / 475,988 | 1,463 |
+| Aggregate summary | 33,247 / 34,448 / 34,382 | 1,232 | 36 |
+
+The result is specific to the memory status read: about 14 times faster and
+99.7% less allocation, with the same public counts. It does not imply that the
+whole app or empty-memory polling becomes 14 times faster. No dependency,
+schema migration, motion-sampling change, or extra embedded UI is introduced.
+Machine-local logs and measurement fixtures stay in the ignored
+`.scratch/architecture-audit/` directory.
+
 This file records the baseline evidence required by
 `docs/goals-and-guardrails.md`. Measurements must exclude browser, test runner,
 Ollama, llama.cpp, CUDA, TTS, ASR, and other worker/model processes from the Go
