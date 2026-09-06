@@ -181,14 +181,14 @@ func TestLayeredProductionAuthorityAndNoRepair(t *testing.T) {
 		name, message, raw              string
 		running, paused, reject, motion bool
 	}{
-		{"start", "Start moving gently.", `{"edits":{},"reply":"Starting."}`, false, false, false, true},
-		{"question", "What does the pace layer do?", `{"edits":{},"reply":"It varies pace."}`, true, false, false, false},
-		{"question edit", "What does the pace layer do?", `{"edits":{"evolve":true},"reply":"Varying."}`, true, false, true, false},
-		{"evolve", "Keep varying the motion.", `{"edits":{"evolve":true},"reply":"Fresh details."}`, true, false, false, true},
-		{"gentler", "Keep the current motion but make it gentler.", `{"edits":{"change_by":{"speed_percent":-5}},"reply":"Five points slower."}`, true, false, false, true},
-		{"paused", "Vary the motion.", `{"edits":{"evolve":true},"reply":"Fresh details."}`, true, true, true, false},
-		{"refusal", "Do not move.", `{"edits":{"evolve":true},"reply":"Moving."}`, false, false, true, false},
-		{"invalid", "Move gently.", `{"edits":{"controls":{"turn_softness_percent":70}},"reply":"Moving."}`, true, false, true, false},
+		{"start", "Start moving gently.", `{"action":"start","edits":{},"reply":"Starting."}`, false, false, false, true},
+		{"question", "What does the pace layer do?", `{"action":"none","edits":{},"reply":"It varies pace."}`, true, false, false, false},
+		{"question edit", "What does the pace layer do?", `{"action":"none","edits":{"evolve":true},"reply":"Varying."}`, true, false, true, false},
+		{"evolve", "Keep varying the motion.", `{"action":"update","edits":{"evolve":true},"reply":"Fresh details."}`, true, false, false, true},
+		{"gentler", "Keep the current motion but make it gentler.", `{"action":"update","edits":{"change_by":{"speed_percent":-5}},"reply":"Five points slower."}`, true, false, false, true},
+		{"paused", "Vary the motion.", `{"action":"update","edits":{"evolve":true},"reply":"Fresh details."}`, true, true, true, false},
+		{"refusal", "Do not move.", `{"action":"none","edits":{"evolve":true},"reply":"Moving."}`, false, false, true, false},
+		{"invalid", "Move gently.", `{"action":"update","edits":{"controls":{"turn_softness_percent":70}},"reply":"Moving."}`, true, false, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			provider := &layeredTestProvider{raw: tc.raw}

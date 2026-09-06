@@ -14,8 +14,8 @@ import (
 func TestCreativeV2ProductionRetargetModeFenceAutopilotAndStop(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{
-		`{"edits":[{"focus":{"position_percent":0,"width_percent":45,"mix_percent":55}},{"rebounds":{"count":3,"retained_width_percent":75}}],"reply":"Starting base rebounds and full strokes."}`,
-		`{"edits":[{"inertia_percent":70}],"reply":"A later velocity crest."}`,
+		`{"action":"start","edits":[{"focus":{"position_percent":0,"width_percent":45,"mix_percent":55}},{"rebounds":{"count":3,"retained_width_percent":75}}],"reply":"Starting base rebounds and full strokes."}`,
+		`{"action":"update","edits":[{"inertia_percent":70}],"reply":"A later velocity crest."}`,
 		`{"edits":[{"evolve":true}],"reply":"Fresh variation."}`,
 	}}
 	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: provider})

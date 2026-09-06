@@ -71,6 +71,11 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		schema, parser = CreativeV2ResponseSchema(limits, capabilities.MoodTracking), ParseCreativeV2Reply
 	}
+	if !s.TrustedMotionInput {
+		guard := continuousOutputGuard(capabilities)
+		system = strings.TrimSuffix(system, guard) + continuousActionGuide + "\n\n" + guard
+		schema = continuousActionSchema(schema, state)
+	}
 	if !capabilities.Motion {
 		schema = nil
 	}
@@ -94,7 +99,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	}
 	response, next, changed, err := parser(raw, current, limits)
 	if err == nil {
-		err = s.authorizeLayeredReply(&response, current, next, changed, request.Message, state)
+		err = s.authorizeLayeredReply(&response, next, changed, state)
 	}
 	if err != nil {
 		result.Malformed, result.InitialMalformed, result.MalformedError = true, true, err.Error()
@@ -106,61 +111,6 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	}
 	result.Response = response
 	return result, nil
-}
-
-func (s Service) authorizeLayeredReply(response *AssistantResponse, before, after motion.FlowSpec, changed []string, message string, state MotionContext) error {
-	if !s.capabilities().Motion {
-		return nil
-	}
-	if state.MotionMode == MotionModeCreativeV2 && !s.TrustedMotionInput {
-		if err := creativeV2EditScope(message, before, after); err != nil {
-			return err
-		}
-	}
-	if state.Paused {
-		if len(changed) > 0 {
-			return errors.New("layered motion is paused; edits cannot resume it")
-		}
-		return nil
-	}
-	authorized := s.TrustedMotionInput || layeredUserMayEdit(message, state.Running, before, after)
-	if state.MotionMode == MotionModeCreativeV2 {
-		authorized = s.TrustedMotionInput || creativeV2UserMayEdit(message, state.Running, before, after)
-	}
-	if !authorized {
-		if len(changed) > 0 {
-			return errors.New("the response changed motion outside the current request")
-		}
-		return nil
-	}
-	if state.Running && len(changed) == 0 {
-		return nil
-	}
-	action := MotionActionStart
-	if state.Running {
-		action = MotionActionUpdate
-	}
-	response.Motion = &MotionCommand{Action: action, Layered: motion.CloneFlowSpec(&after)}
-	return nil
-}
-
-func layeredUserMayEdit(message string, running bool, before, after motion.FlowSpec) bool {
-	if !running {
-		return userAuthorizesMotion(message, MotionActionStart)
-	}
-	message = normalizeMotionIntent(message)
-	if motionIntentIsConversation(message) {
-		return false
-	}
-	// Scoped preservation is permitted only when the actual output obeys it.
-	if negatesDynamicSpeedChange(message) && before.SpeedPercent == after.SpeedPercent {
-		for _, phrase := range []string{"do not change the pace", "don't change the pace", "do not change speed", "don't change speed", "without changing speed", "without changing the pace"} {
-			message = strings.ReplaceAll(message, phrase, "")
-		}
-	}
-	return !motionIntentIsNegated(message) && (userAuthorizesMotion(message, MotionActionUpdate) || hasIntentPhrase(message,
-		"alternate", "alternating", "vary", "varying", "variation", "layer", "layers", "reach", "range", "stroke", "strokes", "jerk", "tip", "base", "center", "gentle", "gently", "gentler", "slower", "faster", "natural", "organic", "rhythm", "evolve",
-		"increase speed", "increase the speed", "decrease speed", "decrease the speed", "reduce speed", "reduce the speed", "increase pace", "decrease pace", "reduce pace"))
 }
 
 func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind AutopilotKind, request Request) (AutopilotResponse, error) {

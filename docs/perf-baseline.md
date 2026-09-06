@@ -459,3 +459,32 @@ Start-Sleep -Seconds 2
 }
 Stop-Process -Id $proc.Id
 ```
+
+
+## 2026-09-06 — continuous chat intent grammar
+
+Windows amd64, Go 1.26.4, `CGO_ENABLED=0`, `go build -trimpath -ldflags '-s -w'`.
+The baseline source is alpha.40/main `2eaee13`; the candidate removes continuous
+word guards and adds state-constrained action branches (ADR 0025). Both use
+fresh isolated data and localhost HTTP. Worker/model and browser processes are
+excluded from core figures.
+
+| Measurement | Baseline | Candidate |
+| --- | ---: | ---: |
+| Release binary bytes | 19,076,096 | 19,076,608 |
+| Cold process-to-health, single observation | 521 ms | 539 ms |
+| Isolated server RSS after HTML retrieval, browser JS not opened | 32.98 MiB | 33.01 MiB |
+| Isolated server private committed memory | 55.17 MiB | 55.14 MiB |
+| Warm stopped simulator after 16-turn app evaluation, RSS | 66.00 MiB | 66.37 MiB |
+| Same warm simulator, private committed memory | 56.64 MiB | 56.63 MiB |
+
+The binary increased 512 bytes (0.003%). No Go dependency, browser asset, or
+extra production model call was added. The existing review browser's polling
+made its own RSS unsuitable for a cold comparison, so a second candidate
+process with no opened browser was measured. The isolated-server result is
+not a claim to meet the full UI idle budget. Warm stopped figures remain above the original <40 MB idle target, as in
+the baseline. This measurement does not revise that target or claim a new
+memory waiver.
+Cold-start figures are observations, not a statistically significant speed
+comparison. Commands, process identities and measurements are retained in
+`.scratch/continuous-request-validation/*performance*.json` and build logs.

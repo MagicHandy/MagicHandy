@@ -1,5 +1,21 @@
 # Goal Scorecard
 
+## 2026-09-06 — continuous request validation
+
+The action/state grammar replaces Creative v2 and Layered keyword gates while
+preserving the single engine and Stop path. Repeated core request checks pass
+74/74 on Gemma 12B, 72/74 on E4B Heretic and 51/74 on Granite; structural and
+semantic failures are reported separately. See the [review](continuous-request-review-2026-09-06.md).
+
+Same-toolchain release size changes from 19,076,096 to 19,076,608 bytes (+512).
+No dependency or frontend payload changes; the bundle rebuild is identical.
+The isolated cold HTTP observations were 521/539 ms. Comparable stopped
+simulator RSS was 66.00/66.37 MiB; the existing SQLite memory waiver remains.
+These measurements do not redefine the idle budget. Details are in
+[the performance baseline](perf-baseline.md#2026-09-06--continuous-chat-intent-grammar).
+Full Go test/race/vet/lint and frontend checks pass. All evaluated model outputs
+and failed experiments are retained for shared-engine visual review.
+
 ## Purpose
 
 The rewrite has three stated goals — maintainability, lower core memory, and

@@ -48,6 +48,7 @@ func ParseCreativeV2Reply(raw string, current motion.FlowSpec, limits config.Mot
 		return AssistantResponse{}, current, nil, errors.New("start a new Creative v2 score before using this interface")
 	}
 	var proposal struct {
+		Action  string                       `json:"action,omitempty"`
 		Reply   string                       `json:"reply"`
 		NewMood *Mood                        `json:"new_mood,omitempty"`
 		Edits   []map[string]json.RawMessage `json:"edits"`
@@ -68,7 +69,7 @@ func ParseCreativeV2Reply(raw string, current motion.FlowSpec, limits config.Mot
 	if err != nil {
 		return AssistantResponse{}, current, nil, err
 	}
-	return AssistantResponse{Reply: proposal.Reply, NewMood: proposal.NewMood}, next, labChangedControls(current, next), nil
+	return AssistantResponse{Reply: proposal.Reply, NewMood: proposal.NewMood, continuousAction: proposal.Action}, next, labChangedControls(current, next), nil
 }
 
 func applyCreativeV2Edits(items []map[string]json.RawMessage, current motion.FlowSpec, limits config.MotionSettings) (motion.FlowSpec, error) {
@@ -212,63 +213,6 @@ func CreativeV2ResponseSchema(limits config.MotionSettings, mood bool) json.RawM
 	}
 	encoded, _ := json.Marshal(object(fields, []string{"edits", "reply"}))
 	return encoded
-}
-
-func creativeV2EditScope(message string, before, after motion.FlowSpec) error {
-	if err := creativeV2RequestedCoverage(message, after); err != nil {
-		return err
-	}
-	if before.SpeedPercent == after.SpeedPercent {
-		return nil
-	}
-	message = normalizeMotionIntent(message)
-	if negatesDynamicSpeedChange(message) || !hasIntentPhrase(message,
-		"speed", "pace", "faster", "slower", "gentle", "gently", "gentler", "fast", "rapid", "quick", "quicker", "slow", "slowly", "intensity", "intense") {
-		return errors.New("creative v2 changed pace without a pace request")
-	}
-	return nil
-}
-
-// Check explicit coverage claims without inventing a replacement plan. This
-// catches a model emitting only rebounds while claiming it also moved the focus.
-func creativeV2RequestedCoverage(message string, after motion.FlowSpec) error {
-	message = normalizeMotionIntent(message)
-	if motionIntentIsConversation(message) || explicitlyRefusesDynamicMotion(message) || after.Gesture == nil {
-		return nil
-	}
-	g := after.Gesture
-	if hasIntentPhrase(message, "rebounds at the base", "base rebounds", "bounce at the lower end") && g.FocusPercent != 0 {
-		return errors.New("creative v2 did not move the requested rebound focus to the base")
-	}
-	if hasIntentPhrase(message, "rebounds at the tip", "tip rebounds", "bounce at the upper end") && g.FocusPercent != 100 {
-		return errors.New("creative v2 did not move the requested rebound focus to the tip")
-	}
-	if hasIntentPhrase(message, "mix", "mixed", "interspersed") && hasIntentPhrase(message, "full strokes", "broad travel", "broad strokes") &&
-		(g.FocusMixPercent == 0 || g.FocusMixPercent == 100) {
-		return errors.New("creative v2 did not mix local and broad strokes as requested")
-	}
-	return nil
-}
-
-func creativeV2UserMayEdit(message string, running bool, before, after motion.FlowSpec) bool {
-	if layeredUserMayEdit(message, running, before, after) {
-		return true
-	}
-	message = normalizeMotionIntent(message)
-	if !running || motionIntentIsConversation(message) || explicitlyRefusesDynamicMotion(message) {
-		return false
-	}
-	if after.Gesture != nil && after.Gesture.ReboundCount == 0 {
-		for _, phrase := range []string{"no bounces", "no bounce", "no rebounds", "without bounces", "without rebounds"} {
-			message = strings.ReplaceAll(message, phrase, "remove rebounds")
-		}
-	}
-	if after.Gesture != nil && after.Gesture.InertiaPercent == 0 {
-		for _, phrase := range []string{"no inertia", "without inertia"} {
-			message = strings.ReplaceAll(message, phrase, "remove inertia")
-		}
-	}
-	return !motionIntentIsNegated(message) && hasIntentPhrase(message, "bounce", "bounces", "rebound", "rebounds", "sweep", "sweeps", "inertia", "momentum", "upward", "downward", "stroke", "strokes", "roam", "roaming", "focus", "working location")
 }
 
 // CreativeV2CharacterUnchanged is shared by scheduled Lab and production turns.

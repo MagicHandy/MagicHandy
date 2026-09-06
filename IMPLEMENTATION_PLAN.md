@@ -2,6 +2,15 @@
 
 ## Core Direction
 
+The September 6 continuous-chat review replaces word-based request permissions
+in Creative v2 and Layered with a model-declared action and a backend-state
+output grammar. A no-change action permits no edits; paused state, saved limits
+and the shared Stop path remain enforced independently of wording. The live
+matrix includes Gemma 12B, the newly installed E4B Heretic, and Granite 3B,
+including accepted interpretation errors. See
+[ADR 0025](docs/decisions/0025-continuous-chat-intent.md) and the
+[evaluation](docs/continuous-request-review-2026-09-06.md).
+
 The September 5 Creative v2 flow refactor replaces local/full blocks with
 correlated reach and timing, shared reversal acceleration and nearby-stroke
 handoffs. It remains semantic content inside the single shared engine. See
