@@ -54,7 +54,8 @@ interface ControlledRestart {
   id: number;
   mediaTimeMillis: number;
   resume: boolean;
-  stop: Promise<void>;
+  stop: Promise<boolean>;
+  committed?: boolean;
 }
 
 export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, onRequestConversion, conversionBusy }: Props) {
@@ -85,9 +86,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
   const arming = useRef(false);
   const seekInProgress = useRef(false);
   const resumeAfterSeek = useRef(false);
-  const seekingStop = useRef<Promise<void>>(Promise.resolve());
+  const seekingStop = useRef<Promise<boolean>>(Promise.resolve(true));
   const awaitingMedia = useRef(false);
-  const bufferingStop = useRef<Promise<void>>(Promise.resolve());
+  const bufferingStop = useRef<Promise<boolean>>(Promise.resolve(true));
   const readyArm = useRef<"play" | "seeked" | "ratechange" | "resync">("play");
   const heartbeatPending = useRef(false);
   const heartbeatAbort = useRef<AbortController | null>(null);
@@ -97,6 +98,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
   const ignoredPlayTimer = useRef<number>();
   const ignoredPauseTimer = useRef<number>();
   const latestStopSequence = useRef(stopSequence);
+  const previousLocked = useRef(locked);
   const capturedStopSequence = useRef<number>();
   const alignSeekActive = useRef(false);
   const alignSeekTimer = useRef<number>();
@@ -112,6 +114,15 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
   const seekGesture = useRef<ControlledRestart | null>(null);
   const filterRestart = useRef<ControlledRestart | null>(null);
   const filterWriteChain = useRef<Promise<void>>(Promise.resolve());
+
+  const invalidatePlaybackRequests = useCallback(() => {
+    generation.current += 1;
+    pendingArm.current = null;
+    armAbort.current?.abort();
+    heartbeatAbort.current?.abort();
+    heartbeatAbort.current = null;
+    heartbeatPending.current = false;
+  }, []);
 
   const clearMediaReadyPoll = useCallback(() => {
     window.clearInterval(mediaReadyTimer.current);
@@ -134,9 +145,10 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     clearMediaReadyPoll();
     const recovery = bufferingStop.current;
     const event = readyArm.current;
-    void recovery.then(() => {
+    void recovery.then((stopped) => {
       if (
-        waitGeneration !== mediaReadyGeneration.current
+        !stopped
+        || waitGeneration !== mediaReadyGeneration.current
         || !mounted.current
         || !awaitingMedia.current
         || !desiredPlaying.current
@@ -168,7 +180,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
 
   useEffect(() => {
     const controller = new AbortController();
-    const loadGeneration = ++generation.current;
+    generation.current += 1;
     setScript(null);
     setScriptError("");
     setSyncError("");
@@ -176,13 +188,12 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     setCurrentTime(0);
     setSyncOperation(null);
     setPlaybackIntent(false);
-    setVideoDuration(video.duration_ms ?? 0);
     setPlaybackRate(1);
     desiredPlaying.current = false;
     activeSync.current = false;
     seekInProgress.current = false;
     awaitingMedia.current = false;
-    bufferingStop.current = Promise.resolve();
+    bufferingStop.current = Promise.resolve(true);
     readyArm.current = "play";
     capturedStopSequence.current = undefined;
     alignSeekActive.current = false;
@@ -195,20 +206,26 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     if (!video.has_funscript) return () => controller.abort();
 
     void api.mediaFunscript(video.id, controller.signal).then((response) => {
-      if (!controller.signal.aborted && mounted.current && generation.current === loadGeneration) {
+      if (!controller.signal.aborted && mounted.current) {
         setScript(response.funscript);
       }
     }).catch((reason) => {
-      if (!controller.signal.aborted && mounted.current && generation.current === loadGeneration) {
+      if (!controller.signal.aborted && mounted.current) {
         setScriptError(reason instanceof Error ? reason.message : "The paired funscript could not be loaded.");
       }
     }).finally(() => {
-      if (!controller.signal.aborted && mounted.current && generation.current === loadGeneration) {
+      if (!controller.signal.aborted && mounted.current) {
         setLoadingScript(false);
       }
     });
     return () => controller.abort();
-  }, [video.duration_ms, video.has_funscript, video.id]);
+  }, [video.has_funscript, video.id]);
+
+  // Persisted decoder metadata can arrive during playback. It updates the
+  // controls without replacing the script or resetting the active session.
+  useEffect(() => {
+    setVideoDuration(video.duration_ms ?? 0);
+  }, [video.duration_ms, video.id]);
 
   const suppressNext = useCallback((kind: "play" | "pause") => {
     const flag = kind === "play" ? ignoredPlay : ignoredPause;
@@ -259,19 +276,23 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
   useEffect(() => {
     const previous = latestStopSequence.current;
     latestStopSequence.current = stopSequence;
-    if (previous === undefined || stopSequence === undefined || previous === stopSequence || (!activeSync.current && !arming.current && !awaitingMedia.current)) return;
+    if (previous === undefined || stopSequence === undefined || previous === stopSequence || !video.has_funscript) return;
     setDesiredPlayback(false);
     awaitingMedia.current = false;
     setSyncOperation(null);
-    pendingArm.current = null;
-    bufferingStop.current = Promise.resolve();
-    generation.current += 1;
-    armAbort.current?.abort();
+    seekGesture.current = null;
+    filterRestart.current = null;
+    seekInProgress.current = false;
+    resumeAfterSeek.current = false;
+    bufferingStop.current = Promise.resolve(true);
+    mediaReadyGeneration.current += 1;
+    clearMediaReadyPoll();
+    invalidatePlaybackRequests();
     const player = playerRef.current;
     if (player) holdVideo(player);
     activeSync.current = false;
     setSync({ active: false, state: "stopped", last_event: "emergency_stop", message: "Motion was stopped. Press play to start a new synchronized run." });
-  }, [holdVideo, setDesiredPlayback, stopSequence]);
+  }, [clearMediaReadyPoll, holdVideo, invalidatePlaybackRequests, setDesiredPlayback, stopSequence, video.has_funscript]);
 
   const updateSync = useCallback((status: MediaSyncStatus) => {
     if (!mounted.current) return;
@@ -328,14 +349,18 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     const ownedController = signal ? null : new AbortController();
     if (ownedController) sessionRequestControllers.current.add(ownedController);
     lastPlayer.current = player;
+    const requestGeneration = generation.current;
+    const request = buildSyncEvent(video.id, player, state, event, session);
     try {
       const response = await api.mediaSync(
-        buildSyncEvent(video.id, player, state, event, session),
+        request,
         sequence,
         signal ?? ownedController?.signal,
         keepalive,
       );
-      if (mounted.current && activeSessionID.current === session.id) updateSync(response.sync);
+      if (mounted.current && activeSessionID.current === session.id
+        && generation.current === requestGeneration && request.event_sequence === session.sequence
+        && !(signal ?? ownedController?.signal)?.aborted) updateSync(response.sync);
       return response.sync;
     } finally {
       if (ownedController) sessionRequestControllers.current.delete(ownedController);
@@ -348,14 +373,20 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     event: MediaSyncEvent["event"],
   ) => {
     activeSync.current = false;
+    const requestGeneration = generation.current;
     const sequence = capturedStopSequence.current ?? latestStopSequence.current;
-    if (sequence === undefined || locked) return;
+    if (sequence === undefined || locked) return false;
     try {
       await syncEvent(player, state, event, sequence, state === "closed");
+      return true;
     } catch (reason) {
-      showSyncFailure(reason, "Device motion could not be stopped from the video player.");
+      if (generation.current === requestGeneration && activeSessionID.current === session.id) {
+        setDesiredPlayback(false);
+        showSyncFailure(reason, "Device motion could not be stopped from the video player.");
+      }
+      return false;
     }
-  }, [locked, showSyncFailure, syncEvent]);
+  }, [locked, session.id, setDesiredPlayback, showSyncFailure, syncEvent]);
 
   const armPlayback = useCallback(async (
     player: HTMLVideoElement,
@@ -466,8 +497,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
 
   const beginSeekGesture = useCallback(() => {
     const player = playerRef.current ?? lastPlayer.current;
-    if (!player || !script || locked || seekGesture.current) return;
-    const atMillis = Math.min(script.duration_ms, mediaTimeMillis(player));
+    if (!player || !script || locked || (seekGesture.current && !seekGesture.current.committed)) return;
+    const previousStop = seekGesture.current?.stop;
+    const atMillis = mediaTimeMillis(player);
     const resume = desiredPlaying.current || activeSync.current || arming.current || !player.paused;
     const id = ++controlledRestartID.current;
     const mustStop = activeSync.current || arming.current;
@@ -477,16 +509,14 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     awaitingMedia.current = false;
     mediaReadyGeneration.current += 1;
     clearMediaReadyPoll();
-    generation.current += 1;
-    pendingArm.current = null;
-    armAbort.current?.abort();
+    invalidatePlaybackRequests();
     holdVideoAt(player, atMillis);
     setSyncOperation({ kind: "seeking", mediaTimeMillis: atMillis });
     const stop = mustStop
       ? stopPlaybackMotion(player, "seeking", "seeking")
-      : Promise.resolve();
+      : previousStop ?? Promise.resolve(true);
     seekGesture.current = { id, mediaTimeMillis: atMillis, resume, stop };
-  }, [clearMediaReadyPoll, holdVideoAt, locked, script, stopPlaybackMotion]);
+  }, [clearMediaReadyPoll, holdVideoAt, invalidatePlaybackRequests, locked, script, stopPlaybackMotion]);
 
   const completeSeekGesture = useCallback((milliseconds: number, event: "seeked" | "ratechange" = "seeked") => {
     const player = playerRef.current ?? lastPlayer.current;
@@ -496,19 +526,22 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       return;
     }
     if (!seekGesture.current) beginSeekGesture();
-    const gesture = seekGesture.current;
-    if (!gesture) return;
+    if (!seekGesture.current) return;
+    // Each commit replaces the previous continuation, including repeated keys
+    // or a new scrub released before the original Stop has been acknowledged.
+    const gesture = { ...seekGesture.current, id: ++controlledRestartID.current, committed: true };
+    seekGesture.current = gesture;
 
     const target = Math.max(0, Math.min(videoDuration || script.duration_ms, Math.round(milliseconds)));
     setPlayerTime(player, target);
     setSyncOperation({ kind: "seeking", mediaTimeMillis: target });
-    void gesture.stop.then(async () => {
+    void gesture.stop.then(async (stopped) => {
       if (!mounted.current || seekGesture.current?.id !== gesture.id) return;
       seekGesture.current = null;
       seekInProgress.current = false;
       resumeAfterSeek.current = false;
 
-      if (!gesture.resume) {
+      if (!stopped || !gesture.resume) {
         setDesiredPlayback(false);
         setSyncOperation(null);
         return;
@@ -551,16 +584,14 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     awaitingMedia.current = false;
     mediaReadyGeneration.current += 1;
     clearMediaReadyPoll();
-    generation.current += 1;
-    pendingArm.current = null;
-    armAbort.current?.abort();
+    invalidatePlaybackRequests();
     holdVideoAt(player, atMillis);
     if (resume) setSyncOperation({ kind: "resyncing", mediaTimeMillis: atMillis });
     const stop = mustStop
       ? stopPlaybackMotion(player, "paused", "pause")
-      : Promise.resolve();
+      : Promise.resolve(true);
     filterRestart.current = { id, mediaTimeMillis: atMillis, resume, stop };
-  }, [clearMediaReadyPoll, holdVideoAt, locked, script, stopPlaybackMotion]);
+  }, [clearMediaReadyPoll, holdVideoAt, invalidatePlaybackRequests, locked, script, stopPlaybackMotion]);
 
   const applyPlaybackFilters = useCallback((patch: MediaPlaybackPatch): Promise<void> => {
     const operation = async () => {
@@ -573,8 +604,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       }
 
       let writeError: unknown;
+      let stopped = false;
       try {
-        await restart.stop;
+        stopped = await restart.stop;
         await api.saveMediaPlayback(patch);
         await refresh();
       } catch (reason) {
@@ -584,7 +616,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       if (mounted.current && filterRestart.current?.id === restart.id) {
         filterRestart.current = null;
         const player = playerRef.current ?? lastPlayer.current;
-        if (player && restart.resume) {
+        if (player && restart.resume && stopped) {
           holdVideoAt(player, restart.mediaTimeMillis);
           setDesiredPlayback(true);
           setSyncOperation({ kind: "resyncing", mediaTimeMillis: restart.mediaTimeMillis });
@@ -672,11 +704,10 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       setDesiredPlayback(false);
       resumeAfterSeek.current = false;
       setSyncOperation(null);
-      generation.current += 1;
+      invalidatePlaybackRequests();
       awaitingMedia.current = false;
       mediaReadyGeneration.current += 1;
       clearMediaReadyPoll();
-      armAbort.current?.abort();
       void stopPlaybackMotion(player, "paused", "pause");
       return;
     }
@@ -691,8 +722,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       holdVideo(player);
       mediaReadyGeneration.current += 1;
       clearMediaReadyPoll();
-      generation.current += 1;
-      armAbort.current?.abort();
+      invalidatePlaybackRequests();
       seekingStop.current = stopPlaybackMotion(player, "seeking", "seeking");
       return;
     }
@@ -700,18 +730,29 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       if (alignSeekActive.current) {
         alignSeekActive.current = false;
         window.clearTimeout(alignSeekTimer.current);
+        resumeWhenMediaReady(player, mediaReadyGeneration.current);
+        return;
+      }
+      if (seekGesture.current) return;
+      if (!seekInProgress.current) {
+        resumeWhenMediaReady(player, mediaReadyGeneration.current);
         return;
       }
       const shouldResume = resumeAfterSeek.current;
+      const seekGeneration = generation.current;
       seekInProgress.current = false;
       if (shouldResume) {
         setDesiredPlayback(true);
         setSyncOperation({ kind: "resyncing", mediaTimeMillis: mediaTimeMillis(player) });
-        void seekingStop.current.then(() => armPlayback(player, "seeked"));
+        void seekingStop.current.then((stopped) => {
+          if (stopped && generation.current === seekGeneration) return armPlayback(player, "seeked");
+        });
       } else {
         setDesiredPlayback(false);
         setSyncOperation(null);
-        void seekingStop.current.then(() => stopPlaybackMotion(player, "paused", "seeked"));
+        void seekingStop.current.then((stopped) => {
+          if (stopped && generation.current === seekGeneration) return stopPlaybackMotion(player, "paused", "seeked");
+        });
       }
       return;
     }
@@ -725,9 +766,8 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     if (event === "ended") {
       setDesiredPlayback(false);
       setSyncOperation(null);
-      generation.current += 1;
+      invalidatePlaybackRequests();
       awaitingMedia.current = false;
-      armAbort.current?.abort();
       void stopPlaybackMotion(player, "ended", "ended");
       return;
     }
@@ -747,8 +787,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       desiredPlaying.current = true;
       awaitingMedia.current = true;
       readyArm.current = "resync";
-      generation.current += 1;
-      armAbort.current?.abort();
+      invalidatePlaybackRequests();
       holdVideo(player);
       activeSync.current = false;
       setSyncOperation(null);
@@ -761,7 +800,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
         media_time_ms: mediaTimeMillis(player),
         message: "Video is buffering; device motion is stopped.",
       });
-      bufferingStop.current = mustStop ? stopPlaybackMotion(player, "paused", "waiting") : Promise.resolve();
+      if (mustStop) bufferingStop.current = stopPlaybackMotion(player, "paused", "waiting");
       waitForMediaReady(player);
       return;
     }
@@ -770,12 +809,11 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       setDesiredPlayback(false);
       awaitingMedia.current = false;
       setSyncOperation(null);
-      generation.current += 1;
-      armAbort.current?.abort();
+      invalidatePlaybackRequests();
       holdVideo(player);
       void stopPlaybackMotion(player, "paused", "error");
     }
-  }, [armPlayback, beginSeekGesture, clearMediaReadyPoll, completeSeekGesture, holdVideo, holdVideoAt, loadingScript, locked, resumeWhenMediaReady, script, setDesiredPlayback, stopPlaybackMotion, video.id, waitForMediaReady]);
+  }, [armPlayback, beginSeekGesture, clearMediaReadyPoll, completeSeekGesture, holdVideo, holdVideoAt, invalidatePlaybackRequests, loadingScript, locked, resumeWhenMediaReady, script, setDesiredPlayback, stopPlaybackMotion, video.id, waitForMediaReady]);
 
   useEffect(() => {
     if (!script || locked) return undefined;
@@ -803,7 +841,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
         }
         if (status.active) alignPlayerToEngineClock(player);
       }).catch((reason) => {
-        if (controller.signal.aborted || !mounted.current || activeSessionID.current !== requestSessionID) return;
+        if (controller.signal.aborted || !mounted.current || activeSessionID.current !== requestSessionID || generation.current !== requestGeneration) return;
         setDesiredPlayback(false);
         holdVideo(player);
         showSyncFailure(reason, "Video synchronization was interrupted; motion stopped.");
@@ -818,17 +856,24 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
   }, [alignPlayerToEngineClock, armPlayback, holdVideo, locked, script, setDesiredPlayback, showSyncFailure, syncEvent]);
 
   useEffect(() => {
-    if (!locked || (!activeSync.current && !arming.current && !awaitingMedia.current)) return;
+    const wasLocked = previousLocked.current;
+    previousLocked.current = locked;
+    if (!locked || wasLocked || !video.has_funscript) return;
     setDesiredPlayback(false);
     setSyncOperation(null);
-    generation.current += 1;
-    armAbort.current?.abort();
+    seekGesture.current = null;
+    filterRestart.current = null;
+    seekInProgress.current = false;
+    resumeAfterSeek.current = false;
+    invalidatePlaybackRequests();
     awaitingMedia.current = false;
+    mediaReadyGeneration.current += 1;
+    clearMediaReadyPoll();
     const player = playerRef.current;
     if (player) holdVideo(player);
     activeSync.current = false;
     setSync({ active: false, state: "interrupted", message: "Controller access changed; video playback paused and synchronized motion stopped." });
-  }, [holdVideo, locked, setDesiredPlayback]);
+  }, [clearMediaReadyPoll, holdVideo, invalidatePlaybackRequests, locked, setDesiredPlayback, video.has_funscript]);
 
   useEffect(() => {
     const closingVideoID = video.id;
@@ -842,12 +887,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       seekGesture.current = null;
       filterRestart.current = null;
       const shouldClose = closingSession.stopSequence !== undefined;
-      generation.current += 1;
-      pendingArm.current = null;
-      armAbort.current?.abort();
-      heartbeatAbort.current?.abort();
-      heartbeatAbort.current = null;
-      heartbeatPending.current = false;
+      invalidatePlaybackRequests();
       for (const controller of sessionRequestControllers.current) controller.abort();
       sessionRequestControllers.current.clear();
       awaitingMedia.current = false;
@@ -863,7 +903,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       }
       activeSync.current = false;
     };
-  }, [session, video.id]);
+  }, [invalidatePlaybackRequests, session, video.id]);
 
   function toggleTimeline() {
     setTimelineHidden((current) => {
@@ -889,9 +929,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       awaitingMedia.current = false;
       mediaReadyGeneration.current += 1;
       clearMediaReadyPoll();
-      generation.current += 1;
-      pendingArm.current = null;
-      armAbort.current?.abort();
+      invalidatePlaybackRequests();
       setDesiredPlayback(false);
       setSyncOperation(null);
       holdVideo(player);
@@ -1081,7 +1119,7 @@ function supportedPlaybackRate(rate: number): boolean {
 }
 
 function mediaHasFutureData(player: HTMLVideoElement): boolean {
-  return player.readyState >= 3;
+  return !player.seeking && player.readyState >= 3;
 }
 
 function syncStatusFromError(reason: unknown): MediaSyncStatus | null {

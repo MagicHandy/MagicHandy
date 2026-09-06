@@ -66,9 +66,28 @@ describe("FunscriptTimeline", () => {
     expect(onSeek).toHaveBeenLastCalledWith(7_500);
 
     fireEvent.keyDown(timeline, { key: "ArrowRight" });
+    fireEvent.keyUp(timeline, { key: "ArrowRight" });
     expect(onSeek).toHaveBeenLastCalledWith(7_000);
     fireEvent.keyDown(timeline, { key: "End" });
+    fireEvent.keyUp(timeline, { key: "End" });
     expect(onSeek).toHaveBeenLastCalledWith(10_000);
+  });
+
+  it.each(["release", "blur"])("coalesces held arrow keys into one seek on %s", (finish) => {
+    const onSeek = vi.fn();
+    const onSeekStart = vi.fn();
+    render(<FunscriptTimeline script={script} currentTime={0} hidden={false} onSeek={onSeek} onSeekStart={onSeekStart} />);
+    const timeline = screen.getByRole("slider");
+    fireEvent.keyDown(timeline, { key: "ArrowRight" });
+    fireEvent.keyDown(timeline, { key: "ArrowRight", repeat: true });
+    fireEvent.keyDown(timeline, { key: "ArrowLeft", repeat: true });
+    expect(timeline).toHaveAttribute("aria-valuenow", "5000");
+    expect(onSeekStart).toHaveBeenCalledOnce();
+    expect(onSeek).not.toHaveBeenCalled();
+    if (finish === "release") fireEvent.keyUp(timeline, { key: "ArrowLeft" });
+    else fireEvent.blur(timeline);
+    expect(onSeek).toHaveBeenCalledOnce();
+    expect(onSeek).toHaveBeenCalledWith(5000);
   });
 
   it("keeps a compact progress indicator when the full curve is hidden", () => {
