@@ -47,7 +47,7 @@ func TestArcAdvancesWithElapsedTime(t *testing.T) {
 	manager := swayTestManager(t, arcSettings(true, true, 1))
 	start := time.Unix(1000, 0)
 	manager.mu.Lock()
-	manager.arc.startedAt = start
+	manager.history.arc.startedAt = start
 	quarter := manager.arcPercentLocked(start.Add(15 * time.Second))
 	full := manager.arcPercentLocked(start.Add(time.Minute))
 	over := manager.arcPercentLocked(start.Add(40 * time.Minute))
@@ -67,7 +67,7 @@ func TestThirtyMinuteArcHonorsConfiguredDuration(t *testing.T) {
 	manager := swayTestManager(t, arcSettings(true, true, 30))
 	start := time.Unix(1500, 0)
 	manager.mu.Lock()
-	manager.arc.startedAt = start
+	manager.history.arc.startedAt = start
 	quarter := manager.arcPercentLocked(start.Add(7*time.Minute + 30*time.Second))
 	half := manager.arcPercentLocked(start.Add(15 * time.Minute))
 	full := manager.arcPercentLocked(start.Add(30 * time.Minute))
@@ -83,8 +83,8 @@ func TestTwentyMinuteArcUsesActiveTimeAndFreezesWhilePaused(t *testing.T) {
 	manager.options.Now = func() time.Time { return now }
 	manager.options.Tick = time.Minute
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
-	manager.arc.startedAt = now
+	manager.loop.mode = ModeAutopilot
+	manager.history.arc.startedAt = now
 	manager.mu.Unlock()
 
 	now = now.Add(12 * time.Second)
@@ -115,7 +115,7 @@ func TestMaximumArcDurationDoesNotOverflow(t *testing.T) {
 	start := time.Unix(0, 0)
 	duration := time.Duration(config.AutopilotMaximumArcMinutes) * time.Minute
 	manager.mu.Lock()
-	manager.arc.startedAt = start
+	manager.history.arc.startedAt = start
 	half := manager.arcPercentLocked(start.Add(duration / 2))
 	manager.mu.Unlock()
 	if half < 49 || half > 50 {
@@ -129,10 +129,10 @@ func TestAcceptedDecisionsDoNotAccelerateBuildup(t *testing.T) {
 	manager := swayTestManager(t, arcSettings(true, true, 60))
 	now := manager.options.Now()
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
-	manager.generation = 7
-	manager.segment = Segment{PatternID: "steady", SpeedPercent: 30}
-	manager.arc.startedAt = now.Add(-15 * time.Minute)
+	manager.loop.mode = ModeAutopilot
+	manager.loop.generation = 7
+	manager.motion.segment = Segment{PatternID: "steady", SpeedPercent: 30}
+	manager.history.arc.startedAt = now.Add(-15 * time.Minute)
 	manager.mu.Unlock()
 
 	before := manager.SessionArcSnapshot().Percent
@@ -155,7 +155,7 @@ func TestAcceptedDecisionsDoNotAccelerateBuildup(t *testing.T) {
 func TestUserCanPlaceAndResetTheArc(t *testing.T) {
 	manager := swayTestManager(t, arcSettings(true, true, 30))
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
+	manager.loop.mode = ModeAutopilot
 	manager.mu.Unlock()
 
 	manager.SetSessionArcPercent(70)
@@ -180,7 +180,7 @@ func TestArcPlacementIsRefusedWithoutASession(t *testing.T) {
 		t.Fatal("resetting the arc should be refused while Autopilot is not running")
 	}
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
+	manager.loop.mode = ModeAutopilot
 	manager.mu.Unlock()
 	if !manager.SetSessionArcPercent(55) {
 		t.Fatal("placing the arc should succeed once Autopilot is running")

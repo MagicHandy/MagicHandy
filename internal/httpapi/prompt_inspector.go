@@ -10,7 +10,7 @@ import (
 // the active conversation. It is intentionally read-only and available to a
 // read-only client: inspectability must not require device-control ownership.
 func (s *Server) handlePromptComposition(w http.ResponseWriter, r *http.Request) {
-	sessionID, err := s.resolveActiveChatSession(r.URL.Query().Get("session_id"))
+	sessionID, err := s.chatWorkspace.ResolveActive(r.URL.Query().Get("session_id"))
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return

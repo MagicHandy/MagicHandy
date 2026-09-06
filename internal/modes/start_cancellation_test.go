@@ -29,7 +29,7 @@ func TestModeStartCanceledWhileWaitingForControl(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager.mu.Lock()
-	previousIntent := manager.userPauseID
+	previousIntent := manager.user.intentID
 	manager.mu.Unlock()
 	manager.userControlMu.Lock()
 	releaseControl := sync.OnceFunc(manager.userControlMu.Unlock)
@@ -45,7 +45,7 @@ func TestModeStartCanceledWhileWaitingForControl(t *testing.T) {
 	waitFor(t, time.Second, func() bool {
 		manager.mu.Lock()
 		defer manager.mu.Unlock()
-		return manager.userPauseID != previousIntent
+		return manager.user.intentID != previousIntent
 	})
 	cancel()
 	releaseControl()
@@ -64,9 +64,9 @@ func TestModeStartCanceledWhileDrainingPreviousLoop(t *testing.T) {
 	releaseDrain := sync.OnceFunc(func() { close(drained) })
 	defer releaseDrain()
 	// Model a previous loop that needs time to finish cancellation.
-	manager.mode = ModeChat
-	manager.cancel = func() { close(stopping) }
-	manager.done = drained
+	manager.loop.mode = ModeChat
+	manager.loop.cancel = func() { close(stopping) }
+	manager.loop.done = drained
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)

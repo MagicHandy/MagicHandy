@@ -126,14 +126,14 @@ func (m *Manager) planSwayLocked(
 		base := swayEdgeGuard + slot*time.Duration(index)
 		jitter := time.Duration(0)
 		if span := int64(slot - swayMinSpacing); span > 0 {
-			jitter = time.Duration(m.swayRNG.Int63n(span))
+			jitter = time.Duration(m.motion.swayRNG.Int63n(span))
 		}
-		delta := m.swayRNG.Intn(2*amplitude+1) - amplitude
+		delta := m.motion.swayRNG.Intn(2*amplitude+1) - amplitude
 		if delta == 0 {
 			// A zero delta would be a no-op retarget, which is exactly what this
 			// change set removed from the hold path. Nudge it off zero instead.
 			delta = amplitude
-			if m.swayRNG.Intn(2) == 0 {
+			if m.motion.swayRNG.Intn(2) == 0 {
 				delta = -amplitude
 			}
 		}
@@ -214,22 +214,22 @@ func swayAmplitude(low int, high int, variability VariabilityPreference) int {
 func (m *Manager) dueSway(now time.Time, generation uint64) (swayPoint, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.mode != ModeAutopilot || m.generation != generation || m.userStopped ||
-		m.chatTargetPending || len(m.swayPoints) == 0 {
+	if m.loop.mode != ModeAutopilot || m.loop.generation != generation || m.user.stopped ||
+		m.chat.pending || len(m.motion.swayPoints) == 0 {
 		return swayPoint{}, false
 	}
-	if m.swayPoints[0].generation != generation {
+	if m.motion.swayPoints[0].generation != generation {
 		// Generation changes invalidate the whole segment schedule. Without
 		// carrying that identity on the waypoint itself, a chat handoff could
 		// adopt a new pattern and then receive a speed sampled for the old one.
-		m.swayPoints = nil
+		m.motion.swayPoints = nil
 		return swayPoint{}, false
 	}
-	if now.Before(m.swayPoints[0].at) {
+	if now.Before(m.motion.swayPoints[0].at) {
 		return swayPoint{}, false
 	}
-	point := m.swayPoints[0]
-	m.swayPoints = m.swayPoints[1:]
+	point := m.motion.swayPoints[0]
+	m.motion.swayPoints = m.motion.swayPoints[1:]
 	return point, true
 }
 
@@ -248,8 +248,8 @@ func (m *Manager) applyDueSway(
 	defer finish()
 
 	m.mu.Lock()
-	segment := m.segment
-	pattern := m.pattern
+	segment := m.motion.segment
+	pattern := m.motion.pattern
 	m.mu.Unlock()
 	if !segment.hasContent() {
 		return
@@ -267,23 +267,23 @@ func (m *Manager) applyDueSway(
 		return
 	}
 	m.mu.Lock()
-	if m.mode == ModeAutopilot && m.generation == generation {
-		m.previousSpeed = m.segment.SpeedPercent
-		m.segment.SpeedPercent = point.speedPercent
-		m.speedChangedAt = m.options.Now()
+	if m.loop.mode == ModeAutopilot && m.loop.generation == generation {
+		m.history.previousSpeed = m.motion.segment.SpeedPercent
+		m.motion.segment.SpeedPercent = point.speedPercent
+		m.history.speedChangedAt = m.options.Now()
 	}
-	remaining := len(m.swayPoints)
+	remaining := len(m.motion.swayPoints)
 	m.mu.Unlock()
 	m.trace(ModeAutopilot, "autopilot_sway", nil,
 		swayNote(point.speedPercent, remaining))
 }
 
 func (m *Manager) ensureSwayRNGLocked() {
-	if m.planner == nil {
-		m.planner = NewPlanner(m.options.Seed)
+	if m.motion.planner == nil {
+		m.motion.planner = NewPlanner(m.options.Seed)
 	}
-	if m.swayRNG == nil {
+	if m.motion.swayRNG == nil {
 		//nolint:gosec // Reproducible cadence variation, never security material.
-		m.swayRNG = rand.New(rand.NewSource(m.planner.Seed() ^ swayCadenceSeedSalt))
+		m.motion.swayRNG = rand.New(rand.NewSource(m.motion.planner.Seed() ^ swayCadenceSeedSalt))
 	}
 }

@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -96,13 +95,15 @@ func TestPersonaMutationIsLockedWhileAReplyRuns(t *testing.T) {
 	t.Cleanup(server.Close)
 	created := createPersonaVia(t, server, "Rowan")
 
-	server.chatCancelMu.Lock()
-	if server.chatCancels == nil {
-		server.chatCancels = make(map[uint64]context.CancelFunc)
+	sessionID, err := server.chatLog.ActiveSessionID()
+	if err != nil {
+		t.Fatal(err)
 	}
-	server.chatCancels[1] = func() {}
-	server.chatCancelMu.Unlock()
-	t.Cleanup(server.cancelActiveChats)
+	_, finishTurn, err := server.chatWorkspace.BeginTurn(t.Context(), sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(finishTurn)
 
 	recorder, _ := personaRequest(t, server, http.MethodPatch,
 		"/api/personas/"+created.ID, map[string]any{"name": "Changed in flight"})

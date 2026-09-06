@@ -40,6 +40,18 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-06 chat application and mode state boundaries
+
+The first two audit follow-ups now have focused implementations. Conversation
+session policy, turn admission/cancellation and status/history use cases live in
+`internal/chatapp` behind a persistence port (see
+[ADR 0026](docs/decisions/0026-conversation-application-boundary.md)). The mode
+manager names lifecycle, control, chat, schedule, history and event state owners,
+and separates pure scheduling decisions from transitions. Chat activity IDs fix
+late completion of an old request releasing Autopilot during its replacement.
+The [implementation review](docs/chat-mode-boundaries-2026-09-06.md) records
+tests, simulator/LLM acceptance, measurements and remaining extraction scope.
+
 ### 2026-09-06 architecture and lifecycle audit
 
 The cross-domain review fixes canceled mode startup and LLM admission,

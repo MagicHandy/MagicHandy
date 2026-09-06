@@ -25,11 +25,40 @@ func TestInternalImportBoundaries(t *testing.T) {
 	packages := listInternalPackages(t)
 	internal := modulePath + "/internal/"
 
-	rules := []struct {
-		name      string
-		appliesTo func(string) bool
-		forbidden []string
-	}{
+	rules := internalBoundaryRules(internal)
+
+	for _, pkg := range packages {
+		imports := uniqueImports(pkg)
+		for _, rule := range rules {
+			if !rule.appliesTo(pkg.ImportPath) {
+				continue
+			}
+			for _, imported := range imports {
+				for _, forbidden := range rule.forbidden {
+					if imported == forbidden || strings.HasPrefix(imported, forbidden+"/") {
+						t.Errorf("%s: package %s imports forbidden package %s", rule.name, pkg.ImportPath, imported)
+					}
+				}
+			}
+		}
+	}
+}
+
+type importRule struct {
+	name      string
+	appliesTo func(string) bool
+	forbidden []string
+}
+
+func internalBoundaryRules(internal string) []importRule {
+	return []importRule{
+		{
+			name: "conversation application stays above core domains",
+			appliesTo: func(importPath string) bool {
+				return !hasAnyPrefix(importPath, internal+"httpapi", internal+"chatapp")
+			},
+			forbidden: []string{internal + "chatapp"},
+		},
 		{
 			name: "httpapi is an edge adapter",
 			appliesTo: func(importPath string) bool {
@@ -101,22 +130,6 @@ func TestInternalImportBoundaries(t *testing.T) {
 				internal + "motion",
 			},
 		},
-	}
-
-	for _, pkg := range packages {
-		imports := uniqueImports(pkg)
-		for _, rule := range rules {
-			if !rule.appliesTo(pkg.ImportPath) {
-				continue
-			}
-			for _, imported := range imports {
-				for _, forbidden := range rule.forbidden {
-					if imported == forbidden || strings.HasPrefix(imported, forbidden+"/") {
-						t.Errorf("%s: package %s imports forbidden package %s", rule.name, pkg.ImportPath, imported)
-					}
-				}
-			}
-		}
 	}
 }
 

@@ -40,9 +40,9 @@ func (m *Manager) tickAutopilot(ctx context.Context) {
 
 	if !snapshot.Running {
 		m.mu.Lock()
-		stopped := m.userStopped
-		retryAt := m.nextRetry
-		generation := m.generation
+		stopped := m.user.stopped
+		retryAt := m.motion.nextRetry
+		generation := m.loop.generation
 		m.mu.Unlock()
 		if stopped {
 			go m.Stop("user_stop_observed")
@@ -57,23 +57,19 @@ func (m *Manager) tickAutopilot(ctx context.Context) {
 
 	now := m.options.Now()
 	m.mu.Lock()
-	pending := m.pendingMotion
-	deadline := m.deadline
-	planAt := m.motionPlanAt
-	retryAt := m.nextRetry
-	generation := m.generation
-	waitingID := m.speechWaitingID
-	fallbackAt := m.speechFallbackAt
+	work := m.motion.nextAutopilotWork(now)
+	generation := m.loop.generation
+	waitingID := m.speech.waitingID
+	fallbackAt := m.speech.fallbackAt
 	m.mu.Unlock()
 
-	if now.Before(retryAt) {
+	switch work {
+	case waitForRetry:
 		return
-	}
-	if pending != nil && !now.Before(deadline) {
+	case applyPlannedMotion:
 		m.applyPendingAutopilotChoice(ctx, engine, generation)
 		return
-	}
-	if pending == nil && (planAt.IsZero() || !now.Before(planAt)) {
+	case planNextMotion:
 		m.planAutopilotMotion(ctx, engine, generation)
 		return
 	}
@@ -107,14 +103,14 @@ func (m *Manager) planAutopilotMotion(ctx context.Context, engine Engine, genera
 	}
 	now := m.options.Now()
 	m.mu.Lock()
-	if m.mode != ModeAutopilot || m.generation != generation || m.chatTargetPending || m.userStopped {
+	if m.loop.mode != ModeAutopilot || m.loop.generation != generation || m.chat.pending || m.user.stopped {
 		m.mu.Unlock()
 		return
 	}
-	m.lastDecisionTime = choice.decisionLatency
-	if now.Before(m.deadline) {
+	m.motion.lastDecisionTime = choice.decisionLatency
+	if now.Before(m.motion.deadline) {
 		copied := choice
-		m.pendingMotion = &copied
+		m.motion.pending = &copied
 		m.mu.Unlock()
 		m.trace(ModeAutopilot, "motion_planned", nil,
 			fmt.Sprintf("%s next=%s variability=%s latency=%s%s",
@@ -134,12 +130,12 @@ func (m *Manager) applyPendingAutopilotChoice(ctx context.Context, engine Engine
 	defer finish()
 
 	m.mu.Lock()
-	if m.mode != ModeAutopilot || m.generation != generation || m.pendingMotion == nil {
+	if m.loop.mode != ModeAutopilot || m.loop.generation != generation || m.motion.pending == nil {
 		m.mu.Unlock()
 		return
 	}
-	choice := *m.pendingMotion
-	m.pendingMotion = nil
+	choice := *m.motion.pending
+	m.motion.pending = nil
 	m.mu.Unlock()
 	m.applyAutopilotChoice(operationCtx, engine, choice, generation, "autopilot_segment")
 }
@@ -164,10 +160,10 @@ func (m *Manager) applyAutopilotChoice(
 		if ctx.Err() == nil {
 			m.backoff(ModeAutopilot, generation, "segment_failed", err)
 			m.mu.Lock()
-			if m.mode == ModeAutopilot && m.generation == generation {
-				m.pendingMotion = nil
-				m.deadline = m.nextRetry
-				m.motionPlanAt = m.nextRetry
+			if m.loop.mode == ModeAutopilot && m.loop.generation == generation {
+				m.motion.pending = nil
+				m.motion.deadline = m.motion.nextRetry
+				m.motion.planAt = m.motion.nextRetry
 			}
 			m.mu.Unlock()
 		}
@@ -181,10 +177,10 @@ func (m *Manager) applyAutopilotChoice(
 	m.tracePlanned(ModeAutopilot, reason, choice)
 	if state.RecentCommandLatencyMillis > 0 {
 		m.mu.Lock()
-		if m.mode == ModeAutopilot && m.generation == generation {
+		if m.loop.mode == ModeAutopilot && m.loop.generation == generation {
 			transportLatency := time.Duration(state.RecentCommandLatencyMillis) * time.Millisecond
-			if transportLatency > m.lastDecisionTime {
-				m.lastDecisionTime = transportLatency
+			if transportLatency > m.motion.lastDecisionTime {
+				m.motion.lastDecisionTime = transportLatency
 			}
 		}
 		m.mu.Unlock()
@@ -195,12 +191,12 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	now := m.options.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.mode != mode || m.generation != generation || m.userStopped || m.userPaused || m.chatTargetPending {
+	if m.loop.mode != mode || m.loop.generation != generation || m.user.stopped || m.user.paused || m.chat.pending {
 		return false
 	}
-	previousSpeed := m.segment.SpeedPercent
+	previousSpeed := m.motion.segment.SpeedPercent
 	if choice.decisionLatency > 0 {
-		m.lastDecisionTime = choice.decisionLatency
+		m.motion.lastDecisionTime = choice.decisionLatency
 	}
 	m.observeAutopilotPhraseLocked(now, *choice)
 	m.rememberPositionBandLocked(choice.appliedPerceptual)
@@ -223,22 +219,22 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 		duration = m.options.MaxSegmentDuration
 	}
 	choice.segment.DurationMillis = duration.Milliseconds()
-	m.segment = choice.segment
-	m.pattern = choice.pattern
-	m.segmentIdx++
-	m.deadline = now.Add(duration)
-	m.motionPlanAt = m.deadline.Add(-m.planningLeadLocked(duration))
-	m.pendingMotion = nil
+	m.motion.segment = choice.segment
+	m.motion.pattern = choice.pattern
+	m.motion.segmentIdx++
+	m.motion.deadline = now.Add(duration)
+	m.motion.planAt = m.motion.deadline.Add(-m.planningLeadLocked(duration))
+	m.motion.pending = nil
 	// tickAutopilot never read driftAt/driftDone, so the old midpoint step was
 	// write-only state here. Intra-segment variation is now the sway schedule.
-	m.driftDone = true
+	m.motion.driftDone = true
 	if choice.segment.SpeedPercent != previousSpeed {
-		m.previousSpeed = previousSpeed
-		m.speedChangedAt = now
+		m.history.previousSpeed = previousSpeed
+		m.history.speedChangedAt = now
 	}
-	m.swayPoints = m.planSwayLocked(now, duration, *choice, generation)
-	m.nextRetry = time.Time{}
-	if m.speechDeadline.IsZero() && m.speechWaitingID == "" {
+	m.motion.swayPoints = m.planSwayLocked(now, duration, *choice, generation)
+	m.motion.nextRetry = time.Time{}
+	if m.speech.deadline.IsZero() && m.speech.waitingID == "" {
 		m.scheduleSpeechLocked(now, TimingNormal)
 	}
 	return true
@@ -251,13 +247,13 @@ func (m *Manager) rememberPositionBandLocked(summary *motion.PerceptualSummary) 
 	if summary == nil || summary.PositionMaxPercent <= summary.PositionMinPercent {
 		return
 	}
-	m.recentPositionBands = append(m.recentPositionBands, PositionBand{
+	m.history.recentPositionBands = append(m.history.recentPositionBands, PositionBand{
 		MinimumPercent: summary.PositionMinPercent,
 		MaximumPercent: summary.PositionMaxPercent,
 	})
 	const limit = 4
-	if len(m.recentPositionBands) > limit {
-		m.recentPositionBands = m.recentPositionBands[len(m.recentPositionBands)-limit:]
+	if len(m.history.recentPositionBands) > limit {
+		m.history.recentPositionBands = m.history.recentPositionBands[len(m.history.recentPositionBands)-limit:]
 	}
 }
 
@@ -266,30 +262,30 @@ func (m *Manager) rememberPositionBandLocked(summary *motion.PerceptualSummary) 
 // only a semantic shape/texture change resets it. Callers hold m.mu.
 func (m *Manager) observeAutopilotPhraseLocked(now time.Time, choice segmentChoice) {
 	if choice.source == "hold" {
-		if m.currentPhrase.hasContent() {
-			m.decisionsAtCurrentPhrase++
+		if m.history.currentPhrase.hasContent() {
+			m.history.decisionsAtCurrentPhrase++
 		}
 		if choice.note == "" {
-			m.consecutiveHolds++
+			m.history.consecutiveHolds++
 		} else {
-			m.consecutiveHolds = 0
+			m.history.consecutiveHolds = 0
 		}
 		return
 	}
-	m.consecutiveHolds = 0
+	m.history.consecutiveHolds = 0
 	if !choice.segment.hasContent() {
 		return
 	}
-	if !m.currentPhrase.hasContent() || !sameFeltMotionPhrase(
-		m.currentPhrase, choice.segment, m.currentPerceptual, choice.appliedPerceptual,
+	if !m.history.currentPhrase.hasContent() || !sameFeltMotionPhrase(
+		m.history.currentPhrase, choice.segment, m.history.currentPerceptual, choice.appliedPerceptual,
 	) {
-		m.currentPhrase = clonePhraseSegment(choice.segment)
-		m.currentPerceptual = clonePerceptualSummaryPointer(choice.appliedPerceptual)
-		m.phraseChangedAt = now
-		m.decisionsAtCurrentPhrase = 0
+		m.history.currentPhrase = clonePhraseSegment(choice.segment)
+		m.history.currentPerceptual = clonePerceptualSummaryPointer(choice.appliedPerceptual)
+		m.history.phraseChangedAt = now
+		m.history.decisionsAtCurrentPhrase = 0
 		return
 	}
-	m.decisionsAtCurrentPhrase++
+	m.history.decisionsAtCurrentPhrase++
 }
 
 // observeInteractivePhraseLocked adopts user-authored shape without counting
@@ -299,17 +295,17 @@ func (m *Manager) observeInteractivePhraseLocked(
 	segment Segment,
 	perceptual *motion.PerceptualSummary,
 ) {
-	m.consecutiveHolds = 0
+	m.history.consecutiveHolds = 0
 	if !segment.hasContent() {
 		return
 	}
-	if !m.currentPhrase.hasContent() || !sameFeltMotionPhrase(
-		m.currentPhrase, segment, m.currentPerceptual, perceptual,
+	if !m.history.currentPhrase.hasContent() || !sameFeltMotionPhrase(
+		m.history.currentPhrase, segment, m.history.currentPerceptual, perceptual,
 	) {
-		m.currentPhrase = clonePhraseSegment(segment)
-		m.currentPerceptual = clonePerceptualSummaryPointer(perceptual)
-		m.phraseChangedAt = now
-		m.decisionsAtCurrentPhrase = 0
+		m.history.currentPhrase = clonePhraseSegment(segment)
+		m.history.currentPerceptual = clonePerceptualSummaryPointer(perceptual)
+		m.history.phraseChangedAt = now
+		m.history.decisionsAtCurrentPhrase = 0
 	}
 }
 
@@ -365,7 +361,7 @@ func (m *Manager) tickAutopilotSpeech(ctx context.Context, engine Engine, genera
 	}
 	now := m.options.Now()
 	m.mu.Lock()
-	deadline := m.speechDeadline
+	deadline := m.speech.deadline
 	m.mu.Unlock()
 	if deadline.IsZero() || now.Before(deadline) {
 		return
@@ -409,11 +405,11 @@ func (m *Manager) tickAutopilotSpeech(ctx context.Context, engine Engine, genera
 
 func (m *Manager) retryAutopilotSpeech(generation uint64, delay time.Duration, event string, note string) {
 	m.mu.Lock()
-	if m.mode != ModeAutopilot || m.generation != generation || m.userStopped {
+	if m.loop.mode != ModeAutopilot || m.loop.generation != generation || m.user.stopped {
 		m.mu.Unlock()
 		return
 	}
-	m.speechDeadline = m.options.Now().Add(delay)
+	m.speech.deadline = m.options.Now().Add(delay)
 	m.mu.Unlock()
 	m.trace(ModeAutopilot, event, nil, note)
 }
@@ -455,16 +451,16 @@ func (m *Manager) armAutopilotSpeech(
 	announcement Announcement,
 ) {
 	m.mu.Lock()
-	if m.mode != ModeAutopilot || m.generation != generation || m.userStopped {
+	if m.loop.mode != ModeAutopilot || m.loop.generation != generation || m.user.stopped {
 		m.mu.Unlock()
 		return
 	}
-	m.lastSay = say
-	m.speechNextTiming = timing
+	m.speech.lastSay = say
+	m.speech.nextTiming = timing
 	if announcement.AwaitPlayback && announcement.RequestID != "" {
-		m.speechDeadline = time.Time{}
-		m.speechWaitingID = announcement.RequestID
-		m.speechFallbackAt = m.options.Now().Add(speechPlaybackAckFallback)
+		m.speech.deadline = time.Time{}
+		m.speech.waitingID = announcement.RequestID
+		m.speech.fallbackAt = m.options.Now().Add(speechPlaybackAckFallback)
 	} else {
 		m.scheduleSpeechLocked(m.options.Now(), timing)
 	}
@@ -481,13 +477,13 @@ func (m *Manager) NotifySpeechPlaybackComplete(requestID string) bool {
 
 func (m *Manager) completeSpeechWait(requestID string, reason string) bool {
 	m.mu.Lock()
-	if m.mode != ModeAutopilot || requestID == "" || m.speechWaitingID != requestID {
+	if m.loop.mode != ModeAutopilot || requestID == "" || m.speech.waitingID != requestID {
 		m.mu.Unlock()
 		return false
 	}
-	timing := m.speechNextTiming
-	m.speechWaitingID = ""
-	m.speechFallbackAt = time.Time{}
+	timing := m.speech.nextTiming
+	m.speech.waitingID = ""
+	m.speech.fallbackAt = time.Time{}
 	m.scheduleSpeechLocked(m.options.Now(), timing)
 	m.mu.Unlock()
 	m.trace(ModeAutopilot, reason, nil, fmt.Sprintf("next=%s", timing))
@@ -499,18 +495,18 @@ func (m *Manager) completeSpeechWait(requestID string, reason string) bool {
 func (m *Manager) NotifyAutopilotSettingsChanged() {
 	now := m.options.Now()
 	m.mu.Lock()
-	if m.mode != ModeAutopilot || m.userStopped {
+	if m.loop.mode != ModeAutopilot || m.user.stopped {
 		m.mu.Unlock()
 		return
 	}
-	m.generation++
+	m.loop.generation++
 	m.cancelOperationLocked()
-	m.pendingMotion = nil
-	m.swayPoints = nil
-	m.deadline = now.Add(m.sampleMotionDelayLocked(TimingNormal))
-	m.motionPlanAt = m.deadline.Add(-m.planningLeadLocked(m.deadline.Sub(now)))
-	m.speechWaitingID = ""
-	m.speechFallbackAt = time.Time{}
+	m.motion.pending = nil
+	m.motion.swayPoints = nil
+	m.motion.deadline = now.Add(m.sampleMotionDelayLocked(TimingNormal))
+	m.motion.planAt = m.motion.deadline.Add(-m.planningLeadLocked(m.motion.deadline.Sub(now)))
+	m.speech.waitingID = ""
+	m.speech.fallbackAt = time.Time{}
 	m.scheduleSpeechLocked(now, TimingNormal)
 	m.mu.Unlock()
 	m.trace(ModeAutopilot, "cadence_settings_changed", nil, "")
@@ -520,10 +516,10 @@ func (m *Manager) scheduleSpeechLocked(now time.Time, timing TimingPreference) {
 	settings := m.options.AutopilotSettings()
 	_, _, enabled := settings.SpeechWindow()
 	if !enabled || m.options.DecideSpeech == nil || m.options.Announce == nil {
-		m.speechDeadline = time.Time{}
+		m.speech.deadline = time.Time{}
 		return
 	}
-	m.speechDeadline = now.Add(m.sampleSpeechDelayLocked(timing))
+	m.speech.deadline = now.Add(m.sampleSpeechDelayLocked(timing))
 }
 
 func (m *Manager) sampleMotionDelayLocked(timing TimingPreference) time.Duration {
@@ -535,7 +531,7 @@ func (m *Manager) sampleMotionDelayLocked(timing TimingPreference) time.Duration
 		maximum,
 		timing,
 		settings.AdaptiveMotionTiming,
-		m.motionCadenceRNG,
+		m.motion.cadenceRNG,
 	)
 }
 
@@ -551,7 +547,7 @@ func (m *Manager) sampleSpeechDelayLocked(timing TimingPreference) time.Duration
 		maximum,
 		timing,
 		settings.AdaptiveSpeechTiming,
-		m.speechCadenceRNG,
+		m.speech.cadenceRNG,
 	)
 }
 
@@ -592,15 +588,15 @@ func (m *Manager) sampleCadenceLocked(
 }
 
 func (m *Manager) ensureCadenceRNGsLocked() {
-	if m.planner == nil {
-		m.planner = NewPlanner(m.options.Seed)
+	if m.motion.planner == nil {
+		m.motion.planner = NewPlanner(m.options.Seed)
 	}
-	seed := m.planner.Seed()
-	if m.motionCadenceRNG == nil {
-		m.motionCadenceRNG = newCadenceRNG(seed, motionCadenceSeedSalt)
+	seed := m.motion.planner.Seed()
+	if m.motion.cadenceRNG == nil {
+		m.motion.cadenceRNG = newCadenceRNG(seed, motionCadenceSeedSalt)
 	}
-	if m.speechCadenceRNG == nil {
-		m.speechCadenceRNG = newCadenceRNG(seed, speechCadenceSeedSalt)
+	if m.speech.cadenceRNG == nil {
+		m.speech.cadenceRNG = newCadenceRNG(seed, speechCadenceSeedSalt)
 	}
 }
 
@@ -610,8 +606,8 @@ func newCadenceRNG(seed int64, salt int64) *rand.Rand {
 }
 
 func (m *Manager) planningLeadLocked(duration time.Duration) time.Duration {
-	lead := m.lastDecisionTime + 500*time.Millisecond
-	if m.lastDecisionTime <= 0 {
+	lead := m.motion.lastDecisionTime + 500*time.Millisecond
+	if m.motion.lastDecisionTime <= 0 {
 		lead = defaultPlanningLead
 	}
 	if lead < minimumPlanningLead {

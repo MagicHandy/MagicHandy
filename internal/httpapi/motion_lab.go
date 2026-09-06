@@ -89,7 +89,7 @@ func (s *Server) handleMotionLabProposal(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusServiceUnavailable, err)
 		return
 	}
-	trialCtx, finishTrial, err := s.beginChat(r.Context(), sessionID)
+	trialCtx, finishTrial, err := s.chatWorkspace.BeginTurn(r.Context(), sessionID)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return

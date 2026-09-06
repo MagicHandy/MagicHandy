@@ -47,7 +47,7 @@ func planSway(t *testing.T, manager *Manager, duration time.Duration, variabilit
 	t.Helper()
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
-	return manager.planSwayLocked(time.Unix(0, 0), duration, swayChoice(variability), manager.generation)
+	return manager.planSwayLocked(time.Unix(0, 0), duration, swayChoice(variability), manager.loop.generation)
 }
 
 // Settled is the model's way of asking for a flat stretch, so it must produce no
@@ -151,7 +151,7 @@ func TestSwayNeverLeavesTheUserSpeedBand(t *testing.T) {
 		choice := swayChoice(VariabilityRestless)
 		choice.segment.SpeedPercent = speed
 		manager.mu.Lock()
-		points := manager.planSwayLocked(time.Unix(0, 0), 120*time.Second, choice, manager.generation)
+		points := manager.planSwayLocked(time.Unix(0, 0), 120*time.Second, choice, manager.loop.generation)
 		manager.mu.Unlock()
 		for _, point := range points {
 			if point.speedPercent < settings.SpeedMinPercent || point.speedPercent > settings.SpeedMaxPercent {
@@ -233,9 +233,9 @@ func TestDueSwayPopsOnReadSoAFailureCannotStarveSpeech(t *testing.T) {
 	manager := swayTestManager(t, config.DefaultAutopilotSettings())
 	now := time.Unix(100, 0)
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
-	manager.generation = 3
-	manager.swayPoints = []swayPoint{
+	manager.loop.mode = ModeAutopilot
+	manager.loop.generation = 3
+	manager.motion.swayPoints = []swayPoint{
 		{generation: 3, at: now.Add(-time.Second), speedPercent: 34},
 		{generation: 3, at: now.Add(time.Minute), speedPercent: 26},
 	}
@@ -249,7 +249,7 @@ func TestDueSwayPopsOnReadSoAFailureCannotStarveSpeech(t *testing.T) {
 		t.Fatal("the future waypoint must not be due yet")
 	}
 	manager.mu.Lock()
-	remaining := len(manager.swayPoints)
+	remaining := len(manager.motion.swayPoints)
 	manager.mu.Unlock()
 	if remaining != 1 {
 		t.Fatalf("remaining waypoints = %d, want 1", remaining)
@@ -263,9 +263,9 @@ func TestDueSwayDiscardsASupersededSchedule(t *testing.T) {
 	manager := swayTestManager(t, config.DefaultAutopilotSettings())
 	now := time.Unix(100, 0)
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
-	manager.generation = 9
-	manager.swayPoints = []swayPoint{{
+	manager.loop.mode = ModeAutopilot
+	manager.loop.generation = 9
+	manager.motion.swayPoints = []swayPoint{{
 		generation:   8,
 		at:           now.Add(-time.Second),
 		speedPercent: 40,
@@ -276,7 +276,7 @@ func TestDueSwayDiscardsASupersededSchedule(t *testing.T) {
 		t.Fatal("a waypoint from an older generation was applied")
 	}
 	manager.mu.Lock()
-	remaining := len(manager.swayPoints)
+	remaining := len(manager.motion.swayPoints)
 	manager.mu.Unlock()
 	if remaining != 0 {
 		t.Fatalf("stale schedule retained %d waypoints", remaining)
@@ -287,13 +287,13 @@ func TestPauseShiftsSwayScheduleWithTheSegmentDeadline(t *testing.T) {
 	manager := swayTestManager(t, config.DefaultAutopilotSettings())
 	now := time.Unix(100, 0)
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
-	manager.generation = 4
-	manager.deadline = now.Add(time.Minute)
-	manager.speedChangedAt = now.Add(-30 * time.Second)
-	manager.phraseChangedAt = now.Add(-45 * time.Second)
-	manager.arc.startedAt = now.Add(-time.Minute)
-	manager.swayPoints = []swayPoint{{
+	manager.loop.mode = ModeAutopilot
+	manager.loop.generation = 4
+	manager.motion.deadline = now.Add(time.Minute)
+	manager.history.speedChangedAt = now.Add(-30 * time.Second)
+	manager.history.phraseChangedAt = now.Add(-45 * time.Second)
+	manager.history.arc.startedAt = now.Add(-time.Minute)
+	manager.motion.swayPoints = []swayPoint{{
 		generation:   4,
 		at:           now.Add(10 * time.Second),
 		speedPercent: 34,
@@ -303,11 +303,11 @@ func TestPauseShiftsSwayScheduleWithTheSegmentDeadline(t *testing.T) {
 	manager.freezeDeadline()
 
 	manager.mu.Lock()
-	deadline := manager.deadline
-	waypointAt := manager.swayPoints[0].at
-	speedChangedAt := manager.speedChangedAt
-	phraseChangedAt := manager.phraseChangedAt
-	arcStartedAt := manager.arc.startedAt
+	deadline := manager.motion.deadline
+	waypointAt := manager.motion.swayPoints[0].at
+	speedChangedAt := manager.history.speedChangedAt
+	phraseChangedAt := manager.history.phraseChangedAt
+	arcStartedAt := manager.history.arc.startedAt
 	tick := manager.options.Tick
 	manager.mu.Unlock()
 	if !deadline.Equal(now.Add(time.Minute + tick)) {
@@ -332,10 +332,10 @@ func TestAutopilotSpeedHistoryChangesOnlyWhenSpeedChanges(t *testing.T) {
 	now := time.Unix(200, 0)
 	manager.options.Now = func() time.Time { return now }
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
-	manager.generation = 5
-	manager.segment = Segment{PatternID: motion.PatternStroke, SpeedPercent: 24}
-	manager.speedChangedAt = now.Add(-30 * time.Second)
+	manager.loop.mode = ModeAutopilot
+	manager.loop.generation = 5
+	manager.motion.segment = Segment{PatternID: motion.PatternStroke, SpeedPercent: 24}
+	manager.history.speedChangedAt = now.Add(-30 * time.Second)
 	manager.mu.Unlock()
 
 	changed := swayChoice(VariabilitySettled)
@@ -344,8 +344,8 @@ func TestAutopilotSpeedHistoryChangesOnlyWhenSpeedChanges(t *testing.T) {
 		t.Fatal("failed to arm changed-speed segment")
 	}
 	manager.mu.Lock()
-	previous := manager.previousSpeed
-	changedAt := manager.speedChangedAt
+	previous := manager.history.previousSpeed
+	changedAt := manager.history.speedChangedAt
 	trend := manager.speedTrendLocked()
 	manager.mu.Unlock()
 	if previous != 24 || !changedAt.Equal(now) || trend != SpeedTrendRising {
@@ -359,8 +359,8 @@ func TestAutopilotSpeedHistoryChangesOnlyWhenSpeedChanges(t *testing.T) {
 		t.Fatal("failed to arm same-speed segment")
 	}
 	manager.mu.Lock()
-	previous = manager.previousSpeed
-	unchangedAt := manager.speedChangedAt
+	previous = manager.history.previousSpeed
+	unchangedAt := manager.history.speedChangedAt
 	trend = manager.speedTrendLocked()
 	manager.mu.Unlock()
 	if previous != 24 || !unchangedAt.Equal(changedAt) || trend != SpeedTrendRising {
@@ -374,9 +374,9 @@ func TestAppliedSwayRecordsItsSpeedTransition(t *testing.T) {
 	now := time.Unix(300, 0)
 	manager.options.Now = func() time.Time { return now }
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
-	manager.generation = 6
-	manager.segment = Segment{PatternID: motion.PatternStroke, SpeedPercent: 30}
+	manager.loop.mode = ModeAutopilot
+	manager.loop.generation = 6
+	manager.motion.segment = Segment{PatternID: motion.PatternStroke, SpeedPercent: 30}
 	manager.mu.Unlock()
 
 	engine := manager.options.Current()
@@ -388,9 +388,9 @@ func TestAppliedSwayRecordsItsSpeedTransition(t *testing.T) {
 	)
 
 	manager.mu.Lock()
-	previous := manager.previousSpeed
-	current := manager.segment.SpeedPercent
-	changedAt := manager.speedChangedAt
+	previous := manager.history.previousSpeed
+	current := manager.motion.segment.SpeedPercent
+	changedAt := manager.history.speedChangedAt
 	trend := manager.speedTrendLocked()
 	manager.mu.Unlock()
 	if previous != 30 || current != 38 || !changedAt.Equal(now) || trend != SpeedTrendRising {
@@ -427,11 +427,11 @@ func TestSpeechPlaybackFallbackRecoversALostAcknowledgement(t *testing.T) {
 	t.Cleanup(manager.Shutdown)
 	now := clock.Now()
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
-	manager.generation = 1
-	manager.speechWaitingID = "tts-lost"
-	manager.speechFallbackAt = now.Add(speechPlaybackAckFallback)
-	manager.speechNextTiming = TimingNormal
+	manager.loop.mode = ModeAutopilot
+	manager.loop.generation = 1
+	manager.speech.waitingID = "tts-lost"
+	manager.speech.fallbackAt = now.Add(speechPlaybackAckFallback)
+	manager.speech.nextTiming = TimingNormal
 	manager.mu.Unlock()
 
 	// Before the fallback moment the scheduler is still waiting, deliberately.
@@ -439,7 +439,7 @@ func TestSpeechPlaybackFallbackRecoversALostAcknowledgement(t *testing.T) {
 		t.Fatal("an unrelated request id completed the wait")
 	}
 	manager.mu.Lock()
-	stillWaiting := manager.speechWaitingID
+	stillWaiting := manager.speech.waitingID
 	manager.mu.Unlock()
 	if stillWaiting != "tts-lost" {
 		t.Fatalf("waiting id = %q, want it unchanged", stillWaiting)
@@ -450,9 +450,9 @@ func TestSpeechPlaybackFallbackRecoversALostAcknowledgement(t *testing.T) {
 		t.Fatal("the fallback did not release the speech wait")
 	}
 	manager.mu.Lock()
-	waiting := manager.speechWaitingID
-	fallbackAt := manager.speechFallbackAt
-	deadline := manager.speechDeadline
+	waiting := manager.speech.waitingID
+	fallbackAt := manager.speech.fallbackAt
+	deadline := manager.speech.deadline
 	manager.mu.Unlock()
 	if waiting != "" || !fallbackAt.IsZero() {
 		t.Fatalf("wait state was not cleared: id=%q fallbackAt=%v", waiting, fallbackAt)

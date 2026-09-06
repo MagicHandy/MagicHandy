@@ -324,37 +324,37 @@ func (m *Manager) decisionInput() DecisionInput {
 	m.mu.Lock()
 	input := DecisionInput{
 		Style:               settings.Style,
-		SegmentIndex:        m.segmentIdx,
-		RecentPatternIDs:    append([]string(nil), m.recentPatternIDs...),
-		RecentPositionBands: append([]PositionBand(nil), m.recentPositionBands...),
+		SegmentIndex:        m.motion.segmentIdx,
+		RecentPatternIDs:    append([]string(nil), m.history.recentPatternIDs...),
+		RecentPositionBands: append([]PositionBand(nil), m.history.recentPositionBands...),
 		SpeedMinPercent:     settings.SpeedMinPercent,
 		SpeedMaxPercent:     settings.SpeedMaxPercent,
-		LastSay:             m.lastSay,
+		LastSay:             m.speech.lastSay,
 		SessionTracking:     autopilot.SessionTracking,
 	}
 	if autopilot.SessionTracking {
 		input.SessionSeconds = sessionSeconds
 		input.SpeedTrend = m.speedTrendLocked()
-		if !m.speedChangedAt.IsZero() {
-			if held := now.Sub(m.speedChangedAt); held > 0 {
+		if !m.history.speedChangedAt.IsZero() {
+			if held := now.Sub(m.history.speedChangedAt); held > 0 {
 				input.SecondsAtCurrentSpeed = int(held / time.Second)
 			}
 		}
-		if !m.phraseChangedAt.IsZero() {
-			if held := now.Sub(m.phraseChangedAt); held > 0 {
+		if !m.history.phraseChangedAt.IsZero() {
+			if held := now.Sub(m.history.phraseChangedAt); held > 0 {
 				input.SecondsAtCurrentPhrase = int(held / time.Second)
 			}
 		}
-		input.DecisionsAtCurrentPhrase = m.decisionsAtCurrentPhrase
-		input.ConsecutiveHolds = m.consecutiveHolds
+		input.DecisionsAtCurrentPhrase = m.history.decisionsAtCurrentPhrase
+		input.ConsecutiveHolds = m.history.consecutiveHolds
 		if autopilot.SessionArc {
 			input.ArcEnabled = true
 			input.ArcPercent = m.arcPercentLocked(now)
 		}
 	}
-	if current == nil && m.segment.hasContent() {
-		fallback := m.segment.Target(modeLabel(m.mode), m.mode)
-		fallback.Pattern = m.pattern
+	if current == nil && m.motion.segment.hasContent() {
+		fallback := m.motion.segment.Target(modeLabel(m.loop.mode), m.loop.mode)
+		fallback.Pattern = m.motion.pattern
 		copied := cloneTarget(fallback)
 		current = &copied
 	}
@@ -409,11 +409,11 @@ func samePhraseAreaFocus(left, right *motion.AreaFocus) bool {
 // speedTrendLocked reports the direction of the last speed change. Callers hold
 // the lock.
 func (m *Manager) speedTrendLocked() string {
-	if m.previousSpeed <= 0 || m.segment.SpeedPercent <= 0 ||
-		m.segment.SpeedPercent == m.previousSpeed {
+	if m.history.previousSpeed <= 0 || m.motion.segment.SpeedPercent <= 0 ||
+		m.motion.segment.SpeedPercent == m.history.previousSpeed {
 		return SpeedTrendSteady
 	}
-	if m.segment.SpeedPercent > m.previousSpeed {
+	if m.motion.segment.SpeedPercent > m.history.previousSpeed {
 		return SpeedTrendRising
 	}
 	return SpeedTrendEasing
@@ -430,8 +430,8 @@ func (m *Manager) heldSegment() (Segment, *motion.PatternDefinition, bool) {
 	}
 
 	m.mu.Lock()
-	target := m.segment.Target(modeLabel(m.mode), m.mode)
-	target.Pattern = m.pattern
+	target := m.motion.segment.Target(modeLabel(m.loop.mode), m.loop.mode)
+	target.Pattern = m.motion.pattern
 	target = cloneTarget(target)
 	m.mu.Unlock()
 	return segmentFromMotionTarget(target, 0)
@@ -458,19 +458,19 @@ func segmentFromMotionTarget(target motion.MotionTarget, durationMillis int64) (
 func (m *Manager) rememberChoice(mode string, choice segmentChoice) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.mode != mode {
+	if m.loop.mode != mode {
 		return
 	}
 	if mode == ModeAutopilot {
-		m.decisionSource = choice.source
+		m.events.decisionSource = choice.source
 	}
 	if choice.source == "hold" || !choice.segment.hasContent() {
 		return
 	}
 	if choice.segment.PatternID != "" {
-		m.recentPatternIDs = append(m.recentPatternIDs, string(choice.segment.PatternID))
-		if len(m.recentPatternIDs) > 4 {
-			m.recentPatternIDs = m.recentPatternIDs[len(m.recentPatternIDs)-4:]
+		m.history.recentPatternIDs = append(m.history.recentPatternIDs, string(choice.segment.PatternID))
+		if len(m.history.recentPatternIDs) > 4 {
+			m.history.recentPatternIDs = m.history.recentPatternIDs[len(m.history.recentPatternIDs)-4:]
 		}
 	}
 }

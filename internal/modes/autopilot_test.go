@@ -349,7 +349,7 @@ func autopilotDecisionSettled(manager *Manager, decider *fakeDecider, clock *fak
 	now := clock.Now()
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
-	return manager.deadline.After(now)
+	return manager.motion.deadline.After(now)
 }
 
 func TestInteractiveChatTargetSuspendsAndReplacesAutopilotState(t *testing.T) {
@@ -368,8 +368,8 @@ func TestInteractiveChatTargetSuspendsAndReplacesAutopilotState(t *testing.T) {
 	// Make the superseded segment's texture deterministically due during the
 	// handoff. The new target must never inherit this speed waypoint.
 	manager.mu.Lock()
-	manager.swayPoints = []swayPoint{{
-		generation:   manager.generation,
+	manager.motion.swayPoints = []swayPoint{{
+		generation:   manager.loop.generation,
 		at:           clock.Now().Add(time.Second),
 		speedPercent: 36,
 	}}
@@ -397,7 +397,7 @@ func TestInteractiveChatTargetSuspendsAndReplacesAutopilotState(t *testing.T) {
 		t.Fatalf("status after chat handoff = %+v, want interactive source", status)
 	}
 	manager.mu.Lock()
-	dwell := manager.deadline.Sub(clock.Now())
+	dwell := manager.motion.deadline.Sub(clock.Now())
 	manager.mu.Unlock()
 	if dwell < 20*time.Second || dwell > 60*time.Second {
 		t.Fatalf("interactive target dwell = %s, want bounded natural motion cadence", dwell)
@@ -455,9 +455,9 @@ func TestPhraseAgeUsesAccumulatedPerceptualDifference(t *testing.T) {
 		segment:           Segment{SpeedPercent: 54, Dynamic: &smallDynamic},
 		appliedPerceptual: &smallSummary,
 	})
-	if manager.phraseChangedAt != startedAt || manager.decisionsAtCurrentPhrase != 1 {
+	if manager.history.phraseChangedAt != startedAt || manager.history.decisionsAtCurrentPhrase != 1 {
 		t.Fatalf("small felt edit reset phrase facts: changed=%s decisions=%d",
-			manager.phraseChangedAt, manager.decisionsAtCurrentPhrase)
+			manager.history.phraseChangedAt, manager.history.decisionsAtCurrentPhrase)
 	}
 
 	largeDynamic := baseDynamic
@@ -477,9 +477,9 @@ func TestPhraseAgeUsesAccumulatedPerceptualDifference(t *testing.T) {
 		segment:           Segment{SpeedPercent: 58, Dynamic: &largeDynamic},
 		appliedPerceptual: &largeSummary,
 	})
-	if manager.phraseChangedAt != changedAt || manager.decisionsAtCurrentPhrase != 0 {
+	if manager.history.phraseChangedAt != changedAt || manager.history.decisionsAtCurrentPhrase != 0 {
 		t.Fatalf("macro felt edit did not reset phrase facts: changed=%s decisions=%d",
-			manager.phraseChangedAt, manager.decisionsAtCurrentPhrase)
+			manager.history.phraseChangedAt, manager.history.decisionsAtCurrentPhrase)
 	}
 
 	seedOnly := largeDynamic
@@ -490,9 +490,9 @@ func TestPhraseAgeUsesAccumulatedPerceptualDifference(t *testing.T) {
 		segment:           Segment{SpeedPercent: 58, Dynamic: &seedOnly},
 		appliedPerceptual: &seedSummary,
 	})
-	if manager.phraseChangedAt != changedAt || manager.decisionsAtCurrentPhrase != 1 {
+	if manager.history.phraseChangedAt != changedAt || manager.history.decisionsAtCurrentPhrase != 1 {
 		t.Fatalf("seed-only micro refresh became a new semantic phrase: changed=%s decisions=%d",
-			manager.phraseChangedAt, manager.decisionsAtCurrentPhrase)
+			manager.history.phraseChangedAt, manager.history.decisionsAtCurrentPhrase)
 	}
 }
 
@@ -510,12 +510,12 @@ func TestRecentPositionBandMemoryIsBoundedAndObservational(t *testing.T) {
 		{MinimumPercent: 24, MaximumPercent: 74},
 		{MinimumPercent: 25, MaximumPercent: 75},
 	}
-	if !reflect.DeepEqual(manager.recentPositionBands, want) {
-		t.Fatalf("recent position bands = %+v, want %+v", manager.recentPositionBands, want)
+	if !reflect.DeepEqual(manager.history.recentPositionBands, want) {
+		t.Fatalf("recent position bands = %+v, want %+v", manager.history.recentPositionBands, want)
 	}
 	manager.rememberPositionBandLocked(&motion.PerceptualSummary{PositionMinPercent: 50, PositionMaxPercent: 50})
-	if !reflect.DeepEqual(manager.recentPositionBands, want) {
-		t.Fatalf("invalid band changed history: %+v", manager.recentPositionBands)
+	if !reflect.DeepEqual(manager.history.recentPositionBands, want) {
+		t.Fatalf("invalid band changed history: %+v", manager.history.recentPositionBands)
 	}
 }
 
@@ -698,7 +698,7 @@ func TestAutopilotSpeechMotionPreservesSpeechTimingChoice(t *testing.T) {
 	clock.Advance(121 * time.Second)
 	waitFor(t, time.Second, func() bool { return manager.Status().SpeechWaitingPlayback })
 	manager.mu.Lock()
-	timing := manager.speechNextTiming
+	timing := manager.speech.nextTiming
 	manager.mu.Unlock()
 	if timing != TimingLater {
 		t.Fatalf("speech timing = %q, want later after speech-owned motion", timing)
@@ -791,13 +791,13 @@ func TestAutopilotChatActivityBlocksAutonomousWorkUntilComplete(t *testing.T) {
 	}
 	waitForAutonomousStart(t, manager, engine)
 
-	manager.NotifyChatActivity()
+	activityID := manager.NotifyChatActivity()
 	clock.Advance(150 * time.Second)
 	time.Sleep(20 * time.Millisecond)
 	if calls := decider.callCount(); calls != 1 {
 		t.Fatalf("Autopilot made %d decisions during interactive chat, want first start only", calls)
 	}
-	manager.NotifyChatActivityComplete()
+	manager.NotifyChatActivityComplete(activityID)
 	waitFor(t, time.Second, func() bool { return decider.callCount() >= 2 })
 }
 
@@ -886,8 +886,8 @@ func TestAutopilotUserPauseCoversTransientIdleGapWithoutRestart(t *testing.T) {
 	waitForAutonomousStart(t, manager, engine)
 	callsBeforePause := decider.callCount()
 	manager.mu.Lock()
-	manager.swayPoints = []swayPoint{{
-		generation: manager.generation, at: clock.Now().Add(time.Minute), speedPercent: 34,
+	manager.motion.swayPoints = []swayPoint{{
+		generation: manager.loop.generation, at: clock.Now().Add(time.Minute), speedPercent: 34,
 	}}
 	manager.mu.Unlock()
 
@@ -896,7 +896,7 @@ func TestAutopilotUserPauseCoversTransientIdleGapWithoutRestart(t *testing.T) {
 		t.Fatal("initial Pause was not admitted")
 	}
 	manager.mu.Lock()
-	if len(manager.swayPoints) != 1 || manager.swayPoints[0].generation != manager.generation {
+	if len(manager.motion.swayPoints) != 1 || manager.motion.swayPoints[0].generation != manager.loop.generation {
 		manager.mu.Unlock()
 		t.Fatal("Pause invalidated the preserved intra-segment speed schedule")
 	}

@@ -197,7 +197,7 @@ func (s *Server) runLabChat(parent context.Context, body labChatRequest, automat
 	if err != nil {
 		return llmLabState{}, err
 	}
-	trialCtx, finish, err := s.beginChat(parent, sessionID)
+	trialCtx, finish, err := s.chatWorkspace.BeginTurn(parent, sessionID)
 	if err != nil {
 		return llmLabState{}, err
 	}

@@ -50,10 +50,10 @@ func (m *Manager) arcPercentLocked(now time.Time) int {
 	if minutes < config.AutopilotMinimumArcMinutes {
 		minutes = config.AutopilotDefaultArcMinutes
 	}
-	if m.arc.startedAt.IsZero() {
-		m.arc.startedAt = now
+	if m.history.arc.startedAt.IsZero() {
+		m.history.arc.startedAt = now
 	}
-	elapsed := now.Sub(m.arc.startedAt)
+	elapsed := now.Sub(m.history.arc.startedAt)
 	if elapsed < 0 {
 		elapsed = 0
 	}
@@ -75,7 +75,7 @@ func (m *Manager) placeArcPercentLocked(now time.Time, percent int) {
 		minutes = config.AutopilotDefaultArcMinutes
 	}
 	offset := time.Duration(percent) * time.Duration(minutes) * time.Minute / 100
-	m.arc.startedAt = now.Add(-offset)
+	m.history.arc.startedAt = now.Add(-offset)
 }
 
 // SessionArcSnapshot reports buildup for the UI.
@@ -87,7 +87,7 @@ func (m *Manager) SessionArcSnapshot() SessionArc {
 		Enabled: settings.SessionArc && settings.SessionTracking,
 		Minutes: settings.SessionArcMinutes,
 	}
-	if arc.Enabled && m.mode == ModeAutopilot {
+	if arc.Enabled && m.loop.mode == ModeAutopilot {
 		arc.Percent = m.arcPercentLocked(m.options.Now())
 	}
 	return arc
@@ -102,11 +102,11 @@ func (m *Manager) SessionArcSnapshot() SessionArc {
 // and does nothing is worse than one that says no.
 func (m *Manager) ResetSessionArc() bool {
 	m.mu.Lock()
-	if m.mode != ModeAutopilot {
+	if m.loop.mode != ModeAutopilot {
 		m.mu.Unlock()
 		return false
 	}
-	m.arc = arcState{startedAt: m.options.Now()}
+	m.history.arc = arcState{startedAt: m.options.Now()}
 	m.mu.Unlock()
 	m.trace(ModeAutopilot, "session_arc_reset", nil, "")
 	return true
@@ -116,7 +116,7 @@ func (m *Manager) ResetSessionArc() bool {
 func (m *Manager) SetSessionArcPercent(percent int) bool {
 	now := m.options.Now()
 	m.mu.Lock()
-	if m.mode != ModeAutopilot {
+	if m.loop.mode != ModeAutopilot {
 		m.mu.Unlock()
 		return false
 	}

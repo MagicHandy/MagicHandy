@@ -129,10 +129,10 @@ func TestStatusPublishesAuthoritativeDeadlinesFromOneSnapshot(t *testing.T) {
 	motionDue := clock.Now().Add(14*time.Second + 500*time.Millisecond)
 	speechDue := clock.Now().Add(47*time.Second + 250*time.Millisecond)
 	manager.mu.Lock()
-	manager.mode = ModeAutopilot
-	manager.segmentIdx = 3
-	manager.deadline = motionDue
-	manager.speechDeadline = speechDue
+	manager.loop.mode = ModeAutopilot
+	manager.motion.segmentIdx = 3
+	manager.motion.deadline = motionDue
+	manager.speech.deadline = speechDue
 	manager.mu.Unlock()
 
 	status := manager.Status()
@@ -177,13 +177,13 @@ func waitForAutonomousStart(t *testing.T, manager *Manager, engine *fakeEngine) 
 
 func TestArmSegmentUsesLatencyAwareDwellFloor(t *testing.T) {
 	clock := &fakeClock{now: time.Unix(0, 0)}
-	manager := &Manager{options: Options{Now: clock.Now}, mode: ModeFreestyle, generation: 1}
+	manager := &Manager{options: Options{Now: clock.Now}, loop: modeLoopState{mode: ModeFreestyle, generation: 1}}
 	manager.armSegment(ModeFreestyle, Segment{DurationMillis: 1000}, nil, 9000, 1)
-	if got := manager.deadline.Sub(clock.Now()); got != 9750*time.Millisecond {
+	if got := manager.motion.deadline.Sub(clock.Now()); got != 9750*time.Millisecond {
 		t.Fatalf("latency dwell = %s, want 9.75s", got)
 	}
 	manager.armSegment(ModeFreestyle, Segment{DurationMillis: 1000}, nil, 30000, 1)
-	if got := manager.deadline.Sub(clock.Now()); got != maximumLatencyDwell {
+	if got := manager.motion.deadline.Sub(clock.Now()); got != maximumLatencyDwell {
 		t.Fatalf("capped latency dwell = %s, want %s", got, maximumLatencyDwell)
 	}
 }
@@ -191,15 +191,14 @@ func TestArmSegmentUsesLatencyAwareDwellFloor(t *testing.T) {
 func TestTransientStartFailureRetainsRecoveryBackoff(t *testing.T) {
 	clock := &fakeClock{now: time.Unix(100, 0)}
 	manager := &Manager{
-		options:    Options{Now: clock.Now, Traces: diagnostics.NewTraceRing(8)},
-		mode:       ModeAutopilot,
-		generation: 7,
+		options: Options{Now: clock.Now, Traces: diagnostics.NewTraceRing(8)}, loop: modeLoopState{mode: ModeAutopilot,
+			generation: 7},
 	}
 	manager.handleStartFailure(ModeAutopilot, 7, "start_failed", errors.New("temporary transport timeout"))
 
 	manager.mu.Lock()
-	active := manager.mode == ModeAutopilot
-	retryAt := manager.nextRetry
+	active := manager.loop.mode == ModeAutopilot
+	retryAt := manager.motion.nextRetry
 	manager.mu.Unlock()
 	if !active {
 		t.Fatal("transient start failure opened the unsafe-state circuit")
@@ -216,15 +215,14 @@ func TestTransientStartFailureRetainsRecoveryBackoff(t *testing.T) {
 
 func TestTerminalFailureCannotStopNewerModeGeneration(t *testing.T) {
 	manager := &Manager{
-		options:    Options{Traces: diagnostics.NewTraceRing(8)},
-		mode:       ModeAutopilot,
-		generation: 8,
+		options: Options{Traces: diagnostics.NewTraceRing(8)}, loop: modeLoopState{mode: ModeAutopilot,
+			generation: 8},
 	}
 	manager.stopLoopAtGeneration(ModeAutopilot, 7, "unsafe_startup_state")
 
 	manager.mu.Lock()
-	mode := manager.mode
-	generation := manager.generation
+	mode := manager.loop.mode
+	generation := manager.loop.generation
 	manager.mu.Unlock()
 	if mode != ModeAutopilot || generation != 8 {
 		t.Fatalf("stale terminal failure changed newer run: mode=%q generation=%d", mode, generation)
@@ -288,7 +286,7 @@ func retargetCount(engine *fakeEngine) int {
 func userPauseLatched(manager *Manager) bool {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
-	return manager.userPaused
+	return manager.user.paused
 }
 
 type userControlResult struct {
@@ -344,7 +342,7 @@ func TestOverlappingPauseFailureKeepsConfirmedLatch(t *testing.T) {
 		t.Fatal("first Pause was not admitted")
 	}
 	manager.mu.Lock()
-	firstPauseID := manager.userPauseID
+	firstPauseID := manager.user.intentID
 	manager.mu.Unlock()
 
 	duplicate := make(chan userControlResult, 1)
@@ -355,7 +353,7 @@ func TestOverlappingPauseFailureKeepsConfirmedLatch(t *testing.T) {
 	waitFor(t, time.Second, func() bool {
 		manager.mu.Lock()
 		defer manager.mu.Unlock()
-		return manager.userPauseID == firstPauseID+1
+		return manager.user.intentID == firstPauseID+1
 	})
 
 	engine.setState(false, false)
@@ -397,7 +395,7 @@ func TestUserControlOrderingKeepsNewestPauseLatched(t *testing.T) {
 		t.Fatal("Pause blocker was not admitted")
 	}
 	manager.mu.Lock()
-	blockerID := manager.userPauseID
+	blockerID := manager.user.intentID
 	manager.mu.Unlock()
 
 	resumeReady := make(chan userControlResult, 1)
@@ -408,7 +406,7 @@ func TestUserControlOrderingKeepsNewestPauseLatched(t *testing.T) {
 	waitFor(t, time.Second, func() bool {
 		manager.mu.Lock()
 		defer manager.mu.Unlock()
-		return manager.userPauseID == blockerID+1
+		return manager.user.intentID == blockerID+1
 	})
 
 	pauseReady := make(chan userControlResult, 1)
@@ -419,7 +417,7 @@ func TestUserControlOrderingKeepsNewestPauseLatched(t *testing.T) {
 	waitFor(t, time.Second, func() bool {
 		manager.mu.Lock()
 		defer manager.mu.Unlock()
-		return manager.userPauseID == blockerID+2
+		return manager.user.intentID == blockerID+2
 	})
 
 	blocker(true)
@@ -657,9 +655,9 @@ func TestStaleChatTargetHandoffCannotClearUserStop(t *testing.T) {
 	}
 
 	manager.mu.Lock()
-	userStopped := manager.userStopped
-	chatTarget := manager.chatTarget
-	pending := manager.chatTargetPending
+	userStopped := manager.user.stopped
+	chatTarget := manager.chat.target
+	pending := manager.chat.pending
 	manager.mu.Unlock()
 	if !userStopped || chatTarget != nil || pending {
 		t.Fatalf("stale handoff changed stopped state: stopped=%t target=%+v pending=%t", userStopped, chatTarget, pending)
@@ -713,7 +711,7 @@ func TestUserStopInvalidatesModeStartQueuedBehindPause(t *testing.T) {
 		t.Fatal("Pause blocker was not admitted")
 	}
 	manager.mu.Lock()
-	blockerID := manager.userPauseID
+	blockerID := manager.user.intentID
 	manager.mu.Unlock()
 
 	startDone := make(chan error, 1)
@@ -724,7 +722,7 @@ func TestUserStopInvalidatesModeStartQueuedBehindPause(t *testing.T) {
 	waitFor(t, time.Second, func() bool {
 		manager.mu.Lock()
 		defer manager.mu.Unlock()
-		return manager.userPauseID == blockerID+1
+		return manager.user.intentID == blockerID+1
 	})
 
 	// Stop does not wait for the Pause/Resume execution gate. It invalidates the
@@ -759,7 +757,7 @@ func TestNewModeStartSupersedesQueuedResume(t *testing.T) {
 		t.Fatal("Pause blocker was not admitted")
 	}
 	manager.mu.Lock()
-	blockerID := manager.userPauseID
+	blockerID := manager.user.intentID
 	manager.mu.Unlock()
 
 	type resumeResult struct {
@@ -774,7 +772,7 @@ func TestNewModeStartSupersedesQueuedResume(t *testing.T) {
 	waitFor(t, time.Second, func() bool {
 		manager.mu.Lock()
 		defer manager.mu.Unlock()
-		return manager.userPauseID == blockerID+1
+		return manager.user.intentID == blockerID+1
 	})
 
 	startDone := make(chan error, 1)
@@ -785,7 +783,7 @@ func TestNewModeStartSupersedesQueuedResume(t *testing.T) {
 	waitFor(t, time.Second, func() bool {
 		manager.mu.Lock()
 		defer manager.mu.Unlock()
-		return manager.userPauseID == blockerID+2
+		return manager.user.intentID == blockerID+2
 	})
 
 	blocker(true)
