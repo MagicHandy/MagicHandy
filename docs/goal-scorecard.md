@@ -15,8 +15,8 @@ installer. Actual speech listening, GPU coexistence and full optional-module
 download acceptance remain alpha limitations; fixture activation is tested.
 
 Compared with the merged AI implementation, the stripped CGO-free app grows
-35,328 bytes (19,183,104 → 19,218,432; 0.18%). Main JS gzip grows 762 bytes
-(211,013 → 211,775); all raw embedded assets grow 7,749 bytes. No dependency is
+35,328 bytes (19,183,104 → 19,218,432; 0.18%). Main JS gzip grows 877 bytes
+(211,013 → 211,890); all raw embedded assets grow 8,153 bytes. No dependency is
 added. An isolated cold-start observation is 583.4 ms, with three idle working
 set samples at 34,283,520 bytes and private memory 57,245,696 bytes. This remains
 within the prior host variation and does not close the existing cold-start/RSS

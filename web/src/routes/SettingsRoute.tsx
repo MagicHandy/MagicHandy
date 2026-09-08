@@ -11,6 +11,7 @@ import { MemoryManager } from "../components/MemoryManager";
 import { ModelSettingsPanel } from "../components/ModelSettingsPanel";
 import { PromptSetEditor } from "../components/PromptSetEditor";
 import { VoiceSettingsPanel } from "../components/VoiceSettingsPanel";
+import { rebaseSettingsDraft } from "../util/settings-draft";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { ThemePicker } from "../components/ThemePicker";
 import { UpdateSettingsPanel } from "../components/UpdateSettingsPanel";
@@ -108,9 +109,11 @@ export function SettingsRoute() {
   const mounted = useRef(true);
   const loadGeneration = useRef(0);
   const savingRef = useRef(false);
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
   const locked = !backendOnline || readOnly || loading;
 
-  async function load() {
+  async function load(preserveDraft = false) {
     if (!mounted.current) return;
     const generation = ++loadGeneration.current;
     setLoading(true);
@@ -118,7 +121,10 @@ export function SettingsRoute() {
     try {
       const res = await api.getSettings();
       if (!mounted.current || generation !== loadGeneration.current) return;
-      setS(res.settings);
+      const baseline = savedRef.current;
+      setS((draft) => preserveDraft && baseline && draft
+        ? rebaseSettingsDraft(baseline, draft, res.settings)
+        : res.settings);
       setSaved(res.settings);
     } catch (e) {
       if (mounted.current && generation === loadGeneration.current) setLoadError(msg(e));
@@ -553,7 +559,7 @@ export function SettingsRoute() {
           setNewOpenAIKey={(value) => { setNewOpenAITTSKey(value); if (value.trim()) setClearOpenAITTSKey(false); }}
           clearOpenAIKey={clearOpenAITTSKey}
           setClearOpenAIKey={(value) => { setClearOpenAITTSKey(value); if (value) setNewOpenAITTSKey(""); }}
-          onRuntimeChanged={() => { void load(); }}
+          onRuntimeChanged={() => { void load(true); }}
         />}
 
         {section === "prompts" && (
