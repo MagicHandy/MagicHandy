@@ -231,7 +231,7 @@ func TestInstructionHasDefensiveSizeLimit(t *testing.T) {
 	}
 }
 
-func TestOpenAICompatibleSpeechRequestAndStreamingWAVRepair(t *testing.T) {
+func TestOpenAICompatibleSpeechPreservesStreamUntilCompletedWAVRepair(t *testing.T) {
 	var requestBody map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -275,6 +275,10 @@ func TestOpenAICompatibleSpeechRequestAndStreamingWAVRepair(t *testing.T) {
 	if _, seeded := requestBody["seed"]; seeded {
 		t.Fatalf("generic OpenAI-compatible request unexpectedly included seed: %#v", requestBody)
 	}
+	if got := binary.LittleEndian.Uint32(audio[4:8]); got != ^uint32(0) {
+		t.Fatalf("stream prematurely finalized: %d", got)
+	}
+	audio = RepairWAVLengths(audio)
 	if got, want := binary.LittleEndian.Uint32(audio[4:8]), uint32(40); got != want {
 		t.Fatalf("RIFF length = %d, want %d", got, want)
 	}
@@ -504,7 +508,7 @@ func TestSpeechResponseSizeIsBounded(t *testing.T) {
 	driver.send(t, protocol.Request{Type: protocol.RequestSpeak, ID: "oversize", Text: "Too much audio."})
 	response, _ := driver.terminal(t)
 	if response.Type != protocol.ResponseError || response.Error == nil ||
-		!strings.Contains(response.Error.Message, "exceeds 32 MiB") {
+		!strings.Contains(response.Error.Message, "exceeds 8 MiB") {
 		t.Fatalf("oversize response = %+v", response)
 	}
 }

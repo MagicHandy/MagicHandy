@@ -337,11 +337,13 @@ func (s *Supervisor) stop(ctx context.Context) error {
 	s.stopping = true
 	s.mu.Unlock()
 
-	_ = workerConn.send(Request{Type: RequestShutdown, ID: s.newRequestID()})
+	stopCtx, cancel := context.WithTimeout(ctx, shutdownGrace)
+	defer cancel()
+	_ = workerConn.sendContext(stopCtx, Request{Type: RequestShutdown, ID: s.newRequestID()})
 
 	select {
 	case <-exited:
-	case <-time.After(shutdownGrace):
+	case <-stopCtx.Done():
 		killErr := killWorkerProcess(process)
 		return errors.Join(killErr, waitForWorkerExit(exited))
 	case <-ctx.Done():
@@ -442,6 +444,8 @@ func (s *Supervisor) newRequestID() string {
 
 // roundTrip sends one unary request and waits for its terminal response.
 func (s *Supervisor) roundTrip(ctx context.Context, workerConn *conn, request Request, timeout time.Duration) (Response, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 	if request.ID == "" {
 		request.ID = s.newRequestID()
 	}
@@ -451,20 +455,18 @@ func (s *Supervisor) roundTrip(ctx context.Context, workerConn *conn, request Re
 	}
 	defer release()
 
-	if err := workerConn.send(request); err != nil {
+	if err := workerConn.sendContext(ctx, request); err != nil {
 		return Response{}, err
 	}
 
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
 	for {
 		select {
 		case response := <-responses:
 			if response.Terminal() {
 				return response, nil
 			}
-		case <-timer.C:
-			return Response{}, fmt.Errorf("%s request timed out after %s", request.Type, timeout)
+		case <-workerConn.closedChan():
+			return Response{}, workerConn.failure()
 		case <-ctx.Done():
 			return Response{}, ctx.Err()
 		}

@@ -85,6 +85,7 @@ type Service struct {
 	MaxTokens             int
 	ReasoningMode         string
 	ReasoningBudgetTokens int
+	PromptBudget          PromptBudgetSettings
 	Memories              []string
 	Patterns              []PatternChoice
 	// MotionContext is the authoritative semantic snapshot for this turn.
@@ -173,7 +174,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		prompt, _ = BuiltinPromptSetByID(DefaultPromptSetID)
 	}
 	capabilities := s.capabilities()
-	systemPrompt := composeSystem(prompt, s.Memories, s.Patterns, capabilities, s.MotionContext, s.ConversationContext)
+	systemPrompt := composeSystem(prompt, s.Memories, s.Patterns, capabilities, s.MotionContext, s.ConversationContext, s.PromptBudget)
 	validationMessage := userMessage
 	if capabilities.MotionMode == MotionModeDynamic {
 		validationMessage = contextualDynamicCorrectionIntent(userMessage, request.History)
@@ -261,19 +262,20 @@ type repairInput struct {
 func (s Service) repairResponse(ctx context.Context, in repairInput, emit func(StreamEvent) error) (Result, error) {
 	result := in.result
 	repairMessages := append([]llm.Message(nil), in.messages...)
-	repairContext := strings.TrimSpace(in.raw)
+	repairContext := truncateUTF8Bytes(strings.TrimSpace(in.raw), 4096)
 	if repairContext == "" {
 		repairContext = emptyRepairContext
 	}
 	repairMessages = append(repairMessages, llm.Message{Role: "assistant", Content: repairContext})
 	repairMessages = append(repairMessages, llm.Message{Role: "user", Content: repairPromptFor(in.prompt, in.parseErr.Error(), in.truncated)})
 	repairRaw, repairErr := s.Provider.StreamChat(ctx, llm.ChatRequest{
-		Messages:      repairMessages,
-		Model:         s.Model,
-		Temperature:   0,
-		MaxTokens:     s.MaxTokens,
-		ReasoningMode: "off",
-		JSONSchema:    PatternResponseSchema(s.Patterns, in.capabilities, s.MotionContext),
+		Messages:             repairMessages,
+		PreserveTailMessages: 3,
+		Model:                s.Model,
+		Temperature:          0,
+		MaxTokens:            s.MaxTokens,
+		ReasoningMode:        "off",
+		JSONSchema:           PatternResponseSchema(s.Patterns, in.capabilities, s.MotionContext),
 	}, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "repair_delta", Phase: "repair", Text: text})
 	})

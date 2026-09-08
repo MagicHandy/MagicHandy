@@ -62,6 +62,7 @@ type AutopilotService struct {
 	MaxTokens             int
 	ReasoningMode         string
 	ReasoningBudgetTokens int
+	PromptBudget          PromptBudgetSettings
 	// Temperature lets the motion-change preference widen or narrow model
 	// exploration without turning qualitative geometry into fixed presets.
 	// Zero preserves the ordinary chat-tuned default.
@@ -100,6 +101,7 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		s.MotionContext,
 		s.ConversationContext,
 		kind,
+		s.PromptBudget,
 	)
 	messages := buildMessages(system, request.History, message)
 	temperature := s.Temperature
@@ -141,7 +143,7 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		parseErr = fmt.Errorf("autopilot response was truncated before valid JSON: %w", parseErr)
 	}
 
-	repairContext := strings.TrimSpace(raw)
+	repairContext := truncateUTF8Bytes(strings.TrimSpace(raw), 4096)
 	if repairContext == "" {
 		repairContext = emptyRepairContext
 	}
@@ -152,12 +154,13 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		Content: autopilotRepairPrompt(prompt.ID, kind, parseErr),
 	})
 	repairedRaw, repairErr := s.Provider.StreamChat(ctx, llm.ChatRequest{
-		Messages:      repairMessages,
-		Model:         s.Model,
-		Temperature:   0,
-		MaxTokens:     s.MaxTokens,
-		ReasoningMode: "off",
-		JSONSchema:    autopilotPatternSchema(s.Patterns, s.Capabilities, s.MotionContext, kind),
+		Messages:             repairMessages,
+		PreserveTailMessages: 3,
+		Model:                s.Model,
+		Temperature:          0,
+		MaxTokens:            s.MaxTokens,
+		ReasoningMode:        "off",
+		JSONSchema:           autopilotPatternSchema(s.Patterns, s.Capabilities, s.MotionContext, kind),
 	}, nil)
 	if repairErr != nil && !errors.Is(repairErr, llm.ErrOutputTruncated) {
 		return AutopilotResponse{}, fmt.Errorf("repair Autopilot response: %w", repairErr)
@@ -334,8 +337,9 @@ func composeAutopilotSystem(
 	motionContext *MotionContext,
 	conversationContext *ConversationContext,
 	kind AutopilotKind,
+	budget ...PromptBudgetSettings,
 ) string {
-	composition := composePrompt(set, memories, patterns, capabilities, motionContext, conversationContext)
+	composition := composePrompt(set, memories, patterns, capabilities, motionContext, conversationContext, budget...)
 	sections := make([]string, 0, len(composition.Sections))
 	for _, section := range composition.Sections {
 		switch section.ID {

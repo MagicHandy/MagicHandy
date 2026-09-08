@@ -1035,10 +1035,10 @@ Mitigation:
   bind those files to the selected repository with a checked manifest, reject
   linked materialized paths, and retry with retained files and local metadata
   only for that same repository after failure
-- resume source, environment, package, and model artifacts left before module
-  state is committed; exclude only installer-generated package metadata from
-  the managed checkout's integrity check, while tracked edits and unknown
-  untracked files continue to block replacement
+- prepare updates in a fresh permanent version directory under an exclusive
+  install lock; share app-owned uv downloads and copy same-repository Qwen model
+  seeds without modifying the live environment; promote the home index only
+  after settings accept the candidate, retaining the old runtime for recovery
 - keep Faster Qwen reference selection in Settings > Voice; command-line
   installation may finish without a reference, app status must distinguish
   that state from missing runtime files, and module updates must preserve
@@ -1052,7 +1052,7 @@ Mitigation:
 - bound request text, error bodies, response audio, queue depth, and deadlines;
   repair streamed WAV headers only after the bounded clip is retained; keep the
   playable core retention ceiling at 8 MiB per clip and nine clips (72 MiB
-  worst case), independently of the worker's larger HTTP response ceiling
+  worst case), with the same 8 MiB ceiling in each real TTS worker
 - default managed Faster Qwen to fixed seed `1337`, expose explicit New seed
   and Varied controls, and reseed Python, NumPy, and Torch inside the server's
   serialized inference lock; never add this extension to generic compatible
@@ -1114,6 +1114,16 @@ listening, broader latency, browser, and VRAM
 acceptance remains open. Historical NeuTTS measurements remain in
 `docs/goal-scorecard.md` and `docs/perf-baseline.md`; they are not evidence for
 the replacement modules.
+
+Status 2026-09-08: [ADR 0028](decisions/0028-ai-runtime-lifetimes.md) and the
+[AI implementation](ai-runtime-improvements-2026-09-08.md) add permanent staged
+runtimes, atomic voice terminal transitions, bounded pipe writes and shared
+adapter job cancellation. Qwen/Chatterbox use a bounded asynchronous inference
+bridge and private child routes. PCM speech streams through the Go worker/core
+and controller-gated browser playback; scoped ElevenLabs account-read denial
+does not veto speech. Automated lifecycle, framing and installer fixtures pass.
+Real-model listening, full-install activation/rollback recovery, first-audible
+latency and simultaneous local-LLM GPU acceptance remain open; R17 stays Medium.
 
 ## R18: LAN And Mobile Secure-Context Requirements
 

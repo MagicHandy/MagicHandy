@@ -10,6 +10,10 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/voice/stubworker"
 )
 
+type testWriteCloser struct{ io.Writer }
+
+func (testWriteCloser) Close() error { return nil }
+
 func TestConnBackpressuresWithoutDroppingAudioFrames(t *testing.T) {
 	c := &conn{
 		pending: make(map[string]*responseSink),
@@ -49,7 +53,7 @@ func TestConnBackpressuresWithoutDroppingAudioFrames(t *testing.T) {
 
 func TestConnMalformedWorkerOutputFailsPendingRequest(t *testing.T) {
 	reader, writer := io.Pipe()
-	c := newConn(io.Discard, reader)
+	c := newConn(testWriteCloser{io.Discard}, reader)
 	responses, release, err := c.register("speech")
 	if err != nil {
 		t.Fatal(err)

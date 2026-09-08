@@ -19,6 +19,7 @@ type llmRuntime struct {
 	mu         sync.Mutex
 	cached     llm.Provider
 	cacheKey   string
+	generation uint64
 }
 
 // Autoload is asynchronous and may include a cold multi-gigabyte model read.
@@ -33,46 +34,44 @@ func newLLMRuntime(runtime Runtime) llmRuntime {
 }
 
 func (s *Server) newLLMProvider(ctx context.Context, settings config.LLMSettings) (llm.Provider, error) {
+	return s.resolveLLMProvider(ctx, settings, true)
+}
+
+func (s *Server) resolveLLMProvider(ctx context.Context, settings config.LLMSettings, retain bool) (llm.Provider, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if s.llm.provider != nil {
 		return s.llm.provider, nil
 	}
 
-	var managedRunnerPath, managedModelPath, managedKey string
-	if settings.Provider == config.LLMProviderLlamaCPP && settings.LlamaCPPMode == config.LlamaCPPModeManaged {
-		runtimeSnapshot := s.managedLLM.Snapshot()
-		if managedRuntimeBuildInProgress(runtimeSnapshot.Build) {
-			return nil, errors.New("managed llama.cpp installation is in progress")
-		}
-		runtimeStatus := runtimeSnapshot.Runtime
-		if !runtimeStatus.Installed {
-			return nil, fmt.Errorf("managed llama.cpp unavailable: %s", runtimeStatus.Message)
-		}
-		model, err := s.models.Model(ctx, settings.Model)
-		if err != nil {
-			return nil, fmt.Errorf("selected managed llama.cpp model %q is unavailable: %w", settings.Model, err)
-		}
-		if model.State != "ready" {
-			return nil, fmt.Errorf("selected managed llama.cpp model %q is %s: %s", settings.Model, model.State, model.Message)
-		}
-		managedRunnerPath = runtimeStatus.RunnerPath
-		managedModelPath = model.ModelPath
-		managedKey = strings.Join([]string{runtimeStatus.Commit, runtimeStatus.Backend, managedRunnerPath, model.ID, model.UpdatedAt, managedModelPath}, "\x00")
+	paths, err := s.managedProviderPaths(ctx, settings)
+	if err != nil {
+		return nil, err
 	}
 
-	key := llmCacheKey(settings, managedKey)
+	key := llmCacheKey(settings, paths.key)
 	s.llm.mu.Lock()
 	defer s.llm.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if generation, ok := ctx.Value(llmGenerationKey{}).(uint64); ok && generation != s.llm.generation {
+		return nil, context.Canceled
+	}
 	if s.llm.cached != nil && s.llm.cacheKey == key {
 		provider := s.llm.cached
 		return provider, nil
 	}
-	if s.llm.cached != nil {
+	if retain && s.llm.cached != nil {
 		if err := closeLLMProvider(s.llm.cached); err != nil {
 			return nil, fmt.Errorf("close previous LLM provider: %w", err)
 		}
 	}
-	s.llm.cached = nil
-	s.llm.cacheKey = ""
+	if retain {
+		s.llm.cached = nil
+		s.llm.cacheKey = ""
+	}
 
 	timeout := time.Duration(settings.RequestTimeoutMillis) * time.Millisecond
 	options := llm.HTTPProviderOptions{
@@ -83,14 +82,13 @@ func (s *Server) newLLMProvider(ctx context.Context, settings config.LLMSettings
 	}
 
 	var provider llm.Provider
-	var err error
 	switch settings.Provider {
 	case config.LLMProviderLlamaCPP:
 		if settings.LlamaCPPMode == config.LlamaCPPModeManaged {
 			provider, err = llm.NewManagedLlamaCPPProvider(llm.ManagedLlamaCPPOptions{
 				HTTPProviderOptions: options,
-				RunnerPath:          managedRunnerPath,
-				ModelPath:           managedModelPath,
+				RunnerPath:          paths.runner,
+				ModelPath:           paths.model,
 				ContextSize:         settings.LlamaCPPContextSize,
 			})
 		} else {
@@ -105,8 +103,10 @@ func (s *Server) newLLMProvider(ctx context.Context, settings config.LLMSettings
 		return nil, err
 	}
 
-	s.llm.cached = provider
-	s.llm.cacheKey = key
+	if retain {
+		s.llm.cached = provider
+		s.llm.cacheKey = key
+	}
 	return provider, nil
 }
 
@@ -143,6 +143,11 @@ func (s *Server) startLLMAutoload(settings config.LLMSettings) {
 		loadCtx, loadCancel := context.WithTimeout(ctx, llmAutoloadTimeout)
 		defer loadCancel()
 		started := time.Now()
+		loadCtx, _, releaseSlot, err := s.llmRequests.acquire(loadCtx, llmRequestAutonomous)
+		if err != nil {
+			return
+		}
+		defer releaseSlot()
 		provider, err := s.newLLMProvider(loadCtx, settings)
 		if err != nil {
 			if loadCtx.Err() == nil {
@@ -163,11 +168,7 @@ func (s *Server) startLLMAutoload(settings config.LLMSettings) {
 				"elapsed_ms", time.Since(started).Milliseconds(), "message", status.Message)
 			return
 		}
-		warmCtx, _, releaseWarmup, warmErr := s.llmRequests.acquire(loadCtx, llmRequestAutonomous)
-		if warmErr == nil {
-			warmErr = warmManagedLLM(warmCtx, provider, settings.Model)
-			releaseWarmup()
-		}
+		warmErr := warmManagedLLM(loadCtx, provider, settings.Model)
 		if loadCtx.Err() != nil {
 			return
 		}
@@ -223,6 +224,8 @@ func (s *Server) applyLLMSettingsTransition(previous, next config.LLMSettings) e
 	if !runtimeChanged && !loadPolicyChanged {
 		return nil
 	}
+	finishChange := s.llmRequests.beginChange()
+	defer finishChange()
 	s.stopLLMAutoload()
 	var transitionErr error
 	if runtimeChanged || next.ManagedLoadPolicy == config.LLMManagedLoadOnDemand {
@@ -294,7 +297,7 @@ func (s *Server) llmState(ctx context.Context) any {
 
 func (s *Server) handleLLMStatus(w http.ResponseWriter, r *http.Request) {
 	settings, _ := s.store.Snapshot()
-	provider, err := s.newLLMProvider(r.Context(), settings.LLM)
+	provider, err := s.resolveLLMProvider(r.Context(), settings.LLM, false)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"provider":  settings.LLM.Provider,
@@ -314,6 +317,13 @@ func (s *Server) handleLLMLoad(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	ctx, _, release, err := s.llmRequests.acquire(r.Context(), llmRequestInteractive)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	defer release()
+	r = r.WithContext(ctx)
 	settings, _ := s.store.Snapshot()
 	provider, err := s.newLLMProvider(r.Context(), settings.LLM)
 	if err != nil {
@@ -332,6 +342,15 @@ func (s *Server) handleLLMUnload(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	s.stopLLMAutoload()
+	s.llmRequests.invalidate()
+	ctx, _, release, err := s.llmRequests.acquire(r.Context(), llmRequestInteractive)
+	if err != nil {
+		writeError(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	defer release()
+	r = r.WithContext(ctx)
 	settings, _ := s.store.Snapshot()
 	provider, err := s.newLLMProvider(r.Context(), settings.LLM)
 	if err != nil {
@@ -349,6 +368,7 @@ func (s *Server) handleLLMUnload(w http.ResponseWriter, r *http.Request) {
 func (s *Server) closeLLM() error {
 	s.llm.mu.Lock()
 	defer s.llm.mu.Unlock()
+	s.llm.generation++
 	provider := s.llm.cached
 	if err := closeLLMProvider(provider); err != nil {
 		return err
@@ -387,4 +407,32 @@ func llmCacheKey(settings config.LLMSettings, managedKey string) string {
 
 func llmRuntimeSettingsChanged(previous, next config.LLMSettings) bool {
 	return llmCacheKey(previous, "") != llmCacheKey(next, "")
+}
+
+type managedProviderPaths struct{ runner, model, key string }
+
+func (s *Server) managedProviderPaths(ctx context.Context, settings config.LLMSettings) (managedProviderPaths, error) {
+	var managedRunnerPath, managedModelPath, managedKey string
+	if settings.Provider == config.LLMProviderLlamaCPP && settings.LlamaCPPMode == config.LlamaCPPModeManaged {
+		runtimeSnapshot := s.managedLLM.Snapshot()
+		if managedRuntimeBuildInProgress(runtimeSnapshot.Build) {
+			return managedProviderPaths{}, errors.New("managed llama.cpp installation is in progress")
+		}
+		runtimeStatus := runtimeSnapshot.Runtime
+		if !runtimeStatus.Installed {
+			return managedProviderPaths{}, fmt.Errorf("managed llama.cpp unavailable: %s", runtimeStatus.Message)
+		}
+		model, err := s.models.Model(ctx, settings.Model)
+		if err != nil {
+			return managedProviderPaths{}, fmt.Errorf("selected managed llama.cpp model %q is unavailable: %w", settings.Model, err)
+		}
+		if model.State != "ready" {
+			return managedProviderPaths{}, fmt.Errorf("selected managed llama.cpp model %q is %s: %s", settings.Model, model.State, model.Message)
+		}
+		managedRunnerPath = runtimeStatus.RunnerPath
+		managedModelPath = model.ModelPath
+		managedKey = strings.Join([]string{runtimeStatus.Commit, runtimeStatus.Backend, managedRunnerPath, model.ID, model.UpdatedAt, managedModelPath}, "\x00")
+	}
+
+	return managedProviderPaths{managedRunnerPath, managedModelPath, managedKey}, nil
 }

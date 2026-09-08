@@ -12,6 +12,7 @@ class FakeSource {
 class FakeAudioContext {
   static instances: FakeAudioContext[] = [];
   state: AudioContextState = "suspended";
+  currentTime = 0;
   destination = {} as AudioDestinationNode;
   source = new FakeSource();
   resume = vi.fn(async () => {
@@ -19,6 +20,10 @@ class FakeAudioContext {
   });
   decodeAudioData = vi.fn(async () => ({} as AudioBuffer));
   createBufferSource = vi.fn(() => this.source as unknown as AudioBufferSourceNode);
+  createBuffer = vi.fn((channels: number, frames: number) => {
+    const data = Array.from({ length: channels }, () => new Float32Array(frames));
+    return { getChannelData: (channel: number) => data[channel] } as AudioBuffer;
+  });
 
   constructor() {
     FakeAudioContext.instances.push(this);
@@ -26,6 +31,27 @@ class FakeAudioContext {
 }
 
 describe("shared audio playback", () => {
+  it("schedules PCM before the producer finishes and rejects later audio after cancellation", async () => {
+    const { audioPlaybackToken, playPCMChunks, stopAllAudioPlayback } = await import("./audio");
+    const controller = new AbortController();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    async function* chunks() {
+      yield { samples: new Float32Array([0, 0.5]), sampleRate: 24000, channels: 1 };
+      await gate;
+      yield { samples: new Float32Array([0.25]), sampleRate: 24000, channels: 1 };
+    }
+    const playing = playPCMChunks(chunks(), audioPlaybackToken(), controller.signal);
+    const rejected = expect(playing).rejects.toMatchObject({ name: "AbortError" });
+    await vi.waitFor(() => expect(FakeAudioContext.instances[0].source.start).toHaveBeenCalledOnce());
+    const audioContext = FakeAudioContext.instances[0];
+    expect([...audioContext.createBuffer.mock.results[0].value.getChannelData(0)]).toEqual([0, 0.5]);
+    controller.abort();
+    stopAllAudioPlayback();
+    release();
+    await rejected;
+    expect(audioContext.createBufferSource).toHaveBeenCalledOnce();
+  });
   const cleanup: Array<() => void> = [];
 
   beforeEach(() => {

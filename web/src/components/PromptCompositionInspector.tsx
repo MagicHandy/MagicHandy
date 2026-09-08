@@ -63,6 +63,10 @@ export function PromptCompositionInspector() {
             <div><dt>{t("Model")}</dt><dd>{payload.model || t("Not selected")}</dd></div>
             <div><dt>{t("Prompt set")}</dt><dd>{payload.prompt_set}</dd></div>
             <div><dt>{t("Persona")}</dt><dd>{payload.persona_name || t("No persona")}</dd></div>
+            {payload.composition.memory_candidates !== undefined && <div>
+              <dt>{t("Memories used")}</dt>
+              <dd>{payload.composition.memories_included ?? 0} / {payload.composition.memory_candidates}</dd>
+            </div>}
             <div>
               <dt>{t("Lore")}</dt>
               <dd>

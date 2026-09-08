@@ -151,7 +151,7 @@ func TestVoiceManagerConfigComposesManagedFasterQwen(t *testing.T) {
 		[2]string{"-server-arg", "--host"},
 		[2]string{"-server-arg", "127.0.0.1"},
 	)
-	if got.TTS.JobTimeout != voiceModelLoadTimeout {
+	if got.TTS.JobTimeout != 10*time.Minute {
 		t.Fatalf("managed Faster Qwen job timeout = %v", got.TTS.JobTimeout)
 	}
 	for _, runtimeControl := range []string{"-seed", "-randomize-seed", "-instruct"} {
@@ -359,7 +359,7 @@ func TestVoiceManagerConfigComposesManagedChatterbox(t *testing.T) {
 		[2]string{"-server-arg", launcher},
 		[2]string{"-server-arg", server},
 	)
-	if got.TTS.JobTimeout != voiceModelLoadTimeout {
+	if got.TTS.JobTimeout != 10*time.Minute {
 		t.Fatalf("managed Chatterbox job timeout = %v", got.TTS.JobTimeout)
 	}
 	if err := os.Remove(voicePath); err != nil {
@@ -1171,7 +1171,31 @@ func TestEmergencyStopInvalidatesTrackedTTSAudio(t *testing.T) {
 	}
 	waitForVoiceRequestDone(t, server, accepted.Request.ID)
 
+	chunkPath := "/api/voice/requests/" + accepted.Request.ID + "/audio-chunk?offset=0"
+	readOnly := httptest.NewRecorder()
+	server.Handler().ServeHTTP(readOnly, httptest.NewRequest(http.MethodGet, chunkPath, nil))
+	if readOnly.Code != http.StatusConflict {
+		t.Fatalf("audio chunk was not lease gated: %d", readOnly.Code)
+	}
+	chunkRecorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(chunkRecorder, withController(httptest.NewRequest(http.MethodGet, chunkPath, nil)))
+	var chunk voice.AudioChunk
+	if err := json.Unmarshal(chunkRecorder.Body.Bytes(), &chunk); err != nil {
+		t.Fatal(err)
+	}
+	if chunkRecorder.Code != http.StatusOK || len(chunk.Data) == 0 || !chunk.Done {
+		t.Fatalf("completed chunk unavailable: %s", chunkRecorder.Body.String())
+	}
+
 	callMotion(t, server, http.MethodPost, "/api/motion/stop", `{}`)
+	chunkRecorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(chunkRecorder, withController(httptest.NewRequest(http.MethodGet, chunkPath, nil)))
+	if err := json.Unmarshal(chunkRecorder.Body.Bytes(), &chunk); err != nil {
+		t.Fatal(err)
+	}
+	if chunk.State != voice.RequestStateCanceled || len(chunk.Data) != 0 {
+		t.Fatalf("Stop exposed progressive audio: %s", chunkRecorder.Body.String())
+	}
 	audioRecorder := httptest.NewRecorder()
 	audioRequest := withController(httptest.NewRequest(http.MethodGet, "/api/voice/requests/"+accepted.Request.ID+"/audio", nil))
 	server.Handler().ServeHTTP(audioRecorder, audioRequest)

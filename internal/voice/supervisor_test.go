@@ -389,9 +389,10 @@ func TestCancelInvalidatedSendsBoundWorkerCancelExactlyOnce(t *testing.T) {
 	manager := NewManager()
 	var workerInput bytes.Buffer
 	workerConn := &conn{
-		writer:  &workerInput,
-		pending: make(map[string]*responseSink),
-		done:    make(chan struct{}),
+		writer:    testWriteCloser{&workerInput},
+		writeGate: make(chan struct{}, 1),
+		pending:   make(map[string]*responseSink),
+		done:      make(chan struct{}),
 	}
 	pending := &PendingRequest{
 		ID: "tts-active", Role: RoleTTS, Type: RequestSpeak,
@@ -492,9 +493,10 @@ func TestCancelStopsActiveRequest(t *testing.T) {
 func TestCancelQueuedRequestDoesNotSendUnknownWorkerCancel(t *testing.T) {
 	var workerInput bytes.Buffer
 	workerConn := &conn{
-		writer:  &workerInput,
-		pending: make(map[string]*responseSink),
-		done:    make(chan struct{}),
+		writer:    testWriteCloser{&workerInput},
+		writeGate: make(chan struct{}, 1),
+		pending:   make(map[string]*responseSink),
+		done:      make(chan struct{}),
 	}
 	supervisor := NewSupervisor(RoleTTS)
 	supervisor.mu.Lock()

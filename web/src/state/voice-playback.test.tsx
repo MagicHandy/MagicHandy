@@ -23,6 +23,7 @@ vi.mock("../util/audio", () => ({
 
 vi.mock("./app-state", () => ({
   useToast: () => ({ show }),
+  useAppState: () => ({ state: { controller: { active: true }, stop_sequence: 0 }, backendOnline: true }),
 }));
 
 const voiceRequest = vi.mocked(api.voiceRequest);

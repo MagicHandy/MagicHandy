@@ -1,6 +1,7 @@
 package voice
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -9,13 +10,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/voice/protocol"
 )
 
 // Audio retention bounds: completed speak audio is kept in memory for the
 // lease-gated playback endpoint, capped per request and to the most recent
 // few requests so retained audio cannot grow without bound.
 const (
-	maxRetainedAudioBytes = 8 << 20 // per request
+	maxRetainedAudioBytes = protocol.MaxAudioBytes
 	// One active TTS request plus every request accepted by the bounded queue
 	// may complete before ordered browser playback catches up.
 	audioRetainCount      = queueCapacity + 1
@@ -44,11 +47,12 @@ type PendingRequest struct {
 	state     string
 	createdAt time.Time
 
-	request    Request
-	canceled   bool
-	cleanup    func()
-	wire       *conn
-	cancelSent bool
+	request     Request
+	canceled    bool
+	cleanup     func()
+	wire        *conn
+	cancelSent  bool
+	writeCancel context.CancelFunc
 
 	chunks         int
 	audio          []byte
@@ -57,21 +61,26 @@ type PendingRequest struct {
 	transcript     []TranscriptCandidate
 	rejected       string
 	failure        *WorkerError
+	firstAudioAt   time.Time
+	completedAt    time.Time
 }
 
 // RequestSnapshot is the JSON view of one request's progress.
 type RequestSnapshot struct {
-	ID             string                `json:"id"`
-	Role           Role                  `json:"role"`
-	Type           string                `json:"type"`
-	State          string                `json:"state"`
-	CreatedAt      string                `json:"created_at"`
-	AudioChunks    int                   `json:"audio_chunks,omitempty"`
-	AudioBytes     int                   `json:"audio_bytes,omitempty"`
-	AudioTruncated bool                  `json:"audio_truncated,omitempty"`
-	Transcript     []TranscriptCandidate `json:"transcript,omitempty"`
-	Rejected       string                `json:"rejected,omitempty"`
-	Error          *WorkerError          `json:"error,omitempty"`
+	ID               string                `json:"id"`
+	Role             Role                  `json:"role"`
+	Type             string                `json:"type"`
+	State            string                `json:"state"`
+	CreatedAt        string                `json:"created_at"`
+	AudioChunks      int                   `json:"audio_chunks,omitempty"`
+	AudioBytes       int                   `json:"audio_bytes,omitempty"`
+	AudioFormat      string                `json:"audio_format,omitempty"`
+	FirstAudioMillis int64                 `json:"first_audio_ms,omitempty"`
+	CompletionMillis int64                 `json:"completion_ms,omitempty"`
+	AudioTruncated   bool                  `json:"audio_truncated,omitempty"`
+	Transcript       []TranscriptCandidate `json:"transcript,omitempty"`
+	Rejected         string                `json:"rejected,omitempty"`
+	Error            *WorkerError          `json:"error,omitempty"`
 }
 
 // Snapshot returns a copy safe to serialize.
@@ -85,17 +94,20 @@ func (p *PendingRequest) Snapshot() RequestSnapshot {
 		failure = &failureCopy
 	}
 	return RequestSnapshot{
-		ID:             p.ID,
-		Role:           p.Role,
-		Type:           p.Type,
-		State:          p.state,
-		CreatedAt:      p.createdAt.Format(time.RFC3339),
-		AudioChunks:    p.chunks,
-		AudioBytes:     len(p.audio),
-		AudioTruncated: p.audioTruncated,
-		Transcript:     transcript,
-		Rejected:       p.rejected,
-		Error:          failure,
+		ID:               p.ID,
+		Role:             p.Role,
+		Type:             p.Type,
+		State:            p.state,
+		CreatedAt:        p.createdAt.Format(time.RFC3339),
+		AudioChunks:      p.chunks,
+		AudioBytes:       len(p.audio),
+		AudioFormat:      p.audioFormat,
+		FirstAudioMillis: elapsedMillis(p.createdAt, p.firstAudioAt),
+		CompletionMillis: elapsedMillis(p.createdAt, p.completedAt),
+		AudioTruncated:   p.audioTruncated,
+		Transcript:       transcript,
+		Rejected:         p.rejected,
+		Error:            failure,
 	}
 }
 
@@ -113,7 +125,7 @@ func (p *PendingRequest) Text() string {
 // is retained). Raw audio never appears in snapshots, traces, or logs.
 func (p *PendingRequest) Audio() ([]byte, string) {
 	p.mu.Lock()
-	if len(p.audio) == 0 {
+	if len(p.audio) == 0 || p.canceled || p.state == RequestStateFailed {
 		p.mu.Unlock()
 		return nil, ""
 	}
@@ -123,6 +135,9 @@ func (p *PendingRequest) Audio() ([]byte, string) {
 	p.mu.Unlock()
 	if format == "pcm_s16le_24000" {
 		return pcmS16LEToWAV(audio, 24000), "wav"
+	}
+	if format == "wav" {
+		return protocol.RepairWAVLengths(audio), format
 	}
 	return audio, format
 }
@@ -180,6 +195,10 @@ func (p *PendingRequest) markCanceled() bool {
 	}
 	p.canceled = true
 	p.state = RequestStateCanceled
+	p.audio = nil
+	if p.writeCancel != nil {
+		p.writeCancel()
+	}
 	return true
 }
 
@@ -187,6 +206,10 @@ func (p *PendingRequest) invalidate() {
 	p.mu.Lock()
 	p.canceled = true
 	p.state = RequestStateCanceled
+	if p.writeCancel != nil {
+		p.writeCancel()
+	}
+	p.audio = nil
 	p.mu.Unlock()
 }
 
@@ -208,7 +231,7 @@ func (p *PendingRequest) isCanceled() bool {
 
 func (p *PendingRequest) fail(err *WorkerError) {
 	p.mu.Lock()
-	if p.canceled {
+	if p.terminalLocked() {
 		p.mu.Unlock()
 		return
 	}
@@ -220,7 +243,7 @@ func (p *PendingRequest) fail(err *WorkerError) {
 func (p *PendingRequest) failAndCancel(err *WorkerError) *conn {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.canceled {
+	if p.terminalLocked() {
 		return nil
 	}
 	p.state = RequestStateFailed
@@ -230,6 +253,12 @@ func (p *PendingRequest) failAndCancel(err *WorkerError) *conn {
 		return p.wire
 	}
 	return nil
+}
+
+// terminalLocked keeps worker responses monotonic even when cancellation wins
+// while a response is being decoded. The caller holds p.mu.
+func (p *PendingRequest) terminalLocked() bool {
+	return p.canceled || p.state == RequestStateDone || p.state == RequestStateFailed || p.state == RequestStateCanceled
 }
 
 // markSent binds cancellation to the exact worker session that received the
@@ -258,6 +287,9 @@ func (p *PendingRequest) clearWire() {
 func (p *PendingRequest) timeOut(err *WorkerError) *conn {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.terminalLocked() {
+		return nil
+	}
 	p.canceled = true
 	p.state = RequestStateFailed
 	p.failure = err
@@ -339,11 +371,16 @@ func (s *Supervisor) cancelPending(pending *PendingRequest) {
 }
 
 func (s *Supervisor) sendCancel(workerConn *conn, targetID string) {
-	_ = workerConn.send(Request{
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err := workerConn.sendContext(ctx, Request{
 		Type:     RequestCancel,
 		ID:       s.newRequestID(),
 		TargetID: targetID,
 	})
+	if err != nil {
+		workerConn.closeWithError(err)
+	}
 }
 
 // dispatchLoop serializes work requests to the worker. It exits when the
@@ -351,10 +388,10 @@ func (s *Supervisor) sendCancel(workerConn *conn, targetID string) {
 func (s *Supervisor) dispatchLoop(workerConn *conn, queue chan *PendingRequest) {
 	for pending := range queue {
 		s.mu.Lock()
-		if s.queued > 0 {
+		if s.conn == workerConn && s.queued > 0 {
 			s.queued--
 		}
-		if !pending.isCanceled() {
+		if s.conn == workerConn && !pending.isCanceled() {
 			s.activeID = pending.ID
 		}
 		s.mu.Unlock()
@@ -366,7 +403,9 @@ func (s *Supervisor) dispatchLoop(workerConn *conn, queue chan *PendingRequest) 
 		}
 
 		s.mu.Lock()
-		s.activeID = ""
+		if s.conn == workerConn {
+			s.activeID = ""
+		}
 		s.mu.Unlock()
 	}
 }
@@ -386,11 +425,28 @@ func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
 		return
 	}
 	defer release()
+	s.mu.Lock()
+	jobTimeout := s.config.JobTimeout
+	s.mu.Unlock()
+	if jobTimeout <= 0 {
+		jobTimeout = defaultJobTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
+	defer cancel()
 
 	pending.mu.Lock()
 	request := pending.request
+	writeCtx, cancelWrite := context.WithCancel(ctx)
+	pending.writeCancel = cancelWrite
+	if pending.canceled {
+		cancelWrite()
+	}
 	pending.mu.Unlock()
-	err = workerConn.send(request)
+	err = workerConn.sendContext(writeCtx, request)
+	pending.mu.Lock()
+	pending.writeCancel = nil
+	pending.mu.Unlock()
+	cancelWrite()
 	// send serializes synchronously, so inline test audio no longer needs to be
 	// retained in the core once the worker frame has been written.
 	pending.dropInlineAudio()
@@ -402,14 +458,6 @@ func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
 		s.sendCancel(cancelConn, pending.ID)
 	}
 
-	s.mu.Lock()
-	jobTimeout := s.config.JobTimeout
-	s.mu.Unlock()
-	if jobTimeout <= 0 {
-		jobTimeout = defaultJobTimeout
-	}
-	timer := time.NewTimer(jobTimeout)
-	defer timer.Stop()
 	for {
 		select {
 		case response := <-responses:
@@ -420,7 +468,10 @@ func (s *Supervisor) execute(workerConn *conn, pending *PendingRequest) {
 			if terminal {
 				return
 			}
-		case <-timer.C:
+		case <-workerConn.closedChan():
+			pending.fail(&WorkerError{Code: ErrorCodeInternal, Message: workerConn.failure().Error()})
+			return
+		case <-ctx.Done():
 			workerConn := pending.timeOut(&WorkerError{
 				Code:    ErrorCodeTimeout,
 				Message: fmt.Sprintf("%s request timed out after %s", pending.Type, jobTimeout),
@@ -595,7 +646,7 @@ func (m *Manager) submitAndTrack(role Role, request Request, cleanup func()) (*P
 		m.mu.Unlock()
 		// Shutdown ran during submission; do not leave an untracked request
 		// queued against a worker that is going away.
-		worker.cancelPending(pending)
+		worker.Cancel(pending)
 		return nil, errors.New("voice manager is shut down")
 	}
 	m.trackLocked(pending)

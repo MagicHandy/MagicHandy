@@ -41,6 +41,13 @@ func NewOllamaProvider(options HTTPProviderOptions) (*OllamaProvider, error) {
 func (p *OllamaProvider) StreamChat(ctx context.Context, request ChatRequest, onDelta func(string) error) (string, error) {
 	ctx, cancel := checkedRequestContext(ctx, p.timeout)
 	defer cancel()
+	request, budget, err := BudgetChatRequest(request, 0)
+	if request.OnBudget != nil {
+		request.OnBudget(budget)
+	}
+	if err != nil {
+		return "", err
+	}
 
 	body := ollamaChatRequest{
 		Model:    firstNonEmpty(request.Model, p.model),
@@ -97,7 +104,7 @@ func (p *OllamaProvider) StreamChat(ctx context.Context, request ChatRequest, on
 		return "", fmt.Errorf("ollama chat returned %d: %s", response.StatusCode, strings.TrimSpace(string(message)))
 	}
 
-	return readOllamaStream(response.Body, onDelta)
+	return readOllamaStream(response.Body, onDelta, request.OnProgress)
 }
 
 // Status checks Ollama daemon reachability without loading or downloading a model.
@@ -179,14 +186,19 @@ type ollamaChatRequest struct {
 
 type ollamaChatChunk struct {
 	Message struct {
-		Content string `json:"content"`
+		Content  string `json:"content"`
+		Thinking string `json:"thinking"`
 	} `json:"message"`
-	Done       bool   `json:"done"`
-	DoneReason string `json:"done_reason,omitempty"`
-	Error      string `json:"error,omitempty"`
+	LoadDuration       int64  `json:"load_duration"`
+	PromptEvalDuration int64  `json:"prompt_eval_duration"`
+	PromptEvalCount    int    `json:"prompt_eval_count"`
+	EvalCount          int    `json:"eval_count"`
+	Done               bool   `json:"done"`
+	DoneReason         string `json:"done_reason,omitempty"`
+	Error              string `json:"error,omitempty"`
 }
 
-func readOllamaStream(body io.Reader, onDelta func(string) error) (string, error) {
+func readOllamaStream(body io.Reader, onDelta func(string) error, progress ...func(ProviderProgress)) (string, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 4096), 1024*1024)
 
@@ -203,6 +215,7 @@ func readOllamaStream(body io.Reader, onDelta func(string) error) (string, error
 		if chunk.Error != "" {
 			return builder.String(), errors.New(chunk.Error)
 		}
+		reportProgress(progress, ProviderProgress{Activity: chunk.Message.Content != "" || chunk.Message.Thinking != "", LoadMillis: chunk.LoadDuration / int64(time.Millisecond), PromptEvalMillis: chunk.PromptEvalDuration / int64(time.Millisecond), PromptTokens: chunk.PromptEvalCount, GeneratedTokens: chunk.EvalCount})
 		if chunk.Message.Content != "" {
 			if err := appendStreamDelta(&builder, chunk.Message.Content, onDelta); err != nil {
 				return builder.String(), err

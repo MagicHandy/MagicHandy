@@ -178,6 +178,14 @@ if (-not (Test-Path -LiteralPath $moduleStatePath -PathType Leaf)) {
     throw "Module state was not found at '$moduleStatePath'. Run install-tts-module.ps1 first."
 }
 $state = Read-TTSModuleState -Path $moduleStatePath -ExpectedRoot $InstallRoot
+$runtimeRoot = $InstallRoot
+if ($state.PSObject.Properties.Name -contains 'runtime_root') {
+    $runtimeRoot = [System.IO.Path]::GetFullPath([string]$state.runtime_root)
+    Assert-MagicHandyChildPath -Root (Join-Path $InstallRoot 'runtimes') -Candidate $runtimeRoot
+    if (-not (Test-Path -LiteralPath (Join-Path $runtimeRoot 'module-state.json') -PathType Leaf)) {
+        throw 'The selected TTS runtime manifest is missing. Use guided setup to repair the module.'
+    }
+}
 
 Write-Host ''
 Write-Host 'MagicHandy local TTS updater' -ForegroundColor Cyan
@@ -188,7 +196,7 @@ Write-Host "Port:        $($state.port)"
 Write-Host "Auto-launch: $([bool]$state.auto_launch)"
 
 if ($CheckOnly) {
-    $pythonVersion = Assert-InstalledTTSPythonEnvironment -Root $InstallRoot -Module ([string]$state.module)
+    $pythonVersion = Assert-InstalledTTSPythonEnvironment -Root $runtimeRoot -Module ([string]$state.module)
     Write-Host "Module state verified. Managed $pythonVersion environment verified." -ForegroundColor Green
     return
 }
@@ -230,6 +238,13 @@ $arguments = @{
     Update = $true
     PlanOnly = [bool]$PlanOnly
     Yes = [bool]$Yes
+}
+if ([string]$state.module -eq 'chatterbox') {
+    $savedVoice = Join-Path $runtimeRoot ('runtime\voices\' + [string]$state.voice)
+    Assert-MagicHandyChildPath -Root $runtimeRoot -Candidate $savedVoice
+    if (Test-Path -LiteralPath $savedVoice -PathType Leaf) {
+        $arguments['ReferenceWav'] = $savedVoice
+    }
 }
 & $installer @arguments
 if (-not $?) {

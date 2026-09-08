@@ -133,7 +133,7 @@ func (s *Server) autopilotModelTurn(
 	if kind == chat.AutopilotKindMotion {
 		patternChoices = withoutRecentPatterns(patternChoices, input.RecentPatternIDs)
 	}
-	provider, err := s.newLLMProvider(ctx, settings.LLM)
+	provider, err := s.prepareLLMProvider(settings.LLM)
 	if err != nil {
 		return chat.AutopilotResponse{}, err
 	}
@@ -161,6 +161,7 @@ func (s *Server) autopilotModelTurn(
 		MaxTokens:             settings.LLM.MaxOutputTokens,
 		ReasoningMode:         settings.LLM.ReasoningMode,
 		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
+		PromptBudget:          chatPromptBudget(settings.LLM),
 		Temperature:           temperature,
 		Memories:              memories,
 		Patterns:              patternChoices,

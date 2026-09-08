@@ -1960,5 +1960,12 @@
   "Peak timing shifts up to {milliseconds} ms": "峰值时间最多偏移 {milliseconds} 毫秒",
   "{count} corners use shorter windows": "{count} 个转向使用了较短的时间窗口",
   "{count} corners too short to round": "{count} 个转向过短，无法圆滑处理",
-  "No eligible script changes at these settings.": "在这些设置下，没有可应用的脚本更改。"
+  "No eligible script changes at these settings.": "在这些设置下，没有可应用的脚本更改。",
+  "Memories used": "已使用的记忆",
+  "First provider activity": "提供方首次活动",
+  "Model load": "模型加载",
+  "Prompt processing": "提示词处理",
+  "Input bytes / budget": "输入字节数 / 上限",
+  "History messages omitted": "省略的历史消息",
+  "Tokens (input / output)": "词元（输入 / 输出）"
 }

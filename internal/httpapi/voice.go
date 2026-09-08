@@ -21,6 +21,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
+	"github.com/mapledaemon/MagicHandy/internal/voice/protocol"
 )
 
 // voiceHealthTimeout bounds the live health probe on the status endpoint so
@@ -98,7 +99,7 @@ func openAITTSWorkerConfig(settings config.VoiceSettings, executablePath, dataDi
 	}
 	worker := voice.WorkerConfig{
 		Enabled:    settings.Enabled,
-		JobTimeout: 10 * time.Minute,
+		JobTimeout: protocol.SynthesisTimeout,
 		Command:    command,
 		Args: []string{
 			"-base-url", settings.TTSBaseURL,
@@ -132,7 +133,6 @@ func openAITTSWorkerConfig(settings config.VoiceSettings, executablePath, dataDi
 	for _, argument := range managed.args {
 		worker.Args = append(worker.Args, "-server-arg", argument)
 	}
-	worker.JobTimeout = voiceModelLoadTimeout
 	moduleRoot := ttsModuleRoot(settings, dataDir)
 	if moduleRoot != "" {
 		if worker.Env == nil {
@@ -504,16 +504,16 @@ func fasterQwenReferenceConfigured(settings config.VoiceSettings) bool {
 
 func ttsModuleRoot(settings config.VoiceSettings, dataDir string) string {
 	if root := strings.TrimSpace(settings.TTSModuleRoot); root != "" {
-		return root
+		return installedTTSRuntimeRoot(root)
 	}
 	if strings.TrimSpace(dataDir) == "" {
 		return ""
 	}
 	switch settings.TTSProvider {
 	case config.VoiceTTSProviderFasterQwen:
-		return filepath.Join(dataDir, "voice", "faster-qwen3-tts")
+		return installedTTSRuntimeRoot(filepath.Join(dataDir, "voice", "faster-qwen3-tts"))
 	case config.VoiceTTSProviderChatterbox:
-		return filepath.Join(dataDir, "voice", "chatterbox-tts")
+		return installedTTSRuntimeRoot(filepath.Join(dataDir, "voice", "chatterbox-tts"))
 	default:
 		return ""
 	}
@@ -729,6 +729,7 @@ func (s *Server) voiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/voice/workers/{role}/test", s.handleVoiceWorkerTest)
 	mux.HandleFunc("GET /api/voice/requests/{id}", s.handleVoiceRequestGet)
 	mux.HandleFunc("GET /api/voice/requests/{id}/audio", s.handleVoiceRequestAudio)
+	mux.HandleFunc("GET /api/voice/requests/{id}/audio-chunk", s.handleVoiceRequestAudioChunk)
 	mux.HandleFunc("POST /api/voice/requests/{id}/cancel", s.handleVoiceRequestCancel)
 	mux.HandleFunc("POST /api/voice/requests/{id}/played", s.handleVoiceRequestPlayed)
 	mux.HandleFunc("POST /api/voice/transcriptions", s.handleVoiceTranscription)

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/voice/protocol"
+	"github.com/mapledaemon/MagicHandy/internal/voice/workerhost"
 )
 
 // Defaults for the ElevenLabs API. Voice and model are deliberately
@@ -38,7 +39,7 @@ const (
 	chunkBytes     = 32 * 1024
 	queueCapacity  = 8
 	maxSpeechBytes = 32 << 10
-	maxAudioBytes  = 32 << 20
+	maxAudioBytes  = protocol.MaxAudioBytes
 )
 
 // Options configure one worker session.
@@ -76,10 +77,10 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 	}
 
 	s := &session{
-		options:  options,
-		writer:   writer,
-		queue:    make(chan protocol.Request, queueCapacity),
-		cancels:  make(map[string]context.CancelFunc),
+		options: options,
+		writer:  writer,
+		queue:   make(chan protocol.Request, queueCapacity),
+
 		setupErr: validateOptions(options),
 	}
 
@@ -105,8 +106,7 @@ type session struct {
 	mu       sync.Mutex
 	loaded   bool
 	pending  int
-	canceled map[string]bool
-	cancels  map[string]context.CancelFunc
+	jobs     workerhost.Jobs
 	setupErr error
 
 	queue chan protocol.Request
@@ -205,7 +205,9 @@ func (s *session) handleLoad(request protocol.Request) {
 			"ElevenLabs rejected the API key (401); check the key in Settings → Voice", false)
 		return
 	}
-	if response.StatusCode >= 400 {
+	// Endpoint-scoped speech keys need not grant account/profile access. A
+	// forbidden /user probe is inconclusive; speech reports its own auth errors.
+	if response.StatusCode >= 400 && response.StatusCode != http.StatusForbidden {
 		s.sendError(request.ID, protocol.ErrorCodeInternal,
 			fmt.Sprintf("ElevenLabs key check failed with status %d", response.StatusCode), true)
 		return
@@ -216,12 +218,17 @@ func (s *session) handleLoad(request protocol.Request) {
 }
 
 func (s *session) enqueue(request protocol.Request) {
+	if !s.jobs.Track(request.ID) {
+		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, "worker queue is full or the request ID is already queued", true)
+		return
+	}
 	s.mu.Lock()
 	s.pending++
 	s.mu.Unlock()
 	select {
 	case s.queue <- request:
 	default:
+		s.jobs.Finish(request.ID)
 		s.mu.Lock()
 		s.pending--
 		s.mu.Unlock()
@@ -235,12 +242,7 @@ func (s *session) workLoop() {
 		s.pending--
 		canceled := s.canceledLocked(request.ID)
 		loaded := s.loaded
-		var ctx context.Context
-		var cancel context.CancelFunc
-		if !canceled {
-			ctx, cancel = context.WithCancel(context.Background())
-			s.cancels[request.ID] = cancel
-		}
+		ctx := s.jobs.Context(request.ID)
 		s.mu.Unlock()
 
 		switch {
@@ -253,13 +255,7 @@ func (s *session) workLoop() {
 			s.speak(ctx, request)
 		}
 
-		s.mu.Lock()
-		if cancel != nil {
-			cancel()
-			delete(s.cancels, request.ID)
-		}
-		delete(s.canceled, request.ID)
-		s.mu.Unlock()
+		s.jobs.Finish(request.ID)
 	}
 }
 
@@ -398,42 +394,13 @@ func validateOptions(options Options) error {
 	return nil
 }
 
-func (s *session) markCanceled(id string) {
-	if id == "" {
-		return
-	}
-	s.mu.Lock()
-	if s.canceled == nil {
-		s.canceled = make(map[string]bool)
-	}
-	s.canceled[id] = true
-	if cancel, ok := s.cancels[id]; ok {
-		cancel()
-	}
-	s.mu.Unlock()
-}
+func (s *session) markCanceled(id string) { s.jobs.Cancel(id) }
 
-func (s *session) cancelAll() {
-	s.mu.Lock()
-	for id, cancel := range s.cancels {
-		if s.canceled == nil {
-			s.canceled = make(map[string]bool)
-		}
-		s.canceled[id] = true
-		cancel()
-	}
-	s.mu.Unlock()
-}
+func (s *session) cancelAll() { s.jobs.CancelAll() }
 
-func (s *session) isCanceled(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.canceledLocked(id)
-}
+func (s *session) isCanceled(id string) bool { return s.jobs.Canceled(id) }
 
-func (s *session) canceledLocked(id string) bool {
-	return s.canceled != nil && s.canceled[id]
-}
+func (s *session) canceledLocked(id string) bool { return s.jobs.Canceled(id) }
 
 func (s *session) setLoaded(loaded bool) {
 	s.mu.Lock()

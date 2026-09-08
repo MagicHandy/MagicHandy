@@ -1,5 +1,25 @@
 # Goal Scorecard
 
+## 2026-09-08 — AI runtime correctness and streaming
+
+The [AI runtime implementation](ai-runtime-improvements-2026-09-08.md) addresses
+the audit's twelve findings and four optimization areas, preserving the pure-Go
+core and shared motion path. GPU placement/KV tuning remains measurement-gated.
+
+Same-toolchain stripped app: 19,116,032 → 19,182,592 bytes (+66,560; 0.35%).
+Main JS gzip grows 2,162 bytes; total raw `dist` grows 8,460 bytes. No Go/browser
+dependency is added. ASR multipart assembly allocation drops from about 33.6 MB
+to 35.9 KB per 32 MiB request; the memory-flood system prompt falls from 401,604
+to 7,604 bytes. These are bounded component measurements, not whole-app speedups.
+
+Full Go/race/vet/lint, architecture/goleak, frontend typecheck/localization/502
+tests/build, installer fixtures and lightweight Python adapter tests pass.
+A current-source isolated simulator completes an unrepaired, text-only app chat
+using a real local Ollama model. Speech model listening/full-install/shared-GPU
+acceptance remains open. Startup observations still exceed 500 ms and Windows
+working-set variation prevents an RSS improvement claim; existing waivers stay.
+See [measurement conditions](perf-baseline.md#2026-09-08--ai-runtime-improvements).
+
 ## 2026-09-06 — alpha.43 release preparation
 
 PR #259's encoded startup-arrival correction is merged with all nine PR checks
