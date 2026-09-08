@@ -571,16 +571,17 @@ func isRegularFileWithoutLinks(root, path string) bool {
 }
 
 type voiceModuleStatus struct {
-	State            string `json:"state"`
-	Installed        bool   `json:"installed"`
-	WorkerInstalled  bool   `json:"worker_installed"`
-	RuntimeInstalled bool   `json:"runtime_installed"`
-	RunnerInstalled  *bool  `json:"runner_installed,omitempty"`
-	ModelInstalled   *bool  `json:"model_installed,omitempty"`
-	ResumablePartial *bool  `json:"resumable_partial,omitempty"`
-	PartialBytes     int64  `json:"partial_bytes,omitempty"`
-	RuntimeBackend   string `json:"runtime_backend,omitempty"`
-	Message          string `json:"message"`
+	State            string             `json:"state"`
+	Installed        bool               `json:"installed"`
+	WorkerInstalled  bool               `json:"worker_installed"`
+	RuntimeInstalled bool               `json:"runtime_installed"`
+	RunnerInstalled  *bool              `json:"runner_installed,omitempty"`
+	ModelInstalled   *bool              `json:"model_installed,omitempty"`
+	ResumablePartial *bool              `json:"resumable_partial,omitempty"`
+	PartialBytes     int64              `json:"partial_bytes,omitempty"`
+	RuntimeBackend   string             `json:"runtime_backend,omitempty"`
+	Message          string             `json:"message"`
+	Update           *voiceModuleUpdate `json:"update,omitempty"`
 }
 
 func inspectParakeetAppModule(workerOverride, executablePath, dataDir string) voiceModuleStatus {
@@ -735,6 +736,8 @@ func (s *Server) voiceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/voice/transcriptions", s.handleVoiceTranscription)
 	mux.HandleFunc("PUT /api/voice/preferences", s.handleVoicePreferences)
 	mux.HandleFunc("PUT /api/voice/input-preferences", s.handleVoiceInputPreferences)
+	mux.HandleFunc("POST /api/voice/module/update", s.handleTTSModuleUpdate)
+	mux.HandleFunc("DELETE /api/voice/module/update", s.handleTTSModuleUpdateCancel)
 }
 
 // voiceState is the /api/state block: lifecycle snapshots only, no live IPC
@@ -747,7 +750,10 @@ func (s *Server) voiceState() map[string]any {
 	}
 	if settings.Voice.TTSProvider == config.VoiceTTSProviderFasterQwen ||
 		settings.Voice.TTSProvider == config.VoiceTTSProviderChatterbox {
-		modules["tts"] = inspectTTSModule(settings.Voice, s.voiceExecutable, s.voiceDataDir)
+		module := inspectTTSModule(settings.Voice, s.voiceExecutable, s.voiceDataDir)
+		update := s.ttsModuleUpdate(settings.Voice, false)
+		module.Update = &update
+		modules["tts"] = module
 	}
 	return map[string]any{
 		"enabled":          settings.Voice.Enabled,

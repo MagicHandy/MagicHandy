@@ -1,6 +1,7 @@
 import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
+import type { VoiceModuleUpdate } from "../api/types";
 import { setLocaleForTest } from "../i18n";
 import english from "../i18n/locales/en.json";
 import { NotificationCenter } from "./NotificationCenter";
@@ -10,6 +11,7 @@ const app = vi.hoisted(() => ({
   push: vi.fn(),
   voiceEnabled: false,
   workers: undefined as Record<string, { state: string; started_at?: string }> | undefined,
+  ttsUpdate: undefined as VoiceModuleUpdate | undefined,
 }));
 
 vi.mock("../api/client", () => ({
@@ -26,7 +28,7 @@ vi.mock("../state/app-state", () => ({
         ui: { setup_completed: true, update_check_mode: app.mode },
         voice: { enabled: app.voiceEnabled },
       },
-      voice: { workers: app.workers },
+      voice: { workers: app.workers, modules: { tts: { update: app.ttsUpdate } } },
     },
   }),
   useNotifications: () => ({
@@ -47,6 +49,7 @@ describe("NotificationCenter release checks", () => {
     app.mode = "automatic";
     app.voiceEnabled = false;
     app.workers = undefined;
+    app.ttsUpdate = undefined;
     app.push.mockReset();
     updateStatus.mockReset();
     updateStatus.mockResolvedValue({ state: "current", current_version: "1.0.0" });
@@ -71,6 +74,17 @@ describe("NotificationCenter release checks", () => {
     app.mode = "manual";
     render(<NotificationCenter open={false} onOpenChange={vi.fn()} />);
 
+    expect(updateStatus).not.toHaveBeenCalled();
+  });
+
+  it("offers a managed TTS update even with voice off and release checks manual", async () => {
+    app.mode = "manual";
+    app.ttsUpdate = { available: true, supported: true, id: "bundle-fingerprint", module: "chatterbox" };
+    render(<NotificationCenter open={false} onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(app.push).toHaveBeenCalledWith(expect.objectContaining({
+      title: "TTS module update available", category: "voice", href: "#/settings/voice",
+      sourceKey: "tts-module-update:bundle-fingerprint",
+    })));
     expect(updateStatus).not.toHaveBeenCalled();
   });
 

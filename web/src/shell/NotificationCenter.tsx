@@ -23,6 +23,7 @@ export function NotificationCenter({ open, onOpenChange, restoreFocusOnClose = t
   const job = state?.media?.job;
   const voiceSettings = state?.settings?.voice;
   const voiceWorkers = state?.voice?.workers;
+  const ttsUpdate = state?.voice?.modules?.tts?.update;
   const voiceCrashed = Boolean(
     voiceSettings?.enabled &&
     (voiceWorkers?.tts?.state === "crashed" || voiceWorkers?.asr?.state === "crashed"),
@@ -83,6 +84,18 @@ export function NotificationCenter({ open, onOpenChange, restoreFocusOnClose = t
       });
     }
   }, [push, voiceWorkers]);
+
+  useEffect(() => {
+    if (!backendOnline || !ttsUpdate?.available || !ttsUpdate.id) return;
+    push({
+      title: t("TTS module update available"),
+      detail: t("Open Voice settings to update your managed speech module."),
+      category: "voice",
+      tone: "info",
+      href: "#/settings/voice",
+      sourceKey: `tts-module-update:${ttsUpdate.id}`,
+    });
+  }, [backendOnline, push, ttsUpdate?.available, ttsUpdate?.id]);
 
   const setupComplete = state?.settings?.ui?.setup_completed !== false;
   const automaticUpdateChecks = state?.settings?.ui?.update_check_mode !== "manual";

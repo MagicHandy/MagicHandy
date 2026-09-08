@@ -77,6 +77,7 @@ type setupVoiceInstallRequest struct {
 	Module     string `json:"module"`
 	Device     string `json:"device"`
 	AutoLaunch bool   `json:"auto_launch"`
+	updateFrom *config.VoiceSettings
 }
 
 type setupPreferencesRequest struct {
@@ -96,6 +97,7 @@ type setupVoiceInstallResult struct {
 	Device     string
 	AutoLaunch bool
 	Root       string
+	updateFrom *config.VoiceSettings
 }
 
 type setupParakeetInstallResult struct {
@@ -281,11 +283,15 @@ func (m *setupManager) reserveJob(kind, module, device, message string) (context
 	return ctx, m.job.setupJob, nil
 }
 
-func (m *setupManager) Cancel() (setupJob, error) {
+func (m *setupManager) Cancel(expectedID ...string) (setupJob, error) {
 	m.mu.Lock()
 	if m.job == nil || (m.job.Status != setupJobQueued && m.job.Status != setupJobRunning) {
 		m.mu.Unlock()
 		return setupJob{}, errors.New("no setup installation is running")
+	}
+	if len(expectedID) > 0 && m.job.ID != expectedID[0] {
+		m.mu.Unlock()
+		return setupJob{}, errors.New("the setup installation changed; refresh before canceling")
 	}
 	m.job.cancel()
 	command := m.job.command
@@ -322,7 +328,11 @@ func (m *setupManager) runVoiceInstall(
 ) {
 	defer m.wg.Done()
 	err := m.installVoice(ctx, id, module, request)
-	m.finishJob(ctx, id, err, "Voice module")
+	subject := "Voice module"
+	if request.updateFrom != nil {
+		subject = "TTS module update"
+	}
+	m.finishJob(ctx, id, err, subject)
 }
 
 func (m *setupManager) installVoice(
@@ -346,14 +356,9 @@ func (m *setupManager) installVoice(
 		folder = "chatterbox-tts"
 	}
 	root := filepath.Join(m.dataDir, "voice", folder)
-	arguments := []string{
-		"-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script,
-		"-Module", module.ID, "-DataDir", m.dataDir, "-InstallRoot", root,
-		"-Device", request.Device, "-Port", fmt.Sprint(module.Port),
-		"-Yes", "-SkipAppConfiguration",
-	}
-	if request.AutoLaunch {
-		arguments = append(arguments, "-AutoLaunch")
+	root, arguments, err := voiceInstallArguments(script, m.dataDir, root, module, request)
+	if err != nil {
+		return err
 	}
 	command := exec.CommandContext(ctx, powerShell, arguments...) // #nosec G204 -- executable and script are app-discovered; arguments are closed enums and app-owned paths.
 	configureSetupProcess(command)
@@ -376,6 +381,12 @@ func (m *setupManager) installVoice(
 	if err == nil {
 		err = verifyInstalledVoiceModule(root, module)
 	}
+	if err == nil && request.updateFrom != nil {
+		update := inspectVoiceModuleUpdate(module.Provider, root, m.executablePath)
+		if update.ID == "" || update.Available {
+			err = errors.New("the prepared TTS module does not match the bundled adapter version")
+		}
+	}
 	if err == nil {
 		worker := resolveFirstPartyWorkerBinary("", m.executablePath, m.dataDir, "voice-openai-tts-worker")
 		if !isRegularFile(worker) {
@@ -385,6 +396,7 @@ func (m *setupManager) installVoice(
 	if err == nil && ctx.Err() == nil && m.onInstalled != nil {
 		err = m.onInstalled(context.WithoutCancel(ctx), setupVoiceInstallResult{
 			Module: module, Device: request.Device, AutoLaunch: request.AutoLaunch, Root: root,
+			updateFrom: request.updateFrom,
 		})
 		if err == nil {
 			err = activateVoiceInstallCandidate(moduleHome, root)
@@ -829,6 +841,11 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) applyInstalledVoiceModule(ctx context.Context, result setupVoiceInstallResult) error {
 	_, _, saveErr, runtimeErr := s.updateSettingsAndRuntime(ctx, func(current config.Settings) (config.Settings, error) {
+		if result.updateFrom != nil {
+			voice, err := applyVoiceModuleUpdate(current.Voice, result)
+			current.Voice = voice
+			return current, err
+		}
 		current.Voice.Enabled = false
 		current.Voice.SpeakReplies = false
 		current.Voice.TTSProvider = result.Module.Provider

@@ -100,6 +100,7 @@ type Server struct {
 	voice               *voice.Manager
 	voiceExecutable     string
 	voiceDataDir        string
+	voiceModuleUpdates  voiceModuleUpdateCache
 	voiceAutoloadMu     sync.Mutex
 	voiceAutoloadCancel context.CancelFunc
 	voiceAutoloadWG     sync.WaitGroup

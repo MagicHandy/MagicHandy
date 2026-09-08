@@ -2,7 +2,7 @@
 
 Date: 2026-09-08
 
-Status: Proposed for PR review
+Status: Accepted in PR #261
 
 ## Context
 

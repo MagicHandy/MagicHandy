@@ -83,6 +83,28 @@ install repairs a failed check with the saved module choices. A normal app
 update remains core-only and does not unexpectedly re-run optional model or
 package downloads.
 
+Starting with alpha.44, the running app compares the selected managed module's
+Python adapter, shared streaming helper, and pinned source revision with the
+copies bundled with MagicHandy. Checks are local, bounded, and cached for 30
+seconds; they do not query upstream projects or download anything. An outdated
+Qwen or Chatterbox module produces a notification linking to Settings > Voice
+and an **Update TTS module** prompt there, including when voice is off.
+Notifications are deduplicated by the bundled payload and selected runtime.
+External providers and fresh installations are not offered a managed update.
+
+The Windows x64 controller can click **Update TTS module** after saving any
+pending Voice settings. The prompt explains the download and extra disk space
+before the action starts. Progress, failure/retry, and cancellation are visible
+in the same panel. Preparation uses the existing staged installer and verifies
+that the candidate matches the bundled adapters before activation. Model, voice,
+reference, language, seed/tone, port, enablement, and unrelated ASR/credential
+settings are preserved; the selected Chatterbox WAV is copied into the candidate.
+An existing local Qwen model directory is reused without a model download.
+Previous runtimes remain on disk. If the selected provider, root, model, voice,
+device, or port changes during preparation, activation fails rather than
+overwriting that newer selection. Speech can reload when an update is applied.
+Cancel targets the displayed job ID and cannot cancel a replacement setup job.
+
 Before Faster Qwen provisioning starts, the installer runs `nvidia-smi.exe` and
 requires it to enumerate at least one GPU. This catches a missing, stale, or
 unusable NVIDIA driver before Python, PyTorch, and model downloads. The later

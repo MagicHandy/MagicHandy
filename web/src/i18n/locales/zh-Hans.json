@@ -1967,5 +1967,12 @@
   "Prompt processing": "提示词处理",
   "Input bytes / budget": "输入字节数 / 上限",
   "History messages omitted": "省略的历史消息",
-  "Tokens (input / output)": "词元（输入 / 输出）"
+  "Tokens (input / output)": "词元（输入 / 输出）",
+  "TTS module update available": "TTS 模块有可用更新",
+  "Update the managed speech module to use the improvements included with this MagicHandy version.": "更新托管语音合成模块，以使用此 MagicHandy 版本中的改进。",
+  "The update may download several GiB and needs space for a separate runtime. Your model, voice and reference settings are preserved. Speech may reload when the update is applied.": "更新可能下载数 GiB 的数据，并需要空间来创建独立运行环境。模型、音色和参考音频设置将保留。应用更新时，语音模块可能重新加载。",
+  "Update TTS module": "更新 TTS 模块",
+  "TTS module update completed.": "TTS 模块更新完成。",
+  "TTS module updates are supported on Windows x64.": "TTS 模块更新支持 Windows x64。",
+  "Open Voice settings to update your managed speech module.": "打开语音设置以更新托管语音合成模块。"
 }
