@@ -104,6 +104,9 @@ Previous runtimes remain on disk. If the selected provider, root, model, voice,
 device, or port changes during preparation, activation fails rather than
 overwriting that newer selection. Speech can reload when an update is applied.
 Cancel targets the displayed job ID and cannot cancel a replacement setup job.
+Unsaved form edits survive the completion refresh, which adopts the activated
+runtime path for subsequent saves. Cancellation also remains available while
+the form contains unsaved changes.
 
 Before Faster Qwen provisioning starts, the installer runs `nvidia-smi.exe` and
 requires it to enumerate at least one GPU. This catches a missing, stale, or

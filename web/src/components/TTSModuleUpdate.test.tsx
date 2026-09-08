@@ -65,4 +65,10 @@ describe("managed TTS updates", () => {
     view.rerender(<TTSModuleUpdate {...props} update={{ ...available, available: false }} />);
     expect(view.container).toBeEmptyDOMElement();
   });
+
+  it("still permits cancellation after the user edits a voice setting", () => {
+    render(<TTSModuleUpdate update={{ ...available, busy: true, job }} locked={false} dirty refresh={vi.fn()} onComplete={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Update TTS module" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  });
 });

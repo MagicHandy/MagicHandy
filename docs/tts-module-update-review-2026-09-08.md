@@ -12,7 +12,7 @@ selection rejects activation, and cancellation targets the displayed job ID.
 Validation on Windows x64, Go 1.26.4:
 
 - Full Go tests, vet, lint, race suite, import boundaries and lifecycle gates pass.
-- Frontend typecheck, localization (1,976 keys in five locales), 507 tests in 69
+- Frontend typecheck, localization (1,976 keys in five locales), 510 tests in 70
   files, and the canonical production build pass.
 - Windows PowerShell 5.1 installer fixtures pass, including local-model selection,
   staged-runtime isolation, and the exact alpha.44 unsigned-policy allowlist.
@@ -22,6 +22,9 @@ Validation on Windows x64, Go 1.26.4:
   cancellation identity, and settings preservation. A Windows fixture installer
   runs through the real update endpoint, job process, candidate validation and
   activation without downloading models or running inference.
+- A final settings-form pass preserves unsaved edits when an update completes,
+  adopts the newly activated runtime in subsequent saves, and keeps Cancel
+  available while the form is dirty. Regression tests cover all three outcomes.
 - In-app browser review follows the one-time notification to Voice settings,
   displays the update action and download explanation at a narrow viewport, and
   keeps Emergency Stop visible. An isolated old-adapter fixture deliberately
@@ -32,8 +35,8 @@ Validation on Windows x64, Go 1.26.4:
   fallback, motion disabled, and voice off (121 ms total; 53 ms first token).
 
 The stripped app is 19,218,432 bytes, 35,328 bytes above merged PR #261. Main JS
-is 766,507 bytes raw / 211,775 gzip (level 9); the embedded tree is 2,028,522
-bytes. This adds 762 bytes gzip to the main JS and 7,749 raw bytes across all
+is 766,911 bytes raw / 211,890 gzip (level 9); the embedded tree is 2,028,926
+bytes. This adds 877 bytes gzip to the main JS and 8,153 raw bytes across all
 assets. Measurements use `CGO_ENABLED=0`, `-trimpath`, and `-s -w`, with release
 version metadata. No new Go, JavaScript, or Python dependency is introduced.
 Fresh isolated simulator startup is 583.4 ms; three idle working-set samples are

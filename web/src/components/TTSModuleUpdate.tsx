@@ -6,11 +6,12 @@ import { t, translateKnown } from "../i18n";
 interface Props {
   update?: VoiceModuleUpdate;
   locked: boolean;
+  dirty?: boolean;
   refresh: () => Promise<void>;
   onComplete: () => void;
 }
 
-export function TTSModuleUpdate({ update, locked, refresh, onComplete }: Props) {
+export function TTSModuleUpdate({ update, locked, dirty = false, refresh, onComplete }: Props) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const completed = useRef("");
@@ -54,7 +55,7 @@ export function TTSModuleUpdate({ update, locked, refresh, onComplete }: Props) 
     {update?.available && !update.supported && <p>{t("TTS module updates are supported on Windows x64.")}</p>}
     <div className="row-actions">
       {active && <button type="button" className="btn btn-secondary" disabled={locked || pending} onClick={() => void run(() => api.cancelTTSModuleUpdate(job.id))}>{t("Cancel")}</button>}
-      {update?.available && <button type="button" className="btn btn-secondary" disabled={locked || pending || update.busy || !update.supported || !update.id} onClick={() => void run(() => api.updateTTSModule(update.id!))}>{t("Update TTS module")}</button>}
+      {update?.available && <button type="button" className="btn btn-secondary" disabled={locked || dirty || pending || update.busy || !update.supported || !update.id} onClick={() => void run(() => api.updateTTSModule(update.id!))}>{t("Update TTS module")}</button>}
     </div>
   </div>;
 }

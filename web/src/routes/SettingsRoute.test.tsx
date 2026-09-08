@@ -13,6 +13,17 @@ const app = vi.hoisted(() => ({
   show: vi.fn(),
 }));
 
+vi.mock("../components/VoiceSettingsPanel", () => ({
+  VoiceSettingsPanel: ({ settings, patch, onRuntimeChanged }: {
+    settings: PublicSettings;
+    patch: (next: Partial<PublicSettings["voice"]>) => void;
+    onRuntimeChanged: () => void;
+  }) => <>
+    <input aria-label="Reference transcript fixture" value={settings.voice.tts_reference_text || ""} onChange={(event) => patch({ tts_reference_text: event.target.value })} />
+    <button onClick={onRuntimeChanged}>Complete module update fixture</button>
+  </>,
+}));
+
 vi.mock("../api/client", () => ({
   api: {
     getSettings: vi.fn(),
@@ -179,6 +190,27 @@ describe("SettingsRoute", () => {
     resetSettings.mockReset();
     saveSettings.mockResolvedValue({ settings: settings("normal") });
     resetSettings.mockResolvedValue({ settings: settings("normal") });
+  });
+
+  it("keeps unsaved voice edits after activation and saves with the new runtime root", async () => {
+    app.hash = "#/settings/voice";
+    const initial = settings("normal");
+    initial.voice.tts_provider = "faster_qwen3_tts";
+    initial.voice.tts_module_root = "old-runtime";
+    initial.voice.tts_reference_text = "Original transcript.";
+    const installed = { ...initial, voice: { ...initial.voice, tts_module_root: "new-runtime" } };
+    getSettings.mockResolvedValueOnce({ settings: initial }).mockResolvedValue({ settings: installed });
+    render(<SettingsRoute />);
+    const transcript = await screen.findByRole("textbox", { name: "Reference transcript fixture" });
+    fireEvent.change(transcript, { target: { value: "My unsaved transcript." } });
+    fireEvent.click(screen.getByRole("button", { name: "Complete module update fixture" }));
+    await waitFor(() => expect(getSettings).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save settings" })).toBeEnabled());
+    expect(transcript).toHaveValue("My unsaved transcript.");
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({
+      voice: expect.objectContaining({ tts_module_root: "new-runtime", tts_reference_text: "My unsaved transcript." }),
+    })));
   });
 
   it("persists the selected interface language", async () => {
