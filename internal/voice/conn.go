@@ -2,6 +2,7 @@ package voice
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,8 +22,8 @@ var errConnClosed = errors.New("voice worker connection is closed")
 // request frames to the worker's stdin and dispatches response frames from
 // its stdout to the goroutine waiting on that request ID.
 type conn struct {
-	writeMu sync.Mutex
-	writer  io.Writer
+	writeGate chan struct{}
+	writer    io.WriteCloser
 
 	mu      sync.Mutex
 	pending map[string]*responseSink
@@ -49,11 +50,12 @@ func (s *responseSink) stop() {
 	s.stopOnce.Do(func() { close(s.done) })
 }
 
-func newConn(writer io.Writer, reader io.Reader) *conn {
+func newConn(writer io.WriteCloser, reader io.Reader) *conn {
 	c := &conn{
-		writer:  writer,
-		pending: make(map[string]*responseSink),
-		done:    make(chan struct{}),
+		writeGate: make(chan struct{}, 1),
+		writer:    writer,
+		pending:   make(map[string]*responseSink),
+		done:      make(chan struct{}),
 	}
 	go c.readLoop(reader)
 	return c
@@ -62,19 +64,51 @@ func newConn(writer io.Writer, reader io.Reader) *conn {
 // send writes one request frame. Frames never carry secrets; payload fields
 // are the caller's responsibility to keep small.
 func (c *conn) send(request Request) error {
+	ctx, cancel := context.WithTimeout(context.Background(), controlTimeout)
+	defer cancel()
+	return c.sendContext(ctx, request)
+}
+
+// A timed-out write retires the entire protocol session: a partial JSON frame
+// cannot be retried safely. Closing the owned stdin pipe releases the write;
+// the supervisor observes done and terminates the unresponsive child.
+func (c *conn) sendContext(ctx context.Context, request Request) error {
 	data, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("encode voice request: %w", err)
 	}
 	data = append(data, '\n')
 
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
+	if len(data) > maxFrameBytes {
+		return errors.New("voice request exceeds protocol frame limit")
+	}
+	select {
+	case c.writeGate <- struct{}{}:
+		defer func() { <-c.writeGate }()
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.done:
+		return errConnClosed
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if c.isClosed() {
 		return errConnClosed
 	}
-	if _, err := c.writer.Write(data); err != nil {
+	stopCancellation := context.AfterFunc(ctx, func() { c.closeWithError(ctx.Err()) })
+	defer stopCancellation()
+	n, err := c.writer.Write(data)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if err != nil {
+		c.closeWithError(err)
 		return fmt.Errorf("write voice request: %w", err)
+	}
+	if n != len(data) {
+		c.closeWithError(io.ErrShortWrite)
+		return io.ErrShortWrite
 	}
 	return nil
 }
@@ -159,6 +193,9 @@ func (c *conn) closeWithError(err error) {
 	c.pending = make(map[string]*responseSink)
 	c.mu.Unlock()
 	close(c.done)
+	if c.writer != nil {
+		_ = c.writer.Close()
+	}
 
 	failure := Response{
 		Type:  ResponseError,
@@ -169,6 +206,9 @@ func (c *conn) closeWithError(err error) {
 		select {
 		case sink.responses <- failure:
 		case <-sink.done:
+		default:
+			// Callers also select on done; teardown must not wait for a slow
+			// consumer to drain its full response buffer.
 		}
 	}
 }

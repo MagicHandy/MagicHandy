@@ -17,10 +17,11 @@ const llamaCPPProviderName = "llama_cpp"
 
 // LlamaCPPProvider talks to llama-server through its OpenAI-compatible API.
 type LlamaCPPProvider struct {
-	baseURL string
-	model   string
-	client  *http.Client
-	timeout time.Duration
+	baseURL     string
+	model       string
+	client      *http.Client
+	timeout     time.Duration
+	contextSize int
 }
 
 // NewLlamaCPPProvider creates a llama.cpp HTTP provider.
@@ -30,10 +31,11 @@ func NewLlamaCPPProvider(options HTTPProviderOptions) (*LlamaCPPProvider, error)
 		return nil, err
 	}
 	return &LlamaCPPProvider{
-		baseURL: normalized.BaseURL,
-		model:   normalized.Model,
-		client:  normalized.Client,
-		timeout: normalized.Timeout,
+		baseURL:     normalized.BaseURL,
+		model:       normalized.Model,
+		client:      normalized.Client,
+		timeout:     normalized.Timeout,
+		contextSize: normalized.ContextSize,
 	}, nil
 }
 
@@ -41,6 +43,13 @@ func NewLlamaCPPProvider(options HTTPProviderOptions) (*LlamaCPPProvider, error)
 func (p *LlamaCPPProvider) StreamChat(ctx context.Context, request ChatRequest, onDelta func(string) error) (string, error) {
 	ctx, cancel := checkedRequestContext(ctx, p.timeout)
 	defer cancel()
+	request, budget, err := BudgetChatRequest(request, p.contextSize)
+	if request.OnBudget != nil {
+		request.OnBudget(budget)
+	}
+	if err != nil {
+		return "", err
+	}
 
 	body := openAIChatRequest{
 		Model:                firstNonEmpty(request.Model, p.model),
@@ -89,7 +98,7 @@ func (p *LlamaCPPProvider) StreamChat(ctx context.Context, request ChatRequest, 
 		return "", fmt.Errorf("llama.cpp chat returned %d: %s", response.StatusCode, strings.TrimSpace(string(message)))
 	}
 
-	return readOpenAIEventStream(response.Body, onDelta)
+	return readOpenAIEventStream(response.Body, onDelta, request.OnProgress)
 }
 
 // Status checks the llama.cpp health endpoint without loading or downloading a model.
@@ -231,19 +240,27 @@ type openAIResponseFormat struct {
 type openAIChatChunk struct {
 	Choices []struct {
 		Delta struct {
-			Content string `json:"content"`
+			Content          string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"delta"`
 		Message struct {
 			Content string `json:"content"`
 		} `json:"message"`
 		FinishReason string `json:"finish_reason"`
 	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+	} `json:"usage"`
+	Timings struct {
+		PromptMillis float64 `json:"prompt_ms"`
+	} `json:"timings"`
 	Error *struct {
 		Message string `json:"message"`
 	} `json:"error,omitempty"`
 }
 
-func readOpenAIEventStream(body io.Reader, onDelta func(string) error) (string, error) {
+func readOpenAIEventStream(body io.Reader, onDelta func(string) error, progress ...func(ProviderProgress)) (string, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, 4096), 1024*1024)
 
@@ -272,6 +289,7 @@ func readOpenAIEventStream(body io.Reader, onDelta func(string) error) (string, 
 		if chunk.Error != nil && chunk.Error.Message != "" {
 			return builder.String(), errors.New(chunk.Error.Message)
 		}
+		reportProgress(progress, chunk.progress())
 		for _, choice := range chunk.Choices {
 			if choice.FinishReason != "" {
 				finishReason = choice.FinishReason
@@ -317,4 +335,12 @@ func modelListed(model string, models []string) bool {
 		}
 	}
 	return false
+}
+
+func (chunk openAIChatChunk) progress() ProviderProgress {
+	activity := false
+	for _, choice := range chunk.Choices {
+		activity = activity || choice.Delta.Content != "" || choice.Delta.ReasoningContent != "" || choice.Message.Content != ""
+	}
+	return ProviderProgress{Activity: activity, PromptEvalMillis: int64(chunk.Timings.PromptMillis), PromptTokens: chunk.Usage.PromptTokens, GeneratedTokens: chunk.Usage.CompletionTokens}
 }

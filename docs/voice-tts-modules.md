@@ -29,10 +29,10 @@ Choose a managed module in `install.ps1`, or run
    Git and `uv` after consent; every discovered executable must pass a version
    probe, and an unusable WinGet alias is bypassed through the real package
    binary;
-3. installs a managed Python runtime, uv cache, and uv credential store inside
-   the selected provider, without global executable links or a registry entry,
-   then creates a private virtual environment from the exact patch-specific
-   interpreter;
+3. takes an exclusive module install lock and prepares a new permanent
+   `runtimes/<id>` directory, with a managed Python interpreter, private venv and
+   credential store; uv package downloads use the shared app-owned module cache,
+   without global executable links or a registry entry;
 4. installs a pinned upstream revision with app-owned constraints for the
    dependency versions that are sensitive to the selected runtime;
 5. verifies generated launchers, package compatibility where upstream metadata
@@ -40,7 +40,7 @@ Choose a managed module in `install.ps1`, or run
    model;
 6. downloads the chosen model only after consent;
 7. configures the server for `127.0.0.1`, not all interfaces; and
-8. calls the MagicHandy settings command so the provider, paths, port, and
+8. applies the candidate through MagicHandy's settings path so the provider, paths, port, and
    auto-launch choice are persisted in SQLite. Faster Qwen reference fields
    remain empty until the user completes them in Settings > Voice.
 
@@ -69,8 +69,9 @@ private environment with `venv --without-pip`; this writes the exact
 patch-specific home and standard Windows launchers rather than uv's trampoline.
 uv still performs dependency installation against that environment, so bundled
 pip is unnecessary. A failed or incomplete extraction still stops setup. A
-compatible existing environment is reused, while an incomplete environment or
-alpha.5's uv trampoline environment is replaced on retry. The app-owned runtime,
+candidate environment can be reused by the environment helper, while an
+incomplete environment or alpha.5's uv trampoline environment is replaced only
+inside that candidate. Each install attempt starts a separate version. The app-owned runtime,
 cache, and credential store are removed when the MagicHandy data directory is
 purged; setup does not alter a system Python installation, user PATH, or global
 Python registry state.
@@ -99,11 +100,14 @@ Model downloads do not require Windows symlink privileges. The installer uses
 one Hugging Face file-finalization worker and materializes Faster Qwen into an
 ordinary app-owned model directory, retries transient failures three times, and
 keeps completed files plus resumable local metadata when all attempts fail.
-Rerunning either installer reuses files that already finished for the same
-repository. A small app-owned manifest beside the download tree binds the
+An update seeds its candidate with copies of the active Qwen model's completed
+files for the same repository, preserving resumable metadata; candidate writes
+cannot change active weights. Failed unactivated candidate directories are
+retained for inspection, but a new attempt does not reuse their venv. A small
+app-owned manifest beside the download tree binds the
 directory to that repository without sharing the repository's file namespace;
-choosing a different repository replaces the old materialized files instead of
-mixing two models. Every refresh marks that manifest incomplete before transfer
+choosing a different repository starts a clean candidate model directory rather
+than mixing models. Every candidate refresh marks its manifest incomplete before transfer
 and complete only after the entire model validates, so a failed mutable-revision
 refresh cannot expose mixed old and new files as ready. Retained trees are
 checked for links and reparse points before the downloader can write into them.
@@ -116,8 +120,9 @@ caches remain compatible through their `refs/main` snapshot. The
 server remains in Hugging Face and Transformers offline modes after installation;
 startup never depends on a network metadata request. A legacy cache without a
 revision ref is accepted only when it contains exactly one complete snapshot.
-MagicHandy's small launcher wrapper is copied beside the module and refreshed
-by ordinary app updates without touching the Python environment or model cache.
+MagicHandy's small launcher and shared streaming helper are copied beside the
+module. Ordinary app updates refresh them only after the exact app is stopped,
+without touching the Python environment or model cache.
 It extends only the managed Faster Qwen endpoint with an unsigned generation
 seed and an optional Base-model tone instruction, then consumes one discarded
 codec frame through the complete streaming path before reporting ready.
@@ -126,13 +131,19 @@ visible request's latency. Stopping after one frame avoids decoding an entire
 throwaway utterance while
 retaining the warm first-visible-request behavior.
 
-Retries also reuse a source checkout and managed environment left by a failure
-before `module-state.json` was written. The installer records only its known
-package-metadata directory in the checkout's private Git excludes. It never
-cleans the checkout or ignores arbitrary files, so tracked edits and unrelated
-untracked files remain a hard stop. New clones use a sibling staging directory,
-and retries complete the empty no-checkout worktree produced by older installers
-without misclassifying Git's deleted-file report as a user modification.
+Source and packages are prepared in the candidate while the existing worker can
+continue using its original files. A candidate gets its own `module-state.json`;
+the module home holds a small index naming the selected runtime. In-app setup
+validates the candidate, applies settings (which retires the old owned worker),
+then promotes the index. CLI installation stops the exact app only at this
+activation stage. A venv is never moved after creation. Failed preparation leaves
+the active source, packages and index untouched; previous versions remain on
+disk for manual recovery. There is no automatic rollback or garbage collection,
+and index promotion errors are reported even if settings already applied.
+
+The source helper records only known package metadata in private Git excludes;
+tracked edits and unrelated untracked files remain protected. New clones use a
+sibling staging directory inside their candidate.
 The verified Git directory is also added to the installer process PATH so
 `uv` can resolve pinned `git+https` dependencies even when Git was discovered
 through an absolute fallback path.
@@ -228,6 +239,33 @@ Chatterbox accepts a local reference WAV as a named voice. The installer copies
 that source into the module's voice directory and stores the resulting voice
 name. The original file remains untouched. Without a reference, the pinned
 server's `Emily.wav` sample is installed as the initial voice.
+
+## Streaming and private worker endpoints
+
+Both managed services expose only health/model information and the speech API,
+bind to loopback, reject browser Origin headers and reject non-loopback Host
+headers. Chatterbox's upstream upload/settings UI and permissive CORS routes are
+not mounted. These are private child endpoints; the Go app owns user controls.
+
+Synchronous inference runs through a shared bridge with one inference lock, at
+most two producers and two queued chunks. Completion uses an event, so a full
+queue cannot strand a producer delivering a terminal sentinel. Disconnects
+cancel waiting work and skip subsequent generation. They cannot interrupt a
+GPU call already executing.
+
+Qwen forwards its codec frames. Chatterbox generates sentence-sized pieces,
+retains a small crossfade tail, requires 24 kHz model output and emits PCM WAV pieces.
+Chatterbox clips/normalizes each sentence independently when necessary; this
+differs from normalizing a fully generated utterance and needs listening
+acceptance. MP3/Opus paths retain bounded whole-clip encoding.
+
+The worker/core/browser limit is 8 MiB per utterance. PCM playback can begin
+before generation completes, through the controller-gated chunk API described
+in [the worker protocol](voice-worker-protocol.md). Unsupported browser PCM
+formats fall back to completed-clip playback. Automated adapter tests use fake
+engines; they prove framing, cancellation and event-loop responsiveness, not
+real model voice quality or GPU coexistence. See
+[the implementation evidence](ai-runtime-improvements-2026-09-08.md).
 
 For NVIDIA installs, the script selects the pinned upstream CUDA 12.1
 requirements on RTX 20/30/40-series GPUs and CUDA 12.8 on compute-capability

@@ -4,6 +4,19 @@ import { VoiceActivitySegmenter } from "./voice-activity";
 const chunk = (value: number, frames = 50) => new Float32Array(frames).fill(value);
 
 describe("VoiceActivitySegmenter", () => {
+  it("discards short noise at the silence boundary and accepts the next phrase", () => {
+    const vad = new VoiceActivitySegmenter({ sampleRate: 1000, sensitivity: 55, silenceMillis: 300 });
+    for (let index = 0; index < 5; index++) vad.push(chunk(0));
+    vad.push(chunk(0.2));
+    vad.push(chunk(0.2));
+    let result = vad.push(chunk(0));
+    for (let index = 1; index < 6; index++) result = vad.push(chunk(0));
+    expect(result.speaking).toBe(false);
+    expect(result.segment).toBeUndefined();
+    for (let index = 0; index < 400; index++) expect(vad.push(chunk(0)).segment).toBeUndefined();
+    for (let index = 0; index < 6; index++) vad.push(chunk(0.2));
+    expect(vad.flush()?.length).toBeGreaterThanOrEqual(300);
+  });
   it("segments repeated phrases without ending the listening session", () => {
     const vad = new VoiceActivitySegmenter({ sampleRate: 1000, sensitivity: 55, silenceMillis: 300 });
     for (let index = 0; index < 5; index += 1) vad.push(chunk(0));

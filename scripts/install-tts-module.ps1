@@ -318,17 +318,19 @@ function Initialize-TTSPythonEnvironment {
     param(
         [Parameter(Mandatory = $true)][string]$Uv,
         [Parameter(Mandatory = $true)][string]$Root,
-        [Parameter(Mandatory = $true)][string]$PythonVersion
+        [Parameter(Mandatory = $true)][string]$PythonVersion,
+        [string]$CacheRoot = ''
     )
 
     $venv = Join-Path $Root '.venv'
     $python = Join-Path $venv 'Scripts\python.exe'
     $managedPythonRoot = Join-Path $Root 'managed-python'
-    $uvCacheRoot = Join-Path $Root 'uv-cache'
+    if ([string]::IsNullOrWhiteSpace($CacheRoot)) { $CacheRoot = $Root }
+    $uvCacheRoot = Join-Path $CacheRoot 'uv-cache'
     $uvCredentialsRoot = Join-Path $Root 'uv-credentials'
     Assert-MagicHandyChildPath -Root $Root -Candidate $venv
     Assert-MagicHandyChildPath -Root $Root -Candidate $managedPythonRoot
-    Assert-MagicHandyChildPath -Root $Root -Candidate $uvCacheRoot
+    Assert-MagicHandyChildPath -Root $CacheRoot -Candidate $uvCacheRoot
     Assert-MagicHandyChildPath -Root $Root -Candidate $uvCredentialsRoot
     New-Item -ItemType Directory -Path $Root -Force | Out-Null
 
@@ -835,6 +837,54 @@ function Write-TTSModuleState {
     }
 }
 
+function New-TTSInstallSession {
+    param([Parameter(Mandatory = $true)][string]$Root)
+
+    $moduleHome = [System.IO.Path]::GetFullPath($Root)
+    New-Item -ItemType Directory -Path $moduleHome -Force | Out-Null
+    $lockPath = Join-Path $moduleHome '.install.lock'
+    Assert-MagicHandyChildPath -Root $moduleHome -Candidate $lockPath
+    try {
+        $installLock = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+    } catch {
+        throw "Another TTS installation owns '$moduleHome'. Wait for it to finish before retrying."
+    }
+    try {
+        $runtimeRoot = Join-Path $moduleHome ('runtimes\' + [Guid]::NewGuid().ToString('N'))
+        Assert-MagicHandyChildPath -Root $moduleHome -Candidate $runtimeRoot
+        New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
+        return [pscustomobject]@{ Home = $moduleHome; Root = $runtimeRoot; Lock = $installLock }
+    } catch {
+        $installLock.Dispose()
+        throw
+    }
+}
+
+function Copy-TTSModelSeed {
+    param(
+        [Parameter(Mandatory = $true)][string]$ModuleHome,
+        [Parameter(Mandatory = $true)][string]$Candidate,
+        [Parameter(Mandatory = $true)][string]$Repository
+    )
+    $previousRoot = $ModuleHome
+    $index = Join-Path $ModuleHome 'module-state.json'
+    if (Test-Path -LiteralPath $index -PathType Leaf) {
+        $saved = [System.IO.File]::ReadAllText($index) | ConvertFrom-Json
+        if ($saved.PSObject.Properties.Name -contains 'runtime_root') {
+            $previousRoot = [System.IO.Path]::GetFullPath([string]$saved.runtime_root)
+            Assert-MagicHandyChildPath -Root (Join-Path $ModuleHome 'runtimes') -Candidate $previousRoot
+        }
+    }
+    $previousModel = Join-Path $previousRoot 'model'
+    if ((Get-FasterQwenMaterializedRepository -Directory $previousModel) -ne $Repository) { return }
+    Assert-FasterQwenMaterializedTreeNoReparsePoints -Directory $previousModel
+    $destination = Join-Path $Candidate 'model'
+    Assert-MagicHandyChildPath -Root $ModuleHome -Candidate $destination
+    Write-Host 'Seeding the candidate with existing model files; downloads will verify and resume missing files.'
+    Copy-Item -LiteralPath $previousModel -Destination $destination -Recurse
+    Copy-Item -LiteralPath (Join-Path $previousRoot 'model-manifest.json') -Destination (Join-Path $Candidate 'model-manifest.json')
+}
+
 function Sync-PinnedSource {
     param(
         [Parameter(Mandatory = $true)][string]$Git,
@@ -1076,6 +1126,13 @@ if ($Module -eq 'faster-qwen3-tts') {
 }
 
 Confirm-TTSAction 'Proceed with the optional TTS module download and installation?'
+# Never update packages or editable source used by a live Python process.
+# Build at its permanent version path: moving a venv would break its launchers.
+$installSession = New-TTSInstallSession -Root $InstallRoot
+$moduleHome = [string]$installSession.Home
+$InstallRoot = [string]$installSession.Root
+try {
+Write-Host "Candidate runtime: $InstallRoot"
 $git = Initialize-TTSGit -Git (InstallerSupport\Ensure-MagicHandyGit -AssumeYes:$Yes)
 $uv = Ensure-Uv
 $sourceRoot = Join-Path $InstallRoot 'source'
@@ -1092,7 +1149,7 @@ Sync-PinnedSource `
     -InstallerGeneratedPaths $installerGeneratedPaths
 
 $pythonVersion = if ($Module -eq 'chatterbox') { '3.10' } else { '3.11' }
-$pythonEnvironment = Initialize-TTSPythonEnvironment -Uv $uv -Root $InstallRoot -PythonVersion $pythonVersion
+$pythonEnvironment = Initialize-TTSPythonEnvironment -Uv $uv -Root $InstallRoot -PythonVersion $pythonVersion -CacheRoot $moduleHome
 $venv = [string]$pythonEnvironment.Root
 $python = [string]$pythonEnvironment.Python
 $relativePython = '.venv\Scripts\python.exe'
@@ -1167,6 +1224,7 @@ $modelRepo = if ($Module -eq 'faster-qwen3-tts') { $Model } else { 'ResembleAI/c
 $modelCache = Join-Path $InstallRoot 'model-cache\hub'
 $materializedModel = if ($Module -eq 'faster-qwen3-tts') { Join-Path $InstallRoot 'model' } else { '' }
 if ($Module -eq 'faster-qwen3-tts') {
+    Copy-TTSModelSeed -ModuleHome $moduleHome -Candidate $InstallRoot -Repository $modelRepo
     Initialize-FasterQwenMaterializedModel -Root $InstallRoot -Directory $materializedModel -Repository $modelRepo
 }
 Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache -LocalDirectory $materializedModel
@@ -1175,6 +1233,7 @@ if ($Module -eq 'faster-qwen3-tts') {
 }
 
 $healthPath = '/health'
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'tts\tts_stream.py') -Destination (Join-Path $InstallRoot 'tts_stream.py') -Force
 if ($Module -eq 'faster-qwen3-tts') {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'tts\faster-qwen-server.py') -Destination (Join-Path $InstallRoot 'magichandy-faster-qwen-server.py') -Force
 } else {
@@ -1200,8 +1259,16 @@ $moduleState = [ordered]@{
     speak_replies = [bool]$SpeakReplies
 }
 
+# A complete candidate has its own immutable manifest. The home index is
+# promoted only after the app has accepted the new runtime in its settings.
+Write-TTSModuleState -Path (Join-Path $InstallRoot 'module-state.json') -State $moduleState
+$moduleIndex = [ordered]@{}
+foreach ($key in $moduleState.Keys) { $moduleIndex[$key] = $moduleState[$key] }
+$moduleIndex['install_root'] = $moduleHome
+$moduleIndex['runtime_root'] = $InstallRoot
+Write-TTSModuleState -Path (Join-Path $moduleHome 'candidate-state.json') -State $moduleIndex
+
 if ($SkipAppConfiguration) {
-    Write-TTSModuleState -Path (Join-Path $InstallRoot 'module-state.json') -State $moduleState
     Write-Host 'Module files are ready. The running MagicHandy app owns the settings update.' -ForegroundColor Green
     return
 }
@@ -1247,7 +1314,7 @@ try {
         $settingsArguments += '-tts-speak-replies'
     }
     Invoke-Checked -Executable $exe -Arguments $settingsArguments -Description 'MagicHandy TTS settings update'
-    Write-TTSModuleState -Path (Join-Path $InstallRoot 'module-state.json') -State $moduleState
+    Write-TTSModuleState -Path (Join-Path $moduleHome 'module-state.json') -State $moduleIndex
 } finally {
     if ($wasRunning) {
         InstallerSupport\Start-MagicHandyApp -RepositoryPath $repository -DataDir $DataDir -Port $appPort
@@ -1265,4 +1332,8 @@ if ($Module -eq 'faster-qwen3-tts') {
 }
 if (-not $AutoLaunch) {
     Write-Host 'Auto-launch is off. Start the server yourself before loading the TTS worker.' -ForegroundColor Yellow
+}
+
+} finally {
+    $installSession.Lock.Dispose()
 }

@@ -369,6 +369,10 @@ func (m *setupManager) installVoice(
 
 	err = command.Run()
 	m.detachCommand(id, command)
+	moduleHome := root
+	if err == nil {
+		root, err = voiceRuntimeFromIndex(moduleHome, "candidate-state.json")
+	}
 	if err == nil {
 		err = verifyInstalledVoiceModule(root, module)
 	}
@@ -382,6 +386,9 @@ func (m *setupManager) installVoice(
 		err = m.onInstalled(context.WithoutCancel(ctx), setupVoiceInstallResult{
 			Module: module, Device: request.Device, AutoLaunch: request.AutoLaunch, Root: root,
 		})
+		if err == nil {
+			err = activateVoiceInstallCandidate(moduleHome, root)
+		}
 	}
 	return err
 }

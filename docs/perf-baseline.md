@@ -1,5 +1,61 @@
 # Performance Baseline
 
+## 2026-09-08 — AI runtime improvements
+
+Baseline `c1f7b7cb`, branch `codex/ai-runtime-improvements`; Windows/amd64,
+Go 1.26.4, Ryzen 9 9950X3D, `CGO_ENABLED=0`, `-trimpath -ldflags '-s -w'`.
+No new Go/browser dependency. See [implementation and limits](ai-runtime-improvements-2026-09-08.md).
+
+| Measurement | Baseline | Candidate |
+| --- | ---: | ---: |
+| Stripped app | 19,116,032 B | 19,183,104 B (+67,072) |
+| Main JS raw / gzip level 9 | 755,229 / 208,618 B | 763,057 / 211,013 B |
+| Labs JS raw / gzip level 9 | 52,019 / 14,585 B | 52,019 / 14,586 B |
+| All `dist` files, raw | 2,011,769 B | 2,020,773 B (+9,004) |
+| Lazy locale growth, each | — | 310–367 B raw / 142–161 B gzip |
+| Fresh `/healthz` observations | 603.9 / 588.1 ms | 610.2 / 595.6 / 592.6 / 585.7 ms |
+| Stopped working set across launches | 22,491,136–68,653,056 B | 25,305,088–67,874,816 B |
+| Private commitment across launches | 57,131,008–58,507,264 B | 57,106,432–57,663,488 B |
+
+Each launch uses a fresh isolated simulator directory, no browser or model,
+four state warmups 500 ms apart and three RSS samples 400 ms apart. All three
+samples per process were equal, but Windows working-set variation between
+processes is large. The last adjacent pair measured 588.1/592.6 ms and
+22,491,136/25,583,616 B RSS. Do not infer an idle-memory reduction or close the
+SQLite waiver from these observations. The 500 ms startup target remains unmet.
+Only the owned measurement processes were stopped; the actual review app uses
+separate data and stays open with a working LLM. The final tooltip correction
+adds 512 bytes to the earlier candidate binary. Its final launch observed
+585.7 ms, 34,082,816 B working set and 57,262,080 B private commitment; earlier
+candidate launches establish the Windows working-set variation above.
+
+`BenchmarkMultipartAudio32MiB` constructs and drains a multipart reader over
+already-present audio. An ignored overlay recreates the baseline buffered
+builder on the same toolchain, excluding file reads/network/recognition:
+
+| Method | ns/op, three runs | B/op | allocs/op |
+| --- | --- | --- | --- |
+| Buffered multipart | 1,861,566 / 2,167,814 / 2,069,791 | 33,566,577–33,566,661 | 44–45 |
+| Multipart reader | 387,226 / 386,415 / 403,463 | 35,881–35,884 | 54 |
+
+The reader avoids the large copy (about 99.9% fewer allocated bytes) despite
+ten more small allocations. It is not an end-to-end ASR throughput claim. The
+core's upload validation/staging remains bounded and still reads incoming audio.
+
+The original 200 × 1,998-byte synthetic saved-memory fixture produces a
+401,604-byte system prompt at the baseline and 7,604 bytes with bounded memory
+selection. Stored entries are untouched. Tokenizer-specific capacity and
+inference latency were not measured with that fixture.
+
+Real review chat with Ollama Granite 3B: 53 ms first visible token, 44 ms
+provider-reported prefill and 122 ms generation, one call with no repair or
+fallback. Streaming speech tests establish first PCM scheduling before response
+completion; actual model first-audible latency and listening remain unmeasured.
+
+Local evidence: `.scratch/ai-module-review/{asr-benchmark.txt,bundle-final.json,
+measure-*-final.json,measure-final-candidate.json,measure-paired-*.json,measure-visual-final.json,
+implementation-chat-check.json}`. Runtime evidence stays ignored.
+
 ## 2026-09-06 — funscript filter quality
 
 Parent `72f8a9be`, candidate continuous media filters; Go 1.26.4,

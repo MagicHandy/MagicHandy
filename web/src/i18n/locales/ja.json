@@ -1960,5 +1960,12 @@
   "Peak timing shifts up to {milliseconds} ms": "ピーク時刻のずれは最大 {milliseconds} ミリ秒です",
   "{count} corners use shorter windows": "{count} 箇所で短い時間幅を使用しています",
   "{count} corners too short to round": "{count} 箇所は短すぎるため丸められません",
-  "No eligible script changes at these settings.": "この設定では変更対象の動きがありません。"
+  "No eligible script changes at these settings.": "この設定では変更対象の動きがありません。",
+  "Memories used": "使用したメモリ",
+  "First provider activity": "プロバイダーの初回応答",
+  "Model load": "モデルの読み込み",
+  "Prompt processing": "プロンプトの処理",
+  "Input bytes / budget": "入力バイト数 / 上限",
+  "History messages omitted": "省略した履歴メッセージ",
+  "Tokens (input / output)": "トークン（入力 / 出力）"
 }

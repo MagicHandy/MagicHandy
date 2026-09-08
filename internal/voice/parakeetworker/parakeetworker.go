@@ -7,21 +7,18 @@ package parakeetworker
 
 import (
 	"bufio"
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/voice/protocol"
+	"github.com/mapledaemon/MagicHandy/internal/voice/workerhost"
 )
 
 const (
@@ -72,10 +69,10 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 	}
 
 	s := &session{
-		options:  options,
-		writer:   writer,
-		queue:    make(chan protocol.Request, queueCapacity),
-		cancels:  make(map[string]context.CancelFunc),
+		options: options,
+		writer:  writer,
+		queue:   make(chan protocol.Request, queueCapacity),
+
 		runner:   runner,
 		setupErr: setupErr,
 	}
@@ -99,11 +96,10 @@ type session struct {
 	writeMu sync.Mutex
 	writer  io.Writer
 
-	mu       sync.Mutex
-	loaded   bool
-	pending  int
-	canceled map[string]bool
-	cancels  map[string]context.CancelFunc
+	mu      sync.Mutex
+	loaded  bool
+	pending int
+	jobs    workerhost.Jobs
 
 	queue chan protocol.Request
 
@@ -130,7 +126,7 @@ func (s *session) readLoop(reader io.Reader) error {
 		case protocol.RequestHello:
 			s.handleHello(request)
 		case protocol.RequestHealth:
-			s.send(s.healthResponse(request.ID))
+			s.handleHealth(request)
 		case protocol.RequestLoad:
 			s.handleLoad(request)
 		case protocol.RequestUnload:
@@ -170,6 +166,18 @@ func (s *session) handleHello(request protocol.Request) {
 
 // handleLoad checks the transcription server is reachable so "server not
 // running" is an immediate, clear state instead of a failed first dictation.
+func (s *session) handleHealth(request protocol.Request) {
+	s.mu.Lock()
+	loaded := s.loaded
+	s.mu.Unlock()
+	if s.runner != nil && loaded && !s.runner.Running() {
+		s.setLoaded(false)
+		s.sendError(request.ID, protocol.ErrorCodeInternal, "managed ASR server exited unexpectedly", true)
+		return
+	}
+	s.send(s.healthResponse(request.ID))
+}
+
 func (s *session) handleLoad(request protocol.Request) {
 	if s.setupErr != nil {
 		s.sendError(request.ID, protocol.ErrorCodeMissingDependency,
@@ -284,12 +292,17 @@ func isSuccessStatus(status int) bool {
 }
 
 func (s *session) enqueue(request protocol.Request) {
+	if !s.jobs.Track(request.ID) {
+		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, "worker queue is full or the request ID is already queued", true)
+		return
+	}
 	s.mu.Lock()
 	s.pending++
 	s.mu.Unlock()
 	select {
 	case s.queue <- request:
 	default:
+		s.jobs.Finish(request.ID)
 		s.mu.Lock()
 		s.pending--
 		s.mu.Unlock()
@@ -303,12 +316,7 @@ func (s *session) workLoop() {
 		s.pending--
 		canceled := s.canceledLocked(request.ID)
 		loaded := s.loaded
-		var ctx context.Context
-		var cancel context.CancelFunc
-		if !canceled {
-			ctx, cancel = context.WithCancel(context.Background())
-			s.cancels[request.ID] = cancel
-		}
+		ctx := s.jobs.Context(request.ID)
 		s.mu.Unlock()
 
 		switch {
@@ -321,23 +329,18 @@ func (s *session) workLoop() {
 			s.transcribe(ctx, request)
 		}
 
-		s.mu.Lock()
-		if cancel != nil {
-			cancel()
-			delete(s.cancels, request.ID)
-		}
-		delete(s.canceled, request.ID)
-		s.mu.Unlock()
+		s.jobs.Finish(request.ID)
 	}
 }
 
 func (s *session) transcribe(ctx context.Context, request protocol.Request) {
-	audio, err := s.loadAudio(request)
+	audio, size, err := openAudio(request)
 	if err != nil {
 		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, err.Error(), false)
 		return
 	}
-	if len(audio) == 0 {
+	defer func() { _ = audio.Close() }()
+	if size == 0 {
 		// ADR 0003: no audio is a rejection, never an empty transcript.
 		s.send(protocol.Response{
 			Type:      protocol.ResponseTranscript,
@@ -347,7 +350,7 @@ func (s *session) transcribe(ctx context.Context, request protocol.Request) {
 		return
 	}
 
-	text, err := s.callServer(ctx, audio, request.AudioFormat)
+	text, err := s.callServer(ctx, audio, size, request.AudioFormat)
 	if err != nil {
 		if ctx.Err() != nil || s.isCanceled(request.ID) {
 			s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: request.ID})
@@ -383,79 +386,20 @@ func (s *session) transcribe(ctx context.Context, request protocol.Request) {
 	})
 }
 
-func (s *session) loadAudio(request protocol.Request) ([]byte, error) {
-	format := strings.ToLower(strings.TrimSpace(request.AudioFormat))
-	if format != "" && format != "wav" && format != "webm" && format != "ogg" {
-		return nil, fmt.Errorf("audio format must be wav, webm, or ogg")
-	}
-	if request.AudioB64 != "" {
-		audio, err := base64.StdEncoding.DecodeString(request.AudioB64)
-		if err != nil {
-			return nil, fmt.Errorf("audio_b64 is not valid base64")
-		}
-		if len(audio) > maxAudioBytes {
-			return nil, fmt.Errorf("audio_b64 exceeds %d MiB", maxAudioBytes>>20)
-		}
-		return audio, nil
-	}
-	if request.AudioRef != "" {
-		// #nosec G304 -- audio_ref comes from the core over the private stdio
-		// protocol, same trust domain as the process itself.
-		file, err := os.Open(request.AudioRef)
-		if err != nil {
-			return nil, fmt.Errorf("audio_ref file is unavailable: %s", request.AudioRef)
-		}
-		defer func() { _ = file.Close() }()
-		info, err := file.Stat()
-		if err != nil || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("audio_ref file is unavailable: %s", request.AudioRef)
-		}
-		if info.Size() > maxAudioBytes {
-			return nil, fmt.Errorf("audio_ref file exceeds %d MiB", maxAudioBytes>>20)
-		}
-		audio, err := io.ReadAll(io.LimitReader(file, maxAudioBytes+1))
-		if err != nil {
-			return nil, fmt.Errorf("read audio_ref: %w", err)
-		}
-		if len(audio) > maxAudioBytes {
-			return nil, fmt.Errorf("audio_ref file exceeds %d MiB", maxAudioBytes>>20)
-		}
-		return audio, nil
-	}
-	return nil, nil
-}
-
-// callServer posts multipart audio to /v1/audio/transcriptions and returns
-// the transcript text.
-func (s *session) callServer(ctx context.Context, audio []byte, format string) (string, error) {
-	var body bytes.Buffer
-	form := multipart.NewWriter(&body)
-	name := "audio.wav"
-	if format != "" && format != "wav" {
-		name = "audio." + format
-	}
-	part, err := form.CreateFormFile("file", name)
+// callServer streams the staged file between small multipart headers. It never
+// duplicates the capture in a second in-memory multipart buffer.
+func (s *session) callServer(ctx context.Context, audio io.Reader, size int64, format string) (string, error) {
+	body, contentType, contentLength, err := multipartAudio(audio, size, format, s.options.Model)
 	if err != nil {
-		return "", fmt.Errorf("build transcription upload: %w", err)
+		return "", err
 	}
-	if _, err := part.Write(audio); err != nil {
-		return "", fmt.Errorf("write transcription upload: %w", err)
-	}
-	if s.options.Model != "" {
-		if err := form.WriteField("model", s.options.Model); err != nil {
-			return "", fmt.Errorf("write model field: %w", err)
-		}
-	}
-	if err := form.Close(); err != nil {
-		return "", fmt.Errorf("finish transcription upload: %w", err)
-	}
-
 	url := s.options.BaseURL + "/v1/audio/transcriptions"
-	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &body)
+	httpRequest, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
 		return "", fmt.Errorf("build transcription request: %w", err)
 	}
-	httpRequest.Header.Set("Content-Type", form.FormDataContentType())
+	httpRequest.ContentLength = contentLength
+	httpRequest.Header.Set("Content-Type", contentType)
 
 	response, err := s.options.HTTPClient.Do(httpRequest)
 	if err != nil {
@@ -483,32 +427,9 @@ func (s *session) callServer(ctx context.Context, audio []byte, format string) (
 	return payload.Text, nil
 }
 
-func (s *session) markCanceled(id string) {
-	if id == "" {
-		return
-	}
-	s.mu.Lock()
-	if s.canceled == nil {
-		s.canceled = make(map[string]bool)
-	}
-	s.canceled[id] = true
-	if cancel, ok := s.cancels[id]; ok {
-		cancel()
-	}
-	s.mu.Unlock()
-}
+func (s *session) markCanceled(id string) { s.jobs.Cancel(id) }
 
-func (s *session) cancelAll() {
-	s.mu.Lock()
-	if s.canceled == nil {
-		s.canceled = make(map[string]bool)
-	}
-	for id, cancel := range s.cancels {
-		s.canceled[id] = true
-		cancel()
-	}
-	s.mu.Unlock()
-}
+func (s *session) cancelAll() { s.jobs.CancelAll() }
 
 func (s *session) shutdown() {
 	s.setLoaded(false)
@@ -518,15 +439,9 @@ func (s *session) shutdown() {
 	}
 }
 
-func (s *session) isCanceled(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.canceledLocked(id)
-}
+func (s *session) isCanceled(id string) bool { return s.jobs.Canceled(id) }
 
-func (s *session) canceledLocked(id string) bool {
-	return s.canceled != nil && s.canceled[id]
-}
+func (s *session) canceledLocked(id string) bool { return s.jobs.Canceled(id) }
 
 func (s *session) setLoaded(loaded bool) {
 	s.mu.Lock()

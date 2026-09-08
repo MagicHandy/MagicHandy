@@ -65,7 +65,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	current, limits := layeredContextScore(&state)
 	// The prompt and parser must share the same freshly seeded starting score.
 	state.Layered = &current
-	system := composeSystem(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext)
+	system := composeSystem(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget)
 	schema := LayeredResponseSchema(limits, capabilities.MoodTracking)
 	parser := ParseLayeredReply
 	if capabilities.MotionMode == MotionModeCreativeV2 {
@@ -117,7 +117,7 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 	service := Service{Provider: s.Provider, Prompt: s.Prompt, Model: s.Model, MaxTokens: s.MaxTokens,
 		ReasoningMode: s.ReasoningMode, ReasoningBudgetTokens: s.ReasoningBudgetTokens, Memories: s.Memories,
 		MotionContext: s.MotionContext, ConversationContext: s.ConversationContext, Capabilities: &s.Capabilities, TrustedMotionInput: true,
-		AutonomousTemperature: s.Temperature}
+		AutonomousTemperature: s.Temperature, PromptBudget: s.PromptBudget}
 	if kind == AutopilotKindMotion {
 		var requests []string
 		if s.MotionContext != nil {

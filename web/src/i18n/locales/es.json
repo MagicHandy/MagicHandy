@@ -1960,5 +1960,12 @@
   "Peak timing shifts up to {milliseconds} ms": "El momento de los picos se desplaza hasta {milliseconds} ms",
   "{count} corners use shorter windows": "{count} giros usan ventanas más cortas",
   "{count} corners too short to round": "{count} giros demasiado breves para redondearlos",
-  "No eligible script changes at these settings.": "Estos ajustes no producen cambios en el guion."
+  "No eligible script changes at these settings.": "Estos ajustes no producen cambios en el guion.",
+  "Memories used": "Recuerdos utilizados",
+  "First provider activity": "Primera actividad del proveedor",
+  "Model load": "Carga del modelo",
+  "Prompt processing": "Procesamiento del prompt",
+  "Input bytes / budget": "Bytes de entrada / límite",
+  "History messages omitted": "Mensajes del historial omitidos",
+  "Tokens (input / output)": "Tokens (entrada / salida)"
 }

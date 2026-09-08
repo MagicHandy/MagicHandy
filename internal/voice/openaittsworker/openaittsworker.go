@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -23,6 +22,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/voice/protocol"
+	"github.com/mapledaemon/MagicHandy/internal/voice/workerhost"
 )
 
 const (
@@ -36,7 +36,7 @@ const (
 	providerName    = "openai-compatible-tts"
 	providerVersion = "1.0.0"
 
-	requestTimeout       = 5 * time.Minute
+	requestTimeout       = protocol.SynthesisTimeout
 	externalLoadTimeout  = 15 * time.Second
 	managedLoadTimeout   = 15 * time.Minute
 	managedProbeInterval = 250 * time.Millisecond
@@ -44,7 +44,7 @@ const (
 	chunkBytes           = 32 * 1024
 	maxSpeechBytes       = 32 << 10
 	maxInstructBytes     = 2 << 10
-	maxAudioBytes        = 32 << 20
+	maxAudioBytes        = protocol.MaxAudioBytes
 	maxHealthBytes       = 64 << 10
 	maxErrorBytes        = 2 << 10
 )
@@ -99,11 +99,10 @@ func Run(reader io.Reader, writer io.Writer, options Options) error {
 	}
 
 	s := &session{
-		options:  options,
-		writer:   writer,
-		queue:    make(chan protocol.Request, queueCapacity),
-		canceled: make(map[string]bool),
-		cancels:  make(map[string]context.CancelFunc),
+		options: options,
+		writer:  writer,
+		queue:   make(chan protocol.Request, queueCapacity),
+
 		server:   server,
 		setupErr: validateOptions(options),
 	}
@@ -131,8 +130,7 @@ type session struct {
 	loaded         bool
 	pending        int
 	managedFailure string
-	canceled       map[string]bool
-	cancels        map[string]context.CancelFunc
+	jobs           workerhost.Jobs
 
 	queue chan protocol.Request
 
@@ -344,12 +342,17 @@ func (s *session) probe(parent context.Context) error {
 }
 
 func (s *session) enqueue(request protocol.Request) {
+	if !s.jobs.Track(request.ID) {
+		s.sendError(request.ID, protocol.ErrorCodeInvalidRequest, "worker queue is full or the request ID is already queued", true)
+		return
+	}
 	s.mu.Lock()
 	s.pending++
 	s.mu.Unlock()
 	select {
 	case s.queue <- request:
 	default:
+		s.jobs.Finish(request.ID)
 		s.mu.Lock()
 		s.pending--
 		s.mu.Unlock()
@@ -363,12 +366,7 @@ func (s *session) workLoop() {
 		s.pending--
 		canceled := s.canceledLocked(request.ID)
 		loaded := s.loaded
-		var ctx context.Context
-		var cancel context.CancelFunc
-		if !canceled {
-			ctx, cancel = context.WithCancel(context.Background())
-			s.cancels[request.ID] = cancel
-		}
+		ctx := s.jobs.Context(request.ID)
 		s.mu.Unlock()
 
 		switch {
@@ -381,13 +379,7 @@ func (s *session) workLoop() {
 			s.speak(ctx, request)
 		}
 
-		s.mu.Lock()
-		if cancel != nil {
-			cancel()
-			delete(s.cancels, request.ID)
-		}
-		delete(s.canceled, request.ID)
-		s.mu.Unlock()
+		s.jobs.Finish(request.ID)
 	}
 }
 
@@ -502,50 +494,12 @@ func (s *session) speak(ctx context.Context, request protocol.Request) {
 		return
 	}
 
-	audio, err := io.ReadAll(io.LimitReader(response.Body, maxAudioBytes+1))
-	if err != nil {
-		if ctx.Err() != nil || s.isCanceled(request.ID) {
-			s.send(protocol.Response{Type: protocol.ResponseCanceled, RequestID: request.ID})
-			return
-		}
-		s.sendError(request.ID, protocol.ErrorCodeInternal,
-			"TTS audio stream was interrupted: "+sanitize(err.Error(), s.options.APIKey), true)
-		return
-	}
-	if len(audio) > maxAudioBytes {
-		s.sendError(request.ID, protocol.ErrorCodeInternal,
-			fmt.Sprintf("TTS audio exceeds %d MiB", maxAudioBytes>>20), false)
-		return
-	}
-	if len(audio) == 0 {
-		s.sendError(request.ID, protocol.ErrorCodeInternal, "TTS server returned no audio", true)
-		return
-	}
-
 	format, err := responseAudioFormat(response.Header.Get("Content-Type"), s.options.ResponseFormat)
 	if err != nil {
 		s.sendError(request.ID, protocol.ErrorCodeInternal, err.Error(), false)
 		return
 	}
-	s.sendAudio(request.ID, audio, format)
-}
-
-func (s *session) sendAudio(requestID string, audio []byte, format string) {
-	if format == "wav" {
-		audio = RepairWAVLengths(audio)
-	}
-	for seq, offset := 0, 0; offset < len(audio); seq++ {
-		end := min(offset+chunkBytes, len(audio))
-		s.send(protocol.Response{
-			Type:        protocol.ResponseAudioChunk,
-			RequestID:   requestID,
-			Seq:         seq,
-			AudioB64:    base64.StdEncoding.EncodeToString(audio[offset:end]),
-			AudioFormat: format,
-		})
-		offset = end
-	}
-	s.send(protocol.Response{Type: protocol.ResponseDone, RequestID: requestID})
+	s.streamAudio(ctx, request.ID, response.Body, format)
 }
 
 func (s *session) authorize(request *http.Request) {
@@ -705,72 +659,16 @@ func acceptedContentType(format string) string {
 	}
 }
 
-// RepairWAVLengths replaces streaming sentinel lengths with the actual bounded
-// response size. Faster Qwen's streaming WAV uses 0xffffffff because its final
-// size is unknown when the first bytes are sent; browsers reject that header
-// after MagicHandy has already retained the complete clip.
-func RepairWAVLengths(audio []byte) []byte {
-	if len(audio) < 12 || len(audio) > maxAudioBytes ||
-		string(audio[:4]) != "RIFF" || string(audio[8:12]) != "WAVE" {
-		return audio
-	}
-	repaired := append([]byte(nil), audio...)
-	// #nosec G115 -- audio is bounded to maxAudioBytes above.
-	binary.LittleEndian.PutUint32(repaired[4:8], uint32(len(repaired)-8))
+// RepairWAVLengths is retained for callers repairing an already complete clip.
+func RepairWAVLengths(audio []byte) []byte { return protocol.RepairWAVLengths(audio) }
 
-	for offset := 12; offset+8 <= len(repaired); {
-		size := binary.LittleEndian.Uint32(repaired[offset+4 : offset+8])
-		remaining := len(repaired) - (offset + 8)
-		// #nosec G115 -- remaining is bounded to maxAudioBytes above.
-		remainingSize := uint32(remaining)
-		if string(repaired[offset:offset+4]) == "data" {
-			if size == ^uint32(0) || size > remainingSize {
-				binary.LittleEndian.PutUint32(repaired[offset+4:offset+8], remainingSize)
-			}
-			break
-		}
-		if size > remainingSize {
-			break
-		}
-		next := offset + 8 + int(size)
-		if size%2 != 0 {
-			next++
-		}
-		offset = next
-	}
-	return repaired
-}
+func (s *session) markCanceled(id string) { s.jobs.Cancel(id) }
 
-func (s *session) markCanceled(id string) {
-	if id == "" {
-		return
-	}
-	s.mu.Lock()
-	s.canceled[id] = true
-	if cancel, ok := s.cancels[id]; ok {
-		cancel()
-	}
-	s.mu.Unlock()
-}
+func (s *session) cancelAll() { s.jobs.CancelAll() }
 
-func (s *session) cancelAll() {
-	s.mu.Lock()
-	for id, cancel := range s.cancels {
-		s.canceled[id] = true
-		cancel()
-	}
-	s.mu.Unlock()
-}
+func (s *session) isCanceled(id string) bool { return s.jobs.Canceled(id) }
 
-func (s *session) isCanceled(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.canceledLocked(id)
-}
-
-func (s *session) canceledLocked(id string) bool {
-	return s.canceled[id]
-}
+func (s *session) canceledLocked(id string) bool { return s.jobs.Canceled(id) }
 
 func (s *session) setLoaded(loaded bool) {
 	s.mu.Lock()

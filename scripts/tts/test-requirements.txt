@@ -1,0 +1,5 @@
+# Lightweight adapter tests use fake model engines, never GPU model downloads.
+fastapi==0.141.1
+httpx==0.28.1
+numpy>=1.24,<1.26; python_version < '3.11'
+numpy==2.4.6; python_version >= '3.11'

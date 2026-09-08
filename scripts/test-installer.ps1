@@ -164,7 +164,7 @@ try {
         [ref]$ttsTokens,
         [ref]$ttsErrors
     )
-    foreach ($functionName in @('Invoke-Checked', 'Invoke-HuggingFaceModelDownload', 'Test-FasterQwenMaterializedRegularFile', 'Get-FasterQwenMaterializedRepository', 'Assert-FasterQwenMaterializedTreeNoReparsePoints', 'Write-FasterQwenMaterializedManifest', 'Initialize-FasterQwenMaterializedModel', 'Assert-FasterQwenMaterializedModel', 'Complete-FasterQwenMaterializedModel', 'Write-TTSModuleState', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Get-TTSPythonVersion', 'Get-TTSVirtualEnvironmentVersion', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
+    foreach ($functionName in @('Invoke-Checked', 'Invoke-HuggingFaceModelDownload', 'Test-FasterQwenMaterializedRegularFile', 'Get-FasterQwenMaterializedRepository', 'Assert-FasterQwenMaterializedTreeNoReparsePoints', 'Write-FasterQwenMaterializedManifest', 'Initialize-FasterQwenMaterializedModel', 'Assert-FasterQwenMaterializedModel', 'Complete-FasterQwenMaterializedModel', 'Write-TTSModuleState', 'New-TTSInstallSession', 'Copy-TTSModelSeed', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Get-TTSPythonVersion', 'Get-TTSVirtualEnvironmentVersion', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
         $functionAst = $ttsAst.Find({
             $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                 $args[0].Name -eq $functionName
@@ -172,6 +172,30 @@ try {
         Assert-True -Condition ($null -ne $functionAst) -Message "TTS installer should define $functionName"
         Invoke-Expression $functionAst.Extent.Text
     }
+
+    $stagedHome = Join-Path $tempRoot 'staged-tts-home'
+    New-Item -ItemType Directory -Path (Join-Path $stagedHome '.venv') -Force | Out-Null
+    $oldMarker = Join-Path $stagedHome '.venv\live.txt'
+    [System.IO.File]::WriteAllText($oldMarker, 'live runtime')
+    $candidate = New-TTSInstallSession -Root $stagedHome
+    try {
+        Assert-True -Condition ($candidate.Root.StartsWith((Join-Path $stagedHome 'runtimes'))) -Message 'runtime should be staged beneath its home'
+        Assert-Equal -Expected 'live runtime' -Actual ([System.IO.File]::ReadAllText($oldMarker)) -Message 'staging must not modify the active environment'
+        Assert-Throws -Action { New-TTSInstallSession -Root $stagedHome } -Message 'a concurrent installer must not enter the same module home'
+    } finally { $candidate.Lock.Dispose() }
+    $seedModel = Join-Path $stagedHome 'model'
+    New-Item -ItemType Directory -Path $seedModel -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $seedModel 'weight.bin'), 'existing weights')
+    [System.IO.File]::WriteAllText((Join-Path $stagedHome 'model-manifest.json'), '{"schema_version":1,"repository":"fixture/reuse","complete":true}')
+    Copy-TTSModelSeed -ModuleHome $stagedHome -Candidate $candidate.Root -Repository 'fixture/reuse'
+    $seedCopy = Join-Path $candidate.Root 'model\weight.bin'
+    Assert-Equal -Expected 'existing weights' -Actual ([System.IO.File]::ReadAllText($seedCopy)) -Message 'candidate should reuse downloaded model bytes'
+    [System.IO.File]::WriteAllText($seedCopy, 'candidate update')
+    Assert-Equal -Expected 'existing weights' -Actual ([System.IO.File]::ReadAllText((Join-Path $seedModel 'weight.bin'))) -Message 'candidate writes must not mutate active weights'
+    $replacement = New-TTSInstallSession -Root $stagedHome
+    try {
+        Assert-True -Condition ($replacement.Root -ne $candidate.Root) -Message 'each candidate gets its permanent independent path'
+    } finally { $replacement.Lock.Dispose() }
 
     $fakeRuntimeSource = Join-Path $tempRoot 'fake-tts-runtime.go'
     $fakeRuntimeBuild = Join-Path $tempRoot 'fake-tts-runtime.exe'
@@ -968,10 +992,11 @@ func main() {
     Assert-True -Condition (Test-Path -LiteralPath $installedQwenLauncher -PathType Leaf) -Message 'main updater should sync the Faster Qwen launcher without reinstalling the model'
     Assert-Equal -Expected ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $Repo 'scripts\tts\faster-qwen-server.py')).Hash) -Actual ((Get-FileHash -Algorithm SHA256 -LiteralPath $installedQwenLauncher).Hash) -Message 'synced Faster Qwen launcher content'
     $installedQwenLauncherSource = Get-Content -Raw -LiteralPath $installedQwenLauncher
-    Assert-True -Condition ($installedQwenLauncherSource -match 'instruct=request\.instruct or None') -Message 'synced Faster Qwen launcher should forward tone instructions'
+    Assert-True -Condition ($installedQwenLauncherSource -match 'instruct=instruct or None') -Message 'synced Faster Qwen launcher should forward tone instructions'
     Assert-True -Condition ($installedQwenLauncherSource -match 'generate_voice_clone_streaming') -Message 'synced Faster Qwen launcher should retain streaming synthesis'
-    Assert-True -Condition ($installedQwenLauncherSource -match 'threading\.Event\(\)') -Message 'synced Faster Qwen launcher should propagate client cancellation to its producer'
-    Assert-True -Condition ($installedQwenLauncherSource -match 'queue\.Queue\(maxsize=2\)') -Message 'synced Faster Qwen launcher should bound abandoned streaming audio'
+    $installedStreamHelper = Get-Content -Raw -LiteralPath (Join-Path $qwenRoot 'tts_stream.py')
+    Assert-True -Condition ($installedQwenLauncherSource -match 'aclosing\(stream_from_sync' -and $installedStreamHelper -match 'threading\.Event\(\)') -Message 'synced Faster Qwen launcher should propagate client cancellation to its producer'
+    Assert-True -Condition ($installedStreamHelper -match 'queue\.Queue\(maxsize=2\)') -Message 'synced Faster Qwen launcher should bound abandoned streaming audio'
     Assert-True -Condition ($installedQwenLauncherSource -match 'stream\.close\(\)') -Message 'synced Faster Qwen launcher should close canceled model generators'
     $moduleState = [ordered]@{
         schema_version = 2

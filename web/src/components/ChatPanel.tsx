@@ -5,8 +5,9 @@ import { t, translateKnown } from "../i18n";
 // scroll stickiness with a jump-to-latest affordance and surfaces the
 // malformed-response state. Chat can start, adjust, and stop motion through
 // the backend contract; the frontend sends only text. When speak-replies is
-// on, the controller tab (the audio-lease owner) plays completed TTS clips.
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+// on, the controller tab (the audio-lease owner) plays the ordered speech queue.
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, streamChat } from "../api/client";
 import type { ChatMessageDiagnostics } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
@@ -411,7 +412,29 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
 }
 
 function AssistantAvatar({ message }: { message: Msg }) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
   const diagnostics = message.diagnostics;
+  useLayoutEffect(() => {
+    if (!open) return;
+    const position = () => {
+      const button = buttonRef.current;
+      const tooltip = tooltipRef.current;
+      if (!button || !tooltip) return;
+      const anchor = button.getBoundingClientRect();
+      tooltip.style.left = `${Math.max(8, Math.min(anchor.right + 8, window.innerWidth - tooltip.offsetWidth - 8))}px`;
+      // Leave the persistent Stop/navigation region reachable on small screens.
+      tooltip.style.top = `${Math.max(8, Math.min(anchor.bottom - tooltip.offsetHeight, window.innerHeight - tooltip.offsetHeight - 96))}px`;
+    };
+    position();
+    window.addEventListener("resize", position);
+    document.addEventListener("scroll", position, true);
+    return () => {
+      window.removeEventListener("resize", position);
+      document.removeEventListener("scroll", position, true);
+    };
+  }, [open, diagnostics]);
   const initial = Array.from(diagnostics?.persona_name?.trim() || "MagicHandy")[0]?.toUpperCase() || "M";
   if (!diagnostics || !Object.values(diagnostics).some((value) => value !== undefined && value !== "" && value !== false)) {
     return <span className="chat-avatar" aria-hidden="true">{initial}</span>;
@@ -420,9 +443,9 @@ function AssistantAvatar({ message }: { message: Msg }) {
   const rows = diagnosticRows(diagnostics);
   const title = rows.map(([label, value]) => `${label}: ${value}`).join("\n");
   return (
-    <span className="chat-avatar-diagnostics">
-      <button type="button" className="chat-avatar" aria-label={t("Show response diagnostics")} aria-describedby={tooltipID} title={title}>{initial}</button>
-      <span id={tooltipID} className="chat-diagnostics-tooltip" role="tooltip">
+    <span className="chat-avatar-diagnostics" onMouseEnter={() => setOpen(true)} onMouseLeave={() => { if (document.activeElement !== buttonRef.current) setOpen(false); }}>
+      <button ref={buttonRef} type="button" className="chat-avatar" aria-label={t("Show response diagnostics")} aria-describedby={open ? tooltipID : undefined} title={title} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}>{initial}</button>
+      {open && createPortal(<span ref={tooltipRef} id={tooltipID} className="chat-diagnostics-tooltip" role="tooltip">
         <strong>{t("Response diagnostics")}</strong>
         <dl>
           {rows.map(([label, value]) => (
@@ -432,7 +455,7 @@ function AssistantAvatar({ message }: { message: Msg }) {
             </div>
           ))}
         </dl>
-      </span>
+      </span>, document.body)}
     </span>
   );
 }
@@ -446,6 +469,12 @@ function diagnosticRows(diagnostics: ChatMessageDiagnostics): Array<[string, str
   if (diagnostics.persona_name) rows.push([t("Persona"), diagnostics.persona_name]);
   if (Number.isFinite(diagnostics.request_ms)) rows.push([t("Run time"), `${Math.max(0, Math.round(diagnostics.request_ms ?? 0))} ms`]);
   if (Number.isFinite(diagnostics.first_token_ms)) rows.push([t("First token"), `${Math.max(0, Math.round(diagnostics.first_token_ms ?? 0))} ms`]);
+  if ((diagnostics.first_activity_ms ?? 0) > 0) rows.push([t("First provider activity"), `${diagnostics.first_activity_ms} ms`]);
+  if ((diagnostics.model_load_ms ?? 0) > 0) rows.push([t("Model load"), `${diagnostics.model_load_ms} ms`]);
+  if ((diagnostics.prompt_eval_ms ?? 0) > 0) rows.push([t("Prompt processing"), `${diagnostics.prompt_eval_ms} ms`]);
+  if ((diagnostics.prompt_bytes ?? 0) > 0) rows.push([t("Input bytes / budget"), `${diagnostics.prompt_bytes} / ${diagnostics.prompt_limit_bytes}`]);
+  if ((diagnostics.history_messages_dropped ?? 0) > 0) rows.push([t("History messages omitted"), String(diagnostics.history_messages_dropped)]);
+  if ((diagnostics.prompt_tokens ?? 0) > 0) rows.push([t("Tokens (input / output)"), `${diagnostics.prompt_tokens} / ${diagnostics.generated_tokens ?? 0}`]);
   if (Number.isFinite(diagnostics.preparation_ms)) rows.push([t("Preparation"), `${Math.max(0, Math.round(diagnostics.preparation_ms ?? 0))} ms`]);
   if (Number.isFinite(diagnostics.scheduler_wait_ms)) rows.push([t("Model queue"), `${Math.max(0, Math.round(diagnostics.scheduler_wait_ms ?? 0))} ms`]);
   if (Number.isFinite(diagnostics.generation_ms)) rows.push([t("Generation"), `${Math.max(0, Math.round(diagnostics.generation_ms ?? 0))} ms`]);

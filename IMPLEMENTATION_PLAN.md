@@ -2359,3 +2359,19 @@ travels through the shared engine. Prompt changes are compared on Gemma and
 Granite, retaining failed iterations and requiring no observed Gemma regression.
 See [ADR 0023](docs/decisions/0023-persistent-layered-motion.md) and
 [evaluation and limits](docs/layered-motion-review-2026-09-05.md).
+
+## September 8 AI runtime follow-up
+
+Implemented for PR review: permanent managed-provider retirement and coordinated
+model transitions; conservative combined-prompt and memory budgets; provider
+phase diagnostics; cancellation-safe voice terminal states and pipe deadlines;
+shared bounded adapter jobs; Parakeet readiness and multipart forwarding;
+private asynchronous Qwen/Chatterbox adapters; progressive PCM delivery through
+the existing controller-owned playback queue; short-noise VAD reset; scoped
+ElevenLabs key handling; and versioned TTS install candidates.
+
+The pure-Go core, shared motion engine and existing delivery authority remain.
+GPU/KV tuning, actual local-model listening and full multi-GiB update acceptance
+remain explicit follow-up work. See [ADR 0028](docs/decisions/0028-ai-runtime-lifetimes.md),
+[implementation and validation](docs/ai-runtime-improvements-2026-09-08.md), and
+[budget measurements](docs/perf-baseline.md#2026-09-08--ai-runtime-improvements).

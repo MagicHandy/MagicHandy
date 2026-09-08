@@ -2080,6 +2080,18 @@ function Sync-MagicHandyTTSModuleArtifacts {
         [Parameter(Mandatory = $true)][string]$InstallRoot
     )
 
+    if (Test-MagicHandyAppRunning -RepositoryPath $RepositoryPath) {
+        throw 'Stop the owned MagicHandy app before refreshing its TTS launcher.'
+    }
+    $statePath = Join-Path $InstallRoot 'module-state.json'
+    if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+        $moduleState = [System.IO.File]::ReadAllText($statePath) | ConvertFrom-Json
+        if ($moduleState.PSObject.Properties.Name -contains 'runtime_root') {
+            $selectedRoot = [System.IO.Path]::GetFullPath([string]$moduleState.runtime_root)
+            Assert-MagicHandyChildPath -Root (Join-Path $InstallRoot 'runtimes') -Candidate $selectedRoot
+            $InstallRoot = $selectedRoot
+        }
+    }
     $launcher = if ([string]$State.tts_module -eq 'faster-qwen3-tts') {
         'faster-qwen-server.py'
     } else {
@@ -2092,6 +2104,9 @@ function Sync-MagicHandyTTSModuleArtifacts {
     $destination = Join-Path $InstallRoot "magichandy-$launcher"
     Assert-MagicHandyChildPath -Root ([string]$State.data_dir) -Candidate $destination
     Copy-Item -LiteralPath $source -Destination $destination -Force
+    $streamHelper = Join-Path $InstallRoot 'tts_stream.py'
+    Assert-MagicHandyChildPath -Root ([string]$State.data_dir) -Candidate $streamHelper
+    Copy-Item -LiteralPath (Join-Path $RepositoryPath 'scripts\tts\tts_stream.py') -Destination $streamHelper -Force
 }
 
 function Sync-MagicHandyInstalledTTSArtifacts {

@@ -44,21 +44,29 @@ type MessageDiagnostics struct {
 	// alongside the id is what lets the transcript stay readable after a persona
 	// is renamed or deleted, and it is what a mid-conversation persona divider is
 	// derived from — no new message role required.
-	PersonaID           string `json:"persona_id,omitempty"`
-	PersonaName         string `json:"persona_name,omitempty"`
-	RequestMillis       int64  `json:"request_ms,omitempty"`
-	PreparationMillis   int64  `json:"preparation_ms,omitempty"`
-	SchedulerWaitMillis int64  `json:"scheduler_wait_ms,omitempty"`
-	FirstTokenMillis    int64  `json:"first_token_ms,omitempty"`
-	GenerationMillis    int64  `json:"generation_ms,omitempty"`
-	RepairMillis        int64  `json:"repair_ms,omitempty"`
-	ProviderCalls       int    `json:"provider_calls,omitempty"`
-	Repaired            bool   `json:"repaired,omitempty"`
-	SemanticFallback    bool   `json:"semantic_fallback,omitempty"`
-	InitialMalformed    bool   `json:"initial_malformed,omitempty"`
-	MotionAction        string `json:"motion_action,omitempty"`
-	Mood                Mood   `json:"mood,omitempty"`
-	MoodChanged         bool   `json:"mood_changed,omitempty"`
+	PersonaID              string `json:"persona_id,omitempty"`
+	PersonaName            string `json:"persona_name,omitempty"`
+	RequestMillis          int64  `json:"request_ms,omitempty"`
+	PreparationMillis      int64  `json:"preparation_ms,omitempty"`
+	SchedulerWaitMillis    int64  `json:"scheduler_wait_ms,omitempty"`
+	FirstTokenMillis       int64  `json:"first_token_ms,omitempty"`
+	FirstActivityMillis    int64  `json:"first_activity_ms,omitempty"`
+	ModelLoadMillis        int64  `json:"model_load_ms,omitempty"`
+	PromptEvalMillis       int64  `json:"prompt_eval_ms,omitempty"`
+	PromptTokens           int    `json:"prompt_tokens,omitempty"`
+	GeneratedTokens        int    `json:"generated_tokens,omitempty"`
+	GenerationMillis       int64  `json:"generation_ms,omitempty"`
+	RepairMillis           int64  `json:"repair_ms,omitempty"`
+	ProviderCalls          int    `json:"provider_calls,omitempty"`
+	PromptBytes            int    `json:"prompt_bytes,omitempty"`
+	PromptLimitBytes       int    `json:"prompt_limit_bytes,omitempty"`
+	HistoryMessagesDropped int    `json:"history_messages_dropped,omitempty"`
+	Repaired               bool   `json:"repaired,omitempty"`
+	SemanticFallback       bool   `json:"semantic_fallback,omitempty"`
+	InitialMalformed       bool   `json:"initial_malformed,omitempty"`
+	MotionAction           string `json:"motion_action,omitempty"`
+	Mood                   Mood   `json:"mood,omitempty"`
+	MoodChanged            bool   `json:"mood_changed,omitempty"`
 }
 
 // SessionPromptContext is the backend-owned per-session continuity snapshot

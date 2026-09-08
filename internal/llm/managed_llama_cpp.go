@@ -59,6 +59,7 @@ type ManagedLlamaCPPProvider struct {
 	stderr   *tailBuffer
 	ready    bool
 	stopping bool
+	closed   bool
 	lifetime managedLlamaProcessLifetime
 }
 
@@ -67,6 +68,7 @@ func NewManagedLlamaCPPProvider(options ManagedLlamaCPPOptions) (*ManagedLlamaCP
 	if options.ContextSize <= 0 {
 		return nil, errors.New("managed llama.cpp context size must be positive")
 	}
+	options.HTTPProviderOptions.ContextSize = options.ContextSize
 	httpOptions, err := normalizeHTTPOptions(options.HTTPProviderOptions)
 	if err != nil {
 		return nil, err
@@ -96,7 +98,11 @@ func (p *ManagedLlamaCPPProvider) StreamChat(ctx context.Context, request ChatRe
 	// Load performs health and model-list probes. Reuse that successful state on
 	// warm calls; the chat request itself will still report a crashed server.
 	if !p.readyToServe() {
+		started := time.Now()
 		status := p.Load(ctx)
+		if request.OnProgress != nil {
+			request.OnProgress(ProviderProgress{LoadMillis: time.Since(started).Milliseconds()})
+		}
 		if !status.Available {
 			return "", errors.New(status.Message)
 		}
@@ -139,6 +145,10 @@ func (p *ManagedLlamaCPPProvider) Status(ctx context.Context) ProviderStatus {
 // Load starts the configured llama-server process and waits for readiness.
 func (p *ManagedLlamaCPPProvider) Load(ctx context.Context) ProviderStatus {
 	status := p.baseStatus()
+	if err := ctx.Err(); err != nil {
+		status.Message = err.Error()
+		return status
+	}
 	if message := p.setupMessage(); message != "" {
 		status.Message = message
 		return status
@@ -246,8 +256,12 @@ func (p *ManagedLlamaCPPProvider) Unload(ctx context.Context) ProviderStatus {
 	return status
 }
 
-// Close releases the managed process.
+// Close permanently retires this provider. Unload alone permits later loading.
 func (p *ManagedLlamaCPPProvider) Close() error {
+	p.mu.Lock()
+	p.closed = true
+	p.ready = false
+	p.mu.Unlock()
 	status := p.Unload(context.Background())
 	if status.Message != "" && status.Message != "unloaded" && status.Message != "llama.cpp runner is not loaded" {
 		return errors.New(status.Message)
@@ -286,6 +300,9 @@ func (p *ManagedLlamaCPPProvider) setupMessage() string {
 func (p *ManagedLlamaCPPProvider) ensureStarted() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.closed {
+		return errors.New("managed llama.cpp provider has been closed")
+	}
 	if p.runningLocked() {
 		return nil
 	}
@@ -375,7 +392,7 @@ func (p *ManagedLlamaCPPProvider) ProcessID() int {
 func (p *ManagedLlamaCPPProvider) readyToServe() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return p.runningLocked() && p.ready
+	return !p.closed && p.runningLocked() && p.ready
 }
 
 func (p *ManagedLlamaCPPProvider) clientSnapshot() *LlamaCPPProvider {
@@ -386,7 +403,7 @@ func (p *ManagedLlamaCPPProvider) clientSnapshot() *LlamaCPPProvider {
 
 func (p *ManagedLlamaCPPProvider) setReady(ready bool) {
 	p.mu.Lock()
-	p.ready = ready
+	p.ready = ready && !p.closed
 	p.mu.Unlock()
 }
 

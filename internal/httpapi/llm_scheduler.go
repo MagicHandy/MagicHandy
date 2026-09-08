@@ -26,6 +26,8 @@ type llmRequestCoordinator struct {
 	activeCancel       context.CancelFunc
 	interactiveWaiters int
 	changed            chan struct{}
+	generation         uint64
+	changing           int
 }
 
 func (c *llmRequestCoordinator) acquire(
@@ -38,12 +40,19 @@ func (c *llmRequestCoordinator) acquire(
 	started := time.Now()
 	interactive := priority == llmRequestInteractive
 	registered := false
+	c.mu.Lock()
+	generation := c.generation
+	c.mu.Unlock()
 
 	for {
 		c.mu.Lock()
 		// Cancellation wins over an available slot or a simultaneous release.
 		// A dead interactive request must not preempt valid autonomous work.
-		if err := ctx.Err(); err != nil {
+		err := ctx.Err()
+		if generation != c.generation {
+			err = context.Canceled
+		}
+		if err != nil {
 			if registered {
 				c.interactiveWaiters--
 				c.signalLocked()
@@ -62,7 +71,7 @@ func (c *llmRequestCoordinator) acquire(
 			}
 			c.signalLocked()
 		}
-		if !c.active && (interactive || c.interactiveWaiters == 0) {
+		if !c.active && c.changing == 0 && (interactive || c.interactiveWaiters == 0) {
 			leaseCtx, leaseCancel := context.WithCancel(ctx)
 			c.active = true
 			c.activePriority = priority
@@ -95,6 +104,40 @@ func (c *llmRequestCoordinator) acquire(
 	}
 }
 
+// invalidate cancels admitted work and rejects already waiting requests when
+// the model configuration changes. New arrivals can use the replacement.
+func (c *llmRequestCoordinator) invalidate() {
+	c.mu.Lock()
+	c.generation++
+	if c.activeCancel != nil {
+		c.activeCancel()
+	}
+	c.signalLocked()
+	c.mu.Unlock()
+}
+
+// beginChange prevents newly arriving work from loading a replacement model
+// while the settings transition is still retiring the old runtime.
+func (c *llmRequestCoordinator) beginChange() func() {
+	c.mu.Lock()
+	c.changing++
+	c.generation++
+	if c.activeCancel != nil {
+		c.activeCancel()
+	}
+	c.signalLocked()
+	c.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			c.mu.Lock()
+			c.changing--
+			c.signalLocked()
+			c.mu.Unlock()
+		})
+	}
+}
+
 func (c *llmRequestCoordinator) signalLocked() {
 	if c.changed != nil {
 		close(c.changed)
@@ -103,9 +146,12 @@ func (c *llmRequestCoordinator) signalLocked() {
 }
 
 type llmCallTiming struct {
-	started    time.Time
-	firstToken time.Time
-	finished   time.Time
+	started       time.Time
+	firstToken    time.Time
+	finished      time.Time
+	budget        llm.PromptBudget
+	firstActivity time.Time
+	progress      llm.ProviderProgress
 }
 
 // timedLLMProvider records provider phases without changing the request,
@@ -126,6 +172,26 @@ func (p *timedLLMProvider) StreamChat(
 	onDelta func(string) error,
 ) (string, error) {
 	call := llmCallTiming{started: time.Now()}
+	previousProgress := request.OnProgress
+	request.OnProgress = func(progress llm.ProviderProgress) {
+		if progress.Activity && call.firstActivity.IsZero() {
+			call.firstActivity = time.Now()
+		}
+		call.progress.LoadMillis = max(call.progress.LoadMillis, progress.LoadMillis)
+		call.progress.PromptEvalMillis = max(call.progress.PromptEvalMillis, progress.PromptEvalMillis)
+		call.progress.PromptTokens = max(call.progress.PromptTokens, progress.PromptTokens)
+		call.progress.GeneratedTokens = max(call.progress.GeneratedTokens, progress.GeneratedTokens)
+		if previousProgress != nil {
+			previousProgress(progress)
+		}
+	}
+	previousBudget := request.OnBudget
+	request.OnBudget = func(budget llm.PromptBudget) {
+		call.budget = budget
+		if previousBudget != nil {
+			previousBudget(budget)
+		}
+	}
 	var firstOnce sync.Once
 	wrappedDelta := func(delta string) error {
 		firstOnce.Do(func() { call.firstToken = time.Now() })
@@ -174,6 +240,16 @@ func (p *timedLLMProvider) applyDiagnostics(
 		diagnostics.FirstTokenMillis = calls[0].firstToken.Sub(requestStarted).Milliseconds()
 	}
 	diagnostics.GenerationMillis = calls[0].finished.Sub(calls[0].started).Milliseconds()
+	if !calls[0].firstActivity.IsZero() {
+		diagnostics.FirstActivityMillis = calls[0].firstActivity.Sub(requestStarted).Milliseconds()
+	}
+	diagnostics.ModelLoadMillis = calls[0].progress.LoadMillis
+	diagnostics.PromptEvalMillis = calls[0].progress.PromptEvalMillis
+	diagnostics.PromptTokens = calls[0].progress.PromptTokens
+	diagnostics.GeneratedTokens = calls[0].progress.GeneratedTokens
+	diagnostics.PromptBytes = calls[0].budget.InputBytes
+	diagnostics.PromptLimitBytes = calls[0].budget.LimitBytes
+	diagnostics.HistoryMessagesDropped = calls[0].budget.HistoryMessagesDropped
 	for _, call := range calls[1:] {
 		diagnostics.RepairMillis += call.finished.Sub(call.started).Milliseconds()
 	}

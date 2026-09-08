@@ -2,7 +2,9 @@ import { t, translateKnown } from "../i18n";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { api } from "../api/client";
 import { audioPlaybackToken, installAudioPlaybackUnlock, playBlob, stopAllAudioPlayback } from "../util/audio";
-import { useToast } from "./app-state";
+import { useAppState, useToast } from "./app-state";
+import { playSpeechStream } from "./voice-audio-stream";
+import { UnsupportedPCMStream } from "../util/pcm-stream";
 
 interface VoicePlaybackValue {
   queueSpeech: (requestId: string) => void;
@@ -16,10 +18,12 @@ interface SpeechQueueEntry {
   id: string;
   controller: AbortController;
   audio: Promise<SpeechAudioResult>;
+  token: number;
 }
 
 type SpeechAudioResult =
   | { ok: true; audio: Blob }
+  | { ok: true; format: string }
   | { ok: false; error?: unknown };
 
 function isAbort(error: unknown): boolean {
@@ -44,7 +48,7 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-async function waitForSpeech(requestId: string, signal: AbortSignal): Promise<boolean> {
+async function waitForSpeech(requestId: string, signal: AbortSignal, progressive = true): Promise<string | boolean> {
   // The worker owns its inference timeout. Local model startup can take
   // minutes, so a second browser deadline would discard a valid request while
   // the backend is still loading or generating audio.
@@ -54,6 +58,8 @@ async function waitForSpeech(requestId: string, signal: AbortSignal): Promise<bo
     if (request?.role !== "tts" || request.type !== "speak") {
       throw new Error("the voice worker returned the wrong request");
     }
+    if (progressive && ["active", "done"].includes(request.state) && (request.audio_bytes ?? 0) > 0 &&
+        ["wav", "pcm_s16le_24000"].includes(request.audio_format ?? "")) return request.audio_format!;
     switch (request?.state) {
       case "done":
         if ((request.audio_bytes ?? 0) <= 0) {
@@ -72,7 +78,9 @@ async function waitForSpeech(requestId: string, signal: AbortSignal): Promise<bo
 
 async function prepareSpeech(requestId: string, signal: AbortSignal): Promise<SpeechAudioResult> {
   try {
-    if (!await waitForSpeech(requestId, signal)) return { ok: false };
+    const ready = await waitForSpeech(requestId, signal);
+    if (!ready) return { ok: false };
+    if (typeof ready === "string") return { ok: true, format: ready };
     return { ok: true, audio: await api.voiceRequestAudio(requestId, signal) };
   } catch (error) {
     return { ok: false, error };
@@ -81,11 +89,26 @@ async function prepareSpeech(requestId: string, signal: AbortSignal): Promise<Sp
 
 export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
   const { show } = useToast();
+  const { state, backendOnline } = useAppState();
   const pending = useRef<SpeechQueueEntry[]>([]);
   const tracked = useRef(new Set<string>());
   const controllers = useRef(new Map<string, AbortController>());
   const draining = useRef(false);
   const disposed = useRef(false);
+  const stopSequence = useRef(state?.stop_sequence);
+  const cancel = useCallback(() => {
+    pending.current = [];
+    tracked.current.clear();
+    controllers.current.forEach((controller) => controller.abort());
+    controllers.current.clear();
+    stopAllAudioPlayback();
+  }, []);
+
+  useEffect(() => {
+    if (backendOnline === false || state?.controller?.active === false ||
+        (stopSequence.current !== undefined && state?.stop_sequence !== undefined && stopSequence.current !== state.stop_sequence)) cancel();
+    stopSequence.current = state?.stop_sequence;
+  }, [backendOnline, state?.controller?.active, state?.stop_sequence, cancel]);
 
   const drain = useCallback(async () => {
     if (draining.current) return;
@@ -104,6 +127,7 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
         let acknowledge = false;
         try {
           const result = await entry.audio;
+          if (entry.controller.signal.aborted || disposed.current || entry.token !== audioPlaybackToken()) continue;
           if (!result.ok) {
             // prepareSpeech reports a worker-side cancellation as "not ok" with no
             // error at all, and an abort as an AbortError. Neither is a completed
@@ -116,9 +140,20 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
             }
             continue;
           }
-          const playbackToken = audioPlaybackToken();
-          await playBlob(result.audio, playbackToken);
-          acknowledge = true;
+          if ("format" in result) {
+            try {
+              await playSpeechStream(entry.id, result.format, entry.token, entry.controller.signal);
+            } catch (error) {
+              if (!(error instanceof UnsupportedPCMStream)) throw error;
+              if (!await waitForSpeech(entry.id, entry.controller.signal, false)) continue;
+              const audio = await api.voiceRequestAudio(entry.id, entry.controller.signal);
+              if (entry.controller.signal.aborted || entry.token !== audioPlaybackToken()) continue;
+              await playBlob(audio, entry.token);
+            }
+          } else {
+            await playBlob(result.audio, entry.token);
+          }
+          acknowledge = !entry.controller.signal.aborted && entry.token === audioPlaybackToken();
         } catch (error) {
           acknowledge = !isAbort(error);
           if (!isAbort(error) && !disposed.current) {
@@ -154,6 +189,7 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
     pending.current.push({
       id,
       controller,
+      token: audioPlaybackToken(),
       audio: prepareSpeech(id, controller.signal),
     });
     void drain();
@@ -162,13 +198,6 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     disposed.current = false;
     const removePlaybackUnlock = installAudioPlaybackUnlock();
-    const cancel = () => {
-      pending.current = [];
-      tracked.current.clear();
-      controllers.current.forEach((controller) => controller.abort());
-      controllers.current.clear();
-      stopAllAudioPlayback();
-    };
     window.addEventListener("magichandy:emergency-stop", cancel);
     return () => {
       disposed.current = true;
@@ -176,7 +205,7 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("magichandy:emergency-stop", cancel);
       cancel();
     };
-  }, []);
+  }, [cancel]);
 
   const value = useMemo(() => ({ queueSpeech }), [queueSpeech]);
   return <VoicePlaybackContext.Provider value={value}>{children}</VoicePlaybackContext.Provider>;

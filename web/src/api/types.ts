@@ -236,6 +236,14 @@ export interface ChatMessageDiagnostics {
   preparation_ms?: number;
   scheduler_wait_ms?: number;
   first_token_ms?: number;
+  first_activity_ms?: number;
+  model_load_ms?: number;
+  prompt_eval_ms?: number;
+  prompt_tokens?: number;
+  generated_tokens?: number;
+  prompt_bytes?: number;
+  prompt_limit_bytes?: number;
+  history_messages_dropped?: number;
   generation_ms?: number;
   repair_ms?: number;
   provider_calls?: number;
@@ -403,6 +411,9 @@ export interface PromptCompositionPayload {
     sections: PromptSection[];
     characters: number;
     bytes: number;
+    memory_candidates?: number;
+    memories_included?: number;
+    memory_limit_bytes?: number;
   };
 }
 
@@ -888,6 +899,9 @@ export interface VoiceRequestSnapshot {
   created_at: string;
   audio_chunks?: number;
   audio_bytes?: number;
+  audio_format?: string;
+  first_audio_ms?: number;
+  completion_ms?: number;
   audio_truncated?: boolean;
   transcript?: { text: string; confidence: number }[];
   rejected?: string;

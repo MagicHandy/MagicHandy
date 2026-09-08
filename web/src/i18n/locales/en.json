@@ -1960,5 +1960,12 @@
   "Peak timing shifts up to {milliseconds} ms": "Peak timing shifts up to {milliseconds} ms",
   "{count} corners use shorter windows": "{count} corners use shorter windows",
   "{count} corners too short to round": "{count} corners too short to round",
-  "No eligible script changes at these settings.": "No eligible script changes at these settings."
+  "No eligible script changes at these settings.": "No eligible script changes at these settings.",
+  "Memories used": "Memories used",
+  "First provider activity": "First provider activity",
+  "Model load": "Model load",
+  "Prompt processing": "Prompt processing",
+  "Input bytes / budget": "Input bytes / budget",
+  "History messages omitted": "History messages omitted",
+  "Tokens (input / output)": "Tokens (input / output)"
 }

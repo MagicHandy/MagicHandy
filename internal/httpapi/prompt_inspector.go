@@ -32,7 +32,7 @@ func (s *Server) handlePromptComposition(w http.ResponseWriter, r *http.Request)
 		s.writeLibraryStorageError(w, err)
 		return
 	}
-	motionContext := s.chatMotionContext(settings.Motion, settings.LLM)
+	motionContext := s.contextualChatMotion(settings, promptContext.UserRequests)
 	composition := chat.ComposePrompt(
 		prompt,
 		memories,
@@ -40,6 +40,7 @@ func (s *Server) handlePromptComposition(w http.ResponseWriter, r *http.Request)
 		promptContext.Capabilities,
 		&motionContext,
 		promptContext.ConversationContext,
+		chatPromptBudget(settings.LLM),
 	)
 	payload := map[string]any{
 		"session_id":  sessionID,

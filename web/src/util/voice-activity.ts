@@ -104,8 +104,8 @@ export class VoiceActivitySegmenter {
       this.quietLength += samples.length;
     }
     if (this.phraseLength >= this.maxPhraseFrames ||
-        (this.quietLength >= this.silenceFrames && this.voicedLength >= this.minSpeechFrames)) {
-      return { level, speaking: false, segment: this.finishSegment() };
+        this.quietLength >= this.silenceFrames) {
+      return { level, speaking: false, segment: this.flush() };
     }
     return { level, speaking: true };
   }

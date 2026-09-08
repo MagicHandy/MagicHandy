@@ -272,10 +272,13 @@ type PromptSection struct {
 // PromptComposition is the exact prompt sent to the provider plus a section
 // index over those same bytes.
 type PromptComposition struct {
-	Prompt     string          `json:"prompt"`
-	Sections   []PromptSection `json:"sections"`
-	Characters int             `json:"characters"`
-	Bytes      int             `json:"bytes"`
+	Prompt           string          `json:"prompt"`
+	Sections         []PromptSection `json:"sections"`
+	Characters       int             `json:"characters"`
+	Bytes            int             `json:"bytes"`
+	MemoryCandidates int             `json:"memory_candidates"`
+	MemoriesIncluded int             `json:"memories_included"`
+	MemoryLimitBytes int             `json:"memory_limit_bytes"`
 }
 
 // voiceIdentityInstructions establishes the reply identity before the machine
@@ -480,17 +483,20 @@ func ComposeSystemWithMotionContext(set PromptSet, memories []string, patterns [
 	return composeSystem(set, memories, patterns, capabilities, &context, nil)
 }
 
-func composeSystem(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, motionContext *MotionContext, conversationContext *ConversationContext) string {
-	return composePrompt(set, memories, patterns, capabilities, motionContext, conversationContext).Prompt
+func composeSystem(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, motionContext *MotionContext, conversationContext *ConversationContext, budget ...PromptBudgetSettings) string {
+	return composePrompt(set, memories, patterns, capabilities, motionContext, conversationContext, budget...).Prompt
 }
 
 // ComposePrompt exposes the production composition path for inspectability.
 // Callers receive the exact prompt and counts from the same code Service uses.
-func ComposePrompt(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, motionContext *MotionContext, conversationContext *ConversationContext) PromptComposition {
-	return composePrompt(set, memories, patterns, capabilities, motionContext, conversationContext)
+func ComposePrompt(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, motionContext *MotionContext, conversationContext *ConversationContext, budget ...PromptBudgetSettings) PromptComposition {
+	return composePrompt(set, memories, patterns, capabilities, motionContext, conversationContext, budget...)
 }
 
-func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, motionContext *MotionContext, conversationContext *ConversationContext) PromptComposition {
+func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, capabilities Capabilities, motionContext *MotionContext, conversationContext *ConversationContext, budget ...PromptBudgetSettings) PromptComposition {
+	allMemories := memories
+	memoryCandidates := len(memories)
+	memories = selectPromptMemories(memories, motionContext)
 	capabilities.Voice = normalizedVoiceLevel(capabilities.Voice)
 	if !capabilities.Motion || !capabilities.Patterns {
 		patterns = nil
@@ -560,11 +566,24 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 		texts = append(texts, section.Text)
 	}
 	prompt := strings.Join(texts, "\n\n")
+	if len(budget) > 0 {
+		limit := memoryBudgetForPrompt(sections, budget[0])
+		if limit < maxPromptMemoryBytes {
+			selected := selectPromptMemories(allMemories, motionContext, limit)
+			composition := composePrompt(set, selected, patterns, capabilities, motionContext, conversationContext)
+			composition.MemoryCandidates = memoryCandidates
+			composition.MemoryLimitBytes = limit
+			return composition
+		}
+	}
 	return PromptComposition{
-		Prompt:     prompt,
-		Sections:   sections,
-		Characters: utf8.RuneCountInString(prompt),
-		Bytes:      len(prompt),
+		Prompt:           prompt,
+		Sections:         sections,
+		Characters:       utf8.RuneCountInString(prompt),
+		Bytes:            len(prompt),
+		MemoryCandidates: memoryCandidates,
+		MemoriesIncluded: len(memories),
+		MemoryLimitBytes: maxPromptMemoryBytes,
 	}
 }
 

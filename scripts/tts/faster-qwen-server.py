@@ -10,17 +10,17 @@ inference lock.
 import asyncio
 import importlib.util
 import math
-import queue
 import random
 import sys
-import threading
+from contextlib import aclosing
 from pathlib import Path
 from typing import AsyncGenerator, Optional
 
 import torch
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from tts_stream import PrivateWorkerAPI, stream_from_sync
 
 
 def load_upstream(path: str):
@@ -41,7 +41,8 @@ if len(sys.argv) < 2:
 upstream = load_upstream(sys.argv[1])
 sys.argv = [sys.argv[1], *sys.argv[2:]]
 
-app = FastAPI(title="MagicHandy Faster Qwen3-TTS API")
+app = FastAPI(title="MagicHandy Faster Qwen3-TTS API", docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(PrivateWorkerAPI)
 DEFAULT_SEED = 1337
 MIN_GENERATION_SECONDS = 12
 MAX_GENERATION_SECONDS = 160
@@ -49,7 +50,7 @@ MAX_GENERATION_SECONDS = 160
 
 class SpeechRequest(BaseModel):
     model: str = "tts-1"
-    input: str
+    input: str = Field(max_length=32768)
     voice: str = "alloy"
     response_format: str = "wav"
     speed: float = 1.0
@@ -100,83 +101,34 @@ def warm_up_model() -> None:
 async def stream_chunks(
     voice_cfg: dict, text: str, seed: int, instruct: str
 ) -> AsyncGenerator[bytes, None]:
-    # Keep back-pressure close to the model. An unbounded queue lets a client
-    # disconnect while the producer continues allocating audio and occupying
-    # the CUDA inference lock for the entire abandoned utterance.
-    chunks: queue.Queue = queue.Queue(maxsize=2)
-    done = object()
-    canceled = threading.Event()
-
-    def put_chunk(item) -> bool:
-        while not canceled.is_set():
-            try:
-                chunks.put(item, timeout=0.1)
-                return True
-            except queue.Full:
-                continue
-        return False
-
-    def finish_producer() -> None:
-        if not canceled.is_set():
-            chunks.put(done)
-            return
-        # Wake an executor thread already blocked in Queue.get after the async
-        # consumer was canceled. At that point queued audio is abandoned.
-        while True:
-            try:
-                chunks.put_nowait(done)
+    def generate(canceled):
+        with upstream._model_lock:
+            if canceled.is_set():
                 return
-            except queue.Full:
-                try:
-                    chunks.get_nowait()
-                except queue.Empty:
-                    continue
-
-    def producer() -> None:
-        stream = None
-        try:
-            with upstream._model_lock:
-                if canceled.is_set():
-                    return
-                seed_generators(seed)
-                token_limit = max_generation_tokens(text)
-                upstream.logger.info(
-                    "MagicHandy generation seed=%d max_new_tokens=%d", seed, token_limit
-                )
-                stream = upstream.tts_model.generate_voice_clone_streaming(
-                    text=text,
-                    language=voice_cfg.get("language", "Auto"),
-                    ref_audio=voice_cfg["ref_audio"],
-                    ref_text=voice_cfg.get("ref_text", ""),
-                    max_new_tokens=token_limit,
-                    chunk_size=voice_cfg.get("chunk_size", 12),
-                    non_streaming_mode=False,
-                    instruct=instruct or None,
-                )
-                for chunk, _sample_rate, _timing in stream:
-                    if canceled.is_set() or not put_chunk(chunk):
-                        break
-        except Exception as exc:
-            put_chunk(exc)
-        finally:
+            seed_generators(seed)
+            stream = upstream.tts_model.generate_voice_clone_streaming(
+                text=text,
+                language=voice_cfg.get("language", "Auto"),
+                ref_audio=voice_cfg["ref_audio"],
+                ref_text=voice_cfg.get("ref_text", ""),
+                max_new_tokens=max_generation_tokens(text),
+                chunk_size=voice_cfg.get("chunk_size", 12),
+                non_streaming_mode=False,
+                instruct=instruct or None,
+            )
             try:
-                if stream is not None:
-                    stream.close()
+                for chunk, sample_rate, _timing in stream:
+                    if canceled.is_set():
+                        break
+                    if sample_rate != upstream.SAMPLE_RATE:
+                        raise RuntimeError("TTS sample rate changed during inference")
+                    yield upstream._to_pcm16(chunk)
             finally:
-                finish_producer()
+                stream.close()
 
-    threading.Thread(target=producer, daemon=True).start()
-    loop = asyncio.get_running_loop()
-    try:
-        while True:
-            item = await loop.run_in_executor(None, chunks.get)
-            if item is done:
-                break
-            if isinstance(item, Exception):
-                raise item
-            yield upstream._to_pcm16(item)
-    finally:
-        canceled.set()
+    async with aclosing(stream_from_sync(generate)) as chunks:
+        async for chunk in chunks:
+            yield chunk
 
 
 @app.get("/health")
@@ -205,40 +157,26 @@ async def create_speech(request: SpeechRequest):
         )
 
     if output_format == "mp3":
-        loop = asyncio.get_running_loop()
-
-        def generate():
-            with upstream._model_lock:
-                seed_generators(request.seed)
-                token_limit = max_generation_tokens(request.input)
-                upstream.logger.info(
-                    "MagicHandy generation seed=%d max_new_tokens=%d",
-                    request.seed,
-                    token_limit,
-                )
-                return upstream.tts_model.generate_voice_clone(
-                    text=request.input,
-                    language=voice_cfg.get("language", "Auto"),
-                    ref_audio=voice_cfg["ref_audio"],
-                    ref_text=voice_cfg.get("ref_text", ""),
-                    max_new_tokens=token_limit,
-                    instruct=request.instruct or None,
-                )
-
-        audio_arrays, sample_rate = await loop.run_in_executor(None, generate)
-        audio = audio_arrays[0] if audio_arrays else upstream.np.zeros(1, dtype=upstream.np.float32)
-        return Response(
-            content=upstream._to_mp3_bytes(audio, sample_rate),
-            media_type=content_types[output_format],
-        )
+        async def mp3_stream():
+            # Use the same cancelable producer as WAV/PCM. A disconnect skips
+            # remaining model chunks even when the chosen codec needs a full clip.
+            pcm = bytearray()
+            async with aclosing(stream_chunks(voice_cfg, request.input, request.seed, request.instruct)) as chunks:
+                async for chunk in chunks:
+                    if len(pcm) + len(chunk) > 8 * 1024 * 1024:
+                        raise HTTPException(status_code=413, detail="TTS audio exceeds 8 MiB")
+                    pcm.extend(chunk)
+            audio = upstream.np.frombuffer(pcm, dtype="<i2").astype(upstream.np.float32) / 32768.0
+            encoded = await asyncio.to_thread(upstream._to_mp3_bytes, audio, upstream.SAMPLE_RATE)
+            yield encoded
+        return StreamingResponse(mp3_stream(), media_type=content_types[output_format])
 
     async def audio_stream():
         if output_format == "wav":
             yield upstream._wav_header(upstream.SAMPLE_RATE)
-        async for raw_chunk in stream_chunks(
-            voice_cfg, request.input, request.seed, request.instruct
-        ):
-            yield raw_chunk
+        async with aclosing(stream_chunks(voice_cfg, request.input, request.seed, request.instruct)) as chunks:
+            async for raw_chunk in chunks:
+                yield raw_chunk
 
     return StreamingResponse(audio_stream(), media_type=content_types[output_format])
 

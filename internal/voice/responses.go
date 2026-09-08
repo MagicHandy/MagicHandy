@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 )
 
 // applyResponse folds one worker frame into the request record.
@@ -70,6 +71,9 @@ func (p *PendingRequest) appendAudio(response Response) error {
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.terminalLocked() {
+		return nil
+	}
 	if response.Seq != p.chunks {
 		return fmt.Errorf("audio sequence %d arrived; expected %d", response.Seq, p.chunks)
 	}
@@ -82,6 +86,7 @@ func (p *PendingRequest) appendAudio(response Response) error {
 	}
 	if p.audioFormat == "" {
 		p.audioFormat = format
+		p.firstAudioAt = time.Now()
 	}
 	p.audio = append(p.audio, data...)
 	p.chunks++
@@ -91,6 +96,9 @@ func (p *PendingRequest) appendAudio(response Response) error {
 func (p *PendingRequest) completeAudio() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.terminalLocked() {
+		return nil
+	}
 	if p.Type != RequestSpeak {
 		return errors.New("done was returned for a non-speak request")
 	}
@@ -104,6 +112,7 @@ func (p *PendingRequest) completeAudio() error {
 		return errors.New("PCM audio ended on an incomplete sample")
 	}
 	p.state = RequestStateDone
+	p.completedAt = time.Now()
 	return nil
 }
 
@@ -131,9 +140,13 @@ func (p *PendingRequest) completeTranscript(response Response) error {
 	}
 
 	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.terminalLocked() {
+		return nil
+	}
 	p.transcript = append([]TranscriptCandidate(nil), response.Candidates...)
 	p.rejected = response.Rejected
 	p.state = RequestStateDone
-	p.mu.Unlock()
+	p.completedAt = time.Now()
 	return nil
 }

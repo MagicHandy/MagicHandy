@@ -42,6 +42,12 @@ type ChatRequest struct {
 	JSONSchema json.RawMessage
 	// ReasoningBudgetTokens is used only by providers with an explicit bounded-thinking API.
 	ReasoningBudgetTokens int
+	// OnBudget receives bounded prompt accounting without prompt contents.
+	OnBudget   func(PromptBudget)     `json:"-"`
+	OnProgress func(ProviderProgress) `json:"-"`
+	// PreserveTailMessages protects a repair's original user turn as well as
+	// the malformed response and repair instruction. Ordinary requests use one.
+	PreserveTailMessages int
 }
 
 // Provider streams text from one local LLM runtime.
@@ -78,6 +84,9 @@ type HTTPProviderOptions struct {
 	Model   string
 	Client  *http.Client
 	Timeout time.Duration
+	// ContextSize is known for managed runtimes; zero uses the app's bounded
+	// input policy without claiming a remote server has this context available.
+	ContextSize int
 }
 
 func normalizeHTTPOptions(options HTTPProviderOptions) (HTTPProviderOptions, error) {
@@ -126,8 +135,5 @@ func appendStreamDelta(builder *strings.Builder, delta string, onDelta func(stri
 }
 
 func checkedRequestContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
-	if _, ok := ctx.Deadline(); ok {
-		return context.WithCancel(ctx)
-	}
 	return context.WithTimeout(ctx, timeout)
 }

@@ -109,7 +109,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		s.writeLibraryStorageError(w, err)
 		return
 	}
-	provider, err := s.newLLMProvider(chatCtx, settings.LLM)
+	provider, err := s.prepareLLMProvider(settings.LLM)
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, err)
 		return
@@ -123,6 +123,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		MaxTokens:             settings.LLM.MaxOutputTokens,
 		ReasoningMode:         settings.LLM.ReasoningMode,
 		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
+		PromptBudget:          chatPromptBudget(settings.LLM),
 		Memories:              memories,
 		Patterns:              patternChoices,
 		MotionContext:         &motionContext,

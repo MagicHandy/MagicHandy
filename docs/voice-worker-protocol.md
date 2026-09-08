@@ -91,10 +91,16 @@ enter chat history, TTS playback, or motion (ADR 0003).
 
 - One serialized work request per worker; the core queue is bounded and rejects
   new work when full for catch-up flood protection.
-- Per-request timeouts: handshake and ordinary control 5 s, work 60 s (then a
-  cancel frame + a `timeout` failure). Model load honors a 15-minute caller
-  deadline because first installation validation and managed local startup may
-  include a large CUDA model load.
+- Per-request timeouts include write admission and stdin I/O: handshake and
+  ordinary control 5 s, default work 60 s, OpenAI-compatible TTS work 10 minutes
+  in both core and HTTP adapter. A timeout fails the request and bounds its
+  cancel frame to 1 s. A blocked write closes the owned pipe/session so teardown
+  can terminate the child. Model load has a separate 15-minute caller deadline
+  because managed startup may include a large CUDA model load.
+- Terminal state is immutable under the request mutex. Late audio, transcripts,
+  completion and failures cannot revive canceled work. Cancel/unload also covers
+  adapter jobs already queued behind inference, without accumulating tombstones
+  for unknown request IDs.
 - Status surfaces every lifecycle state (`disabled`, `not_configured`,
   `stopped`, `starting`, `running`, `crashed`) plus provider identity, model
   state, queue depth, last error, and the crash stderr tail — in
@@ -117,6 +123,33 @@ enter chat history, TTS playback, or motion (ADR 0003).
   single-owner audio lease (the active controller), so two tabs never speak
   the same clip. Retention is bounded (per request and to the newest few
   requests).
+- `GET /api/voice/requests/{id}/audio-chunk?offset=N` — up to 32 KiB of base64
+  audio with atomic `offset`, `next_offset`, `format`, request `state`, `done`
+  and optional `error`. Every read requires the active controller. Responses
+  use `Cache-Control: no-store`; active empty reads are polled at 100 ms by the
+  browser. Canceled/failed work exposes no audio. This endpoint supplements the
+  completed-clip API; it is a bounded pull protocol, not an unbounded SSE stream.
+
+## Progressive speech and resource bounds
+
+OpenAI-compatible workers forward HTTP audio as it arrives rather than building
+a second complete clip. All real TTS workers and the core agree on the 8 MiB
+utterance limit. Request snapshots expose `audio_format`, `first_audio_ms` and
+`completion_ms`; first audio means first retained bytes, not measured speaker
+latency. The completed WAV endpoint repairs unknown streaming lengths only at
+the final serving boundary.
+
+The browser incrementally decodes 16-bit PCM WAV (mono/stereo) or
+`pcm_s16le_24000`, schedules bounded buffers through the existing shared audio
+context, and acknowledges only after playback. MP3/Opus and unsupported WAV
+encodings use the complete-clip decoder. Stop, controller loss, backend loss,
+request cancellation and stale playback tokens stop presentation and reject
+late fetch results. The core's request log and delivery order stay authoritative.
+
+Parakeet forwards staged WAV files through a multipart reader with a known
+Content-Length, avoiding a second full file read and multipart copy inside the
+worker. The core still performs its existing bounded upload validation/staging.
+External ASR servers retain their existing ownership policy.
 
 ## Trying It
 

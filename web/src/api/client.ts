@@ -725,6 +725,9 @@ export const api = {
     input_noise_suppression: boolean;
   }>("PUT", "/api/voice/input-preferences", patch),
   // Lease-gated audio: only the active controller may fetch a clip.
+  voiceRequestAudioChunk: (id: string, offset: number, signal?: AbortSignal) =>
+    request<{ data: string | null; format: string; state: string; offset: number; next_offset: number; done: boolean; error?: { message: string } }>(
+      "GET", `/api/voice/requests/${encodeURIComponent(id)}/audio-chunk?offset=${offset}`, undefined, signal),
   voiceRequestAudio: async (id: string, signal?: AbortSignal): Promise<Blob> => {
     const res = await fetch(`/api/voice/requests/${encodeURIComponent(id)}/audio`, {
       headers: { [CLIENT_HEADER]: clientId },
