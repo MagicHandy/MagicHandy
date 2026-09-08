@@ -200,11 +200,15 @@ describe("ChatPanel history", () => {
     expect(await screen.findByText("Diagnosed reply")).toBeInTheDocument();
     const avatar = screen.getByRole("button", { name: "Show response diagnostics" });
     expect(avatar).toHaveAttribute("title", expect.stringContaining("Model: gemma-3"));
+    fireEvent.focus(avatar);
+    expect(screen.getByRole("log")).not.toContainElement(screen.getByRole("tooltip"));
     expect(screen.getByRole("tooltip")).toHaveTextContent(/Run time\s*184 ms/);
     expect(screen.getByRole("tooltip")).toHaveTextContent(/First token\s*96 ms/);
     expect(screen.getByRole("tooltip")).toHaveTextContent(/Model queue\s*31 ms/);
     expect(screen.getByRole("tooltip")).toHaveTextContent(/Repair\s*22 ms/);
     expect(screen.getByRole("tooltip")).toHaveTextContent(/Provider calls\s*2/);
+    fireEvent.blur(avatar);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("marks persona changes from persisted assistant provenance", async () => {

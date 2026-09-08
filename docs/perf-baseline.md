@@ -8,12 +8,12 @@ No new Go/browser dependency. See [implementation and limits](ai-runtime-improve
 
 | Measurement | Baseline | Candidate |
 | --- | ---: | ---: |
-| Stripped app | 19,116,032 B | 19,182,592 B (+66,560) |
-| Main JS raw / gzip level 9 | 755,229 / 208,618 B | 762,318 / 210,780 B |
-| Labs JS raw / gzip level 9 | 52,019 / 14,585 B | unchanged |
-| All `dist` files, raw | 2,011,769 B | 2,020,229 B (+8,460) |
+| Stripped app | 19,116,032 B | 19,183,104 B (+67,072) |
+| Main JS raw / gzip level 9 | 755,229 / 208,618 B | 763,057 / 211,013 B |
+| Labs JS raw / gzip level 9 | 52,019 / 14,585 B | 52,019 / 14,586 B |
+| All `dist` files, raw | 2,011,769 B | 2,020,773 B (+9,004) |
 | Lazy locale growth, each | — | 310–367 B raw / 142–161 B gzip |
-| Fresh `/healthz` observations | 603.9 / 588.1 ms | 610.2 / 595.6 / 592.6 ms |
+| Fresh `/healthz` observations | 603.9 / 588.1 ms | 610.2 / 595.6 / 592.6 / 585.7 ms |
 | Stopped working set across launches | 22,491,136–68,653,056 B | 25,305,088–67,874,816 B |
 | Private commitment across launches | 57,131,008–58,507,264 B | 57,106,432–57,663,488 B |
 
@@ -24,9 +24,10 @@ processes is large. The last adjacent pair measured 588.1/592.6 ms and
 22,491,136/25,583,616 B RSS. Do not infer an idle-memory reduction or close the
 SQLite waiver from these observations. The 500 ms startup target remains unmet.
 Only the owned measurement processes were stopped; the actual review app uses
-separate data and stays open with a working LLM. A last pipe-error correction
-preserves the measured candidate binary size; the last two candidate launches
-use that final source.
+separate data and stays open with a working LLM. The final tooltip correction
+adds 512 bytes to the earlier candidate binary. Its final launch observed
+585.7 ms, 34,082,816 B working set and 57,262,080 B private commitment; earlier
+candidate launches establish the Windows working-set variation above.
 
 `BenchmarkMultipartAudio32MiB` constructs and drains a multipart reader over
 already-present audio. An ignored overlay recreates the baseline buffered
@@ -46,13 +47,13 @@ The original 200 × 1,998-byte synthetic saved-memory fixture produces a
 selection. Stored entries are untouched. Tokenizer-specific capacity and
 inference latency were not measured with that fixture.
 
-Real review chat with Ollama Granite 3B: 53 ms first visible token, 45 ms
-provider-reported prefill and 127 ms generation, one call with no repair or
+Real review chat with Ollama Granite 3B: 53 ms first visible token, 44 ms
+provider-reported prefill and 122 ms generation, one call with no repair or
 fallback. Streaming speech tests establish first PCM scheduling before response
 completion; actual model first-audible latency and listening remain unmeasured.
 
 Local evidence: `.scratch/ai-module-review/{asr-benchmark.txt,bundle-final.json,
-measure-*-final.json,measure-final-candidate.json,measure-paired-*.json,
+measure-*-final.json,measure-final-candidate.json,measure-paired-*.json,measure-visual-final.json,
 implementation-chat-check.json}`. Runtime evidence stays ignored.
 
 ## 2026-09-06 — funscript filter quality

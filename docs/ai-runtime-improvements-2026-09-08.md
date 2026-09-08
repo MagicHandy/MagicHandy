@@ -32,6 +32,10 @@ The final bug pass found and covered partial stdin writes with errors: these
 retire the connection just like a timeout or short write, preventing another
 JSON frame from following an incomplete one.
 
+The narrow-browser visual review also caught the expanded diagnostics clipping
+inside the chat scroll container. Its tooltip now renders outside that container
+and fits within the viewport, with bounded scrolling and the Stop region clear.
+
 ## Measured effects
 
 Windows/amd64, Go 1.26.4, Ryzen 9 9950X3D. Baseline and candidate use
@@ -43,9 +47,9 @@ UI. The comparison uses no installed user data or credentials.
 | 200 synthetic 1,998-byte memories, same utility-chat system prompt | 401,604 B | 7,604 B |
 | Multipart assembly/drain for already-present 32 MiB audio, allocations | 33,566,577–33,566,661 B/op | 35,881–35,884 B/op |
 | Same multipart benchmark, three runs | 1.862 / 2.168 / 2.070 ms/op | 0.387 / 0.386 / 0.403 ms/op |
-| Stripped Go app | 19,116,032 B | 19,182,592 B (+66,560; 0.35%) |
-| Main JS raw / gzip level 9 | 755,229 / 208,618 B | 762,318 / 210,780 B (+7,089 / +2,162) |
-| Complete embedded `dist`, raw | 2,011,769 B | 2,020,229 B (+8,460) |
+| Stripped Go app | 19,116,032 B | 19,183,104 B (+67,072; 0.35%) |
+| Main JS raw / gzip level 9 | 755,229 / 208,618 B | 763,057 / 211,013 B (+7,828 / +2,395) |
+| Complete embedded `dist`, raw | 2,011,769 B | 2,020,773 B (+9,004) |
 
 The memory fixture retains stored memories and sends three complete entries;
 this is prompt-size reduction, not a tokenizer or inference-speed claim. The
@@ -53,13 +57,14 @@ multipart microbenchmark excludes disk/network/recognition and compares the old
 buffered builder against the new reader using the same input. Allocation count
 is slightly higher (54 versus 44–45) while allocated bytes fall by about 99.9%.
 
-Labs JS bytes are unchanged. Each lazy non-English locale adds 310–367 raw bytes
+Labs JS raw bytes are unchanged (gzip +1 byte). Each lazy non-English locale adds 310–367 raw bytes
 and 142–161 gzip bytes. The added frontend code pays for progressive PCM parsing,
 bounded playback and the new diagnostics, without a decoder dependency.
 
 Fresh launch observations were 603.9/588.1 ms for baseline and 610.2/595.6/592.6
-ms for candidate variants with the same binary size. An immediate paired rerun
-was 588.1 versus 592.6 ms. The 500 ms startup target remains unmet on this host.
+ms before the final tooltip correction. An immediate paired rerun was 588.1
+versus 592.6 ms. The final UI build observed 585.7 ms and 34,082,816 B working set.
+The 500 ms startup target remains unmet on this host.
 Windows working-set readings varied substantially between launches: baseline
 22,491,136–68,653,056 B; candidate 25,305,088–67,874,816 B. Private commitment was
 approximately 57–59 MB. No idle-memory improvement or waiver closure is claimed.
@@ -100,7 +105,7 @@ preserved. No hardware connection or motion command was issued.
 available local Ollama model `huihui_ai/granite4.1-abliterated:3b`. A separate real
 request through the app's chat path returned “The text-only AI review session
 is ready.” One provider call, no repair/fallback, 53 ms to first visible token,
-45 ms provider-reported prefill and 127 ms generation. The response diagnostics
+44 ms provider-reported prefill and 122 ms generation (123 ms overall). The response diagnostics
 are expanded in the browser. This is one short warm readiness check, not a
 general model benchmark.
 

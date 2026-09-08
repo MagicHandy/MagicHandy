@@ -6,8 +6,8 @@ The [AI runtime implementation](ai-runtime-improvements-2026-09-08.md) addresses
 the audit's twelve findings and four optimization areas, preserving the pure-Go
 core and shared motion path. GPU placement/KV tuning remains measurement-gated.
 
-Same-toolchain stripped app: 19,116,032 → 19,182,592 bytes (+66,560; 0.35%).
-Main JS gzip grows 2,162 bytes; total raw `dist` grows 8,460 bytes. No Go/browser
+Same-toolchain stripped app: 19,116,032 → 19,183,104 bytes (+67,072; 0.35%).
+Main JS gzip grows 2,395 bytes; total raw `dist` grows 9,004 bytes. No Go/browser
 dependency is added. ASR multipart assembly allocation drops from about 33.6 MB
 to 35.9 KB per 32 MiB request; the memory-flood system prompt falls from 401,604
 to 7,604 bytes. These are bounded component measurements, not whole-app speedups.
