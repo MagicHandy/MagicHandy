@@ -164,7 +164,7 @@ try {
         [ref]$ttsTokens,
         [ref]$ttsErrors
     )
-    foreach ($functionName in @('Invoke-Checked', 'Invoke-HuggingFaceModelDownload', 'Test-FasterQwenMaterializedRegularFile', 'Get-FasterQwenMaterializedRepository', 'Assert-FasterQwenMaterializedTreeNoReparsePoints', 'Write-FasterQwenMaterializedManifest', 'Initialize-FasterQwenMaterializedModel', 'Assert-FasterQwenMaterializedModel', 'Complete-FasterQwenMaterializedModel', 'Write-TTSModuleState', 'New-TTSInstallSession', 'Copy-TTSModelSeed', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Get-TTSPythonVersion', 'Get-TTSVirtualEnvironmentVersion', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
+    foreach ($functionName in @('Invoke-Checked', 'Test-TTSLocalModel', 'Invoke-HuggingFaceModelDownload', 'Test-FasterQwenMaterializedRegularFile', 'Get-FasterQwenMaterializedRepository', 'Assert-FasterQwenMaterializedTreeNoReparsePoints', 'Write-FasterQwenMaterializedManifest', 'Initialize-FasterQwenMaterializedModel', 'Assert-FasterQwenMaterializedModel', 'Complete-FasterQwenMaterializedModel', 'Write-TTSModuleState', 'New-TTSInstallSession', 'Copy-TTSModelSeed', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Get-TTSPythonVersion', 'Get-TTSVirtualEnvironmentVersion', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
         $functionAst = $ttsAst.Find({
             $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                 $args[0].Name -eq $functionName
@@ -172,6 +172,12 @@ try {
         Assert-True -Condition ($null -ne $functionAst) -Message "TTS installer should define $functionName"
         Invoke-Expression $functionAst.Extent.Text
     }
+
+    $localModelFixture = Join-Path $tempRoot 'user-local-model'
+    New-Item -ItemType Directory -Path $localModelFixture -Force | Out-Null
+    Assert-True -Condition (Test-TTSLocalModel -ModelPath $localModelFixture) -Message 'an existing local model must be retained without a Hub download'
+    Assert-True -Condition (-not (Test-TTSLocalModel -ModelPath 'Qwen/Qwen3-TTS-12Hz-1.7B-Base')) -Message 'a Hub model still needs the normal download path'
+    Assert-Throws -Action { Test-TTSLocalModel -ModelPath (Join-Path $tempRoot 'missing-local-model') } -Message 'missing local model must fail before preparing an update'
 
     $stagedHome = Join-Path $tempRoot 'staged-tts-home'
     New-Item -ItemType Directory -Path (Join-Path $stagedHome '.venv') -Force | Out-Null
@@ -734,11 +740,14 @@ func main() {
     Assert-True -Condition ($releaseWorkflowSource.Contains('-ReviewedFalsePositiveCaseID "15c1e36d-fb35-4c5d-85de-83707169818a"')) -Message 'release workflow should bind setup publication to the completed Microsoft review'
     Assert-True -Condition ($releaseWorkflowSource.Contains('-ExerciseInstaller')) -Message 'release workflow should exercise the exact public setup lifecycle'
     Assert-True -Condition ($releaseWorkflowSource.Contains('-ExerciseDefaultInstall')) -Message 'release workflow should exercise the exact public setup in Program Files'
+    Assert-True -Condition ($releaseWorkflowSource.Contains('needs: [validate, quality, voice-adapters]')) -Message 'public release must wait for Python voice adapter tests'
+    Assert-True -Condition ($releaseWorkflowSource.Contains("python: ['3.10', '3.11']")) -Message 'release adapter tests should cover both managed Python versions'
     Assert-True -Condition ($releaseWorkflowSource.Contains('Scan exact public artifacts with Microsoft Defender')) -Message 'release workflow should scan the exact public artifact directory before publication'
     Assert-True -Condition ($releaseWorkflowSource.Contains('-DisableRemediation')) -Message 'release Defender scan should report rather than mutate the candidate'
     Assert-True -Condition ($releaseWorkflowSource.IndexOf('Scan exact public artifacts with Microsoft Defender', [StringComparison]::Ordinal) -lt $releaseWorkflowSource.IndexOf('Verify reviewed public Windows artifacts', [StringComparison]::Ordinal)) -Message 'Defender should scan the candidate before release verification and publication'
     Assert-True -Condition (-not $releaseWorkflowSource.Contains('artifacts\ci')) -Message 'tag workflow should not lifecycle-test a parallel setup instead of the public artifact'
     $releaseAcceptanceSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
+    Assert-True -Condition ($releaseAcceptanceSource.Contains("'scripts\tts\tts_stream.py'")) -Message 'release payload verification must require the shared speech streaming helper'
     Assert-True -Condition ($releaseAcceptanceSource.Contains("`$allowedDisplayNames += 'MagicHandy (Current user)'")) -Message 'current-user lifecycle smoke should accept Inno Setup collision labeling when a machine install exists'
     Assert-True -Condition ($releaseAcceptanceSource.Contains("Test-Path -LiteralPath `$machineEntry")) -Message 'current-user collision labeling should be allowed only when the machine-wide uninstall entry exists'
     Assert-True -Condition (-not $releaseWorkflowSource.Contains('-SkipInstaller')) -Message 'public release build should include the reviewed setup executable'
@@ -759,7 +768,7 @@ func main() {
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseVerifierSource.Contains("'ReviewedUnsignedPublic'")) -Message 'release verifier should expose the reviewed unsigned public policy'
     Assert-True -Condition ($releaseVerifierSource.Contains('ReviewedUnsignedPublic requires Microsoft false-positive case')) -Message 'reviewed unsigned publication should fail closed without the recorded Microsoft case'
-    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39', '0.1.0-alpha.40', '0.1.0-alpha.41', '0.1.0-alpha.42', '0.1.0-alpha.43')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
+    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39', '0.1.0-alpha.40', '0.1.0-alpha.41', '0.1.0-alpha.42', '0.1.0-alpha.43', '0.1.0-alpha.44')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
             -Version '0.0.0-local' `
@@ -775,6 +784,14 @@ func main() {
             -ArtifactPolicy ReviewedUnsignedPublic `
             -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
     } -Pattern 'approved only for versions 0.1.0-alpha.8, 0.1.0-alpha.9, 0.1.0-alpha.10, 0.1.0-alpha.11, 0.1.0-alpha.13' -Message 'non-allowlisted version rejected by ReviewedUnsignedPublic'
+    Assert-Throws -Action {
+        & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
+            -Version '0.1.0-alpha.45' `
+            -Commit ('0' * 40) `
+            -ArtifactsRoot $tempRoot `
+            -ArtifactPolicy ReviewedUnsignedPublic `
+            -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
+    } -Pattern 'approved only for versions' -Message 'alpha.44 review grants no permission to later versions'
     $portablePolicyFixture = Join-Path $tempRoot 'portable-policy-fixture'
     New-Item -ItemType Directory -Force -Path $portablePolicyFixture | Out-Null
     $portableFixtureName = 'MagicHandy-0.1.0-alpha.12-windows-amd64-portable.zip'

@@ -112,6 +112,15 @@ enter chat history, TTS playback, or motion (ADR 0003).
 ## HTTP Surface
 
 - `GET /api/voice/status` — both workers with a live health probe.
+- Both voice status and `/api/state` include `voice.modules.tts.update` for
+  managed providers: `available`, `supported`, opaque `id`, `module`, `busy`, and
+  an optional `job` containing the current TTS update's status/progress. Raw
+  installer output is omitted from this frequently polled snapshot.
+- `POST /api/voice/module/update` — `{"update_id":"<displayed id>"}` starts a
+  staged update after rechecking the local payload. Returns HTTP 202 with
+  `installation`; a stale/unavailable update returns 409. Controller required.
+- `DELETE /api/voice/module/update` — `{"job_id":"<displayed job id>"}` cancels
+  that specific active job. A changed job returns 409. Controller required.
 - `POST /api/voice/workers/{role}/start|stop|restart` — lifecycle (controller
   lease required). Start includes model load; on load failure the just-started
   adapter is stopped and the request fails, so success means ready to serve.

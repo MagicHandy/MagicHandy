@@ -889,6 +889,16 @@ export interface VoiceModuleStatus {
   partial_bytes?: number;
   runtime_backend?: "cpu" | "cuda" | "custom" | string;
   message: string;
+  update?: VoiceModuleUpdate;
+}
+
+export interface VoiceModuleUpdate {
+  available: boolean;
+  supported: boolean;
+  id?: string;
+  module?: string;
+  busy?: boolean;
+  job?: SetupJob;
 }
 
 export interface VoiceRequestSnapshot {

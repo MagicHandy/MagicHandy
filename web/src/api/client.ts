@@ -626,6 +626,10 @@ export const api = {
     request<{ installation: SetupJob }>("POST", "/api/setup/parakeet/install", {}),
   installSetupVoice: (module: string, device: "cpu" | "cuda", auto_launch: boolean) =>
     request<{ installation: SetupJob }>("POST", "/api/setup/voice/install", { module, device, auto_launch }),
+  updateTTSModule: (update_id: string) =>
+    request<{ installation: SetupJob }>("POST", "/api/voice/module/update", { update_id }),
+  cancelTTSModuleUpdate: (job_id: string) =>
+    request<{ installation: SetupJob }>("DELETE", "/api/voice/module/update", { job_id }),
   installSetupPlan: (plan: SetupInstallPlan) =>
     request<{ installation: SetupJob }>("POST", "/api/setup/install", plan),
   cancelSetupInstall: () => request<{ installation: SetupJob }>("DELETE", "/api/setup/install"),

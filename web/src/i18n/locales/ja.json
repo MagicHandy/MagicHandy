@@ -1967,5 +1967,12 @@
   "Prompt processing": "プロンプトの処理",
   "Input bytes / budget": "入力バイト数 / 上限",
   "History messages omitted": "省略した履歴メッセージ",
-  "Tokens (input / output)": "トークン（入力 / 出力）"
+  "Tokens (input / output)": "トークン（入力 / 出力）",
+  "TTS module update available": "TTSモジュールの更新があります",
+  "Update the managed speech module to use the improvements included with this MagicHandy version.": "管理対象の音声合成モジュールを更新すると、このバージョンのMagicHandyに含まれる改善を利用できます。",
+  "The update may download several GiB and needs space for a separate runtime. Your model, voice and reference settings are preserved. Speech may reload when the update is applied.": "更新では数GiBをダウンロードする場合があり、別の実行環境用の空き容量が必要です。モデル、音声、参照音声の設定は保持されます。更新の適用時に音声モジュールが再読み込みされる場合があります。",
+  "Update TTS module": "TTSモジュールを更新",
+  "TTS module update completed.": "TTSモジュールの更新が完了しました。",
+  "TTS module updates are supported on Windows x64.": "TTSモジュールの更新はWindows x64に対応しています。",
+  "Open Voice settings to update your managed speech module.": "音声設定を開いて、管理対象の音声合成モジュールを更新してください。"
 }

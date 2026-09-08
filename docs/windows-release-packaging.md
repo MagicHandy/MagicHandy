@@ -10,8 +10,8 @@ The setup EXE is a thin Inno Setup shell with a native x64 loader and non-solid
 ultra-LZMA stream used by the withdrawn alpha.6 package. Microsoft completed its
 review of that exact alpha.6 file as `Not malware` and removed the detection.
 ADR 0014 therefore permits alpha.8 through alpha.11 and alpha.13 through
-alpha.43 setup publication through a dedicated policy bound to those versions
-and case. Alpha.9 through alpha.11 and alpha.13 through alpha.43 also add a
+alpha.44 setup publication through a dedicated policy bound to those versions
+and case. Alpha.9 through alpha.11 and alpha.13 through alpha.44 also add a
 Defender scan of the exact public artifact directory. Alpha.12's portable-only
 GitHub Release was withdrawn; its source tag remains immutable. A later unsigned
 setup fails closed until another explicit review decision. The exception does
@@ -145,7 +145,7 @@ $commit = (git rev-parse HEAD).Trim()
 ```
 
 `ReviewedUnsignedPublic` accepts only alpha.8 through alpha.11 and alpha.13
-through alpha.43 with the recorded Microsoft case ID and checks the x64 unsigned
+through alpha.44 with the recorded Microsoft case ID and checks the x64 unsigned
 setup, four x64 payload executables, manifests, and both outer hashes.
 `SignedPublic` is the fail-closed long-term policy. It requires valid,
 timestamped Authenticode on the setup executable and all four payload
@@ -188,7 +188,7 @@ retention is seven days.
 `.github/workflows/release-windows.yml` runs only for a supported SemVer tag.
 It requires that the exact tagged commit matches the current `origin/main` tip,
 that the checkout is clean, and that matching release notes exist. It reruns
-Go, race, lint, pure-Go, frontend, installer, package, and full Windows
+Go, race, lint, pure-Go, frontend, Python voice adapters, installer, package, and full Windows
 lifecycle gates. It builds setup, portable ZIP, and checksum in the dedicated
 public directory, scans the exact directory with Microsoft Defender, verifies
 that setup with `ReviewedUnsignedPublic`, and creates the GitHub Release from

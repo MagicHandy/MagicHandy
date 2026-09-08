@@ -1,5 +1,27 @@
 # Goal Scorecard
 
+## 2026-09-08 — alpha.44 release preparation
+
+The user requested an update after the AI implementation review. PR #261 is
+merged with all thirteen checks green. The alpha.44 release preparation records
+the single-version reviewed-unsigned amendment, current download references and
+concise changelog. It requires the new shared speech helper in the payload and
+adds the Python 3.10/3.11 adapter suites to the tag's publication dependencies.
+The x64 packaging format, Defender, manifest/checksum, exact-main provenance and
+installer lifecycle gates remain in place. The release also adds a bounded local
+managed-TTS update check, deduplicated notification, and explicit update/cancel
+actions in Voice settings. Updates retain voice choices and use the staged
+installer. Actual speech listening, GPU coexistence and full optional-module
+download acceptance remain alpha limitations; fixture activation is tested.
+
+Compared with the merged AI implementation, the stripped CGO-free app grows
+35,328 bytes (19,183,104 → 19,218,432; 0.18%). Main JS gzip grows 762 bytes
+(211,013 → 211,775); all raw embedded assets grow 7,749 bytes. No dependency is
+added. An isolated cold-start observation is 583.4 ms, with three idle working
+set samples at 34,283,520 bytes and private memory 57,245,696 bytes. This remains
+within the prior host variation and does not close the existing cold-start/RSS
+waivers. See [release review](tts-module-update-review-2026-09-08.md).
+
 ## 2026-09-08 — AI runtime correctness and streaming
 
 The [AI runtime implementation](ai-runtime-improvements-2026-09-08.md) addresses

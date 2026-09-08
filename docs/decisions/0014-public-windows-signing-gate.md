@@ -2,15 +2,39 @@
 
 ## Status
 
-Accepted; amended 2026-09-06 after Microsoft completed the false-positive
+Accepted; amended 2026-09-08 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.43 package-preserving releases.
+reviewed alpha.14 through alpha.44 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.44 amendment
+
+On 2026-09-08 the user requested an update release after reviewing PR #261's
+AI runtime improvements and its explicit acceptance limits. This release
+amendment adds only `0.1.0-alpha.44` to the existing reviewed-unsigned Windows
+alpha policy. It grants no standing permission to later versions.
+
+PR #261 passed all thirteen checks before merging. Alpha.44 ships bounded LLM
+prompts, coordinated model replacement, progressive speech and cancellation,
+Parakeet/ElevenLabs corrections, and staged optional-TTS updates. Actual speech
+model listening, shared-GPU tuning and full multi-GiB module-update acceptance
+remain open as recorded in the [AI implementation review](../ai-runtime-improvements-2026-09-08.md).
+The release notes make these alpha limitations and the separate managed-module
+update requirement visible to users.
+
+The native x64 setup loader, non-solid ZIP compression, three public assets,
+four pure-Go payload executables and data-preserving over-install contract
+remain. The shared Python streaming helper is now a required payload file.
+The tag workflow adds both Python 3.10 and 3.11 adapter tests as publication
+dependencies. Main-tip provenance, full quality gates, Defender scanning of
+the exact artifacts, manifests, outer checksums and exact installer lifecycle
+verification remain mandatory. The Microsoft case does not pre-clear new
+hashes, and trusted Authenticode remains the long-term policy.
 
 ### Alpha.43 amendment
 
@@ -128,7 +152,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.43 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.44 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -242,11 +266,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.43 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.44 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.43 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.44 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,

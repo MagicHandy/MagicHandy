@@ -542,6 +542,18 @@ function Invoke-Checked {
     }
 }
 
+function Test-TTSLocalModel {
+    param([Parameter(Mandatory = $true)][string]$ModelPath)
+    if (Test-Path -LiteralPath $ModelPath -PathType Container) { return $true }
+    if (-not [System.IO.Path]::IsPathRooted($ModelPath) -and -not $ModelPath.Contains('\')) {
+        return $false
+    }
+    if (-not (Test-Path -LiteralPath $ModelPath -PathType Container)) {
+        throw 'The selected local TTS model directory is unavailable. Restore it before updating.'
+    }
+    return $true
+}
+
 function Invoke-HuggingFaceModelDownload {
     param(
         [Parameter(Mandatory = $true)][string]$Executable,
@@ -1053,6 +1065,7 @@ if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
 }
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
 
+$localModel = $false
 if ($Module -eq 'faster-qwen3-tts') {
     if (-not [string]::IsNullOrWhiteSpace($ReferenceWav)) {
         throw 'Configure the Faster Qwen3-TTS reference WAV and transcript in Settings > Voice after installation.'
@@ -1060,6 +1073,8 @@ if ($Module -eq 'faster-qwen3-tts') {
     if ([string]::IsNullOrWhiteSpace($Model)) {
         $Model = 'Qwen/Qwen3-TTS-12Hz-0.6B-Base'
     }
+    $localModel = Test-TTSLocalModel -ModelPath $Model
+    if ($localModel) { $Model = [System.IO.Path]::GetFullPath($Model) }
     if ([string]::IsNullOrWhiteSpace($Voice)) {
         $Voice = 'default'
     }
@@ -1223,12 +1238,16 @@ Test-TTSPythonRuntime `
 $modelRepo = if ($Module -eq 'faster-qwen3-tts') { $Model } else { 'ResembleAI/chatterbox-turbo' }
 $modelCache = Join-Path $InstallRoot 'model-cache\hub'
 $materializedModel = if ($Module -eq 'faster-qwen3-tts') { Join-Path $InstallRoot 'model' } else { '' }
-if ($Module -eq 'faster-qwen3-tts') {
+if ($Module -eq 'faster-qwen3-tts' -and -not $localModel) {
     Copy-TTSModelSeed -ModuleHome $moduleHome -Candidate $InstallRoot -Repository $modelRepo
     Initialize-FasterQwenMaterializedModel -Root $InstallRoot -Directory $materializedModel -Repository $modelRepo
 }
-Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache -LocalDirectory $materializedModel
-if ($Module -eq 'faster-qwen3-tts') {
+if (-not $localModel) {
+    Invoke-HuggingFaceModelDownload -Executable $hf -Repository $modelRepo -CacheDirectory $modelCache -LocalDirectory $materializedModel
+} else {
+    Write-Host 'Keeping the selected local model directory; no model download is needed.'
+}
+if ($Module -eq 'faster-qwen3-tts' -and -not $localModel) {
     Complete-FasterQwenMaterializedModel -Directory $materializedModel -Repository $modelRepo
 }
 

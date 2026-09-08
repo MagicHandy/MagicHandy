@@ -1967,5 +1967,12 @@
   "Prompt processing": "Prompt processing",
   "Input bytes / budget": "Input bytes / budget",
   "History messages omitted": "History messages omitted",
-  "Tokens (input / output)": "Tokens (input / output)"
+  "Tokens (input / output)": "Tokens (input / output)",
+  "TTS module update available": "TTS module update available",
+  "Update the managed speech module to use the improvements included with this MagicHandy version.": "Update the managed speech module to use the improvements included with this MagicHandy version.",
+  "The update may download several GiB and needs space for a separate runtime. Your model, voice and reference settings are preserved. Speech may reload when the update is applied.": "The update may download several GiB and needs space for a separate runtime. Your model, voice and reference settings are preserved. Speech may reload when the update is applied.",
+  "Update TTS module": "Update TTS module",
+  "TTS module update completed.": "TTS module update completed.",
+  "TTS module updates are supported on Windows x64.": "TTS module updates are supported on Windows x64.",
+  "Open Voice settings to update your managed speech module.": "Open Voice settings to update your managed speech module."
 }
