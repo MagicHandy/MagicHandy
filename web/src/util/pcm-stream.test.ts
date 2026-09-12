@@ -40,4 +40,22 @@ describe("PCM streaming decoder", () => {
     new DataView(floating.buffer).setUint16(20, 3, true);
     expect(() => new PCMStreamDecoder("wav").push(floating)).toThrow(UnsupportedPCMStream);
   });
+
+  it("owns incomplete header and sample bytes when callers reuse an input buffer", () => {
+    for (const split of [8, 44, 45, 49]) {
+      const bytes = wav();
+      const decoder = new PCMStreamDecoder("wav");
+      const first = decoder.push(bytes.subarray(0, split));
+      bytes.fill(255, 0, split);
+      const last = decoder.push(bytes.subarray(split));
+      decoder.finish();
+      expect([...(first?.samples ?? []), ...(last?.samples ?? [])]).toEqual([-1, 0, 0.5, 32767 / 32768]);
+    }
+    const raw = new PCMStreamDecoder("pcm_s16le_24000");
+    const bytes = new Uint8Array([0]);
+    raw.push(bytes);
+    bytes[0] = 255;
+    expect(raw.push(new Uint8Array([64]))?.samples[0]).toBe(0.5);
+    raw.finish();
+  });
 });

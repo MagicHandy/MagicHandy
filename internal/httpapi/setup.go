@@ -374,6 +374,7 @@ func (m *setupManager) installVoice(
 
 	err = command.Run()
 	m.detachCommand(id, command)
+	err = m.voiceInstallFailure(id, err)
 	moduleHome := root
 	if err == nil {
 		root, err = voiceRuntimeFromIndex(moduleHome, "candidate-state.json")

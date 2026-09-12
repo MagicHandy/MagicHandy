@@ -181,7 +181,8 @@ function Initialize-TTSGit {
 function Get-TTSNvidiaGPUName {
     $nvidia = Get-Command 'nvidia-smi.exe' -ErrorAction SilentlyContinue
     if (-not $nvidia -or [string]::IsNullOrWhiteSpace([string]$nvidia.Source)) {
-        throw 'Faster Qwen3-TTS requires a working NVIDIA driver, but nvidia-smi.exe was not found.'
+        Write-TTSInstallFailure -Stage 'NVIDIA driver verification' -ExitCode -1
+        throw 'CUDA TTS installation requires a working NVIDIA driver, but nvidia-smi.exe was not found.'
     }
 
     $previousErrorAction = $ErrorActionPreference
@@ -190,7 +191,8 @@ function Get-TTSNvidiaGPUName {
         $gpuNames = @(& $nvidia.Source --query-gpu=name --format=csv,noheader 2>&1)
         $exitCode = $LASTEXITCODE
     } catch {
-        throw "The NVIDIA driver probe could not start. Repair the NVIDIA driver before installing Faster Qwen3-TTS: $($_.Exception.Message)"
+        Write-TTSInstallFailure -Stage 'NVIDIA driver verification' -ExitCode -1
+        throw "The NVIDIA driver probe could not start. Repair the NVIDIA driver before installing CUDA TTS: $($_.Exception.Message)"
     } finally {
         $ErrorActionPreference = $previousErrorAction
     }
@@ -199,7 +201,8 @@ function Get-TTSNvidiaGPUName {
         -not [string]::IsNullOrWhiteSpace($_) -and $_ -notmatch '(?i)no devices were found'
     })
     if ($exitCode -ne 0 -or $usableNames.Count -eq 0) {
-        throw "The NVIDIA driver probe failed (exit $exitCode; reported '$reported'). Repair the driver before installing Faster Qwen3-TTS."
+        Write-TTSInstallFailure -Stage 'NVIDIA driver verification' -ExitCode $(if ($exitCode -eq 0) { -1 } else { $exitCode })
+        throw "The NVIDIA driver probe failed (exit $exitCode; reported '$reported'). Repair the driver before installing CUDA TTS."
     }
     return $usableNames -join ', '
 }
@@ -503,6 +506,15 @@ function Get-ChatterboxRequirements {
     return 'requirements-nvidia.txt'
 }
 
+function Write-TTSInstallFailure {
+    param([string]$Stage, [int]$ExitCode)
+
+    # Only fixed operation labels and exit codes cross into the app's persisted
+    # failure message. Command arguments and raw diagnostics stay in live output.
+    $failure = @{ stage = $Stage; exit_code = $ExitCode } | ConvertTo-Json -Compress
+    Write-Host "MAGICHANDY_SETUP_FAILURE:$failure"
+}
+
 function Invoke-Checked {
     param(
         [Parameter(Mandatory = $true)][string]$Executable,
@@ -515,6 +527,7 @@ function Invoke-Checked {
     if (-not [string]::IsNullOrWhiteSpace($WorkingDirectory)) {
         $WorkingDirectory = [System.IO.Path]::GetFullPath($WorkingDirectory)
         if (-not (Test-Path -LiteralPath $WorkingDirectory -PathType Container)) {
+            Write-TTSInstallFailure -Stage $Description -ExitCode -1
             throw "$Description working directory is unavailable: '$WorkingDirectory'."
         }
         Push-Location -LiteralPath $WorkingDirectory
@@ -529,6 +542,7 @@ function Invoke-Checked {
             & $Executable @Arguments
             $exitCode = $LASTEXITCODE
         } catch {
+            Write-TTSInstallFailure -Stage $Description -ExitCode -1
             throw "$Description could not start '$Executable': $($_.Exception.Message)"
         }
     } finally {
@@ -538,6 +552,7 @@ function Invoke-Checked {
         }
     }
     if ($exitCode -ne 0) {
+        Write-TTSInstallFailure -Stage $Description -ExitCode $exitCode
         throw "$Description failed (exit $exitCode)."
     }
 }
@@ -625,6 +640,7 @@ function Invoke-HuggingFaceModelDownload {
         }
     }
 
+    Write-TTSInstallFailure -Stage 'Hugging Face model download' -ExitCode $exitCode
     throw "Model download failed after 3 attempts (last exit $exitCode). Downloaded files were kept; rerun the installer to resume."
 }
 
@@ -1135,7 +1151,7 @@ if (-not [string]::IsNullOrWhiteSpace($ReferenceWav)) {
     }
 }
 
-if ($Module -eq 'faster-qwen3-tts') {
+if ($Module -eq 'faster-qwen3-tts' -or $Device -eq 'cuda') {
     $gpuName = Get-TTSNvidiaGPUName
     Write-Host "NVIDIA runtime: $gpuName" -ForegroundColor Green
 }

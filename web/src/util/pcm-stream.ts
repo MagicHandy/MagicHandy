@@ -9,7 +9,7 @@ export class UnsupportedPCMStream extends Error {}
 // Decode only ordinary 16-bit PCM WAV (or the explicit raw PCM wire format).
 // Other WAV encodings retain the browser's complete-clip decoder as a fallback.
 export class PCMStreamDecoder {
-  private pending = new Uint8Array(0);
+  private pending: Uint8Array = new Uint8Array(0);
   private headerDone = false;
   private sampleRate = 24000;
   private channels = 1;
@@ -23,14 +23,23 @@ export class PCMStreamDecoder {
 
   push(bytes: Uint8Array): PCMChunk | undefined {
     if (this.headerDone && this.remaining === 0) return undefined;
-    const joined = new Uint8Array(this.pending.length + bytes.length);
-    joined.set(this.pending);
-    joined.set(bytes, this.pending.length);
-    this.pending = joined;
-    if (!this.headerDone && !this.readHeader()) return undefined;
+    if (!this.pending.length) this.pending = bytes;
+    else {
+      const joined = new Uint8Array(this.pending.length + bytes.length);
+      joined.set(this.pending);
+      joined.set(bytes, this.pending.length);
+      this.pending = joined;
+    }
+    if (!this.headerDone && !this.readHeader()) {
+      this.pending = this.pending.slice();
+      return undefined;
+    }
     const available = this.remaining === null ? this.pending.length : Math.min(this.pending.length, this.remaining);
     const length = available - available % (this.channels * 2);
-    if (!length) return undefined;
+    if (!length) {
+      this.pending = this.pending.slice();
+      return undefined;
+    }
     const view = new DataView(this.pending.buffer, this.pending.byteOffset, length);
     const samples = new Float32Array(length / 2);
     this.samplesDecoded += samples.length;
@@ -59,7 +68,7 @@ export class PCMStreamDecoder {
       if (tag(offset) === "data") {
         if (!formatFound) throw new UnsupportedPCMStream("WAV format header is missing");
         this.remaining = size === 0xffffffff ? null : size;
-        this.pending = this.pending.slice(offset + 8);
+        this.pending = this.pending.subarray(offset + 8);
         this.headerDone = true;
         return true;
       }

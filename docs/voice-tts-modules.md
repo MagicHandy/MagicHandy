@@ -178,6 +178,20 @@ PowerShell process. This keeps the module script's support-module reload and
 private schema state separate from the parent provisioner, while preserving
 interactive prompts, output, and exit failures.
 
+Failed native installer steps emit a fixed operation label and exit code for
+the app's status message. For example, a dependency failure identifies
+`Chatterbox dependency installation` instead of showing only `exit status 1`.
+Only known operation labels are retained across app restarts; raw output remains
+in the current setup session. Keep the preceding installer output when reporting
+a failure, since the step and exit code do not identify the underlying cause.
+Both Faster Qwen and an explicitly selected Chatterbox CUDA install verify that
+the NVIDIA driver can enumerate a GPU before creating an environment or downloading
+dependencies. Chatterbox CPU installation does not require this probe.
+
+The [September 12 reliability review](tts-reliability-review-2026-09-12.md)
+records successful fresh Chatterbox CPU dependency/native-import checks and
+browser buffering fixes. It does not establish real-time inference on an RTX 3070.
+
 `scripts/update-tts-module.ps1` reads the existing module choice, preserves it
 by default, and asks before changing provider, model, port, or auto-launch. The
 main app updater validates and reuses a selected installed module rather than

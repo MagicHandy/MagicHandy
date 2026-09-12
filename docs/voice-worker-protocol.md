@@ -150,7 +150,14 @@ the final serving boundary.
 
 The browser incrementally decodes 16-bit PCM WAV (mono/stereo) or
 `pcm_s16le_24000`, schedules bounded buffers through the existing shared audio
-context, and acknowledges only after playback. MP3/Opus and unsupported WAV
+context, and acknowledges only after playback. Progressive playback collects
+0.75 seconds of audio before starting. An underrun doubles the refill reserve
+to 1.5 seconds, then caps it at 3 seconds; completed short clips flush immediately.
+These are audio-duration reserves, not fixed wall-clock delays. On-time chunks
+remain contiguous without adding startup padding at each boundary. Cancellation
+also interrupts pending producer reads and a suspended browser audio context.
+Buffering absorbs uneven delivery but cannot make slower-than-real-time inference
+sustain continuous playback. MP3/Opus and unsupported WAV
 encodings use the complete-clip decoder. Stop, controller loss, backend loss,
 request cancellation and stale playback tokens stop presentation and reject
 late fetch results. The core's request log and delivery order stay authoritative.
