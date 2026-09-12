@@ -69,6 +69,16 @@ function freshSettings(): PublicSettings {
 describe("SetupRoute", () => {
   let settings: PublicSettings;
 
+  it("offers the last failure report when returning to setup after onboarding", async () => {
+    vi.mocked(api.setupStatus).mockResolvedValue({ ...setupFixture, required: false, installation: {
+      id: "last-failure", kind: "voice_module", module: "chatterbox", device: "cpu", status: "failed",
+      message: "Chatterbox dependency installation failed.", started_at: "", updated_at: "",
+    } });
+    render(<SetupRoute />);
+    expect(await screen.findByRole("button", { name: "Download failure report" })).toBeVisible();
+    expect(screen.getByText("Chatterbox dependency installation failed.")).toBeVisible();
+  });
+
   beforeEach(() => {
     bootstrapAccount.mockClear();
     refreshAuthentication.mockClear();

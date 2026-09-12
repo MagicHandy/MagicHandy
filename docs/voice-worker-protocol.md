@@ -141,6 +141,18 @@ enter chat history, TTS playback, or motion (ADR 0003).
 
 ## Progressive speech and resource bounds
 
+Failed setup jobs expose a one-click report download through
+`GET /api/setup/install/{id}/report`. The normal API authentication boundary
+applies; downloading does not acquire controller ownership or modify settings.
+The response is an `application/json` attachment named
+`magichandy-install-failure.json`, with `Cache-Control: no-store` and `nosniff`.
+Only the current failed job or latest retained failure with the requested ID is
+returned; unavailable, replaced, running, successful and canceled jobs return
+404. Reports include selected installation metadata and a redacted output tail,
+not a private-settings export. The private setup-result file remains capped at
+64 KiB; encoded output is shortened by complete lines if necessary to fit.
+Detailed output remains outside routine state/update snapshots.
+
 OpenAI-compatible workers forward HTTP audio as it arrives rather than building
 a second complete clip. All real TTS workers and the core agree on the 8 MiB
 utterance limit. Request snapshots expose `audio_format`, `first_audio_ms` and

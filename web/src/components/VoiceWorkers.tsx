@@ -7,6 +7,7 @@ import { api } from "../api/client";
 import type { SetupJob, VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
 import { useToast } from "../state/app-state";
 import { useVoicePlayback } from "../state/voice-playback";
+import { SetupFailureReport } from "./SetupFailureReport";
 
 const message = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Request failed");
 
@@ -130,6 +131,7 @@ export function VoiceWorkers({
   return (
     <div className="voice-workers">
       {showParakeetModule && (
+        <>
         <div className="voice-module-readout" role="status" aria-live="polite" aria-busy={parakeetRepairActive || undefined} aria-label={t("MagicHandy Parakeet module")}>
           <span className="status-dot" data-state={parakeetRepair?.error ? "error" : parakeetRepairActive ? "pending" : parakeetModule?.installed ? "ok" : parakeetModule?.state === "incomplete" ? "warn" : "idle"} />
           <span className="voice-module-message">
@@ -141,6 +143,8 @@ export function VoiceWorkers({
             <button type="button" className="btn btn-secondary" disabled={locked || parakeetRepair.setupBusy} onClick={() => void parakeetRepair.repair()}>{t("Repair")} {t("Parakeet")}</button>
           </span>}
         </div>
+        <SetupFailureReport job={parakeetRepair?.job} />
+        </>
       )}
       {showTTSModule && (
         <div className="voice-module-readout" role="status" aria-label={t("Checking the {module} module.", { module: ttsModuleName ?? "TTS" })}>

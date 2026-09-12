@@ -705,3 +705,8 @@
   gap: 8px;
   border-top: 1px solid var(--line);
 }
+.setup-failure-report {
+  display: grid;
+  gap: 0.5rem;
+  margin-block: 0.5rem;
+}

@@ -82,6 +82,14 @@ describe("VoiceWorkers", () => {
     expect(cancel).toHaveBeenCalledOnce();
   });
 
+  it("offers a report for a failed Parakeet repair even when runtime actions are locked", () => {
+    render(<VoiceWorkers locked role="asr" providerSelected showParakeetModule workers={{}} requests={[]}
+      modules={{ parakeet: { state: "incomplete", installed: false, worker_installed: true, runtime_installed: false, message: "Repair failed." } }}
+      parakeetRepair={{ setupBusy: false, error: "", job: { id: "repair-failed", kind: "parakeet", module: "parakeet", device: "cpu", status: "failed", message: "Download failed.", started_at: "", updated_at: "" }, repair: vi.fn(), cancel: vi.fn() }}
+      refresh={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Download failure report" })).toBeEnabled();
+  });
+
   it("keeps managed TTS recovery inside the app", () => {
     render(
       <VoiceWorkers

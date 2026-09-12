@@ -1,5 +1,23 @@
 # Goal Scorecard
 
+## 2026-09-12 — Downloadable installer failure reports
+
+Guided setup, TTS updates and Parakeet repair now offer a one-click JSON failure
+report and encourage sharing it with the developer. The latest failure's
+redacted diagnostics survive retries/restarts within the existing 64 KiB private
+setup-result limit. No settings/chat/audio/environment dump is included, and
+the report is fetched only on demand. See the
+[report review](installer-failure-report-review-2026-09-12.md).
+
+Against the preceding TTS reliability changes, the same-toolchain stripped
+CGO-free binary grows **83,968 B** (19,224,576 → 19,308,544), main JS gzip-9
+grows **683 B** (212,097 → 212,780), and total raw embedded assets grow
+**3,556 B** (2,030,099 → 2,033,655). No dependencies are added. An isolated
+final-build simulator observation measured 597.9 ms startup, 25,366,528 B idle
+working set (three samples) and 56,983,552 B private memory. Working-set variation
+is substantial on this host; existing startup/RSS waivers remain and no memory
+or startup improvement is claimed.
+
 ## 2026-09-12 — TTS installation and playback reliability
 
 The [TTS reliability pass](tts-reliability-review-2026-09-12.md) preserves the

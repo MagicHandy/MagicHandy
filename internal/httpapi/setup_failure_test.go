@@ -63,7 +63,7 @@ func TestVoiceInstallFailureAcceptsOnlyKnownStagesForTheCurrentFailedJob(t *test
 	}
 }
 
-func TestVoiceInstallFailureSurvivesRestartWithoutPersistingRawOutput(t *testing.T) {
+func TestVoiceInstallFailureSurvivesRestartWithoutPersistingCredentials(t *testing.T) {
 	server := newTestServer(t)
 	ctx, job, err := server.setup.reserveJob("voice", "chatterbox", "cpu", "queued")
 	if err != nil {
@@ -71,7 +71,7 @@ func TestVoiceInstallFailureSurvivesRestartWithoutPersistingRawOutput(t *testing
 	}
 	writer := &setupOutputWriter{manager: server.setup, id: job.ID}
 	for _, piece := range []string{
-		"private-installer-output\nMAGICHANDY_SETUP_FAIL",
+		"Authorization: Bearer private-installer-output\nMAGICHANDY_SETUP_FAIL",
 		"URE:{\"stage\":\"Pinned Chatterbox engine installation\",\"exit_code\":73}\r\n",
 		"unrelated PowerShell footer\n",
 	} {
@@ -83,8 +83,8 @@ func TestVoiceInstallFailureSurvivesRestartWithoutPersistingRawOutput(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(data), "private-installer-output") || strings.Contains(string(data), "PowerShell footer") {
-		t.Fatal("raw installer output was persisted")
+	if strings.Contains(string(data), "private-installer-output") {
+		t.Fatal("installer credentials were persisted")
 	}
 	reloaded := &setupManager{dataDir: server.setup.dataDir}
 	reloaded.loadPersistedSetupJob()

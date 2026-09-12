@@ -1974,5 +1974,9 @@
   "Update TTS module": "更新 TTS 模块",
   "TTS module update completed.": "TTS 模块更新完成。",
   "TTS module updates are supported on Windows x64.": "TTS 模块更新支持 Windows x64。",
-  "Open Voice settings to update your managed speech module.": "打开语音设置以更新托管语音合成模块。"
+  "Open Voice settings to update your managed speech module.": "打开语音设置以更新托管语音合成模块。",
+  "Download failure report": "下载故障报告",
+  "Please share this report with the developer to help fix the installation failure.": "请将此报告分享给开发者，帮助解决安装失败的问题。",
+  "Preparing report...": "正在准备报告...",
+  "Could not download the failure report. Please try again.": "无法下载故障报告。请重试。"
 }

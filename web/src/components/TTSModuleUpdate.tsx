@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { VoiceModuleUpdate } from "../api/types";
 import { t, translateKnown } from "../i18n";
+import { SetupFailureReport } from "./SetupFailureReport";
 
 interface Props {
   update?: VoiceModuleUpdate;
@@ -51,6 +52,7 @@ export function TTSModuleUpdate({ update, locked, dirty = false, refresh, onComp
       <p>{t("The update may download several GiB and needs space for a separate runtime. Your model, voice and reference settings are preserved. Speech may reload when the update is applied.")}</p>
     </>}
     {job && <p className="form-status">{job.status === "complete" ? t("TTS module update completed.") : translateKnown(job.message)}</p>}
+    <SetupFailureReport job={job} />
     {error && <p className="form-status" role="alert">{error}</p>}
     {update?.available && !update.supported && <p>{t("TTS module updates are supported on Windows x64.")}</p>}
     <div className="row-actions">
