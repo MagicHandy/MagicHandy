@@ -11,6 +11,7 @@ import type {
   SetupStatus,
 } from "../api/types";
 import { HostPathField } from "../components/HostPathField";
+import { SetupFailureReport } from "../components/SetupFailureReport";
 import { OllamaLibraryImport } from "../components/OllamaLibraryImport";
 import { PasswordConfirmationField } from "../components/PasswordConfirmationField";
 import { LOCALE_OPTIONS, t, translateKnown } from "../i18n";
@@ -367,6 +368,10 @@ export function SetupRoute() {
         </header>
 
         <div className="setup-body">
+          {setup.installation?.status === "failed" && (currentStep !== "install" || installJob?.id !== setup.installation.id) && <section className="setup-notice">
+            <strong>{translateKnown(setup.installation.message)}</strong>
+            <SetupFailureReport job={setup.installation} />
+          </section>}
           {step === 0 && <WelcomeStep settings={settings} patch={(patch) => setSettings({ ...settings, ...patch })} />}
           {currentStep === "access" && <AccessStep
             choice={accessChoice}
@@ -717,6 +722,7 @@ function SetupJobPanel({ job, cancel }: { job: SetupJob; cancel: () => void }) {
     <progress className="setup-install-progress" max={total} value={Math.min(completed, total)} aria-label={t("Installation progress")} />
     {job.steps && <ol className="setup-install-steps">{job.steps.map((item) => <li key={item.id} data-state={item.status}><span className="status-dot" data-state={item.status === "complete" ? "ok" : item.status === "failed" ? "error" : item.status === "running" ? "working" : "idle"} /><span><strong>{item.label}</strong>{item.message && <small>{translateKnown(item.message)}</small>}</span></li>)}</ol>}
     <div className="setup-terminal" role="log" aria-label={t("Installation terminal output")}><pre>{job.output || t("Waiting for installer output...")}</pre></div>
+    <SetupFailureReport job={job} />
     {active && <button type="button" className="btn btn-secondary" onClick={cancel}>{t("Cancel installation")}</button>}
   </section>;
 }

@@ -141,6 +141,18 @@ enter chat history, TTS playback, or motion (ADR 0003).
 
 ## Progressive speech and resource bounds
 
+Failed setup jobs expose a one-click report download through
+`GET /api/setup/install/{id}/report`. The normal API authentication boundary
+applies; downloading does not acquire controller ownership or modify settings.
+The response is an `application/json` attachment named
+`magichandy-install-failure.json`, with `Cache-Control: no-store` and `nosniff`.
+Only the current failed job or latest retained failure with the requested ID is
+returned; unavailable, replaced, running, successful and canceled jobs return
+404. Reports include selected installation metadata and a redacted output tail,
+not a private-settings export. The private setup-result file remains capped at
+64 KiB; encoded output is shortened by complete lines if necessary to fit.
+Detailed output remains outside routine state/update snapshots.
+
 OpenAI-compatible workers forward HTTP audio as it arrives rather than building
 a second complete clip. All real TTS workers and the core agree on the 8 MiB
 utterance limit. Request snapshots expose `audio_format`, `first_audio_ms` and
@@ -150,7 +162,14 @@ the final serving boundary.
 
 The browser incrementally decodes 16-bit PCM WAV (mono/stereo) or
 `pcm_s16le_24000`, schedules bounded buffers through the existing shared audio
-context, and acknowledges only after playback. MP3/Opus and unsupported WAV
+context, and acknowledges only after playback. Progressive playback collects
+0.75 seconds of audio before starting. An underrun doubles the refill reserve
+to 1.5 seconds, then caps it at 3 seconds; completed short clips flush immediately.
+These are audio-duration reserves, not fixed wall-clock delays. On-time chunks
+remain contiguous without adding startup padding at each boundary. Cancellation
+also interrupts pending producer reads and a suspended browser audio context.
+Buffering absorbs uneven delivery but cannot make slower-than-real-time inference
+sustain continuous playback. MP3/Opus and unsupported WAV
 encodings use the complete-clip decoder. Stop, controller loss, backend loss,
 request cancellation and stale playback tokens stop presentation and reject
 late fetch results. The core's request log and delivery order stay authoritative.

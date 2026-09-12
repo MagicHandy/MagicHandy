@@ -1974,5 +1974,9 @@
   "Update TTS module": "Atualizar módulo TTS",
   "TTS module update completed.": "Atualização do módulo TTS concluída.",
   "TTS module updates are supported on Windows x64.": "As atualizações do módulo TTS são compatíveis com Windows x64.",
-  "Open Voice settings to update your managed speech module.": "Abra as configurações de voz para atualizar o módulo de síntese de voz gerenciado."
+  "Open Voice settings to update your managed speech module.": "Abra as configurações de voz para atualizar o módulo de síntese de voz gerenciado.",
+  "Download failure report": "Baixar relatório da falha",
+  "Please share this report with the developer to help fix the installation failure.": "Compartilhe este relatório com o desenvolvedor para ajudar a corrigir a falha na instalação.",
+  "Preparing report...": "Preparando relatório...",
+  "Could not download the failure report. Please try again.": "Não foi possível baixar o relatório da falha. Tente novamente."
 }

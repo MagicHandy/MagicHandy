@@ -164,7 +164,7 @@ try {
         [ref]$ttsTokens,
         [ref]$ttsErrors
     )
-    foreach ($functionName in @('Invoke-Checked', 'Test-TTSLocalModel', 'Invoke-HuggingFaceModelDownload', 'Test-FasterQwenMaterializedRegularFile', 'Get-FasterQwenMaterializedRepository', 'Assert-FasterQwenMaterializedTreeNoReparsePoints', 'Write-FasterQwenMaterializedManifest', 'Initialize-FasterQwenMaterializedModel', 'Assert-FasterQwenMaterializedModel', 'Complete-FasterQwenMaterializedModel', 'Write-TTSModuleState', 'New-TTSInstallSession', 'Copy-TTSModelSeed', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Get-TTSPythonVersion', 'Get-TTSVirtualEnvironmentVersion', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
+    foreach ($functionName in @('Write-TTSInstallFailure', 'Invoke-Checked', 'Test-TTSLocalModel', 'Invoke-HuggingFaceModelDownload', 'Test-FasterQwenMaterializedRegularFile', 'Get-FasterQwenMaterializedRepository', 'Assert-FasterQwenMaterializedTreeNoReparsePoints', 'Write-FasterQwenMaterializedManifest', 'Initialize-FasterQwenMaterializedModel', 'Assert-FasterQwenMaterializedModel', 'Complete-FasterQwenMaterializedModel', 'Write-TTSModuleState', 'New-TTSInstallSession', 'Copy-TTSModelSeed', 'Test-UvExecutable', 'Resolve-Uv', 'Initialize-TTSGit', 'Get-TTSNvidiaGPUName', 'Get-TTSPythonVersion', 'Get-TTSVirtualEnvironmentVersion', 'Find-TTSManagedPython', 'Initialize-TTSPythonEnvironment', 'Test-TTSPythonRuntime', 'Sync-PinnedSource')) {
         $functionAst = $ttsAst.Find({
             $args[0] -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
                 $args[0].Name -eq $functionName
@@ -375,12 +375,18 @@ func main() {
     Write-Host 'Checking native command stderr and exit handling...'
     Invoke-Checked -Executable $fakeRuntimeBuild -Arguments @('--stderr-success') -Description 'Successful native diagnostic fixture'
     $nativeFailureRejected = $false
+    $failureOutput = Join-Path $tempRoot 'native-failure-output.txt'
     try {
-        Invoke-Checked -Executable $fakeRuntimeBuild -Arguments @('--stderr-failure') -Description 'Failed native diagnostic fixture'
+        Invoke-Checked -Executable $fakeRuntimeBuild -Arguments @('--stderr-failure') -Description 'Chatterbox dependency installation' 6> $failureOutput
     } catch {
-        $nativeFailureRejected = $_.Exception.Message -match 'Failed native diagnostic fixture failed \(exit 73\)'
+        $nativeFailureRejected = $_.Exception.Message -match 'Chatterbox dependency installation failed \(exit 73\)'
     }
     Assert-True -Condition $nativeFailureRejected -Message 'native stderr must not bypass authoritative exit-code handling'
+    $failureLine = Get-Content -LiteralPath $failureOutput | Where-Object { $_ -like 'MAGICHANDY_SETUP_FAILURE:*' } | Select-Object -Last 1
+    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($failureLine)) -Message 'native failure should emit machine-readable stage context'
+    $failureDetails = $failureLine.Substring('MAGICHANDY_SETUP_FAILURE:'.Length) | ConvertFrom-Json
+    Assert-Equal -Expected 'Chatterbox dependency installation' -Actual $failureDetails.stage -Message 'failure context should retain the operation'
+    Assert-Equal -Expected 73 -Actual $failureDetails.exit_code -Message 'failure context should retain the native exit code'
 
     Write-Host 'Checking native invocation from a Program Files-style path...'
     $spacedWorkingDirectory = Join-Path $tempRoot 'Program Files\MagicHandy voice module'

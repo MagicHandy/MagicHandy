@@ -1,5 +1,46 @@
 # Goal Scorecard
 
+## 2026-09-12 — Downloadable installer failure reports
+
+Guided setup, TTS updates and Parakeet repair now offer a one-click JSON failure
+report and encourage sharing it with the developer. The latest failure's
+redacted diagnostics survive retries/restarts within the existing 64 KiB private
+setup-result limit. No settings/chat/audio/environment dump is included, and
+the report is fetched only on demand. See the
+[report review](installer-failure-report-review-2026-09-12.md).
+
+Against the preceding TTS reliability changes, the same-toolchain stripped
+CGO-free binary grows **83,968 B** (19,224,576 → 19,308,544), main JS gzip-9
+grows **683 B** (212,097 → 212,780), and total raw embedded assets grow
+**3,556 B** (2,030,099 → 2,033,655). No dependencies are added. An isolated
+final-build simulator observation measured 597.9 ms startup, 25,366,528 B idle
+working set (three samples) and 56,983,552 B private memory. Working-set variation
+is substantial on this host; existing startup/RSS waivers remain and no memory
+or startup improvement is claimed.
+
+## 2026-09-12 — TTS installation and playback reliability
+
+The [TTS reliability pass](tts-reliability-review-2026-09-12.md) preserves the
+installer's failing operation, checks explicitly selected CUDA earlier, and
+adds bounded adaptive speech buffering with cancellation during pending reads.
+It also removes redundant PCM packet copies and uses bulk mono-channel writes.
+No dependencies are added. The reported Chatterbox failure remains unconfirmed;
+a fresh CPU environment and the real native import probe pass on the review host.
+
+Against alpha.44, the stripped CGO-free app grows 6,144 bytes
+(19,218,432 → 19,224,576). Main JS grows 1,173 raw bytes and 207 gzip-9 bytes
+(211,890 → 212,097); all embedded assets total 2,030,099 bytes.
+An alternating baseline/candidate Node 24.15.0 decoder microbenchmark over an
+8 MiB PCM payload drops from 7.97 ms to 5.80 ms median, eliminating one redundant
+8 MiB packet-copy allocation over that input. This is not an inference speedup.
+
+An isolated simulator cold-start observation is 599.1 ms; three idle working-set
+samples are 33,918,976 bytes and private memory is 57,327,616 bytes. Existing
+startup/RSS waivers remain; the observations do not establish a whole-app memory
+or startup improvement. The review app completes a real text-only local-model
+chat in 118 ms without repair or fallback. Speech listening and shared-GPU
+throughput on the reporter's hardware remain unmeasured.
+
 ## 2026-09-08 — alpha.44 release preparation
 
 The user requested an update after the AI implementation review. PR #261 is

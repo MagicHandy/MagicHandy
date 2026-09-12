@@ -1974,5 +1974,9 @@
   "Update TTS module": "TTSモジュールを更新",
   "TTS module update completed.": "TTSモジュールの更新が完了しました。",
   "TTS module updates are supported on Windows x64.": "TTSモジュールの更新はWindows x64に対応しています。",
-  "Open Voice settings to update your managed speech module.": "音声設定を開いて、管理対象の音声合成モジュールを更新してください。"
+  "Open Voice settings to update your managed speech module.": "音声設定を開いて、管理対象の音声合成モジュールを更新してください。",
+  "Download failure report": "エラーレポートをダウンロード",
+  "Please share this report with the developer to help fix the installation failure.": "インストールの問題を解決するため、このレポートを開発者と共有してください。",
+  "Preparing report...": "レポートを準備中...",
+  "Could not download the failure report. Please try again.": "エラーレポートをダウンロードできませんでした。もう一度お試しください。"
 }

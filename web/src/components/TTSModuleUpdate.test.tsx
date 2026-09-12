@@ -48,6 +48,7 @@ describe("managed TTS updates", () => {
     await waitFor(() => expect(api.cancelTTSModuleUpdate).toHaveBeenCalledWith(job.id));
     expect(api.cancelTTSModuleUpdate).toHaveBeenCalledOnce();
     view.rerender(<TTSModuleUpdate {...props} update={{ ...available, job: { ...job, status: "failed", message: "Download failed." } }} />);
+    expect(screen.getByRole("button", { name: "Download failure report" })).toBeVisible();
     await waitFor(() => expect(screen.getByRole("button", { name: "Update TTS module" })).toBeEnabled());
     vi.mocked(api.updateTTSModule).mockRejectedValue(new Error("Request failed"));
     fireEvent.click(screen.getByRole("button", { name: "Update TTS module" }));

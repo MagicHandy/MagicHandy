@@ -1974,5 +1974,9 @@
   "Update TTS module": "Update TTS module",
   "TTS module update completed.": "TTS module update completed.",
   "TTS module updates are supported on Windows x64.": "TTS module updates are supported on Windows x64.",
-  "Open Voice settings to update your managed speech module.": "Open Voice settings to update your managed speech module."
+  "Open Voice settings to update your managed speech module.": "Open Voice settings to update your managed speech module.",
+  "Download failure report": "Download failure report",
+  "Please share this report with the developer to help fix the installation failure.": "Please share this report with the developer to help fix the installation failure.",
+  "Preparing report...": "Preparing report...",
+  "Could not download the failure report. Please try again.": "Could not download the failure report. Please try again."
 }

@@ -106,20 +106,21 @@ type setupParakeetInstallResult struct {
 }
 
 type setupJob struct {
-	ID             string         `json:"id"`
-	Kind           string         `json:"kind"`
-	Module         string         `json:"module"`
-	Device         string         `json:"device"`
-	Status         string         `json:"status"`
-	Message        string         `json:"message"`
-	Output         string         `json:"output,omitempty"`
-	Steps          []setupJobStep `json:"steps,omitempty"`
-	CompletedSteps int            `json:"completed_steps,omitempty"`
-	TotalSteps     int            `json:"total_steps,omitempty"`
-	BytesCompleted int64          `json:"bytes_completed,omitempty"`
-	BytesTotal     int64          `json:"bytes_total,omitempty"`
-	StartedAt      string         `json:"started_at"`
-	UpdatedAt      string         `json:"updated_at"`
+	ID              string         `json:"id"`
+	Kind            string         `json:"kind"`
+	Module          string         `json:"module"`
+	Device          string         `json:"device"`
+	Status          string         `json:"status"`
+	Message         string         `json:"message"`
+	Output          string         `json:"output,omitempty"`
+	OutputTruncated bool           `json:"output_truncated,omitempty"`
+	Steps           []setupJobStep `json:"steps,omitempty"`
+	CompletedSteps  int            `json:"completed_steps,omitempty"`
+	TotalSteps      int            `json:"total_steps,omitempty"`
+	BytesCompleted  int64          `json:"bytes_completed,omitempty"`
+	BytesTotal      int64          `json:"bytes_total,omitempty"`
+	StartedAt       string         `json:"started_at"`
+	UpdatedAt       string         `json:"updated_at"`
 }
 
 type setupJobStep struct {
@@ -152,10 +153,14 @@ type setupManager struct {
 	hardwareOnce         sync.Once
 	hardware             map[string]any
 
-	mu     sync.Mutex
-	job    *setupJobState
-	closed bool
-	wg     sync.WaitGroup
+	mu                sync.Mutex
+	job               *setupJobState
+	closed            bool
+	wg                sync.WaitGroup
+	reportMu          sync.Mutex
+	lastFailureReport *setupFailureReport
+	reportVersion     VersionInfo
+	reportSecrets     func() []string
 }
 
 func newSetupManager(
@@ -374,6 +379,7 @@ func (m *setupManager) installVoice(
 
 	err = command.Run()
 	m.detachCommand(id, command)
+	err = m.voiceInstallFailure(id, err)
 	moduleHome := root
 	if err == nil {
 		root, err = voiceRuntimeFromIndex(moduleHome, "candidate-state.json")
@@ -468,6 +474,7 @@ func (m *setupManager) updateJob(id, status, message, output string) {
 		m.job.Message = message
 	}
 	if output != "" {
+		m.job.OutputTruncated = m.job.OutputTruncated || len(m.job.Output)+len(output) > setupJobOutputLimit
 		m.job.Output = trimSetupOutput(m.job.Output + output)
 		if line := lastSetupOutputLine(output); line != "" {
 			m.job.Message = line
@@ -666,6 +673,7 @@ func setupHardwareSnapshot() map[string]any {
 
 func (s *Server) setupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/setup", s.handleSetupStatus)
+	mux.HandleFunc("GET /api/setup/install/{id}/report", s.handleSetupFailureReport)
 	mux.HandleFunc("PUT /api/setup/preferences", s.handleSetupPreferences)
 	mux.HandleFunc("POST /api/setup/llm/install", s.handleSetupLlamaInstall)
 	mux.HandleFunc("POST /api/setup/parakeet/install", s.handleSetupParakeetInstall)

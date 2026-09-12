@@ -1031,6 +1031,7 @@ export interface SetupJob {
   status: "queued" | "running" | "complete" | "failed" | "cancelled" | string;
   message: string;
   output?: string;
+  output_truncated?: boolean;
   steps?: Array<{
     id: string;
     label: string;
