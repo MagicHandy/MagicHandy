@@ -2,15 +2,39 @@
 
 ## Status
 
-Accepted; amended 2026-09-08 after Microsoft completed the false-positive
+Accepted; amended 2026-09-12 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.44 package-preserving releases.
+reviewed alpha.14 through alpha.45 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.45 amendment
+
+On 2026-09-12 the user requested publication after the TTS reliability and
+downloadable installer failure-report work. This amendment adds only
+`0.1.0-alpha.45` to the existing reviewed-unsigned Windows alpha policy. It
+grants no standing permission to later versions.
+
+PR #264 passed all thirteen checks before merging. Alpha.45 removes artificial
+streamed-speech gaps, adds bounded adaptive buffering and prompt cancellation,
+preserves useful installer failure details, and offers redacted, retained
+failure reports through a one-click download. The original reported Chatterbox
+failure remains unconfirmed; CPU dependency installation and native imports
+passed, while actual model listening and RTX 3070 throughput remain open. See
+the [TTS review](../tts-reliability-review-2026-09-12.md) and
+[failure-report review](../installer-failure-report-review-2026-09-12.md).
+
+The native x64 loader, non-solid ZIP compression, three public assets, four
+pure-Go payload executables and data-preserving over-install contract remain.
+No dependencies or model/package pins change. Main-tip provenance, full quality
+gates, Python adapter tests, Defender scanning of the exact artifacts,
+manifests, outer checksums and exact installer lifecycle verification remain
+mandatory. The Microsoft case does not pre-clear new hashes, and trusted
+Authenticode remains the long-term policy.
 
 ### Alpha.44 amendment
 
@@ -152,7 +176,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.44 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.45 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -266,11 +290,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.44 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.45 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.44 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.45 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
