@@ -107,6 +107,12 @@ consent, bounded audit history, stronger WAN enrollment/recovery, controlled
 network fault/load/soak and external/mobile/device acceptance remain open.
 No numbered checklist acceptance is closed from this checkpoint.
 
+The first Linux CI run rejected a Windows-specific absolute path in the new
+settings fixture before its assertions ran. The fixture now uses a temporary
+directory and `filepath.Join` for host locations on every OS, preserving the
+same private-data sentinels and response assertions. No production path
+validation was weakened to accommodate the test.
+
 ## Session management and admission checkpoint — 2026-09-13
 
 The [login management contract](lan-wan-session-management.md) adds schema v22,

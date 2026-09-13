@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,12 +14,13 @@ import (
 func TestObserverSettingsExcludeHostConfigurationAndKeepSemanticControls(t *testing.T) {
 	s, store, admin, adminCookie := newControllerSessionFixture(t)
 	observer := newAdmissionIdentity(t, store, admin.ID, "observer", false)
+	hostDirectory := filepath.Join(t.TempDir(), "host-detail-fixture")
 	if _, _, err := s.store.Update(func(settings config.Settings) (config.Settings, error) {
-		settings.LLM.OllamaModelsPath = "C:/host-detail-fixture/models"
+		settings.LLM.OllamaModelsPath = filepath.Join(hostDirectory, "models")
 		settings.LLM.OllamaBaseURL = "http://host-detail-fixture.invalid:11434"
-		settings.Voice.TTSWorkerPath = "C:/host-detail-fixture/worker.exe"
+		settings.Voice.TTSWorkerPath = filepath.Join(hostDirectory, "worker.exe")
 		settings.Voice.TTSWorkerArgs = []string{"--private-host-detail-fixture"}
-		settings.Media.LibraryPaths = []string{"C:/host-detail-fixture/videos"}
+		settings.Media.LibraryPaths = []string{filepath.Join(hostDirectory, "videos")}
 		settings.Media.ScriptSmoothingPercent = 3
 		settings.Motion.SpeedMinPercent = 19
 		settings.Motion.SpeedMaxPercent = 29
