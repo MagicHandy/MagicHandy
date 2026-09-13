@@ -55,11 +55,62 @@ The implementation is in progress on `codex/lan-wan-control`:
   persona provenance resolved against one captured conversation;
 - independent management IDs, account-scoped login listing/renaming/revocation
   and bounded reconciliation of a lost management response;
-- a maintained 207-route role admission inventory, setup/private-account read
+- a maintained 209-route role admission inventory, setup/private-account read
   boundaries, operator control permission fixes and cancelable feedback writes;
 - capability-specific shared response projections, administrator-only raw
   diagnostics, a minimal public Stop acknowledgement and browser login lifetime
-  boundaries for snapshots, notifications and queued quick edits.
+  boundaries for snapshots, notifications and queued quick edits;
+- atomic access-change records and bounded runtime audit history, with an
+  administrator page/export, explicit loss reporting and trace correlation;
+- a latest-run trace writer that preserves immediate reads while removing
+  diagnostic storage waits from the public Stop response.
+
+## Access history checkpoint — 2026-09-13
+
+The [audit contract](lan-wan-audit-history.md) records account/session/grant
+changes atomically and runtime outcomes through one bounded writer. The Access
+panel fetches on demand, retains one page and provides a one-click JSON export.
+Exports exclude credentials, raw request IDs/bodies and application content.
+Protected command replay does not create another execution record. Public Stop
+has an unauthenticated actor and does no login lookup.
+
+A regression holding the shared SQLite writer exposed existing synchronous
+trace persistence after engine Stop. The new trace worker saves the latest
+bounded run independently of the response. In-memory trace reads remain
+immediate; orderly shutdown flushes with a two-second cancellation budget.
+Overlapping Stops now preserve their individual invalidation sequences in
+history. No motion sampler or transport dispatch path was added.
+
+Schema migration, rollback, retention, paging, retry deduplication, queue loss,
+blocked storage, trace coalescing/redaction/durability and worker teardown have
+regression coverage. Browser tests cover download authorization requests,
+pagination, late replies, disconnect/collapse, timeouts and incomplete history.
+The complete frontend suite passes **599 tests in 79 files**, with **2,145 keys
+in five locales**. Full Go/race, vet/lint, CGO-free build and current app evidence
+are retained with this checkpoint's validation results. Real WAN/mobile/device
+acceptance remains open.
+
+The exact build runs at `http://127.0.0.8:50003/#/settings/access` with isolated
+data and simulated motion. Real provider readiness passes, and text-only app
+chat returns “The review build is ready.” in **100 ms**, one provider call,
+without repair, fallback or motion. The browser stays an observer. The history
+shows that claim, command and subsequent watchdog loss/Stop; the retired grant
+and expired review login also remain correctly time-limited. No hardware,
+public listener, firewall or trust-store settings were changed.
+
+Authenticated export returned 12 events / 3,525 B with attachment metadata;
+payload checks exclude the fixture password, chat text and private paths. An
+operator export returned 403. The served JS SHA-256 matches the worktree.
+Desktop and 390-by-844 viewport review show history controls and a visible Stop;
+the narrow document's scroll width remains 390 px. Viewport emulation does not
+establish physical mobile acceptance.
+
+Browser download initiation is verified, but complete file saving remains
+unverified in the in-app browser: its `Page.downloadWillBegin` event names
+`magichandy-access-history.json`, followed by `Page.downloadProgress` with
+`state=canceled`, zero received bytes and a 4,431-byte generated JSON file.
+The HTTP attachment and browser unit tests pass. Retain this limitation until
+an actual browser save is verified; do not equate initiation with completion.
 
 ## Observer privacy checkpoint — 2026-09-13
 
@@ -434,7 +485,7 @@ diagnostics. Extend that evidence to the exhaustive handler/resource and export
 matrix, remaining delayed-work lifetimes and administrator consent workflows.
 
 The remaining durable chat recovery, RTT/stream diagnostics, telemetry budget,
-media/voice and transport-location behavior, audit history and enrollment,
+media/voice and transport-location behavior, exhaustive audit attribution and enrollment,
 authentication recovery, network fault/load fixtures and real device/browser
 matrix remain part of the goal. A simulator or green unit suite cannot establish
 real WAN, mobile, certificate enrollment or physical Stop acceptance.

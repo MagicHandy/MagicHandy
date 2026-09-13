@@ -108,7 +108,7 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   as UI tests. Selecting a linked profile never silently grants authority or
   reveals private history, media or host configuration.
   **In progress:** the [login management and admission checkpoint](lan-wan-session-management.md)
-  covers all 207 current registrations and implicit HEAD at role admission.
+  covers all 209 current registrations and implicit HEAD at role admission.
   [Observer response projections and UI boundaries](lan-wan-observer-privacy.md)
   now cover host configuration/diagnostic payloads and granted playback versus
   host edits. Exhaustive handler/resource, consent and full UI coverage remain open.
@@ -228,8 +228,12 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   **Acceptance:** a reported remote action can be attributed and correlated with
   a trace; users can end access from a lost device and see when it took effect.
   **In progress:** [account-owned session inspection, names and revocation](lan-wan-session-management.md)
-  are implemented, including active-work retirement. Bounded audit history,
-  grant/ownership attribution and the complete acceptance scenario remain open.
+  are implemented, including active-work retirement. The
+  [bounded audit history](lan-wan-audit-history.md) now records access changes,
+  grant/ownership transitions, protected command results and Stop, with an
+  administrator page/export and explicit loss reporting. Its storage-contention
+  regression also removes trace persistence from the Stop response path.
+  Full remote-action/trace and real-device acceptance remain open.
 
 ## P2 — WAN implementation and release acceptance
 

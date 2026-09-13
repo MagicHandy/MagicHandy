@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 	appstore "github.com/mapledaemon/MagicHandy/internal/store"
 )
 
@@ -198,7 +199,10 @@ func (s *Store) create(ctx context.Context, username, password, role string, boo
 				last_login_at, created_at, updated_at, profile_updated_at
 			) VALUES(?, ?, ?, ?, ?, 0, '', ?, ?, '')
 		`, id, username, usernameKey, role, passwordHash, now, now)
-		return err
+		if err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: audit.AccountCreated, Outcome: "success", TargetAccountID: id})
 	})
 	if err != nil {
 		return Account{}, fmt.Errorf("create user account: %w", err)
@@ -354,7 +358,10 @@ func (s *Store) NewSessionWithClient(ctx context.Context, accountID string, clie
 				LIMIT -1 OFFSET ?
 			)
 		`, accountID, tokenHash, MaxSessionsPerAccount-1)
-		return err
+		if err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: nowTime.UnixMilli(), Kind: audit.SessionCreated, Outcome: "success", Actor: audit.Actor{Type: "account", AccountID: accountID, SessionID: publicID}, TargetSessionID: publicID})
 	})
 	if err != nil {
 		return "", Session{}, fmt.Errorf("create user session: %w", err)
@@ -466,8 +473,17 @@ func (s *Store) RevokeSession(ctx context.Context, token string) error {
 		return nil
 	}
 	return s.db.WithTx(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE token_hash = ?`, hashSessionToken(token))
-		return err
+		var owner, publicID string
+		key := hashSessionToken(token)
+		if err := tx.QueryRowContext(ctx, `SELECT user_id, public_id FROM user_sessions WHERE token_hash = ?`, key).Scan(&owner, &publicID); errors.Is(err, sql.ErrNoRows) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE token_hash = ?`, key); err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: audit.SessionRevoked, Outcome: "success", TargetAccountID: owner, TargetSessionID: publicID})
 	})
 }
 
@@ -494,7 +510,10 @@ func (s *Store) SetPassword(ctx context.Context, accountID, password string) err
 			return ErrNotFound
 		}
 		_, err = tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = ?`, accountID)
-		return err
+		if err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: audit.PasswordChanged, Outcome: "success", TargetAccountID: accountID})
 	})
 }
 
@@ -533,9 +552,15 @@ func (s *Store) SetDisabled(ctx context.Context, accountID string, disabled bool
 		}
 		if disabled {
 			_, err := tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = ?`, accountID)
-			return err
+			if err != nil {
+				return err
+			}
 		}
-		return nil
+		kind := audit.AccountEnabled
+		if disabled {
+			kind = audit.AccountDisabled
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: kind, Outcome: "success", TargetAccountID: accountID})
 	})
 }
 

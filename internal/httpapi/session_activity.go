@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 )
 
 const (
@@ -238,6 +240,8 @@ func (s *Server) closeAccessWorkers() {
 
 func (s *Server) stopLostController(reason string) {
 	defer s.controller.FinishLoss()
+	generation, grantID := s.controller.lossAuditReference()
+	s.recordAccessEvent(context.Background(), audit.Event{Kind: audit.ControlLost, Outcome: "success", Operation: auditStopOperation(reason), Generation: generation, GrantID: grantID})
 	ctx, cancel := context.WithTimeout(s.lifecycleCtx, 5*time.Second)
 	defer cancel()
 	_, err := s.emergencyStop(ctx, reason)

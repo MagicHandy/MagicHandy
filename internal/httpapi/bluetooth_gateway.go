@@ -250,7 +250,7 @@ func (s *Server) finishLostBluetoothGateway(l *bluetoothGatewayLease) {
 	}
 	s.accessWG.Add(1)
 	s.access.mu.Unlock()
-	finishStop := s.beginGlobalStop("bluetooth_gateway_lost")
+	finishStop, _ := s.beginGlobalStop("bluetooth_gateway_lost")
 	go func() {
 		defer s.accessWG.Done()
 		defer finish()

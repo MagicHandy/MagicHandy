@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/chatapp"
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -78,12 +79,15 @@ type Server struct {
 	logger              *slog.Logger
 	store               *config.Store
 	accounts            *accounts.Store
+	auditStore          *audit.Store
+	accessAudit         *audit.Recorder
 	auth                authenticationRuntime
 	access              sessionActivityRuntime
 	accessWG            sync.WaitGroup
 	networkPolicy       *netaccess.Policy
 	networkCertificates *netaccess.Certificates
 	traces              *diagnostics.TraceRing
+	traceArchive        *traceArchiveWriter
 	transport           transport.DiagnosticsProvider
 	cloud               cloudRuntime
 	bluetooth           bluetoothRuntime
@@ -247,6 +251,10 @@ func (s *Server) openRuntimeDomains(runtime Runtime, settings config.Settings) e
 }
 
 func (s *Server) activate(runtime Runtime, settings config.Settings) {
+	s.traceArchive = newTraceArchiveWriter(s.writeLastMotionTrace)
+	s.auditStore = audit.NewStore(s.store.Datastore())
+	s.accessAudit = audit.NewRecorder(s.auditStore)
+	s.accessAudit.Record(audit.Event{Kind: audit.ServerStarted, Outcome: "success", Epoch: s.controller.epoch})
 	mux := http.NewServeMux()
 	s.routes(mux)
 	s.handler = logRequests(s.logger, securityHeaders(
@@ -347,6 +355,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) routes(mux *http.ServeMux) {
+	s.auditRoutes(mux)
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	s.authenticationRoutes(mux)
 	s.networkRoutes(mux)
@@ -404,8 +413,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.mediaRoutes(mux)
 	s.voiceRoutes(mux)
 	s.setupRoutes(mux)
-	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
-	mux.HandleFunc("GET /api/traces/last-motion", s.handleLastMotionTrace)
+	s.traceRoutes(mux)
 	mux.HandleFunc("GET /", s.handleStatic)
 }
 

@@ -2,6 +2,7 @@
 // client ID so the backend controller lease can pick one active controller;
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
+import type { AccessAuditPage } from "./audit-types";
 import type {
   AppState,
   AutopilotSettings,
@@ -483,6 +484,8 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  accessAudit: (before = 0, signal?: AbortSignal) => request<AccessAuditPage>("GET", `/api/audit?before=${before}`, undefined, signal),
+  exportAccessAudit: (before: number, signal?: AbortSignal) => request<AccessAuditPage>("GET", `/api/audit/export?before=${before}`, undefined, signal),
   // Authentication. The HttpOnly session token never enters React; these
   // methods only exchange credentials for backend-owned cookie state.
   authStatus: (signal?: AbortSignal) =>

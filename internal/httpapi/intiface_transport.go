@@ -108,7 +108,7 @@ func (s *Server) handleIntifaceDisconnect(w http.ResponseWriter, r *http.Request
 	}
 	s.intiface.opMu.Lock()
 	defer s.intiface.opMu.Unlock()
-	finishStop := s.beginGlobalStop("intiface_disconnected", r.Context())
+	finishStop, _ := s.beginGlobalStop("intiface_disconnected", r.Context())
 	defer finishStop()
 
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
@@ -158,7 +158,7 @@ func (s *Server) handleIntifaceSelect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	finishStop := s.beginGlobalStop("intiface_selection_changed", r.Context())
+	finishStop, _ := s.beginGlobalStop("intiface_selection_changed", r.Context())
 	defer finishStop()
 
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)

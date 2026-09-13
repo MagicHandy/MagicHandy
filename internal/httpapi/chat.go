@@ -753,7 +753,7 @@ func (s *Server) notifyChatTarget(generation uint64, target motion.MotionTarget)
 }
 
 func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, requestedSessionID string, message string, settings config.LLMSettings) {
-	finishInvalidation := s.invalidateWorkForStop("chat_stop", r.Context())
+	finishInvalidation, _ := s.invalidateWorkForStop("chat_stop", r.Context())
 	defer finishInvalidation()
 	command := &chat.MotionCommand{Action: chat.MotionActionStop}
 	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)

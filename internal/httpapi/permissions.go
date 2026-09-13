@@ -57,7 +57,7 @@ func readRequest(r *http.Request) bool {
 }
 
 func hostPrivateRead(route string) bool {
-	return hostDiagnosticsRoute(route) || route == "/api/network" || strings.HasPrefix(route, "/api/network/") ||
+	return hostDiagnosticsRoute(route) || route == "/api/audit" || strings.HasPrefix(route, "/api/audit/") || route == "/api/network" || strings.HasPrefix(route, "/api/network/") ||
 		route == "/api/setup" || strings.HasPrefix(route, "/api/setup/") ||
 		(strings.HasPrefix(route, "/api/llm/") && route != "/api/llm/status") ||
 		route == "/api/media/tools" || route == "/api/accounts" ||

@@ -18,22 +18,24 @@ type controllerIdentity struct {
 }
 
 type controllerRuntime struct {
-	mu          sync.Mutex
-	clock       func() time.Time
-	leaseTTL    time.Duration
-	active      controllerIdentity
-	pending     controllerIdentity
-	activeSince time.Time
-	lastSeenAt  time.Time
-	generation  uint64
-	revision    uint64
-	epoch       string
-	stopping    bool
-	ownerCtx    context.Context
-	ownerCancel context.CancelFunc
-	requests    map[uint64]context.CancelFunc
-	requestID   uint64
-	tickets     []controllerCommandTicket
+	mu             sync.Mutex
+	clock          func() time.Time
+	leaseTTL       time.Duration
+	active         controllerIdentity
+	pending        controllerIdentity
+	activeSince    time.Time
+	lastSeenAt     time.Time
+	generation     uint64
+	revision       uint64
+	epoch          string
+	stopping       bool
+	lossGeneration uint64
+	lossGrantID    string
+	ownerCtx       context.Context
+	ownerCancel    context.CancelFunc
+	requests       map[uint64]context.CancelFunc
+	requestID      uint64
+	tickets        []controllerCommandTicket
 }
 
 func newControllerRuntime() controllerRuntime {
@@ -52,20 +54,26 @@ func (c *controllerRuntime) Observe(actor controllerIdentity) controllerSnapshot
 }
 
 func (c *controllerRuntime) Heartbeat(actor controllerIdentity, generation uint64) controllerSnapshot {
+	snapshot, _ := c.heartbeatTransition(actor, generation)
+	return snapshot
+}
+
+func (c *controllerRuntime) heartbeatTransition(actor controllerIdentity, generation uint64) (controllerSnapshot, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if actor.clientID == "" || c.stopping || c.pending.clientID != "" || (actor.sessionKey != "" && generation != c.generation) {
-		return c.snapshotLocked(actor)
+		return c.snapshotLocked(actor), false
 	}
 	// An initial heartbeat may claim a stopped fresh server. After any loss or
 	// takeover, claiming again requires the explicit stop-first takeover route.
 	if c.active.clientID == "" && c.generation == 0 {
 		c.activateLocked(actor)
+		return c.snapshotLocked(actor), true
 	} else if c.active == actor && !c.expiredLocked() {
 		c.lastSeenAt = c.clock()
 		c.issueCommandTicketLocked()
 	}
-	return c.snapshotLocked(actor)
+	return c.snapshotLocked(actor), false
 }
 
 func (c *controllerRuntime) touchLocalLocked(actor controllerIdentity) {
@@ -147,6 +155,7 @@ func (c *controllerRuntime) BeginLoss(sessionKey string, expiredOnly bool) bool 
 		return false
 	}
 	c.stopping = true
+	c.lossGeneration, c.lossGrantID = c.generation, c.active.grantID
 	c.pending = controllerIdentity{}
 	c.clearOwnerLocked()
 	return true
@@ -158,6 +167,12 @@ func (c *controllerRuntime) FinishLoss() {
 	c.stopping = false
 }
 
+func (c *controllerRuntime) lossAuditReference() (uint64, string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lossGeneration, c.lossGrantID
+}
+
 func (c *controllerRuntime) BeginLocalLoss() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -165,6 +180,7 @@ func (c *controllerRuntime) BeginLocalLoss() bool {
 		return false
 	}
 	c.stopping = true
+	c.lossGeneration, c.lossGrantID = c.generation, c.active.grantID
 	c.pending = controllerIdentity{}
 	c.clearOwnerLocked()
 	return true

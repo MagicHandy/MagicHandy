@@ -46,6 +46,7 @@ type actualSchemaColumn struct {
 }
 
 var requiredSchemaTables = []schemaTable{
+	{name: "access_audit", columns: columns("seq:INTEGER", "event_id:TEXT", "occurred_at:INTEGER", "document:TEXT"), primaryKey: []string{"seq"}},
 	{name: "user_control_grants", columns: columns("user_id:TEXT", "grant_id:TEXT", "issued_by:TEXT", "created_at:TEXT", "expires_at:TEXT"), primaryKey: []string{"user_id"}},
 	{name: "settings", columns: columns("id:TEXT", "document:TEXT", "updated_at:TEXT"), primaryKey: []string{"id"}},
 	{name: "app_kv", columns: columns("key:TEXT", "value:TEXT", "updated_at:TEXT"), primaryKey: []string{"key"}},
@@ -109,6 +110,8 @@ var requiredSchemaTables = []schemaTable{
 }
 
 var requiredSchemaIndexes = []schemaIndex{
+	{table: "access_audit", name: "access_audit_time", columns: indexColumns("occurred_at")},
+	{table: "access_audit", name: "access_audit_event_id", unique: true, columns: indexColumns("event_id")},
 	{table: "messages", name: "messages_session_revision", columns: indexColumns("session_id", "committed", "revision")},
 	{table: "chat_session_cursors", name: "chat_cursors_updated", columns: indexColumns("updated_at", "client_id", "session_id")},
 	{table: "messages", name: "messages_session_seq", columns: indexColumns("session_id", "seq")},
@@ -154,6 +157,7 @@ func (db *DB) validateSchema(ctx context.Context) error {
 		db.validateForeignKeyEnforcement,
 		db.validateSchemaTables,
 		db.validateSchemaIndexes,
+		db.validateAuditRetention,
 		db.validateSchemaForeignKeys,
 		db.validateForeignKeyRows,
 	}

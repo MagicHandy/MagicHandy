@@ -9,6 +9,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 )
 
 // MaxSessionNameRunes bounds optional, informational device names.
@@ -187,7 +189,10 @@ func (s *Store) RevokeOwnSession(ctx context.Context, actorKey, id string) (stri
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE token_hash = ? AND user_id = ?`, key, owner)
-		return err
+		if err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: audit.SessionRevoked, Outcome: "success", Actor: audit.ActingAccount(ctx, owner), TargetSessionID: id})
 	})
 	if err != nil {
 		return "", err
@@ -227,7 +232,10 @@ func (s *Store) RevokeOtherSessions(ctx context.Context, actorKey string) ([]str
 			return errors.New("session collection exceeds its retention limit")
 		}
 		_, err = tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = ? AND token_hash <> ?`, owner, actorKey)
-		return err
+		if err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: audit.SessionsRevoked, Outcome: "success", Actor: audit.ActingAccount(ctx, owner), TargetAccountID: owner, Count: uint64(len(keys))})
 	})
 	if err != nil {
 		return nil, err

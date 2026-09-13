@@ -1839,13 +1839,20 @@ three-artifact reviewed setup path without reusing or moving alpha.12.
 
 Level: High
 
+The [bounded audit checkpoint](lan-wan-audit-history.md) records transactional
+access changes and bounded runtime outcomes without credentials or raw content.
+Administrators can inspect/export retained pages with explicit history-loss
+status. Stop is tested against blocked audit storage; trace persistence now
+runs independently of the response. This does not provide tamper-proof history
+or establish WAN load/device acceptance.
+
 The [session management checkpoint](lan-wan-session-management.md) adds
 account-owned management IDs, transaction-level actor revalidation and active
 request/gateway/controller retirement. Self-revocation retains a bounded
-acknowledgement without retaining authority. A 207-route admission table tests
+acknowledgement without retaining authority. A 209-route admission table tests
 roles and implicit HEAD, and exact setup status now requires administrator
 access. This is admission coverage; full payload redaction, handler/UI scope,
-invitations, audit history and real WAN/mobile/device acceptance remain open.
+invitations, exhaustive audit attribution and real WAN/mobile/device acceptance remain open.
 
 Implementation update 2026-09-12: the LAN/WAN branch adds session-and-tab-bound
 control, a process epoch and ownership generation, explicit foreground

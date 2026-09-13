@@ -1,5 +1,42 @@
 # Goal Scorecard
 
+## 2026-09-13 — Bounded access history and asynchronous trace persistence
+
+The [audit contract](lan-wan-audit-history.md) adds transactional access-change
+history, one bounded runtime-event writer and an administrator page/export.
+Another bounded worker saves the latest stopped trace without delaying Stop's
+response. Neither worker commands motion. There is no new dependency or
+periodic browser poll; the history panel loads only while expanded.
+
+| Artifact | Previous observer checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,759,616 B | 19,863,040 B | +103,424 B |
+| Main JS, raw | 815,823 B | 826,509 B | +10,686 B |
+| Main JS, gzip-9 | 225,213 B | 227,986 B | +2,773 B |
+| All embedded assets | 2,119,298 B | 2,143,397 B | +24,099 B |
+
+Measurements use Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. Relative to the same-toolchain
+alpha.45 baseline, the binary adds **554,496 B (2.87%)**, main JS adds
+**15,390 B** gzip, and embedded assets add **109,742 B**. The canonical dist
+replaces prior hashed bundles.
+
+History is bounded to 10,000 retained rows / 30 days; individual events are at
+most 2,048 encoded bytes. Runtime admission holds at most 256 waiting events
+plus a 64-event batch, with explicit drop reporting. Reads/export contain at
+most 100 events / 256 KiB and release their read transaction before writes.
+The trace worker keeps at most one pending and one in-flight 128-row / 1 MiB
+document. A test holding SQLite's writer verifies that Stop responds within
+its one-second test deadline; this is a regression threshold, not a measured
+physical latency percentile.
+
+The running isolated fixture's authenticated export contained **12 events /
+3,525 B**; an operator's export attempt returned 403. After real LLM generation
+and browser review, one process sample measured **116,064,256 B** working set
+and **104,005,632 B** private memory. Its lifetime and workload differ from
+earlier samples; no controlled RSS/CPU/startup or WAN performance comparison
+is claimed. Full load, telemetry and soak measurements remain open.
+
 ## 2026-09-13 — Observer response privacy and browser login lifetime
 
 The [observer contract](lan-wan-observer-privacy.md) selects operational response

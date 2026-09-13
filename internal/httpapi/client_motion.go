@@ -42,12 +42,7 @@ func (s *Server) clientSyncStatus(r *http.Request, state mediaSyncStatus) mediaS
 // Its acknowledgement must therefore be equally safe for every caller, even
 // when the browser supplied a cookie. Never add the previous target/settings.
 func (s *Server) writePublicStopResult(w http.ResponseWriter, outcome emergencyStopResult, err error) {
-	result := outcome.transportResult
-	if outcome.engineAvailable && outcome.state.LastResult != nil {
-		result = *outcome.state.LastResult
-	}
-	available := outcome.engineAvailable || outcome.transportAvailable
-	confirmed := err == nil && result.Kind == transport.CommandKindStop && result.OK
+	available, confirmed := stopConfirmation(outcome, err)
 	payload := map[string]any{"available": available, "stopped": true, "transport_stop_confirmed": confirmed}
 	status := http.StatusOK
 	if err != nil {
@@ -57,4 +52,14 @@ func (s *Server) writePublicStopResult(w http.ResponseWriter, outcome emergencyS
 		}
 	}
 	writeJSON(w, status, payload)
+}
+
+func stopConfirmation(outcome emergencyStopResult, err error) (bool, bool) {
+	result := outcome.transportResult
+	if outcome.engineAvailable && outcome.state.LastResult != nil {
+		result = *outcome.state.LastResult
+	}
+	available := outcome.engineAvailable || outcome.transportAvailable
+	confirmed := err == nil && result.Kind == transport.CommandKindStop && result.OK
+	return available, confirmed
 }

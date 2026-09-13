@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 )
 
 // ControlGrant authorizes one account to operate this shared installation's
@@ -79,7 +81,10 @@ func (s *Store) GrantControl(ctx context.Context, administratorID, accountID str
 			VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET grant_id = excluded.grant_id,
 			issued_by = excluded.issued_by, created_at = excluded.created_at, expires_at = excluded.expires_at`,
 			accountID, grant.ID, administratorID, now.Format(time.RFC3339Nano), grant.ExpiresAt.Format(time.RFC3339Nano))
-		return err
+		if err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: now.UnixMilli(), Kind: audit.GrantIssued, Outcome: "success", Actor: audit.ActingAccount(ctx, administratorID), TargetAccountID: accountID, GrantID: grant.ID, ExpiresAt: grant.ExpiresAt.UnixMilli()})
 	})
 	return grant, err
 }
@@ -94,7 +99,15 @@ func (s *Store) RevokeControl(ctx context.Context, administratorID, accountID st
 		if count != 1 {
 			return errors.New("administrator access required")
 		}
-		_, err := tx.ExecContext(ctx, "DELETE FROM user_control_grants WHERE user_id = ?", accountID)
-		return err
+		var grantID string
+		if err := tx.QueryRowContext(ctx, "SELECT grant_id FROM user_control_grants WHERE user_id = ?", accountID).Scan(&grantID); errors.Is(err, sql.ErrNoRows) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, "DELETE FROM user_control_grants WHERE user_id = ?", accountID); err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: audit.GrantRevoked, Outcome: "success", Actor: audit.ActingAccount(ctx, administratorID), TargetAccountID: accountID, GrantID: grantID})
 	})
 }

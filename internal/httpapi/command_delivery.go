@@ -38,6 +38,7 @@ func (s *Server) trackCommandDelivery(next http.Handler) http.Handler {
 			if invocation.receipt != nil {
 				invocation.capture.interrupted = !completed
 				s.commands.finish(invocation.receipt, invocation.capture, invocation.body)
+				s.recordCommandResult(r, invocation)
 			}
 			if invocation.release != nil {
 				invocation.release()

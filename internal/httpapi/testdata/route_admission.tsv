@@ -3,6 +3,8 @@
 # Self-service ownership, gateway lease, controller generation/tickets and origins remain handler/middleware checks.
 # Keep every ServeMux registration exactly once; GET rows also cover implicit HEAD.
 host	DELETE /api/accounts/{id}/control-grant
+host	GET /api/audit
+host	GET /api/audit/export
 self	DELETE /api/auth/profile-image
 self	DELETE /api/auth/sessions
 self	DELETE /api/auth/sessions/{id}

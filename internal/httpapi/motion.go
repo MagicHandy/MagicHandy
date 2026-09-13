@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
@@ -373,8 +374,16 @@ func (s *Server) handleEmergencyStop(w http.ResponseWriter, r *http.Request, rea
 	writeJSON(w, status, payload)
 }
 
-func (s *Server) emergencyStop(ctx context.Context, reason string) (emergencyStopResult, error) {
-	finishStop := s.beginGlobalStop(reason, ctx)
+func (s *Server) emergencyStop(ctx context.Context, reason string) (outcome emergencyStopResult, err error) {
+	var sequence uint64
+	defer func() {
+		result := "success"
+		if _, confirmed := stopConfirmation(outcome, err); !confirmed {
+			result = "unconfirmed"
+		}
+		s.recordAccessEvent(ctx, audit.Event{Kind: audit.StopFinished, Outcome: result, Operation: auditStopOperation(reason), StopSequence: sequence})
+	}()
+	finishStop, sequence := s.beginGlobalStop(reason, ctx)
 	defer finishStop()
 
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
@@ -398,10 +407,10 @@ func (s *Server) emergencyStop(ctx context.Context, reason string) (emergencySto
 	}, err
 }
 
-func (s *Server) beginGlobalStop(reason string, origins ...context.Context) func() {
+func (s *Server) beginGlobalStop(reason string, origins ...context.Context) (func(), uint64) {
 	// Publish every emergency-stop activation, including repeated idle stops,
 	// so browser-owned capture can discard pending speech in every client.
-	finishInvalidation := s.invalidateWorkForStop(reason, origins...)
+	finishInvalidation, sequence := s.invalidateWorkForStop(reason, origins...)
 	// Mark autonomous modes stopped before touching the engine, but drain their
 	// goroutine only after Engine.Stop has canceled any blocked mode startup.
 	finishModeStop := func() {}
@@ -414,7 +423,7 @@ func (s *Server) beginGlobalStop(reason string, origins ...context.Context) func
 			finishModeStop()
 			finishInvalidation()
 		})
-	}
+	}, sequence
 }
 
 func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (transport.CommandResult, error) {
@@ -434,7 +443,7 @@ func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (tran
 	return result, stopErr
 }
 
-func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context) func() {
+func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context) (func(), uint64) {
 	// Let the stop-causing request deliver its acknowledgement. Every other
 	// request admitted under the old protected generation is canceled.
 	for _, origin := range origins {
@@ -443,7 +452,7 @@ func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context
 		}
 	}
 	s.controller.AdvanceStopGeneration()
-	s.stopSequence.Add(1)
+	sequence := s.stopSequence.Add(1)
 	finishLab := s.cancelLabSession()
 	if s.mediaSync != nil {
 		s.mediaSync.Invalidate(reason)
@@ -461,7 +470,7 @@ func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context
 		finishLab()
 		s.voice.CancelInvalidated(voice.RoleASR, pendingASR)
 		s.voice.CancelInvalidated(voice.RoleTTS, pendingTTS)
-	}
+	}, sequence
 }
 
 func (s *Server) newSelectedStopTransport() (transport.Transport, error) {
@@ -746,7 +755,7 @@ func (s *Server) Quiesce() {
 		if s.lifecycleCancel != nil {
 			s.lifecycleCancel()
 		}
-		finishInvalidation := s.invalidateWorkForStop("server_shutdown")
+		finishInvalidation, _ := s.invalidateWorkForStop("server_shutdown")
 		defer finishInvalidation()
 		if s.mediaSync != nil {
 			s.mediaSync.Shutdown()
@@ -801,6 +810,13 @@ func (s *Server) Close() {
 			_ = s.personas.Close()
 		}
 		s.personalization.Close()
+		if s.traceArchive != nil {
+			s.traceArchive.close()
+		}
+		if s.accessAudit != nil {
+			s.recordAccessEvent(context.Background(), audit.Event{Kind: audit.ServerStopped, Outcome: "success", Operation: "shutdown", StopSequence: s.stopSequence.Load()})
+			s.accessAudit.Close()
+		}
 		if s.store != nil {
 			_ = s.store.Close()
 		}

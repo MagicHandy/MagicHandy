@@ -161,6 +161,13 @@ contact; they do not create a second motion implementation.
 
 ## Acceptance and open work
 
+The [bounded audit contract](../lan-wan-audit-history.md) keeps durable access
+mutations and their records atomic, while runtime events use a bounded queue
+that never puts database persistence ahead of Stop. Administrator-only pages
+and downloads omit credentials and application content and disclose history
+loss. Stopped traces remain immediately readable while a bounded worker saves
+the latest run independently of the Stop response.
+
 The [observer response contract](../lan-wan-observer-privacy.md) distinguishes
 shared installation content and semantic controls from host configuration and
 diagnostics. Protected public Stop returns only an acknowledgement without

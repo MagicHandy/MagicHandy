@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 )
 
 const (
@@ -109,6 +111,7 @@ func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request
 		return
 	}
 	completed = true
+	s.recordAccessEvent(r.Context(), audit.Event{Kind: audit.ControlTransferred, Outcome: "success", Generation: controller.Generation, GrantID: actor.grantID, Operation: "takeover"})
 
 	response := controllerTakeoverResponse{
 		Controller:    s.commandSnapshot(r, controller),
@@ -214,7 +217,11 @@ func (s *Server) handleControllerHeartbeat(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusOK, s.controllerState(r))
 		return
 	}
-	writeJSON(w, http.StatusOK, s.commandSnapshot(r, s.controller.Heartbeat(actor, generation)))
+	snapshot, claimed := s.controller.heartbeatTransition(actor, generation)
+	if claimed {
+		s.recordAccessEvent(r.Context(), audit.Event{Kind: audit.ControlClaimed, Outcome: "success", Generation: snapshot.Generation, GrantID: actor.grantID})
+	}
+	writeJSON(w, http.StatusOK, s.commandSnapshot(r, snapshot))
 }
 
 func (s *Server) bootstrapController(r *http.Request, sessionKey string) {
@@ -232,7 +239,9 @@ func (s *Server) bootstrapController(r *http.Request, sessionKey string) {
 	defer s.controller.CancelTakeover(actor)
 	_, _ = s.emergencyStop(r.Context(), "account_protection_enabled")
 	if r.Context().Err() == nil {
-		_, _ = s.controller.CompleteTakeover(actor)
+		if snapshot, err := s.controller.CompleteTakeover(actor); err == nil {
+			s.recordAccessEvent(r.Context(), audit.Event{Kind: audit.ControlTransferred, Outcome: "success", Generation: snapshot.Generation, Operation: "takeover"})
+		}
 	}
 }
 

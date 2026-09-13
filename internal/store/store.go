@@ -19,7 +19,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 22
+	CurrentSchemaVersion = 23
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -567,6 +567,8 @@ var migrations = [][]string{
 	{`SELECT 1`},
 	// v21 -> v22: public management IDs and non-sensitive session descriptions.
 	{`SELECT 1`},
+	// v22 -> v23: bounded access/control audit records, never credentials/content.
+	{`SELECT 1`},
 }
 
 func migrateAccountProfiles(ctx context.Context, tx *sql.Tx) error {
@@ -888,6 +890,8 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		err = migrateChatRecovery(ctx, tx)
 	case 22:
 		err = migrateSessionManagement(ctx, tx)
+	case 23:
+		err = migrateAccessAudit(ctx, tx)
 	default:
 		return nil
 	}

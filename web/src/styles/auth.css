@@ -594,3 +594,32 @@
     transition: none;
   }
 }
+
+.audit-toolbar,
+.audit-event-heading,
+.audit-event-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+}
+
+.audit-events {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.audit-events > li {
+  border-top: 1px solid var(--line);
+  padding: 10px 0;
+  overflow-wrap: anywhere;
+}
+
+.audit-event-heading { justify-content: space-between; }
+.audit-event-meta { color: var(--muted); font-size: 0.85rem; margin-block: 4px; }
+.audit-references { margin-top: 6px; font-size: 0.85rem; }
+.audit-references summary { cursor: pointer; }
+.audit-references dl { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr); gap: 4px 12px; }
+.audit-references dt { color: var(--muted); }
+.audit-references dd { margin: 0; overflow-wrap: anywhere; }

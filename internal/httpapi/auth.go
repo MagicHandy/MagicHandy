@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/netaccess"
 )
@@ -104,12 +105,13 @@ func (s *Server) authenticateRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/motion/stop" {
 			// Stop is public and must not wait for session/database admission.
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(audit.WithActor(r.Context(), audit.Actor{Type: "public"})))
 			return
 		}
 		if session, token, ok := s.sessionFromRequest(r); ok {
 			ctx := context.WithValue(r.Context(), authenticatedAccountContextKey{}, session.Account)
 			ctx = context.WithValue(ctx, authenticatedSessionContextKey{}, authenticatedSessionState{session: session, token: token})
+			ctx = audit.WithActor(ctx, audit.Actor{Type: "account", AccountID: session.Account.ID, SessionID: session.ID})
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		} else if token != "" {
@@ -120,7 +122,11 @@ func (s *Server) authenticateRequests(next http.Handler) http.Handler {
 			s.writeAuthenticationRequired(w)
 			return
 		}
-		next.ServeHTTP(w, r)
+		actorType := "public"
+		if !s.auth.authenticationRequired() {
+			actorType = "local"
+		}
+		next.ServeHTTP(w, r.WithContext(audit.WithActor(r.Context(), audit.Actor{Type: actorType})))
 	})
 }
 
@@ -163,10 +169,12 @@ func (s *Server) authenticatePassword(r *http.Request, username, password string
 	address := netaccess.ClientIP(r)
 	usernameKey := strings.ToLower(strings.TrimSpace(username))
 	if !s.auth.limiter.Allow(address, usernameKey) {
+		s.recordRejectedLogin(r, errAuthenticationThrottled)
 		return accounts.Account{}, false, errAuthenticationThrottled
 	}
 	account, err := s.accounts.Authenticate(r.Context(), username, password)
 	if errors.Is(err, accounts.ErrInvalidCredentials) {
+		s.recordRejectedLogin(r, nil)
 		return accounts.Account{}, false, nil
 	}
 	if err != nil {
@@ -320,7 +328,7 @@ func (s *Server) handleAuthenticationBootstrap(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusInternalServerError, errors.New("the initial account was created but a session could not be started"))
 		return
 	}
-	s.bootstrapController(r, session.Key)
+	s.bootstrapController(r.WithContext(audit.WithActor(r.Context(), audit.Actor{Type: "account", AccountID: account.ID, SessionID: session.ID})), session.Key)
 	s.setSessionCookie(w, token)
 	s.logger.Info("initial administrator account created", "account_id", account.ID)
 	writeJSON(w, http.StatusCreated, map[string]any{"account": account})

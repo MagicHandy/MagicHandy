@@ -143,7 +143,7 @@ func (s *Server) handleBluetoothDisconnect(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	defer finishGateway()
-	finishStop := s.beginGlobalStop("bluetooth_disconnected", r.Context())
+	finishStop, _ := s.beginGlobalStop("bluetooth_disconnected", r.Context())
 	defer finishStop()
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
 	stopErr := s.stopAndClearMotionEngine(stopCtx, "bluetooth_disconnected")

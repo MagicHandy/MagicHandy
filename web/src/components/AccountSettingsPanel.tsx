@@ -12,6 +12,7 @@ import { PasswordConfirmationField } from "./PasswordConfirmationField";
 import { NetworkSettingsPanel } from "./NetworkSettingsPanel";
 import { ControlGrantPanel } from "./ControlGrantPanel";
 import { SessionSettingsPanel } from "./SessionSettingsPanel";
+import { AuditSettingsPanel } from "./AuditSettingsPanel";
 
 const errorMessage = (reason: unknown) => reason instanceof Error ? translateKnown(reason.message) : t("Request failed");
 
@@ -74,6 +75,7 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
           <CreateAccountForm disabled={!backendOnline || loading} onCreated={loadAccounts} />
         </section>
       )}
+      {account.role === "admin" && <AuditSettingsPanel backendOnline={backendOnline} accounts={accounts} />}
     </>
   );
 }

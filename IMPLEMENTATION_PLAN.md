@@ -2,6 +2,12 @@
 
 ## Core Direction
 
+The September 13 [LAN/WAN audit history](docs/lan-wan-audit-history.md) adds
+transactional access-change records, bounded runtime history and an
+administrator page/download. Stop remains independent of audit storage, and
+stopped-run trace persistence no longer delays its response. Full network and
+physical-device acceptance remains open.
+
 The September 13 [LAN/WAN observer response contract](docs/lan-wan-observer-privacy.md)
 keeps host configuration/diagnostics out of shared responses while retaining
 granted semantic playback and chat. Login changes retire browser snapshots,
