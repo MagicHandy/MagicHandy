@@ -287,6 +287,9 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
                       {m.role === "user" ? t("You") : m.diagnostics?.persona_name || "MagicHandy"}
                     </span>
                     <div className="chat-bubble">{m.text || (m.warning ? t("Malformed model JSON — the reply could not be parsed.") : "")}</div>
+                    {m.contentDownload && <p className="form-status chat-sync-status">{t("Long message preview.")} {" "}
+                      <a href={m.contentDownload} download>{t("Download full message")}</a>
+                    </p>}
                   </div>
                 </div>
               </Fragment>

@@ -1878,8 +1878,11 @@ recoverable. Coherent database pages, cancellation, bounded read markers and
 browser resync prevent skipped durable replies and obsolete response merging.
 Migration preserves conversation content, and recovery does not replay old
 speech. These guarantees cover read tracking within the existing shared-data
-policy; they do not establish tenant isolation or complete response-byte/load
-acceptance for large histories.
+policy; they do not establish tenant isolation. History pages now have a 256 KiB
+encoded limit, resumable reset windows, explicit previews and authenticated
+full-content downloads. Publication waits cancel; downloads bound materialized
+chunks and release database connections before writes. Broader stream/load and
+real-network acceptance remain open.
 
 The risk remains open: exhaustive route/apply-time fault coverage, stronger WAN login and
 owner recovery, durable auditing, multi-client load/partition testing, proxy

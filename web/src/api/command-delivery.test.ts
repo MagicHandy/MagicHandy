@@ -26,6 +26,8 @@ describe("command delivery", () => {
     fetchMock.mockRejectedValueOnce(new Error("lost read acknowledgement"));
     await expect(client.api.advanceChatCursor("conversation", 5, { revision: 8, epoch: "server-process" })).rejects.toThrow("lost read acknowledgement");
     expect(fetchMock).toHaveBeenCalledTimes(5);
+    await client.api.getChatMessages("conversation", 5, { revision: 8, snapshot: { revision: 12, pruned_revision: 1, first_seq: 2 } });
+    expect(fetchMock.mock.calls[5][0]).toBe("/api/chat/messages?session_id=conversation&after_revision=8&snapshot_revision=12&snapshot_pruned_revision=1&snapshot_first_seq=2");
   });
 
   it("keeps gateway maintenance independent of controller command delivery", async () => {

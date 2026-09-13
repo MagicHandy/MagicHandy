@@ -2029,5 +2029,8 @@
   "Grant control permission": "授予控制权限",
   "Revoke control permission": "撤销控制权限",
   "Ask the administrator for a control permission.": "请向管理员申请控制权限。",
-  "Observer": "观察者"
+  "Observer": "观察者",
+  "Loading remaining conversation history…": "正在加载剩余对话记录…",
+  "Long message preview.": "长消息预览。",
+  "Download full message": "下载完整消息"
 }

@@ -78,14 +78,17 @@ type SessionPromptContext struct {
 
 // LogMessage is one visible row in a chat session.
 type LogMessage struct {
-	Seq             int64               `json:"seq"`
-	Revision        int64               `json:"revision,omitempty"`
-	Role            string              `json:"role"`
-	Content         string              `json:"content"`
-	ClientID        string              `json:"client_id,omitempty"`
-	CreatedAt       string              `json:"created_at"`
-	Diagnostics     *MessageDiagnostics `json:"diagnostics,omitempty"`
-	SpeechRequestID string              `json:"speech_request_id,omitempty"`
+	Seq                int64               `json:"seq"`
+	Revision           int64               `json:"revision,omitempty"`
+	Role               string              `json:"role"`
+	Content            string              `json:"content"`
+	ClientID           string              `json:"client_id,omitempty"`
+	CreatedAt          string              `json:"created_at"`
+	Diagnostics        *MessageDiagnostics `json:"diagnostics,omitempty"`
+	SpeechRequestID    string              `json:"speech_request_id,omitempty"`
+	ContentBytes       int64               `json:"content_bytes,omitempty"`
+	ContentTruncated   bool                `json:"content_truncated,omitempty"`
+	DiagnosticsOmitted bool                `json:"diagnostics_omitted,omitempty"`
 }
 
 // Session is one retained or process-local conversation tab. Exactly one row
@@ -533,10 +536,21 @@ func (l *MessageLog) AppendTo(sessionID, role, content, clientID string, diagnos
 // AppendPendingAssistantTo stages one generated reply. Reads and cap pruning
 // ignore it until CommitPending makes the row visible.
 func (l *MessageLog) AppendPendingAssistantTo(sessionID, content string, diagnostics *MessageDiagnostics) (int64, error) {
-	return l.appendTo(sessionID, MessageRoleAssistant, content, "", diagnostics, false)
+	return l.AppendPendingAssistantContext(context.Background(), sessionID, content, diagnostics)
+}
+
+// AppendPendingAssistantContext allows autonomous publication to leave a busy
+// writer queue when its run is canceled. Interactive durable commits retain
+// their existing background-context contract.
+func (l *MessageLog) AppendPendingAssistantContext(ctx context.Context, sessionID, content string, diagnostics *MessageDiagnostics) (int64, error) {
+	return l.appendToContext(ctx, sessionID, MessageRoleAssistant, content, "", diagnostics, false)
 }
 
 func (l *MessageLog) appendTo(sessionID, role, content, clientID string, diagnostics *MessageDiagnostics, committed bool) (int64, error) {
+	return l.appendToContext(context.Background(), sessionID, role, content, clientID, diagnostics, committed)
+}
+
+func (l *MessageLog) appendToContext(ctx context.Context, sessionID, role, content, clientID string, diagnostics *MessageDiagnostics, committed bool) (int64, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return 0, fmt.Errorf("chat log rejects empty %s messages", role)
@@ -553,7 +567,6 @@ func (l *MessageLog) appendTo(sessionID, role, content, clientID string, diagnos
 		}
 	}
 
-	ctx := context.Background()
 	var seq int64
 	err = l.db.WithTx(ctx, func(tx *sql.Tx) error {
 		var exists int
@@ -605,10 +618,14 @@ func (l *MessageLog) appendTo(sessionID, role, content, clientID string, diagnos
 // per-session cap. A Stop that wins the caller's commit barrier deletes the
 // staged row instead, so a canceled reply cannot evict visible history.
 func (l *MessageLog) CommitPending(seq int64) error {
+	return l.CommitPendingContext(context.Background(), seq)
+}
+
+// CommitPendingContext is the cancelable autonomous counterpart to CommitPending.
+func (l *MessageLog) CommitPendingContext(ctx context.Context, seq int64) error {
 	if seq <= 0 {
 		return errors.New("a pending chat sequence is required")
 	}
-	ctx := context.Background()
 	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
 		var sessionID string
 		if err := tx.QueryRowContext(ctx, `

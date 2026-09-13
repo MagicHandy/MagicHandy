@@ -96,8 +96,15 @@ func TestRecoveryPagesAdvanceOnlyThroughDeliveredChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	reset := recoveryPage(t, l, id, 3, 1)
-	if !reset.Reset || reset.HasMore || reset.NextRevision != 5 || len(reset.Messages) != 3 {
-		t.Fatalf("deletion did not give a complete reset: %+v", reset)
+	if !reset.Reset || !reset.HasMore || reset.NextRevision != 1 || len(reset.Messages) != 1 || reset.Snapshot == nil {
+		t.Fatalf("deletion did not begin a bounded reset: %+v", reset)
+	}
+	for _, revision := range []int64{3, 5} {
+		next, err := l.ReadMessagePageContext(t.Context(), MessagePageRequest{SessionID: id, AfterRevision: &reset.NextRevision, Snapshot: reset.Snapshot, Limit: 1})
+		reset = next
+		if err != nil || reset.Reset || reset.NextRevision != revision || len(reset.Messages) != 1 {
+			t.Fatalf("deletion reset continuation: %+v, %v", reset, err)
+		}
 	}
 	future := recoveryPage(t, l, id, 100, 0)
 	if !future.Reset || future.NextRevision != 5 {
@@ -110,7 +117,7 @@ func TestRecoveryReportsRetainedWindowGap(t *testing.T) {
 	for index := 0; index < MessageLogCap+3; index++ {
 		appendRecoveryMessage(t, l, fmt.Sprintf("retained message %d", index))
 	}
-	page := recoveryPage(t, l, id, 1, 1)
+	page := recoveryPage(t, l, id, 1, 0)
 	if !page.Reset || !page.HistoryGap || page.HasMore || len(page.Messages) != MessageLogCap || page.FirstSeq != 4 || page.NextRevision != MessageLogCap+3 {
 		t.Fatalf("retention loss was hidden: %+v", page)
 	}

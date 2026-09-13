@@ -1,5 +1,46 @@
 # Goal Scorecard
 
+## 2026-09-13 — Bounded history recovery and full-message downloads
+
+The [chat recovery contract](lan-wan-chat-recovery.md) now limits each encoded
+history response to **256 KiB**, previews long messages at **16 KiB**, and serves
+explicit full-text downloads in **64 KiB** chunks. Resets continue across pages;
+publication waiters cancel without a helper goroutine. No dependency was added.
+
+| Artifact | Previous chat checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,625,472 B | 19,649,536 B | +24,064 B |
+| Main JS, raw | 801,759 B | 803,280 B | +1,521 B |
+| Main JS, gzip-9 | 221,292 B | 221,680 B | +388 B |
+| All embedded assets | 2,089,930 B | 2,092,335 B | +2,405 B |
+
+Binary measurements use Go 1.26.4, `CGO_ENABLED=0`, `-trimpath` and
+`-ldflags '-s -w'`. Gzip uses Node 24.15.0 / zlib 1.3.1-e00f703, level 9,
+consistently with the preceding comparison. Relative to the same-toolchain
+alpha.45 baseline, the binary adds **340,992 B (1.77%)**, main JS adds
+**9,084 B** gzip, and total embedded assets add **58,680 B**.
+
+A synthetic fixture with twenty 128 KiB messages containing JSON-escaped text
+reproduced a **15,731,179 B** single response before the change. Complete preview
+recovery now takes ten pages totaling approximately **1.97 MB**, each under the
+256 KiB limit. Stored messages remain intact; requesting their complete text
+transfers the original content separately. This comparison does not claim WAN
+latency or full-download bandwidth improvement.
+
+Three local first-page microbenchmark samples measured **1.08–1.57 ms/op**,
+**950,398–1,007,343 B/op**, **243–245 allocations/op**, and approximately
+**197,161 response bytes**. These shared-host synthetic measurements are not a
+controlled before/after CPU comparison, a percentile, or a supported LAN/WAN
+load envelope. The benchmark is `BenchmarkChatHistoryBoundedPage` in
+`internal/chat/log_page_budget_test.go`.
+
+The final app's 76,574-byte native browser download matched the synthetic source
+SHA-256 exactly. After LLM/chat, authenticated history, browser and download
+review, one process sample measured **115,433,472 B** working set and
+**104,210,432 B** private memory. This is not a controlled idle comparison or an
+RSS/startup improvement claim. Live chat SSE, downloads under load, telemetry,
+multi-client CPU/RSS measurements and soak acceptance remain open.
+
 ## 2026-09-13 — Durable conversation recovery
 
 The [chat recovery checkpoint](lan-wan-chat-recovery.md) adds committed

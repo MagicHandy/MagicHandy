@@ -617,6 +617,11 @@ textarea:disabled {
   margin: 0;
   padding: 8px 14px 0;
 }
+
+.chat-sync-status a {
+  color: var(--accent);
+  text-underline-offset: 0.15em;
+}
 .chat-log-shell {
   position: relative;
   display: flex;

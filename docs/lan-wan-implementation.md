@@ -48,7 +48,43 @@ The implementation is in progress on `codex/lan-wan-control`:
 - passive POST acknowledgement handling, preserving validated explicit playback
   activity without letting background reports keep a login alive;
 - durable committed chat revisions, coherent read pages, session-scoped bounded
-  cursors and cancelable browser recovery without skipped replies or audio replay.
+  cursors and cancelable browser recovery without skipped replies or audio replay;
+- encoded history byte budgets, resumable resets, explicit long-message previews
+  and exact-content downloads that release database connections before writes;
+- cancelable chat publication, with autonomous preparation outside the gate and
+  persona provenance resolved against one captured conversation.
+
+## History resource checkpoint — 2026-09-13
+
+Two regressions reproduced an unbounded 15.7 MB history response from twenty
+large synthetic messages and a canceled reader stuck behind chat publication.
+The [recovery contract](lan-wan-chat-recovery.md) now defines 256 KiB pages,
+stateless snapshot continuation, 16 KiB UTF-8 previews, explicit full-message
+downloads and cancelable publication. Newer and late commits remain recoverable;
+deletion or pruning between pages invalidates the anchored window. Retry/poll
+boundaries retain both continuation and speech suppression.
+
+Regressions cover exact canonical download bytes, UTF-8 boundaries, diagnostics
+limits, unchanged stored content, authenticated/mismatched/pending-row access,
+database release before socket writes, and failed framing when a message is
+removed during its download. The full Go and race suites, vet, zero-issue lint,
+CGO-free core build, 575 frontend tests, typechecking, 2,034-key/five-locale audit,
+production UI and final embedded/architecture checks pass. No gate was relaxed.
+
+The final source build runs at **`http://127.0.0.5:49995/#/chat`**, with isolated
+data and simulated motion. The exact provider readiness probe completes real
+generation, and app chat completes in **135 ms**, one provider call, no repair
+or fallback and no motion. The retained observer tab shows the long-message
+preview/download and the LLM reply, with Stop mounted and Bluetooth disconnected.
+One click downloaded all **76,574 bytes**, matching the fixture SHA-256; visual
+review corrected the link's default visited color and the final console is
+clear. The served main asset hash matches the worktree. Earlier processes were
+preserved. Detailed local evidence remains in ignored `.scratch/lan-wan/` and
+the [scorecard](goal-scorecard.md) records budgets and measurement limits.
+
+This advances LAN-07/12/13. It does not close full stream/work admission,
+permissions/session workflows, WAN authentication/recovery, fault/load/soak,
+external HTTPS/proxy, mobile or physical-device acceptance.
 
 ## Durable chat recovery checkpoint — 2026-09-13
 
@@ -80,7 +116,7 @@ checks pass. Sandbox restrictions on existing synthetic Ollama-library fixture
 paths required rerunning the Go checks with host filesystem access; their
 assertions and the shipped pure-Go boundary remain unchanged.
 
-The exact current-source review runs at
+That checkpoint was reviewed at
 `http://127.0.0.3:49991/#/chat`, with fresh isolated data, simulated motion,
 voice off and LLM motion off. The configured local Ollama model passes the real
 `scripts/check-review-llm.ps1` generation probe. App chat returns “The review
@@ -94,7 +130,7 @@ cursor remains zero. Its own acknowledgement then advances the cursor, and a
 read after revision 2 returns an empty, consistent tail. Browser sign-in and
 reload recover the same two messages without duplicates, in observer mode with
 Stop mounted and no console errors/warnings. The served main asset's SHA-256 matches the current canonical
-worktree asset. Existing user/review processes remain running.
+worktree asset for that checkpoint. Existing user/review processes were preserved.
 
 Artifact measurements and memory-sample limits are in the
 [scorecard](goal-scorecard.md). Logs and fixture results remain in ignored

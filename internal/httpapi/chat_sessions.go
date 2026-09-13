@@ -19,6 +19,7 @@ func (s *Server) chatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/chat/sessions/{id}/save", s.handleSaveChatSession)
 	mux.HandleFunc("DELETE /api/chat/sessions/{id}", s.handleDeleteChatSession)
 	mux.HandleFunc("GET /api/chat/messages", s.handleChatMessages)
+	mux.HandleFunc("GET /api/chat/messages/{seq}/content", s.handleChatMessageContent)
 	mux.HandleFunc("POST /api/chat/cursor", s.handleChatCursor)
 }
 

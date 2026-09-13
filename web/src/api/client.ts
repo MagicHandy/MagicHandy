@@ -804,10 +804,15 @@ export const api = {
     request<ChatSessionsResponse>("PUT", `/api/chat/sessions/${encodeURIComponent(sessionId)}/save`, {}),
   deleteChatSession: (sessionId: string) =>
     request<ChatSessionsResponse>("DELETE", `/api/chat/sessions/${encodeURIComponent(sessionId)}`),
-  getChatMessages: (sessionId: string, after = 0, recovery?: { revision?: number; signal?: AbortSignal }) => {
+  getChatMessages: (sessionId: string, after = 0, recovery?: { revision?: number; snapshot?: ChatMessagesResponse["snapshot"]; signal?: AbortSignal }) => {
     const query = new URLSearchParams({ session_id: sessionId });
     if (recovery?.revision !== undefined) query.set("after_revision", String(recovery.revision));
     else if (after > 0) query.set("after", String(after));
+    if (recovery?.snapshot) {
+      query.set("snapshot_revision", String(recovery.snapshot.revision));
+      query.set("snapshot_pruned_revision", String(recovery.snapshot.pruned_revision));
+      query.set("snapshot_first_seq", String(recovery.snapshot.first_seq));
+    }
     return request<ChatMessagesResponse>("GET", `/api/chat/messages?${query.toString()}`, undefined, recovery?.signal);
   },
   advanceChatCursor: (sessionId: string, seq: number, recovery?: { revision?: number; epoch?: string; signal?: AbortSignal }) =>

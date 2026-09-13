@@ -253,6 +253,9 @@ export interface ChatHistoryMessage {
 // One row of the server-side shared chat log (the canonical history; each
 // client reads via its own cursor and reads are never destructive).
 export interface ChatLogMessage {
+  content_bytes?: number;
+  content_truncated?: boolean;
+  diagnostics_omitted?: boolean;
   revision?: number;
   seq: number;
   role: "user" | "assistant";
@@ -461,6 +464,7 @@ export interface ChatSessionsResponse {
 }
 
 export interface ChatMessagesResponse {
+  snapshot?: { revision: number; pruned_revision: number; first_seq: number };
   messages: ChatLogMessage[];
   latest_seq: number;
   cursor: number;

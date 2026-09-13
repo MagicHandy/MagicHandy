@@ -2283,7 +2283,10 @@ SSE placeholders reconcile with durable rows without duplicate messages or
 speech replay. Cursor writes honor cancellation, stay outside control delivery,
 and retain at most 4,096 markers. Browser reads, acknowledgements and retries are
 bounded. Migration preserves conversation content and compatible legacy read
-positions. Response-byte budgets and the broader acceptance matrix remain open.
+positions. History now uses 256 KiB JSON pages, resumable reset windows and
+explicit 16 KiB previews with exact-content downloads. Publication waiters honor
+cancellation and downloads release database connections before bounded writes.
+The broader request/stream budgets and network acceptance matrix remain open.
 
 - account-link invitation/acceptance/revocation UI and any linked context that
   can affect motion or controller ownership

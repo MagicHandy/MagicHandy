@@ -1,12 +1,14 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 )
@@ -29,7 +31,14 @@ func chatCursorClientID(r *http.Request) string {
 // Reads do not advance cursors. The committed snapshot supplies an independent
 // revision cursor, because a pending reply can commit below the highest seq.
 func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
-	request := chat.MessagePageRequest{SessionID: strings.TrimSpace(r.URL.Query().Get("session_id")), ClientID: chatCursorClientID(r)}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	r = r.WithContext(ctx)
+	request, err := parseChatHistoryRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	if request.SessionID == "" {
 		var err error
 		request.SessionID, err = s.chatLog.ActiveSessionIDContext(r.Context())
@@ -38,39 +47,17 @@ func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	for key, target := range map[string]*int64{"after": &request.AfterSequence, "after_revision": nil} {
-		if value := r.URL.Query().Get(key); value != "" {
-			parsed, err := strconv.ParseInt(value, 10, 64)
-			if err != nil || parsed < 0 {
-				writeError(w, http.StatusBadRequest, errors.New(key+" must be a non-negative integer"))
-				return
-			}
-			if target != nil {
-				*target = parsed
-			} else {
-				request.AfterRevision = &parsed
-			}
-		}
-	}
-	if request.AfterSequence > 0 && request.AfterRevision != nil {
-		writeError(w, http.StatusBadRequest, errors.New("use either after or after_revision"))
-		return
-	}
-	if value := r.URL.Query().Get("limit"); value != "" {
-		parsed, err := strconv.Atoi(value)
-		if err != nil || parsed < 1 {
-			writeError(w, http.StatusBadRequest, errors.New("limit must be a positive integer"))
-			return
-		}
-		request.Limit = parsed
-	}
 	// Autopilot attaches speech after its message commit under this lock. A page
 	// must not acknowledge past that message before its optional speech ID exists.
-	s.chatSpeechMu.Lock()
+	if err := s.chatSpeechMu.Lock(ctx); err != nil {
+		return
+	}
 	page, err := s.chatLog.ReadMessagePageContext(r.Context(), request)
 	if err == nil {
 		for index := range page.Messages {
-			page.Messages[index].SpeechRequestID = s.chatSpeechRequests[page.Messages[index].Seq]
+			if id := s.chatSpeechRequests[page.Messages[index].Seq]; len(id) <= 128 {
+				page.Messages[index].SpeechRequestID = id
+			}
 		}
 	}
 	s.chatSpeechMu.Unlock()
@@ -82,10 +69,17 @@ func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	writeJSON(w, http.StatusOK, struct {
+	data, err := json.Marshal(struct {
 		chat.MessagePage
 		ServerEpoch string `json:"server_epoch"`
 	}{page, s.controller.epoch})
+	if err != nil || len(data)+1 > chat.MessagePageMaxBytes {
+		s.writeChatStorageError(w, errors.New("chat page encoding exceeded its budget"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = writeChatBytes(ctx, w, append(data, '\n'))
 }
 
 func (s *Server) handleChatCursor(w http.ResponseWriter, r *http.Request) {

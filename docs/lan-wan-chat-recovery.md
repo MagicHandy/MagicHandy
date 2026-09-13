@@ -59,6 +59,7 @@ application's serialized write gate.
 | `latest_seq` | Highest retained display sequence; informational. |
 | `revision` | Current committed conversation head. |
 | `next_revision` | Recovery position through the changes delivered by this page. |
+| `snapshot` | Continuation anchor for an incomplete reset: head revision, pruning marker and first retained sequence. |
 | `first_seq` | Earliest retained display row; old cached rows below it are removed. |
 | `has_more` | More committed changes remain after this page. |
 | `reset` | Replace the cached conversation with the supplied retained snapshot. |
@@ -66,18 +67,57 @@ application's serialized write gate.
 | `server_epoch` | Process identity used to reject stale responses and acknowledgements. |
 | `cursor`, `cursor_revision` | This caller's saved display/recovery read positions. |
 
-Normal delta reads honor a positive `limit`, capped at 200. A reset returns the
-complete retained window, even if a smaller limit was requested: using a partial
-reset cursor below the deletion marker would otherwise repeatedly restart the
-same snapshot. Initial reads, a future cursor, explicit deletion and a missed
-retention window can require a reset. The response makes retention loss visible;
-it does not promise recovery of data already removed by the existing log cap.
+All pages, including resets, honor a positive `limit`, capped at 200, and a
+**256 KiB encoded JSON budget**. Initial reads, a future cursor, explicit
+deletion and a missed retention window can require a reset. Only the first page
+of a reset replaces the cache. If `snapshot` is present, the next request sends
+`after_revision=next_revision`, `snapshot_revision`, `snapshot_pruned_revision`
+and `snapshot_first_seq` from that response. These are read offsets, not grants.
+
+A continuation reads only rows at or below its anchored head. Completing it
+advances to that head, then subsequent delta pages recover newer commits,
+including late commits at earlier display sequences. Deletion after the anchor,
+a changed pruning marker or a changed first retained row starts a new bounded
+reset. The first-row check matters when an earlier late reply was pruned at a
+higher revision than rows pruned afterward. No database snapshot, transaction,
+server-side continuation cache or socket is retained between pages. Retention
+loss stays visible; the protocol cannot recover messages already removed by the
+existing log cap.
 
 The legacy `after` sequence query remains supported and cannot be combined with
 `after_revision`. It does not acquire the new revision protocol's late-commit
-guarantee. The shipped browser uses committed revisions. Snapshot byte budgets
-and pagination for exceptionally large retained messages remain part of
-LAN-07/LAN-13; a row count alone is not a response-byte bound.
+guarantee. The shipped browser uses committed revisions. Custom API clients must
+follow `has_more` and the appropriate delivered sequence/revision; the
+informational head is not a substitute for page continuation.
+
+### Long messages and slow readers
+
+History selects at most **16 KiB of UTF-8 content per row inside SQLite**, ending
+on a complete character. `content_bytes` gives the canonical byte count and
+`content_truncated` explicitly identifies a preview. The UI labels the preview
+and offers **Download full message** as a native one-click download. Stored text,
+prompt-context policy and the existing 200-row retention policy are unchanged.
+Diagnostics larger than 8 KiB are omitted from previews with an explicit
+`diagnostics_omitted` marker; they are not deleted from storage. Encoding counts
+JSON escaping and reserves space for the envelope and bounded speech IDs.
+
+`GET /api/chat/messages/{seq}/content?session_id=…&revision=…` downloads the exact
+stored UTF-8 text as an attachment with `no-store` and `nosniff`. It uses the same
+authenticated shared-history read policy; pending rows, mismatched identities
+and deleted messages are unavailable. Each database read returns at most
+**64 KiB**, releases its connection, and then writes with a **five-second**
+socket deadline and request cancellation. Content-Length describes the complete
+file. Removal during transfer aborts HTTP framing rather than reporting success
+for shortened content. The browser does not materialize a full-message Blob or
+expand every long message into its rendered cache.
+
+History requests have a **ten-second** read/publication lifetime and bounded
+socket writes. The publication gate is cancelable without creating a waiter
+goroutine. Autopilot prepares persona, prompt provenance and its pending row
+outside that gate, using its run context and one captured conversation ID. The
+visible commit and optional speech association remain atomic to history readers.
+Interactive accepted-commit semantics are unchanged. The existing authenticated
+session/request admission and revocation policies also cover content downloads.
 
 `POST /api/chat/cursor` accepts `seq`, `revision`, `server_epoch` and the
 conversation ID. A revision acknowledgement from an old process is rejected.
@@ -113,10 +153,12 @@ a canceled waiter cannot later advance a cursor.
 
 The focused `useChatHistory` hook owns the rendered cache and read lifecycle.
 It retains at most one history read and one cursor acknowledgement, with
-**15-second** deadlines. It consumes at most **four delta pages** in a catch-up
+**15-second** deadlines. It consumes at most **four pages** in a catch-up
 burst, continuing on later app-state polls if needed. The first failure may retry
 on the next poll; repeated failures back off to at most 30 seconds. Successful
-delivery resets that backoff.
+delivery resets that backoff. Snapshot continuation and speech suppression
+survive poll boundaries and retryable failures. Long-message downloads are
+explicit, independent of history recovery and read acknowledgements.
 
 Offline transitions, a new server epoch, visibility changes and unmount cancel
 obsolete reads and acknowledgements. Request-generation checks also reject a
@@ -149,9 +191,21 @@ changes do not add an audio lease or motion path.
   background/return, retention gaps, invalid metadata, deadlines and backoff.
   ChatPanel tests reconcile missing messages after SSE without duplicates or
   speech replay. API tests ensure read tracking stays outside command delivery.
+- [Byte/continuation regressions](../internal/chat/log_page_budget_test.go) cover
+  escaped large text, UTF-8 boundaries, metadata limits, complete retained-window
+  delivery, unchanged stored content and mutation/pruning between pages.
+- [Publication regressions](../internal/httpapi/chat_publication_test.go) reproduce
+  and fix a canceled reader stuck behind publication and reject a canceled
+  autonomous announcement. [Download tests](../internal/httpapi/chat_content_test.go)
+  verify authenticated exact-content delivery, pending/mismatched-row denial,
+  database release before writes and aborted framing when content disappears.
 
 Full verification, the current-source review and measured artifact sizes are in
 the [implementation log](lan-wan-implementation.md) and [scorecard](goal-scorecard.md).
-Real WAN/client scheduling, response-byte budgets, broader route/permission
-coverage and the network fault/load/soak matrix remain open. The full LAN/WAN
-goal remains active.
+The synthetic 20 x 128 KiB escaped-message fixture originally returned a
+15,731,179-byte JSON page. It now returns ten bounded preview pages totaling
+approximately 1.97 MB. This is a preview-traffic measurement, not a reduction in
+the canonical content available for explicit download or a WAN latency claim.
+Normal live chat SSE and full-download traffic require separate load budgets.
+Real WAN/client scheduling, broader route/permission coverage and the network
+fault/load/soak matrix remain open. The full LAN/WAN goal remains active.

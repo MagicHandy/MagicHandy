@@ -181,8 +181,9 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   capture revisions, independent controller liveness, bounded stream recovery
   and visibility resync. [Committed chat recovery](lan-wan-chat-recovery.md)
   adds coherent read pages, login-scoped bounded cursors, late-commit recovery,
-  retention-gap reporting and cancelable browser resync. Response-byte budgets,
-  the full network-fault matrix and real-network/mobile acceptance remain open.
+  retention-gap reporting and cancelable browser resync. History now uses 256 KiB
+  pages, resumable resets and explicit long-message previews/downloads. The full
+  network-fault matrix and real-network/mobile acceptance remain open.
 
 - [ ] **LAN-13 — Reduce telemetry and polling cost with measurements.** Measure
   the existing two-second full-state polling and eight-Hz per-client motion

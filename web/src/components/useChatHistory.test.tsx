@@ -24,6 +24,41 @@ beforeEach(() => { getMessages.mockReset(); advanceCursor.mockReset(); advanceCu
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("committed conversation recovery", () => {
+  it("continues a reset across polls and retries without restarting it or replaying speech", async () => {
+    const snapshot = { revision: 10, pruned_revision: 2, first_seq: 3 };
+    getMessages.mockImplementation(async (_session, _after, request) => {
+      const next = (request?.revision || 2) + 1;
+      return page([row(next, next, `retained ${next}`, `tts-${next}`)], 10, {
+        first_seq: 3, latest_seq: 10, next_revision: next, has_more: next < 10,
+        reset: request?.revision === 0, history_gap: request?.revision === 0,
+        snapshot: next < 10 ? snapshot : undefined,
+      });
+    });
+    const props = { ...options(), revision: 10, latestSeq: 10 };
+    const view = renderHook(useChatHistory, { initialProps: props });
+    await waitFor(() => expect(view.result.current.messages).toHaveLength(4));
+    expect(getMessages).toHaveBeenCalledTimes(4);
+    expect(getMessages.mock.calls[1][2]?.snapshot).toEqual(snapshot);
+    expect(view.result.current.historyNotice).toMatch(/older messages are no longer retained/);
+    getMessages.mockRejectedValueOnce(new Error("temporary connection loss"));
+    view.rerender({ ...props, pollEpoch: 2 });
+    await waitFor(() => expect(view.result.current.tailError).toMatch(/temporary connection loss/));
+    view.rerender({ ...props, pollEpoch: 3 });
+    await waitFor(() => expect(view.result.current.messages).toHaveLength(8));
+    expect(getMessages.mock.calls.map((call) => call[2]?.revision)).toEqual([0, 3, 4, 5, 6, 6, 7, 8, 9]);
+    expect(props.queueSpeech).not.toHaveBeenCalled();
+    expect(view.result.current.historyNotice).toMatch(/older messages are no longer retained/);
+    expect(advanceCursor).toHaveBeenLastCalledWith(sessionId, 10, expect.objectContaining({ revision: 10 }));
+  });
+
+  it("retains an explicit full-content download for a long message preview", async () => {
+    getMessages.mockResolvedValueOnce(page([{ ...row(1, 1, "bounded preview"), content_truncated: true, content_bytes: 100000 }], 1, { reset: true }));
+    const view = renderHook(useChatHistory, { initialProps: options() });
+    await waitFor(() => expect(view.result.current.messages).toHaveLength(1));
+    expect(view.result.current.messages[0]).toMatchObject({ text: "bounded preview", contentDownload: `/api/chat/messages/1/content?session_id=${sessionId}&revision=1` });
+    expect(getMessages).toHaveBeenCalledOnce();
+  });
+
   it("bounds catch-up work per state poll even when every page advertises more", async () => {
     getMessages.mockResolvedValueOnce(page([row(1)], 1, { reset: true }));
     const props = { ...options(), revision: 1, latestSeq: 1 };

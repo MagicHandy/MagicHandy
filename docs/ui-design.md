@@ -277,6 +277,13 @@ action for unavailable history. Cursor acknowledgements are passive read
 tracking and do not participate in controller command delivery. The
 [recovery contract](lan-wan-chat-recovery.md) records the lifecycle and bounds.
 
+Large history windows load in bounded pages across state polls. Recovery keeps
+its continuation and does not replay speech while catching up. A message longer
+than the history preview limit shows **Long message preview.** with a nearby
+**Download full message** link. This downloads the exact retained UTF-8 message
+directly; it does not add a full-message Blob or permanent expanded text to the
+conversation cache. The preview is explicit, and storage/retention are unchanged.
+
 The testing-badged Manual motion group lives in `#/settings/device` — it drives
 the device, so it belongs with the connection that carries it rather than among
 read-only diagnostics — and it

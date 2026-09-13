@@ -61,6 +61,18 @@ describe("ChatPanel history", () => {
     advanceChatCursor.mockResolvedValue({ cursor: 0, session_id: SESSION_ID });
   });
 
+  it("offers a direct download beside an explicitly labeled long-message preview", async () => {
+    getChatMessages.mockResolvedValueOnce({ session_id: SESSION_ID, cursor: 0, latest_seq: 1,
+      messages: [{ seq: 1, revision: 1, role: "assistant", content: "Visible preview", content_bytes: 100000, content_truncated: true, created_at: "now" }],
+    });
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    const download = await screen.findByRole("link", { name: "Download full message" });
+    expect(screen.getByText("Long message preview.")).toBeInTheDocument();
+    expect(download).toHaveAttribute("download");
+    expect(download).toHaveAttribute("href", `/api/chat/messages/1/content?session_id=${SESSION_ID}&revision=1`);
+    expect(getChatMessages).toHaveBeenCalledOnce();
+  });
+
   it("reconciles messages missed during SSE without duplicates or replaying speech", async () => {
     const metadata = { server_epoch: "chat-process", first_seq: 1, has_more: false, history_limit: 200, cursor: 0, cursor_revision: 0, session_id: SESSION_ID };
     getChatMessages.mockResolvedValueOnce({ ...metadata, revision: 1, next_revision: 1, latest_seq: 1, reset: true,

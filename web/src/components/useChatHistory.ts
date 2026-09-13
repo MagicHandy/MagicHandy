@@ -11,6 +11,7 @@ export interface ChatDisplayMessage {
   streaming?: boolean;
   warning?: boolean;
   diagnostics?: ChatMessageDiagnostics;
+  contentDownload?: string;
 }
 
 interface HistoryOptions {
@@ -48,7 +49,9 @@ export function useChatHistory(options: HistoryOptions) {
   const generation = useRef(0);
   const seeded = useRef(false);
   const needsTail = useRef(false);
-  const position = useRef<{ seq: number; revision?: number; epoch?: string }>({ seq: 0 });
+  const position = useRef<{ seq: number; revision?: number; epoch?: string; snapshot?: ChatMessagesResponse["snapshot"] }>({ seq: 0 });
+  const recoveringSpeech = useRef(false);
+  const retentionGap = useRef(false);
   const inFlight = useRef<{ controller: AbortController; promise: Promise<void>; full: boolean } | null>(null);
   const acknowledgement = useRef<{ controller: AbortController; timer: number } | null>(null);
   const speechSeen = useRef(new Set<string>());
@@ -100,14 +103,15 @@ export function useChatHistory(options: HistoryOptions) {
     const timer = window.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
     const promise = (async () => {
       let reset = full;
-      let recovering = suppressSpeech;
+      let recovering = suppressSpeech || recoveringSpeech.current;
+      recoveringSpeech.current = recovering;
       let needsAcknowledgement = false;
       try {
         for (let batch = 0; batch < MAX_PAGES_PER_READ; batch++) {
           const before = position.current;
           const after = reset ? 0 : before.seq;
           const afterRevision = reset ? 0 : before.revision;
-          const page = await api.getChatMessages(requestedSession, after, { revision: afterRevision, signal: controller.signal });
+          const page = await api.getChatMessages(requestedSession, after, { revision: afterRevision, snapshot: reset ? undefined : before.snapshot, signal: controller.signal });
           if (!current()) return;
           if (controller.signal.aborted) throw new Error("Conversation history request timed out.");
           if (!full && latest.current.busyRef.current) return;
@@ -120,22 +124,26 @@ export function useChatHistory(options: HistoryOptions) {
             continue;
           }
           const replace = reset || page.reset === true;
+          recovering = recovering || replace || before.snapshot !== undefined;
+          if (replace) retentionGap.current = page.history_gap === true;
           const deliveredSeq = page.messages.reduce((seq, item) => Math.max(seq, item.seq), replace ? 0 : before.seq);
           const next = modern ? page.next_revision! : undefined;
           if (modern && !replace && (next! < (before.revision ?? 0) || (page.has_more && next! <= (before.revision ?? 0)))) {
             throw new Error("Invalid conversation recovery response.");
           }
           setMessages((existing) => mergeMessages(existing, page, replace));
-          position.current = { seq: deliveredSeq, revision: next, epoch: modern ? page.server_epoch : undefined };
+          position.current = { seq: deliveredSeq, revision: next, epoch: modern ? page.server_epoch : undefined, snapshot: page.snapshot };
           needsAcknowledgement = deliveredSeq > page.cursor || (modern && next! > (page.cursor_revision ?? 0));
           seeded.current = true;
           failureCount.current = 0;
           retryAt.current = 0;
           needsTail.current = modern ? page.has_more === true : page.latest_seq > deliveredSeq;
+          recoveringSpeech.current = recovering && needsTail.current;
           setHistoryError("");
           setTailError(!modern && !page.messages.length && needsTail.current ? t("Conversation updates could not be synchronized; retrying.") : "");
-          if (page.history_gap) setHistoryNotice(t("Some older messages are no longer retained. Showing the available conversation history."));
-          else if (replace) setHistoryNotice(page.messages.length >= HISTORY_LIMIT ? t("Showing the latest {count} retained messages.", { count: HISTORY_LIMIT }) : "");
+          if (retentionGap.current) setHistoryNotice(t("Some older messages are no longer retained. Showing the available conversation history."));
+          else if (needsTail.current && recovering) setHistoryNotice(t("Loading remaining conversation history…"));
+          else setHistoryNotice(page.messages.length >= HISTORY_LIMIT ? t("Showing the latest {count} retained messages.", { count: HISTORY_LIMIT }) : "");
           // Recovery/resets never replay old speech. Normal tail delivery and
           // live SSE share the same bounded request-ID deduplication.
           for (const message of page.messages) if (message.speech_request_id) {
@@ -153,7 +161,7 @@ export function useChatHistory(options: HistoryOptions) {
         needsTail.current = true;
         failureCount.current += 1;
         retryAt.current = Date.now() + (failureCount.current === 1 ? 0 : Math.min(30_000, 1000 * 2 ** Math.min(failureCount.current, 5)));
-        if (full) { seeded.current = false; setHistoryError(failure(reason)); }
+        if (full && !seeded.current) { setHistoryError(failure(reason)); }
         else setTailError(t("Conversation updates delayed: {reason} Retrying.", { reason: failure(reason) }));
       } finally {
         window.clearTimeout(timer);
@@ -173,6 +181,8 @@ export function useChatHistory(options: HistoryOptions) {
     alive.current = true;
     seeded.current = false;
     position.current = { seq: 0 };
+    recoveringSpeech.current = false;
+    retentionGap.current = false;
     needsTail.current = false;
     failureCount.current = 0;
     retryAt.current = 0;
@@ -215,6 +225,12 @@ function validatePage(page: ChatMessagesResponse, sessionId: string, expectedEpo
   if (modern && ((page.latest_seq === 0 ? page.first_seq !== 0 : page.first_seq! <= 0 || page.first_seq! > page.latest_seq) ||
       page.messages.some((item) => !nonnegative(item.revision) || item.revision === 0 || item.revision > page.next_revision! || item.seq < page.first_seq!) ||
       new Set(page.messages.map((item) => item.seq)).size !== page.messages.length)) throw new Error("Invalid conversation recovery response.");
+  if (page.snapshot && (!modern || !nonnegative(page.snapshot.revision) || !nonnegative(page.snapshot.pruned_revision) ||
+      page.snapshot.pruned_revision > page.snapshot.revision || page.snapshot.revision > page.revision! ||
+      page.snapshot.revision <= page.next_revision! || page.snapshot.first_seq !== page.first_seq || !page.has_more)) throw new Error("Invalid conversation recovery response.");
+  if (page.messages.some((item) => item.content_truncated && (!nonnegative(item.content_bytes) || !nonnegative(item.revision) || item.revision === 0))) {
+    throw new Error("Invalid conversation recovery response.");
+  }
   if (expectedEpoch && (!modern || expectedEpoch !== page.server_epoch)) throw new Error("Conversation changed while reconnecting. Reload its history.");
   return modern;
 }
@@ -231,6 +247,7 @@ function mergeMessages(existing: ChatDisplayMessage[], page: ChatMessagesRespons
     bySequence.set(message.seq, {
       id: `log-${message.seq}`, seq: message.seq, role: message.role, text: message.content,
       diagnostics: message.diagnostics, warning: previous?.warning,
+      contentDownload: message.content_truncated ? `/api/chat/messages/${message.seq}/content?${new URLSearchParams({ session_id: page.session_id, revision: String(message.revision) })}` : undefined,
     });
   }
   return [...[...bySequence.values()].sort((a, b) => a.seq! - b.seq!), ...transient].slice(-HISTORY_LIMIT);

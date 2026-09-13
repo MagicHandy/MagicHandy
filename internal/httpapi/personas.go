@@ -834,17 +834,3 @@ func personaArchiveFilename(name string) string {
 	}
 	return base + persona.ArchiveExtension
 }
-
-// activeSessionPersona resolves the persona of whichever conversation is active.
-// Background work that speaks into the chat uses this so the assistant does not
-// change character the moment it starts talking on its own.
-func (s *Server) activeSessionPersona() (*persona.Persona, error) {
-	if s.chatLog == nil {
-		return nil, errors.New("chat session store is unavailable")
-	}
-	sessionID, err := s.chatLog.ActiveSessionID()
-	if err != nil {
-		return nil, fmt.Errorf("read active chat session: %w", err)
-	}
-	return s.sessionPersona(sessionID)
-}

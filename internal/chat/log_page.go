@@ -12,29 +12,40 @@ type MessagePageRequest struct {
 	ClientID      string
 	AfterSequence int64
 	AfterRevision *int64
+	Snapshot      *MessageSnapshot
 	Limit         int
 }
 
-// MessagePage describes one committed database snapshot. NextRevision covers
-// only delivered changes; Revision is the informational conversation head.
-type MessagePage struct {
-	SessionID      string       `json:"session_id"`
-	Messages       []LogMessage `json:"messages"`
-	LatestSeq      int64        `json:"latest_seq"`
-	FirstSeq       int64        `json:"first_seq"`
-	Revision       int64        `json:"revision"`
-	NextRevision   int64        `json:"next_revision"`
-	HasMore        bool         `json:"has_more"`
-	Reset          bool         `json:"reset"`
-	HistoryGap     bool         `json:"history_gap"`
-	HistoryLimit   int          `json:"history_limit"`
-	Cursor         int64        `json:"cursor"`
-	CursorRevision int64        `json:"cursor_revision"`
+// MessageSnapshot is a stateless continuation, not an access credential. Its
+// pruning marker detects removal even when the removed row predates the head.
+type MessageSnapshot struct {
+	Revision       int64 `json:"revision"`
+	PrunedRevision int64 `json:"pruned_revision"`
+	FirstSeq       int64 `json:"first_seq"`
 }
 
-// ReadMessagePageContext uses a short read transaction, without taking the
-// application's write gate. Rows, retained bounds, head and cursor cannot come
-// from different commits. No transaction survives an HTTP response write.
+// MessagePage describes one short database snapshot. NextRevision covers only
+// delivered changes. Snapshot, when present, must accompany the next request so
+// a partial reset below a deletion marker does not restart the same first page.
+type MessagePage struct {
+	SessionID      string           `json:"session_id"`
+	Messages       []LogMessage     `json:"messages"`
+	LatestSeq      int64            `json:"latest_seq"`
+	FirstSeq       int64            `json:"first_seq"`
+	Revision       int64            `json:"revision"`
+	NextRevision   int64            `json:"next_revision"`
+	Snapshot       *MessageSnapshot `json:"snapshot,omitempty"`
+	HasMore        bool             `json:"has_more"`
+	Reset          bool             `json:"reset"`
+	HistoryGap     bool             `json:"history_gap"`
+	HistoryLimit   int              `json:"history_limit"`
+	Cursor         int64            `json:"cursor"`
+	CursorRevision int64            `json:"cursor_revision"`
+}
+
+// ReadMessagePageContext bounds materialized rows and encoded message bytes
+// without taking the application's write gate. Bounds, rows and cursor share a
+// read transaction, which ends before any HTTP response write.
 func (l *MessageLog) ReadMessagePageContext(ctx context.Context, request MessagePageRequest) (MessagePage, error) {
 	page := MessagePage{SessionID: request.SessionID, Messages: []LogMessage{}, HistoryLimit: MessageLogCap}
 	tx, err := l.db.SQL().BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -59,29 +70,37 @@ func (l *MessageLog) ReadMessagePageContext(ctx context.Context, request Message
 		return page, err
 	}
 	page.Cursor, page.CursorRevision = min(cursor.Sequence, page.LatestSeq), min(cursor.Revision, page.Revision)
-	query, after, limit := messagePageQuery(&page, request, resetRevision, prunedRevision)
-	rows, err := tx.QueryContext(ctx, query, request.SessionID, after, limit+1)
+	after, head := messagePageRange(&page, request, resetRevision, prunedRevision)
+	limit := request.Limit
+	if limit <= 0 || limit > MessageLogCap {
+		limit = MessageLogCap
+	}
+	// Select bounded byte prefixes in SQLite. Scanning a full long row and then
+	// slicing it in Go would still allocate the unbounded source first.
+	query := messagePageSequenceQuery
+	if request.AfterRevision != nil {
+		query = messagePageRevisionQuery
+	}
+	rows, err := tx.QueryContext(ctx, query, request.SessionID, after, head, limit+1)
 	if err != nil {
 		return page, fmt.Errorf("read chat snapshot messages: %w", err)
 	}
-	messages, readErr := scanLogMessageRows(rows, true)
+	page.Messages, page.HasMore, err = scanBoundedMessagePage(rows, limit)
 	closeErr := rows.Close()
-	if readErr != nil {
-		return page, readErr
+	if err != nil {
+		return page, err
 	}
 	if closeErr != nil {
 		return page, closeErr
 	}
-	page.HasMore = len(messages) > limit
-	if page.HasMore {
-		messages = messages[:limit]
-	}
-	if messages != nil {
-		page.Messages = messages
-	}
-	page.NextRevision = page.Revision
+	page.NextRevision = head
 	if page.HasMore && request.AfterRevision != nil {
-		page.NextRevision = messages[len(messages)-1].Revision
+		page.NextRevision = page.Messages[len(page.Messages)-1].Revision
+	} else {
+		// Once the anchored window is delivered, newer commits are recovered as
+		// ordinary deltas. Never acknowledge the newer informational head here.
+		page.Snapshot = nil
+		page.HasMore = page.HasMore || head < page.Revision
 	}
 	if err := tx.Commit(); err != nil {
 		return page, fmt.Errorf("finish chat snapshot: %w", err)
@@ -89,27 +108,24 @@ func (l *MessageLog) ReadMessagePageContext(ctx context.Context, request Message
 	return page, nil
 }
 
-func messagePageQuery(page *MessagePage, request MessagePageRequest, resetRevision, prunedRevision int64) (query string, after int64, limit int) {
-	limit = request.Limit
-	if limit <= 0 || limit > MessageLogCap {
-		limit = MessageLogCap
-	}
-	after = max(0, request.AfterSequence)
-	query = `SELECT seq, role, content, client_id, diagnostics_json, created_at, revision
-		FROM messages WHERE session_id = ? AND committed = 1 AND seq > ? ORDER BY seq ASC LIMIT ?`
+func messagePageRange(page *MessagePage, request MessagePageRequest, resetRevision, prunedRevision int64) (after, head int64) {
+	after, head = max(0, request.AfterSequence), page.Revision
 	if request.AfterRevision == nil {
 		return
 	}
 	after = max(0, *request.AfterRevision)
 	page.HistoryGap = after > 0 && after < prunedRevision
-	page.Reset = after == 0 || after > page.Revision || after < resetRevision || page.HistoryGap
+	if snapshot := request.Snapshot; snapshot != nil && snapshot.Revision > 0 && snapshot.Revision <= head &&
+		after > 0 && after < snapshot.Revision && resetRevision <= snapshot.Revision && snapshot.PrunedRevision == prunedRevision && snapshot.FirstSeq == page.FirstSeq {
+		page.Snapshot = &MessageSnapshot{Revision: snapshot.Revision, PrunedRevision: prunedRevision, FirstSeq: page.FirstSeq}
+		page.HistoryGap = false // Older pruning was already accounted for at reset.
+		head = snapshot.Revision
+		return
+	}
+	page.Reset = request.Snapshot != nil || after == 0 || after > head || after < resetRevision || page.HistoryGap
 	if page.Reset {
 		after = 0
-		// Resets deliver the complete retained window. Splitting a reset below
-		// reset_revision would repeatedly restart pagination.
-		limit = MessageLogCap
+		page.Snapshot = &MessageSnapshot{Revision: head, PrunedRevision: prunedRevision, FirstSeq: page.FirstSeq}
 	}
-	query = `SELECT seq, role, content, client_id, diagnostics_json, created_at, revision
-		FROM messages WHERE session_id = ? AND committed = 1 AND revision > ? ORDER BY revision ASC, seq ASC LIMIT ?`
 	return
 }

@@ -2029,5 +2029,8 @@
   "Grant control permission": "Conceder permissão de controle",
   "Revoke control permission": "Revogar permissão de controle",
   "Ask the administrator for a control permission.": "Peça ao administrador uma permissão de controle.",
-  "Observer": "Observador"
+  "Observer": "Observador",
+  "Loading remaining conversation history…": "Carregando o restante do histórico da conversa…",
+  "Long message preview.": "Prévia de uma mensagem longa.",
+  "Download full message": "Baixar mensagem completa"
 }

@@ -169,6 +169,13 @@ from control grants and command delivery. One database read snapshot supplies
 rows and recovery metadata, while browser cancellation, full resync and bounded
 retries prevent stale responses from replacing a newer conversation view.
 
+History resets also obey the encoded response budget. Stateless continuations
+anchor the committed head, pruning marker and first retained row; mutations
+that invalidate that window restart a bounded reset. Long content has explicit
+previews and authenticated attachment downloads, with no database transaction
+held across network writes. Publication keeps message/speech visibility together
+while allowing canceled history requests and autonomous runs to leave its queue.
+
 Current evidence and outstanding requirements are recorded in the
 [implementation log](../lan-wan-implementation.md). The new exposure modes,
 permission/grant model, command deduplication and ordering, certificate/setup UI,
