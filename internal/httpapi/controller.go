@@ -119,6 +119,9 @@ func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request
 	if stopErr != nil {
 		response.Warning = "Control transferred after local Stop, but physical Stop could not be confirmed: " +
 			s.safeMotionErrorMessage(stopErr)
+		if !s.capabilities(r).ConfigureHost {
+			response.Warning = "Stop is unconfirmed. Check the device locally."
+		}
 	}
 	s.logger.Info("controller ownership transferred",
 		"stop_confirmed", response.StopConfirmed,

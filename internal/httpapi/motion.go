@@ -115,8 +115,8 @@ func (s *Server) motionStateValue() map[string]any {
 	}
 }
 
-func (s *Server) handleMotionState(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.motionState())
+func (s *Server) handleMotionState(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.clientMotionState(r))
 }
 
 func (s *Server) handleMotionEvents(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +130,7 @@ func (s *Server) handleMotionEvents(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	emit := func() bool {
-		if err := writeSSE(w, "motion", s.motionState()); err != nil {
+		if err := writeSSE(w, "motion", s.clientMotionState(r)); err != nil {
 			return false
 		}
 		return true
@@ -190,19 +190,23 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 	}
 	defer finishModeStop()
 	if state, err := s.stopActiveMotionForReplacement(r.Context(), "manual_test_replace"); err != nil {
-		s.writeMotionResult(w, state, err)
+		s.writeMotionResult(w, r, state, err)
 		return
 	}
 	finishModeStop()
 	// A canceled mode operation can publish its engine while being drained.
 	// Recheck after the drain so manual testing never races a late mode start.
 	if state, err := s.stopActiveMotionForReplacement(r.Context(), "manual_test_replace"); err != nil {
-		s.writeMotionResult(w, state, err)
+		s.writeMotionResult(w, r, state, err)
 		return
 	}
 	engine, admission, err := s.motionEngineForStart()
 	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New(s.safeMotionErrorMessage(err)))
+		message := s.safeMotionErrorMessage(err)
+		if !s.capabilities(r).ConfigureHost {
+			message = clientFailure(message)
+		}
+		writeError(w, http.StatusServiceUnavailable, errors.New(message))
 		return
 	}
 	settings, _ = s.store.Snapshot()
@@ -218,7 +222,7 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state, err := engine.StartAtGeneration(r.Context(), target, settings.Motion, admission)
-	s.writeMotionResult(w, state, err)
+	s.writeMotionResult(w, r, state, err)
 }
 
 func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
@@ -256,7 +260,7 @@ func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	updated, err := engine.ApplyTarget(r.Context(), target, "ui_target")
-	s.writeMotionResult(w, updated, err)
+	s.writeMotionResult(w, r, updated, err)
 }
 
 // handleMotionQuick patches motion settings (speed/stroke/direction), persists
@@ -278,6 +282,10 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if body.HandyModel != nil && !s.capabilities(r).ConfigureHost {
+		writeError(w, http.StatusForbidden, errors.New(administratorHostAccessRequired))
 		return
 	}
 
@@ -314,7 +322,7 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 
 	payload := map[string]any{"motion": saved.Public().Motion}
 	if engine := s.currentMotionEngine(); engine != nil {
-		payload["engine"] = engine.Snapshot()
+		payload["engine"] = s.clientMotionSnapshot(r, engine.Snapshot())
 	}
 	status := http.StatusOK
 	if refreshErr != nil {
@@ -337,8 +345,12 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleEmergencyStop(w http.ResponseWriter, r *http.Request, reason string) {
 	outcome, err := s.emergencyStop(r.Context(), reason)
+	if s.auth.authenticationRequired() {
+		s.writePublicStopResult(w, outcome, err)
+		return
+	}
 	if outcome.engineAvailable {
-		s.writeMotionResult(w, outcome.state, err)
+		s.writeMotionResult(w, r, outcome.state, err)
 		return
 	}
 
@@ -478,12 +490,12 @@ func (s *Server) handleMotionPause(w http.ResponseWriter, r *http.Request) {
 	}
 	if !admitted {
 		finishModePause(false)
-		s.writeMotionResult(w, engine.Snapshot(), nil)
+		s.writeMotionResult(w, r, engine.Snapshot(), nil)
 		return
 	}
 	state, err := engine.Pause(r.Context(), "ui_pause")
 	finishModePause(state.Paused)
-	s.writeMotionResult(w, state, err)
+	s.writeMotionResult(w, r, state, err)
 }
 
 func (s *Server) handleMotionResume(w http.ResponseWriter, r *http.Request) {
@@ -499,23 +511,26 @@ func (s *Server) handleMotionResume(w http.ResponseWriter, r *http.Request) {
 	}
 	if !admitted {
 		finishModeResume(false)
-		s.writeMotionResult(w, engine.Snapshot(), nil)
+		s.writeMotionResult(w, r, engine.Snapshot(), nil)
 		return
 	}
 	state, err := engine.Resume(r.Context(), "ui_resume")
 	finishModeResume(err == nil && state.Running && !state.Paused)
-	s.writeMotionResult(w, state, err)
+	s.writeMotionResult(w, r, state, err)
 }
 
 // writeMotionResult always returns the resolved engine state so the UI can
 // reconcile optimistic controls, and reports transport failures as 502 with the
 // state attached rather than a bare error.
-func (s *Server) writeMotionResult(w http.ResponseWriter, state motion.ActiveMotionState, err error) {
+func (s *Server) writeMotionResult(w http.ResponseWriter, r *http.Request, state motion.ActiveMotionState, err error) {
 	status := http.StatusOK
-	payload := map[string]any{"available": true, "engine": state}
+	payload := map[string]any{"available": true, "engine": s.clientMotionSnapshot(r, state)}
 	if err != nil {
 		status = http.StatusBadGateway
 		payload["error"] = s.safeMotionErrorMessage(err)
+		if !s.capabilities(r).ConfigureHost {
+			payload["error"] = administratorDetails
+		}
 	}
 	writeJSON(w, status, payload)
 }

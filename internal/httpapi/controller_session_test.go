@@ -35,7 +35,7 @@ func claimAuthenticatedController(t *testing.T, server *Server, cookie *http.Coo
 	return snapshot
 }
 
-func authenticatedControlRequest(server *Server, cookie *http.Cookie, method, route, clientID, body string) *httptest.ResponseRecorder {
+func authenticatedControlRequest(server *Server, cookie *http.Cookie, method, route, clientID, body string, prepare ...func(*http.Request)) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, route, strings.NewReader(body))
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set(controllerHeaderName, clientID)
@@ -51,6 +51,9 @@ func authenticatedControlRequest(server *Server, cookie *http.Cookie, method, ro
 	server.commands.mu.Unlock()
 	r.Header.Set(commandIDHeader, rand.Text())
 	r.AddCookie(cookie)
+	for _, edit := range prepare {
+		edit(r)
+	}
 	w := httptest.NewRecorder()
 	server.Handler().ServeHTTP(w, r)
 	return w

@@ -2072,5 +2072,9 @@
   "macOS": "macOS",
   "Linux": "Linux",
   "Android": "Android",
-  "iOS": "iOS"
+  "iOS": "iOS",
+  "Details are available to the administrator.": "Os detalhes estão disponíveis para o administrador.",
+  "Stop is unconfirmed. Check the device locally.": "A parada não foi confirmada. Verifique o dispositivo no local.",
+  "Host settings and diagnostics are managed by an administrator.": "As configurações e os diagnósticos do computador anfitrião são gerenciados por um administrador.",
+  "Shared library": "Biblioteca compartilhada"
 }

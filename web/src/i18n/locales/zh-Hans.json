@@ -2072,5 +2072,9 @@
   "macOS": "macOS",
   "Linux": "Linux",
   "Android": "Android",
-  "iOS": "iOS"
+  "iOS": "iOS",
+  "Details are available to the administrator.": "管理员可以查看详细信息。",
+  "Stop is unconfirmed. Check the device locally.": "尚未确认停止。请在设备旁检查设备。",
+  "Host settings and diagnostics are managed by an administrator.": "主机设置和诊断由管理员管理。",
+  "Shared library": "共享媒体库"
 }

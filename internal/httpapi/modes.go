@@ -110,7 +110,11 @@ func (s *Server) handleModeStart(w http.ResponseWriter, r *http.Request) {
 	defer s.personaMutationMu.Unlock()
 	status, err := s.modes.Start(r.Context(), body.Mode)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+		message := err.Error()
+		if body.Mode == modes.ModeFreestyle || body.Mode == modes.ModeAutopilot || body.Mode == modes.ModeChat {
+			message = s.clientRuntimeError(r, err)
+		}
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": message})
 		return
 	}
 	if s.stopSequence.Load() != stopSequence {
@@ -153,7 +157,7 @@ func (s *Server) handleModeStop(w http.ResponseWriter, r *http.Request) {
 	if stopMotion {
 		if engine := s.currentMotionEngine(); engine != nil {
 			if _, err := engine.Stop(r.Context(), "mode_stopped"); err != nil {
-				writeError(w, http.StatusBadGateway, errors.New("mode stopped, but the motion stop failed: "+err.Error()))
+				writeJSON(w, http.StatusBadGateway, map[string]string{"error": "mode stopped, but the motion stop failed: " + s.clientRuntimeError(r, err)})
 				return
 			}
 		}

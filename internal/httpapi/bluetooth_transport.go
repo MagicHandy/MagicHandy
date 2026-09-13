@@ -374,8 +374,8 @@ func (s *Server) bluetoothStatus(r *http.Request) bluetoothStatusResponse {
 		Gateway:       s.bluetoothGatewaySnapshot(r),
 		Status:        "success",
 		DispatchOwner: settings.Device.HSPDispatchOwner,
-		Bluetooth:     s.bluetoothSnapshot(),
-		Diagnostics:   s.bluetoothDiagnostics(),
+		Bluetooth:     s.clientBluetoothSnapshot(r),
+		Diagnostics:   s.clientTransportDiagnostics(r, s.bluetoothDiagnostics()),
 	}
 }
 

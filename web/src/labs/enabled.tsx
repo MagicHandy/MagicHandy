@@ -6,6 +6,7 @@ import {WorkspaceHead} from "../components/WorkspaceHead";
 const Workspace=lazy(()=>import("./LabsRoute").then(module=>({default:module.LabsRoute})));
 export function LabsRoute() {
   const {state}=useAppState();
+  if(state?.capabilities?.configure_host === false)return <section><WorkspaceHead title={t("Labs")}/><p>{t("Host settings and diagnostics are managed by an administrator.")}</p></section>;
   if(!state?.labs_enabled)return <section><WorkspaceHead title={t("Labs")}/><p>{t("Labs is disabled. Enable it in Settings > General.")}</p><a className="btn btn-secondary" href="#/settings/general">{t("Open Settings")}</a></section>;
   return <Suspense fallback={<p role="status">{t("Loading…")}</p>}><Workspace/></Suspense>;
 }

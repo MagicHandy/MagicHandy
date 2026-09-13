@@ -111,7 +111,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	provider, err := s.prepareLLMProvider(settings.LLM)
 	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": s.clientRuntimeError(r, err)})
 		return
 	}
 
@@ -158,7 +158,7 @@ func (s *Server) beginInteractiveChatStream(
 	message string,
 	promptContext interactiveChatPromptContext,
 ) (sseEmitter, bool) {
-	emit := sseEmitter(func(event string, payload any) error { return writeSSE(w, event, payload) })
+	emit := s.clientChatEmitter(w, r)
 	// Persist before starting SSE so canonical history failure cannot produce
 	// an untracked model turn. The seq rides the status event for client sync.
 	userSeq, err := s.chatLog.AppendTo(sessionID, chat.MessageRoleUser, message, clientIDFromRequest(r), nil)
@@ -773,9 +773,7 @@ func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, 
 	sessionID, userSeq, replySeq := record.SessionID, record.UserSeq, record.ReplySeq
 	diagnostics = record.Diagnostics
 	setSSEHeaders(w)
-	emit := func(event string, payload any) error {
-		return writeSSE(w, event, payload)
-	}
+	emit := s.clientChatEmitter(w, r)
 	if err := emit("status", map[string]any{
 		"state":         "deterministic_stop",
 		"provider":      settings.Provider,

@@ -202,7 +202,7 @@ func (s *Server) handleLibraryPatternPlay(w http.ResponseWriter, r *http.Request
 		SpeedPercent: *request.SpeedPercent, Pattern: &definition,
 	}
 	state, err := s.playLibraryPattern(r, target, stopSequence)
-	s.writeMotionResult(w, state, err)
+	s.writeMotionResult(w, r, state, err)
 }
 
 func (s *Server) handleLibraryProgramPlay(w http.ResponseWriter, r *http.Request) {
@@ -225,7 +225,7 @@ func (s *Server) handleLibraryProgramPlay(w http.ResponseWriter, r *http.Request
 		SpeedPercent: *request.SpeedPercent, Program: &definition,
 	}
 	state, err := s.playLibraryProgram(r, target, stopSequence)
-	s.writeMotionResult(w, state, err)
+	s.writeMotionResult(w, r, state, err)
 }
 
 func (s *Server) playLibraryPattern(r *http.Request, target motion.MotionTarget, stopSequence uint64) (motion.ActiveMotionState, error) {

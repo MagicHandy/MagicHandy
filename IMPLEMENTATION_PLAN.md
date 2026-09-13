@@ -2,6 +2,12 @@
 
 ## Core Direction
 
+The September 13 [LAN/WAN observer response contract](docs/lan-wan-observer-privacy.md)
+keeps host configuration/diagnostics out of shared responses while retaining
+granted semantic playback and chat. Login changes retire browser snapshots,
+drafts, notifications and queued quick edits. The full network implementation
+and acceptance scope remains in the [21-item checklist](docs/lan-wan-control-checklist.md).
+
 The September 6 funscript-filter review applies the continuous LLM motion
 lessons to media: conservative chatter removal, opt-in local C2 interpolation
 inside the shared curve, and backend measurements of actual filter effects.

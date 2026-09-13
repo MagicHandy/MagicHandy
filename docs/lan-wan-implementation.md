@@ -56,7 +56,56 @@ The implementation is in progress on `codex/lan-wan-control`:
 - independent management IDs, account-scoped login listing/renaming/revocation
   and bounded reconciliation of a lost management response;
 - a maintained 207-route role admission inventory, setup/private-account read
-  boundaries, operator control permission fixes and cancelable feedback writes.
+  boundaries, operator control permission fixes and cancelable feedback writes;
+- capability-specific shared response projections, administrator-only raw
+  diagnostics, a minimal public Stop acknowledgement and browser login lifetime
+  boundaries for snapshots, notifications and queued quick edits.
+
+## Observer privacy checkpoint — 2026-09-13
+
+The [response contract](lan-wan-observer-privacy.md) selects shared settings,
+motion, voice, media, transport and chat fields without host paths, worker
+commands or raw diagnostics. Detailed Labs/trace/transport reads require host
+administration. Granted operators retain semantic playback, limits, chat and
+feedback; the physical Handy profile remains an administrator setting. Public
+Stop acknowledgements contain no previous target and perform no login lookup.
+
+The production UI discards old snapshots, drafts, notifications, streams and
+queued quick edits when a login changes or ends. A delayed quick-setting
+response cannot flush an older login's next edit. A capability-loading regression
+also ensures host settings panels wait for the backend snapshot before mounting.
+
+Full Go tests, the full race suite, vet, zero-issue golangci-lint, the CGO-free
+stripped build, TypeScript and five-locale localization checks pass locally.
+The full browser suite passed 593 tests in 78 files; the added capability-loading
+regression and the final 23-test Settings suite pass after that run. The canonical
+UI was rebuilt before the final Go/embedded checks. The maintained matrix covers
+all 207 registrations and implicit HEAD; it is still admission coverage, with
+behavioral response/UI tests documented separately.
+
+The current source runs at `http://127.0.0.7:50001/#/settings/access` using fresh
+isolated accounts/data and simulated motion, with voice and LLM motion off.
+The previously used Ollama service was stopped; the installed runtime was
+started on loopback with its existing downloaded model. Real provider readiness
+and app chat complete, returning “The review build is ready.” in **101 ms**,
+one provider call, no repair/fallback and no motion. The fresh-server probe uses
+initial heartbeat admission, without takeover or Stop endpoints.
+
+Built-app authenticated HTTP checks verify administrator/operator settings and
+state projection, rejection of raw host routes, and shared committed chat text
+without model diagnostics. The served `/assets/index-w5vqGE1y.js` matches the
+worktree SHA-256 `E951172F9479D874C7777D2F9D8D5F0D656F50E64533C471E8DA5C16AE0F8F2F`.
+Browser review verifies the operator Access boundary, own sign-ins, restricted
+setup bookmark and shared chat. Desktop and 390-by-844 viewport layouts retain
+visible Stop, and the warning/error log is empty. The viewport is restored and
+the operator Access tab/process are retained. Viewport emulation is not physical
+phone acceptance. The [scorecard](goal-scorecard.md) records artifact costs and
+the limits of the response/memory samples.
+
+The full handler/resource/export audit, other deferred browser work, invitation
+consent, bounded audit history, stronger WAN enrollment/recovery, controlled
+network fault/load/soak and external/mobile/device acceptance remain open.
+No numbered checklist acceptance is closed from this checkpoint.
 
 ## Session management and admission checkpoint — 2026-09-13
 
@@ -373,12 +422,10 @@ media, mode and live-setting routes. Extend the completed route-admission
 inventory to handler/resource and UI scope, including payload redaction and an
 owner-approved invitation workflow.
 
-The next payload audit must address shared `GET /api/state` and
-`GET /api/settings`: their current snapshots include host filesystem paths and
-configuration metadata. Role admission alone does not remove those fields.
-Provide capability-appropriate response projections while preserving the
-semantic settings and status needed by observers; audit the other shared read
-and export payloads alongside them.
+The [observer privacy checkpoint](lan-wan-observer-privacy.md) now projects
+shared settings/state, runtime status and chat responses without host paths or
+diagnostics. Extend that evidence to the exhaustive handler/resource and export
+matrix, remaining delayed-work lifetimes and administrator consent workflows.
 
 The remaining durable chat recovery, RTT/stream diagnostics, telemetry budget,
 media/voice and transport-location behavior, audit history and enrollment,

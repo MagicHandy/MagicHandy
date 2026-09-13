@@ -85,7 +85,10 @@ func (s *Server) handleMediaSync(w http.ResponseWriter, r *http.Request) {
 			if responseStatus.Message == "" {
 				responseStatus.Message = message
 			}
-			writeJSON(w, statusCode, map[string]any{"sync": responseStatus, "error": message})
+			if !s.capabilities(r).ConfigureHost && statusCode >= http.StatusInternalServerError {
+				message = administratorDetails
+			}
+			writeJSON(w, statusCode, map[string]any{"sync": s.clientSyncStatus(r, responseStatus), "error": message})
 		}
 		switch {
 		case errors.Is(err, errMediaMotionInterrupted):
@@ -106,7 +109,7 @@ func (s *Server) handleMediaSync(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sync": status})
+	writeJSON(w, http.StatusOK, map[string]any{"sync": s.clientSyncStatus(r, status)})
 }
 
 func validateMediaSyncEvent(event mediaSyncEvent) error {
@@ -145,7 +148,7 @@ func (s *Server) handleMediaVideos(w http.ResponseWriter, r *http.Request) {
 	}
 	settings, _ := s.store.Snapshot()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"videos": visibleVideos(videos, settings.Media.ShowSupersededOriginals),
+		"videos": s.clientVideos(r, visibleVideos(videos, settings.Media.ShowSupersededOriginals)),
 	})
 }
 
@@ -220,8 +223,8 @@ func (s *Server) startMediaAutoScan(settings config.MediaSettings) {
 	)
 }
 
-func (s *Server) handleMediaScanState(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"scan": s.media.ScanState()})
+func (s *Server) handleMediaScanState(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"scan": s.clientScanState(r, s.media.ScanState())})
 }
 
 func (s *Server) handleMediaScanCancel(w http.ResponseWriter, r *http.Request) {
@@ -298,6 +301,9 @@ func (s *Server) handleMediaPlayback(w http.ResponseWriter, r *http.Request) {
 		"media":  saved.Public().Media,
 		"motion": saved.Public().Motion,
 	}
+	if !s.capabilities(r).ConfigureHost {
+		payload["media"] = clientMediaPreferences(saved.Media)
+	}
 	status := http.StatusOK
 	if runtimeErr != nil {
 		status = http.StatusBadGateway
@@ -337,10 +343,10 @@ func (s *Server) handleMediaScriptOffset(w http.ResponseWriter, r *http.Request)
 	payload := map[string]any{"status": "saved", "script_offset_ms": body.OffsetMillis}
 	if s.mediaSync != nil {
 		settings, _ := s.store.Snapshot()
-		payload["sync"] = s.mediaSync.SetScriptOffset(
+		payload["sync"] = s.clientSyncStatus(r, s.mediaSync.SetScriptOffset(
 			body.ID,
 			settings.Media.ScriptOffsetMillis+body.OffsetMillis,
-		)
+		))
 	}
 	writeJSON(w, http.StatusOK, payload)
 }

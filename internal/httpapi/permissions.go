@@ -15,6 +15,8 @@ type accountCapabilities struct {
 	SharedData    bool `json:"shared_data"`
 }
 
+const administratorHostAccessRequired = "administrator access required for host configuration, files and module management"
+
 func (s *Server) capabilities(r *http.Request) accountCapabilities {
 	if session, ok := authenticatedSession(r); ok {
 		return accountCapabilities{Control: session.session.CanControl(time.Now()),
@@ -42,7 +44,7 @@ func (s *Server) authorizeRoutes(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		message := "administrator access required for host configuration, files and module management"
+		message := administratorHostAccessRequired
 		if controlRoute(r) {
 			message = "this account is an observer; ask the administrator for a control permission"
 		}
@@ -55,11 +57,25 @@ func readRequest(r *http.Request) bool {
 }
 
 func hostPrivateRead(route string) bool {
-	return route == "/api/network" || strings.HasPrefix(route, "/api/network/") ||
+	return hostDiagnosticsRoute(route) || route == "/api/network" || strings.HasPrefix(route, "/api/network/") ||
 		route == "/api/setup" || strings.HasPrefix(route, "/api/setup/") ||
 		(strings.HasPrefix(route, "/api/llm/") && route != "/api/llm/status") ||
 		route == "/api/media/tools" || route == "/api/accounts" ||
 		(strings.HasPrefix(route, "/api/accounts/") && !singleResourceAction(route, "/api/accounts/", "/profile-image"))
+}
+
+func hostDiagnosticsRoute(route string) bool {
+	if strings.HasPrefix(route, "/api/labs/") || strings.HasPrefix(route, "/api/diagnostics/") || route == "/api/traces" || strings.HasPrefix(route, "/api/traces/") {
+		return true
+	}
+	switch route {
+	case "/api/transport/cloud/state", "/api/transport/cloud/events", "/api/transport/cloud/diagnostics",
+		"/api/transport/bluetooth/state", "/api/transport/bluetooth/events", "/api/transport/bluetooth/diagnostics",
+		"/api/transport/intiface/diagnostics":
+		return true
+	default:
+		return false
+	}
 }
 
 func singleResourceAction(route, prefix, action string) bool {
@@ -85,6 +101,9 @@ func selfServiceRoute(r *http.Request) bool {
 
 func controlRoute(r *http.Request) bool {
 	route := r.URL.Path
+	if strings.HasPrefix(route, "/api/motion/lab/") {
+		return false
+	}
 	if strings.HasPrefix(route, "/api/motion/") || strings.HasPrefix(route, "/api/modes/") || strings.HasPrefix(route, "/api/chat/") {
 		return true
 	}

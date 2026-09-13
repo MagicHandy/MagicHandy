@@ -161,6 +161,12 @@ contact; they do not create a second motion implementation.
 
 ## Acceptance and open work
 
+The [observer response contract](../lan-wan-observer-privacy.md) distinguishes
+shared installation content and semantic controls from host configuration and
+diagnostics. Protected public Stop returns only an acknowledgement without
+login/database admission. The browser discards the previous login's snapshots,
+drafts, notifications and queued quick edits when its audience changes.
+
 The [login management contract](../lan-wan-session-management.md) uses separate
 non-authenticating management IDs and transaction-level account ownership.
 Revocation retires existing session work and associated control/gateway

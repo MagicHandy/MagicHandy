@@ -2072,5 +2072,9 @@
   "macOS": "macOS",
   "Linux": "Linux",
   "Android": "Android",
-  "iOS": "iOS"
+  "iOS": "iOS",
+  "Details are available to the administrator.": "詳細は管理者が確認できます。",
+  "Stop is unconfirmed. Check the device locally.": "停止は確認できていません。デバイスを直接確認してください。",
+  "Host settings and diagnostics are managed by an administrator.": "ホストの設定と診断は管理者が管理します。",
+  "Shared library": "共有ライブラリ"
 }

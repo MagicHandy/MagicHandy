@@ -459,7 +459,7 @@ func (s *Server) handlePutLLMMotionMode(w http.ResponseWriter, r *http.Request) 
 	if s.modes != nil {
 		s.modes.Stop("llm_motion_mode_changed")
 	}
-	payload := map[string]any{"settings": saved.Public(), "mode": saved.LLM.MotionGenerationMode}
+	payload := map[string]any{"settings": s.clientSettings(r, saved.Public()), "mode": saved.LLM.MotionGenerationMode}
 	status := http.StatusOK
 	if runtimeErr != nil {
 		status = http.StatusBadGateway
@@ -551,7 +551,8 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	settings, status := s.store.PublicSnapshot()
 	observation := s.observationStamp()
 	s.observations.settingsMu.Unlock()
-	transportDiagnostics := s.transport.Diagnostics()
+	settings, status = s.clientSettings(r, settings), s.clientLoadStatus(r, status)
+	transportDiagnostics := s.clientTransportDiagnostics(r, s.transport.Diagnostics())
 	writeJSON(w, http.StatusOK, map[string]any{
 		"observation":    observation,
 		"service":        serviceName,
@@ -583,32 +584,32 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			"transport": "cloud_rest_browser_bluetooth_intiface_manual",
 			"voice":     "optional_worker_protocol_v1",
 		},
-		"llm":                 s.llmState(r.Context()),
+		"llm":                 s.clientLLMState(r),
 		"controller":          s.controllerState(r),
 		"capabilities":        s.capabilities(r),
 		"memory":              s.memoryState(r.Context()),
 		"modes":               s.modes.Status(),
-		"voice":               s.voiceState(),
+		"voice":               s.clientVoiceState(r),
 		"chat":                s.chatState(r.Context()),
 		"library":             s.libraryState(),
-		"media":               s.mediaState(r.Context()),
-		"motion":              s.motionState(),
+		"media":               s.clientMediaState(r),
+		"motion":              s.clientMotionState(r),
 		"motion_simulated":    s.motion.simulated,
 		"labs_enabled":        settings.Labs.Enabled,
 		"transport":           transportDiagnostics,
-		"cloud_transport":     s.cloudDiagnostics(),
-		"bluetooth_transport": s.bluetoothDiagnostics(),
-		"bluetooth_bridge":    s.bluetoothSnapshot(),
-		"intiface_transport":  s.intifaceSnapshot(),
+		"cloud_transport":     s.clientTransportDiagnostics(r, s.cloudDiagnostics()),
+		"bluetooth_transport": s.clientTransportDiagnostics(r, s.bluetoothDiagnostics()),
+		"bluetooth_bridge":    s.clientBluetoothSnapshot(r),
+		"intiface_transport":  s.clientIntifaceSnapshot(r),
 		"trace":               s.traces.Summary(),
 	})
 }
 
-func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	settings, status := s.store.PublicSnapshot()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"settings": settings,
-		"status":   status,
+		"settings": s.clientSettings(r, settings),
+		"status":   s.clientLoadStatus(r, status),
 	})
 }
 
@@ -691,8 +692,8 @@ func (s *Server) handlePutConnectionKey(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, responseStatus, payload)
 }
 
-func (s *Server) handleTransportDiagnostics(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.transport.Diagnostics())
+func (s *Server) handleTransportDiagnostics(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.clientTransportDiagnostics(r, s.transport.Diagnostics()))
 }
 
 func (s *Server) handleTraceExport(w http.ResponseWriter, _ *http.Request) {

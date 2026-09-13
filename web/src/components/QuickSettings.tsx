@@ -8,6 +8,7 @@ import type { HandyModel, MotionSettings } from "../api/types";
 import { RangeSlider } from "./RangeSlider";
 import { SegmentedChoice, SetpointSlider } from "./SetpointControls";
 import { useAppState, useToast } from "../state/app-state";
+import { useApplicationAudience } from "../state/application-audience";
 
 const STYLES = ["gentle", "balanced", "intense"] as const;
 const DEFAULT_HANDY_MODELS: HandyModel[] = ["handy_original", "handy_2_standard", "handy_2_pro"];
@@ -21,6 +22,7 @@ interface QuickSettingsProps {
 export function QuickSettings({ section = "all" }: QuickSettingsProps) {
   const { state, backendOnline, readOnly, refresh } = useAppState();
   const { show } = useToast();
+  const audience = useApplicationAudience();
   const motion = state?.settings?.motion;
   const handyModels = state?.settings?.options?.handy_models ?? DEFAULT_HANDY_MODELS;
   const locked = !backendOnline || readOnly;
@@ -58,6 +60,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
 
   // Combine rapid edits without resending untouched bounds from a stale poll.
   function push(patch: QuickPatch) {
+    if (locked || (patch.handy_model !== undefined && state?.capabilities?.configure_host === false)) return;
     revision.current += 1;
     for (const key of quickKeys(patch)) {
       dirtyRevisions.current.set(key, revision.current);
@@ -69,6 +72,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
   }
 
   async function flush() {
+    if (!audience.active) { pending.current = {}; return; }
     if (sending.current) return;
     const body = pending.current;
     const keys = quickKeys(body);
@@ -128,6 +132,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
         <SegmentedChoice
           className="quick-handy-model"
           label={t("Handy model")}
+          disabled={state?.capabilities?.configure_host === false}
           value={vals.handy_model}
           options={handyModels.map((model) => ({ value: model, label: handyModelLabel(model) }))}
           onChange={(handy_model) => {

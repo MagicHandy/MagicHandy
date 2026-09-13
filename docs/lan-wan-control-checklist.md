@@ -109,7 +109,9 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   reveals private history, media or host configuration.
   **In progress:** the [login management and admission checkpoint](lan-wan-session-management.md)
   covers all 207 current registrations and implicit HEAD at role admission.
-  Handler/resource, payload-redaction, consent and full UI coverage remain open.
+  [Observer response projections and UI boundaries](lan-wan-observer-privacy.md)
+  now cover host configuration/diagnostic payloads and granted playback versus
+  host edits. Exhaustive handler/resource, consent and full UI coverage remain open.
 
 - [ ] **LAN-06 — Preserve Stop under congestion and partial failure.** Reserve
   bounded capacity for Stop despite login floods, slow streams, LLM generation,

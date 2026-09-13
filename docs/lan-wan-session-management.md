@@ -65,11 +65,11 @@ operator, administrator and revoked-administrator callers.
 | Admission policy | Registrations | Meaning |
 | --- | ---: | --- |
 | Public | 6 | Shell, health, authentication entry points and global Stop |
-| Shared observation | 49 | Any enabled login may enter; installation data remains shared |
+| Shared observation | 34 | Any enabled login may enter; installation data remains shared |
 | Self-service / caller-scoped | 14 | Any enabled login may enter; the handler checks the affected identity/resource |
 | Gateway maintenance | 4 | Login admission is independent of controller status; gateway ownership is checked separately |
-| Semantic control | 33 | Administrator or operator with an unexpired control grant |
-| Host administration | 101 | Administrator admission; applicable controller/local-origin checks still apply |
+| Semantic control | 30 | Administrator or operator with an unexpired control grant |
+| Host administration | 119 | Administrator admission; applicable controller/local-origin checks still apply |
 
 The table verifies authentication and role **admission**, not successful
 execution of each route. Origin checks, command tickets/generations, gateway
@@ -78,6 +78,10 @@ dialogs remain additional contracts. Existing and new behavioral tests cover
 specific contracts; the table is not a substitute for their broader audit.
 In particular, admission of a shared read does not prove all its fields are
 appropriate for remote observation.
+
+The [observer privacy follow-up](lan-wan-observer-privacy.md) adds explicit
+response projections and restricts raw diagnostics/Labs to administrators.
+The counts above include that follow-up; runtime/resource checks remain separate.
 
 The audit fixed four mismatches:
 

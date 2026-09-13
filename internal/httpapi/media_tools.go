@@ -191,8 +191,8 @@ func (s *Server) scanFollowUp(settings config.MediaSettings) func(media.ScanStat
 	}
 }
 
-func (s *Server) handleMediaJobState(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"job": s.media.JobState()})
+func (s *Server) handleMediaJobState(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"job": s.clientJobState(r, s.media.JobState())})
 }
 
 func (s *Server) handleMediaJobCancel(w http.ResponseWriter, r *http.Request) {

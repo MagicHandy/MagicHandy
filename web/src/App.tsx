@@ -40,6 +40,7 @@ export function App() {
   const managedLLMSelected = llmSettings?.provider === "llama_cpp" && llmSettings.llama_cpp_mode === "managed";
   const theme = normalizeTheme(state?.settings?.ui?.theme);
   const authenticationLocked = Boolean(auth.status?.authentication_required && !auth.status.authenticated);
+  const hostAdministration = auth.status?.capabilities?.configure_host !== false && state?.capabilities?.configure_host !== false;
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = theme;
@@ -64,9 +65,9 @@ export function App() {
     const destination=legacyLabRoute(route);
     if(state?.labs_enabled&&destination)window.location.hash=destination;
   },[route,state?.labs_enabled]);
-  const askBeforeSetup = setupPending && !freshStore && base !== "setup" && !setupPromptDismissed;
+  const askBeforeSetup = hostAdministration && setupPending && !freshStore && base !== "setup" && !setupPromptDismissed;
   useEffect(() => {
-    if (setupPending && freshStore && base !== "setup") {
+    if (hostAdministration && setupPending && freshStore && base !== "setup") {
       window.location.hash = "#/setup";
     } else if (setupComplete && base === "setup" && !explicitSetup) {
       // An update can revive an existing browser tab whose old hash still
@@ -74,7 +75,7 @@ export function App() {
       // wizard after completion.
       window.location.hash = "#/chat";
     }
-  }, [base, explicitSetup, freshStore, setupComplete, setupPending]);
+  }, [base, explicitSetup, freshStore, setupComplete, setupPending, hostAdministration]);
   useEffect(() => {
     const workspace = document.getElementById("workspace");
     if (!workspace) return;
@@ -82,6 +83,7 @@ export function App() {
     workspace.scrollLeft = 0;
   }, [route]);
   useEffect(() => {
+    if (!hostAdministration) { setDuplicateRuntime(null); return; }
     if (!duplicateConfigKey || checkedDuplicateConfig.current === duplicateConfigKey) return;
     if (!managedLLMSelected) {
       checkedDuplicateConfig.current = duplicateConfigKey;
@@ -108,7 +110,7 @@ export function App() {
       canceled = true;
       window.clearTimeout(retryTimer);
     };
-  }, [duplicateConfigKey, managedLLMSelected]);
+  }, [duplicateConfigKey, managedLLMSelected, hostAdministration]);
 
   // Declining has to persist, or the same question returns on every launch,
   // which is the behaviour this replaced. Marking the store configured is what
@@ -173,7 +175,9 @@ export function App() {
           )}
         </section>
       ) : <ErrorBoundary key={contentBase}>
-        {contentBase === "setup" ? (
+        {contentBase === "setup" && !hostAdministration ? (
+          <section className="panel"><h1>{t("Setup")}</h1><p>{t("Host settings and diagnostics are managed by an administrator.")}</p><a href="#/settings/access">{t("Access")}</a></section>
+        ) : contentBase === "setup" ? (
           <SetupRoute />
         ) : contentBase === "personas" ? (
           <PersonasRoute />

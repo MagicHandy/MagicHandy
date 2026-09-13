@@ -343,14 +343,14 @@ interface NotificationSession {
   sourceKeys: string[];
 }
 
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function ToastProvider({ children, audience = "local" }: { children: ReactNode; audience?: string }) {
   const appState = useContext(AppStateContext);
   const [toast, setToast] = useState<{ message: string; tone: string; visible: boolean }>({
     message: "",
     tone: "info",
     visible: false,
   });
-  const [initialSession] = useState(readNotificationSession);
+  const [initialSession] = useState(() => readNotificationSession(audience));
   const [items, setItems] = useState<AppNotification[]>(initialSession.items);
   const consumedSourceKeys = useRef(new Set(initialSession.sourceKeys));
   const timer = useRef<number | undefined>(undefined);
@@ -393,8 +393,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     writeNotificationSession({
       items,
       sourceKeys: Array.from(consumedSourceKeys.current),
-    });
-  }, [items]);
+    }, audience);
+  }, [items, audience]);
 
   const show = useCallback((message: string, tone: NotificationTone = "info") => {
     window.clearTimeout(timer.current);
@@ -428,11 +428,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function readNotificationSession(): NotificationSession {
+function readNotificationSession(audience: string): NotificationSession {
   try {
     const raw = window.sessionStorage.getItem(NOTIFICATION_SESSION_KEY);
     if (!raw) return { items: [], sourceKeys: [] };
-    const stored = JSON.parse(raw) as { items?: unknown; sourceKeys?: unknown };
+    const stored = JSON.parse(raw) as { items?: unknown; sourceKeys?: unknown; audience?: unknown };
+    if ((stored.audience ?? "local") !== audience) return { items: [], sourceKeys: [] };
     const items = Array.isArray(stored.items)
       ? stored.items.map(readStoredNotification).filter((item): item is AppNotification => item !== null).slice(0, MAX_NOTIFICATIONS)
       : [];
@@ -499,9 +500,9 @@ function rememberNotificationSource(sourceKeys: Set<string>, sourceKey: string):
   return true;
 }
 
-function writeNotificationSession(session: NotificationSession): void {
+function writeNotificationSession(session: NotificationSession, audience: string): void {
   try {
-    window.sessionStorage.setItem(NOTIFICATION_SESSION_KEY, JSON.stringify(session));
+    window.sessionStorage.setItem(NOTIFICATION_SESSION_KEY, JSON.stringify({ ...session, audience }));
   } catch {
     // Notifications still work in memory when browser storage is unavailable.
   }

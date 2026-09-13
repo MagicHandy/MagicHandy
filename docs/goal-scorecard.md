@@ -1,5 +1,33 @@
 # Goal Scorecard
 
+## 2026-09-13 — Observer response privacy and browser login lifetime
+
+The [observer contract](lan-wan-observer-privacy.md) selects operational response
+fields, restricts raw host diagnostics and retires private UI state and queued
+quick edits across logins. It adds no dependency, periodic poll or motion path.
+Observer voice snapshots skip host module-path inspection.
+
+| Artifact | Previous session checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,713,536 B | 19,759,616 B | +46,080 B |
+| Main JS, raw | 812,586 B | 815,823 B | +3,237 B |
+| Main JS, gzip-9 | 224,220 B | 225,213 B | +993 B |
+| All embedded assets | 2,114,496 B | 2,119,298 B | +4,802 B |
+
+The comparison uses Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. Relative to the same-toolchain
+alpha.45 baseline, the binary adds **451,072 B (2.34%)**, main JS adds **12,617 B**
+gzip, and all assets add **85,643 B**. Only the canonical dist is shipped.
+
+In the isolated running fixture, administrator/operator responses respectively
+measured **10,049 / 7,052 B** for `/api/state` and **5,464 / 3,347 B** for
+`/api/settings`. This compares audiences in one fixture, not a controlled
+before/after performance run or a WAN bandwidth envelope. One process sample
+after LLM/chat and desktop browser review measured **93,175,808 B** working set
+and **81,985,536 B** private memory. The fixture and workload differ from prior
+samples; no RSS, CPU, startup or latency improvement is claimed. Controlled
+multi-client telemetry/load/soak measurements remain required work.
+
 ## 2026-09-13 — Account-owned login management and route admission
 
 The [session checkpoint](lan-wan-session-management.md) adds a bounded Access

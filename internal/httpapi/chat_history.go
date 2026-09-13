@@ -54,7 +54,13 @@ func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	page, err := s.chatLog.ReadMessagePageContext(r.Context(), request)
 	if err == nil {
+		hostAdministration := s.capabilities(r).ConfigureHost
 		for index := range page.Messages {
+			if !hostAdministration {
+				page.Messages[index].Diagnostics = nil
+				page.Messages[index].DiagnosticsOmitted = false
+				page.Messages[index].ClientID = ""
+			}
 			if id := s.chatSpeechRequests[page.Messages[index].Seq]; len(id) <= 128 {
 				page.Messages[index].SpeechRequestID = id
 			}

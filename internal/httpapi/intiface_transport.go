@@ -41,8 +41,8 @@ func newIntifaceRuntime(runtime Runtime) intifaceRuntime {
 	}
 }
 
-func (s *Server) handleIntifaceStatus(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.intifaceSnapshot())
+func (s *Server) handleIntifaceStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.clientIntifaceSnapshot(r))
 }
 
 func (s *Server) handleIntifaceDiagnostics(w http.ResponseWriter, _ *http.Request) {
