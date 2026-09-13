@@ -425,6 +425,75 @@
   margin: 0;
 }
 
+.session-management-header,
+.session-actions,
+.session-name-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.session-management-header {
+  justify-content: space-between;
+}
+
+.session-management-header .group-title {
+  margin: 0;
+}
+
+.session-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+
+.session-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.session-summary {
+  display: grid;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+
+.session-summary small {
+  color: var(--muted);
+}
+
+.session-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--accent);
+  font-size: 0.78rem;
+}
+
+.session-actions {
+  align-content: start;
+  align-items: start;
+  justify-content: end;
+}
+
+.session-name-form {
+  grid-column: 1 / -1;
+  align-items: end;
+}
+
+.session-name-form .field {
+  flex: 1 1 220px;
+}
+
+@media (max-width: 640px) {
+  .session-row { grid-template-columns: minmax(0, 1fr); }
+  .session-actions { justify-content: start; }
+}
+
 .linked-profile-list {
   display: grid;
 }

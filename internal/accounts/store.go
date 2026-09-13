@@ -68,6 +68,7 @@ type Account struct {
 // Session is an authenticated account plus the server-enforced absolute
 // expiration. The raw bearer token is returned only by NewSession.
 type Session struct {
+	ID string `json:"id"`
 	// Key is a non-bearer database identity used only for server-side lifetime
 	// checks. It must never be serialized or accepted as a login credential.
 	Key              string        `json:"-"`
@@ -295,12 +296,24 @@ func (s *Store) Authenticate(ctx context.Context, username, password string) (Ac
 // NewSession creates a high-entropy bearer token while storing only its
 // SHA-256 digest. A database disclosure therefore does not reveal live tokens.
 func (s *Store) NewSession(ctx context.Context, accountID string) (string, Session, error) {
+	return s.NewSessionWithClient(ctx, accountID, SessionClient{})
+}
+
+// NewSessionWithClient records only a coarse, untrusted browser/platform hint.
+// The independent management ID is never accepted as a bearer credential.
+func (s *Store) NewSessionWithClient(ctx context.Context, accountID string, client SessionClient) (string, Session, error) {
 	raw := make([]byte, 32)
 	if err := s.randomBytes(raw); err != nil {
 		return "", Session{}, fmt.Errorf("generate session token: %w", err)
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	tokenHash := hashSessionToken(token)
+	var publicRandom [16]byte
+	if err := s.randomBytes(publicRandom[:]); err != nil {
+		return "", Session{}, fmt.Errorf("generate session management identity: %w", err)
+	}
+	publicID := base64.RawURLEncoding.EncodeToString(publicRandom[:])
+	client = normalizedSessionClient(client)
 	nowTime := s.now()
 	now := nowTime.Format(time.RFC3339Nano)
 	expires := nowTime.Add(s.lifetime)
@@ -325,26 +338,28 @@ func (s *Store) NewSession(ctx context.Context, accountID string) (string, Sessi
 			return ErrInvalidCredentials
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO user_sessions(token_hash, user_id, created_at, last_seen_at, expires_at)
-			VALUES(?, ?, ?, ?, ?)
-		`, tokenHash, accountID, now, now, expires.Format(time.RFC3339Nano)); err != nil {
+			INSERT INTO user_sessions(token_hash, user_id, created_at, last_seen_at, expires_at, public_id, client_browser, client_platform)
+			VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+		`, tokenHash, accountID, now, now, expires.Format(time.RFC3339Nano), publicID, client.Browser, client.Platform); err != nil {
 			return err
 		}
+		// Keep the newly issued login even when clocks give several logins the
+		// same creation timestamp. Tie-breaking by hash must never evict it.
 		_, err := tx.ExecContext(ctx, `
 			DELETE FROM user_sessions
 			WHERE token_hash IN (
 				SELECT token_hash FROM user_sessions
-				WHERE user_id = ?
+				WHERE user_id = ? AND token_hash <> ?
 				ORDER BY created_at DESC, token_hash DESC
 				LIMIT -1 OFFSET ?
 			)
-		`, accountID, MaxSessionsPerAccount)
+		`, accountID, tokenHash, MaxSessionsPerAccount-1)
 		return err
 	})
 	if err != nil {
 		return "", Session{}, fmt.Errorf("create user session: %w", err)
 	}
-	return token, Session{Key: tokenHash, Account: account, ControlAccountID: account.ID, ExpiresAt: expires}, nil
+	return token, Session{ID: publicID, Key: tokenHash, Account: account, ControlAccountID: account.ID, ExpiresAt: expires}, nil
 }
 
 // ResolveSession authenticates a token and advances its idle timestamp at most
@@ -376,10 +391,10 @@ func (s *Store) CheckSession(ctx context.Context, key string) (Session, error) {
 func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (Session, error) {
 	var account Account
 	var disabled int
-	var lastSeenRaw, expiresRaw, controlAccountID string
+	var lastSeenRaw, expiresRaw, controlAccountID, publicID string
 	err := s.db.SQL().QueryRowContext(ctx, `
 		SELECT a.id, a.username, a.role, a.disabled, a.last_login_at, a.created_at, a.updated_at,
-		       a.profile_updated_at, s.last_seen_at, s.expires_at,
+		       a.profile_updated_at, s.last_seen_at, s.expires_at, s.public_id,
 		       CASE
 		         WHEN EXISTS (
 		           SELECT 1
@@ -398,7 +413,7 @@ func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (
 	`, key).Scan(
 		&account.ID, &account.Username, &account.Role, &disabled,
 		&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt,
-		&account.ProfileUpdatedAt, &lastSeenRaw, &expiresRaw, &controlAccountID,
+		&account.ProfileUpdatedAt, &lastSeenRaw, &expiresRaw, &publicID, &controlAccountID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrInvalidSession
@@ -438,7 +453,7 @@ func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (
 	if controlAccountID == "" {
 		controlAccountID = account.ID
 	}
-	session := Session{Key: key, Account: account, ControlAccountID: controlAccountID, ExpiresAt: expires}
+	session := Session{ID: publicID, Key: key, Account: account, ControlAccountID: controlAccountID, ExpiresAt: expires}
 	if account.Role != RoleAdmin {
 		session.ControlGrant, err = s.ControlGrant(ctx, account.ID)
 	}

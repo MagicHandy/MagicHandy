@@ -14,6 +14,7 @@ const (
 )
 
 type controllerCancellationKey struct{}
+type sessionCancellationKey struct{}
 
 type sessionActivity struct {
 	ctx      context.Context
@@ -102,6 +103,7 @@ func (s *Server) trackSessionActivity(next http.Handler) http.Handler {
 		defer cancel()
 		stopSession := context.AfterFunc(lifetime, cancel)
 		defer stopSession()
+		ctx = context.WithValue(ctx, sessionCancellationKey{}, stopSession)
 		if lifetime.Err() != nil {
 			cancel()
 		}

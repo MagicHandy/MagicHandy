@@ -161,6 +161,13 @@ contact; they do not create a second motion implementation.
 
 ## Acceptance and open work
 
+The [login management contract](../lan-wan-session-management.md) uses separate
+non-authenticating management IDs and transaction-level account ownership.
+Revocation retires existing session work and associated control/gateway
+authority while permitting a bounded acknowledgement of the durable change.
+An explicit source-covered route table tests role admission; it does not
+replace handler ownership, origin, redaction or apply-time checks.
+
 The [chat recovery contract](../lan-wan-chat-recovery.md) extends observation
 ordering to the durable conversation log. Display sequence and committed
 revision are distinct; a pending reply committed later must remain recoverable

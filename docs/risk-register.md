@@ -1839,6 +1839,14 @@ three-artifact reviewed setup path without reusing or moving alpha.12.
 
 Level: High
 
+The [session management checkpoint](lan-wan-session-management.md) adds
+account-owned management IDs, transaction-level actor revalidation and active
+request/gateway/controller retirement. Self-revocation retains a bounded
+acknowledgement without retaining authority. A 207-route admission table tests
+roles and implicit HEAD, and exact setup status now requires administrator
+access. This is admission coverage; full payload redaction, handler/UI scope,
+invitations, audit history and real WAN/mobile/device acceptance remain open.
+
 Implementation update 2026-09-12: the LAN/WAN branch adds session-and-tab-bound
 control, a process epoch and ownership generation, explicit foreground
 heartbeats, a periodic stop watchdog, stream/session cancellation and expiring

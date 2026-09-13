@@ -56,12 +56,25 @@ func readRequest(r *http.Request) bool {
 
 func hostPrivateRead(route string) bool {
 	return route == "/api/network" || strings.HasPrefix(route, "/api/network/") ||
-		strings.HasPrefix(route, "/api/setup/") ||
+		route == "/api/setup" || strings.HasPrefix(route, "/api/setup/") ||
 		(strings.HasPrefix(route, "/api/llm/") && route != "/api/llm/status") ||
-		route == "/api/media/tools" || route == "/api/accounts"
+		route == "/api/media/tools" || route == "/api/accounts" ||
+		(strings.HasPrefix(route, "/api/accounts/") && !singleResourceAction(route, "/api/accounts/", "/profile-image"))
+}
+
+func singleResourceAction(route, prefix, action string) bool {
+	id, ok := strings.CutPrefix(route, prefix)
+	if !ok || !strings.HasSuffix(id, action) {
+		return false
+	}
+	id = strings.TrimSuffix(id, action)
+	return id != "" && !strings.Contains(id, "/")
 }
 
 func selfServiceRoute(r *http.Request) bool {
+	if ownSessionManagementRoute(r) {
+		return true
+	}
 	switch r.URL.Path {
 	case "/api/auth/logout", "/api/auth/password", "/api/auth/control-identity", "/api/auth/profile-image", "/api/controller/heartbeat", "/api/chat/cursor":
 		return true
@@ -76,13 +89,14 @@ func controlRoute(r *http.Request) bool {
 		return true
 	}
 	if strings.HasPrefix(route, "/api/voice/requests/") ||
-		(strings.HasPrefix(route, "/api/library/") && strings.HasSuffix(route, "/play")) {
+		(strings.HasPrefix(route, "/api/library/") && strings.HasSuffix(route, "/play")) ||
+		singleResourceAction(route, "/api/library/feedback/", "/undo") {
 		return true
 	}
 	switch route {
 	case "/api/controller/takeover", "/api/media/sync", "/api/media/duration", "/api/media/script-offset", "/api/media/playback",
 		"/api/voice/transcriptions", "/api/voice/preferences", "/api/voice/input-preferences", "/api/library/feedback",
-		"/api/transport/bluetooth/status", "/api/transport/bluetooth/ack":
+		"/api/transport/bluetooth/status", "/api/transport/bluetooth/ack", "/api/settings/llm-motion-mode":
 		return true
 	default:
 		return false

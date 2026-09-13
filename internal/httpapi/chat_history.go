@@ -79,7 +79,7 @@ func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = writeChatBytes(ctx, w, append(data, '\n'))
+	_ = writeContextBytes(ctx, w, append(data, '\n'))
 }
 
 func (s *Server) handleChatCursor(w http.ResponseWriter, r *http.Request) {

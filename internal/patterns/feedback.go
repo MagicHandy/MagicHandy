@@ -14,10 +14,15 @@ const feedbackWeightStep = 0.15
 
 // ApplyFeedback records one thumbs adjustment and returns the visible row.
 func (l *Library) ApplyFeedback(patternID string, rating int) (Feedback, Pattern, error) {
+	return l.ApplyFeedbackContext(context.Background(), patternID, rating)
+}
+
+// ApplyFeedbackContext does not apply a queued adjustment after its caller loses
+// authority or cancels the request.
+func (l *Library) ApplyFeedbackContext(ctx context.Context, patternID string, rating int) (Feedback, Pattern, error) {
 	if rating != -1 && rating != 1 {
 		return Feedback{}, Pattern{}, fmt.Errorf("%w: feedback rating must be -1 or 1", ErrInvalidContent)
 	}
-	ctx := context.Background()
 	var feedback Feedback
 	var pattern Pattern
 	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
@@ -70,7 +75,12 @@ func (l *Library) ApplyFeedback(patternID string, rating int) (Feedback, Pattern
 // UndoFeedback restores the exact prior weight/enablement when no newer
 // feedback exists for that pattern.
 func (l *Library) UndoFeedback(id int64) (Feedback, Pattern, error) {
-	ctx := context.Background()
+	return l.UndoFeedbackContext(context.Background(), id)
+}
+
+// UndoFeedbackContext keeps the ordering checks and both updates in the same
+// cancelable transaction.
+func (l *Library) UndoFeedbackContext(ctx context.Context, id int64) (Feedback, Pattern, error) {
 	var feedback Feedback
 	var pattern Pattern
 	var patternID string

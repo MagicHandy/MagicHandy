@@ -29,6 +29,15 @@ See [Self-hosted HTTPS](self-hosted-https.md) and the open
 
 ## Backend observation lifecycle
 
+Access settings includes the current account's signed-in browsers. The backend
+supplies names, coarse client hints, activity/expiry times and controller or
+Bluetooth-browser indicators. Observers may rename or sign out their own
+logins without taking control. Names are labels, not verified identity. A
+sign-out confirmation explains that control/gateway retirement requests Stop;
+the UI does not claim physical confirmation. Canceled reads cannot overwrite
+newer results, and a lost action response is reconciled without replay. See
+the [login management contract](lan-wan-session-management.md).
+
 The Bluetooth panel distinguishes the device connection in this browser from
 one in another browser. An observer can view the connection without publishing
 its own disconnected/unsupported state over the owning browser's status.

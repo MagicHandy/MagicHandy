@@ -107,6 +107,9 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   **Acceptance:** a route-level role/grant matrix passes negative tests as well
   as UI tests. Selecting a linked profile never silently grants authority or
   reveals private history, media or host configuration.
+  **In progress:** the [login management and admission checkpoint](lan-wan-session-management.md)
+  covers all 207 current registrations and implicit HEAD at role admission.
+  Handler/resource, payload-redaction, consent and full UI coverage remain open.
 
 - [ ] **LAN-06 — Preserve Stop under congestion and partial failure.** Reserve
   bounded capacity for Stop despite login floods, slow streams, LLM generation,
@@ -222,6 +225,9 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   intimate content out of audit records and exports.
   **Acceptance:** a reported remote action can be attributed and correlated with
   a trace; users can end access from a lost device and see when it took effect.
+  **In progress:** [account-owned session inspection, names and revocation](lan-wan-session-management.md)
+  are implemented, including active-work retirement. Bounded audit history,
+  grant/ownership attribution and the complete acceptance scenario remain open.
 
 ## P2 — WAN implementation and release acceptance
 

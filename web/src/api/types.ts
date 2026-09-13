@@ -3,6 +3,9 @@
 // authoritative, so unknown fields are ignored and read sites use optional
 // chaining. See docs/decisions/0009-react-frontend.md (State Model Rules).
 
+import type { AccountCapabilities } from "./access-types";
+export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus } from "./access-types";
+
 export type MotionStyle = "gentle" | "balanced" | "intense";
 export type HandyModel = "handy_original" | "handy_2_standard" | "handy_2_pro";
 export type NotificationCategory = "app" | "system" | "library" | "voice" | "updates";
@@ -1156,71 +1159,6 @@ export interface SetupStatus {
   helpers: { llama: boolean; parakeet: boolean; voice: boolean };
 }
 
-export type AccountRole = "admin" | "operator";
-
-export interface UserAccount {
-  id: string;
-  username: string;
-  role: AccountRole;
-  disabled: boolean;
-  has_profile_image: boolean;
-  profile_updated_at?: string;
-  last_login_at?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ControlIdentity {
-  account: UserAccount;
-  relationship: "self" | "linked";
-  label: string;
-  selected: boolean;
-}
-
-export interface AuthenticationStatus {
-	capabilities?: AccountCapabilities;
-  initialized: boolean;
-  authentication_required: boolean;
-  authenticated: boolean;
-  bootstrap_available: boolean;
-  ui_locale: string;
-  account: UserAccount | null;
-  control_identities: ControlIdentity[] | null;
-}
-
-export interface AccountCapabilities {
-  control: boolean;
-  configure_host: boolean;
-  shared_data: boolean;
-}
-
-export interface ControlGrant {
-  id: string;
-  account_id: string;
-  issued_by: string;
-  created_at: string;
-  expires_at: string;
-}
-
-export interface NetworkConfig {
-  mode: "local" | "direct_https" | "trusted_proxy" | "legacy";
-  listen_address: string;
-  public_url: string;
-  trusted_proxies: string[] | null;
-  tls_certificate: string;
-  tls_private_key: string;
-}
-
-export interface NetworkStatus {
-  active: NetworkConfig;
-  saved: NetworkConfig | null;
-  restart_required: boolean;
-  interfaces: Array<{ name: string; address: string; loopback: boolean }>;
-  forwarded: boolean;
-  authentication_required: boolean;
-  secure_cookie: boolean;
-  certificate?: { not_before: string; not_after: string; sha256: string; renewal_due: boolean; reload_error: boolean };
-}
 
 export interface ManagedLLMModel {
   id: string;

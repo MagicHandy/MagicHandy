@@ -11,6 +11,7 @@ import { AccountAvatar } from "./AccountAvatar";
 import { PasswordConfirmationField } from "./PasswordConfirmationField";
 import { NetworkSettingsPanel } from "./NetworkSettingsPanel";
 import { ControlGrantPanel } from "./ControlGrantPanel";
+import { SessionSettingsPanel } from "./SessionSettingsPanel";
 
 const errorMessage = (reason: unknown) => reason instanceof Error ? translateKnown(reason.message) : t("Request failed");
 
@@ -58,6 +59,7 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
     <>
       <h2 className="section-title">{t("Access")}</h2>
       <ProfileGroup account={account} disabled={!backendOnline} onChanged={auth.refresh} />
+      <SessionSettingsPanel key={auth.status.session_id || account.id} backendOnline={backendOnline} onSignedOut={auth.refresh} />
       <PasswordGroup disabled={!backendOnline} onChanged={auth.refresh} />
       <LinkedProfilesGroup />
       <NetworkSettingsPanel backendOnline={backendOnline} administrator={account.role === "admin"} />

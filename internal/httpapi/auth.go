@@ -83,6 +83,7 @@ func newAuthenticationComponents(store *config.Store, runtime Runtime) (*account
 
 func (s *Server) authenticationRoutes(mux *http.ServeMux) {
 	s.controlGrantRoutes(mux)
+	s.sessionManagementRoutes(mux)
 	mux.HandleFunc("GET /api/auth/status", s.handleAuthenticationStatus)
 	mux.HandleFunc("POST /api/auth/bootstrap", s.handleAuthenticationBootstrap)
 	mux.HandleFunc("POST /api/auth/login", s.handleAuthenticationLogin)
@@ -247,7 +248,9 @@ func (s *Server) handleAuthenticationStatus(w http.ResponseWriter, r *http.Reque
 	account, authenticated := authenticatedAccount(r)
 	settings, _ := s.store.PublicSnapshot()
 	controlIdentities := []accounts.ControlIdentity(nil)
+	currentSessionID := ""
 	if session, ok := authenticatedSession(r); ok {
+		currentSessionID = session.session.ID
 		controlIdentities, err = s.accounts.ControlIdentities(r.Context(), account.ID, session.session.ControlAccountID)
 		if err != nil {
 			s.logger.Warn("control identities could not be listed", "error", err)
@@ -263,6 +266,7 @@ func (s *Server) handleAuthenticationStatus(w http.ResponseWriter, r *http.Reque
 		"bootstrap_available":     isLocalHostRequest(r),
 		"ui_locale":               settings.UI.Locale,
 		"control_identities":      controlIdentities,
+		"session_id":              currentSessionID,
 		"capabilities":            s.capabilities(r),
 	})
 }
@@ -308,7 +312,7 @@ func (s *Server) handleAuthenticationBootstrap(w http.ResponseWriter, r *http.Re
 	// Switch the live middleware before session creation so a partial failure
 	// fails closed; the newly created credentials can still use JSON login.
 	s.auth.requireAuthentication()
-	token, session, err := s.accounts.NewSession(r.Context(), account.ID)
+	token, session, err := s.accounts.NewSessionWithClient(r.Context(), account.ID, sessionClientHint(r))
 	if err != nil {
 		if s.controller.BeginLocalLoss() {
 			s.stopLostController("account_protection_enabled")
@@ -514,7 +518,7 @@ func (s *Server) handleAuthenticationLogin(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusUnauthorized, accounts.ErrInvalidCredentials)
 		return
 	}
-	token, session, err := s.accounts.NewSession(r.Context(), account.ID)
+	token, session, err := s.accounts.NewSessionWithClient(r.Context(), account.ID, sessionClientHint(r))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, errors.New("login session could not be created"))
 		return
@@ -524,21 +528,19 @@ func (s *Server) handleAuthenticationLogin(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleAuthenticationLogout(w http.ResponseWriter, r *http.Request) {
-	_, token, authenticated := s.sessionFromRequest(r)
-	if !authenticated {
-		if _, ok := authenticatedAccount(r); !ok {
-			s.writeAuthenticationRequired(w)
-			return
-		}
+	current, ok := authenticatedSession(r)
+	if !ok {
+		s.writeAuthenticationRequired(w)
+		return
 	}
-	if token != "" {
-		if err := s.accounts.RevokeSession(r.Context(), token); err != nil {
-			writeError(w, http.StatusInternalServerError, errors.New("session could not be revoked"))
-			return
-		}
+	key, err := s.accounts.RevokeOwnSession(r.Context(), current.session.Key, current.session.ID)
+	if err != nil {
+		s.writeSessionManagementError(w, err)
+		return
 	}
 	s.clearSessionCookie(w)
 	w.Header().Set("Clear-Site-Data", `"cookies"`)
+	s.endRevokedSessions(r.Context(), key, []string{key})
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -101,6 +101,7 @@ var requiredSchemaTables = []schemaTable{
 	), primaryKey: []string{"id"}},
 	{name: "user_sessions", columns: columns(
 		"token_hash:TEXT", "user_id:TEXT", "created_at:TEXT", "last_seen_at:TEXT", "expires_at:TEXT", "control_account_id:TEXT?",
+		"public_id:TEXT", "device_name:TEXT", "client_browser:TEXT", "client_platform:TEXT",
 	), primaryKey: []string{"token_hash"}},
 	{name: "user_account_links", columns: columns(
 		"owner_user_id:TEXT", "linked_user_id:TEXT", "label:TEXT", "status:TEXT", "created_at:TEXT", "updated_at:TEXT",
@@ -123,6 +124,7 @@ var requiredSchemaIndexes = []schemaIndex{
 	{table: "media_videos", name: "media_videos_missing_name", columns: indexColumns("missing", "display_name", "id")},
 	{table: "user_accounts", name: "user_accounts_username_key", unique: true, columns: indexColumns("username_key")},
 	{table: "user_sessions", name: "user_sessions_user_expiry", columns: indexColumns("user_id", "expires_at")},
+	{table: "user_sessions", name: "user_sessions_public_id", unique: true, columns: indexColumns("public_id")},
 	{table: "user_account_links", name: "user_account_links_owner_status", columns: indexColumns("owner_user_id", "status", "linked_user_id")},
 }
 

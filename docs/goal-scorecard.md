@@ -1,5 +1,33 @@
 # Goal Scorecard
 
+## 2026-09-13 — Account-owned login management and route admission
+
+The [session checkpoint](lan-wan-session-management.md) adds a bounded Access
+panel, independent session-management IDs and revocation through the existing
+shared lifetime/Stop paths. It adds no dependency, motion path or periodic UI
+poll. Lists retain the 20-login cap, 80-code-point names, a 32 KiB encoded
+response limit, ten-second operation budget and cancelable socket writes.
+
+| Artifact | Previous history checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,649,536 B | 19,713,536 B | +64,000 B |
+| Main JS, raw | 803,280 B | 812,586 B | +9,306 B |
+| Main JS, gzip-9 | 221,680 B | 224,220 B | +2,540 B |
+| All embedded assets | 2,092,335 B | 2,114,496 B | +22,161 B |
+
+Measurements use Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+and Node 24.15.0 / zlib 1.3.1-e00f703 gzip level 9 for all compared artifacts.
+Compared with the same-toolchain alpha.45 baseline, the binary adds
+**404,992 B (2.10%)**, main JS adds **11,624 B** gzip, and total embedded assets
+add **80,841 B**. The canonical dist replaces the old hashed bundles.
+
+After real LLM/app-chat, login-management and browser review, one process
+sample measured **78,094,336 B** working set and **65,380,352 B** private memory.
+Its fixture and workload differ from the preceding checkpoint: this is not a
+controlled idle comparison or an RSS improvement claim. Multi-client CPU/RSS,
+state-age, connection/work saturation and long-running soak measurements remain
+part of the full LAN/WAN goal.
+
 ## 2026-09-13 — Bounded history recovery and full-message downloads
 
 The [chat recovery contract](lan-wan-chat-recovery.md) now limits each encoded

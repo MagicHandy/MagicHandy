@@ -2288,6 +2288,14 @@ explicit 16 KiB previews with exact-content downloads. Publication waiters honor
 cancellation and downloads release database connections before bounded writes.
 The broader request/stream budgets and network acceptance matrix remain open.
 
+The [login management checkpoint](docs/lan-wan-session-management.md) adds
+schema v22 independent session IDs, account-scoped list/name/revoke controls,
+apply-time actor validation and immediate active-work/gateway/controller
+retirement after revocation. A maintained 207-route admission matrix includes
+roles, revoked logins and implicit HEAD. Setup visibility and operator control
+permission mismatches are corrected; feedback writes honor cancellation.
+Audit history, invitations and the broader handler/UI acceptance remain open.
+
 - account-link invitation/acceptance/revocation UI and any linked context that
   can affect motion or controller ownership
 - automatic local CA creation/trust, leaf renewal, Android/iOS trust helpers,

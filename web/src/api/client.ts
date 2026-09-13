@@ -60,6 +60,7 @@ import type {
   VoiceState,
   VoiceWorkerStatus,
   AuthenticationStatus,
+  ManagedSessionsResponse,
   UserAccount,
   AccountRole,
   ControlIdentity,
@@ -491,6 +492,10 @@ export const api = {
   authBootstrap: (username: string, password: string) =>
     request<{ account: UserAccount }>("POST", "/api/auth/bootstrap", { username, password }),
   authLogout: () => request<null>("POST", "/api/auth/logout", {}),
+  authSessions: (signal?: AbortSignal) => request<ManagedSessionsResponse>("GET", "/api/auth/sessions", undefined, signal),
+  renameSession: (id: string, name: string, signal?: AbortSignal) => request<{ updated: boolean }>("PATCH", `/api/auth/sessions/${encodeURIComponent(id)}`, { name }, signal),
+  revokeSession: (id: string, signal?: AbortSignal) => request<{ revoked: number; current_revoked: boolean }>("DELETE", `/api/auth/sessions/${encodeURIComponent(id)}`, undefined, signal),
+  revokeOtherSessions: (signal?: AbortSignal) => request<{ revoked: number; current_revoked: boolean }>("DELETE", "/api/auth/sessions", undefined, signal),
   authChangePassword: (currentPassword: string, newPassword: string) =>
     request<null>("PUT", "/api/auth/password", { current_password: currentPassword, new_password: newPassword }),
   accounts: () => request<{ accounts: UserAccount[] }>("GET", "/api/accounts"),

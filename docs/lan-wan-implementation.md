@@ -52,9 +52,63 @@ The implementation is in progress on `codex/lan-wan-control`:
 - encoded history byte budgets, resumable resets, explicit long-message previews
   and exact-content downloads that release database connections before writes;
 - cancelable chat publication, with autonomous preparation outside the gate and
-  persona provenance resolved against one captured conversation.
+  persona provenance resolved against one captured conversation;
+- independent management IDs, account-scoped login listing/renaming/revocation
+  and bounded reconciliation of a lost management response;
+- a maintained 207-route role admission inventory, setup/private-account read
+  boundaries, operator control permission fixes and cancelable feedback writes.
+
+## Session management and admission checkpoint — 2026-09-13
+
+The [login management contract](lan-wan-session-management.md) adds schema v22,
+independent management IDs, account-owned names and revocation, and apply-time
+actor validation. Revocation closes active work and retires controller/gateway
+authority through the shared Stop lifecycle. The browser reconciles lost action
+responses without replay. A fixed-clock regression also prevents the session
+cap from evicting the login it just created.
+
+A maintained table covers all **207** registrations and implicit HEAD across
+anonymous, observer, granted operator, administrator and revoked-administrator
+callers. The audit corrected exact setup-status exposure, aligned private
+account-read admission with its handler, and enabled granted controllers to
+change LLM motion mode and undo feedback. Feedback transactions now honor
+request cancellation. The table establishes admission coverage; full handler,
+payload-redaction and UI capability coverage remain separate work.
+
+The full Go and race suites, vet, zero-issue pinned lint, CGO-free build, final
+embedded/architecture checks, typechecking, **582 frontend tests in 77 files**,
+the **2,074-key/five-locale** audit and production UI build pass. The new tests
+cover migration preservation across 300 rows, same-account management,
+cross-account denial, canceled/obsolete writer-queue operations, private key
+exclusion, HTTP self-revocation acknowledgement and open-stream termination.
+The file-size check prompted extraction of account/session/network payload
+types into `web/src/api/access-types.ts`; no gate was weakened. Localization
+allows only nine exact browser/platform product names to retain their spelling.
+
+The current source runs at **`http://127.0.0.6:49997/#/settings/access`**, using
+fresh isolated data and simulated motion. Its real provider readiness check
+passes, and app chat returns a nonempty response in **117 ms**, one provider
+call, no repair/fallback or motion. Actual HTTP requests rename a synthetic
+login and revoke its peer: the peer immediately returns **401**, while other
+logins remain valid and the response excludes bearer cookies.
+
+The browser names its own login while remaining an observer, then refreshes
+the backend list. Desktop and 390-by-844 viewport review show readable session
+rows, wrapping controls and visible Stop. This is desktop browser emulation,
+not physical phone acceptance. The viewport is restored, the Access tab and
+process remain running, and browser error/warning logs are empty. The served
+main asset matches the worktree SHA-256. Earlier app sessions are preserved.
+The [scorecard](goal-scorecard.md) records sizes and memory-sample limitations;
+raw fixture evidence stays in ignored `.scratch/lan-wan/`.
+
+This advances LAN-03/05/16. All numbered acceptances remain open, including
+bounded audit history, invitations, stronger WAN enrollment/recovery, full
+handler/UI coverage, load/soak and external/mobile/physical-device evidence.
 
 ## History resource checkpoint — 2026-09-13
+
+See the newer [session management checkpoint](#session-management-and-admission-checkpoint--2026-09-13)
+for the current review app and validation.
 
 Two regressions reproduced an unbounded 15.7 MB history response from twenty
 large synthetic messages and a canceled reader stuck behind chat publication.
@@ -315,11 +369,19 @@ acceptance have not been tested.
 ## Next work and completion evidence
 
 Complete apply-time race/fault scenarios across all motion,
-media, mode and live-setting routes. Expand the permission matrix to an exhaustive
-route inventory and owner-approved invitation/session management workflow.
+media, mode and live-setting routes. Extend the completed route-admission
+inventory to handler/resource and UI scope, including payload redaction and an
+owner-approved invitation workflow.
+
+The next payload audit must address shared `GET /api/state` and
+`GET /api/settings`: their current snapshots include host filesystem paths and
+configuration metadata. Role admission alone does not remove those fields.
+Provide capability-appropriate response projections while preserving the
+semantic settings and status needed by observers; audit the other shared read
+and export payloads alongside them.
 
 The remaining durable chat recovery, RTT/stream diagnostics, telemetry budget,
-media/voice and transport-location behavior, session/audit management,
+media/voice and transport-location behavior, audit history and enrollment,
 authentication recovery, network fault/load fixtures and real device/browser
 matrix remain part of the goal. A simulator or green unit suite cannot establish
 real WAN, mobile, certificate enrollment or physical Stop acceptance.

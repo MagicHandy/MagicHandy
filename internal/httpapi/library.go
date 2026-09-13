@@ -293,7 +293,7 @@ func (s *Server) handleLibraryFeedback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	feedback, pattern, err := s.patterns.ApplyFeedback(body.PatternID, body.Rating)
+	feedback, pattern, err := s.patterns.ApplyFeedbackContext(r.Context(), body.PatternID, body.Rating)
 	if err != nil {
 		s.writeLibraryError(w, err)
 		return
@@ -310,7 +310,7 @@ func (s *Server) handleLibraryFeedbackUndo(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, errors.New("feedback id must be positive"))
 		return
 	}
-	feedback, pattern, err := s.patterns.UndoFeedback(id)
+	feedback, pattern, err := s.patterns.UndoFeedbackContext(r.Context(), id)
 	if err != nil {
 		s.writeLibraryError(w, err)
 		return
