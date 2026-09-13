@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"sync/atomic"
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/netaccess"
 )
 
 const (
@@ -26,9 +26,11 @@ type authenticationOptions struct {
 }
 
 type authenticationRuntime struct {
-	options  authenticationOptions
-	limiter  *loginLimiter
-	required *atomic.Bool
+	options        authenticationOptions
+	limiter        *loginLimiter
+	required       *atomic.Bool
+	unprotectedCtx context.Context
+	endUnprotected context.CancelFunc
 }
 
 type authenticatedAccountContextKey struct{}
@@ -42,7 +44,12 @@ type authenticatedSessionState struct {
 func newAuthenticationRuntime(options authenticationOptions, initialized bool) authenticationRuntime {
 	required := &atomic.Bool{}
 	required.Store(options.Required || initialized)
-	return authenticationRuntime{options: options, limiter: newLoginLimiter(), required: required}
+	unprotected, cancel := context.WithCancel(context.Background())
+	if required.Load() {
+		cancel()
+	}
+	return authenticationRuntime{options: options, limiter: newLoginLimiter(), required: required,
+		unprotectedCtx: unprotected, endUnprotected: cancel}
 }
 
 func (a authenticationRuntime) authenticationRequired() bool {
@@ -51,6 +58,7 @@ func (a authenticationRuntime) authenticationRequired() bool {
 
 func (a authenticationRuntime) requireAuthentication() {
 	a.required.Store(true)
+	a.endUnprotected()
 }
 
 func newAuthenticationComponents(store *config.Store, runtime Runtime) (*accounts.Store, authenticationRuntime, error) {
@@ -74,6 +82,7 @@ func newAuthenticationComponents(store *config.Store, runtime Runtime) (*account
 }
 
 func (s *Server) authenticationRoutes(mux *http.ServeMux) {
+	s.controlGrantRoutes(mux)
 	mux.HandleFunc("GET /api/auth/status", s.handleAuthenticationStatus)
 	mux.HandleFunc("POST /api/auth/bootstrap", s.handleAuthenticationBootstrap)
 	mux.HandleFunc("POST /api/auth/login", s.handleAuthenticationLogin)
@@ -92,6 +101,11 @@ func (s *Server) authenticationRoutes(mux *http.ServeMux) {
 
 func (s *Server) authenticateRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/motion/stop" {
+			// Stop is public and must not wait for session/database admission.
+			next.ServeHTTP(w, r)
+			return
+		}
 		if session, token, ok := s.sessionFromRequest(r); ok {
 			ctx := context.WithValue(r.Context(), authenticatedAccountContextKey{}, session.Account)
 			ctx = context.WithValue(ctx, authenticatedSessionContextKey{}, authenticatedSessionState{session: session, token: token})
@@ -133,7 +147,11 @@ func (s *Server) sessionFromRequest(r *http.Request) (accounts.Session, string, 
 		return accounts.Session{}, "", false
 	}
 	token := strings.TrimSpace(cookie.Value)
-	session, err := s.accounts.ResolveSession(r.Context(), token)
+	resolve := s.accounts.ResolveSession
+	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.URL.Path == "/api/controller/heartbeat" {
+		resolve = s.accounts.InspectSession
+	}
+	session, err := resolve(r.Context(), token)
 	if err != nil {
 		return accounts.Session{}, token, false
 	}
@@ -141,7 +159,7 @@ func (s *Server) sessionFromRequest(r *http.Request) (accounts.Session, string, 
 }
 
 func (s *Server) authenticatePassword(r *http.Request, username, password string) (accounts.Account, bool, error) {
-	address := remoteHost(r.RemoteAddr)
+	address := netaccess.ClientIP(r)
 	usernameKey := strings.ToLower(strings.TrimSpace(username))
 	if !s.auth.limiter.Allow(address, usernameKey) {
 		return accounts.Account{}, false, errAuthenticationThrottled
@@ -154,14 +172,6 @@ func (s *Server) authenticatePassword(r *http.Request, username, password string
 		return accounts.Account{}, false, err
 	}
 	return account, true, nil
-}
-
-func remoteHost(remoteAddress string) string {
-	host, _, err := net.SplitHostPort(strings.TrimSpace(remoteAddress))
-	if err != nil {
-		return strings.Trim(strings.TrimSpace(remoteAddress), "[]")
-	}
-	return host
 }
 
 func (s *Server) writeAuthenticationRequired(w http.ResponseWriter) {
@@ -250,9 +260,10 @@ func (s *Server) handleAuthenticationStatus(w http.ResponseWriter, r *http.Reque
 		"authentication_required": s.auth.authenticationRequired(),
 		"authenticated":           authenticated,
 		"account":                 optionalAccount(account, authenticated),
-		"bootstrap_available":     isLoopbackRemote(r.RemoteAddr) && isLoopbackHost(r.Host),
+		"bootstrap_available":     isLocalHostRequest(r),
 		"ui_locale":               settings.UI.Locale,
 		"control_identities":      controlIdentities,
+		"capabilities":            s.capabilities(r),
 	})
 }
 
@@ -264,7 +275,7 @@ func optionalAccount(account accounts.Account, present bool) any {
 }
 
 func (s *Server) handleAuthenticationBootstrap(w http.ResponseWriter, r *http.Request) {
-	if !isLoopbackRemote(r.RemoteAddr) || !isLoopbackHost(r.Host) || !isSameOriginBrowserRequest(r) {
+	if !isLocalHostRequest(r) || !isSameOriginBrowserRequest(r) {
 		writeError(w, http.StatusForbidden, errors.New("the first account can be created only from the computer running MagicHandy"))
 		return
 	}
@@ -297,11 +308,15 @@ func (s *Server) handleAuthenticationBootstrap(w http.ResponseWriter, r *http.Re
 	// Switch the live middleware before session creation so a partial failure
 	// fails closed; the newly created credentials can still use JSON login.
 	s.auth.requireAuthentication()
-	token, _, err := s.accounts.NewSession(r.Context(), account.ID)
+	token, session, err := s.accounts.NewSession(r.Context(), account.ID)
 	if err != nil {
+		if s.controller.BeginLocalLoss() {
+			s.stopLostController("account_protection_enabled")
+		}
 		writeError(w, http.StatusInternalServerError, errors.New("the initial account was created but a session could not be started"))
 		return
 	}
+	s.bootstrapController(r, session.Key)
 	s.setSessionCookie(w, token)
 	s.logger.Info("initial administrator account created", "account_id", account.ID)
 	writeJSON(w, http.StatusCreated, map[string]any{"account": account})

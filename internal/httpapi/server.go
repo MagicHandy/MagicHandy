@@ -26,6 +26,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/media"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
+	"github.com/mapledaemon/MagicHandy/internal/netaccess"
 	"github.com/mapledaemon/MagicHandy/internal/patterns"
 	"github.com/mapledaemon/MagicHandy/internal/persona"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
@@ -67,6 +68,8 @@ type Runtime struct {
 	AuthenticationRequired bool
 	SecureCookies          bool
 	AllowedBrowserHosts    []string
+	NetworkPolicy          *netaccess.Policy
+	NetworkCertificates    *netaccess.Certificates
 }
 
 // Server owns the local HTTP routes and embedded static asset serving.
@@ -76,6 +79,10 @@ type Server struct {
 	store               *config.Store
 	accounts            *accounts.Store
 	auth                authenticationRuntime
+	access              sessionActivityRuntime
+	accessWG            sync.WaitGroup
+	networkPolicy       *netaccess.Policy
+	networkCertificates *netaccess.Certificates
 	traces              *diagnostics.TraceRing
 	transport           transport.DiagnosticsProvider
 	cloud               cloudRuntime
@@ -170,28 +177,31 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 
 	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 	server := &Server{
-		static:          static,
-		logger:          logger,
-		store:           store,
-		accounts:        accountStore,
-		auth:            authRuntime,
-		traces:          runtime.Traces,
-		transport:       runtime.Transport,
-		cloud:           newCloudRuntime(runtime),
-		bluetooth:       newBluetoothRuntime(runtime),
-		intiface:        newIntifaceRuntime(runtime),
-		motion:          newMotionRuntime(runtime),
-		llm:             newLLMRuntime(runtime),
-		models:          modelManager,
-		managedLLM:      managedLLM,
-		updates:         newUpdateChecker(runtime, version),
-		controller:      newControllerRuntime(),
-		hostPathPicker:  systemHostPathPicker,
-		personalization: personalization,
-		lifecycleCtx:    lifecycleCtx,
-		lifecycleCancel: lifecycleCancel,
-		started:         time.Now().UTC(),
-		version:         version,
+		static:              static,
+		logger:              logger,
+		store:               store,
+		accounts:            accountStore,
+		auth:                authRuntime,
+		access:              newSessionActivityRuntime(),
+		networkPolicy:       runtime.NetworkPolicy,
+		networkCertificates: runtime.NetworkCertificates,
+		traces:              runtime.Traces,
+		transport:           runtime.Transport,
+		cloud:               newCloudRuntime(runtime),
+		bluetooth:           newBluetoothRuntime(runtime),
+		intiface:            newIntifaceRuntime(runtime),
+		motion:              newMotionRuntime(runtime),
+		llm:                 newLLMRuntime(runtime),
+		models:              modelManager,
+		managedLLM:          managedLLM,
+		updates:             newUpdateChecker(runtime, version),
+		controller:          newControllerRuntime(),
+		hostPathPicker:      systemHostPathPicker,
+		personalization:     personalization,
+		lifecycleCtx:        lifecycleCtx,
+		lifecycleCancel:     lifecycleCancel,
+		started:             time.Now().UTC(),
+		version:             version,
 	}
 	server.setup = newSetupManager(
 		lifecycleCtx,
@@ -203,25 +213,9 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	)
 	server.configureSetupManager()
 
-	manager, err := server.newModeManager()
-	if err != nil {
-		lifecycleCancel()
-		managedLLM.Close()
-		_ = modelManager.Close()
-		personalization.Close()
-		return nil, err
-	}
-	server.modes = manager
-
 	settings, _ := store.Snapshot()
-	server.configureVoice(settings.Voice, runtime.ExecutablePath, store.DataDir())
-
-	if err := server.openPersistentDomains(settings.Media.LibraryPaths, settings.Chat); err != nil {
+	if err := server.openRuntimeDomains(runtime, settings); err != nil {
 		lifecycleCancel()
-		server.modes.Shutdown()
-		if server.voice != nil {
-			server.voice.Shutdown()
-		}
 		managedLLM.Close()
 		_ = modelManager.Close()
 		personalization.Close()
@@ -232,19 +226,41 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	return server, nil
 }
 
+func (s *Server) openRuntimeDomains(runtime Runtime, settings config.Settings) error {
+	manager, err := s.newModeManager()
+	if err != nil {
+		return err
+	}
+	s.modes = manager
+	s.configureVoice(settings.Voice, runtime.ExecutablePath, s.store.DataDir())
+	if err := s.openPersistentDomains(settings.Media.LibraryPaths, settings.Chat); err != nil {
+		s.modes.Shutdown()
+		if s.voice != nil {
+			s.voice.Shutdown()
+		}
+		return err
+	}
+	return nil
+}
+
 func (s *Server) activate(runtime Runtime, settings config.Settings) {
 	mux := http.NewServeMux()
 	s.routes(mux)
 	s.handler = logRequests(s.logger, securityHeaders(
 		runtime.SecureCookies,
-		protectBrowserRequests(runtime.AllowedBrowserHosts, s.authenticateRequests(mux)),
+		s.protectNetworkRequests(protectBrowserRequests(runtime.AllowedBrowserHosts, s.authenticateRequests(s.authorizeRoutes(s.trackSessionActivity(mux))))),
 	))
 	s.startLLMAutoload(settings.LLM)
 	s.startVoiceAutoload(settings.Voice)
 	s.startMediaAutoScan(settings.Media)
+	s.startAccessWatchdog()
 }
 
 func normalizeRuntime(runtime Runtime) Runtime {
+	if runtime.NetworkPolicy != nil && runtime.NetworkPolicy.Config.Mode != netaccess.Local {
+		runtime.AuthenticationRequired = true
+		runtime.SecureCookies = true
+	}
 	if runtime.Traces == nil {
 		runtime.Traces = diagnostics.NewTraceRing(1)
 	}
@@ -330,10 +346,10 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	s.authenticationRoutes(mux)
+	s.networkRoutes(mux)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("GET /api/state", s.handleState)
-	mux.HandleFunc("GET /api/controller", s.handleControllerState)
-	mux.HandleFunc("POST /api/controller/takeover", s.handleControllerTakeover)
+	s.controllerRoutes(mux)
 	s.settingsAndUpdateRoutes(mux)
 	mux.HandleFunc("POST /api/host/path-picker", s.handleHostPathPicker)
 	s.personalizationRoutes(mux)
@@ -562,6 +578,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		},
 		"llm":                 s.llmState(r.Context()),
 		"controller":          s.controllerState(r),
+		"capabilities":        s.capabilities(r),
 		"memory":              s.memoryState(r.Context()),
 		"modes":               s.modes.Status(),
 		"voice":               s.voiceState(),
@@ -779,6 +796,8 @@ type statusRecorder struct {
 	bytes  int
 }
 
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 func (r *statusRecorder) WriteHeader(status int) {
 	if r.status != 0 {
 		return
@@ -797,12 +816,14 @@ func (r *statusRecorder) Write(data []byte) (int, error) {
 }
 
 func (r *statusRecorder) Flush() {
+	_ = r.FlushError()
+}
+
+func (r *statusRecorder) FlushError() error {
 	if r.status == 0 {
 		r.status = http.StatusOK
 	}
-	if flusher, ok := r.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	return http.NewResponseController(r.ResponseWriter).Flush()
 }
 
 func logRequests(logger *slog.Logger, next http.Handler) http.Handler {

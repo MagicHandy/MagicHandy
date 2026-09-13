@@ -2246,6 +2246,16 @@ multi-tenant.
 
 ## Follow-up / Out Of Scope
 
+The [robust LAN/WAN control checklist](docs/lan-wan-control-checklist.md) turns
+these follow-ups into a prioritized engineering backlog with acceptance criteria.
+The user selected self-hosted HTTPS with direct access or a trusted reverse
+proxy. Implementation is active under [ADR 0029](docs/decisions/0029-session-bound-network-control.md).
+The branch adds session-bound ownership, heartbeats/watchdogs, process epochs,
+expiring operator control permissions, explicit direct/proxy network modes and
+an Access settings UI. The [implementation log](docs/lan-wan-implementation.md)
+records verification and remaining acceptance; full LAN/WAN support is not yet
+complete. Legacy startup remains local/LAN-only unless a new mode is selected.
+
 - account-link invitation/acceptance/revocation UI and any linked context that
   can affect motion or controller ownership
 - automatic local CA creation/trust, leaf renewal, Android/iOS trust helpers,

@@ -15,12 +15,16 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/httpapi"
+	"github.com/mapledaemon/MagicHandy/internal/netaccess"
 )
 
 type serverSecurityFlags struct {
-	certificate *string
-	privateKey  *string
-	requireAuth *bool
+	certificate    *string
+	privateKey     *string
+	requireAuth    *bool
+	networkMode    *string
+	publicURL      *string
+	trustedProxies *string
 }
 
 type serverSecurity struct {
@@ -28,13 +32,18 @@ type serverSecurity struct {
 	AuthenticationRequired bool
 	AllowedBrowserHosts    []string
 	BaseURL                string
+	NetworkPolicy          *netaccess.Policy
+	Certificates           *netaccess.Certificates
 }
 
 func addServerSecurityFlags(flags *flag.FlagSet) serverSecurityFlags {
 	return serverSecurityFlags{
-		certificate: flags.String("tls-cert", "", "PEM certificate chain for HTTPS (requires -tls-key)"),
-		privateKey:  flags.String("tls-key", "", "PEM private key for HTTPS (requires -tls-cert)"),
-		requireAuth: flags.Bool("require-auth", false, "require a user account for all non-emergency routes, including on loopback"),
+		certificate:    flags.String("tls-cert", "", "PEM certificate chain for HTTPS (requires -tls-key)"),
+		privateKey:     flags.String("tls-key", "", "PEM private key for HTTPS (requires -tls-cert)"),
+		requireAuth:    flags.Bool("require-auth", false, "require a user account for all non-emergency routes, including on loopback"),
+		networkMode:    flags.String("network-mode", "", "network mode override: local, direct_https or trusted_proxy; local retains account protection for recovery"),
+		publicURL:      flags.String("public-url", "", "canonical external HTTPS origin for an explicit remote network mode"),
+		trustedProxies: flags.String("trusted-proxies", "", "comma-separated trusted proxy peer IPs/CIDRs; trusted_proxy mode only"),
 	}
 }
 
@@ -54,14 +63,16 @@ func prepareServerRuntime(
 		return runtime, serverSecurity{}, "", err
 	}
 	address := listenAddress(config.Default().Server.Address, settings.Server.Port, addressOverride)
-	security, err := resolveServerSecurity(address, *flags.certificate, *flags.privateKey, *flags.requireAuth, enabledAccounts)
+	security, address, err := resolveConfiguredNetwork(store, address, addressOverride, flags, enabledAccounts)
 	if err != nil {
 		return runtime, serverSecurity{}, "", err
 	}
 	runtime.Accounts = accountStore
 	runtime.AuthenticationRequired = security.AuthenticationRequired
-	runtime.SecureCookies = security.TLSConfig != nil
+	runtime.SecureCookies = security.TLSConfig != nil || (security.NetworkPolicy != nil && security.NetworkPolicy.Config.Mode == netaccess.TrustedProxy)
 	runtime.AllowedBrowserHosts = security.AllowedBrowserHosts
+	runtime.NetworkPolicy = security.NetworkPolicy
+	runtime.NetworkCertificates = security.Certificates
 	return runtime, security, address, nil
 }
 

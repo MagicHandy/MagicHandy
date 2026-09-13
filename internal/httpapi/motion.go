@@ -112,24 +112,19 @@ func (s *Server) handleMotionState(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleMotionEvents(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
+	_, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, errors.New("streaming responses are unavailable"))
 		return
 	}
 
-	clientID := clientIDFromRequest(r)
 	setSSEHeaders(w)
 	w.WriteHeader(http.StatusOK)
 
 	emit := func() bool {
-		if clientID != "" {
-			s.controller.Touch(clientID)
-		}
 		if err := writeSSE(w, "motion", s.motionState()); err != nil {
 			return false
 		}
-		flusher.Flush()
 		return true
 	}
 	if !emit() {
@@ -359,7 +354,7 @@ func (s *Server) handleEmergencyStop(w http.ResponseWriter, r *http.Request, rea
 }
 
 func (s *Server) emergencyStop(ctx context.Context, reason string) (emergencyStopResult, error) {
-	finishStop := s.beginGlobalStop(reason)
+	finishStop := s.beginGlobalStop(reason, ctx)
 	defer finishStop()
 
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
@@ -383,10 +378,10 @@ func (s *Server) emergencyStop(ctx context.Context, reason string) (emergencySto
 	}, err
 }
 
-func (s *Server) beginGlobalStop(reason string) func() {
+func (s *Server) beginGlobalStop(reason string, origins ...context.Context) func() {
 	// Publish every emergency-stop activation, including repeated idle stops,
 	// so browser-owned capture can discard pending speech in every client.
-	finishInvalidation := s.invalidateWorkForStop(reason)
+	finishInvalidation := s.invalidateWorkForStop(reason, origins...)
 	// Mark autonomous modes stopped before touching the engine, but drain their
 	// goroutine only after Engine.Stop has canceled any blocked mode startup.
 	finishModeStop := func() {}
@@ -419,7 +414,15 @@ func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (tran
 	return result, stopErr
 }
 
-func (s *Server) invalidateWorkForStop(reason string) func() {
+func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context) func() {
+	// Let the stop-causing request deliver its acknowledgement. Every other
+	// request admitted under the old protected generation is canceled.
+	for _, origin := range origins {
+		if detach, ok := origin.Value(controllerCancellationKey{}).(func() bool); ok {
+			detach()
+		}
+	}
+	s.controller.AdvanceStopGeneration()
 	s.stopSequence.Add(1)
 	finishLab := s.cancelLabSession()
 	if s.mediaSync != nil {
@@ -740,6 +743,7 @@ func (s *Server) Quiesce() {
 func (s *Server) Close() {
 	s.closeOnce.Do(func() {
 		s.Quiesce()
+		s.closeAccessWorkers()
 		s.stopLLMAutoload()
 		if s.setup != nil {
 			s.setup.Close()

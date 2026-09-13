@@ -1839,6 +1839,20 @@ three-artifact reviewed setup path without reusing or moving alpha.12.
 
 Level: High
 
+Implementation update 2026-09-12: the LAN/WAN branch adds session-and-tab-bound
+control, a process epoch and ownership generation, explicit foreground
+heartbeats, a periodic stop watchdog, stream/session cancellation and expiring
+administrator-issued operator permissions. Direct HTTPS and trusted proxy
+modes require an explicit network policy; the legacy restrictions below still
+describe default/legacy startup. Exact public origins, trusted immediate peers
+and local-dialog isolation have regression coverage. [ADR 0029](decisions/0029-session-bound-network-control.md)
+and the [deployment guide](self-hosted-https.md) record the new contract.
+
+The risk remains open: full command deduplication/order, stronger WAN login and
+owner recovery, durable auditing, multi-client load/partition testing, proxy
+deployment and real mobile/device acceptance are unfinished. Green simulator
+tests do not reduce this risk to a claim of robust internet exposure.
+
 Description:
 Opt-in LAN access moves private chat, personas, media metadata, model controls,
 device configuration, and physical commands beyond the operating-system user's

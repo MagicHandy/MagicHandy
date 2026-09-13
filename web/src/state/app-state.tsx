@@ -51,7 +51,13 @@ export function AppStateProvider({ children, enabled = true }: { children: React
     const timeout = window.setTimeout(() => controller.abort(), STATE_TIMEOUT_MS);
     const task = (async () => {
       try {
-        const next = await api.getState(controller.signal);
+        let next = await api.getState(controller.signal);
+        // A protected lease is renewed by a responsive, visible document,
+        // never by the server sending telemetry down a surviving socket.
+        if (next.controller?.heartbeat_required && document.visibilityState !== "hidden") {
+          const ownership = await api.controllerHeartbeat(controller.signal);
+          next = { ...next, controller: ownership };
+        }
         if (controller.signal.aborted || activeRequest.current !== controller) return;
         setState(next);
         // Reconcile an older SSE observation, but keep an event received

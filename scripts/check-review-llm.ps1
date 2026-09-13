@@ -6,13 +6,17 @@ param(
     [string]$BaseUrl = 'http://127.0.0.1:49717',
 
     [ValidateRange(5, 300)]
-    [int]$TimeoutSeconds = 120
+    [int]$TimeoutSeconds = 120,
+
+    [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $reviewBaseUrl = $BaseUrl.TrimEnd('/')
+$reviewAppRequest = @{}
+if ($null -ne $WebSession) { $reviewAppRequest['WebSession'] = $WebSession }
 
 function Get-OptionalProperty {
     param(
@@ -45,11 +49,11 @@ function Assert-ReviewCondition {
 }
 
 try {
-    $health = Invoke-RestMethod -Method Get -Uri "$reviewBaseUrl/healthz" -TimeoutSec 10
+    $health = Invoke-RestMethod -Method Get -Uri "$reviewBaseUrl/healthz" -TimeoutSec 10 @reviewAppRequest
     Assert-ReviewCondition ([string](Get-OptionalProperty $health 'status') -eq 'ok') `
         "The review app at '$reviewBaseUrl' is not healthy."
 
-    $status = Invoke-RestMethod -Method Get -Uri "$reviewBaseUrl/api/llm/status" -TimeoutSec 15
+    $status = Invoke-RestMethod -Method Get -Uri "$reviewBaseUrl/api/llm/status" -TimeoutSec 15 @reviewAppRequest
     $provider = [string](Get-OptionalProperty $status 'provider')
     $providerBaseUrl = ([string](Get-OptionalProperty $status 'base_url')).TrimEnd('/')
     $model = [string](Get-OptionalProperty $status 'model')

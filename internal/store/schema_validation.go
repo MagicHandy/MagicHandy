@@ -46,6 +46,7 @@ type actualSchemaColumn struct {
 }
 
 var requiredSchemaTables = []schemaTable{
+	{name: "user_control_grants", columns: columns("user_id:TEXT", "grant_id:TEXT", "issued_by:TEXT", "created_at:TEXT", "expires_at:TEXT"), primaryKey: []string{"user_id"}},
 	{name: "settings", columns: columns("id:TEXT", "document:TEXT", "updated_at:TEXT"), primaryKey: []string{"id"}},
 	{name: "app_kv", columns: columns("key:TEXT", "value:TEXT", "updated_at:TEXT"), primaryKey: []string{"key"}},
 	{name: "memories", columns: columns("id:TEXT", "text:TEXT", "enabled:INTEGER", "created_at:TEXT"), primaryKey: []string{"id"}},
@@ -124,6 +125,8 @@ var requiredSchemaIndexes = []schemaIndex{
 }
 
 var requiredSchemaForeignKeys = []schemaForeignKey{
+	{table: "user_control_grants", column: "user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
+	{table: "user_control_grants", column: "issued_by", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "messages", column: "session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "chat_workspace", column: "active_session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "RESTRICT"},
 	{table: "chat_session_cursors", column: "session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "CASCADE"},

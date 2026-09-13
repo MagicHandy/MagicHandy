@@ -19,6 +19,7 @@ import type {
   ConnectionCheckResult,
   CloudDisconnectResponse,
   ControllerTakeoverResponse,
+  ControllerSnapshot,
   PromptSetsPayload,
   PatternInput,
   PatternLibrary,
@@ -61,6 +62,9 @@ import type {
   UserAccount,
   AccountRole,
   ControlIdentity,
+  ControlGrant,
+  NetworkConfig,
+  NetworkStatus,
 } from "./types";
 
 
@@ -125,6 +129,36 @@ export const clientId = resolveControllerClientID(browserSessionStorage(), brows
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
 export const AUTHENTICATION_REQUIRED_EVENT = "magichandy:authentication-required";
 
+// Transport metadata copied from backend snapshots. It never grants local
+// ownership; the server independently checks session, tab and generation.
+let controlGeneration: number | undefined;
+let controlEpoch: string | undefined;
+let controllerResponseOrder = 0;
+let requestOrder = 0;
+
+function controllerRequestHeaders(): Record<string, string> {
+  return {
+    [CLIENT_HEADER]: clientId,
+    ...(controlGeneration === undefined ? {} : { "X-MagicHandy-Control-Generation": String(controlGeneration) }),
+    ...(controlEpoch === undefined ? {} : { "X-MagicHandy-Control-Epoch": controlEpoch }),
+  };
+}
+
+function rememberControllerResponse(value: unknown, order: number): void {
+  if (!value || typeof value !== "object") return;
+  const candidate = "controller" in value ? value.controller : value;
+  if (!candidate || typeof candidate !== "object" || !("heartbeat_required" in candidate)) return;
+  if (order < controllerResponseOrder) return;
+  const epoch = "epoch" in candidate && typeof candidate.epoch === "string" ? candidate.epoch : undefined;
+  const generation = candidate.heartbeat_required === true && "generation" in candidate &&
+    typeof candidate.generation === "number" && Number.isSafeInteger(candidate.generation)
+    ? candidate.generation : undefined;
+  controllerResponseOrder = order;
+  controlGeneration = epoch === controlEpoch && generation !== undefined && controlGeneration !== undefined
+    ? Math.max(generation, controlGeneration) : generation;
+  controlEpoch = generation === undefined ? undefined : epoch;
+}
+
 export async function request<T>(
   method: string,
   path: string,
@@ -133,7 +167,8 @@ export async function request<T>(
   extraHeaders?: Record<string, string>,
   keepalive = false,
 ): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json", [CLIENT_HEADER]: clientId, ...extraHeaders };
+  const order = ++requestOrder;
+  const headers: Record<string, string> = { Accept: "application/json", ...controllerRequestHeaders(), ...extraHeaders };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(path, {
     method,
@@ -153,6 +188,8 @@ export async function request<T>(
   }
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith("/api/auth/")) {
+      controlGeneration = undefined;
+      controlEpoch = undefined;
       window.dispatchEvent(new Event(AUTHENTICATION_REQUIRED_EVENT));
     }
     let message = `Request failed (${res.status})`;
@@ -161,6 +198,7 @@ export async function request<T>(
     }
     throw new ApiError(message, res.status, parsed);
   }
+  rememberControllerResponse(parsed, order);
   return parsed as T;
 }
 
@@ -168,7 +206,7 @@ async function uploadVoiceTranscription(audio: Blob, format: string, stopSequenc
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": `audio/${format}`,
-    [CLIENT_HEADER]: clientId,
+    ...controllerRequestHeaders(),
   };
   if (stopSequence !== undefined) headers["X-MagicHandy-Stop-Sequence"] = String(stopSequence);
   const res = await fetch("/api/voice/transcriptions", {
@@ -201,7 +239,7 @@ async function uploadVoiceTranscription(audio: Blob, format: string, stopSequenc
 async function uploadThumbnail(id: string, image: Blob): Promise<{ status: string }> {
   const res = await fetch(`/api/media/videos/${encodeURIComponent(id)}/thumbnail`, {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "image/jpeg", [CLIENT_HEADER]: clientId },
+    headers: { Accept: "application/json", "Content-Type": "image/jpeg", ...controllerRequestHeaders() },
     body: image,
   });
   const text = await res.text();
@@ -228,7 +266,7 @@ async function uploadThumbnail(id: string, image: Blob): Promise<{ status: strin
 async function uploadPortrait(id: string, image: Blob): Promise<PersonasPayload> {
   const res = await fetch(`/api/personas/${encodeURIComponent(id)}/portrait`, {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "image/jpeg", [CLIENT_HEADER]: clientId },
+    headers: { Accept: "application/json", "Content-Type": "image/jpeg", ...controllerRequestHeaders() },
     body: image,
   });
   const text = await res.text();
@@ -253,7 +291,7 @@ async function uploadAccountProfileImage(image: Blob): Promise<{ account: UserAc
   const path = "/api/auth/profile-image";
   const res = await fetch(path, {
     method: "PUT",
-    headers: { Accept: "application/json", "Content-Type": "image/jpeg", [CLIENT_HEADER]: clientId },
+    headers: { Accept: "application/json", "Content-Type": "image/jpeg", ...controllerRequestHeaders() },
     body: image,
   });
   const text = await res.text();
@@ -281,7 +319,7 @@ async function uploadPersonaArchive(file: File): Promise<PersonasPayload> {
     headers: {
       Accept: "application/json",
       "Content-Type": "application/vnd.magichandy.persona+zip",
-      [CLIENT_HEADER]: clientId,
+      ...controllerRequestHeaders(),
     },
     body: file,
   });
@@ -386,6 +424,13 @@ export const api = {
   authChangePassword: (currentPassword: string, newPassword: string) =>
     request<null>("PUT", "/api/auth/password", { current_password: currentPassword, new_password: newPassword }),
   accounts: () => request<{ accounts: UserAccount[] }>("GET", "/api/accounts"),
+  controlGrant: (id: string) => request<{ grant: ControlGrant | null }>("GET", `/api/accounts/${encodeURIComponent(id)}/control-grant`),
+  grantControl: (id: string, duration_minutes: number) => request<{ grant: ControlGrant }>("PUT", `/api/accounts/${encodeURIComponent(id)}/control-grant`, { duration_minutes }),
+  revokeControl: (id: string) => request<{ grant: null }>("DELETE", `/api/accounts/${encodeURIComponent(id)}/control-grant`),
+  networkStatus: (signal?: AbortSignal) => request<NetworkStatus>("GET", "/api/network", undefined, signal),
+  validateNetwork: (config: NetworkConfig) => request<{ valid: boolean; config: NetworkConfig; message: string }>("POST", "/api/network/validate", { config }),
+  saveNetwork: (config: NetworkConfig, password: string) => request<{ restart_required: boolean }>("PUT", "/api/network", { config, password }),
+  networkReport: () => request<Record<string, unknown>>("GET", "/api/network/report"),
   createAccount: (username: string, password: string, role: AccountRole) =>
     request<{ account: UserAccount }>("POST", "/api/accounts", { username, password, role }),
   resetAccountPassword: (id: string, password: string) =>
@@ -404,6 +449,7 @@ export const api = {
 
   getState: (signal?: AbortSignal) => request<AppState>("GET", "/api/state", undefined, signal),
   takeControl: () => request<ControllerTakeoverResponse>("POST", "/api/controller/takeover", {}),
+  controllerHeartbeat: (signal?: AbortSignal) => request<ControllerSnapshot>("POST", "/api/controller/heartbeat", {}, signal),
 
   // Motion — semantic commands only.
   stopMotion: () => request<{ error?: string }>("POST", "/api/motion/stop", {}),
@@ -735,7 +781,7 @@ export const api = {
       "GET", `/api/voice/requests/${encodeURIComponent(id)}/audio-chunk?offset=${offset}`, undefined, signal),
   voiceRequestAudio: async (id: string, signal?: AbortSignal): Promise<Blob> => {
     const res = await fetch(`/api/voice/requests/${encodeURIComponent(id)}/audio`, {
-      headers: { [CLIENT_HEADER]: clientId },
+      headers: { ...controllerRequestHeaders() },
       signal,
     });
     if (!res.ok) throw new ApiError(`Audio fetch failed (${res.status})`, res.status, null);
@@ -750,7 +796,7 @@ async function importMotionContent(file: File, asKind: "pattern" | "program"): P
   const path = `/api/library/import?filename=${encodeURIComponent(file.name)}&as=${asKind}`;
   const res = await fetch(path, {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json", [CLIENT_HEADER]: clientId },
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...controllerRequestHeaders() },
     body: file,
   });
   const text = await res.text();
@@ -770,7 +816,7 @@ async function importMotionContent(file: File, asKind: "pattern" | "program"): P
 }
 
 async function download(path: string, fallbackFilename = "motion-content.json"): Promise<{ blob: Blob; filename: string }> {
-  const res = await fetch(path, { headers: { [CLIENT_HEADER]: clientId } });
+  const res = await fetch(path, { headers: { ...controllerRequestHeaders() } });
   if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status, null);
   const disposition = res.headers.get("Content-Disposition") ?? "";
   const match = disposition.match(/filename="?([^";]+)"?/i);
@@ -778,7 +824,7 @@ async function download(path: string, fallbackFilename = "motion-content.json"):
 }
 
 async function requestWithSignal<T>(method: string, path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(path, { method, headers: { Accept: "application/json", [CLIENT_HEADER]: clientId }, signal });
+  const res = await fetch(path, { method, headers: { Accept: "application/json", ...controllerRequestHeaders() }, signal });
   const text = await res.text();
   let parsed: unknown = null;
   if (text) {
@@ -803,7 +849,7 @@ export async function streamChat(
   signal?: AbortSignal,
   stopSequence?: number,
 ): Promise<void> {
-  const headers: Record<string, string> = { "Content-Type": "application/json", [CLIENT_HEADER]: clientId };
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...controllerRequestHeaders() };
   if (stopSequence !== undefined) headers["X-MagicHandy-Stop-Sequence"] = String(stopSequence);
   const res = await fetch("/api/chat/stream", {
     method: "POST",

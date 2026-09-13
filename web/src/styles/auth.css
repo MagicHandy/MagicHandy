@@ -415,6 +415,16 @@
   padding: 10px 0 14px 46px;
 }
 
+.account-control-permission {
+  grid-template-columns: minmax(160px, 1fr) auto auto;
+}
+
+.account-control-permission > .hint-block,
+.account-control-permission > .form-status {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 .linked-profile-list {
   display: grid;
 }

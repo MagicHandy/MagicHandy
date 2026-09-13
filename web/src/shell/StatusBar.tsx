@@ -133,7 +133,9 @@ export function StatusBar({
         <span className="status-dot" data-state={coreState} />
         <span className="status-text">{translateKnown(coreLabel)}</span>
       </span>
-      {state && (readOnly ? (
+      {state && (state.capabilities?.control === false ? (
+        <span className="status-readout status-readout-observer" title={t("Ask the administrator for a control permission.")}><span className="status-dot" data-state="idle" /><span className="status-text">{t("Observer")}</span></span>
+      ) : readOnly ? (
         <button
           type="button"
           className="status-readout status-readout-controller status-controller-action"

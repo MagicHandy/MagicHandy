@@ -1,5 +1,29 @@
 # Goal Scorecard
 
+## 2026-09-12 — LAN/WAN implementation checkpoint
+
+The in-progress network implementation adds session/control lifetimes,
+expiring permissions, direct HTTPS and trusted proxy policy, and localized
+Access settings/reporting. It adds no dependencies or second motion path.
+Full LAN/WAN acceptance remains open in the
+[implementation log](lan-wan-implementation.md).
+
+Using Go 1.26.4, `CGO_ENABLED=0`, `-trimpath` and `-ldflags '-s -w'` for both
+the alpha.45 source archive and candidate, the binary grows **183,808 B**
+(19,308,544 → 19,492,352; **0.95%**). Main JS grows **15,985 B** raw and
+**3,941 B** gzip-9 (212,780 → 216,721). Total embedded assets grow **37,575 B**
+(2,033,655 → 2,071,230), including the four lazy-loaded translation catalogs.
+The published alpha.45 executable was built in a different build environment;
+it is not used as the same-toolchain size baseline.
+
+After login and the real LLM readiness probe, three one-second observations of
+the current isolated review process measured **46,522,368 B** working set and
+**80,433,152 B** private memory. This includes recent authentication work and is
+not a controlled idle comparison; no startup or RSS improvement is claimed.
+The existing startup/RSS waivers remain. Telemetry bytes/client, CPU,
+allocations, state-age percentiles and the fault/load/soak matrix are still
+required; these size measurements establish no network performance claim.
+
 ## 2026-09-12 — Downloadable installer failure reports
 
 Guided setup, TTS updates and Parakeet repair now offer a one-click JSON failure

@@ -138,6 +138,7 @@
 }
 .status-controller-action {
   appearance: none;
+  flex: 0 0 auto;
   min-width: 0;
   margin: -4px -6px;
   padding: 4px 6px;
@@ -971,7 +972,7 @@
   white-space: nowrap;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   .status-readout-controller .status-text {
     display: none;
   }

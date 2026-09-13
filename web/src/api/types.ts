@@ -114,6 +114,9 @@ export interface MotionInfo {
 }
 
 export interface ControllerSnapshot {
+  epoch?: string;
+  generation?: number;
+  heartbeat_required?: boolean;
   client_id?: string;
   active: boolean;
   read_only: boolean;
@@ -1127,6 +1130,7 @@ export interface ControlIdentity {
 }
 
 export interface AuthenticationStatus {
+	capabilities?: AccountCapabilities;
   initialized: boolean;
   authentication_required: boolean;
   authenticated: boolean;
@@ -1134,6 +1138,40 @@ export interface AuthenticationStatus {
   ui_locale: string;
   account: UserAccount | null;
   control_identities: ControlIdentity[] | null;
+}
+
+export interface AccountCapabilities {
+  control: boolean;
+  configure_host: boolean;
+  shared_data: boolean;
+}
+
+export interface ControlGrant {
+  id: string;
+  account_id: string;
+  issued_by: string;
+  created_at: string;
+  expires_at: string;
+}
+
+export interface NetworkConfig {
+  mode: "local" | "direct_https" | "trusted_proxy" | "legacy";
+  listen_address: string;
+  public_url: string;
+  trusted_proxies: string[] | null;
+  tls_certificate: string;
+  tls_private_key: string;
+}
+
+export interface NetworkStatus {
+  active: NetworkConfig;
+  saved: NetworkConfig | null;
+  restart_required: boolean;
+  interfaces: Array<{ name: string; address: string; loopback: boolean }>;
+  forwarded: boolean;
+  authentication_required: boolean;
+  secure_cookie: boolean;
+  certificate?: { not_before: string; not_after: string; sha256: string; renewal_due: boolean; reload_error: boolean };
 }
 
 export interface ManagedLLMModel {
@@ -1365,6 +1403,7 @@ export interface IntifaceTransportSnapshot {
 }
 
 export interface AppState {
+  capabilities?: AccountCapabilities;
   version?: string;
   commit?: string;
   uptime_seconds?: number;

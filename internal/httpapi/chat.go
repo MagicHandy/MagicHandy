@@ -746,7 +746,7 @@ func (s *Server) notifyChatTarget(generation uint64, target motion.MotionTarget)
 }
 
 func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, requestedSessionID string, message string, settings config.LLMSettings) {
-	finishInvalidation := s.invalidateWorkForStop("chat_stop")
+	finishInvalidation := s.invalidateWorkForStop("chat_stop", r.Context())
 	defer finishInvalidation()
 	command := &chat.MotionCommand{Action: chat.MotionActionStop}
 	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
@@ -1263,6 +1263,13 @@ func setSSEHeaders(w http.ResponseWriter) {
 }
 
 func writeSSE(w http.ResponseWriter, event string, payload any) error {
+	controller := http.NewResponseController(w)
+	if err := controller.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return err
+	}
+	// Only the socket write is bounded. HTTP/2 deadlines otherwise terminate
+	// a healthy stream while a slow model is computing its next token.
+	defer func() { _ = controller.SetWriteDeadline(time.Time{}) }()
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode SSE payload: %w", err)
@@ -1270,8 +1277,8 @@ func writeSSE(w http.ResponseWriter, event string, payload any) error {
 	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data); err != nil {
 		return err
 	}
-	if flusher, ok := w.(http.Flusher); ok {
-		flusher.Flush()
+	if err := controller.Flush(); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return err
 	}
 	return nil
 }

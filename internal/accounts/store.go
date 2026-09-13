@@ -68,9 +68,13 @@ type Account struct {
 // Session is an authenticated account plus the server-enforced absolute
 // expiration. The raw bearer token is returned only by NewSession.
 type Session struct {
-	Account          Account   `json:"account"`
-	ControlAccountID string    `json:"control_account_id"`
-	ExpiresAt        time.Time `json:"expires_at"`
+	// Key is a non-bearer database identity used only for server-side lifetime
+	// checks. It must never be serialized or accepted as a login credential.
+	Key              string        `json:"-"`
+	Account          Account       `json:"account"`
+	ControlAccountID string        `json:"control_account_id"`
+	ExpiresAt        time.Time     `json:"expires_at"`
+	ControlGrant     *ControlGrant `json:"control_grant,omitempty"`
 }
 
 // ControlIdentity is an account this login session may represent in the
@@ -340,7 +344,7 @@ func (s *Store) NewSession(ctx context.Context, accountID string) (string, Sessi
 	if err != nil {
 		return "", Session{}, fmt.Errorf("create user session: %w", err)
 	}
-	return token, Session{Account: account, ControlAccountID: account.ID, ExpiresAt: expires}, nil
+	return token, Session{Key: tokenHash, Account: account, ControlAccountID: account.ID, ExpiresAt: expires}, nil
 }
 
 // ResolveSession authenticates a token and advances its idle timestamp at most
@@ -349,6 +353,27 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 	if len(token) < 32 || len(token) > 128 {
 		return Session{}, ErrInvalidSession
 	}
+	return s.resolveSessionKey(ctx, hashSessionToken(token), true)
+}
+
+// InspectSession authenticates passive polling without extending idle time.
+func (s *Store) InspectSession(ctx context.Context, token string) (Session, error) {
+	if len(token) < 32 || len(token) > 128 {
+		return Session{}, ErrInvalidSession
+	}
+	return s.resolveSessionKey(ctx, hashSessionToken(token), false)
+}
+
+// CheckSession validates a server-side session identity without renewing idle
+// time. Background streams and control watchdogs are observations, not activity.
+func (s *Store) CheckSession(ctx context.Context, key string) (Session, error) {
+	if len(key) != sha256.Size*2 {
+		return Session{}, ErrInvalidSession
+	}
+	return s.resolveSessionKey(ctx, key, false)
+}
+
+func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (Session, error) {
 	var account Account
 	var disabled int
 	var lastSeenRaw, expiresRaw, controlAccountID string
@@ -370,7 +395,7 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 		FROM user_sessions s
 		JOIN user_accounts a ON a.id = s.user_id
 		WHERE s.token_hash = ?
-	`, hashSessionToken(token)).Scan(
+	`, key).Scan(
 		&account.ID, &account.Username, &account.Role, &disabled,
 		&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt,
 		&account.ProfileUpdatedAt, &lastSeenRaw, &expiresRaw, &controlAccountID,
@@ -387,15 +412,14 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 	expires, expiresErr := time.Parse(time.RFC3339Nano, expiresRaw)
 	now := s.now()
 	if lastSeenErr != nil || expiresErr != nil || account.Disabled || !now.Before(expires) || now.Sub(lastSeen) > s.idleLimit {
-		_ = s.RevokeSession(ctx, token)
 		return Session{}, ErrInvalidSession
 	}
-	if now.Sub(lastSeen) >= time.Minute {
+	if touch && now.Sub(lastSeen) >= time.Minute {
 		if err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 			result, err := tx.ExecContext(ctx, `
 				UPDATE user_sessions SET last_seen_at = ?
 				WHERE token_hash = ?
-			`, now.Format(time.RFC3339Nano), hashSessionToken(token))
+			`, now.Format(time.RFC3339Nano), key)
 			if err != nil {
 				return err
 			}
@@ -414,7 +438,11 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 	if controlAccountID == "" {
 		controlAccountID = account.ID
 	}
-	return Session{Account: account, ControlAccountID: controlAccountID, ExpiresAt: expires}, nil
+	session := Session{Key: key, Account: account, ControlAccountID: controlAccountID, ExpiresAt: expires}
+	if account.Role != RoleAdmin {
+		session.ControlGrant, err = s.ControlGrant(ctx, account.ID)
+	}
+	return session, err
 }
 
 // RevokeSession invalidates one opaque bearer token. It is idempotent.

@@ -111,7 +111,7 @@ export function SettingsRoute() {
   const savingRef = useRef(false);
   const savedRef = useRef(saved);
   savedRef.current = saved;
-  const locked = !backendOnline || readOnly || loading;
+  const locked = !backendOnline || readOnly || loading || state?.capabilities?.configure_host === false;
 
   async function load(preserveDraft = false) {
     if (!mounted.current) return;

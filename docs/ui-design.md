@@ -1,5 +1,25 @@
 # UI Design
 
+## Network access and account control
+
+Access settings separate the running network boundary from the policy saved
+for restart. Administrators validate the host configuration and confirm their
+current password before saving. No saved form value changes the active socket
+or installs trust/firewall rules. Other accounts see their observer/control
+capabilities from the backend. Host mutations remain administrator-only even
+when an operator has a temporary control permission.
+
+Protected ownership is renewed by an explicit foreground heartbeat, not by
+state polling or received events. Hidden documents stop renewing it. Loss,
+revocation or expiry fences old commands and requires explicit stop-first
+reacquisition. Server epochs and generations travel as transport metadata; they
+do not create frontend ownership. Emergency Stop remains mounted for observers
+and signed-out/offline clients. The one-click connection report omits private
+paths, addresses and content and encourages sharing with the developer.
+
+See [Self-hosted HTTPS](self-hosted-https.md) and the open
+[LAN/WAN acceptance checklist](lan-wan-control-checklist.md).
+
 ## Backend observation lifecycle
 
 State polling and live motion subscriptions belong to the current enabled app

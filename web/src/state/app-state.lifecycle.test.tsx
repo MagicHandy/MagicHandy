@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import type { AppState, MotionInfo } from "../api/types";
 import { AppStateProvider, useAppState, useMotionState } from "./app-state";
 
-vi.mock("../api/client", () => ({ api: { getState: vi.fn() }, clientId: "test-tab" }));
+vi.mock("../api/client", () => ({ api: { getState: vi.fn(), controllerHeartbeat: vi.fn() }, clientId: "test-tab" }));
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -33,6 +33,7 @@ const view = (enabled = true) => <AppStateProvider enabled={enabled}><Harness />
 beforeEach(() => {
   vi.useFakeTimers();
   vi.mocked(api.getState).mockReset().mockResolvedValue(snapshot());
+  vi.mocked(api.controllerHeartbeat).mockReset();
   FakeEventSource.instances = [];
   vi.stubGlobal("EventSource", FakeEventSource);
 });
@@ -41,9 +42,39 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("backend snapshot lifecycle", () => {
+  it("establishes a protected lease with a client heartbeat before enabling control", async () => {
+    const state = snapshot();
+    state.controller = { active: false, read_only: true, heartbeat_required: true, generation: 0 };
+    vi.mocked(api.getState).mockResolvedValue(state);
+    const heartbeat = deferred<NonNullable<AppState["controller"]>>();
+    vi.mocked(api.controllerHeartbeat).mockReturnValue(heartbeat.promise);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    render(view());
+    await act(async () => {});
+    expect(current.state).toBeNull();
+    expect(api.controllerHeartbeat).toHaveBeenCalledOnce();
+    await act(async () => heartbeat.resolve({ active: true, read_only: false, generation: 1, heartbeat_required: true }));
+    expect(current.state?.controller?.generation).toBe(1);
+    expect(current.readOnly).toBe(false);
+  });
+
+  it("does not renew protected control from a hidden document or telemetry", async () => {
+    const state = snapshot();
+    state.controller = { active: false, read_only: true, heartbeat_required: true, generation: 2 };
+    vi.mocked(api.getState).mockResolvedValue(state);
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    render(view());
+    await act(async () => {});
+    act(() => FakeEventSource.instances[0].emit(running));
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(api.controllerHeartbeat).not.toHaveBeenCalled();
+    expect(current.readOnly).toBe(true);
+  });
+
   it("does not restart a waiting explicit refresh after access is disabled", async () => {
     const pending = deferred<AppState>();
     vi.mocked(api.getState).mockReturnValueOnce(pending.promise);

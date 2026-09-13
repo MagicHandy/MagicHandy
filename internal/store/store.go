@@ -19,7 +19,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 19
+	CurrentSchemaVersion = 20
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -552,6 +552,17 @@ var migrations = [][]string{
 	// Active account links are directional authorization records for a future
 	// pairing flow; this migration does not grant or infer any links.
 	{`SELECT 1`},
+	// v19 -> v20: explicit, expiring permission to control shared hardware.
+	// Existing operators become observers until an administrator grants control.
+	{
+		`CREATE TABLE IF NOT EXISTS user_control_grants (
+			user_id TEXT PRIMARY KEY REFERENCES user_accounts(id) ON DELETE CASCADE,
+			grant_id TEXT NOT NULL,
+			issued_by TEXT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+			created_at TEXT NOT NULL,
+			expires_at TEXT NOT NULL
+		)`,
+	},
 }
 
 func migrateAccountProfiles(ctx context.Context, tx *sql.Tx) error {
