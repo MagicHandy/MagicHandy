@@ -33,9 +33,46 @@ The implementation is in progress on `codex/lan-wan-control`:
 - persisted restart-only network settings, host validation, administrator
   password confirmation, local recovery override and certificate reload/expiry
   handling; no automatic listener/firewall/trust-root change;
-- localized Access UI, one-click redacted connection reports and control grants.
+- localized Access UI, one-click redacted connection reports and control grants;
+- protected delivery tickets, sequence ordering, bounded receipts and safe
+  recovery of a lost JSON result without repeating the original mutation;
+- synchronous ownership cancellation and context-bound settings transactions;
+- deferred chat/Lab motion checks that preserve newer control intentions while
+  allowing text generation to run outside the immediate-control lane.
 
-## Verification at this checkpoint
+## Command-delivery checkpoint — 2026-09-13
+
+The [delivery contract](lan-wan-command-delivery.md) documents the protocol,
+receipt states, resource bounds and remaining coverage. Full Go tests, full race
+tests, go vet, golangci-lint, the CGO-free stripped build, browser typechecking,
+the localization audit, **539 browser tests in 74 files**, the production UI
+build and final embedded-asset/import-boundary checks pass.
+
+New regressions exercise an old Start/Resume/mode/media request arriving after
+Stop, reordered settings, duplicate delivery, receipt privacy/expiry/capacity,
+ticket expiry despite a live lease, Stop during a queued settings write and
+interrupted handlers. A blocked provider completes after a newer live-setting
+change: the text reply is retained and its obsolete motion is rejected. Voice
+bookkeeping does not discard otherwise-current deferred motion. A prepared
+settings transaction canceled before commit changes neither disk nor memory.
+
+The exact current binary is running at `http://127.0.0.1:49983` with isolated
+data and `-simulate-motion`, voice off and LLM motion off. Authenticated HTTP
+checks apply two settings, replay the first and verify that the newer setting
+remains active; the first completed result is also retrieved through its receipt.
+The original setting is restored. The real review LLM probe passes, and the app
+chat path returns “The network review is ready.” in **108 ms**, with **one
+provider call**, `repaired=false`, `semantic_fallback=false` and no motion.
+
+The browser is left on Access settings, scrolled to the LAN/WAN configuration,
+in observer mode with the simulator idle and Stop visible. Browser takeover was
+not completed; the independent authenticated simulator API test above supplies
+the takeover/delivery evidence. No public listener, firewall, client trust store
+or physical-device configuration was changed. The
+[scorecard](goal-scorecard.md) records the current artifact sizes and the limits
+of the memory observation. Detailed logs remain in ignored `.scratch/lan-wan/`.
+
+## Foundation checkpoint — 2026-09-12
 
 `go test ./...`, `go test -race ./...`, `go vet ./...`, golangci-lint, the
 CGO-free stripped build, browser typechecking, localization audit, 533 browser
@@ -67,8 +104,7 @@ acceptance have not been tested.
 
 ## Next work and completion evidence
 
-Implement bounded command IDs, expiry, ordering and deduplication with unknown
-outcome recovery. Complete apply-time race/fault scenarios across all motion,
+Complete apply-time race/fault scenarios across all motion,
 media, mode and live-setting routes. Expand the permission matrix to an exhaustive
 route inventory and owner-approved invitation/session management workflow.
 

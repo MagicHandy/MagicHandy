@@ -21,6 +21,9 @@ var (
 )
 
 type controllerSnapshot struct {
+	CommandTicket         string `json:"command_ticket,omitempty"`
+	CommandTicketMillis   int64  `json:"command_ticket_ms,omitempty"`
+	CommandSequence       uint64 `json:"command_sequence"`
 	Epoch                 string `json:"epoch"`
 	Generation            uint64 `json:"generation"`
 	HeartbeatRequired     bool   `json:"heartbeat_required"`
@@ -46,6 +49,7 @@ func (s *Server) controllerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/controller", s.handleControllerState)
 	mux.HandleFunc("POST /api/controller/heartbeat", s.handleControllerHeartbeat)
 	mux.HandleFunc("POST /api/controller/takeover", s.handleControllerTakeover)
+	mux.HandleFunc("GET /api/controller/commands/{id}", s.handleCommandReceipt)
 }
 
 func (s *Server) handleControllerState(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +82,7 @@ func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request
 	}
 	if !started {
 		writeJSON(w, http.StatusOK, controllerTakeoverResponse{
-			Controller:    controller,
+			Controller:    s.commandSnapshot(r, controller),
 			Changed:       false,
 			StopConfirmed: true,
 			StopSequence:  s.stopSequence.Load(),
@@ -106,7 +110,7 @@ func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request
 	completed = true
 
 	response := controllerTakeoverResponse{
-		Controller:    controller,
+		Controller:    s.commandSnapshot(r, controller),
 		Changed:       true,
 		StopConfirmed: stopErr == nil,
 		StopSequence:  s.stopSequence.Load(),
@@ -127,6 +131,13 @@ func (s *Server) controllerState(r *http.Request) controllerSnapshot {
 		snapshot.Active, snapshot.ReadOnly = false, true
 		snapshot.Reason = "this account is an observer; ask the administrator for a control permission"
 	}
+	return s.commandSnapshot(r, snapshot)
+}
+
+func (s *Server) commandSnapshot(r *http.Request, snapshot controllerSnapshot) controllerSnapshot {
+	if snapshot.Active && snapshot.HeartbeatRequired {
+		snapshot.CommandSequence = s.commands.lastSequence(commandScope{actor: controllerActor(r, clientIDFromRequest(r)), generation: snapshot.Generation})
+	}
 	return snapshot
 }
 
@@ -146,7 +157,12 @@ func (s *Server) requireController(w http.ResponseWriter, r *http.Request) bool 
 		generationOK = err == nil && generation == snapshot.Generation && s.currentControllerEpoch(r)
 	}
 	if snapshot.Active && generationOK && r.Context().Err() == nil {
-		return true
+		if binding, ok := r.Context().Value(controllerRequestBindingKey{}).(*controllerRequestBinding); ok &&
+			!binding.bind(&s.controller, controllerActor(r, clientIDFromRequest(r))) {
+			writeError(w, http.StatusConflict, errors.New("controller changed before command admission"))
+			return false
+		}
+		return s.admitControlCommand(w, r, snapshot)
 	}
 	message := "this client is read-only; the active controller owns device commands"
 	if snapshot.Active && !generationOK {
@@ -194,7 +210,7 @@ func (s *Server) handleControllerHeartbeat(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusOK, s.controllerState(r))
 		return
 	}
-	writeJSON(w, http.StatusOK, s.controller.Heartbeat(actor, generation))
+	writeJSON(w, http.StatusOK, s.commandSnapshot(r, s.controller.Heartbeat(actor, generation)))
 }
 
 func (s *Server) bootstrapController(r *http.Request, sessionKey string) {

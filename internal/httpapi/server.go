@@ -101,6 +101,7 @@ type Server struct {
 	setup               *setupManager
 	updates             *updatecheck.Checker
 	controller          controllerRuntime
+	commands            commandRuntime
 	personalization     personalizationRuntime
 	personas            *persona.Store
 	modes               *modes.Manager
@@ -196,6 +197,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		managedLLM:          managedLLM,
 		updates:             newUpdateChecker(runtime, version),
 		controller:          newControllerRuntime(),
+		commands:            newCommandRuntime(),
 		hostPathPicker:      systemHostPathPicker,
 		personalization:     personalization,
 		lifecycleCtx:        lifecycleCtx,
@@ -248,7 +250,7 @@ func (s *Server) activate(runtime Runtime, settings config.Settings) {
 	s.routes(mux)
 	s.handler = logRequests(s.logger, securityHeaders(
 		runtime.SecureCookies,
-		s.protectNetworkRequests(protectBrowserRequests(runtime.AllowedBrowserHosts, s.authenticateRequests(s.authorizeRoutes(s.trackSessionActivity(mux))))),
+		s.protectNetworkRequests(protectBrowserRequests(runtime.AllowedBrowserHosts, s.authenticateRequests(s.authorizeRoutes(s.trackSessionActivity(s.trackCommandDelivery(mux)))))),
 	))
 	s.startLLMAutoload(settings.LLM)
 	s.startVoiceAutoload(settings.Voice)

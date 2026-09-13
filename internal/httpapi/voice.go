@@ -1336,7 +1336,7 @@ func (s *Server) handleVoicePreferences(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	_, _, err := s.store.Update(func(settings config.Settings) (config.Settings, error) {
+	_, _, err := s.store.UpdateContext(r.Context(), func(settings config.Settings) (config.Settings, error) {
 		settings.Voice.SpeakReplies = body.SpeakReplies
 		return settings, nil
 	})
@@ -1398,7 +1398,7 @@ func (s *Server) handleVoiceInputPreferences(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	_, saved, err := s.store.Update(func(settings config.Settings) (config.Settings, error) {
+	_, saved, err := s.store.UpdateContext(r.Context(), func(settings config.Settings) (config.Settings, error) {
 		body.apply(&settings)
 		return settings, nil
 	})

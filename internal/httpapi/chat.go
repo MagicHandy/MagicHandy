@@ -64,12 +64,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		s.handleChatStopFastPath(w, r, body.SessionID, body.Message, settings.LLM)
 		return
 	}
+	if !s.requireController(w, r) {
+		return
+	}
 	sessionID, err := s.chatWorkspace.ResolveActive(r.Context(), body.SessionID)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
-		return
-	}
-	if !s.requireController(w, r) {
 		return
 	}
 	if strings.TrimSpace(r.Header.Get(stopSequenceHeader)) == "" {
@@ -576,6 +576,13 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 }
 
 func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
+	if command != nil && command.Action != "" && command.Action != chat.MotionActionNone && command.Action != chat.MotionActionStop {
+		release, err := s.beginDeferredMotion(ctx)
+		if err != nil {
+			return chatMotionDispatch{Action: command.Action}, err
+		}
+		defer release()
+	}
 	if stopSequence != nil && s.stopSequence.Load() != *stopSequence {
 		action := ""
 		if command != nil {

@@ -11,7 +11,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api, clientId } from "../api/client";
+import { api, clientId, COMMAND_RECOVERED_EVENT } from "../api/client";
 import type { AppState, MotionInfo, NotificationCategory } from "../api/types";
 import { notificationCategories } from "../notification-preferences";
 
@@ -91,6 +91,13 @@ export function AppStateProvider({ children, enabled = true }: { children: React
     if (lifecycle.current !== admittedLifecycle) return;
     await performRefresh();
   }, [performRefresh]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const recover = () => { void refresh(); };
+    window.addEventListener(COMMAND_RECOVERED_EVENT, recover);
+    return () => window.removeEventListener(COMMAND_RECOVERED_EVENT, recover);
+  }, [enabled, refresh]);
 
   useEffect(() => {
     lifecycle.current++;

@@ -99,6 +99,9 @@ func TestSetupCompletionSignsOutBootstrapSessionOnLoopbackHTTP(t *testing.T) {
 	complete.AddCookie(bootstrapCookie)
 	complete.Header.Set(controllerGenerationHeader, strconv.FormatUint(bootstrapLease.Generation, 10))
 	complete.Header.Set(controllerEpochHeader, bootstrapLease.Epoch)
+	complete.Header.Set(commandIDHeader, "bootstrap-complete")
+	complete.Header.Set(commandSequenceHeader, "1")
+	complete.Header.Set(commandTicketHeader, bootstrapLease.CommandTicket)
 	completeRecorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(completeRecorder, complete)
 	if completeRecorder.Code != http.StatusOK {
@@ -161,6 +164,9 @@ func TestCompletedSetupReconfigurationPreservesOrdinarySession(t *testing.T) {
 	reconfigure.AddCookie(cookie)
 	reconfigure.Header.Set(controllerGenerationHeader, strconv.FormatUint(lease.Generation, 10))
 	reconfigure.Header.Set(controllerEpochHeader, lease.Epoch)
+	reconfigure.Header.Set(commandIDHeader, "setup-reconfigure")
+	reconfigure.Header.Set(commandSequenceHeader, "1")
+	reconfigure.Header.Set(commandTicketHeader, lease.CommandTicket)
 	reconfigureRecorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(reconfigureRecorder, reconfigure)
 	if reconfigureRecorder.Code != http.StatusOK || strings.Contains(reconfigureRecorder.Body.String(), `"signed_out":true`) {

@@ -104,11 +104,12 @@ func (s *Server) trackSessionActivity(next http.Handler) http.Handler {
 		}
 		stopServer := context.AfterFunc(s.lifecycleCtx, cancel)
 		defer stopServer()
-		if _, owner := s.controller.Authority(controllerActor(r, clientIDFromRequest(r))); authenticated && owner != nil &&
-			r.URL.Path != "/api/controller/takeover" {
-			stopOwner := context.AfterFunc(owner, cancel)
-			defer stopOwner()
-			ctx = context.WithValue(ctx, controllerCancellationKey{}, stopOwner)
+		if authenticated && r.URL.Path != "/api/controller/takeover" {
+			binding := &controllerRequestBinding{cancel: cancel}
+			binding.bind(&s.controller, controllerActor(r, clientIDFromRequest(r)))
+			defer binding.release()
+			ctx = context.WithValue(ctx, controllerRequestBindingKey{}, binding)
+			ctx = context.WithValue(ctx, controllerCancellationKey{}, binding.release)
 		}
 		// A canceled stream must also release a blocked socket write/body read.
 		// Deadline support is optional only for in-memory test response writers.
@@ -144,6 +145,7 @@ func (s *Server) startAccessWatchdog() {
 				}
 				return
 			case <-ticker.C:
+				s.commands.prune()
 				s.checkAccessLifetimes()
 			}
 		}

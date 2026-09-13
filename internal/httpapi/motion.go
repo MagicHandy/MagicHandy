@@ -551,7 +551,7 @@ func (s *Server) updateSettingsAndRuntime(
 	s.settingsLifecycleMu.Lock()
 	defer s.settingsLifecycleMu.Unlock()
 
-	previous, saved, saveErr = s.store.Update(mutate)
+	previous, saved, saveErr = s.store.UpdateContext(ctx, mutate)
 	if saveErr != nil {
 		return previous, saved, saveErr, nil
 	}

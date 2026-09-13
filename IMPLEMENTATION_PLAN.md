@@ -2256,6 +2256,12 @@ an Access settings UI. The [implementation log](docs/lan-wan-implementation.md)
 records verification and remaining acceptance; full LAN/WAN support is not yet
 complete. Legacy startup remains local/LAN-only unless a new mode is selected.
 
+The 2026-09-13 checkpoint adds [protected command delivery](docs/lan-wan-command-delivery.md):
+short-lived tickets, sequence ordering, bounded receipts, response-loss
+reconciliation, synchronous ownership cancellation and context-bound settings
+transactions. Deferred chat/Lab motion rechecks newer control intentions at
+application while inference leaves immediate controls responsive.
+
 - account-link invitation/acceptance/revocation UI and any linked context that
   can affect motion or controller ownership
 - automatic local CA creation/trust, leaf renewal, Android/iOS trust helpers,

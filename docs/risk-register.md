@@ -1848,7 +1848,14 @@ describe default/legacy startup. Exact public origins, trusted immediate peers
 and local-dialog isolation have regression coverage. [ADR 0029](decisions/0029-session-bound-network-control.md)
 and the [deployment guide](self-hosted-https.md) record the new contract.
 
-The risk remains open: full command deduplication/order, stronger WAN login and
+Implementation update 2026-09-13: protected commands now have bounded receipts,
+delivery expiry and sequence checks; settings transactions respect cancellation,
+and delayed chat/Lab motion is rejected after newer control intentions. Lost
+JSON responses query the original receipt without repeating a mutation. The
+[delivery contract](lan-wan-command-delivery.md) records bounds and simulator
+evidence, including interrupted handlers and pre-Stop delayed requests.
+
+The risk remains open: exhaustive route/apply-time fault coverage, stronger WAN login and
 owner recovery, durable auditing, multi-client load/partition testing, proxy
 deployment and real mobile/device acceptance are unfinished. Green simulator
 tests do not reduce this risk to a claim of robust internet exposure.

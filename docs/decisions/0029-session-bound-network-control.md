@@ -48,6 +48,19 @@ latency, unavailable links and already buffered motion require separate
 measurement and honest UI reporting. Protected foreground sessions pause their
 heartbeat while hidden; local unprotected unattended use remains distinct.
 
+### Command ordering and reconciliation
+
+Protected controller mutations additionally require a short-lived delivery
+ticket, a unique request ID and a monotonically increasing sequence. Bounded
+receipts prevent duplicate execution and permit the originating session/tab to
+reconcile a lost JSON response without resending a mutation. Immediate control
+changes serialize; deferred chat/Lab motion checks for a newer control intention
+when applying through the same lane. Large-model inference does not hold that
+lane or inherit its short delivery timeout. Ownership cancellation is synchronous
+and queued settings writes bind their transaction to the request context.
+Emergency Stop bypasses delivery admission. See the detailed
+[command contract and evidence](../lan-wan-command-delivery.md).
+
 ### Authentication lifetime and streaming
 
 Passive polling and heartbeats validate credentials without extending login

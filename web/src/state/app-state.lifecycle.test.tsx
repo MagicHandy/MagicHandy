@@ -1,10 +1,10 @@
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api } from "../api/client";
+import { api, COMMAND_RECOVERED_EVENT } from "../api/client";
 import type { AppState, MotionInfo } from "../api/types";
 import { AppStateProvider, useAppState, useMotionState } from "./app-state";
 
-vi.mock("../api/client", () => ({ api: { getState: vi.fn(), controllerHeartbeat: vi.fn() }, clientId: "test-tab" }));
+vi.mock("../api/client", () => ({ api: { getState: vi.fn(), controllerHeartbeat: vi.fn() }, clientId: "test-tab", COMMAND_RECOVERED_EVENT: "magichandy:command-recovered" }));
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -46,6 +46,17 @@ afterEach(() => {
 });
 
 describe("backend snapshot lifecycle", () => {
+  it("refreshes canonical state after receipt recovery and removes that listener when disabled", async () => {
+    const rendered = render(view());
+    await act(async () => {});
+    vi.mocked(api.getState).mockResolvedValue(snapshot("reconciled"));
+    await act(async () => { window.dispatchEvent(new Event(COMMAND_RECOVERED_EVENT)); });
+    expect(current.state?.version).toBe("reconciled");
+    const calls = vi.mocked(api.getState).mock.calls.length;
+    rendered.rerender(view(false));
+    await act(async () => { window.dispatchEvent(new Event(COMMAND_RECOVERED_EVENT)); });
+    expect(api.getState).toHaveBeenCalledTimes(calls);
+  });
   it("establishes a protected lease with a client heartbeat before enabling control", async () => {
     const state = snapshot();
     state.controller = { active: false, read_only: true, heartbeat_required: true, generation: 0 };

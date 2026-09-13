@@ -1,5 +1,30 @@
 # Goal Scorecard
 
+## 2026-09-13 — Protected command delivery checkpoint
+
+The in-progress LAN/WAN branch adds bounded receipts, command expiry/order,
+response-loss recovery and deferred-motion checks. No dependency or parallel
+motion path is added. Against the same Go 1.26.4 / `CGO_ENABLED=0` /
+`-trimpath -ldflags '-s -w'` alpha.45 source baseline, the current binary is
+**19,550,720 B**, up **242,176 B (1.25%)**. Main JS is **787,853 B** raw and
+**217,320 B** gzip-9; total embedded assets are **2,073,183 B**. This is
+**58,368 B** more binary and **599 B** more gzip-9 main JS than the previous
+LAN/WAN checkpoint below. The canonical dist has one main bundle and the same
+lazy-loaded features/locales.
+
+The receipt store retains at most 256 entries, each with at most 16 KiB of JSON
+response (4 MiB total response payload), a URL capped at 2048 bytes and bounded
+identity metadata. Completed receipts expire after five minutes. Request bodies
+and uploads are hashed in place rather than copied. Inference releases the
+immediate-control lane; no performance claim depends on a short LLM timeout.
+
+One observation after real authenticated review, LLM generation and browser
+loading measured **76,091,392 B** working set and **64,335,872 B** private memory.
+Authentication allocation/GC and page history differ from the previous sample;
+this is not a controlled idle comparison or an RSS improvement/regression claim.
+The remaining telemetry, CPU/allocation, state-age, sustained load and soak
+measurements remain required by the [implementation log](lan-wan-implementation.md).
+
 ## 2026-09-12 — LAN/WAN implementation checkpoint
 
 The in-progress network implementation adds session/control lifetimes,

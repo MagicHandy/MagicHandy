@@ -88,6 +88,9 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   **Acceptance:** delay a Start until after Stop/takeover, reorder slider updates,
   and drop a response after application. No old command restarts motion, no
   duplicate executes twice, and the newest accepted setting wins.
+  **In progress:** the [2026-09-13 delivery checkpoint](lan-wan-command-delivery.md)
+  implements tickets, ordering, bounded receipts, deferred-motion checks and
+  response-loss recovery; exhaustive route and network-fault acceptance remains.
 
 - [ ] **LAN-05 — Define and enforce remote permissions and consent.** Inventory
   every API capability: observe, control, configure devices, edit files/media,

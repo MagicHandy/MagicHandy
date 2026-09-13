@@ -17,6 +17,13 @@ do not create frontend ownership. Emergency Stop remains mounted for observers
 and signed-out/offline clients. The one-click connection report omits private
 paths, addresses and content and encourages sharing with the developer.
 
+Protected commands carry backend delivery metadata. A lost JSON response causes
+a bounded receipt lookup and a canonical-state refresh; the browser never
+automatically repeats a mutation with a new ID. An unknown outcome is labeled
+unconfirmed. Emergency Stop remains outside that recovery path. A delayed model
+reply can retain its text while reporting that newer controls superseded its
+motion. See the [delivery contract](lan-wan-command-delivery.md).
+
 See [Self-hosted HTTPS](self-hosted-https.md) and the open
 [LAN/WAN acceptance checklist](lan-wan-control-checklist.md).
 

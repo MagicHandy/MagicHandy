@@ -114,6 +114,9 @@ export interface MotionInfo {
 }
 
 export interface ControllerSnapshot {
+  command_ticket?: string;
+  command_ticket_ms?: number;
+  command_sequence?: number;
   epoch?: string;
   generation?: number;
   heartbeat_required?: boolean;
@@ -125,6 +128,19 @@ export interface ControllerSnapshot {
   active_client_age_ms?: number;
   lease_expires_in_ms?: number;
   takeover_in_progress?: boolean;
+}
+
+export interface CommandReceipt {
+  id: string;
+  epoch: string;
+  generation: number;
+  sequence: number;
+  state: "pending" | "complete" | "unknown";
+  http_status?: number;
+  replayable: boolean;
+  response?: unknown;
+  created_at: string;
+  completed_at?: string;
 }
 
 export interface ControllerTakeoverResponse {

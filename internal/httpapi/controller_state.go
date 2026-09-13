@@ -30,6 +30,9 @@ type controllerRuntime struct {
 	stopping    bool
 	ownerCtx    context.Context
 	ownerCancel context.CancelFunc
+	requests    map[uint64]context.CancelFunc
+	requestID   uint64
+	tickets     []controllerCommandTicket
 }
 
 func newControllerRuntime() controllerRuntime {
@@ -59,6 +62,7 @@ func (c *controllerRuntime) Heartbeat(actor controllerIdentity, generation uint6
 		c.activateLocked(actor)
 	} else if c.active == actor && !c.expiredLocked() {
 		c.lastSeenAt = c.clock()
+		c.issueCommandTicketLocked()
 	}
 	return c.snapshotLocked(actor)
 }
@@ -180,6 +184,8 @@ func (c *controllerRuntime) AdvanceStopGeneration() {
 	c.cancelOwnerLocked()
 	c.generation++
 	c.ownerCtx, c.ownerCancel = context.WithCancel(context.Background())
+	c.tickets = nil
+	c.issueCommandTicketLocked()
 }
 
 func (c *controllerRuntime) activateLocked(actor controllerIdentity) {
@@ -189,9 +195,15 @@ func (c *controllerRuntime) activateLocked(actor controllerIdentity) {
 	c.activeSince = c.clock()
 	c.lastSeenAt = c.activeSince
 	c.ownerCtx, c.ownerCancel = context.WithCancel(context.Background())
+	c.tickets = nil
+	c.issueCommandTicketLocked()
 }
 
 func (c *controllerRuntime) cancelOwnerLocked() {
+	for id, cancel := range c.requests {
+		cancel()
+		delete(c.requests, id)
+	}
 	if c.ownerCancel != nil {
 		c.ownerCancel()
 	}
@@ -236,10 +248,17 @@ func (c *controllerRuntime) snapshotLocked(actor controllerIdentity) controllerS
 		age = max(0, now.Sub(c.activeSince).Milliseconds())
 		remaining = max(0, c.leaseTTL.Milliseconds()-now.Sub(c.lastSeenAt).Milliseconds())
 	}
-	return controllerSnapshot{
+	snapshot := controllerSnapshot{
 		ClientID: actor.clientID, Active: active, ReadOnly: !active, Reason: reason,
 		ActiveClientID: c.active.clientID, ActiveClientAgeMillis: age,
 		LeaseExpiresInMillis: remaining, TakeoverInProgress: c.stopping || c.pending.clientID != "",
 		Generation: c.generation, Epoch: c.epoch, HeartbeatRequired: actor.sessionKey != "",
 	}
+	if active && actor.sessionKey != "" && len(c.tickets) > 0 {
+		latest := c.tickets[len(c.tickets)-1]
+		if now.Before(latest.expires) {
+			snapshot.CommandTicket, snapshot.CommandTicketMillis = latest.value, latest.expires.Sub(now).Milliseconds()
+		}
+	}
+	return snapshot
 }

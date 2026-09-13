@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -40,14 +42,21 @@ func authenticatedControlRequest(server *Server, cookie *http.Cookie, method, ro
 	server.controller.mu.Lock()
 	r.Header.Set(controllerGenerationHeader, strconv.FormatUint(server.controller.generation, 10))
 	r.Header.Set(controllerEpochHeader, server.controller.epoch)
+	if len(server.controller.tickets) > 0 {
+		r.Header.Set(commandTicketHeader, server.controller.tickets[len(server.controller.tickets)-1].value)
+	}
 	server.controller.mu.Unlock()
+	server.commands.mu.Lock()
+	r.Header.Set(commandSequenceHeader, strconv.FormatUint(server.commands.sequence+1, 10))
+	server.commands.mu.Unlock()
+	r.Header.Set(commandIDHeader, rand.Text())
 	r.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	server.Handler().ServeHTTP(w, r)
 	return w
 }
 
-func newControllerSessionFixture(t *testing.T) (*Server, *accounts.Store, accounts.Account, *http.Cookie) {
+func newControllerSessionFixture(t *testing.T, providers ...llm.Provider) (*Server, *accounts.Store, accounts.Account, *http.Cookie) {
 	t.Helper()
 	settings, err := config.OpenStore(t.TempDir())
 	if err != nil {
@@ -58,9 +67,13 @@ func newControllerSessionFixture(t *testing.T) (*Server, *accounts.Store, accoun
 		t.Fatal(err)
 	}
 	fake := transport.NewFake()
-	s := newTestServerWithStore(t, settings, Runtime{
+	runtime := Runtime{
 		Accounts: store, AuthenticationRequired: true, MotionTransport: fake, Transport: fake,
-	})
+	}
+	if len(providers) > 0 {
+		runtime.LLMProvider = providers[0]
+	}
+	s := newTestServerWithStore(t, settings, runtime)
 	admin, err := store.BootstrapAdmin(t.Context(), "owner", "a long review passphrase")
 	if err != nil {
 		t.Fatal(err)

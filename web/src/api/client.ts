@@ -65,6 +65,7 @@ import type {
   ControlGrant,
   NetworkConfig,
   NetworkStatus,
+  CommandReceipt,
 } from "./types";
 
 
@@ -128,6 +129,7 @@ export const clientId = resolveControllerClientID(browserSessionStorage(), brows
 
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
 export const AUTHENTICATION_REQUIRED_EVENT = "magichandy:authentication-required";
+export const COMMAND_RECOVERED_EVENT = "magichandy:command-recovered";
 
 // Transport metadata copied from backend snapshots. It never grants local
 // ownership; the server independently checks session, tab and generation.
@@ -135,12 +137,19 @@ let controlGeneration: number | undefined;
 let controlEpoch: string | undefined;
 let controllerResponseOrder = 0;
 let requestOrder = 0;
+let commandTicket: string | undefined;
+let commandSequence = 0;
 
-function controllerRequestHeaders(): Record<string, string> {
+function controllerRequestHeaders(delivery = true): Record<string, string> {
   return {
     [CLIENT_HEADER]: clientId,
     ...(controlGeneration === undefined ? {} : { "X-MagicHandy-Control-Generation": String(controlGeneration) }),
     ...(controlEpoch === undefined ? {} : { "X-MagicHandy-Control-Epoch": controlEpoch }),
+    ...(!delivery || commandTicket === undefined ? {} : {
+      "X-MagicHandy-Command-Ticket": commandTicket,
+      "X-MagicHandy-Command-ID": newControllerClientID(),
+      "X-MagicHandy-Command-Sequence": String(++commandSequence),
+    }),
   };
 }
 
@@ -153,10 +162,18 @@ function rememberControllerResponse(value: unknown, order: number): void {
   const generation = candidate.heartbeat_required === true && "generation" in candidate &&
     typeof candidate.generation === "number" && Number.isSafeInteger(candidate.generation)
     ? candidate.generation : undefined;
+  const scopeChanged = epoch !== controlEpoch || generation !== controlGeneration;
+  if (epoch === controlEpoch && generation !== undefined && controlGeneration !== undefined && generation < controlGeneration) return;
   controllerResponseOrder = order;
   controlGeneration = epoch === controlEpoch && generation !== undefined && controlGeneration !== undefined
     ? Math.max(generation, controlGeneration) : generation;
   controlEpoch = generation === undefined ? undefined : epoch;
+  commandTicket = generation !== undefined && "command_ticket" in candidate && typeof candidate.command_ticket === "string"
+    ? candidate.command_ticket : undefined;
+  if (scopeChanged) commandSequence = 0;
+  if ("command_sequence" in candidate && typeof candidate.command_sequence === "number" && Number.isSafeInteger(candidate.command_sequence)) {
+    commandSequence = Math.max(commandSequence, candidate.command_sequence);
+  }
 }
 
 export async function request<T>(
@@ -168,16 +185,23 @@ export async function request<T>(
   keepalive = false,
 ): Promise<T> {
   const order = ++requestOrder;
-  const headers: Record<string, string> = { Accept: "application/json", ...controllerRequestHeaders(), ...extraHeaders };
+  const delivery = method !== "GET" && method !== "HEAD" && !stopDeliveryPath(path) &&
+    !/^\/api\/(?:auth|accounts|network|controller)(?:\/|$)/.test(path);
+  const headers: Record<string, string> = { Accept: "application/json", ...controllerRequestHeaders(delivery), ...extraHeaders };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetch(path, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal,
-    keepalive,
-  });
-  const text = await res.text();
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(path, {
+      method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal, keepalive,
+    });
+    text = await res.text();
+  } catch (reason) {
+    if (headers["X-MagicHandy-Command-ID"] && method !== "GET" && method !== "HEAD" && !signal?.aborted && !stopDeliveryPath(path)) {
+      return recoverCommandResponse<T>(headers["X-MagicHandy-Command-ID"]);
+    }
+    throw reason;
+  }
   let parsed: unknown = null;
   if (text) {
     try {
@@ -190,6 +214,7 @@ export async function request<T>(
     if (res.status === 401 && !path.startsWith("/api/auth/")) {
       controlGeneration = undefined;
       controlEpoch = undefined;
+      commandTicket = undefined;
       window.dispatchEvent(new Event(AUTHENTICATION_REQUIRED_EVENT));
     }
     let message = `Request failed (${res.status})`;
@@ -200,6 +225,39 @@ export async function request<T>(
   }
   rememberControllerResponse(parsed, order);
   return parsed as T;
+}
+
+function stopDeliveryPath(path: string): boolean {
+  return ["/api/motion/stop", "/api/transport/cloud/stop", "/api/transport/bluetooth/stop"].includes(path);
+}
+
+async function recoverCommandResponse<T>(id: string): Promise<T> {
+  const abort = new AbortController();
+  const timeout = window.setTimeout(() => abort.abort(), 3000);
+  try {
+    const response = await fetch(`/api/controller/commands/${encodeURIComponent(id)}`, {
+      method: "GET", headers: { Accept: "application/json", [CLIENT_HEADER]: clientId }, signal: abort.signal,
+    });
+    if (!response.ok) throw new Error("No retained command receipt");
+    const receipt = JSON.parse(await response.text()) as CommandReceipt;
+    if (receipt.state !== "complete" || !receipt.replayable || !receipt.http_status) {
+      throw new Error("The original request has no replayable result");
+    }
+    window.dispatchEvent(new Event(COMMAND_RECOVERED_EVENT));
+    if (receipt.http_status < 200 || receipt.http_status >= 300) {
+      const payload = receipt.response;
+      const message = payload && typeof payload === "object" && "error" in payload ? String(payload.error) : `Request failed (${receipt.http_status})`;
+      throw new ApiError(message, receipt.http_status, payload);
+    }
+    return (receipt.response ?? null) as T;
+  } catch (reason) {
+    if (reason instanceof ApiError) throw reason;
+    // A query is safe after response loss. Re-sending the mutation with a new
+    // ID would turn an unknown outcome into possible duplicate execution.
+    throw new ApiError("The command outcome is unconfirmed. Check the current state or use Stop before trying again.", 0, { command_id: id });
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 async function uploadVoiceTranscription(audio: Blob, format: string, stopSequence?: number, signal?: AbortSignal): Promise<{ request: VoiceRequestSnapshot }> {
@@ -450,6 +508,7 @@ export const api = {
   getState: (signal?: AbortSignal) => request<AppState>("GET", "/api/state", undefined, signal),
   takeControl: () => request<ControllerTakeoverResponse>("POST", "/api/controller/takeover", {}),
   controllerHeartbeat: (signal?: AbortSignal) => request<ControllerSnapshot>("POST", "/api/controller/heartbeat", {}, signal),
+  commandReceipt: (id: string, signal?: AbortSignal) => request<CommandReceipt>("GET", `/api/controller/commands/${encodeURIComponent(id)}`, undefined, signal),
 
   // Motion — semantic commands only.
   stopMotion: () => request<{ error?: string }>("POST", "/api/motion/stop", {}),
