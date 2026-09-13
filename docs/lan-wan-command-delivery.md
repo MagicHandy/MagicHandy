@@ -97,6 +97,12 @@ control, and the browser does not delay a Stop error with a receipt lookup.
 The ordinary `/api/modes/stop` operation can preserve motion via
 `stop_motion:false`, so it remains an ordered, controller-authorized command.
 
+Server shutdown cancels handler work immediately but gives socket writes a
+bounded five-second grace period to finish HTTP framing. An immediate write
+deadline at this point could truncate a healthy event stream's chunk terminator.
+Ordinary session/ownership revocation on a running server still interrupts socket
+writes immediately; it does not receive the shutdown grace period.
+
 ## Evidence and limits
 
 The regression suite exercises delayed starts/resumes/mode/media requests after
@@ -106,6 +112,9 @@ Stop while a settings transaction waits, synchronous ownership cancellation,
 receipt eviction/expiry, interrupted handlers and a delayed model response after
 newer controls. The browser suite covers sequence recovery, stale response
 metadata, safe receipt lookup, unknown outcomes and canonical-state refresh.
+A deterministic regression forces the shutdown cancellation callback to run
+before an HTTP/1 stream handler returns and verifies clean end-of-stream framing;
+a separate test verifies immediate interruption on live access revocation.
 
 These are deterministic process/simulator tests. They do not close the remaining
 exhaustive route/permission inventory, real proxy deployment, sustained load,

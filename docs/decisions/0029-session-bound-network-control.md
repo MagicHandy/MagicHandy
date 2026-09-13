@@ -79,6 +79,10 @@ interrupts socket writes and body reads. Healthy concurrent requests share a
 bounded per-session budget; Emergency Stop bypasses authentication storage and
 ordinary admission limits.
 
+During application shutdown, cancellation permits a bounded five-second socket
+write grace so healthy responses can finish their HTTP framing. Session and
+ownership revocation on a running server still interrupt writes immediately.
+
 ### Target network modes
 
 The implementation exposes explicit local, direct-HTTPS and trusted-proxy

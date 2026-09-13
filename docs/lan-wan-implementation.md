@@ -56,7 +56,7 @@ change: the text reply is retained and its obsolete motion is rejected. Voice
 bookkeeping does not discard otherwise-current deferred motion. A prepared
 settings transaction canceled before commit changes neither disk nor memory.
 
-The exact current binary is running at `http://127.0.0.1:49983` with isolated
+The initial delivery build ran at `http://127.0.0.1:49983` with isolated
 data and `-simulate-motion`, voice off and LLM motion off. Authenticated HTTP
 checks apply two settings, replay the first and verify that the newer setting
 remains active; the first completed result is also retrieved through its receipt.
@@ -71,6 +71,25 @@ the takeover/delivery evidence. No public listener, firewall, client trust store
 or physical-device configuration was changed. The
 [scorecard](goal-scorecard.md) records the current artifact sizes and the limits
 of the memory observation. Detailed logs remain in ignored `.scratch/lan-wan/`.
+
+### CI shutdown correction
+
+The first delivery commit exposed a shutdown timing defect in Linux CI:
+`TestQuiesceReleasesMotionEventStream` sometimes received `unexpected EOF`.
+An immediate cancellation write deadline could prevent the HTTP/1 response's
+final chunk framing. A deterministic local reproducer failed before the fix.
+Shutdown now gives socket writes a bounded five-second grace period while
+canceling handler work immediately; live-server access revocation still applies
+an immediate write deadline. The original test remains intact, both shutdown
+tests pass repeated runs, and the full Go/race/vet/lint/CGO-free gates pass again.
+
+The corrected current build is at `http://127.0.0.1:49985/#/settings/access`,
+using a fresh isolated simulator database. Its real provider readiness probe
+passes, and app chat returns “The review build is ready.” in **106 ms**, with
+one provider call, no repair/fallback and no motion. This fresh-server check
+used initial heartbeat admission and invoked neither takeover nor Stop.
+The review tab is signed in, in observer mode, with the LAN/WAN settings and
+Stop visible. Earlier simulator sessions were preserved.
 
 ## Foundation checkpoint — 2026-09-12
 

@@ -8,7 +8,10 @@ import (
 	"time"
 )
 
-const accessWatchdogInterval = time.Second
+const (
+	accessWatchdogInterval = time.Second
+	shutdownWriteGrace     = 5 * time.Second
+)
 
 type controllerCancellationKey struct{}
 
@@ -116,8 +119,16 @@ func (s *Server) trackSessionActivity(next http.Handler) http.Handler {
 		interrupted := make(chan struct{})
 		interrupt := context.AfterFunc(ctx, func() {
 			defer close(interrupted)
-			_ = http.NewResponseController(w).SetReadDeadline(time.Now())
-			_ = http.NewResponseController(w).SetWriteDeadline(time.Now())
+			now := time.Now()
+			writeDeadline := now
+			if s.quiescing.Load() {
+				// Healthy shutdown must finish HTTP framing after the handler
+				// returns. Keep that write bounded for stalled receivers, while
+				// live-server session/ownership revocation still interrupts now.
+				writeDeadline = now.Add(shutdownWriteGrace)
+			}
+			_ = http.NewResponseController(w).SetReadDeadline(now)
+			_ = http.NewResponseController(w).SetWriteDeadline(writeDeadline)
 			if r.Body != nil {
 				_ = r.Body.Close()
 			}

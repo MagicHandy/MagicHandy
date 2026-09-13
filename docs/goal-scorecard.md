@@ -6,9 +6,9 @@ The in-progress LAN/WAN branch adds bounded receipts, command expiry/order,
 response-loss recovery and deferred-motion checks. No dependency or parallel
 motion path is added. Against the same Go 1.26.4 / `CGO_ENABLED=0` /
 `-trimpath -ldflags '-s -w'` alpha.45 source baseline, the current binary is
-**19,550,720 B**, up **242,176 B (1.25%)**. Main JS is **787,853 B** raw and
+**19,551,232 B**, up **242,688 B (1.26%)**. Main JS is **787,853 B** raw and
 **217,320 B** gzip-9; total embedded assets are **2,073,183 B**. This is
-**58,368 B** more binary and **599 B** more gzip-9 main JS than the previous
+**58,880 B** more binary and **599 B** more gzip-9 main JS than the previous
 LAN/WAN checkpoint below. The canonical dist has one main bundle and the same
 lazy-loaded features/locales.
 
@@ -19,7 +19,8 @@ and uploads are hashed in place rather than copied. Inference releases the
 immediate-control lane; no performance claim depends on a short LLM timeout.
 
 One observation after real authenticated review, LLM generation and browser
-loading measured **76,091,392 B** working set and **64,335,872 B** private memory.
+loading measured **113,664,000 B** working set and **100,974,592 B** private memory
+in the fresh simulator containing the shutdown correction.
 Authentication allocation/GC and page history differ from the previous sample;
 this is not a controlled idle comparison or an RSS improvement/regression claim.
 The remaining telemetry, CPU/allocation, state-age, sustained load and soak
