@@ -96,8 +96,8 @@ API tests cover controller response reordering and an aborted delayed response.
 Existing state lifecycle and subscription tests remain in place.
 
 The implementation log records final build, test and review evidence. This
-checkpoint does not implement durable chat cursor recovery, shared encoded
-telemetry, adaptive spectator rates, RTT/jitter diagnostics or the complete
-network fault/load matrix. The new lightweight controller reads and observation
+observation checkpoint is extended by [durable chat recovery](lan-wan-chat-recovery.md).
+Shared encoded telemetry, adaptive spectator rates, RTT/jitter diagnostics and the complete
+network fault/load matrix remain open. The new lightweight controller reads and observation
 fields have a wire cost; no telemetry speedup is claimed without LAN-13's
 bytes/client/minute, CPU, allocations, RSS and state-age measurements.

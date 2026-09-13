@@ -178,18 +178,6 @@ func (l *MessageLog) LatestSeqSessionContext(ctx context.Context, sessionID stri
 
 // CursorSessionContext is the request-cancellable form of CursorSession.
 func (l *MessageLog) CursorSessionContext(ctx context.Context, clientID, sessionID string) (int64, error) {
-	if clientID == "" {
-		return 0, nil
-	}
-	var seq int64
-	err := l.db.SQL().QueryRowContext(ctx, `
-		SELECT last_seq FROM chat_session_cursors WHERE client_id = ? AND session_id = ?
-	`, clientID, sessionID).Scan(&seq)
-	if err == sql.ErrNoRows {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, fmt.Errorf("read chat cursor: %w", err)
-	}
-	return seq, nil
+	cursor, err := readChatCursor(ctx, l.db.SQL(), clientID, sessionID)
+	return cursor.Sequence, err
 }

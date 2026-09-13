@@ -1,4 +1,9 @@
 {
+  "Some older messages are no longer retained. Showing the available conversation history.": "较早的一些消息已不再保留。正在显示可用的对话历史。",
+  "Showing the latest {count} retained messages.": "正在显示最近保留的 {count} 条消息。",
+  "Conversation history request timed out.": "对话历史请求超时。",
+  "Invalid conversation recovery response.": "对话恢复响应无效。",
+  "Conversation changed while reconnecting. Reload its history.": "重新连接期间对话已更改。请重新加载历史记录。",
   "Not now": "暂不",
   "Notification history": "通知历史记录",
   "Choose which events create bell history and unread badges. Live activity, offline state, and Emergency Stop remain visible regardless.": "选择哪些事件会产生铃铛历史记录和未读标记。当前活动、离线状态和紧急停止始终保持可见。",

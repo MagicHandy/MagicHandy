@@ -161,6 +161,14 @@ contact; they do not create a second motion implementation.
 
 ## Acceptance and open work
 
+The [chat recovery contract](../lan-wan-chat-recovery.md) extends observation
+ordering to the durable conversation log. Display sequence and committed
+revision are distinct; a pending reply committed later must remain recoverable
+even below an observed display head. Login-scoped read markers are separate
+from control grants and command delivery. One database read snapshot supplies
+rows and recovery metadata, while browser cancellation, full resync and bounded
+retries prevent stale responses from replacing a newer conversation view.
+
 Current evidence and outstanding requirements are recorded in the
 [implementation log](../lan-wan-implementation.md). The new exposure modes,
 permission/grant model, command deduplication and ordering, certificate/setup UI,

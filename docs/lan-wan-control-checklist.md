@@ -179,8 +179,10 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   Motion-changing controls require fresh ownership/state; Stop stays reachable.
   **In progress:** the [observation checkpoint](lan-wan-observations.md) adds
   capture revisions, independent controller liveness, bounded stream recovery
-  and visibility resync. Durable chat cursor recovery and real-network/mobile
-  acceptance remain open.
+  and visibility resync. [Committed chat recovery](lan-wan-chat-recovery.md)
+  adds coherent read pages, login-scoped bounded cursors, late-commit recovery,
+  retention-gap reporting and cancelable browser resync. Response-byte budgets,
+  the full network-fault matrix and real-network/mobile acceptance remain open.
 
 - [ ] **LAN-13 — Reduce telemetry and polling cost with measurements.** Measure
   the existing two-second full-state polling and eight-Hz per-client motion

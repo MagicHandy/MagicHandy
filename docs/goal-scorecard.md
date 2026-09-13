@@ -1,5 +1,38 @@
 # Goal Scorecard
 
+## 2026-09-13 — Durable conversation recovery
+
+The [chat recovery checkpoint](lan-wan-chat-recovery.md) adds committed
+revisions, coherent database read pages, login-scoped read markers and bounded
+browser recovery. It adds no dependency or motion path. With Go 1.26.4,
+`CGO_ENABLED=0`, `-trimpath` and `-ldflags '-s -w'`, the candidate is
+**19,625,472 B**: **26,624 B** above the gateway checkpoint and **316,928 B
+(1.64%)** above the same-toolchain alpha.45 source baseline.
+
+Gzip in this comparison uses Node **24.15.0**, zlib **1.3.1-e00f703**, level 9
+for all three inputs. These compressed totals differ slightly from the prior
+Python-based entries, so the baseline and preceding bundle are recompressed
+with the same implementation here.
+
+| Artifact | Alpha.45 baseline | Gateway checkpoint | Chat recovery |
+| --- | ---: | ---: | ---: |
+| Main JS, raw bytes | 769,915 | 795,413 | 801,759 |
+| Main JS, gzip-9 bytes | 212,596 | 219,347 | 221,292 |
+| All embedded assets, bytes | 2,033,655 | 2,081,028 | 2,089,930 |
+
+The checkpoint adds **6,346 B** raw / **1,945 B** gzip-9 main JS and **8,902 B**
+total assets over the preceding gateway checkpoint. Compared with alpha.45,
+gzip-9 main JS adds **8,696 B** and embedded assets add **56,275 B**. The single
+canonical dist replaces prior hashed assets; heavy features/locales remain lazy.
+
+After real authenticated LLM/chat, two-login cursor checks and browser reload,
+one simulator sample measured **96,591,872 B** working set / **85,307,392 B**
+private memory. This is not a controlled idle comparison and establishes no
+RSS or startup improvement. Cursor writes avoid rewriting unchanged positions,
+but their CPU/IO benefit has not been benchmarked. Response-byte budgets,
+controlled telemetry/CPU/allocation measurements and load/soak acceptance remain
+open; the 200-row history limit is not a byte bound.
+
 ## 2026-09-13 — Authenticated Bluetooth gateway and passive activity
 
 The [gateway checkpoint](lan-wan-bluetooth-gateway.md) binds the device browser

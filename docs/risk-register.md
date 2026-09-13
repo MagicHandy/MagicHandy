@@ -1871,6 +1871,16 @@ GATT teardown attempt. Automatic POST bookkeeping no longer renews login idle
 time. Fake transport/browser regressions cover these boundaries; physical Stop,
 mobile scheduling and WAN load/partition measurements remain open.
 
+The [chat recovery checkpoint](lan-wan-chat-recovery.md) closes a reproduced
+cross-login read-cursor collision and separates committed revisions from
+display sequence. A later commit below an observed display head remains
+recoverable. Coherent database pages, cancellation, bounded read markers and
+browser resync prevent skipped durable replies and obsolete response merging.
+Migration preserves conversation content, and recovery does not replay old
+speech. These guarantees cover read tracking within the existing shared-data
+policy; they do not establish tenant isolation or complete response-byte/load
+acceptance for large histories.
+
 The risk remains open: exhaustive route/apply-time fault coverage, stronger WAN login and
 owner recovery, durable auditing, multi-client load/partition testing, proxy
 deployment and real mobile/device acceptance are unfinished. Green simulator

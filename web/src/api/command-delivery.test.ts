@@ -11,6 +11,23 @@ beforeEach(async () => { vi.resetModules(); client = await import("./client"); }
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("command delivery", () => {
+  it("keeps chat read markers outside control sequencing and receipt recovery", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(reply(ownership())).mockResolvedValue(reply({}));
+    vi.stubGlobal("fetch", fetchMock);
+    await client.api.getState();
+    await client.api.advanceChatCursor("conversation", 5, { revision: 8, epoch: "server-process" });
+    const acknowledgement = fetchMock.mock.calls[1][1];
+    expect(acknowledgement.headers["X-MagicHandy-Command-ID"]).toBeUndefined();
+    expect(JSON.parse(acknowledgement.body)).toMatchObject({ seq: 5, revision: 8, server_epoch: "server-process" });
+    await client.request("POST", "/api/motion/quick", { speed_max_percent: 40 });
+    expect(fetchMock.mock.calls[2][1].headers["X-MagicHandy-Command-Sequence"]).toBe("21");
+    await client.api.getChatMessages("conversation", 5, { revision: 8 });
+    expect(fetchMock.mock.calls[3][0]).toBe("/api/chat/messages?session_id=conversation&after_revision=8");
+    fetchMock.mockRejectedValueOnce(new Error("lost read acknowledgement"));
+    await expect(client.api.advanceChatCursor("conversation", 5, { revision: 8, epoch: "server-process" })).rejects.toThrow("lost read acknowledgement");
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
   it("keeps gateway maintenance independent of controller command delivery", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(reply(ownership())).mockResolvedValue(reply({}));
     vi.stubGlobal("fetch", fetchMock);

@@ -193,6 +193,7 @@ export async function request<T>(
 ): Promise<T> {
   const order = ++requestOrder;
   const delivery = method !== "GET" && method !== "HEAD" && !stopDeliveryPath(path) &&
+    path !== "/api/chat/cursor" &&
     !/^\/api\/transport\/bluetooth\/(?:status|ack)$/.test(path) &&
     !(path === "/api/transport/bluetooth/disconnect" && extraHeaders?.["X-MagicHandy-Gateway-Generation"]) &&
     !/^\/api\/(?:auth|accounts|network|controller)(?:\/|$)/.test(path);
@@ -803,13 +804,16 @@ export const api = {
     request<ChatSessionsResponse>("PUT", `/api/chat/sessions/${encodeURIComponent(sessionId)}/save`, {}),
   deleteChatSession: (sessionId: string) =>
     request<ChatSessionsResponse>("DELETE", `/api/chat/sessions/${encodeURIComponent(sessionId)}`),
-  getChatMessages: (sessionId: string, after = 0) => {
+  getChatMessages: (sessionId: string, after = 0, recovery?: { revision?: number; signal?: AbortSignal }) => {
     const query = new URLSearchParams({ session_id: sessionId });
-    if (after > 0) query.set("after", String(after));
-    return request<ChatMessagesResponse>("GET", `/api/chat/messages?${query.toString()}`);
+    if (recovery?.revision !== undefined) query.set("after_revision", String(recovery.revision));
+    else if (after > 0) query.set("after", String(after));
+    return request<ChatMessagesResponse>("GET", `/api/chat/messages?${query.toString()}`, undefined, recovery?.signal);
   },
-  advanceChatCursor: (sessionId: string, seq: number) =>
-    request<{ cursor: number; session_id: string }>("POST", "/api/chat/cursor", { session_id: sessionId, seq }),
+  advanceChatCursor: (sessionId: string, seq: number, recovery?: { revision?: number; epoch?: string; signal?: AbortSignal }) =>
+    request<{ cursor: number; cursor_revision?: number; session_id: string }>("POST", "/api/chat/cursor", {
+      session_id: sessionId, seq, revision: recovery?.revision, server_epoch: recovery?.epoch,
+    }, recovery?.signal),
 
   // Voice workers (optional; the app runs fully without them).
   voiceStatus: () =>

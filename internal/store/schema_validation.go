@@ -55,14 +55,14 @@ var requiredSchemaTables = []schemaTable{
 		"domain:TEXT", "source_path:TEXT", "archived_path:TEXT", "status:TEXT", "message:TEXT", "imported_at:TEXT",
 	), primaryKey: []string{"domain"}},
 	{name: "messages", columns: columns(
-		"seq:INTEGER", "session_id:TEXT", "role:TEXT", "content:TEXT", "client_id:TEXT", "diagnostics_json:TEXT", "created_at:TEXT", "committed:INTEGER",
+		"seq:INTEGER", "session_id:TEXT", "role:TEXT", "content:TEXT", "client_id:TEXT", "diagnostics_json:TEXT", "created_at:TEXT", "committed:INTEGER", "revision:INTEGER",
 	), primaryKey: []string{"seq"}},
 	{name: "client_cursors", columns: columns("client_id:TEXT", "last_seq:INTEGER", "updated_at:TEXT"), primaryKey: []string{"client_id"}},
 	{name: "chat_sessions", columns: columns(
-		"id:TEXT", "title:TEXT", "saved:INTEGER", "persona_id:TEXT", "created_at:TEXT", "updated_at:TEXT",
+		"id:TEXT", "title:TEXT", "saved:INTEGER", "persona_id:TEXT", "created_at:TEXT", "updated_at:TEXT", "revision:INTEGER", "reset_revision:INTEGER", "pruned_revision:INTEGER",
 	), primaryKey: []string{"id"}},
 	{name: "chat_workspace", columns: columns("id:TEXT", "active_session_id:TEXT", "updated_at:TEXT"), primaryKey: []string{"id"}},
-	{name: "chat_session_cursors", columns: columns("client_id:TEXT", "session_id:TEXT", "last_seq:INTEGER", "updated_at:TEXT"), primaryKey: []string{"client_id", "session_id"}},
+	{name: "chat_session_cursors", columns: columns("client_id:TEXT", "session_id:TEXT", "last_seq:INTEGER", "last_revision:INTEGER", "updated_at:TEXT"), primaryKey: []string{"client_id", "session_id"}},
 	{name: "personas", columns: columns(
 		"id:TEXT", "name:TEXT", "description:TEXT", "chat_voice:TEXT", "reaction_style:TEXT",
 		"prompt_set_id:TEXT", "default_focus_area:TEXT", "lore_mode:TEXT",
@@ -108,6 +108,8 @@ var requiredSchemaTables = []schemaTable{
 }
 
 var requiredSchemaIndexes = []schemaIndex{
+	{table: "messages", name: "messages_session_revision", columns: indexColumns("session_id", "committed", "revision")},
+	{table: "chat_session_cursors", name: "chat_cursors_updated", columns: indexColumns("updated_at", "client_id", "session_id")},
 	{table: "messages", name: "messages_session_seq", columns: indexColumns("session_id", "seq")},
 	{table: "chat_sessions", name: "chat_sessions_saved_updated", columns: indexColumns("-saved", "-updated_at", "id")},
 	{table: "personas", name: "personas_used", columns: indexColumns("-last_used_at", "name", "id")},

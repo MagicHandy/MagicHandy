@@ -1,4 +1,9 @@
 {
+  "Some older messages are no longer retained. Showing the available conversation history.": "Algunos mensajes antiguos ya no se conservan. Se muestra el historial disponible de la conversación.",
+  "Showing the latest {count} retained messages.": "Se muestran los últimos {count} mensajes conservados.",
+  "Conversation history request timed out.": "La solicitud del historial de la conversación agotó el tiempo de espera.",
+  "Invalid conversation recovery response.": "La respuesta de recuperación de la conversación no es válida.",
+  "Conversation changed while reconnecting. Reload its history.": "La conversación cambió durante la reconexión. Vuelve a cargar su historial.",
   "Not now": "Ahora no",
   "Notification history": "Historial de notificaciones",
   "Choose which events create bell history and unread badges. Live activity, offline state, and Emergency Stop remain visible regardless.": "Elige qué eventos crean historial en la campana e indicadores sin leer. La actividad en curso, el estado sin conexión y la Parada de emergencia permanecen visibles.",

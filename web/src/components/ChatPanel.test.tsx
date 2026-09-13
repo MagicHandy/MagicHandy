@@ -61,6 +61,34 @@ describe("ChatPanel history", () => {
     advanceChatCursor.mockResolvedValue({ cursor: 0, session_id: SESSION_ID });
   });
 
+  it("reconciles messages missed during SSE without duplicates or replaying speech", async () => {
+    const metadata = { server_epoch: "chat-process", first_seq: 1, has_more: false, history_limit: 200, cursor: 0, cursor_revision: 0, session_id: SESSION_ID };
+    getChatMessages.mockResolvedValueOnce({ ...metadata, revision: 1, next_revision: 1, latest_seq: 1, reset: true,
+      messages: [{ seq: 1, revision: 1, role: "user", content: "Earlier", created_at: "now" }] })
+      .mockResolvedValueOnce({ ...metadata, revision: 4, next_revision: 4, latest_seq: 4, reset: false, messages: [
+        { seq: 2, revision: 2, role: "assistant", content: "Missed while streaming", created_at: "now", speech_request_id: "older-speech" },
+        { seq: 3, revision: 3, role: "user", content: "New request", created_at: "now" },
+        { seq: 4, revision: 4, role: "assistant", content: "Committed reply", created_at: "now", speech_request_id: "live-speech" },
+      ] });
+    streamChatMock.mockImplementation(async (_id, _text, onEvent) => {
+      onEvent({ event: "status", data: { user_seq: 3 } });
+      onEvent({ event: "message", data: { seq: 4, reply: "Committed reply" } });
+      onEvent({ event: "speech", data: { request_id: "live-speech" } });
+      onEvent({ event: "done", data: { ok: true } });
+    });
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    expect(await screen.findByText("Earlier")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "New request" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Missed while streaming")).toBeInTheDocument();
+    expect(screen.getAllByText("New request")).toHaveLength(1);
+    expect(screen.getAllByText("Committed reply")).toHaveLength(1);
+    expect(getChatMessages).toHaveBeenLastCalledWith(SESSION_ID, 1, expect.objectContaining({ revision: 1 }));
+    expect(app.queueSpeech).toHaveBeenCalledOnce();
+    expect(app.queueSpeech).toHaveBeenCalledWith("live-speech");
+    expect(advanceChatCursor).toHaveBeenLastCalledWith(SESSION_ID, 4, expect.objectContaining({ revision: 4 }));
+  });
+
   it("distinguishes a failed history read from an empty conversation and retries", async () => {
     getChatMessages
       .mockRejectedValueOnce(new Error("chat database unavailable"))

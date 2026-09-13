@@ -19,7 +19,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 20
+	CurrentSchemaVersion = 21
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -563,6 +563,8 @@ var migrations = [][]string{
 			expires_at TEXT NOT NULL
 		)`,
 	},
+	// v20 -> v21: committed conversation revisions and bounded read cursors.
+	{`SELECT 1`},
 }
 
 func migrateAccountProfiles(ctx context.Context, tx *sql.Tx) error {
@@ -880,6 +882,8 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		err = migratePersonaLore(ctx, tx)
 	case 19:
 		err = migrateAccountProfiles(ctx, tx)
+	case 21:
+		err = migrateChatRecovery(ctx, tx)
 	default:
 		return nil
 	}

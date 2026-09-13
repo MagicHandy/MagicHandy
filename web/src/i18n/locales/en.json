@@ -1,4 +1,9 @@
 {
+  "Some older messages are no longer retained. Showing the available conversation history.": "Some older messages are no longer retained. Showing the available conversation history.",
+  "Showing the latest {count} retained messages.": "Showing the latest {count} retained messages.",
+  "Conversation history request timed out.": "Conversation history request timed out.",
+  "Invalid conversation recovery response.": "Invalid conversation recovery response.",
+  "Conversation changed while reconnecting. Reload its history.": "Conversation changed while reconnecting. Reload its history.",
   "At startup": "At startup",
   "Not now": "Not now",
   "On demand": "On demand",

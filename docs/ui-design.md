@@ -266,6 +266,17 @@ current unsaved draft is retained after shutdown; saved tabs are unaffected.
 Starting clean always discards the prior draft, so its retention toggle is off
 and unavailable in that mode. A clean exit applies the choice immediately and
 the next startup repeats it after a crash.
+
+Conversation history uses backend committed revisions independently of display
+sequence numbers. Late committed replies merge into their display position;
+stream placeholders reconcile with durable rows without duplicates. Returning
+from a hidden/offline browser or a server restart refreshes retained history
+without replaying old speech or taking control. The existing compact history
+status area reports read failures and retention gaps, with a direct Retry
+action for unavailable history. Cursor acknowledgements are passive read
+tracking and do not participate in controller command delivery. The
+[recovery contract](lan-wan-chat-recovery.md) records the lifecycle and bounds.
+
 The testing-badged Manual motion group lives in `#/settings/device` — it drives
 the device, so it belongs with the connection that carries it rather than among
 read-only diagnostics — and it

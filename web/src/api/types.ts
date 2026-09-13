@@ -253,6 +253,7 @@ export interface ChatHistoryMessage {
 // One row of the server-side shared chat log (the canonical history; each
 // client reads via its own cursor and reads are never destructive).
 export interface ChatLogMessage {
+  revision?: number;
   seq: number;
   role: "user" | "assistant";
   content: string;
@@ -464,6 +465,15 @@ export interface ChatMessagesResponse {
   latest_seq: number;
   cursor: number;
   session_id: string;
+  revision?: number;
+  next_revision?: number;
+  server_epoch?: string;
+  first_seq?: number;
+  has_more?: boolean;
+  reset?: boolean;
+  history_gap?: boolean;
+  history_limit?: number;
+  cursor_revision?: number;
 }
 
 // LLMMotionCapabilities is the user-selected checkbox list of control methods
@@ -1455,7 +1465,7 @@ export interface AppState {
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
   voice?: VoiceState;
-  chat?: { available?: boolean; latest_seq?: number; active_session_id?: string; current_mood?: AssistantMood | "" };
+  chat?: { available?: boolean; latest_seq?: number; revision?: number; active_session_id?: string; current_mood?: AssistantMood | "" };
   library?: LibrarySummary;
   media?: MediaSummary;
   transport?: Record<string, unknown>;

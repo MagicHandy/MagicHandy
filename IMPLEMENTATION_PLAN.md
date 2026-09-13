@@ -2265,8 +2265,8 @@ application while inference leaves immediate controls responsive.
 The [observation checkpoint](docs/lan-wan-observations.md) adds backend capture
 revisions and independent controller liveness, rejecting delayed motion and
 controller responses. Stream recovery and visibility return require a fresh
-snapshot without automatic takeover or resume. Durable chat recovery, measured
-telemetry/load behavior and real phone/network acceptance remain open.
+snapshot without automatic takeover or resume. Measured telemetry/load behavior
+and real phone/network acceptance remain open.
 
 The [Bluetooth gateway checkpoint](docs/lan-wan-bluetooth-gateway.md) binds the
 device browser to its authenticated session and connection generation while a
@@ -2275,6 +2275,15 @@ IDs and obsolete polls/ACKs, retains the Stop channel across controller handoff,
 and retires a lost gateway before replacement. Passive POST bookkeeping does
 not extend login idle time; validated playback intentions still count as
 activity. Real browser/GATT and WAN acceptance remain required.
+
+The [chat recovery checkpoint](docs/lan-wan-chat-recovery.md) adds schema v21
+committed revisions, coherent read pages and login-scoped read cursors. Pending
+replies committed below a newer display sequence are recovered without gaps;
+SSE placeholders reconcile with durable rows without duplicate messages or
+speech replay. Cursor writes honor cancellation, stay outside control delivery,
+and retain at most 4,096 markers. Browser reads, acknowledgements and retries are
+bounded. Migration preserves conversation content and compatible legacy read
+positions. Response-byte budgets and the broader acceptance matrix remain open.
 
 - account-link invitation/acceptance/revocation UI and any linked context that
   can affect motion or controller ownership

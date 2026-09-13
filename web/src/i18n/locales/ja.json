@@ -1,4 +1,9 @@
 {
+  "Some older messages are no longer retained. Showing the available conversation history.": "以前の一部のメッセージは保存されていません。利用可能な会話履歴を表示しています。",
+  "Showing the latest {count} retained messages.": "最後の {count} 件の保存済みメッセージを表示しています。",
+  "Conversation history request timed out.": "会話履歴のリクエストがタイムアウトしました。",
+  "Invalid conversation recovery response.": "会話の復元に対する応答が無効です。",
+  "Conversation changed while reconnecting. Reload its history.": "再接続中に会話が変更されました。履歴を再読み込みしてください。",
   "Not now": "今はしない",
   "Notification history": "通知履歴",
   "Choose which events create bell history and unread badges. Live activity, offline state, and Emergency Stop remain visible regardless.": "ベルの履歴と未読バッジを作成するイベントを選択します。進行中の処理、オフライン状態、緊急停止は常に表示されます。",

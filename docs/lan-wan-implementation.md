@@ -46,7 +46,61 @@ The implementation is in progress on `codex/lan-wan-control`:
 - a session-bound Bluetooth gateway independent of remote controller ownership,
   per-connection dispatch identities and loss-triggered shared-engine Stop;
 - passive POST acknowledgement handling, preserving validated explicit playback
-  activity without letting background reports keep a login alive.
+  activity without letting background reports keep a login alive;
+- durable committed chat revisions, coherent read pages, session-scoped bounded
+  cursors and cancelable browser recovery without skipped replies or audio replay.
+
+## Durable chat recovery checkpoint — 2026-09-13
+
+The [chat recovery contract](lan-wan-chat-recovery.md) separates display order
+from committed delivery order. The reproduced cross-login cursor collision is
+fixed. A reply committed below the newest display sequence is recovered through
+its later committed revision, and the browser no longer acknowledges an
+informational head beyond the delivered changes. Rows and recovery metadata
+come from one read transaction.
+
+Schema v21 preserves existing conversation content, initializes committed
+revisions, retains compatible read markers within the storage cap and remains
+safe to reapply over existing revision metadata. The original v11 migration
+preservation test caught an over-eager expiry step; that assertion remains, and
+expiry now belongs to ordinary reads/advancement rather than migration.
+
+The browser extracts history lifecycle management into a focused hook, merges
+stream placeholders with durable rows, handles resets/retention gaps and aborts
+obsolete reads. Initial history, reconnect and post-stream reconciliation do
+not replay old speech. Read acknowledgements no longer consume controller
+sequence numbers or seek command receipts after a lost response. Read-marker
+writes honor cancellation and avoid rewriting unchanged positions.
+
+Full Go and race suites, vet and zero-issue pinned lint pass after the migration
+compatibility correction. The frontend passes typechecking, localization
+(2,031 keys across five locales), and **572 tests in 76 files**. The production
+UI, stripped `CGO_ENABLED=0` build and final embedded-asset/import-boundary
+checks pass. Sandbox restrictions on existing synthetic Ollama-library fixture
+paths required rerunning the Go checks with host filesystem access; their
+assertions and the shipped pure-Go boundary remain unchanged.
+
+The exact current-source review runs at
+`http://127.0.0.3:49991/#/chat`, with fresh isolated data, simulated motion,
+voice off and LLM motion off. The configured local Ollama model passes the real
+`scripts/check-review-llm.ps1` generation probe. App chat returns “The review
+build is ready.” in **113 ms**, one provider call, with no repair/fallback or
+motion. The fresh-server probe uses initial heartbeat admission and invokes
+neither takeover nor Stop.
+
+Built-app HTTP checks retrieve two committed messages at revision 2. A second
+login acknowledges them using the same public browser ID; the first login's
+cursor remains zero. Its own acknowledgement then advances the cursor, and a
+read after revision 2 returns an empty, consistent tail. Browser sign-in and
+reload recover the same two messages without duplicates, in observer mode with
+Stop mounted and no console errors/warnings. The served main asset's SHA-256 matches the current canonical
+worktree asset. Existing user/review processes remain running.
+
+Artifact measurements and memory-sample limits are in the
+[scorecard](goal-scorecard.md). Logs and fixture results remain in ignored
+`.scratch/lan-wan/`. This does not close response-byte/resource acceptance,
+the full route/grant matrix, external HTTPS/proxy deployment, or physical
+client/network testing. The full 21-item goal remains active.
 
 ## Bluetooth gateway and login activity checkpoint — 2026-09-13
 
@@ -73,7 +127,7 @@ files**. Production UI and stripped `CGO_ENABLED=0` core builds pass, followed
 by the final embedded-asset/import-boundary checks. A final focused Go run
 passes after the lint-only error string capitalization correction.
 
-The current-source app runs at
+The gateway checkpoint's review app ran at
 `http://127.0.0.2:49989/#/settings/device`, with fresh isolated data,
 `-simulate-motion`, voice off and LLM motion off. The separate loopback host
 avoids sharing browser login cookies with other review apps on `127.0.0.1`.
