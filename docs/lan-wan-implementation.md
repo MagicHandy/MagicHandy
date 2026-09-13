@@ -38,7 +38,49 @@ The implementation is in progress on `codex/lan-wan-control`:
   recovery of a lost JSON result without repeating the original mutation;
 - synchronous ownership cancellation and context-bound settings transactions;
 - deferred chat/Lab motion checks that preserve newer control intentions while
-  allowing text generation to run outside the immediate-control lane.
+  allowing text generation to run outside the immediate-control lane;
+- backend capture revisions for app/motion observations and separate controller
+  read revisions, with no-store JSON responses;
+- independent controller liveness, ordered motion reconciliation, bounded
+  reconnect and a fresh resync after browser visibility or server-epoch changes.
+
+## Observation checkpoint — 2026-09-13
+
+The [observation contract](lan-wan-observations.md) defines capture order,
+independent channel timing and reconnect behavior. Full-state collection does
+not hold a capture lock during slow diagnostics, and heartbeat renewal does
+not wait for that collection. A delayed packet cannot overwrite newer motion;
+stream failure retains the newest observation while requiring fresh state.
+Visibility return and restart discard obsolete work without automatic takeover
+or motion resume. Protected controller packets are validated before enabling
+controls, and aborted responses cannot replace cached delivery metadata.
+
+Backend and browser regressions exercise blocked diagnostics, heartbeat renewal
+past a lease period while state is blocked, response/event reordering, restart,
+duplicate error callbacks, bounded retries, malformed controller metadata and
+phone-style background/resume after backend ownership expiry. Durable chat
+recovery, real mobile scheduling and telemetry/load measurements remain open.
+
+Full Go and race suites, vet, zero-issue lint, browser typechecking and
+localization checks pass. The full browser suite passes **549 tests in 75
+files**; all **23** targeted lifecycle/network/delivery tests pass again after
+the final backoff adjustment. The production UI and stripped pure-Go core
+builds pass, along with the final embedded-asset and architecture checks.
+
+The exact current-source app runs at
+`http://127.0.0.1:49987/#/settings/access`, with fresh isolated data,
+`-simulate-motion`, voice off and LLM motion off. Its available Ollama model
+passes `scripts/check-review-llm.ps1`. App chat returns “The review build is
+ready.” in **109 ms**, with **one provider call**, no repair/fallback and no
+motion. The fresh-server probe uses initial heartbeat admission and invokes
+neither takeover nor Stop. Read-only HTTP checks verify increasing full/motion
+capture revisions and `Cache-Control: no-store`.
+
+The browser is signed in and left in observer mode, with the simulator idle,
+the LAN/WAN Access panel visible and Emergency Stop mounted. No console errors
+or warnings were observed. Existing app sessions remain running. Artifact
+sizes and the limits of the memory sample are in the [scorecard](goal-scorecard.md);
+logs remain under ignored `.scratch/lan-wan/`.
 
 ## Command-delivery checkpoint — 2026-09-13
 
@@ -127,7 +169,7 @@ Complete apply-time race/fault scenarios across all motion,
 media, mode and live-setting routes. Expand the permission matrix to an exhaustive
 route inventory and owner-approved invitation/session management workflow.
 
-The remaining snapshot/event reconnect ordering, RTT/stream diagnostics, telemetry budget,
+The remaining durable chat recovery, RTT/stream diagnostics, telemetry budget,
 media/voice and transport-location behavior, session/audit management,
 authentication recovery, network fault/load fixtures and real device/browser
 matrix remain part of the goal. A simulator or green unit suite cannot establish

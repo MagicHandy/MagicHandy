@@ -21,6 +21,7 @@ var (
 )
 
 type controllerSnapshot struct {
+	Revision              uint64 `json:"revision"`
 	CommandTicket         string `json:"command_ticket,omitempty"`
 	CommandTicketMillis   int64  `json:"command_ticket_ms,omitempty"`
 	CommandSequence       uint64 `json:"command_sequence"`

@@ -26,6 +26,7 @@ type controllerRuntime struct {
 	activeSince time.Time
 	lastSeenAt  time.Time
 	generation  uint64
+	revision    uint64
 	epoch       string
 	stopping    bool
 	ownerCtx    context.Context
@@ -249,11 +250,13 @@ func (c *controllerRuntime) snapshotLocked(actor controllerIdentity) controllerS
 		remaining = max(0, c.leaseTTL.Milliseconds()-now.Sub(c.lastSeenAt).Milliseconds())
 	}
 	snapshot := controllerSnapshot{
+		Revision: c.revision + 1,
 		ClientID: actor.clientID, Active: active, ReadOnly: !active, Reason: reason,
 		ActiveClientID: c.active.clientID, ActiveClientAgeMillis: age,
 		LeaseExpiresInMillis: remaining, TakeoverInProgress: c.stopping || c.pending.clientID != "",
 		Generation: c.generation, Epoch: c.epoch, HeartbeatRequired: actor.sessionKey != "",
 	}
+	c.revision++
 	if active && actor.sessionKey != "" && len(c.tickets) > 0 {
 		latest := c.tickets[len(c.tickets)-1]
 		if now.Before(latest.expires) {

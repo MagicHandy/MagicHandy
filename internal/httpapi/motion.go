@@ -87,6 +87,14 @@ func (r motionRequest) target(settings config.MotionSettings) (motion.MotionTarg
 // motionState returns a UI-facing snapshot; the "available" flag lets the
 // frontend show an honest "motion unavailable" state instead of guessing.
 func (s *Server) motionState() any {
+	s.observations.motionMu.Lock()
+	defer s.observations.motionMu.Unlock()
+	state := s.motionStateValue()
+	state["observation"] = s.observationStamp()
+	return state
+}
+
+func (s *Server) motionStateValue() map[string]any {
 	if engine := s.currentMotionEngine(); engine != nil {
 		snapshot := engine.Snapshot()
 		if snapshot.Running || snapshot.Paused || snapshot.Completing {

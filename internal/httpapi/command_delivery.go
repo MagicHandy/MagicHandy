@@ -139,6 +139,7 @@ func (s *Server) replayControlCommand(w http.ResponseWriter, r *http.Request, in
 	w.Header().Set(commandIDHeader, receipt.ID)
 	w.Header().Set("X-MagicHandy-Command-Replayed", "true")
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(receipt.HTTPStatus)
 	_, _ = w.Write(receipt.Response)
 	return false

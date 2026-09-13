@@ -4,7 +4,7 @@ import { api, COMMAND_RECOVERED_EVENT } from "../api/client";
 import type { AppState, MotionInfo } from "../api/types";
 import { AppStateProvider, useAppState, useMotionState } from "./app-state";
 
-vi.mock("../api/client", () => ({ api: { getState: vi.fn(), controllerHeartbeat: vi.fn() }, clientId: "test-tab", COMMAND_RECOVERED_EVENT: "magichandy:command-recovered" }));
+vi.mock("../api/client", () => ({ api: { getState: vi.fn(), controllerState: vi.fn(), controllerHeartbeat: vi.fn() }, clientId: "test-tab", COMMAND_RECOVERED_EVENT: "magichandy:command-recovered" }));
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
@@ -34,6 +34,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.mocked(api.getState).mockReset().mockResolvedValue(snapshot());
   vi.mocked(api.controllerHeartbeat).mockReset();
+  vi.mocked(api.controllerState).mockReset().mockResolvedValue({ active: true, read_only: false });
   FakeEventSource.instances = [];
   vi.stubGlobal("EventSource", FakeEventSource);
 });
@@ -59,30 +60,43 @@ describe("backend snapshot lifecycle", () => {
   });
   it("establishes a protected lease with a client heartbeat before enabling control", async () => {
     const state = snapshot();
-    state.controller = { active: false, read_only: true, heartbeat_required: true, generation: 0 };
+    state.controller = { active: false, read_only: true, heartbeat_required: true, generation: 0, epoch: "server", revision: 1 };
+    state.observation = { epoch: "server", revision: 1, observed_at: "2026-09-13T00:00:00Z" };
     vi.mocked(api.getState).mockResolvedValue(state);
+    vi.mocked(api.controllerState).mockResolvedValue(state.controller);
     const heartbeat = deferred<NonNullable<AppState["controller"]>>();
     vi.mocked(api.controllerHeartbeat).mockReturnValue(heartbeat.promise);
     vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     render(view());
     await act(async () => {});
-    expect(current.state).toBeNull();
+    expect(current.state?.version).toBe("current");
+    expect(current.readOnly).toBe(true);
     expect(api.controllerHeartbeat).toHaveBeenCalledOnce();
-    await act(async () => heartbeat.resolve({ active: true, read_only: false, generation: 1, heartbeat_required: true }));
+    await act(async () => heartbeat.resolve({ active: true, read_only: false, generation: 1, heartbeat_required: true, epoch: "server", revision: 2 }));
     expect(current.state?.controller?.generation).toBe(1);
     expect(current.readOnly).toBe(false);
   });
 
   it("does not renew protected control from a hidden document or telemetry", async () => {
     const state = snapshot();
-    state.controller = { active: false, read_only: true, heartbeat_required: true, generation: 2 };
+    state.controller = { active: true, read_only: false, heartbeat_required: true, generation: 2, epoch: "server", revision: 3 };
+    state.observation = { epoch: "server", revision: 1, observed_at: "2026-09-13T00:00:00Z" };
     vi.mocked(api.getState).mockResolvedValue(state);
-    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    vi.mocked(api.controllerState).mockResolvedValue(state.controller);
+    vi.mocked(api.controllerHeartbeat).mockResolvedValue(state.controller);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
     render(view());
     await act(async () => {});
-    act(() => FakeEventSource.instances[0].emit(running));
-    await act(async () => vi.advanceTimersByTimeAsync(2000));
-    expect(api.controllerHeartbeat).not.toHaveBeenCalled();
+    const source = FakeEventSource.instances[FakeEventSource.instances.length - 1];
+    const heartbeats = vi.mocked(api.controllerHeartbeat).mock.calls.length;
+    const polls = vi.mocked(api.getState).mock.calls.length;
+    visibility.mockReturnValue("hidden");
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    act(() => source.emit(running));
+    await act(async () => vi.advanceTimersByTimeAsync(20000));
+    expect(source.close).toHaveBeenCalled();
+    expect(api.controllerHeartbeat).toHaveBeenCalledTimes(heartbeats);
+    expect(api.getState).toHaveBeenCalledTimes(polls);
     expect(current.readOnly).toBe(true);
   });
 

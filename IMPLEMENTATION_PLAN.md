@@ -2262,6 +2262,12 @@ reconciliation, synchronous ownership cancellation and context-bound settings
 transactions. Deferred chat/Lab motion rechecks newer control intentions at
 application while inference leaves immediate controls responsive.
 
+The [observation checkpoint](docs/lan-wan-observations.md) adds backend capture
+revisions and independent controller liveness, rejecting delayed motion and
+controller responses. Stream recovery and visibility return require a fresh
+snapshot without automatic takeover or resume. Durable chat recovery, measured
+telemetry/load behavior and real phone/network acceptance remain open.
+
 - account-link invitation/acceptance/revocation UI and any linked context that
   can affect motion or controller ownership
 - automatic local CA creation/trust, leaf renewal, Android/iOS trust helpers,

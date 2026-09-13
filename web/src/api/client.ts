@@ -135,6 +135,7 @@ export const COMMAND_RECOVERED_EVENT = "magichandy:command-recovered";
 // ownership; the server independently checks session, tab and generation.
 let controlGeneration: number | undefined;
 let controlEpoch: string | undefined;
+let controlRevision: number | undefined;
 let controllerResponseOrder = 0;
 let requestOrder = 0;
 let commandTicket: string | undefined;
@@ -157,14 +158,19 @@ function rememberControllerResponse(value: unknown, order: number): void {
   if (!value || typeof value !== "object") return;
   const candidate = "controller" in value ? value.controller : value;
   if (!candidate || typeof candidate !== "object" || !("heartbeat_required" in candidate)) return;
-  if (order < controllerResponseOrder) return;
   const epoch = "epoch" in candidate && typeof candidate.epoch === "string" ? candidate.epoch : undefined;
+  const revision = "revision" in candidate && typeof candidate.revision === "number" && Number.isSafeInteger(candidate.revision)
+    ? candidate.revision : undefined;
+  if (epoch === controlEpoch && revision !== undefined && controlRevision !== undefined) {
+    if (revision < controlRevision) return;
+  } else if (order < controllerResponseOrder) return;
   const generation = candidate.heartbeat_required === true && "generation" in candidate &&
     typeof candidate.generation === "number" && Number.isSafeInteger(candidate.generation)
     ? candidate.generation : undefined;
   const scopeChanged = epoch !== controlEpoch || generation !== controlGeneration;
   if (epoch === controlEpoch && generation !== undefined && controlGeneration !== undefined && generation < controlGeneration) return;
-  controllerResponseOrder = order;
+  controllerResponseOrder = Math.max(order, controllerResponseOrder);
+  controlRevision = revision;
   controlGeneration = epoch === controlEpoch && generation !== undefined && controlGeneration !== undefined
     ? Math.max(generation, controlGeneration) : generation;
   controlEpoch = generation === undefined ? undefined : epoch;
@@ -196,6 +202,7 @@ export async function request<T>(
       method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal, keepalive,
     });
     text = await res.text();
+    if (signal?.aborted) throw new DOMException("Request aborted", "AbortError");
   } catch (reason) {
     if (headers["X-MagicHandy-Command-ID"] && method !== "GET" && method !== "HEAD" && !signal?.aborted && !stopDeliveryPath(path)) {
       return recoverCommandResponse<T>(headers["X-MagicHandy-Command-ID"]);
@@ -214,6 +221,7 @@ export async function request<T>(
     if (res.status === 401 && !path.startsWith("/api/auth/")) {
       controlGeneration = undefined;
       controlEpoch = undefined;
+      controlRevision = undefined;
       commandTicket = undefined;
       window.dispatchEvent(new Event(AUTHENTICATION_REQUIRED_EVENT));
     }
@@ -506,6 +514,7 @@ export const api = {
   deleteAccountProfileImage: () => request<{ account: UserAccount }>("DELETE", "/api/auth/profile-image"),
 
   getState: (signal?: AbortSignal) => request<AppState>("GET", "/api/state", undefined, signal),
+  controllerState: (signal?: AbortSignal) => request<ControllerSnapshot>("GET", "/api/controller", undefined, signal),
   takeControl: () => request<ControllerTakeoverResponse>("POST", "/api/controller/takeover", {}),
   controllerHeartbeat: (signal?: AbortSignal) => request<ControllerSnapshot>("POST", "/api/controller/heartbeat", {}, signal),
   commandReceipt: (id: string, signal?: AbortSignal) => request<CommandReceipt>("GET", `/api/controller/commands/${encodeURIComponent(id)}`, undefined, signal),

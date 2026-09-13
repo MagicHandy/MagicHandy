@@ -1855,6 +1855,13 @@ JSON responses query the original receipt without repeating a mutation. The
 [delivery contract](lan-wan-command-delivery.md) records bounds and simulator
 evidence, including interrupted handlers and pre-Stop delayed requests.
 
+The [observation checkpoint](lan-wan-observations.md) separates controller
+heartbeats from slow full-state reads, orders motion and controller observations
+by backend revisions, and resyncs after restart or browser visibility changes.
+Old callbacks and pre-failure polls cannot restore fresh status or obsolete
+motion. Backgrounding and recovery tests use simulated browser lifecycle events;
+physical phone sleep, partitions and measured multi-client state age remain open.
+
 The risk remains open: exhaustive route/apply-time fault coverage, stronger WAN login and
 owner recovery, durable auditing, multi-client load/partition testing, proxy
 deployment and real mobile/device acceptance are unfinished. Green simulator

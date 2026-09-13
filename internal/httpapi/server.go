@@ -102,6 +102,7 @@ type Server struct {
 	updates             *updatecheck.Checker
 	controller          controllerRuntime
 	commands            commandRuntime
+	observations        observationRuntime
 	personalization     personalizationRuntime
 	personas            *persona.Store
 	modes               *modes.Manager
@@ -546,9 +547,13 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
+	s.observations.settingsMu.Lock()
 	settings, status := s.store.PublicSnapshot()
+	observation := s.observationStamp()
+	s.observations.settingsMu.Unlock()
 	transportDiagnostics := s.transport.Diagnostics()
 	writeJSON(w, http.StatusOK, map[string]any{
+		"observation":    observation,
 		"service":        serviceName,
 		"version":        s.version.Version,
 		"commit":         s.version.Commit,
@@ -750,6 +755,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	data = append(data, '\n')
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_, _ = w.Write(data)
 }

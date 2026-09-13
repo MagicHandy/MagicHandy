@@ -11,6 +11,36 @@ beforeEach(async () => { vi.resetModules(); client = await import("./client"); }
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("command delivery", () => {
+  it("uses backend controller revisions when a later observation comes from an earlier-issued request", async () => {
+    let finishHeartbeat!: (value: unknown) => void;
+    const fetchMock = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { finishHeartbeat = resolve; }))
+      .mockResolvedValueOnce(reply({ controller: { ...ownership(4, 30).controller, revision: 2, command_ticket: "older-ticket" } }))
+      .mockResolvedValue(reply({}));
+    vi.stubGlobal("fetch", fetchMock);
+    const heartbeat = client.api.controllerHeartbeat();
+    await client.api.getState();
+    finishHeartbeat(reply({ controller: { ...ownership(4, 31).controller, revision: 3, command_ticket: "newer-ticket" } }));
+    await heartbeat;
+    await client.request("POST", "/api/motion/quick", { speed_max_percent: 40 });
+    expect(fetchMock.mock.calls[2][1].headers["X-MagicHandy-Command-Ticket"]).toBe("newer-ticket");
+    expect(fetchMock.mock.calls[2][1].headers["X-MagicHandy-Command-Sequence"]).toBe("32");
+  });
+
+  it("does not learn authority from an aborted request whose response arrives later", async () => {
+    let finishOld!: (value: unknown) => void;
+    const fetchMock = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; }))
+      .mockResolvedValueOnce(reply(ownership(3, 40))).mockResolvedValue(reply({}));
+    vi.stubGlobal("fetch", fetchMock);
+    const abort = new AbortController();
+    const previous = client.api.getState(abort.signal);
+    abort.abort();
+    await client.api.getState();
+    finishOld(reply(ownership(900, 900)));
+    await expect(previous).rejects.toThrow("aborted");
+    await client.request("POST", "/api/motion/quick", { speed_max_percent: 40 });
+    expect(fetchMock.mock.calls[2][1].headers["X-MagicHandy-Control-Generation"]).toBe("3");
+    expect(fetchMock.mock.calls[2][1].headers["X-MagicHandy-Command-Sequence"]).toBe("41");
+  });
   it("does not replace current delivery metadata with a stale generation from a later-issued read", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(reply(ownership(4, 12)))
       .mockResolvedValueOnce(reply(ownership(3, 0))).mockResolvedValue(reply({}));

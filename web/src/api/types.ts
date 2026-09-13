@@ -107,13 +107,21 @@ export interface EngineSnapshot {
   last_error?: string;
 }
 
+export interface BackendObservation {
+  epoch: string;
+  revision: number;
+  observed_at: string;
+}
+
 export interface MotionInfo {
+  observation?: BackendObservation;
   available: boolean;
   error?: string;
   engine?: EngineSnapshot;
 }
 
 export interface ControllerSnapshot {
+  revision?: number;
   command_ticket?: string;
   command_ticket_ms?: number;
   command_sequence?: number;
@@ -1419,6 +1427,7 @@ export interface IntifaceTransportSnapshot {
 }
 
 export interface AppState {
+  observation?: BackendObservation;
   capabilities?: AccountCapabilities;
   version?: string;
   commit?: string;

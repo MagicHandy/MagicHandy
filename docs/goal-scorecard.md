@@ -1,5 +1,28 @@
 # Goal Scorecard
 
+## 2026-09-13 — Ordered observations and independent heartbeat
+
+The [observation checkpoint](lan-wan-observations.md) adds backend capture
+revisions, an independent controller channel and bounded browser recovery. It
+adds no dependency or motion path. With Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`
+and `-ldflags '-s -w'`, the candidate is **19,562,496 B**. This is **11,264 B**
+above the preceding command/shutdown checkpoint and **253,952 B (1.32%)** above
+the alpha.45 source rebuilt with the same toolchain.
+
+The canonical main JS is **793,082 B** raw / **218,702 B** gzip-9; total embedded
+assets are **2,078,412 B**. The change adds **5,229 B** raw assets and **1,382 B**
+gzip-9 main JS over the preceding checkpoint. There is still one main bundle,
+one lazy Labs bundle and the existing lazy locale assets; stale bundles are
+replaced in the canonical dist.
+
+After authenticated readiness, text-only app chat and Access UI review, one
+simulator sample measured **116,695,040 B** working set / **104,210,432 B** private
+memory. This is not a controlled idle comparison; authentication allocation,
+garbage collection and browser history differ across samples. LAN-13 still
+requires controlled CPU/allocation/RSS and bytes/client/minute measurements,
+including the wire cost of revision fields and lightweight controller reads.
+No telemetry speedup or WAN support limit is inferred from these artifact sizes.
+
 ## 2026-09-13 — Protected command delivery checkpoint
 
 The in-progress LAN/WAN branch adds bounded receipts, command expiry/order,

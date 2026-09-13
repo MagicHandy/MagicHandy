@@ -61,6 +61,22 @@ and queued settings writes bind their transaction to the request context.
 Emergency Stop bypasses delivery admission. See the detailed
 [command contract and evidence](../lan-wan-command-delivery.md).
 
+### Observation ordering and reconnect
+
+App/motion observations use monotonic capture revisions scoped to the process
+epoch; controller reads have their own revision counter under the ownership
+lock. A full-state envelope orders its initial settings capture, while its
+embedded motion carries an independent capture stamp. It does not claim an
+atomic cross-module snapshot. No capture lock spans network/database work.
+
+The browser runs the lightweight controller channel independently of full-state
+polling and motion SSE. Hidden documents stop all three channels. Return,
+restart and lost freshness require a full resync; old responses/events cannot
+restore obsolete control or motion, and recovery does not trigger takeover or
+resume. JSON responses are not cacheable. The
+[observation contract](../lan-wan-observations.md) defines ordering, deadlines,
+backoff, visibility behavior and the remaining acceptance work.
+
 ### Authentication lifetime and streaming
 
 Passive polling and heartbeats validate credentials without extending login

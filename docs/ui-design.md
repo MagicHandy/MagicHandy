@@ -32,11 +32,20 @@ See [Self-hosted HTTPS](self-hosted-https.md) and the open
 State polling and live motion subscriptions belong to the current enabled app
 session. Disabling access cancels its poll, releases the request slot, and
 ignores queued events and waiting refreshes from that session. Re-enabling
-starts a fresh poll. A completed state poll supersedes live motion observed
-before that poll started; an event received during the poll is retained because
-their server ordering is unknown. These are backend observations, never a
-parallel frontend motion model. See the
+starts a fresh poll. App and motion captures carry a server epoch and revision;
+motion packets are reconciled by their own capture revisions rather than HTTP
+completion or local arrival order. Controller reads have a separate revision
+counter. These remain backend observations, never a parallel frontend motion
+model. See the [observation contract](lan-wan-observations.md) and the original
 [lifecycle audit](architecture-review-2026-09-06.md).
+
+The controller heartbeat runs independently of full-state polling. A stream
+error retains the newest known motion and requires a fresh state request before
+clearing the stale/read-only indicator. A hidden document stops its requests,
+heartbeat and stream; returning requires a full resync. Server restart retires
+old responses and event callbacks. Neither reconnect nor visibility return
+automatically reclaims control or resumes motion. Retry timers are bounded and
+jittered, and malformed protected controller metadata leaves controls disabled.
 
 `useAppState` subscribes to the slower app snapshot and connection/controller
 status. `useMotionState` subscribes separately to reconciled live motion.
