@@ -34,7 +34,7 @@ func (s *Server) authorizeRoutes(next http.Handler) http.Handler {
 			return
 		}
 		capabilities := s.capabilities(r)
-		if capabilities.ConfigureHost || selfServiceRoute(r) || (readRequest(r) && !hostPrivateRead(r.URL.Path)) {
+		if capabilities.ConfigureHost || selfServiceRoute(r) || bluetoothGatewaySessionRoute(r) || (readRequest(r) && !hostPrivateRead(r.URL.Path)) {
 			next.ServeHTTP(w, r)
 			return
 		}

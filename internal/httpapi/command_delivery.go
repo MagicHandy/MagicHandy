@@ -27,7 +27,7 @@ type commandInvocation struct {
 // requires control. Self-service account actions and Stop need no ticket.
 func (s *Server) trackCommandDelivery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := authenticatedSession(r); !ok || readRequest(r) || isStopDelivery(r.URL.Path) {
+		if _, ok := authenticatedSession(r); !ok || readRequest(r) || isStopDelivery(r.URL.Path) || bluetoothGatewayDataRoute(r) {
 			next.ServeHTTP(w, r)
 			return
 		}

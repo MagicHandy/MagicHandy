@@ -29,6 +29,17 @@ See [Self-hosted HTTPS](self-hosted-https.md) and the open
 
 ## Backend observation lifecycle
 
+The Bluetooth panel distinguishes the device connection in this browser from
+one in another browser. An observer can view the connection without publishing
+its own disconnected/unsupported state over the owning browser's status.
+Choosing a native device requires host configuration permission. Gateway
+dispatch remains available when the device browser becomes a controller
+observer; its local Disconnect and Emergency Stop remain reachable.
+Gateway channel failure or document hiding attempts local Stop and releases
+the GATT session with explicit reconnection required. A slow state poll alone
+does not tear down a healthy device channel. See the
+[gateway contract](lan-wan-bluetooth-gateway.md).
+
 State polling and live motion subscriptions belong to the current enabled app
 session. Disabling access cancels its poll, releases the request slot, and
 ignores queued events and waiting refreshes from that session. Re-enabling

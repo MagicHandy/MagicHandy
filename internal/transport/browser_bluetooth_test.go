@@ -9,6 +9,35 @@ import (
 	"time"
 )
 
+func TestBrowserBluetoothCanceledPollCannotConsumeQueuedWork(t *testing.T) {
+	bridge := NewBrowserBluetoothBridge()
+	bridge.ConnectClient(BrowserBluetoothClientStatus{ClientID: "client-1"})
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Error("canceled bridge command did not finish")
+		}
+	})
+	go func() { defer close(done); _ = bridge.SendCommand(ctx, CommandKind("read"), "hsp/state", nil) }()
+	deadline := time.Now().Add(time.Second)
+	for bridge.Snapshot().Pending == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if bridge.Snapshot().Pending != 1 {
+		t.Fatal("test command was not queued")
+	}
+	stopped, stopPoll := context.WithCancel(t.Context())
+	stopPoll()
+	commands, err := bridge.NextCommands(stopped, "client-1", 0)
+	if !errors.Is(err, context.Canceled) || len(commands) != 0 || bridge.Snapshot().Pending != 1 {
+		t.Fatalf("canceled poll consumed queued work: commands=%d error=%v", len(commands), err)
+	}
+}
+
 func TestBrowserBluetoothTransportQueuesCommandAndWaitsForAck(t *testing.T) {
 	bridge := NewBrowserBluetoothBridge()
 	connected := true

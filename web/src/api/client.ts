@@ -13,6 +13,7 @@ import type {
   BluetoothClientStatus,
   BluetoothCommandsResponse,
   BluetoothStatusResponse,
+  BluetoothGatewaySnapshot,
   IntifaceTransportSnapshot,
   ChatMessagesResponse,
   ChatSessionsResponse,
@@ -192,6 +193,8 @@ export async function request<T>(
 ): Promise<T> {
   const order = ++requestOrder;
   const delivery = method !== "GET" && method !== "HEAD" && !stopDeliveryPath(path) &&
+    !/^\/api\/transport\/bluetooth\/(?:status|ack)$/.test(path) &&
+    !(path === "/api/transport/bluetooth/disconnect" && extraHeaders?.["X-MagicHandy-Gateway-Generation"]) &&
     !/^\/api\/(?:auth|accounts|network|controller)(?:\/|$)/.test(path);
   const headers: Record<string, string> = { Accept: "application/json", ...controllerRequestHeaders(delivery), ...extraHeaders };
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -770,23 +773,23 @@ export const api = {
   // Browser Bluetooth bridge. React owns only the browser/device session; all
   // motion commands still come from backend bridge commands.
   bluetoothStatus: () => request<BluetoothStatusResponse>("GET", "/api/transport/bluetooth/status"),
-  postBluetoothStatus: (status: BluetoothClientStatus) =>
-    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/status", status),
+  postBluetoothStatus: (status: BluetoothClientStatus, gateway?: BluetoothGatewaySnapshot) =>
+    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/status", status, undefined, bluetoothGatewayHeaders(gateway)),
   bluetoothConnect: (status: BluetoothClientStatus) =>
     request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/connect", status),
-  bluetoothDisconnect: (client_id: string, message?: string) =>
-    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/disconnect", { client_id, message }),
-  bluetoothCommands: (bridgeClientId: string, waitSeconds: number, signal?: AbortSignal) =>
-    requestWithSignal<BluetoothCommandsResponse>(
+  bluetoothDisconnect: (client_id: string, message?: string, gateway?: BluetoothGatewaySnapshot) =>
+    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/disconnect", { client_id, message }, undefined, bluetoothGatewayHeaders(gateway)),
+  bluetoothCommands: (bridgeClientId: string, waitSeconds: number, signal?: AbortSignal, gateway?: BluetoothGatewaySnapshot) =>
+    request<BluetoothCommandsResponse>(
       "GET",
       `/api/transport/bluetooth/commands?client_id=${encodeURIComponent(bridgeClientId)}&wait=${waitSeconds}`,
-      signal,
+      undefined, signal, bluetoothGatewayHeaders(gateway),
     ),
-  bluetoothAck: (bridgeClientId: string, payload: BluetoothAckPayload) =>
+  bluetoothAck: (bridgeClientId: string, payload: BluetoothAckPayload, gateway?: BluetoothGatewaySnapshot) =>
     request<{ status: string; bluetooth: BluetoothStatusResponse["bluetooth"] }>("POST", "/api/transport/bluetooth/ack", {
       client_id: bridgeClientId,
       ...payload,
-    }),
+    }, undefined, bluetoothGatewayHeaders(gateway)),
 
   // Backend-owned chat sessions and their non-destructive per-client cursors.
   getChatSessions: () => request<ChatSessionsResponse>("GET", "/api/chat/sessions"),
@@ -891,22 +894,12 @@ async function download(path: string, fallbackFilename = "motion-content.json"):
   return { blob: await res.blob(), filename: match?.[1] ?? fallbackFilename };
 }
 
-async function requestWithSignal<T>(method: string, path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(path, { method, headers: { Accept: "application/json", ...controllerRequestHeaders() }, signal });
-  const text = await res.text();
-  let parsed: unknown = null;
-  if (text) {
-    try {
-      parsed = JSON.parse(text) as unknown;
-    } catch {
-      parsed = { error: text };
-    }
+function bluetoothGatewayHeaders(gateway?: BluetoothGatewaySnapshot): Record<string, string> {
+  if (!gateway?.required) return {};
+  if (!gateway.owned || !gateway.epoch || !Number.isSafeInteger(gateway.generation) || gateway.generation! <= 0) {
+    throw new ApiError("Bluetooth gateway access ended; reconnect from the device browser.", 409, null);
   }
-  if (!res.ok) {
-    const message = parsed && typeof parsed === "object" && "error" in parsed ? String((parsed as { error: unknown }).error) : `Request failed (${res.status})`;
-    throw new ApiError(message, res.status, parsed);
-  }
-  return parsed as T;
+  return { "X-MagicHandy-Gateway-Epoch": gateway.epoch, "X-MagicHandy-Gateway-Generation": String(gateway.generation) };
 }
 
 // Chat is a POST SSE stream; parse named events off the response body.

@@ -598,7 +598,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"transport":           transportDiagnostics,
 		"cloud_transport":     s.cloudDiagnostics(),
 		"bluetooth_transport": s.bluetoothDiagnostics(),
-		"bluetooth_bridge":    s.bluetooth.bridge.Snapshot(),
+		"bluetooth_bridge":    s.bluetoothSnapshot(),
 		"intiface_transport":  s.intifaceSnapshot(),
 		"trace":               s.traces.Summary(),
 	})

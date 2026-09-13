@@ -42,7 +42,66 @@ The implementation is in progress on `codex/lan-wan-control`:
 - backend capture revisions for app/motion observations and separate controller
   read revisions, with no-store JSON responses;
 - independent controller liveness, ordered motion reconciliation, bounded
-  reconnect and a fresh resync after browser visibility or server-epoch changes.
+  reconnect and a fresh resync after browser visibility or server-epoch changes;
+- a session-bound Bluetooth gateway independent of remote controller ownership,
+  per-connection dispatch identities and loss-triggered shared-engine Stop;
+- passive POST acknowledgement handling, preserving validated explicit playback
+  activity without letting background reports keep a login alive.
+
+## Bluetooth gateway and login activity checkpoint — 2026-09-13
+
+The [gateway contract](lan-wan-bluetooth-gateway.md) documents the boundary.
+An exploratory fake-bridge regression reproduced an observer retrieving queued
+work by copying the public gateway ID. Normal regression tests now deny copied
+identities, preserve the legitimate queue and test status/ACK forgery, handoff,
+old generations/epochs and loss stopping the shared fake engine.
+
+The browser retains the gateway through controller handoff, uses the server's
+connection metadata, suppresses observer status writes and identifies the
+device browser in the panel. Failed/hidden gateway channels attempt local Stop
+and release GATT with explicit reconnection. Queued native writes recheck Stop
+cancellation after waiting for the writer. Explicit Disconnect still uses the
+existing global Stop coordinator; its original regression remains intact.
+
+Automatic POST acknowledgements no longer advance login idle time. Persisted
+timestamp tests distinguish heartbeat/bookkeeping from validated playback
+intentions and confirm that an expired login cannot be revived.
+
+Full Go and race suites, vet, zero-issue lint, browser typechecking and
+localization checks pass. The full browser suite passes **559 tests in 75
+files**. Production UI and stripped `CGO_ENABLED=0` core builds pass, followed
+by the final embedded-asset/import-boundary checks. A final focused Go run
+passes after the lint-only error string capitalization correction.
+
+The current-source app runs at
+`http://127.0.0.2:49989/#/settings/device`, with fresh isolated data,
+`-simulate-motion`, voice off and LLM motion off. The separate loopback host
+avoids sharing browser login cookies with other review apps on `127.0.0.1`.
+Its configured Ollama model passes `scripts/check-review-llm.ps1`. App chat
+returns “The review build is ready.” in **112 ms**, with **one provider call**,
+no repair/fallback and no motion. The fresh-server probe invokes neither
+takeover nor Stop. The retained review browser is signed in as an observer,
+with the device connection panel open, Browser Bluetooth selected, no device
+connected and Emergency Stop visible. No console errors/warnings were observed;
+existing app sessions remain running.
+
+A review-only Go test overlay captures the shared engine's redacted stopped
+trace for synthetic gateway expiry, session revocation and reported disconnect.
+Each case uses a temporary database, synthetic login and fake motion transport
+under the browser-Bluetooth dispatch policy. One sample per case measures
+**1.504 ms**, **2.509 ms** and **2.037 ms**, respectively, from fault injection
+through an explicit watchdog check to stopped engine and retired gateway.
+This excludes the normal watchdog interval, network, GATT and physical device
+timing; it is not a stopping-time guarantee or percentile measurement. Each
+export contains five rows, including the existing engine Stop. The artifacts
+are retained locally as ignored `.scratch/lan-wan/gateway-*-trace.json` and
+`gateway-*-measurement.json`. The semantic target mapping, sampler, stroke
+limits and transport Stop payload are unchanged. Real-device traces and
+physical latency acceptance remain open.
+
+Artifact sizes and memory-sample limits are recorded in the
+[scorecard](goal-scorecard.md); verification logs remain in ignored
+`.scratch/lan-wan/`. The full 21-item LAN/WAN goal remains in progress.
 
 ## Observation checkpoint — 2026-09-13
 
@@ -67,7 +126,7 @@ files**; all **23** targeted lifecycle/network/delivery tests pass again after
 the final backoff adjustment. The production UI and stripped pure-Go core
 builds pass, along with the final embedded-asset and architecture checks.
 
-The exact current-source app runs at
+The observation checkpoint's review app ran at
 `http://127.0.0.1:49987/#/settings/access`, with fresh isolated data,
 `-simulate-motion`, voice off and LLM motion off. Its available Ollama model
 passes `scripts/check-review-llm.ps1`. App chat returns “The review build is

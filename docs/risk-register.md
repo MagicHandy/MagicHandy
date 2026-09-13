@@ -1862,6 +1862,15 @@ Old callbacks and pre-failure polls cannot restore fresh status or obsolete
 motion. Backgrounding and recovery tests use simulated browser lifecycle events;
 physical phone sleep, partitions and measured multi-client state age remain open.
 
+The [Bluetooth gateway checkpoint](lan-wan-bluetooth-gateway.md) closes a
+reproduced copied-ID command-drain gap with session/tab/connection binding and
+keeps gateway dispatch independent of remote controller handoff. Retired
+connections cannot poll or acknowledge replacement work. Gateway loss uses
+shared engine Stop; browser failure/backgrounding has a bounded local Stop and
+GATT teardown attempt. Automatic POST bookkeeping no longer renews login idle
+time. Fake transport/browser regressions cover these boundaries; physical Stop,
+mobile scheduling and WAN load/partition measurements remain open.
+
 The risk remains open: exhaustive route/apply-time fault coverage, stronger WAN login and
 owner recovery, durable auditing, multi-client load/partition testing, proxy
 deployment and real mobile/device acceptance are unfinished. Green simulator

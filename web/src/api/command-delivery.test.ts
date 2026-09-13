@@ -11,6 +11,41 @@ beforeEach(async () => { vi.resetModules(); client = await import("./client"); }
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("command delivery", () => {
+  it("keeps gateway maintenance independent of controller command delivery", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(reply(ownership())).mockResolvedValue(reply({}));
+    vi.stubGlobal("fetch", fetchMock);
+    await client.api.getState();
+    const gateway = { required: true, owned: true, epoch: "gateway-process", generation: 7 };
+    await client.api.postBluetoothStatus({ client_id: "device-browser", connected: true, supported: true }, gateway);
+    await client.api.bluetoothAck("device-browser", { id: "command-1", ok: true }, gateway);
+    await client.api.bluetoothCommands("device-browser", 4, undefined, gateway);
+    await client.api.bluetoothDisconnect("device-browser", "disconnect", gateway);
+    for (const call of fetchMock.mock.calls.slice(1)) {
+      expect(call[1].headers["X-MagicHandy-Gateway-Epoch"]).toBe("gateway-process");
+      expect(call[1].headers["X-MagicHandy-Gateway-Generation"]).toBe("7");
+      expect(call[1].headers["X-MagicHandy-Command-ID"]).toBeUndefined();
+    }
+    await client.api.bluetoothDisconnect("device-browser", "administrator disconnect");
+    expect(fetchMock.mock.calls[5][1].headers["X-MagicHandy-Command-ID"]).toBeTruthy();
+  });
+
+  it("rejects malformed protected gateway metadata before sending a request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    expect(() => client.api.bluetoothCommands("device-browser", 4, undefined, { required: true, owned: false })).toThrow("gateway access ended");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a delayed gateway batch after its poll was aborted", async () => {
+    let finish!: (value: unknown) => void;
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => new Promise((resolve) => { finish = resolve; })));
+    const controller = new AbortController();
+    const pending = client.api.bluetoothCommands("device-browser", 4, controller.signal, { required: true, owned: true, epoch: "boot", generation: 1 });
+    controller.abort();
+    finish(reply({ commands: [{ id: "old", path: "hsp/play" }] }));
+    await expect(pending).rejects.toThrow("aborted");
+  });
+
   it("uses backend controller revisions when a later observation comes from an earlier-issued request", async () => {
     let finishHeartbeat!: (value: unknown) => void;
     const fetchMock = vi.fn().mockImplementationOnce(() => new Promise((resolve) => { finishHeartbeat = resolve; }))

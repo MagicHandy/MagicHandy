@@ -2268,6 +2268,14 @@ controller responses. Stream recovery and visibility return require a fresh
 snapshot without automatic takeover or resume. Durable chat recovery, measured
 telemetry/load behavior and real phone/network acceptance remain open.
 
+The [Bluetooth gateway checkpoint](docs/lan-wan-bluetooth-gateway.md) binds the
+device browser to its authenticated session and connection generation while a
+separate remote controller drives the shared engine. It rejects copied gateway
+IDs and obsolete polls/ACKs, retains the Stop channel across controller handoff,
+and retires a lost gateway before replacement. Passive POST bookkeeping does
+not extend login idle time; validated playback intentions still count as
+activity. Real browser/GATT and WAN acceptance remain required.
+
 - account-link invitation/acceptance/revocation UI and any linked context that
   can affect motion or controller ownership
 - automatic local CA creation/trust, leaf renewal, Android/iOS trust helpers,

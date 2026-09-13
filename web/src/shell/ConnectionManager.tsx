@@ -246,6 +246,7 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
           )}
           <BluetoothBridge
             visible={owner === "browser_bluetooth"}
+            canConfigureHost={state?.capabilities?.configure_host !== false}
             locked={locked}
             backendOnline={backendOnline}
             initial={state?.bluetooth_bridge as BluetoothBridgeSnapshot | undefined}

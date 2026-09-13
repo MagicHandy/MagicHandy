@@ -79,6 +79,12 @@ backoff, visibility behavior and the remaining acceptance work.
 
 ### Authentication lifetime and streaming
 
+Automatic browser POST acknowledgements also remain passive: chat cursors,
+gateway status/ACK/disconnect, voice played, duration reporting and media
+heartbeats do not renew login idle time. Explicit media intentions record
+activity only after bounded decoding and validation. Neither path revives an
+expired login.
+
 Passive polling and heartbeats validate credentials without extending login
 idle time. A bounded registry tracks active authenticated requests; a periodic
 read-only session check cancels revoked/expired sessions and affected ownership.
@@ -98,6 +104,22 @@ ordinary admission limits.
 During application shutdown, cancellation permits a bounded five-second socket
 write grace so healthy responses can finish their HTTP framing. Session and
 ownership revocation on a running server still interrupt writes immediately.
+
+### Browser device gateway
+
+Protected Bluetooth dispatch binds the authenticated session, declared tab,
+Bluetooth client ID, process epoch and a per-connection gateway generation.
+This authority is independent of the remote controller. Gateway maintenance
+survives controller handoff, while session loss and a ten-second gateway lease
+retire it. An internal transport identity changes on each connection so an old
+poll cannot drain replacement work. No account/HTTP dependency enters transport.
+
+Connecting requires a controlling host administrator; replacement cannot bypass
+gateway teardown. Explicit disconnect retains shared global Stop. Gateway loss
+invalidates shared motion when Bluetooth is selected, and the browser attempts
+local Stop before bounded GATT teardown. Recovery is explicit. The
+[gateway contract](../lan-wan-bluetooth-gateway.md) documents admission, login
+activity, timing policies and the remaining physical/network acceptance.
 
 ### Target network modes
 

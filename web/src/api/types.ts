@@ -185,6 +185,7 @@ export interface PromptSetsPayload {
 }
 
 export interface BluetoothBridgeSnapshot {
+  client_id?: string;
   connected?: boolean;
   supported?: boolean;
   ready?: boolean;
@@ -196,7 +197,16 @@ export interface BluetoothBridgeSnapshot {
   last_ack?: { ok?: boolean; status?: string; error?: string };
 }
 
+export interface BluetoothGatewaySnapshot {
+  required: boolean;
+  owned: boolean;
+  epoch?: string;
+  generation?: number;
+  lease_expires_in_ms?: number;
+}
+
 export interface BluetoothStatusResponse {
+  gateway?: BluetoothGatewaySnapshot;
   status: string;
   dispatch_owner: string;
   bluetooth: BluetoothBridgeSnapshot;

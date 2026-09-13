@@ -148,7 +148,7 @@ func (s *Server) sessionFromRequest(r *http.Request) (accounts.Session, string, 
 	}
 	token := strings.TrimSpace(cookie.Value)
 	resolve := s.accounts.ResolveSession
-	if r.Method == http.MethodGet || r.Method == http.MethodHead || r.URL.Path == "/api/controller/heartbeat" {
+	if passiveSessionRequest(r) {
 		resolve = s.accounts.InspectSession
 	}
 	session, err := resolve(r.Context(), token)

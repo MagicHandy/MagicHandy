@@ -75,6 +75,9 @@ func (s *Server) handleMediaSync(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if explicitMediaActivity(event.Event) && !s.recordSessionActivity(w, r) {
+		return
+	}
 	status, err := s.mediaSync.Handle(r.Context(), event, stopSequence)
 	if err != nil {
 		writeSyncError := func(statusCode int, message string) {

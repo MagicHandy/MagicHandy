@@ -79,6 +79,9 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   **Acceptance:** an already-open stream stops disclosing protected data after
   revocation, and an admitted delayed command cannot apply afterward. Stop
   remains usable on the expired browser.
+  **In progress:** [gateway and idle handling](lan-wan-bluetooth-gateway.md)
+  separates automatic POST acknowledgements from login activity and includes
+  the device gateway in bounded session revalidation.
 
 - [ ] **LAN-04 — Reject stale, duplicate and reordered commands.** Extend the
   existing Stop-generation protections consistently across start/resume,
@@ -204,6 +207,10 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   **Acceptance:** the UI explains supported control/voice/Bluetooth combinations;
   gateway loss and phone sleep follow the defined stop policy and never create
   competing transport sessions.
+  **In progress:** [authenticated browser gateway](lan-wan-bluetooth-gateway.md)
+  binds dispatch to its session and connection generation, keeps it distinct
+  from remote control, labels its browser location and tests loss/handoff with
+  fake transport and browser fixtures. Real platform/GATT acceptance remains.
 
 - [ ] **LAN-16 — Add session management and a bounded audit trail.** Let users
   inspect/revoke their sessions and let administrators inspect grant/ownership

@@ -1,5 +1,29 @@
 # Goal Scorecard
 
+## 2026-09-13 — Authenticated Bluetooth gateway and passive activity
+
+The [gateway checkpoint](lan-wan-bluetooth-gateway.md) binds the device browser
+to its login and connection generation, separates gateway maintenance from
+remote controller delivery, and retires lost connections. No dependency or
+parallel motion path is added. There is one gateway lease, with teardown using
+the existing access watchdog and tracked Stop lifecycle.
+
+Using Go 1.26.4, `CGO_ENABLED=0`, `-trimpath` and `-ldflags '-s -w'`, the
+candidate is **19,598,848 B**: **36,352 B** above the observation checkpoint
+and **290,304 B (1.50%)** above the same-toolchain alpha.45 source baseline.
+Main JS is **795,413 B** raw / **219,525 B** gzip-9, and total embedded assets
+are **2,081,028 B**. Compared with the preceding checkpoint, main JS adds
+**2,331 B** raw / **823 B** gzip-9 and total assets add **2,616 B**. Compared
+with alpha.45, gzip-9 main JS adds **6,745 B** and assets add **47,373 B**.
+The canonical dist retains one main bundle and the existing lazy bundles.
+
+One sample after authenticated readiness, text-only chat and gateway panel
+review measured **73,949,184 B** working set / **62,484,480 B** private memory.
+This is not a controlled idle comparison; GC, authentication and page history
+differ across checkpoints. It establishes no RSS or startup improvement.
+Controlled telemetry, CPU/allocation, bytes/client/minute and load/soak
+measurements remain open in LAN-13 and LAN-19.
+
 ## 2026-09-13 — Ordered observations and independent heartbeat
 
 The [observation checkpoint](lan-wan-observations.md) adds backend capture

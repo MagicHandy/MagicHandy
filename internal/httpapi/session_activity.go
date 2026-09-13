@@ -109,7 +109,12 @@ func (s *Server) trackSessionActivity(next http.Handler) http.Handler {
 		defer stopServer()
 		if authenticated && r.URL.Path != "/api/controller/takeover" {
 			binding := &controllerRequestBinding{cancel: cancel}
-			binding.bind(&s.controller, controllerActor(r, clientIDFromRequest(r)))
+			// The device browser must still deliver Stop when a remote controller
+			// takes over. Its gateway traffic is bound to its login and gateway,
+			// while a handler may explicitly bind an administrative control action.
+			if !bluetoothGatewaySessionRoute(r) {
+				binding.bind(&s.controller, controllerActor(r, clientIDFromRequest(r)))
+			}
 			defer binding.release()
 			ctx = context.WithValue(ctx, controllerRequestBindingKey{}, binding)
 			ctx = context.WithValue(ctx, controllerCancellationKey{}, binding.release)
@@ -164,12 +169,16 @@ func (s *Server) startAccessWatchdog() {
 }
 
 func (s *Server) checkAccessLifetimes() {
+	s.checkBluetoothGatewayLifetime("")
 	if s.controller.BeginLoss("", true) {
 		s.scheduleLostControllerStop("controller_heartbeat_expired")
 	}
 	keys := s.access.keys()
 	if owner := s.controller.SessionKey(); owner != "" {
 		keys = append(keys, owner)
+	}
+	if gateway := s.bluetoothGatewaySessionKey(); gateway != "" {
+		keys = append(keys, gateway)
 	}
 	// Bound the entire validation pass. Storage unavailability fails closed;
 	// it must not indefinitely preserve authority or block Emergency Stop.
@@ -193,6 +202,7 @@ func (s *Server) checkAccessLifetimes() {
 			continue
 		}
 		s.access.revoke(key)
+		s.checkBluetoothGatewayLifetime(key)
 		if s.controller.BeginLoss(key, false) {
 			s.scheduleLostControllerStop("controller_session_expired")
 		}
