@@ -131,7 +131,7 @@ func (s *Server) handleLibraryPatternExport(w http.ResponseWriter, r *http.Reque
 		s.writeLibraryError(w, err)
 		return
 	}
-	writeDownload(w, filename, data)
+	writeDownload(w, r, filename, data)
 }
 
 func (s *Server) handleLibraryProgramExport(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +140,7 @@ func (s *Server) handleLibraryProgramExport(w http.ResponseWriter, r *http.Reque
 		s.writeLibraryError(w, err)
 		return
 	}
-	writeDownload(w, filename, data)
+	writeDownload(w, r, filename, data)
 }
 
 func (s *Server) handleLibraryImport(w http.ResponseWriter, r *http.Request) {
@@ -202,7 +202,7 @@ func (s *Server) handleLibraryPatternPlay(w http.ResponseWriter, r *http.Request
 		SpeedPercent: *request.SpeedPercent, Pattern: &definition,
 	}
 	state, err := s.playLibraryPattern(r, target, stopSequence)
-	s.writeMotionResult(w, state, err)
+	s.writeMotionResult(w, r, state, err)
 }
 
 func (s *Server) handleLibraryProgramPlay(w http.ResponseWriter, r *http.Request) {
@@ -225,7 +225,7 @@ func (s *Server) handleLibraryProgramPlay(w http.ResponseWriter, r *http.Request
 		SpeedPercent: *request.SpeedPercent, Program: &definition,
 	}
 	state, err := s.playLibraryProgram(r, target, stopSequence)
-	s.writeMotionResult(w, state, err)
+	s.writeMotionResult(w, r, state, err)
 }
 
 func (s *Server) playLibraryPattern(r *http.Request, target motion.MotionTarget, stopSequence uint64) (motion.ActiveMotionState, error) {
@@ -293,7 +293,7 @@ func (s *Server) handleLibraryFeedback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	feedback, pattern, err := s.patterns.ApplyFeedback(body.PatternID, body.Rating)
+	feedback, pattern, err := s.patterns.ApplyFeedbackContext(r.Context(), body.PatternID, body.Rating)
 	if err != nil {
 		s.writeLibraryError(w, err)
 		return
@@ -310,7 +310,7 @@ func (s *Server) handleLibraryFeedbackUndo(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, errors.New("feedback id must be positive"))
 		return
 	}
-	feedback, pattern, err := s.patterns.UndoFeedback(id)
+	feedback, pattern, err := s.patterns.UndoFeedbackContext(r.Context(), id)
 	if err != nil {
 		s.writeLibraryError(w, err)
 		return
@@ -399,12 +399,12 @@ func (s *Server) writeLibraryStorageError(w http.ResponseWriter, err error) {
 	writeError(w, http.StatusInternalServerError, errors.New("pattern library storage is unavailable"))
 }
 
-func writeDownload(w http.ResponseWriter, filename string, data []byte) {
+func writeDownload(w http.ResponseWriter, r *http.Request, filename string, data []byte) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	// #nosec G705 -- data is validated JSON served as an attachment with
 	// nosniff; it is never interpolated into an HTML response.
-	_, _ = w.Write(data)
+	writeBoundedAttachment(w, r, data)
 }

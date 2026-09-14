@@ -6,22 +6,16 @@ import { t, translateKnown } from "../i18n";
 // malformed-response state. Chat can start, adjust, and stop motion through
 // the backend contract; the frontend sends only text. When speak-replies is
 // on, the controller tab (the audio-lease owner) plays the ordered speech queue.
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { api, streamChat } from "../api/client";
+import { streamChat } from "../api/client";
 import type { ChatMessageDiagnostics } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 import { useVoicePlayback } from "../state/voice-playback";
 import { VoiceComposerControls } from "./VoiceComposerControls";
+import { useChatHistory, type ChatDisplayMessage } from "./useChatHistory";
 
-interface Msg {
-  id: string;
-  role: "user" | "assistant";
-  text: string;
-  streaming?: boolean;
-  warning?: boolean;
-  diagnostics?: ChatMessageDiagnostics;
-}
+type Msg = ChatDisplayMessage;
 
 interface Props {
   sessionId: string;
@@ -31,100 +25,35 @@ interface Props {
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
-const message = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Conversation history request failed.");
 
 export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChanged }: Props) {
   const { backendOnline, readOnly, state, refresh } = useAppState();
   const { show } = useToast();
   const { queueSpeech } = useVoicePlayback();
-  const [messages, setMessages] = useState<Msg[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [showJump, setShowJump] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-  const lastSeq = useRef(0);
-  const seeded = useRef(false);
   const mounted = useRef(false);
   const streamGeneration = useRef(0);
   const activeStream = useRef<AbortController | null>(null);
   const observedStopSequence = useRef(state?.stop_sequence);
-  const historyLoad = useRef<Promise<void> | null>(null);
-  const tailLoad = useRef<Promise<void> | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyError, setHistoryError] = useState("");
-  const [tailError, setTailError] = useState("");
+  const observedEpoch = useRef(state?.observation?.epoch);
   const [voiceActive, setVoiceActive] = useState(false);
+  const activeChat = state?.chat?.active_session_id === sessionId ? state.chat : undefined;
+  const {
+    messages, setMessages, historyLoading, historyError, tailError, historyNotice,
+    loadHistory, reconcileHistory, cancelReads, queueSpeechOnce,
+  } = useChatHistory({
+    sessionId, epoch: state?.observation?.epoch, backendOnline, readOnly, busy, busyRef,
+    latestSeq: activeChat?.latest_seq ?? 0, revision: activeChat?.revision,
+    pollEpoch: state?.uptime_seconds ?? 0, queueSpeech,
+  });
 
-  const loadHistory = useCallback(async () => {
-    if (historyLoad.current) return historyLoad.current;
-    setHistoryLoading(true);
-    setHistoryError("");
-    const request = (async () => {
-      try {
-        const res = await api.getChatMessages(sessionId);
-        if (!mounted.current) return;
-        seeded.current = true;
-        setMessages(res.messages.map((m) => ({ id: `log-${m.seq}`, role: m.role, text: m.content, diagnostics: m.diagnostics })));
-        lastSeq.current = res.latest_seq;
-        setHistoryError("");
-        if (res.latest_seq > res.cursor) void api.advanceChatCursor(sessionId, res.latest_seq).catch(() => undefined);
-      } catch (error) {
-        if (!mounted.current) return;
-        seeded.current = false;
-        setHistoryError(message(error));
-      } finally {
-        if (mounted.current) setHistoryLoading(false);
-      }
-    })();
-    historyLoad.current = request;
-    try {
-      await request;
-    } finally {
-      if (historyLoad.current === request) historyLoad.current = null;
-    }
-  }, [sessionId]);
-
-  const loadTail = useCallback(async () => {
-    if (tailLoad.current || !seeded.current || busyRef.current) return tailLoad.current;
-    const after = lastSeq.current;
-    const request = (async () => {
-      try {
-        const res = await api.getChatMessages(sessionId, after);
-        if (!mounted.current || busyRef.current) return;
-        const fresh = res.messages.filter((m) => m.seq > lastSeq.current);
-        if (!fresh.length) {
-          setTailError(res.latest_seq > lastSeq.current ? t("Conversation updates could not be synchronized; retrying.") : "");
-          return;
-        }
-        setMessages((m) => [...m, ...fresh.map((x) => ({ id: `log-${x.seq}`, role: x.role, text: x.content, diagnostics: x.diagnostics }))]);
-        if (!readOnly) {
-          for (const message of fresh) {
-            if (message.speech_request_id) queueSpeech(message.speech_request_id);
-          }
-        }
-        lastSeq.current = Math.max(lastSeq.current, res.latest_seq);
-        setTailError("");
-        void api.advanceChatCursor(sessionId, res.latest_seq).catch(() => undefined);
-      } catch (error) {
-        if (mounted.current) setTailError(t("Conversation updates delayed: {reason} Retrying.", { reason: message(error) }));
-      }
-    })();
-    tailLoad.current = request;
-    try {
-      await request;
-    } finally {
-      if (tailLoad.current === request) tailLoad.current = null;
-    }
-  }, [queueSpeech, readOnly, sessionId]);
-
-  // Seed from the canonical log, then keep one tail request in flight. The
-  // uptime dependency retries transient failures on the next backend poll even
-  // when the latest sequence itself has not changed.
   useEffect(() => {
     mounted.current = true;
-    void loadHistory();
     return () => {
       streamGeneration.current += 1;
       mounted.current = false;
@@ -133,22 +62,26 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
       busyRef.current = false;
       onBusyChange?.(false);
     };
-  }, [loadHistory, onBusyChange]);
+  }, [onBusyChange]);
 
   useEffect(() => {
     const previous = observedStopSequence.current;
     const current = state?.stop_sequence;
     observedStopSequence.current = current;
-    if (previous === undefined || current === undefined || previous === current) return;
-    activeStream.current?.abort();
+    if (previous !== undefined && current !== undefined && previous !== current) activeStream.current?.abort();
   }, [state?.stop_sequence]);
 
-  const latestSeq = state?.chat?.active_session_id === sessionId ? state?.chat?.latest_seq ?? 0 : 0;
-  const pollEpoch = state?.uptime_seconds ?? 0;
   useEffect(() => {
-    if (busy || !seeded.current || latestSeq <= lastSeq.current) return;
-    void loadTail();
-  }, [busy, latestSeq, loadTail, pollEpoch]);
+    const previous = observedEpoch.current;
+    observedEpoch.current = state?.observation?.epoch;
+    if (!backendOnline || readOnly || previous !== state?.observation?.epoch) activeStream.current?.abort();
+  }, [backendOnline, readOnly, state?.observation?.epoch]);
+
+  useEffect(() => {
+    const hidden = () => { if (document.visibilityState === "hidden") activeStream.current?.abort(); };
+    document.addEventListener("visibilitychange", hidden);
+    return () => document.removeEventListener("visibilitychange", hidden);
+  }, []);
 
   useEffect(() => {
     if (stick.current) {
@@ -186,12 +119,14 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   async function sendText(input: string, stopSequence?: number) {
     const text = input.trim();
     if (!text || busyRef.current || locked) return;
+    cancelReads();
+    const userId = uid();
     const assistantId = uid();
     setMessages((m) => [
       ...m,
-      { id: uid(), role: "user", text },
-      { id: assistantId, role: "assistant", text: "", streaming: true },
-    ]);
+      { id: userId, role: "user" as const, text },
+      { id: assistantId, role: "assistant" as const, text: "", streaming: true },
+    ].slice(-202));
     busyRef.current = true;
     setBusy(true);
     onBusyChange?.(true);
@@ -219,7 +154,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
             stop_sequence?: number;
           };
           const userSeq = Number(status.user_seq ?? 0);
-          if (userSeq > lastSeq.current) lastSeq.current = userSeq;
+          if (Number.isSafeInteger(userSeq) && userSeq > 0) setMessages((m) => m.map((x) => x.id === userId ? { ...x, seq: userSeq } : x));
           if (status.state === "deterministic_stop") mustRefreshStopState = true;
           const statusDiagnostics: ChatMessageDiagnostics = {
             source: "interactive",
@@ -232,7 +167,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, diagnostics: statusDiagnostics } : x)));
         } else if (ev.event === "speech") {
           const requestId = String((ev.data as { request_id?: string }).request_id ?? "");
-          if (requestId) queueSpeech(requestId);
+          if (requestId) queueSpeechOnce(requestId);
         } else if (ev.event === "delta" || ev.event === "repair_delta") {
           const phase = (ev.data as { phase?: string }).phase;
           const chunk = (ev.data as { text?: string }).text ?? "";
@@ -246,10 +181,10 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
         } else if (ev.event === "message") {
           const finalReply = String(ev.data.reply ?? "");
           const replySeq = Number((ev.data as { seq?: number }).seq ?? 0);
-          if (replySeq > lastSeq.current) lastSeq.current = replySeq;
           stagedReplySeen = true;
           setMessages((m) => m.map((x) => (x.id === assistantId ? {
             ...x,
+            seq: Number.isSafeInteger(replySeq) && replySeq > 0 ? replySeq : x.seq,
             text: finalReply || "...",
             warning: Boolean(ev.data.initial_malformed),
             diagnostics: ev.data.diagnostics ?? x.diagnostics,
@@ -285,9 +220,6 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
           } : x)));
         }
       }, controller.signal, stopSequence);
-      if (mounted.current && streamGeneration.current === requestGeneration && lastSeq.current > 0) {
-        void api.advanceChatCursor(sessionId, lastSeq.current).catch(() => undefined);
-      }
     } catch (e) {
       if (controller.signal.aborted || !mounted.current || streamGeneration.current !== requestGeneration) return;
       const message = e instanceof Error ? translateKnown(e.message) : t("Chat failed.");
@@ -313,6 +245,10 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
       }));
       if (controller.signal.aborted && stagedReplySeen && !retainReplyOnAbort) {
         await loadHistory();
+      } else if (!controller.signal.aborted) {
+        // Reconcile every committed message since the last delivered page,
+        // including replies that committed below the SSE display sequence.
+        await reconcileHistory();
       }
       if (!mounted.current || streamGeneration.current !== requestGeneration) return;
       if (!controller.signal.aborted) onSessionChanged?.();
@@ -351,12 +287,16 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
                       {m.role === "user" ? t("You") : m.diagnostics?.persona_name || "MagicHandy"}
                     </span>
                     <div className="chat-bubble">{m.text || (m.warning ? t("Malformed model JSON — the reply could not be parsed.") : "")}</div>
+                    {m.contentDownload && <p className="form-status chat-sync-status">{t("Long message preview.")} {" "}
+                      <a href={m.contentDownload} download>{t("Download full message")}</a>
+                    </p>}
                   </div>
                 </div>
               </Fragment>
             );
           })}
           {tailError && <p className="form-status chat-sync-status" role="status">{tailError}</p>}
+          {historyNotice && <p className="form-status chat-sync-status" role="status">{historyNotice}</p>}
         </div>
         {showJump && (
           <button type="button" className="btn btn-secondary chat-jump" onClick={jump}>{t("Jump to latest")}</button>

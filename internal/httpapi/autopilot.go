@@ -430,24 +430,22 @@ func (s *Server) autopilotAnnounce(ctx context.Context, say string) modes.Announ
 		say = string(runes[:maxAutopilotSayRunes])
 	}
 	stopSequence := s.stopSequence.Load()
-	s.chatSpeechMu.Lock()
-	defer s.chatSpeechMu.Unlock()
 	if s.autopilotAnnouncementInvalidated(ctx, stopSequence) {
 		return modes.Announcement{}
 	}
-	sessionID, err := s.chatLog.ActiveSessionID()
+	sessionID, err := s.chatLog.ActiveSessionIDContext(ctx)
 	if err != nil {
 		s.logger.Warn("Autopilot chat session unavailable", "error", err)
 		return modes.Announcement{}
 	}
 	settings, _ := s.store.Snapshot()
-	activePersona, err := s.activeSessionPersona()
+	activePersona, err := s.sessionPersonaContext(ctx, sessionID)
 	if err != nil {
 		s.logger.Warn("resolve Autopilot persona", "error", err)
 		return modes.Announcement{}
 	}
 	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, activePersona)
-	if _, found, resolveErr := s.personalization.prompts.Resolve(promptID); resolveErr != nil || !found {
+	if _, found, resolveErr := s.personalization.prompts.ResolveContext(ctx, promptID); resolveErr != nil || !found {
 		promptID = chat.DefaultPromptSetID
 	}
 	diagnostics := &chat.MessageDiagnostics{
@@ -460,12 +458,12 @@ func (s *Server) autopilotAnnounce(ctx context.Context, say string) modes.Announ
 		diagnostics.PersonaID = activePersona.ID
 		diagnostics.PersonaName = activePersona.Name
 	}
-	if promptContext, promptErr := s.chatLog.PromptContext(sessionID); promptErr != nil {
+	if promptContext, promptErr := s.chatLog.ReadPromptContext(ctx, sessionID); promptErr != nil {
 		s.logger.Warn("read Autopilot chat mood", "error", promptErr)
 	} else {
 		diagnostics.Mood = promptContext.CurrentMood
 	}
-	replySeq, err := s.chatLog.AppendPendingAssistantTo(sessionID, say, diagnostics)
+	replySeq, err := s.chatLog.AppendPendingAssistantContext(ctx, sessionID, say, diagnostics)
 	if err != nil {
 		s.logger.Warn("stage Autopilot chat line", "error", err)
 		return modes.Announcement{}
@@ -476,10 +474,16 @@ func (s *Server) autopilotAnnounce(ctx context.Context, say string) modes.Announ
 			s.deletePendingChatReply(replySeq)
 		}
 	}()
+	// Preparation and staging do not publish anything. Only the visible commit
+	// and speech association need to exclude history readers.
+	if err := s.chatSpeechMu.Lock(ctx); err != nil {
+		return modes.Announcement{}
+	}
+	defer s.chatSpeechMu.Unlock()
 	if s.autopilotAnnouncementInvalidated(ctx, stopSequence) {
 		return modes.Announcement{}
 	}
-	if err := s.chatLog.CommitPending(replySeq); err != nil {
+	if err := s.chatLog.CommitPendingContext(ctx, replySeq); err != nil {
 		s.logger.Warn("commit Autopilot chat line", "error", err)
 		return modes.Announcement{}
 	}

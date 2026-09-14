@@ -228,6 +228,11 @@ func labContinuationMessage(method, fallback string, turns []chat.LLMLabTrial) s
 }
 
 func (s *Server) applyLabConversationTarget(ctx context.Context, stopSequence uint64, spec motion.FlowSpec) (bool, string) {
+	release, err := s.beginDeferredMotion(ctx)
+	if err != nil {
+		return false, err.Error()
+	}
+	defer release()
 	s.lab.mu.Lock()
 	engine, active := s.lab.sessionEngine, s.lab.session.Active && s.lab.session.Live
 	s.lab.mu.Unlock()

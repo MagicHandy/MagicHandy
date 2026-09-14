@@ -260,7 +260,7 @@ func (s *Server) handlePersonaExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(archive) // #nosec G705 -- validated ZIP served as a nosniff attachment.
+	writeBoundedAttachment(w, r, archive) // #nosec G705 -- validated ZIP served as a nosniff attachment.
 }
 
 func (s *Server) handlePersonaUpdate(w http.ResponseWriter, r *http.Request) {
@@ -359,7 +359,7 @@ func (s *Server) handlePersonaPortrait(w http.ResponseWriter, r *http.Request) {
 	// A portrait changes only when replaced, and the row's stamp changes with it,
 	// so the tile URL busts its own cache and a short max-age is safe.
 	w.Header().Set("Cache-Control", "private, max-age=60")
-	http.ServeContent(w, r, "portrait.jpg", info.ModTime(), file)
+	serveBoundedContent(w, r, "portrait.jpg", info.ModTime(), file)
 }
 
 // handlePersonaPortraitUpload accepts a JPEG the browser already downscaled on
@@ -833,18 +833,4 @@ func personaArchiveFilename(name string) string {
 		base = "persona"
 	}
 	return base + persona.ArchiveExtension
-}
-
-// activeSessionPersona resolves the persona of whichever conversation is active.
-// Background work that speaks into the chat uses this so the assistant does not
-// change character the moment it starts talking on its own.
-func (s *Server) activeSessionPersona() (*persona.Persona, error) {
-	if s.chatLog == nil {
-		return nil, errors.New("chat session store is unavailable")
-	}
-	sessionID, err := s.chatLog.ActiveSessionID()
-	if err != nil {
-		return nil, fmt.Errorf("read active chat session: %w", err)
-	}
-	return s.sessionPersona(sessionID)
 }

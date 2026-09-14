@@ -1,15 +1,71 @@
 # UI Design
 
+## Network access and account control
+
+Access settings separate the running network boundary from the policy saved
+for restart. Administrators validate the host configuration and confirm their
+current password before saving. No saved form value changes the active socket
+or installs trust/firewall rules. Other accounts see their observer/control
+capabilities from the backend. Host mutations remain administrator-only even
+when an operator has a temporary control permission.
+
+Protected ownership is renewed by an explicit foreground heartbeat, not by
+state polling or received events. Hidden documents stop renewing it. Loss,
+revocation or expiry fences old commands and requires explicit stop-first
+reacquisition. Server epochs and generations travel as transport metadata; they
+do not create frontend ownership. Emergency Stop remains mounted for observers
+and signed-out/offline clients. The one-click connection report omits private
+paths, addresses and content and encourages sharing with the developer.
+
+Protected commands carry backend delivery metadata. A lost JSON response causes
+a bounded receipt lookup and a canonical-state refresh; the browser never
+automatically repeats a mutation with a new ID. An unknown outcome is labeled
+unconfirmed. Emergency Stop remains outside that recovery path. A delayed model
+reply can retain its text while reporting that newer controls superseded its
+motion. See the [delivery contract](lan-wan-command-delivery.md).
+
+See [Self-hosted HTTPS](self-hosted-https.md) and the open
+[LAN/WAN acceptance checklist](lan-wan-control-checklist.md).
+
 ## Backend observation lifecycle
+
+Access settings includes the current account's signed-in browsers. The backend
+supplies names, coarse client hints, activity/expiry times and controller or
+Bluetooth-browser indicators. Observers may rename or sign out their own
+logins without taking control. Names are labels, not verified identity. A
+sign-out confirmation explains that control/gateway retirement requests Stop;
+the UI does not claim physical confirmation. Canceled reads cannot overwrite
+newer results, and a lost action response is reconciled without replay. See
+the [login management contract](lan-wan-session-management.md).
+
+The Bluetooth panel distinguishes the device connection in this browser from
+one in another browser. An observer can view the connection without publishing
+its own disconnected/unsupported state over the owning browser's status.
+Choosing a native device requires host configuration permission. Gateway
+dispatch remains available when the device browser becomes a controller
+observer; its local Disconnect and Emergency Stop remain reachable.
+Gateway channel failure or document hiding attempts local Stop and releases
+the GATT session with explicit reconnection required. A slow state poll alone
+does not tear down a healthy device channel. See the
+[gateway contract](lan-wan-bluetooth-gateway.md).
 
 State polling and live motion subscriptions belong to the current enabled app
 session. Disabling access cancels its poll, releases the request slot, and
 ignores queued events and waiting refreshes from that session. Re-enabling
-starts a fresh poll. A completed state poll supersedes live motion observed
-before that poll started; an event received during the poll is retained because
-their server ordering is unknown. These are backend observations, never a
-parallel frontend motion model. See the
+starts a fresh poll. App and motion captures carry a server epoch and revision;
+motion packets are reconciled by their own capture revisions rather than HTTP
+completion or local arrival order. Controller reads have a separate revision
+counter. These remain backend observations, never a parallel frontend motion
+model. See the [observation contract](lan-wan-observations.md) and the original
 [lifecycle audit](architecture-review-2026-09-06.md).
+
+The controller heartbeat runs independently of full-state polling. A stream
+error retains the newest known motion and requires a fresh state request before
+clearing the stale/read-only indicator. A hidden document stops its requests,
+heartbeat and stream; returning requires a full resync. Server restart retires
+old responses and event callbacks. Neither reconnect nor visibility return
+automatically reclaims control or resumes motion. Retry timers are bounded and
+jittered, and malformed protected controller metadata leaves controls disabled.
 
 `useAppState` subscribes to the slower app snapshot and connection/controller
 status. `useMotionState` subscribes separately to reconciled live motion.
@@ -219,6 +275,24 @@ current unsaved draft is retained after shutdown; saved tabs are unaffected.
 Starting clean always discards the prior draft, so its retention toggle is off
 and unavailable in that mode. A clean exit applies the choice immediately and
 the next startup repeats it after a crash.
+
+Conversation history uses backend committed revisions independently of display
+sequence numbers. Late committed replies merge into their display position;
+stream placeholders reconcile with durable rows without duplicates. Returning
+from a hidden/offline browser or a server restart refreshes retained history
+without replaying old speech or taking control. The existing compact history
+status area reports read failures and retention gaps, with a direct Retry
+action for unavailable history. Cursor acknowledgements are passive read
+tracking and do not participate in controller command delivery. The
+[recovery contract](lan-wan-chat-recovery.md) records the lifecycle and bounds.
+
+Large history windows load in bounded pages across state polls. Recovery keeps
+its continuation and does not replay speech while catching up. A message longer
+than the history preview limit shows **Long message preview.** with a nearby
+**Download full message** link. This downloads the exact retained UTF-8 message
+directly; it does not add a full-message Blob or permanent expanded text to the
+conversation cache. The preview is explicit, and storage/retention are unchanged.
+
 The testing-badged Manual motion group lives in `#/settings/device` — it drives
 the device, so it belongs with the connection that carries it rather than among
 read-only diagnostics — and it

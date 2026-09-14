@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 	appstore "github.com/mapledaemon/MagicHandy/internal/store"
 )
 
@@ -68,9 +69,14 @@ type Account struct {
 // Session is an authenticated account plus the server-enforced absolute
 // expiration. The raw bearer token is returned only by NewSession.
 type Session struct {
-	Account          Account   `json:"account"`
-	ControlAccountID string    `json:"control_account_id"`
-	ExpiresAt        time.Time `json:"expires_at"`
+	ID string `json:"id"`
+	// Key is a non-bearer database identity used only for server-side lifetime
+	// checks. It must never be serialized or accepted as a login credential.
+	Key              string        `json:"-"`
+	Account          Account       `json:"account"`
+	ControlAccountID string        `json:"control_account_id"`
+	ExpiresAt        time.Time     `json:"expires_at"`
+	ControlGrant     *ControlGrant `json:"control_grant,omitempty"`
 }
 
 // ControlIdentity is an account this login session may represent in the
@@ -193,7 +199,10 @@ func (s *Store) create(ctx context.Context, username, password, role string, boo
 				last_login_at, created_at, updated_at, profile_updated_at
 			) VALUES(?, ?, ?, ?, ?, 0, '', ?, ?, '')
 		`, id, username, usernameKey, role, passwordHash, now, now)
-		return err
+		if err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: audit.AccountCreated, Outcome: "success", TargetAccountID: id})
 	})
 	if err != nil {
 		return Account{}, fmt.Errorf("create user account: %w", err)
@@ -291,12 +300,24 @@ func (s *Store) Authenticate(ctx context.Context, username, password string) (Ac
 // NewSession creates a high-entropy bearer token while storing only its
 // SHA-256 digest. A database disclosure therefore does not reveal live tokens.
 func (s *Store) NewSession(ctx context.Context, accountID string) (string, Session, error) {
+	return s.NewSessionWithClient(ctx, accountID, SessionClient{})
+}
+
+// NewSessionWithClient records only a coarse, untrusted browser/platform hint.
+// The independent management ID is never accepted as a bearer credential.
+func (s *Store) NewSessionWithClient(ctx context.Context, accountID string, client SessionClient) (string, Session, error) {
 	raw := make([]byte, 32)
 	if err := s.randomBytes(raw); err != nil {
 		return "", Session{}, fmt.Errorf("generate session token: %w", err)
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
 	tokenHash := hashSessionToken(token)
+	var publicRandom [16]byte
+	if err := s.randomBytes(publicRandom[:]); err != nil {
+		return "", Session{}, fmt.Errorf("generate session management identity: %w", err)
+	}
+	publicID := base64.RawURLEncoding.EncodeToString(publicRandom[:])
+	client = normalizedSessionClient(client)
 	nowTime := s.now()
 	now := nowTime.Format(time.RFC3339Nano)
 	expires := nowTime.Add(s.lifetime)
@@ -321,26 +342,31 @@ func (s *Store) NewSession(ctx context.Context, accountID string) (string, Sessi
 			return ErrInvalidCredentials
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO user_sessions(token_hash, user_id, created_at, last_seen_at, expires_at)
-			VALUES(?, ?, ?, ?, ?)
-		`, tokenHash, accountID, now, now, expires.Format(time.RFC3339Nano)); err != nil {
+			INSERT INTO user_sessions(token_hash, user_id, created_at, last_seen_at, expires_at, public_id, client_browser, client_platform)
+			VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+		`, tokenHash, accountID, now, now, expires.Format(time.RFC3339Nano), publicID, client.Browser, client.Platform); err != nil {
 			return err
 		}
+		// Keep the newly issued login even when clocks give several logins the
+		// same creation timestamp. Tie-breaking by hash must never evict it.
 		_, err := tx.ExecContext(ctx, `
 			DELETE FROM user_sessions
 			WHERE token_hash IN (
 				SELECT token_hash FROM user_sessions
-				WHERE user_id = ?
+				WHERE user_id = ? AND token_hash <> ?
 				ORDER BY created_at DESC, token_hash DESC
 				LIMIT -1 OFFSET ?
 			)
-		`, accountID, MaxSessionsPerAccount)
-		return err
+		`, accountID, tokenHash, MaxSessionsPerAccount-1)
+		if err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: nowTime.UnixMilli(), Kind: audit.SessionCreated, Outcome: "success", Actor: audit.Actor{Type: "account", AccountID: accountID, SessionID: publicID}, TargetSessionID: publicID})
 	})
 	if err != nil {
 		return "", Session{}, fmt.Errorf("create user session: %w", err)
 	}
-	return token, Session{Account: account, ControlAccountID: account.ID, ExpiresAt: expires}, nil
+	return token, Session{ID: publicID, Key: tokenHash, Account: account, ControlAccountID: account.ID, ExpiresAt: expires}, nil
 }
 
 // ResolveSession authenticates a token and advances its idle timestamp at most
@@ -349,12 +375,33 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 	if len(token) < 32 || len(token) > 128 {
 		return Session{}, ErrInvalidSession
 	}
+	return s.resolveSessionKey(ctx, hashSessionToken(token), true)
+}
+
+// InspectSession authenticates passive polling without extending idle time.
+func (s *Store) InspectSession(ctx context.Context, token string) (Session, error) {
+	if len(token) < 32 || len(token) > 128 {
+		return Session{}, ErrInvalidSession
+	}
+	return s.resolveSessionKey(ctx, hashSessionToken(token), false)
+}
+
+// CheckSession validates a server-side session identity without renewing idle
+// time. Background streams and control watchdogs are observations, not activity.
+func (s *Store) CheckSession(ctx context.Context, key string) (Session, error) {
+	if len(key) != sha256.Size*2 {
+		return Session{}, ErrInvalidSession
+	}
+	return s.resolveSessionKey(ctx, key, false)
+}
+
+func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (Session, error) {
 	var account Account
 	var disabled int
-	var lastSeenRaw, expiresRaw, controlAccountID string
+	var lastSeenRaw, expiresRaw, controlAccountID, publicID string
 	err := s.db.SQL().QueryRowContext(ctx, `
 		SELECT a.id, a.username, a.role, a.disabled, a.last_login_at, a.created_at, a.updated_at,
-		       a.profile_updated_at, s.last_seen_at, s.expires_at,
+		       a.profile_updated_at, s.last_seen_at, s.expires_at, s.public_id,
 		       CASE
 		         WHEN EXISTS (
 		           SELECT 1
@@ -370,10 +417,10 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 		FROM user_sessions s
 		JOIN user_accounts a ON a.id = s.user_id
 		WHERE s.token_hash = ?
-	`, hashSessionToken(token)).Scan(
+	`, key).Scan(
 		&account.ID, &account.Username, &account.Role, &disabled,
 		&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt,
-		&account.ProfileUpdatedAt, &lastSeenRaw, &expiresRaw, &controlAccountID,
+		&account.ProfileUpdatedAt, &lastSeenRaw, &expiresRaw, &publicID, &controlAccountID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrInvalidSession
@@ -387,15 +434,14 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 	expires, expiresErr := time.Parse(time.RFC3339Nano, expiresRaw)
 	now := s.now()
 	if lastSeenErr != nil || expiresErr != nil || account.Disabled || !now.Before(expires) || now.Sub(lastSeen) > s.idleLimit {
-		_ = s.RevokeSession(ctx, token)
 		return Session{}, ErrInvalidSession
 	}
-	if now.Sub(lastSeen) >= time.Minute {
+	if touch && now.Sub(lastSeen) >= time.Minute {
 		if err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 			result, err := tx.ExecContext(ctx, `
 				UPDATE user_sessions SET last_seen_at = ?
 				WHERE token_hash = ?
-			`, now.Format(time.RFC3339Nano), hashSessionToken(token))
+			`, now.Format(time.RFC3339Nano), key)
 			if err != nil {
 				return err
 			}
@@ -414,7 +460,11 @@ func (s *Store) ResolveSession(ctx context.Context, token string) (Session, erro
 	if controlAccountID == "" {
 		controlAccountID = account.ID
 	}
-	return Session{Account: account, ControlAccountID: controlAccountID, ExpiresAt: expires}, nil
+	session := Session{ID: publicID, Key: key, Account: account, ControlAccountID: controlAccountID, ExpiresAt: expires}
+	if account.Role != RoleAdmin {
+		session.ControlGrant, err = s.ControlGrant(ctx, account.ID)
+	}
+	return session, err
 }
 
 // RevokeSession invalidates one opaque bearer token. It is idempotent.
@@ -423,8 +473,17 @@ func (s *Store) RevokeSession(ctx context.Context, token string) error {
 		return nil
 	}
 	return s.db.WithTx(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE token_hash = ?`, hashSessionToken(token))
-		return err
+		var owner, publicID string
+		key := hashSessionToken(token)
+		if err := tx.QueryRowContext(ctx, `SELECT user_id, public_id FROM user_sessions WHERE token_hash = ?`, key).Scan(&owner, &publicID); errors.Is(err, sql.ErrNoRows) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE token_hash = ?`, key); err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: audit.SessionRevoked, Outcome: "success", TargetAccountID: owner, TargetSessionID: publicID})
 	})
 }
 
@@ -451,7 +510,10 @@ func (s *Store) SetPassword(ctx context.Context, accountID, password string) err
 			return ErrNotFound
 		}
 		_, err = tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = ?`, accountID)
-		return err
+		if err != nil {
+			return err
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: audit.PasswordChanged, Outcome: "success", TargetAccountID: accountID})
 	})
 }
 
@@ -490,9 +552,15 @@ func (s *Store) SetDisabled(ctx context.Context, accountID string, disabled bool
 		}
 		if disabled {
 			_, err := tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = ?`, accountID)
-			return err
+			if err != nil {
+				return err
+			}
 		}
-		return nil
+		kind := audit.AccountEnabled
+		if disabled {
+			kind = audit.AccountDisabled
+		}
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: kind, Outcome: "success", TargetAccountID: accountID})
 	})
 }
 

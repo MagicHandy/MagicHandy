@@ -1,10 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { AppStateProvider, ToastProvider } from "./state/app-state";
-import { AuthProvider, useAuth } from "./state/auth";
-import { I18nProvider } from "./i18n";
+import { AuthProvider } from "./state/auth";
+import { ApplicationProviders } from "./state/ApplicationProviders";
 import "./styles/tokens.css";
 import "./styles/themes.css";
 import "./styles/shell.css";
@@ -24,20 +22,6 @@ import "./styles/auth.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");
-
-function ApplicationProviders() {
-  const { status } = useAuth();
-  const accessGranted = Boolean(status && (!status.authentication_required || status.authenticated));
-  return (
-    <AppStateProvider enabled={accessGranted}>
-      <I18nProvider fallbackLocale={status?.ui_locale}>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
-      </I18nProvider>
-    </AppStateProvider>
-  );
-}
 
 createRoot(root).render(
   <StrictMode>

@@ -111,7 +111,7 @@ export function SettingsRoute() {
   const savingRef = useRef(false);
   const savedRef = useRef(saved);
   savedRef.current = saved;
-  const locked = !backendOnline || readOnly || loading;
+  const locked = !backendOnline || readOnly || loading || state?.capabilities?.configure_host === false;
 
   async function load(preserveDraft = false) {
     if (!mounted.current) return;
@@ -325,7 +325,14 @@ export function SettingsRoute() {
     setClearOpenAITTSKey(false);
   }
 
-  if (!s) return (
+  if (state?.capabilities?.configure_host === false) return <>
+    <WorkspaceHead title={t("Settings")} />
+    <nav className="settings-nav" aria-label={t("Settings sections")}><a href="#/settings/access" aria-current="page">{t("Access")}</a></nav>
+    <p className="hint-block">{t("Host settings and diagnostics are managed by an administrator.")}</p>
+    <section className="panel"><AccountSettingsPanel backendOnline={backendOnline} /></section>
+  </>;
+
+  if (!s || !state) return (
     <>
       <WorkspaceHead title={t("Settings")} />
       {loadError ? (
@@ -335,7 +342,7 @@ export function SettingsRoute() {
           <button type="button" className="btn btn-secondary" onClick={() => void load()}>{t("Retry")}</button>
         </div>
       ) : (
-        <p className="form-status" role="status">{loading ? t("Loading settings…") : t("Settings unavailable.")}</p>
+        <p className="form-status" role="status">{loading || !state ? t("Loading settings…") : t("Settings unavailable.")}</p>
       )}
     </>
   );

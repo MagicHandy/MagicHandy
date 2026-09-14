@@ -56,6 +56,22 @@ describe("MediaVideoPlayer", () => {
     expect(onVideoUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: "session", duration_ms: 42000 }));
   });
 
+  it("allows playback duration updates without writing host compatibility or cover data", async () => {
+    render(<MediaVideoPlayer video={video("session")} allowMetadataWrite allowLibraryWrite={false} />);
+    const player = screen.getByLabelText("session") as HTMLVideoElement;
+    Object.defineProperty(player, "duration", { configurable: true, value: 42 });
+    Object.defineProperty(player, "videoWidth", { configurable: true, value: 1920 });
+    Object.defineProperty(player, "videoHeight", { configurable: true, value: 1080 });
+    Object.defineProperty(player, "readyState", { configurable: true, value: 4 });
+    fireEvent.loadedMetadata(player);
+    fireEvent.loadedData(player);
+    fireEvent.playing(player);
+    fireEvent.timeUpdate(player);
+    await waitFor(() => expect(saveMediaDuration).toHaveBeenCalledWith("session", 42000));
+    expect(reportMediaCompatibility).not.toHaveBeenCalled();
+    expect(saveMediaThumbnail).not.toHaveBeenCalled();
+  });
+
   it("preloads synchronized media while controls are temporarily withheld", () => {
     const onPlaybackEvent = vi.fn();
     render(

@@ -78,13 +78,17 @@ type SessionPromptContext struct {
 
 // LogMessage is one visible row in a chat session.
 type LogMessage struct {
-	Seq             int64               `json:"seq"`
-	Role            string              `json:"role"`
-	Content         string              `json:"content"`
-	ClientID        string              `json:"client_id,omitempty"`
-	CreatedAt       string              `json:"created_at"`
-	Diagnostics     *MessageDiagnostics `json:"diagnostics,omitempty"`
-	SpeechRequestID string              `json:"speech_request_id,omitempty"`
+	Seq                int64               `json:"seq"`
+	Revision           int64               `json:"revision,omitempty"`
+	Role               string              `json:"role"`
+	Content            string              `json:"content"`
+	ClientID           string              `json:"client_id,omitempty"`
+	CreatedAt          string              `json:"created_at"`
+	Diagnostics        *MessageDiagnostics `json:"diagnostics,omitempty"`
+	SpeechRequestID    string              `json:"speech_request_id,omitempty"`
+	ContentBytes       int64               `json:"content_bytes,omitempty"`
+	ContentTruncated   bool                `json:"content_truncated,omitempty"`
+	DiagnosticsOmitted bool                `json:"diagnostics_omitted,omitempty"`
 }
 
 // Session is one retained or process-local conversation tab. Exactly one row
@@ -532,10 +536,21 @@ func (l *MessageLog) AppendTo(sessionID, role, content, clientID string, diagnos
 // AppendPendingAssistantTo stages one generated reply. Reads and cap pruning
 // ignore it until CommitPending makes the row visible.
 func (l *MessageLog) AppendPendingAssistantTo(sessionID, content string, diagnostics *MessageDiagnostics) (int64, error) {
-	return l.appendTo(sessionID, MessageRoleAssistant, content, "", diagnostics, false)
+	return l.AppendPendingAssistantContext(context.Background(), sessionID, content, diagnostics)
+}
+
+// AppendPendingAssistantContext allows autonomous publication to leave a busy
+// writer queue when its run is canceled. Interactive durable commits retain
+// their existing background-context contract.
+func (l *MessageLog) AppendPendingAssistantContext(ctx context.Context, sessionID, content string, diagnostics *MessageDiagnostics) (int64, error) {
+	return l.appendToContext(ctx, sessionID, MessageRoleAssistant, content, "", diagnostics, false)
 }
 
 func (l *MessageLog) appendTo(sessionID, role, content, clientID string, diagnostics *MessageDiagnostics, committed bool) (int64, error) {
+	return l.appendToContext(context.Background(), sessionID, role, content, clientID, diagnostics, committed)
+}
+
+func (l *MessageLog) appendToContext(ctx context.Context, sessionID, role, content, clientID string, diagnostics *MessageDiagnostics, committed bool) (int64, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return 0, fmt.Errorf("chat log rejects empty %s messages", role)
@@ -552,7 +567,6 @@ func (l *MessageLog) appendTo(sessionID, role, content, clientID string, diagnos
 		}
 	}
 
-	ctx := context.Background()
 	var seq int64
 	err = l.db.WithTx(ctx, func(tx *sql.Tx) error {
 		var exists int
@@ -589,6 +603,9 @@ func (l *MessageLog) appendTo(sessionID, role, content, clientID string, diagnos
 		if err != nil {
 			return err
 		}
+		if err := publishMessageRevision(ctx, tx, sessionID, seq); err != nil {
+			return err
+		}
 		return pruneCommittedMessages(ctx, tx, sessionID)
 	})
 	if err != nil {
@@ -601,10 +618,14 @@ func (l *MessageLog) appendTo(sessionID, role, content, clientID string, diagnos
 // per-session cap. A Stop that wins the caller's commit barrier deletes the
 // staged row instead, so a canceled reply cannot evict visible history.
 func (l *MessageLog) CommitPending(seq int64) error {
+	return l.CommitPendingContext(context.Background(), seq)
+}
+
+// CommitPendingContext is the cancelable autonomous counterpart to CommitPending.
+func (l *MessageLog) CommitPendingContext(ctx context.Context, seq int64) error {
 	if seq <= 0 {
 		return errors.New("a pending chat sequence is required")
 	}
-	ctx := context.Background()
 	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
 		var sessionID string
 		if err := tx.QueryRowContext(ctx, `
@@ -621,6 +642,9 @@ func (l *MessageLog) CommitPending(seq int64) error {
 		if _, err := tx.ExecContext(ctx, `UPDATE chat_sessions SET updated_at = ? WHERE id = ?`, nowUTC(), sessionID); err != nil {
 			return err
 		}
+		if err := publishMessageRevision(ctx, tx, sessionID, seq); err != nil {
+			return err
+		}
 		return pruneCommittedMessages(ctx, tx, sessionID)
 	}); err != nil {
 		return fmt.Errorf("commit pending chat reply: %w", err)
@@ -629,6 +653,12 @@ func (l *MessageLog) CommitPending(seq int64) error {
 }
 
 func pruneCommittedMessages(ctx context.Context, tx *sql.Tx, sessionID string) error {
+	if _, err := tx.ExecContext(ctx, `UPDATE chat_sessions SET pruned_revision = MAX(pruned_revision,
+		COALESCE((SELECT MAX(revision) FROM messages WHERE session_id = ? AND committed = 1 AND seq NOT IN (
+			SELECT seq FROM messages WHERE session_id = ? AND committed = 1 ORDER BY seq DESC LIMIT ?
+		)), 0)) WHERE id = ?`, sessionID, sessionID, MessageLogCap, sessionID); err != nil {
+		return err
+	}
 	_, err := tx.ExecContext(ctx, `
 		DELETE FROM messages
 		WHERE session_id = ? AND committed = 1 AND seq NOT IN (
@@ -647,6 +677,10 @@ func (l *MessageLog) Delete(seq int64) error {
 	}
 	ctx := context.Background()
 	if err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE chat_sessions SET revision = revision + 1, reset_revision = revision + 1
+			WHERE id = (SELECT session_id FROM messages WHERE seq = ? AND committed = 1)`, seq); err != nil {
+			return err
+		}
 		_, err := tx.ExecContext(ctx, `DELETE FROM messages WHERE seq = ?`, seq)
 		return err
 	}); err != nil {
@@ -691,11 +725,19 @@ func (l *MessageLog) PromptContext(sessionID string) (SessionPromptContext, erro
 }
 
 func scanLogMessages(rows *sql.Rows) ([]LogMessage, error) {
+	return scanLogMessageRows(rows, false)
+}
+
+func scanLogMessageRows(rows *sql.Rows, withRevision bool) ([]LogMessage, error) {
 	var messages []LogMessage
 	for rows.Next() {
 		var message LogMessage
 		var diagnosticsJSON string
-		if err := rows.Scan(&message.Seq, &message.Role, &message.Content, &message.ClientID, &diagnosticsJSON, &message.CreatedAt); err != nil {
+		values := []any{&message.Seq, &message.Role, &message.Content, &message.ClientID, &diagnosticsJSON, &message.CreatedAt}
+		if withRevision {
+			values = append(values, &message.Revision)
+		}
+		if err := rows.Scan(values...); err != nil {
 			return nil, fmt.Errorf("scan chat message: %w", err)
 		}
 		if diagnosticsJSON != "" && diagnosticsJSON != "{}" {
@@ -749,40 +791,7 @@ func (l *MessageLog) AdvanceCursor(clientID string, seq int64) (int64, error) {
 
 // AdvanceCursorSession moves a client's selected-session cursor forward.
 func (l *MessageLog) AdvanceCursorSession(clientID, sessionID string, seq int64) (int64, error) {
-	if clientID == "" {
-		return 0, errors.New("a client id is required to advance a chat cursor")
-	}
-	if seq < 0 {
-		seq = 0
-	}
-	ctx := context.Background()
-	var stored int64
-	err := l.db.WithTx(ctx, func(tx *sql.Tx) error {
-		var latest sql.NullInt64
-		if err := tx.QueryRowContext(ctx, `SELECT MAX(seq) FROM messages WHERE session_id = ? AND committed = 1`, sessionID).Scan(&latest); err != nil {
-			return err
-		}
-		if seq > latest.Int64 {
-			seq = latest.Int64
-		}
-		_, err := tx.ExecContext(ctx, `
-			INSERT INTO chat_session_cursors(client_id, session_id, last_seq, updated_at)
-			VALUES(?, ?, ?, ?)
-			ON CONFLICT(client_id, session_id) DO UPDATE SET
-				last_seq = MIN(?, MAX(chat_session_cursors.last_seq, excluded.last_seq)),
-				updated_at = excluded.updated_at
-		`, clientID, sessionID, seq, nowUTC(), latest.Int64)
-		if err != nil {
-			return err
-		}
-		return tx.QueryRowContext(ctx, `
-			SELECT last_seq FROM chat_session_cursors WHERE client_id = ? AND session_id = ?
-		`, clientID, sessionID).Scan(&stored)
-	})
-	if err != nil {
-		return 0, fmt.Errorf("advance chat cursor: %w", err)
-	}
-	return stored, nil
+	return l.AdvanceCursorSessionContext(context.Background(), clientID, sessionID, seq)
 }
 
 // Clear resets every chat session and cursor. It is test support; settings

@@ -81,6 +81,18 @@ describe("VideoLibrary", () => {
     mediaSync.mockResolvedValue({ sync: { active: false, state: "idle" } });
   });
 
+  it("lets operators browse shared media without configuring or scanning host files", async () => {
+    mediaVideos.mockResolvedValue({ videos: [{ ...video("alpha", "Alpha session", "2026-07-19T12:00:00Z"), location_path: "" }] });
+    render(<VideoLibrary locked={false} hostAdministration={false} />);
+    const item = await screen.findByRole("button", { name: "Play Alpha session" });
+    expect(within(item).getByText("Shared library")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scan library" })).toBeDisabled();
+    expect(mediaTools).not.toHaveBeenCalled();
+    fireEvent.click(item);
+    expect(await screen.findByLabelText("Alpha session")).toHaveAttribute("src", "/stream/alpha");
+    expect(screen.queryByRole("link", { name: "Set up FFmpeg" })).not.toBeInTheDocument();
+  });
+
   it("searches the catalog and opens paired video playback with its timeline", async () => {
     mediaVideos.mockResolvedValue({ videos: [
       video("zeta", "Zeta session", "2026-07-18T12:00:00Z"),

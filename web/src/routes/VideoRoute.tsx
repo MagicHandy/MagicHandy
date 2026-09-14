@@ -10,7 +10,7 @@ export function VideoRoute() {
     <>
       <WorkspaceHead title={t("Videos")} wide />
       <div className="video-page" data-requires-backend>
-        <VideoLibrary locked={!backendOnline || readOnly} stopSequence={state?.stop_sequence} />
+        <VideoLibrary locked={!backendOnline || readOnly} hostAdministration={state?.capabilities?.configure_host !== false} stopSequence={state?.stop_sequence} />
       </div>
     </>
   );

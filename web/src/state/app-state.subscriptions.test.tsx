@@ -6,6 +6,7 @@ import { AppStateProvider, useAppState, useMotionState } from "./app-state";
 
 vi.mock("../api/client", () => ({
   clientId: "subscription-profile",
+  COMMAND_RECOVERED_EVENT: "magichandy:command-recovered",
   api: { getState: vi.fn(async () => ({ controller: { read_only: false }, motion: { available: true } }) as AppState) },
 }));
 

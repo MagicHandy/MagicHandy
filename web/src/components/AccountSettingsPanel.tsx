@@ -9,6 +9,10 @@ import { PROFILE_IMAGE_MAX_EDGE, resizeImageToJPEG } from "../util/profile-image
 import { passwordMeetsMinimum } from "../util/password";
 import { AccountAvatar } from "./AccountAvatar";
 import { PasswordConfirmationField } from "./PasswordConfirmationField";
+import { NetworkSettingsPanel } from "./NetworkSettingsPanel";
+import { ControlGrantPanel } from "./ControlGrantPanel";
+import { SessionSettingsPanel } from "./SessionSettingsPanel";
+import { AuditSettingsPanel } from "./AuditSettingsPanel";
 
 const errorMessage = (reason: unknown) => reason instanceof Error ? translateKnown(reason.message) : t("Request failed");
 
@@ -46,6 +50,7 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
           <p className="hint-block">{t("This installation currently opens without an account. Creating the first administrator turns on sign-in immediately and on future launches.")}</p>
           <BootstrapAccountForm disabled={!backendOnline} onCreated={auth.bootstrap} />
         </section>
+        <NetworkSettingsPanel backendOnline={backendOnline} administrator />
       </>
     );
   }
@@ -55,12 +60,14 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
     <>
       <h2 className="section-title">{t("Access")}</h2>
       <ProfileGroup account={account} disabled={!backendOnline} onChanged={auth.refresh} />
+      <SessionSettingsPanel key={auth.status.session_id || account.id} backendOnline={backendOnline} onSignedOut={auth.refresh} />
       <PasswordGroup disabled={!backendOnline} onChanged={auth.refresh} />
       <LinkedProfilesGroup />
+      <NetworkSettingsPanel backendOnline={backendOnline} administrator={account.role === "admin"} />
       {account.role === "admin" && (
         <section className="group account-management">
           <h3 className="group-title">{t("Installation accounts")}</h3>
-          <p className="hint-block">{t("Administrators can create operators, reset their passwords, and disable access. Account data remains shared in this installation.")}</p>
+          <p className="hint-block">{t("Operators begin as observers. An administrator grants time-limited permission to control motion, chat and synchronized playback. Accounts share this installation's content; host configuration remains administrator-only.")}</p>
           {error && <p className="form-status auth-error" role="alert">{error}</p>}
           {loading ? <p className="form-status" role="status">{t("Loading accounts…")}</p> : (
             <AccountList current={account} accounts={accounts} onChanged={loadAccounts} />
@@ -68,6 +75,7 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
           <CreateAccountForm disabled={!backendOnline || loading} onCreated={loadAccounts} />
         </section>
       )}
+      {account.role === "admin" && <AuditSettingsPanel backendOnline={backendOnline} accounts={accounts} />}
     </>
   );
 }
@@ -301,6 +309,7 @@ function AccountList({ current, accounts, onChanged }: {
             <PasswordConfirmationField password={password} confirmation={confirmation} disabled={Boolean(busy)} onChange={setConfirmation} />
             <button className="btn btn-primary" type="submit" disabled={Boolean(busy) || !password}>{busy ? t("Saving…") : t("Save new password")}</button>
           </form>}
+          {account.role === "operator" && <ControlGrantPanel accountID={account.id} disabled={account.disabled || Boolean(busy)} />}
         </div>
       ))}
       {error && <p className="form-status auth-error" role="alert">{error}</p>}

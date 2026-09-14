@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
@@ -87,6 +88,14 @@ func (r motionRequest) target(settings config.MotionSettings) (motion.MotionTarg
 // motionState returns a UI-facing snapshot; the "available" flag lets the
 // frontend show an honest "motion unavailable" state instead of guessing.
 func (s *Server) motionState() any {
+	s.observations.motionMu.Lock()
+	defer s.observations.motionMu.Unlock()
+	state := s.motionStateValue()
+	state["observation"] = s.observationStamp()
+	return state
+}
+
+func (s *Server) motionStateValue() map[string]any {
 	if engine := s.currentMotionEngine(); engine != nil {
 		snapshot := engine.Snapshot()
 		if snapshot.Running || snapshot.Paused || snapshot.Completing {
@@ -107,29 +116,24 @@ func (s *Server) motionState() any {
 	}
 }
 
-func (s *Server) handleMotionState(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.motionState())
+func (s *Server) handleMotionState(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.clientMotionState(r))
 }
 
 func (s *Server) handleMotionEvents(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
+	_, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, errors.New("streaming responses are unavailable"))
 		return
 	}
 
-	clientID := clientIDFromRequest(r)
 	setSSEHeaders(w)
 	w.WriteHeader(http.StatusOK)
 
 	emit := func() bool {
-		if clientID != "" {
-			s.controller.Touch(clientID)
-		}
-		if err := writeSSE(w, "motion", s.motionState()); err != nil {
+		if err := writeSSE(w, "motion", s.clientMotionState(r)); err != nil {
 			return false
 		}
-		flusher.Flush()
 		return true
 	}
 	if !emit() {
@@ -187,19 +191,23 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 	}
 	defer finishModeStop()
 	if state, err := s.stopActiveMotionForReplacement(r.Context(), "manual_test_replace"); err != nil {
-		s.writeMotionResult(w, state, err)
+		s.writeMotionResult(w, r, state, err)
 		return
 	}
 	finishModeStop()
 	// A canceled mode operation can publish its engine while being drained.
 	// Recheck after the drain so manual testing never races a late mode start.
 	if state, err := s.stopActiveMotionForReplacement(r.Context(), "manual_test_replace"); err != nil {
-		s.writeMotionResult(w, state, err)
+		s.writeMotionResult(w, r, state, err)
 		return
 	}
 	engine, admission, err := s.motionEngineForStart()
 	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, errors.New(s.safeMotionErrorMessage(err)))
+		message := s.safeMotionErrorMessage(err)
+		if !s.capabilities(r).ConfigureHost {
+			message = clientFailure(message)
+		}
+		writeError(w, http.StatusServiceUnavailable, errors.New(message))
 		return
 	}
 	settings, _ = s.store.Snapshot()
@@ -215,7 +223,7 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state, err := engine.StartAtGeneration(r.Context(), target, settings.Motion, admission)
-	s.writeMotionResult(w, state, err)
+	s.writeMotionResult(w, r, state, err)
 }
 
 func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
@@ -253,7 +261,7 @@ func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	updated, err := engine.ApplyTarget(r.Context(), target, "ui_target")
-	s.writeMotionResult(w, updated, err)
+	s.writeMotionResult(w, r, updated, err)
 }
 
 // handleMotionQuick patches motion settings (speed/stroke/direction), persists
@@ -275,6 +283,10 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if body.HandyModel != nil && !s.capabilities(r).ConfigureHost {
+		writeError(w, http.StatusForbidden, errors.New(administratorHostAccessRequired))
 		return
 	}
 
@@ -311,7 +323,7 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 
 	payload := map[string]any{"motion": saved.Public().Motion}
 	if engine := s.currentMotionEngine(); engine != nil {
-		payload["engine"] = engine.Snapshot()
+		payload["engine"] = s.clientMotionSnapshot(r, engine.Snapshot())
 	}
 	status := http.StatusOK
 	if refreshErr != nil {
@@ -322,6 +334,7 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 }
 
 type emergencyStopResult struct {
+	pending            bool
 	state              motion.ActiveMotionState
 	transportResult    transport.CommandResult
 	engineAvailable    bool
@@ -333,9 +346,16 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEmergencyStop(w http.ResponseWriter, r *http.Request, reason string) {
-	outcome, err := s.emergencyStop(r.Context(), reason)
+	finishUnreadBody(w, r)
+	outcome, err := s.emergencyStopWithAdmission(r.Context(), reason, &s.stopAdmission)
+	if s.auth.authenticationRequired() || outcome.pending {
+		s.writePublicStopResult(w, outcome, err)
+		return
+	}
 	if outcome.engineAvailable {
-		s.writeMotionResult(w, outcome.state, err)
+		bounded := &contentResponseWriter{ResponseWriter: w, ctx: context.Background()}
+		s.writeMotionResult(bounded, r, outcome.state, err)
+		bounded.finish()
 		return
 	}
 
@@ -355,13 +375,38 @@ func (s *Server) handleEmergencyStop(w http.ResponseWriter, r *http.Request, rea
 			payload["error"] = "stop could not reach the configured transport: " + s.safeMotionErrorMessage(err)
 		}
 	}
-	writeJSON(w, status, payload)
+	writeBoundedJSON(w, status, payload)
 }
 
-func (s *Server) emergencyStop(ctx context.Context, reason string) (emergencyStopResult, error) {
-	finishStop := s.beginGlobalStop(reason)
-	defer finishStop()
+func (s *Server) emergencyStop(ctx context.Context, reason string) (outcome emergencyStopResult, err error) {
+	return s.emergencyStopWithAdmission(ctx, reason, nil)
+}
 
+func (s *Server) emergencyStopWithAdmission(ctx context.Context, reason string, admission *stopAdmissionRuntime) (outcome emergencyStopResult, err error) {
+	var sequence uint64
+	defer func() {
+		result := "success"
+		if _, confirmed := stopConfirmation(outcome, err); !confirmed {
+			result = "unconfirmed"
+		}
+		s.recordAccessEvent(ctx, audit.Event{Kind: audit.StopFinished, Outcome: result, Operation: auditStopOperation(reason), StopSequence: sequence})
+	}()
+	finishStop, sequence := s.beginGlobalStop(reason, ctx)
+	defer finishStop()
+	var request *stopAdmission
+	if admission != nil {
+		// Invalidate before choosing a shared operation. A request delayed
+		// before invalidation cannot reuse a Stop from before a newer Start.
+		request = admission.enter()
+		defer request.release()
+		if !request.leader {
+			return request.await(ctx)
+		}
+	}
+	return s.dispatchEmergencyStop(ctx, reason, request)
+}
+
+func (s *Server) dispatchEmergencyStop(ctx context.Context, reason string, request *stopAdmission) (outcome emergencyStopResult, err error) {
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
 
@@ -370,6 +415,9 @@ func (s *Server) emergencyStop(ctx context.Context, reason string) (emergencySto
 	// that decision and physical Stop.
 	s.motion.lifecycleMu.Lock()
 	defer s.motion.lifecycleMu.Unlock()
+	if request != nil {
+		defer func() { request.complete(outcome, err) }()
+	}
 	engine := s.currentMotionEngine()
 	if engine != nil {
 		state, err := engine.Stop(stopCtx, reason)
@@ -383,10 +431,10 @@ func (s *Server) emergencyStop(ctx context.Context, reason string) (emergencySto
 	}, err
 }
 
-func (s *Server) beginGlobalStop(reason string) func() {
+func (s *Server) beginGlobalStop(reason string, origins ...context.Context) (func(), uint64) {
 	// Publish every emergency-stop activation, including repeated idle stops,
 	// so browser-owned capture can discard pending speech in every client.
-	finishInvalidation := s.invalidateWorkForStop(reason)
+	finishInvalidation, sequence := s.invalidateWorkForStop(reason, origins...)
 	// Mark autonomous modes stopped before touching the engine, but drain their
 	// goroutine only after Engine.Stop has canceled any blocked mode startup.
 	finishModeStop := func() {}
@@ -399,7 +447,7 @@ func (s *Server) beginGlobalStop(reason string) func() {
 			finishModeStop()
 			finishInvalidation()
 		})
-	}
+	}, sequence
 }
 
 func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (transport.CommandResult, error) {
@@ -419,8 +467,16 @@ func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (tran
 	return result, stopErr
 }
 
-func (s *Server) invalidateWorkForStop(reason string) func() {
-	s.stopSequence.Add(1)
+func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context) (func(), uint64) {
+	// Let the stop-causing request deliver its acknowledgement. Every other
+	// request admitted under the old protected generation is canceled.
+	for _, origin := range origins {
+		if detach, ok := origin.Value(controllerCancellationKey{}).(func() bool); ok {
+			detach()
+		}
+	}
+	s.controller.AdvanceStopGeneration()
+	sequence := s.stopSequence.Add(1)
 	finishLab := s.cancelLabSession()
 	if s.mediaSync != nil {
 		s.mediaSync.Invalidate(reason)
@@ -438,7 +494,7 @@ func (s *Server) invalidateWorkForStop(reason string) func() {
 		finishLab()
 		s.voice.CancelInvalidated(voice.RoleASR, pendingASR)
 		s.voice.CancelInvalidated(voice.RoleTTS, pendingTTS)
-	}
+	}, sequence
 }
 
 func (s *Server) newSelectedStopTransport() (transport.Transport, error) {
@@ -467,12 +523,12 @@ func (s *Server) handleMotionPause(w http.ResponseWriter, r *http.Request) {
 	}
 	if !admitted {
 		finishModePause(false)
-		s.writeMotionResult(w, engine.Snapshot(), nil)
+		s.writeMotionResult(w, r, engine.Snapshot(), nil)
 		return
 	}
 	state, err := engine.Pause(r.Context(), "ui_pause")
 	finishModePause(state.Paused)
-	s.writeMotionResult(w, state, err)
+	s.writeMotionResult(w, r, state, err)
 }
 
 func (s *Server) handleMotionResume(w http.ResponseWriter, r *http.Request) {
@@ -488,23 +544,26 @@ func (s *Server) handleMotionResume(w http.ResponseWriter, r *http.Request) {
 	}
 	if !admitted {
 		finishModeResume(false)
-		s.writeMotionResult(w, engine.Snapshot(), nil)
+		s.writeMotionResult(w, r, engine.Snapshot(), nil)
 		return
 	}
 	state, err := engine.Resume(r.Context(), "ui_resume")
 	finishModeResume(err == nil && state.Running && !state.Paused)
-	s.writeMotionResult(w, state, err)
+	s.writeMotionResult(w, r, state, err)
 }
 
 // writeMotionResult always returns the resolved engine state so the UI can
 // reconcile optimistic controls, and reports transport failures as 502 with the
 // state attached rather than a bare error.
-func (s *Server) writeMotionResult(w http.ResponseWriter, state motion.ActiveMotionState, err error) {
+func (s *Server) writeMotionResult(w http.ResponseWriter, r *http.Request, state motion.ActiveMotionState, err error) {
 	status := http.StatusOK
-	payload := map[string]any{"available": true, "engine": state}
+	payload := map[string]any{"available": true, "engine": s.clientMotionSnapshot(r, state)}
 	if err != nil {
 		status = http.StatusBadGateway
 		payload["error"] = s.safeMotionErrorMessage(err)
+		if !s.capabilities(r).ConfigureHost {
+			payload["error"] = administratorDetails
+		}
 	}
 	writeJSON(w, status, payload)
 }
@@ -548,7 +607,7 @@ func (s *Server) updateSettingsAndRuntime(
 	s.settingsLifecycleMu.Lock()
 	defer s.settingsLifecycleMu.Unlock()
 
-	previous, saved, saveErr = s.store.Update(mutate)
+	previous, saved, saveErr = s.store.UpdateContext(ctx, mutate)
 	if saveErr != nil {
 		return previous, saved, saveErr, nil
 	}
@@ -720,7 +779,7 @@ func (s *Server) Quiesce() {
 		if s.lifecycleCancel != nil {
 			s.lifecycleCancel()
 		}
-		finishInvalidation := s.invalidateWorkForStop("server_shutdown")
+		finishInvalidation, _ := s.invalidateWorkForStop("server_shutdown")
 		defer finishInvalidation()
 		if s.mediaSync != nil {
 			s.mediaSync.Shutdown()
@@ -740,6 +799,7 @@ func (s *Server) Quiesce() {
 func (s *Server) Close() {
 	s.closeOnce.Do(func() {
 		s.Quiesce()
+		s.closeAccessWorkers()
 		s.stopLLMAutoload()
 		if s.setup != nil {
 			s.setup.Close()
@@ -774,6 +834,13 @@ func (s *Server) Close() {
 			_ = s.personas.Close()
 		}
 		s.personalization.Close()
+		if s.traceArchive != nil {
+			s.traceArchive.close()
+		}
+		if s.accessAudit != nil {
+			s.recordAccessEvent(context.Background(), audit.Event{Kind: audit.ServerStopped, Outcome: "success", Operation: "shutdown", StopSequence: s.stopSequence.Load()})
+			s.accessAudit.Close()
+		}
 		if s.store != nil {
 			_ = s.store.Close()
 		}

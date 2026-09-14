@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { MotionSettings } from "../api/types";
 import { QuickSettings } from "./QuickSettings";
+import { ApplicationAudience } from "../state/application-audience";
 
 const app = vi.hoisted(() => ({
+  hostAdministration: true,
   motion: null as MotionSettings | null,
   refresh: vi.fn(),
   show: vi.fn(),
@@ -16,7 +18,7 @@ vi.mock("../api/client", () => ({
 
 vi.mock("../state/app-state", () => ({
   useAppState: () => ({
-    state: { settings: { motion: app.motion, options: { handy_models: ["handy_original", "handy_2_standard", "handy_2_pro"] } } },
+    state: { capabilities: { configure_host: app.hostAdministration }, settings: { motion: app.motion, options: { handy_models: ["handy_original", "handy_2_standard", "handy_2_pro"] } } },
     backendOnline: true,
     readOnly: false,
     refresh: app.refresh,
@@ -38,6 +40,7 @@ const initialMotion: MotionSettings = {
 
 describe("QuickSettings", () => {
   beforeEach(() => {
+    app.hostAdministration = true;
     vi.useFakeTimers();
     app.motion = { ...initialMotion };
     app.refresh.mockReset();
@@ -47,6 +50,23 @@ describe("QuickSettings", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("lets a granted operator adjust speed while locking physical device calibration", async () => {
+    app.hostAdministration = false;
+    applyQuick.mockResolvedValue(undefined);
+    const view = render(<QuickSettings section="connection" />);
+    const model = screen.getByRole("radiogroup", { name: "Handy model" });
+    for (const radio of within(model).getAllByRole("radio")) expect(radio).toBeDisabled();
+    fireEvent.click(within(model).getByRole("radio", { name: "2 Pro" }));
+    await act(async () => vi.advanceTimersByTimeAsync(180));
+    expect(applyQuick).not.toHaveBeenCalled();
+    view.rerender(<QuickSettings section="limits" />);
+    const minimum = screen.getByRole("slider", { name: "Speed minimum" });
+    expect(minimum).toBeEnabled();
+    fireEvent.change(minimum, { target: { value: "20" } });
+    await act(async () => vi.advanceTimersByTimeAsync(180));
+    expect(applyQuick).toHaveBeenCalledWith({ speed_min_percent: 20 });
   });
 
   it("does not let stale polls overwrite an unconfirmed local edit", async () => {
@@ -147,6 +167,22 @@ describe("QuickSettings", () => {
 
     expect(screen.getByRole("slider", { name: "Speed minimum" })).toHaveValue("10");
     expect(app.show).toHaveBeenCalledWith("backend rejected the range", "error");
+  });
+
+  it.each([false, true])("discards queued edits when the login ends (in-flight: %s)", async (inFlight) => {
+    let complete!: () => void;
+    applyQuick.mockImplementationOnce(() => new Promise<void>((resolve) => { complete = resolve; }));
+    const view = render(<ApplicationAudience key="old-login"><QuickSettings section="limits" /></ApplicationAudience>);
+    fireEvent.change(screen.getByRole("slider", { name: "Speed minimum" }), { target: { value: "20" } });
+    if (inFlight) await act(async () => vi.advanceTimersByTimeAsync(180));
+    fireEvent.change(screen.getByRole("slider", { name: "Speed maximum" }), { target: { value: "35" } });
+    view.rerender(<ApplicationAudience key="new-login"><QuickSettings section="limits" /></ApplicationAudience>);
+    await act(async () => {
+      if (inFlight) complete();
+      await vi.advanceTimersByTimeAsync(180);
+    });
+    expect(applyQuick).toHaveBeenCalledTimes(inFlight ? 1 : 0);
+    expect(screen.getByRole("slider", { name: "Speed maximum" })).toHaveValue("40");
   });
 
   it("flushes a pending edit on unmount", async () => {

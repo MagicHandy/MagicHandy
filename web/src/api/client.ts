@@ -2,6 +2,7 @@
 // client ID so the backend controller lease can pick one active controller;
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
+import type { AccessAuditPage } from "./audit-types";
 import type {
   AppState,
   AutopilotSettings,
@@ -13,12 +14,14 @@ import type {
   BluetoothClientStatus,
   BluetoothCommandsResponse,
   BluetoothStatusResponse,
+  BluetoothGatewaySnapshot,
   IntifaceTransportSnapshot,
   ChatMessagesResponse,
   ChatSessionsResponse,
   ConnectionCheckResult,
   CloudDisconnectResponse,
   ControllerTakeoverResponse,
+  ControllerSnapshot,
   PromptSetsPayload,
   PatternInput,
   PatternLibrary,
@@ -58,9 +61,14 @@ import type {
   VoiceState,
   VoiceWorkerStatus,
   AuthenticationStatus,
+  ManagedSessionsResponse,
   UserAccount,
   AccountRole,
   ControlIdentity,
+  ControlGrant,
+  NetworkConfig,
+  NetworkStatus,
+  CommandReceipt,
 } from "./types";
 
 
@@ -124,6 +132,58 @@ export const clientId = resolveControllerClientID(browserSessionStorage(), brows
 
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
 export const AUTHENTICATION_REQUIRED_EVENT = "magichandy:authentication-required";
+export const COMMAND_RECOVERED_EVENT = "magichandy:command-recovered";
+
+// Transport metadata copied from backend snapshots. It never grants local
+// ownership; the server independently checks session, tab and generation.
+let controlGeneration: number | undefined;
+let controlEpoch: string | undefined;
+let controlRevision: number | undefined;
+let controllerResponseOrder = 0;
+let requestOrder = 0;
+let commandTicket: string | undefined;
+let commandSequence = 0;
+
+function controllerRequestHeaders(delivery = true): Record<string, string> {
+  return {
+    [CLIENT_HEADER]: clientId,
+    ...(controlGeneration === undefined ? {} : { "X-MagicHandy-Control-Generation": String(controlGeneration) }),
+    ...(controlEpoch === undefined ? {} : { "X-MagicHandy-Control-Epoch": controlEpoch }),
+    ...(!delivery || commandTicket === undefined ? {} : {
+      "X-MagicHandy-Command-Ticket": commandTicket,
+      "X-MagicHandy-Command-ID": newControllerClientID(),
+      "X-MagicHandy-Command-Sequence": String(++commandSequence),
+    }),
+  };
+}
+
+function rememberControllerResponse(value: unknown, order: number): void {
+  if (!value || typeof value !== "object") return;
+  const candidate = "controller" in value ? value.controller : value;
+  if (!candidate || typeof candidate !== "object" || !("heartbeat_required" in candidate)) return;
+  const epoch = "epoch" in candidate && typeof candidate.epoch === "string" ? candidate.epoch : undefined;
+  const revision = "revision" in candidate && typeof candidate.revision === "number" && Number.isSafeInteger(candidate.revision)
+    ? candidate.revision : undefined;
+  if (epoch === controlEpoch && revision !== undefined && controlRevision !== undefined) {
+    if (revision < controlRevision) return;
+  } else if (order < controllerResponseOrder) return;
+  const generation = candidate.heartbeat_required === true && "generation" in candidate &&
+    typeof candidate.generation === "number" && Number.isSafeInteger(candidate.generation)
+    ? candidate.generation : undefined;
+  const scopeChanged = epoch !== controlEpoch || generation !== controlGeneration;
+  if (epoch === controlEpoch && generation !== undefined && controlGeneration !== undefined && generation < controlGeneration) return;
+  controllerResponseOrder = Math.max(order, controllerResponseOrder);
+  controlRevision = revision;
+  controlGeneration = epoch === controlEpoch && generation !== undefined && controlGeneration !== undefined
+    ? Math.max(generation, controlGeneration) : generation;
+  controlEpoch = generation === undefined ? undefined : epoch;
+  commandTicket = generation !== undefined && "command_ticket" in candidate && typeof candidate.command_ticket === "string"
+    ? candidate.command_ticket : undefined;
+  if (scopeChanged) commandSequence = 0;
+  if ("command_sequence" in candidate && typeof candidate.command_sequence === "number" && Number.isSafeInteger(candidate.command_sequence)) {
+    commandSequence = Math.max(commandSequence, candidate.command_sequence);
+  }
+}
 
 export async function request<T>(
   method: string,
@@ -133,16 +193,28 @@ export async function request<T>(
   extraHeaders?: Record<string, string>,
   keepalive = false,
 ): Promise<T> {
-  const headers: Record<string, string> = { Accept: "application/json", [CLIENT_HEADER]: clientId, ...extraHeaders };
+  const order = ++requestOrder;
+  const delivery = method !== "GET" && method !== "HEAD" && !stopDeliveryPath(path) &&
+    path !== "/api/chat/cursor" &&
+    !/^\/api\/transport\/bluetooth\/(?:status|ack)$/.test(path) &&
+    !(path === "/api/transport/bluetooth/disconnect" && extraHeaders?.["X-MagicHandy-Gateway-Generation"]) &&
+    !/^\/api\/(?:auth|accounts|network|controller)(?:\/|$)/.test(path);
+  const headers: Record<string, string> = { Accept: "application/json", ...controllerRequestHeaders(delivery), ...extraHeaders };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetch(path, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal,
-    keepalive,
-  });
-  const text = await res.text();
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(path, {
+      method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal, keepalive,
+    });
+    text = await res.text();
+    if (signal?.aborted) throw new DOMException("Request aborted", "AbortError");
+  } catch (reason) {
+    if (headers["X-MagicHandy-Command-ID"] && method !== "GET" && method !== "HEAD" && !signal?.aborted && !stopDeliveryPath(path)) {
+      return recoverCommandResponse<T>(headers["X-MagicHandy-Command-ID"]);
+    }
+    throw reason;
+  }
   let parsed: unknown = null;
   if (text) {
     try {
@@ -153,6 +225,10 @@ export async function request<T>(
   }
   if (!res.ok) {
     if (res.status === 401 && !path.startsWith("/api/auth/")) {
+      controlGeneration = undefined;
+      controlEpoch = undefined;
+      controlRevision = undefined;
+      commandTicket = undefined;
       window.dispatchEvent(new Event(AUTHENTICATION_REQUIRED_EVENT));
     }
     let message = `Request failed (${res.status})`;
@@ -161,14 +237,48 @@ export async function request<T>(
     }
     throw new ApiError(message, res.status, parsed);
   }
+  rememberControllerResponse(parsed, order);
   return parsed as T;
+}
+
+function stopDeliveryPath(path: string): boolean {
+  return ["/api/motion/stop", "/api/transport/cloud/stop", "/api/transport/bluetooth/stop"].includes(path);
+}
+
+async function recoverCommandResponse<T>(id: string): Promise<T> {
+  const abort = new AbortController();
+  const timeout = window.setTimeout(() => abort.abort(), 3000);
+  try {
+    const response = await fetch(`/api/controller/commands/${encodeURIComponent(id)}`, {
+      method: "GET", headers: { Accept: "application/json", [CLIENT_HEADER]: clientId }, signal: abort.signal,
+    });
+    if (!response.ok) throw new Error("No retained command receipt");
+    const receipt = JSON.parse(await response.text()) as CommandReceipt;
+    if (receipt.state !== "complete" || !receipt.replayable || !receipt.http_status) {
+      throw new Error("The original request has no replayable result");
+    }
+    window.dispatchEvent(new Event(COMMAND_RECOVERED_EVENT));
+    if (receipt.http_status < 200 || receipt.http_status >= 300) {
+      const payload = receipt.response;
+      const message = payload && typeof payload === "object" && "error" in payload ? String(payload.error) : `Request failed (${receipt.http_status})`;
+      throw new ApiError(message, receipt.http_status, payload);
+    }
+    return (receipt.response ?? null) as T;
+  } catch (reason) {
+    if (reason instanceof ApiError) throw reason;
+    // A query is safe after response loss. Re-sending the mutation with a new
+    // ID would turn an unknown outcome into possible duplicate execution.
+    throw new ApiError("The command outcome is unconfirmed. Check the current state or use Stop before trying again.", 0, { command_id: id });
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 async function uploadVoiceTranscription(audio: Blob, format: string, stopSequence?: number, signal?: AbortSignal): Promise<{ request: VoiceRequestSnapshot }> {
   const headers: Record<string, string> = {
     Accept: "application/json",
     "Content-Type": `audio/${format}`,
-    [CLIENT_HEADER]: clientId,
+    ...controllerRequestHeaders(),
   };
   if (stopSequence !== undefined) headers["X-MagicHandy-Stop-Sequence"] = String(stopSequence);
   const res = await fetch("/api/voice/transcriptions", {
@@ -201,7 +311,7 @@ async function uploadVoiceTranscription(audio: Blob, format: string, stopSequenc
 async function uploadThumbnail(id: string, image: Blob): Promise<{ status: string }> {
   const res = await fetch(`/api/media/videos/${encodeURIComponent(id)}/thumbnail`, {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "image/jpeg", [CLIENT_HEADER]: clientId },
+    headers: { Accept: "application/json", "Content-Type": "image/jpeg", ...controllerRequestHeaders() },
     body: image,
   });
   const text = await res.text();
@@ -228,7 +338,7 @@ async function uploadThumbnail(id: string, image: Blob): Promise<{ status: strin
 async function uploadPortrait(id: string, image: Blob): Promise<PersonasPayload> {
   const res = await fetch(`/api/personas/${encodeURIComponent(id)}/portrait`, {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "image/jpeg", [CLIENT_HEADER]: clientId },
+    headers: { Accept: "application/json", "Content-Type": "image/jpeg", ...controllerRequestHeaders() },
     body: image,
   });
   const text = await res.text();
@@ -253,7 +363,7 @@ async function uploadAccountProfileImage(image: Blob): Promise<{ account: UserAc
   const path = "/api/auth/profile-image";
   const res = await fetch(path, {
     method: "PUT",
-    headers: { Accept: "application/json", "Content-Type": "image/jpeg", [CLIENT_HEADER]: clientId },
+    headers: { Accept: "application/json", "Content-Type": "image/jpeg", ...controllerRequestHeaders() },
     body: image,
   });
   const text = await res.text();
@@ -281,7 +391,7 @@ async function uploadPersonaArchive(file: File): Promise<PersonasPayload> {
     headers: {
       Accept: "application/json",
       "Content-Type": "application/vnd.magichandy.persona+zip",
-      [CLIENT_HEADER]: clientId,
+      ...controllerRequestHeaders(),
     },
     body: file,
   });
@@ -374,6 +484,8 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  accessAudit: (before = 0, signal?: AbortSignal) => request<AccessAuditPage>("GET", `/api/audit?before=${before}`, undefined, signal),
+  exportAccessAudit: (before: number, signal?: AbortSignal) => request<AccessAuditPage>("GET", `/api/audit/export?before=${before}`, undefined, signal),
   // Authentication. The HttpOnly session token never enters React; these
   // methods only exchange credentials for backend-owned cookie state.
   authStatus: (signal?: AbortSignal) =>
@@ -383,9 +495,20 @@ export const api = {
   authBootstrap: (username: string, password: string) =>
     request<{ account: UserAccount }>("POST", "/api/auth/bootstrap", { username, password }),
   authLogout: () => request<null>("POST", "/api/auth/logout", {}),
+  authSessions: (signal?: AbortSignal) => request<ManagedSessionsResponse>("GET", "/api/auth/sessions", undefined, signal),
+  renameSession: (id: string, name: string, signal?: AbortSignal) => request<{ updated: boolean }>("PATCH", `/api/auth/sessions/${encodeURIComponent(id)}`, { name }, signal),
+  revokeSession: (id: string, signal?: AbortSignal) => request<{ revoked: number; current_revoked: boolean }>("DELETE", `/api/auth/sessions/${encodeURIComponent(id)}`, undefined, signal),
+  revokeOtherSessions: (signal?: AbortSignal) => request<{ revoked: number; current_revoked: boolean }>("DELETE", "/api/auth/sessions", undefined, signal),
   authChangePassword: (currentPassword: string, newPassword: string) =>
     request<null>("PUT", "/api/auth/password", { current_password: currentPassword, new_password: newPassword }),
   accounts: () => request<{ accounts: UserAccount[] }>("GET", "/api/accounts"),
+  controlGrant: (id: string) => request<{ grant: ControlGrant | null }>("GET", `/api/accounts/${encodeURIComponent(id)}/control-grant`),
+  grantControl: (id: string, duration_minutes: number) => request<{ grant: ControlGrant }>("PUT", `/api/accounts/${encodeURIComponent(id)}/control-grant`, { duration_minutes }),
+  revokeControl: (id: string) => request<{ grant: null }>("DELETE", `/api/accounts/${encodeURIComponent(id)}/control-grant`),
+  networkStatus: (signal?: AbortSignal) => request<NetworkStatus>("GET", "/api/network", undefined, signal),
+  validateNetwork: (config: NetworkConfig) => request<{ valid: boolean; config: NetworkConfig; message: string }>("POST", "/api/network/validate", { config }),
+  saveNetwork: (config: NetworkConfig, password: string) => request<{ restart_required: boolean }>("PUT", "/api/network", { config, password }),
+  networkReport: () => request<Record<string, unknown>>("GET", "/api/network/report"),
   createAccount: (username: string, password: string, role: AccountRole) =>
     request<{ account: UserAccount }>("POST", "/api/accounts", { username, password, role }),
   resetAccountPassword: (id: string, password: string) =>
@@ -403,7 +526,10 @@ export const api = {
   deleteAccountProfileImage: () => request<{ account: UserAccount }>("DELETE", "/api/auth/profile-image"),
 
   getState: (signal?: AbortSignal) => request<AppState>("GET", "/api/state", undefined, signal),
+  controllerState: (signal?: AbortSignal) => request<ControllerSnapshot>("GET", "/api/controller", undefined, signal),
   takeControl: () => request<ControllerTakeoverResponse>("POST", "/api/controller/takeover", {}),
+  controllerHeartbeat: (signal?: AbortSignal) => request<ControllerSnapshot>("POST", "/api/controller/heartbeat", {}, signal),
+  commandReceipt: (id: string, signal?: AbortSignal) => request<CommandReceipt>("GET", `/api/controller/commands/${encodeURIComponent(id)}`, undefined, signal),
 
   // Motion — semantic commands only.
   stopMotion: () => request<{ error?: string }>("POST", "/api/motion/stop", {}),
@@ -656,23 +782,23 @@ export const api = {
   // Browser Bluetooth bridge. React owns only the browser/device session; all
   // motion commands still come from backend bridge commands.
   bluetoothStatus: () => request<BluetoothStatusResponse>("GET", "/api/transport/bluetooth/status"),
-  postBluetoothStatus: (status: BluetoothClientStatus) =>
-    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/status", status),
+  postBluetoothStatus: (status: BluetoothClientStatus, gateway?: BluetoothGatewaySnapshot) =>
+    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/status", status, undefined, bluetoothGatewayHeaders(gateway)),
   bluetoothConnect: (status: BluetoothClientStatus) =>
     request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/connect", status),
-  bluetoothDisconnect: (client_id: string, message?: string) =>
-    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/disconnect", { client_id, message }),
-  bluetoothCommands: (bridgeClientId: string, waitSeconds: number, signal?: AbortSignal) =>
-    requestWithSignal<BluetoothCommandsResponse>(
+  bluetoothDisconnect: (client_id: string, message?: string, gateway?: BluetoothGatewaySnapshot) =>
+    request<BluetoothStatusResponse>("POST", "/api/transport/bluetooth/disconnect", { client_id, message }, undefined, bluetoothGatewayHeaders(gateway)),
+  bluetoothCommands: (bridgeClientId: string, waitSeconds: number, signal?: AbortSignal, gateway?: BluetoothGatewaySnapshot) =>
+    request<BluetoothCommandsResponse>(
       "GET",
       `/api/transport/bluetooth/commands?client_id=${encodeURIComponent(bridgeClientId)}&wait=${waitSeconds}`,
-      signal,
+      undefined, signal, bluetoothGatewayHeaders(gateway),
     ),
-  bluetoothAck: (bridgeClientId: string, payload: BluetoothAckPayload) =>
+  bluetoothAck: (bridgeClientId: string, payload: BluetoothAckPayload, gateway?: BluetoothGatewaySnapshot) =>
     request<{ status: string; bluetooth: BluetoothStatusResponse["bluetooth"] }>("POST", "/api/transport/bluetooth/ack", {
       client_id: bridgeClientId,
       ...payload,
-    }),
+    }, undefined, bluetoothGatewayHeaders(gateway)),
 
   // Backend-owned chat sessions and their non-destructive per-client cursors.
   getChatSessions: () => request<ChatSessionsResponse>("GET", "/api/chat/sessions"),
@@ -686,13 +812,21 @@ export const api = {
     request<ChatSessionsResponse>("PUT", `/api/chat/sessions/${encodeURIComponent(sessionId)}/save`, {}),
   deleteChatSession: (sessionId: string) =>
     request<ChatSessionsResponse>("DELETE", `/api/chat/sessions/${encodeURIComponent(sessionId)}`),
-  getChatMessages: (sessionId: string, after = 0) => {
+  getChatMessages: (sessionId: string, after = 0, recovery?: { revision?: number; snapshot?: ChatMessagesResponse["snapshot"]; signal?: AbortSignal }) => {
     const query = new URLSearchParams({ session_id: sessionId });
-    if (after > 0) query.set("after", String(after));
-    return request<ChatMessagesResponse>("GET", `/api/chat/messages?${query.toString()}`);
+    if (recovery?.revision !== undefined) query.set("after_revision", String(recovery.revision));
+    else if (after > 0) query.set("after", String(after));
+    if (recovery?.snapshot) {
+      query.set("snapshot_revision", String(recovery.snapshot.revision));
+      query.set("snapshot_pruned_revision", String(recovery.snapshot.pruned_revision));
+      query.set("snapshot_first_seq", String(recovery.snapshot.first_seq));
+    }
+    return request<ChatMessagesResponse>("GET", `/api/chat/messages?${query.toString()}`, undefined, recovery?.signal);
   },
-  advanceChatCursor: (sessionId: string, seq: number) =>
-    request<{ cursor: number; session_id: string }>("POST", "/api/chat/cursor", { session_id: sessionId, seq }),
+  advanceChatCursor: (sessionId: string, seq: number, recovery?: { revision?: number; epoch?: string; signal?: AbortSignal }) =>
+    request<{ cursor: number; cursor_revision?: number; session_id: string }>("POST", "/api/chat/cursor", {
+      session_id: sessionId, seq, revision: recovery?.revision, server_epoch: recovery?.epoch,
+    }, recovery?.signal),
 
   // Voice workers (optional; the app runs fully without them).
   voiceStatus: () =>
@@ -735,7 +869,7 @@ export const api = {
       "GET", `/api/voice/requests/${encodeURIComponent(id)}/audio-chunk?offset=${offset}`, undefined, signal),
   voiceRequestAudio: async (id: string, signal?: AbortSignal): Promise<Blob> => {
     const res = await fetch(`/api/voice/requests/${encodeURIComponent(id)}/audio`, {
-      headers: { [CLIENT_HEADER]: clientId },
+      headers: { ...controllerRequestHeaders() },
       signal,
     });
     if (!res.ok) throw new ApiError(`Audio fetch failed (${res.status})`, res.status, null);
@@ -750,7 +884,7 @@ async function importMotionContent(file: File, asKind: "pattern" | "program"): P
   const path = `/api/library/import?filename=${encodeURIComponent(file.name)}&as=${asKind}`;
   const res = await fetch(path, {
     method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json", [CLIENT_HEADER]: clientId },
+    headers: { Accept: "application/json", "Content-Type": "application/json", ...controllerRequestHeaders() },
     body: file,
   });
   const text = await res.text();
@@ -770,29 +904,19 @@ async function importMotionContent(file: File, asKind: "pattern" | "program"): P
 }
 
 async function download(path: string, fallbackFilename = "motion-content.json"): Promise<{ blob: Blob; filename: string }> {
-  const res = await fetch(path, { headers: { [CLIENT_HEADER]: clientId } });
+  const res = await fetch(path, { headers: { ...controllerRequestHeaders() } });
   if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status, null);
   const disposition = res.headers.get("Content-Disposition") ?? "";
   const match = disposition.match(/filename="?([^";]+)"?/i);
   return { blob: await res.blob(), filename: match?.[1] ?? fallbackFilename };
 }
 
-async function requestWithSignal<T>(method: string, path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(path, { method, headers: { Accept: "application/json", [CLIENT_HEADER]: clientId }, signal });
-  const text = await res.text();
-  let parsed: unknown = null;
-  if (text) {
-    try {
-      parsed = JSON.parse(text) as unknown;
-    } catch {
-      parsed = { error: text };
-    }
+function bluetoothGatewayHeaders(gateway?: BluetoothGatewaySnapshot): Record<string, string> {
+  if (!gateway?.required) return {};
+  if (!gateway.owned || !gateway.epoch || !Number.isSafeInteger(gateway.generation) || gateway.generation! <= 0) {
+    throw new ApiError("Bluetooth gateway access ended; reconnect from the device browser.", 409, null);
   }
-  if (!res.ok) {
-    const message = parsed && typeof parsed === "object" && "error" in parsed ? String((parsed as { error: unknown }).error) : `Request failed (${res.status})`;
-    throw new ApiError(message, res.status, parsed);
-  }
-  return parsed as T;
+  return { "X-MagicHandy-Gateway-Epoch": gateway.epoch, "X-MagicHandy-Gateway-Generation": String(gateway.generation) };
 }
 
 // Chat is a POST SSE stream; parse named events off the response body.
@@ -803,7 +927,7 @@ export async function streamChat(
   signal?: AbortSignal,
   stopSequence?: number,
 ): Promise<void> {
-  const headers: Record<string, string> = { "Content-Type": "application/json", [CLIENT_HEADER]: clientId };
+  const headers: Record<string, string> = { "Content-Type": "application/json", ...controllerRequestHeaders() };
   if (stopSequence !== undefined) headers["X-MagicHandy-Stop-Sequence"] = String(stopSequence);
   const res = await fetch("/api/chat/stream", {
     method: "POST",

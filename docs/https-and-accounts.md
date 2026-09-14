@@ -11,10 +11,19 @@ selector. The product design is in
 [account-gui-design.md](account-gui-design.md). Every operation remains
 backend-authoritative through the JSON HTTP endpoints below.
 
-Architecture and threat-model decisions are in
-[ADR 0017](decisions/0017-authenticated-lan-https.md). Internet exposure,
-port forwarding, reverse-proxy hosting, automatic CA installation, and
-per-user partitioning of settings/chat/library data are not supported.
+The released legacy mode is described in
+[ADR 0017](decisions/0017-authenticated-lan-https.md). The in-progress LAN/WAN
+implementation adds explicit direct-HTTPS and trusted-proxy modes under
+[ADR 0029](decisions/0029-session-bound-network-control.md); their startup,
+permission and recovery contract is in [Self-hosted HTTPS](self-hosted-https.md).
+Full acceptance remains open. Automatic CA installation and per-user data
+partitioning are not provided.
+
+The [robust LAN/WAN control checklist](lan-wan-control-checklist.md) prioritizes
+the remaining authority, disconnect, revocation, streaming, setup and acceptance
+work. The legacy CLI contract below applies when no new network mode is saved
+or selected. The new deployment guide takes precedence for the new modes and
+the operator-permission migration.
 
 ## Modes and startup rules
 

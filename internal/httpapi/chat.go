@@ -64,12 +64,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		s.handleChatStopFastPath(w, r, body.SessionID, body.Message, settings.LLM)
 		return
 	}
+	if !s.requireController(w, r) {
+		return
+	}
 	sessionID, err := s.chatWorkspace.ResolveActive(r.Context(), body.SessionID)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
-		return
-	}
-	if !s.requireController(w, r) {
 		return
 	}
 	if strings.TrimSpace(r.Header.Get(stopSequenceHeader)) == "" {
@@ -111,7 +111,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	provider, err := s.prepareLLMProvider(settings.LLM)
 	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, err)
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": s.clientRuntimeError(r, err)})
 		return
 	}
 
@@ -158,7 +158,7 @@ func (s *Server) beginInteractiveChatStream(
 	message string,
 	promptContext interactiveChatPromptContext,
 ) (sseEmitter, bool) {
-	emit := sseEmitter(func(event string, payload any) error { return writeSSE(w, event, payload) })
+	emit := s.clientChatEmitter(w, r)
 	// Persist before starting SSE so canonical history failure cannot produce
 	// an untracked model turn. The seq rides the status event for client sync.
 	userSeq, err := s.chatLog.AppendTo(sessionID, chat.MessageRoleUser, message, clientIDFromRequest(r), nil)
@@ -576,6 +576,13 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 }
 
 func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
+	if command != nil && command.Action != "" && command.Action != chat.MotionActionNone && command.Action != chat.MotionActionStop {
+		release, err := s.beginDeferredMotion(ctx)
+		if err != nil {
+			return chatMotionDispatch{Action: command.Action}, err
+		}
+		defer release()
+	}
 	if stopSequence != nil && s.stopSequence.Load() != *stopSequence {
 		action := ""
 		if command != nil {
@@ -746,7 +753,7 @@ func (s *Server) notifyChatTarget(generation uint64, target motion.MotionTarget)
 }
 
 func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, requestedSessionID string, message string, settings config.LLMSettings) {
-	finishInvalidation := s.invalidateWorkForStop("chat_stop")
+	finishInvalidation, _ := s.invalidateWorkForStop("chat_stop", r.Context())
 	defer finishInvalidation()
 	command := &chat.MotionCommand{Action: chat.MotionActionStop}
 	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
@@ -766,9 +773,7 @@ func (s *Server) handleChatStopFastPath(w http.ResponseWriter, r *http.Request, 
 	sessionID, userSeq, replySeq := record.SessionID, record.UserSeq, record.ReplySeq
 	diagnostics = record.Diagnostics
 	setSSEHeaders(w)
-	emit := func(event string, payload any) error {
-		return writeSSE(w, event, payload)
-	}
+	emit := s.clientChatEmitter(w, r)
 	if err := emit("status", map[string]any{
 		"state":         "deterministic_stop",
 		"provider":      settings.Provider,
@@ -864,116 +869,8 @@ func (s *Server) chatState(ctx context.Context) map[string]any {
 	if state.CurrentMood != "" {
 		mood = state.CurrentMood
 	}
-	return map[string]any{"available": err == nil, "latest_seq": state.LatestSeq,
+	return map[string]any{"available": err == nil, "latest_seq": state.LatestSeq, "revision": state.Revision,
 		"active_session_id": state.ActiveSessionID, "current_mood": mood}
-}
-
-// handleChatMessages reads the shared log non-destructively. Reads never
-// consume anything: cursors only move via the explicit cursor endpoint.
-func (s *Server) handleChatMessages(w http.ResponseWriter, r *http.Request) {
-	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
-	if sessionID == "" {
-		var err error
-		sessionID, err = s.chatLog.ActiveSessionIDContext(r.Context())
-		if err != nil {
-			s.writeChatStorageError(w, err)
-			return
-		}
-	}
-	if _, err := s.chatLog.SessionContext(r.Context(), sessionID); err != nil {
-		s.writeChatSessionError(w, err)
-		return
-	}
-	after := int64(0)
-	if value := r.URL.Query().Get("after"); value != "" {
-		parsed, err := strconv.ParseInt(value, 10, 64)
-		if err != nil || parsed < 0 {
-			writeError(w, http.StatusBadRequest, errors.New("after must be a non-negative integer"))
-			return
-		}
-		after = parsed
-	}
-	limit := 0
-	if value := r.URL.Query().Get("limit"); value != "" {
-		parsed, err := strconv.Atoi(value)
-		if err != nil || parsed < 1 {
-			writeError(w, http.StatusBadRequest, errors.New("limit must be a positive integer"))
-			return
-		}
-		limit = parsed
-	}
-
-	// Autopilot appends the visible message before enqueuing TTS. Sharing this
-	// short lock with that delivery path prevents a client from observing and
-	// advancing past the row before its optional speech request ID is attached.
-	s.chatSpeechMu.Lock()
-	messages, err := s.chatLog.AfterSessionContext(r.Context(), sessionID, after, limit)
-	if err == nil {
-		for index := range messages {
-			messages[index].SpeechRequestID = s.chatSpeechRequests[messages[index].Seq]
-		}
-	}
-	s.chatSpeechMu.Unlock()
-	if err != nil {
-		s.writeChatStorageError(w, err)
-		return
-	}
-	latest, err := s.chatLog.LatestSeqSessionContext(r.Context(), sessionID)
-	if err != nil {
-		s.writeChatStorageError(w, err)
-		return
-	}
-	cursor, err := s.chatLog.CursorSessionContext(r.Context(), clientIDFromRequest(r), sessionID)
-	if err != nil {
-		s.writeChatStorageError(w, err)
-		return
-	}
-	if messages == nil {
-		messages = []chat.LogMessage{}
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"messages":   messages,
-		"latest_seq": latest,
-		"cursor":     cursor,
-		"session_id": sessionID,
-	})
-}
-
-// handleChatCursor advances the caller's own cursor (monotonic). Each client
-// owns exactly one cursor, so no controller lease is involved.
-func (s *Server) handleChatCursor(w http.ResponseWriter, r *http.Request) {
-	clientID := clientIDFromRequest(r)
-	if clientID == "" {
-		writeError(w, http.StatusBadRequest, errors.New("a client id header is required to advance a chat cursor"))
-		return
-	}
-	var body struct {
-		SessionID string `json:"session_id,omitempty"`
-		Seq       int64  `json:"seq"`
-	}
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	sessionID := strings.TrimSpace(body.SessionID)
-	if sessionID == "" {
-		var err error
-		sessionID, err = s.chatLog.ActiveSessionID()
-		if err != nil {
-			s.writeChatStorageError(w, err)
-			return
-		}
-	}
-	if _, err := s.chatLog.Session(sessionID); err != nil {
-		s.writeChatSessionError(w, err)
-		return
-	}
-	cursor, err := s.chatLog.AdvanceCursorSession(clientID, sessionID, body.Seq)
-	if err != nil {
-		s.writeChatStorageError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"cursor": cursor, "session_id": sessionID})
 }
 
 func (s *Server) writeChatStorageError(w http.ResponseWriter, err error) {
@@ -1263,6 +1160,13 @@ func setSSEHeaders(w http.ResponseWriter) {
 }
 
 func writeSSE(w http.ResponseWriter, event string, payload any) error {
+	controller := http.NewResponseController(w)
+	if err := controller.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return err
+	}
+	// Only the socket write is bounded. HTTP/2 deadlines otherwise terminate
+	// a healthy stream while a slow model is computing its next token.
+	defer func() { _ = controller.SetWriteDeadline(time.Time{}) }()
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode SSE payload: %w", err)
@@ -1270,8 +1174,8 @@ func writeSSE(w http.ResponseWriter, event string, payload any) error {
 	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, data); err != nil {
 		return err
 	}
-	if flusher, ok := w.(http.Flusher); ok {
-		flusher.Flush()
+	if err := controller.Flush(); err != nil && !errors.Is(err, http.ErrNotSupported) {
+		return err
 	}
 	return nil
 }

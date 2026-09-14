@@ -8,10 +8,14 @@ import japanese from "../i18n/locales/ja.json";
 import { SettingsRoute } from "./SettingsRoute";
 
 const app = vi.hoisted(() => ({
+  hostAdministration: true,
+  hasState: true,
   hash: "#/settings/diagnostics",
   refresh: vi.fn(),
   show: vi.fn(),
 }));
+
+vi.mock("../components/AccountSettingsPanel", () => ({ AccountSettingsPanel: () => <div>Own sign-ins fixture</div> }));
 
 vi.mock("../components/VoiceSettingsPanel", () => ({
   VoiceSettingsPanel: ({ settings, patch, onRuntimeChanged }: {
@@ -63,7 +67,7 @@ vi.mock("../state/app-state", () => ({
     readOnly: false,
     refresh: app.refresh,
     motion: { engine: { running: true, target: { source: "autopilot" } } },
-    state: { version: "test", commit: "abc", uptime_seconds: 10, motion: { available: true } },
+    state: app.hasState ? { capabilities: { configure_host: app.hostAdministration }, version: "test", commit: "abc", uptime_seconds: 10, motion: { available: true } } : null,
   }),
   useHashRoute: () => app.hash,
   useToast: () => ({ show: app.show }),
@@ -181,6 +185,9 @@ function settings(verbosity: string): PublicSettings {
 
 describe("SettingsRoute", () => {
   beforeEach(() => {
+    app.hostAdministration = true;
+    app.hasState = true;
+    vi.clearAllMocks();
     setLocaleForTest("en", english);
     app.hash = "#/settings/diagnostics";
     app.refresh.mockReset();
@@ -190,6 +197,34 @@ describe("SettingsRoute", () => {
     resetSettings.mockReset();
     saveSettings.mockResolvedValue({ settings: settings("normal") });
     resetSettings.mockResolvedValue({ settings: settings("normal") });
+  });
+
+  it("waits for capabilities when settings arrive before the backend snapshot", async () => {
+    app.hasState = false;
+    app.hash = "#/settings/model";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    const view = render(<SettingsRoute />);
+    await waitFor(() => expect(getSettings).toHaveBeenCalled());
+    expect(screen.getByText("Loading settings…")).toBeInTheDocument();
+    expect(api.llmModels).not.toHaveBeenCalled();
+    app.hasState = true;
+    app.hostAdministration = false;
+    view.rerender(<SettingsRoute />);
+    expect(screen.getByText("Own sign-ins fixture")).toBeInTheDocument();
+    expect(api.llmModels).not.toHaveBeenCalled();
+  });
+
+  it.each(["#/settings/model", "#/settings/diagnostics", "#/settings/voice"])("keeps own sign-ins accessible from an operator bookmark at %s", async (hash) => {
+    app.hostAdministration = false;
+    app.hash = hash;
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+    expect(await screen.findByText("Host settings and diagnostics are managed by an administrator.")).toBeInTheDocument();
+    expect(screen.getByText("Own sign-ins fixture")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save settings" })).not.toBeInTheDocument();
+    expect(api.llmModels).not.toHaveBeenCalled();
+    expect(api.promptComposition).not.toHaveBeenCalled();
+    expect(screen.queryByRole("textbox", { name: "Reference transcript fixture" })).not.toBeInTheDocument();
   });
 
   it("keeps unsaved voice edits after activation and saves with the new runtime root", async () => {

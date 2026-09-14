@@ -16,7 +16,7 @@ export function PersonasRoute() {
   const [adding, setAdding] = useState(false);
   const autopilotActive = state?.modes?.mode === "autopilot"
     || state?.modes?.active_mode === "autopilot";
-  const locked = !backendOnline || readOnly || autopilotActive;
+  const locked = !backendOnline || readOnly || autopilotActive || state?.capabilities?.configure_host === false;
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {

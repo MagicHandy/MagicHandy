@@ -6,6 +6,7 @@ import type { MediaVideo } from "../api/types";
 interface Props {
   video: MediaVideo;
   allowMetadataWrite: boolean;
+  allowLibraryWrite?: boolean;
   children?: ReactNode;
   videoOverlay?: ReactNode;
   controlsEnabled?: boolean;
@@ -39,6 +40,7 @@ const THUMBNAIL_QUALITY = 0.85;
 export function MediaVideoPlayer({
   video,
   allowMetadataWrite,
+  allowLibraryWrite = allowMetadataWrite,
   children,
   videoOverlay,
   controlsEnabled = true,
@@ -76,7 +78,7 @@ export function MediaVideoPlayer({
   // answer is specific to this browser, so a later success in one that does
   // have the decoder has to be able to clear it.
   const reportCompatibility = useCallback(async (state: "playable" | "unsupported_codec") => {
-    if (!allowMetadataWrite || compatibilityReported.current === state) return;
+    if (!allowLibraryWrite || compatibilityReported.current === state) return;
     if (video.compatibility === state && compatibilityReported.current === "") {
       compatibilityReported.current = state;
       return;
@@ -90,7 +92,7 @@ export function MediaVideoPlayer({
       // playback reports the same result.
       compatibilityReported.current = "";
     }
-  }, [allowMetadataWrite, onVideoUpdate, video]);
+  }, [allowLibraryWrite, onVideoUpdate, video]);
 
   // classifyFailure separates "cannot decode" from "cannot fetch". A missing
   // file also surfaces as MEDIA_ERR_SRC_NOT_SUPPORTED in some browsers, and
@@ -122,7 +124,7 @@ export function MediaVideoPlayer({
   // captureCover draws the frame the browser has already decoded. No new
   // dependency and no decision: the decode happened for playback anyway.
   const captureCover = useCallback(async (player: HTMLVideoElement) => {
-    if (!allowMetadataWrite || captured.current === video.id || video.thumbnail_generated_at) return;
+    if (!allowLibraryWrite || captured.current === video.id || video.thumbnail_generated_at) return;
     if (!player.videoWidth || !player.videoHeight) return;
     captured.current = video.id;
     try {
@@ -147,7 +149,7 @@ export function MediaVideoPlayer({
       // A cover is a nicety. Failing to store one must never disturb playback,
       // so the attempt is simply not retried for this video.
     }
-  }, [allowMetadataWrite, onVideoUpdate, video]);
+  }, [allowLibraryWrite, onVideoUpdate, video]);
 
   async function loadedMetadata(event: SyntheticEvent<HTMLVideoElement>) {
     const durationMillis = Math.round(event.currentTarget.duration * 1000);
@@ -176,7 +178,7 @@ export function MediaVideoPlayer({
   // playback costs nothing, because Tier 1 only ever claimed to cover videos
   // the user actually opens; anything unopened is the batch job's to do.
   function maybeCapture(player: HTMLVideoElement): void {
-    if (captured.current === video.id || video.thumbnail_generated_at || !allowMetadataWrite) return;
+    if (captured.current === video.id || video.thumbnail_generated_at || !allowLibraryWrite) return;
     if (player.currentTime < THUMBNAIL_MIN_CAPTURE_SECONDS) return;
     void captureCover(player);
   }

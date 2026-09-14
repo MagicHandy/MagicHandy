@@ -8,6 +8,7 @@ import { SyncedVideoPlayer } from "./SyncedVideoPlayer";
 
 interface Props {
   locked: boolean;
+  hostAdministration?: boolean;
   stopSequence?: number;
 }
 
@@ -22,7 +23,8 @@ interface ConversionFollowTarget {
   jobStartedAt?: string;
 }
 
-export function VideoLibrary({ locked, stopSequence }: Props) {
+export function VideoLibrary({ locked, hostAdministration = true, stopSequence }: Props) {
+  const hostLocked = locked || !hostAdministration;
   const [videos, setVideos] = useState<MediaVideo[]>([]);
   const [selectedID, setSelectedID] = useState("");
   const [query, setQuery] = useState("");
@@ -84,7 +86,8 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
         setScanError(reason instanceof Error ? reason.message : t("Scan status could not be loaded."));
       }
     });
-    void api.mediaTools(controller.signal).then((response) => {
+    if (!hostAdministration) setTools(null);
+    if (hostAdministration) void api.mediaTools(controller.signal).then((response) => {
       if (mounted.current && !controller.signal.aborted) setTools(response.tools);
     }).catch(() => {
       // The absent state is the honest default here: without a tools answer,
@@ -98,7 +101,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
       loadGeneration.current += 1;
       controller.abort();
     };
-  }, [load, updateJob]);
+  }, [load, updateJob, hostAdministration]);
 
   useEffect(() => {
     if (!scan?.running) return undefined;
@@ -212,6 +215,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   // whole library; either way the server converts only what it has established
   // is broken, so this cannot re-encode a working file.
   async function startConversion(ids: string[]) {
+    if (hostLocked) return;
     setConversionError("");
     // Only follow along when the open video is the one being repaired.
     const followTarget = ids.length === 1 && ids[0] === selectedID && selected ? {
@@ -234,6 +238,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   }
 
   async function cancelJob() {
+    if (hostLocked) return;
     try {
       const response = await api.cancelMediaJob();
       if (mounted.current) updateJob(response.job);
@@ -243,6 +248,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   }
 
   async function startScan() {
+    if (hostLocked) return;
     setScanError("");
     setScanAction("start");
     try {
@@ -256,6 +262,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
   }
 
   async function cancelScan() {
+    if (hostLocked) return;
     setScanError("");
     setScanAction("cancel");
     try {
@@ -307,9 +314,10 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
           stopSequence={stopSequence}
           onVideoUpdate={updateVideo}
           conversionBusy={conversionBusy}
-          onRequestConversion={locked || !tools?.available ? undefined : () => void startConversion([selected.id])}
+          onRequestConversion={hostLocked || !tools?.available ? undefined : () => void startConversion([selected.id])}
         />
-        {!tools?.available && needsConversion(selected) && (
+        {!hostAdministration && needsConversion(selected) && <p className="form-status media-playback-error" role="alert">{t("Host settings and diagnostics are managed by an administrator.")}</p>}
+        {hostAdministration && !tools?.available && needsConversion(selected) && (
           <p className="form-status media-playback-error" role="alert">
             {t("Set an FFmpeg location in Settings > Media to enable conversion.")}
             {" "}
@@ -329,17 +337,17 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
           <label className="media-sort"><span>{t("Sort")}</span><select value={sort} onChange={(event) => setSort(event.target.value as "name" | "recent")}><option value="name">{t("Name")}</option><option value="recent">{t("Most recent")}</option></select></label>
           <button type="button" className="icon-button" aria-label={t("Reload video catalog")} title={t("Reload catalog")} disabled={loading} onClick={() => void load()}><RefreshIcon /></button>
           {scan?.running ? (
-            <button type="button" className="btn btn-secondary compact-command" disabled={locked || !scan.cancellable || scanAction !== ""} onClick={() => void cancelScan()}><CloseIcon />{t("Cancel scan")}</button>
+            <button type="button" className="btn btn-secondary compact-command" disabled={hostLocked || !scan.cancellable || scanAction !== ""} onClick={() => void cancelScan()}><CloseIcon />{t("Cancel scan")}</button>
           ) : (
-            <button type="button" className="btn btn-secondary compact-command" disabled={locked || scanAction !== ""} onClick={() => void startScan()}><RefreshIcon />{t("Scan library")}</button>
+            <button type="button" className="btn btn-secondary compact-command" disabled={hostLocked || scanAction !== ""} onClick={() => void startScan()}><RefreshIcon />{t("Scan library")}</button>
           )}
         </div>
       </div>
       {brokenCount > 0 && !job?.running && (
         <div className="form-status media-convert-banner" role="status">
           <span>{t("{count} files cannot be played by this browser.", { count: formatNumber(brokenCount) })}</span>
-          {tools?.available
-            ? <button type="button" className="btn btn-secondary compact-command" disabled={locked} onClick={() => void startConversion([])}>{t("Convert all")}</button>
+          {!hostAdministration ? <span>{t("Host settings and diagnostics are managed by an administrator.")}</span> : tools?.available
+            ? <button type="button" className="btn btn-secondary compact-command" disabled={hostLocked} onClick={() => void startConversion([])}>{t("Convert all")}</button>
             : <a className="btn btn-secondary compact-command" href="#/settings/media">{t("Set up FFmpeg")}</a>}
         </div>
       )}
@@ -348,7 +356,7 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
           <span>{job.kind === "conversion"
             ? t("Converting {name} ({done} of {total}, {percent}%)", { name: job.current_name ?? "", done: formatNumber(job.processed + 1), total: formatNumber(job.total), percent: formatNumber(job.item_percent) })
             : t("Generating thumbnails ({done} of {total})", { done: formatNumber(job.processed), total: formatNumber(job.total) })}</span>
-          <button type="button" className="btn btn-secondary compact-command" disabled={!job.cancellable} onClick={() => void cancelJob()}>{t("Cancel")}</button>
+          <button type="button" className="btn btn-secondary compact-command" disabled={hostLocked || !job.cancellable} onClick={() => void cancelJob()}>{t("Cancel")}</button>
         </div>
       )}
       {conversionError && <p className="form-status media-playback-error" role="alert">{conversionError}</p>}
@@ -365,8 +373,8 @@ export function VideoLibrary({ locked, stopSequence }: Props) {
         <div className="empty-state compact-empty">
           <VideoIcon size={28} />
           <h2>{t("No videos scanned")}</h2>
-          <p>{t("Add or review library locations before scanning the catalog.")}</p>
-          <a className="btn btn-secondary" href="#/settings/media">{t("Library locations")}</a>
+          <p>{hostAdministration ? t("Add or review library locations before scanning the catalog.") : t("Host settings and diagnostics are managed by an administrator.")}</p>
+          {hostAdministration && <a className="btn btn-secondary" href="#/settings/media">{t("Library locations")}</a>}
         </div>
       )}
       {videos.length > 0 && visible.length === 0 && <div className="empty-state compact-empty"><h2>{t("No matching videos")}</h2></div>}
@@ -422,5 +430,5 @@ export function formatFileSize(size: number): string {
 
 export function formatLocation(location: string): string {
   const parts = location.trim().replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] || location || "Unknown location";
+  return parts[parts.length - 1] || location || t("Shared library");
 }

@@ -29,6 +29,7 @@ export function PatternLibraryRoute() {
   const mounted = useRef(true);
   const tabRefs = useRef<Partial<Record<View, HTMLButtonElement | null>>>({});
   const locked = !backendOnline || readOnly;
+  const hostLocked = locked || state?.capabilities?.configure_host === false;
   const maxSpeed = state?.settings?.motion?.speed_max_percent ?? 100;
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -268,12 +269,13 @@ export function PatternLibraryRoute() {
         ) : (
           <>
             <div role="tabpanel" id="library-browse-panel" aria-labelledby="library-browse-tab" hidden={view !== "browse"}>
-              <PatternBrowser patterns={library.patterns} locked={locked} offline={!backendOnline} busyKeys={busyKeys} onPatch={patchPattern} onPlay={playPattern} onFeedback={ratePattern} onExport={exportPatternFile} onDelete={removePattern} />
+              <PatternBrowser patterns={library.patterns} locked={locked} hostLocked={hostLocked} offline={!backendOnline} busyKeys={busyKeys} onPatch={patchPattern} onPlay={playPattern} onFeedback={ratePattern} onExport={exportPatternFile} onDelete={removePattern} />
             </div>
             <div role="tabpanel" id="library-programs-panel" aria-labelledby="library-programs-tab" hidden={view !== "programs"}>
               <LiveProgramLibrary
                 programs={library.programs}
                 locked={locked}
+                hostLocked={hostLocked}
                 offline={!backendOnline}
                 busyKeys={busyKeys}
                 maxSpeed={maxSpeed}
@@ -286,10 +288,10 @@ export function PatternLibraryRoute() {
               />
             </div>
             <div role="tabpanel" id="library-import-panel" aria-labelledby="library-import-tab" hidden={view !== "import"}>
-              <MotionImport locked={locked} importing={busyKeys.has(libraryActionKey.import)} onImport={importFile} />
+              <MotionImport locked={hostLocked} importing={busyKeys.has(libraryActionKey.import)} onImport={importFile} />
             </div>
             <div role="tabpanel" id="library-author-panel" aria-labelledby="library-author-tab" hidden={view !== "author"}>
-              <PatternAuthoring locked={locked} saving={busyKeys.has(libraryActionKey.author)} onPreview={previewPattern} onPreviewError={showPreviewError} onSave={savePattern} />
+              <PatternAuthoring locked={hostLocked} saving={busyKeys.has(libraryActionKey.author)} onPreview={previewPattern} onPreviewError={showPreviewError} onSave={savePattern} />
             </div>
             <div role="tabpanel" id="library-training-panel" aria-labelledby="library-training-tab" hidden={view !== "training"}>
               <PatternTraining
@@ -297,6 +299,7 @@ export function PatternLibraryRoute() {
                 feedback={library.feedback}
                 autoDisable={library.auto_disable}
                 locked={locked}
+                hostLocked={hostLocked}
                 busyKeys={busyKeys}
                 maxSpeed={maxSpeed}
                 onPlay={playPattern}

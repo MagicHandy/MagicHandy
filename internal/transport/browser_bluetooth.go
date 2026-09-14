@@ -385,6 +385,9 @@ func (b *BrowserBluetoothBridge) NextCommands(ctx context.Context, clientID stri
 	defer b.mu.Unlock()
 
 	for len(b.pending) == 0 {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if !b.isCurrentClientLocked(clientID) || !b.connected {
 			return nil, nil
 		}
@@ -406,6 +409,9 @@ func (b *BrowserBluetoothBridge) NextCommands(ctx context.Context, clientID stri
 		}
 	}
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if !b.isCurrentClientLocked(clientID) || !b.connected {
 		return nil, nil
 	}

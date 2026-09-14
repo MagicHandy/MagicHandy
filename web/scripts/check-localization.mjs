@@ -16,6 +16,12 @@ const sameValueAllowed = {
   ja: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{rounding} ms", "{size} / {location}", "{state}: {message}", "Autopilot", "Esc", "Funscript", "Intiface Central", "MagicHandy"]),
 };
 
+// Product names in the session client hints retain their official spelling.
+// Only these exact labels may pass unchanged; surrounding UI copy is localized.
+for (const allowed of Object.values(sameValueAllowed)) {
+  for (const brand of ["Chrome", "Microsoft Edge", "Firefox", "Safari", "Windows", "macOS", "Linux", "Android", "iOS"]) allowed.add(brand);
+}
+
 function walk(directory) {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(directory, entry.name);
