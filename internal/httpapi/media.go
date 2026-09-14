@@ -377,7 +377,7 @@ func (s *Server) handleMediaVideoStream(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	http.ServeContent(w, r, filepath.Base(video.RelativePath), info.ModTime(), file)
+	serveBoundedContent(w, r, filepath.Base(video.RelativePath), info.ModTime(), file)
 }
 
 func mediaContentType(path string) string {

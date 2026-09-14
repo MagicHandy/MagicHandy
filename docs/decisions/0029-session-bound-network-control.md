@@ -154,6 +154,15 @@ interruption by a direct unauthenticated peer; self-hosted WAN documentation
 must disclose that availability tradeoff and support a restricted network
 perimeter. Rate/resource controls must not put ordinary work ahead of Stop.
 
+The [request-pressure contract](../lan-wan-request-pressure.md) reserves bounded
+application capacity before session lookup. A cached session match selects a
+budget only; it never replaces live authorization. Every HTTP Stop invalidates
+old work before joining an overlapping shared Stop operation. Completion occurs
+under the engine lifecycle lock; completed Stops are not cached. At most 16
+callers wait for confirmation, while excess/timed-out callers receive an honest
+pending response. Internal Stop paths remain independent. Cancelable per-write
+content deadlines release stalled clients without a short total stream timeout.
+
 No software can deliver a remote request over a severed link. The UI must
 distinguish local cancellation, an acknowledged backend stop and a physically
 confirmed result. The host watchdog and local stop path cover loss of remote

@@ -42,16 +42,21 @@ func (s *Server) clientSyncStatus(r *http.Request, state mediaSyncStatus) mediaS
 // Its acknowledgement must therefore be equally safe for every caller, even
 // when the browser supplied a cookie. Never add the previous target/settings.
 func (s *Server) writePublicStopResult(w http.ResponseWriter, outcome emergencyStopResult, err error) {
+	if outcome.pending {
+		writeBoundedJSON(w, http.StatusServiceUnavailable, map[string]any{"stopped": false, "stop_pending": true,
+			"transport_stop_confirmed": false, "error": errStopConfirmationPending.Error()})
+		return
+	}
 	available, confirmed := stopConfirmation(outcome, err)
 	payload := map[string]any{"available": available, "stopped": true, "transport_stop_confirmed": confirmed}
 	status := http.StatusOK
-	if err != nil {
+	if !confirmed {
 		payload["error"] = "Stop is unconfirmed. Check the device locally."
 		if available {
 			status = http.StatusBadGateway
 		}
 	}
-	writeJSON(w, status, payload)
+	writeBoundedJSON(w, status, payload)
 }
 
 func stopConfirmation(outcome emergencyStopResult, err error) (bool, bool) {

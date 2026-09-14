@@ -2,6 +2,13 @@
 
 ## Core Direction
 
+The September 13 [LAN/WAN request-pressure work](docs/lan-wan-request-pressure.md)
+reserves controller/gateway capacity before session lookup, bounds overlapping
+HTTP Stop waiters and media/content writes, and preserves login cookies during
+temporary storage failure. Regression tests cover unfinished uploads, stalled
+HTTP/1 and HTTP/2 receivers, delayed Stop and 20 concurrent spectators. Full
+network/device acceptance remains open.
+
 The September 13 [LAN/WAN audit history](docs/lan-wan-audit-history.md) adds
 transactional access-change records, bounded runtime history and an
 administrator page/download. Stop remains independent of audit storage, and

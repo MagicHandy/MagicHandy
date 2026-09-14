@@ -189,7 +189,7 @@ func newHTTPServer(address string, handler http.Handler, tlsConfig *tls.Config) 
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		IdleTimeout:       2 * time.Minute,
-		MaxHeaderBytes:    1 << 20,
+		MaxHeaderBytes:    32 << 10,
 	}
 }
 

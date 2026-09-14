@@ -24,12 +24,12 @@ func (s *Server) protectNetworkRequests(next http.Handler) http.Handler {
 		if s.networkPolicy != nil {
 			accepted, err := s.networkPolicy.Accept(r)
 			if err != nil {
-				writeError(w, http.StatusForbidden, err)
+				rejectRequest(w, r, http.StatusForbidden, err)
 				return
 			}
 			r = accepted
 		} else if netaccess.HasForwardingHeaders(r) {
-			writeError(w, http.StatusForbidden, errors.New("forwarded traffic requires an explicit trusted proxy configuration"))
+			rejectRequest(w, r, http.StatusForbidden, errors.New("forwarded traffic requires an explicit trusted proxy configuration"))
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -67,6 +67,8 @@ func (s *Server) handleNetworkStatus(w http.ResponseWriter, r *http.Request) {
 		"restart_required": saved != nil && !reflect.DeepEqual(*saved, active),
 		"interfaces":       networkInterfaces(), "forwarded": netaccess.IsForwarded(r),
 		"authentication_required": s.auth.authenticationRequired(), "secure_cookie": s.auth.options.SecureCookies}
+	payload["request_admission"] = s.requestAdmission.snapshot()
+	payload["stop_admission"] = s.stopAdmission.snapshot()
 	if s.networkCertificates != nil {
 		payload["certificate"] = s.networkCertificates.Status()
 	}
@@ -176,8 +178,10 @@ func (s *Server) handleNetworkReport(w http.ResponseWriter, r *http.Request) {
 		"authentication_required": s.auth.authenticationRequired(), "secure_cookie": s.auth.options.SecureCookies,
 		"controller_active": controller.Active, "lease_remaining_ms": controller.LeaseExpiresInMillis,
 		"ownership_generation": controller.Generation, "stop_sequence": s.stopSequence.Load(),
-		"dispatch_owner": settings.Device.HSPDispatchOwner,
-		"privacy":        "This report excludes credentials, host paths, addresses, chat, media and audio. Share it with the developer when reporting a connection problem."}
+		"dispatch_owner":    settings.Device.HSPDispatchOwner,
+		"request_admission": s.requestAdmission.snapshot(),
+		"stop_admission":    s.stopAdmission.snapshot(),
+		"privacy":           "This report excludes credentials, host paths, addresses, chat, media and audio. Share it with the developer when reporting a connection problem."}
 	if s.networkCertificates != nil {
 		status := s.networkCertificates.Status()
 		report["certificate_expires_at"], report["certificate_reload_failed"] = status.NotAfter, status.ReloadError

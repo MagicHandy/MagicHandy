@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
 	"github.com/mapledaemon/MagicHandy/internal/audit"
@@ -17,6 +18,7 @@ import (
 const (
 	secureSessionCookieName   = "__Host-MagicHandy-Session"
 	loopbackSessionCookieName = "MagicHandy-Session"
+	sessionLookupTimeout      = time.Second
 )
 
 var errAuthenticationThrottled = errors.New("too many authentication attempts; try again later")
@@ -108,17 +110,29 @@ func (s *Server) authenticateRequests(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(audit.WithActor(r.Context(), audit.Actor{Type: "public"})))
 			return
 		}
-		if session, token, ok := s.sessionFromRequest(r); ok {
+		if readRequest(r) && !strings.HasPrefix(r.URL.Path, "/api/") {
+			// The public shell and health endpoint must load during a datastore
+			// outage too, including when this browser already has a login cookie.
+			next.ServeHTTP(w, r)
+			return
+		}
+		if session, token, err := s.sessionFromRequest(r); err == nil {
 			ctx := context.WithValue(r.Context(), authenticatedAccountContextKey{}, session.Account)
 			ctx = context.WithValue(ctx, authenticatedSessionContextKey{}, authenticatedSessionState{session: session, token: token})
 			ctx = audit.WithActor(ctx, audit.Actor{Type: "account", AccountID: session.Account.ID, SessionID: session.ID})
 			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		} else if !errors.Is(err, accounts.ErrInvalidSession) {
+			finishUnreadBody(w, r)
+			w.Header().Set("Retry-After", "1")
+			writeBoundedJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "session verification is temporarily unavailable; retry shortly"})
 			return
 		} else if token != "" {
 			s.clearSessionCookie(w)
 		}
 
 		if s.auth.authenticationRequired() && !isPublicAuthenticationRequest(r) {
+			finishUnreadBody(w, r)
 			s.writeAuthenticationRequired(w)
 			return
 		}
@@ -148,21 +162,23 @@ func isPublicAuthenticationRequest(r *http.Request) bool {
 	}
 }
 
-func (s *Server) sessionFromRequest(r *http.Request) (accounts.Session, string, bool) {
+func (s *Server) sessionFromRequest(r *http.Request) (accounts.Session, string, error) {
 	cookie, err := r.Cookie(s.sessionCookieName())
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
-		return accounts.Session{}, "", false
+		return accounts.Session{}, "", accounts.ErrInvalidSession
 	}
 	token := strings.TrimSpace(cookie.Value)
 	resolve := s.accounts.ResolveSession
 	if passiveSessionRequest(r) {
 		resolve = s.accounts.InspectSession
 	}
-	session, err := resolve(r.Context(), token)
+	ctx, cancel := context.WithTimeout(r.Context(), sessionLookupTimeout)
+	defer cancel()
+	session, err := resolve(ctx, token)
 	if err != nil {
-		return accounts.Session{}, token, false
+		return accounts.Session{}, token, err
 	}
-	return session, token, true
+	return session, token, nil
 }
 
 func (s *Server) authenticatePassword(r *http.Request, username, password string) (accounts.Account, bool, error) {
@@ -185,7 +201,7 @@ func (s *Server) authenticatePassword(r *http.Request, username, password string
 
 func (s *Server) writeAuthenticationRequired(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store")
-	writeError(w, http.StatusUnauthorized, errors.New("authentication required"))
+	writeBoundedJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 }
 
 func (s *Server) sessionCookieName() string {
@@ -248,9 +264,12 @@ func (s *Server) requireAdministrator(w http.ResponseWriter, r *http.Request) (a
 }
 
 func (s *Server) handleAuthenticationStatus(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), sessionLookupTimeout)
+	defer cancel()
+	r = r.WithContext(ctx)
 	initialized, err := s.accounts.Initialized(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, errors.New("account status is unavailable"))
+		writeBoundedJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "account status is unavailable"})
 		return
 	}
 	account, authenticated := authenticatedAccount(r)
@@ -262,7 +281,7 @@ func (s *Server) handleAuthenticationStatus(w http.ResponseWriter, r *http.Reque
 		controlIdentities, err = s.accounts.ControlIdentities(r.Context(), account.ID, session.session.ControlAccountID)
 		if err != nil {
 			s.logger.Warn("control identities could not be listed", "error", err)
-			writeError(w, http.StatusInternalServerError, errors.New("account status is unavailable"))
+			writeBoundedJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "account status is unavailable"})
 			return
 		}
 	}
@@ -497,7 +516,7 @@ func (s *Server) handleProfileImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "private, max-age=60")
-	http.ServeContent(w, r, "profile.jpg", info.ModTime(), file)
+	serveBoundedContent(w, r, "profile.jpg", info.ModTime(), file)
 }
 
 func (s *Server) handleAuthenticationLogin(w http.ResponseWriter, r *http.Request) {

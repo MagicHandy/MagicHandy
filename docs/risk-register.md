@@ -1839,6 +1839,15 @@ three-artifact reviewed setup path without reusing or moving alpha.12.
 
 Level: High
 
+The [request-pressure checkpoint](lan-wan-request-pressure.md) reserves bounded
+controller/gateway capacity before authentication, bounds temporary storage
+waits without erasing valid cookies, and releases stalled HTTP/1 and HTTP/2
+content receivers. Overlapping HTTP Stops invalidate every intent while sharing
+one active dispatch with bounded waiters and honest pending replies. A delayed
+request cannot reuse confirmation from before a newer run. Application limits
+and the 20-spectator loopback fixture do not establish connection-flood,
+public-WAN or physical-device limits; the full load/fault matrix remains open.
+
 The [bounded audit checkpoint](lan-wan-audit-history.md) records transactional
 access changes and bounded runtime outcomes without credentials or raw content.
 Administrators can inspect/export retained pages with explicit history-loss

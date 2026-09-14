@@ -123,6 +123,10 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   **Acceptance:** measure receipt-to-cancellation and physical confirmation
   separately under load. A disconnected UI reports an unconfirmed Stop honestly;
   it cannot guarantee delivery across a severed network.
+  **In progress:** [request pressure and Stop delivery](lan-wan-request-pressure.md)
+  adds reserved admission, bounded overlapping Stop waiters, unfinished-body
+  replies and storage-independent shell/Stop behavior. Physical confirmation,
+  connection floods and the full load/fault matrix remain open.
 
 - [ ] **LAN-07 — Bound streaming and request resources.** Add cancelable
   per-write deadlines, bounded queues, slow-client eviction and per-session/IP
@@ -132,6 +136,10 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   write timeout to all long-running speech/chat streams.
   **Acceptance:** slow readers and repeated reconnects do not grow goroutines,
   memory or queues indefinitely, delay Stop, or starve a healthy client.
+  **In progress:** the [request-pressure checkpoint](lan-wan-request-pressure.md)
+  adds global/per-peer limits before authentication, reserved controller/gateway
+  capacity, bounded lookup and media/content writes. HTTP/1 and HTTP/2 stalled
+  receiver tests pass; handler preparation, uploads and connection limits remain.
 
 - [ ] **LAN-08 — Decide the supported WAN architecture and threat model.**
   Evaluate an authenticated private overlay as the initial WAN target; compare
@@ -207,6 +215,9 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   **Acceptance:** a throttled media transfer cannot block control; speech cancels
   promptly, unsupported capture/playback is explained, and authorized media
   continues or pauses predictably after connection loss.
+  **In progress:** [bounded content delivery](lan-wan-request-pressure.md)
+  preserves Range/HEAD and releases stalled media/download receivers. Full remote
+  voice, seek, buffering and bandwidth-contention acceptance remains open.
 
 - [ ] **LAN-15 — Make transport location and capabilities explicit.** Identify
   whether device access lives on the app host, a browser BLE bridge, or an
@@ -265,6 +276,9 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   disconnect-to-stop bounds, stale-state duration, bytes, CPU, RSS and goroutines.
   Select supported operating limits from the measurements and run an overnight
   soak within that envelope. Keep all safety, race and import-boundary gates.
+  **In progress:** the [20-spectator HTTP/2 fixture](lan-wan-request-pressure.md)
+  measures Stop and revocation under concurrent state reads. It is loopback
+  evidence, not the RTT/loss/outage matrix or overnight acceptance.
 
 - [ ] **LAN-20 — Record real device/browser acceptance.** Use at least two
   physical clients and each claimed browser/OS, including supported Android and

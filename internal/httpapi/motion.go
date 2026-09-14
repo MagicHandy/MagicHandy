@@ -334,6 +334,7 @@ func (s *Server) handleMotionQuick(w http.ResponseWriter, r *http.Request) {
 }
 
 type emergencyStopResult struct {
+	pending            bool
 	state              motion.ActiveMotionState
 	transportResult    transport.CommandResult
 	engineAvailable    bool
@@ -345,13 +346,16 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEmergencyStop(w http.ResponseWriter, r *http.Request, reason string) {
-	outcome, err := s.emergencyStop(r.Context(), reason)
-	if s.auth.authenticationRequired() {
+	finishUnreadBody(w, r)
+	outcome, err := s.emergencyStopWithAdmission(r.Context(), reason, &s.stopAdmission)
+	if s.auth.authenticationRequired() || outcome.pending {
 		s.writePublicStopResult(w, outcome, err)
 		return
 	}
 	if outcome.engineAvailable {
-		s.writeMotionResult(w, r, outcome.state, err)
+		bounded := &contentResponseWriter{ResponseWriter: w, ctx: context.Background()}
+		s.writeMotionResult(bounded, r, outcome.state, err)
+		bounded.finish()
 		return
 	}
 
@@ -371,10 +375,14 @@ func (s *Server) handleEmergencyStop(w http.ResponseWriter, r *http.Request, rea
 			payload["error"] = "stop could not reach the configured transport: " + s.safeMotionErrorMessage(err)
 		}
 	}
-	writeJSON(w, status, payload)
+	writeBoundedJSON(w, status, payload)
 }
 
 func (s *Server) emergencyStop(ctx context.Context, reason string) (outcome emergencyStopResult, err error) {
+	return s.emergencyStopWithAdmission(ctx, reason, nil)
+}
+
+func (s *Server) emergencyStopWithAdmission(ctx context.Context, reason string, admission *stopAdmissionRuntime) (outcome emergencyStopResult, err error) {
 	var sequence uint64
 	defer func() {
 		result := "success"
@@ -385,7 +393,20 @@ func (s *Server) emergencyStop(ctx context.Context, reason string) (outcome emer
 	}()
 	finishStop, sequence := s.beginGlobalStop(reason, ctx)
 	defer finishStop()
+	var request *stopAdmission
+	if admission != nil {
+		// Invalidate before choosing a shared operation. A request delayed
+		// before invalidation cannot reuse a Stop from before a newer Start.
+		request = admission.enter()
+		defer request.release()
+		if !request.leader {
+			return request.await(ctx)
+		}
+	}
+	return s.dispatchEmergencyStop(ctx, reason, request)
+}
 
+func (s *Server) dispatchEmergencyStop(ctx context.Context, reason string, request *stopAdmission) (outcome emergencyStopResult, err error) {
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
 
@@ -394,6 +415,9 @@ func (s *Server) emergencyStop(ctx context.Context, reason string) (outcome emer
 	// that decision and physical Stop.
 	s.motion.lifecycleMu.Lock()
 	defer s.motion.lifecycleMu.Unlock()
+	if request != nil {
+		defer func() { request.complete(outcome, err) }()
+	}
 	engine := s.currentMotionEngine()
 	if engine != nil {
 		state, err := engine.Stop(stopCtx, reason)

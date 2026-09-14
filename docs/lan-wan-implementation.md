@@ -63,7 +63,45 @@ The implementation is in progress on `codex/lan-wan-control`:
 - atomic access-change records and bounded runtime audit history, with an
   administrator page/export, explicit loss reporting and trace correlation;
 - a latest-run trace writer that preserves immediate reads while removing
-  diagnostic storage waits from the public Stop response.
+  diagnostic storage waits from the public Stop response;
+- admission before authentication with reserved controller/gateway capacity,
+  bounded storage lookup and honest retryable errors that preserve login cookies;
+- bounded overlapping HTTP Stop waiters with per-intent invalidation, prompt
+  replies to unfinished uploads, and cancelable media/content writes.
+
+## Request-pressure checkpoint — 2026-09-13
+
+The [request-pressure contract](lan-wan-request-pressure.md) records concurrent
+budgets, Stop coalescing, slow-client behavior, measured overhead and remaining
+acceptance. Regressions reproduced the unfinished-upload Stop delay, temporary
+storage failure clearing login state, and a delayed Stop reusing confirmation
+from before a newer run. They now pass. Each overlapping Stop retains its own
+invalidation and audit sequence; completed operations never become cached retries.
+
+The 20-spectator TLS/HTTP/2 fixture exercises concurrent state reads, public Stop
+and server-side stream revocation. HTTP/1 and HTTP/2 stalled-download fixtures
+release request capacity, while a healthy producer gap remains supported. This
+advances LAN-06/07/14/19 without closing the full network-fault/load matrix.
+
+Full Go and race suites, vet, zero-issue golangci-lint v2.12.2, the CGO-free
+build, TypeScript, all 599 frontend tests in 79 files, 2,150 translation keys
+in five locales and the canonical production UI build pass. No hard gate was
+changed. Test details and artifact/overhead measurements are in the contract
+and [scorecard](goal-scorecard.md).
+
+The current isolated simulator runs at
+`http://127.0.0.9:50005/#/settings/access`. Real provider readiness passes and
+text-only browser chat returns “The final review build is ready.” in 125 ms,
+with a 57 ms first token and LLM motion off. The initial build's SSE check also
+verified one provider call without repair or fallback. The served JS SHA-256 matches the
+worktree. Its 1,185-byte connection report includes all five request budgets and
+Stop waiter status without credentials/session keys. The browser stays an
+administrator observer with LAN/WAN settings and Stop visible; no console
+warnings/errors were observed. Voice and LLM motion remain off, hardware remains
+disconnected, and existing app processes were preserved. Earlier in-app browser
+file-save verification remains unresolved as recorded below; HTTP report
+verification does not establish a completed browser download.
+
 
 ## Access history checkpoint — 2026-09-13
 

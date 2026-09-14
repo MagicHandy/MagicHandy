@@ -2143,5 +2143,10 @@
   "Stop sequence": "停止序号",
   "Trace sequence": "跟踪序号",
   "Command reference": "命令引用",
-  "HTTP status": "HTTP 状态"
+  "HTTP status": "HTTP 状态",
+  "session verification is temporarily unavailable; retry shortly": "会话验证暂时不可用，请稍后重试。",
+  "server request capacity is busy; retry shortly": "服务器繁忙，请稍后重试。",
+  "stop requested; device confirmation is still pending": "已请求停止，仍在等待设备确认。",
+  "account status is unavailable": "账户状态不可用。",
+  "too many active requests; close an unused tab and retry": "当前请求过多，请关闭不使用的标签页后重试。"
 }

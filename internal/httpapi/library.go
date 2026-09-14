@@ -131,7 +131,7 @@ func (s *Server) handleLibraryPatternExport(w http.ResponseWriter, r *http.Reque
 		s.writeLibraryError(w, err)
 		return
 	}
-	writeDownload(w, filename, data)
+	writeDownload(w, r, filename, data)
 }
 
 func (s *Server) handleLibraryProgramExport(w http.ResponseWriter, r *http.Request) {
@@ -140,7 +140,7 @@ func (s *Server) handleLibraryProgramExport(w http.ResponseWriter, r *http.Reque
 		s.writeLibraryError(w, err)
 		return
 	}
-	writeDownload(w, filename, data)
+	writeDownload(w, r, filename, data)
 }
 
 func (s *Server) handleLibraryImport(w http.ResponseWriter, r *http.Request) {
@@ -399,12 +399,12 @@ func (s *Server) writeLibraryStorageError(w http.ResponseWriter, err error) {
 	writeError(w, http.StatusInternalServerError, errors.New("pattern library storage is unavailable"))
 }
 
-func writeDownload(w http.ResponseWriter, filename string, data []byte) {
+func writeDownload(w http.ResponseWriter, r *http.Request, filename string, data []byte) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	// #nosec G705 -- data is validated JSON served as an attachment with
 	// nosniff; it is never interpolated into an HTML response.
-	_, _ = w.Write(data)
+	writeBoundedAttachment(w, r, data)
 }

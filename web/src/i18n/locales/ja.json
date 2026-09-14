@@ -2143,5 +2143,10 @@
   "Stop sequence": "停止シーケンス",
   "Trace sequence": "トレースシーケンス",
   "Command reference": "コマンド参照",
-  "HTTP status": "HTTP ステータス"
+  "HTTP status": "HTTP ステータス",
+  "session verification is temporarily unavailable; retry shortly": "セッションを一時的に確認できません。しばらくしてから再試行してください。",
+  "server request capacity is busy; retry shortly": "サーバーが混雑しています。しばらくしてから再試行してください。",
+  "stop requested; device confirmation is still pending": "停止を要求しました。デバイスからの確認を待っています。",
+  "account status is unavailable": "アカウントの状態を取得できません。",
+  "too many active requests; close an unused tab and retry": "処理中のリクエストが多すぎます。使っていないタブを閉じて再試行してください。"
 }

@@ -2143,5 +2143,10 @@
   "Stop sequence": "Stop sequence",
   "Trace sequence": "Trace sequence",
   "Command reference": "Command reference",
-  "HTTP status": "HTTP status"
+  "HTTP status": "HTTP status",
+  "session verification is temporarily unavailable; retry shortly": "Session verification is temporarily unavailable; retry shortly.",
+  "server request capacity is busy; retry shortly": "The server is busy; retry shortly.",
+  "stop requested; device confirmation is still pending": "Stop requested; device confirmation is still pending.",
+  "account status is unavailable": "Account status is unavailable.",
+  "too many active requests; close an unused tab and retry": "Too many active requests; close an unused tab and retry."
 }

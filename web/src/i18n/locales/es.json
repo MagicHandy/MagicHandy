@@ -2143,5 +2143,10 @@
   "Stop sequence": "Secuencia de parada",
   "Trace sequence": "Secuencia de traza",
   "Command reference": "Referencia del comando",
-  "HTTP status": "Estado HTTP"
+  "HTTP status": "Estado HTTP",
+  "session verification is temporarily unavailable; retry shortly": "La verificación de la sesión no está disponible temporalmente; vuelve a intentarlo en breve.",
+  "server request capacity is busy; retry shortly": "El servidor está ocupado; vuelve a intentarlo en breve.",
+  "stop requested; device confirmation is still pending": "Parada solicitada; la confirmación del dispositivo sigue pendiente.",
+  "account status is unavailable": "El estado de la cuenta no está disponible.",
+  "too many active requests; close an unused tab and retry": "Hay demasiadas solicitudes activas; cierra una pestaña que no uses y vuelve a intentarlo."
 }

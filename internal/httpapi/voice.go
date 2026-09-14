@@ -1120,7 +1120,7 @@ func (s *Server) handleVoiceRequestAudio(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 	// #nosec G705 -- binary audio from the local worker process, served with
 	// an explicit audio/* content type and nosniff; never rendered as HTML.
-	_, _ = w.Write(audio)
+	writeBoundedAttachment(w, r, audio)
 }
 
 func audioContentType(format string) string {

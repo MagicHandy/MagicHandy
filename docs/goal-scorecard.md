@@ -1,5 +1,47 @@
 # Goal Scorecard
 
+## 2026-09-13 — Request admission and bounded content/Stop replies
+
+The [request-pressure contract](lan-wan-request-pressure.md) adds bounded
+admission before session lookup, reserved control/gateway capacity, overlapping
+HTTP Stop sharing and cancelable content writes. It adds no dependency, periodic
+browser poll or background motion worker. Five status strings are translated.
+
+| Artifact | Previous audit checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,863,040 B | 19,901,952 B | +38,912 B |
+| Main JS, raw | 826,509 B | 827,019 B | +510 B |
+| Main JS, gzip-9 | 227,986 B | 228,094 B | +108 B |
+| All embedded assets | 2,143,397 B | 2,146,356 B | +2,959 B |
+
+Measured with Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. The canonical dist replaces
+the earlier hashed assets. The running app serves the same main JS SHA-256 as
+the worktree.
+
+Independent global request budgets are ordinary 128, login 8, shell 16,
+liveness 16 and immediate control 16, with smaller per-peer/session bounds and
+no waiting queue. Public Stop bypasses ordinary admission; at most 16 followers
+wait for its in-flight dispatch. A blocked-fake-transport fixture issues 65
+overlapping Stops, verifies all 65 invalidations and only one transport attempt,
+and checks explicit pending replies for overflow. This is not a TCP/TLS or
+physical device capacity measurement.
+
+The 20-spectator loopback HTTP/2 fixture transferred 142,864 B across 20 state
+reads, measured Stop p95 1.006 ms / max 1.016 ms and revoked a stream in
+946.907 ms. Three 1 MiB sink benchmarks measured bounded content at
+23.783–24.185 microseconds / 42,584 B / 175 allocations, compared with
+13.509–14.680 microseconds / 33,296 B / 9 allocations for `ServeContent`.
+This records about 10 microseconds and 9,288 B of added per-MiB bookkeeping,
+not network throughput. Protocol tests separately verify stalled receiver
+release and healthy transfers beyond five seconds.
+
+The isolated review's redacted connection report is 1,185 B. After real LLM
+generation, text-only app chat and browser review, one process sample recorded
+134,193,152 B working set and 122,060,800 B private memory. Workload and process
+lifetime differ from prior samples; no controlled RSS, CPU or startup change
+is claimed. Full RTT/loss/outage/load/soak and real WAN/device measurements remain.
+
 ## 2026-09-13 — Bounded access history and asynchronous trace persistence
 
 The [audit contract](lan-wan-audit-history.md) adds transactional access-change

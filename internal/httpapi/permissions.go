@@ -48,7 +48,7 @@ func (s *Server) authorizeRoutes(next http.Handler) http.Handler {
 		if controlRoute(r) {
 			message = "this account is an observer; ask the administrator for a control permission"
 		}
-		writeError(w, http.StatusForbidden, errors.New(message))
+		rejectRequest(w, r, http.StatusForbidden, errors.New(message))
 	})
 }
 

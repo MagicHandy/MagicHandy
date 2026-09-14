@@ -260,7 +260,7 @@ func (s *Server) handlePersonaExport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(archive) // #nosec G705 -- validated ZIP served as a nosniff attachment.
+	writeBoundedAttachment(w, r, archive) // #nosec G705 -- validated ZIP served as a nosniff attachment.
 }
 
 func (s *Server) handlePersonaUpdate(w http.ResponseWriter, r *http.Request) {
@@ -359,7 +359,7 @@ func (s *Server) handlePersonaPortrait(w http.ResponseWriter, r *http.Request) {
 	// A portrait changes only when replaced, and the row's stamp changes with it,
 	// so the tile URL busts its own cache and a short max-age is safe.
 	w.Header().Set("Cache-Control", "private, max-age=60")
-	http.ServeContent(w, r, "portrait.jpg", info.ModTime(), file)
+	serveBoundedContent(w, r, "portrait.jpg", info.ModTime(), file)
 }
 
 // handlePersonaPortraitUpload accepts a JPEG the browser already downscaled on

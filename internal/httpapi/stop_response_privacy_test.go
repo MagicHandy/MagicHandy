@@ -51,3 +51,12 @@ func TestPublicStopFailureKeepsConfirmationHonestWithoutPrivateDetails(t *testin
 		t.Fatal("Stop failure did not preserve its public response contract")
 	}
 }
+
+func TestPublicStopRejectsAnUnconfirmedResultEvenWithoutAnError(t *testing.T) {
+	s, _, _, _ := newControllerSessionFixture(t)
+	w := httptest.NewRecorder()
+	s.writePublicStopResult(w, emergencyStopResult{transportAvailable: true, transportResult: transport.CommandResult{Kind: transport.CommandKindStop, OK: false}}, nil)
+	if w.Code != http.StatusBadGateway || !strings.Contains(w.Body.String(), "Stop is unconfirmed") {
+		t.Fatal("an unconfirmed transport result became a successful UI Stop")
+	}
+}

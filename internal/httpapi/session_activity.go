@@ -22,6 +22,7 @@ type sessionActivity struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	requests int
+	lanes    [requestLaneCount]int
 }
 
 type sessionActivityRuntime struct {
@@ -35,26 +36,40 @@ func newSessionActivityRuntime() sessionActivityRuntime {
 }
 
 func (a *sessionActivityRuntime) enter(key string) (*sessionActivity, func()) {
+	return a.enterLane(key, ordinaryLane)
+}
+
+func (a *sessionActivityRuntime) enterLane(key string, lane requestLane) (*sessionActivity, func()) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	entry := a.sessions[key]
 	if entry == nil {
 		// Bound simultaneous active sessions and per-session streams/requests.
-		if len(a.sessions) >= 128 {
+		sessionLimit := 128
+		if lane == livenessLane || lane == controlLane {
+			sessionLimit += requestLaneLimits[livenessLane].global + requestLaneLimits[controlLane].global
+		}
+		if len(a.sessions) >= sessionLimit {
 			return nil, nil
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		entry = &sessionActivity{ctx: ctx, cancel: cancel}
 		a.sessions[key] = entry
 	}
-	if entry.requests >= 32 || entry.ctx.Err() != nil {
+	requestLimit := 32
+	if lane == livenessLane || lane == controlLane {
+		requestLimit = 8
+	}
+	if entry.lanes[lane] >= requestLimit || entry.ctx.Err() != nil {
 		return nil, nil
 	}
 	entry.requests++
+	entry.lanes[lane]++
 	return entry, func() {
 		a.mu.Lock()
 		defer a.mu.Unlock()
 		entry.requests--
+		entry.lanes[lane]--
 		if entry.requests == 0 {
 			entry.cancel()
 			if a.sessions[key] == entry {
@@ -93,9 +108,10 @@ func (s *Server) trackSessionActivity(next http.Handler) http.Handler {
 		}
 		lifetime := s.auth.unprotectedCtx
 		if authenticated {
-			entry, leave := s.access.enter(session.session.Key)
+			entry, leave := s.access.enterLane(session.session.Key, s.requestLane(r))
 			if entry == nil {
-				writeError(w, http.StatusTooManyRequests, errors.New("too many active requests; close an unused tab and retry"))
+				w.Header().Set("Retry-After", "1")
+				rejectRequest(w, r, http.StatusTooManyRequests, errors.New("too many active requests; close an unused tab and retry"))
 				return
 			}
 			defer leave()

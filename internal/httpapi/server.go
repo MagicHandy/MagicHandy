@@ -86,6 +86,8 @@ type Server struct {
 	accessWG            sync.WaitGroup
 	networkPolicy       *netaccess.Policy
 	networkCertificates *netaccess.Certificates
+	requestAdmission    requestAdmissionRuntime
+	stopAdmission       stopAdmissionRuntime
 	traces              *diagnostics.TraceRing
 	traceArchive        *traceArchiveWriter
 	transport           transport.DiagnosticsProvider
@@ -257,10 +259,12 @@ func (s *Server) activate(runtime Runtime, settings config.Settings) {
 	s.accessAudit.Record(audit.Event{Kind: audit.ServerStarted, Outcome: "success", Epoch: s.controller.epoch})
 	mux := http.NewServeMux()
 	s.routes(mux)
-	s.handler = logRequests(s.logger, securityHeaders(
-		runtime.SecureCookies,
-		s.protectNetworkRequests(protectBrowserRequests(runtime.AllowedBrowserHosts, s.authenticateRequests(s.authorizeRoutes(s.trackSessionActivity(s.trackCommandDelivery(mux)))))),
-	))
+	delivery := s.trackCommandDelivery(mux)
+	sessions := s.trackSessionActivity(delivery)
+	authorized := s.authorizeRoutes(sessions)
+	admitted := s.admitHTTPRequests(s.authenticateRequests(authorized))
+	browser := protectBrowserRequests(runtime.AllowedBrowserHosts, admitted)
+	s.handler = logRequests(s.logger, securityHeaders(runtime.SecureCookies, s.protectNetworkRequests(browser)))
 	s.startLLMAutoload(settings.LLM)
 	s.startVoiceAutoload(settings.Voice)
 	s.startMediaAutoScan(settings.Media)
@@ -731,7 +735,7 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setStaticHeaders(w, name)
-	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(data))
+	serveBoundedContent(w, r, name, time.Time{}, bytes.NewReader(data))
 }
 
 func cleanAssetName(urlPath string) string {
@@ -863,7 +867,7 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 func protectBrowserRequests(allowedHosts []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isBrowserRequest(r) && (!isAllowedBrowserHost(r.Host, allowedHosts) || !isSameOriginBrowserRequest(r)) {
-			writeError(w, http.StatusForbidden, errors.New("browser requests must use an allowed MagicHandy origin"))
+			rejectRequest(w, r, http.StatusForbidden, errors.New("browser requests must use an allowed MagicHandy origin"))
 			return
 		}
 		next.ServeHTTP(w, r)

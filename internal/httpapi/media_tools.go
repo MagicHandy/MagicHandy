@@ -84,7 +84,7 @@ func (s *Server) handleMediaThumbnail(w http.ResponseWriter, r *http.Request) {
 	// Covers change only when regenerated, and the row's timestamp changes with
 	// them, so a short cache keeps a scrolling grid from refetching every tile.
 	w.Header().Set("Cache-Control", "private, max-age=60")
-	http.ServeContent(w, r, "thumbnail.jpg", info.ModTime(), file)
+	serveBoundedContent(w, r, "thumbnail.jpg", info.ModTime(), file)
 }
 
 // handleMediaThumbnailUpload accepts a cover the browser captured from a video
