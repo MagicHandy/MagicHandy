@@ -12,16 +12,16 @@ path is added.
 
 | Artifact | Previous pressure checkpoint | Recovery and menus | Change |
 | --- | ---: | ---: | ---: |
-| Stripped CGO-free binary | 19,901,952 B | 19,996,160 B | +94,208 B |
-| Main JS, raw | 827,019 B | 845,142 B | +18,123 B |
-| Main JS, gzip-9 | 228,094 B | 232,511 B | +4,417 B |
-| All embedded assets | 2,146,356 B | 2,187,966 B | +41,610 B |
+| Stripped CGO-free binary | 19,901,952 B | 19,996,672 B | +94,720 B |
+| Main JS, raw | 827,019 B | 845,134 B | +18,115 B |
+| Main JS, gzip-9 | 228,094 B | 232,535 B | +4,441 B |
+| All embedded assets | 2,146,356 B | 2,188,303 B | +41,947 B |
 
 Measured with Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
 Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. The menu follow-up accounts
-for 2,209 B of compressed main JS relative to the first recovery build. The
+for 2,233 B of compressed main JS relative to the first recovery build. The
 canonical dist replaces earlier hashes, and the running app's served main
-bundle matches SHA-256 `dc667ddd87cb6407a47b07653d15daeb955738ba547748c84286212073815adf`.
+bundle matches SHA-256 `83b0799dd6105565fa78f346e03e99b1987f99d98d6f29fb597cf755e2200e5f`.
 
 Opening Profile makes no page-specific account-directory, grant, session,
 network-status or audit requests. Grant inspection is limited to the selected
@@ -35,7 +35,7 @@ budgets reuse the bounded authentication/session infrastructure. Concurrent
 redemption, rollback and real HTTP/1/2 stream retirement are regression-tested.
 
 After desktop/390px browser review, one final process sample recorded
-94,498,816 B working set and 83,128,320 B private memory. Its workload/lifetime
+98,037,760 B working set and 86,978,560 B private memory. Its workload/lifetime
 differs from earlier samples, so this is not a controlled memory improvement.
 The exact final build passes a real LLM generation probe. Its
 text-only app chat completed in 110 ms with one provider call, no repair or

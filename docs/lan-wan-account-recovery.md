@@ -14,7 +14,8 @@ the panel shows the remaining count, never the codes. Generating another set
 immediately invalidates the old set. Removing a set also requires the current
 password. These operations do not need controller ownership.
 
-If the password is lost, choose **Use a recovery code** on the sign-in screen.
+If the password is lost, choose the small **Forgot password?** action on the
+sign-in screen to reveal the recovery-code form.
 Supply the installation's username, a previously saved code and a confirmed
 replacement password. Successful recovery changes the password and invalidates
 **every existing login and every code in that set**. Sign in separately with

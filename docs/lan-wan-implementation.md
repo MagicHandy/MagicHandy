@@ -103,6 +103,8 @@ and one shared draft/Save action. Chat and Access share their sidebar; General,
 Device, Media library, Voice and Diagnostics remain single pages. Flat sections,
 sentence-case headings, 32px narrow-layout actions and an on-demand theme
 chooser reduce visual weight across the settings system.
+The sign-in screen exposes recovery through a small **Forgot password?** text
+button; the recovery-code form appears only after activation.
 
 Full Go/race suites, vet, zero-issue golangci-lint v2.12.2 and the CGO-free build
 passed for the recovery core. Final menu changes pass TypeScript, 2,199 keys
@@ -132,10 +134,11 @@ and Stop remains pinned. Restoring 1110px restores the sidebar and hides the
 overflow buttons. This is responsive
 Chromium evidence, not physical Android/iOS or WAN acceptance. No console
 warnings/errors were observed. The served JS hash matches the worktree; the
-redacted connection report is 1,187 B in the final sample. The [scorecard](goal-scorecard.md)
+redacted connection report is 1,188 B in the final sample. The [scorecard](goal-scorecard.md)
 records artifact sizes and the limits of runtime samples.
 
-The browser remains on Chat → Model with an idle simulator and hardware
+After the Chat settings review, the browser was left on the sign-in screen to
+show the compact Forgot password action, with the simulator stopped and hardware
 disconnected. Existing user-launched processes, network exposure, firewall and
 trust configuration are preserved. Invitations, stronger authentication,
 lost-all-credentials recovery, broad handler/resource coverage and the complete

@@ -105,7 +105,7 @@ export function LoginRoute() {
             </button>
           </form>
         )}
-        {!bootstrap && !recovery && auth.status?.initialized && <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => { setPassword(""); setConfirmation(""); setError(""); setRecovery(true); }}>{t("Use a recovery code")}</button>}
+        {!bootstrap && !recovery && auth.status?.initialized && <button className="auth-recovery-link" type="button" disabled={busy} onClick={() => { setPassword(""); setConfirmation(""); setError(""); setRecovery(true); }}>{t("Forgot password?")}</button>}
         <div className="auth-safety-note">
           <strong>{t("Emergency Stop remains available.")}</strong>
           <span>{t("Signing in does not transfer device control; the existing controller lease still decides which browser may command motion.")}</span>

@@ -149,7 +149,8 @@ silent insecure fallback. Stop the old listener before reusing its data
 directory. A local recovery launch is not password recovery.
 
 Save account recovery codes from **Settings → Access → Security → Recovery codes** before
-losing the password. The sign-in screen's **Use a recovery code** action changes
+losing the password. The sign-in screen's small **Forgot password?** action opens
+the recovery-code form, which changes
 the password and signs out every login for that account; sign in separately and
 generate a new set afterward. Codes cannot be retrieved again or re-enable a
 disabled account. See the [saved-code contract](lan-wan-account-recovery.md).

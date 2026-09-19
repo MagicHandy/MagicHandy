@@ -65,6 +65,21 @@
   justify-self: start;
 }
 
+.auth-recovery-link {
+  justify-self: start;
+  min-height: 28px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: .8125rem;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.auth-recovery-link:hover:not(:disabled) { color: var(--accent); }
+.auth-recovery-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.auth-recovery-link:disabled { opacity: .5; cursor: default; }
+
 .auth-safety-note,
 .auth-notice {
   display: grid;

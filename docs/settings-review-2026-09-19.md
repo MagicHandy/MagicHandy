@@ -38,6 +38,10 @@ the route, and entry/resizing keeps the selected link visible without scrolling
 the page vertically. Settings actions and icon buttons are 32px in this layout.
 The permanent Emergency Stop remains in the application shell.
 
+On the sign-in screen, a small **Forgot password?** text button reveals the
+recovery-code form. Recovery controls remain hidden during ordinary sign-in;
+going back discards the recovery fields and clears the typed login password.
+
 ## Validation and limits
 
 - All 631 frontend tests in 83 files pass, including legacy/canonical routes,
@@ -55,11 +59,17 @@ The permanent Emergency Stop remains in the application shell.
 - Restoring the normal 1110px viewport restores the Chat sidebar. The legacy
   Model bookmark selects Chat → Model, with the provider ready. Mobile session
   Refresh, Name, Sign out and Sign out other sessions all measure 32px.
+- The follow-up sign-in review verifies a 28px-high Forgot password text button
+  at 390px, recovery fields absent before activation and restored sign-in on
+  returning. All eight login/recovery checks pass; no password or code was
+  submitted during visual review. The browser is left signed out to show this
+  entry, with the normal viewport restored.
 - The current review binary at `http://127.0.0.10:50007` serves the exact
   worktree bundle and passes the real LLM readiness probe. Its text-only app
   chat returned “Text chat is ready.” in 110 ms, with one provider call and no
   repair, fallback or motion. Voice and LLM motion remain off; the simulator
-  is idle and Bluetooth is disconnected.
+  remained idle during generation; signing out retired control and Bluetooth
+  remains disconnected.
 
 This is responsive browser validation on the review host, not physical mobile
 or external WAN acceptance. Artifact sizes and the limits of the runtime sample

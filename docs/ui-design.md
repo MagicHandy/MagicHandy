@@ -27,7 +27,8 @@ decisions and validation.
 
 Recovery codes are an on-demand panel under Access → Security. Current-password
 confirmation precedes issuance/removal; only the backend's count is retained
-after the one-time display closes. The sign-in screen offers saved-code recovery,
+after the one-time display closes. A small **Forgot password?** text button on
+the sign-in screen reveals saved-code recovery. The recovery form
 requires replacement-password confirmation and directs the user to sign in
 separately after success. Unknown outcomes never trigger automatic retries or
 restore old authority. See the [recovery contract](lan-wan-account-recovery.md).
