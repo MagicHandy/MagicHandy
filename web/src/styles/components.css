@@ -1076,27 +1076,6 @@ textarea:disabled {
   font-size: 0.85rem;
 }
 
-/* ---- Settings sub-nav ---- */
-.settings-nav {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
-}
-.settings-nav a {
-  padding: 7px 13px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--surface-2);
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 0.85rem;
-}
-.settings-nav a[aria-current="page"] {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
 .quick-fields {
   border: 0;
   margin: 0;

@@ -239,42 +239,17 @@ func (s *Store) List(ctx context.Context) ([]Account, error) {
 // Authenticate performs the same Argon2id work for missing, disabled, and
 // existing accounts and returns one generic credential error.
 func (s *Store) Authenticate(ctx context.Context, username, password string) (Account, error) {
-	_, usernameKey, usernameErr := normalizeUsername(username)
-	var account Account
-	var encoded string
-	found := usernameErr == nil
-	if found {
-		var disabled int
-		err := s.db.SQL().QueryRowContext(ctx, `
-			SELECT id, username, role, disabled, last_login_at, created_at, updated_at, profile_updated_at, password_hash
-			FROM user_accounts
-			WHERE username_key = ?
-		`, usernameKey).Scan(
-			&account.ID, &account.Username, &account.Role, &disabled,
-			&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt, &account.ProfileUpdatedAt, &encoded,
-		)
-		account.Disabled = disabled != 0
-		account.HasProfileImage = account.ProfileUpdatedAt != ""
-		if errors.Is(err, sql.ErrNoRows) {
-			found = false
-		} else if err != nil {
-			return Account{}, fmt.Errorf("read user account: %w", err)
-		}
+	proof, err := s.checkPassword(ctx, username, password)
+	if err != nil {
+		return Account{}, err
 	}
-	if !found {
-		encoded = dummyPasswordHash()
-	}
-	matched, verifyErr := s.verifyPassword(ctx, password, encoded)
-	if verifyErr != nil || !found || account.Disabled || !matched {
-		return Account{}, ErrInvalidCredentials
-	}
-
+	account := proof.account
 	now := s.now().Format(time.RFC3339Nano)
 	if err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `
 			UPDATE user_accounts SET last_login_at = ?, updated_at = ?
-			WHERE id = ? AND disabled = 0
-		`, now, now, account.ID)
+			WHERE id = ? AND disabled = 0 AND password_hash = ?
+		`, now, now, account.ID, proof.encoded)
 		if err != nil {
 			return err
 		}
@@ -306,6 +281,10 @@ func (s *Store) NewSession(ctx context.Context, accountID string) (string, Sessi
 // NewSessionWithClient records only a coarse, untrusted browser/platform hint.
 // The independent management ID is never accepted as a bearer credential.
 func (s *Store) NewSessionWithClient(ctx context.Context, accountID string, client SessionClient) (string, Session, error) {
+	return s.newSessionWithClient(ctx, accountID, client, nil)
+}
+
+func (s *Store) newSessionWithClient(ctx context.Context, accountID string, client SessionClient, proof *passwordProof) (string, Session, error) {
 	raw := make([]byte, 32)
 	if err := s.randomBytes(raw); err != nil {
 		return "", Session{}, fmt.Errorf("generate session token: %w", err)
@@ -340,6 +319,15 @@ func (s *Store) NewSessionWithClient(ctx context.Context, accountID string, clie
 		account.HasProfileImage = account.ProfileUpdatedAt != ""
 		if account.Disabled {
 			return ErrInvalidCredentials
+		}
+		if proof != nil {
+			if err := proof.revalidate(ctx, tx); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE user_accounts SET last_login_at = ?, updated_at = ? WHERE id = ?`, now, now, accountID); err != nil {
+				return err
+			}
+			account.LastLoginAt, account.UpdatedAt = now, now
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO user_sessions(token_hash, user_id, created_at, last_seen_at, expires_at, public_id, client_browser, client_platform)
@@ -494,26 +482,10 @@ func (s *Store) SetPassword(ctx context.Context, accountID, password string) err
 	if err != nil {
 		return err
 	}
-	now := s.now().Format(time.RFC3339Nano)
+	now := s.now()
 	return s.db.WithTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, `
-			UPDATE user_accounts SET password_hash = ?, updated_at = ? WHERE id = ?
-		`, encoded, now, accountID)
-		if err != nil {
-			return err
-		}
-		changed, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if changed != 1 {
-			return ErrNotFound
-		}
-		_, err = tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = ?`, accountID)
-		if err != nil {
-			return err
-		}
-		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: audit.PasswordChanged, Outcome: "success", TargetAccountID: accountID})
+		_, err := s.replacePasswordTx(ctx, tx, accountID, encoded, now)
+		return err
 	})
 }
 
@@ -553,6 +525,9 @@ func (s *Store) SetDisabled(ctx context.Context, accountID string, disabled bool
 		if disabled {
 			_, err := tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = ?`, accountID)
 			if err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `DELETE FROM user_recovery_codes WHERE user_id = ?`, accountID); err != nil {
 				return err
 			}
 		}

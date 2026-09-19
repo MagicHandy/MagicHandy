@@ -19,6 +19,7 @@ import "./styles/model-manager.css";
 import "./styles/setup.css";
 import "./styles/update.css";
 import "./styles/auth.css";
+import "./styles/settings-navigation.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

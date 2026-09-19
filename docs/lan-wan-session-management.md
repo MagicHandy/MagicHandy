@@ -41,8 +41,9 @@ context immediately. Controller/gateway retirement uses the existing shared
 Stop lifecycle. A bounded acknowledgement may finish after self-revocation;
 this grants no new authority. Client cancellation and server shutdown remain
 attached. Logout uses the same retirement path and clears the browser cookie.
-Password reset, disabling and external store changes retain the existing
-watchdog revalidation fallback. Network acknowledgement is not proof that a
+HTTP password changes and [saved-code recovery](lan-wan-account-recovery.md)
+now retire affected work immediately after commit. Disabling and external
+store changes retain the watchdog fallback. Network acknowledgement is not proof that a
 physical device has stopped.
 
 The panel cancels obsolete reads, refreshes after changes and never replays a
@@ -56,7 +57,8 @@ APIs and require no controller grant.
 ## Maintained admission inventory
 
 The committed [route table](../internal/httpapi/testdata/route_admission.tsv)
-classifies all **207** current ServeMux registrations. A source-inventory test
+classifies all **213** current ServeMux registrations, including saved-code
+recovery and audit endpoints. A source-inventory test
 requires an entry for every registration and rejects stale, duplicate or
 unrecognized registration shapes. The role test covers each method, every
 implicit `HEAD` for a `GET` registration, and anonymous, observer, granted
@@ -64,12 +66,12 @@ operator, administrator and revoked-administrator callers.
 
 | Admission policy | Registrations | Meaning |
 | --- | ---: | --- |
-| Public | 6 | Shell, health, authentication entry points and global Stop |
+| Public | 7 | Shell, health, authentication/recovery entry points and global Stop |
 | Shared observation | 34 | Any enabled login may enter; installation data remains shared |
-| Self-service / caller-scoped | 14 | Any enabled login may enter; the handler checks the affected identity/resource |
+| Self-service / caller-scoped | 17 | Any enabled login may enter; the handler checks the affected identity/resource |
 | Gateway maintenance | 4 | Login admission is independent of controller status; gateway ownership is checked separately |
 | Semantic control | 30 | Administrator or operator with an unexpired control grant |
-| Host administration | 119 | Administrator admission; applicable controller/local-origin checks still apply |
+| Host administration | 121 | Administrator admission; applicable controller/local-origin checks still apply |
 
 The table verifies authentication and role **admission**, not successful
 execution of each route. Origin checks, command tickets/generations, gateway

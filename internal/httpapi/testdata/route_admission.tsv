@@ -6,6 +6,7 @@ host	DELETE /api/accounts/{id}/control-grant
 host	GET /api/audit
 host	GET /api/audit/export
 self	DELETE /api/auth/profile-image
+self	DELETE /api/auth/recovery-codes
 self	DELETE /api/auth/sessions
 self	DELETE /api/auth/sessions/{id}
 control	DELETE /api/chat/sessions/{id}
@@ -34,6 +35,7 @@ self	GET /api/accounts/{id}/profile-image
 self	GET /api/auth/control-identities
 self	GET /api/auth/sessions
 public	GET /api/auth/status
+self	GET /api/auth/recovery-codes
 shared	GET /api/chat/messages
 shared	GET /api/chat/messages/{seq}/content
 shared	GET /api/chat/sessions
@@ -104,6 +106,8 @@ host	PATCH /api/personas/{id}/lore/{lore_id}
 host	POST /api/accounts
 public	POST /api/auth/bootstrap
 public	POST /api/auth/login
+public	POST /api/auth/recover
+self	POST /api/auth/recovery-codes
 self	POST /api/auth/logout
 self	POST /api/chat/cursor
 control	POST /api/chat/sessions

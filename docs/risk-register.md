@@ -1839,6 +1839,15 @@ three-artifact reviewed setup path without reusing or moving alpha.12.
 
 Level: High
 
+The [saved recovery checkpoint](lan-wan-account-recovery.md) closes password
+verification/reset races and binds password/code mutations to still-live proof
+inside their transaction. Recovery invalidates all logins/codes, cancels active
+streams and retires shared control without automatic login. Codes are stored
+only as digests and excluded from logs/audit/status. Concurrent redemption,
+audit rollback, stale password changes and HTTP/1/2 retirement are covered.
+Stolen codes remain password-reset credentials; stronger WAN authentication,
+enrollment, lost-all-credentials recovery and real deployment acceptance remain.
+
 The [request-pressure checkpoint](lan-wan-request-pressure.md) reserves bounded
 controller/gateway capacity before authentication, bounds temporary storage
 waits without erasing valid cookies, and releases stalled HTTP/1 and HTTP/2
@@ -1858,7 +1867,7 @@ or establish WAN load/device acceptance.
 The [session management checkpoint](lan-wan-session-management.md) adds
 account-owned management IDs, transaction-level actor revalidation and active
 request/gateway/controller retirement. Self-revocation retains a bounded
-acknowledgement without retaining authority. A 209-route admission table tests
+acknowledgement without retaining authority. A 213-route admission table tests
 roles and implicit HEAD, and exact setup status now requires administrator
 access. This is admission coverage; full payload redaction, handler/UI scope,
 invitations, exhaustive audit attribution and real WAN/mobile/device acceptance remain open.

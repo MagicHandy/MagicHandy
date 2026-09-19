@@ -64,7 +64,7 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
 
   if (!mem) return (
     <div className="group">
-      <h3 className="group-title">{t("Long-term memory")}</h3>
+      <h4 className="group-title">{t("Long-term memory")}</h4>
       {loadError ? (
         <div className="empty-state compact-empty" role="alert">
           <strong>{t("Memory unavailable")}</strong>
@@ -80,7 +80,7 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
 
   return (
     <div className="group" aria-busy={busy || loading || undefined}>
-      <h3 className="group-title">{t("Long-term memory")}</h3>
+      <h4 className="group-title">{t("Long-term memory")}</h4>
       {loadError && (
         <div className="empty-state compact-empty" role="alert">
           <strong>{t("Memory refresh failed")}</strong>

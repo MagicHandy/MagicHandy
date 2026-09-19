@@ -7,6 +7,8 @@ import { t, translateKnown, type MessageKey } from "../i18n";
 const eventLabels: Record<string, MessageKey> = {
   account_created: "Account created", account_enabled: "Account enabled", account_disabled: "Account disabled",
   password_changed: "Password changed", session_created: "Signed in", session_revoked: "Session signed out",
+  password_recovered: "Password recovered", recovery_codes_replaced: "Recovery codes replaced", recovery_codes_removed: "Recovery codes removed",
+  credential_check_failed: "Credential check failed", credential_check_throttled: "Credential check throttled",
   sessions_revoked: "Other sessions signed out", grant_issued: "Control permission granted", grant_revoked: "Control permission revoked",
   login_failed: "Sign-in rejected", login_throttled: "Sign-in throttled", control_claimed: "Control claimed",
   control_transferred: "Control transferred", control_lost: "Control lost", command_finished: "Command completed",
@@ -20,8 +22,8 @@ const operationLabels: Record<string, MessageKey> = {
   heartbeat_expired: "Heartbeat expired", session_ended: "Session ended", permission_ended: "Control permission ended", takeover: "Takeover", emergency: "Emergency Stop", shutdown: "Shutdown", other: "Other",
 };
 
-export function AuditSettingsPanel({ backendOnline, accounts }: { backendOnline: boolean; accounts: UserAccount[] }) {
-  const [expanded, setExpanded] = useState(false);
+export function AuditSettingsPanel({ backendOnline, accounts, initiallyExpanded = false }: { backendOnline: boolean; accounts: UserAccount[]; initiallyExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const [before, setBefore] = useState(0);
   const [revision, setRevision] = useState(0);
   const [page, setPage] = useState<AccessAuditPage | null>(null);
@@ -86,7 +88,7 @@ export function AuditSettingsPanel({ backendOnline, accounts }: { backendOnline:
 
   const locked = !backendOnline || loading || downloading;
   const accountName = (id?: string) => accounts.find((account) => account.id === id)?.username || (id ? t("Account {id}", { id: id.slice(0, 8) }) : "—");
-  return <details className="group access-audit" onToggle={(event) => setExpanded(event.currentTarget.open)}>
+  return <details className="group access-audit" open={expanded} onToggle={(event) => setExpanded(event.currentTarget.open)}>
     <summary className="group-title">{t("Access and control history")}</summary>
     {expanded && <>
       <p className="hint-block">{t("Administrator history records access and control outcomes without passwords, chat, audio, or private file paths.")}</p>
@@ -108,7 +110,7 @@ export function AuditSettingsPanel({ backendOnline, accounts }: { backendOnline:
             <div className="audit-event-meta"><time dateTime={new Date(event.occurred_at_ms).toISOString()}>{new Date(event.occurred_at_ms).toLocaleString()}</time><span>{event.actor.type === "account" ? accountName(event.actor.account_id) : event.actor.type === "public" ? t("Unauthenticated caller") : event.actor.type === "local" ? t("Local client") : t("System")}</span></div>
             {event.operation && <span>{translateKnown(operationLabels[event.operation] || "Unknown")}</span>}
             {event.target_account_id && <span> · {accountName(event.target_account_id)}</span>}
-            {event.count !== undefined && <span> · {event.kind === "history_gap" ? t("{count} missing events", { count: event.count }) : t("{count} sessions", { count: event.count })}</span>}
+            {event.count !== undefined && <span> · {event.kind === "history_gap" ? t("{count} missing events", { count: event.count }) : event.kind === "recovery_codes_replaced" ? t("{count} recovery codes", { count: event.count }) : t("{count} sessions", { count: event.count })}</span>}
             {event.expires_at_ms !== undefined && <span> · {t("Expires: {time}", { time: new Date(event.expires_at_ms).toLocaleString() })}</span>}
             <AuditReferences event={event} />
           </li>)}

@@ -88,6 +88,9 @@ func singleResourceAction(route, prefix, action string) bool {
 }
 
 func selfServiceRoute(r *http.Request) bool {
+	if r.URL.Path == "/api/auth/recovery-codes" && (r.Method == http.MethodPost || r.Method == http.MethodDelete) {
+		return true
+	}
 	if ownSessionManagementRoute(r) {
 		return true
 	}

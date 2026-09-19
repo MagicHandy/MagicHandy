@@ -76,5 +76,19 @@ describe("LoginRoute", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("Local setup required");
     expect(screen.queryByLabelText("Password")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Use a recovery code" })).not.toBeInTheDocument();
+  });
+
+  it("keeps recovery separate from signing in and discards the typed login password", () => {
+    render(<LoginRoute />);
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "owner" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "unsubmitted password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Use a recovery code" }));
+    expect(screen.getByRole("heading", { name: "Recover your account" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Username")).toHaveValue("owner");
+    expect(screen.getByText("Emergency Stop remains available.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+    expect(screen.getByLabelText("Password")).toHaveValue("");
+    expect(auth.login).not.toHaveBeenCalled();
   });
 });

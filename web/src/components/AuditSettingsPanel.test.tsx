@@ -27,6 +27,16 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("administrator access history", () => {
+  it("opens a dedicated history page immediately and labels recovery code counts accurately", async () => {
+    const result = page();
+    result.events[0] = { ...result.events[0], kind: "recovery_codes_replaced", count: 8 };
+    list.mockResolvedValueOnce(result);
+    render(<AuditSettingsPanel backendOnline accounts={[]} initiallyExpanded />);
+    expect(await screen.findByText("Recovery codes replaced")).toBeInTheDocument();
+    expect(screen.getByText(/8 recovery codes/)).toBeInTheDocument();
+    expect(screen.queryByText(/8 sessions/)).not.toBeInTheDocument();
+  });
+
   it("loads only while expanded and replaces pages instead of retaining an unbounded feed", async () => {
     render(<AuditSettingsPanel backendOnline accounts={[]} />);
     expect(list).not.toHaveBeenCalled();

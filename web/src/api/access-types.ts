@@ -3,6 +3,16 @@
 
 export type AccountRole = "admin" | "operator";
 
+export interface RecoveryCodeStatus {
+  remaining: number;
+  limit: number;
+  created_at?: string;
+}
+
+export interface IssuedRecoveryCodes extends RecoveryCodeStatus {
+  codes: string[];
+}
+
 export interface ManagedSession {
   id: string;
   name: string;

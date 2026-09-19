@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { PasswordConfirmationField } from "../components/PasswordConfirmationField";
+import { AccountRecoveryForm } from "../components/AccountRecoveryForm";
 import { t, translateKnown } from "../i18n";
 import { useAuth } from "../state/auth";
 import { passwordMeetsMinimum } from "../util/password";
@@ -11,6 +12,7 @@ export function LoginRoute() {
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [recovery, setRecovery] = useState(false);
   const usernameInput = useRef<HTMLInputElement>(null);
   const bootstrap = auth.status?.initialized === false;
 
@@ -50,7 +52,7 @@ export function LoginRoute() {
           <span className="auth-mark" aria-hidden="true">M</span>
           <span>
             <p className="eyebrow">{t("Protected access")}</p>
-            <h1 id="auth-title">{bootstrap ? t("Create the first administrator") : t("Sign in to MagicHandy")}</h1>
+            <h1 id="auth-title">{bootstrap ? t("Create the first administrator") : recovery ? t("Recover your account") : t("Sign in to MagicHandy")}</h1>
           </span>
         </header>
         <p className="auth-intro">
@@ -58,7 +60,7 @@ export function LoginRoute() {
             ? t("Create the local administrator that will manage access to this installation.")
             : t("Use an account from this MagicHandy installation. Your session is kept in a protected browser cookie.")}
         </p>
-        {bootstrapUnavailable ? (
+        {recovery && !bootstrap ? <AccountRecoveryForm initialUsername={username} onBack={name => { setUsername(name); setPassword(""); setConfirmation(""); setError(""); setRecovery(false); }} /> : bootstrapUnavailable ? (
           <div className="auth-notice" role="alert">
             <strong>{t("Local setup required")}</strong>
             <span>{t("Create the first administrator from the computer running MagicHandy, then sign in remotely.")}</span>
@@ -103,6 +105,7 @@ export function LoginRoute() {
             </button>
           </form>
         )}
+        {!bootstrap && !recovery && auth.status?.initialized && <button className="btn btn-secondary" type="button" disabled={busy} onClick={() => { setPassword(""); setConfirmation(""); setError(""); setRecovery(true); }}>{t("Use a recovery code")}</button>}
         <div className="auth-safety-note">
           <strong>{t("Emergency Stop remains available.")}</strong>
           <span>{t("Signing in does not transfer device control; the existing controller lease still decides which browser may command motion.")}</span>

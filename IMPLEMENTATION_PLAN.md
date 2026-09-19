@@ -2,6 +2,31 @@
 
 ## Core Direction
 
+The September 19 [settings review](docs/settings-review-2026-09-19.md) combines
+Conversation, Model and Prompts & memory under Chat. Access and Chat share the
+responsive secondary navigation; the remaining five settings pages retain a
+single level. Legacy bookmarks, the common draft and backend permission checks
+are preserved. Shared flat sections and compact actions reduce visual weight;
+General's theme chooser opens on demand. No dependency or periodic work is added.
+
+The September 19 [Access settings navigation](docs/ui-design.md) groups personal
+Profile/Security/Sessions and administrator Accounts/Remote access/History into
+bookmarkable pages. Only visible panels load; grants and account creation open
+on demand. Directory/permission reads are bounded and canceled on exit, and
+security drafts cannot cross views or logins. The referenced account/session
+management patterns improve navigation without changing backend authority.
+Desktop navigation and account/session rows use explicit dividers and compact
+actions. Narrow layouts use two single-line scrolling navigation levels with
+neutral selection, overflow controls and automatic visibility of the selected
+route. These share one navigation component and add no dependency or data poll.
+
+The September 13 [saved account recovery checkpoint](docs/lan-wan-account-recovery.md)
+adds private offline codes and atomic password/session retirement. Login and
+queued password mutations recheck credentials inside their write transaction.
+Recovery closes active streams and retires control through shared Stop without
+automatically signing in or restarting motion. Enrollment, stronger WAN access
+policy, lost-all-credentials recovery and full network/device acceptance remain.
+
 The September 13 [LAN/WAN request-pressure work](docs/lan-wan-request-pressure.md)
 reserves controller/gateway capacity before session lookup, bounds overlapping
 HTTP Stop waiters and media/content writes, and preserves login cookies during

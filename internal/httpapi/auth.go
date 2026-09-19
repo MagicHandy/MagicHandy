@@ -87,18 +87,19 @@ func newAuthenticationComponents(store *config.Store, runtime Runtime) (*account
 func (s *Server) authenticationRoutes(mux *http.ServeMux) {
 	s.controlGrantRoutes(mux)
 	s.sessionManagementRoutes(mux)
+	s.accountRecoveryRoutes(mux)
 	mux.HandleFunc("GET /api/auth/status", s.handleAuthenticationStatus)
 	mux.HandleFunc("POST /api/auth/bootstrap", s.handleAuthenticationBootstrap)
-	mux.HandleFunc("POST /api/auth/login", s.handleAuthenticationLogin)
+	mux.HandleFunc("POST /api/auth/login", credentialHandler(s.handleAuthenticationLogin))
 	mux.HandleFunc("POST /api/auth/logout", s.handleAuthenticationLogout)
-	mux.HandleFunc("PUT /api/auth/password", s.handleAuthenticationPassword)
+	mux.HandleFunc("PUT /api/auth/password", credentialHandler(s.handleAuthenticationPassword))
 	mux.HandleFunc("GET /api/auth/control-identities", s.handleControlIdentities)
 	mux.HandleFunc("PUT /api/auth/control-identity", s.handleControlIdentity)
 	mux.HandleFunc("PUT /api/auth/profile-image", s.handleProfileImageUpload)
 	mux.HandleFunc("DELETE /api/auth/profile-image", s.handleProfileImageDelete)
 	mux.HandleFunc("GET /api/accounts", s.handleAccountsList)
 	mux.HandleFunc("POST /api/accounts", s.handleAccountCreate)
-	mux.HandleFunc("PUT /api/accounts/{id}/password", s.handleAccountPassword)
+	mux.HandleFunc("PUT /api/accounts/{id}/password", credentialHandler(s.handleAccountPassword))
 	mux.HandleFunc("PUT /api/accounts/{id}/disabled", s.handleAccountDisabled)
 	mux.HandleFunc("GET /api/accounts/{id}/profile-image", s.handleProfileImage)
 }
@@ -157,6 +158,8 @@ func isPublicAuthenticationRequest(r *http.Request) bool {
 		// Stop remains a fail-safe operation even if a browser session expires.
 		// Same-origin browser enforcement still runs outside this middleware.
 		return r.Method == http.MethodPost
+	case "/api/auth/recover":
+		return r.Method == http.MethodPost
 	default:
 		return false
 	}
@@ -182,13 +185,16 @@ func (s *Server) sessionFromRequest(r *http.Request) (accounts.Session, string, 
 }
 
 func (s *Server) authenticatePassword(r *http.Request, username, password string) (accounts.Account, bool, error) {
-	address := netaccess.ClientIP(r)
-	usernameKey := strings.ToLower(strings.TrimSpace(username))
-	if !s.auth.limiter.Allow(address, usernameKey) {
-		s.recordRejectedLogin(r, errAuthenticationThrottled)
+	return s.authenticateAccount(r, username, func() (accounts.Account, error) {
+		return s.accounts.Authenticate(r.Context(), username, password)
+	})
+}
+
+func (s *Server) authenticateAccount(r *http.Request, username string, authenticate func() (accounts.Account, error)) (accounts.Account, bool, error) {
+	if !s.allowCredentialAttempt(r, username) {
 		return accounts.Account{}, false, errAuthenticationThrottled
 	}
-	account, err := s.accounts.Authenticate(r.Context(), username, password)
+	account, err := authenticate()
 	if errors.Is(err, accounts.ErrInvalidCredentials) {
 		s.recordRejectedLogin(r, nil)
 		return accounts.Account{}, false, nil
@@ -197,6 +203,16 @@ func (s *Server) authenticatePassword(r *http.Request, username, password string
 		return accounts.Account{}, false, err
 	}
 	return account, true, nil
+}
+
+func (s *Server) allowCredentialAttempt(r *http.Request, username string) bool {
+	address := netaccess.ClientIP(r)
+	usernameKey := strings.ToLower(strings.TrimSpace(username))
+	if !s.auth.limiter.Allow(address, usernameKey) {
+		s.recordRejectedLogin(r, errAuthenticationThrottled)
+		return false
+	}
+	return true
 }
 
 func (s *Server) writeAuthenticationRequired(w http.ResponseWriter) {
@@ -354,47 +370,37 @@ func (s *Server) handleAuthenticationBootstrap(w http.ResponseWriter, r *http.Re
 }
 
 func (s *Server) handleAuthenticationPassword(w http.ResponseWriter, r *http.Request) {
-	account, authenticated := authenticatedAccount(r)
+	current, authenticated := authenticatedSession(r)
 	if !authenticated {
 		s.writeAuthenticationRequired(w)
-		return
-	}
-	if !requireJSONRequest(w, r) {
 		return
 	}
 	var body struct {
 		CurrentPassword string `json:"current_password"`
 		NewPassword     string `json:"new_password"`
 	}
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	if !decodeCredentialRequest(w, r, &body) {
 		return
 	}
-	verified, allowed, err := s.authenticatePassword(r, account.Username, body.CurrentPassword)
-	if errors.Is(err, errAuthenticationThrottled) {
+	if !s.allowCredentialAttempt(r, current.session.Account.Username) {
 		writeError(w, http.StatusTooManyRequests, errAuthenticationThrottled)
 		return
 	}
+	keys, err := s.accounts.ChangeOwnPassword(r.Context(), current.session.Key, body.CurrentPassword, body.NewPassword)
 	if err != nil {
-		s.logger.Warn("account password confirmation failed internally", "error", err)
-		writeError(w, http.StatusServiceUnavailable, errors.New("password change is temporarily unavailable"))
-		return
-	}
-	if !allowed || verified.ID != account.ID {
-		writeError(w, http.StatusUnauthorized, accounts.ErrInvalidCredentials)
-		return
-	}
-	if err := s.accounts.SetPassword(r.Context(), account.ID, body.NewPassword); err != nil {
 		if errors.Is(err, accounts.ErrInvalidPassword) {
 			writeError(w, http.StatusBadRequest, err)
 		} else {
-			s.logger.Warn("account password could not be changed", "error", err)
-			writeError(w, http.StatusInternalServerError, errors.New("account password could not be changed"))
+			if errors.Is(err, accounts.ErrInvalidCredentials) {
+				s.recordRejectedLogin(r, nil)
+			}
+			s.writeRecoveryError(w, err)
 		}
 		return
 	}
 	s.clearSessionCookie(w)
 	w.Header().Set("Clear-Site-Data", `"cookies"`)
+	s.endRevokedSessions(r.Context(), current.session.Key, keys)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -520,18 +526,20 @@ func (s *Server) handleProfileImage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAuthenticationLogin(w http.ResponseWriter, r *http.Request) {
-	if !requireJSONRequest(w, r) {
-		return
-	}
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	if !decodeCredentialRequest(w, r, &body) {
 		return
 	}
-	account, allowed, err := s.authenticatePassword(r, body.Username, body.Password)
+	var token string
+	var session accounts.Session
+	_, allowed, err := s.authenticateAccount(r, body.Username, func() (accounts.Account, error) {
+		var err error
+		token, session, err = s.accounts.LoginWithClient(r.Context(), body.Username, body.Password, sessionClientHint(r))
+		return session.Account, err
+	})
 	if errors.Is(err, errAuthenticationThrottled) {
 		writeError(w, http.StatusTooManyRequests, errAuthenticationThrottled)
 		return
@@ -545,13 +553,8 @@ func (s *Server) handleAuthenticationLogin(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusUnauthorized, accounts.ErrInvalidCredentials)
 		return
 	}
-	token, session, err := s.accounts.NewSessionWithClient(r.Context(), account.ID, sessionClientHint(r))
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, errors.New("login session could not be created"))
-		return
-	}
 	s.setSessionCookie(w, token)
-	writeJSON(w, http.StatusOK, session)
+	writeBoundedJSON(w, http.StatusOK, session)
 }
 
 func (s *Server) handleAuthenticationLogout(w http.ResponseWriter, r *http.Request) {
@@ -617,28 +620,36 @@ func (s *Server) handleAccountPassword(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAdministrator(w, r); !ok {
 		return
 	}
-	if !requireJSONRequest(w, r) {
+	current, ok := authenticatedSession(r)
+	if !ok {
+		s.writeAuthenticationRequired(w)
 		return
 	}
 	var body struct {
 		Password string `json:"password"`
 	}
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	if !decodeCredentialRequest(w, r, &body) {
 		return
 	}
-	if err := s.accounts.SetPassword(r.Context(), r.PathValue("id"), body.Password); err != nil {
+	keys, err := s.accounts.ResetPasswordForSession(r.Context(), current.session.Key, r.PathValue("id"), body.Password)
+	if err != nil {
 		switch {
 		case errors.Is(err, accounts.ErrNotFound):
 			writeError(w, http.StatusNotFound, err)
 		case errors.Is(err, accounts.ErrInvalidPassword):
 			writeError(w, http.StatusBadRequest, err)
+		case errors.Is(err, accounts.ErrInvalidSession):
+			s.writeAuthenticationRequired(w)
 		default:
 			s.logger.Warn("account password could not be changed", "error", err)
 			writeError(w, http.StatusInternalServerError, errors.New("account password could not be changed"))
 		}
 		return
 	}
+	if current.session.Account.ID == r.PathValue("id") {
+		s.clearSessionCookie(w)
+	}
+	s.endRevokedSessions(r.Context(), current.session.Key, keys)
 	w.WriteHeader(http.StatusNoContent)
 }
 

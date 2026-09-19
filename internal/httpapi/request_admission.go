@@ -117,7 +117,7 @@ func (s *Server) requestLane(r *http.Request) requestLane {
 	if readRequest(r) && !strings.HasPrefix(r.URL.Path, "/api/") {
 		return shellLane
 	}
-	if r.Method == http.MethodPost && (r.URL.Path == "/api/auth/login" || r.URL.Path == "/api/auth/bootstrap") {
+	if r.Method == http.MethodPost && (r.URL.Path == "/api/auth/login" || r.URL.Path == "/api/auth/bootstrap" || r.URL.Path == "/api/auth/recover") {
 		return loginLane
 	}
 	if r.URL.Path == "/api/controller/heartbeat" || immediateControlTraffic(r) {

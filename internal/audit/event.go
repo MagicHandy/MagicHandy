@@ -19,25 +19,30 @@ type Kind string
 
 // Supported event kinds deliberately exclude free-form application content.
 const (
-	AccountCreated     Kind = "account_created"
-	AccountEnabled     Kind = "account_enabled"
-	AccountDisabled    Kind = "account_disabled"
-	PasswordChanged    Kind = "password_changed"
-	SessionCreated     Kind = "session_created"
-	SessionRevoked     Kind = "session_revoked"
-	SessionsRevoked    Kind = "sessions_revoked"
-	GrantIssued        Kind = "grant_issued"
-	GrantRevoked       Kind = "grant_revoked"
-	LoginFailed        Kind = "login_failed"
-	LoginThrottled     Kind = "login_throttled"
-	ControlClaimed     Kind = "control_claimed"
-	ControlTransferred Kind = "control_transferred"
-	ControlLost        Kind = "control_lost"
-	CommandFinished    Kind = "command_finished"
-	StopFinished       Kind = "stop_finished"
-	ServerStarted      Kind = "server_started"
-	ServerStopped      Kind = "server_stopped"
-	HistoryGap         Kind = "history_gap"
+	AccountCreated           Kind = "account_created"
+	AccountEnabled           Kind = "account_enabled"
+	AccountDisabled          Kind = "account_disabled"
+	PasswordChanged          Kind = "password_changed"
+	PasswordRecovered        Kind = "password_recovered"
+	RecoveryCodesReplaced    Kind = "recovery_codes_replaced"
+	RecoveryCodesRemoved     Kind = "recovery_codes_removed"
+	SessionCreated           Kind = "session_created"
+	SessionRevoked           Kind = "session_revoked"
+	SessionsRevoked          Kind = "sessions_revoked"
+	GrantIssued              Kind = "grant_issued"
+	GrantRevoked             Kind = "grant_revoked"
+	LoginFailed              Kind = "login_failed"
+	LoginThrottled           Kind = "login_throttled"
+	CredentialCheckFailed    Kind = "credential_check_failed"    // #nosec G101 -- public event classification, not a credential.
+	CredentialCheckThrottled Kind = "credential_check_throttled" // #nosec G101 -- public event classification, not a credential.
+	ControlClaimed           Kind = "control_claimed"
+	ControlTransferred       Kind = "control_transferred"
+	ControlLost              Kind = "control_lost"
+	CommandFinished          Kind = "command_finished"
+	StopFinished             Kind = "stop_finished"
+	ServerStarted            Kind = "server_started"
+	ServerStopped            Kind = "server_stopped"
+	HistoryGap               Kind = "history_gap"
 )
 
 // Actor identifies the authenticated caller or a non-account system/public lane.
@@ -149,7 +154,7 @@ func validActor(actor Actor) bool {
 
 func validKind(kind Kind) bool {
 	switch kind {
-	case AccountCreated, AccountEnabled, AccountDisabled, PasswordChanged, SessionCreated, SessionRevoked, SessionsRevoked, GrantIssued, GrantRevoked, LoginFailed, LoginThrottled, ControlClaimed, ControlTransferred, ControlLost, CommandFinished, StopFinished, ServerStarted, ServerStopped, HistoryGap:
+	case AccountCreated, AccountEnabled, AccountDisabled, PasswordChanged, PasswordRecovered, RecoveryCodesReplaced, RecoveryCodesRemoved, SessionCreated, SessionRevoked, SessionsRevoked, GrantIssued, GrantRevoked, LoginFailed, LoginThrottled, CredentialCheckFailed, CredentialCheckThrottled, ControlClaimed, ControlTransferred, ControlLost, CommandFinished, StopFinished, ServerStarted, ServerStopped, HistoryGap:
 		return true
 	default:
 		return false

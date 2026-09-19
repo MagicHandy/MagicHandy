@@ -115,7 +115,7 @@ export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
 
   if (!sets) return (
     <div className="group">
-      <h3 className="group-title">{t("Prompt set editor")}</h3>
+      <h4 className="group-title">{t("Prompt set editor")}</h4>
       {loadError ? (
         <div className="empty-state compact-empty" role="alert">
           <strong>{t("Prompt sets unavailable")}</strong>
@@ -128,7 +128,7 @@ export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
 
   return (
     <div className="group" aria-busy={busy || loading || undefined}>
-      <h3 className="group-title">{t("Prompt set editor")}</h3>
+      <h4 className="group-title">{t("Prompt set editor")}</h4>
       {loadError && (
         <div className="empty-state compact-empty" role="alert">
           <strong>{t("Prompt set refresh failed")}</strong>

@@ -148,6 +148,14 @@ An unavailable address/port or invalid certificate fails startup; there is no
 silent insecure fallback. Stop the old listener before reusing its data
 directory. A local recovery launch is not password recovery.
 
+Save account recovery codes from **Settings → Access → Security → Recovery codes** before
+losing the password. The sign-in screen's **Use a recovery code** action changes
+the password and signs out every login for that account; sign in separately and
+generate a new set afterward. Codes cannot be retrieved again or re-enable a
+disabled account. See the [saved-code contract](lan-wan-account-recovery.md).
+Recovery without a password or any previously saved code remains unfinished;
+the network override above must not be treated as an authentication bypass.
+
 The one-click connection report contains version, network mode, authentication/
 cookie state, lease/generation, Stop sequence, dispatch owner and certificate
 expiry/reload status. It omits credentials, addresses, private paths, chat,

@@ -154,7 +154,7 @@ describe("PersonaGrid", () => {
     );
 
     const defaultTile = screen.getByRole("link", { name: "MagicHandy (Default)" });
-    expect(defaultTile).toHaveAttribute("href", "#/settings/prompts");
+    expect(defaultTile).toHaveAttribute("href", "#/settings/chat/prompts");
     expect(defaultTile).toHaveAttribute("aria-current", "true");
     expect(screen.getByText("1 persona")).toBeInTheDocument();
   });

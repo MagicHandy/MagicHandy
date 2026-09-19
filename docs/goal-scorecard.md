@@ -1,5 +1,50 @@
 # Goal Scorecard
 
+## 2026-09-19 — Account recovery and settings organization
+
+The [saved recovery contract](lan-wan-account-recovery.md) adds atomic password,
+login and code retirement. The [Access navigation](ui-design.md) separates
+personal Profile/Security/Sessions from administrator Accounts/Remote access/
+History, mounting only the selected area. The [settings review](settings-review-2026-09-19.md)
+also consolidates Conversation/Model/Prompts under Chat and shares compact
+navigation and action styling. No dependency, periodic browser poll or motion
+path is added.
+
+| Artifact | Previous pressure checkpoint | Recovery and menus | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,901,952 B | 19,996,160 B | +94,208 B |
+| Main JS, raw | 827,019 B | 845,142 B | +18,123 B |
+| Main JS, gzip-9 | 228,094 B | 232,511 B | +4,417 B |
+| All embedded assets | 2,146,356 B | 2,187,966 B | +41,610 B |
+
+Measured with Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. The menu follow-up accounts
+for 2,209 B of compressed main JS relative to the first recovery build. The
+canonical dist replaces earlier hashes, and the running app's served main
+bundle matches SHA-256 `dc667ddd87cb6407a47b07653d15daeb955738ba547748c84286212073815adf`.
+
+Opening Profile makes no page-specific account-directory, grant, session,
+network-status or audit requests. Grant inspection is limited to the selected
+operator; directory/grant reads time out in ten seconds and abort on exit.
+Normal shell state/heartbeat traffic is unchanged. These are tested request
+lifetimes/counts, not a measured WAN latency improvement.
+
+Storage retains at most eight 128-bit recovery codes per account as digests.
+Credential uploads are capped at 8 KiB/five seconds; operation and response
+budgets reuse the bounded authentication/session infrastructure. Concurrent
+redemption, rollback and real HTTP/1/2 stream retirement are regression-tested.
+
+After desktop/390px browser review, one final process sample recorded
+94,498,816 B working set and 83,128,320 B private memory. Its workload/lifetime
+differs from earlier samples, so this is not a controlled memory improvement.
+The exact final build passes a real LLM generation probe. Its
+text-only app chat completed in 110 ms with one provider call, no repair or
+fallback, and no motion; the recovery core's disposable-account round trip also passed.
+The two mobile navigation rows each measure 32px. At 390px all three Chat
+section labels fit together; the Access fixture fits four full labels before scrolling.
+Desktop session rows measure 62px in the reviewed fixture. The full WAN/load/soak and physical-client/device matrix
+remain open.
+
 ## 2026-09-13 — Request admission and bounded content/Stop replies
 
 The [request-pressure contract](lan-wan-request-pressure.md) adds bounded

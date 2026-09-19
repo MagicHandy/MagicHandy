@@ -55,7 +55,7 @@ The implementation is in progress on `codex/lan-wan-control`:
   persona provenance resolved against one captured conversation;
 - independent management IDs, account-scoped login listing/renaming/revocation
   and bounded reconciliation of a lost management response;
-- a maintained 209-route role admission inventory, setup/private-account read
+- a maintained 213-route role admission inventory, setup/private-account read
   boundaries, operator control permission fixes and cancelable feedback writes;
 - capability-specific shared response projections, administrator-only raw
   diagnostics, a minimal public Stop acknowledgement and browser login lifetime
@@ -67,7 +67,81 @@ The implementation is in progress on `codex/lan-wan-control`:
 - admission before authentication with reserved controller/gateway capacity,
   bounded storage lookup and honest retryable errors that preserve login cookies;
 - bounded overlapping HTTP Stop waiters with per-intent invalidation, prompt
-  replies to unfinished uploads, and cancelable media/content writes.
+  replies to unfinished uploads, and cancelable media/content writes;
+- saved recovery codes, atomic password/login/session revalidation and immediate
+  retirement of affected work after password changes and account recovery.
+
+## Account recovery and settings organization — 2026-09-19
+
+The [recovery contract](lan-wan-account-recovery.md) adds eight pre-saved codes,
+current-password-protected issuance/removal and atomic password/session/code
+retirement in schema 24. It closes reproduced password-verification/reset and
+login-issuance races, and rechecks own/admin password mutation authority in the
+write transaction. Successful recovery closes affected streams and retires
+control through shared Stop without signing in or resuming automatically.
+
+The user-requested settings review applies documented patterns from GitHub,
+Home Assistant and Tailscale. [Access now has six focused destinations](ui-design.md):
+Profile, Security, Sessions, Accounts & permissions, Remote access and Access
+history. Administrator destinations are absent for operators; invalid or
+unauthorized bookmarks resolve to the caller's profile. Only the selected
+panels load. Session expiry details, account creation and operator permission
+inspection open on demand. Navigation/login changes discard security drafts;
+directory and grant reads are bounded and canceled. A failed permission read
+no longer claims observer status or enables granting control.
+Desktop navigation has row/group dividers and a neutral selected outline;
+account/session lists share compact aligned actions on a flat surface. The
+mobile follow-up uses one 32px scrolling row per navigation level, concise
+labels and neutral filled selection, drawing on Carbon, Radix and Shopify.
+One shared component manages overflow, keeps the selected
+route visible, and disconnects its observer on exit. It neither activates a page
+when scrolling nor scrolls content vertically.
+
+The subsequent [whole-settings review](settings-review-2026-09-19.md) merges
+Conversation, Model and Prompts & memory under Chat, preserving old bookmarks
+and one shared draft/Save action. Chat and Access share their sidebar; General,
+Device, Media library, Voice and Diagnostics remain single pages. Flat sections,
+sentence-case headings, 32px narrow-layout actions and an on-demand theme
+chooser reduce visual weight across the settings system.
+
+Full Go/race suites, vet, zero-issue golangci-lint v2.12.2 and the CGO-free build
+passed for the recovery core. Final menu changes pass TypeScript, 2,199 keys
+across five locales, all **631 frontend tests in 83 files**, and current
+architecture/embedded-asset tests. The final production UI is rebuilt. No hard
+gate was changed. Regressions include code reuse/concurrency, audit rollback,
+cross-account/origin boundaries, incomplete uploads, real HTTP/1/2 revocation,
+lazy page loading, hidden administrator destinations, retained host drafts and
+discarded account/security drafts.
+
+The current review runs at `http://127.0.0.10:50007/#/settings/chat/model`
+with isolated data, simulated motion, voice/LLM motion off and the available
+local Ollama model. The exact final app passes real generation. Its app chat returned
+“Text chat is ready.” in **110 ms**, one provider call, with no repair,
+fallback or motion. A live disposable-operator recovery check issued eight
+codes, rejected reuse, ended the old login, authenticated with the replacement
+password and restored the fixture's original password. No real user credentials
+were copied or changed.
+
+Desktop review covered every Access area and loaded the chosen operator's
+permission details. The follow-up covers all seven settings destinations,
+each Chat child, the theme disclosure and the optional Qwen form. At 390px,
+both navigation levels stay on a single line,
+overflow arrows reveal destinations without navigating, selected links remain
+visible, the document has no horizontal overflow, form actions are reachable,
+and Stop remains pinned. Restoring 1110px restores the sidebar and hides the
+overflow buttons. This is responsive
+Chromium evidence, not physical Android/iOS or WAN acceptance. No console
+warnings/errors were observed. The served JS hash matches the worktree; the
+redacted connection report is 1,187 B in the final sample. The [scorecard](goal-scorecard.md)
+records artifact sizes and the limits of runtime samples.
+
+The browser remains on Chat → Model with an idle simulator and hardware
+disconnected. Existing user-launched processes, network exposure, firewall and
+trust configuration are preserved. Invitations, stronger authentication,
+lost-all-credentials recovery, broad handler/resource coverage and the complete
+network/device acceptance matrix remain in scope. No numbered checklist item
+is closed by this checkpoint, and browser file-save completion remains unverified
+as recorded in the prior audit checkpoint.
 
 ## Request-pressure checkpoint — 2026-09-13
 

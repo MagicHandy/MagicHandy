@@ -72,12 +72,19 @@ func (s *Server) recordAccessEvent(ctx context.Context, event audit.Event) {
 }
 
 func (s *Server) recordRejectedLogin(r *http.Request, err error) {
-	if r.URL.Path != "/api/auth/login" {
-		return
-	}
 	kind := audit.LoginFailed
 	if errors.Is(err, errAuthenticationThrottled) {
 		kind = audit.LoginThrottled
+	}
+	switch r.URL.Path {
+	case "/api/auth/login":
+	case "/api/auth/recover", "/api/auth/recovery-codes", "/api/auth/password":
+		kind = audit.CredentialCheckFailed
+		if errors.Is(err, errAuthenticationThrottled) {
+			kind = audit.CredentialCheckThrottled
+		}
+	default:
+		return
 	}
 	s.recordAccessEvent(r.Context(), audit.Event{Kind: kind, Outcome: "rejected", Actor: audit.Actor{Type: "public"}})
 }

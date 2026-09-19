@@ -108,7 +108,7 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   as UI tests. Selecting a linked profile never silently grants authority or
   reveals private history, media or host configuration.
   **In progress:** the [login management and admission checkpoint](lan-wan-session-management.md)
-  covers all 209 current registrations and implicit HEAD at role admission.
+  covers all 213 current registrations and implicit HEAD at role admission.
   [Observer response projections and UI boundaries](lan-wan-observer-privacy.md)
   now cover host configuration/diagnostic payloads and granted playback versus
   host edits. Exhaustive handler/resource, consent and full UI coverage remain open.
@@ -265,6 +265,10 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   account or remote-access changes where the selected threat model requires it.
   **Acceptance:** lost credentials, a lost second factor, a stolen session and
   a compromised invite have documented, tested containment and recovery paths.
+  **In progress:** [saved account recovery](lan-wan-account-recovery.md) adds
+  current-password-protected code issuance, atomic password/session retirement,
+  credential race fixes and bounded public recovery. Stronger authentication,
+  invitations/enrollment and local recovery without any saved credential remain.
 
 - [ ] **LAN-19 — Build repeatable network fault and load tests.** Cover request
   delay/reordering/duplicate delivery, response loss, blackholed connections,

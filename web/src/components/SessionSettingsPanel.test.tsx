@@ -26,6 +26,18 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("own login management", () => {
+  it("keeps session expiry details available without expanding every row", async () => {
+    render(<SessionSettingsPanel backendOnline onSignedOut={onSignedOut} />);
+    const peerRow = (await screen.findByText("Living room tablet")).closest("li")!;
+    const details = within(peerRow).getByText("Session details").closest("details")!;
+    expect(details.open).toBe(false);
+    expect(within(peerRow).getByText(/Last activity:/)).toBeVisible();
+    expect(within(peerRow).getByText(/Idle sign-out:/)).not.toBeVisible();
+    fireEvent.click(within(peerRow).getByText("Session details"));
+    expect(details.open).toBe(true);
+    expect(within(peerRow).getByText(/Idle sign-out:/)).toBeVisible();
+  });
+
   it("shows backend session facts and permits naming without controller ownership", async () => {
     render(<SessionSettingsPanel backendOnline onSignedOut={onSignedOut} />);
     const peerRow = (await screen.findByText("Living room tablet")).closest("li")!;

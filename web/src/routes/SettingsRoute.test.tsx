@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { PublicSettings } from "../api/types";
@@ -214,6 +214,27 @@ describe("SettingsRoute", () => {
     expect(api.llmModels).not.toHaveBeenCalled();
   });
 
+  it("opens account settings without waiting for or fetching host configuration", () => {
+    app.hash = "#/settings/access/security";
+    getSettings.mockImplementationOnce(() => new Promise(() => undefined));
+    render(<SettingsRoute />);
+    expect(screen.getByText("Own sign-ins fixture")).toBeInTheDocument();
+    expect(getSettings).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Save settings" })).not.toBeInTheDocument();
+  });
+
+  it("preserves an unsaved host-settings draft while visiting account settings", async () => {
+    app.hash = "#/settings/voice";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    const view = render(<SettingsRoute />);
+    fireEvent.change(await screen.findByLabelText("Reference transcript fixture"), { target: { value: "unsaved reference draft" } });
+    app.hash = "#/settings/access/security"; view.rerender(<SettingsRoute />);
+    expect(screen.getByText("Own sign-ins fixture")).toBeInTheDocument();
+    app.hash = "#/settings/voice"; view.rerender(<SettingsRoute />);
+    expect(screen.getByLabelText("Reference transcript fixture")).toHaveValue("unsaved reference draft");
+    expect(getSettings).toHaveBeenCalledOnce();
+  });
+
   it.each(["#/settings/model", "#/settings/diagnostics", "#/settings/voice"])("keeps own sign-ins accessible from an operator bookmark at %s", async (hash) => {
     app.hostAdministration = false;
     app.hash = hash;
@@ -275,6 +296,9 @@ describe("SettingsRoute", () => {
     getSettings.mockResolvedValue({ settings: settings("normal") });
     render(<SettingsRoute />);
 
+    const themeMenu = await screen.findByText("Theme", { selector: "summary" });
+    expect(screen.getByRole("radio", { name: /Steel Azure/ })).not.toBeVisible();
+    fireEvent.click(themeMenu);
     const steel = await screen.findByRole("radio", { name: /Steel Azure/ });
     expect(steel).toBeChecked();
     expect(screen.getAllByRole("radio")).toHaveLength(3);
@@ -338,7 +362,7 @@ describe("SettingsRoute", () => {
     expect(await screen.findByRole("link", { name: "一般" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "デバイス" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "メディアライブラリ" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "プロンプトとメモリ" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: japanese.Chat })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "診断" })).toBeInTheDocument();
     expect(screen.getByText("Cloud REST には、API v3 アクセスが有効な Handy ファームウェア v4 が必要です。")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "\u540c\u68b1\u30a2\u30d7\u30ea\u30b1\u30fc\u30b7\u30e7\u30f3 ID" })).toBeInTheDocument();
@@ -347,6 +371,7 @@ describe("SettingsRoute", () => {
     app.hash = "#/settings/prompts";
     render(<SettingsRoute />);
     expect(await screen.findByRole("option", { name: "実用（中立的なアシスタント）" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "プロンプトとメモリ" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "ペニス" })).toBeInTheDocument();
   });
 
@@ -380,12 +405,12 @@ describe("SettingsRoute", () => {
     getSettings.mockResolvedValue({ settings: settings("normal") });
     const view = render(<SettingsRoute />);
 
-    await screen.findByRole("heading", { level: 2, name: "Model" });
+    await screen.findByRole("heading", { level: 3, name: "Model" });
     await screen.findByRole("alert");
     const panel = view.container.querySelector(".panel");
     expect(panel).not.toBeNull();
-    expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Model");
-    expect(panel?.querySelectorAll(":scope > .group")).toHaveLength(3);
+    expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Chat");
+    expect(panel?.querySelectorAll(".settings-content > .group")).toHaveLength(3);
     expect(panel?.querySelectorAll(".group .group")).toHaveLength(0);
     expect(screen.getByRole("group", { name: "Motion generation" })).toBeInTheDocument();
   });
@@ -547,6 +572,50 @@ describe("SettingsRoute", () => {
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
     expect(saveSettings.mock.calls[0][0].motion.apply_video_speed_limit).toBe(true);
+  });
+
+  it.each(["#/settings/model", "#/settings/chat/model", "#/settings/prompts", "#/settings/chat/prompts"])("keeps %s inside the consolidated Chat settings", async (hash) => {
+    app.hash = hash;
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    render(<SettingsRoute />);
+    const navigation = await screen.findByRole("navigation", { name: "Settings sections" });
+    expect(within(navigation).getAllByRole("link")).toHaveLength(7);
+    expect(within(navigation).queryByRole("link", { name: "Model" })).not.toBeInTheDocument();
+    expect(within(navigation).queryByRole("link", { name: "Prompts & memory" })).not.toBeInTheDocument();
+    expect(within(navigation).getByRole("link", { name: "Chat" })).toHaveAttribute("aria-current", "page");
+    const chat = screen.getByRole("navigation", { name: "Chat sections" });
+    expect(within(chat).getAllByRole("link")).toHaveLength(3);
+    const label = hash.endsWith("model") ? "Model" : "Prompts & memory";
+    expect(within(chat).getByRole("link", { name: label })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("heading", { name: label, level: 3 })).toBeInTheDocument();
+  });
+
+  it("keeps one draft and one Save across Chat sections without refetching host settings", async () => {
+    app.hash = "#/settings/chat/conversation";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    const view = render(<SettingsRoute />);
+    fireEvent.change(await screen.findByLabelText(/When MagicHandy starts/), { target: { value: "new" } });
+    app.hash = "#/settings/chat/prompts"; view.rerender(<SettingsRoute />);
+    fireEvent.change(await screen.findByLabelText(/Chat voice/), { target: { value: "warm" } });
+    app.hash = "#/settings/chat/model"; view.rerender(<SettingsRoute />);
+    expect(await screen.findByRole("heading", { name: "Model", level: 3 })).toBeInTheDocument();
+    expect(getSettings).toHaveBeenCalledOnce();
+    expect(screen.getAllByRole("button", { name: "Save settings" })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].chat?.startup_behavior).toBe("new");
+    expect(saveSettings.mock.calls[0][0].llm.chat_voice).toBe("warm");
+  });
+
+  it("opens conversation for an unknown Chat child without adding a sidebar to General", async () => {
+    app.hash = "#/settings/chat/unknown";
+    getSettings.mockResolvedValue({ settings: settings("normal") });
+    const view = render(<SettingsRoute />);
+    expect(await screen.findByLabelText(/When MagicHandy starts/)).toBeInTheDocument();
+    app.hash = "#/settings/general"; view.rerender(<SettingsRoute />);
+    expect(screen.queryByRole("navigation", { name: "Chat sections" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Access sections" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Language" })).toBeInTheDocument();
   });
 
   it("persists startup and missing-file scan policy", async () => {

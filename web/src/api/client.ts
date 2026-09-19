@@ -3,6 +3,7 @@
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
 import type { AccessAuditPage } from "./audit-types";
+import type { RecoveryCodeStatus, IssuedRecoveryCodes } from "./access-types";
 import type {
   AppState,
   AutopilotSettings,
@@ -495,14 +496,18 @@ export const api = {
   authBootstrap: (username: string, password: string) =>
     request<{ account: UserAccount }>("POST", "/api/auth/bootstrap", { username, password }),
   authLogout: () => request<null>("POST", "/api/auth/logout", {}),
+  recoveryCodeStatus: (signal?: AbortSignal) => request<RecoveryCodeStatus>("GET", "/api/auth/recovery-codes", undefined, signal),
+  replaceRecoveryCodes: (password: string, signal?: AbortSignal) => request<IssuedRecoveryCodes>("POST", "/api/auth/recovery-codes", { password }, signal),
+  removeRecoveryCodes: (password: string, signal?: AbortSignal) => request<RecoveryCodeStatus>("DELETE", "/api/auth/recovery-codes", { password }, signal),
+  recoverPassword: (username: string, code: string, password: string, signal?: AbortSignal) => request<{ recovered: boolean }>("POST", "/api/auth/recover", { username, code, password }, signal),
   authSessions: (signal?: AbortSignal) => request<ManagedSessionsResponse>("GET", "/api/auth/sessions", undefined, signal),
   renameSession: (id: string, name: string, signal?: AbortSignal) => request<{ updated: boolean }>("PATCH", `/api/auth/sessions/${encodeURIComponent(id)}`, { name }, signal),
   revokeSession: (id: string, signal?: AbortSignal) => request<{ revoked: number; current_revoked: boolean }>("DELETE", `/api/auth/sessions/${encodeURIComponent(id)}`, undefined, signal),
   revokeOtherSessions: (signal?: AbortSignal) => request<{ revoked: number; current_revoked: boolean }>("DELETE", "/api/auth/sessions", undefined, signal),
   authChangePassword: (currentPassword: string, newPassword: string) =>
     request<null>("PUT", "/api/auth/password", { current_password: currentPassword, new_password: newPassword }),
-  accounts: () => request<{ accounts: UserAccount[] }>("GET", "/api/accounts"),
-  controlGrant: (id: string) => request<{ grant: ControlGrant | null }>("GET", `/api/accounts/${encodeURIComponent(id)}/control-grant`),
+  accounts: (signal?: AbortSignal) => request<{ accounts: UserAccount[] }>("GET", "/api/accounts", undefined, signal),
+  controlGrant: (id: string, signal?: AbortSignal) => request<{ grant: ControlGrant | null }>("GET", `/api/accounts/${encodeURIComponent(id)}/control-grant`, undefined, signal),
   grantControl: (id: string, duration_minutes: number) => request<{ grant: ControlGrant }>("PUT", `/api/accounts/${encodeURIComponent(id)}/control-grant`, { duration_minutes }),
   revokeControl: (id: string) => request<{ grant: null }>("DELETE", `/api/accounts/${encodeURIComponent(id)}/control-grant`),
   networkStatus: (signal?: AbortSignal) => request<NetworkStatus>("GET", "/api/network", undefined, signal),

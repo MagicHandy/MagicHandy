@@ -127,9 +127,9 @@ export function SessionSettingsPanel({ backendOnline, onSignedOut }: {
   };
 
   return <section className="group session-management" aria-labelledby="session-management-title" aria-busy={loading || busy || undefined}>
-    <div className="session-management-header">
+    <div className="access-section-header">
       <h3 id="session-management-title" className="group-title">{t("Your signed-in browsers")}</h3>
-      <button type="button" className="btn btn-secondary" disabled={!backendOnline || loading || busy} onClick={() => void load()}>{t("Refresh sessions")}</button>
+      <button type="button" className="btn btn-secondary" aria-label={t("Refresh sessions")} disabled={!backendOnline || loading || busy} onClick={() => void load()}>{t("Refresh")}</button>
     </div>
     <p className="hint-block">{t("A login may be shared by several tabs. Device names and browser hints help identify it; they are not proof of identity.")}</p>
     <p className="hint-block">{t("Signing out a controller or Bluetooth browser requests Stop.")}</p>
@@ -139,21 +139,26 @@ export function SessionSettingsPanel({ backendOnline, onSignedOut }: {
     <ul className="session-list">
       {sessions.map((session) => <li key={session.id} className="session-row">
         <div className="session-summary">
-          <strong>{sessionLabel(session)}</strong>
+          <div className="session-heading"><strong>{sessionLabel(session)}</strong>
           <span className="session-flags">
             {session.current && <span>{t("This browser")}</span>}
             {session.controller && <span>{t("Active controller")}</span>}
             {session.device_gateway && <span>{t("Bluetooth browser")}</span>}
           </span>
+          </div>
           {session.name && <small>{clientLabel(session)}</small>}
-          <small>{t("Signed in: {time}", { time: formatSessionTime(session.created_at) })}</small>
+          <div className="session-metadata">
           <small>{t("Last activity: {time}", { time: formatSessionTime(session.last_active_at) })}</small>
-          <small>{t("Idle sign-out: {time}", { time: formatSessionTime(session.idle_expires_at) })}</small>
-          <small>{t("Sign-in expires: {time}", { time: formatSessionTime(session.expires_at) })}</small>
+          <details className="session-details"><summary>{t("Session details")}</summary>
+            <small>{t("Signed in: {time}", { time: formatSessionTime(session.created_at) })}</small>
+            <small>{t("Idle sign-out: {time}", { time: formatSessionTime(session.idle_expires_at) })}</small>
+            <small>{t("Sign-in expires: {time}", { time: formatSessionTime(session.expires_at) })}</small>
+          </details>
+          </div>
         </div>
         <div className="session-actions">
-          <button type="button" className="btn btn-secondary" disabled={!backendOnline || busy} onClick={() => { setEditing(session.id); setName(session.name); }}>{t("Name this browser")}</button>
-          <button type="button" className="btn btn-secondary" disabled={!backendOnline || busy} onClick={() => revoke(session)}>{session.current ? t("Sign out this browser") : t("Sign out session")}</button>
+          <button type="button" className="btn btn-secondary" aria-label={t("Name this browser")} title={t("Name this browser")} disabled={!backendOnline || busy} onClick={() => { setEditing(session.id); setName(session.name); }}>{t("Name")}</button>
+          <button type="button" className="btn btn-secondary" aria-label={session.current ? t("Sign out this browser") : t("Sign out session")} disabled={!backendOnline || busy} onClick={() => revoke(session)}>{t("Sign out")}</button>
         </div>
         {editing === session.id && <form className="session-name-form" onSubmit={rename}>
           <label className="field"><span className="label">{t("Device name")}</span><input type="text" maxLength={160} autoComplete="off" value={name} disabled={!backendOnline || busy} onChange={(event) => setName(event.target.value)} placeholder={clientLabel(session)} /></label>

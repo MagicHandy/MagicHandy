@@ -79,6 +79,16 @@ backoff, visibility behavior and the remaining acceptance work.
 
 ### Authentication lifetime and streaming
 
+Pre-saved account recovery codes are high-entropy, digest-only credentials,
+issued after live-session and current-password proof. Recovery atomically
+replaces the password, invalidates every login and code, and records an audit
+event. Login issuance and sensitive password/code mutations recheck their proof
+inside the write transaction. The HTTP edge retires affected work through the
+existing shared lifetime and Stop paths; recovery never logs in or resumes
+motion automatically. These codes do not satisfy the stronger WAN enrollment,
+MFA/step-up or lost-all-credentials requirements. See the
+[recovery contract](../lan-wan-account-recovery.md).
+
 Automatic browser POST acknowledgements also remain passive: chat cursors,
 gateway status/ACK/disconnect, voice played, duration reporting and media
 heartbeats do not renew login idle time. Explicit media intentions record

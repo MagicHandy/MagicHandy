@@ -317,12 +317,12 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
   const statusMessage = dirty ? "Save settings to check this configuration." : status?.message || "Checking runtime";
   return (
     <>
-      <h2 className="section-title">{t("Model")}</h2>
+      <h3 className="section-title">{t("Model")}</h3>
       {managerMessage && <p className="form-status form-status-error" role="alert">{t("Model list unavailable: {message}", { message: managerMessage })}</p>}
 
       <div className="group">
         <div className="model-section-head model-runtime-section-head">
-          <h3 className="group-title">{t("Local LLM")}</h3>
+          <h4 className="group-title">{t("Local LLM")}</h4>
           <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite" aria-busy={status?.loading || undefined}>
             <span className="status-dot" aria-hidden="true" />
             <span>{statusMessage}</span>
@@ -440,7 +440,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
       </div>
 
       <div className="group">
-        <h3 id="model-permissions-title" className="group-title">{t("Motion generation")}</h3>
+        <h4 id="model-permissions-title" className="group-title">{t("Motion generation")}</h4>
         <div className="capability-gates" role="group" aria-labelledby="model-permissions-title">
           <label className="field capability-mode">
             <span className="label">{t("LLM motion")}</span>
@@ -484,7 +484,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
       <div className="group">
         <div className="model-section-head">
           <div>
-            <h3 className="group-title">{t("Managed models")}</h3>
+            <h4 className="group-title">{t("Managed models")}</h4>
             <p className="model-store-path">{manager?.store_path || (managerMessage ? t("Model store unavailable") : t("Loading model store"))}</p>
           </div>
           <div className="row-actions model-import-actions">

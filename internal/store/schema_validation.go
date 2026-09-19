@@ -107,9 +107,11 @@ var requiredSchemaTables = []schemaTable{
 	{name: "user_account_links", columns: columns(
 		"owner_user_id:TEXT", "linked_user_id:TEXT", "label:TEXT", "status:TEXT", "created_at:TEXT", "updated_at:TEXT",
 	), primaryKey: []string{"owner_user_id", "linked_user_id"}},
+	{name: "user_recovery_codes", columns: columns("code_hash:TEXT", "user_id:TEXT", "created_at:TEXT"), primaryKey: []string{"code_hash"}},
 }
 
 var requiredSchemaIndexes = []schemaIndex{
+	{table: "user_recovery_codes", name: "recovery_codes_user", columns: indexColumns("user_id")},
 	{table: "access_audit", name: "access_audit_time", columns: indexColumns("occurred_at")},
 	{table: "access_audit", name: "access_audit_event_id", unique: true, columns: indexColumns("event_id")},
 	{table: "messages", name: "messages_session_revision", columns: indexColumns("session_id", "committed", "revision")},
@@ -132,6 +134,7 @@ var requiredSchemaIndexes = []schemaIndex{
 }
 
 var requiredSchemaForeignKeys = []schemaForeignKey{
+	{table: "user_recovery_codes", column: "user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "user_control_grants", column: "user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "user_control_grants", column: "issued_by", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "messages", column: "session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "CASCADE"},
@@ -158,6 +161,7 @@ func (db *DB) validateSchema(ctx context.Context) error {
 		db.validateSchemaTables,
 		db.validateSchemaIndexes,
 		db.validateAuditRetention,
+		db.validateRecoveryCodeBounds,
 		db.validateSchemaForeignKeys,
 		db.validateForeignKeyRows,
 	}

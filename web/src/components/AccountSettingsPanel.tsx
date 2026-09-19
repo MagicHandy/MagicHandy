@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import type { AccountRole, UserAccount } from "../api/types";
 import { t, translateKnown } from "../i18n";
 import { useAuth } from "../state/auth";
-import { useToast } from "../state/app-state";
+import { useHashRoute, useToast } from "../state/app-state";
 import { PencilIcon, TrashIcon } from "../shell/icons";
 import { PROFILE_IMAGE_MAX_EDGE, resizeImageToJPEG } from "../util/profile-image";
 import { passwordMeetsMinimum } from "../util/password";
@@ -13,33 +13,17 @@ import { NetworkSettingsPanel } from "./NetworkSettingsPanel";
 import { ControlGrantPanel } from "./ControlGrantPanel";
 import { SessionSettingsPanel } from "./SessionSettingsPanel";
 import { AuditSettingsPanel } from "./AuditSettingsPanel";
+import { RecoveryCodesPanel } from "./RecoveryCodesPanel";
+import { AccessSettingsNavigation, resolveAccessSection } from "./AccessSettingsNavigation";
 
 const errorMessage = (reason: unknown) => reason instanceof Error ? translateKnown(reason.message) : t("Request failed");
 
 export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean }) {
   const auth = useAuth();
   const account = auth.status?.account ?? null;
-  const [accounts, setAccounts] = useState<UserAccount[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const loadAccounts = useCallback(async () => {
-    if (account?.role !== "admin") return;
-    setLoading(true);
-    try {
-      const response = await api.accounts();
-      setAccounts(response.accounts);
-      setError("");
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setLoading(false);
-    }
-  }, [account?.role]);
-
-  useEffect(() => {
-    void loadAccounts();
-  }, [loadAccounts]);
+  const route = useHashRoute();
+  const administrator = account?.role === "admin";
+  const section = resolveAccessSection(route.split("/")[3] || "profile", administrator);
 
   if (!auth.status?.initialized) {
     return (
@@ -59,25 +43,71 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
   return (
     <>
       <h2 className="section-title">{t("Access")}</h2>
-      <ProfileGroup account={account} disabled={!backendOnline} onChanged={auth.refresh} />
-      <SessionSettingsPanel key={auth.status.session_id || account.id} backendOnline={backendOnline} onSignedOut={auth.refresh} />
-      <PasswordGroup disabled={!backendOnline} onChanged={auth.refresh} />
-      <LinkedProfilesGroup />
-      <NetworkSettingsPanel backendOnline={backendOnline} administrator={account.role === "admin"} />
-      {account.role === "admin" && (
-        <section className="group account-management">
-          <h3 className="group-title">{t("Installation accounts")}</h3>
-          <p className="hint-block">{t("Operators begin as observers. An administrator grants time-limited permission to control motion, chat and synchronized playback. Accounts share this installation's content; host configuration remains administrator-only.")}</p>
-          {error && <p className="form-status auth-error" role="alert">{error}</p>}
-          {loading ? <p className="form-status" role="status">{t("Loading accounts…")}</p> : (
-            <AccountList current={account} accounts={accounts} onChanged={loadAccounts} />
-          )}
-          <CreateAccountForm disabled={!backendOnline || loading} onCreated={loadAccounts} />
-        </section>
-      )}
-      {account.role === "admin" && <AuditSettingsPanel backendOnline={backendOnline} accounts={accounts} />}
+      <div className="access-layout">
+        <AccessSettingsNavigation section={section} administrator={administrator} />
+        <div className="access-content" key={`${auth.status.session_id || account.id}:${account.role}:${section}`}>
+          {section === "profile" && <><ProfileGroup account={account} disabled={!backendOnline} onChanged={auth.refresh} /><LinkedProfilesGroup /></>}
+          {section === "security" && <><PasswordGroup disabled={!backendOnline} onChanged={auth.refresh} /><RecoveryCodesPanel backendOnline={backendOnline} /></>}
+          {section === "sessions" && <SessionSettingsPanel backendOnline={backendOnline} onSignedOut={auth.refresh} />}
+          {section === "network" && administrator && <NetworkSettingsPanel backendOnline={backendOnline} administrator />}
+          {(section === "accounts" || section === "history") && administrator && <AccountDirectory current={account} backendOnline={backendOnline} history={section === "history"} />}
+        </div>
+      </div>
     </>
   );
+}
+
+// Directory reads exist only on their two administrator pages. Leaving the
+// page or switching login cancels them and discards that account's view.
+function AccountDirectory({ current, backendOnline, history }: { current: UserAccount; backendOnline: boolean; history: boolean }) {
+  const [accounts, setAccounts] = useState<UserAccount[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
+  const mounted = useRef(false);
+  const active = useRef<{ controller: AbortController; timer: number } | null>(null);
+  const cancel = useCallback(() => {
+    const request = active.current; active.current = null;
+    if (request) { window.clearTimeout(request.timer); request.controller.abort(); }
+  }, []);
+  const loadAccounts = useCallback(async () => {
+    if (!mounted.current || !backendOnline) return;
+    cancel(); setLoading(true); setError("");
+    const request = { controller: new AbortController(), timer: 0 };
+    active.current = request;
+    request.timer = window.setTimeout(() => {
+      if (active.current !== request) return;
+      cancel(); setLoading(false); setError(t("Accounts are unavailable. Refresh and try again."));
+    }, 10_000);
+    try {
+      const response = await api.accounts(request.controller.signal);
+      if (active.current === request) setAccounts(response.accounts);
+    } catch (reason) {
+      if (active.current === request) setError(errorMessage(reason));
+    } finally {
+      window.clearTimeout(request.timer);
+      if (active.current === request) { active.current = null; setLoading(false); }
+    }
+  }, [backendOnline, cancel]);
+  useEffect(() => {
+    mounted.current = true;
+    if (backendOnline) void loadAccounts();
+    else { setAccounts([]); setLoading(false); }
+    return () => { mounted.current = false; cancel(); };
+  }, [backendOnline, loadAccounts, cancel]);
+  if (history) return <AuditSettingsPanel backendOnline={backendOnline} accounts={accounts} initiallyExpanded />;
+  return <section className="group account-management">
+    <div className="access-section-header">
+      <h3 className="group-title">{t("Installation accounts")}</h3>
+      <button className="btn btn-secondary" aria-label={t("Refresh accounts")} disabled={!backendOnline || loading} onClick={() => void loadAccounts()}>{t("Refresh")}</button>
+    </div>
+    <p className="hint-block">{t("Operators begin as observers. An administrator grants time-limited permission to control motion, chat and synchronized playback. Accounts share this installation's content; host configuration remains administrator-only.")}</p>
+    {!backendOnline && <p role="status">{t("Core offline")}</p>}
+    {error && <p className="form-status auth-error" role="alert">{error}</p>}
+    {loading ? <p className="form-status" role="status">{t("Loading accounts…")}</p> : <AccountList current={current} accounts={accounts} disabled={!backendOnline} onChanged={loadAccounts} />}
+    <button className="btn btn-secondary" type="button" aria-expanded={creating} disabled={!backendOnline || loading} onClick={() => setCreating(value => !value)}>{creating ? t("Cancel") : t("Add an account")}</button>
+    {creating && <CreateAccountForm disabled={!backendOnline || loading} onCreated={async () => { setCreating(false); await loadAccounts(); }} />}
+  </section>;
 }
 
 function BootstrapAccountForm({ disabled, onCreated }: {
@@ -234,19 +264,21 @@ function PasswordGroup({ disabled, onChanged }: { disabled: boolean; onChanged: 
 function LinkedProfilesGroup() {
   const identities = useAuth().status?.control_identities ?? [];
   const linked = identities.filter((identity) => identity.relationship === "linked");
+  if (!linked.length) return null;
   return (
     <section className="group">
       <h3 className="group-title">{t("Linked control profiles")}</h3>
-      {linked.length ? <div className="linked-profile-list">{linked.map((identity) => (
+      <div className="linked-profile-list">{linked.map((identity) => (
         <div key={identity.account.id}><AccountAvatar account={identity.account} /><span><strong>{identity.label}</strong><small>{identity.account.username}</small></span></div>
-      ))}</div> : <p className="hint-block">{t("No linked accounts yet. Future invitation-based remote control links will appear in the top-bar selector without sharing passwords or changing who is signed in.")}</p>}
+      ))}</div>
     </section>
   );
 }
 
-function AccountList({ current, accounts, onChanged }: {
+function AccountList({ current, accounts, disabled, onChanged }: {
   current: UserAccount;
   accounts: UserAccount[];
+  disabled: boolean;
   onChanged: () => Promise<void>;
 }) {
   const { show } = useToast();
@@ -255,6 +287,7 @@ function AccountList({ current, accounts, onChanged }: {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
+  const [permissionID, setPermissionID] = useState("");
   const toggle = async (account: UserAccount) => {
     if (!account.disabled && !window.confirm(t("Disable {username}? Every active session for this account will be signed out.", { username: account.username }))) return;
     setBusy(account.id);
@@ -291,29 +324,30 @@ function AccountList({ current, accounts, onChanged }: {
     }
   };
   return (
-    <div className="account-list">
+    <ul className="account-list">
       {accounts.map((account) => (
-        <div className="account-row" key={account.id}>
+        <li className="account-row" key={account.id}>
           <div className="account-row-summary">
             <AccountAvatar account={account} />
-            <span className="account-row-name"><strong>{account.username}</strong><small>{account.role === "admin" ? t("Administrator") : t("Operator")}</small></span>
-            <span className="account-row-status"><span className="status-dot" data-state={account.disabled ? "idle" : "active"} />{account.disabled ? t("Disabled") : t("Enabled")}</span>
-            <span className="account-row-last">{account.last_login_at ? t("Last sign-in {time}", { time: new Date(account.last_login_at).toLocaleString() }) : t("Never signed in")}</span>
+            <span className="account-row-name"><strong>{account.username}</strong><span className="account-row-meta"><small>{account.role === "admin" ? t("Administrator") : t("Operator")}</small><small>{account.disabled ? t("Disabled") : t("Enabled")}</small></span>
+              <small>{account.last_login_at ? t("Last sign-in {time}", { time: new Date(account.last_login_at).toLocaleString() }) : t("Never signed in")}</small>
+            </span>
             <span className="row-actions">
-              {account.id !== current.id && <button className="btn btn-secondary small" type="button" disabled={Boolean(busy)} onClick={() => void toggle(account)}>{account.disabled ? t("Enable") : t("Disable")}</button>}
-              {account.id !== current.id && <button className="btn btn-secondary small" type="button" disabled={Boolean(busy)} onClick={() => { setResetID(resetID === account.id ? "" : account.id); setError(""); }}>{t("Reset password")}</button>}
+              {account.id !== current.id && <button className="btn btn-secondary small" type="button" disabled={disabled || Boolean(busy)} onClick={() => void toggle(account)}>{account.disabled ? t("Enable") : t("Disable")}</button>}
+              {account.id !== current.id && <button className="btn btn-secondary small" type="button" disabled={disabled || Boolean(busy)} onClick={() => { setResetID(resetID === account.id ? "" : account.id); setPassword(""); setConfirmation(""); setError(""); }}>{t("Reset password")}</button>}
+              {account.role === "operator" && <button className="btn btn-secondary small" type="button" disabled={disabled} aria-expanded={permissionID === account.id} onClick={() => setPermissionID(permissionID === account.id ? "" : account.id)}>{t("Control permission")}</button>}
             </span>
           </div>
           {resetID === account.id && <form className="account-reset-form" onSubmit={(event) => void reset(event, account)}>
-            <label className="field"><span className="label">{t("New password for {username}", { username: account.username })}</span><input type="password" autoComplete="new-password" value={password} disabled={Boolean(busy)} onChange={(event) => setPassword(event.target.value)} /></label>
-            <PasswordConfirmationField password={password} confirmation={confirmation} disabled={Boolean(busy)} onChange={setConfirmation} />
-            <button className="btn btn-primary" type="submit" disabled={Boolean(busy) || !password}>{busy ? t("Saving…") : t("Save new password")}</button>
+            <label className="field"><span className="label">{t("New password for {username}", { username: account.username })}</span><input type="password" autoComplete="new-password" value={password} disabled={disabled || Boolean(busy)} onChange={(event) => setPassword(event.target.value)} /></label>
+            <PasswordConfirmationField password={password} confirmation={confirmation} disabled={disabled || Boolean(busy)} onChange={setConfirmation} />
+            <button className="btn btn-primary" type="submit" disabled={disabled || Boolean(busy) || !password}>{busy ? t("Saving…") : t("Save new password")}</button>
           </form>}
-          {account.role === "operator" && <ControlGrantPanel accountID={account.id} disabled={account.disabled || Boolean(busy)} />}
-        </div>
+          {account.role === "operator" && permissionID === account.id && <ControlGrantPanel accountID={account.id} disabled={disabled || account.disabled || Boolean(busy)} />}
+        </li>
       ))}
-      {error && <p className="form-status auth-error" role="alert">{error}</p>}
-    </div>
+      {error && <li className="form-status auth-error" role="alert">{error}</li>}
+    </ul>
   );
 }
 

@@ -1,6 +1,96 @@
 # UI Design
 
+## Settings organization
+
+The primary settings destinations are **General**, **Access**, **Device**,
+**Media library**, **Chat**, **Voice** and **Diagnostics**. Chat combines the
+former Chat, Model and Prompts pages behind a shared sidebar: **Conversation**,
+**Model** and **Prompts & memory**. The canonical routes are
+`#/settings/chat/conversation`, `#/settings/chat/model` and
+`#/settings/chat/prompts`. Existing `#/settings/model` and `#/settings/prompts`
+bookmarks retain their destination inside Chat; `#/settings/chat` defaults to
+Conversation. The parent owns the settings draft and Save action, so moving
+between these sections does not discard edits or fetch another host snapshot.
+Prompt-set and memory operations keep their existing immediate-save behavior.
+
+Only Chat and Access use secondary navigation. General, Device, Media library,
+Voice and Diagnostics remain single pages with flat sections, sentence-case
+headings and restrained horizontal dividers. General displays the current
+theme in a disclosure; expanding it reveals the existing full theme chooser.
+Narrow settings layouts use compact 32px action buttons. Model import actions
+wrap as complete buttons rather than squeezing into equal-width columns. Model
+generation fields adapt to the content column, including beside the new sidebar.
+See the [settings review](settings-review-2026-09-19.md) for the page-by-page
+decisions and validation.
+
 ## Network access and account control
+
+Recovery codes are an on-demand panel under Access → Security. Current-password
+confirmation precedes issuance/removal; only the backend's count is retained
+after the one-time display closes. The sign-in screen offers saved-code recovery,
+requires replacement-password confirmation and directs the user to sign in
+separately after success. Unknown outcomes never trigger automatic retries or
+restore old authority. See the [recovery contract](lan-wan-account-recovery.md).
+
+Access uses task navigation with stable bookmarkable routes. Personal links are
+**Your profile**, **Security** and **Sessions**. Administrators also see
+**Accounts & permissions**, **Remote access** and **Access history**. The legacy
+`#/settings/access` route opens Profile. An unavailable or unauthorized child
+route resolves to the caller's own profile, without fetching administrator data.
+These links are ordinary keyboard-accessible anchors with `aria-current` in
+labeled lists. A vertical divider separates navigation from content; row rules
+and a stronger group divider distinguish destinations. The selected link uses
+a neutral inset, full neutral outline and heavier label, with no colored edge
+marker. Desktop rows are 36px. Below 1000px, Settings, Access and Chat use a
+single horizontally scrolling row with compact labels. A neutral filled surface
+identifies the selected link; neither an underline nor a left-edge marker is
+used. Link targets are 28px high in a 32px strip, with 7px horizontal padding.
+Profile, Accounts, History, Media and Prompts use shorter visual labels in this
+layout while retaining their full accessible names and titles.
+Small arrows expose overflow without selecting another page; the active route
+stays visible on entry, route changes and resizing without scrolling the page
+vertically. Group labels remain available to assistive technology. No wrapped
+button grid or additional data requests are introduced.
+Emergency Stop stays in the shell.
+
+Only the chosen area mounts its data panels. Profile does not request the
+account directory, grants, sessions, network status or audit history. Access
+does not wait on the general host-settings request. Existing host-setting
+drafts survive a visit to Access, while password and recovery-code drafts are
+discarded on changing account area or login. Directory and grant reads have
+ten-second limits and are canceled when their view closes.
+
+Access uses one surface with flat sections instead of nested rounded panels.
+Sentence-case headings and compact, consistently aligned actions establish the
+content hierarchy. Session rows lead with the browser label, inline
+current/controller/gateway indicators, last activity and sign-out actions.
+Creation/expiry timestamps are available under **Session details**. Account rows
+group name, role, enabled state and last sign-in together; actions stay in a
+separate column and wrap below when the content width requires it. Enabled
+accounts use neutral text, not the green reserved for running motion. Narrow
+settings pages use 32px action buttons and icon controls with compact padding;
+session detail disclosures keep the same tight rhythm as their metadata.
+Account creation opens
+explicitly; control permission
+loads only for the chosen operator. Empty future-feature placeholders are omitted.
+The live network boundary and restart-only configuration remain distinct.
+
+The information architecture draws on documented patterns from
+[GitHub's session management](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/viewing-and-managing-your-sessions)
+(a dedicated session list with expandable details),
+[Home Assistant's personal security](https://www.home-assistant.io/docs/authentication/)
+(account security separate from installation management), and
+[Tailscale's user administration](https://tailscale.com/docs/manage-users)
+(user access and administrative roles organized as explicit tasks). These
+references guide navigation; MagicHandy's backend permissions and shared Stop
+contract remain authoritative.
+
+The compact mode follows [Carbon's responsive tab guidance](https://carbondesignsystem.com/components/tabs/usage/)
+to keep horizontal tabs on one scrolling line. Its selected surface draws on
+[Radix's compact segmented controls](https://www.radix-ui.com/themes/docs/components/segmented-control),
+while [Shopify's navigation guidance](https://shopify.dev/docs/apps/design/navigation)
+informs the short, scannable labels. These visual references retain ordinary
+URL links, focus order and bookmarks rather than introducing toggle semantics.
 
 Access settings separate the running network boundary from the policy saved
 for restart. Administrators validate the host configuration and confirm their
