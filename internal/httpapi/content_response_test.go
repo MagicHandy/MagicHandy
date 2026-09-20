@@ -58,11 +58,15 @@ func TestStalledContentReleasesRequestCapacityOnHTTP1AndHTTP2(t *testing.T) {
 			host.StartTLS()
 			defer host.Close()
 			client := host.Client()
-			// A large OS receive window can keep accepting data after this
-			// client stops reading. Bound that buffering so the assertion tests
-			// the blocked-write deadline, not time spent filling autotuned TCP
-			// buffers under the race detector and concurrent package load.
-			client.Transport.(*http.Transport).DialContext = dialSmallContentWindow
+			// Bound unread buffering at the layer that applies backpressure.
+			// Shrinking TCP for HTTP/2 would instead slow healthy transmission
+			// while its protocol reader continues filling a large stream window.
+			clientTransport := client.Transport.(*http.Transport)
+			if http2 {
+				clientTransport.HTTP2 = &http.HTTP2Config{MaxReceiveBufferPerStream: 16 << 10}
+			} else {
+				clientTransport.DialContext = dialSmallContentWindow
+			}
 			response, err := client.Get(host.URL + "/api/large-content")
 			if err != nil {
 				t.Fatal(err)

@@ -138,8 +138,10 @@ was neither weakened nor skipped.
 The first CI pair also exposed an intermittent HTTP/1 stalled-content fixture
 timeout (the other full run passed). An unread response can continue filling
 an autotuned OS receive buffer before its write actually stalls. The fixture
-now limits the test client's TCP receive buffer to 4 KiB, so backpressure begins
-promptly under race-instrumented package load. Its eight-second assertion,
+now limits HTTP/1's TCP receive buffer to 4 KiB and HTTP/2's stream flow-control
+window to 16 KiB, so backpressure begins promptly. Shrinking TCP for HTTP/2 was
+rejected after Linux CI showed it delayed filling the stream buffer instead of
+promptly stalling the stream. The fixture's eight-second assertion,
 five-second production write deadline and HTTP/2 negotiation check remain
 unchanged. Three consecutive race runs of both protocols complete in about
 five seconds per protocol. This is a test-fixture correction, with no runtime
