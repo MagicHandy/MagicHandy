@@ -1,5 +1,27 @@
 # Goal Scorecard
 
+## 2026-09-19 — Full-page startup prompt backdrops
+
+Viewport scrims are exempt from the workspace content-width rule. The setup
+prompt previously covered only 980 px of a 1,440 px viewport; the corrected
+scrim covers all 1,440 px while its dialog remains 480 px wide. Browser review
+also verifies 390 px mobile coverage and pointer/keyboard access to Emergency
+Stop above the scrim. The duplicate-model startup prompt shares this layout.
+
+| Artifact | Previous checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 20,077,056 B | 20,077,056 B | 0 B |
+| Main CSS, raw | 146,885 B | 146,898 B | +13 B |
+| Main CSS, gzip-9 | 26,535 B | 26,543 B | +8 B |
+| All embedded assets | 2,211,623 B | 2,211,636 B | +13 B |
+
+Measured with the same Go 1.26.4, Node 24.15.0 and gzip-9 toolchain as the
+previous checkpoint. This is a CSS selector correction with no dependency,
+JavaScript logic, motion behavior or periodic work added. Existing frontend
+tests (645), typecheck, localization and production build pass. The isolated
+simulator at `http://127.0.0.1:50019/#/chat` retains the setup prompt for review
+and passes real local-provider generation; motion and voice remain off.
+
 ## 2026-09-19 — Motion timing and Bluetooth feedback
 
 The [transport quality corrections](motion-transport-review-2026-09-19.md)
