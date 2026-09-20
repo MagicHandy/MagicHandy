@@ -118,21 +118,34 @@ export function StatusBar({
 
   return (
     <div className="status-bar" role="region" aria-label={t("Status")}>
-      <span className="status-readout">
-        <span className="status-dot" data-state={phaseState} />
-        <span className="status-text">{phaseLabelIsUserAuthored ? phaseLabel : translateKnown(phaseLabel)}</span>
-      </span>
-      <span className="status-divider" aria-hidden="true" />
-      {state?.motion_simulated && (
-        <span className="status-readout" title={t("Simulation is active. Motion commands go to the simulator; connected devices will not move.")}>
-          <span className="status-dot" data-state="warn" />
-          <span className="status-text">{t("Motion simulator")}</span>
+      <div className="status-readouts">
+        <span className="status-readout">
+          <span className="status-dot" data-state={phaseState} />
+          <span className="status-text">{phaseLabelIsUserAuthored ? phaseLabel : translateKnown(phaseLabel)}</span>
         </span>
-      )}
-      <span className="status-readout">
-        <span className="status-dot" data-state={coreState} />
-        <span className="status-text">{translateKnown(coreLabel)}</span>
-      </span>
+        <span className="status-divider" aria-hidden="true" />
+        {state?.motion_simulated && (
+          <span className="status-readout" title={t("Simulation is active. Motion commands go to the simulator; connected devices will not move.")}>
+            <span className="status-dot" data-state="warn" />
+            <span className="status-text">{t("Motion simulator")}</span>
+          </span>
+        )}
+        <span className="status-readout">
+          <span className="status-dot" data-state={coreState} />
+          <span className="status-text">{translateKnown(coreLabel)}</span>
+        </span>
+        {(voiceCrashed || speakNotReady) && (
+          <span className="status-readout">
+            <span className="status-dot" data-state={voiceCrashed ? "error" : "warn"} />
+            <span className="status-text">{voiceCrashed ? t("voice crashed") : t("voice not ready")}</span>
+          </span>
+        )}
+        <span className="status-divider" aria-hidden="true" />
+        <span className="status-timer">
+          <ClockIcon />
+          <span className="value">{formatClock(engine?.running_ms)}</span>
+        </span>
+      </div>
       {state && (state.capabilities?.control === false ? (
         <span className="status-readout status-readout-observer" title={t("Ask the administrator for a control permission.")}><span className="status-dot" data-state="idle" /><span className="status-text">{t("Observer")}</span></span>
       ) : readOnly ? (
@@ -159,18 +172,6 @@ export function StatusBar({
           <span className="status-text">{t("controller: you")}</span>
         </span>
       ))}
-      {(voiceCrashed || speakNotReady) && (
-        <span className="status-readout">
-          <span className="status-dot" data-state={voiceCrashed ? "error" : "warn"} />
-          <span className="status-text">{voiceCrashed ? t("voice crashed") : t("voice not ready")}</span>
-        </span>
-      )}
-      <span className="status-divider" aria-hidden="true" />
-      <span className="status-timer">
-        <ClockIcon />
-        <span className="value">{formatClock(engine?.running_ms)}</span>
-      </span>
-      <span className="status-spacer" />
       <MotionVisualizer motion={motion} mini />
       {authenticationStatus?.authenticated && authenticationStatus.control_identities?.length && onLogout && onSelectControlIdentity ? (
         <ControlIdentitySelector
