@@ -78,9 +78,10 @@ instead of probing `hsp/state`; explicit state reads remain diagnostics. The
 the motion engine does not wait for a response that the device may not emit.
 
 Semantic stroke-window values crossing the bridge remain percentages in the
-inclusive 0-100 range. The browser encoder clamps that range but does not infer
-or convert normalized 0-1 values; unit conversion by heuristic can turn an
-intended 1% boundary into 100% motion.
+inclusive 0-100 range. The browser encoder clamps that semantic range and divides by 100 exactly
+once for the normalized `RequestSliderStrokeSet` floats. It never guesses
+units based on value: a semantic 1% boundary becomes 0.01 on the wire. HSP
+points instead use integer 0-100 on the wire. These are distinct field contracts.
 
 Emergency Stop has a browser-local delivery path in addition to the normal Go
 command bridge. When an already-connected browser receives the global Stop
@@ -105,3 +106,18 @@ Reconsider native Go Bluetooth only after:
 - the Go core has mature transport diagnostics
 - a specific native packaging requirement justifies the complexity
 - a prototype proves reliable Windows BLE behavior
+
+## September 2026 reference review
+
+The connection-specific `HandyBleSession` owns its immutable GATT pair,
+serialized writer, unique request IDs, response waiters and notification listener.
+A native write has a one-second deadline; failure fences further motion and
+allows the owner's bounded Stop/disconnect path. Retiring a connection aborts
+waiters and prevents old native promises or queued Stop from reaching a new one.
+Optional clock-sync failure omits `server_time` rather than inventing an offset.
+A successful sync uses the lowest round-trip sample; Play is timestamped at its
+actual native write boundary. Write-only firmware remains supported: no new
+mandatory firmware response wait is added to streaming commands. A correlated
+late rejection, including a code-only error, ends the channel.
+
+See [the review, references and simulation limits](bluetooth-intiface-review-2026-09-20.md).

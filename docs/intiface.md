@@ -109,3 +109,20 @@ Remaining acceptance checks:
   `motion_trace.v3` send-lateness/ACK distributions
 
 Keep automated or unattended real-device runs at or below 40% speed.
+
+## September 2026 connection review
+
+Session I/O and handshake live in `intiface_session.go`, separate from motion
+pacing. Ping begins immediately after ServerInfo, including during a slow device
+list request. The reader applies discovery and scan replies before delivering
+them to callers, preserving later DeviceAdded, DeviceRemoved and ScanningFinished
+events in wire order. Uncorrelated protocol errors retire the session, and
+watchdog durations are checked before converting to Go durations.
+
+Buttplug fixed a Handy 2 HDSP direction-timing problem in upstream commit
+[`5a60f54`](https://github.com/buttplugio/buttplug/commit/5a60f5492800dbe9bcb5e9443c4db0a04b7239e6).
+That device driver belongs to the installed Intiface engine. MagicHandy keeps
+using the standard v3 LinearCmd contract and does not bypass it with raw BLE
+commands. Record the Intiface/engine version during physical acceptance; this
+review does not establish which distributed releases include that upstream fix.
+See [the full review](bluetooth-intiface-review-2026-09-20.md).

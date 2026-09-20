@@ -79,29 +79,47 @@ function hspPositions(encoded: Uint8Array): number[] {
 }
 
 describe("Handy BLE codec", () => {
-  it("encodes the backend's semantic stroke percentages without guessing normalized units", () => {
-    expect(strokeWindow(encodeHandyRequest("slider/stroke", { min: 1, max: 40 }, 7))).toEqual({
-      min: 1,
-      max: 40,
-    });
+  it("converts backend stroke percentages to normalized wire units exactly once", () => {
+    const stroke = strokeWindow(encodeHandyRequest("slider/stroke", { min: 1, max: 40 }, 7));
+    expect(stroke.min).toBeCloseTo(0.01);
+    expect(stroke.max).toBeCloseTo(0.4);
   });
 
   it("clamps stroke percentages at the protocol boundary", () => {
     expect(strokeWindow(encodeHandyRequest("slider/stroke", { min: -20, max: 120 }))).toEqual({
       min: 0,
-      max: 100,
+      max: 1,
     });
   });
 
-  it("keeps sub-percent HSP positions through the Bluetooth wire scale", () => {
+  it("encodes HSP points as integer percent without saturating firmware above 100", () => {
     const encoded = encodeHandyRequest("hsp/add", {
       points: [{ t: 0, x: 25.25 }, { t: 125, x: 75.75 }],
     });
-    expect(hspPositions(encoded)).toEqual([253, 758]);
+    expect(hspPositions(encoded)).toEqual([25, 76]);
   });
 
   it("rejects truncated length-delimited fields", () => {
     expect(() => decodeHandyRPCMessage(Uint8Array.from([0x12, 0x05, 0x01]))).toThrow(/truncated length-delimited/i);
+  });
+
+  it("decodes proto3 omitted zero values for an uninitialized stream zero", () => {
+    // RpcMessage.notification -> NotificationHspStateChanged (861) -> HspState.
+    // Field numbers and defaults from the manufacturer's public RPC definitions.
+    const result = decodeHandyRPCMessage(Uint8Array.from([0x08, 0x04, 0x2a, 0x05, 0xea, 0x35, 0x02, 0x0a, 0x00]));
+    expect(result).toMatchObject({ type: "notification", notification: { hsp_state: { play_state: "not_initialized", stream_id: 0, points: 0, current_point: 0, current_time_ms: 0 } } });
+  });
+
+  it("omits server time without a clock and encodes the backend's absolute tail index", () => {
+    const play = bytesValue(parseFields(bytesValue(parseFields(encodeHandyRequest("hsp/play", { start_time: 0 })), 2)), 863);
+    expect(parseFields(play).some((field) => field.field === 2)).toBe(false);
+    const add = bytesValue(parseFields(bytesValue(parseFields(encodeHandyRequest("hsp/add", { points: [{ t: 100, x: 50 }], tail_point_stream_index: 99 })), 2)), 861);
+    expect(parseFields(add).find((field) => field.field === 3)?.value).toBe(99n);
+  });
+
+  it("ignores unknown fixed64 fields without discarding supported notifications", () => {
+    const result = decodeHandyRPCMessage(Uint8Array.from([0x08, 0x04, 0x2a, 0x05, 0xea, 0x35, 0x02, 0x0a, 0x00, 0x31, 0, 0, 0, 0, 0, 0, 0, 0]));
+    expect(result).toMatchObject({ type: "notification" });
   });
 
   it("rejects protobuf varints wider than uint64", () => {

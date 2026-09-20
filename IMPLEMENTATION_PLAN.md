@@ -2503,3 +2503,13 @@ GPU/KV tuning, actual local-model listening and full multi-GiB update acceptance
 remain explicit follow-up work. See [ADR 0028](docs/decisions/0028-ai-runtime-lifetimes.md),
 [implementation and validation](docs/ai-runtime-improvements-2026-09-08.md), and
 [budget measurements](docs/perf-baseline.md#2026-09-08--ai-runtime-improvements).
+
+## September 20 transport reference review
+
+Corrected Handy Bluetooth HSP/stroke units against manufacturer sources and
+reported actual 1% resolution to the existing shared engine. Extracted bounded
+GATT session delivery from React and Intiface session I/O from pacing. Fixed
+Intiface watchdog/discovery ordering, shared zero-based HSP indices and timestamp
+bounds, and Cloud validation/response/Stop edge cases. No additional transport,
+motion generator, native dependency or hardware auto-connect was introduced.
+See [review and validation](docs/bluetooth-intiface-review-2026-09-20.md).

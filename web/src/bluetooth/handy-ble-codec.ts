@@ -7,7 +7,9 @@ const WIRE_FIXED32 = 5;
 const MESSAGE_TYPE_REQUEST = 1;
 const MESSAGE_TYPE_RESPONSE = 3;
 const MESSAGE_TYPE_NOTIFICATION = 4;
-const HSP_POINT_PROTOCOL_MAX = 1000;
+// The manufacturer's Point.x is an integer percent, NOT a 0..1000 scale.
+// Values above 100 clamp to the endpoint on firmware (public RPC constants.proto).
+const HSP_POINT_PROTOCOL_MAX = 100;
 const REQUEST_FIELDS: Record<string, number> = {
   "clock/offset/get": 712,
   "clock/offset/set": 709,
@@ -112,8 +114,8 @@ function pointMessage(point: Record<string, unknown> = {}): Uint8Array {
 function requestBodyForPath(path: string, body: Record<string, unknown> = {}): Uint8Array {
   if (path === "slider/stroke") {
     return concatBytes([
-      floatField(1, strokePercentValue(body.min, 0)),
-      floatField(2, strokePercentValue(body.max, 100)),
+      floatField(1, strokePercentValue(body.min, 0) / 100),
+      floatField(2, strokePercentValue(body.max, 100) / 100),
     ]);
   }
   if (path === "hsp/setup") return uintField(1, body.stream_id ?? 0);
@@ -122,12 +124,14 @@ function requestBodyForPath(path: string, body: Record<string, unknown> = {}): U
     return concatBytes([
       ...points.map((point) => lengthField(1, pointMessage(point))),
       boolField(2, Boolean(body.flush)),
+      ...(body.tail_point_stream_index === undefined ? [] : [uintField(3, body.tail_point_stream_index)]),
     ]);
   }
   if (path === "hsp/play") {
     return concatBytes([
       intField(1, body.start_time ?? 0),
-      uintField(2, body.server_time ?? Date.now()),
+      // Omit latency compensation when this session has no synchronized clock.
+      ...(body.server_time === undefined ? [] : [uintField(2, body.server_time)]),
       floatField(3, body.playback_rate ?? 1),
       boolField(4, Boolean(body.loop)),
       boolField(5, Boolean(body.pause_on_starving)),
@@ -206,6 +210,10 @@ function parseFields(bytes: Uint8Array): Field[] {
       if (size > bytes.length - offset) throw new Error("Truncated length-delimited protobuf field");
       value = bytes.slice(offset, offset + size);
       offset += size;
+    } else if (wire === 1) {
+      if (bytes.length - offset < 8) throw new Error("Truncated fixed64 protobuf field");
+      value = view.getFloat64(offset, true);
+      offset += 8;
     } else if (wire === WIRE_FIXED32) {
       if (bytes.length - offset < 4) throw new Error("Truncated fixed32 protobuf field");
       value = view.getFloat32(offset, true);
@@ -249,11 +257,11 @@ function parseHSPState(bytes: Uint8Array): Record<string, unknown> {
   const fields = parseFields(bytes);
   const readInt = (number: number) => {
     const value = varintField(firstField(fields, number));
-    return value === undefined ? undefined : toNumber(value);
+    return value === undefined ? 0 : toNumber(value);
   };
   const readFloat = (number: number) => {
     const item = firstField(fields, number);
-    return item && item.wire === WIRE_FIXED32 && typeof item.value === "number" ? item.value : undefined;
+    return item && item.wire === WIRE_FIXED32 && typeof item.value === "number" ? item.value : 0;
   };
   const state: Record<string, unknown> = {};
   const playState = readInt(1);
@@ -263,9 +271,9 @@ function parseHSPState(bytes: Uint8Array): Record<string, unknown> {
   const maxPoints = readInt(3);
   if (maxPoints !== undefined) state.max_points = maxPoints;
   const currentPoint = varintField(firstField(fields, 4));
-  if (currentPoint !== undefined) state.current_point = toSigned32(currentPoint);
+  state.current_point = toSigned32(currentPoint ?? 0n);
   const currentTime = varintField(firstField(fields, 5));
-  if (currentTime !== undefined) state.current_time_ms = toSigned32(currentTime);
+  state.current_time_ms = toSigned32(currentTime ?? 0n);
   const loop = readInt(6);
   if (loop !== undefined) state.loop = Boolean(loop);
   const playbackRate = readFloat(7);
@@ -273,7 +281,7 @@ function parseHSPState(bytes: Uint8Array): Record<string, unknown> {
   const streamID = readInt(10);
   if (streamID !== undefined) state.stream_id = streamID;
   const tailPoint = varintField(firstField(fields, 11));
-  if (tailPoint !== undefined) state.tail_point_stream_index = toSigned32(tailPoint);
+  state.tail_point_stream_index = toSigned32(tailPoint ?? 0n);
   const threshold = readInt(12);
   if (threshold !== undefined) state.tail_point_stream_index_threshold = threshold;
   const pauseOnStarving = readInt(13);

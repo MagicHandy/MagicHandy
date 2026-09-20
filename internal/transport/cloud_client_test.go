@@ -293,7 +293,7 @@ func TestCloudRESTTransportRejectsHTTP200ErrorWithoutAdvancingTail(t *testing.T)
 	if cloud.hspPointCount != len(command.Points) {
 		t.Fatalf("point count = %d, want %d after accepted retry", cloud.hspPointCount, len(command.Points))
 	}
-	if len(addBodies) != 2 || !strings.Contains(addBodies[1], `"tail_point_stream_index":2`) || !strings.Contains(addBodies[1], `"flush":true`) {
+	if len(addBodies) != 2 || !strings.Contains(addBodies[1], `"tail_point_stream_index":1`) || !strings.Contains(addBodies[1], `"flush":true`) {
 		t.Fatalf("add bodies = %q, want retry to retain first-add tail and flush semantics", addBodies)
 	}
 }

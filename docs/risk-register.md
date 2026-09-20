@@ -1997,3 +1997,15 @@ expired-cache recovery and failed-renewal retention. Public IP detection is not
 proof of inbound routing. Router/firewall changes, client trust enrollment,
 dynamic public-address changes and external-client acceptance remain deployment
 responsibilities; certificate automation does not imply multi-tenant isolation.
+
+## September 20, 2026 transport protocol correction
+
+The historical R14/R15-era claims of 0.1% Bluetooth HSP precision were wrong.
+Manufacturer definitions confirm integer 0-100 points and normalized 0-1 stroke
+window floats. Both wire mappings, the declared sampling resolution, and
+zero-based buffer tail indices are corrected. Bounded connection-specific BLE
+writes, ordered Intiface discovery/scan handling, early keepalive, and Cloud
+preflight/response/Stop checks have regression coverage. See the
+[reference review and evidence](bluetooth-intiface-review-2026-09-20.md).
+Matched physical acceptance remains open: simulator output establishes command
+correctness, not perceived comfort or radio performance.

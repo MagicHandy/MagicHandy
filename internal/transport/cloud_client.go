@@ -277,6 +277,16 @@ func (t *CloudRESTTransport) AppendPoints(ctx context.Context, command AppendPoi
 	if err != nil {
 		return t.recordBuildError(CommandKindPointsAdd, err), err
 	}
+	// Build before setup: malformed input must not reset a valid device buffer.
+	pointCount := t.hspPointCount
+	if streamID != t.activeStreamID {
+		pointCount = 0
+	}
+	tailPointStreamIndex := pointCount + len(command.Points) - 1
+	request, err := t.builder.buildHSPAdd(command, pointCount == 0, tailPointStreamIndex)
+	if err != nil {
+		return t.recordBuildError(CommandKindPointsAdd, err), err
+	}
 	if streamID != t.activeStreamID {
 		setup := HSPSetupCommand{StreamID: t.nextSetupStreamIDLocked()}
 		request, err := t.builder.BuildHSPSetup(setup)
@@ -291,14 +301,12 @@ func (t *CloudRESTTransport) AppendPoints(ctx context.Context, command AppendPoi
 		t.playbackStartedAt = time.Time{}
 	}
 
-	tailPointStreamIndex := t.hspPointCount + len(command.Points)
-	request, err := t.builder.buildHSPAdd(command, t.hspPointCount == 0, tailPointStreamIndex)
-	if err != nil {
+	if err := t.motionGate.validate(admission); err != nil {
 		return t.recordBuildError(CommandKindPointsAdd, err), err
 	}
 	result, err := t.dispatch(ctx, request)
 	if err == nil {
-		t.hspPointCount = tailPointStreamIndex
+		t.hspPointCount = tailPointStreamIndex + 1
 	}
 	return result, err
 }
@@ -317,8 +325,15 @@ func (t *CloudRESTTransport) Play(ctx context.Context, command PlayCommand) (Com
 
 	// Resolve the offset before timestamping: the refresh is a round trip, and
 	// anything measured before it would describe an instant already in the past.
+	if _, err := t.builder.BuildHSPPlay(command); err != nil {
+		return t.recordBuildError(CommandKindPointsPlay, err), err
+	}
+	command.ServerTimeMillis = 0
 	if serverTime, ok := t.estimatedServerTimeMillisLocked(ctx); ok {
 		command.ServerTimeMillis = serverTime
+	}
+	if err := t.motionGate.validate(admission); err != nil {
+		return t.recordBuildError(CommandKindPointsPlay, err), err
 	}
 	request, err := t.builder.BuildHSPPlay(command)
 	if err != nil {
@@ -467,7 +482,10 @@ func (t *CloudRESTTransport) dispatchWithBody(ctx context.Context, request Cloud
 		_ = response.Body.Close()
 	}()
 
-	body, readErr := io.ReadAll(io.LimitReader(response.Body, 64*1024))
+	body, readErr := io.ReadAll(io.LimitReader(response.Body, 64*1024+1))
+	if readErr == nil && len(body) > 64*1024 {
+		readErr = errors.New("cloud REST response exceeded the 64 KiB limit")
+	}
 	if readErr != nil {
 		result := t.recordHTTPResult(request, response.StatusCode, time.Since(start), readErr)
 		return result, body, readErr
@@ -491,8 +509,18 @@ func (t *CloudRESTTransport) dispatchWithBody(ctx context.Context, request Cloud
 func cloudAPIResponseError(operation string, body []byte) error {
 	var envelope struct {
 		Error json.RawMessage `json:"error"`
+		OK    *bool           `json:"ok"`
 	}
-	if err := json.Unmarshal(body, &envelope); err != nil || len(envelope.Error) == 0 {
+	if err := json.Unmarshal(body, &envelope); err != nil || strings.TrimSpace(string(body)) == "null" {
+		return fmt.Errorf("cloud REST %s returned an invalid JSON response", operation)
+	}
+	if envelope.OK != nil && !*envelope.OK {
+		if CommandKind(operation) == CommandKindConnectionCheck {
+			return hspUnavailable("hsp_unavailable", "hsp", "HSP is unavailable for this device/API state")
+		}
+		return fmt.Errorf("cloud REST %s reported an unsuccessful request", operation)
+	}
+	if len(envelope.Error) == 0 {
 		return nil
 	}
 	raw := strings.TrimSpace(string(envelope.Error))

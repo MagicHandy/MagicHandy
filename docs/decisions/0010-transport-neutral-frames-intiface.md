@@ -83,17 +83,16 @@ transport-neutral frame. An Intiface owner fits behind the existing
 - **Float positions.** `MotionSample.PositionPercent` and
   `TimedPoint.PositionPercent` widened from `int` to `float64`. Pattern content
   and PCHIP sampling were already `float64` (`internal/motion/content.go`); the
-  old sample boundary rounded to whole percent. Cloud REST API v3 still
-  requires integer `PointPosition`, but firmware-v4 Bluetooth protobuf exposes
-  a native 0..1000 point scale and Buttplug-side actuators may resolve still
-  finer positions. Slow shallow strokes visibly stair-step when precision is
-  discarded early. Each owner quantizes only at encode time: Cloud rounds to
-  integer percent, Browser Bluetooth maps the semantic float to 0..1000, and
-  Intiface divides by 100. The JSON field stays `position_percent` (a number),
-  so traces, the UI visualizer, and stored content are unaffected.
-  Cloud declares its 1% endpoint resolution to the shared engine, which may
-  remove redundant rounded knots under a combined 0.8% wire-error bound. This
-  keeps curve fitting in the one shared motion path rather than in the owner.
+  old sample boundary rounded to whole percent. Cloud REST API v3 and
+  firmware-v4 Bluetooth HSP both require integer-percent positions; Buttplug
+  actuators may resolve finer positions. Each owner quantizes at its boundary:
+  Cloud and Bluetooth round to integer percent, and Intiface divides by 100.
+  The JSON field stays `position_percent` (a number), so semantic traces, the
+  visualizer and stored content retain their precision. Both Handy owners
+  declare 1% endpoint resolution to the shared engine, which may remove redundant
+  rounded knots under a combined 0.8% wire-error bound. The former 0..1000 BLE
+  claim was corrected against the manufacturer reference on September 20, 2026;
+  see the [protocol review](../bluetooth-intiface-review-2026-09-20.md).
   Startup arrival also projects the expected endpoint using the declared
   resolution, in the owner's mapping order. It compares the measured slider
   against the encoded target in the temporary lead-in window; the no-lead-in

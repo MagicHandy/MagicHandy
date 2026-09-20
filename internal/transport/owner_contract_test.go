@@ -95,7 +95,7 @@ func TestTransportOwnersPreserveNeutralFrameContract(t *testing.T) {
 			t.Fatalf("stroke window = %+v, want 20..80", windowCommands[0].Body)
 		}
 		points := pointCommands[0].Body["points"].([]map[string]any)
-		assertHandyPoints(t, points, []float64{89.7, 49.5, 10.2})
+		assertHandyPoints(t, points, []float64{90, 49, 10})
 		assertSemanticFixtureUnchanged(t, fixture)
 	})
 

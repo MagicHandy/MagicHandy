@@ -6,25 +6,28 @@ These invariants preserve lessons learned from StrokeGPT-ReVibed's Handy firmwar
 
 ## Invariant 1: HSP Position Units
 
-The shared engine and Cloud REST API use semantic `0..100` position units. API
-v3 Cloud `PointPosition` is an integer, so the Cloud owner rounds only while
-building its request. Firmware-v4 Bluetooth protobuf uses a native `0..1000`
-integer field; the browser owner rounds to its corresponding 0.1% semantic step
-at the bridge boundary before the codec maps it to that wire scale. The
-`0..1000` value must never leak back into the engine, stored content, HTTP
-bridge body, or diagnostics.
+The shared engine uses semantic `0..100` positions. Both Cloud API v3 and
+firmware-v4 Bluetooth `Point.x` encode integer percent in `0..100`. Each owner
+advertises 1% resolution to the shared sampler and rounds at its boundary.
+The manufacturer's September 2026 public RPC definition explicitly corrects
+an older misleading range comment: values above 100 clamp to the endpoint.
+The former Bluetooth `0..1000` mapping was a bug, not extra device precision.
+See the [reference review and reproduction](bluetooth-intiface-review-2026-09-20.md).
 
 Test expectation:
 
 - generated HSP point payloads never contain `x` outside `0..100` for normal sampled motion
-- Cloud payloads quantize to whole percent, while Browser Bluetooth quantizes
-  to 0.1% and maps that value to the native 0..1000 protobuf field
-- Cloud's owner-declared 1% resolution may reduce redundant knots only in the
+- Cloud and Bluetooth payloads both encode whole-percent points in `0..100`
+- Both Handy owners' declared 1% resolution may reduce redundant knots only in the
   shared engine and only under the combined 0.8% wire-error bound
 - quantize before reverse mapping so forward and reversed output are exact
   mirrors in native endpoint steps
 - one Cloud `/hsp/add` contains at most the API v3 limit of 100 points
-- intentional invalid data is rejected before transport dispatch
+- timestamps fit uint32 milliseconds and increase strictly within each append;
+  Play start time fits a non-negative int32
+- buffer tail indices are zero-based absolute point indices across appends;
+  Bluetooth chunking preserves the backend-issued tail
+- intentional invalid data is rejected before stream setup or transport dispatch
 
 ## Invariant 2: Stroke Range Is A Transport Envelope
 
@@ -36,6 +39,8 @@ Test expectation:
 
 - changing stroke range emits/updates a stroke-window command
 - sampled HSP points remain in semantic `0..100` units
+- Cloud JSON and Bluetooth protobuf stroke-window floats encode `0..1`;
+  semantic percentages are divided by 100 exactly once at the wire boundary
 
 ## Invariant 3: Reverse Direction Is Transport-Boundary Mapping
 

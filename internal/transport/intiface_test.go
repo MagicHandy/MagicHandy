@@ -988,6 +988,10 @@ type fakeButtplugServer struct {
 	ackPing        bool
 	timingGap      uint32
 	stepCount      uint32
+	listAfterPing  bool
+	listRequestID  uint32
+	initialEvents  []map[string]any
+	scanFinishes   bool
 	writeMu        sync.Mutex
 	mu             sync.Mutex
 	conn           *websocket.Conn
@@ -1090,11 +1094,25 @@ func (f *fakeButtplugServer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 					"Id": id, "ServerName": "test", "MessageVersion": 3, "MaxPingTime": f.maxPing,
 				})
 			case "RequestDeviceList":
-				f.write("DeviceList", map[string]any{"Id": id, "Devices": []any{fakeLinearDeviceWithCapabilities(7, "Test Linear", f.timingGap, f.stepCount)}})
+				if f.listAfterPing {
+					f.listRequestID = id
+				} else {
+					f.respondDeviceList(id)
+				}
 			case "Ping":
 				if f.ackPing {
 					f.write("Ok", map[string]any{"Id": id})
 				}
+				if f.listRequestID != 0 {
+					f.respondDeviceList(f.listRequestID)
+					f.listRequestID = 0
+				}
+			case "StartScanning":
+				messages := []map[string]any{{"Ok": map[string]any{"Id": id}}}
+				if f.scanFinishes {
+					messages = append(messages, map[string]any{"ScanningFinished": map[string]any{"Id": 0}})
+				}
+				f.writeBatch(messages)
 			case "LinearCmd":
 				f.respondLinear(id)
 			case "StopDeviceCmd":
@@ -1104,6 +1122,11 @@ func (f *fakeButtplugServer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+func (f *fakeButtplugServer) respondDeviceList(id uint32) {
+	messages := []map[string]any{{"DeviceList": map[string]any{"Id": id, "Devices": []any{fakeLinearDeviceWithCapabilities(7, "Test Linear", f.timingGap, f.stepCount)}}}}
+	f.writeBatch(append(messages, f.initialEvents...))
 }
 
 func (f *fakeButtplugServer) respondStop(id uint32) {
@@ -1182,13 +1205,17 @@ func (f *fakeButtplugServer) setLinearACKPlans(plans ...fakeLinearACK) {
 }
 
 func (f *fakeButtplugServer) write(kind string, fields map[string]any) {
+	f.writeBatch([]map[string]any{{kind: fields}})
+}
+
+func (f *fakeButtplugServer) writeBatch(messages []map[string]any) {
 	f.mu.Lock()
 	conn := f.conn
 	f.mu.Unlock()
 	if conn == nil {
 		return
 	}
-	data, _ := json.Marshal([]map[string]any{{kind: fields}})
+	data, _ := json.Marshal(messages)
 	f.writeMu.Lock()
 	_ = conn.Write(context.Background(), websocket.MessageText, data)
 	f.writeMu.Unlock()

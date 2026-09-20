@@ -26,15 +26,16 @@ type BrowserBluetoothTransport struct {
 	activeStreamID          string
 	activeBluetoothStreamID int
 	nextBluetoothStreamID   uint32
+	hspPointCount           int
 	playbackStartedAt       time.Time
 
 	diagnosis TransportDiagnostics
 }
 
-// MotionSamplingCapabilities reports the Handy BLE HSP protobuf's native
-// 0..1000 point encoding.
+// MotionSamplingCapabilities reports the Handy BLE HSP protobuf's integer
+// percent encoding. Point.x above 100 clamps at the endpoint on firmware.
 func (*BrowserBluetoothTransport) MotionSamplingCapabilities() MotionSamplingCapabilities {
-	return MotionSamplingCapabilities{PositionResolutionPercent: 0.1}
+	return MotionSamplingCapabilities{PositionResolutionPercent: 1}
 }
 
 // MotionTimingCapabilities covers the browser round trip and serialized GATT
@@ -85,6 +86,7 @@ func (t *BrowserBluetoothTransport) Stop(ctx context.Context, command StopComman
 	if result.OK {
 		t.activeStreamID = ""
 		t.activeBluetoothStreamID = 0
+		t.hspPointCount = 0
 	}
 	return result, err
 }
@@ -135,19 +137,23 @@ func (t *BrowserBluetoothTransport) AppendPoints(ctx context.Context, command Ap
 	if err != nil {
 		return t.recordBuildError(CommandKindPointsAdd, err), err
 	}
-	if len(command.Points) == 0 {
-		err := errors.New("HSP add requires at least one point")
+	if err := validateHandyHSPPoints(command.Points); err != nil {
+		return t.recordBuildError(CommandKindPointsAdd, err), err
+	}
+	pointCount := t.hspPointCount
+	if semanticStreamID != t.activeStreamID {
+		pointCount = 0
+	}
+	tailIndex := pointCount + len(command.Points) - 1
+	if tailIndex < 0 || uint64(tailIndex) > uint64(^uint32(0)) {
+		err := errors.New("HSP tail point stream index exceeds uint32")
 		return t.recordBuildError(CommandKindPointsAdd, err), err
 	}
 	points := make([]map[string]any, len(command.Points))
 	for index, point := range command.Points {
-		x, ok := quantizeHandyPositionAtResolution(point.PositionPercent, 0.1, t.options.ReverseDirection)
+		x, ok := quantizeHandyPositionAtResolution(point.PositionPercent, 1, t.options.ReverseDirection)
 		if !ok {
 			err := fmt.Errorf("HSP point %d x must be between 0 and 100", index)
-			return t.recordBuildError(CommandKindPointsAdd, err), err
-		}
-		if point.TimeMillis < 0 {
-			err := fmt.Errorf("HSP point %d t must be non-negative", index)
 			return t.recordBuildError(CommandKindPointsAdd, err), err
 		}
 		points[index] = map[string]any{
@@ -161,13 +167,15 @@ func (t *BrowserBluetoothTransport) AppendPoints(ctx context.Context, command Ap
 		PointsAdd: cloneAppendPoints(command),
 	}
 	body := map[string]any{
-		"stream_id": bluetoothStreamID,
-		"points":    points,
+		"stream_id":               bluetoothStreamID,
+		"points":                  points,
+		"tail_point_stream_index": tailIndex,
 	}
 	result, err := t.dispatch(ctx, recorded, "hsp/add", body)
 	if result.OK {
 		t.activeStreamID = semanticStreamID
 		t.activeBluetoothStreamID = bluetoothStreamID
+		t.hspPointCount = tailIndex + 1
 	}
 	return result, err
 }
@@ -188,8 +196,7 @@ func (t *BrowserBluetoothTransport) Play(ctx context.Context, command PlayComman
 	if err != nil {
 		return t.recordBuildError(CommandKindPointsPlay, err), err
 	}
-	if command.StartTimeMillis < 0 {
-		err := errors.New("HSP play start time must be non-negative")
+	if err := validateHandyHSPStart(command.StartTimeMillis); err != nil {
 		return t.recordBuildError(CommandKindPointsPlay, err), err
 	}
 	recorded := Command{
@@ -386,7 +393,7 @@ func (t *BrowserBluetoothTransport) bluetoothStreamIDLocked(streamID string) (st
 
 func parseBluetoothStreamID(streamID string) (int, bool) {
 	id, err := strconv.Atoi(streamID)
-	if err != nil || id < 0 {
+	if err != nil || id < 0 || uint64(id) > uint64(^uint32(0)) {
 		return 0, false
 	}
 	return id, true
