@@ -84,6 +84,7 @@ type Engine struct {
 	latencyMillis                  []int64
 	transition                     *planTransition
 	preservePlanKnots              bool
+	minimumPointIntervalMillis     int64
 	minimumBufferedLeadMillis      int64
 	minimumMediaBufferedLeadMillis int64
 	positionResolutionPercent      float64
@@ -150,12 +151,10 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 		if capabilities.MinimumPointInterval > engine.sampleInterval {
 			engine.sampleInterval = capabilities.MinimumPointInterval
 		}
-		// An immediate-mode owner with a declared timing floor cannot always
-		// represent authored knots that are closer together than that floor.
-		// Keep its neutral cadence valid instead of injecting points it must
-		// reject. Buffered HSP owners preserve authored knot timing.
 		if capabilities.MinimumPointInterval > 0 {
-			engine.preservePlanKnots = false
+			// Fit the curve with a minimum output interval; a positive floor
+			// must not silently replace it with the default 125ms probe grid.
+			engine.minimumPointIntervalMillis = int64((capabilities.MinimumPointInterval + time.Millisecond - 1) / time.Millisecond)
 		}
 		if capabilities.MinimumBufferedLead > 0 {
 			engine.minimumBufferedLeadMillis = max(int64(1), capabilities.MinimumBufferedLead.Milliseconds())

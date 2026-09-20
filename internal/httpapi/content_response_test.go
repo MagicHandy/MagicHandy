@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -56,7 +57,17 @@ func TestStalledContentReleasesRequestCapacityOnHTTP1AndHTTP2(t *testing.T) {
 			host.EnableHTTP2 = http2
 			host.StartTLS()
 			defer host.Close()
-			response, err := host.Client().Get(host.URL + "/api/large-content")
+			client := host.Client()
+			// Bound unread buffering at the layer that applies backpressure.
+			// Shrinking TCP for HTTP/2 would instead slow healthy transmission
+			// while its protocol reader continues filling a large stream window.
+			clientTransport := client.Transport.(*http.Transport)
+			if http2 {
+				clientTransport.HTTP2 = &http.HTTP2Config{MaxReceiveBufferPerStream: 16 << 10}
+			} else {
+				clientTransport.DialContext = dialSmallContentWindow
+			}
+			response, err := client.Get(host.URL + "/api/large-content")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -76,6 +87,23 @@ func TestStalledContentReleasesRequestCapacityOnHTTP1AndHTTP2(t *testing.T) {
 			}
 		})
 	}
+}
+
+func dialSmallContentWindow(ctx context.Context, network, address string) (net.Conn, error) {
+	conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
+	if err != nil {
+		return nil, err
+	}
+	tcp, ok := conn.(*net.TCPConn)
+	if !ok {
+		_ = conn.Close()
+		return nil, errors.New("content fixture requires a TCP connection")
+	}
+	if err := tcp.SetReadBuffer(4 << 10); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return conn, nil
 }
 
 func TestContentDeadlineDoesNotLimitAnIdleProducerGap(t *testing.T) {

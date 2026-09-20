@@ -180,6 +180,28 @@ describe("BluetoothBridge", () => {
     expect(screen.getByRole("button", { name: "Disconnect" })).toBeDisabled();
   });
 
+  it("forwards starvation immediately and ignores notifications after Stop", async () => {
+    bluetoothCommands.mockResolvedValueOnce({ status: "ok", bluetooth: connectedSnapshot, commands: [{ id: "play", path: "hsp/play", body: { stream_id: 7, start_time: 0, pause_on_starving: true } }] });
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    await connect();
+    await waitFor(() => expect(bluetoothAck).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ id: "play", ok: true }), { required: false, owned: false }));
+    postBluetoothStatus.mockClear();
+    const notify = (play_state: string) => {
+      codec.decoded = { type: "notification", notification: { hsp_state: { stream_id: 7, play_state, points: 4, current_time_ms: 800 } } };
+      device.rx.emitValue();
+    };
+    await act(async () => { notify("playing"); notify("starving"); });
+    expect(postBluetoothStatus).toHaveBeenCalledTimes(2);
+    const first = postBluetoothStatus.mock.calls[0][0].hsp_state!;
+    const second = postBluetoothStatus.mock.calls[1][0].hsp_state!;
+    expect(second.play_state).toBe("starving");
+    expect(second.sequence).toBeGreaterThan(first.sequence);
+    await act(async () => window.dispatchEvent(new Event("magichandy:emergency-stop")));
+    postBluetoothStatus.mockClear();
+    await act(async () => notify("playing"));
+    expect(postBluetoothStatus).not.toHaveBeenCalled();
+  });
+
   it("requires host permission before opening the Bluetooth device chooser", async () => {
     render(<BluetoothBridge visible locked={false} backendOnline canConfigureHost={false} />);
     await act(async () => {});

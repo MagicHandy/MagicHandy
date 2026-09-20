@@ -105,6 +105,18 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-19 motion transport quality corrections
+
+The shared sampler now preserves representable reversals under immediate
+transport timing limits, with a 50 ms minimum Intiface command budget. Buffered
+continuous sampling reduces rounding-related velocity jumps while preserving
+append boundaries and enforcing the rounded velocity ceiling. Browser Bluetooth
+uses full bridge latency, explicit prebuffer/starvation policy and passive HSP
+feedback tied to the current gateway, stream and command. Stop remains independent
+of feedback. The 204-case comparison improves 137 maximum wire-velocity jumps,
+leaves 67 unchanged and increases none; physical acceptance remains open. See
+the [implementation and visual review](docs/motion-transport-review-2026-09-19.md).
+
 ### 2026-09-06 video playback and live seeking review
 
 Paired playback now fences pending seeks against Stop/controller loss, ignores

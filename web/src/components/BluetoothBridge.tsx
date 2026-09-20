@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { BluetoothBridgeSnapshot, BluetoothCommand, BluetoothGatewaySnapshot } from "../api/types";
 import { decodeHandyRPCMessage, encodeHandyRequest } from "../bluetooth/handy-ble-codec";
+import { bluetoothPlaybackFeedback } from "../bluetooth/playback-feedback";
 import { useToast } from "../state/app-state";
 
 const HANDY_BLE_SERVICE_UUID = "77834d26-40f7-11ee-be56-0242ac120002";
@@ -92,6 +93,9 @@ export function BluetoothBridge({ visible, locked, backendOnline, canConfigureHo
   const disconnecting = useRef(false);
   const writeTail = useRef<Promise<void>>(Promise.resolve());
   const lastNotificationStatus = useRef(0);
+  const feedbackSequence = useRef(0);
+  const feedbackCommandID = useRef<string | null>(null);
+  const lastReportedPlayState = useRef("");
 
 
   useEffect(() => {
@@ -309,6 +313,7 @@ export function BluetoothBridge({ visible, locked, backendOnline, canConfigureHo
     device.current = null;
     activeStreamID.current = null;
     localStopPending.current = false;
+    lastReportedPlayState.current = "";
   }
 
   function ensureCommandLoop() {
@@ -395,11 +400,13 @@ export function BluetoothBridge({ visible, locked, backendOnline, canConfigureHo
     const body = command.body ?? {};
     if (command.path === "hsp/stop") {
       activeStreamID.current = null;
+      feedbackCommandID.current = null;
       const response = await sendBleRequest("hsp/stop", {}, { waitForResponse: false });
       localStopPending.current = false;
       return response;
     }
     if (localStopPending.current) throw new Error("Bluetooth command was invalidated by Emergency Stop.");
+    if (command.path === "hsp/add" || command.path === "hsp/play") feedbackCommandID.current = command.id;
     assertCommandGeneration(generation);
     if (command.path === "hsp/add") return executeHSPAdd(body, generation);
     if (command.path === "hsp/play") {
@@ -576,10 +583,15 @@ export function BluetoothBridge({ visible, locked, backendOnline, canConfigureHo
         return;
       }
       if (parsed.type === "notification") {
+        const notification = parsed.notification as Record<string, unknown> | undefined;
+        const feedback = bluetoothPlaybackFeedback(notification?.hsp_state, activeStreamID.current, ++feedbackSequence.current, feedbackCommandID.current);
         const now = Date.now();
-        if (now - lastNotificationStatus.current >= 1000) {
+        // State changes (especially starvation) must not be dropped by the
+        // progress throttle. The server orders overlapping reports by sequence.
+        if (feedback && (feedback.play_state !== lastReportedPlayState.current || now - lastNotificationStatus.current >= 250)) {
           lastNotificationStatus.current = now;
-          void postBluetoothStatus({ status: "connected", message: "Handy Bluetooth event received." })
+          lastReportedPlayState.current = feedback.play_state;
+          void postBluetoothStatus({ status: "connected", hsp_state: feedback })
             .then((res) => { if (mounted.current) setBridge(res.bluetooth); })
             .catch(() => undefined);
         }

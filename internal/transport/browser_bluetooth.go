@@ -24,15 +24,16 @@ type BrowserBluetoothBridgeOption func(*BrowserBluetoothBridge)
 
 // BrowserBluetoothClientStatus is a browser tab status update.
 type BrowserBluetoothClientStatus struct {
-	ClientID   string `json:"client_id"`
-	Connected  *bool  `json:"connected,omitempty"`
-	Supported  *bool  `json:"supported,omitempty"`
-	Status     string `json:"status,omitempty"`
-	Message    string `json:"message,omitempty"`
-	DeviceName string `json:"device_name,omitempty"`
-	DeviceID   string `json:"device_id,omitempty"`
-	Protocol   string `json:"protocol,omitempty"`
-	Error      string `json:"error,omitempty"`
+	ClientID   string                         `json:"client_id"`
+	Connected  *bool                          `json:"connected,omitempty"`
+	Supported  *bool                          `json:"supported,omitempty"`
+	Status     string                         `json:"status,omitempty"`
+	Message    string                         `json:"message,omitempty"`
+	DeviceName string                         `json:"device_name,omitempty"`
+	DeviceID   string                         `json:"device_id,omitempty"`
+	Protocol   string                         `json:"protocol,omitempty"`
+	Error      string                         `json:"error,omitempty"`
+	HSPState   *BrowserBluetoothPlaybackState `json:"hsp_state,omitempty"`
 }
 
 // BrowserBluetoothBridgeCommand is the command shape consumed by the browser.
@@ -57,22 +58,23 @@ type BrowserBluetoothBridgeAck struct {
 
 // BrowserBluetoothBridgeSnapshot is a safe bridge status view.
 type BrowserBluetoothBridgeSnapshot struct {
-	Transport         string                     `json:"transport"`
-	Connected         bool                       `json:"connected"`
-	Ready             bool                       `json:"ready"`
-	Supported         bool                       `json:"supported"`
-	Stale             bool                       `json:"stale"`
-	Status            string                     `json:"status"`
-	Message           string                     `json:"message"`
-	DeviceName        string                     `json:"device_name,omitempty"`
-	DeviceID          string                     `json:"device_id,omitempty"`
-	Protocol          string                     `json:"protocol,omitempty"`
-	ClientID          string                     `json:"client_id,omitempty"`
-	Pending           int                        `json:"pending"`
-	Inflight          int                        `json:"inflight"`
-	LastSeenAgeMillis *float64                   `json:"last_seen_age_ms,omitempty"`
-	LastError         string                     `json:"last_error,omitempty"`
-	LastAck           *BrowserBluetoothBridgeAck `json:"last_ack,omitempty"`
+	Transport         string                         `json:"transport"`
+	Connected         bool                           `json:"connected"`
+	Ready             bool                           `json:"ready"`
+	Supported         bool                           `json:"supported"`
+	Stale             bool                           `json:"stale"`
+	Status            string                         `json:"status"`
+	Message           string                         `json:"message"`
+	DeviceName        string                         `json:"device_name,omitempty"`
+	DeviceID          string                         `json:"device_id,omitempty"`
+	Protocol          string                         `json:"protocol,omitempty"`
+	ClientID          string                         `json:"client_id,omitempty"`
+	Pending           int                            `json:"pending"`
+	Inflight          int                            `json:"inflight"`
+	LastSeenAgeMillis *float64                       `json:"last_seen_age_ms,omitempty"`
+	LastError         string                         `json:"last_error,omitempty"`
+	LastAck           *BrowserBluetoothBridgeAck     `json:"last_ack,omitempty"`
+	HSPState          *BrowserBluetoothPlaybackState `json:"hsp_state,omitempty"`
 }
 
 // BrowserBluetoothError classifies bridge, browser, and device failures.
@@ -98,20 +100,25 @@ type BrowserBluetoothBridge struct {
 	batchLimit     int
 	nextCommandID  int
 
-	activeClientID string
-	connected      bool
-	supported      bool
-	status         string
-	message        string
-	deviceName     string
-	deviceID       string
-	protocol       string
-	lastSeenAt     time.Time
-	lastError      string
-	lastAck        *BrowserBluetoothBridgeAck
-	pending        []BrowserBluetoothBridgeCommand
-	inflight       map[string]BrowserBluetoothBridgeCommand
-	acks           map[string]BrowserBluetoothBridgeAck
+	activeClientID    string
+	connected         bool
+	supported         bool
+	status            string
+	message           string
+	deviceName        string
+	deviceID          string
+	protocol          string
+	lastSeenAt        time.Time
+	lastError         string
+	lastAck           *BrowserBluetoothBridgeAck
+	playback          *BrowserBluetoothPlaybackState
+	feedbackStreamID  int
+	feedbackActive    bool
+	feedbackSequence  uint64
+	feedbackCommandID string
+	pending           []BrowserBluetoothBridgeCommand
+	inflight          map[string]BrowserBluetoothBridgeCommand
+	acks              map[string]BrowserBluetoothBridgeAck
 }
 
 // NewBrowserBluetoothBridge returns a browser-owned Bluetooth bridge.
@@ -179,6 +186,7 @@ func (b *BrowserBluetoothBridge) ConnectClient(status BrowserBluetoothClientStat
 		b.failAllLocked("bridge_reconnected", "Bluetooth browser client reconnected.")
 	}
 	b.activeClientID = clientID
+	b.playback, b.feedbackActive, b.feedbackSequence = nil, false, 0
 	b.connected = true
 	b.supported = true
 	if status.Supported != nil {
@@ -249,8 +257,12 @@ func (b *BrowserBluetoothBridge) UpdateClient(status BrowserBluetoothClientStatu
 		b.lastError = safeShortString(status.Error, 180)
 		b.message = b.lastError
 	}
+	if b.isCurrentClientLocked(clientID) {
+		b.acceptPlaybackLocked(status.HSPState)
+	}
 	b.lastSeenAt = b.clock()
 	if !b.connected {
+		b.playback, b.feedbackActive = nil, false
 		b.failAllLocked("bridge_disconnected", b.messageOrDefaultLocked())
 	}
 	b.broadcastLocked()
@@ -267,6 +279,7 @@ func (b *BrowserBluetoothBridge) DisconnectClient(clientID string, message strin
 		return b.snapshotLocked()
 	}
 	b.connected = false
+	b.playback, b.feedbackActive = nil, false
 	b.status = "disconnected"
 	b.message = safeShortString(message, 180)
 	if b.message == "" {
@@ -313,6 +326,7 @@ func (b *BrowserBluetoothBridge) SendCommand(ctx context.Context, kind CommandKi
 		b.acks[dropped.ID] = b.failureAck(dropped.ID, "bridge_queue_overflow", "Bluetooth command queue overflow; dropped pending command.", 0)
 	}
 	b.pending = append(b.pending, command)
+	b.preparePlaybackCommandLocked(path, body, commandID)
 	b.broadcastLocked()
 
 	for {
@@ -560,6 +574,7 @@ func (b *BrowserBluetoothBridge) snapshotLocked() BrowserBluetoothBridgeSnapshot
 		LastSeenAgeMillis: lastSeenAge,
 		LastError:         b.lastError,
 		LastAck:           cloneAckPtrValue(b.lastAck),
+		HSPState:          cloneBluetoothPlayback(b.playback),
 	}
 }
 

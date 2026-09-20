@@ -5,6 +5,24 @@ import (
 	"sort"
 )
 
+func (e *Engine) refineContinuousSamples(samples, reference []MotionSample, mandatory map[int64]struct{}, resolution float64, hasPrevious, inTransition bool) []MotionSample {
+	samples = removeRedundantQuantizedSamples(samples, resolution, mandatory)
+	if hasPrevious {
+		samples = removeLeadingQuantizedDuplicates(samples, *e.lastSample, resolution, mandatory)
+		samples = append([]MotionSample{*e.lastSample}, samples...)
+	}
+	// Removing duplicate positions can erase easing near a reversal. Restore
+	// distinct points against the path, including the immutable append tail.
+	samples = refineQuantizedMotionSamples(samples, reference, resolution)
+	if inTransition {
+		samples = stabilizeTransitionSamples(samples, mandatory)
+	}
+	if hasPrevious {
+		samples = samples[1:]
+	}
+	return samples
+}
+
 // refineQuantizedMotionSamples checks the final quantized segments after
 // stationary-edge removal. Splits come only from the shared path probes and
 // must round differently from both segment ends. Mandatory reversals, prior

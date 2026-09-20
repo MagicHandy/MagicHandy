@@ -37,6 +37,15 @@ func (*BrowserBluetoothTransport) MotionSamplingCapabilities() MotionSamplingCap
 	return MotionSamplingCapabilities{PositionResolutionPercent: 0.1}
 }
 
+// MotionTimingCapabilities covers the browser round trip and serialized GATT
+// writes. Media can prebuffer more deeply without delaying interactive edits.
+func (*BrowserBluetoothTransport) MotionTimingCapabilities() MotionTimingCapabilities {
+	return MotionTimingCapabilities{
+		MinimumBufferedLead:      1500 * time.Millisecond,
+		MinimumMediaBufferedLead: 5 * time.Second,
+	}
+}
+
 // PlaybackStartTime reports the estimated stream origin at the successful
 // browser bridge Play acknowledgement midpoint.
 func (t *BrowserBluetoothTransport) PlaybackStartTime() time.Time {
@@ -188,8 +197,9 @@ func (t *BrowserBluetoothTransport) Play(ctx context.Context, command PlayComman
 		PointsPlay: &command,
 	}
 	body := map[string]any{
-		"stream_id":  bluetoothStreamID,
-		"start_time": command.StartTimeMillis,
+		"stream_id":         bluetoothStreamID,
+		"start_time":        command.StartTimeMillis,
+		"pause_on_starving": true,
 	}
 	dispatchedAt := time.Now()
 	result, err := t.dispatch(ctx, recorded, "hsp/play", body)
@@ -248,6 +258,11 @@ func (t *BrowserBluetoothTransport) Diagnostics() TransportDiagnostics {
 	defer t.mu.Unlock()
 
 	diagnostics := t.diagnosis
+	bridge := t.bridge.Snapshot()
+	diagnostics.Connected = bridge.Ready
+	if bridge.Ready && bridge.HSPState != nil {
+		diagnostics.PlaybackState = bridge.HSPState.PlayState
+	}
 	if diagnostics.LastCommand != nil {
 		command := SafeCommand(*diagnostics.LastCommand)
 		diagnostics.LastCommand = &command
@@ -271,16 +286,15 @@ func (t *BrowserBluetoothTransport) dispatchWithAck(ctx context.Context, command
 	start := time.Now()
 	ack := t.bridge.SendCommand(ctx, command.Kind, path, body)
 	result := CommandResult{
-		CommandID:     ack.ID,
-		Kind:          command.Kind,
-		Transport:     BrowserBluetoothName,
-		OK:            ack.OK,
-		Status:        ack.Status,
-		LatencyMillis: int64(ack.ElapsedMillis),
+		CommandID: ack.ID,
+		Kind:      command.Kind,
+		Transport: BrowserBluetoothName,
+		OK:        ack.OK,
+		Status:    ack.Status,
+		// The browser's elapsed_ms measures GATT work only. Refill planning
+		// must also budget command delivery and the acknowledgement round trip.
+		LatencyMillis: time.Since(start).Milliseconds(),
 		CompletedAt:   time.Now().UTC().Format(time.RFC3339Nano),
-	}
-	if result.LatencyMillis == 0 {
-		result.LatencyMillis = time.Since(start).Milliseconds()
 	}
 	if result.Status == "" {
 		if ack.OK {
@@ -332,9 +346,11 @@ func (t *BrowserBluetoothTransport) recordResult(command Command, result Command
 		case CommandKindStop:
 			playbackState = "idle"
 		case CommandKindPointsAdd:
-			playbackState = "buffered"
+			if playbackState != "play_requested" {
+				playbackState = "submitted"
+			}
 		case CommandKindPointsPlay:
-			playbackState = "playing"
+			playbackState = "play_requested"
 		case CommandKindHSPState, CommandKindConnectionCheck:
 			if state := playbackStateFromAck(snapshot.LastAck); state != "" {
 				playbackState = state

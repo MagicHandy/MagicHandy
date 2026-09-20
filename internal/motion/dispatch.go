@@ -201,7 +201,7 @@ func (e *Engine) nextChunkThrough(
 		return "", nil, nil, err
 	}
 
-	linearMedia := e.plan.Target.Media != nil && e.transition == nil && e.preservePlanKnots
+	linearMedia := e.plan.Target.Media != nil && e.transition == nil && e.preservePlanKnots && e.minimumPointIntervalMillis == 0
 	var samples []MotionSample
 	var err error
 	if linearMedia {

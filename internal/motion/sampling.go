@@ -114,7 +114,7 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 		probeIntervalMillis = bufferedProbeIntervalMillis
 	}
 	positionResolution := e.effectivePositionResolutionPercentLocked()
-	useNaturalCutoff := e.preservePlanKnots && positionResolution > 0
+	useNaturalCutoff := e.preservePlanKnots && (positionResolution > 0 || e.minimumPointIntervalMillis > 0)
 	windowEnd := targetTail
 	maximumWindowEnd := targetTail
 	if useNaturalCutoff {
@@ -127,13 +127,16 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 	}
 
 	for {
-		samples, mandatory := e.fitMotionWindowLocked(
+		samples, mandatory, err := e.fitMotionWindowLocked(
 			chunkStart,
 			windowEnd,
 			probeIntervalMillis,
 			maximumPoints,
 			positionResolution,
 		)
+		if err != nil {
+			return nil, err
+		}
 		if len(samples) == 0 {
 			return nil, errors.New("motion sampler produced an empty output window")
 		}
@@ -168,7 +171,7 @@ func (e *Engine) fitMotionWindowLocked(
 	probeIntervalMillis int64,
 	maximumPoints int,
 	positionResolution float64,
-) ([]MotionSample, map[int64]struct{}) {
+) ([]MotionSample, map[int64]struct{}, error) {
 	minimumBoundedProbe := max(
 		int64(1),
 		(windowEnd-chunkStart+maximumInternalProbePoints-1)/maximumInternalProbePoints,
@@ -191,6 +194,9 @@ func (e *Engine) fitMotionWindowLocked(
 		samples = stabilizeTransitionSamples(samples, mandatory)
 	}
 	referenceSamples := samples
+	if e.minimumPointIntervalMillis > 0 {
+		return e.fitImmediateMotionSamples(referenceSamples, positionResolution, hasPreviousAnchor)
+	}
 	samples = simplifyMotionSamples(samples, wireApproximationTolerance, mandatory)
 	if transitionInChunk {
 		samples = stabilizeTransitionSamples(samples, mandatory)
@@ -211,25 +217,66 @@ func (e *Engine) fitMotionWindowLocked(
 		samples = samples[1:]
 	}
 	if positionResolution > 0 && e.plan.Target.continuousCurve() {
-		samples = removeRedundantQuantizedSamples(samples, positionResolution, mandatory)
-		if hasPreviousAnchor {
-			samples = removeLeadingQuantizedDuplicates(samples, *e.lastSample, positionResolution, mandatory)
-		}
-		// Removing duplicate wire positions can erase easing near a reversal.
-		// Restore distinct positions against the original path, including the
-		// immutable previous append tail, without reintroducing stationary edges.
-		if hasPreviousAnchor {
-			samples = append([]MotionSample{*e.lastSample}, samples...)
-		}
-		samples = refineQuantizedMotionSamples(samples, referenceSamples, positionResolution)
-		if transitionInChunk {
-			samples = stabilizeTransitionSamples(samples, mandatory)
-		}
-		if hasPreviousAnchor {
-			samples = samples[1:]
+		samples = e.refineContinuousSamples(samples, referenceSamples, mandatory, positionResolution, hasPreviousAnchor, transitionInChunk)
+	}
+	if positionResolution > 0 && e.plan.Target.continuousCurve() && !transitionInChunk {
+		var err error
+		samples, err = e.retimeBufferedSamples(samples, referenceSamples, mandatory, positionResolution, hasPreviousAnchor, chunkStart)
+		if err != nil {
+			return nil, nil, err
 		}
 	}
-	return samples, mandatory
+	return samples, mandatory, nil
+}
+
+func (e *Engine) fitImmediateMotionSamples(reference []MotionSample, resolution float64, hasPrevious bool) ([]MotionSample, map[int64]struct{}, error) {
+	samples, mandatory, err := fitSpacedMotionSamples(reference, e.minimumPointIntervalMillis)
+	if err != nil {
+		return nil, nil, err
+	}
+	if resolution > 0 && e.plan.Target.continuousCurve() {
+		samples = removeRedundantQuantizedSamples(samples, resolution, mandatory)
+	}
+	samples, err = fitQuantizedMotionTiming(samples, reference, mandatory, resolution,
+		referenceTravelRateForSpeed(100, e.settings.HandyModel), e.minimumPointIntervalMillis)
+	if err != nil {
+		return nil, nil, err
+	}
+	if hasPrevious {
+		samples = samples[1:]
+	}
+	return samples, mandatory, nil
+}
+
+func (e *Engine) retimeBufferedSamples(samples, reference []MotionSample, mandatory map[int64]struct{}, resolution float64, hasPrevious bool, chunkStart int64) ([]MotionSample, error) {
+	if hasPrevious && len(samples) > 0 {
+		// Preserve both sides of the already committed batch boundary.
+		mandatory[samples[0].TimeMillis] = struct{}{}
+	}
+	// Keep the established append partition stable. A shifted cutoff changes
+	// the next fit's phase and can create a pulse despite local improvements.
+	targetTail := chunkStart + int64(e.chunkSize)*e.sampleInterval.Milliseconds()
+	for index, point := range samples {
+		if point.TimeMillis >= targetTail {
+			mandatory[point.TimeMillis] = struct{}{}
+			if index > 0 {
+				mandatory[samples[index-1].TimeMillis] = struct{}{}
+			}
+			break
+		}
+	}
+	if hasPrevious {
+		samples = append([]MotionSample{*e.lastSample}, samples...)
+	}
+	samples, err := fitQuantizedMotionTiming(samples, reference, mandatory, resolution,
+		referenceTravelRateForSpeed(100, e.settings.HandyModel), 1)
+	if err != nil {
+		return nil, err
+	}
+	if hasPrevious {
+		samples = samples[1:]
+	}
+	return samples, nil
 }
 
 // naturalMotionChunkCutoff chooses a point that the trajectory fitter retained
