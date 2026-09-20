@@ -837,7 +837,9 @@
   scrollbar-gutter: stable;
   padding: clamp(16px, 2.4vw, 26px);
 }
-.workspace > :not(.backend-banner) {
+/* Viewport backdrops are not routed content: capping their width leaves the
+   page edges uncovered even when they use position: fixed and inset: 0. */
+.workspace > :not(.backend-banner, .modal-scrim) {
   width: min(100%, var(--content-max));
   margin-inline: auto;
 }

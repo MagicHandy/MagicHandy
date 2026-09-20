@@ -12,6 +12,15 @@ thin outline, with no colored left-edge accent. Inline dismissal choices leave
 Emergency Stop reachable. Live errors, status and required workflow messages
 remain current-state information. See the [notice contract](informational-notices.md).
 
+## Modal backdrops
+
+Modal backdrops cover the entire viewport and are exempt from the workspace's
+content-width and centering rules. Apply size limits to the dialog surface,
+never the scrim: setup and duplicate-model prompts are direct workspace children
+and otherwise inherit its 980 px cap. Emergency Stop remains above the backdrop
+and is included in the modal keyboard focus cycle. Check coverage at the page
+edges on wide desktop layouts as well as narrow layouts.
+
 ## Settings organization
 
 The primary settings destinations are **General**, **Access**, **Device**,
