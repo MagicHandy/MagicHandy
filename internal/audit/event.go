@@ -74,6 +74,7 @@ type Event struct {
 	HTTPStatus      int    `json:"http_status,omitempty"`
 	Count           uint64 `json:"count,omitempty"`
 	ExpiresAt       int64  `json:"expires_at_ms,omitempty"`
+	Permanent       bool   `json:"permanent,omitempty"`
 }
 
 type actorKey struct{}

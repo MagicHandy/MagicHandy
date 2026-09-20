@@ -88,6 +88,7 @@ func (s *Server) authenticationRoutes(mux *http.ServeMux) {
 	s.controlGrantRoutes(mux)
 	s.sessionManagementRoutes(mux)
 	s.accountRecoveryRoutes(mux)
+	s.noticePreferenceRoutes(mux)
 	mux.HandleFunc("GET /api/auth/status", s.handleAuthenticationStatus)
 	mux.HandleFunc("POST /api/auth/bootstrap", s.handleAuthenticationBootstrap)
 	mux.HandleFunc("POST /api/auth/login", credentialHandler(s.handleAuthenticationLogin))
@@ -160,6 +161,10 @@ func isPublicAuthenticationRequest(r *http.Request) bool {
 		return r.Method == http.MethodPost
 	case "/api/auth/recover":
 		return r.Method == http.MethodPost
+	case "/api/notice-preferences":
+		// Only fixed explanatory notices in this browser's private preference
+		// record are available before sign-in. No host setting is exposed.
+		return readRequest(r) || r.Method == http.MethodPut || r.Method == http.MethodDelete
 	default:
 		return false
 	}

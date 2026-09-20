@@ -1,0 +1,10 @@
+[
+  { "id": "sign-in-safety", "label": "Emergency Stop remains available.", "browser_only": true },
+  { "id": "setup-protection", "label": "Password protection is active.", "browser_only": false },
+  { "id": "setup-remote-access", "label": "Remote access remains off by default.", "browser_only": false },
+  { "id": "setup-device-safety", "label": "Device safety remains active during setup.", "browser_only": false },
+  { "id": "setup-before-motion", "label": "Before commanding motion", "browser_only": false },
+  { "id": "model-generation", "label": "Generation guidance", "browser_only": false },
+  { "id": "device-firmware", "label": "Firmware / API requirement", "browser_only": false },
+  { "id": "control-profile", "label": "Control profile", "browser_only": false }
+]

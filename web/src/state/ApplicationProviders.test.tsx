@@ -10,7 +10,7 @@ vi.mock("./auth", () => ({ useAuth: () => auth }));
 vi.mock("../api/client", () => ({
   clientId: "audience-regression",
   COMMAND_RECOVERED_EVENT: "magichandy:command-recovered",
-  api: { getState: vi.fn() },
+  api: { getState: vi.fn(), noticePreferences: vi.fn(async () => ({ scope: "browser", hidden: [] })) },
 }));
 vi.mock("../App", async () => {
   const { useAppState, useToast, useNotifications } = await import("./app-state");

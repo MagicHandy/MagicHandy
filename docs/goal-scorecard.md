@@ -1,5 +1,52 @@
 # Goal Scorecard
 
+## 2026-09-19 — Shared notice preferences and permanent control permission
+
+The [notice contract](informational-notices.md) adds a shared catalog and
+account/browser preferences in the existing SQLite database. Both dismissal
+choices leave no marker outside Settings. The [permission amendment](self-hosted-https.md)
+adds explicitly permanent, revocable operator grants without extending login or
+controller leases. Neither change adds a dependency, periodic poll or motion path.
+
+| Artifact | Previous recovery/menu checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,996,672 B | 20,047,872 B | +51,200 B |
+| Main JS, raw | 845,134 B | 855,396 B | +10,262 B |
+| Main JS, gzip-9 | 232,535 B | 235,040 B | +2,505 B |
+| All embedded assets | 2,188,303 B | 2,210,787 B | +22,484 B |
+
+Measured with Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. The canonical dist contains
+only current hashes. The running app's main JS matches SHA-256
+`3332571719249e67c3b696e22d95985f1174da32038e19bc41f2b37edc53224b`.
+
+Notice reads create no database rows. Anonymous preferences have a 2,048-record
+cap, one-year expiry and 2 KiB/16-ID documents. Uploads are limited to 1 KiB/three
+seconds and operations to five seconds. The eight-entry catalog is shared at
+build time; preferences load on audience entry and visibility return only.
+
+Full Go/race suites, vet, zero-issue golangci-lint, architecture and embedded
+checks pass. The frontend passes 642 tests in 86 files, TypeScript and 2,229
+localized keys. The final copy follow-up also passes the focused account/grant
+tests and production rebuild. Migration and permission tests cover explicit
+consent, preserved timed deadlines, permanence, replacement/revocation, disabled
+accounts, login expiry, heartbeat loss and unchanged host-operation restrictions.
+
+The current isolated simulator at `http://127.0.0.10:50007` passes real provider
+generation. Final text-only app chat returns “The app is ready.” in 87 ms, one
+provider call, no repair/fallback and no motion action. Voice/LLM motion are off
+and Bluetooth is disconnected. One post-review sample records 120,049,664 B
+working set and 109,060,096 B private memory; this differs in workload/lifetime
+from earlier samples and establishes no controlled RSS/startup improvement.
+The redacted connection report is 1,189 B.
+
+Mobile review at 390px verifies both notice-dismissal choices, reload behavior,
+settings-only restoration and the compact Permanent choice. Saved account
+preferences are visible to an independent client after restart. The normal
+viewport is restored. Permission grants are exercised with disposable unit/API
+fixtures; visual review selects the option without granting live access.
+Physical motion, external WAN and the full acceptance matrix remain unverified.
+
 ## 2026-09-19 — Account recovery and settings organization
 
 The [saved recovery contract](lan-wan-account-recovery.md) adds atomic password,

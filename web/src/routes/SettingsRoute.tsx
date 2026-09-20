@@ -21,6 +21,7 @@ import { AccountSettingsPanel } from "../components/AccountSettingsPanel";
 import { ChatSettingsPanel, resolveChatSettingsSection } from "../components/ChatSettingsPanel";
 import { SettingsNavigation, SettingsNavigationLabel } from "../components/SettingsNavigation";
 import { LabsSettings } from "../components/LabsSettings";
+import { DismissibleNotice } from "../components/DismissibleNotice";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
@@ -443,6 +444,7 @@ export function SettingsRoute() {
               <p className="hint-block">{t("Review device, model, and optional voice choices in the same guided flow used after installation.")}</p>
               <a className="btn btn-secondary settings-setup-link" href="#/setup/reconfigure">{t("Run setup again")}</a>
             </div>
+            <p className="hint-block"><a href="#/settings/access/profile">{t("Manage hidden informational notices")}</a></p>
           </>
         )}
 
@@ -453,10 +455,10 @@ export function SettingsRoute() {
               <h3 className="group-title">{t("Connection")}</h3>
               <label className="field"><span className="label">{t("Dispatch owner")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
               {owner === "cloud_rest" && <>
-                <div className="device-requirement" role="note" aria-labelledby="device-firmware-requirement">
+                <DismissibleNotice id="device-firmware" className="device-requirement">
                   <span id="device-firmware-requirement" className="label">{t("Firmware / API requirement")}</span>
                   <p>{firmwareRequirementLabel(s.device.firmware_api_requirement)}</p>
-                </div>
+                </DismissibleNotice>
                 <label className="field"><span className="label">{t("API application ID source")}</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
                 {s.device.api_application_id_source === "developer_override" && <label className="field"><span className="label">{t("Developer application ID")}</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>}
                 <label className="field"><span className="label">{t("Handy connection key")}{s.device.connection_key_set && <span className="badge">{t("set")}</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? t("set (leave blank to keep)") : t("Paste key")} value={newKey} disabled={locked} onChange={(e) => { setNewKey(e.target.value); if (e.target.value.trim()) setClearKey(false); }} /></label>

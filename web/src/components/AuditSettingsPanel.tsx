@@ -112,6 +112,7 @@ export function AuditSettingsPanel({ backendOnline, accounts, initiallyExpanded 
             {event.target_account_id && <span> · {accountName(event.target_account_id)}</span>}
             {event.count !== undefined && <span> · {event.kind === "history_gap" ? t("{count} missing events", { count: event.count }) : event.kind === "recovery_codes_replaced" ? t("{count} recovery codes", { count: event.count }) : t("{count} sessions", { count: event.count })}</span>}
             {event.expires_at_ms !== undefined && <span> · {t("Expires: {time}", { time: new Date(event.expires_at_ms).toLocaleString() })}</span>}
+            {event.kind === "grant_issued" && event.permanent && <span> · {t("Permanent")}</span>}
             <AuditReferences event={event} />
           </li>)}
         </ol>}

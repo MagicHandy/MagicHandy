@@ -2,6 +2,20 @@
 
 ## Core Direction
 
+The September 19 control-permission follow-up adds an explicit **Permanent**
+choice for existing operator accounts. Schema 26 preserves timed grants and
+represents new permanent grants with a null expiry. Replacement and revocation
+still rotate grant authority, and login/session/heartbeat lifetimes still fence
+control. Permission records and access history clearly distinguish permanence;
+the default duration remains one hour.
+
+The September 19 [informational-notice system](docs/informational-notices.md)
+adds one shared catalog and SQLite preference domain for account and browser
+dismissals. Users choose a temporary dismissal or a saved choice and can restore
+notices from Access. Explanations use neutral outlines without left accent lines;
+operational alerts and the permanent Stop remain independent. Schema 25 keeps
+preferences in the existing app database with bounded anonymous storage.
+
 The September 19 [settings review](docs/settings-review-2026-09-19.md) combines
 Conversation, Model and Prompts & memory under Chat. Access and Chat share the
 responsive secondary navigation; the remaining five settings pages retain a

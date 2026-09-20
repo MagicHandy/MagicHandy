@@ -100,7 +100,10 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   install modules, change worker commands, manage models and administer accounts.
   Add a real viewer role if needed; being a second tab is not that role. Specify
   owner-approved, scoped, expiring invitations/grants before a linked control
-  profile affects hardware. Explicitly choose shared-data visibility versus
+  profile affects hardware. Existing operator accounts may also receive an
+  explicitly permanent, revocable installation grant per the September 19
+  user-requested amendment in ADR 0029; linked profiles still confer no authority.
+  Explicitly choose shared-data visibility versus
   per-user isolation. Keep host-native dialogs local and privileged host
   operations restricted. Follow the server-side authorization principles in
   [OWASP authorization guidance](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html).
@@ -108,7 +111,7 @@ Source entry points: [controller](../internal/httpapi/controller.go),
   as UI tests. Selecting a linked profile never silently grants authority or
   reveals private history, media or host configuration.
   **In progress:** the [login management and admission checkpoint](lan-wan-session-management.md)
-  covers all 213 current registrations and implicit HEAD at role admission.
+  covers all 216 current registrations and implicit HEAD at role admission.
   [Observer response projections and UI boundaries](lan-wan-observer-privacy.md)
   now cover host configuration/diagnostic payloads and granted playback versus
   host edits. Exhaustive handler/resource, consent and full UI coverage remain open.

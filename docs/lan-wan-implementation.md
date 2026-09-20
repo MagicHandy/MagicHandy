@@ -23,8 +23,9 @@ The implementation is in progress on `codex/lan-wan-control`:
 - per-event write deadlines, including correct HTTP/2 reset and response-wrapper
   support so model-generation waits are not mistaken for blocked writes;
 - a stop-first protected bootstrap handoff for the creating browser tab;
-- schema v20 operator control permissions: explicit administrator consent,
-  expiry, replacement and revocation; operators otherwise observe shared data;
+- schema v26 operator control permissions: explicit administrator consent for
+  a timed or permanent grant, replacement and revocation; existing timed grants
+  keep their deadlines and operators otherwise observe shared data;
 - a server-enforced default-administrator policy for host mutations, separate
   from semantic control and self-service account operations;
 - explicit local/direct-HTTPS/trusted-proxy modes with a canonical external
@@ -55,7 +56,7 @@ The implementation is in progress on `codex/lan-wan-control`:
   persona provenance resolved against one captured conversation;
 - independent management IDs, account-scoped login listing/renaming/revocation
   and bounded reconciliation of a lost management response;
-- a maintained 213-route role admission inventory, setup/private-account read
+- a maintained 216-route role admission inventory, setup/private-account read
   boundaries, operator control permission fixes and cancelable feedback writes;
 - capability-specific shared response projections, administrator-only raw
   diagnostics, a minimal public Stop acknowledgement and browser login lifetime
@@ -70,6 +71,49 @@ The implementation is in progress on `codex/lan-wan-control`:
   replies to unfinished uploads, and cancelable media/content writes;
 - saved recovery codes, atomic password/login/session revalidation and immediate
   retirement of affected work after password changes and account recovery.
+
+## Notice preferences and permanent control — 2026-09-19
+
+The [notice contract](informational-notices.md) centralizes fixed informational
+notice IDs and saved account/browser choices in the existing database. The ×
+offers **Just this time**, **Don't show again** and Cancel. Both dismissal choices
+remove the entire notice without a placeholder, restore link, count or other
+marker outside Settings. Saved choices follow the signed-in account; sign-in
+notices remain browser-specific. Restore controls live under Access → Your
+profile → Informational notices. Neutral outlines replace left accent lines.
+
+Schema 25 adds bounded preference records, same-transaction session checks,
+scope checks and per-notice patches. Anonymous preference cookies grant no
+login/control authority. Browser records expire after a year without a write
+and are capped at 2,048 profiles. The UI bounds and cancels reads/writes, ignores
+obsolete audiences, and does not add a periodic poll or browser storage domain.
+
+The user-requested **Permanent** control duration uses an explicit API choice
+and a nullable expiry in schema 26. Existing timed deadlines survive migration.
+The default menu choice remains one hour. Permanent grants remain revocable
+and replaceable; sign-out, disabled accounts and controller heartbeat loss still
+retire ownership through shared Stop. Grant replacement rotates the grant ID.
+Access history labels permanent grants, and operators retain no host privileges.
+See the amended [deployment contract](self-hosted-https.md) and ADR 0029.
+
+Focused regression tests cover persistence, explicit consent, migration,
+replacement, revocation, account disabling, login expiry, heartbeat loss,
+audit records and unchanged host-operation restrictions. The final frontend
+suite has **642 tests in 86 files** and **2,229 keys in five locales**. Notice
+tests cover no residual content after either choice, settings restoration,
+cross-account/browser boundaries and stale/failed writes. Current build,
+runtime and review evidence is recorded in the scorecard. This checkpoint
+does not close a numbered LAN/WAN acceptance item.
+
+The final review build serves the exact worktree assets at
+`http://127.0.0.10:50007`. Full Go/race, vet, lint, architecture/embedded checks
+and the CGO-free build pass. Real generation succeeds, and text-only app chat
+returns “The app is ready.” in 87 ms with one call and no repair/fallback or
+motion. Mobile browser review verifies complete dismissal, reload behavior and
+restoration in Settings; an independent client confirms saved account scope.
+The Permanent option renders in the compact mobile permission form. Visual
+review does not grant a live permission; isolated API regressions exercise
+granting, replacement, revocation and the existing safety boundaries.
 
 ## Account recovery and settings organization — 2026-09-19
 

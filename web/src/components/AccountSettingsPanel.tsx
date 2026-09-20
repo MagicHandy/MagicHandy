@@ -14,6 +14,7 @@ import { ControlGrantPanel } from "./ControlGrantPanel";
 import { SessionSettingsPanel } from "./SessionSettingsPanel";
 import { AuditSettingsPanel } from "./AuditSettingsPanel";
 import { RecoveryCodesPanel } from "./RecoveryCodesPanel";
+import { NoticePreferencesPanel } from "./NoticePreferencesPanel";
 import { AccessSettingsNavigation, resolveAccessSection } from "./AccessSettingsNavigation";
 
 const errorMessage = (reason: unknown) => reason instanceof Error ? translateKnown(reason.message) : t("Request failed");
@@ -35,6 +36,7 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
           <BootstrapAccountForm disabled={!backendOnline} onCreated={auth.bootstrap} />
         </section>
         <NetworkSettingsPanel backendOnline={backendOnline} administrator />
+        <NoticePreferencesPanel />
       </>
     );
   }
@@ -46,7 +48,7 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
       <div className="access-layout">
         <AccessSettingsNavigation section={section} administrator={administrator} />
         <div className="access-content" key={`${auth.status.session_id || account.id}:${account.role}:${section}`}>
-          {section === "profile" && <><ProfileGroup account={account} disabled={!backendOnline} onChanged={auth.refresh} /><LinkedProfilesGroup /></>}
+          {section === "profile" && <><ProfileGroup account={account} disabled={!backendOnline} onChanged={auth.refresh} /><NoticePreferencesPanel /><LinkedProfilesGroup /></>}
           {section === "security" && <><PasswordGroup disabled={!backendOnline} onChanged={auth.refresh} /><RecoveryCodesPanel backendOnline={backendOnline} /></>}
           {section === "sessions" && <SessionSettingsPanel backendOnline={backendOnline} onSignedOut={auth.refresh} />}
           {section === "network" && administrator && <NetworkSettingsPanel backendOnline={backendOnline} administrator />}
@@ -101,7 +103,7 @@ function AccountDirectory({ current, backendOnline, history }: { current: UserAc
       <h3 className="group-title">{t("Installation accounts")}</h3>
       <button className="btn btn-secondary" aria-label={t("Refresh accounts")} disabled={!backendOnline || loading} onClick={() => void loadAccounts()}>{t("Refresh")}</button>
     </div>
-    <p className="hint-block">{t("Operators begin as observers. An administrator grants time-limited permission to control motion, chat and synchronized playback. Accounts share this installation's content; host configuration remains administrator-only.")}</p>
+    <p className="hint-block">{t("Operators begin as observers. An administrator grants timed or permanent permission to control motion, chat and synchronized playback. Accounts share this installation's content; host configuration remains administrator-only.")}</p>
     {!backendOnline && <p role="status">{t("Core offline")}</p>}
     {error && <p className="form-status auth-error" role="alert">{error}</p>}
     {loading ? <p className="form-status" role="status">{t("Loading accounts…")}</p> : <AccountList current={current} accounts={accounts} disabled={!backendOnline} onChanged={loadAccounts} />}

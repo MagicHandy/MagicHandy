@@ -74,8 +74,10 @@ export interface ControlGrant {
   account_id: string;
   issued_by: string;
   created_at: string;
-  expires_at: string;
+  expires_at: string | null;
 }
+
+export type ControlGrantDuration = number | "permanent";
 
 export interface NetworkConfig {
   mode: "local" | "direct_https" | "trusted_proxy" | "legacy";

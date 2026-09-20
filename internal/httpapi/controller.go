@@ -187,7 +187,10 @@ func controllerActor(r *http.Request, clientID string) controllerIdentity {
 	if session, ok := authenticatedSession(r); ok {
 		actor.sessionKey = session.session.Key
 		if grant := session.session.ControlGrant; grant != nil {
-			actor.grantID, actor.grantExpires = grant.ID, grant.ExpiresAt
+			actor.grantID = grant.ID
+			if grant.ExpiresAt != nil {
+				actor.grantExpires = *grant.ExpiresAt
+			}
 		}
 	}
 	return actor

@@ -196,7 +196,7 @@ export async function request<T>(
 ): Promise<T> {
   const order = ++requestOrder;
   const delivery = method !== "GET" && method !== "HEAD" && !stopDeliveryPath(path) &&
-    path !== "/api/chat/cursor" &&
+    path !== "/api/chat/cursor" && path !== "/api/notice-preferences" &&
     !/^\/api\/transport\/bluetooth\/(?:status|ack)$/.test(path) &&
     !(path === "/api/transport/bluetooth/disconnect" && extraHeaders?.["X-MagicHandy-Gateway-Generation"]) &&
     !/^\/api\/(?:auth|accounts|network|controller)(?:\/|$)/.test(path);
@@ -485,6 +485,9 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  noticePreferences: (scope: "account" | "browser", signal?: AbortSignal) => request<import("../notice-catalog").NoticePreferences>("GET", "/api/notice-preferences", undefined, signal, { "X-MagicHandy-Notice-Scope": scope }),
+  saveNoticePreference: (id: string, hidden: boolean, scope: "account" | "browser", signal?: AbortSignal) => request<import("../notice-catalog").NoticePreferences>("PUT", "/api/notice-preferences", { notice_id: id, hidden }, signal, { "X-MagicHandy-Notice-Scope": scope }),
+  resetNoticePreferences: (scope: "account" | "browser", signal?: AbortSignal) => request<import("../notice-catalog").NoticePreferences>("DELETE", "/api/notice-preferences", undefined, signal, { "X-MagicHandy-Notice-Scope": scope }),
   accessAudit: (before = 0, signal?: AbortSignal) => request<AccessAuditPage>("GET", `/api/audit?before=${before}`, undefined, signal),
   exportAccessAudit: (before: number, signal?: AbortSignal) => request<AccessAuditPage>("GET", `/api/audit/export?before=${before}`, undefined, signal),
   // Authentication. The HttpOnly session token never enters React; these
@@ -508,7 +511,7 @@ export const api = {
     request<null>("PUT", "/api/auth/password", { current_password: currentPassword, new_password: newPassword }),
   accounts: (signal?: AbortSignal) => request<{ accounts: UserAccount[] }>("GET", "/api/accounts", undefined, signal),
   controlGrant: (id: string, signal?: AbortSignal) => request<{ grant: ControlGrant | null }>("GET", `/api/accounts/${encodeURIComponent(id)}/control-grant`, undefined, signal),
-  grantControl: (id: string, duration_minutes: number) => request<{ grant: ControlGrant }>("PUT", `/api/accounts/${encodeURIComponent(id)}/control-grant`, { duration_minutes }),
+  grantControl: (id: string, duration: number | "permanent") => request<{ grant: ControlGrant }>("PUT", `/api/accounts/${encodeURIComponent(id)}/control-grant`, duration === "permanent" ? { permanent: true } : { duration_minutes: duration }),
   revokeControl: (id: string) => request<{ grant: null }>("DELETE", `/api/accounts/${encodeURIComponent(id)}/control-grant`),
   networkStatus: (signal?: AbortSignal) => request<NetworkStatus>("GET", "/api/network", undefined, signal),
   validateNetwork: (config: NetworkConfig) => request<{ valid: boolean; config: NetworkConfig; message: string }>("POST", "/api/network/validate", { config }),

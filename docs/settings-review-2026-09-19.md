@@ -42,7 +42,31 @@ On the sign-in screen, a small **Forgot password?** text button reveals the
 recovery-code form. Recovery controls remain hidden during ordinary sign-in;
 going back discards the recovery fields and clears the typed login password.
 
-## Validation and limits
+## Notice and permission follow-up
+
+Informational notices now share a neutral outline, one dismissal component and
+one database-backed preference store. The × offers Just this time or Don't show
+again. Either choice removes the entire notice with no marker outside Settings;
+temporary choices clear on reload. Saved choices follow the account across
+browsers, while sign-in notices remain browser-specific. Restoration lives in
+Access → Your profile → Informational notices, also linked from General. The
+[notice contract](informational-notices.md) documents storage and scope.
+
+Accounts & permissions now offers Permanent alongside the four timed control
+durations. A new permission still defaults to one hour; selecting Permanent
+does not save until the administrator grants/replaces the permission. Permanent
+permissions have no expiry date and remain revocable. The current state and
+access history label them explicitly. Login and controller leases remain active.
+
+The combined follow-up passes 642 frontend tests in 86 files, TypeScript and
+2,229 keys across five locales. Live 390px review confirms that both dismissal
+choices leave no sign-in content behind, temporary dismissal resets on reload,
+saved dismissal survives reload and Settings restores it. An independent client
+also reads the saved account choice after restart; the review fixture's saved
+dismissals are restored afterward. Full gate/build evidence and artifact
+measurements are recorded in the scorecard and implementation log.
+
+## Earlier settings validation and limits
 
 - All 631 frontend tests in 83 files pass, including legacy/canonical routes,
   one draft across all three Chat sections, no secondary navigation on General,

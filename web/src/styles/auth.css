@@ -85,7 +85,6 @@
   display: grid;
   gap: 3px;
   padding: 12px 14px;
-  border-left: 3px solid var(--accent);
   background: var(--bg-inset);
 }
 

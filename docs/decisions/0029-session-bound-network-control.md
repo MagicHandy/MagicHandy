@@ -79,6 +79,17 @@ backoff, visibility behavior and the remaining acceptance work.
 
 ### Authentication lifetime and streaming
 
+On September 19, the user requested a permanent duration for existing operator
+control permissions. Administrators may explicitly choose a timed grant or a
+permanent grant that remains revocable and replaceable. Schema 26 makes the
+expiry nullable without changing existing timed deadlines. A missing or zero
+duration never implies permanence. Both kinds bind controller ownership to a
+fresh grant ID; replacement, revocation, disabled accounts, expired/revoked
+logins and heartbeat loss still retire control through the shared Stop path.
+Permanence grants no host-administration privilege or linked-profile authority.
+This does not remove the separate consent and expiry requirements for future
+enrollment invitations.
+
 Pre-saved account recovery codes are high-entropy, digest-only credentials,
 issued after live-session and current-password proof. Recovery atomically
 replaces the password, invalidates every login and code, and records an audit

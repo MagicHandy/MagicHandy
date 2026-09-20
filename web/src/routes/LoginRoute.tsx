@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { PasswordConfirmationField } from "../components/PasswordConfirmationField";
 import { AccountRecoveryForm } from "../components/AccountRecoveryForm";
+import { DismissibleNotice } from "../components/DismissibleNotice";
 import { t, translateKnown } from "../i18n";
 import { useAuth } from "../state/auth";
 import { passwordMeetsMinimum } from "../util/password";
@@ -106,10 +107,10 @@ export function LoginRoute() {
           </form>
         )}
         {!bootstrap && !recovery && auth.status?.initialized && <button className="auth-recovery-link" type="button" disabled={busy} onClick={() => { setPassword(""); setConfirmation(""); setError(""); setRecovery(true); }}>{t("Forgot password?")}</button>}
-        <div className="auth-safety-note">
+        <DismissibleNotice id="sign-in-safety" className="auth-safety-note">
           <strong>{t("Emergency Stop remains available.")}</strong>
           <span>{t("Signing in does not transfer device control; the existing controller lease still decides which browser may command motion.")}</span>
-        </div>
+        </DismissibleNotice>
       </div>
     </section>
   );

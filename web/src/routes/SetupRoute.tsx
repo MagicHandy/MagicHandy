@@ -11,6 +11,7 @@ import type {
   SetupStatus,
 } from "../api/types";
 import { HostPathField } from "../components/HostPathField";
+import { DismissibleNotice } from "../components/DismissibleNotice";
 import { SetupFailureReport } from "../components/SetupFailureReport";
 import { OllamaLibraryImport } from "../components/OllamaLibraryImport";
 import { PasswordConfirmationField } from "../components/PasswordConfirmationField";
@@ -508,7 +509,7 @@ function AccessStep({
         onSelect={() => setChoice("protected")}
       />
     </div>
-    {initialized ? <div className="setup-notice"><strong>{t("Password protection is active.")}</strong><span>{t("Manage accounts, passwords, and your profile image from Settings > Access.")}</span></div> : choice === "protected" && <div className="setup-subsection account-setup-fields">
+    {initialized ? <DismissibleNotice id="setup-protection" className="setup-notice"><strong>{t("Password protection is active.")}</strong><span>{t("Manage accounts, passwords, and your profile image from Settings > Access.")}</span></DismissibleNotice> : choice === "protected" && <div className="setup-subsection account-setup-fields">
       <label className="field"><span className="label">{t("Administrator username")}</span><input type="text" autoComplete="username" spellCheck={false} value={username} disabled={locked} onChange={(event) => setUsername(event.target.value)} /></label>
       <div className="setup-fields two-columns">
         <label className="field"><span className="label">{t("Password")}</span><input type="password" autoComplete="new-password" value={password} disabled={locked} onChange={(event) => setPassword(event.target.value)} /><span className="hint">{t("At least 8 characters. A long, unique passphrase is recommended.")}</span></label>
@@ -516,7 +517,7 @@ function AccessStep({
       </div>
       <p className="hint-block">{t("The password goes directly to the local account API. It is never written to installer logs, command lines, response files, or settings.")}</p>
     </div>}
-    <div className="setup-notice"><strong>{t("Remote access remains off by default.")}</strong><span>{t("LAN login still requires an explicit private address and a trusted HTTPS certificate.")}</span></div>
+    <DismissibleNotice id="setup-remote-access" className="setup-notice"><strong>{t("Remote access remains off by default.")}</strong><span>{t("LAN login still requires an explicit private address and a trusted HTTPS certificate.")}</span></DismissibleNotice>
   </div>;
 }
 
@@ -529,7 +530,7 @@ function WelcomeStep({ settings, patch }: { settings: PublicSettings; patch: (pa
       <label className="field"><span className="label">{t("App language")}</span><select value={locale} onChange={(event) => patch({ ui: { ...settings.ui, locale: event.target.value } })}>{LOCALE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
       <label className="field"><span className="label">{t("Chat reply language")}</span><select value={chatLocale} onChange={(event) => patch({ llm: { ...settings.llm, prompt_set: promptSet(event.target.value) } })}>{LOCALE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
     </div>
-    <div className="setup-notice"><strong>{t("Device safety remains active during setup.")}</strong><span>{t("Emergency Stop stays available. Connection checks never command motion.")}</span></div>
+    <DismissibleNotice id="setup-device-safety" className="setup-notice"><strong>{t("Device safety remains active during setup.")}</strong><span>{t("Emergency Stop stays available. Connection checks never command motion.")}</span></DismissibleNotice>
   </div>;
 }
 
@@ -701,7 +702,7 @@ function FinishStep({ setup, settings, models, runtimeChoice, voiceChoice, parak
       <div><dt>{t("Local address")}</dt><dd>{window.location.origin}</dd></div>
     </dl>
     {requiresSignIn && <div className="setup-notice"><strong>{t("Sign-in required after setup")}</strong><span>{t("Finishing setup ends the temporary setup session. Sign in with the administrator password you just created.")}</span></div>}
-    <div className="setup-notice"><strong>{t("Before commanding motion")}</strong><span>{t("Connect The Handy, confirm the active transport, and review speed and stroke limits in the top-bar connection manager.")}</span></div>
+    <DismissibleNotice id="setup-before-motion" className="setup-notice"><strong>{t("Before commanding motion")}</strong><span>{t("Connect The Handy, confirm the active transport, and review speed and stroke limits in the top-bar connection manager.")}</span></DismissibleNotice>
   </div>;
 }
 

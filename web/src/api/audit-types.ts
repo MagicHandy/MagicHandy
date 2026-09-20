@@ -17,6 +17,7 @@ export interface AccessAuditEvent {
   http_status?: number;
   count?: number;
   expires_at_ms?: number;
+  permanent?: boolean;
 }
 
 export interface AccessAuditPage {

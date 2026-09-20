@@ -1261,7 +1261,6 @@ textarea:disabled {
 .device-requirement {
   margin: 0;
   padding: 10px 12px;
-  border-left: 3px solid var(--warn);
   background: var(--surface);
 }
 .device-requirement .label {

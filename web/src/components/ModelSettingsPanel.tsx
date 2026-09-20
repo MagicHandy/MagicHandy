@@ -1,4 +1,5 @@
 import { t, translateKnown } from "../i18n";
+import { DismissibleNotice } from "./DismissibleNotice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type {
@@ -416,7 +417,8 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
           </label>
           <label className="field model-timeout"><span className="label">{t("Timeout ms")}</span><input type="number" min={1000} max={300000} value={settings.request_timeout_ms} disabled={locked} onChange={(event) => patch({ request_timeout_ms: Number(event.target.value) })} /></label>
         </div>
-        <div className="generation-notes" role="note">
+        <DismissibleNotice id="model-generation" className="generation-notes">
+          <strong>{t("Generation guidance")}</strong>
           {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
             <>
               <p>{managedLoadPolicy === "startup" ? t("Startup loading keeps the model ready for the first chat and Autopilot decision, but reserves RAM and VRAM while idle.") : t("On-demand loading saves idle RAM and VRAM, but the first request must wait for the model to load.")}</p>
@@ -427,7 +429,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
           <p>{settings.reasoning_mode === "off"
             ? t("Requesting disabled reasoning is recommended for compact structured replies from small {provider} models. Unsupported models may ignore or reject it.", { provider: providerLabel(settings.provider) })
             : t("Automatic reasoning may improve difficult intent interpretation, but can add hidden tokens and latency before the visible reply.")}</p>
-        </div>
+        </DismissibleNotice>
 
         {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
           <div className="row-actions model-runtime-actions">

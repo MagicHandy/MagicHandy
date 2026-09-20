@@ -57,8 +57,8 @@ APIs and require no controller grant.
 ## Maintained admission inventory
 
 The committed [route table](../internal/httpapi/testdata/route_admission.tsv)
-classifies all **213** current ServeMux registrations, including saved-code
-recovery and audit endpoints. A source-inventory test
+classifies all **216** current ServeMux registrations, including saved-code
+recovery, audit and caller-owned notice-preference endpoints. A source-inventory test
 requires an entry for every registration and rejects stale, duplicate or
 unrecognized registration shapes. The role test covers each method, every
 implicit `HEAD` for a `GET` registration, and anonymous, observer, granted
@@ -66,11 +66,11 @@ operator, administrator and revoked-administrator callers.
 
 | Admission policy | Registrations | Meaning |
 | --- | ---: | --- |
-| Public | 7 | Shell, health, authentication/recovery entry points and global Stop |
+| Public | 10 | Shell, health, authentication/recovery entry points, caller-owned notice choices and global Stop |
 | Shared observation | 34 | Any enabled login may enter; installation data remains shared |
 | Self-service / caller-scoped | 17 | Any enabled login may enter; the handler checks the affected identity/resource |
 | Gateway maintenance | 4 | Login admission is independent of controller status; gateway ownership is checked separately |
-| Semantic control | 30 | Administrator or operator with an unexpired control grant |
+| Semantic control | 30 | Administrator or operator with a current timed or permanent control grant |
 | Host administration | 121 | Administrator admission; applicable controller/local-origin checks still apply |
 
 The table verifies authentication and role **admission**, not successful

@@ -27,6 +27,14 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("administrator access history", () => {
+  it("labels an explicitly permanent grant without inventing an expiry", async () => {
+    const result = page();
+    result.events[0] = { ...result.events[0], kind: "grant_issued", permanent: true };
+    list.mockResolvedValueOnce(result);
+    render(<AuditSettingsPanel backendOnline accounts={[]} initiallyExpanded />);
+    expect(await screen.findByText(/Permanent/)).toBeInTheDocument();
+    expect(screen.queryByText(/Expires:/)).not.toBeInTheDocument();
+  });
   it("opens a dedicated history page immediately and labels recovery code counts accurately", async () => {
     const result = page();
     result.events[0] = { ...result.events[0], kind: "recovery_codes_replaced", count: 8 };

@@ -1,5 +1,17 @@
 # UI Design
 
+## Informational notices
+
+Explanatory notices use the shared dismissal component and catalog. Their ×
+asks **Just this time** or **Don't show again**. Saved choices follow the account;
+sign-in choices belong to the current browser. All durable choices are stored
+in the existing SQLite database, with restoration only under Access → Your profile.
+Both dismissal choices leave no link, placeholder or indicator outside Settings.
+Notices use a neutral surface and
+thin outline, with no colored left-edge accent. Inline dismissal choices leave
+Emergency Stop reachable. Live errors, status and required workflow messages
+remain current-state information. See the [notice contract](informational-notices.md).
+
 ## Settings organization
 
 The primary settings destinations are **General**, **Access**, **Device**,

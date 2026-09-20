@@ -18,18 +18,21 @@ type ControlGrant struct {
 	AccountID string    `json:"account_id"`
 	IssuedBy  string    `json:"issued_by"`
 	CreatedAt time.Time `json:"created_at"`
-	ExpiresAt time.Time `json:"expires_at"`
+	// A nil expiry is an explicitly issued permanent permission.
+	ExpiresAt *time.Time `json:"expires_at"`
 }
 
 // CanControl reports authority at the supplied instant, including grant expiry.
 func (s Session) CanControl(now time.Time) bool {
-	return !s.Account.Disabled && (s.Account.Role == RoleAdmin || (s.ControlGrant != nil && now.Before(s.ControlGrant.ExpiresAt)))
+	return !s.Account.Disabled && (s.Account.Role == RoleAdmin || (s.ControlGrant != nil &&
+		(s.ControlGrant.ExpiresAt == nil || now.Before(*s.ControlGrant.ExpiresAt))))
 }
 
-// ControlGrant returns an unexpired permission, or nil for an observer.
+// ControlGrant returns a permanent or unexpired permission, or nil for an observer.
 func (s *Store) ControlGrant(ctx context.Context, accountID string) (*ControlGrant, error) {
 	var grant ControlGrant
-	var created, expires string
+	var created string
+	var expires sql.NullString
 	err := s.db.SQL().QueryRowContext(ctx, `SELECT g.grant_id, g.user_id, g.issued_by, g.created_at, g.expires_at
 		FROM user_control_grants g JOIN user_accounts owner ON owner.id = g.issued_by
 		WHERE g.user_id = ? AND owner.disabled = 0 AND owner.role = 'admin'`, accountID).
@@ -44,12 +47,15 @@ func (s *Store) ControlGrant(ctx context.Context, accountID string) (*ControlGra
 	if err != nil {
 		return nil, err
 	}
-	grant.ExpiresAt, err = time.Parse(time.RFC3339Nano, expires)
-	if err != nil {
-		return nil, err
-	}
-	if !s.now().Before(grant.ExpiresAt) {
-		return nil, nil
+	if expires.Valid {
+		deadline, parseErr := time.Parse(time.RFC3339Nano, expires.String)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		if !s.now().Before(deadline) {
+			return nil, nil
+		}
+		grant.ExpiresAt = &deadline
 	}
 	return &grant, nil
 }
@@ -60,13 +66,31 @@ func (s *Store) GrantControl(ctx context.Context, administratorID, accountID str
 	if lifetime < time.Minute || lifetime > 12*time.Hour {
 		return nil, errors.New("control permission must expire between one minute and twelve hours from now")
 	}
+	return s.grantControl(ctx, administratorID, accountID, lifetime)
+}
+
+// GrantPermanentControl explicitly issues control until revoked or replaced.
+// Login expiry, account disabling and controller leases still apply.
+func (s *Store) GrantPermanentControl(ctx context.Context, administratorID, accountID string) (*ControlGrant, error) {
+	return s.grantControl(ctx, administratorID, accountID, 0)
+}
+
+func (s *Store) grantControl(ctx context.Context, administratorID, accountID string, lifetime time.Duration) (*ControlGrant, error) {
 	random := make([]byte, 16)
 	if err := s.randomBytes(random); err != nil {
 		return nil, err
 	}
 	now := s.now()
 	grant := &ControlGrant{ID: hex.EncodeToString(random), AccountID: accountID, IssuedBy: administratorID,
-		CreatedAt: now, ExpiresAt: now.Add(lifetime)}
+		CreatedAt: now}
+	var expiry sql.NullString
+	var expiresAtMillis int64
+	if lifetime != 0 {
+		deadline := now.Add(lifetime)
+		grant.ExpiresAt = &deadline
+		expiry = sql.NullString{String: deadline.Format(time.RFC3339Nano), Valid: true}
+		expiresAtMillis = deadline.UnixMilli()
+	}
 	err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 		var count int
 		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM user_accounts owner, user_accounts target
@@ -80,11 +104,11 @@ func (s *Store) GrantControl(ctx context.Context, administratorID, accountID str
 		_, err := tx.ExecContext(ctx, `INSERT INTO user_control_grants(user_id, grant_id, issued_by, created_at, expires_at)
 			VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET grant_id = excluded.grant_id,
 			issued_by = excluded.issued_by, created_at = excluded.created_at, expires_at = excluded.expires_at`,
-			accountID, grant.ID, administratorID, now.Format(time.RFC3339Nano), grant.ExpiresAt.Format(time.RFC3339Nano))
+			accountID, grant.ID, administratorID, now.Format(time.RFC3339Nano), expiry)
 		if err != nil {
 			return err
 		}
-		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: now.UnixMilli(), Kind: audit.GrantIssued, Outcome: "success", Actor: audit.ActingAccount(ctx, administratorID), TargetAccountID: accountID, GrantID: grant.ID, ExpiresAt: grant.ExpiresAt.UnixMilli()})
+		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: now.UnixMilli(), Kind: audit.GrantIssued, Outcome: "success", Actor: audit.ActingAccount(ctx, administratorID), TargetAccountID: accountID, GrantID: grant.ID, ExpiresAt: expiresAtMillis, Permanent: grant.ExpiresAt == nil})
 	})
 	return grant, err
 }

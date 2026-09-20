@@ -50,6 +50,17 @@ func TestForwardedLocalAddressNeverGrantsLocalPrivileges(t *testing.T) {
 }
 
 func TestOperatorPermissionMatrixAndRevocationFence(t *testing.T) {
+	for _, permanent := range []bool{false, true} {
+		name := "timed"
+		if permanent {
+			name = "permanent"
+		}
+		t.Run(name, func(t *testing.T) { assertOperatorPermissionMatrix(t, permanent) })
+	}
+}
+
+func assertOperatorPermissionMatrix(t *testing.T, permanent bool) {
+	t.Helper()
 	s, store, admin, _ := newControllerSessionFixture(t)
 	operator, err := store.Create(t.Context(), "observer", "a strong observer passphrase", accounts.RoleOperator)
 	if err != nil {
@@ -66,7 +77,12 @@ func TestOperatorPermissionMatrixAndRevocationFence(t *testing.T) {
 			t.Fatalf("observer allowed %s: %d %s", route, w.Code, w.Body.String())
 		}
 	}
-	if _, err := store.GrantControl(t.Context(), admin.ID, operator.ID, time.Hour); err != nil {
+	if permanent {
+		_, err = store.GrantPermanentControl(t.Context(), admin.ID, operator.ID)
+	} else {
+		_, err = store.GrantControl(t.Context(), admin.ID, operator.ID, time.Hour)
+	}
+	if err != nil {
 		t.Fatal(err)
 	}
 	claimAuthenticatedController(t, s, cookie)

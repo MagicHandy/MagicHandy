@@ -73,7 +73,6 @@
 .generation-notes {
   margin: -2px 0 14px;
   padding: 8px 12px;
-  border-left: 3px solid var(--warn);
   background: var(--surface-1);
   color: var(--muted);
   font-size: 0.82rem;
@@ -506,8 +505,7 @@
 }
 
 .managed-duplicate-note {
-  padding-left: 10px;
-  border-left: 3px solid var(--warn);
+  padding: 10px 12px;
   color: var(--text) !important;
 }
 

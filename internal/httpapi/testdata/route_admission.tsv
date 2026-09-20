@@ -215,3 +215,6 @@ control	PUT /api/settings/llm-motion-mode
 host	PUT /api/setup/preferences
 control	PUT /api/voice/input-preferences
 control	PUT /api/voice/preferences
+public	GET /api/notice-preferences
+public	PUT /api/notice-preferences
+public	DELETE /api/notice-preferences

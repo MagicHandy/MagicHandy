@@ -177,8 +177,7 @@
 }
 
 .reference-guide {
-  padding-left: 12px;
-  border-left: 3px solid var(--accent);
+  padding: 10px 12px;
   color: var(--muted);
   font-size: 0.84rem;
 }
@@ -266,7 +265,6 @@
   align-items: flex-start;
   gap: 9px;
   padding: 10px 12px;
-  border-left: 3px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--muted);
   font-size: 0.86rem;

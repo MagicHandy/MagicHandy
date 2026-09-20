@@ -1,0 +1,22 @@
+.dismissible-notice,
+.auth-notice,
+.setup-notice,
+.reference-guide,
+.voice-module-readout,
+.managed-duplicate-note,
+.chat-session-dialog-note,
+.curation-readout { border: 1px solid var(--line); border-radius: 4px; background: var(--bg-inset); }
+.dismissible-notice { position: relative; padding: 10px 12px; }
+.dismissible-notice > .notice-content { min-width: 0; padding-inline-end: 28px; }
+.notice-content > strong, .notice-content > span { display: block; }
+.notice-dismiss { position: absolute; inset-block-start: 6px; inset-inline-end: 6px; display: grid; place-items: center; width: 24px; height: 24px; min-height: 24px; border: 0; border-radius: 3px; padding: 0; background: transparent; color: var(--muted); font-size: 1.15rem; cursor: pointer; }
+.notice-dismiss:hover { background: var(--surface-2); color: var(--text); }
+.notice-dismiss:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.notice-dismiss-choice { display: grid; gap: 8px; }
+.notice-dismiss-choice > span { font-size: .8125rem; }
+.notice-dismiss-choice .row-actions { gap: 6px; flex-wrap: wrap; }
+.notice-dismiss-choice button.btn { min-height: 28px; padding: 4px 8px; font-size: .8125rem; line-height: 1.35; }
+.notice-preferences-list { list-style: none; padding: 0; margin: 12px 0; }
+.notice-preferences-list li { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding-block: 8px; border-bottom: 1px solid var(--line); font-size: .8125rem; }
+.notice-preferences-list small { display: block; color: var(--muted); margin-top: 3px; }
+.notice-preferences-list button { flex: none; }

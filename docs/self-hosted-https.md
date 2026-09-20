@@ -13,7 +13,13 @@ Settings > Access. Keep the data directory private to the app's OS account.
 Creating an account enables login on subsequent local launches as well.
 Remote modes refuse startup without an enabled account. Existing operators
 become observers: an administrator grants separate control permission, lasting
-one minute to twelve hours. The UI offers common durations from 15 minutes.
+one minute to twelve hours, or **Permanent** until revoked or replaced. The UI
+offers 15 minutes, one hour (the default), four hours, twelve hours and Permanent.
+Schema 26 preserves existing timed deadlines; no account gains permanent control
+during migration. The API requires an explicit `{"permanent":true}` choice,
+exclusive of `duration_minutes`. Missing, zero or invalid durations are rejected.
+A permanent grant has `expires_at: null` and an explicit permanent audit marker.
+It does not extend login expiry or the foreground controller heartbeat lease.
 
 Accounts share this installation's chat, personas, media and motion settings.
 It is not a service for mutually untrusted tenants. Control permission covers

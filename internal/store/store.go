@@ -19,7 +19,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 24
+	CurrentSchemaVersion = 26
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -571,6 +571,10 @@ var migrations = [][]string{
 	{`SELECT 1`},
 	// v23 -> v24: user-owned offline recovery codes; only digests are stored.
 	accountRecoverySchema,
+	// v24 -> v25: centralized account/browser explanatory-notice preferences.
+	noticePreferencesSchema,
+	// v25 -> v26: an explicitly issued permanent control permission has no expiry.
+	permanentControlSchema,
 }
 
 func migrateAccountProfiles(ctx context.Context, tx *sql.Tx) error {

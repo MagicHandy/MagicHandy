@@ -123,6 +123,12 @@ func (s *Store) sessionTimes(lastSeenRaw, expiresRaw string) (time.Time, time.Ti
 	return lastSeen, expires, seenErr == nil && expiresErr == nil && now.Before(expires) && now.Sub(lastSeen) <= s.idleLimit
 }
 
+// SessionOwnerTx revalidates an account's session inside a domain write
+// transaction using the shared datastore. It grants no host or control permission.
+func (s *Store) SessionOwnerTx(ctx context.Context, tx *sql.Tx, key string) (string, error) {
+	return s.liveSessionOwner(ctx, tx, key)
+}
+
 // Called inside the same transaction as a management mutation: a request that
 // waited behind logout, password reset, disabling or expiry cannot apply later.
 func (s *Store) liveSessionOwner(ctx context.Context, tx *sql.Tx, key string) (string, error) {

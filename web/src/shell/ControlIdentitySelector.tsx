@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ControlIdentity } from "../api/types";
 import { t } from "../i18n";
 import { AccountAvatar } from "../components/AccountAvatar";
+import { DismissibleNotice } from "../components/DismissibleNotice";
 import { ChevronUpIcon, CloseIcon } from "./icons";
 
 interface ControlIdentitySelectorProps {
@@ -119,9 +120,9 @@ export function ControlIdentitySelector({
               </button>
             ))}
           </div>
-          <p className="control-identity-note">
+          <DismissibleNotice id="control-profile" className="control-identity-note">
             {t("This labels this browser session. It does not sign in as another account or transfer device control.")}
-          </p>
+          </DismissibleNotice>
           {error && <p className="form-status auth-error" role="alert">{error}</p>}
           <footer>
             <a href="#/settings/access" onClick={() => onOpenChange(false)}>{t("Manage account")}</a>

@@ -46,8 +46,9 @@ type actualSchemaColumn struct {
 }
 
 var requiredSchemaTables = []schemaTable{
+	{name: "notice_preferences", columns: columns("owner_key:TEXT", "account_id:TEXT?", "hidden_json:TEXT", "updated_at:INTEGER"), primaryKey: []string{"owner_key"}},
 	{name: "access_audit", columns: columns("seq:INTEGER", "event_id:TEXT", "occurred_at:INTEGER", "document:TEXT"), primaryKey: []string{"seq"}},
-	{name: "user_control_grants", columns: columns("user_id:TEXT", "grant_id:TEXT", "issued_by:TEXT", "created_at:TEXT", "expires_at:TEXT"), primaryKey: []string{"user_id"}},
+	{name: "user_control_grants", columns: columns("user_id:TEXT", "grant_id:TEXT", "issued_by:TEXT", "created_at:TEXT", "expires_at:TEXT?"), primaryKey: []string{"user_id"}},
 	{name: "settings", columns: columns("id:TEXT", "document:TEXT", "updated_at:TEXT"), primaryKey: []string{"id"}},
 	{name: "app_kv", columns: columns("key:TEXT", "value:TEXT", "updated_at:TEXT"), primaryKey: []string{"key"}},
 	{name: "memories", columns: columns("id:TEXT", "text:TEXT", "enabled:INTEGER", "created_at:TEXT"), primaryKey: []string{"id"}},
@@ -134,6 +135,7 @@ var requiredSchemaIndexes = []schemaIndex{
 }
 
 var requiredSchemaForeignKeys = []schemaForeignKey{
+	{table: "notice_preferences", column: "account_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "user_recovery_codes", column: "user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "user_control_grants", column: "user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "user_control_grants", column: "issued_by", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
@@ -162,6 +164,7 @@ func (db *DB) validateSchema(ctx context.Context) error {
 		db.validateSchemaIndexes,
 		db.validateAuditRetention,
 		db.validateRecoveryCodeBounds,
+		db.validateNoticePreferenceBounds,
 		db.validateSchemaForeignKeys,
 		db.validateForeignKeyRows,
 	}

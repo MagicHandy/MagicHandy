@@ -144,17 +144,21 @@ func (s *Server) handleControlGrant(w http.ResponseWriter, r *http.Request) {
 		grant, err = s.accounts.ControlGrant(r.Context(), accountID)
 	case http.MethodPut:
 		var body struct {
-			DurationMinutes int `json:"duration_minutes"`
+			DurationMinutes *int `json:"duration_minutes"`
+			Permanent       bool `json:"permanent"`
 		}
 		if decodeErr := decodeJSON(r, &body); decodeErr != nil {
 			writeError(w, http.StatusBadRequest, decodeErr)
 			return
 		}
-		if body.DurationMinutes < 1 || body.DurationMinutes > 720 {
-			writeError(w, http.StatusBadRequest, errors.New("control permission duration must be from 1 to 720 minutes"))
+		if body.Permanent && body.DurationMinutes == nil {
+			grant, err = s.accounts.GrantPermanentControl(r.Context(), administrator.ID, accountID)
+		} else if !body.Permanent && body.DurationMinutes != nil && *body.DurationMinutes >= 1 && *body.DurationMinutes <= 720 {
+			grant, err = s.accounts.GrantControl(r.Context(), administrator.ID, accountID, time.Duration(*body.DurationMinutes)*time.Minute)
+		} else {
+			writeError(w, http.StatusBadRequest, errors.New("choose a duration from 1 to 720 minutes or explicitly request permanent control"))
 			return
 		}
-		grant, err = s.accounts.GrantControl(r.Context(), administrator.ID, accountID, time.Duration(body.DurationMinutes)*time.Minute)
 	case http.MethodDelete:
 		err = s.accounts.RevokeControl(r.Context(), administrator.ID, accountID)
 	}
