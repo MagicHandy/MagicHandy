@@ -186,7 +186,7 @@ func (b *CloudRESTBuilder) BuildHSPSetup(command HSPSetupCommand) (CloudRequest,
 
 // BuildHSPAdd shapes a Cloud REST request that appends HSP timed points.
 func (b *CloudRESTBuilder) BuildHSPAdd(command AppendPointsCommand) (CloudRequest, error) {
-	return b.buildHSPAdd(command, true, len(command.Points))
+	return b.buildHSPAdd(command, true, len(command.Points)-1)
 }
 
 func (b *CloudRESTBuilder) buildHSPAdd(command AppendPointsCommand, flush bool, tailPointStreamIndex int) (CloudRequest, error) {
@@ -194,13 +194,13 @@ func (b *CloudRESTBuilder) buildHSPAdd(command AppendPointsCommand, flush bool, 
 	if err != nil {
 		return CloudRequest{}, err
 	}
-	if len(command.Points) == 0 {
-		return CloudRequest{}, errors.New("HSP add requires at least one point")
+	if err := validateHandyHSPPoints(command.Points); err != nil {
+		return CloudRequest{}, err
 	}
 	if len(command.Points) > maximumCloudHSPAddPoints {
 		return CloudRequest{}, fmt.Errorf("HSP add supports at most %d points", maximumCloudHSPAddPoints)
 	}
-	if tailPointStreamIndex < len(command.Points) {
+	if tailPointStreamIndex < len(command.Points)-1 || int64(tailPointStreamIndex) > int64(^uint32(0)) {
 		return CloudRequest{}, errors.New("HSP tail point stream index must cover the appended points")
 	}
 
@@ -210,10 +210,6 @@ func (b *CloudRESTBuilder) buildHSPAdd(command AppendPointsCommand, flush bool, 
 		if !ok {
 			return CloudRequest{}, fmt.Errorf("HSP point %d x must be between 0 and 100", index)
 		}
-		if point.TimeMillis < 0 {
-			return CloudRequest{}, fmt.Errorf("HSP point %d t must be non-negative", index)
-		}
-
 		points[index] = CloudHSPPoint{
 			X: x,
 			T: point.TimeMillis,
@@ -245,8 +241,8 @@ func (b *CloudRESTBuilder) BuildHSPPlay(command PlayCommand) (CloudRequest, erro
 	if err != nil {
 		return CloudRequest{}, err
 	}
-	if command.StartTimeMillis < 0 {
-		return CloudRequest{}, errors.New("HSP play start time must be non-negative")
+	if err := validateHandyHSPStart(command.StartTimeMillis); err != nil {
+		return CloudRequest{}, err
 	}
 
 	return CloudRequest{

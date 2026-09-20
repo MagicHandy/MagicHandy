@@ -57,7 +57,7 @@
         }
       ],
       "flush": true,
-      "tail_point_stream_index": 3
+      "tail_point_stream_index": 2
     }
   },
   {

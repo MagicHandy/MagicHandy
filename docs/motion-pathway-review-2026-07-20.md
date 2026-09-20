@@ -1,5 +1,10 @@
 # Motion Pathway Review - 2026-07-20
 
+**Correction, September 20, 2026:** the historical Bluetooth 0..1000 / 0.1%
+claims below were incorrect. The manufacturer specifies integer 0..100 HSP
+positions. The encoder and sampler capability are now corrected; see the
+[reference review](bluetooth-intiface-review-2026-09-20.md).
+
 ## Scope
 
 This review followed every production motion source through pattern import,

@@ -1,5 +1,35 @@
 # Goal Scorecard
 
+## 2026-09-20 — Bluetooth, Intiface and shared Handy contracts
+
+No runtime dependency was added. The GATT session owns bounded writes and
+waiters; Intiface session I/O is separate from pacing. Correct 1% Bluetooth
+resolution allows the existing sampler to remove redundant points. In a
+12-second synthetic Full sweeps prebuffer at 10/25/43, point counts change from
+112/189/287 to 84/141/228 (25.0%, 25.4%, 20.6% fewer). These compare the old
+advertised 0.1% capability with the corrected 1% capability; the old actual wire
+values were wrong and saturated firmware. This is not a radio benchmark.
+
+| Artifact | HTTPS checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 21,996,544 B | 22,003,712 B | +7,168 B |
+| Main JS, raw | 870,949 B | 872,603 B | +1,654 B |
+| Main JS, Node gzip-9 | 239,147 B | 239,857 B | +710 B |
+| Main CSS, raw / Node gzip-9 | 148,552 / 26,809 B | 148,552 / 26,809 B | 0 B |
+| All embedded assets | 2,254,305 B | 2,255,959 B | +1,654 B |
+
+One fresh simulated review process reached health in 587 ms with a 29,618,176 B
+working set and 57,528,320 private bytes, using warm OS file caches. External
+Ollama memory is separate. Full Go/race, vet, Windows/Linux lint, all 658 frontend
+tests, TypeScript and canonical UI build pass; final Cloud changes also receive
+focused transport/HTTP and race checks. The final binary vulnerability scan
+reports no reachable or imported-package vulnerabilities (three advisories are
+in unused dependency modules). The exact review app completes a real local
+Ollama text generation. CI also exposed a ready-before-listener-cleanup race in
+the pending HTTPS base; preparation now completes teardown before publishing
+its terminal status, with repeated race coverage of success and failure paths.
+See [review and evidence](bluetooth-intiface-review-2026-09-20.md).
+
 ## 2026-09-20 — Guided HTTPS and automatic certificates
 
 The pure-Go ACMEz v3.1.6 client adds public IP/profile support; its Apache-2.0
@@ -2675,7 +2705,8 @@ Ranked by threat to the stated goals:
   the old grid. Semantic output remains bounded to 0.35%. Loop seams now retain
   cyclic velocity unless they truly reverse,
   retargets use a 750 ms C1 blend whose final frame removes generated <=2%
-  chatter, Browser Bluetooth retains 0.1% native point resolution, and loop
+  chatter, Browser Bluetooth was then believed to have 0.1% native point
+  resolution (corrected to 1% on September 20, 2026), and loop
   import rejects <5% source spans plus rapid <=2% chatter.
   Slow subtle reversals and stored finite programs remain source-exact. Focused
   Go, frontend, typecheck, and lint gates pass. The rebuilt embedded UI is

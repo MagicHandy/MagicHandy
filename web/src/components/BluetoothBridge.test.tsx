@@ -78,7 +78,7 @@ class FakeCharacteristic extends EventTarget {
         response: {
           id: request.id,
           ok: true,
-          clock_offset_get: { time: Date.now(), clock_offset: 0, rtd: 1 },
+          clock_offset_get: { time: 123456, clock_offset: 0, rtd: 1 },
         },
       };
       this.peer?.emitValue();
@@ -285,5 +285,92 @@ describe("BluetoothBridge", () => {
     await waitFor(() => expect(commandSignal?.aborted).toBe(true));
     await waitFor(() => expect(device.gatt.disconnect).toHaveBeenCalledOnce());
     expect(device.tx.writes.some((request) => request.path === "hsp/stop")).toBe(true);
+  });
+
+  it("bounds a stuck GATT write, stops, and discards the rest of an append", async () => {
+    vi.useFakeTimers();
+    bluetoothCommands.mockResolvedValueOnce({ status: "ok", bluetooth: connectedSnapshot, commands: [{ id: "add", path: "hsp/add", body: { stream_id: 7, points: Array.from({ length: 45 }, (_, t) => ({ t, x: 50 })) } }] });
+    const originalWrite = device.tx.writeValueWithResponse.getMockImplementation()!;
+    device.tx.writeValueWithResponse.mockImplementation((bytes) => {
+      if (codec.requests.get(bytes)?.path === "hsp/add") {
+        device.tx.writes.push(codec.requests.get(bytes)!);
+        return new Promise(() => {});
+      }
+      return originalWrite(bytes);
+    });
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Connect Bluetooth" })); await vi.advanceTimersByTimeAsync(2100); });
+    expect(device.tx.writes.filter((request) => request.path === "hsp/add")).toHaveLength(1);
+    expect(device.tx.writes.some((request) => request.path === "hsp/stop")).toBe(true);
+    expect(device.gatt.disconnect).toHaveBeenCalledOnce();
+    expect(show).toHaveBeenCalledWith(expect.stringMatching(/write timed out/i), "error");
+  });
+
+  it("does not carry an old native writer or queued Stop into a replacement session", async () => {
+    let deliver!: (value: Awaited<ReturnType<typeof api.bluetoothCommands>>) => void;
+    bluetoothCommands.mockReturnValueOnce(new Promise((resolve) => { deliver = resolve; }));
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    await connect();
+    let finishWrite!: () => void;
+    const retired = device;
+    retired.tx.writeValueWithResponse.mockImplementation(async (bytes) => {
+      retired.tx.writes.push(codec.requests.get(bytes)!);
+      await new Promise<void>((resolve) => { finishWrite = resolve; });
+    });
+    await act(async () => deliver({ status: "ok", bluetooth: connectedSnapshot, commands: [{ id: "old", path: "slider/stroke", body: { min: 20, max: 80 } }] }));
+    await act(async () => { window.dispatchEvent(new Event("magichandy:emergency-stop")); retired.gatt.disconnect(); });
+    device = new FakeDevice();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Connect Bluetooth" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Connect Bluetooth" }));
+    await waitFor(() => expect(bluetoothConnect).toHaveBeenCalledTimes(2));
+    await act(async () => finishWrite());
+    expect(device.tx.writes.filter((request) => request.path === "clock/offset/get")).toHaveLength(3);
+    expect(device.tx.writes.some((request) => request.path === "hsp/stop" || request.path === "slider/stroke")).toBe(false);
+  });
+
+  it("treats a correlated code-only firmware rejection as failure and stops locally", async () => {
+    bluetoothCommands.mockResolvedValueOnce({ status: "ok", bluetooth: connectedSnapshot, commands: [{ id: "play", path: "hsp/play", body: { stream_id: 7 } }] });
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    await connect();
+    await waitFor(() => expect(device.tx.writes.some((request) => request.path === "hsp/play")).toBe(true));
+    const request = device.tx.writes.find((request) => request.path === "hsp/play")!;
+    expect(new Set(device.tx.writes.map((item) => item.id)).size).toBe(device.tx.writes.length);
+    await act(async () => { codec.decoded = { type: "response", response: { id: request.id, ok: false, error: { code: 100014 } } }; device.rx.emitValue(); });
+    await waitFor(() => expect(device.gatt.disconnect).toHaveBeenCalledOnce());
+    expect(device.tx.writes.some((item) => item.path === "hsp/stop")).toBe(true);
+    expect(show).toHaveBeenCalledWith(expect.stringContaining("100014"), "error");
+  });
+
+  it("omits Play clock compensation when optional clock replies are unavailable", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    device.tx.writeValueWithResponse.mockImplementation(async (bytes) => { device.tx.writes.push(codec.requests.get(bytes)!); });
+    bluetoothCommands.mockResolvedValueOnce({ status: "ok", bluetooth: connectedSnapshot, commands: [{ id: "play", path: "hsp/play", body: { stream_id: 7, server_time: 123 } }] });
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Connect Bluetooth" })); await vi.advanceTimersByTimeAsync(5100); });
+    expect(bluetoothConnect).toHaveBeenCalledOnce();
+    expect(device.tx.writes.find((request) => request.path === "hsp/play")?.body.server_time).toBeUndefined();
+    expect(bluetoothAck).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ id: "play", ok: true }), expect.anything());
+  });
+
+  it("cancels a chooser that resolves after the component unmounts", async () => {
+    let choose!: (device: FakeDevice) => void;
+    Object.defineProperty(navigator, "bluetooth", { configurable: true, value: { requestDevice: vi.fn(() => new Promise((resolve) => { choose = resolve; })) } });
+    const result = render(<BluetoothBridge visible locked={false} backendOnline />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect Bluetooth" }));
+    result.unmount();
+    await act(async () => choose(device));
+    expect(device.gatt.connect).not.toHaveBeenCalled();
+    expect(bluetoothConnect).not.toHaveBeenCalled();
+  });
+
+  it("preserves the backend's absolute tail indices when splitting an HSP append", async () => {
+    bluetoothCommands.mockResolvedValueOnce({ status: "ok", bluetooth: connectedSnapshot, commands: [{ id: "chunked", path: "hsp/add", body: { stream_id: 7, points: Array.from({ length: 45 }, (_, t) => ({ t, x: 50 })), tail_point_stream_index: 144, flush: true } }] });
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    await connect();
+    await waitFor(() => expect(bluetoothAck).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ id: "chunked", ok: true }), expect.anything()));
+    const adds = device.tx.writes.filter((request) => request.path === "hsp/add");
+    expect(adds.map((request) => request.body.tail_point_stream_index)).toEqual([119, 139, 144]);
+    expect(adds.map((request) => request.body.flush)).toEqual([true, false, false]);
   });
 });

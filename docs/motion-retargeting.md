@@ -66,9 +66,9 @@ The shared path must:
   essential points than the owner accepts (100 for one Cloud `/hsp/add`, 128
   otherwise) instead of flooding a transport
 - when an owner declares a coarser endpoint resolution, run a second
-  quantization-aware reduction in the shared engine. Cloud's 1% endpoint scale
-  uses a combined 0.8% bound to remove dwell/catch-up plateaus; Browser
-  Bluetooth uses its 0.1% native endpoint scale; Intiface scales the selected
+  quantization-aware reduction in the shared engine. Cloud and Browser Bluetooth
+  use their 1% endpoint scale with a combined 0.8% bound to remove redundant
+  rounded knots; Intiface scales the selected
   actuator's physical `StepCount` through the active stroke window first
 - for immediate-mode owners, honor the selected device timing floor and do not
   inject authored knots that violate its minimum command interval
