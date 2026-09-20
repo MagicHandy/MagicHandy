@@ -130,7 +130,7 @@ try {
     Assert-True -Condition ($ttsInstallerSource.Contains('for ($attempt = 1; $attempt -le 3; $attempt++)')) -Message 'TTS model downloads should retry the resumable cache'
     Assert-True -Condition ($ttsInstallerSource.Contains("`$ErrorActionPreference = 'Continue'")) -Message 'TTS native dependency commands should not treat ordinary stderr as a terminating PowerShell error'
     Assert-True -Condition ($ttsInstallerSource.Contains('Downloaded files were kept; rerun the installer to resume.')) -Message 'TTS model failure should explain that completed downloads are retained'
-    Assert-True -Condition ($ttsInstallerSource.Contains("@('faster_qwen3_tts.egg-info')")) -Message 'partial Faster Qwen installs should recognize installer-generated package metadata'
+    Assert-True -Condition ($ttsInstallerSource.Contains("'faster_qwen3_tts.egg-info'")) -Message 'partial Faster Qwen installs should recognize installer-generated package metadata'
     $mainInstallerSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'install.ps1'))
     Assert-True -Condition (-not $mainInstallerSource.Contains('TTSReferenceWav')) -Message 'main installer must not expose a reference WAV choice'
     Assert-True -Condition (-not $mainInstallerSource.Contains('TTSReferenceTranscript')) -Message 'main installer must not expose a reference transcript choice'
@@ -717,25 +717,38 @@ func main() {
     $fixtureRevision = (& $gitCommand.Source -C $sourceFixture rev-parse HEAD).Trim()
     Assert-True -Condition ($LASTEXITCODE -eq 0 -and $fixtureRevision -match '^[0-9a-f]{40}$') -Message 'TTS source fixture should have a pinned revision'
 
-    $freshCheckout = Join-Path $tempRoot 'tts-source-fresh'
-    Sync-PinnedSource -Git $gitCommand.Source -URL $sourceFixture -Revision $fixtureRevision -Destination $freshCheckout
-    Assert-Equal -Expected 'pinned module source' -Actual ([System.IO.File]::ReadAllText((Join-Path $freshCheckout 'module.txt'))) -Message 'fresh TTS source clone should complete its checkout'
-    Assert-Equal -Expected '' -Actual ((@(& $gitCommand.Source -C $freshCheckout status --porcelain) -join "`n")) -Message 'fresh TTS source clone should finish cleanly'
+    foreach ($sourceCase in @(
+        # An empty conditional/pipeline result is $null, not @(). This was the
+        # Chatterbox call shape that failed under StrictMode in alpha.45.
+        @{ Name = 'chatterbox'; GeneratedPaths = $null },
+        @{ Name = 'faster-qwen'; GeneratedPaths = @('faster_qwen3_tts.egg-info') }
+    )) {
+        $sourceArguments = @{
+            Git = $gitCommand.Source
+            URL = $sourceFixture
+            Revision = $fixtureRevision
+            InstallerGeneratedPaths = $sourceCase.GeneratedPaths
+        }
+        $freshCheckout = Join-Path $tempRoot "tts-source-fresh-$($sourceCase.Name)"
+        Sync-PinnedSource @sourceArguments -Destination $freshCheckout
+        Assert-Equal -Expected 'pinned module source' -Actual ([System.IO.File]::ReadAllText((Join-Path $freshCheckout 'module.txt'))) -Message 'fresh TTS source clone should complete its checkout'
+        Assert-Equal -Expected '' -Actual ((@(& $gitCommand.Source -C $freshCheckout status --porcelain) -join "`n")) -Message 'fresh TTS source clone should finish cleanly'
 
-    $interruptedCheckout = Join-Path $tempRoot 'tts-source-interrupted'
-    Invoke-Checked -Executable $gitCommand.Source -Arguments @('clone', '--no-checkout', $sourceFixture, $interruptedCheckout) -Description 'Interrupted TTS source fixture clone'
-    $interruptedStatus = @(& $gitCommand.Source -C $interruptedCheckout status --porcelain)
-    Assert-True -Condition ($LASTEXITCODE -eq 0 -and $interruptedStatus.Count -gt 0) -Message 'no-checkout fixture should reproduce the alpha.2 dirty status'
-    Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $interruptedCheckout 'module.txt'))) -Message 'no-checkout fixture should not have a populated worktree'
-    Sync-PinnedSource -Git $gitCommand.Source -URL $sourceFixture -Revision $fixtureRevision -Destination $interruptedCheckout
-    Assert-Equal -Expected 'pinned module source' -Actual ([System.IO.File]::ReadAllText((Join-Path $interruptedCheckout 'module.txt'))) -Message 'retry should recover the alpha.2 no-checkout residue'
-    Assert-Equal -Expected '' -Actual ((@(& $gitCommand.Source -C $interruptedCheckout status --porcelain) -join "`n")) -Message 'recovered TTS source should finish cleanly'
+        $interruptedCheckout = Join-Path $tempRoot "tts-source-interrupted-$($sourceCase.Name)"
+        Invoke-Checked -Executable $gitCommand.Source -Arguments @('clone', '--no-checkout', $sourceFixture, $interruptedCheckout) -Description 'Interrupted TTS source fixture clone'
+        $interruptedStatus = @(& $gitCommand.Source -C $interruptedCheckout status --porcelain)
+        Assert-True -Condition ($LASTEXITCODE -eq 0 -and $interruptedStatus.Count -gt 0) -Message 'no-checkout fixture should reproduce the interrupted clone dirty status'
+        Assert-True -Condition (-not (Test-Path -LiteralPath (Join-Path $interruptedCheckout 'module.txt'))) -Message 'no-checkout fixture should not have a populated worktree'
+        Sync-PinnedSource @sourceArguments -Destination $interruptedCheckout
+        Assert-Equal -Expected 'pinned module source' -Actual ([System.IO.File]::ReadAllText((Join-Path $interruptedCheckout 'module.txt'))) -Message 'retry should recover the no-checkout residue'
+        Assert-Equal -Expected '' -Actual ((@(& $gitCommand.Source -C $interruptedCheckout status --porcelain) -join "`n")) -Message 'recovered TTS source should finish cleanly'
 
-    [System.IO.File]::WriteAllText((Join-Path $interruptedCheckout 'module.txt'), 'user edit')
-    Assert-Throws -Action {
-        Sync-PinnedSource -Git $gitCommand.Source -URL $sourceFixture -Revision $fixtureRevision -Destination $interruptedCheckout
-    } -Pattern 'local changes' -Message 'populated TTS source with a tracked edit'
-    Assert-Equal -Expected 'user edit' -Actual ([System.IO.File]::ReadAllText((Join-Path $interruptedCheckout 'module.txt'))) -Message 'TTS source retry should preserve genuine edits'
+        [System.IO.File]::WriteAllText((Join-Path $interruptedCheckout 'module.txt'), 'user edit')
+        Assert-Throws -Action {
+            Sync-PinnedSource @sourceArguments -Destination $interruptedCheckout
+        } -Pattern 'local changes' -Message 'populated TTS source with a tracked edit'
+        Assert-Equal -Expected 'user edit' -Actual ([System.IO.File]::ReadAllText((Join-Path $interruptedCheckout 'module.txt'))) -Message 'TTS source retry should preserve genuine edits'
+    }
 
     Write-Host 'Checking public Windows artifact policy...'
     $reviewLLMSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\check-review-llm.ps1'))
@@ -1042,6 +1055,21 @@ func main() {
     Assert-True -Condition ($updatePlan -match 'Auto-launch:\s+True') -Message 'TTS update plan should preserve auto-launch'
     Assert-True -Condition ($updatePlan -match 'Qwen/Qwen3-TTS-12Hz-0\.6B-Base') -Message 'TTS update plan should preserve the installed model'
 
+    foreach ($invalidField in @(
+        @{ Name = 'schema_version'; Values = @('2', 2.5, $true, $null, [long]::MaxValue); Pattern = 'Unsupported TTS module state schema' },
+        @{ Name = 'port'; Values = @('8991', 8991.5, $true, $null, 0, 65536, [long]::MaxValue); Pattern = 'invalid port' }
+    )) {
+        $savedValue = $moduleState[$invalidField.Name]
+        foreach ($invalidValue in $invalidField.Values) {
+            $moduleState[$invalidField.Name] = $invalidValue
+            [System.IO.File]::WriteAllText((Join-Path $qwenRoot 'module-state.json'), ($moduleState | ConvertTo-Json))
+            Assert-Throws -Action {
+                & $ttsUpdater -InstallRoot $qwenRoot -PlanOnly -Yes
+            } -Pattern $invalidField.Pattern -Message "invalid TTS $($invalidField.Name) value '$invalidValue'"
+        }
+        $moduleState[$invalidField.Name] = $savedValue
+    }
+
     $moduleState.schema_version = 1
     $moduleState.reference_wav = 'C:\voices\sample.wav'
     $moduleState.reference_transcript = 'Exact transcript.'
@@ -1094,7 +1122,12 @@ func main() {
     [System.IO.File]::AppendAllText((Join-Path $partialSource 'pyproject.toml'), '# preserve this edit')
     Add-MagicHandyGitInfoExclusions -RepositoryPath $partialSource -RelativePaths @('faster_qwen3_tts.egg-info')
     Add-MagicHandyGitInfoExclusions -RepositoryPath $partialSource -RelativePaths @('faster_qwen3_tts.egg-info')
+    $excludePath = Join-Path $partialSource '.git\info\exclude'
+    $existingExclusions = [System.IO.File]::ReadAllText($excludePath)
+    Add-MagicHandyGitInfoExclusions -RepositoryPath $partialSource
+    Add-MagicHandyGitInfoExclusions -RepositoryPath $partialSource -RelativePaths $null
     Add-MagicHandyGitInfoExclusions -RepositoryPath $partialSource -RelativePaths @()
+    Assert-Equal -Expected $existingExclusions -Actual ([System.IO.File]::ReadAllText($excludePath)) -Message 'omitted, null, or empty exclusions should leave the existing file unchanged'
 
     $partialStatus = @(& $gitForTTS -C $partialSource status --porcelain --untracked-files=all)
     Assert-Equal -Expected 0 -Actual $LASTEXITCODE -Message 'partial TTS fixture status'
@@ -1103,7 +1136,6 @@ func main() {
     Assert-True -Condition ($partialStatusText -match '\?\? user-notes\.txt') -Message 'unknown untracked files should continue to block managed source replacement'
     Assert-True -Condition ($partialStatusText -match ' M pyproject\.toml') -Message 'tracked source edits should continue to block managed source replacement'
 
-    $excludePath = Join-Path $partialSource '.git\info\exclude'
     $excludeLines = @([System.IO.File]::ReadAllLines($excludePath))
     $exclusionCount = @($excludeLines | Where-Object { $_ -eq '/faster_qwen3_tts.egg-info/' }).Count
     Assert-Equal -Expected 1 -Actual $exclusionCount -Message 'installer metadata exclusion should be idempotent'
@@ -1287,6 +1319,23 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     $migratedSchemaTwo = Read-MagicHandyInstallState -Path $schemaTwoStatePath
     Assert-Equal -Expected 3 -Actual ([int]$migratedSchemaTwo.schema_version) -Message 'schema 2 state should migrate to schema 3 in memory'
     Assert-Equal -Expected 'none' -Actual ([string]$migratedSchemaTwo.tts_module) -Message 'schema 2 TTS default'
+
+    foreach ($invalidField in @(
+        @{ Name = 'schema_version'; Values = @('3', 3.5, $true, $null, [long]::MaxValue); Pattern = 'schema.+unsupported' },
+        @{ Name = 'port'; Values = @('49800', 49800.5, $true, $null, 0, 65536, [long]::MaxValue); Pattern = 'invalid port' },
+        @{ Name = 'installed_at'; Values = @('not a date', 42, $true, $null); Pattern = 'installed_at.+timestamp' }
+    )) {
+        foreach ($invalidValue in $invalidField.Values) {
+            $invalidState = $json | ConvertFrom-Json
+            $invalidState.($invalidField.Name) = $invalidValue
+            $invalidStatePath = Join-Path $tempRoot 'invalid-scalar-state.json'
+            [System.IO.File]::WriteAllText($invalidStatePath, ($invalidState | ConvertTo-Json -Depth 5))
+            Assert-Throws -Action {
+                Read-MagicHandyInstallState -Path $invalidStatePath
+            } -Pattern $invalidField.Pattern -Message "invalid installer $($invalidField.Name) value '$invalidValue'"
+        }
+    }
+    Assert-True -Condition ($loaded.installed_at -is [string] -and $loaded.updated_at -is [string]) -Message 'loaded timestamps should remain strings on every PowerShell version'
 
     $invalidLocalePath = Join-Path $tempRoot 'invalid-locale-state.json'
     $invalidLocale = $json | ConvertFrom-Json

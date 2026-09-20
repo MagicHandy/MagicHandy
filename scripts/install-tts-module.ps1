@@ -588,8 +588,8 @@ function Invoke-HuggingFaceModelDownload {
     } else {
         'retained local files and metadata'
     }
-    $isWindows = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
-    if ($isWindows) {
+    $serializeWindowsDownloads = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+    if ($serializeWindowsDownloads) {
         # huggingface_hub probes symlink support lazily. Concurrent first-use
         # workers can observe the optimistic probe value and fail with WinError
         # 1314 before the normal copy fallback is selected.
@@ -603,7 +603,7 @@ function Invoke-HuggingFaceModelDownload {
     )
     $exitCode = 1
     try {
-        if ($isWindows) {
+        if ($serializeWindowsDownloads) {
             [System.Environment]::SetEnvironmentVariable(
                 'HF_HUB_DISABLE_SYMLINKS_WARNING',
                 '1',
@@ -631,7 +631,7 @@ function Invoke-HuggingFaceModelDownload {
             }
         }
     } finally {
-        if ($isWindows) {
+        if ($serializeWindowsDownloads) {
             [System.Environment]::SetEnvironmentVariable(
                 'HF_HUB_DISABLE_SYMLINKS_WARNING',
                 $previousSymlinkWarning,
@@ -1167,11 +1167,11 @@ Write-Host "Candidate runtime: $InstallRoot"
 $git = Initialize-TTSGit -Git (InstallerSupport\Ensure-MagicHandyGit -AssumeYes:$Yes)
 $uv = Ensure-Uv
 $sourceRoot = Join-Path $InstallRoot 'source'
-$installerGeneratedPaths = if ($Module -eq 'faster-qwen3-tts') {
-    @('faster_qwen3_tts.egg-info')
-} else {
-    @()
-}
+$installerGeneratedPaths = @(
+    if ($Module -eq 'faster-qwen3-tts') {
+        'faster_qwen3_tts.egg-info'
+    }
+)
 Sync-PinnedSource `
     -Git $git `
     -URL $sourceURL `

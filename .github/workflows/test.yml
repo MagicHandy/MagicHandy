@@ -96,6 +96,10 @@ jobs:
         shell: powershell
         run: .\scripts\test-installer.ps1
 
+      - name: PowerShell 7 installer tests
+        shell: pwsh
+        run: .\scripts\test-installer.ps1
+
   voice-adapters:
     name: Voice adapters (Python ${{ matrix.python }})
     runs-on: ubuntu-latest

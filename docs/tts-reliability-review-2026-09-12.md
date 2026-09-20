@@ -5,8 +5,32 @@
 A user reported `Chatterbox Turbo installation failed: exit status 1`, then
 speech pausing every few words with Qwen3-TTS on a Ryzen 5950 / RTX 3070 machine.
 The preceding installer output, installed app version, and throughput with the
-LLM idle were unavailable. The exact installation failure is therefore unknown;
-the hardware description alone does not establish the cause of the audio gaps.
+LLM idle were unavailable. At the time of this review, the exact installation
+failure was unknown; the hardware description alone did not establish the cause
+of the audio gaps.
+
+**September 19 follow-up:** A subsequently supplied alpha.45 failure report
+identifies a PowerShell StrictMode error in `Add-MagicHandyGitInfoExclusions`
+immediately after the Chatterbox source clone. The installer's empty `if`
+branch produced `$null`, which was explicitly passed through `Sync-PinnedSource`
+to a helper that read `.Count` without a null check. Existing checkout tests
+omitted the argument, so they exercised the safe default `@()` instead.
+The caller now captures an array, and the shared helper treats null and empty
+lists as a no-op. Real local-Git regression fixtures cover fresh and interrupted
+Chatterbox and Qwen checkouts, idempotent exclusions, and refusal to overwrite
+user edits. The null-input fixture reproduces the report's exact error on
+Windows PowerShell 5.1 before the fix. This explains the submitted installation
+failure; it does not establish the cause of the separately reported audio gaps.
+
+The same follow-up also runs the installer suite on PowerShell 7. That exposed
+two compatibility defects: the download helper assigned to the read-only
+`IsWindows` automatic variable, and saved-state validation rejected the JSON
+integer/timestamp types produced by that shell. The helper now uses a dedicated
+variable. State validation accepts Int32 or Int64 integers without accepting
+numeric strings, fractions, booleans, null, or out-of-range values, and normalizes
+parsed timestamps back to round-trip strings. CI exercises both supported
+PowerShell versions. These changes add no runtime dependencies or UI assets;
+they do not validate model synthesis or the reporter's CUDA environment.
 
 This pass covers the Windows module installer, Go setup error propagation,
 Python streaming adapters, PCM decoding, and browser speech scheduling. It adds
