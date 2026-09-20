@@ -1,15 +1,174 @@
 # UI Design
 
+## Informational notices
+
+Explanatory notices use the shared dismissal component and catalog. Their ×
+asks **Just this time** or **Don't show again**. Saved choices follow the account;
+sign-in choices belong to the current browser. All durable choices are stored
+in the existing SQLite database, with restoration only under Access → Your profile.
+Both dismissal choices leave no link, placeholder or indicator outside Settings.
+Notices use a neutral surface and
+thin outline, with no colored left-edge accent. Inline dismissal choices leave
+Emergency Stop reachable. Live errors, status and required workflow messages
+remain current-state information. See the [notice contract](informational-notices.md).
+
+## Settings organization
+
+The primary settings destinations are **General**, **Access**, **Device**,
+**Media library**, **Chat**, **Voice** and **Diagnostics**. Chat combines the
+former Chat, Model and Prompts pages behind a shared sidebar: **Conversation**,
+**Model** and **Prompts & memory**. The canonical routes are
+`#/settings/chat/conversation`, `#/settings/chat/model` and
+`#/settings/chat/prompts`. Existing `#/settings/model` and `#/settings/prompts`
+bookmarks retain their destination inside Chat; `#/settings/chat` defaults to
+Conversation. The parent owns the settings draft and Save action, so moving
+between these sections does not discard edits or fetch another host snapshot.
+Prompt-set and memory operations keep their existing immediate-save behavior.
+
+Only Chat and Access use secondary navigation. General, Device, Media library,
+Voice and Diagnostics remain single pages with flat sections, sentence-case
+headings and restrained horizontal dividers. General displays the current
+theme in a disclosure; expanding it reveals the existing full theme chooser.
+Narrow settings layouts use compact 32px action buttons. Model import actions
+wrap as complete buttons rather than squeezing into equal-width columns. Model
+generation fields adapt to the content column, including beside the new sidebar.
+See the [settings review](settings-review-2026-09-19.md) for the page-by-page
+decisions and validation.
+
+## Network access and account control
+
+Recovery codes are an on-demand panel under Access → Security. Current-password
+confirmation precedes issuance/removal; only the backend's count is retained
+after the one-time display closes. A small **Forgot password?** text button on
+the sign-in screen reveals saved-code recovery. The recovery form
+requires replacement-password confirmation and directs the user to sign in
+separately after success. Unknown outcomes never trigger automatic retries or
+restore old authority. See the [recovery contract](lan-wan-account-recovery.md).
+
+Access uses task navigation with stable bookmarkable routes. Personal links are
+**Your profile**, **Security** and **Sessions**. Administrators also see
+**Accounts & permissions**, **Remote access** and **Access history**. The legacy
+`#/settings/access` route opens Profile. An unavailable or unauthorized child
+route resolves to the caller's own profile, without fetching administrator data.
+These links are ordinary keyboard-accessible anchors with `aria-current` in
+labeled lists. A vertical divider separates navigation from content; row rules
+and a stronger group divider distinguish destinations. The selected link uses
+a neutral inset, full neutral outline and heavier label, with no colored edge
+marker. Desktop rows are 36px. Below 1000px, Settings, Access and Chat use a
+single horizontally scrolling row with compact labels. A neutral filled surface
+identifies the selected link; neither an underline nor a left-edge marker is
+used. Link targets are 28px high in a 32px strip, with 7px horizontal padding.
+Profile, Accounts, History, Media and Prompts use shorter visual labels in this
+layout while retaining their full accessible names and titles.
+Small arrows expose overflow without selecting another page; the active route
+stays visible on entry, route changes and resizing without scrolling the page
+vertically. Group labels remain available to assistive technology. No wrapped
+button grid or additional data requests are introduced.
+Emergency Stop stays in the shell.
+
+Only the chosen area mounts its data panels. Profile does not request the
+account directory, grants, sessions, network status or audit history. Access
+does not wait on the general host-settings request. Existing host-setting
+drafts survive a visit to Access, while password and recovery-code drafts are
+discarded on changing account area or login. Directory and grant reads have
+ten-second limits and are canceled when their view closes.
+
+Access uses one surface with flat sections instead of nested rounded panels.
+Sentence-case headings and compact, consistently aligned actions establish the
+content hierarchy. Session rows lead with the browser label, inline
+current/controller/gateway indicators, last activity and sign-out actions.
+Creation/expiry timestamps are available under **Session details**. Account rows
+group name, role, enabled state and last sign-in together; actions stay in a
+separate column and wrap below when the content width requires it. Enabled
+accounts use neutral text, not the green reserved for running motion. Narrow
+settings pages use 32px action buttons and icon controls with compact padding;
+session detail disclosures keep the same tight rhythm as their metadata.
+Account creation opens
+explicitly; control permission
+loads only for the chosen operator. Empty future-feature placeholders are omitted.
+The live network boundary and restart-only configuration remain distinct.
+
+The information architecture draws on documented patterns from
+[GitHub's session management](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/viewing-and-managing-your-sessions)
+(a dedicated session list with expandable details),
+[Home Assistant's personal security](https://www.home-assistant.io/docs/authentication/)
+(account security separate from installation management), and
+[Tailscale's user administration](https://tailscale.com/docs/manage-users)
+(user access and administrative roles organized as explicit tasks). These
+references guide navigation; MagicHandy's backend permissions and shared Stop
+contract remain authoritative.
+
+The compact mode follows [Carbon's responsive tab guidance](https://carbondesignsystem.com/components/tabs/usage/)
+to keep horizontal tabs on one scrolling line. Its selected surface draws on
+[Radix's compact segmented controls](https://www.radix-ui.com/themes/docs/components/segmented-control),
+while [Shopify's navigation guidance](https://shopify.dev/docs/apps/design/navigation)
+informs the short, scannable labels. These visual references retain ordinary
+URL links, focus order and bookmarks rather than introducing toggle semantics.
+
+Access settings separate the running network boundary from the policy saved
+for restart. Administrators validate the host configuration and confirm their
+current password before saving. No saved form value changes the active socket
+or installs trust/firewall rules. Other accounts see their observer/control
+capabilities from the backend. Host mutations remain administrator-only even
+when an operator has a temporary control permission.
+
+Protected ownership is renewed by an explicit foreground heartbeat, not by
+state polling or received events. Hidden documents stop renewing it. Loss,
+revocation or expiry fences old commands and requires explicit stop-first
+reacquisition. Server epochs and generations travel as transport metadata; they
+do not create frontend ownership. Emergency Stop remains mounted for observers
+and signed-out/offline clients. The one-click connection report omits private
+paths, addresses and content and encourages sharing with the developer.
+
+Protected commands carry backend delivery metadata. A lost JSON response causes
+a bounded receipt lookup and a canonical-state refresh; the browser never
+automatically repeats a mutation with a new ID. An unknown outcome is labeled
+unconfirmed. Emergency Stop remains outside that recovery path. A delayed model
+reply can retain its text while reporting that newer controls superseded its
+motion. See the [delivery contract](lan-wan-command-delivery.md).
+
+See [Self-hosted HTTPS](self-hosted-https.md) and the open
+[LAN/WAN acceptance checklist](lan-wan-control-checklist.md).
+
 ## Backend observation lifecycle
+
+Access settings includes the current account's signed-in browsers. The backend
+supplies names, coarse client hints, activity/expiry times and controller or
+Bluetooth-browser indicators. Observers may rename or sign out their own
+logins without taking control. Names are labels, not verified identity. A
+sign-out confirmation explains that control/gateway retirement requests Stop;
+the UI does not claim physical confirmation. Canceled reads cannot overwrite
+newer results, and a lost action response is reconciled without replay. See
+the [login management contract](lan-wan-session-management.md).
+
+The Bluetooth panel distinguishes the device connection in this browser from
+one in another browser. An observer can view the connection without publishing
+its own disconnected/unsupported state over the owning browser's status.
+Choosing a native device requires host configuration permission. Gateway
+dispatch remains available when the device browser becomes a controller
+observer; its local Disconnect and Emergency Stop remain reachable.
+Gateway channel failure or document hiding attempts local Stop and releases
+the GATT session with explicit reconnection required. A slow state poll alone
+does not tear down a healthy device channel. See the
+[gateway contract](lan-wan-bluetooth-gateway.md).
 
 State polling and live motion subscriptions belong to the current enabled app
 session. Disabling access cancels its poll, releases the request slot, and
 ignores queued events and waiting refreshes from that session. Re-enabling
-starts a fresh poll. A completed state poll supersedes live motion observed
-before that poll started; an event received during the poll is retained because
-their server ordering is unknown. These are backend observations, never a
-parallel frontend motion model. See the
+starts a fresh poll. App and motion captures carry a server epoch and revision;
+motion packets are reconciled by their own capture revisions rather than HTTP
+completion or local arrival order. Controller reads have a separate revision
+counter. These remain backend observations, never a parallel frontend motion
+model. See the [observation contract](lan-wan-observations.md) and the original
 [lifecycle audit](architecture-review-2026-09-06.md).
+
+The controller heartbeat runs independently of full-state polling. A stream
+error retains the newest known motion and requires a fresh state request before
+clearing the stale/read-only indicator. A hidden document stops its requests,
+heartbeat and stream; returning requires a full resync. Server restart retires
+old responses and event callbacks. Neither reconnect nor visibility return
+automatically reclaims control or resumes motion. Retry timers are bounded and
+jittered, and malformed protected controller metadata leaves controls disabled.
 
 `useAppState` subscribes to the slower app snapshot and connection/controller
 status. `useMotionState` subscribes separately to reconciled live motion.
@@ -219,6 +378,24 @@ current unsaved draft is retained after shutdown; saved tabs are unaffected.
 Starting clean always discards the prior draft, so its retention toggle is off
 and unavailable in that mode. A clean exit applies the choice immediately and
 the next startup repeats it after a crash.
+
+Conversation history uses backend committed revisions independently of display
+sequence numbers. Late committed replies merge into their display position;
+stream placeholders reconcile with durable rows without duplicates. Returning
+from a hidden/offline browser or a server restart refreshes retained history
+without replaying old speech or taking control. The existing compact history
+status area reports read failures and retention gaps, with a direct Retry
+action for unavailable history. Cursor acknowledgements are passive read
+tracking and do not participate in controller command delivery. The
+[recovery contract](lan-wan-chat-recovery.md) records the lifecycle and bounds.
+
+Large history windows load in bounded pages across state polls. Recovery keeps
+its continuation and does not replay speech while catching up. A message longer
+than the history preview limit shows **Long message preview.** with a nearby
+**Download full message** link. This downloads the exact retained UTF-8 message
+directly; it does not add a full-message Blob or permanent expanded text to the
+conversation cache. The preview is explicit, and storage/retention are unchanged.
+
 The testing-badged Manual motion group lives in `#/settings/device` — it drives
 the device, so it belongs with the connection that carries it rather than among
 read-only diagnostics — and it

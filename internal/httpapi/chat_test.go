@@ -546,7 +546,7 @@ func TestChatStartRechecksStopAfterWaitingForEngineAdmission(t *testing.T) {
 		result <- dispatchResult{dispatch: dispatch, err: err}
 	}()
 	time.Sleep(20 * time.Millisecond)
-	finishInvalidation := server.invalidateWorkForStop("test_stop")
+	finishInvalidation, _ := server.invalidateWorkForStop("test_stop")
 	server.motion.lifecycleMu.Unlock()
 	defer finishInvalidation()
 

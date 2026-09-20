@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/mapledaemon/MagicHandy/internal/netaccess"
 )
 
 var errHostPathPickerUnsupported = errors.New("the host path picker is not supported on this platform")
@@ -39,7 +41,7 @@ func pathPickerSpec(kind string) (hostPathPickerSpec, bool) {
 }
 
 func (s *Server) handleHostPathPicker(w http.ResponseWriter, r *http.Request) {
-	if !isLoopbackRemote(r.RemoteAddr) || !isLoopbackHost(r.Host) || !isSameOriginBrowserRequest(r) {
+	if !isLocalHostRequest(r) || !isSameOriginBrowserRequest(r) {
 		writeError(w, http.StatusForbidden, errors.New("the host path picker is available only from the computer running MagicHandy"))
 		return
 	}
@@ -50,7 +52,7 @@ func (s *Server) handleHostPathPicker(w http.ResponseWriter, r *http.Request) {
 	// Unlike general API compatibility, this native-UI endpoint deliberately
 	// rejects query-string controller IDs so a cross-origin simple request cannot
 	// claim an expired lease and open a dialog.
-	if !s.requireControllerID(w, strings.TrimSpace(r.Header.Get(controllerHeaderName))) {
+	if !s.requireController(w, r) {
 		return
 	}
 	var body struct {
@@ -106,6 +108,10 @@ func isLoopbackHost(hostPort string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+func isLocalHostRequest(r *http.Request) bool {
+	return !netaccess.IsForwarded(r) && !netaccess.HasForwardingHeaders(r) && isLoopbackRemote(r.RemoteAddr) && isLoopbackHost(r.Host)
+}
+
 func isSameOriginBrowserRequest(r *http.Request) bool {
 	if site := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site"))); site != "" && site != "same-origin" && site != "none" {
 		return false
@@ -119,7 +125,7 @@ func isSameOriginBrowserRequest(r *http.Request) bool {
 		return false
 	}
 	scheme := "http"
-	if r.TLS != nil {
+	if r.TLS != nil || netaccess.IsForwarded(r) {
 		scheme = "https"
 	}
 	return parsed.Scheme == scheme && strings.EqualFold(parsed.Host, r.Host)

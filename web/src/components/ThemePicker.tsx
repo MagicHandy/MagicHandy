@@ -5,6 +5,7 @@ interface ThemePickerProps {
   value?: string;
   allowedThemes?: readonly string[];
   disabled?: boolean;
+  collapsible?: boolean;
   onChange: (theme: UIThemeID) => void;
 }
 
@@ -12,14 +13,15 @@ export function ThemePicker({
   value,
   allowedThemes,
   disabled = false,
+  collapsible = false,
   onChange,
 }: ThemePickerProps) {
   const selected = normalizeTheme(value);
   const themes = availableThemes(allowedThemes);
 
-  return (
+  const picker = (
     <fieldset className="theme-picker" disabled={disabled}>
-      <legend className="label">{t("Theme")}</legend>
+      <legend className={collapsible ? "visually-hidden" : "label"}>{t("Theme")}</legend>
       <div className="theme-choice-list" data-last-row={themes.length % 4}>
         {themes.map((theme) => (
           <label
@@ -49,4 +51,5 @@ export function ThemePicker({
       </span>
     </fieldset>
   );
+  return collapsible ? <details className="settings-theme"><summary>{t("Theme")} <span>{themes.find(theme => theme.id === selected)?.label || selected}</span></summary>{picker}</details> : picker;
 }

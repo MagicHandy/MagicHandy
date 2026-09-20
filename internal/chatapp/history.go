@@ -11,6 +11,7 @@ import (
 type Observation struct {
 	ActiveSessionID string
 	LatestSeq       int64
+	Revision        int64
 	CurrentMood     chat.Mood
 }
 
@@ -26,7 +27,7 @@ func (w *Workspace) Observe(ctx context.Context, trackMood bool) (Observation, e
 	if err != nil {
 		return state, err
 	}
-	state.LatestSeq, err = w.sessions.LatestSeqSessionContext(ctx, state.ActiveSessionID)
+	state.LatestSeq, state.Revision, err = w.sessions.ConversationHeadContext(ctx, state.ActiveSessionID)
 	if err != nil || !trackMood {
 		return state, err
 	}

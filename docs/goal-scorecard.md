@@ -1,5 +1,403 @@
 # Goal Scorecard
 
+## 2026-09-19 — Shared notice preferences and permanent control permission
+
+The [notice contract](informational-notices.md) adds a shared catalog and
+account/browser preferences in the existing SQLite database. Both dismissal
+choices leave no marker outside Settings. The [permission amendment](self-hosted-https.md)
+adds explicitly permanent, revocable operator grants without extending login or
+controller leases. Neither change adds a dependency, periodic poll or motion path.
+
+| Artifact | Previous recovery/menu checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,996,672 B | 20,047,872 B | +51,200 B |
+| Main JS, raw | 845,134 B | 855,396 B | +10,262 B |
+| Main JS, gzip-9 | 232,535 B | 235,040 B | +2,505 B |
+| All embedded assets | 2,188,303 B | 2,210,787 B | +22,484 B |
+
+Measured with Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. The canonical dist contains
+only current hashes. The running app's main JS matches SHA-256
+`3332571719249e67c3b696e22d95985f1174da32038e19bc41f2b37edc53224b`.
+
+Notice reads create no database rows. Anonymous preferences have a 2,048-record
+cap, one-year expiry and 2 KiB/16-ID documents. Uploads are limited to 1 KiB/three
+seconds and operations to five seconds. The eight-entry catalog is shared at
+build time; preferences load on audience entry and visibility return only.
+
+Full Go/race suites, vet, zero-issue golangci-lint, architecture and embedded
+checks pass. The frontend passes 642 tests in 86 files, TypeScript and 2,229
+localized keys. The final copy follow-up also passes the focused account/grant
+tests and production rebuild. Migration and permission tests cover explicit
+consent, preserved timed deadlines, permanence, replacement/revocation, disabled
+accounts, login expiry, heartbeat loss and unchanged host-operation restrictions.
+
+The current isolated simulator at `http://127.0.0.10:50007` passes real provider
+generation. Final text-only app chat returns “The app is ready.” in 87 ms, one
+provider call, no repair/fallback and no motion action. Voice/LLM motion are off
+and Bluetooth is disconnected. One post-review sample records 120,049,664 B
+working set and 109,060,096 B private memory; this differs in workload/lifetime
+from earlier samples and establishes no controlled RSS/startup improvement.
+The redacted connection report is 1,189 B.
+
+Mobile review at 390px verifies both notice-dismissal choices, reload behavior,
+settings-only restoration and the compact Permanent choice. Saved account
+preferences are visible to an independent client after restart. The normal
+viewport is restored. Permission grants are exercised with disposable unit/API
+fixtures; visual review selects the option without granting live access.
+Physical motion, external WAN and the full acceptance matrix remain unverified.
+
+## 2026-09-19 — Account recovery and settings organization
+
+The [saved recovery contract](lan-wan-account-recovery.md) adds atomic password,
+login and code retirement. The [Access navigation](ui-design.md) separates
+personal Profile/Security/Sessions from administrator Accounts/Remote access/
+History, mounting only the selected area. The [settings review](settings-review-2026-09-19.md)
+also consolidates Conversation/Model/Prompts under Chat and shares compact
+navigation and action styling. No dependency, periodic browser poll or motion
+path is added.
+
+| Artifact | Previous pressure checkpoint | Recovery and menus | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,901,952 B | 19,996,672 B | +94,720 B |
+| Main JS, raw | 827,019 B | 845,134 B | +18,115 B |
+| Main JS, gzip-9 | 228,094 B | 232,535 B | +4,441 B |
+| All embedded assets | 2,146,356 B | 2,188,303 B | +41,947 B |
+
+Measured with Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. The menu follow-up accounts
+for 2,233 B of compressed main JS relative to the first recovery build. The
+canonical dist replaces earlier hashes, and the running app's served main
+bundle matches SHA-256 `83b0799dd6105565fa78f346e03e99b1987f99d98d6f29fb597cf755e2200e5f`.
+
+Opening Profile makes no page-specific account-directory, grant, session,
+network-status or audit requests. Grant inspection is limited to the selected
+operator; directory/grant reads time out in ten seconds and abort on exit.
+Normal shell state/heartbeat traffic is unchanged. These are tested request
+lifetimes/counts, not a measured WAN latency improvement.
+
+Storage retains at most eight 128-bit recovery codes per account as digests.
+Credential uploads are capped at 8 KiB/five seconds; operation and response
+budgets reuse the bounded authentication/session infrastructure. Concurrent
+redemption, rollback and real HTTP/1/2 stream retirement are regression-tested.
+
+After desktop/390px browser review, one final process sample recorded
+98,037,760 B working set and 86,978,560 B private memory. Its workload/lifetime
+differs from earlier samples, so this is not a controlled memory improvement.
+The exact final build passes a real LLM generation probe. Its
+text-only app chat completed in 110 ms with one provider call, no repair or
+fallback, and no motion; the recovery core's disposable-account round trip also passed.
+The two mobile navigation rows each measure 32px. At 390px all three Chat
+section labels fit together; the Access fixture fits four full labels before scrolling.
+Desktop session rows measure 62px in the reviewed fixture. The full WAN/load/soak and physical-client/device matrix
+remain open.
+
+## 2026-09-13 — Request admission and bounded content/Stop replies
+
+The [request-pressure contract](lan-wan-request-pressure.md) adds bounded
+admission before session lookup, reserved control/gateway capacity, overlapping
+HTTP Stop sharing and cancelable content writes. It adds no dependency, periodic
+browser poll or background motion worker. Five status strings are translated.
+
+| Artifact | Previous audit checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,863,040 B | 19,901,952 B | +38,912 B |
+| Main JS, raw | 826,509 B | 827,019 B | +510 B |
+| Main JS, gzip-9 | 227,986 B | 228,094 B | +108 B |
+| All embedded assets | 2,143,397 B | 2,146,356 B | +2,959 B |
+
+Measured with Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. The canonical dist replaces
+the earlier hashed assets. The running app serves the same main JS SHA-256 as
+the worktree.
+
+Independent global request budgets are ordinary 128, login 8, shell 16,
+liveness 16 and immediate control 16, with smaller per-peer/session bounds and
+no waiting queue. Public Stop bypasses ordinary admission; at most 16 followers
+wait for its in-flight dispatch. A blocked-fake-transport fixture issues 65
+overlapping Stops, verifies all 65 invalidations and only one transport attempt,
+and checks explicit pending replies for overflow. This is not a TCP/TLS or
+physical device capacity measurement.
+
+The 20-spectator loopback HTTP/2 fixture transferred 142,864 B across 20 state
+reads, measured Stop p95 1.006 ms / max 1.016 ms and revoked a stream in
+946.907 ms. Three 1 MiB sink benchmarks measured bounded content at
+23.783–24.185 microseconds / 42,584 B / 175 allocations, compared with
+13.509–14.680 microseconds / 33,296 B / 9 allocations for `ServeContent`.
+This records about 10 microseconds and 9,288 B of added per-MiB bookkeeping,
+not network throughput. Protocol tests separately verify stalled receiver
+release and healthy transfers beyond five seconds.
+
+The isolated review's redacted connection report is 1,185 B. After real LLM
+generation, text-only app chat and browser review, one process sample recorded
+134,193,152 B working set and 122,060,800 B private memory. Workload and process
+lifetime differ from prior samples; no controlled RSS, CPU or startup change
+is claimed. Full RTT/loss/outage/load/soak and real WAN/device measurements remain.
+
+## 2026-09-13 — Bounded access history and asynchronous trace persistence
+
+The [audit contract](lan-wan-audit-history.md) adds transactional access-change
+history, one bounded runtime-event writer and an administrator page/export.
+Another bounded worker saves the latest stopped trace without delaying Stop's
+response. Neither worker commands motion. There is no new dependency or
+periodic browser poll; the history panel loads only while expanded.
+
+| Artifact | Previous observer checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,759,616 B | 19,863,040 B | +103,424 B |
+| Main JS, raw | 815,823 B | 826,509 B | +10,686 B |
+| Main JS, gzip-9 | 225,213 B | 227,986 B | +2,773 B |
+| All embedded assets | 2,119,298 B | 2,143,397 B | +24,099 B |
+
+Measurements use Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. Relative to the same-toolchain
+alpha.45 baseline, the binary adds **554,496 B (2.87%)**, main JS adds
+**15,390 B** gzip, and embedded assets add **109,742 B**. The canonical dist
+replaces prior hashed bundles.
+
+History is bounded to 10,000 retained rows / 30 days; individual events are at
+most 2,048 encoded bytes. Runtime admission holds at most 256 waiting events
+plus a 64-event batch, with explicit drop reporting. Reads/export contain at
+most 100 events / 256 KiB and release their read transaction before writes.
+The trace worker keeps at most one pending and one in-flight 128-row / 1 MiB
+document. A test holding SQLite's writer verifies that Stop responds within
+its one-second test deadline; this is a regression threshold, not a measured
+physical latency percentile.
+
+The running isolated fixture's authenticated export contained **12 events /
+3,525 B**; an operator's export attempt returned 403. After real LLM generation
+and browser review, one process sample measured **116,064,256 B** working set
+and **104,005,632 B** private memory. Its lifetime and workload differ from
+earlier samples; no controlled RSS/CPU/startup or WAN performance comparison
+is claimed. Full load, telemetry and soak measurements remain open.
+
+## 2026-09-13 — Observer response privacy and browser login lifetime
+
+The [observer contract](lan-wan-observer-privacy.md) selects operational response
+fields, restricts raw host diagnostics and retires private UI state and queued
+quick edits across logins. It adds no dependency, periodic poll or motion path.
+Observer voice snapshots skip host module-path inspection.
+
+| Artifact | Previous session checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,713,536 B | 19,759,616 B | +46,080 B |
+| Main JS, raw | 812,586 B | 815,823 B | +3,237 B |
+| Main JS, gzip-9 | 224,220 B | 225,213 B | +993 B |
+| All embedded assets | 2,114,496 B | 2,119,298 B | +4,802 B |
+
+The comparison uses Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. Relative to the same-toolchain
+alpha.45 baseline, the binary adds **451,072 B (2.34%)**, main JS adds **12,617 B**
+gzip, and all assets add **85,643 B**. Only the canonical dist is shipped.
+
+In the isolated running fixture, administrator/operator responses respectively
+measured **10,049 / 7,052 B** for `/api/state` and **5,464 / 3,347 B** for
+`/api/settings`. This compares audiences in one fixture, not a controlled
+before/after performance run or a WAN bandwidth envelope. One process sample
+after LLM/chat and desktop browser review measured **93,175,808 B** working set
+and **81,985,536 B** private memory. The fixture and workload differ from prior
+samples; no RSS, CPU, startup or latency improvement is claimed. Controlled
+multi-client telemetry/load/soak measurements remain required work.
+
+## 2026-09-13 — Account-owned login management and route admission
+
+The [session checkpoint](lan-wan-session-management.md) adds a bounded Access
+panel, independent session-management IDs and revocation through the existing
+shared lifetime/Stop paths. It adds no dependency, motion path or periodic UI
+poll. Lists retain the 20-login cap, 80-code-point names, a 32 KiB encoded
+response limit, ten-second operation budget and cancelable socket writes.
+
+| Artifact | Previous history checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,649,536 B | 19,713,536 B | +64,000 B |
+| Main JS, raw | 803,280 B | 812,586 B | +9,306 B |
+| Main JS, gzip-9 | 221,680 B | 224,220 B | +2,540 B |
+| All embedded assets | 2,092,335 B | 2,114,496 B | +22,161 B |
+
+Measurements use Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+and Node 24.15.0 / zlib 1.3.1-e00f703 gzip level 9 for all compared artifacts.
+Compared with the same-toolchain alpha.45 baseline, the binary adds
+**404,992 B (2.10%)**, main JS adds **11,624 B** gzip, and total embedded assets
+add **80,841 B**. The canonical dist replaces the old hashed bundles.
+
+After real LLM/app-chat, login-management and browser review, one process
+sample measured **78,094,336 B** working set and **65,380,352 B** private memory.
+Its fixture and workload differ from the preceding checkpoint: this is not a
+controlled idle comparison or an RSS improvement claim. Multi-client CPU/RSS,
+state-age, connection/work saturation and long-running soak measurements remain
+part of the full LAN/WAN goal.
+
+## 2026-09-13 — Bounded history recovery and full-message downloads
+
+The [chat recovery contract](lan-wan-chat-recovery.md) now limits each encoded
+history response to **256 KiB**, previews long messages at **16 KiB**, and serves
+explicit full-text downloads in **64 KiB** chunks. Resets continue across pages;
+publication waiters cancel without a helper goroutine. No dependency was added.
+
+| Artifact | Previous chat checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 19,625,472 B | 19,649,536 B | +24,064 B |
+| Main JS, raw | 801,759 B | 803,280 B | +1,521 B |
+| Main JS, gzip-9 | 221,292 B | 221,680 B | +388 B |
+| All embedded assets | 2,089,930 B | 2,092,335 B | +2,405 B |
+
+Binary measurements use Go 1.26.4, `CGO_ENABLED=0`, `-trimpath` and
+`-ldflags '-s -w'`. Gzip uses Node 24.15.0 / zlib 1.3.1-e00f703, level 9,
+consistently with the preceding comparison. Relative to the same-toolchain
+alpha.45 baseline, the binary adds **340,992 B (1.77%)**, main JS adds
+**9,084 B** gzip, and total embedded assets add **58,680 B**.
+
+A synthetic fixture with twenty 128 KiB messages containing JSON-escaped text
+reproduced a **15,731,179 B** single response before the change. Complete preview
+recovery now takes ten pages totaling approximately **1.97 MB**, each under the
+256 KiB limit. Stored messages remain intact; requesting their complete text
+transfers the original content separately. This comparison does not claim WAN
+latency or full-download bandwidth improvement.
+
+Three local first-page microbenchmark samples measured **1.08–1.57 ms/op**,
+**950,398–1,007,343 B/op**, **243–245 allocations/op**, and approximately
+**197,161 response bytes**. These shared-host synthetic measurements are not a
+controlled before/after CPU comparison, a percentile, or a supported LAN/WAN
+load envelope. The benchmark is `BenchmarkChatHistoryBoundedPage` in
+`internal/chat/log_page_budget_test.go`.
+
+The final app's 76,574-byte native browser download matched the synthetic source
+SHA-256 exactly. After LLM/chat, authenticated history, browser and download
+review, one process sample measured **115,433,472 B** working set and
+**104,210,432 B** private memory. This is not a controlled idle comparison or an
+RSS/startup improvement claim. Live chat SSE, downloads under load, telemetry,
+multi-client CPU/RSS measurements and soak acceptance remain open.
+
+## 2026-09-13 — Durable conversation recovery
+
+The [chat recovery checkpoint](lan-wan-chat-recovery.md) adds committed
+revisions, coherent database read pages, login-scoped read markers and bounded
+browser recovery. It adds no dependency or motion path. With Go 1.26.4,
+`CGO_ENABLED=0`, `-trimpath` and `-ldflags '-s -w'`, the candidate is
+**19,625,472 B**: **26,624 B** above the gateway checkpoint and **316,928 B
+(1.64%)** above the same-toolchain alpha.45 source baseline.
+
+Gzip in this comparison uses Node **24.15.0**, zlib **1.3.1-e00f703**, level 9
+for all three inputs. These compressed totals differ slightly from the prior
+Python-based entries, so the baseline and preceding bundle are recompressed
+with the same implementation here.
+
+| Artifact | Alpha.45 baseline | Gateway checkpoint | Chat recovery |
+| --- | ---: | ---: | ---: |
+| Main JS, raw bytes | 769,915 | 795,413 | 801,759 |
+| Main JS, gzip-9 bytes | 212,596 | 219,347 | 221,292 |
+| All embedded assets, bytes | 2,033,655 | 2,081,028 | 2,089,930 |
+
+The checkpoint adds **6,346 B** raw / **1,945 B** gzip-9 main JS and **8,902 B**
+total assets over the preceding gateway checkpoint. Compared with alpha.45,
+gzip-9 main JS adds **8,696 B** and embedded assets add **56,275 B**. The single
+canonical dist replaces prior hashed assets; heavy features/locales remain lazy.
+
+After real authenticated LLM/chat, two-login cursor checks and browser reload,
+one simulator sample measured **96,591,872 B** working set / **85,307,392 B**
+private memory. This is not a controlled idle comparison and establishes no
+RSS or startup improvement. Cursor writes avoid rewriting unchanged positions,
+but their CPU/IO benefit has not been benchmarked. Response-byte budgets,
+controlled telemetry/CPU/allocation measurements and load/soak acceptance remain
+open; the 200-row history limit is not a byte bound.
+
+## 2026-09-13 — Authenticated Bluetooth gateway and passive activity
+
+The [gateway checkpoint](lan-wan-bluetooth-gateway.md) binds the device browser
+to its login and connection generation, separates gateway maintenance from
+remote controller delivery, and retires lost connections. No dependency or
+parallel motion path is added. There is one gateway lease, with teardown using
+the existing access watchdog and tracked Stop lifecycle.
+
+Using Go 1.26.4, `CGO_ENABLED=0`, `-trimpath` and `-ldflags '-s -w'`, the
+candidate is **19,598,848 B**: **36,352 B** above the observation checkpoint
+and **290,304 B (1.50%)** above the same-toolchain alpha.45 source baseline.
+Main JS is **795,413 B** raw / **219,525 B** gzip-9, and total embedded assets
+are **2,081,028 B**. Compared with the preceding checkpoint, main JS adds
+**2,331 B** raw / **823 B** gzip-9 and total assets add **2,616 B**. Compared
+with alpha.45, gzip-9 main JS adds **6,745 B** and assets add **47,373 B**.
+The canonical dist retains one main bundle and the existing lazy bundles.
+
+One sample after authenticated readiness, text-only chat and gateway panel
+review measured **73,949,184 B** working set / **62,484,480 B** private memory.
+This is not a controlled idle comparison; GC, authentication and page history
+differ across checkpoints. It establishes no RSS or startup improvement.
+Controlled telemetry, CPU/allocation, bytes/client/minute and load/soak
+measurements remain open in LAN-13 and LAN-19.
+
+## 2026-09-13 — Ordered observations and independent heartbeat
+
+The [observation checkpoint](lan-wan-observations.md) adds backend capture
+revisions, an independent controller channel and bounded browser recovery. It
+adds no dependency or motion path. With Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`
+and `-ldflags '-s -w'`, the candidate is **19,562,496 B**. This is **11,264 B**
+above the preceding command/shutdown checkpoint and **253,952 B (1.32%)** above
+the alpha.45 source rebuilt with the same toolchain.
+
+The canonical main JS is **793,082 B** raw / **218,702 B** gzip-9; total embedded
+assets are **2,078,412 B**. The change adds **5,229 B** raw assets and **1,382 B**
+gzip-9 main JS over the preceding checkpoint. There is still one main bundle,
+one lazy Labs bundle and the existing lazy locale assets; stale bundles are
+replaced in the canonical dist.
+
+After authenticated readiness, text-only app chat and Access UI review, one
+simulator sample measured **116,695,040 B** working set / **104,210,432 B** private
+memory. This is not a controlled idle comparison; authentication allocation,
+garbage collection and browser history differ across samples. LAN-13 still
+requires controlled CPU/allocation/RSS and bytes/client/minute measurements,
+including the wire cost of revision fields and lightweight controller reads.
+No telemetry speedup or WAN support limit is inferred from these artifact sizes.
+
+## 2026-09-13 — Protected command delivery checkpoint
+
+The in-progress LAN/WAN branch adds bounded receipts, command expiry/order,
+response-loss recovery and deferred-motion checks. No dependency or parallel
+motion path is added. Against the same Go 1.26.4 / `CGO_ENABLED=0` /
+`-trimpath -ldflags '-s -w'` alpha.45 source baseline, the current binary is
+**19,551,232 B**, up **242,688 B (1.26%)**. Main JS is **787,853 B** raw and
+**217,320 B** gzip-9; total embedded assets are **2,073,183 B**. This is
+**58,880 B** more binary and **599 B** more gzip-9 main JS than the previous
+LAN/WAN checkpoint below. The canonical dist has one main bundle and the same
+lazy-loaded features/locales.
+
+The receipt store retains at most 256 entries, each with at most 16 KiB of JSON
+response (4 MiB total response payload), a URL capped at 2048 bytes and bounded
+identity metadata. Completed receipts expire after five minutes. Request bodies
+and uploads are hashed in place rather than copied. Inference releases the
+immediate-control lane; no performance claim depends on a short LLM timeout.
+
+One observation after real authenticated review, LLM generation and browser
+loading measured **113,664,000 B** working set and **100,974,592 B** private memory
+in the fresh simulator containing the shutdown correction.
+Authentication allocation/GC and page history differ from the previous sample;
+this is not a controlled idle comparison or an RSS improvement/regression claim.
+The remaining telemetry, CPU/allocation, state-age, sustained load and soak
+measurements remain required by the [implementation log](lan-wan-implementation.md).
+
+## 2026-09-12 — LAN/WAN implementation checkpoint
+
+The in-progress network implementation adds session/control lifetimes,
+expiring permissions, direct HTTPS and trusted proxy policy, and localized
+Access settings/reporting. It adds no dependencies or second motion path.
+Full LAN/WAN acceptance remains open in the
+[implementation log](lan-wan-implementation.md).
+
+Using Go 1.26.4, `CGO_ENABLED=0`, `-trimpath` and `-ldflags '-s -w'` for both
+the alpha.45 source archive and candidate, the binary grows **183,808 B**
+(19,308,544 → 19,492,352; **0.95%**). Main JS grows **15,985 B** raw and
+**3,941 B** gzip-9 (212,780 → 216,721). Total embedded assets grow **37,575 B**
+(2,033,655 → 2,071,230), including the four lazy-loaded translation catalogs.
+The published alpha.45 executable was built in a different build environment;
+it is not used as the same-toolchain size baseline.
+
+After login and the real LLM readiness probe, three one-second observations of
+the current isolated review process measured **46,522,368 B** working set and
+**80,433,152 B** private memory. This includes recent authentication work and is
+not a controlled idle comparison; no startup or RSS improvement is claimed.
+The existing startup/RSS waivers remain. Telemetry bytes/client, CPU,
+allocations, state-age percentiles and the fault/load/soak matrix are still
+required; these size measurements establish no network performance claim.
+
 ## 2026-09-12 — Downloadable installer failure reports
 
 Guided setup, TTS updates and Parakeet repair now offer a one-click JSON failure

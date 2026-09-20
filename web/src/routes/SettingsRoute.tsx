@@ -1,5 +1,5 @@
 // Settings as a routed workspace (not an overlay). Sub-sections are real hash
-// routes: #/settings/device|media|model|prompts|diagnostics. Routed sections
+// routes: #/settings/device|media|chat|diagnostics. Routed sections
 // share one Save; prompt sets, memory, reset use their own immediate APIs.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
@@ -7,9 +7,6 @@ import type { NotificationCategory, PublicSettings, SettingsUpdate } from "../ap
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 import { ManualMotionTest } from "../components/ManualMotionTest";
 import { MediaSettingsPanel } from "../components/MediaSettingsPanel";
-import { MemoryManager } from "../components/MemoryManager";
-import { ModelSettingsPanel } from "../components/ModelSettingsPanel";
-import { PromptSetEditor } from "../components/PromptSetEditor";
 import { VoiceSettingsPanel } from "../components/VoiceSettingsPanel";
 import { rebaseSettingsDraft } from "../util/settings-draft";
 import { WorkspaceHead } from "../components/WorkspaceHead";
@@ -21,23 +18,15 @@ import type { MediaSettingsPayload } from "../api/types";
 import { DEFAULT_THEME, normalizeTheme } from "../theme";
 import { notificationCategories } from "../notification-preferences";
 import { AccountSettingsPanel } from "../components/AccountSettingsPanel";
+import { ChatSettingsPanel, resolveChatSettingsSection } from "../components/ChatSettingsPanel";
+import { SettingsNavigation, SettingsNavigationLabel } from "../components/SettingsNavigation";
 import { LabsSettings } from "../components/LabsSettings";
+import { DismissibleNotice } from "../components/DismissibleNotice";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
   ? t("Cloud REST requires Handy firmware v4 with API v3 access.")
   : value;
-const CHAT_VOICE_LABELS: Partial<Record<string, MessageKey>> = {
-  utility: "Utility (neutral assistant)",
-  warm: "Warm (flirtatious, never explicit)",
-  intimate: "Intimate (sensual partner)",
-  explicit: "Explicit (direct sexual language)",
-};
-const USER_ANATOMY_LABELS: Partial<Record<string, MessageKey>> = {
-  penis: "Penis",
-  vagina: "Vagina / vulva",
-  custom: "Custom wording",
-};
 const SETTING_OPTION_LABELS: Partial<Record<string, MessageKey>> = {
   cloud_rest: "Cloud REST",
   browser_bluetooth: "Browser Bluetooth",
@@ -54,17 +43,6 @@ const optionLabel = (labels: Partial<Record<string, MessageKey>>, value: string)
   const label = labels[value];
   return label ? translateKnown(label) : value;
 };
-const MAX_CUSTOM_ANATOMY_CHARS = 120;
-const MAX_PERSONA_DESCRIPTION_CHARS = 500;
-const clampCharacters = (value: string, limit: number) => Array.from(value).slice(0, limit).join("");
-const PROMPT_SET_LABELS: Record<string, string> = {
-  magichandy_motion_v1: "English",
-  magichandy_motion_v1_es: "Español",
-  magichandy_motion_v1_pt_br: "Português (Brasil)",
-  magichandy_motion_v1_zh_hans: "简体中文",
-  magichandy_motion_v1_ja: "日本語",
-};
-
 function notificationPreferenceOptions(): Array<{ category: NotificationCategory; label: string; detail: string }> {
   return [
     { category: "app", label: t("Routine app feedback"), detail: t("Save confirmations and other short-lived command results.") },
@@ -78,21 +56,31 @@ const SECTIONS = [
   { id: "general", label: "General" },
   { id: "access", label: "Access" },
   { id: "device", label: "Device" },
-  { id: "media", label: "Media library" },
-  { id: "model", label: "Model" },
+  { id: "media", label: "Media library", compact: "Media" },
   { id: "chat", label: "Chat" },
   { id: "voice", label: "Voice" },
-  { id: "prompts", label: "Prompts & memory" },
   { id: "diagnostics", label: "Diagnostics" },
 ] as const;
+
+function SettingsSections({ section, accessOnly = false }: { section: string; accessOnly?: boolean }) {
+  return <SettingsNavigation className="settings-nav" label={t("Settings sections")} current={section}>
+    {(accessOnly ? SECTIONS.filter(item => item.id === "access") : SECTIONS).map(item =>
+      <a key={item.id} href={`#/settings/${item.id}`} aria-label={translateKnown(item.label)} title={translateKnown(item.label)} aria-current={section === item.id ? "page" : undefined}><SettingsNavigationLabel label={item.label} compact={"compact" in item ? item.compact : undefined} /></a>)}
+  </SettingsNavigation>;
+}
 
 export function SettingsRoute() {
   const { backendOnline, readOnly, refresh, state } = useAppState();
   const { show } = useToast();
   const hash = useHashRoute();
   const requestedSection = hash.split("/")[2] || "general";
-  const sections = SECTIONS;
-  const section = sections.some((item) => item.id === requestedSection) ? requestedSection : "general";
+  // Existing model/prompt bookmarks retain their destination within Chat.
+  const legacyChatSection = requestedSection === "model" || requestedSection === "prompts";
+  const requestedRoot = legacyChatSection ? "chat" : requestedSection;
+  const section = SECTIONS.some((item) => item.id === requestedRoot) ? requestedRoot : "general";
+  const chatSection = resolveChatSettingsSection(legacyChatSection ? requestedSection : hash.split("/")[3] || "conversation");
+  const restricted = state?.capabilities?.configure_host === false;
+  const onlyAccess = restricted || section === "access";
   const [s, setS] = useState<PublicSettings | null>(null);
   // The last-saved snapshot, kept to detect unsaved voice edits: worker
   // controls act on the saved config and lock while the form is dirty.
@@ -111,7 +99,7 @@ export function SettingsRoute() {
   const savingRef = useRef(false);
   const savedRef = useRef(saved);
   savedRef.current = saved;
-  const locked = !backendOnline || readOnly || loading;
+  const locked = !backendOnline || readOnly || loading || state?.capabilities?.configure_host === false;
 
   async function load(preserveDraft = false) {
     if (!mounted.current) return;
@@ -134,12 +122,14 @@ export function SettingsRoute() {
   }
   useEffect(() => {
     mounted.current = true;
-    void load();
+    // Account/security pages use their own bounded endpoints. They should not
+    // wait for host settings, and visiting them must preserve an existing draft.
+    if (!onlyAccess && !savedRef.current) void load();
     return () => {
       mounted.current = false;
       loadGeneration.current += 1;
     };
-  }, []);
+  }, [onlyAccess]);
 
   function patchUI(p: Partial<NonNullable<PublicSettings["ui"]>>) {
     setS((cur) => (cur ? {
@@ -325,7 +315,14 @@ export function SettingsRoute() {
     setClearOpenAITTSKey(false);
   }
 
-  if (!s) return (
+  if (onlyAccess) return <>
+    <WorkspaceHead title={t("Settings")} />
+    <SettingsSections section="access" accessOnly={restricted} />
+    {restricted && <p className="hint-block">{t("Host settings and diagnostics are managed by an administrator.")}</p>}
+    <section className="panel settings-panel access-panel"><AccountSettingsPanel backendOnline={backendOnline} /></section>
+  </>;
+
+  if (!s || !state) return (
     <>
       <WorkspaceHead title={t("Settings")} />
       {loadError ? (
@@ -335,7 +332,7 @@ export function SettingsRoute() {
           <button type="button" className="btn btn-secondary" onClick={() => void load()}>{t("Retry")}</button>
         </div>
       ) : (
-        <p className="form-status" role="status">{loading ? t("Loading settings…") : t("Settings unavailable.")}</p>
+        <p className="form-status" role="status">{loading || !state ? t("Loading settings…") : t("Settings unavailable.")}</p>
       )}
     </>
   );
@@ -370,15 +367,15 @@ export function SettingsRoute() {
     </select>
   );
   const owner = s.device.hsp_dispatch_owner;
+  const saveActions = <div className="row-actions settings-actions">
+    <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving}>{saving ? t("Saving settings") : t("Save settings")}</button>
+    {locked && <span className="form-status">{loading ? t("Refreshing settings") : backendOnline ? t("Read-only client") : t("Core offline")}</span>}
+  </div>;
 
   return (
     <>
       <WorkspaceHead title={t("Settings")} />
-      <nav className="settings-nav" aria-label={t("Settings sections")}>
-        {sections.map((sec) => (
-          <a key={sec.id} href={`#/settings/${sec.id}`} aria-current={section === sec.id ? "page" : undefined}>{translateKnown(sec.label)}</a>
-        ))}
-      </nav>
+      <SettingsSections section={section} />
 
       {loadError && (
         <div className="empty-state compact-empty" role="alert">
@@ -389,8 +386,8 @@ export function SettingsRoute() {
       )}
       {loading && <p className="form-status" role="status">{t("Refreshing settings…")}</p>}
 
-      <section className="panel">
-        {section === "access" && <AccountSettingsPanel backendOnline={backendOnline} />}
+      <section className="panel settings-panel">
+        {section === "chat" && <ChatSettingsPanel section={chatSection} settings={s} saved={saved} options={opt} locked={locked} patchLLM={patchLLM} patchChat={patchChat} actions={saveActions} />}
 
         {section === "general" && (
           <>
@@ -412,6 +409,7 @@ export function SettingsRoute() {
                 <span className="hint-block">{t("The saved language is shared by every open tab and applies after Save settings.")}</span>
               </label>
               <ThemePicker
+                collapsible
                 value={s.ui?.theme}
                 allowedThemes={opt.themes}
                 disabled={locked}
@@ -446,6 +444,7 @@ export function SettingsRoute() {
               <p className="hint-block">{t("Review device, model, and optional voice choices in the same guided flow used after installation.")}</p>
               <a className="btn btn-secondary settings-setup-link" href="#/setup/reconfigure">{t("Run setup again")}</a>
             </div>
+            <p className="hint-block"><a href="#/settings/access/profile">{t("Manage hidden informational notices")}</a></p>
           </>
         )}
 
@@ -456,10 +455,10 @@ export function SettingsRoute() {
               <h3 className="group-title">{t("Connection")}</h3>
               <label className="field"><span className="label">{t("Dispatch owner")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
               {owner === "cloud_rest" && <>
-                <div className="device-requirement" role="note" aria-labelledby="device-firmware-requirement">
+                <DismissibleNotice id="device-firmware" className="device-requirement">
                   <span id="device-firmware-requirement" className="label">{t("Firmware / API requirement")}</span>
                   <p>{firmwareRequirementLabel(s.device.firmware_api_requirement)}</p>
-                </div>
+                </DismissibleNotice>
                 <label className="field"><span className="label">{t("API application ID source")}</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
                 {s.device.api_application_id_source === "developer_override" && <label className="field"><span className="label">{t("Developer application ID")}</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>}
                 <label className="field"><span className="label">{t("Handy connection key")}{s.device.connection_key_set && <span className="badge">{t("set")}</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? t("set (leave blank to keep)") : t("Paste key")} value={newKey} disabled={locked} onChange={(e) => { setNewKey(e.target.value); if (e.target.value.trim()) setClearKey(false); }} /></label>
@@ -477,21 +476,6 @@ export function SettingsRoute() {
           </>
         )}
 
-        {section === "model" && (
-          <ModelSettingsPanel
-            settings={s.llm}
-            saved={saved?.llm}
-            providers={opt.llm_providers ?? []}
-            llamaModes={opt.llama_cpp_modes ?? []}
-            managedLoadPolicies={opt.llm_managed_load_policies ?? []}
-            llamaContextSizes={opt.llama_cpp_context_sizes ?? []}
-            reasoningModes={opt.llm_reasoning_modes ?? []}
-            maxOutputOptions={opt.llm_max_output_tokens ?? []}
-            locked={locked}
-            patch={patchLLM}
-          />
-        )}
-
         {section === "media" && (
           <>
             <h2 className="section-title">{t("Media library")}</h2>
@@ -503,46 +487,6 @@ export function SettingsRoute() {
               locked={locked}
               onChange={patchMedia}
             />
-          </>
-        )}
-
-        {section === "chat" && (
-          <>
-            <h2 className="section-title">{t("Chat")}</h2>
-            <div className="group">
-              <h3 className="group-title">{t("Sessions")}</h3>
-              <label className="field">
-                <span className="label">{t("When MagicHandy starts")}</span>
-                <select
-                  value={s.chat?.startup_behavior ?? "previous"}
-                  disabled={locked}
-                  onChange={(event) => patchChat({
-                    startup_behavior: event.target.value,
-                    ...(event.target.value === "new" ? { keep_unsaved_on_exit: false } : {}),
-                  })}
-                >
-                  {(opt.chat_startup_behaviors ?? ["previous", "new"]).map((behavior) => (
-                    <option key={behavior} value={behavior}>{behavior === "new" ? t("Start a new chat") : t("Open the previous chat")}</option>
-                  ))}
-                </select>
-                <span className="hint-block">{t("Previous restores the last retained chat. New creates a blank, unsaved tab on every launch.")}</span>
-              </label>
-              <label className="toggle-line">
-                <span className="toggle">
-                  <input
-                    type="checkbox"
-                    checked={s.chat?.keep_unsaved_on_exit ?? false}
-                    disabled={locked || s.chat?.startup_behavior === "new"}
-                    onChange={(event) => patchChat({ keep_unsaved_on_exit: event.target.checked })}
-                  />
-                  <span className="track" aria-hidden="true" />
-                </span>
-                <span>{t("Keep an unsaved current chat after closing MagicHandy")}<small>{s.chat?.startup_behavior === "new"
-                    ? t("Starting with a new chat always removes the prior unsaved draft.")
-                    : t("Off by default. Saved tabs are always kept; use Save chat from the tab menu or its right-click menu.")}</small>
-                </span>
-              </label>
-            </div>
           </>
         )}
 
@@ -562,74 +506,6 @@ export function SettingsRoute() {
           onRuntimeChanged={() => { void load(true); }}
         />}
 
-        {section === "prompts" && (
-          <>
-            <h2 className="section-title">{t("Prompts & memory")}</h2>
-            <div className="group">
-            <h3 className="group-title">{t("Reply style")}</h3>
-            <label className="field">
-              <span className="label">{t("Active prompt set")}<span className="hint-inline">{t("saved with Save settings")}</span></span>
-              <select value={s.llm.prompt_set} disabled={locked} onChange={(event) => patchLLM({ prompt_set: event.target.value })}>
-                {(opt.prompt_sets?.length ? opt.prompt_sets : [s.llm.prompt_set]).map((promptSet) => (
-                  <option key={promptSet} value={promptSet}>{PROMPT_SET_LABELS[promptSet] ?? promptSet}</option>
-                ))}
-              </select>
-              <span className="hint-block">{t("Built-in prompt sets choose the default language for model replies. Custom prompt sets keep their own instructions.")}</span>
-            </label>
-            <label className="field">
-              <span className="label">{t("Chat voice")}<span className="hint-inline">{t("how sexual the model's replies may be")}</span></span>
-              <select value={s.llm.chat_voice ?? "utility"} disabled={locked} onChange={(e) => patchLLM({ chat_voice: e.target.value })}>
-                {(opt.llm_chat_voices?.length ? opt.llm_chat_voices : ["utility"]).map((voice) => (
-                  <option key={voice} value={voice}>{optionLabel(CHAT_VOICE_LABELS, voice)}</option>
-                ))}
-              </select>
-            </label>
-            <p className="hint">{t("Utility keeps the neutral assistant register. Warm is flirtatious but never explicit. Intimate speaks as a partner with sensual language. Explicit permits direct sexual language like the legacy app. Voice changes wording only; motion limits, capability gates, and Stop are identical at every level.")}</p>
-            </div>
-            <div className="group">
-            <h3 className="group-title">{t("Persona and anatomy")}</h3>
-            <label className="field">
-              <span className="label">{t("User anatomy")}<span className="hint-inline">{t("separate from partner persona")}</span></span>
-              <select
-                value={s.llm.user_anatomy ?? "penis"}
-                disabled={locked}
-                onChange={(event) => patchLLM({ user_anatomy: event.target.value as PublicSettings["llm"]["user_anatomy"] })}
-              >
-                {(opt.llm_user_anatomies?.length ? opt.llm_user_anatomies : ["penis", "vagina", "custom"]).map((anatomy) => (
-                  <option key={anatomy} value={anatomy}>{optionLabel(USER_ANATOMY_LABELS, anatomy)}</option>
-                ))}
-              </select>
-            </label>
-            {(s.llm.user_anatomy ?? "penis") === "custom" && (
-              <label className="field">
-                <span className="label">{t("Custom anatomy wording")}<span className="hint-inline">{Array.from(s.llm.custom_anatomy ?? "").length} / {MAX_CUSTOM_ANATOMY_CHARS}</span>
-                </span>
-                <input
-                  type="text"
-                  value={s.llm.custom_anatomy ?? ""}
-                  disabled={locked}
-                  autoComplete="off"
-                  onChange={(event) => patchLLM({ custom_anatomy: clampCharacters(event.target.value, MAX_CUSTOM_ANATOMY_CHARS) })}
-                />
-              </label>
-            )}
-            <label className="field">
-              <span className="label">{t("Persona description")}<span className="hint-inline">{t("optional · {current} / {max}", { current: Array.from(s.llm.persona_description ?? "").length, max: MAX_PERSONA_DESCRIPTION_CHARS })}</span>
-              </span>
-              <textarea
-                rows={3}
-                value={s.llm.persona_description ?? ""}
-                disabled={locked}
-                onChange={(event) => patchLLM({ persona_description: clampCharacters(event.target.value, MAX_PERSONA_DESCRIPTION_CHARS) })}
-              />
-            </label>
-            <p className="hint">{t("Anatomy context and persona apply to interactive Warm, Intimate, and Explicit replies. Direct anatomy wording is reserved for Explicit; the other levels keep references indirect. This bounded context cannot change motion permissions or limits.")}</p>
-            </div>
-            <PromptSetEditor locked={locked} />
-            <MemoryManager locked={locked} />
-          </>
-        )}
-
         {section === "diagnostics" && (
           <>
             <h2 className="section-title">{t("Diagnostics")}</h2>
@@ -643,10 +519,7 @@ export function SettingsRoute() {
         )}
 
 
-        {section !== "access" && <div className="row-actions settings-actions">
-          <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving}>{saving ? t("Saving settings") : t("Save settings")}</button>
-          {locked && <span className="form-status">{loading ? t("Refreshing settings") : backendOnline ? t("Read-only client") : t("Core offline")}</span>}
-        </div>}
+        {section !== "chat" && saveActions}
       </section>
     </>
   );

@@ -1839,6 +1839,89 @@ three-artifact reviewed setup path without reusing or moving alpha.12.
 
 Level: High
 
+The [saved recovery checkpoint](lan-wan-account-recovery.md) closes password
+verification/reset races and binds password/code mutations to still-live proof
+inside their transaction. Recovery invalidates all logins/codes, cancels active
+streams and retires shared control without automatic login. Codes are stored
+only as digests and excluded from logs/audit/status. Concurrent redemption,
+audit rollback, stale password changes and HTTP/1/2 retirement are covered.
+Stolen codes remain password-reset credentials; stronger WAN authentication,
+enrollment, lost-all-credentials recovery and real deployment acceptance remain.
+
+The [request-pressure checkpoint](lan-wan-request-pressure.md) reserves bounded
+controller/gateway capacity before authentication, bounds temporary storage
+waits without erasing valid cookies, and releases stalled HTTP/1 and HTTP/2
+content receivers. Overlapping HTTP Stops invalidate every intent while sharing
+one active dispatch with bounded waiters and honest pending replies. A delayed
+request cannot reuse confirmation from before a newer run. Application limits
+and the 20-spectator loopback fixture do not establish connection-flood,
+public-WAN or physical-device limits; the full load/fault matrix remains open.
+
+The [bounded audit checkpoint](lan-wan-audit-history.md) records transactional
+access changes and bounded runtime outcomes without credentials or raw content.
+Administrators can inspect/export retained pages with explicit history-loss
+status. Stop is tested against blocked audit storage; trace persistence now
+runs independently of the response. This does not provide tamper-proof history
+or establish WAN load/device acceptance.
+
+The [session management checkpoint](lan-wan-session-management.md) adds
+account-owned management IDs, transaction-level actor revalidation and active
+request/gateway/controller retirement. Self-revocation retains a bounded
+acknowledgement without retaining authority. A 213-route admission table tests
+roles and implicit HEAD, and exact setup status now requires administrator
+access. This is admission coverage; full payload redaction, handler/UI scope,
+invitations, exhaustive audit attribution and real WAN/mobile/device acceptance remain open.
+
+Implementation update 2026-09-12: the LAN/WAN branch adds session-and-tab-bound
+control, a process epoch and ownership generation, explicit foreground
+heartbeats, a periodic stop watchdog, stream/session cancellation and expiring
+administrator-issued operator permissions. Direct HTTPS and trusted proxy
+modes require an explicit network policy; the legacy restrictions below still
+describe default/legacy startup. Exact public origins, trusted immediate peers
+and local-dialog isolation have regression coverage. [ADR 0029](decisions/0029-session-bound-network-control.md)
+and the [deployment guide](self-hosted-https.md) record the new contract.
+
+Implementation update 2026-09-13: protected commands now have bounded receipts,
+delivery expiry and sequence checks; settings transactions respect cancellation,
+and delayed chat/Lab motion is rejected after newer control intentions. Lost
+JSON responses query the original receipt without repeating a mutation. The
+[delivery contract](lan-wan-command-delivery.md) records bounds and simulator
+evidence, including interrupted handlers and pre-Stop delayed requests.
+
+The [observation checkpoint](lan-wan-observations.md) separates controller
+heartbeats from slow full-state reads, orders motion and controller observations
+by backend revisions, and resyncs after restart or browser visibility changes.
+Old callbacks and pre-failure polls cannot restore fresh status or obsolete
+motion. Backgrounding and recovery tests use simulated browser lifecycle events;
+physical phone sleep, partitions and measured multi-client state age remain open.
+
+The [Bluetooth gateway checkpoint](lan-wan-bluetooth-gateway.md) closes a
+reproduced copied-ID command-drain gap with session/tab/connection binding and
+keeps gateway dispatch independent of remote controller handoff. Retired
+connections cannot poll or acknowledge replacement work. Gateway loss uses
+shared engine Stop; browser failure/backgrounding has a bounded local Stop and
+GATT teardown attempt. Automatic POST bookkeeping no longer renews login idle
+time. Fake transport/browser regressions cover these boundaries; physical Stop,
+mobile scheduling and WAN load/partition measurements remain open.
+
+The [chat recovery checkpoint](lan-wan-chat-recovery.md) closes a reproduced
+cross-login read-cursor collision and separates committed revisions from
+display sequence. A later commit below an observed display head remains
+recoverable. Coherent database pages, cancellation, bounded read markers and
+browser resync prevent skipped durable replies and obsolete response merging.
+Migration preserves conversation content, and recovery does not replay old
+speech. These guarantees cover read tracking within the existing shared-data
+policy; they do not establish tenant isolation. History pages now have a 256 KiB
+encoded limit, resumable reset windows, explicit previews and authenticated
+full-content downloads. Publication waits cancel; downloads bound materialized
+chunks and release database connections before writes. Broader stream/load and
+real-network acceptance remain open.
+
+The risk remains open: exhaustive route/apply-time fault coverage, stronger WAN login and
+owner recovery, durable auditing, multi-client load/partition testing, proxy
+deployment and real mobile/device acceptance are unfinished. Green simulator
+tests do not reduce this risk to a claim of robust internet exposure.
+
 Description:
 Opt-in LAN access moves private chat, personas, media metadata, model controls,
 device configuration, and physical commands beyond the operating-system user's

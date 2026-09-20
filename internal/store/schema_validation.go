@@ -46,6 +46,9 @@ type actualSchemaColumn struct {
 }
 
 var requiredSchemaTables = []schemaTable{
+	{name: "notice_preferences", columns: columns("owner_key:TEXT", "account_id:TEXT?", "hidden_json:TEXT", "updated_at:INTEGER"), primaryKey: []string{"owner_key"}},
+	{name: "access_audit", columns: columns("seq:INTEGER", "event_id:TEXT", "occurred_at:INTEGER", "document:TEXT"), primaryKey: []string{"seq"}},
+	{name: "user_control_grants", columns: columns("user_id:TEXT", "grant_id:TEXT", "issued_by:TEXT", "created_at:TEXT", "expires_at:TEXT?"), primaryKey: []string{"user_id"}},
 	{name: "settings", columns: columns("id:TEXT", "document:TEXT", "updated_at:TEXT"), primaryKey: []string{"id"}},
 	{name: "app_kv", columns: columns("key:TEXT", "value:TEXT", "updated_at:TEXT"), primaryKey: []string{"key"}},
 	{name: "memories", columns: columns("id:TEXT", "text:TEXT", "enabled:INTEGER", "created_at:TEXT"), primaryKey: []string{"id"}},
@@ -54,14 +57,14 @@ var requiredSchemaTables = []schemaTable{
 		"domain:TEXT", "source_path:TEXT", "archived_path:TEXT", "status:TEXT", "message:TEXT", "imported_at:TEXT",
 	), primaryKey: []string{"domain"}},
 	{name: "messages", columns: columns(
-		"seq:INTEGER", "session_id:TEXT", "role:TEXT", "content:TEXT", "client_id:TEXT", "diagnostics_json:TEXT", "created_at:TEXT", "committed:INTEGER",
+		"seq:INTEGER", "session_id:TEXT", "role:TEXT", "content:TEXT", "client_id:TEXT", "diagnostics_json:TEXT", "created_at:TEXT", "committed:INTEGER", "revision:INTEGER",
 	), primaryKey: []string{"seq"}},
 	{name: "client_cursors", columns: columns("client_id:TEXT", "last_seq:INTEGER", "updated_at:TEXT"), primaryKey: []string{"client_id"}},
 	{name: "chat_sessions", columns: columns(
-		"id:TEXT", "title:TEXT", "saved:INTEGER", "persona_id:TEXT", "created_at:TEXT", "updated_at:TEXT",
+		"id:TEXT", "title:TEXT", "saved:INTEGER", "persona_id:TEXT", "created_at:TEXT", "updated_at:TEXT", "revision:INTEGER", "reset_revision:INTEGER", "pruned_revision:INTEGER",
 	), primaryKey: []string{"id"}},
 	{name: "chat_workspace", columns: columns("id:TEXT", "active_session_id:TEXT", "updated_at:TEXT"), primaryKey: []string{"id"}},
-	{name: "chat_session_cursors", columns: columns("client_id:TEXT", "session_id:TEXT", "last_seq:INTEGER", "updated_at:TEXT"), primaryKey: []string{"client_id", "session_id"}},
+	{name: "chat_session_cursors", columns: columns("client_id:TEXT", "session_id:TEXT", "last_seq:INTEGER", "last_revision:INTEGER", "updated_at:TEXT"), primaryKey: []string{"client_id", "session_id"}},
 	{name: "personas", columns: columns(
 		"id:TEXT", "name:TEXT", "description:TEXT", "chat_voice:TEXT", "reaction_style:TEXT",
 		"prompt_set_id:TEXT", "default_focus_area:TEXT", "lore_mode:TEXT",
@@ -100,13 +103,20 @@ var requiredSchemaTables = []schemaTable{
 	), primaryKey: []string{"id"}},
 	{name: "user_sessions", columns: columns(
 		"token_hash:TEXT", "user_id:TEXT", "created_at:TEXT", "last_seen_at:TEXT", "expires_at:TEXT", "control_account_id:TEXT?",
+		"public_id:TEXT", "device_name:TEXT", "client_browser:TEXT", "client_platform:TEXT",
 	), primaryKey: []string{"token_hash"}},
 	{name: "user_account_links", columns: columns(
 		"owner_user_id:TEXT", "linked_user_id:TEXT", "label:TEXT", "status:TEXT", "created_at:TEXT", "updated_at:TEXT",
 	), primaryKey: []string{"owner_user_id", "linked_user_id"}},
+	{name: "user_recovery_codes", columns: columns("code_hash:TEXT", "user_id:TEXT", "created_at:TEXT"), primaryKey: []string{"code_hash"}},
 }
 
 var requiredSchemaIndexes = []schemaIndex{
+	{table: "user_recovery_codes", name: "recovery_codes_user", columns: indexColumns("user_id")},
+	{table: "access_audit", name: "access_audit_time", columns: indexColumns("occurred_at")},
+	{table: "access_audit", name: "access_audit_event_id", unique: true, columns: indexColumns("event_id")},
+	{table: "messages", name: "messages_session_revision", columns: indexColumns("session_id", "committed", "revision")},
+	{table: "chat_session_cursors", name: "chat_cursors_updated", columns: indexColumns("updated_at", "client_id", "session_id")},
 	{table: "messages", name: "messages_session_seq", columns: indexColumns("session_id", "seq")},
 	{table: "chat_sessions", name: "chat_sessions_saved_updated", columns: indexColumns("-saved", "-updated_at", "id")},
 	{table: "personas", name: "personas_used", columns: indexColumns("-last_used_at", "name", "id")},
@@ -120,10 +130,15 @@ var requiredSchemaIndexes = []schemaIndex{
 	{table: "media_videos", name: "media_videos_missing_name", columns: indexColumns("missing", "display_name", "id")},
 	{table: "user_accounts", name: "user_accounts_username_key", unique: true, columns: indexColumns("username_key")},
 	{table: "user_sessions", name: "user_sessions_user_expiry", columns: indexColumns("user_id", "expires_at")},
+	{table: "user_sessions", name: "user_sessions_public_id", unique: true, columns: indexColumns("public_id")},
 	{table: "user_account_links", name: "user_account_links_owner_status", columns: indexColumns("owner_user_id", "status", "linked_user_id")},
 }
 
 var requiredSchemaForeignKeys = []schemaForeignKey{
+	{table: "notice_preferences", column: "account_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
+	{table: "user_recovery_codes", column: "user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
+	{table: "user_control_grants", column: "user_id", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
+	{table: "user_control_grants", column: "issued_by", parentTable: "user_accounts", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "messages", column: "session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "chat_workspace", column: "active_session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "RESTRICT"},
 	{table: "chat_session_cursors", column: "session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "CASCADE"},
@@ -147,6 +162,9 @@ func (db *DB) validateSchema(ctx context.Context) error {
 		db.validateForeignKeyEnforcement,
 		db.validateSchemaTables,
 		db.validateSchemaIndexes,
+		db.validateAuditRetention,
+		db.validateRecoveryCodeBounds,
+		db.validateNoticePreferenceBounds,
 		db.validateSchemaForeignKeys,
 		db.validateForeignKeyRows,
 	}

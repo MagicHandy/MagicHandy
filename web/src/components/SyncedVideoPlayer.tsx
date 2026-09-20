@@ -1006,6 +1006,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     <MediaVideoPlayer
       video={video}
       allowMetadataWrite={!locked}
+      allowLibraryWrite={!locked && state?.capabilities?.configure_host !== false}
       controlsEnabled={!loadingScript && !script}
       busy={loadingScript}
       videoOverlay={script ? (

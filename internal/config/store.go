@@ -136,12 +136,22 @@ func (s *Store) Save(next Settings) (Settings, error) {
 // latest snapshot. All runtime read-modify-write paths should use Update rather
 // than constructing a replacement from a separately acquired Snapshot.
 func (s *Store) Update(mutate func(Settings) (Settings, error)) (previous Settings, saved Settings, err error) {
+	return s.UpdateContext(context.Background(), mutate)
+}
+
+// UpdateContext rejects canceled queued writes and binds the durable transaction
+// to the caller's authority lifetime. After commit, publication still completes
+// so the in-memory snapshot cannot diverge from the durable settings row.
+func (s *Store) UpdateContext(ctx context.Context, mutate func(Settings) (Settings, error)) (previous Settings, saved Settings, err error) {
 	if mutate == nil {
 		return Settings{}, Settings{}, errors.New("settings update function is required")
 	}
 
 	s.saveMu.Lock()
 	defer s.saveMu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return Settings{}, Settings{}, err
+	}
 
 	s.mu.RLock()
 	previous = cloneSettings(s.settings)
@@ -155,7 +165,7 @@ func (s *Store) Update(mutate func(Settings) (Settings, error)) (previous Settin
 	if err != nil {
 		return Settings{}, Settings{}, err
 	}
-	saved, err = s.commit(next)
+	saved, err = s.commitContext(ctx, next)
 	if err != nil {
 		return Settings{}, Settings{}, err
 	}
@@ -163,8 +173,12 @@ func (s *Store) Update(mutate func(Settings) (Settings, error)) (previous Settin
 }
 
 func (s *Store) commit(next Settings) (Settings, error) {
+	return s.commitContext(context.Background(), next)
+}
+
+func (s *Store) commitContext(ctx context.Context, next Settings) (Settings, error) {
 	durable := cloneSettings(next)
-	if err := s.writeSettings(context.Background(), durable); err != nil {
+	if err := s.writeSettings(ctx, durable); err != nil {
 		return Settings{}, err
 	}
 

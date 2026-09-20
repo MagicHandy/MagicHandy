@@ -20,6 +20,7 @@ const bluetoothTraceSource = "manual_browser_bluetooth"
 
 type bluetoothRuntime struct {
 	bridge      *transport.BrowserBluetoothBridge
+	gateway     bluetoothGatewayRuntime
 	mu          sync.Mutex
 	diagnostics transport.TransportDiagnostics
 }
@@ -39,6 +40,7 @@ type bluetoothErrorResponse struct {
 }
 
 type bluetoothStatusResponse struct {
+	Gateway       bluetoothGatewaySnapshot                 `json:"gateway"`
 	Status        string                                   `json:"status"`
 	DispatchOwner string                                   `json:"dispatch_owner"`
 	Bluetooth     transport.BrowserBluetoothBridgeSnapshot `json:"bluetooth"`
@@ -81,7 +83,7 @@ func newBluetoothRuntime(runtime Runtime) bluetoothRuntime {
 func (s *Server) handleBluetoothDiagnostics(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"diagnostics": s.bluetoothDiagnostics(),
-		"bridge":      s.bluetooth.bridge.Snapshot(),
+		"bridge":      s.bluetoothSnapshot(),
 	})
 }
 
@@ -92,9 +94,23 @@ func (s *Server) handleBluetoothStatus(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		s.bluetooth.bridge.UpdateClient(status)
+		if s.auth.authenticationRequired() {
+			lease, unlock, ok := s.lockBluetoothGateway(w, r, gatewayClientID(status.ClientID))
+			if !ok {
+				return
+			}
+			status.ClientID = lease.transportID
+			s.bluetooth.bridge.UpdateClient(status)
+			if status.Connected != nil && !*status.Connected {
+				lease.cancel()
+			}
+			unlock()
+			s.checkBluetoothGatewayLifetime("")
+		} else {
+			s.bluetooth.bridge.UpdateClient(status)
+		}
 	}
-	writeJSON(w, http.StatusOK, s.bluetoothStatus())
+	writeJSON(w, http.StatusOK, s.bluetoothStatus(r))
 }
 
 func (s *Server) handleBluetoothConnect(w http.ResponseWriter, r *http.Request) {
@@ -110,8 +126,10 @@ func (s *Server) handleBluetoothConnect(w http.ResponseWriter, r *http.Request) 
 	if !s.requireController(w, r) {
 		return
 	}
-	s.bluetooth.bridge.ConnectClient(status)
-	writeJSON(w, http.StatusOK, s.bluetoothStatus())
+	if !s.registerBluetoothGateway(w, r, status) {
+		return
+	}
+	writeJSON(w, http.StatusOK, s.bluetoothStatus(r))
 }
 
 func (s *Server) handleBluetoothDisconnect(w http.ResponseWriter, r *http.Request) {
@@ -120,14 +138,18 @@ func (s *Server) handleBluetoothDisconnect(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	finishStop := s.beginGlobalStop("bluetooth_disconnected")
+	finishGateway, ok := s.beginBluetoothGatewayDisconnect(w, r, request)
+	if !ok {
+		return
+	}
+	defer finishGateway()
+	finishStop, _ := s.beginGlobalStop("bluetooth_disconnected", r.Context())
 	defer finishStop()
-
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
 	stopErr := s.stopAndClearMotionEngine(stopCtx, "bluetooth_disconnected")
 	cancel()
-	s.bluetooth.bridge.DisconnectClient(request.ClientID, request.Message)
-	response := s.bluetoothStatus()
+	finishGateway()
+	response := s.bluetoothStatus(r)
 	if stopErr != nil {
 		response.Warning = "Bluetooth disconnected, but the active motion Stop could not be confirmed: " +
 			s.safeMotionErrorMessage(stopErr)
@@ -136,7 +158,7 @@ func (s *Server) handleBluetoothDisconnect(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleBluetoothCommands(w http.ResponseWriter, r *http.Request) {
-	clientID := strings.TrimSpace(r.URL.Query().Get("client_id"))
+	clientID := gatewayClientID(r.URL.Query().Get("client_id"))
 	if clientID == "" {
 		writeError(w, http.StatusBadRequest, errors.New("missing browser Bluetooth client id"))
 		return
@@ -152,15 +174,40 @@ func (s *Server) handleBluetoothCommands(w http.ResponseWriter, r *http.Request)
 	}
 	ctx, cancel := s.requestLifecycleContext(r.Context())
 	defer cancel()
+	var lease *bluetoothGatewayLease
+	if s.auth.authenticationRequired() {
+		var unlock func()
+		var ok bool
+		lease, unlock, ok = s.lockBluetoothGateway(w, r, clientID)
+		if !ok {
+			return
+		}
+		clientID = lease.transportID
+		unlock()
+		endGateway := context.AfterFunc(lease.ctx, cancel)
+		defer endGateway()
+		if lease.ctx.Err() != nil {
+			cancel()
+		}
+	}
 	commands, err := s.bluetooth.bridge.NextCommands(ctx, clientID, wait)
 	if err != nil && !errors.Is(err, context.Canceled) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if lease != nil {
+		s.bluetooth.gateway.mu.Lock()
+		current := s.bluetooth.gateway.lease == lease && lease.ctx.Err() == nil && ctx.Err() == nil
+		s.bluetooth.gateway.mu.Unlock()
+		if !current {
+			writeError(w, http.StatusConflict, errors.New("bluetooth gateway access ended"))
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, bluetoothCommandsResponse{
 		Status:    "success",
 		Commands:  commands,
-		Bluetooth: s.bluetooth.bridge.Snapshot(),
+		Bluetooth: s.bluetoothSnapshot(),
 	})
 }
 
@@ -178,7 +225,16 @@ func (s *Server) handleBluetoothAck(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("missing Bluetooth command id"))
 		return
 	}
-	snapshot := s.bluetooth.bridge.Acknowledge(request.ClientID, transport.BrowserBluetoothBridgeAck{
+	clientID := gatewayClientID(request.ClientID)
+	unlock := func() {}
+	if s.auth.authenticationRequired() {
+		lease, release, ok := s.lockBluetoothGateway(w, r, clientID)
+		if !ok {
+			return
+		}
+		clientID, unlock = lease.transportID, release
+	}
+	s.bluetooth.bridge.Acknowledge(clientID, transport.BrowserBluetoothBridgeAck{
 		ID:            request.ID,
 		OK:            request.OK,
 		Status:        request.Status,
@@ -186,9 +242,10 @@ func (s *Server) handleBluetoothAck(w http.ResponseWriter, r *http.Request) {
 		Error:         request.Error,
 		Response:      request.Response,
 	})
+	unlock()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":    "success",
-		"bluetooth": snapshot,
+		"bluetooth": s.bluetoothSnapshot(),
 	})
 }
 
@@ -206,7 +263,7 @@ func (s *Server) handleBluetoothConnectionCheck(w http.ResponseWriter, r *http.R
 		writeJSON(w, bluetoothCommandStatus(err, check.Diagnostics.LastResult), bluetoothErrorResponse{
 			Error:       safeBluetoothErrorMessage(err),
 			Diagnostics: diagnostics,
-			Bridge:      s.bluetooth.bridge.Snapshot(),
+			Bridge:      s.bluetoothSnapshot(),
 		})
 		return
 	}
@@ -226,7 +283,7 @@ func (s *Server) handleBluetoothState(w http.ResponseWriter, r *http.Request) {
 		State:       state,
 		Result:      transport.SafeCommandResult(result),
 		Diagnostics: diagnostics,
-		Bridge:      s.bluetooth.bridge.Snapshot(),
+		Bridge:      s.bluetoothSnapshot(),
 	}
 	if err != nil {
 		payload.Error = safeBluetoothErrorMessage(err)
@@ -244,7 +301,7 @@ func (s *Server) handleBluetoothEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	setEventStreamHeaders(w)
 	w.WriteHeader(http.StatusOK)
-	_ = writeBluetoothSnapshotEvent(w, s.bluetooth.bridge.Snapshot())
+	_ = writeBluetoothSnapshotEvent(w, s.bluetoothSnapshot())
 	flusher.Flush()
 
 	ctx, cancel := s.requestLifecycleContext(r.Context())
@@ -256,7 +313,7 @@ func (s *Server) handleBluetoothEvents(w http.ResponseWriter, r *http.Request) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := writeBluetoothSnapshotEvent(w, s.bluetooth.bridge.Snapshot()); err != nil {
+			if err := writeBluetoothSnapshotEvent(w, s.bluetoothSnapshot()); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -293,7 +350,7 @@ func (s *Server) writeBluetoothSetupError(w http.ResponseWriter, err error) {
 	writeJSON(w, http.StatusBadRequest, bluetoothErrorResponse{
 		Error:       safeBluetoothErrorMessage(err),
 		Diagnostics: diagnostics,
-		Bridge:      s.bluetooth.bridge.Snapshot(),
+		Bridge:      s.bluetoothSnapshot(),
 	})
 }
 
@@ -311,13 +368,14 @@ func (s *Server) bluetoothDiagnostics() transport.TransportDiagnostics {
 	return safeBluetoothDiagnostics(s.bluetooth.diagnostics)
 }
 
-func (s *Server) bluetoothStatus() bluetoothStatusResponse {
+func (s *Server) bluetoothStatus(r *http.Request) bluetoothStatusResponse {
 	settings, _ := s.store.Snapshot()
 	return bluetoothStatusResponse{
+		Gateway:       s.bluetoothGatewaySnapshot(r),
 		Status:        "success",
 		DispatchOwner: settings.Device.HSPDispatchOwner,
-		Bluetooth:     s.bluetooth.bridge.Snapshot(),
-		Diagnostics:   s.bluetoothDiagnostics(),
+		Bluetooth:     s.clientBluetoothSnapshot(r),
+		Diagnostics:   s.clientTransportDiagnostics(r, s.bluetoothDiagnostics()),
 	}
 }
 

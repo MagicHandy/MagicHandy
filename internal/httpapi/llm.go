@@ -299,18 +299,14 @@ func (s *Server) handleLLMStatus(w http.ResponseWriter, r *http.Request) {
 	settings, _ := s.store.Snapshot()
 	provider, err := s.resolveLLMProvider(r.Context(), settings.LLM, false)
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"provider":  settings.LLM.Provider,
-			"base_url":  selectedLLMBaseURL(settings.LLM),
-			"model":     settings.LLM.Model,
-			"available": false,
-			"managed":   settings.LLM.Provider == config.LLMProviderLlamaCPP && settings.LLM.LlamaCPPMode == config.LlamaCPPModeManaged,
-			"loaded":    false,
-			"message":   err.Error(),
-		})
+		writeJSON(w, http.StatusOK, s.clientProviderStatus(r, llm.ProviderStatus{
+			Provider: settings.LLM.Provider, BaseURL: selectedLLMBaseURL(settings.LLM), Model: settings.LLM.Model,
+			Managed: settings.LLM.Provider == config.LLMProviderLlamaCPP && settings.LLM.LlamaCPPMode == config.LlamaCPPModeManaged,
+			Message: err.Error(),
+		}))
 		return
 	}
-	writeJSON(w, http.StatusOK, provider.Status(r.Context()))
+	writeJSON(w, http.StatusOK, s.clientProviderStatus(r, provider.Status(r.Context())))
 }
 
 func (s *Server) handleLLMLoad(w http.ResponseWriter, r *http.Request) {

@@ -68,7 +68,7 @@ export function DefaultPersonaTile({
   return (
     <a
       className="persona-card persona-card-default"
-      href="#/settings/prompts"
+      href="#/settings/chat/prompts"
       aria-current={active ? "true" : undefined}
       aria-label={t("{name} (Default)", { name: item.name })}
     >

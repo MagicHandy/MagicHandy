@@ -2,6 +2,64 @@
 
 ## Core Direction
 
+The September 19 control-permission follow-up adds an explicit **Permanent**
+choice for existing operator accounts. Schema 26 preserves timed grants and
+represents new permanent grants with a null expiry. Replacement and revocation
+still rotate grant authority, and login/session/heartbeat lifetimes still fence
+control. Permission records and access history clearly distinguish permanence;
+the default duration remains one hour.
+
+The September 19 [informational-notice system](docs/informational-notices.md)
+adds one shared catalog and SQLite preference domain for account and browser
+dismissals. Users choose a temporary dismissal or a saved choice and can restore
+notices from Access. Explanations use neutral outlines without left accent lines;
+operational alerts and the permanent Stop remain independent. Schema 25 keeps
+preferences in the existing app database with bounded anonymous storage.
+
+The September 19 [settings review](docs/settings-review-2026-09-19.md) combines
+Conversation, Model and Prompts & memory under Chat. Access and Chat share the
+responsive secondary navigation; the remaining five settings pages retain a
+single level. Legacy bookmarks, the common draft and backend permission checks
+are preserved. Shared flat sections and compact actions reduce visual weight;
+General's theme chooser opens on demand. No dependency or periodic work is added.
+
+The September 19 [Access settings navigation](docs/ui-design.md) groups personal
+Profile/Security/Sessions and administrator Accounts/Remote access/History into
+bookmarkable pages. Only visible panels load; grants and account creation open
+on demand. Directory/permission reads are bounded and canceled on exit, and
+security drafts cannot cross views or logins. The referenced account/session
+management patterns improve navigation without changing backend authority.
+Desktop navigation and account/session rows use explicit dividers and compact
+actions. Narrow layouts use two single-line scrolling navigation levels with
+neutral selection, overflow controls and automatic visibility of the selected
+route. These share one navigation component and add no dependency or data poll.
+
+The September 13 [saved account recovery checkpoint](docs/lan-wan-account-recovery.md)
+adds private offline codes and atomic password/session retirement. Login and
+queued password mutations recheck credentials inside their write transaction.
+Recovery closes active streams and retires control through shared Stop without
+automatically signing in or restarting motion. Enrollment, stronger WAN access
+policy, lost-all-credentials recovery and full network/device acceptance remain.
+
+The September 13 [LAN/WAN request-pressure work](docs/lan-wan-request-pressure.md)
+reserves controller/gateway capacity before session lookup, bounds overlapping
+HTTP Stop waiters and media/content writes, and preserves login cookies during
+temporary storage failure. Regression tests cover unfinished uploads, stalled
+HTTP/1 and HTTP/2 receivers, delayed Stop and 20 concurrent spectators. Full
+network/device acceptance remains open.
+
+The September 13 [LAN/WAN audit history](docs/lan-wan-audit-history.md) adds
+transactional access-change records, bounded runtime history and an
+administrator page/download. Stop remains independent of audit storage, and
+stopped-run trace persistence no longer delays its response. Full network and
+physical-device acceptance remains open.
+
+The September 13 [LAN/WAN observer response contract](docs/lan-wan-observer-privacy.md)
+keeps host configuration/diagnostics out of shared responses while retaining
+granted semantic playback and chat. Login changes retire browser snapshots,
+drafts, notifications and queued quick edits. The full network implementation
+and acceptance scope remains in the [21-item checklist](docs/lan-wan-control-checklist.md).
+
 The September 6 funscript-filter review applies the continuous LLM motion
 lessons to media: conservative chatter removal, opt-in local C2 interpolation
 inside the shared curve, and backend measurements of actual filter effects.
@@ -2245,6 +2303,56 @@ multi-tenant.
 - standard Go/frontend/pure-Go build gates and binary-size remeasurement
 
 ## Follow-up / Out Of Scope
+
+The [robust LAN/WAN control checklist](docs/lan-wan-control-checklist.md) turns
+these follow-ups into a prioritized engineering backlog with acceptance criteria.
+The user selected self-hosted HTTPS with direct access or a trusted reverse
+proxy. Implementation is active under [ADR 0029](docs/decisions/0029-session-bound-network-control.md).
+The branch adds session-bound ownership, heartbeats/watchdogs, process epochs,
+expiring operator control permissions, explicit direct/proxy network modes and
+an Access settings UI. The [implementation log](docs/lan-wan-implementation.md)
+records verification and remaining acceptance; full LAN/WAN support is not yet
+complete. Legacy startup remains local/LAN-only unless a new mode is selected.
+
+The 2026-09-13 checkpoint adds [protected command delivery](docs/lan-wan-command-delivery.md):
+short-lived tickets, sequence ordering, bounded receipts, response-loss
+reconciliation, synchronous ownership cancellation and context-bound settings
+transactions. Deferred chat/Lab motion rechecks newer control intentions at
+application while inference leaves immediate controls responsive.
+
+The [observation checkpoint](docs/lan-wan-observations.md) adds backend capture
+revisions and independent controller liveness, rejecting delayed motion and
+controller responses. Stream recovery and visibility return require a fresh
+snapshot without automatic takeover or resume. Measured telemetry/load behavior
+and real phone/network acceptance remain open.
+
+The [Bluetooth gateway checkpoint](docs/lan-wan-bluetooth-gateway.md) binds the
+device browser to its authenticated session and connection generation while a
+separate remote controller drives the shared engine. It rejects copied gateway
+IDs and obsolete polls/ACKs, retains the Stop channel across controller handoff,
+and retires a lost gateway before replacement. Passive POST bookkeeping does
+not extend login idle time; validated playback intentions still count as
+activity. Real browser/GATT and WAN acceptance remain required.
+
+The [chat recovery checkpoint](docs/lan-wan-chat-recovery.md) adds schema v21
+committed revisions, coherent read pages and login-scoped read cursors. Pending
+replies committed below a newer display sequence are recovered without gaps;
+SSE placeholders reconcile with durable rows without duplicate messages or
+speech replay. Cursor writes honor cancellation, stay outside control delivery,
+and retain at most 4,096 markers. Browser reads, acknowledgements and retries are
+bounded. Migration preserves conversation content and compatible legacy read
+positions. History now uses 256 KiB JSON pages, resumable reset windows and
+explicit 16 KiB previews with exact-content downloads. Publication waiters honor
+cancellation and downloads release database connections before bounded writes.
+The broader request/stream budgets and network acceptance matrix remain open.
+
+The [login management checkpoint](docs/lan-wan-session-management.md) adds
+schema v22 independent session IDs, account-scoped list/name/revoke controls,
+apply-time actor validation and immediate active-work/gateway/controller
+retirement after revocation. A maintained 207-route admission matrix includes
+roles, revoked logins and implicit HEAD. Setup visibility and operator control
+permission mismatches are corrected; feedback writes honor cancellation.
+Audit history, invitations and the broader handler/UI acceptance remain open.
 
 - account-link invitation/acceptance/revocation UI and any linked context that
   can affect motion or controller ownership

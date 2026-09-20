@@ -51,12 +51,8 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding-left: 10px;
-  border-left: 3px solid var(--accent);
+  padding: 6px 10px;
   font-size: 0.82rem;
-}
-.curation-readout[data-fallback="true"] {
-  border-left-color: var(--warn);
 }
 .curation-readout span {
   color: var(--muted);

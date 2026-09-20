@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/chatapp"
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -26,6 +27,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/media"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
+	"github.com/mapledaemon/MagicHandy/internal/netaccess"
 	"github.com/mapledaemon/MagicHandy/internal/patterns"
 	"github.com/mapledaemon/MagicHandy/internal/persona"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
@@ -67,6 +69,8 @@ type Runtime struct {
 	AuthenticationRequired bool
 	SecureCookies          bool
 	AllowedBrowserHosts    []string
+	NetworkPolicy          *netaccess.Policy
+	NetworkCertificates    *netaccess.Certificates
 }
 
 // Server owns the local HTTP routes and embedded static asset serving.
@@ -75,8 +79,17 @@ type Server struct {
 	logger              *slog.Logger
 	store               *config.Store
 	accounts            *accounts.Store
+	auditStore          *audit.Store
+	accessAudit         *audit.Recorder
 	auth                authenticationRuntime
+	access              sessionActivityRuntime
+	accessWG            sync.WaitGroup
+	networkPolicy       *netaccess.Policy
+	networkCertificates *netaccess.Certificates
+	requestAdmission    requestAdmissionRuntime
+	stopAdmission       stopAdmissionRuntime
 	traces              *diagnostics.TraceRing
+	traceArchive        *traceArchiveWriter
 	transport           transport.DiagnosticsProvider
 	cloud               cloudRuntime
 	bluetooth           bluetoothRuntime
@@ -94,6 +107,8 @@ type Server struct {
 	setup               *setupManager
 	updates             *updatecheck.Checker
 	controller          controllerRuntime
+	commands            commandRuntime
+	observations        observationRuntime
 	personalization     personalizationRuntime
 	personas            *persona.Store
 	modes               *modes.Manager
@@ -114,7 +129,7 @@ type Server struct {
 	settingsLifecycleMu sync.Mutex
 	personaMutationMu   sync.Mutex
 	chatWorkspace       *chatapp.Workspace
-	chatSpeechMu        sync.Mutex
+	chatSpeechMu        chatPublicationGate
 	chatSpeechRequests  map[int64]string
 	hostPathPicker      hostPathPicker
 	chatLog             *chat.MessageLog
@@ -170,28 +185,32 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 
 	lifecycleCtx, lifecycleCancel := context.WithCancel(context.Background())
 	server := &Server{
-		static:          static,
-		logger:          logger,
-		store:           store,
-		accounts:        accountStore,
-		auth:            authRuntime,
-		traces:          runtime.Traces,
-		transport:       runtime.Transport,
-		cloud:           newCloudRuntime(runtime),
-		bluetooth:       newBluetoothRuntime(runtime),
-		intiface:        newIntifaceRuntime(runtime),
-		motion:          newMotionRuntime(runtime),
-		llm:             newLLMRuntime(runtime),
-		models:          modelManager,
-		managedLLM:      managedLLM,
-		updates:         newUpdateChecker(runtime, version),
-		controller:      newControllerRuntime(),
-		hostPathPicker:  systemHostPathPicker,
-		personalization: personalization,
-		lifecycleCtx:    lifecycleCtx,
-		lifecycleCancel: lifecycleCancel,
-		started:         time.Now().UTC(),
-		version:         version,
+		static:              static,
+		logger:              logger,
+		store:               store,
+		accounts:            accountStore,
+		auth:                authRuntime,
+		access:              newSessionActivityRuntime(),
+		networkPolicy:       runtime.NetworkPolicy,
+		networkCertificates: runtime.NetworkCertificates,
+		traces:              runtime.Traces,
+		transport:           runtime.Transport,
+		cloud:               newCloudRuntime(runtime),
+		bluetooth:           newBluetoothRuntime(runtime),
+		intiface:            newIntifaceRuntime(runtime),
+		motion:              newMotionRuntime(runtime),
+		llm:                 newLLMRuntime(runtime),
+		models:              modelManager,
+		managedLLM:          managedLLM,
+		updates:             newUpdateChecker(runtime, version),
+		controller:          newControllerRuntime(),
+		commands:            newCommandRuntime(),
+		hostPathPicker:      systemHostPathPicker,
+		personalization:     personalization,
+		lifecycleCtx:        lifecycleCtx,
+		lifecycleCancel:     lifecycleCancel,
+		started:             time.Now().UTC(),
+		version:             version,
 	}
 	server.setup = newSetupManager(
 		lifecycleCtx,
@@ -203,25 +222,9 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	)
 	server.configureSetupManager()
 
-	manager, err := server.newModeManager()
-	if err != nil {
-		lifecycleCancel()
-		managedLLM.Close()
-		_ = modelManager.Close()
-		personalization.Close()
-		return nil, err
-	}
-	server.modes = manager
-
 	settings, _ := store.Snapshot()
-	server.configureVoice(settings.Voice, runtime.ExecutablePath, store.DataDir())
-
-	if err := server.openPersistentDomains(settings.Media.LibraryPaths, settings.Chat); err != nil {
+	if err := server.openRuntimeDomains(runtime, settings); err != nil {
 		lifecycleCancel()
-		server.modes.Shutdown()
-		if server.voice != nil {
-			server.voice.Shutdown()
-		}
 		managedLLM.Close()
 		_ = modelManager.Close()
 		personalization.Close()
@@ -232,19 +235,47 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	return server, nil
 }
 
+func (s *Server) openRuntimeDomains(runtime Runtime, settings config.Settings) error {
+	manager, err := s.newModeManager()
+	if err != nil {
+		return err
+	}
+	s.modes = manager
+	s.configureVoice(settings.Voice, runtime.ExecutablePath, s.store.DataDir())
+	if err := s.openPersistentDomains(settings.Media.LibraryPaths, settings.Chat); err != nil {
+		s.modes.Shutdown()
+		if s.voice != nil {
+			s.voice.Shutdown()
+		}
+		return err
+	}
+	return nil
+}
+
 func (s *Server) activate(runtime Runtime, settings config.Settings) {
+	s.traceArchive = newTraceArchiveWriter(s.writeLastMotionTrace)
+	s.auditStore = audit.NewStore(s.store.Datastore())
+	s.accessAudit = audit.NewRecorder(s.auditStore)
+	s.accessAudit.Record(audit.Event{Kind: audit.ServerStarted, Outcome: "success", Epoch: s.controller.epoch})
 	mux := http.NewServeMux()
 	s.routes(mux)
-	s.handler = logRequests(s.logger, securityHeaders(
-		runtime.SecureCookies,
-		protectBrowserRequests(runtime.AllowedBrowserHosts, s.authenticateRequests(mux)),
-	))
+	delivery := s.trackCommandDelivery(mux)
+	sessions := s.trackSessionActivity(delivery)
+	authorized := s.authorizeRoutes(sessions)
+	admitted := s.admitHTTPRequests(s.authenticateRequests(authorized))
+	browser := protectBrowserRequests(runtime.AllowedBrowserHosts, admitted)
+	s.handler = logRequests(s.logger, securityHeaders(runtime.SecureCookies, s.protectNetworkRequests(browser)))
 	s.startLLMAutoload(settings.LLM)
 	s.startVoiceAutoload(settings.Voice)
 	s.startMediaAutoScan(settings.Media)
+	s.startAccessWatchdog()
 }
 
 func normalizeRuntime(runtime Runtime) Runtime {
+	if runtime.NetworkPolicy != nil && runtime.NetworkPolicy.Config.Mode != netaccess.Local {
+		runtime.AuthenticationRequired = true
+		runtime.SecureCookies = true
+	}
 	if runtime.Traces == nil {
 		runtime.Traces = diagnostics.NewTraceRing(1)
 	}
@@ -328,12 +359,13 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) routes(mux *http.ServeMux) {
+	s.auditRoutes(mux)
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	s.authenticationRoutes(mux)
+	s.networkRoutes(mux)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("GET /api/state", s.handleState)
-	mux.HandleFunc("GET /api/controller", s.handleControllerState)
-	mux.HandleFunc("POST /api/controller/takeover", s.handleControllerTakeover)
+	s.controllerRoutes(mux)
 	s.settingsAndUpdateRoutes(mux)
 	mux.HandleFunc("POST /api/host/path-picker", s.handleHostPathPicker)
 	s.personalizationRoutes(mux)
@@ -385,8 +417,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.mediaRoutes(mux)
 	s.voiceRoutes(mux)
 	s.setupRoutes(mux)
-	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
-	mux.HandleFunc("GET /api/traces/last-motion", s.handleLastMotionTrace)
+	s.traceRoutes(mux)
 	mux.HandleFunc("GET /", s.handleStatic)
 }
 
@@ -440,7 +471,7 @@ func (s *Server) handlePutLLMMotionMode(w http.ResponseWriter, r *http.Request) 
 	if s.modes != nil {
 		s.modes.Stop("llm_motion_mode_changed")
 	}
-	payload := map[string]any{"settings": saved.Public(), "mode": saved.LLM.MotionGenerationMode}
+	payload := map[string]any{"settings": s.clientSettings(r, saved.Public()), "mode": saved.LLM.MotionGenerationMode}
 	status := http.StatusOK
 	if runtimeErr != nil {
 		status = http.StatusBadGateway
@@ -528,9 +559,14 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
+	s.observations.settingsMu.Lock()
 	settings, status := s.store.PublicSnapshot()
-	transportDiagnostics := s.transport.Diagnostics()
+	observation := s.observationStamp()
+	s.observations.settingsMu.Unlock()
+	settings, status = s.clientSettings(r, settings), s.clientLoadStatus(r, status)
+	transportDiagnostics := s.clientTransportDiagnostics(r, s.transport.Diagnostics())
 	writeJSON(w, http.StatusOK, map[string]any{
+		"observation":    observation,
 		"service":        serviceName,
 		"version":        s.version.Version,
 		"commit":         s.version.Commit,
@@ -560,31 +596,32 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			"transport": "cloud_rest_browser_bluetooth_intiface_manual",
 			"voice":     "optional_worker_protocol_v1",
 		},
-		"llm":                 s.llmState(r.Context()),
+		"llm":                 s.clientLLMState(r),
 		"controller":          s.controllerState(r),
+		"capabilities":        s.capabilities(r),
 		"memory":              s.memoryState(r.Context()),
 		"modes":               s.modes.Status(),
-		"voice":               s.voiceState(),
+		"voice":               s.clientVoiceState(r),
 		"chat":                s.chatState(r.Context()),
 		"library":             s.libraryState(),
-		"media":               s.mediaState(r.Context()),
-		"motion":              s.motionState(),
+		"media":               s.clientMediaState(r),
+		"motion":              s.clientMotionState(r),
 		"motion_simulated":    s.motion.simulated,
 		"labs_enabled":        settings.Labs.Enabled,
 		"transport":           transportDiagnostics,
-		"cloud_transport":     s.cloudDiagnostics(),
-		"bluetooth_transport": s.bluetoothDiagnostics(),
-		"bluetooth_bridge":    s.bluetooth.bridge.Snapshot(),
-		"intiface_transport":  s.intifaceSnapshot(),
+		"cloud_transport":     s.clientTransportDiagnostics(r, s.cloudDiagnostics()),
+		"bluetooth_transport": s.clientTransportDiagnostics(r, s.bluetoothDiagnostics()),
+		"bluetooth_bridge":    s.clientBluetoothSnapshot(r),
+		"intiface_transport":  s.clientIntifaceSnapshot(r),
 		"trace":               s.traces.Summary(),
 	})
 }
 
-func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	settings, status := s.store.PublicSnapshot()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"settings": settings,
-		"status":   status,
+		"settings": s.clientSettings(r, settings),
+		"status":   s.clientLoadStatus(r, status),
 	})
 }
 
@@ -667,8 +704,8 @@ func (s *Server) handlePutConnectionKey(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, responseStatus, payload)
 }
 
-func (s *Server) handleTransportDiagnostics(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.transport.Diagnostics())
+func (s *Server) handleTransportDiagnostics(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.clientTransportDiagnostics(r, s.transport.Diagnostics()))
 }
 
 func (s *Server) handleTraceExport(w http.ResponseWriter, _ *http.Request) {
@@ -698,7 +735,7 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setStaticHeaders(w, name)
-	http.ServeContent(w, r, name, time.Time{}, bytes.NewReader(data))
+	serveBoundedContent(w, r, name, time.Time{}, bytes.NewReader(data))
 }
 
 func cleanAssetName(urlPath string) string {
@@ -731,6 +768,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	data = append(data, '\n')
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
 	_, _ = w.Write(data)
 }
@@ -779,6 +817,8 @@ type statusRecorder struct {
 	bytes  int
 }
 
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 func (r *statusRecorder) WriteHeader(status int) {
 	if r.status != 0 {
 		return
@@ -797,12 +837,14 @@ func (r *statusRecorder) Write(data []byte) (int, error) {
 }
 
 func (r *statusRecorder) Flush() {
+	_ = r.FlushError()
+}
+
+func (r *statusRecorder) FlushError() error {
 	if r.status == 0 {
 		r.status = http.StatusOK
 	}
-	if flusher, ok := r.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
-	}
+	return http.NewResponseController(r.ResponseWriter).Flush()
 }
 
 func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
@@ -825,7 +867,7 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 func protectBrowserRequests(allowedHosts []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isBrowserRequest(r) && (!isAllowedBrowserHost(r.Host, allowedHosts) || !isSameOriginBrowserRequest(r)) {
-			writeError(w, http.StatusForbidden, errors.New("browser requests must use an allowed MagicHandy origin"))
+			rejectRequest(w, r, http.StatusForbidden, errors.New("browser requests must use an allowed MagicHandy origin"))
 			return
 		}
 		next.ServeHTTP(w, r)

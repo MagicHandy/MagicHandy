@@ -10,6 +10,7 @@ interface Props {
   programs: LibraryProgram[];
   engine?: EngineSnapshot;
   locked: boolean;
+  hostLocked?: boolean;
   offline: boolean;
   busyKeys: LibraryBusyKeys;
   maxSpeed: number;
@@ -21,7 +22,7 @@ interface Props {
   onDelete: (id: string) => Promise<void>;
 }
 
-export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, maxSpeed, onPlay, onPause, onResume, onStop, onExport, onDelete }: Props) {
+export function ProgramLibrary({ programs, engine, locked, hostLocked = locked, offline, busyKeys, maxSpeed, onPlay, onPause, onResume, onStop, onExport, onDelete }: Props) {
   const speedCap = clampSpeedCap(maxSpeed);
   const [speed, setSpeed] = useState(Math.min(30, speedCap));
   const activeProgram = engine?.target?.program_id;
@@ -75,7 +76,7 @@ export function ProgramLibrary({ programs, engine, locked, offline, busyKeys, ma
             <div className="pattern-actions">
               <button type="button" className="btn btn-primary compact-command" disabled={locked || mutating || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(program.id, speed)}><PlayIcon />{t("Play")}</button>
               <button type="button" className="icon-button" title={t("Export program")} aria-label={t("Export {name}", { name: program.name })} disabled={offline || busyKeys.has(libraryActionKey.exportProgram(program.id))} onClick={() => void onExport(program.id)}><DownloadIcon /></button>
-              <button type="button" className="icon-button" title={t("Delete program")} aria-label={t("Delete {name}", { name: program.name })} disabled={locked || mutating} onClick={() => void onDelete(program.id)}><TrashIcon /></button>
+              <button type="button" className="icon-button" title={t("Delete program")} aria-label={t("Delete {name}", { name: program.name })} disabled={hostLocked || mutating} onClick={() => void onDelete(program.id)}><TrashIcon /></button>
             </div>
           </article>;
         })}

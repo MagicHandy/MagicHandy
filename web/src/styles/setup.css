@@ -251,7 +251,6 @@
   display: grid;
   gap: 3px;
   padding: 11px 13px;
-  border-left: 3px solid var(--accent);
   background: var(--surface-2);
   font-size: 0.84rem;
 }

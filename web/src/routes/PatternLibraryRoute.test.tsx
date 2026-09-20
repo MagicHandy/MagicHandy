@@ -5,6 +5,7 @@ import type { LibraryPattern, PatternFeedback, PatternLibrary } from "../api/typ
 import { PatternLibraryRoute } from "./PatternLibraryRoute";
 
 const app = vi.hoisted(() => ({
+  hostAdministration: true,
   refresh: vi.fn(),
   show: vi.fn(),
 }));
@@ -37,7 +38,7 @@ vi.mock("../state/app-state", () => ({
     backendOnline: true,
     readOnly: false,
     motion: null,
-    state: { settings: { motion: { speed_max_percent: 40 } } },
+    state: { capabilities: { configure_host: app.hostAdministration }, settings: { motion: { speed_max_percent: 40 } } },
     refresh: app.refresh,
   }),
   useToast: () => ({ show: app.show }),
@@ -83,8 +84,27 @@ const importMotionContent = vi.mocked(api.importMotionContent);
 
 describe("PatternLibraryRoute", () => {
   beforeEach(() => {
+    app.hostAdministration = true;
     vi.resetAllMocks();
     getLibrary.mockResolvedValue({ library });
+  });
+
+  it("keeps operator audition and feedback available while locking library administration", async () => {
+    app.hostAdministration = false;
+    patternFeedback.mockResolvedValue(feedbackResult(stroke, 1));
+    render(<PatternLibraryRoute />);
+    expect(await screen.findByRole("button", { name: "Audition Stroke" })).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: "Enable Stroke" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Rename Pulse" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Delete Pulse" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Rate Stroke up" }));
+    await waitFor(() => expect(patternFeedback).toHaveBeenCalledWith("stroke", 1));
+    fireEvent.click(screen.getByRole("tab", { name: "Programs" }));
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Delete Demo program" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("tab", { name: "Training" }));
+    expect(screen.getByRole("checkbox", { name: "Auto-disable at low weight" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "More like this" })).toBeEnabled();
   });
 
   it("shows a recoverable storage error instead of a false empty catalog", async () => {

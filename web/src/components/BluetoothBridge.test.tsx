@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import { encodeHandyRequest } from "../bluetooth/handy-ble-codec";
@@ -58,7 +58,7 @@ const connectedSnapshot = {
 };
 
 function statusResponse(bluetooth: typeof connectedSnapshot | Record<string, unknown>) {
-  return { status: "ok", dispatch_owner: "browser_bluetooth", bluetooth };
+  return { status: "ok", dispatch_owner: "browser_bluetooth", bluetooth, gateway: { required: false, owned: false } };
 }
 
 class FakeCharacteristic extends EventTarget {
@@ -143,7 +143,10 @@ describe("BluetoothBridge", () => {
     }));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    cleanup();
+    await act(async () => {});
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -153,16 +156,101 @@ describe("BluetoothBridge", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Disconnect" })).toBeEnabled());
   }
 
-  it("writes Emergency Stop directly to the device when the backend goes offline", async () => {
+  it("keeps a healthy gateway independent of state polling and writes Emergency Stop directly", async () => {
     const result = render(<BluetoothBridge visible locked={false} backendOnline />);
     await connect();
     result.rerender(<BluetoothBridge visible locked={false} backendOnline={false} />);
-    await waitFor(() => expect(commandSignal?.aborted).toBe(true));
+    expect(commandSignal?.aborted).toBe(false);
 
     await act(async () => window.dispatchEvent(new Event("magichandy:emergency-stop")));
 
     await waitFor(() => expect(device.tx.writes.some((request) => request.path === "hsp/stop")).toBe(true));
     expect(show).not.toHaveBeenCalledWith(expect.stringMatching(/stop failed/i), "error");
+    expect(device.gatt.disconnect).not.toHaveBeenCalled();
+  });
+
+  it("does not let an observer report another browser's device as disconnected", async () => {
+    vi.useFakeTimers();
+    bluetoothStatus.mockResolvedValue(statusResponse(connectedSnapshot));
+    render(<BluetoothBridge visible locked backendOnline initial={connectedSnapshot} />);
+    await act(async () => vi.advanceTimersByTimeAsync(15000));
+    expect(postBluetoothStatus).not.toHaveBeenCalled();
+    expect(bluetoothCommands).not.toHaveBeenCalled();
+    expect(screen.getByText("Another browser")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Disconnect" })).toBeDisabled();
+  });
+
+  it("requires host permission before opening the Bluetooth device chooser", async () => {
+    render(<BluetoothBridge visible locked={false} backendOnline canConfigureHost={false} />);
+    await act(async () => {});
+    expect(screen.getByRole("button", { name: "Connect Bluetooth" })).toBeDisabled();
+  });
+
+  it("carries the authenticated gateway binding through polling and acknowledgements", async () => {
+    const binding = { required: true, owned: true, epoch: "gateway-boot", generation: 7 };
+    bluetoothConnect.mockResolvedValue({ ...statusResponse(connectedSnapshot), gateway: binding });
+    bluetoothCommands.mockResolvedValueOnce({ status: "ok", bluetooth: connectedSnapshot, commands: [{ id: "read-1", path: "slider/stroke", body: {} }] });
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    await connect();
+    await waitFor(() => expect(bluetoothAck).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ id: "read-1", ok: true }), binding));
+    expect(bluetoothCommands).toHaveBeenCalledWith(expect.any(String), 4, expect.any(AbortSignal), binding);
+    expect(screen.getByText("This browser")).toBeVisible();
+  });
+
+  it("disconnects when the core omits the gateway authorization response", async () => {
+    bluetoothConnect.mockResolvedValue({ ...statusResponse(connectedSnapshot), gateway: undefined });
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    fireEvent.click(screen.getByRole("button", { name: "Connect Bluetooth" }));
+    await waitFor(() => expect(device.gatt.disconnect).toHaveBeenCalledOnce());
+    expect(bluetoothCommands).not.toHaveBeenCalled();
+    expect(show).toHaveBeenCalledWith(expect.stringMatching(/did not authorize/), "error");
+  });
+
+  it("stops locally and never replays a batch or reconnects after a gateway request fails", async () => {
+    vi.useFakeTimers();
+    bluetoothCommands.mockRejectedValueOnce(new Error("gateway access ended"));
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect Bluetooth" }));
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    await act(async () => vi.advanceTimersByTimeAsync(30000));
+    expect(device.gatt.disconnect).toHaveBeenCalledOnce();
+    expect(device.tx.writes.some((request) => request.path === "hsp/stop")).toBe(true);
+    expect(bluetoothCommands).toHaveBeenCalledOnce();
+    expect(bluetoothConnect).toHaveBeenCalledOnce();
+  });
+
+  it("stops and releases a backgrounded device browser without reconnecting on return", async () => {
+    vi.useFakeTimers();
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Connect Bluetooth" }));
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    visibility.mockReturnValue("hidden");
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); await vi.advanceTimersByTimeAsync(30000); });
+    visibility.mockReturnValue("visible");
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); await vi.advanceTimersByTimeAsync(20000); });
+    expect(device.gatt.disconnect).toHaveBeenCalledOnce();
+    expect(device.tx.writes.some((request) => request.path === "hsp/stop")).toBe(true);
+    expect(bluetoothConnect).toHaveBeenCalledOnce();
+    expect(bluetoothCommands).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a queued native write when Stop arrives before the writer resumes", async () => {
+    let deliver!: (value: Awaited<ReturnType<typeof api.bluetoothCommands>>) => void;
+    bluetoothCommands.mockReturnValueOnce(new Promise((resolve) => { deliver = resolve; }));
+    render(<BluetoothBridge visible locked={false} backendOnline />);
+    await connect();
+    await act(async () => {
+      deliver({ status: "ok", bluetooth: connectedSnapshot, commands: [{ id: "queued", path: "slider/stroke", body: {} }] });
+      await Promise.resolve();
+      window.dispatchEvent(new Event("magichandy:emergency-stop"));
+    });
+    await waitFor(() => expect(device.tx.writes.some((request) => request.path === "hsp/stop")).toBe(true));
+    expect(device.tx.writes.some((request) => request.path === "slider/stroke")).toBe(false);
   });
 
   it("aborts command polling, removes listeners, and disconnects on unmount", async () => {

@@ -3,14 +3,18 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
-	"sync"
 	"time"
+
+	"github.com/mapledaemon/MagicHandy/internal/audit"
 )
 
 const (
-	controllerHeaderName = "X-MagicHandy-Client-ID"
-	controllerLeaseTTL   = 15 * time.Second
+	controllerHeaderName       = "X-MagicHandy-Client-ID"
+	controllerGenerationHeader = "X-MagicHandy-Control-Generation"
+	controllerEpochHeader      = "X-MagicHandy-Control-Epoch"
+	controllerLeaseTTL         = 15 * time.Second
 )
 
 var (
@@ -18,17 +22,14 @@ var (
 	errControllerTakeoverNotPending = errors.New("controller takeover is no longer pending")
 )
 
-type controllerRuntime struct {
-	mu               sync.Mutex
-	clock            func() time.Time
-	leaseTTL         time.Duration
-	activeClientID   string
-	activeSince      time.Time
-	lastSeenAt       time.Time
-	takeoverClientID string
-}
-
 type controllerSnapshot struct {
+	Revision              uint64 `json:"revision"`
+	CommandTicket         string `json:"command_ticket,omitempty"`
+	CommandTicketMillis   int64  `json:"command_ticket_ms,omitempty"`
+	CommandSequence       uint64 `json:"command_sequence"`
+	Epoch                 string `json:"epoch"`
+	Generation            uint64 `json:"generation"`
+	HeartbeatRequired     bool   `json:"heartbeat_required"`
 	ClientID              string `json:"client_id,omitempty"`
 	Active                bool   `json:"active"`
 	ReadOnly              bool   `json:"read_only"`
@@ -47,11 +48,11 @@ type controllerTakeoverResponse struct {
 	Warning       string             `json:"warning,omitempty"`
 }
 
-func newControllerRuntime() controllerRuntime {
-	return controllerRuntime{
-		clock:    func() time.Time { return time.Now().UTC() },
-		leaseTTL: controllerLeaseTTL,
-	}
+func (s *Server) controllerRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/controller", s.handleControllerState)
+	mux.HandleFunc("POST /api/controller/heartbeat", s.handleControllerHeartbeat)
+	mux.HandleFunc("POST /api/controller/takeover", s.handleControllerTakeover)
+	mux.HandleFunc("GET /api/controller/commands/{id}", s.handleCommandReceipt)
 }
 
 func (s *Server) handleControllerState(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +60,10 @@ func (s *Server) handleControllerState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request) {
+	if !s.currentControllerEpoch(r) {
+		writeError(w, http.StatusConflict, errors.New("server restarted; refresh before taking control"))
+		return
+	}
 	if s.quiescing.Load() {
 		writeError(w, http.StatusServiceUnavailable, errServerQuiescing)
 		return
@@ -69,7 +74,8 @@ func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	controller, started, err := s.controller.BeginTakeover(clientID)
+	actor := controllerActor(r, clientID)
+	controller, started, err := s.controller.BeginTakeover(actor)
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error":      err.Error(),
@@ -79,7 +85,7 @@ func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request
 	}
 	if !started {
 		writeJSON(w, http.StatusOK, controllerTakeoverResponse{
-			Controller:    controller,
+			Controller:    s.commandSnapshot(r, controller),
 			Changed:       false,
 			StopConfirmed: true,
 			StopSequence:  s.stopSequence.Load(),
@@ -90,20 +96,25 @@ func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request
 	completed := false
 	defer func() {
 		if !completed {
-			s.controller.CancelTakeover(clientID)
+			s.controller.CancelTakeover(actor)
 		}
 	}()
 
 	_, stopErr := s.emergencyStop(r.Context(), "controller_takeover")
-	controller, err = s.controller.CompleteTakeover(clientID)
+	if r.Context().Err() != nil {
+		writeError(w, http.StatusConflict, errors.New("controller takeover was canceled"))
+		return
+	}
+	controller, err = s.controller.CompleteTakeover(actor)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
 	completed = true
+	s.recordAccessEvent(r.Context(), audit.Event{Kind: audit.ControlTransferred, Outcome: "success", Generation: controller.Generation, GrantID: actor.grantID, Operation: "takeover"})
 
 	response := controllerTakeoverResponse{
-		Controller:    controller,
+		Controller:    s.commandSnapshot(r, controller),
 		Changed:       true,
 		StopConfirmed: stopErr == nil,
 		StopSequence:  s.stopSequence.Load(),
@@ -111,6 +122,9 @@ func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request
 	if stopErr != nil {
 		response.Warning = "Control transferred after local Stop, but physical Stop could not be confirmed: " +
 			s.safeMotionErrorMessage(stopErr)
+		if !s.capabilities(r).ConfigureHost {
+			response.Warning = "Stop is unconfirmed. Check the device locally."
+		}
 	}
 	s.logger.Info("controller ownership transferred",
 		"stop_confirmed", response.StopConfirmed,
@@ -119,27 +133,119 @@ func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) controllerState(r *http.Request) controllerSnapshot {
-	return s.controller.Touch(clientIDFromRequest(r))
+	snapshot := s.controller.Observe(controllerActor(r, clientIDFromRequest(r)))
+	if !s.capabilities(r).Control {
+		snapshot.Active, snapshot.ReadOnly = false, true
+		snapshot.Reason = "this account is an observer; ask the administrator for a control permission"
+	}
+	return s.commandSnapshot(r, snapshot)
+}
+
+func (s *Server) commandSnapshot(r *http.Request, snapshot controllerSnapshot) controllerSnapshot {
+	if snapshot.Active && snapshot.HeartbeatRequired {
+		snapshot.CommandSequence = s.commands.lastSequence(commandScope{actor: controllerActor(r, clientIDFromRequest(r)), generation: snapshot.Generation})
+	}
+	return snapshot
 }
 
 func (s *Server) requireController(w http.ResponseWriter, r *http.Request) bool {
-	return s.requireControllerID(w, strings.TrimSpace(r.Header.Get(controllerHeaderName)))
-}
-
-func (s *Server) requireControllerID(w http.ResponseWriter, clientID string) bool {
+	if !s.capabilities(r).Control {
+		writeError(w, http.StatusForbidden, errors.New("this account does not have permission to control motion"))
+		return false
+	}
 	if s.quiescing.Load() {
 		writeError(w, http.StatusServiceUnavailable, errServerQuiescing)
 		return false
 	}
-	snapshot := s.controller.Touch(clientID)
-	if snapshot.Active {
-		return true
+	snapshot, _ := s.controller.Authority(controllerActor(r, cleanControllerClientID(r.Header.Get(controllerHeaderName))))
+	generationOK := true
+	if snapshot.HeartbeatRequired {
+		generation, err := strconv.ParseUint(r.Header.Get(controllerGenerationHeader), 10, 64)
+		generationOK = err == nil && generation == snapshot.Generation && s.currentControllerEpoch(r)
+	}
+	if snapshot.Active && generationOK && r.Context().Err() == nil {
+		if binding, ok := r.Context().Value(controllerRequestBindingKey{}).(*controllerRequestBinding); ok &&
+			!binding.bind(&s.controller, controllerActor(r, clientIDFromRequest(r))) {
+			writeError(w, http.StatusConflict, errors.New("controller changed before command admission"))
+			return false
+		}
+		return s.admitControlCommand(w, r, snapshot)
+	}
+	message := "this client is read-only; the active controller owns device commands"
+	if snapshot.Active && !generationOK {
+		message = "controller state changed; refresh before sending another command"
 	}
 	writeJSON(w, http.StatusConflict, map[string]any{
-		"error":      "this client is read-only; the active controller owns device commands",
+		"error":      message,
 		"controller": snapshot,
 	})
 	return false
+}
+
+func controllerActor(r *http.Request, clientID string) controllerIdentity {
+	actor := controllerIdentity{clientID: clientID}
+	if session, ok := authenticatedSession(r); ok {
+		actor.sessionKey = session.session.Key
+		if grant := session.session.ControlGrant; grant != nil {
+			actor.grantID = grant.ID
+			if grant.ExpiresAt != nil {
+				actor.grantExpires = *grant.ExpiresAt
+			}
+		}
+	}
+	return actor
+}
+
+func (s *Server) currentControllerEpoch(r *http.Request) bool {
+	_, authenticated := authenticatedSession(r)
+	return !authenticated || r.Header.Get(controllerEpochHeader) == s.controller.epoch
+}
+
+func (s *Server) handleControllerHeartbeat(w http.ResponseWriter, r *http.Request) {
+	if s.quiescing.Load() {
+		writeError(w, http.StatusServiceUnavailable, errServerQuiescing)
+		return
+	}
+	if !s.capabilities(r).Control {
+		writeJSON(w, http.StatusOK, s.controllerState(r))
+		return
+	}
+	actor := controllerActor(r, cleanControllerClientID(r.Header.Get(controllerHeaderName)))
+	if actor.clientID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("controller heartbeat requires a client id header"))
+		return
+	}
+	generation, err := strconv.ParseUint(r.Header.Get(controllerGenerationHeader), 10, 64)
+	if actor.sessionKey != "" && (err != nil || !s.currentControllerEpoch(r)) {
+		writeJSON(w, http.StatusOK, s.controllerState(r))
+		return
+	}
+	snapshot, claimed := s.controller.heartbeatTransition(actor, generation)
+	if claimed {
+		s.recordAccessEvent(r.Context(), audit.Event{Kind: audit.ControlClaimed, Outcome: "success", Generation: snapshot.Generation, GrantID: actor.grantID})
+	}
+	writeJSON(w, http.StatusOK, s.commandSnapshot(r, snapshot))
+}
+
+func (s *Server) bootstrapController(r *http.Request, sessionKey string) {
+	actor := controllerIdentity{clientID: cleanControllerClientID(r.Header.Get(controllerHeaderName)), sessionKey: sessionKey}
+	if actor.clientID == "" {
+		if s.controller.BeginLocalLoss() {
+			s.stopLostController("account_protection_enabled")
+		}
+		return
+	}
+	_, started, err := s.controller.BeginTakeover(actor)
+	if err != nil || !started {
+		return
+	}
+	defer s.controller.CancelTakeover(actor)
+	_, _ = s.emergencyStop(r.Context(), "account_protection_enabled")
+	if r.Context().Err() == nil {
+		if snapshot, err := s.controller.CompleteTakeover(actor); err == nil {
+			s.recordAccessEvent(r.Context(), audit.Event{Kind: audit.ControlTransferred, Outcome: "success", Generation: snapshot.Generation, Operation: "takeover"})
+		}
+	}
 }
 
 func clientIDFromRequest(r *http.Request) string {
@@ -170,150 +276,4 @@ func cleanControllerClientID(clientID string) string {
 		}
 	}, clientID)
 	return clientID
-}
-
-func (c *controllerRuntime) Touch(clientID string) controllerSnapshot {
-	clientID = cleanControllerClientID(clientID)
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	now := c.nowLocked()
-	c.expireLocked(now)
-	if clientID == "" {
-		return c.snapshotLocked(clientID, "missing controller client id", now)
-	}
-	if c.takeoverClientID != "" {
-		return c.snapshotLocked(clientID, "controller handoff is stopping active work", now)
-	}
-	if c.activeClientID == "" {
-		c.activeClientID = clientID
-		c.activeSince = now
-		c.lastSeenAt = now
-		return c.snapshotLocked(clientID, "", now)
-	}
-	if c.activeClientID == clientID {
-		c.lastSeenAt = now
-		return c.snapshotLocked(clientID, "", now)
-	}
-	return c.snapshotLocked(clientID, "another browser tab is the active controller", now)
-}
-
-func (c *controllerRuntime) BeginTakeover(clientID string) (controllerSnapshot, bool, error) {
-	clientID = cleanControllerClientID(clientID)
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	now := c.nowLocked()
-	c.expireLocked(now)
-	if clientID == "" {
-		return c.snapshotLocked(clientID, "missing controller client id", now), false, errors.New("controller takeover requires a client id")
-	}
-	if c.takeoverClientID != "" {
-		return c.snapshotLocked(clientID, "controller handoff is stopping active work", now), false, errControllerTakeoverInProgress
-	}
-	if c.activeClientID == clientID {
-		c.lastSeenAt = now
-		return c.snapshotLocked(clientID, "", now), false, nil
-	}
-
-	c.takeoverClientID = clientID
-	return c.snapshotLocked(clientID, "controller handoff is stopping active work", now), true, nil
-}
-
-func (c *controllerRuntime) CompleteTakeover(clientID string) (controllerSnapshot, error) {
-	clientID = cleanControllerClientID(clientID)
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	now := c.nowLocked()
-	if clientID == "" || c.takeoverClientID != clientID {
-		return c.snapshotLocked(clientID, "controller takeover is no longer pending", now), errControllerTakeoverNotPending
-	}
-	c.activeClientID = clientID
-	c.activeSince = now
-	c.lastSeenAt = now
-	c.takeoverClientID = ""
-	return c.snapshotLocked(clientID, "", now), nil
-}
-
-func (c *controllerRuntime) CancelTakeover(clientID string) {
-	clientID = cleanControllerClientID(clientID)
-	if clientID == "" {
-		return
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.takeoverClientID == clientID {
-		c.takeoverClientID = ""
-	}
-}
-
-func (c *controllerRuntime) Release(clientID string) {
-	clientID = cleanControllerClientID(clientID)
-	if clientID == "" {
-		return
-	}
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.activeClientID == clientID {
-		c.activeClientID = ""
-		c.activeSince = time.Time{}
-		c.lastSeenAt = time.Time{}
-	}
-}
-
-func (c *controllerRuntime) snapshotLocked(clientID string, reason string, now time.Time) controllerSnapshot {
-	active := clientID != "" && c.activeClientID == clientID && c.takeoverClientID == ""
-	readOnly := !active
-	if c.takeoverClientID != "" {
-		reason = "controller handoff is stopping active work"
-	}
-	if reason == "" && readOnly {
-		reason = "another browser tab is the active controller"
-	}
-	age := int64(0)
-	expires := int64(0)
-	if !c.activeSince.IsZero() {
-		age = now.Sub(c.activeSince).Milliseconds()
-	}
-	if !c.lastSeenAt.IsZero() {
-		expires = c.leaseTTL.Milliseconds() - now.Sub(c.lastSeenAt).Milliseconds()
-		if expires < 0 {
-			expires = 0
-		}
-	}
-	return controllerSnapshot{
-		ClientID:              clientID,
-		Active:                active,
-		ReadOnly:              readOnly,
-		Reason:                reason,
-		ActiveClientID:        c.activeClientID,
-		ActiveClientAgeMillis: age,
-		LeaseExpiresInMillis:  expires,
-		TakeoverInProgress:    c.takeoverClientID != "",
-	}
-}
-
-func (c *controllerRuntime) expireLocked(now time.Time) {
-	if c.activeClientID == "" || c.lastSeenAt.IsZero() {
-		return
-	}
-	if now.Sub(c.lastSeenAt) <= c.leaseTTL {
-		return
-	}
-	c.activeClientID = ""
-	c.activeSince = time.Time{}
-	c.lastSeenAt = time.Time{}
-}
-
-func (c *controllerRuntime) nowLocked() time.Time {
-	if c.clock != nil {
-		return c.clock()
-	}
-	return time.Now().UTC()
 }

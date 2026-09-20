@@ -1,4 +1,5 @@
 import { t, translateKnown } from "../i18n";
+import { DismissibleNotice } from "./DismissibleNotice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type {
@@ -317,12 +318,12 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
   const statusMessage = dirty ? "Save settings to check this configuration." : status?.message || "Checking runtime";
   return (
     <>
-      <h2 className="section-title">{t("Model")}</h2>
+      <h3 className="section-title">{t("Model")}</h3>
       {managerMessage && <p className="form-status form-status-error" role="alert">{t("Model list unavailable: {message}", { message: managerMessage })}</p>}
 
       <div className="group">
         <div className="model-section-head model-runtime-section-head">
-          <h3 className="group-title">{t("Local LLM")}</h3>
+          <h4 className="group-title">{t("Local LLM")}</h4>
           <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite" aria-busy={status?.loading || undefined}>
             <span className="status-dot" aria-hidden="true" />
             <span>{statusMessage}</span>
@@ -416,7 +417,8 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
           </label>
           <label className="field model-timeout"><span className="label">{t("Timeout ms")}</span><input type="number" min={1000} max={300000} value={settings.request_timeout_ms} disabled={locked} onChange={(event) => patch({ request_timeout_ms: Number(event.target.value) })} /></label>
         </div>
-        <div className="generation-notes" role="note">
+        <DismissibleNotice id="model-generation" className="generation-notes">
+          <strong>{t("Generation guidance")}</strong>
           {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
             <>
               <p>{managedLoadPolicy === "startup" ? t("Startup loading keeps the model ready for the first chat and Autopilot decision, but reserves RAM and VRAM while idle.") : t("On-demand loading saves idle RAM and VRAM, but the first request must wait for the model to load.")}</p>
@@ -427,7 +429,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
           <p>{settings.reasoning_mode === "off"
             ? t("Requesting disabled reasoning is recommended for compact structured replies from small {provider} models. Unsupported models may ignore or reject it.", { provider: providerLabel(settings.provider) })
             : t("Automatic reasoning may improve difficult intent interpretation, but can add hidden tokens and latency before the visible reply.")}</p>
-        </div>
+        </DismissibleNotice>
 
         {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
           <div className="row-actions model-runtime-actions">
@@ -440,7 +442,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
       </div>
 
       <div className="group">
-        <h3 id="model-permissions-title" className="group-title">{t("Motion generation")}</h3>
+        <h4 id="model-permissions-title" className="group-title">{t("Motion generation")}</h4>
         <div className="capability-gates" role="group" aria-labelledby="model-permissions-title">
           <label className="field capability-mode">
             <span className="label">{t("LLM motion")}</span>
@@ -484,7 +486,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
       <div className="group">
         <div className="model-section-head">
           <div>
-            <h3 className="group-title">{t("Managed models")}</h3>
+            <h4 className="group-title">{t("Managed models")}</h4>
             <p className="model-store-path">{manager?.store_path || (managerMessage ? t("Model store unavailable") : t("Loading model store"))}</p>
           </div>
           <div className="row-actions model-import-actions">

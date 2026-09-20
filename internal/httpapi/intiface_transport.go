@@ -41,8 +41,8 @@ func newIntifaceRuntime(runtime Runtime) intifaceRuntime {
 	}
 }
 
-func (s *Server) handleIntifaceStatus(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.intifaceSnapshot())
+func (s *Server) handleIntifaceStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, s.clientIntifaceSnapshot(r))
 }
 
 func (s *Server) handleIntifaceDiagnostics(w http.ResponseWriter, _ *http.Request) {
@@ -108,7 +108,7 @@ func (s *Server) handleIntifaceDisconnect(w http.ResponseWriter, r *http.Request
 	}
 	s.intiface.opMu.Lock()
 	defer s.intiface.opMu.Unlock()
-	finishStop := s.beginGlobalStop("intiface_disconnected")
+	finishStop, _ := s.beginGlobalStop("intiface_disconnected", r.Context())
 	defer finishStop()
 
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
@@ -158,7 +158,7 @@ func (s *Server) handleIntifaceSelect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	finishStop := s.beginGlobalStop("intiface_selection_changed")
+	finishStop, _ := s.beginGlobalStop("intiface_selection_changed", r.Context())
 	defer finishStop()
 
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)

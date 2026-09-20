@@ -30,7 +30,7 @@ type Sessions interface {
 	ActivateSession(string, bool) (chat.Session, error)
 	SaveSession(string) (chat.Session, error)
 	DeleteSession(string) error
-	LatestSeqSessionContext(context.Context, string) (int64, error)
+	ConversationHeadContext(context.Context, string) (int64, int64, error)
 	ReadPromptContext(context.Context, string) (chat.SessionPromptContext, error)
 	AppendTo(string, string, string, string, *chat.MessageDiagnostics) (int64, error)
 	ReconcileShutdown(bool) error

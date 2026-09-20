@@ -775,8 +775,8 @@ func (s *Server) handleVoiceStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"voice":    s.voiceState(),
-		"requests": s.voice.Requests(),
+		"voice":    s.clientVoiceState(r),
+		"requests": s.clientVoiceRequests(r),
 	})
 }
 
@@ -1057,7 +1057,7 @@ func (s *Server) handleVoiceWorkerTest(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]any{"request": pending.Snapshot()})
+	writeJSON(w, http.StatusAccepted, map[string]any{"request": s.clientVoiceRequest(r, pending.Snapshot())})
 }
 
 func silentTestWAVBase64() string {
@@ -1090,7 +1090,7 @@ func (s *Server) handleVoiceRequestGet(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, errors.New("unknown voice request"))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"request": pending.Snapshot()})
+	writeJSON(w, http.StatusOK, map[string]any{"request": s.clientVoiceRequest(r, pending.Snapshot())})
 }
 
 // handleVoiceRequestAudio serves retained speak audio. The single-owner
@@ -1120,7 +1120,7 @@ func (s *Server) handleVoiceRequestAudio(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 	// #nosec G705 -- binary audio from the local worker process, served with
 	// an explicit audio/* content type and nosniff; never rendered as HTML.
-	_, _ = w.Write(audio)
+	writeBoundedAttachment(w, r, audio)
 }
 
 func audioContentType(format string) string {
@@ -1150,7 +1150,7 @@ func (s *Server) handleVoiceRequestCancel(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.voice.Worker(pending.Role).Cancel(pending)
-	writeJSON(w, http.StatusOK, map[string]any{"request": pending.Snapshot()})
+	writeJSON(w, http.StatusOK, map[string]any{"request": s.clientVoiceRequest(r, pending.Snapshot())})
 }
 
 // handleVoiceRequestPlayed acknowledges completed browser playback. Inference
@@ -1281,7 +1281,7 @@ func (s *Server) handleVoiceTranscription(w http.ResponseWriter, r *http.Request
 	}
 	pending, err := s.voice.SubmitTranscription(audio, format, s.voiceDataDir)
 	if err != nil {
-		writeError(w, http.StatusConflict, err)
+		writeJSON(w, http.StatusConflict, map[string]string{"error": s.clientRuntimeError(r, err)})
 		return
 	}
 	if s.stopSequence.Load() != stopSequence {
@@ -1289,7 +1289,7 @@ func (s *Server) handleVoiceTranscription(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusConflict, errors.New("recorded audio was invalidated by Emergency Stop"))
 		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]any{"request": pending.Snapshot()})
+	writeJSON(w, http.StatusAccepted, map[string]any{"request": s.clientVoiceRequest(r, pending.Snapshot())})
 }
 
 func hasCanonicalASRWAV(audio []byte) bool {
@@ -1336,7 +1336,7 @@ func (s *Server) handleVoicePreferences(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	_, _, err := s.store.Update(func(settings config.Settings) (config.Settings, error) {
+	_, _, err := s.store.UpdateContext(r.Context(), func(settings config.Settings) (config.Settings, error) {
 		settings.Voice.SpeakReplies = body.SpeakReplies
 		return settings, nil
 	})
@@ -1398,7 +1398,7 @@ func (s *Server) handleVoiceInputPreferences(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	_, saved, err := s.store.Update(func(settings config.Settings) (config.Settings, error) {
+	_, saved, err := s.store.UpdateContext(r.Context(), func(settings config.Settings) (config.Settings, error) {
 		body.apply(&settings)
 		return settings, nil
 	})

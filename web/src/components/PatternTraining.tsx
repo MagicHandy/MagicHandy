@@ -10,6 +10,7 @@ interface Props {
   feedback: PatternFeedback[];
   autoDisable: boolean;
   locked: boolean;
+  hostLocked?: boolean;
   busyKeys: LibraryBusyKeys;
   maxSpeed: number;
   onPlay: (id: string, speedPercent: number, feel: string) => Promise<void>;
@@ -18,7 +19,7 @@ interface Props {
   onAutoDisable: (enabled: boolean) => Promise<void>;
 }
 
-export function PatternTraining({ patterns, feedback, autoDisable, locked, busyKeys, maxSpeed, onPlay, onFeedback, onUndo, onAutoDisable }: Props) {
+export function PatternTraining({ patterns, feedback, autoDisable, locked, hostLocked = locked, busyKeys, maxSpeed, onPlay, onFeedback, onUndo, onAutoDisable }: Props) {
   const enabled = useMemo(() => patterns.filter((pattern) => pattern.enabled), [patterns]);
   const patternNames = useMemo(() => new Map(patterns.map((pattern) => [pattern.id, pattern.name])), [patterns]);
   const speedCap = Math.max(1, Math.min(100, Number.isFinite(maxSpeed) ? Math.round(maxSpeed) : 100));
@@ -57,7 +58,7 @@ export function PatternTraining({ patterns, feedback, autoDisable, locked, busyK
       </div>
       <aside className="training-preferences">
         <h2 className="section-title">{t("Preference controls")}</h2>
-        <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={autoDisable} disabled={locked || busyKeys.has(libraryActionKey.autoDisable)} onChange={(event) => void onAutoDisable(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>{t("Auto-disable at low weight")}</span></label>
+        <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={autoDisable} disabled={hostLocked || busyKeys.has(libraryActionKey.autoDisable)} onChange={(event) => void onAutoDisable(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>{t("Auto-disable at low weight")}</span></label>
         <div className="feedback-ledger">
           <h3>{t("Recent ratings")}</h3>
           {feedback.slice(0, 8).map((item) => {

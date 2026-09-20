@@ -20,13 +20,18 @@ func TestRequestReadsCancelWhileDatabasePoolIsBusy(t *testing.T) {
 	}
 	defer func() { _ = connection.Close() }()
 	for name, read := range map[string]func(context.Context) error{
-		"active":   func(ctx context.Context) error { _, err := log.ActiveSessionIDContext(ctx); return err },
-		"sessions": func(ctx context.Context) error { _, err := log.SessionsContext(ctx); return err },
-		"session":  func(ctx context.Context) error { _, err := log.SessionContext(ctx, "session"); return err },
-		"messages": func(ctx context.Context) error { _, err := log.AfterSessionContext(ctx, "session", 0, 20); return err },
-		"recent":   func(ctx context.Context) error { _, err := log.RecentSessionContext(ctx, "session", 20); return err },
-		"prompt":   func(ctx context.Context) error { _, err := log.ReadPromptContext(ctx, "session"); return err },
-		"head":     func(ctx context.Context) error { _, err := log.LatestSeqSessionContext(ctx, "session"); return err },
+		"active":        func(ctx context.Context) error { _, err := log.ActiveSessionIDContext(ctx); return err },
+		"sessions":      func(ctx context.Context) error { _, err := log.SessionsContext(ctx); return err },
+		"session":       func(ctx context.Context) error { _, err := log.SessionContext(ctx, "session"); return err },
+		"messages":      func(ctx context.Context) error { _, err := log.AfterSessionContext(ctx, "session", 0, 20); return err },
+		"recent":        func(ctx context.Context) error { _, err := log.RecentSessionContext(ctx, "session", 20); return err },
+		"prompt":        func(ctx context.Context) error { _, err := log.ReadPromptContext(ctx, "session"); return err },
+		"head":          func(ctx context.Context) error { _, err := log.LatestSeqSessionContext(ctx, "session"); return err },
+		"recovery head": func(ctx context.Context) error { _, _, err := log.ConversationHeadContext(ctx, "session"); return err },
+		"recovery page": func(ctx context.Context) error {
+			_, err := log.ReadMessagePageContext(ctx, MessagePageRequest{SessionID: "session"})
+			return err
+		},
 		"cursor": func(ctx context.Context) error {
 			_, err := log.CursorSessionContext(ctx, "client", "session")
 			return err

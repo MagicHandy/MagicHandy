@@ -11,9 +11,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api, clientId } from "../api/client";
+import { api, clientId, COMMAND_RECOVERED_EVENT } from "../api/client";
 import type { AppState, MotionInfo, NotificationCategory } from "../api/types";
 import { notificationCategories } from "../notification-preferences";
+import { useControllerConnection } from "./controller-connection";
+import { controllerIsNewer, validObservation } from "./observation-order";
 
 interface AppStateValue {
   state: AppState | null;
@@ -36,30 +38,48 @@ export function AppStateProvider({ children, enabled = true }: { children: React
   const [stale, setStale] = useState(false);
   const [liveMotion, setLiveMotion] = useState<MotionInfo | null>(null);
   const [startupError, setStartupError] = useState("");
+  const [streamGeneration, setStreamGeneration] = useState(0);
   const inFlight = useRef<Promise<void> | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const pollingEnabled = useRef(false);
   const lifecycle = useRef(0);
   const motionRevision = useRef(0);
+  const stateObservation = useRef<AppState | null>(null);
+  const liveObservation = useRef<MotionInfo | null>(null);
+  const freshnessBarrier = useRef(0);
+  const connection = useControllerConnection(enabled);
 
   const performRefresh = useCallback((): Promise<void> => {
-    if (!enabled || !pollingEnabled.current) return Promise.resolve();
+    if (!enabled || !pollingEnabled.current || document.visibilityState === "hidden") return Promise.resolve();
     if (inFlight.current) return inFlight.current;
     const controller = new AbortController();
     activeRequest.current = controller;
     const revisionAtStart = motionRevision.current;
+    const admittedFreshness = freshnessBarrier.current;
     const timeout = window.setTimeout(() => controller.abort(), STATE_TIMEOUT_MS);
     const task = (async () => {
       try {
         const next = await api.getState(controller.signal);
         if (controller.signal.aborted || activeRequest.current !== controller) return;
+        const previous = stateObservation.current;
+        if (validObservation(next.observation) && validObservation(previous?.observation) &&
+          next.observation.epoch === previous.observation.epoch && next.observation.revision <= previous.observation.revision) return;
+        const live = liveObservation.current;
+        const epochChanged = next.observation?.epoch !== previous?.observation?.epoch;
+        stateObservation.current = next;
         setState(next);
-        // Reconcile an older SSE observation, but keep an event received
-        // while this request was in flight because its ordering is unknown.
-        if (motionRevision.current === revisionAtStart) setLiveMotion(null);
+        const ordered = validObservation(next.motion?.observation) && validObservation(live?.observation);
+        if (epochChanged || (ordered
+          ? next.motion!.observation!.revision >= live!.observation!.revision
+          : motionRevision.current === revisionAtStart)) {
+          liveObservation.current = null;
+          setLiveMotion(null);
+        }
         setBackendOnline(true);
-        setStale(false);
-        setStartupError("");
+        if (admittedFreshness === freshnessBarrier.current) {
+          setStale(false);
+          setStartupError("");
+        }
       } catch (error) {
         if (controller.signal.aborted && activeRequest.current !== controller) return;
         setBackendOnline(false);
@@ -79,6 +99,28 @@ export function AppStateProvider({ children, enabled = true }: { children: React
     return tracked;
   }, [enabled]);
 
+  const resync = useCallback(() => {
+    if (!enabled || !pollingEnabled.current) return;
+    const previous = activeRequest.current;
+    activeRequest.current = null;
+    inFlight.current = null;
+    previous?.abort();
+    freshnessBarrier.current++;
+    stateObservation.current = null;
+    liveObservation.current = null;
+    setState(null);
+    setLiveMotion(null);
+    setStale(true);
+    setStreamGeneration((value) => value + 1);
+    void performRefresh();
+  }, [enabled, performRefresh]);
+
+  useEffect(() => {
+    const currentEpoch = stateObservation.current?.observation?.epoch;
+    const observedEpoch = connection.snapshot?.epoch;
+    if (currentEpoch && observedEpoch && currentEpoch !== observedEpoch) resync();
+  }, [connection.snapshot, resync]);
+
   const refresh = useCallback(async () => {
     const admittedLifecycle = lifecycle.current;
     if (inFlight.current) await inFlight.current;
@@ -87,9 +129,18 @@ export function AppStateProvider({ children, enabled = true }: { children: React
   }, [performRefresh]);
 
   useEffect(() => {
+    if (!enabled) return;
+    const recover = () => { void refresh(); };
+    window.addEventListener(COMMAND_RECOVERED_EVENT, recover);
+    return () => window.removeEventListener(COMMAND_RECOVERED_EVENT, recover);
+  }, [enabled, refresh]);
+
+  useEffect(() => {
     lifecycle.current++;
     pollingEnabled.current = enabled;
     if (!enabled) {
+      stateObservation.current = null;
+      liveObservation.current = null;
       setState(null);
       setLiveMotion(null);
       setStale(false);
@@ -115,36 +166,115 @@ export function AppStateProvider({ children, enabled = true }: { children: React
     };
   }, [enabled, performRefresh]);
 
+  useEffect(() => {
+    if (!enabled) return;
+    const resume = () => {
+      if (document.visibilityState !== "hidden") {
+        resync();
+      } else {
+        const previous = activeRequest.current;
+        activeRequest.current = null;
+        inFlight.current = null;
+        previous?.abort();
+        freshnessBarrier.current++;
+        setStale(true);
+      }
+    };
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("pageshow", resume);
+    return () => {
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("pageshow", resume);
+    };
+  }, [enabled, resync]);
+
   // Live motion over SSE for a responsive visualizer; the poll snapshot remains
   // the source of truth and reconciles this between events.
   useEffect(() => {
     if (!enabled) return;
     let source: EventSource | null = null;
     let closed = false;
-    try {
-      source = new EventSource(`/api/motion/events?client_id=${encodeURIComponent(clientId)}`);
-      source.addEventListener("motion", (ev) => {
-        if (closed) return;
+    let retryTimer: number | undefined;
+    let failures = 0;
+    if (document.visibilityState === "hidden") return;
+    const hide = () => {
+      if (document.visibilityState === "hidden") {
+        closed = true;
+        window.clearTimeout(retryTimer);
+        source?.close();
+      }
+    };
+    const retry = () => {
+      if (closed || document.visibilityState === "hidden") return;
+      failures++;
+      const delay = Math.min(10000, 1000 * 2 ** Math.min(failures - 1, 4) * (0.8 + Math.random() * 0.4));
+      retryTimer = window.setTimeout(connect, delay);
+    };
+    const connect = () => {
+      if (closed || document.visibilityState === "hidden") return;
+      let currentSource: EventSource;
+      try {
+        currentSource = new EventSource(`/api/motion/events?client_id=${encodeURIComponent(clientId)}`);
+      } catch { retry(); return; }
+      source = currentSource;
+      const active = () => !closed && source === currentSource;
+      currentSource.addEventListener("motion", (ev) => {
+        if (!active()) return;
         try {
           const next = JSON.parse((ev as MessageEvent).data) as MotionInfo;
+          if (typeof next?.available !== "boolean") return;
+          const current = stateObservation.current;
+          if (validObservation(next.observation)) {
+            if (!validObservation(current?.observation)) return;
+            if (next.observation.epoch !== current.observation.epoch) {
+              closed = true;
+              source?.close();
+              resync();
+              return;
+            }
+            const previous = liveObservation.current ?? current.motion;
+            if (validObservation(previous?.observation) && next.observation.revision <= previous.observation.revision) return;
+          } else if (validObservation(current?.observation) || current?.controller?.heartbeat_required) return;
+          failures = 0;
           motionRevision.current++;
+          liveObservation.current = next;
           setLiveMotion(next);
         } catch {
           /* ignore */
         }
       });
-      source.onerror = () => { if (!closed) setLiveMotion(null); };
-    } catch {
-      source = null;
-    }
-    return () => { closed = true; source?.close(); };
-  }, [enabled]);
+      currentSource.onerror = () => {
+        if (active()) {
+          currentSource.close();
+          source = null;
+          // Keep the newest known observation until a fresher snapshot arrives;
+          // falling back immediately could restore an older running/stopped view.
+          freshnessBarrier.current++;
+          setStale(true);
+          void refresh();
+          retry();
+        }
+      };
+    };
+    connect();
+    document.addEventListener("visibilitychange", hide);
+    return () => {
+      closed = true;
+      window.clearTimeout(retryTimer);
+      source?.close();
+      document.removeEventListener("visibilitychange", hide);
+    };
+  }, [enabled, state?.observation?.epoch, streamGeneration, refresh, resync]);
 
-  const controller = state?.controller;
-  const readOnly = controller ? controller.read_only === true : false;
+  const controller = connection.snapshot && controllerIsNewer(connection.snapshot, state?.controller)
+    ? connection.snapshot : state?.controller;
+  const epochMismatch = !!(connection.snapshot?.epoch && state?.observation?.epoch && connection.snapshot.epoch !== state.observation.epoch);
+  const readOnly = !state || stale || !backendOnline || epochMismatch || controller?.read_only === true ||
+    (controller?.heartbeat_required === true && (!connection.fresh || !validObservation(state.observation)));
   const motion = liveMotion ?? state?.motion ?? null;
-  const appValue = useMemo(() => ({ state, backendOnline, stale, readOnly, startupError, refresh }),
-    [state, backendOnline, stale, readOnly, startupError, refresh]);
+  const observedState = useMemo(() => state && controller ? { ...state, controller } : state, [state, controller]);
+  const appValue = useMemo(() => ({ state: observedState, backendOnline, stale, readOnly, startupError, refresh }),
+    [observedState, backendOnline, stale, readOnly, startupError, refresh]);
 
   return (
     <AppStateContext.Provider value={appValue}>
@@ -213,14 +343,14 @@ interface NotificationSession {
   sourceKeys: string[];
 }
 
-export function ToastProvider({ children }: { children: ReactNode }) {
+export function ToastProvider({ children, audience = "local" }: { children: ReactNode; audience?: string }) {
   const appState = useContext(AppStateContext);
   const [toast, setToast] = useState<{ message: string; tone: string; visible: boolean }>({
     message: "",
     tone: "info",
     visible: false,
   });
-  const [initialSession] = useState(readNotificationSession);
+  const [initialSession] = useState(() => readNotificationSession(audience));
   const [items, setItems] = useState<AppNotification[]>(initialSession.items);
   const consumedSourceKeys = useRef(new Set(initialSession.sourceKeys));
   const timer = useRef<number | undefined>(undefined);
@@ -263,8 +393,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     writeNotificationSession({
       items,
       sourceKeys: Array.from(consumedSourceKeys.current),
-    });
-  }, [items]);
+    }, audience);
+  }, [items, audience]);
 
   const show = useCallback((message: string, tone: NotificationTone = "info") => {
     window.clearTimeout(timer.current);
@@ -298,11 +428,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function readNotificationSession(): NotificationSession {
+function readNotificationSession(audience: string): NotificationSession {
   try {
     const raw = window.sessionStorage.getItem(NOTIFICATION_SESSION_KEY);
     if (!raw) return { items: [], sourceKeys: [] };
-    const stored = JSON.parse(raw) as { items?: unknown; sourceKeys?: unknown };
+    const stored = JSON.parse(raw) as { items?: unknown; sourceKeys?: unknown; audience?: unknown };
+    if ((stored.audience ?? "local") !== audience) return { items: [], sourceKeys: [] };
     const items = Array.isArray(stored.items)
       ? stored.items.map(readStoredNotification).filter((item): item is AppNotification => item !== null).slice(0, MAX_NOTIFICATIONS)
       : [];
@@ -369,9 +500,9 @@ function rememberNotificationSource(sourceKeys: Set<string>, sourceKey: string):
   return true;
 }
 
-function writeNotificationSession(session: NotificationSession): void {
+function writeNotificationSession(session: NotificationSession, audience: string): void {
   try {
-    window.sessionStorage.setItem(NOTIFICATION_SESSION_KEY, JSON.stringify(session));
+    window.sessionStorage.setItem(NOTIFICATION_SESSION_KEY, JSON.stringify({ ...session, audience }));
   } catch {
     // Notifications still work in memory when browser storage is unavailable.
   }

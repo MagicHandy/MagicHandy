@@ -110,7 +110,7 @@ func (s *Server) handleSetupFailureReport(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Disposition", `attachment; filename="magichandy-install-failure.json"`)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(append(data, '\n'))
+	writeBoundedAttachment(w, r, append(data, '\n'))
 }
 
 func redactReportJob(job setupJob, redact func(string) string) setupJob {

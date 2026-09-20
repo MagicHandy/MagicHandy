@@ -3,6 +3,9 @@
 // authoritative, so unknown fields are ignored and read sites use optional
 // chaining. See docs/decisions/0009-react-frontend.md (State Model Rules).
 
+import type { AccountCapabilities } from "./access-types";
+export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus } from "./access-types";
+
 export type MotionStyle = "gentle" | "balanced" | "intense";
 export type HandyModel = "handy_original" | "handy_2_standard" | "handy_2_pro";
 export type NotificationCategory = "app" | "system" | "library" | "voice" | "updates";
@@ -107,13 +110,27 @@ export interface EngineSnapshot {
   last_error?: string;
 }
 
+export interface BackendObservation {
+  epoch: string;
+  revision: number;
+  observed_at: string;
+}
+
 export interface MotionInfo {
+  observation?: BackendObservation;
   available: boolean;
   error?: string;
   engine?: EngineSnapshot;
 }
 
 export interface ControllerSnapshot {
+  revision?: number;
+  command_ticket?: string;
+  command_ticket_ms?: number;
+  command_sequence?: number;
+  epoch?: string;
+  generation?: number;
+  heartbeat_required?: boolean;
   client_id?: string;
   active: boolean;
   read_only: boolean;
@@ -122,6 +139,19 @@ export interface ControllerSnapshot {
   active_client_age_ms?: number;
   lease_expires_in_ms?: number;
   takeover_in_progress?: boolean;
+}
+
+export interface CommandReceipt {
+  id: string;
+  epoch: string;
+  generation: number;
+  sequence: number;
+  state: "pending" | "complete" | "unknown";
+  http_status?: number;
+  replayable: boolean;
+  response?: unknown;
+  created_at: string;
+  completed_at?: string;
 }
 
 export interface ControllerTakeoverResponse {
@@ -158,6 +188,7 @@ export interface PromptSetsPayload {
 }
 
 export interface BluetoothBridgeSnapshot {
+  client_id?: string;
   connected?: boolean;
   supported?: boolean;
   ready?: boolean;
@@ -169,7 +200,16 @@ export interface BluetoothBridgeSnapshot {
   last_ack?: { ok?: boolean; status?: string; error?: string };
 }
 
+export interface BluetoothGatewaySnapshot {
+  required: boolean;
+  owned: boolean;
+  epoch?: string;
+  generation?: number;
+  lease_expires_in_ms?: number;
+}
+
 export interface BluetoothStatusResponse {
+  gateway?: BluetoothGatewaySnapshot;
   status: string;
   dispatch_owner: string;
   bluetooth: BluetoothBridgeSnapshot;
@@ -216,6 +256,10 @@ export interface ChatHistoryMessage {
 // One row of the server-side shared chat log (the canonical history; each
 // client reads via its own cursor and reads are never destructive).
 export interface ChatLogMessage {
+  content_bytes?: number;
+  content_truncated?: boolean;
+  diagnostics_omitted?: boolean;
+  revision?: number;
   seq: number;
   role: "user" | "assistant";
   content: string;
@@ -423,10 +467,20 @@ export interface ChatSessionsResponse {
 }
 
 export interface ChatMessagesResponse {
+  snapshot?: { revision: number; pruned_revision: number; first_seq: number };
   messages: ChatLogMessage[];
   latest_seq: number;
   cursor: number;
   session_id: string;
+  revision?: number;
+  next_revision?: number;
+  server_epoch?: string;
+  first_seq?: number;
+  has_more?: boolean;
+  reset?: boolean;
+  history_gap?: boolean;
+  history_limit?: number;
+  cursor_revision?: number;
 }
 
 // LLMMotionCapabilities is the user-selected checkbox list of control methods
@@ -1105,36 +1159,6 @@ export interface SetupStatus {
   helpers: { llama: boolean; parakeet: boolean; voice: boolean };
 }
 
-export type AccountRole = "admin" | "operator";
-
-export interface UserAccount {
-  id: string;
-  username: string;
-  role: AccountRole;
-  disabled: boolean;
-  has_profile_image: boolean;
-  profile_updated_at?: string;
-  last_login_at?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ControlIdentity {
-  account: UserAccount;
-  relationship: "self" | "linked";
-  label: string;
-  selected: boolean;
-}
-
-export interface AuthenticationStatus {
-  initialized: boolean;
-  authentication_required: boolean;
-  authenticated: boolean;
-  bootstrap_available: boolean;
-  ui_locale: string;
-  account: UserAccount | null;
-  control_identities: ControlIdentity[] | null;
-}
 
 export interface ManagedLLMModel {
   id: string;
@@ -1365,6 +1389,8 @@ export interface IntifaceTransportSnapshot {
 }
 
 export interface AppState {
+  observation?: BackendObservation;
+  capabilities?: AccountCapabilities;
   version?: string;
   commit?: string;
   uptime_seconds?: number;
@@ -1381,7 +1407,7 @@ export interface AppState {
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
   voice?: VoiceState;
-  chat?: { available?: boolean; latest_seq?: number; active_session_id?: string; current_mood?: AssistantMood | "" };
+  chat?: { available?: boolean; latest_seq?: number; revision?: number; active_session_id?: string; current_mood?: AssistantMood | "" };
   library?: LibrarySummary;
   media?: MediaSummary;
   transport?: Record<string, unknown>;

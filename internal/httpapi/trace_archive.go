@@ -19,12 +19,18 @@ const (
 	lastMotionTraceMaximumBytes  = 1 << 20
 )
 
+func (s *Server) traceRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/traces", s.handleTraceExport)
+	mux.HandleFunc("GET /api/traces/last-motion", s.handleLastMotionTrace)
+}
+
 // motionTraceArchive is the durable, bounded envelope for one stopped run.
 // Trace rows have already crossed the diagnostics redaction boundary before
 // reaching this type. Stop reasons are intentionally not duplicated here.
 type motionTraceArchive struct {
 	SchemaVersion string                  `json:"schema_version"`
 	CapturedAt    string                  `json:"captured_at"`
+	CoreEpoch     string                  `json:"core_epoch,omitempty"`
 	FirstSequence uint64                  `json:"first_sequence"`
 	LastSequence  uint64                  `json:"last_sequence"`
 	RowsOmitted   uint64                  `json:"rows_omitted"`
@@ -44,7 +50,7 @@ func (s *Server) persistLastMotionTrace(_ string, firstSequence uint64) {
 	if firstSequence == 0 || s.store == nil || s.traces == nil {
 		return
 	}
-	archive, document, ok, err := boundedMotionTraceArchive(s.currentTraceExport(), firstSequence)
+	archive, document, ok, err := boundedMotionTraceArchive(s.currentTraceExport(), firstSequence, s.controller.epoch)
 	if err != nil {
 		s.logger.Warn("last motion trace could not be bounded", "error", err)
 		return
@@ -52,13 +58,17 @@ func (s *Server) persistLastMotionTrace(_ string, firstSequence uint64) {
 	if !ok {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	err = s.store.Datastore().WithTx(ctx, func(tx *sql.Tx) error {
+	if s.traceArchive != nil {
+		s.traceArchive.record(archive.LastSequence, document)
+	}
+}
+
+func (s *Server) writeLastMotionTrace(ctx context.Context, document []byte) {
+	err := s.store.Datastore().WithTx(ctx, func(tx *sql.Tx) error {
 		_, execErr := tx.ExecContext(ctx, `
 			INSERT INTO app_kv(key, value, updated_at) VALUES(?, ?, ?)
 			ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-		`, lastMotionTraceKey, string(document), archive.CapturedAt)
+		`, lastMotionTraceKey, string(document), time.Now().UTC().Format(time.RFC3339Nano))
 		return execErr
 	})
 	if err != nil {
@@ -71,6 +81,7 @@ func (s *Server) persistLastMotionTrace(_ string, firstSequence uint64) {
 func boundedMotionTraceArchive(
 	export diagnostics.TraceExport,
 	firstSequence uint64,
+	epoch string,
 ) (motionTraceArchive, []byte, bool, error) {
 	rows := export.Rows[:0]
 	for _, row := range export.Rows {
@@ -84,6 +95,7 @@ func boundedMotionTraceArchive(
 	export.Rows = rows
 	archive := motionTraceArchive{
 		SchemaVersion: lastMotionTraceArchiveSchema,
+		CoreEpoch:     epoch,
 		CapturedAt:    time.Now().UTC().Format(time.RFC3339Nano),
 		FirstSequence: rows[0].Sequence,
 		LastSequence:  rows[len(rows)-1].Sequence,
@@ -117,14 +129,19 @@ func boundedMotionTraceArchive(
 
 func (s *Server) loadLastMotionTrace(ctx context.Context) (motionTraceArchive, bool, error) {
 	var document string
-	err := s.store.Datastore().SQL().QueryRowContext(ctx, `
+	if s.traceArchive != nil {
+		document = string(s.traceArchive.snapshot())
+	}
+	if document == "" {
+		err := s.store.Datastore().SQL().QueryRowContext(ctx, `
 		SELECT value FROM app_kv WHERE key = ?
 	`, lastMotionTraceKey).Scan(&document)
-	if errors.Is(err, sql.ErrNoRows) {
-		return motionTraceArchive{}, false, nil
-	}
-	if err != nil {
-		return motionTraceArchive{}, false, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return motionTraceArchive{}, false, nil
+		}
+		if err != nil {
+			return motionTraceArchive{}, false, err
+		}
 	}
 	if len(document) > lastMotionTraceMaximumBytes {
 		return motionTraceArchive{}, false, errors.New("persisted motion trace exceeds its size limit")
