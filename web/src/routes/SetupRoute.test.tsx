@@ -96,6 +96,7 @@ describe("SetupRoute", () => {
       refresh: refreshAuthentication,
     } as unknown as ReturnType<typeof useAuth>);
     vi.spyOn(api, "setupStatus").mockResolvedValue(setupFixture);
+    vi.spyOn(api, "networkStatus").mockResolvedValue({ active: { mode: "local", listen_address: "127.0.0.1:49717", public_url: "", trusted_proxies: [], tls_certificate: "", tls_private_key: "" }, saved: null, restart_required: false, interfaces: [{ name: "Ethernet", address: "192.168.1.8", loopback: false, private: true }], forwarded: false, authentication_required: false, secure_cookie: false });
     vi.spyOn(api, "llmModels").mockResolvedValue(modelFixture);
     vi.spyOn(api, "ollamaModels").mockResolvedValue({ available: true, models: [] });
     vi.spyOn(api, "scanOllamaModels").mockResolvedValue({
@@ -155,7 +156,7 @@ describe("SetupRoute", () => {
     await screen.findByRole("heading", { name: "Set up MagicHandy" });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
-    fireEvent.click(screen.getByRole("radio", { name: /require an account and password/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /require an account and password/i }));
     fireEvent.change(screen.getByRole("textbox", { name: "Administrator username" }), { target: { value: "owner" } });
     const password = screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!;
     const confirmation = screen.getByText("Confirm password", { selector: ".label" }).closest("label")!.querySelector("input")!;
@@ -174,13 +175,32 @@ describe("SetupRoute", () => {
     expect(await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" })).toBeInTheDocument();
   });
 
+  it("keeps Public setup in the Access step until HTTPS is saved", async () => {
+    vi.spyOn(api, "discoverInternet").mockResolvedValue({ public_ip: "8.8.8.8", terms_url: "https://letsencrypt.org/documents/test.pdf", ip_error: false, ca_error: false, external_port: 443 });
+    render(<SetupRoute />);
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
+    await waitFor(() => expect(screen.getByRole("radio", { name: /^Public/ })).toBeEnabled());
+    fireEvent.click(screen.getByRole("radio", { name: /^Public/ }));
+    fireEvent.change(screen.getByLabelText("Administrator username"), { target: { value: "owner" } });
+    fireEvent.change(screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!, { target: { value: "eight888" } });
+    fireEvent.change(screen.getByText("Confirm password", { selector: ".label" }).closest("label")!.querySelector("input")!, { target: { value: "eight888" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("button", { name: "Set up HTTPS and save" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Choose who can open MagicHandy" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(bootstrapAccount).toHaveBeenCalledOnce();
+    expect(await screen.findByText(/Open incoming TCP 443/)).toBeVisible();
+  });
+
   it("ends the temporary bootstrap session when protected setup finishes", async () => {
     render(<SetupRoute />);
 
     await screen.findByRole("heading", { name: "Set up MagicHandy" });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
-    fireEvent.click(screen.getByRole("radio", { name: /require an account and password/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /require an account and password/i }));
     fireEvent.change(screen.getByRole("textbox", { name: "Administrator username" }), { target: { value: "owner" } });
     const password = screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!;
     fireEvent.change(password, { target: { value: "eight888" } });

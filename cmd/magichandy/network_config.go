@@ -41,8 +41,16 @@ func resolveConfiguredNetwork(store *config.Store, defaultAddress, addressOverri
 	security.BaseURL = policy.Config.PublicURL
 	security.AllowedBrowserHosts = []string{policy.Origin.Host}
 	if policy.Config.Mode == netaccess.DirectHTTPS {
-		security.Certificates, err = netaccess.LoadCertificates(policy)
+		if policy.Config.CertificateMode != "" {
+			security.Automation = netaccess.NewAutomation(store.DataDir())
+			security.Certificates, err = security.Automation.LoadManaged(policy)
+		} else {
+			security.Certificates, err = netaccess.LoadCertificates(policy)
+		}
 		if err != nil {
+			if security.Automation != nil {
+				security.Automation.Close()
+			}
 			return serverSecurity{}, "", err
 		}
 		security.TLSConfig = security.Certificates.TLSConfig()

@@ -58,6 +58,9 @@ func (p *Policy) Accept(r *http.Request) (*http.Request, error) {
 		if r.TLS == nil || HasForwardingHeaders(r) {
 			return nil, errors.New("direct HTTPS requires TLS and does not accept forwarding headers")
 		}
+		if p.Config.Scope == "lan" && !localPeer(ClientIP(r)) {
+			return nil, errors.New("LAN access accepts only private or loopback client addresses")
+		}
 		return r, nil
 	}
 	return p.acceptProxy(r)
@@ -85,8 +88,16 @@ func (p *Policy) acceptProxy(r *http.Request) (*http.Request, error) {
 	if err != nil || client.Zone() != "" || client.IsUnspecified() || client.IsMulticast() {
 		return nil, errors.New("proxy must provide one client IP, replacing any incoming forwarded chain")
 	}
+	if p.Config.Scope == "lan" && !localPeer(client.String()) {
+		return nil, errors.New("LAN access accepts only private or loopback client addresses")
+	}
 	ctx := context.WithValue(r.Context(), forwardedContextKey{}, forwardedRequest{clientIP: client.Unmap().String()})
 	return r.WithContext(ctx), nil
+}
+
+func localPeer(value string) bool {
+	ip, err := netip.ParseAddr(value)
+	return err == nil && (ip.Unmap().IsPrivate() || ip.IsLoopback())
 }
 
 func singleHeader(r *http.Request, name string) string {

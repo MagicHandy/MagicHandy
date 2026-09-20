@@ -33,6 +33,7 @@ coverage.out
 /diagnostics/
 /traces/
 /.scratch/
+https-private/
 
 # Editor and OS metadata
 .idea/

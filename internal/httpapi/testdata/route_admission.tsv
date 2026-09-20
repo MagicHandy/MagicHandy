@@ -68,6 +68,8 @@ shared	GET /api/modes
 shared	GET /api/motion/events
 shared	GET /api/motion/state
 host	GET /api/network
+host	GET /api/network/certificate
+host	GET /api/network/local-trust
 host	GET /api/network/report
 shared	GET /api/personas
 shared	GET /api/personas/{id}/export
@@ -159,6 +161,8 @@ control	POST /api/motion/start
 public	POST /api/motion/stop
 control	POST /api/motion/target
 host	POST /api/network/validate
+host	POST /api/network/certificate
+host	POST /api/network/discover
 host	POST /api/personas
 host	POST /api/personas/import
 host	POST /api/personas/{id}/duplicate

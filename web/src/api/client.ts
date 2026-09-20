@@ -69,6 +69,8 @@ import type {
   ControlGrant,
   NetworkConfig,
   NetworkStatus,
+  InternetDiscovery,
+  CertificatePreparation,
   CommandReceipt,
 } from "./types";
 
@@ -514,6 +516,9 @@ export const api = {
   grantControl: (id: string, duration: number | "permanent") => request<{ grant: ControlGrant }>("PUT", `/api/accounts/${encodeURIComponent(id)}/control-grant`, duration === "permanent" ? { permanent: true } : { duration_minutes: duration }),
   revokeControl: (id: string) => request<{ grant: null }>("DELETE", `/api/accounts/${encodeURIComponent(id)}/control-grant`),
   networkStatus: (signal?: AbortSignal) => request<NetworkStatus>("GET", "/api/network", undefined, signal),
+  discoverInternet: (signal?: AbortSignal) => request<InternetDiscovery>("POST", "/api/network/discover", {}, signal),
+  prepareNetworkCertificate: (config: NetworkConfig, password: string, signal?: AbortSignal) => request<CertificatePreparation>("POST", "/api/network/certificate", { config, password }, signal),
+  certificatePreparation: (signal?: AbortSignal) => request<CertificatePreparation>("GET", "/api/network/certificate", undefined, signal),
   validateNetwork: (config: NetworkConfig) => request<{ valid: boolean; config: NetworkConfig; message: string }>("POST", "/api/network/validate", { config }),
   saveNetwork: (config: NetworkConfig, password: string) => request<{ restart_required: boolean }>("PUT", "/api/network", { config, password }),
   networkReport: () => request<Record<string, unknown>>("GET", "/api/network/report"),

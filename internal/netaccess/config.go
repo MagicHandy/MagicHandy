@@ -30,12 +30,15 @@ const (
 // Config is persisted separately from live settings: changes apply on restart.
 // Certificate paths belong to the host. Private-key contents never enter JSON.
 type Config struct {
-	Mode           string   `json:"mode"`
-	ListenAddress  string   `json:"listen_address"`
-	PublicURL      string   `json:"public_url"`
-	TrustedProxies []string `json:"trusted_proxies"`
-	TLSCertificate string   `json:"tls_certificate"`
-	TLSPrivateKey  string   `json:"tls_private_key"`
+	Mode            string   `json:"mode"`
+	ListenAddress   string   `json:"listen_address"`
+	PublicURL       string   `json:"public_url"`
+	TrustedProxies  []string `json:"trusted_proxies"`
+	TLSCertificate  string   `json:"tls_certificate"`
+	TLSPrivateKey   string   `json:"tls_private_key"`
+	Scope           string   `json:"scope,omitempty"`
+	CertificateMode string   `json:"certificate_mode,omitempty"`
+	AcceptedTerms   string   `json:"accepted_terms,omitempty"`
 }
 
 // Policy is an immutable, validated listener and origin policy.
@@ -58,7 +61,7 @@ func Validate(config Config) (*Policy, error) {
 	config.ListenAddress = address
 	policy := &Policy{Config: config}
 	if config.Mode == Local {
-		if !ip.IsLoopback() || config.PublicURL != "" || len(config.TrustedProxies) != 0 || config.TLSCertificate != "" || config.TLSPrivateKey != "" {
+		if !ip.IsLoopback() || config.PublicURL != "" || len(config.TrustedProxies) != 0 || config.TLSCertificate != "" || config.TLSPrivateKey != "" || config.Scope != "" || config.CertificateMode != "" || config.AcceptedTerms != "" {
 			return nil, errors.New("local mode requires a loopback listener without public URL, proxy or TLS settings")
 		}
 		return policy, nil
@@ -71,8 +74,11 @@ func Validate(config Config) (*Policy, error) {
 		return nil, err
 	}
 	policy.Config.PublicURL = policy.Origin.String()
+	if err := validateAutomation(policy, ip); err != nil {
+		return nil, err
+	}
 	if config.Mode == DirectHTTPS {
-		if strings.TrimSpace(config.TLSCertificate) == "" || strings.TrimSpace(config.TLSPrivateKey) == "" || len(config.TrustedProxies) != 0 {
+		if (config.CertificateMode == "" && (strings.TrimSpace(config.TLSCertificate) == "" || strings.TrimSpace(config.TLSPrivateKey) == "")) || len(config.TrustedProxies) != 0 {
 			return nil, errors.New("direct HTTPS requires a certificate and private key, without trusted proxy entries")
 		}
 		return policy, nil

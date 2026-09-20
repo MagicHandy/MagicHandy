@@ -23,6 +23,16 @@ edges on wide desktop layouts as well as narrow layouts.
 
 ## Settings organization
 
+Access setup uses three compact radio rows: **Local only**, **LAN + local**, and
+**Public**. The selected row has a neutral background; there is no accent stripe
+or underline. Local password protection is an optional checkbox rather than a
+second set of large choice cards. Initial setup and Access settings share the
+HTTPS fields and numbered checklist. Show exact inbound and forwarding ports,
+separate detected addresses from verified reachability, and keep advanced manual
+certificate/proxy fields in a disclosure. Save only backend-validated results;
+report preparation errors inline while retaining the active local connection.
+See [ADR 0030](decisions/0030-guided-https-certificates.md).
+
 The primary settings destinations are **General**, **Access**, **Device**,
 **Media library**, **Chat**, **Voice** and **Diagnostics**. Chat combines the
 former Chat, Model and Prompts pages behind a shared sidebar: **Conversation**,

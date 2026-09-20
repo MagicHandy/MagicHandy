@@ -9,12 +9,15 @@ import type {
   SetupInstallPlan,
   SetupJob,
   SetupStatus,
+  NetworkStatus,
 } from "../api/types";
 import { HostPathField } from "../components/HostPathField";
 import { DismissibleNotice } from "../components/DismissibleNotice";
 import { SetupFailureReport } from "../components/SetupFailureReport";
 import { OllamaLibraryImport } from "../components/OllamaLibraryImport";
 import { PasswordConfirmationField } from "../components/PasswordConfirmationField";
+import { AccessScopeChoices, configForScope, NetworkPortChecklist, networkScope, type NetworkScope } from "../components/NetworkSetupFields";
+import { NetworkSettingsPanel } from "../components/NetworkSettingsPanel";
 import { LOCALE_OPTIONS, t, translateKnown } from "../i18n";
 import { useAppState, useToast } from "../state/app-state";
 import { formatBytes } from "../util/format";
@@ -71,6 +74,11 @@ export function SetupRoute() {
   const [administratorPassword, setAdministratorPassword] = useState("");
   const [administratorConfirmation, setAdministratorConfirmation] = useState("");
   const [createdAdministrator, setCreatedAdministrator] = useState(false);
+  const [accessScope, setAccessScope] = useState<NetworkScope>("local");
+  const [originalScope, setOriginalScope] = useState<NetworkScope>("local");
+  const [networkReady, setNetworkReady] = useState(false);
+  const [networkLoaded, setNetworkLoaded] = useState(false);
+  const [setupNetworkStatus, setSetupNetworkStatus] = useState<NetworkStatus | null>(null);
   const [connectionKey, setConnectionKey] = useState("");
   const [connectionResult, setConnectionResult] = useState<ConnectionCheckResult | null>(null);
   const [ggufPath, setGGUFPath] = useState("");
@@ -86,6 +94,19 @@ export function SetupRoute() {
   const installJob = setup?.installation?.id === installJobID ? setup.installation : undefined;
   const activeImport = models?.imports.find((job) => job.status === "queued" || job.status === "copying");
   const currentStep = STEPS[step];
+  const networkRequired = accessScope !== "local" || originalScope !== "local";
+  useEffect(() => {
+    if (currentStep !== "access" || networkLoaded) return;
+    const abort = new AbortController();
+    void api.networkStatus(abort.signal).then((status) => {
+      if (abort.signal.aborted) return;
+      const scope = networkScope(status.saved ?? status.active);
+      setSetupNetworkStatus(status);
+      setAccessScope(scope); setOriginalScope(scope); setNetworkLoaded(true);
+      if (scope !== "local") setAccessChoice("protected");
+    }).catch((reason: unknown) => { if (!abort.signal.aborted) setError(message(reason)); });
+    return () => abort.abort();
+  }, [currentStep, networkLoaded]);
 
   const load = useCallback(async () => {
     try {
@@ -188,7 +209,7 @@ export function SetupRoute() {
         ui_locale: settings.ui?.locale ?? "en",
         chat_locale: promptLocale(settings.llm.prompt_set, settings.ui?.locale ?? "en"),
       });
-    } else if (currentStep === "access" && accessChoice === "protected" && !auth.status?.initialized) {
+    } else if (currentStep === "access" && accessChoice === "protected" && !auth.status?.initialized && !createdAdministrator) {
       if (!passwordMeetsMinimum(administratorPassword)) {
         throw new Error(t("Use a password or passphrase of at least 8 characters."));
       }
@@ -212,6 +233,7 @@ export function SetupRoute() {
 
   const continueStep = () => void run("continue", async () => {
     await saveCurrentStep();
+    if (currentStep === "access" && networkRequired && !networkReady) return;
     if (step === STEPS.indexOf("voice")) {
       await beginInstall();
     }
@@ -318,12 +340,12 @@ export function SetupRoute() {
     || (runtimeChoice === "managed" && managedModelReady)
     || ((runtimeChoice === "ollama" || runtimeChoice === "external") && Boolean(settings?.llm.model.trim()));
   const installationReady = installSubmitted && (!installJob || installJob.status === "complete");
-  const accessReady = accessChoice === "local" || Boolean(auth.status?.initialized) || (
+  const accessReady = accessChoice === "local" || createdAdministrator || Boolean(auth.status?.initialized) || (
     Boolean(administratorUsername.trim()) &&
     passwordMeetsMinimum(administratorPassword) &&
     administratorPassword === administratorConfirmation
   );
-  const currentStepReady = (currentStep !== "model" || modelChoiceReady) && (currentStep !== "access" || accessReady);
+  const currentStepReady = (currentStep !== "model" || modelChoiceReady) && (currentStep !== "access" || (accessReady && networkLoaded && (!networkRequired || (!auth.status?.initialized && !createdAdministrator) || networkReady)));
   const canFinish = runtimeChoice === "skip" || (
     modelChoiceReady && (runtimeChoice !== "managed" || Boolean(models?.runtime.installed && models.runtime.current))
   );
@@ -376,7 +398,14 @@ export function SetupRoute() {
           {step === 0 && <WelcomeStep settings={settings} patch={(patch) => setSettings({ ...settings, ...patch })} />}
           {currentStep === "access" && <AccessStep
             choice={accessChoice}
-            initialized={Boolean(auth.status?.initialized)}
+            initialized={Boolean(auth.status?.initialized) || createdAdministrator}
+            scope={accessScope}
+            setScope={(scope) => { setAccessScope(scope); setNetworkReady(false); if (scope !== "local") setAccessChoice("protected"); }}
+            networkRequired={networkRequired}
+            networkLoaded={networkLoaded}
+            networkStatus={setupNetworkStatus}
+            onNetworkReady={setNetworkReady}
+            backendOnline={backendOnline}
             username={administratorUsername}
             password={administratorPassword}
             confirmation={administratorConfirmation}
@@ -478,6 +507,7 @@ function AccessStep({
   setUsername,
   setPassword,
   setConfirmation,
+  scope, setScope, networkRequired, networkLoaded, networkStatus, onNetworkReady, backendOnline,
 }: {
   choice: AccessChoice;
   initialized: boolean;
@@ -489,26 +519,18 @@ function AccessStep({
   setUsername: (value: string) => void;
   setPassword: (value: string) => void;
   setConfirmation: (value: string) => void;
+  scope: NetworkScope;
+  setScope: (scope: NetworkScope) => void;
+  networkRequired: boolean;
+  networkLoaded: boolean;
+  networkStatus: NetworkStatus | null;
+  onNetworkReady: (ready: boolean) => void;
+  backendOnline: boolean;
 }) {
   return <div className="setup-copy">
-    <p>{t("Choose whether this installation opens directly or requires a MagicHandy account. This does not enable LAN access or configure certificates.")}</p>
-    <div className="setup-choices">
-      <Choice
-        selected={choice === "local"}
-        title={t("Only this computer")}
-        detail={t("Keep the current loopback-only behavior with no sign-in. You can enable password protection later from Settings.")}
-        badge={t("Recommended")}
-        disabled={initialized || locked}
-        onSelect={() => setChoice("local")}
-      />
-      <Choice
-        selected={choice === "protected"}
-        title={t("Require an account and password")}
-        detail={t("Create the first administrator and require sign-in immediately and on future launches.")}
-        disabled={locked}
-        onSelect={() => setChoice("protected")}
-      />
-    </div>
+    <AccessScopeChoices value={scope} disabled={locked || !networkLoaded} onChange={setScope} />
+    {!initialized && scope !== "local" && networkStatus && <NetworkPortChecklist draft={configForScope(scope, networkStatus.saved ?? networkStatus.active, networkStatus)} />}
+    {scope === "local" && !initialized && <label className="network-terms"><input type="checkbox" checked={choice === "protected"} disabled={locked} onChange={(event) => setChoice(event.target.checked ? "protected" : "local")} /><span>{t("Require an account and password")}</span></label>}
     {initialized ? <DismissibleNotice id="setup-protection" className="setup-notice"><strong>{t("Password protection is active.")}</strong><span>{t("Manage accounts, passwords, and your profile image from Settings > Access.")}</span></DismissibleNotice> : choice === "protected" && <div className="setup-subsection account-setup-fields">
       <label className="field"><span className="label">{t("Administrator username")}</span><input type="text" autoComplete="username" spellCheck={false} value={username} disabled={locked} onChange={(event) => setUsername(event.target.value)} /></label>
       <div className="setup-fields two-columns">
@@ -517,7 +539,7 @@ function AccessStep({
       </div>
       <p className="hint-block">{t("The password goes directly to the local account API. It is never written to installer logs, command lines, response files, or settings.")}</p>
     </div>}
-    <DismissibleNotice id="setup-remote-access" className="setup-notice"><strong>{t("Remote access remains off by default.")}</strong><span>{t("LAN login still requires an explicit private address and a trusted HTTPS certificate.")}</span></DismissibleNotice>
+    {networkRequired && (initialized ? <NetworkSettingsPanel key={scope} backendOnline={backendOnline && !locked} administrator initialScope={scope} onReadyChange={onNetworkReady} /> : <p className="hint-block">{t("Continue to create the administrator, then set up HTTPS here. Remote access stays off until the certificate is ready and you save and restart.")}</p>)}
   </div>;
 }
 

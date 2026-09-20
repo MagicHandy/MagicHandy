@@ -19,6 +19,10 @@ func (s *Server) networkRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/network/validate", s.handleNetworkValidate)
 	mux.HandleFunc("PUT /api/network", s.handleNetworkSave)
 	mux.HandleFunc("GET /api/network/report", s.handleNetworkReport)
+	mux.HandleFunc("POST /api/network/discover", s.handleNetworkDiscover)
+	mux.HandleFunc("POST /api/network/certificate", s.handleCertificatePrepare)
+	mux.HandleFunc("GET /api/network/certificate", s.handleCertificatePreparation)
+	mux.HandleFunc("GET /api/network/local-trust", s.handleLocalTrustCertificate)
 }
 
 func (s *Server) protectNetworkRequests(next http.Handler) http.Handler {
@@ -71,6 +75,7 @@ func (s *Server) handleNetworkStatus(w http.ResponseWriter, r *http.Request) {
 		"authentication_required": s.auth.authenticationRequired(), "secure_cookie": s.auth.options.SecureCookies}
 	payload["request_admission"] = s.requestAdmission.snapshot()
 	payload["stop_admission"] = s.stopAdmission.snapshot()
+	payload["preparation"] = s.networkAutomation.Snapshot()
 	if s.networkCertificates != nil {
 		payload["certificate"] = s.networkCertificates.Status()
 	}
@@ -82,7 +87,7 @@ type networkChange struct {
 	Password string           `json:"password,omitempty"`
 }
 
-func (s *Server) validateNetworkChange(w http.ResponseWriter, r *http.Request) (networkChange, *netaccess.Policy, bool) {
+func (s *Server) validateNetworkChange(w http.ResponseWriter, r *http.Request, prepared bool) (networkChange, *netaccess.Policy, bool) {
 	var body networkChange
 	if !s.requireNetworkAdministrator(w, r) {
 		return body, nil, false
@@ -99,7 +104,11 @@ func (s *Server) validateNetworkChange(w http.ResponseWriter, r *http.Request) (
 		}
 	}
 	if err == nil && policy.Config.Mode == netaccess.DirectHTTPS {
-		_, err = netaccess.LoadCertificates(policy)
+		if policy.Config.CertificateMode == "" {
+			_, err = netaccess.LoadCertificates(policy)
+		} else if prepared {
+			err = s.networkAutomation.ValidatePrepared(policy)
+		}
 	}
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -109,7 +118,7 @@ func (s *Server) validateNetworkChange(w http.ResponseWriter, r *http.Request) (
 }
 
 func (s *Server) handleNetworkValidate(w http.ResponseWriter, r *http.Request) {
-	_, policy, ok := s.validateNetworkChange(w, r)
+	_, policy, ok := s.validateNetworkChange(w, r, true)
 	if !ok {
 		return
 	}
@@ -118,7 +127,7 @@ func (s *Server) handleNetworkValidate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNetworkSave(w http.ResponseWriter, r *http.Request) {
-	body, policy, ok := s.validateNetworkChange(w, r)
+	body, policy, ok := s.validateNetworkChange(w, r, true)
 	if !ok {
 		return
 	}
@@ -166,6 +175,7 @@ type networkInterface struct {
 	Name     string `json:"name"`
 	Address  string `json:"address"`
 	Loopback bool   `json:"loopback"`
+	Private  bool   `json:"private"`
 }
 
 func networkInterfaces() []networkInterface {
@@ -187,7 +197,7 @@ func networkInterfaces() []networkInterface {
 			if err != nil || prefix.Addr().IsLinkLocalUnicast() || prefix.Addr().IsMulticast() {
 				continue
 			}
-			result = append(result, networkInterface{Name: adapter.Name, Address: prefix.Addr().String(), Loopback: prefix.Addr().IsLoopback()})
+			result = append(result, networkInterface{Name: adapter.Name, Address: prefix.Addr().String(), Loopback: prefix.Addr().IsLoopback(), Private: prefix.Addr().IsPrivate()})
 		}
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Address < result[j].Address })

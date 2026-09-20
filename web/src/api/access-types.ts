@@ -86,15 +86,34 @@ export interface NetworkConfig {
   trusted_proxies: string[] | null;
   tls_certificate: string;
   tls_private_key: string;
+  scope?: "lan" | "public";
+  certificate_mode?: "automatic_public" | "local_ca";
+  accepted_terms?: string;
+}
+
+export interface InternetDiscovery {
+  public_ip: string;
+  terms_url: string;
+  ip_error: boolean;
+  ca_error: boolean;
+  external_port: number;
+}
+
+export interface CertificatePreparation {
+  state: "idle" | "running" | "ready" | "failed";
+  config?: NetworkConfig;
+  message?: string;
+  certificate?: NetworkStatus["certificate"];
 }
 
 export interface NetworkStatus {
   active: NetworkConfig;
   saved: NetworkConfig | null;
   restart_required: boolean;
-  interfaces: Array<{ name: string; address: string; loopback: boolean }>;
+  interfaces: Array<{ name: string; address: string; loopback: boolean; private?: boolean }>;
   forwarded: boolean;
   authentication_required: boolean;
   secure_cookie: boolean;
-  certificate?: { not_before: string; not_after: string; sha256: string; renewal_due: boolean; reload_error: boolean };
+  certificate?: { not_before: string; not_after: string; sha256: string; renewal_due: boolean; reload_error: boolean; managed?: boolean };
+  preparation?: CertificatePreparation;
 }

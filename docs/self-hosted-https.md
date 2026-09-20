@@ -1,10 +1,58 @@
 # Self-hosted HTTPS deployment
 
-Implementation and acceptance are in progress on the LAN/WAN branch. This
-guide describes the implemented direct-HTTPS and trusted-proxy boundaries;
-it does not claim that the complete [LAN/WAN checklist](lan-wan-control-checklist.md)
-has passed. Physical clients, external routing, fault/load limits, authentication
-recovery and remaining command-delivery work still need acceptance.
+This guide covers guided HTTPS setup, automatic certificates, and the existing
+trusted-proxy boundary. Security/reliability release evidence is recorded in the
+[LAN/WAN readiness review](lan-wan-release-readiness-2026-09-19.md). That evidence
+does not prove reachability through a particular user's ISP, router, or firewall.
+
+## Guided setup
+
+Initial setup's **Access** step and **Settings > Access > Remote access** offer:
+
+| Choice | Certificate and account | Required incoming port |
+| --- | --- | --- |
+| Local only | Loopback HTTP; account optional initially | None; no firewall exclusion or forwarding |
+| LAN + local | Account plus automatic local certificate | Selected local TCP port, allowed on private networks in the host firewall; no router forwarding |
+| Public | Account plus automatic public certificate for an IP or domain | Internet TCP **443**, forwarded to the displayed local IP/port, plus a host firewall exclusion for that local TCP port |
+
+For example, if the selected interface is `192.168.1.20:49717`, Public setup needs
+router TCP `443 → 192.168.1.20:49717` and a host firewall inbound exception for
+MagicHandy on TCP `49717`. TCP 80 is unnecessary for this implementation. Keep
+the forwarding rule available for renewal. LAN clients instead use
+`https://192.168.1.20:49717`, with TCP 49717 allowed only on private networks.
+Reserve the host's LAN address in DHCP so these rules continue to point to it.
+
+Public setup detects the outgoing IPv4 using ipify and reads Let's Encrypt's
+current terms. It contacts these services only after choosing automatic Public
+setup or pressing Detect. You can replace the detected IP with your domain or
+public IPv6 address. Detection is not an inbound port check: VPNs, CGNAT and ISP
+port blocking can make the outgoing IP unsuitable. Domain DNS must point to the
+correct public address; stale AAAA records can also prevent CA validation.
+If needed, request a public address from your ISP or configure an existing HTTPS
+reverse proxy under Advanced HTTPS options. A public URL used from inside the
+same LAN may require router NAT loopback or split DNS; a successful outside
+connection does not prove that the router supports this internal route.
+
+Read and explicitly accept the CA's terms. The certificate's IP/domain becomes
+public in certificate transparency logs. **Set up HTTPS and save** confirms the
+administrator password, prepares the certificate, validates it, and saves for
+restart. During public validation, a temporary listener serves only the CA's
+TLS-ALPN challenge; the existing app stays at its current address. A failed
+certificate request leaves saved access unchanged. Fix the reported routing or
+service issue before retrying. Router and firewall changes remain user actions.
+
+LAN setup creates a private per-installation CA and a matching local IP
+certificate. Download the **local trust certificate** while the local setup page
+is still available, and enroll it as a trusted root on each client, including the
+host browser, before restarting. Transfer the public certificate over a trusted
+channel. Its signing key is never downloaded. Do not bypass browser certificate
+warnings. LAN scope rejects public client IPs at the application boundary too;
+it does not intentionally create an Internet route.
+
+Finish initial setup, restart, then sign in at the displayed HTTPS address.
+Test using a second device; for Public access, test from a different network too.
+Do not expose model or voice worker ports. Existing certificate files and trusted
+reverse proxies remain advanced choices, with their existing validation rules.
 
 ## Provision locally first
 
@@ -36,7 +84,7 @@ Settings > Access > LAN and WAN access offers:
 | Mode | Listener | Public identity / trust |
 | --- | --- | --- |
 | Local only | Explicit loopback IP and port | Local HTTP; existing account protection stays on |
-| Direct HTTPS | Explicit IP and port; wildcard/public binds require this explicit mode | One advertised HTTPS origin and matching operator-provided certificate/key |
+| Direct HTTPS | Explicit IP and port; automatic setup selects one interface | One advertised HTTPS origin and a managed or operator-provided certificate/key |
 | Trusted reverse proxy | One loopback or private IP and port | One external HTTPS origin; only configured immediate proxy peers accepted |
 
 The public URL is an origin, such as `https://control.example.com:8443`.
@@ -132,15 +180,30 @@ local Stop are separate safeguards.
 
 Direct HTTPS validates the key pair, leaf validity, advertised SAN, server-auth
 usage and supplied intermediate signatures/order. It serves TLS 1.2 or newer.
-It does not establish client trust, install a CA or bypass a warning. Use an
-operator-managed CA/ACME client for issuance and renewal. Restrict private-key
-file access to the app's OS account.
+It does not install trust in a client or bypass a warning. Automatic public
+certificates are obtained from Let's Encrypt using its short-lived profile;
+IP certificates last approximately 160 hours. Automatic certificates renew
+at half their actual lifetime, checked every 15 minutes while the app is running.
+Failures retain the last valid certificate and retry with exponential backoff up
+to one hour. A host returning after expiry can renew a previously prepared
+identity, but refuses ordinary TLS handshakes until a valid replacement exists.
+Changed CA terms require explicit acceptance in setup; there is no silent consent.
+Keep the address and incoming validation port working. If a dynamic public IP
+changes, detect and save the new address; this is not a dynamic DNS service.
+
+Managed keys live in the private `https-private` directory, with protected Windows
+ACLs or Unix 0700/0600 permissions. They are excluded from settings, reports and
+database exports. The local CA lasts five years and must be explicitly replaced
+and re-enrolled before it expires. See [ADR 0030](decisions/0030-guided-https-certificates.md).
+For manual PEM files, continue using an operator-managed CA/ACME client for
+issuance and renewal, with private-key access restricted to the app's OS account.
 
 New TLS handshakes check replacement files at most once per 30 seconds. A bad
 replacement retains the last valid pair; an expired pair is refused. Access
-settings show expiry, a 30-day renewal warning and a failed-reload indicator.
-Existing connections keep their TLS session. Real-client trust enrollment,
-private-key ACL verification and renewal acceptance remain checklist work.
+settings show expiry, a 30-day warning for manual certificates, a lifetime-based
+renewal indicator for managed certificates, and replacement/renewal failures.
+Existing connections keep their TLS session. Real-client trust enrollment and
+external routing still require deployment-specific checks.
 
 If saved remote settings cannot start, use the same data directory locally:
 
