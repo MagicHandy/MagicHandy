@@ -3,7 +3,6 @@ package accounts
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/audit"
@@ -42,16 +41,8 @@ func (s *Store) ResetPasswordForSession(ctx context.Context, actorKey, accountID
 	}
 	var keys []string
 	err = s.db.WithTx(ctx, func(tx *sql.Tx) error {
-		owner, err := s.liveSessionOwner(ctx, tx, actorKey)
-		if err != nil {
+		if _, err := s.liveAdministrator(ctx, tx, actorKey); err != nil {
 			return err
-		}
-		var role string
-		if err := tx.QueryRowContext(ctx, `SELECT role FROM user_accounts WHERE id = ?`, owner).Scan(&role); err != nil {
-			return err
-		}
-		if role != RoleAdmin {
-			return errors.New("administrator access required")
 		}
 		keys, err = s.replacePasswordTx(ctx, tx, accountID, encoded, s.now())
 		return err

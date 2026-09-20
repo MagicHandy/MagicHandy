@@ -1,5 +1,27 @@
 # Goal Scorecard
 
+## 2026-09-19 — LAN/WAN revocation and Go security update
+
+Go 1.26.8 replaces the release pipeline's Go 1.25.0. Security-sensitive account,
+permission and network writes now validate current authority in their existing
+database transaction; no new runtime dependency, poll or database is added.
+
+| Windows amd64 core | Bytes |
+| --- | ---: |
+| Previous checkpoint, Go 1.26.4, `-s -w` | 20,077,056 |
+| Current source, Go 1.26.8, `-s -w` | 20,089,856 |
+| Current release flags, Go 1.26.8, `-w` | 21,439,488 |
+
+All builds use `CGO_ENABLED=0` and `-trimpath`. Retaining the compact symbol
+table costs 1,349,632 bytes versus fully stripping this candidate, and permits
+precise vulnerability scans of the actual Windows payload. DWARF debug data
+remains removed. The 21.44 MB core stays 8,560,512 bytes below the 30 MB budget.
+The browser bundle is unchanged. Source and this exact executable both pass
+`govulncheck` v1.8.0 with zero reachable/linked vulnerable symbols; unused
+packages in dependency modules are not represented as application exploits.
+
+See the [release readiness evidence](lan-wan-release-readiness-2026-09-19.md).
+
 ## 2026-09-19 — Full-page startup prompt backdrops
 
 Viewport scrims are exempt from the workspace content-width rule. The setup

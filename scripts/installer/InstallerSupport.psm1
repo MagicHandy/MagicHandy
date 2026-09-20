@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $script:InstallStateSchema = 3
-$script:MinimumGoVersion = [Version]'1.25.0'
+$script:MinimumGoVersion = [Version]'1.26.8'
 $script:ParakeetRunnerURL = 'https://github.com/mudler/parakeet.cpp/releases/download/v0.4.0/parakeet-v0.4.0-bin-win-cpu-x64.zip'
 $script:ParakeetRunnerSHA256 = '2880150a1bad2944baed46f2e6bb9f1bc55263a9f2bb85573785a7ec4fa35f27'
 $script:ParakeetServerSHA256 = 'a7fb07d20a3319013d01dd797a5b757000e34d862e2bcd84e3cdf007dca67543'

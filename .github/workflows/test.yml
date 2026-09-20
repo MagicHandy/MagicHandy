@@ -33,6 +33,9 @@ jobs:
       - name: Go vet
         run: go vet ./...
 
+      - name: Reachable Go vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:

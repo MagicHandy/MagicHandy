@@ -95,7 +95,7 @@
   "summary_tts_selected": "{0}（{1}、自動起動: {2}）",
   "summary_launcher": "起動スクリプト",
   "summary_managed_yes": "はい（{0}）",
-  "plan_go": "Go 1.25 以降がインストール済みであることを確認",
+  "plan_go": "Go 1.26.8 以降がインストール済みであることを確認",
   "plan_build_app": "CGO を無効にして magichandy.exe をビルド",
   "plan_build_workers": "Parakeet、OpenAI 互換 TTS、ElevenLabs の Go プロトコルアダプターをビルド",
   "plan_git_cmake": "Git と CMake がインストール済みであることを確認",

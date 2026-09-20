@@ -57,7 +57,7 @@ the release manifest, `SOURCE.txt`, and `magichandy.exe -version`.
 
 ## Release Artifacts
 
-The reviewed unsigned Windows alpha.45 release contains exactly these
+The reviewed unsigned Windows alpha.46 release contains exactly these
 downloadable artifacts:
 
 - `MagicHandy-<version>-windows-amd64-setup.exe`
@@ -73,7 +73,7 @@ remains for provenance.
 Pull-request workflows continue to retain setup only as a short-lived
 `unsigned-ci` artifact and exercise its full lifecycle. The tag workflow uses
 `ReviewedUnsignedPublic`, limited to alpha.8 through alpha.11 and alpha.13
-through alpha.45, scans the exact public directory with Defender, verifies the
+through alpha.46, scans the exact public directory with Defender, verifies the
 setup/ZIP manifests and two-entry outer checksum, exercises the exact setup
 lifecycle, and publishes three explicit assets.
 
@@ -89,6 +89,11 @@ A release tag is created only after all of the following are true on the merged
 `main` commit:
 
 1. Go, race, lint, architecture, pure-Go, frontend, and installer suites pass.
+   The patched Go minimum comes from `go.mod`. Pinned `govulncheck` scans source
+   in CI and all four exact Windows payload executables during artifact
+   verification. Releases remove DWARF data but retain their symbol tables
+   (`-w`, without `-s`); missing symbols or an older compiled Go version fail
+   verification rather than silently falling back to module-only analysis.
 2. The package workflow verifies the portable manifest, outer checksums, and
    unsigned installer lifecycle without release permission; the tag workflow
    repeats those checks against the exact reviewed public setup.

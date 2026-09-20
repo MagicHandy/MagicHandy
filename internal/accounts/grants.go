@@ -66,16 +66,28 @@ func (s *Store) GrantControl(ctx context.Context, administratorID, accountID str
 	if lifetime < time.Minute || lifetime > 12*time.Hour {
 		return nil, errors.New("control permission must expire between one minute and twelve hours from now")
 	}
-	return s.grantControl(ctx, administratorID, accountID, lifetime)
+	return s.grantControl(ctx, "", administratorID, accountID, lifetime)
 }
 
 // GrantPermanentControl explicitly issues control until revoked or replaced.
 // Login expiry, account disabling and controller leases still apply.
 func (s *Store) GrantPermanentControl(ctx context.Context, administratorID, accountID string) (*ControlGrant, error) {
-	return s.grantControl(ctx, administratorID, accountID, 0)
+	return s.grantControl(ctx, "", administratorID, accountID, 0)
 }
 
-func (s *Store) grantControl(ctx context.Context, administratorID, accountID string, lifetime time.Duration) (*ControlGrant, error) {
+// GrantControlForSession issues permission under a live administrator login.
+// A zero lifetime explicitly requests permanent permission.
+func (s *Store) GrantControlForSession(ctx context.Context, actorKey, accountID string, lifetime time.Duration) (*ControlGrant, error) {
+	if actorKey == "" {
+		return nil, ErrInvalidSession
+	}
+	if lifetime != 0 && (lifetime < time.Minute || lifetime > 12*time.Hour) {
+		return nil, errors.New("control permission must expire between one minute and twelve hours from now")
+	}
+	return s.grantControl(ctx, actorKey, "", accountID, lifetime)
+}
+
+func (s *Store) grantControl(ctx context.Context, actorKey, administratorID, accountID string, lifetime time.Duration) (*ControlGrant, error) {
 	random := make([]byte, 16)
 	if err := s.randomBytes(random); err != nil {
 		return nil, err
@@ -92,6 +104,14 @@ func (s *Store) grantControl(ctx context.Context, administratorID, accountID str
 		expiresAtMillis = deadline.UnixMilli()
 	}
 	err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
+		if actorKey != "" {
+			var err error
+			administratorID, err = s.liveAdministrator(ctx, tx, actorKey)
+			if err != nil {
+				return err
+			}
+			grant.IssuedBy = administratorID
+		}
 		var count int
 		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM user_accounts owner, user_accounts target
 			WHERE owner.id = ? AND owner.disabled = 0 AND owner.role = 'admin'
@@ -115,7 +135,26 @@ func (s *Store) grantControl(ctx context.Context, administratorID, accountID str
 
 // RevokeControl removes permission without ending the account's read access.
 func (s *Store) RevokeControl(ctx context.Context, administratorID, accountID string) error {
+	return s.revokeControl(ctx, "", administratorID, accountID)
+}
+
+// RevokeControlForSession checks the actor's login in the revocation transaction.
+func (s *Store) RevokeControlForSession(ctx context.Context, actorKey, accountID string) error {
+	if actorKey == "" {
+		return ErrInvalidSession
+	}
+	return s.revokeControl(ctx, actorKey, "", accountID)
+}
+
+func (s *Store) revokeControl(ctx context.Context, actorKey, administratorID, accountID string) error {
 	return s.db.WithTx(ctx, func(tx *sql.Tx) error {
+		if actorKey != "" {
+			var err error
+			administratorID, err = s.liveAdministrator(ctx, tx, actorKey)
+			if err != nil {
+				return err
+			}
+		}
 		var count int
 		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM user_accounts WHERE id = ? AND disabled = 0 AND role = 'admin'`, administratorID).Scan(&count); err != nil {
 			return err
