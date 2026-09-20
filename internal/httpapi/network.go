@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"database/sql"
 	"errors"
 	"net"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/accounts"
 	"github.com/mapledaemon/MagicHandy/internal/netaccess"
 )
 
@@ -120,15 +122,41 @@ func (s *Server) handleNetworkSave(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if account, authenticated := authenticatedAccount(r); authenticated {
-		_, allowed, err := s.authenticatePassword(r, account.Username, body.Password)
-		if err != nil || !allowed {
-			writeError(w, http.StatusForbidden, errors.New("confirm your current administrator password to change remote access"))
+	var err error
+	if current, authenticated := authenticatedSession(r); authenticated {
+		if !s.allowCredentialAttempt(r, current.session.Account.Username) {
+			writeError(w, http.StatusTooManyRequests, errAuthenticationThrottled)
 			return
 		}
+		err = s.accounts.WithConfirmedAdministrator(r.Context(), current.session.Key, body.Password, func(tx *sql.Tx) error {
+			return netaccess.SaveTx(r.Context(), tx, policy.Config)
+		})
+	} else {
+		// Bootstrap-local configuration is allowed only while accounts are
+		// still absent. Serialize that condition with first-account creation.
+		err = s.store.Datastore().WithTx(r.Context(), func(tx *sql.Tx) error {
+			var count int
+			if err := tx.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM user_accounts`).Scan(&count); err != nil {
+				return err
+			}
+			if count != 0 {
+				return accounts.ErrInvalidSession
+			}
+			return netaccess.SaveTx(r.Context(), tx, policy.Config)
+		})
 	}
-	if err := netaccess.Save(r.Context(), s.store.Datastore(), policy.Config); err != nil {
-		writeError(w, http.StatusInternalServerError, errors.New("network configuration could not be saved"))
+	if err != nil {
+		switch {
+		case errors.Is(err, accounts.ErrInvalidSession):
+			s.writeAuthenticationRequired(w)
+		case errors.Is(err, accounts.ErrInvalidCredentials), errors.Is(err, accounts.ErrAdministratorRequired):
+			if errors.Is(err, accounts.ErrInvalidCredentials) {
+				s.recordRejectedLogin(r, nil)
+			}
+			writeError(w, http.StatusForbidden, errors.New("confirm your current administrator password to change remote access"))
+		default:
+			writeError(w, http.StatusInternalServerError, errors.New("network configuration could not be saved"))
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"saved": policy.Config, "restart_required": true})

@@ -132,8 +132,12 @@ func (s *Server) controlGrantRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) handleControlGrant(w http.ResponseWriter, r *http.Request) {
-	administrator, ok := s.requireAdministrator(w, r)
+	if _, ok := s.requireAdministrator(w, r); !ok {
+		return
+	}
+	current, ok := authenticatedSession(r)
 	if !ok {
+		s.writeAuthenticationRequired(w)
 		return
 	}
 	accountID := r.PathValue("id")
@@ -152,17 +156,25 @@ func (s *Server) handleControlGrant(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if body.Permanent && body.DurationMinutes == nil {
-			grant, err = s.accounts.GrantPermanentControl(r.Context(), administrator.ID, accountID)
+			grant, err = s.accounts.GrantControlForSession(r.Context(), current.session.Key, accountID, 0)
 		} else if !body.Permanent && body.DurationMinutes != nil && *body.DurationMinutes >= 1 && *body.DurationMinutes <= 720 {
-			grant, err = s.accounts.GrantControl(r.Context(), administrator.ID, accountID, time.Duration(*body.DurationMinutes)*time.Minute)
+			grant, err = s.accounts.GrantControlForSession(r.Context(), current.session.Key, accountID, time.Duration(*body.DurationMinutes)*time.Minute)
 		} else {
 			writeError(w, http.StatusBadRequest, errors.New("choose a duration from 1 to 720 minutes or explicitly request permanent control"))
 			return
 		}
 	case http.MethodDelete:
-		err = s.accounts.RevokeControl(r.Context(), administrator.ID, accountID)
+		err = s.accounts.RevokeControlForSession(r.Context(), current.session.Key, accountID)
 	}
 	if err != nil {
+		if errors.Is(err, accounts.ErrInvalidSession) {
+			s.writeAuthenticationRequired(w)
+			return
+		}
+		if errors.Is(err, accounts.ErrAdministratorRequired) {
+			writeError(w, http.StatusForbidden, err)
+			return
+		}
 		writeError(w, http.StatusBadRequest, errors.New("control permission could not be read or changed; check that the operator is enabled"))
 		return
 	}

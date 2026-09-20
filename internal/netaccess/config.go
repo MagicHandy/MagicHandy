@@ -200,6 +200,14 @@ func Load(ctx context.Context, db *appstore.DB) (*Config, error) {
 
 // Save persists a previously validated configuration atomically in the shared DB.
 func Save(ctx context.Context, db *appstore.DB, config Config) error {
+	return db.WithTx(ctx, func(tx *sql.Tx) error {
+		return SaveTx(ctx, tx, config)
+	})
+}
+
+// SaveTx validates and persists configuration inside the caller's transaction,
+// allowing the HTTP edge to bind the write to current account authority.
+func SaveTx(ctx context.Context, tx *sql.Tx, config Config) error {
 	policy, err := Validate(config)
 	if err != nil {
 		return err
@@ -208,10 +216,8 @@ func Save(ctx context.Context, db *appstore.DB, config Config) error {
 	if err != nil {
 		return err
 	}
-	return db.WithTx(ctx, func(tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, `INSERT INTO app_kv(key, value, updated_at)
+	_, err = tx.ExecContext(ctx, `INSERT INTO app_kv(key, value, updated_at)
 			VALUES ('network_config', ?, ?) ON CONFLICT(key) DO UPDATE SET
 			value = excluded.value, updated_at = excluded.updated_at`, string(data), time.Now().UTC().Format(time.RFC3339Nano))
-		return err
-	})
+	return err
 }

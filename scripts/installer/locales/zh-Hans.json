@@ -95,7 +95,7 @@
   "summary_tts_selected": "{0}（{1}；自动启动：{2}）",
   "summary_launcher": "启动脚本",
   "summary_managed_yes": "是（{0}）",
-  "plan_go": "确保已安装 Go 1.25 或更高版本",
+  "plan_go": "确保已安装 Go 1.26.8 或更高版本",
   "plan_build_app": "在禁用 CGO 的情况下构建 magichandy.exe",
   "plan_build_workers": "构建 Parakeet、OpenAI 兼容 TTS 和 ElevenLabs 的 Go 协议适配器",
   "plan_git_cmake": "确保已安装 Git 和 CMake",

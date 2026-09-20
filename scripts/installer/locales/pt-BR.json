@@ -95,7 +95,7 @@
   "summary_tts_selected": "{0} ({1}; inicialização automática: {2})",
   "summary_launcher": "Inicializador",
   "summary_managed_yes": "sim ({0})",
-  "plan_go": "Garantir que o Go 1.25 ou mais recente esteja instalado",
+  "plan_go": "Garantir que o Go 1.26.8 ou mais recente esteja instalado",
   "plan_build_app": "Compilar magichandy.exe com o CGO desativado",
   "plan_build_workers": "Compilar os adaptadores Go do Parakeet, TTS compatível com OpenAI e ElevenLabs",
   "plan_git_cmake": "Garantir que o Git e o CMake estejam instalados",

@@ -12,6 +12,29 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/netaccess"
 )
 
+func TestNetworkSaveRequiresLiveAdministratorPassword(t *testing.T) {
+	s, _, _, cookie := newControllerSessionFixture(t)
+	for _, test := range []struct {
+		password string
+		status   int
+	}{
+		{"wrong password", http.StatusForbidden},
+		{"a long review passphrase", http.StatusOK},
+	} {
+		response := recoveryRequest(t, s, cookie, http.MethodPut, "/api/network", map[string]any{
+			"password": test.password,
+			"config":   netaccess.Config{Mode: netaccess.Local, ListenAddress: "127.0.0.1:49717"},
+		})
+		if response.Code != test.status {
+			t.Fatalf("save status=%d want=%d: %s", response.Code, test.status, response.Body.String())
+		}
+		saved, err := netaccess.Load(t.Context(), s.store.Datastore())
+		if err != nil || (saved != nil) != (test.status == http.StatusOK) {
+			t.Fatalf("unexpected persisted network config: %+v %v", saved, err)
+		}
+	}
+}
+
 func TestForwardedLocalAddressNeverGrantsLocalPrivileges(t *testing.T) {
 	s, _, _, _ := newControllerSessionFixture(t)
 	policy, err := netaccess.Validate(netaccess.Config{Mode: netaccess.TrustedProxy, ListenAddress: "127.0.0.1:49717",

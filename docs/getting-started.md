@@ -220,7 +220,7 @@ remain planned.
 
 ## Build and run by hand
 
-Requires [Go](https://go.dev/dl/) 1.25 or newer.
+Requires [Go](https://go.dev/dl/) 1.26.8 or newer.
 
 ```powershell
 go run ./cmd/magichandy

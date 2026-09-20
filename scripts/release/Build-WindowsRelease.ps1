@@ -220,7 +220,10 @@ try {
     $env:GOOS = 'windows'
     $env:GOARCH = 'amd64'
     try {
-        $ldflags = "-s -w -X main.version=$Version -X main.commit=$Commit"
+        # Retain the compact symbol table for artifact vulnerability scans;
+        # remove DWARF debug data. Fully stripped PE files force module-only
+        # findings, including unused vulnerable packages that are not linked.
+        $ldflags = "-w -X main.version=$Version -X main.commit=$Commit"
         $targets = @(
             @{ Output = 'magichandy.exe'; Package = './cmd/magichandy' },
             @{ Output = 'voice-parakeet-worker.exe'; Package = './cmd/voice-parakeet-worker' },

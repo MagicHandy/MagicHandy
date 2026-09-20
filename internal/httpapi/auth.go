@@ -189,12 +189,6 @@ func (s *Server) sessionFromRequest(r *http.Request) (accounts.Session, string, 
 	return session, token, nil
 }
 
-func (s *Server) authenticatePassword(r *http.Request, username, password string) (accounts.Account, bool, error) {
-	return s.authenticateAccount(r, username, func() (accounts.Account, error) {
-		return s.accounts.Authenticate(r.Context(), username, password)
-	})
-}
-
 func (s *Server) authenticateAccount(r *http.Request, username string, authenticate func() (accounts.Account, error)) (accounts.Account, bool, error) {
 	if !s.allowCredentialAttempt(r, username) {
 		return accounts.Account{}, false, errAuthenticationThrottled
@@ -595,6 +589,11 @@ func (s *Server) handleAccountCreate(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAdministrator(w, r); !ok {
 		return
 	}
+	current, ok := authenticatedSession(r)
+	if !ok {
+		s.writeAuthenticationRequired(w)
+		return
+	}
 	if !requireJSONRequest(w, r) {
 		return
 	}
@@ -607,9 +606,13 @@ func (s *Server) handleAccountCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	account, err := s.accounts.Create(r.Context(), body.Username, body.Password, body.Role)
+	account, err := s.accounts.CreateForSession(r.Context(), current.session.Key, body.Username, body.Password, body.Role)
 	if err != nil {
-		if isAccountInputError(err) || errors.Is(err, accounts.ErrUsernameTaken) {
+		if errors.Is(err, accounts.ErrInvalidSession) {
+			s.writeAuthenticationRequired(w)
+		} else if errors.Is(err, accounts.ErrAdministratorRequired) {
+			writeError(w, http.StatusForbidden, err)
+		} else if isAccountInputError(err) || errors.Is(err, accounts.ErrUsernameTaken) {
 			writeError(w, http.StatusBadRequest, err)
 		} else {
 			s.logger.Warn("user account could not be created", "error", err)
@@ -662,6 +665,11 @@ func (s *Server) handleAccountDisabled(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAdministrator(w, r); !ok {
 		return
 	}
+	current, ok := authenticatedSession(r)
+	if !ok {
+		s.writeAuthenticationRequired(w)
+		return
+	}
 	if !requireJSONRequest(w, r) {
 		return
 	}
@@ -672,8 +680,13 @@ func (s *Server) handleAccountDisabled(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := s.accounts.SetDisabled(r.Context(), r.PathValue("id"), body.Disabled); err != nil {
+	keys, err := s.accounts.SetDisabledForSession(r.Context(), current.session.Key, r.PathValue("id"), body.Disabled)
+	if err != nil {
 		switch {
+		case errors.Is(err, accounts.ErrInvalidSession):
+			s.writeAuthenticationRequired(w)
+		case errors.Is(err, accounts.ErrAdministratorRequired):
+			writeError(w, http.StatusForbidden, err)
 		case errors.Is(err, accounts.ErrNotFound):
 			writeError(w, http.StatusNotFound, err)
 		case errors.Is(err, accounts.ErrLastAdmin):
@@ -683,6 +696,14 @@ func (s *Server) handleAccountDisabled(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, errors.New("account enabled state could not be changed"))
 		}
 		return
+	}
+	if body.Disabled {
+		if current.session.Account.ID == r.PathValue("id") {
+			s.clearSessionCookie(w)
+		}
+		s.endRevokedSessions(r.Context(), current.session.Key, keys)
+		// Disabling a grant's issuer also removes that grant's authority.
+		s.checkAccessLifetimes()
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

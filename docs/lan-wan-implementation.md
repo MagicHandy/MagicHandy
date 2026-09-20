@@ -3,9 +3,26 @@
 Goal: **Implement full LAN/WAN support.**
 
 The user selected self-hosted HTTPS, with direct access or a trusted reverse
-proxy, as the primary WAN setup. Scope remains the complete
-[21-item checklist](lan-wan-control-checklist.md), with the proposed design in
-[ADR 0029](decisions/0029-session-bound-network-control.md).
+proxy, as the primary WAN setup. The [21-item checklist](lan-wan-control-checklist.md)
+remains the longer-term roadmap, with the design in
+[ADR 0029](decisions/0029-session-bound-network-control.md). The update release
+criterion is security and reliability of the implemented modes; unimplemented
+enrollment and convenience features are not release prerequisites.
+
+## Release security corrections — 2026-09-19
+
+Administrator account creation, enabling/disabling, control-grant replacement
+and revocation now validate the acting login inside the same serialized write
+transaction. Network configuration additionally rechecks the exact confirmed
+password there. Initial local configuration checks that accounts remain absent
+in that transaction, closing the bootstrap/save race. Account disabling retires
+the affected requests, controller/gateway authority and streams before replying;
+re-enabling an account does not restore its old sessions.
+
+The [release review](lan-wan-release-readiness-2026-09-19.md) records the delayed
+HTTPS request reproduction, fixes, supported deployment tests and boundaries.
+The compiler minimum is Go 1.26.8 throughout CI, release and the source installer.
+Source and exact packaged executable vulnerability scans are release gates.
 
 ## Current implementation work
 

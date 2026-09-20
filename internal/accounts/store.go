@@ -148,15 +148,25 @@ func (s *Store) count(ctx context.Context, condition string) (int, error) {
 // the shared serialized writer so simultaneous bootstrap requests cannot both
 // succeed.
 func (s *Store) BootstrapAdmin(ctx context.Context, username, password string) (Account, error) {
-	return s.create(ctx, username, password, RoleAdmin, true)
+	return s.create(ctx, username, password, RoleAdmin, true, "")
 }
 
-// Create adds an account after the HTTP edge has authorized an administrator.
+// Create adds an account for trusted internal callers. HTTP mutations must use
+// CreateForSession so revocation is serialized with the write.
 func (s *Store) Create(ctx context.Context, username, password, role string) (Account, error) {
-	return s.create(ctx, username, password, role, false)
+	return s.create(ctx, username, password, role, false, "")
 }
 
-func (s *Store) create(ctx context.Context, username, password, role string, bootstrap bool) (Account, error) {
+// CreateForSession creates an account only while the acting administrator's
+// login is still valid at the instant of the write.
+func (s *Store) CreateForSession(ctx context.Context, actorKey, username, password, role string) (Account, error) {
+	if actorKey == "" {
+		return Account{}, ErrInvalidSession
+	}
+	return s.create(ctx, username, password, role, false, actorKey)
+}
+
+func (s *Store) create(ctx context.Context, username, password, role string, bootstrap bool, actorKey string) (Account, error) {
 	username, usernameKey, err := normalizeUsername(username)
 	if err != nil {
 		return Account{}, err
@@ -176,6 +186,11 @@ func (s *Store) create(ctx context.Context, username, password, role string, boo
 	now := s.now().Format(time.RFC3339Nano)
 	account := Account{ID: id, Username: username, Role: role, CreatedAt: now, UpdatedAt: now}
 	err = s.db.WithTx(ctx, func(tx *sql.Tx) error {
+		if actorKey != "" {
+			if _, err := s.liveAdministrator(ctx, tx, actorKey); err != nil {
+				return err
+			}
+		}
 		if bootstrap {
 			var count int
 			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_accounts`).Scan(&count); err != nil {
@@ -489,11 +504,32 @@ func (s *Store) SetPassword(ctx context.Context, accountID, password string) err
 	})
 }
 
-// SetDisabled changes login eligibility and revokes sessions when disabling.
+// SetDisabled changes login eligibility for trusted internal callers.
+// HTTP mutations must use SetDisabledForSession.
 // At least one enabled administrator is always retained.
 func (s *Store) SetDisabled(ctx context.Context, accountID string, disabled bool) error {
+	_, err := s.setDisabled(ctx, "", accountID, disabled)
+	return err
+}
+
+// SetDisabledForSession serializes administrator authority with the mutation.
+// Returned private session keys are for immediate cancellation, never JSON.
+func (s *Store) SetDisabledForSession(ctx context.Context, actorKey, accountID string, disabled bool) ([]string, error) {
+	if actorKey == "" {
+		return nil, ErrInvalidSession
+	}
+	return s.setDisabled(ctx, actorKey, accountID, disabled)
+}
+
+func (s *Store) setDisabled(ctx context.Context, actorKey, accountID string, disabled bool) ([]string, error) {
 	now := s.now().Format(time.RFC3339Nano)
-	return s.db.WithTx(ctx, func(tx *sql.Tx) error {
+	var keys []string
+	err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
+		if actorKey != "" {
+			if _, err := s.liveAdministrator(ctx, tx, actorKey); err != nil {
+				return err
+			}
+		}
 		var role string
 		var currentDisabled int
 		if err := tx.QueryRowContext(ctx, `SELECT role, disabled FROM user_accounts WHERE id = ?`, accountID).Scan(&role, &currentDisabled); err != nil {
@@ -523,7 +559,12 @@ func (s *Store) SetDisabled(ctx context.Context, accountID string, disabled bool
 			return err
 		}
 		if disabled {
-			_, err := tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = ?`, accountID)
+			var err error
+			keys, err = recoverySessionKeys(ctx, tx, accountID)
+			if err != nil {
+				return err
+			}
+			_, err = tx.ExecContext(ctx, `DELETE FROM user_sessions WHERE user_id = ?`, accountID)
 			if err != nil {
 				return err
 			}
@@ -537,6 +578,10 @@ func (s *Store) SetDisabled(ctx context.Context, accountID string, disabled bool
 		}
 		return audit.AppendTx(ctx, tx, audit.Event{OccurredAt: s.now().UnixMilli(), Kind: kind, Outcome: "success", TargetAccountID: accountID})
 	})
+	if err != nil {
+		return nil, err
+	}
+	return keys, nil
 }
 
 func normalizeUsername(username string) (string, string, error) {
