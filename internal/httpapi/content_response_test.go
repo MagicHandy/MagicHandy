@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -56,7 +57,13 @@ func TestStalledContentReleasesRequestCapacityOnHTTP1AndHTTP2(t *testing.T) {
 			host.EnableHTTP2 = http2
 			host.StartTLS()
 			defer host.Close()
-			response, err := host.Client().Get(host.URL + "/api/large-content")
+			client := host.Client()
+			// A large OS receive window can keep accepting data after this
+			// client stops reading. Bound that buffering so the assertion tests
+			// the blocked-write deadline, not time spent filling autotuned TCP
+			// buffers under the race detector and concurrent package load.
+			client.Transport.(*http.Transport).DialContext = dialSmallContentWindow
+			response, err := client.Get(host.URL + "/api/large-content")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -76,6 +83,23 @@ func TestStalledContentReleasesRequestCapacityOnHTTP1AndHTTP2(t *testing.T) {
 			}
 		})
 	}
+}
+
+func dialSmallContentWindow(ctx context.Context, network, address string) (net.Conn, error) {
+	conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
+	if err != nil {
+		return nil, err
+	}
+	tcp, ok := conn.(*net.TCPConn)
+	if !ok {
+		_ = conn.Close()
+		return nil, errors.New("content fixture requires a TCP connection")
+	}
+	if err := tcp.SetReadBuffer(4 << 10); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return conn, nil
 }
 
 func TestContentDeadlineDoesNotLimitAnIdleProducerGap(t *testing.T) {

@@ -135,6 +135,16 @@ startup timeout; the unchanged helper passed five consecutive independent runs
 and the subsequent full suite. Its failure log is retained; the teardown test
 was neither weakened nor skipped.
 
+The first CI pair also exposed an intermittent HTTP/1 stalled-content fixture
+timeout (the other full run passed). An unread response can continue filling
+an autotuned OS receive buffer before its write actually stalls. The fixture
+now limits the test client's TCP receive buffer to 4 KiB, so backpressure begins
+promptly under race-instrumented package load. Its eight-second assertion,
+five-second production write deadline and HTTP/2 negotiation check remain
+unchanged. Three consecutive race runs of both protocols complete in about
+five seconds per protocol. This is a test-fixture correction, with no runtime
+HTTP behavior or timeout change.
+
 The current isolated simulator at `http://127.0.0.10:50007/#/chat` uses the
 available local Ollama `huihui_ai/granite4.1-abliterated:3b`. The provider probe
 returns non-empty text, and the actual app chat returns “The app is ready for
