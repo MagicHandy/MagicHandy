@@ -104,6 +104,17 @@ Stop had already invalidated it. The existing serialization barrier and the
 engine's cancellation path remain in place; ambiguously delivered motion is
 never automatically retried.
 
+### HTTPS cleanup race found by CI
+
+The PR race run exposed an existing failure in the pending HTTPS base:
+`TestPublicIPCertificateEndToEnd` could observe `ready` before deferred cleanup
+released the temporary validation listener. A prompt restart could then contend
+for that same port. Certificate preparation now returns from its listener-owning
+helper before publishing success or failure. The strict success assertion stays
+in place, with a failure-path release regression added. Five race-enabled
+netaccess runs and 100 repetitions of each terminal path pass locally; no sleep,
+retry or weakened assertion masks the ordering defect.
+
 ## Upstream Handy 2 issue
 
 [Buttplug issue 893](https://github.com/buttplugio/buttplug/issues/893) reports

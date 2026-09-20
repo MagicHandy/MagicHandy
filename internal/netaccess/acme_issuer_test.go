@@ -221,7 +221,7 @@ func TestPublicIPCertificateEndToEnd(t *testing.T) {
 	}
 	listener, err = net.Listen("tcp", p.Config.ListenAddress)
 	if err != nil {
-		t.Fatal("preparation kept the validation listener open")
+		t.Fatalf("preparation reported ready before releasing the validation listener: %v", err)
 	}
 	_ = listener.Close()
 	provider, err := a.LoadManaged(p)

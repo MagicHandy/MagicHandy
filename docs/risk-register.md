@@ -1445,9 +1445,9 @@ conditional run.
 
 Review update 2026-07-20: adaptive buffered owners preserve authored knots,
 while an Intiface frame deliberately stays on the selected device timing floor
-and is tested not to inject a closer knot. Browser Bluetooth retains 0.1%
-firmware point resolution; Cloud's integer API floor is documented rather than
-hidden. A matched subjective run of shallow patterns and active envelope
+and is tested not to inject a closer knot. The claimed 0.1% Bluetooth firmware
+resolution was incorrect (see September 20 correction below); both Handy HSP
+owners use integer percent. A matched subjective run of shallow patterns and active envelope
 changes is still required, so the risk remains Medium.
 
 Review update 2026-07-21: selected Intiface `StepCount` now participates in the

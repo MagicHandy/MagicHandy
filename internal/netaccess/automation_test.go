@@ -219,6 +219,32 @@ func TestCloseCancelsPreparationAndReleasesListener(t *testing.T) {
 	}
 }
 
+func TestFailedPreparationReleasesListenerBeforeReportingFailure(t *testing.T) {
+	a := NewAutomation(t.TempDir())
+	defer a.Close()
+	p := managedPolicy(t, AutomaticPublic)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Config.ListenAddress = listener.Addr().String()
+	_ = listener.Close()
+	a.issue = func(context.Context, *Policy, *challengeSolver) ([]byte, error) {
+		return nil, errors.New("validation failed")
+	}
+	if _, err := a.Prepare(p); err != nil {
+		t.Fatal(err)
+	}
+	if status := awaitPreparation(t, a); status.State != "failed" {
+		t.Fatalf("expected preparation failure: %+v", status)
+	}
+	listener, err = net.Listen("tcp", p.Config.ListenAddress)
+	if err != nil {
+		t.Fatalf("preparation reported failure before releasing the validation listener: %v", err)
+	}
+	_ = listener.Close()
+}
+
 func TestShortCertificateRenewalUsesActualLifetime(t *testing.T) {
 	now := time.Now()
 	status := CertificateStatus{NotBefore: now, NotAfter: now.Add(160 * time.Hour)}

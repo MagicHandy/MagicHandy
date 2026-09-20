@@ -151,18 +151,7 @@ func (a *Automation) prepare(policy *Policy) {
 	defer a.operation.Unlock()
 	ctx, cancel := context.WithTimeout(a.ctx, 4*time.Minute)
 	defer cancel()
-	solver := &challengeSolver{host: policy.Origin.Hostname()}
-	err := preparePrivateDirectory(a.root)
-	if err == nil && policy.Config.CertificateMode == AutomaticPublic {
-		var closeListener func()
-		closeListener, err = startChallengeListener(ctx, policy.Config.ListenAddress, solver)
-		if err == nil {
-			defer closeListener()
-		}
-	}
-	if err == nil {
-		err = a.obtain(ctx, policy, solver)
-	}
+	err := a.prepareCertificate(ctx, policy)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if err != nil {
@@ -176,6 +165,23 @@ func (a *Automation) prepare(policy *Policy) {
 	}
 	status := certs.Status()
 	a.status.State, a.status.Certificate = "ready", &status
+}
+
+// Finish challenge teardown before publishing a terminal preparation state.
+// The caller may immediately restart the app on this same port after "ready".
+func (a *Automation) prepareCertificate(ctx context.Context, policy *Policy) error {
+	if err := preparePrivateDirectory(a.root); err != nil {
+		return err
+	}
+	solver := &challengeSolver{host: policy.Origin.Hostname()}
+	if policy.Config.CertificateMode == AutomaticPublic {
+		closeListener, err := startChallengeListener(ctx, policy.Config.ListenAddress, solver)
+		if err != nil {
+			return err
+		}
+		defer closeListener()
+	}
+	return a.obtain(ctx, policy, solver)
 }
 
 func (a *Automation) obtain(ctx context.Context, policy *Policy, solver *challengeSolver) error {

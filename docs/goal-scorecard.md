@@ -18,14 +18,17 @@ values were wrong and saturated firmware. This is not a radio benchmark.
 | Main CSS, raw / Node gzip-9 | 148,552 / 26,809 B | 148,552 / 26,809 B | 0 B |
 | All embedded assets | 2,254,305 B | 2,255,959 B | +1,654 B |
 
-One fresh simulated review process reached health in 587 ms with a 29,413,376 B
-working set and 58,552,320 private bytes, using warm OS file caches. External
+One fresh simulated review process reached health in 587 ms with a 29,618,176 B
+working set and 57,528,320 private bytes, using warm OS file caches. External
 Ollama memory is separate. Full Go/race, vet, Windows/Linux lint, all 658 frontend
 tests, TypeScript and canonical UI build pass; final Cloud changes also receive
 focused transport/HTTP and race checks. The final binary vulnerability scan
 reports no reachable or imported-package vulnerabilities (three advisories are
 in unused dependency modules). The exact review app completes a real local
-Ollama text generation. See [review and evidence](bluetooth-intiface-review-2026-09-20.md).
+Ollama text generation. CI also exposed a ready-before-listener-cleanup race in
+the pending HTTPS base; preparation now completes teardown before publishing
+its terminal status, with repeated race coverage of success and failure paths.
+See [review and evidence](bluetooth-intiface-review-2026-09-20.md).
 
 ## 2026-09-20 — Guided HTTPS and automatic certificates
 

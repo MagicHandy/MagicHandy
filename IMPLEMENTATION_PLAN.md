@@ -1755,8 +1755,9 @@ chatter is removed without flattening slow subtle motion, and active retargets
 use a 750 ms C1 continuity blend. Pattern imports require 5% source span before
 relative normalization; finite programs remain exact. Cloud keeps its required
 whole-percent API encoding but declares that resolution so the engine can
-remove bounded rounded plateaus, while Browser Bluetooth now retains semantic
-fractions to the firmware's 0..1000 field. Unused raw Cloud/Bluetooth
+remove bounded rounded plateaus. That audit's claim that Bluetooth had a
+0..1000 field was incorrect; the September 20 review corrects its encoding and
+advertised sampling resolution to integer percent. Unused raw Cloud/Bluetooth
 stroke/add/play HTTP routes were removed to enforce the single motion path. See
 `docs/motion-pathway-review-2026-07-20.md`. Matched below-40% physical-feel and
 buffered-envelope refresh checks remain manual evidence.
@@ -2510,6 +2511,8 @@ Corrected Handy Bluetooth HSP/stroke units against manufacturer sources and
 reported actual 1% resolution to the existing shared engine. Extracted bounded
 GATT session delivery from React and Intiface session I/O from pacing. Fixed
 Intiface watchdog/discovery ordering, shared zero-based HSP indices and timestamp
-bounds, and Cloud validation/response/Stop edge cases. No additional transport,
+bounds, and Cloud validation/response/Stop edge cases. CI exposed a pending HTTPS
+cleanup race; preparation now releases its validation listener before reporting
+success or failure. No additional transport,
 motion generator, native dependency or hardware auto-connect was introduced.
 See [review and validation](docs/bluetooth-intiface-review-2026-09-20.md).
