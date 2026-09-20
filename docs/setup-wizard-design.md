@@ -105,10 +105,23 @@ Reopening an already completed setup shows status rather than a second bootstrap
 form and does not sign out an administrator who entered through the normal login
 screen.
 
-The screen explicitly separates entry protection from network exposure. It
-does not change the listen address, generate a certificate, install a trust
-root, or promise internet remote control. A remote browser cannot bootstrap the
-first account and instead receives the login screen's local-setup guidance.
+The Access step starts with **Local only**, **LAN + local**, or **Public**.
+Local only retains optional account protection. Remote choices create the first
+administrator and keep the user on Access to finish the shared HTTPS guide.
+LAN setup creates a local certificate and offers its public trust root for
+download. Public setup detects the egress IPv4 and CA terms, accepts an optional
+domain instead, and obtains/renews a public certificate after explicit consent.
+The checklist states exact local and external TCP ports, firewall exclusions and
+router forwarding requirements. Discovery is not labeled as inbound reachability.
+Manual certificates and a trusted proxy remain advanced options.
+
+Certificate preparation cannot change the app listener. The guide saves only
+after preparation and backend validation succeed; Continue waits for that save.
+Changes take effect on restart. No router/firewall rule or trusted root is installed
+automatically. A remote browser cannot bootstrap the first account and instead
+receives the login screen's local-setup guidance. See
+[ADR 0030](decisions/0030-guided-https-certificates.md) and the
+[deployment guide](self-hosted-https.md) for renewal and recovery.
 The exact UX and future linked-session seam are specified in
 [account-gui-design.md](account-gui-design.md).
 

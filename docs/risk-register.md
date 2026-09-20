@@ -1983,3 +1983,17 @@ and motion grants, MFA/recovery, automatic certificate lifecycle, formal
 security review, race-suite evidence, and real second-device acceptance remain
 open. The feature must continue to be described as opt-in LAN support, not
 internet remote control or multi-tenant isolation.
+
+Implementation update 2026-09-20: the historical LAN-only restriction above is
+superseded by the explicit self-hosted HTTPS/proxy policy in ADR 0029 and the
+[September 19 security/reliability evidence](lan-wan-release-readiness-2026-09-19.md).
+[ADR 0030](decisions/0030-guided-https-certificates.md) adds guided Local/LAN/Public
+setup, bounded public-address discovery, per-installation LAN trust, and managed
+public certificates. Administrator consent, account prerequisites, exact origin
+checks and transactional network saves remain enforced. Initial certificate
+validation serves no app data; listeners and outbound operations are bounded and
+joined at teardown. Tests cover real TLS validation against a local authority,
+expired-cache recovery and failed-renewal retention. Public IP detection is not
+proof of inbound routing. Router/firewall changes, client trust enrollment,
+dynamic public-address changes and external-client acceptance remain deployment
+responsibilities; certificate automation does not imply multi-tenant isolation.

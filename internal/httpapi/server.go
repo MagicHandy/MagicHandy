@@ -70,7 +70,8 @@ type Runtime struct {
 	SecureCookies          bool
 	AllowedBrowserHosts    []string
 	NetworkPolicy          *netaccess.Policy
-	NetworkCertificates    *netaccess.Certificates
+	NetworkCertificates    netaccess.CertificateProvider
+	NetworkAutomation      *netaccess.Automation
 }
 
 // Server owns the local HTTP routes and embedded static asset serving.
@@ -85,7 +86,8 @@ type Server struct {
 	access              sessionActivityRuntime
 	accessWG            sync.WaitGroup
 	networkPolicy       *netaccess.Policy
-	networkCertificates *netaccess.Certificates
+	networkCertificates netaccess.CertificateProvider
+	networkAutomation   *netaccess.Automation
 	requestAdmission    requestAdmissionRuntime
 	stopAdmission       stopAdmissionRuntime
 	traces              *diagnostics.TraceRing
@@ -193,6 +195,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		access:              newSessionActivityRuntime(),
 		networkPolicy:       runtime.NetworkPolicy,
 		networkCertificates: runtime.NetworkCertificates,
+		networkAutomation:   runtime.NetworkAutomation,
 		traces:              runtime.Traces,
 		transport:           runtime.Transport,
 		cloud:               newCloudRuntime(runtime),
@@ -212,6 +215,9 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		started:             time.Now().UTC(),
 		version:             version,
 	}
+	if server.networkAutomation == nil {
+		server.networkAutomation = netaccess.NewAutomation(store.DataDir())
+	}
 	server.setup = newSetupManager(
 		lifecycleCtx,
 		store.DataDir(),
@@ -225,6 +231,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	settings, _ := store.Snapshot()
 	if err := server.openRuntimeDomains(runtime, settings); err != nil {
 		lifecycleCancel()
+		server.networkAutomation.Close()
 		managedLLM.Close()
 		_ = modelManager.Close()
 		personalization.Close()
@@ -232,6 +239,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	}
 
 	server.activate(runtime, settings)
+	server.networkAutomation.StartRenewal()
 	return server, nil
 }
 

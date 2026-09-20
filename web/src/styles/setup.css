@@ -57,13 +57,12 @@
 .setup-progress li button {
   display: grid;
   width: 100%;
-  min-height: 40px;
+  min-height: 36px;
   grid-template-columns: 24px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
   padding: 6px 8px;
-  border: 0;
-  border-left: 3px solid transparent;
+  border: 1px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--muted);
@@ -83,8 +82,8 @@
 }
 
 .setup-progress li[data-state="current"] button {
-  border-left-color: var(--accent);
-  background: var(--accent-tint);
+  border-color: var(--line-strong);
+  background: var(--surface-2);
   color: var(--text);
   font-weight: 600;
 }
@@ -576,13 +575,12 @@
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
     padding: 3px;
-    border-left: 0;
-    border-bottom: 3px solid transparent;
+    border: 1px solid transparent;
     font-size: 0;
   }
 
   .setup-progress li[data-state="current"] button {
-    border-bottom-color: var(--accent);
+    border-color: var(--line-strong);
   }
 
   .setup-progress li button > span {

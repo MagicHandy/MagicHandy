@@ -2,6 +2,14 @@
 
 ## Core Direction
 
+The September 20 [guided HTTPS setup](docs/decisions/0030-guided-https-certificates.md)
+integrates Local only, LAN + local, and Public into the initial Access decision.
+Initial setup and Access settings share address selection, exact port/firewall
+instructions, explicit CA consent, automatic public IP/domain certificates and
+renewal, and local CA creation with a public trust download. Changes remain
+password-confirmed and restart-bound. Public discovery is bounded and opt-in;
+the app never automatically changes a router, firewall, or client trust store.
+
 The September 19 control-permission follow-up adds an explicit **Permanent**
 choice for existing operator accounts. Schema 26 preserves timed grants and
 represents new permanent grants with a null expiry. Replacement and revocation

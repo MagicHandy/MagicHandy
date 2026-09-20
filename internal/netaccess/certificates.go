@@ -19,6 +19,7 @@ type CertificateStatus struct {
 	DNSNames    []string  `json:"dns_names"`
 	RenewalDue  bool      `json:"renewal_due"`
 	ReloadError bool      `json:"reload_error"`
+	Managed     bool      `json:"managed,omitempty"`
 }
 
 // Certificates retains the last valid chain during a failed file replacement.
@@ -54,6 +55,18 @@ func loadCertificate(config Config, host string, now time.Time) (*tls.Certificat
 		// actionable category, without forwarding the filesystem error.
 		return nil, errors.New("cannot load the HTTPS certificate and matching private key; check the paths, PEM format and service-account permissions")
 	}
+	return validateCertificatePair(pair, host, now)
+}
+
+func parseCertificate(cert, key []byte, host string, now time.Time) (*tls.Certificate, error) {
+	pair, err := tls.X509KeyPair(cert, key)
+	if err != nil {
+		return nil, errors.New("certificate service returned an invalid certificate and key pair")
+	}
+	return validateCertificatePair(pair, host, now)
+}
+
+func validateCertificatePair(pair tls.Certificate, host string, now time.Time) (*tls.Certificate, error) {
 	leaf, err := x509.ParseCertificate(pair.Certificate[0])
 	if err != nil {
 		return nil, errors.New("cannot parse the HTTPS leaf certificate")

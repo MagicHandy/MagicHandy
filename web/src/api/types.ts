@@ -4,7 +4,7 @@
 // chaining. See docs/decisions/0009-react-frontend.md (State Model Rules).
 
 import type { AccountCapabilities } from "./access-types";
-export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus } from "./access-types";
+export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus, InternetDiscovery, CertificatePreparation } from "./access-types";
 
 export type MotionStyle = "gentle" | "balanced" | "intense";
 export type HandyModel = "handy_original" | "handy_2_standard" | "handy_2_pro";

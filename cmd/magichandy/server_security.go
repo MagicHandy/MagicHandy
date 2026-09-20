@@ -33,7 +33,8 @@ type serverSecurity struct {
 	AllowedBrowserHosts    []string
 	BaseURL                string
 	NetworkPolicy          *netaccess.Policy
-	Certificates           *netaccess.Certificates
+	Certificates           netaccess.CertificateProvider
+	Automation             *netaccess.Automation
 }
 
 func addServerSecurityFlags(flags *flag.FlagSet) serverSecurityFlags {
@@ -73,6 +74,7 @@ func prepareServerRuntime(
 	runtime.AllowedBrowserHosts = security.AllowedBrowserHosts
 	runtime.NetworkPolicy = security.NetworkPolicy
 	runtime.NetworkCertificates = security.Certificates
+	runtime.NetworkAutomation = security.Automation
 	return runtime, security, address, nil
 }
 

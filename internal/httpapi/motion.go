@@ -799,6 +799,9 @@ func (s *Server) Quiesce() {
 func (s *Server) Close() {
 	s.closeOnce.Do(func() {
 		s.Quiesce()
+		if s.networkAutomation != nil {
+			s.networkAutomation.Close()
+		}
 		s.closeAccessWorkers()
 		s.stopLLMAutoload()
 		if s.setup != nil {

@@ -1,5 +1,36 @@
 # Goal Scorecard
 
+## 2026-09-20 — Guided HTTPS and automatic certificates
+
+The pure-Go ACMEz v3.1.6 client adds public IP/profile support; its Apache-2.0
+license is compatible with the project's GPL-3.0-only distribution. The app
+implements a bounded, request-independent certificate lifecycle. Local-only
+startup creates no certificate files, discovery requests, or renewal goroutine.
+Public discovery is explicitly selected, cached for one minute and bounded by
+timeouts/response sizes. No browser runtime dependency is added.
+
+| Artifact | Previous checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 21,439,488 B | 21,996,544 B | +557,056 B |
+| Main JS, raw | 856,232 B | 870,949 B | +14,717 B |
+| Main JS, gzip-9 | 235,273 B | 239,147 B | +3,874 B |
+| Main CSS, raw | 146,898 B | 148,552 B | +1,654 B |
+| Main CSS, gzip-9 | 26,543 B | 26,809 B | +266 B |
+| All embedded assets | 2,211,636 B | 2,254,305 B | +42,669 B |
+
+The core remains 8,003,456 bytes below the 30 MB budget. A fresh review process
+on the Windows host reached `/healthz` in 599 ms with a 28,024,832-byte working
+set and 56,508,416 private bytes. This is one startup observation with warm OS
+file caches, not a cold-disk percentile. External Ollama model memory is separate.
+
+Full Go and race suites, lint/vet, source vulnerability scan, frontend build,
+649 frontend tests, and all five locale catalogs pass. Additional race tests
+cover expired-cache renewal and failed renewal retaining the valid certificate.
+The public ACME flow is exercised against a local test authority with a real
+TLS-ALPN handshake; live CA issuance, firewall rules and trust-store changes
+are left to deployment. Desktop/390 px browser inspection preserves visible Stop.
+See [ADR 0030](decisions/0030-guided-https-certificates.md).
+
 ## 2026-09-19 — LAN/WAN revocation and Go security update
 
 Go 1.26.8 replaces the release pipeline's Go 1.25.0. Security-sensitive account,
