@@ -1,5 +1,27 @@
 # UI Design
 
+## Mobile Chat layout
+
+The shell follows the dynamic viewport height. Its status readouts can shrink
+and wrap independently of the controller, profile, notification and connection
+actions, so a long status never pushes the connection trigger off screen.
+The connection trigger uses a bounded grid row and balanced padding: its icon
+box is centered on both axes in the compact button and vertically aligned in
+the desktop button.
+
+Below 900px, Chat uses the available workspace height for the conversation,
+leaving the Controls heading visible underneath. Controls remain in the same
+scrolling workspace. The message log absorbs height changes; the composer stays
+below the log and above the permanent Stop/navigation footer. At phone widths,
+8px outer margins, smaller internal gaps and full available bubble widths
+recover reading space. Compact chat tabs use a neutral outline instead of an
+accent underline; persona, tab and new-chat controls share a centered row.
+
+The workspace establishes a positioning context for its absolute accessibility
+labels, preventing off-screen controls from creating an extra document scrollbar.
+Keep dynamic resizing, read-only clients, connection panels and short viewports
+in the visual checks. See [mobile Chat review](chat-mobile-review-2026-09-20.md).
+
 ## Informational notices
 
 Explanatory notices use the shared dismissal component and catalog. Their ×

@@ -7,6 +7,7 @@
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
   grid-template-rows: var(--status-h) minmax(0, 1fr);
   height: 100vh;
+  height: 100dvh;
 }
 
 /* ---- Navigation rail (permanent, left, full height) ---- */
@@ -135,6 +136,26 @@
   font-size: 0.82rem;
   color: var(--muted);
   white-space: nowrap;
+}
+/* Readouts may shrink or wrap; connection/profile actions always keep their
+   own space instead of being pushed past the header's clipped edge. */
+.status-readouts {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 14px;
+  overflow: hidden;
+}
+.status-readouts .status-readout {
+  min-width: 0;
+}
+.status-readouts .status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-bar > .status-readout {
+  flex: 0 0 auto;
 }
 .status-controller-action {
   appearance: none;
@@ -774,11 +795,12 @@
 .connection-manager-trigger {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) 18px;
+  grid-template-rows: minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   width: 220px;
   height: 38px;
-  padding: 3px 8px 4px;
+  padding: 3px 8px;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -811,12 +833,13 @@
 }
 .connection-trigger-copy {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-self: stretch;
   justify-content: center;
   gap: 1px;
-  padding-bottom: 1px;
+  line-height: 1.1;
 }
 .connection-trigger-chevron {
   color: var(--muted);
@@ -828,6 +851,7 @@
 
 /* ---- Workspace (routed) ---- */
 .workspace {
+  position: relative;
   grid-column: 2;
   grid-row: 2;
   display: flex;
@@ -998,6 +1022,21 @@
     gap: 8px;
     padding-inline: 8px;
   }
+  .status-readouts {
+    flex-wrap: wrap;
+    gap: 0 8px;
+    max-height: 100%;
+    align-content: center;
+  }
+  .status-readouts .status-readout {
+    max-width: 100%;
+    gap: 5px;
+    font-size: 0.72rem;
+    line-height: 1.3;
+  }
+  .status-readouts .status-divider {
+    display: none;
+  }
   .status-readout-controller:not(.status-controller-action) {
     display: none;
   }
@@ -1011,6 +1050,10 @@
     grid-column: 1;
     grid-row: 2;
     padding-bottom: 18px;
+  }
+  .workspace:has(> .chat-route) {
+    padding: 8px;
+    scrollbar-gutter: auto;
   }
   .nav-rail {
     grid-column: 1;
@@ -1060,12 +1103,13 @@
   .notification-center-panel {
     top: calc(var(--status-h) + 8px);
     right: 8px;
-    max-height: calc(100vh - var(--status-h) - 124px);
+    max-height: calc(100dvh - var(--status-h) - 124px);
   }
   .connection-manager-trigger {
-    grid-template-columns: 28px;
+    grid-template-columns: 1fr;
+    place-items: center;
     width: 38px;
-    padding-inline: 3px;
+    padding: 0;
   }
   .connection-trigger-copy,
   .connection-trigger-chevron {

@@ -490,17 +490,33 @@ button.chat-avatar:focus-visible {
 @media (max-width: 900px) {
   .workspace > .chat-route {
     flex: 0 0 auto;
+    height: 100%;
   }
 
   .chat-workbench {
-    grid-template-columns: minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .chat-conversation {
-    min-height: 520px;
+    /* Leave the controls heading in view; the conversation gets the rest of
+       the workspace and keeps its composer above the permanent Stop footer. */
+    flex: 0 0 calc(100% - 48px);
+    min-height: 240px;
+  }
+
+  .chat-conversation .chat-log-shell {
+    flex: 1 1 0;
+  }
+
+  .chat-conversation .chat-log {
+    height: auto;
+    min-height: 0;
   }
 
   .chat-sidebar {
+    flex: 0 0 auto;
     overflow: visible;
   }
 
@@ -512,25 +528,61 @@ button.chat-avatar:focus-visible {
 }
 
 @media (max-width: 560px) {
-  .chat-conversation {
-    min-height: 0;
-  }
-
-  .chat-conversation .chat-log-shell {
-    flex: 0 0 auto;
+  .chat-conversation > .chat {
+    padding: 6px;
   }
 
   .chat-conversation .chat-log {
-    height: clamp(170px, 30dvh, 240px);
+    padding: 10px 8px;
+    gap: 12px;
   }
 
-  .chat-conversation > .chat {
-    padding: 8px;
+  .chat-conversation .chat-message {
+    max-width: 100%;
+    column-gap: 6px;
+  }
+
+  .chat-conversation .chat-bubble {
+    padding: 8px 10px;
+  }
+
+  .chat-conversation .chat-form {
+    margin-top: 8px;
+  }
+
+  .chat-conversation .chat-compose-row textarea {
+    font-size: 1rem;
+    max-height: 30dvh;
+  }
+
+  .chat-tabs-bar {
+    flex-basis: 38px;
+  }
+
+  .chat-tabs-bar .persona-chip {
+    padding-block: 0;
+  }
+
+  .chat-tabs-scroll {
+    padding: 3px 2px 3px 4px;
+  }
+
+  .chat-tab-wrap {
+    height: 32px;
+    border-radius: 4px;
+  }
+
+  .chat-tab-wrap[data-active="true"] {
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+  }
+
+  .chat-new-slot {
+    padding: 3px 4px;
   }
 
   .chat-mood-readout {
     max-width: 120px;
-    padding-inline: 8px;
+    padding: 0 8px;
   }
 
   .chat-tab-wrap {

@@ -1,5 +1,26 @@
 # Goal Scorecard
 
+## 2026-09-20 — Mobile Chat spacing and connection alignment
+
+The message log at 390 × 844 grows from 240px to 521px while keeping the
+composer above Stop. Header actions remain fully in view at 320px, including
+for a read-only client. Nine viewport checks include a short 390 × 450 view,
+the stacked-layout boundary and desktop. No dependency was added.
+
+| Artifact | Previous checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,003,712 B | 22,004,736 B | +1,024 B |
+| Main JS, raw / Node gzip-9 | 872,603 / 239,857 B | 872,616 / 239,864 B | +13 / +7 B |
+| Main CSS, raw / Node gzip-9 | 148,552 / 26,809 B | 149,743 / 27,029 B | +1,191 / +220 B |
+| All embedded assets | 2,255,959 B | 2,257,163 B | +1,204 B |
+
+One fresh simulated review process reached health in 584ms with a 28,631,040 B
+working set and 57,245,696 private bytes using warm OS caches. External Ollama
+memory is separate. All 658 frontend tests, TypeScript, localization, the UI
+build, embedded-asset/import-boundary checks and pure-Go build pass. A real
+configured-model generation and text-only app chat verify review readiness.
+See [mobile Chat evidence](chat-mobile-review-2026-09-20.md).
+
 ## 2026-09-20 — Bluetooth, Intiface and shared Handy contracts
 
 No runtime dependency was added. The GATT session owns bounded writes and
