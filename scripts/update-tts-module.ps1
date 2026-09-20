@@ -55,7 +55,9 @@ function Read-TTSModuleState {
             throw "TTS module state '$Path' is missing '$name'."
         }
     }
-    if ($moduleState.schema_version -isnot [int] -or [int]$moduleState.schema_version -notin @(1, 2)) {
+    # ConvertFrom-Json returns Int32 in Windows PowerShell and Int64 in PS7.
+    if (($moduleState.schema_version -isnot [int] -and $moduleState.schema_version -isnot [long]) -or
+        $moduleState.schema_version -notin @(1, 2)) {
         throw "Unsupported TTS module state schema '$($moduleState.schema_version)'."
     }
     if ([string]$moduleState.module -notin @('faster-qwen3-tts', 'chatterbox')) {
@@ -75,7 +77,8 @@ function Read-TTSModuleState {
     if (-not $savedRoot.Equals($ExpectedRoot.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) {
         throw "TTS module state '$Path' belongs to '$savedRoot', not '$ExpectedRoot'."
     }
-    if ($moduleState.port -isnot [int] -or [int]$moduleState.port -lt 1 -or [int]$moduleState.port -gt 65535) {
+    if (($moduleState.port -isnot [int] -and $moduleState.port -isnot [long]) -or
+        $moduleState.port -lt 1 -or $moduleState.port -gt 65535) {
         throw "TTS module state '$Path' has an invalid port."
     }
     foreach ($name in @('auto_launch', 'speak_replies')) {

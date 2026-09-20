@@ -428,7 +428,8 @@ function Add-MagicHandyGitInfoExclusions {
         [string[]]$RelativePaths = @()
     )
 
-    if ($RelativePaths.Count -eq 0) {
+    # Empty pipeline/conditional output can bind as $null even for string[].
+    if ($null -eq $RelativePaths -or $RelativePaths.Count -eq 0) {
         return
     }
     $repository = [System.IO.Path]::GetFullPath($RepositoryPath)
@@ -487,14 +488,16 @@ function Convert-MagicHandyInstallState {
 
     if ($State -is [System.Management.Automation.PSCustomObject] -and
         $State.PSObject.Properties.Name -contains 'schema_version' -and
-        $State.schema_version -is [int] -and [int]$State.schema_version -eq 1) {
+        ($State.schema_version -is [int] -or $State.schema_version -is [long]) -and
+        $State.schema_version -eq 1) {
         $State | Add-Member -NotePropertyName 'ui_locale' -NotePropertyValue 'en'
         $State | Add-Member -NotePropertyName 'chat_locale' -NotePropertyValue 'en'
         $State.schema_version = 2
     }
     if ($State -is [System.Management.Automation.PSCustomObject] -and
         $State.PSObject.Properties.Name -contains 'schema_version' -and
-        $State.schema_version -is [int] -and [int]$State.schema_version -eq 2) {
+        ($State.schema_version -is [int] -or $State.schema_version -is [long]) -and
+        $State.schema_version -eq 2) {
         $State | Add-Member -NotePropertyName 'tts_module' -NotePropertyValue 'none'
         $State | Add-Member -NotePropertyName 'tts_device' -NotePropertyValue 'cpu'
         $State | Add-Member -NotePropertyName 'tts_auto_launch' -NotePropertyValue $false
@@ -527,10 +530,13 @@ function Assert-MagicHandyInstallState {
     if ($unexpected.Count -gt 0) {
         throw "$Source contains unsupported field '$($unexpected[0])'."
     }
-    if ($State.schema_version -isnot [int] -or [int]$State.schema_version -ne $script:InstallStateSchema) {
+    # JSON integer widths differ between Windows PowerShell and PowerShell 7.
+    if (($State.schema_version -isnot [int] -and $State.schema_version -isnot [long]) -or
+        $State.schema_version -ne $script:InstallStateSchema) {
         throw "$Source schema '$($State.schema_version)' is unsupported. Expected integer $script:InstallStateSchema."
     }
-    if ($State.port -isnot [int] -or [int]$State.port -lt 1 -or [int]$State.port -gt 65535) {
+    if (($State.port -isnot [int] -and $State.port -isnot [long]) -or
+        $State.port -lt 1 -or $State.port -gt 65535) {
         throw "$Source has an invalid port. Expected an integer from 1 through 65535."
     }
     foreach ($name in @('setup_llm', 'build_managed_llama', 'ensure_ollama', 'install_parakeet', 'tts_auto_launch', 'create_launcher')) {
@@ -555,6 +561,11 @@ function Assert-MagicHandyInstallState {
         }
     }
     foreach ($name in @('installed_at', 'updated_at')) {
+        # PowerShell 7 recognizes ISO JSON timestamps as DateTime values.
+        # Keep the state contract as round-trip strings for later consumers.
+        if ($State.$name -is [DateTime] -or $State.$name -is [DateTimeOffset]) {
+            $State.$name = $State.$name.ToString('o')
+        }
         $parsed = [DateTimeOffset]::MinValue
         if ($State.$name -isnot [string] -or -not [DateTimeOffset]::TryParse([string]$State.$name, [ref]$parsed)) {
             throw "$Source field '$name' must be a timestamp."

@@ -128,6 +128,15 @@ selected. Chatterbox also applies its pinned server's ONNX/protobuf
 compatibility override. Native SoX and FFmpeg are not needed for the managed
 12 Hz Qwen and WAV-only Chatterbox paths.
 
+Managed source preparation accepts omitted, empty, or null Git exclusion lists.
+Chatterbox needs no exclusions; Faster Qwen excludes only its generated package
+metadata through `.git/info/exclude`. An interrupted clone with an unpopulated
+worktree can be recovered, while existing source edits still block replacement.
+If an older installer reports `Add-MagicHandyGitInfoExclusions` followed by
+`The property 'Count' cannot be found`, update MagicHandy before retrying the
+module installation. That failure occurs before Python or model installation
+and does not indicate a CUDA or GPU-memory problem.
+
 Managed Python installations, uv's package cache, and its credential lock files
 are rooted inside the selected TTS module. The installer requests no global
 Python executable links or Windows registry entry. uv currently attempts an
@@ -340,15 +349,20 @@ in-memory settings snapshot cannot overwrite the correction.
 
 ## Validation
 
-`scripts/test-installer.ps1` covers:
+`scripts/test-installer.ps1` runs in CI under Windows PowerShell 5.1 and
+PowerShell 7. It covers:
 
 - PowerShell syntax and localized catalog integrity;
 - plan-only no-write behavior;
 - GUI-default and unattended package/build plans;
 - install-state migration, validation, and atomic writes;
+- both JSON integer widths and parsed timestamps, while rejecting string,
+  fractional, boolean, null, or out-of-range schema/port values;
 - managed llama.cpp versus Ollama plans;
 - optional Parakeet plans;
 - optional Faster Qwen3-TTS and Chatterbox plan/update behavior;
+- fresh and interrupted TTS source checkouts with null or populated exclusions,
+  no-op empty exclusion updates, and preservation of genuine source edits;
 - complete Go binary output and staged replacement;
 - process ownership, controller takeover, Stop, and relaunch behavior; and
 - unsafe dirty-tree/update-state failures.
