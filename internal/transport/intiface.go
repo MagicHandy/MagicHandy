@@ -17,19 +17,20 @@ import (
 )
 
 const (
-	defaultIntifaceAddress       = "ws://127.0.0.1:12345"
-	defaultIntifaceClientName    = "MagicHandy"
-	defaultIntifaceQueueCapacity = 64
-	defaultIntifaceResponseTime  = 650 * time.Millisecond
-	maxIntifacePendingACKs       = 8
-	maxIntifaceRecentDispatches  = 32
-	intifaceTransportName        = "intiface_buttplug_v3"
-	intifaceLateTolerance        = 100 * time.Millisecond
-	intifaceWriteTimeout         = 500 * time.Millisecond
-	intifaceAnchorDuration       = 250 * time.Millisecond
-	maxIntifaceDeviceTimingGap   = 5 * time.Second
-	minIntifaceTimingGapMargin   = 10 * time.Millisecond
-	maxIntifaceTimingGapMargin   = 50 * time.Millisecond
+	defaultIntifaceAddress         = "ws://127.0.0.1:12345"
+	defaultIntifaceClientName      = "MagicHandy"
+	defaultIntifaceQueueCapacity   = 64
+	defaultIntifaceResponseTime    = 650 * time.Millisecond
+	maxIntifacePendingACKs         = 8
+	maxIntifaceRecentDispatches    = 32
+	intifaceTransportName          = "intiface_buttplug_v3"
+	intifaceLateTolerance          = 100 * time.Millisecond
+	intifaceWriteTimeout           = 500 * time.Millisecond
+	intifaceAnchorDuration         = 250 * time.Millisecond
+	maxIntifaceDeviceTimingGap     = 5 * time.Second
+	minIntifaceTimingGapMargin     = 10 * time.Millisecond
+	maxIntifaceTimingGapMargin     = 50 * time.Millisecond
+	minimumIntifaceSegmentInterval = 50 * time.Millisecond
 )
 
 var (
@@ -559,7 +560,9 @@ func (i *Intiface) MotionTimingCapabilities() MotionTimingCapabilities {
 	if !i.selected {
 		return MotionTimingCapabilities{}
 	}
-	return MotionTimingCapabilities{MinimumPointInterval: i.selection.minimumPointInterval()}
+	// LinearCmd is immediate, even when the device advertises no radio gap.
+	// Tiny HSP-style segments leave insufficient host/bridge scheduling margin.
+	return MotionTimingCapabilities{MinimumPointInterval: max(minimumIntifaceSegmentInterval, i.selection.minimumPointInterval())}
 }
 
 // MotionSamplingCapabilities reports the selected actuator's physical step

@@ -237,6 +237,18 @@ export interface BluetoothClientStatus {
   status?: string;
   message?: string;
   error?: string;
+  hsp_state?: BluetoothPlaybackState;
+}
+
+export interface BluetoothPlaybackState {
+  sequence: number;
+  command_id: string;
+  stream_id: number;
+  play_state: string;
+  points: number;
+  current_point: number;
+  current_time_ms: number;
+  tail_point_stream_index: number;
 }
 
 export interface BluetoothAckPayload {

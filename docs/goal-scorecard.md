@@ -1,5 +1,39 @@
 # Goal Scorecard
 
+## 2026-09-19 — Motion timing and Bluetooth feedback
+
+The [transport quality corrections](motion-transport-review-2026-09-19.md)
+retain the single engine and add no dependency. Intiface uses a minimum 50 ms
+command interval; Browser Bluetooth requests 1.5 seconds of interactive lead
+and 5 seconds of media lead. Passive progress reporting is bounded to four
+updates per second, with immediate state changes; no active device poll is added.
+
+| Artifact | Notice/permission checkpoint | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Stripped CGO-free binary | 20,047,872 B | 20,077,056 B | +29,184 B |
+| Main JS, raw | 855,396 B | 856,232 B | +836 B |
+| Main JS, gzip-9 | 235,040 B | 235,273 B | +233 B |
+| All embedded assets | 2,210,787 B | 2,211,623 B | +836 B |
+
+Measured with Go 1.26.4, `CGO_ENABLED=0`, `-trimpath`, `-ldflags '-s -w'`,
+Node 24.15.0 and zlib 1.3.1-e00f703 gzip level 9. The canonical main JS SHA-256
+is `3abd7952c681f783714f1211c9f074ae12b52d511e9629762a14e3cfea88e5ce`.
+The review app serves the same hash. Full Go/race, vet, lint, the CGO-free
+build, and 645 frontend tests pass; generated plots remain outside the bundle.
+
+`BenchmarkQuantizedMotionFrame` measures 146,787 ns/op, 110,913 B/op and
+34 allocations/op on this Windows Ryzen 9 9950X3D host. It includes dense probes
+and quantized fitting for the initial Full sweeps 43% frame; this is a bounded
+cost measurement, not an asserted speedup against a baseline benchmark.
+All 204 atlas cases compile; 137 reduce their maximum adjacent command-speed
+jump and 67 are unchanged. No sampled case increases that metric.
+
+After real provider and app-chat generation, the isolated simulator sampled
+115,322,880 B working set and 104,275,968 B private memory. Different process
+lifetimes and workloads prevent using this single sample as a controlled RSS
+or startup improvement. Physical motion and radio latency remain unmeasured;
+the detailed review records the inert traces and remaining acceptance work.
+
 ## 2026-09-19 — Shared notice preferences and permanent control permission
 
 The [notice contract](informational-notices.md) adds a shared catalog and
