@@ -1,5 +1,22 @@
 # Goal Scorecard
 
+## 2026-09-25 — Branded launch console
+
+The console window that opens with MagicHandy on Windows is now an interactive
+launch console. It shows a wand-and-wordmark header, the app address as a
+clickable link, plain-language activity and keys for open, copy link, Stop,
+details and quit. It adds the `internal/console` package and no dependency; the
+Windows console calls come from the `golang.org/x/sys` module the core already
+uses. The frontend and embedded assets are unchanged. See
+[the launch console design](ui-design.md#launch-console).
+
+| Artifact | Previous checkpoint (`fd3d22e9`) | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,081,024 B | 22,195,712 B | +114,688 B |
+
+New code and data account for 58,568 B; the rest is Go's per-function tables.
+The binary remains under the 30 MB target.
+
 ## 2026-09-25 — Autopilot continuity and motion phrasing
 
 In simulated Gemma 12B Creative v2 sessions, fast-upswipe stroke pairs fall

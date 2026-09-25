@@ -1,5 +1,39 @@
 # UI Design
 
+## Launch console
+
+On Windows, the Start menu and desktop shortcuts start `magichandy.exe` in a
+console window. That window is now a branded launch console instead of a
+stream of JSON logs.
+
+- **Header.** A magic wand with a twinkling star and sparkles sits beside a
+  MAGICHANDY block wordmark, with the tagline and version. Windows Terminal
+  and other ConPTY hosts get ✦ ★ ✧ glyphs. The classic console host gets
+  ASCII sparkles, because its fonts lack those symbols and would show boxes.
+- **Status.** "Running" appears once the listener is bound, with the app
+  address as an OSC 8 hyperlink that Windows Terminal opens on Ctrl+click.
+  The window title carries the same address. Access follows the Setup terms
+  (Local only, LAN + local, Public, trusted proxy) and notes sign-in, and a
+  simulated run says no device moves.
+- **Recent activity.** Log records appear as plain sentences with their
+  details. Warnings are amber. Per-request lines are hidden until Details is
+  on, because the browser polls several times a second.
+- **Keys.** O opens the app in the browser, C copies the link, S or Esc stops
+  motion, D toggles details, and Q asks for a second Q before quitting.
+  Ctrl+C and closing the window still shut the app down cleanly.
+- **Colour roles.** The console uses the Steel Azure palette: azure for
+  things you can act on, green only for Running, amber for warnings and red
+  only for Stop.
+- **Failure.** If the app stops with an error and the window belongs to it
+  alone, the reason stays on screen until a key is pressed. Otherwise the
+  window would close before it could be read.
+
+The console draws from one goroutine fed by a bounded queue, so logging never
+waits on the terminal, and a paused console selection cannot stall the server.
+Redirected output, configuration-only runs and `-console plain` keep the
+structured JSON logs that scripts and diagnostics read. Other platforms keep
+them too.
+
 ## Mobile Chat layout
 
 The shell follows the dynamic viewport height. Its status readouts can shrink
@@ -692,6 +726,9 @@ hoc per-widget colors) are not.
 - Never disabled by a transient UI state. If the backend is unreachable, Stop
   still attempts and the UI reports whether it succeeded. Read-only clients
   can always trigger it.
+- The Windows launch console offers the same Stop on S or Esc. It uses the
+  Stop button's emergency-stop path, admission and audit, so the device can be
+  stopped even when no browser is open.
 - Pause is not Stop: Pause/Resume is a control action (read-only clients
   cannot trigger it) that freezes phase for continuation; Stop is the safety
   path and always resets everything, including the run clock.

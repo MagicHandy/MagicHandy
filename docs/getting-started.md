@@ -23,6 +23,13 @@ warning; retain the checksum and report the detection.
 Build and acceptance commands are in
 [windows-release-packaging.md](windows-release-packaging.md).
 
+The Start menu and desktop shortcuts open a MagicHandy console window next to
+the browser. It shows the app address as a link (Ctrl+click it in Windows
+Terminal) and recent activity. Its keys are O to open the app, C to copy the
+link, S or Esc to stop motion, D to show details and Q twice to quit. Keep
+the window open while you use MagicHandy; closing it stops the app. Start
+with `-console plain` to get the raw JSON logs instead.
+
 Versioned builds check the latest compatible GitHub Release and notify through
 the app. Stable builds ignore prereleases; alpha, beta, and release-candidate
 builds can follow newer compatible prereleases. **Settings > General > Updates** provides an
