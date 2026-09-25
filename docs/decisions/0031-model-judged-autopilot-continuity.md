@@ -27,6 +27,12 @@ because a narrowed band no longer fit the kept focus width. Layered Autopilot
 was nearly static, and incidental reversals in its whole-cycle timing fit
 capped the pace of alternating geometries.
 
+A follow-up found that pace was a choice made for the context, but a narrow
+one. An explicit "go slow" reached 15–25. "That's too much" eased pace only to
+20–35, and Creative v2 climbed back within a stretch or two. "I'm close, don't
+let me finish yet" left pace at 35–52. Layered answered "mix it up" and
+"surprise me" with a seed refresh.
+
 ## Decision
 
 Continuity is a model judgment, bounded by the host.
@@ -75,6 +81,41 @@ Same-direction half-cycles merge, and each leg is fitted under the existing
 Flow authoring budget. This replaces the single whole-cycle fit, in which
 incidental reversals limited alternating geometries.
 
+Pace follows the person, and the model chooses it:
+
+- Both continuous contracts say pace may use all of the saved range. When the
+  person says it is too much, or says they are close and the model chooses to
+  draw the session out, speed goes near the saved minimum in that decision,
+  holds for an appropriate time and then rebuilds. When the model lets them
+  finish, it holds or builds. No word triggers either choice.
+- Planning sees time. Once the model dropped to the minimum, it stayed there
+  for minutes: planning replies are never dialogue, so every planning turn saw
+  the person's line as the latest event. Each recent human line now carries
+  `seconds_ago`. The continuous facts say how long ago the person last spoke,
+  list the speeds of the stretches that began in the last three minutes, and
+  say how long pace has stayed in the lower third of the saved range. A
+  passing state fades after a minute or two; a lasting preference stays.
+- During continuous Autopilot, a live chat turn that leaves the motion
+  unchanged moves the next planning boundary to now. Chat chooses its action
+  before its reply, so it often answers such a remark in words alone.
+- The built-in prompt sets no longer forbid escalating beyond what the person
+  asks. They say to follow the person's cues on energy and pace, respect
+  limits they set, and lead when the choice is left to the model.
+- Layered `evolve` only reseeds the same character. A request for something
+  new or mixed up changes geometry, widths, anchor or layers. A relative speed
+  step past a saved limit stops at the limit.
+- Each continuous contract shows one example of holding off at nearly the
+  slowest pace in a single step. Smaller models followed that example where
+  they missed the guidance, and Gemma 12B followed it more consistently.
+
+Live chat can bring back an earlier score. During continuous Autopilot, the
+scheduler keeps the three latest distinct scores and up to three older ones
+that played while the person spoke. A live chat turn sees them with when each
+started, how long it played and what the person said while it played. The
+edit `{"recall": id}` restores one exactly, and other edits apply on top. A
+recalled speed outside today's limits moves to the nearest limit. Planning
+turns are never offered recall.
+
 No second motion path, clock, sampler or transport payload is added. All motion
 reaches the device through the same prepared plan, sanitizer and transport.
 
@@ -96,6 +137,16 @@ reaches the device through the same prepared plan, sanitizer and transport.
 - Rewriting speech facts. An earlier draft of the review assumed that
   motion-turn narration was spoken and that check-ins received raw score JSON;
   both assumptions were wrong.
+- A host timer that rebuilds pace after a fixed time. The model judges the
+  time from the facts instead.
+- Recall in planning turns. Planning re-read an old "go back" after chat had
+  answered it and swapped between scores.
+- A fixed count of remembered stretch speeds. Six stretches at a 14 s cadence
+  never reached the minute or two after which a slow stretch rebuilds.
+- Separate prompt sets for smaller and larger models. The change that helped
+  3–4B models most, a concrete example, helped Gemma 12B too. What the smaller
+  models miss, judging elapsed time and recall, falls back to staying slow or
+  not recalling.
 
 ## Consequences
 
@@ -107,6 +158,11 @@ relaxation is random, two live runs differ, but every accepted score, seed and
 trace can be replayed. At high speed a rest is about as long as a stroke;
 physical feedback should decide whether rests scale with pace. Plots establish
 commanded character, not physical comfort.
+
+Autopilot may now rebuild pace after a slow stretch that the person asked for,
+without a new request, inside saved limits. The built-in prompt sets no longer
+forbid that. Recall offers live chat a few more hundred tokens while earlier
+scores exist.
 
 See [the review](../motion-naturalness-review-2026-09-24.md) for measurements,
 retained failures, iterations and reproduction.

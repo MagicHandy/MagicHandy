@@ -17,6 +17,17 @@ geometries, while alternating ends gain up to 39%. Kinematic limits, Stop,
 controller ownership and the transport path are unchanged. Physical acceptance
 remains open; see the [review](motion-naturalness-review-2026-09-24.md).
 
+The built-in prompt sets no longer tell the model not to escalate beyond what
+the person asks; they say to follow the person's cues and to lead when the
+choice is left to the model. After a slow stretch the person asked for,
+Autopilot may rebuild pace without a new request, within saved limits. In the
+Gemma 12B runs it held near the minimum for 40–70 s after "that's too much"
+and then rebuilt to at most 40 within three minutes. After "don't let me
+finish yet" it sometimes rebuilt within 15–30 s. A person who wants it slow
+for longer says so, and a lasting wish keeps pace in the lower third. Live
+chat can bring back an earlier score exactly; it picked the score the person
+meant in about half of the test runs, and one chat line undoes a wrong pick.
+
 ## 2026-09-06 datastore and observation follow-up
 
 Canceled/expired writers no longer wait behind an unrelated transaction before

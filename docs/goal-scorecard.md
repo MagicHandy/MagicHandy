@@ -5,14 +5,17 @@
 In simulated Gemma 12B Creative v2 sessions, fast-upswipe stroke pairs fall
 from 70% to 15%, and rejected Autopilot decisions from 17 of 40 to 0. Live chat
 now declares standing holds: all eight scripted hold scenarios were read
-correctly. Layered's alternating geometry gains up to 39% effective pace. See
+correctly. Layered's alternating geometry gains up to 39% effective pace. In the
+pace and variety follow-up, the eight-scenario suite rose from 12/14 to 14/14
+in Creative v2 and from 7/14 to 14/14 in Layered. "Don't let me finish yet" now
+reaches near the saved minimum at once in 14 of 16 runs, against 0 of 16. See
 [the review](motion-naturalness-review-2026-09-24.md) and
 [ADR 0031](decisions/0031-model-judged-autopilot-continuity.md). No dependency
 was added.
 
 | Artifact | Previous checkpoint (`970ccee3`) | This checkpoint | Change |
 | --- | ---: | ---: | ---: |
-| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,004,736 B | 22,026,240 B | +21,504 B |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,004,736 B | 22,080,000 B | +75,264 B |
 | Main JS, raw / Node gzip-9 | 872,616 / 239,864 B | 873,369 / 240,066 B | +753 / +202 B |
 | Main CSS, raw / Node gzip-9 | 149,743 / 27,029 B | 149,743 / 27,029 B | 0 |
 | All embedded assets | 2,257,163 B | 2,261,363 B | +4,200 B |

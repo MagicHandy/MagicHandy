@@ -203,6 +203,203 @@ The hold request "slow down a little and then keep it like that" applied the
 edit and then held. In Creative v2, planning resumed with new characters after
 each release. Layered resumed with seed refreshes only (see limits).
 
+## Pace, variety and recall follow-up
+
+The first round left two limits: Layered answered "mix it up" with a seed
+refresh, and Gemma used only the upper part of the saved speed range. The
+follow-up asked three questions. Was that range a habit, or a choice made for
+the context? After "that's too much" or "I'm close", could the model decide to
+draw the session out by dropping to near the saved minimum, holding for an
+appropriate time and then rebuilding? And could it return to an earlier
+pattern that the person praised or referred to?
+
+### Changes
+
+- **Pace follows the person.** Both continuous contracts say that pace may use
+  all of the saved range. When the person says it is too much, or says they
+  are close and the model chooses to draw the session out, the model sets
+  speed near the saved minimum in that decision. It holds there for an
+  appropriate time and then rebuilds; when it lets them finish, it holds or
+  builds. A wish for a slow pace, such as going slow to make it last, keeps
+  pace in the lower third until the person says otherwise. No word triggers
+  any of these choices.
+- **Planning sees time.** Each recent human line carries `seconds_ago`, both
+  in the motion context and, in continuous planning turns only, as a
+  `[said 2 minutes ago]` mark on the person's lines in the history. The
+  planning facts say how long ago the person last spoke, list the speeds of the
+  stretches that began in the last three minutes, and say how long pace has
+  stayed in the lower third of the saved range.
+- **Unchanged chat re-plans at once.** Live chat chooses its action before it
+  writes the reply, so it often answers such a remark in words alone. During
+  continuous Autopilot, a chat turn that leaves the motion unchanged moves the
+  next planning boundary to now. Before, the planner waited up to the rest of
+  the segment.
+- **Built-in prompt sets.** The five built-in sets told the model to match the
+  user's energy "without escalating beyond what they ask for". They now say to
+  follow the user's cues on energy and pace, respect limits the user sets, and
+  lead when the choice is left to the model.
+- **Layered variety.** `evolve` only reseeds the same character. A request for
+  something new, mixed up or left to the model changes geometry, widths,
+  anchor or layers, and an example shows "mix it up". A relative speed step
+  past a saved limit stops at the limit instead of being rejected.
+- **Hold-off examples.** Both contracts show "I'm close, don't let me finish
+  yet" answered by one step to nearly the slowest pace. The grammar still
+  bounds speed to the saved limits, so a copied number cannot leave them.
+- **Recall.** During continuous Autopilot the scheduler keeps the three latest
+  distinct scores, plus up to three older ones that were playing when the
+  person spoke. Live chat sees them with when each started, how long it played
+  and what the person said while it played, and `{"recall": id}` brings one
+  back exactly. Other edits in the same reply apply on top, and a recalled
+  speed outside today's limits moves to the nearest limit. Planning turns are
+  never offered recall.
+
+The harness now plays a chat edit's own segment before Autopilot plans again,
+as the scheduler does. Before, it planned at the same second, so a chat score
+never played and the planner always saw the line as said 0 seconds ago. The
+PR-head runs below use the harness of that commit.
+
+### Pace and variety
+
+Eight scenarios per mode, two runs each, from the saved range 15–54, on the
+same Gemma 12B build with two llama.cpp slots of 16,384 tokens. Each run opens
+with motion already playing, sends one chat line, then plans four Autopilot
+stretches. "Near the minimum" means 22 or below, and the lower third
+is 28 or below.
+
+| Line (opening speed) | Pass | Creative v2 PR head | Final | Layered PR head | Final |
+| --- | --- | ---: | ---: | ---: | ---: |
+| that's too much (45) | 30 or below by the first planning decision | 2/2 | 2/2 | 2/2 | 2/2 |
+| I'm close, don't let me finish yet (45) | near the minimum by the first planning decision | 0/2 | 2/2 | 0/2 | 2/2 |
+| go slow, I want this to last (45) | near the minimum, or never above the lower third | 2/2 | 2/2 | 1/2 | 2/2 |
+| faster (30) | chat raises speed | 2/2 | 2/2 | 2/2 | 2/2 |
+| mix it up (35) | chat changes the character | 2/2 | 2/2 | 0/2 | 2/2 |
+| surprise me (35) | chat changes the character | 2/2 | 2/2 | 0/2 | 2/2 |
+| keep varying within this same character (35) | chat refreshes only | 2/2 | 2/2 | 2/2 | 2/2 |
+| **Total** | | **12/14** | **14/14** | **7/14** | **14/14** |
+
+"I'm close" alone is left to the model. At the PR head, Creative v2 built
+toward the top in both runs and Layered held 45. In the final build, all four
+runs drew the session out from 18–20 and rebuilt over the next minute.
+
+Pace was a context choice, but a narrow one. Explicit requests moved it:
+"go slow" reached 15–25. Implicit cues barely did: after "that's too much",
+Creative v2 eased to 22–35 and climbed back within a stretch or two, and
+"don't let me finish yet" left pace at 35–52.
+
+Two runs per cell cannot separate wordings, so the first reactions were also
+measured over eight runs per mode:
+
+| Measure (8 runs each) | Creative v2 PR head | Final | Layered PR head | Final |
+| --- | ---: | ---: | ---: | ---: |
+| "don't let me finish yet": near the minimum by the first planning decision | 0/8 | 8/8 | 0/8 | 8/8 |
+| "go slow": never above the lower third in three decisions | 8/8 | 8/8 | 7/8 | 7/8 |
+
+Chat itself answered "don't let me finish yet" with the drop in 4 of 8 Layered
+runs and none in Creative v2; the immediate re-plan made the planner answer
+within seconds. Without the hold-off examples the same wording reached the
+minimum in 6 of 8 Creative v2 and 1 of 8 Layered runs: Layered "pulled back
+just a little" to 30–40, following the "jerk gently" example's five-point step.
+With them, the 37-case continuous request suite still passed 74 of 74 in both
+modes.
+
+### Holding and rebuilding
+
+One line at 45%, then 12 Autopilot stretches (2 min 48 s), two runs per
+scenario and mode.
+
+| Wording and data | "that's too much" |
+| --- | --- |
+| PR head | Creative v2 eased only to 28–50 and kept moving; Layered stayed at 15–25 for three minutes |
+| Pace guide and immediate re-plan | Near the minimum at once, then stayed at 15–18 for three minutes in 3 of 4 runs |
+| Plus line ages, the last-spoke age and recent speeds | Brief rises to 24–25, then back to 15 |
+| Plus the lower-third duration and a rebuild instruction | Layered rose to 25–30 and fell back; Creative v2 stayed at 15–23 |
+| Plus a three-minute speed window instead of six stretches | Rebuilt after 1.5–2 minutes in 3 of 4 runs, then fell back |
+| Plus ages marked on the person's lines in planning history | Rebuilt after 42–70 s in all runs |
+
+Two data defects hid the elapsed time. Planning replies are never dialogue, so
+the person's last line stayed the latest user turn for minutes. And six
+remembered stretches at the 14 s cadence capped "pace has stayed in the lower
+third" at 70 seconds, below the minute or two the rebuild waited for.
+
+The remaining fall-backs came in two kinds. Most were ordinary variation, such
+as "backing the pace off just a hair" on the way up. Others re-read the old
+line as a new reaction: "Since that last bit was a little too intense for
+you…" at 154 s cut pace from 35 to 15. Marking the person's lines with their
+age removed those. Planning drops of 5 or more at least 60 s after the line
+that cite the old line:
+
+| Build | Drops | Citing the old line |
+| --- | ---: | ---: |
+| Three-minute window only | 16 | 3 |
+| Final (ages marked in the history) | 15 | 1 |
+
+Final runs after "that's too much" reached 15–20 at once and began rebuilding
+after 42–70 s. After 90 s they peaked at 21–40, below the 45% that was too
+much. After "don't let me finish yet", all four runs dropped to 15–20 within
+one stretch and started rebuilding 14–70 s later, reaching 30–52 within three
+minutes; Layered climbed fastest.
+
+### Recall
+
+Each script asks for something completely different at decision 2, then says
+one line at decision 5. Two runs per mode.
+
+| Line at decision 5 | Recalled | Recalled the score from before the change |
+| --- | ---: | ---: |
+| go back to what you were doing before I asked for something different | 4/4 | 2/4 |
+| mm, what you were doing before I asked for a change was perfect | 4/4 | 2/4 |
+| that feels amazing | 0/4 | not applicable |
+
+Chat recalls when the person praises or asks for an earlier pattern, and not
+for praise of the current one. It picks the score the person meant in half of
+these runs; the other picks were the change itself or the latest earlier
+score. One more chat line corrects a wrong pick. The first version kept only three
+scores, did not say what was said while each played, and was tested with
+vaguer lines; it picked the right score in 1 of 8 runs.
+
+An earlier version also offered recall to planning turns. They re-read an old
+"go back" after chat had answered it, and swapped between scores for the rest
+of the run.
+
+### Smaller models
+
+The same scripts ran on Gemma 4 E4B heretic (Q4_K_M) and Granite 4.1 3B
+heretic (F16) with both builds, and on Gemma 4 26B A4B abliterated (Q3_K_S)
+with the final build. The suite, rebuild and recall runs predate the Creative
+v2 hold-off example. The Creative v2 first-reaction rows for E4B and Granite
+include it; the 26B A4B rows do not.
+
+| Measure | E4B PR head | E4B final | Granite PR head | Granite final | 26B A4B final |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Suite, Creative v2 | 9/14 | 8/14 | 8/14 | 11/14 | 12/14 |
+| Suite, Layered | 6/14 | 10/14 | 11/14 | 14/14 | 12/14 |
+| Model turns that failed | 105/160 | 76/134 | 24/160 | 6/131 | 1/138 |
+| "don't let me finish yet" at the minimum first, Creative v2 | 0/8 | 8/8 | 0/8 | 8/8 | 6/8 |
+| The same, Layered | 0/8 | 8/8 | 0/8 | 8/8 | 8/8 |
+| "go slow" kept in the lower third, Creative v2 | 7/8 | 5/8 | 0/8 | 1/8 | 4/8 |
+| The same, Layered | 0/8 | 5/8 | 1/8 | 7/8 | 8/8 |
+| Recall on praise or a reference | none | 1/8 | none | 0/8 | 0/8 |
+| Recall on "that feels amazing" | none | 0/4 | none | 0/4 | 0/4 |
+
+- E4B is limited by its output, not by the pace logic. Most failed turns ran to
+  the 512-token limit: 100 of 105 at the PR head and 63 of 76 in the final
+  build. A failed planning turn keeps the previous score.
+- The smaller models follow a concrete example, not abstract guidance. With
+  the hold-off examples both drop to 20–22 at once; without them, Creative v2
+  eased only to 35–39. Granite copies the example's 22 exactly.
+- They do not judge elapsed time the way Gemma 12B does. After "that's too
+  much", Granite's Layered runs stayed at 15–22 for three minutes and every
+  26B A4B run stayed near the minimum. E4B rebuilt Layered pace after 56–126 s.
+- They almost never recall (1 of 24 chances) and never recall by mistake.
+- 26B A4B produced the fewest failures and planned the most conservatively. It
+  answered "surprise me" in words only and held most planning turns.
+
+Separate prompt sets for smaller and larger models are not needed for these
+behaviors. The change that helped the smaller models most, a concrete example,
+also helped Gemma 12B, so it went into the shared contracts. What the smaller
+models miss, judging time and recall, falls back to staying slow or not
+recalling.
+
 ## Corrections to the initial draft
 
 The initial review draft made two wrong claims. It said motion-turn replies
@@ -228,21 +425,31 @@ Five lines per condition is too few to act on.
   phrasing fields vary tempo inside the plan.
 - **Any word rule**, including for exact holds, per the user's direction.
 - **The `keep` contracts** measured above.
+- **A host timer that rebuilds pace** after a fixed time. The model judges the
+  elapsed time from the facts it is given.
+- **Recall in planning turns.** Planning re-read an old "go back" after chat
+  had answered it and swapped between scores.
+- **Separate prompt sets for smaller models.** See
+  [smaller models](#smaller-models).
 
 ## Limits
 
-- One model, one or two runs per condition and one run per hold script.
-  Differences of a few decisions are noise.
+- Most conditions use one or two runs per model; the first reactions use
+  eight. Differences of a few decisions are noise. The width case of the
+  continuous request suite failed twice in one final run and passed 4 of 4 on
+  a rerun, against 2 of 4 at the PR head.
 - Simulated stretches omit handoffs between scores. The atlas shows commanded
   output, not physical feel.
 - Accent relaxation draws unseeded random numbers when a decision is made.
   Every accepted score and seed is recorded, so replay is exact, but two live
   runs differ.
-- Gemma still leaves the lower part of the saved speed range unused.
-  Creative v2 used 35–52 of 15–54, and Layered stayed at 25 without a request.
-- Layered often answers requests for variety with a seed refresh alone. The
-  realization changes but the character does not. One Layered planning reply
-  in the hold runs failed score validation, and the previous score held.
+- Without a request, Gemma still keeps Autopilot in the upper half of the
+  saved range. It uses the lower part when the person's words call for it.
+- After "don't let me finish yet", rebuilding can start within 15–30 s, and
+  Layered climbed back to 45–52 within three minutes.
+- Recall picks the score the person meant in about half of the runs, and the
+  smaller models almost never recall. One Layered planning reply in the hold
+  runs failed score validation, and the previous score held.
 - The standing hold relies on the model's reading. A misread shows in the
   Autopilot status, and one chat line or a fresh run clears it.
 
@@ -260,7 +467,12 @@ go test -tags 'liveeval magichandy_labs' -run 'TestLiveContinuousAutopilotSessio
 ```
 
 For directed runs, set `MAGICHANDY_SESSION_TURNS` to 16 and
-`MAGICHANDY_SESSION_REQUESTS` to `2:harder|6:don't stop`. The hold scripts
+`MAGICHANDY_SESSION_REQUESTS` to `2:harder|6:don't stop`. The pace suite uses
+4 turns and `MAGICHANDY_SESSION_START_SPEED` 45 (30 for "faster", 35 for the
+variety lines) with requests such as `0:that's too much`; the first reactions
+use 3 turns and 8 runs, and the rebuild runs 12 turns. The recall scripts use 8
+turns from 35 with `2:try something completely different|5:go back to what you
+were doing before I asked for something different`. The hold scripts
 use 10 turns, for example `2:keep it exactly like this, no changes from now
 on|4:that feels amazing|7:okay, now surprise me`. To recompile a report with
 the current engine, set `MAGICHANDY_REPLAY_INPUT` to it and run

@@ -7,8 +7,11 @@ removes Autopilot's word-based continuation limits. Creative v2 and Layered
 Autopilot judge the latest human lines, and live chat declares a standing wish
 to keep the motion unchanged. Unrequested accents fade. Creative v2 strokes
 gain seeded breathing, flurries, rare rests and varied landings. Layered scores
-compile from turning-point legs. The motion path, saved limits and Stop are
-unchanged. See [ADR 0031](docs/decisions/0031-model-judged-autopilot-continuity.md).
+compile from turning-point legs. Pace follows the person across the saved
+range: continuous planning sees how long ago each line was said, drops to near
+the minimum to draw a session out and rebuilds later, and live chat can bring
+back an earlier score. The motion path, saved limits and Stop are unchanged.
+See [ADR 0031](docs/decisions/0031-model-judged-autopilot-continuity.md).
 
 The September 20 [guided HTTPS setup](docs/decisions/0030-guided-https-certificates.md)
 integrates Local only, LAN + local, and Public into the initial Access decision.
