@@ -997,3 +997,27 @@ func TestAutopilotTraceRecordsDecisionSource(t *testing.T) {
 		return false
 	})
 }
+
+// A hold the human asked for behaves exactly like any other hold; only the
+// reported source differs, so status can say why Autopilot leaves motion alone.
+func TestAutopilotRequestedHoldKeepsSegmentAndReportsWhy(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	library := &motion.PatternDefinition{ID: "custom-wave", Name: "Custom wave"}
+	decider := &fakeDecider{decisions: []Decision{
+		{Segment: Segment{PatternID: library.ID, SpeedPercent: 40, DurationMillis: 4000}, Pattern: library},
+		{Hold: true, Requested: true},
+	}}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+	clock.Advance(150 * time.Second)
+	waitFor(t, time.Second, func() bool {
+		return decider.callCount() >= 2 && manager.Status().DecisionSource == "requested_hold"
+	})
+	if _, retargets := engine.counts(); retargets != 0 {
+		t.Fatalf("requested hold produced %d engine retargets", retargets)
+	}
+}

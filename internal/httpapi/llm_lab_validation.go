@@ -18,27 +18,19 @@ func (s *Server) validateLabTrial(trial chat.LLMLabTrial, state llmLabState) cha
 	if !trial.Valid {
 		trial.Changed = []string{}
 	}
-	return validateLabAutopilot(trial, labHumanRequests(state.DirectiveTurns))
+	return validateLabAutopilot(trial)
 }
 
-func validateLabAutopilot(trial chat.LLMLabTrial, requests []string) chat.LLMLabTrial {
-	if !trial.Autopilot || !trial.Valid {
+// validateLabAutopilot keeps the comparison methods' conservative continuation
+// rule. The continuous methods match production: the model judges which recent
+// requests still apply, and saved limits bound what it may choose.
+func validateLabAutopilot(trial chat.LLMLabTrial) chat.LLMLabTrial {
+	if !trial.Autopilot || !trial.Valid || trial.Method == "layered" || trial.Method == "creative_v2" {
 		return trial
 	}
-	guided := chat.HasMotionDirection(requests)
-	continuous := trial.Method == "layered" || trial.Method == "creative_v2"
-	if (!continuous || guided) && !labAutopilotWithinRequest(trial.Before, trial.After) {
+	if !labAutopilotWithinRequest(trial.Before, trial.After) {
 		trial.Valid, trial.After, trial.Changed = false, trial.Before, []string{}
 		trial.Error = "Autopilot cannot increase speed or widen the requested band."
 	}
-	if trial.Method == "creative_v2" && trial.Valid && guided && !chat.CreativeV2CharacterUnchanged(trial.Before, trial.After) {
-		trial.Valid, trial.After, trial.Changed = false, trial.Before, []string{}
-		trial.Error = "Creative v2 Autopilot changed the requested character."
-	}
-	if continuous && trial.Valid && len(trial.Changed) > 0 && chat.LayeredExactHoldRequested(requests) {
-		trial.Valid, trial.After, trial.Changed = false, trial.Before, []string{}
-		trial.Error = "Autopilot changed an explicitly fixed score."
-	}
-
 	return trial
 }

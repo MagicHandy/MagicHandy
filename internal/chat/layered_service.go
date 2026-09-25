@@ -3,7 +3,6 @@ package chat
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -41,12 +40,19 @@ func layeredContextInstructions(state MotionContext) string {
 	if state.MotionMode == MotionModeCreativeV2 {
 		scoreContext = creativeV2ScoreContext(score)
 	}
-	encoded, _ := json.Marshal(map[string]any{
+	context := map[string]any{
 		"current_score": scoreContext, "running": state.Running, "paused": state.Paused,
 		"saved_limits":                      map[string]int{"speed_min_percent": limits.SpeedMinPercent, "speed_max_percent": limits.SpeedMaxPercent},
 		"engine_envelope":                   state.Envelope,
 		"recent_user_requests_oldest_first": state.UserRequests,
-	})
+	}
+	if state.Autopilot {
+		context["autopilot"] = "composing between chat turns"
+		if state.StandingHold {
+			context["autopilot"] = "holding the motion unchanged at the user's request"
+		}
+	}
+	encoded, _ := json.Marshal(context)
 	return "Authoritative continuous motion state, refreshed for this turn:\n" + string(encoded) + "\n" + labPlanningContextGuide +
 		"A stopped device starts only for a direct motion request; a paused device cannot be resumed by model edits. Ordinary conversation and questions require reply only."
 }
@@ -73,7 +79,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	}
 	if !s.TrustedMotionInput {
 		guard := continuousOutputGuard(capabilities)
-		system = strings.TrimSuffix(system, guard) + continuousActionGuide + "\n\n" + guard
+		system = strings.TrimSuffix(system, guard) + continuousActionGuideFor(state) + "\n\n" + guard
 		schema = continuousActionSchema(schema, state)
 	}
 	if !capabilities.Motion {
@@ -87,7 +93,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if s.TrustedMotionInput && s.AutonomousTemperature > 0 {
 		temperature = min(s.AutonomousTemperature, 1.2)
 	}
-	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Messages: continuousMessages(system, request.History, request.Message, capabilities.MotionMode),
+	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Messages: continuousMessages(system, request.History, request.Message),
 		Model: s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
 		MaxTokens: maxTokens, ReasoningMode: s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens, JSONSchema: schema}, func(delta string) error {
@@ -109,6 +115,10 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if !capabilities.MoodTracking {
 		response.NewMood = nil
 	}
+	if s.TrustedMotionInput || !state.Autopilot {
+		// A standing wish counts only where live chat was asked for it.
+		response.StayUnchanged = nil
+	}
 	result.Response = response
 	return result, nil
 }
@@ -119,13 +129,9 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 		MotionContext: s.MotionContext, ConversationContext: s.ConversationContext, Capabilities: &s.Capabilities, TrustedMotionInput: true,
 		AutonomousTemperature: s.Temperature, PromptBudget: s.PromptBudget}
 	if kind == AutopilotKindMotion {
-		var requests []string
-		if s.MotionContext != nil {
-			requests = s.MotionContext.UserRequests
-		}
-		continuation := LayeredContinuationMessage(requests)
+		continuation := LayeredContinuationMessage()
 		if s.Capabilities.MotionMode == MotionModeCreativeV2 {
-			continuation = CreativeV2ContinuationMessage(requests)
+			continuation = CreativeV2ContinuationMessage()
 		}
 		request.Message = request.Message + "\n\n" + continuation
 	} else {
@@ -137,32 +143,14 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 		return AutopilotResponse{}, err
 	}
 	command := result.Response.Motion
-	if kind == AutopilotKindMotion {
-		if err := s.validateContinuousAutopilot(command); err != nil {
-			return AutopilotResponse{}, err
-		}
+	// Saved limits were already enforced by the parser. What the human asked
+	// for is honored by the model's judgment of recent requests, not by a
+	// word-matched lock here.
+	if kind == AutopilotKindMotion && command != nil && s.MotionContext != nil {
+		relaxUnchosenAccents(s.MotionContext.Layered, command.Layered)
 	}
 	if command != nil {
 		command.Action = MotionActionUpdate
 	}
 	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled"}, nil
-}
-
-func (s AutopilotService) validateContinuousAutopilot(command *MotionCommand) error {
-	if command == nil || s.MotionContext == nil {
-		return nil
-	}
-	if LayeredExactHoldRequested(s.MotionContext.UserRequests) {
-		return errors.New("layered Autopilot changed an explicitly fixed score")
-	}
-	if command.Layered != nil && s.MotionContext.Layered != nil && HasMotionDirection(s.MotionContext.UserRequests) {
-		before, after := s.MotionContext.Layered, command.Layered
-		if after.SpeedPercent > before.SpeedPercent || after.MinPercent < before.MinPercent || after.MaxPercent > before.MaxPercent {
-			return errors.New("layered Autopilot cannot raise speed or widen the requested band")
-		}
-		if s.Capabilities.MotionMode == MotionModeCreativeV2 && !CreativeV2CharacterUnchanged(*before, *after) {
-			return errors.New("creative v2 Autopilot changed the requested character")
-		}
-	}
-	return nil
 }

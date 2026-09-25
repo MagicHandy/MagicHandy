@@ -11,10 +11,10 @@ focus:{position_percent,width_percent,mix_percent,roam_percent}: supply all four
 - width_percent is local stroke width, 10..outer band width.
 - mix_percent controls reach: 0=full strokes only; 100=local strokes only; 1..99 combines broad and local reach through intermediate widths. A request containing BOTH broad/full strokes AND local work requires a value between 1 and 99, even when a local location is named. Returning to full strokes changes mix to 0; include range when widening to the entire slider.
 - roam_percent controls location: 0 holds the chosen placement; 100 lets it wander freely inside the active band and makes position inactive. Intermediate roam retains a location bias while both endpoints move. A specified local location requires roam 0 unless the user also asks for moving location. This applies to both mixed reach and local-only strokes. Free variation without a requested location can roam instead of choosing a permanent endpoint. Roam and mix do not schedule a sequence or guarantee periodic visits.
-sweep:{faster_direction,contrast_percent}: faster_direction is "tip", "base" or "even"; contrast 0..80 gives unequal direction timing, with 0 equal. For a faster sweep and slower return emit BOTH direction and nonzero contrast. This preserves overall speed.
+sweep:{faster_direction,contrast_percent}: relative timing of the two travel directions. "even" times both alike; "tip" or "base" with contrast 1..80 makes travel toward that end quicker than the return. A request for unequal timing needs both fields. Overall speed is preserved.
 rebounds:{count,retained_width_percent}: count 0..4 shrinking returns when local reach contracts, followed by gradual recovery into the ongoing motion. Count 0 removes them. Retained width 25..85 is the percentage of the excursion retained at each decay step. Tails below 10 percentage points are omitted. Bouncing needs focus.mix_percent greater than zero and enough local width for the requested decay. The reach blend can soften the visible decay; these are not separate inserted patterns.
 inertia_percent: 0..100 shifts the velocity crest later within each stroke, with a smooth reversal. This shapes travel; it does not change force or simulate impacts.
-variation_percent: 0..100 changes correlated pace and local width differences. Focus.roam_percent independently controls changing location. The seeded finite score eventually repeats.
+variation_percent: 0..100 how much the phrase breathes from stroke to stroke: pace drifts, eases off for a stretch or quickens into a short flurry, strokes land at slightly different points, accents vary in strength and a few turns linger briefly. 0 repeats every stroke exactly. Focus.roam_percent independently controls changing location. The seeded finite score eventually repeats.
 speed_percent: overall pace inside saved_limits. Preserve it unless asked for a pace change. Gentler means lower speed while preserving reach.
 evolve:true: refresh the realization without changing the character. "Keep varying within the same character" asks for evolve, not a new variation amount or an unchanged score. Automatic continuation should also evolve unless exact repetition was requested.
 
@@ -30,13 +30,9 @@ User: what does roaming change?
 
 Emit every requested group and scalar, including compound requests. Reply text alone changes nothing. Do not output sections, layers, raw points, timestamps or device commands. Shared-engine velocity, acceleration, jerk and reversal limits can reduce extreme timing contrasts. Never claim physical improvement from a plotted estimate.`
 
-// CreativeV2ContinuationMessage preserves the human's geometry and pacing.
-func CreativeV2ContinuationMessage(requests []string) string {
-	if LayeredExactHoldRequested(requests) {
-		return `Keep the exact score unchanged. Output {"edits":[],"reply":"Keeping the exact score."}.`
-	}
-	if !HasMotionDirection(requests) {
-		return continuousAutopilotExploration + ` Creative v2 can develop reach, timing and working location continuously inside one score. Roaming lets a temporary regional idea move on without switching to another fixed routine. A previous model-selected anchor or sweep is not a user constraint. Refine the ongoing motion; do not keep an endpoint fixed merely because it was used before, and do not replace every control just because another planning turn arrived.`
-	}
-	return `AUTOPILOT VARIATION: preserve every current character control, speed and outer band. Refresh only the realization with {"edits":[{"evolve":true}],"reply":"Fresh variation within the same character."}.`
+// CreativeV2ContinuationMessage is the Creative v2 Autopilot planning policy
+// shared by production and the Lab. The model judges which recent human words
+// still shape the motion.
+func CreativeV2ContinuationMessage() string {
+	return continuousAutopilotMessage("[]") + ` Creative v2 can develop reach, timing and working location continuously inside one score. Roaming lets a temporary regional idea move on without switching to another fixed routine. Unequal direction timing, rebounds and strong inertia are accents for a stretch, not a session default: when a planning turn changes other controls, an accent it does not include again fades on its own, so include its group again while a human request still calls for it. A hold or seed refresh keeps every accent. A previous model-selected accent or anchor is not a user constraint. Refine the ongoing motion; do not keep an endpoint fixed merely because it was used before, and do not replace every control just because another planning turn arrived.`
 }

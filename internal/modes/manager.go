@@ -89,8 +89,9 @@ type Status struct {
 	LastEventAt    string `json:"last_event_at,omitempty"`
 	WaitingForChat bool   `json:"waiting_for_chat,omitempty"`
 	// DecisionSource reports where Autopilot's current segment came from:
-	// "model", "fallback" (planner after a failed decision), "hold", or
-	// "interactive" when chat supplied the live target.
+	// "model", "fallback" (planner after a failed decision), "hold",
+	// "requested_hold" while the human asked chat to keep the motion as it is,
+	// or "interactive" when chat supplied the live target.
 	DecisionSource string `json:"decision_source,omitempty"`
 	// LastSay is the most recent Autopilot line. The planner uses it to avoid
 	// repetition; the API retains it as diagnostic state while Chat owns display.
@@ -727,6 +728,9 @@ func (m *Manager) tracePlanned(mode string, reason string, choice segmentChoice)
 		))
 		if choice.say != "" {
 			note += " say"
+		}
+		if choice.requested {
+			note += " requested"
 		}
 	}
 	m.trace(mode, reason, row, note)

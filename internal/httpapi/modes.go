@@ -108,6 +108,11 @@ func (s *Server) handleModeStart(w http.ResponseWriter, r *http.Request) {
 	defer finishSessionChange()
 	s.personaMutationMu.Lock()
 	defer s.personaMutationMu.Unlock()
+	if body.Mode == modes.ModeAutopilot {
+		// A fresh run starts developing again; a standing wish belonged to the
+		// motion that was playing before.
+		s.autopilotHold.release()
+	}
 	status, err := s.modes.Start(r.Context(), body.Mode)
 	if err != nil {
 		message := err.Error()

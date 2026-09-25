@@ -28,6 +28,9 @@ func autopilotCosmeticFeedback(input modes.DecisionInput) string {
 // autopilotDecide runs the strict motion-only model contract. It never asks for
 // or publishes a chat line.
 func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput) (modes.Decision, error) {
+	if held, ok := s.requestedAutopilotHold(ctx); ok {
+		return held, nil
+	}
 	response, err := s.autopilotModelTurn(ctx, input, chat.AutopilotKindMotion)
 	if err != nil {
 		return modes.Decision{}, err

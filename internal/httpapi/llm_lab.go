@@ -221,7 +221,7 @@ func (s *Server) runLabChat(parent context.Context, body labChatRequest, automat
 	}
 	history := labConversationHistory(state.DirectiveTurns, body)
 	if automatic {
-		body.Message = labContinuationMessage(body.Method, body.Message, state.DirectiveTurns)
+		body.Message = labContinuationMessage(body.Method, body.Message)
 	}
 	trial := chat.RunLLMLab(ctx, provider, settings.LLM.Model, body.Method, body.Prompt, body.Message, state.Current, settings.Motion, history, body.SchemaGuided)
 	trial.Autopilot = automatic
@@ -267,12 +267,4 @@ func labConversationHistory(turns []chat.LLMLabTrial, body labChatRequest) []llm
 		}
 	}
 	return history
-}
-
-func labHumanRequests(turns []chat.LLMLabTrial) []string {
-	requests := make([]string, 0, len(turns))
-	for _, turn := range turns {
-		requests = append(requests, turn.Message)
-	}
-	return requests
 }

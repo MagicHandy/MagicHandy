@@ -185,10 +185,8 @@ func (s *Server) runLabAutopilot(ctx context.Context, options labConversationSes
 		done := make(chan struct{})
 		s.lab.autoCancel, s.lab.autoDone = cancel, done
 		s.lab.mu.Unlock()
+		// Continuous methods replace this with their own planning policy.
 		message := "Continue the conversation as Autopilot. Respect the user's latest requested limits and character. You may hold the current motion or make one small appropriate change. Never increase speed or widen the requested band without permission. Briefly describe what you actually change."
-		if options.Method == "layered" {
-			message = chat.LayeredAutopilotMessage()
-		}
 		state, err := s.runLabChat(turnCtx, labChatRequest{Message: message}, true)
 		canceled := turnCtx.Err() != nil
 		cancel()
@@ -216,12 +214,12 @@ func labAutopilotDelay(options labConversationSession) time.Duration {
 	return delay
 }
 
-func labContinuationMessage(method, fallback string, turns []chat.LLMLabTrial) string {
+func labContinuationMessage(method, fallback string) string {
 	switch method {
 	case "layered":
-		return chat.LayeredContinuationMessage(labHumanRequests(turns))
+		return chat.LayeredContinuationMessage()
 	case "creative_v2":
-		return chat.CreativeV2ContinuationMessage(labHumanRequests(turns))
+		return chat.CreativeV2ContinuationMessage()
 	default:
 		return fallback
 	}

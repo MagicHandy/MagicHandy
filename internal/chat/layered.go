@@ -60,10 +60,11 @@ func ParseLayeredReply(raw string, current motion.FlowSpec, limits config.Motion
 		return AssistantResponse{}, current, nil, err
 	}
 	var proposal struct {
-		Action  string       `json:"action,omitempty"`
-		Reply   string       `json:"reply"`
-		NewMood *Mood        `json:"new_mood,omitempty"`
-		Edits   *LayeredEdit `json:"edits"`
+		Action        string       `json:"action,omitempty"`
+		StayUnchanged *bool        `json:"stay_unchanged,omitempty"`
+		Reply         string       `json:"reply"`
+		NewMood       *Mood        `json:"new_mood,omitempty"`
+		Edits         *LayeredEdit `json:"edits"`
 	}
 	if err := decodeLabObject(raw, &proposal); err != nil {
 		return AssistantResponse{}, current, nil, err
@@ -80,7 +81,7 @@ func ParseLayeredReply(raw string, current motion.FlowSpec, limits config.Motion
 		}
 	}
 	next, err := ApplyLayeredEdit(*proposal.Edits, current, limits)
-	return AssistantResponse{Reply: proposal.Reply, NewMood: proposal.NewMood, continuousAction: proposal.Action}, next, labChangedControls(current, next), err
+	return AssistantResponse{Reply: proposal.Reply, NewMood: proposal.NewMood, StayUnchanged: proposal.StayUnchanged, continuousAction: proposal.Action}, next, labChangedControls(current, next), err
 }
 
 func rejectLayeredNulls(raw string) error {

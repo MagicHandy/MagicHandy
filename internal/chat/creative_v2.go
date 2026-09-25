@@ -48,10 +48,11 @@ func ParseCreativeV2Reply(raw string, current motion.FlowSpec, limits config.Mot
 		return AssistantResponse{}, current, nil, errors.New("start a new Creative v2 score before using this interface")
 	}
 	var proposal struct {
-		Action  string                       `json:"action,omitempty"`
-		Reply   string                       `json:"reply"`
-		NewMood *Mood                        `json:"new_mood,omitempty"`
-		Edits   []map[string]json.RawMessage `json:"edits"`
+		Action        string                       `json:"action,omitempty"`
+		StayUnchanged *bool                        `json:"stay_unchanged,omitempty"`
+		Reply         string                       `json:"reply"`
+		NewMood       *Mood                        `json:"new_mood,omitempty"`
+		Edits         []map[string]json.RawMessage `json:"edits"`
 	}
 	if err := decodeLabObject(raw, &proposal); err != nil {
 		return AssistantResponse{}, current, nil, err
@@ -69,7 +70,7 @@ func ParseCreativeV2Reply(raw string, current motion.FlowSpec, limits config.Mot
 	if err != nil {
 		return AssistantResponse{}, current, nil, err
 	}
-	return AssistantResponse{Reply: proposal.Reply, NewMood: proposal.NewMood, continuousAction: proposal.Action}, next, labChangedControls(current, next), nil
+	return AssistantResponse{Reply: proposal.Reply, NewMood: proposal.NewMood, StayUnchanged: proposal.StayUnchanged, continuousAction: proposal.Action}, next, labChangedControls(current, next), nil
 }
 
 func applyCreativeV2Edits(items []map[string]json.RawMessage, current motion.FlowSpec, limits config.MotionSettings) (motion.FlowSpec, error) {
@@ -122,6 +123,12 @@ func applyCreativeV2Edits(items []map[string]json.RawMessage, current motion.Flo
 	encoded, _ = json.Marshal(fields)
 	if err := decodeLabObject(string(encoded), next.Gesture); err != nil {
 		return current, err
+	}
+	// Narrowing the band while keeping a wider local width has one reading:
+	// local strokes as wide as the new band allows. Rejecting the whole
+	// transaction discarded the model's other edits as well.
+	if band := next.MaxPercent - next.MinPercent; next.Gesture.FocusWidthPercent > band {
+		next.Gesture.FocusWidthPercent = max(10, band)
 	}
 	if err := next.Validate(limits); err != nil {
 		return current, err

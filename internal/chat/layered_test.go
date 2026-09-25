@@ -135,29 +135,27 @@ func TestLayeredGeometryOperationsAreAtomicAndKeepPace(t *testing.T) {
 	}
 }
 
-func TestLayeredContinuationHonorsExactHoldAndLaterChanges(t *testing.T) {
+func TestLayeredAutopilotLeavesExactHoldsToTheModel(t *testing.T) {
 	hold := "Keep this exact pattern repeating. No changes from now on."
 	for _, tc := range []struct {
-		requests []string
-		hold     bool
+		raw  string
+		held bool
 	}{
-		{[]string{"Vary the motion.", hold}, true},
-		{[]string{hold, "What does the pace layer do?"}, true},
-		{[]string{hold, "Actually, vary the motion again."}, false},
-		{[]string{"Alternate tip and base. Keep speed unchanged."}, false},
+		{`{"edits":{},"reply":"Keeping the exact score."}`, true},
+		// A later judgment that the wish no longer applies is the model's to make.
+		{`{"edits":{"evolve":true},"reply":"Fresh."}`, false},
 	} {
-		if LayeredExactHoldRequested(tc.requests) != tc.hold {
-			t.Fatal(tc.requests)
+		provider := &layeredTestProvider{raw: tc.raw}
+		spec := DefaultLayeredScore(25)
+		service := AutopilotService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeLayered}, MotionContext: &MotionContext{Running: true, Layered: &spec, UserRequests: []string{hold}}}
+		response, err := service.Complete(t.Context(), AutopilotKindMotion, Request{Message: "Continue"})
+		if err != nil || (response.Motion == nil) != tc.held || provider.calls != 1 {
+			t.Fatal("exact hold handling", tc.raw, response.Motion, err)
 		}
-	}
-	provider := &layeredTestProvider{raw: `{"edits":{"evolve":true},"reply":"Fresh."}`}
-	spec := DefaultLayeredScore(25)
-	service := AutopilotService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeLayered}, MotionContext: &MotionContext{Running: true, Layered: &spec, UserRequests: []string{hold}}}
-	if _, err := service.Complete(t.Context(), AutopilotKindMotion, Request{Message: "Continue"}); err == nil {
-		t.Fatal("accepted evolution during exact hold")
-	}
-	if provider.calls != 1 || !strings.Contains(provider.request.Messages[len(provider.request.Messages)-1].Content, "HOLD EXACT") {
-		t.Fatal("hold policy not provided without repair")
+		last := provider.request.Messages[len(provider.request.Messages)-1].Content
+		if !strings.Contains(provider.request.Messages[0].Content, hold) || !strings.Contains(last, `asks for change, return "edits":{} with a brief reply and change nothing, not even speed: that wish outranks every other instruction in this turn`) {
+			t.Fatal("the hold wish or the hold instruction did not reach the model")
+		}
 	}
 }
 

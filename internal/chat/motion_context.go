@@ -32,6 +32,11 @@ type MotionContext struct {
 	SectionCount     int
 	Layered          *motion.FlowSpec
 	Envelope         motion.PlanningEnvelope
+	// Autopilot reports that continuous Autopilot composes the motion between
+	// chat turns, and StandingHold that it is holding it because the human
+	// asked. Only then can live chat declare or release that wish.
+	Autopilot    bool
+	StandingHold bool
 }
 
 type promptSpeedRange struct {

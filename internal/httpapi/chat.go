@@ -115,7 +115,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	motionContext := s.contextualChatMotion(settings, promptContext.UserRequests)
+	motionContext := s.chatTurnMotion(settings, promptContext.UserRequests, sessionID)
 	service := chat.Service{
 		Provider:              provider,
 		Prompt:                prompt,
@@ -493,6 +493,9 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		return
 	}
 	replyCommitted = true
+	if stay := result.Response.StayUnchanged; stay != nil {
+		s.autopilotHold.record(sessionID, *stay)
+	}
 	dispatch, motionErr := s.dispatchChatMotionAt(ctx, result.Response.Motion, &stopSequence)
 	if s.chatCanceled(ctx, stopSequence) {
 		if speech != nil {

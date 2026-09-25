@@ -55,6 +55,10 @@ func writeContinuousAutopilotContext(builder *strings.Builder, context Autopilot
 	writeRecentCreativeBands(builder, context.RecentPositionBands)
 	level := normalizedMotionChangeLevel(context.MotionChangeLevel)
 	fmt.Fprintf(builder, "Motion change preference: %d/8 (%s). This is a preference for session development, not a mandatory change schedule.\n", level, motionChangeBias(level))
+	// Every axis collapses to one value unless the spread is asked for; the
+	// continuous modes never received the pace line the catalog modes use.
+	fmt.Fprintf(builder, "Pace: use the width of the saved %d-%d%% speed range across the session rather than settling into one comfortable band. Easing down is what makes the next climb land; several stretches in a row at nearly the same speed_percent read as flat.\n",
+		context.SpeedMinPercent, context.SpeedMaxPercent)
 	if context.MotionFeedback != "" {
 		fmt.Fprintf(builder, "Quality feedback: %s\n", context.MotionFeedback)
 	}

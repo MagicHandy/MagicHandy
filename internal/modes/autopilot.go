@@ -117,7 +117,10 @@ type Decision struct {
 	Pattern *motion.PatternDefinition
 	Say     string
 	Hold    bool
-	Next    TimingPreference
+	// Requested marks a hold the human asked for in chat, so status can say why
+	// Autopilot is leaving the motion alone. It behaves exactly like Hold.
+	Requested bool
+	Next      TimingPreference
 	// Variability is how much the target should wander before the next boundary.
 	Variability VariabilityPreference
 }
@@ -144,6 +147,8 @@ type segmentChoice struct {
 	timing          TimingPreference
 	variability     VariabilityPreference
 	decisionLatency time.Duration
+	// requested marks a hold the human asked for; its source stays "hold".
+	requested bool
 	// Backend facts visible to the decision are retained with its trace so a
 	// hold or update can be audited against the exact accumulated context.
 	sessionTracking          bool
@@ -222,14 +227,14 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 	if decision.Hold {
 		if segment, pattern, ok := m.heldSegment(); ok {
 			return segmentChoice{
-				segment: segment, pattern: pattern, source: "hold",
+				segment: segment, pattern: pattern, source: "hold", requested: decision.Requested,
 				say: decision.Say, timing: timing, variability: variability,
 				decisionLatency: latency,
 			}
 		}
 		if !fallback || dynamicMode {
 			return segmentChoice{
-				source: "hold", say: decision.Say, timing: timing,
+				source: "hold", requested: decision.Requested, say: decision.Say, timing: timing,
 				variability: variability, decisionLatency: latency,
 			}
 		}
@@ -463,6 +468,9 @@ func (m *Manager) rememberChoice(mode string, choice segmentChoice) {
 	}
 	if mode == ModeAutopilot {
 		m.events.decisionSource = choice.source
+		if choice.requested {
+			m.events.decisionSource = "requested_hold"
+		}
 	}
 	if choice.source == "hold" || !choice.segment.hasContent() {
 		return

@@ -15,6 +15,12 @@ func TestCreativeV2PartialEditsAndRejectInvalidTransactions(t *testing.T) {
 	if err != nil || next.Gesture.FocusPercent != 0 || next.Gesture.FocusRoamPercent != 0 || next.Gesture.ReboundCount != 3 || next.SpeedPercent != 25 || s.Gesture.FocusPercent != 50 {
 		t.Fatalf("partial edits %v %+v", err, next)
 	}
+	// A local width wider than the band has one reading: as wide as the band
+	// allows. Rejecting it used to discard every other edit in the turn.
+	_, clamped, _, err := ParseCreativeV2Reply(`{"edits":[{"range":{"min_percent":30,"max_percent":70}},{"focus":{"position_percent":0,"width_percent":60,"mix_percent":40,"roam_percent":0}},{"speed_percent":30}],"reply":"Narrower."}`, s, limits)
+	if err != nil || clamped.Gesture.FocusWidthPercent != 40 || clamped.MinPercent != 30 || clamped.SpeedPercent != 30 {
+		t.Fatalf("narrowed band did not clamp the local width: %v %+v", err, clamped)
+	}
 	_, hold, changed, err := ParseCreativeV2Reply(`{"edits":[],"reply":"Holding."}`, next, limits)
 	if err != nil || len(changed) != 0 || !reflect.DeepEqual(next, hold) {
 		t.Fatal("hold changed score")
@@ -23,7 +29,6 @@ func TestCreativeV2PartialEditsAndRejectInvalidTransactions(t *testing.T) {
 		`{"reply":"missing edits"}`,
 		`{"edits":[{"layers":[]}],"reply":"wrong contract"}`,
 		`{"edits":[{"rebounds":null}],"reply":"null"}`,
-		`{"edits":[{"focus":{"position_percent":0,"width_percent":99,"mix_percent":40}}],"reply":"too wide"}`,
 		`{"edits":[{"focus":{"position_percent":0}}],"reply":"partial group"}`,
 		`{"edits":[{"rebounds":{"count":5,"retained_width_percent":75}}],"reply":"too many"}`,
 		`{"edits":[{"inertia_percent":1.5}],"reply":"fraction"}`,

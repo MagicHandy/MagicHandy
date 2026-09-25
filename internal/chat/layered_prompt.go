@@ -15,8 +15,8 @@ User: alternate between tip and base
 {"edits":{"geometry":"alternate_ends"},"reply":"Short strokes alternate between the two ends."}
 User: Nah, jerk the base then jerk the tip and alternate
 {"edits":{"geometry":"alternate_ends"},"reply":"Short local strokes at the base, then the tip, repeating."}
-User: alternate between full strokes and hammering the tip
-{"edits":{"geometry":"full_and_tip"},"reply":"Full strokes alternate with short tip strokes."}
+User: mix full strokes with short ones near the top
+{"edits":{"geometry":"full_and_tip"},"reply":"Full strokes alternate with short strokes near the tip."}
 User: jerk gently (current speed 25, saved minimum 20)
 {"edits":{"change_by":{"speed_percent":-5}},"reply":"Five points slower, preserving the reach and layers."}
 User: keep varying within this same character
@@ -36,8 +36,3 @@ range varies width; center moves its location; pace varies travel rate. drift is
 - evolve:true refreshes seeded variation and timing without replacing any geometry, widths, speed or layers. Use it to continue a requested character. AUTOPILOT EXPLORATION may choose new geometry, controls and layers instead. Exact repetition/no-change requests override automatic evolution.
 Fixed width plus irregular location needs BOTH stroke_width with equal bounds and a center layer with shape drift; remove any old range layer. Encode every part of a compound request before describing it.
 No steps, device commands, timestamps or point arrays. The shared engine smooths every transition. Never claim sudden acceleration or physical improvement from a plotted estimate.`
-
-const layeredAutopilotMessage = `AUTOPILOT VARIATION: continue the user's latest requested character. Preserve speed, outer band, anchor, widths and layers. If the user requested exact repetition or no changes, use {"edits":{},"reply":"Keeping the exact score."}. Otherwise use {"edits":{"evolve":true},"reply":"Fresh variation within the same character."}.`
-
-// LayeredAutopilotMessage gives Labs and production the same continuation intent.
-func LayeredAutopilotMessage() string { return layeredAutopilotMessage }

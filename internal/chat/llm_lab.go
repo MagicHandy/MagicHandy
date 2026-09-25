@@ -87,11 +87,17 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 	if method == "creative_v2" {
 		score = creativeV2ScoreContext(current)
 	}
-	contextJSON, _ := json.Marshal(map[string]any{
+	labContext := map[string]any{
 		"current_score": score, "current_recipe": recipeID,
 		"saved_limits":    map[string]int{"speed_min_percent": limits.SpeedMinPercent, "speed_max_percent": limits.SpeedMaxPercent},
 		"engine_envelope": motion.CurrentPlanningEnvelope(limits),
-	})
+	}
+	if method == "layered" || method == "creative_v2" {
+		// Their continuation policy reads the human's latest lines here, as in
+		// production. Lab history carries only human turns and replies.
+		labContext["recent_user_requests_oldest_first"] = labRecentUserRequests(history)
+	}
+	contextJSON, _ := json.Marshal(labContext)
 	messages := []llm.Message{{Role: "system", Content: prompt}}
 	if len(history) > 8 {
 		history = history[len(history)-8:]
@@ -122,6 +128,16 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 	trial.Valid = true
 	_, trial.RecipeName = labCurrentRecipe(method, trial.After)
 	return trial
+}
+
+func labRecentUserRequests(history []llm.Message) []string {
+	lines := make([]string, 0, len(history))
+	for _, message := range history {
+		if message.Role == "user" {
+			lines = append(lines, message.Content)
+		}
+	}
+	return SelectRecentUserRequests(lines)
 }
 
 // ParseLLMLab merges only explicit valid changes into the authoritative score.
