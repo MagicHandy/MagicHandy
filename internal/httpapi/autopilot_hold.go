@@ -7,6 +7,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
 // autopilotStandingHold remembers that a live continuous-chat turn read the
@@ -47,7 +48,7 @@ func (h *autopilotStandingHold) release() {
 // chatTurnMotion is the motion state for a live chat turn. It also says whether
 // continuous Autopilot is composing the motion and whether it holds it at the
 // human's request; only then is a standing wish offered to the model.
-func (s *Server) chatTurnMotion(settings config.Settings, requests []string, sessionID string) chat.MotionContext {
+func (s *Server) chatTurnMotion(settings config.Settings, requests []chat.RecentUserRequest, sessionID string) chat.MotionContext {
 	state := s.contextualChatMotion(settings, requests)
 	if s.modes == nil || !continuousChatMode(settings.LLM.MotionGenerationMode) {
 		return state
@@ -57,7 +58,34 @@ func (s *Server) chatTurnMotion(settings config.Settings, requests []string, ses
 	}
 	state.Autopilot = true
 	state.StandingHold = s.autopilotHold.holds(sessionID)
+	state.EarlierScores = chatEarlierScores(s.modes.EarlierScores())
 	return state
+}
+
+// chatEarlierScores passes the run's earlier distinct scores to a model turn.
+func chatEarlierScores(scores []modes.EarlierScore) []chat.EarlierScore {
+	out := make([]chat.EarlierScore, 0, len(scores))
+	for _, score := range scores {
+		if score.Flow != nil {
+			out = append(out, chat.EarlierScore{Flow: *motion.CloneFlowSpec(score.Flow), StartedSecondsAgo: score.StartedSecondsAgo, PlayedSeconds: score.PlayedSeconds})
+		}
+	}
+	return out
+}
+
+// afterLiveChatTurn applies what a committed live chat turn means for
+// continuous Autopilot. It remembers a declared standing wish. When the turn
+// left the motion unchanged, the planner reconsiders now: live chat decides its
+// action before writing its reply, so it often answers a remark such as "that's
+// too much" in words alone, while the planner acts on it.
+func (s *Server) afterLiveChatTurn(sessionID string, response chat.AssistantResponse) {
+	if stay := response.StayUnchanged; stay != nil {
+		s.autopilotHold.record(sessionID, *stay)
+	}
+	settings, _ := s.store.Snapshot()
+	if response.Motion == nil && s.modes != nil && continuousChatMode(settings.LLM.MotionGenerationMode) {
+		s.modes.ReconsiderAfterChat()
+	}
 }
 
 // requestedAutopilotHold answers a planning boundary without inference while

@@ -15,12 +15,14 @@ sweep:{faster_direction,contrast_percent}: relative timing of the two travel dir
 rebounds:{count,retained_width_percent}: count 0..4 shrinking returns when local reach contracts, followed by gradual recovery into the ongoing motion. Count 0 removes them. Retained width 25..85 is the percentage of the excursion retained at each decay step. Tails below 10 percentage points are omitted. Bouncing needs focus.mix_percent greater than zero and enough local width for the requested decay. The reach blend can soften the visible decay; these are not separate inserted patterns.
 inertia_percent: 0..100 shifts the velocity crest later within each stroke, with a smooth reversal. This shapes travel; it does not change force or simulate impacts.
 variation_percent: 0..100 how much the phrase breathes from stroke to stroke: pace drifts, eases off for a stretch or quickens into a short flurry, strokes land at slightly different points, accents vary in strength and a few turns linger briefly. 0 repeats every stroke exactly. Focus.roam_percent independently controls changing location. The seeded finite score eventually repeats.
-speed_percent: overall pace inside saved_limits. Preserve it unless asked for a pace change. Gentler means lower speed while preserving reach.
-evolve:true: refresh the realization without changing the character. "Keep varying within the same character" asks for evolve, not a new variation amount or an unchanged score. Automatic continuation should also evolve unless exact repetition was requested.
+speed_percent: overall pace inside saved_limits. Preserve it unless the conversation calls for a pace change. Gentler means lower speed while preserving reach. ` + continuousPaceGuide + `
+evolve:true: refresh the realization without changing the character. "Keep varying within the same character" asks for evolve, not a new variation amount or an unchanged score.
 
 These examples illustrate edit mechanics, not preferred motions or session instructions:
 User: raise the speed by five percentage points (current speed 25)
 {"edits":[{"speed_percent":30}],"reply":"Five percentage points faster."}
+User: I'm close, don't let me finish yet (current speed 45, saved minimum 20)
+{"edits":[{"speed_percent":22}],"reply":"Holding you off: nearly the slowest pace, all at once."}
 User: remove the rebounds, keep the rest (current retained width 60)
 {"edits":[{"rebounds":{"count":0,"retained_width_percent":60}}],"reply":"Rebounds removed; the other controls stay as they are."}
 User: keep varying within this same character
@@ -34,5 +36,5 @@ Emit every requested group and scalar, including compound requests. Reply text a
 // shared by production and the Lab. The model judges which recent human words
 // still shape the motion.
 func CreativeV2ContinuationMessage() string {
-	return continuousAutopilotMessage("[]") + ` Creative v2 can develop reach, timing and working location continuously inside one score. Roaming lets a temporary regional idea move on without switching to another fixed routine. Unequal direction timing, rebounds and strong inertia are accents for a stretch, not a session default: when a planning turn changes other controls, an accent it does not include again fades on its own, so include its group again while a human request still calls for it. A hold or seed refresh keeps every accent. A previous model-selected accent or anchor is not a user constraint. Refine the ongoing motion; do not keep an endpoint fixed merely because it was used before, and do not replace every control just because another planning turn arrived.`
+	return continuousAutopilotMessage("[]") + ` Creative v2 can develop reach, timing, working location and pace continuously inside one score. Roaming lets a temporary regional idea move on without switching to another fixed routine. Unequal direction timing, rebounds and strong inertia are accents for a stretch, not a session default: when a planning turn changes other controls, an accent it does not include again fades on its own, so include its group again while a human request still calls for it. A hold or seed refresh keeps every accent. A previous model-selected accent or anchor is not a user constraint. Refine the ongoing motion; do not keep an endpoint fixed merely because it was used before, and do not replace every control just because another planning turn arrived.`
 }

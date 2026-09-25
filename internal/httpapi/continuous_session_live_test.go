@@ -40,6 +40,10 @@ type continuousSessionTurn struct {
 	Summary    *motion.PerceptualSummary `json:"summary,omitempty"`
 	Samples    [][2]float64              `json:"samples,omitempty"`
 	DurationMS int64                     `json:"duration_ms"`
+	// Earlier are the earlier scores a chat turn was offered, id 1 first.
+	Earlier []motion.FlowSpec `json:"earlier_scores,omitempty"`
+	// Interactive marks a stretch that played a chat edit's own segment.
+	Interactive bool `json:"interactive,omitempty"`
 }
 
 type continuousSessionRun struct {
@@ -67,6 +71,7 @@ const sessionStretch = 14 * time.Second
 // MAGICHANDY_LIVE_LLAMA_URL selects a loopback llama.cpp server.
 // MAGICHANDY_SESSION_MODE is creative_v2 (default) or layered.
 // MAGICHANDY_SESSION_TURNS sets motion decisions per run (default 20).
+// MAGICHANDY_SESSION_START_SPEED sets the opening score's speed (default 25).
 // MAGICHANDY_SESSION_RUNS sets independent runs (default 1).
 // MAGICHANDY_SESSION_REQUESTS injects human lines as "turn:text|turn:text".
 // MAGICHANDY_EXPERIMENT_CAPTURE writes the JSON report.
@@ -120,11 +125,22 @@ type liveContinuousSession struct {
 	prompt       chat.PromptSet
 	score        motion.FlowSpec
 	history      []llm.Message
+	historyAt    []time.Time
 	humanLines   []string
+	humanAt      []int
 	input        modes.DecisionInput
 	offset       int64
 	nextSpeech   time.Duration
 	standingHold bool
+	// speedMarks mirrors the scheduler's recent stretch speeds on the session clock.
+	speedMarks [][2]int
+	// earlier mirrors the scheduler's earlier distinct scores; since is when
+	// the current score's character began, on the session clock.
+	earlier []liveEarlierScore
+	since   int
+	heard   bool
+	// chatSegment is set while a chat edit's own segment plays.
+	chatSegment bool
 }
 
 func (s *liveContinuousSession) setup() {
@@ -138,9 +154,10 @@ func (s *liveContinuousSession) setup() {
 	s.capabilities.MotionMode = s.mode
 	s.capabilities.Voice = chat.VoiceExplicit
 	s.capabilities.MoodTracking = true
-	s.score = chat.FreshLayeredScore(25)
+	start := liveSessionEnvInt("MAGICHANDY_SESSION_START_SPEED", 25)
+	s.score = chat.FreshLayeredScore(start)
 	if s.mode == chat.MotionModeCreativeV2 {
-		s.score = chat.FreshCreativeV2Score(25)
+		s.score = chat.FreshCreativeV2Score(start)
 	}
 	s.input = modes.DecisionInput{Style: "balanced", SpeedMinPercent: 15, SpeedMaxPercent: 54, MotionMinSeconds: 20,
 		MotionMaxSeconds: 60, MotionChangeLevel: 8, SessionTracking: true, ArcEnabled: true}
@@ -154,9 +171,90 @@ func (s *liveContinuousSession) speechInterval() time.Duration {
 }
 
 func (s *liveContinuousSession) motionContext() chat.MotionContext {
-	return chat.MotionContext{SpeedMinPercent: 15, SpeedMaxPercent: 54, MotionMode: s.mode,
+	context := chat.MotionContext{SpeedMinPercent: 15, SpeedMaxPercent: 54, MotionMode: s.mode,
 		Envelope: motion.CurrentPlanningEnvelope(s.settings.Motion), Running: true, SpeedPercent: s.score.SpeedPercent,
-		Layered: motion.CloneFlowSpec(&s.score), UserRequests: chat.SelectRecentUserRequests(s.humanLines)}
+		Layered: motion.CloneFlowSpec(&s.score)}
+	context.UserRequests, context.UserRequestSecondsAgo = s.userRequests()
+	return context
+}
+
+// earlierScores mirrors the scheduler's memory for a live chat turn, newest
+// first, without the score that is playing.
+func (s *liveContinuousSession) earlierScores() []chat.EarlierScore {
+	var scores []chat.EarlierScore
+	for i := len(s.earlier) - 1; i >= 0; i-- {
+		mark := s.earlier[i]
+		if liveSameCharacter(mark.flow, s.score) {
+			continue
+		}
+		scores = append(scores, chat.EarlierScore{Flow: *motion.CloneFlowSpec(&mark.flow),
+			StartedSecondsAgo: max(0, s.input.SessionSeconds-mark.since), PlayedSeconds: mark.until - mark.since})
+	}
+	return scores
+}
+
+type liveEarlierScore struct {
+	flow         motion.FlowSpec
+	since, until int
+	heard        bool
+}
+
+// adopt plays a new score. When its character differs, the old score joins
+// the earlier scores the way the scheduler keeps them.
+func (s *liveContinuousSession) adopt(next motion.FlowSpec, at int) {
+	previous, heard, since := s.score, s.heard, s.since
+	s.score, s.offset = next, 0
+	if liveSameCharacter(previous, next) {
+		return
+	}
+	s.since, s.heard = at, false
+	if at == since {
+		// The opening score, or a chat score the planner replaced at once,
+		// never played; the scheduler keeps neither.
+		return
+	}
+	kept := s.earlier[:0:0]
+	for _, mark := range s.earlier {
+		if liveSameCharacter(mark.flow, previous) {
+			heard = heard || mark.heard
+			continue
+		}
+		kept = append(kept, mark)
+	}
+	kept = append(kept, liveEarlierScore{flow: previous, since: since, until: at, heard: heard})
+	// The three latest and up to three older scores heard while the person spoke.
+	keep := make([]bool, len(kept))
+	older := 0
+	for i := len(kept) - 1; i >= 0; i-- {
+		if len(kept)-i <= 3 || (kept[i].heard && older < 3) {
+			keep[i] = true
+			if len(kept)-i > 3 {
+				older++
+			}
+		}
+	}
+	s.earlier = s.earlier[:0]
+	for i, mark := range kept {
+		if keep[i] {
+			s.earlier = append(s.earlier, mark)
+		}
+	}
+}
+
+func liveSameCharacter(a, b motion.FlowSpec) bool {
+	a.Seed, b.Seed, a.SpeedPercent, b.SpeedPercent = 1, 1, 1, 1
+	return continuousSameScore(a, b)
+}
+
+// userRequests supplies the recent human lines with their ages, as the chat
+// log does, measured on the session clock.
+func (s *liveContinuousSession) userRequests() ([]string, []int) {
+	base := time.Unix(0, 0)
+	timeline := make([]chat.RecentUserRequest, len(s.humanLines))
+	for i, line := range s.humanLines {
+		timeline[i] = chat.RecentUserRequest{Text: line, At: base.Add(time.Duration(s.humanAt[i]) * time.Second)}
+	}
+	return chat.UserRequestTimeline(chat.SelectRecentUserRequestTimeline(timeline), base.Add(time.Duration(s.input.SessionSeconds)*time.Second))
 }
 
 func (s *liveContinuousSession) run(turns int) continuousSessionRun {
@@ -165,9 +263,13 @@ func (s *liveContinuousSession) run(turns int) continuousSessionRun {
 		Requests: s.requests}
 	for turn := range turns {
 		if text, ok := s.requests[turn]; ok {
-			result.Turns = append(result.Turns, s.chatTurn(turn, text))
+			line := s.chatTurn(turn, text)
+			result.Turns = append(result.Turns, line)
+			// A chat edit plays its own segment before Autopilot plans again.
+			s.chatSegment = line.Score != nil
 		}
 		result.Turns = append(result.Turns, s.motionTurn(turn))
+		s.chatSegment = false
 		elapsed := time.Duration(turn+1) * sessionStretch
 		if elapsed >= s.nextSpeech {
 			result.Turns = append(result.Turns, s.speechTurn(turn))
@@ -181,8 +283,11 @@ func (s *liveContinuousSession) run(turns int) continuousSessionRun {
 // edit the score, before Autopilot plans again.
 func (s *liveContinuousSession) chatTurn(turn int, text string) continuousSessionTurn {
 	s.humanLines = append(s.humanLines, text)
+	s.humanAt = append(s.humanAt, turn*int(sessionStretch/time.Second))
+	s.input.SessionSeconds, s.heard = turn*int(sessionStretch/time.Second), true
 	context := s.motionContext()
 	context.Autopilot, context.StandingHold = true, s.standingHold
+	context.EarlierScores = s.earlierScores()
 	conversation := s.persona
 	interactive := chat.Service{Provider: s.recorder, Prompt: s.prompt, Model: s.model, MaxTokens: 512, ReasoningMode: "off",
 		Capabilities: &s.capabilities, MotionContext: &context, ConversationContext: &conversation}
@@ -191,6 +296,9 @@ func (s *liveContinuousSession) chatTurn(turn int, text string) continuousSessio
 	cancel()
 	line := continuousSessionTurn{Turn: turn, Kind: "chat", At: turn * int(sessionStretch/time.Second), Raw: s.recorder.LastRaw,
 		Reply: strings.TrimSpace(result.Response.Reply), Stay: result.Response.StayUnchanged}
+	for _, earlier := range context.EarlierScores {
+		line.Earlier = append(line.Earlier, earlier.Flow)
+	}
 	if err != nil {
 		line.Error = err.Error()
 	} else {
@@ -199,13 +307,21 @@ func (s *liveContinuousSession) chatTurn(turn int, text string) continuousSessio
 		}
 		if command := result.Response.Motion; command != nil && command.Layered != nil && command.Layered.Validate(s.settings.Motion) == nil {
 			line.Changed = continuousChangedGroups(s.score, *command.Layered)
-			s.score, s.offset = *motion.CloneFlowSpec(command.Layered), 0
+			if command.Layered.SpeedPercent != s.score.SpeedPercent {
+				s.input.SecondsAtCurrentSpeed = 0
+			}
+			if !liveSameCharacter(s.score, *command.Layered) {
+				s.input.DecisionsAtCurrentPhrase, s.input.SecondsAtCurrentPhrase = 0, 0
+			}
+			s.adopt(*command.Layered, turn*int(sessionStretch/time.Second))
 			line.Score = motion.CloneFlowSpec(&s.score)
+			s.rememberSpeed(turn * int(sessionStretch/time.Second))
 		}
 	}
-	s.history = append(s.history, llm.Message{Role: "user", Content: text})
+	said := time.Unix(int64(turn*int(sessionStretch/time.Second)), 0)
+	s.history, s.historyAt = append(s.history, llm.Message{Role: "user", Content: text}), append(s.historyAt, said)
 	if line.Reply != "" {
-		s.history = append(s.history, llm.Message{Role: "assistant", Content: line.Reply})
+		s.history, s.historyAt = append(s.history, llm.Message{Role: "assistant", Content: line.Reply}), append(s.historyAt, said)
 	}
 	s.t.Logf("chat turn=%d user=%q stay=%s changed=%v err=%q reply=%q", turn, text, liveSessionStay(line.Stay), line.Changed, line.Error, line.Reply)
 	return line
@@ -221,25 +337,34 @@ func (s *liveContinuousSession) motionTurn(turn int) continuousSessionTurn {
 	s.input.CurrentFlow = motion.CloneFlowSpec(&s.score)
 	s.input.CurrentPerceptual = &perceptual
 	s.input.SessionSeconds = turn * stretch
+	s.input.RecentSpeeds = s.recentSpeeds()
 	s.input.ArcPercent = min(100, s.input.SessionSeconds*100/1200)
 	record := continuousSessionTurn{Turn: turn, Kind: "motion", At: s.input.SessionSeconds, DurationMS: sessionStretch.Milliseconds()}
 	next := s.score
 	response, err := chat.AutopilotResponse{}, error(nil)
-	if s.standingHold {
+	switch {
+	case s.chatSegment:
+		record.Interactive = true
+	case s.standingHold:
 		record.Requested = true
-	} else {
+	default:
 		context := s.motionContext()
 		conversation := s.persona
 		service := chat.AutopilotService{Provider: s.recorder, Prompt: s.prompt, Model: s.model, MaxTokens: 512, ReasoningMode: "off",
 			Capabilities: s.capabilities, MotionContext: &context, ConversationContext: &conversation,
 			Temperature: autopilotTemperature(chat.AutopilotKindMotion, s.input.MotionChangeLevel)}
 		ctx, cancel := contextWithTimeout()
+		planning := autopilotPromptContext(s.input, s.capabilities)
+		if ages := context.UserRequestSecondsAgo; len(ages) > 0 {
+			planning.LastHumanSecondsAgo = &ages[len(ages)-1]
+		}
 		response, err = service.Complete(ctx, chat.AutopilotKindMotion, chat.Request{
-			Message: chat.AutopilotMotionMessage(autopilotPromptContext(s.input, s.capabilities)), History: s.history})
+			Message: chat.AutopilotMotionMessage(planning), History: chat.PlanningHistory(s.history, s.historyAt, time.Unix(int64(s.input.SessionSeconds), 0))})
 		cancel()
 		record.Raw, record.Reply = s.recorder.LastRaw, strings.TrimSpace(response.Reply)
 	}
 	switch {
+	case record.Interactive:
 	case record.Requested:
 		record.Held = true
 	case err != nil:
@@ -254,7 +379,10 @@ func (s *liveContinuousSession) motionTurn(turn int) continuousSessionTurn {
 			next = *motion.CloneFlowSpec(decision.Segment.Flow)
 		}
 	}
-	if record.Held || continuousSameScore(s.score, next) {
+	if record.Interactive {
+		s.input.ConsecutiveHolds = 0
+		s.input.SecondsAtCurrentPhrase += stretch
+	} else if record.Held || continuousSameScore(s.score, next) {
 		record.Held = true
 		s.input.ConsecutiveHolds++
 		s.input.DecisionsAtCurrentPhrase++
@@ -265,7 +393,7 @@ func (s *liveContinuousSession) motionTurn(turn int) continuousSessionTurn {
 		if next.SpeedPercent != s.score.SpeedPercent {
 			s.input.SecondsAtCurrentSpeed = 0
 		}
-		s.score, s.offset = next, 0
+		s.adopt(next, s.input.SessionSeconds)
 	}
 	s.input.SecondsAtCurrentSpeed += stretch
 	played := motion.NewMotionPlan("session-review", motion.MotionTarget{Label: "Autopilot", Source: "autopilot",
@@ -276,13 +404,34 @@ func (s *liveContinuousSession) motionTurn(turn int) continuousSessionTurn {
 		record.Samples = append(record.Samples, [2]float64{float64(at) / 1000, played.SampleAt(s.offset + at).PositionPercent})
 	}
 	s.offset += sessionStretch.Milliseconds()
+	if !record.Interactive {
+		// Chat already recorded the speed of its own segment.
+		s.rememberSpeed(s.input.SessionSeconds)
+	}
 	s.input.RecentPositionBands = append(s.input.RecentPositionBands, modes.PositionBand{MinimumPercent: summary.PositionMinPercent, MaximumPercent: summary.PositionMaxPercent})
 	if len(s.input.RecentPositionBands) > 4 {
 		s.input.RecentPositionBands = s.input.RecentPositionBands[len(s.input.RecentPositionBands)-4:]
 	}
-	s.t.Logf("turn=%d held=%t requested=%t changed=%v character=%s speed=%d range=%d-%d err=%q", turn, record.Held, record.Requested,
-		record.Changed, continuousCharacter(s.score), s.score.SpeedPercent, s.score.MinPercent, s.score.MaxPercent, record.Error)
+	s.t.Logf("turn=%d held=%t requested=%t interactive=%t changed=%v character=%s speed=%d range=%d-%d err=%q", turn, record.Held, record.Requested,
+		record.Interactive, record.Changed, continuousCharacter(s.score), s.score.SpeedPercent, s.score.MinPercent, s.score.MaxPercent, record.Error)
 	return record
+}
+
+// rememberSpeed records the score's speed for a stretch that began at the given
+// session second, keeping the scheduler's three minutes of at most sixteen.
+func (s *liveContinuousSession) rememberSpeed(at int) {
+	s.speedMarks = append(s.speedMarks, [2]int{s.score.SpeedPercent, at})
+	for len(s.speedMarks) > 16 || (len(s.speedMarks) > 1 && at-s.speedMarks[0][1] > 180) {
+		s.speedMarks = s.speedMarks[1:]
+	}
+}
+
+func (s *liveContinuousSession) recentSpeeds() []modes.SpeedStep {
+	steps := make([]modes.SpeedStep, 0, len(s.speedMarks))
+	for _, mark := range s.speedMarks {
+		steps = append(steps, modes.SpeedStep{SpeedPercent: mark[0], SecondsAgo: max(0, s.input.SessionSeconds-mark[1])})
+	}
+	return steps
 }
 
 // speechTurn publishes an independent spoken check-in into history, as the
@@ -303,6 +452,7 @@ func (s *liveContinuousSession) speechTurn(turn int) continuousSessionTurn {
 		line.Error = err.Error()
 	} else if line.Reply != "" {
 		s.history = append(s.history, llm.Message{Role: "assistant", Content: line.Reply})
+		s.historyAt = append(s.historyAt, time.Unix(int64((turn+1)*int(sessionStretch/time.Second)), 0))
 		s.persona.RecentAssistantReplies = liveSessionLastReplies(s.persona.RecentAssistantReplies, line.Reply)
 		s.input.LastSay = line.Reply
 	}

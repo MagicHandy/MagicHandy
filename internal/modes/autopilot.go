@@ -98,6 +98,10 @@ type DecisionInput struct {
 	// history cannot supply it because motion-only decisions are intentionally
 	// not published as dialogue.
 	RecentPositionBands []PositionBand
+	// RecentSpeeds is the same kind of memory for pace: the speed each recent
+	// stretch used and how long ago it began, oldest first. Without it every
+	// planning turn after "that's too much" looked like the moment it was said.
+	RecentSpeeds []SpeedStep
 	// MotionFeedback is populated only for one semantic quality retry after a
 	// model-elected update compiled as continuity.
 	MotionFeedback string
@@ -332,6 +336,7 @@ func (m *Manager) decisionInput() DecisionInput {
 		SegmentIndex:        m.motion.segmentIdx,
 		RecentPatternIDs:    append([]string(nil), m.history.recentPatternIDs...),
 		RecentPositionBands: append([]PositionBand(nil), m.history.recentPositionBands...),
+		RecentSpeeds:        m.recentSpeedStepsLocked(now),
 		SpeedMinPercent:     settings.SpeedMinPercent,
 		SpeedMaxPercent:     settings.SpeedMaxPercent,
 		LastSay:             m.speech.lastSay,

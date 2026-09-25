@@ -180,6 +180,48 @@ func TestAutopilotDecisionIncludesRecentConversation(t *testing.T) {
 	}
 }
 
+// Continuous planning turns mark each human line with how long ago it was
+// said, so an old "that's too much" is not read as a reaction to the pace
+// chosen since. Catalog planning keeps the plain history.
+func TestContinuousPlanningHistoryMarksHumanLineAges(t *testing.T) {
+	for _, tc := range []struct {
+		mode   string
+		marked bool
+	}{{config.LLMMotionModeLayered, true}, {config.LLMMotionModeDynamic, false}} {
+		provider := &scriptedLLMProvider{responses: []string{`{"edits":{},"reply":"Holding."}`}}
+		server := newTestServerWithRuntime(t, Runtime{LLMProvider: provider})
+		saveSettings(t, server.store, func(s config.Settings) config.Settings {
+			s.LLM.MotionGenerationMode = tc.mode
+			return s
+		})
+		if _, err := server.chatLog.Append(chat.MessageRoleUser, "that's too much", "client"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := server.chatLog.Append(chat.MessageRoleAssistant, "Slowing down.", ""); err != nil {
+			t.Fatal(err)
+		}
+		flow := chat.FreshLayeredScore(20)
+		_, _ = server.autopilotDecide(t.Context(), modes.DecisionInput{CurrentFlow: &flow, CurrentSpeed: 20, SpeedMinPercent: 15, SpeedMaxPercent: 54})
+		server.Close()
+		provider.mu.Lock()
+		messages := provider.requests[0].Messages
+		provider.mu.Unlock()
+		var human, assistant string
+		for _, message := range messages {
+			switch {
+			case message.Role == chat.MessageRoleUser && strings.HasSuffix(message.Content, "that's too much"):
+				human = message.Content
+			case message.Role == chat.MessageRoleAssistant:
+				assistant = message.Content
+			}
+		}
+		// Continuous history replays assistant turns as speech, unmarked.
+		if got := strings.HasPrefix(human, "[said ") && strings.Contains(human, " ago] "); got != tc.marked || (tc.marked && assistant != "Slowing down.") {
+			t.Fatalf("%s planning history: human %q assistant %q, want marked=%t", tc.mode, human, assistant, tc.marked)
+		}
+	}
+}
+
 func TestAutopilotPromptContextCarriesCompiledFeel(t *testing.T) {
 	definition := motion.NormalizeDynamicDefinition(motion.DynamicDefinition{
 		CenterPercent: 52, SpanPercent: 76, SpanMinPercent: 30,

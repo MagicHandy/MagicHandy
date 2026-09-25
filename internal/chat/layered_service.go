@@ -44,7 +44,7 @@ func layeredContextInstructions(state MotionContext) string {
 		"current_score": scoreContext, "running": state.Running, "paused": state.Paused,
 		"saved_limits":                      map[string]int{"speed_min_percent": limits.SpeedMinPercent, "speed_max_percent": limits.SpeedMaxPercent},
 		"engine_envelope":                   state.Envelope,
-		"recent_user_requests_oldest_first": state.UserRequests,
+		"recent_user_requests_oldest_first": timedUserRequests(state),
 	}
 	if state.Autopilot {
 		context["autopilot"] = "composing between chat turns"
@@ -52,9 +52,50 @@ func layeredContextInstructions(state MotionContext) string {
 			context["autopilot"] = "holding the motion unchanged at the user's request"
 		}
 	}
+	recall := ""
+	if earlier := recallableScores(state); len(earlier) > 0 {
+		context["earlier_scores"] = earlierScoresContext(earlier, state)
+		recall = earlierScoresGuide + "\n"
+	}
 	encoded, _ := json.Marshal(context)
-	return "Authoritative continuous motion state, refreshed for this turn:\n" + string(encoded) + "\n" + labPlanningContextGuide +
+	return "Authoritative continuous motion state, refreshed for this turn:\n" + string(encoded) + "\n" + labPlanningContextGuide + recall +
 		"A stopped device starts only for a direct motion request; a paused device cannot be resumed by model edits. Ordinary conversation and questions require reply only."
+}
+
+// parseContinuousReply applies a recalled earlier score, when the reply names
+// one, as the base for its other edits. Changes are reported against the score
+// that is playing, which is what the person will feel.
+func parseContinuousReply(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings,
+	parser func(string, motion.FlowSpec, config.MotionSettings) (AssistantResponse, motion.FlowSpec, []string, error),
+) (AssistantResponse, motion.FlowSpec, []string, error) {
+	parsed, base, recalled, err := applyRecall(raw, current, recallableScores(state), state.MotionMode, limits.SpeedMinPercent, limits.SpeedMaxPercent)
+	if err != nil {
+		return AssistantResponse{}, current, nil, err
+	}
+	response, next, changed, err := parser(parsed, base, limits)
+	if err == nil && recalled {
+		changed = labChangedControls(current, next)
+	}
+	return response, next, changed, err
+}
+
+type timedUserRequest struct {
+	Said       string `json:"said"`
+	SecondsAgo int    `json:"seconds_ago"`
+}
+
+// timedUserRequests shows each recent human line with how long ago it was said
+// when that is known, so planning can tell a request made just now from one
+// made minutes ago.
+func timedUserRequests(state MotionContext) any {
+	if len(state.UserRequests) == 0 || len(state.UserRequestSecondsAgo) != len(state.UserRequests) {
+		return state.UserRequests
+	}
+	timed := make([]timedUserRequest, len(state.UserRequests))
+	for i, text := range state.UserRequests {
+		timed[i] = timedUserRequest{Said: text, SecondsAgo: state.UserRequestSecondsAgo[i]}
+	}
+	return timed
 }
 
 func (s Service) completeLayered(ctx context.Context, request Request, emit func(StreamEvent) error) (Result, error) {
@@ -67,6 +108,11 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if s.MotionContext != nil {
 		state = *s.MotionContext
 	}
+	if s.TrustedMotionInput {
+		// A person asks for an earlier score through chat. Planning turns re-read
+		// an old "go back" and recalled again after chat had answered it.
+		state.EarlierScores = nil
+	}
 	state.MotionMode = capabilities.MotionMode
 	current, limits := layeredContextScore(&state)
 	// The prompt and parser must share the same freshly seeded starting score.
@@ -77,6 +123,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		schema, parser = CreativeV2ResponseSchema(limits, capabilities.MoodTracking), ParseCreativeV2Reply
 	}
+	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(state)))
 	if !s.TrustedMotionInput {
 		guard := continuousOutputGuard(capabilities)
 		system = strings.TrimSuffix(system, guard) + continuousActionGuideFor(state) + "\n\n" + guard
@@ -103,7 +150,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if err != nil {
 		return result, err
 	}
-	response, next, changed, err := parser(raw, current, limits)
+	response, next, changed, err := parseContinuousReply(raw, current, state, limits, parser)
 	if err == nil {
 		err = s.authorizeLayeredReply(&response, next, changed, state)
 	}

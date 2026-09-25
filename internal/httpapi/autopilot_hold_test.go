@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -100,9 +101,10 @@ func TestStandingHoldIsScopedToItsSessionAndFreshRuns(t *testing.T) {
 
 // startScheduledHoldAutopilot runs a real Autopilot mode whose own scheduled
 // decisions hold, so a test can drive planning boundaries directly without
-// racing the scheduler for scripted model replies.
-func startScheduledHoldAutopilot(t *testing.T, server *Server) {
+// racing the scheduler for scripted model replies. It counts those decisions.
+func startScheduledHoldAutopilot(t *testing.T, server *Server) *atomic.Int32 {
 	t.Helper()
+	decisions := &atomic.Int32{}
 	manager, err := modes.NewManager(modes.Options{
 		Ensure: func(context.Context) (modes.Engine, error) {
 			engine, admission, err := server.motionEngineForStart()
@@ -122,6 +124,7 @@ func startScheduledHoldAutopilot(t *testing.T, server *Server) {
 		Tick:     5 * time.Millisecond,
 		Seed:     7,
 		Decide: func(context.Context, modes.DecisionInput) (modes.Decision, error) {
+			decisions.Add(1)
 			return modes.Decision{Hold: true, Next: modes.TimingNormal}, nil
 		},
 	})
@@ -133,6 +136,7 @@ func startScheduledHoldAutopilot(t *testing.T, server *Server) {
 	if _, err := manager.Start(t.Context(), modes.ModeAutopilot); err != nil {
 		t.Fatal(err)
 	}
+	return decisions
 }
 
 func offersStandingWish(t *testing.T, provider *scriptedLLMProvider, request int) bool {
@@ -148,4 +152,36 @@ func offersStandingWish(t *testing.T, provider *scriptedLLMProvider, request int
 		t.Fatalf("request %d has no continuous decision grammar: %v", request, err)
 	}
 	return slices.Contains(schema.OneOf[0].Required, "stay_unchanged")
+}
+
+// Live chat decides its action before its reply, so it often answers "that's
+// too much" in words alone. The planner, which acts on such remarks, then
+// reconsiders at once instead of at the end of the current segment.
+func TestUnchangedChatDuringAutopilotReplansAtOnce(t *testing.T) {
+	fake := transport.NewFake()
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"action":"start","edits":[{"speed_percent":45}],"reply":"Starting."}`,
+		`{"action":"none","edits":[],"reply":"I'll ease right off.","stay_unchanged":false}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: provider})
+	t.Cleanup(server.Close)
+	saveSettings(t, server.store, func(s config.Settings) config.Settings {
+		s.LLM.MotionGenerationMode = config.LLMMotionModeCreativeV2
+		return s
+	})
+	postChatStream(t, server, `{"message":"Start."}`)
+	decisions := startScheduledHoldAutopilot(t, server)
+	deadline := time.Now().Add(2 * time.Second)
+	for decisions.Load() < 1 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	before := decisions.Load()
+	postChatStream(t, server, `{"message":"That's too much."}`)
+	deadline = time.Now().Add(2 * time.Second)
+	for decisions.Load() == before && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if decisions.Load() == before {
+		t.Fatal("the planner waited for the segment boundary after an unchanged chat turn")
+	}
 }

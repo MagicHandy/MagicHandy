@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
@@ -160,5 +161,43 @@ func TestContinuousSpeechWithMotionAuthorityUsesItsOwnContract(t *testing.T) {
 	message := provider.request.Messages[len(provider.request.Messages)-1].Content
 	if strings.Contains(message, "Set next") || !strings.Contains(message, "edits/reply contract") {
 		t.Fatal("mixed speech contracts", message)
+	}
+}
+
+// Planning judges how long a requested slow stretch has lasted from how long
+// ago the human spoke, so the chat log's times reach the model as ages.
+func TestRecentUserRequestsCarryHowLongAgoTheyWereSaid(t *testing.T) {
+	log := openTestLog(t)
+	for _, line := range []string{"that's too much", "mmm"} {
+		if _, err := log.Append(MessageRoleUser, line, "test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	timeline, err := log.RecentUserRequestTimelineContext(t.Context(), id)
+	if err != nil || len(timeline) != 2 || timeline[0].Text != "that's too much" || timeline[0].At.IsZero() {
+		t.Fatalf("timeline %+v: %v", timeline, err)
+	}
+	texts, ages := UserRequestTimeline(timeline, timeline[1].At.Add(90*time.Second))
+	if len(ages) != 2 || ages[1] != 90 || ages[0] < ages[1] || texts[1] != "mmm" {
+		t.Fatalf("ages %v for %v", ages, texts)
+	}
+	// A line without a time never gets a guessed age.
+	if _, unknown := UserRequestTimeline([]RecentUserRequest{{Text: "old"}, timeline[1]}, time.Now()); unknown != nil {
+		t.Fatal("an unknown time produced an age", unknown)
+	}
+
+	score := FreshCreativeV2Score(25)
+	provider := &layeredTestProvider{raw: `{"edits":[],"reply":"Staying slow."}`}
+	state := &MotionContext{Running: true, Layered: &score, UserRequests: texts, UserRequestSecondsAgo: ages}
+	service := AutopilotService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeCreativeV2}, MotionContext: state}
+	if _, err := service.Complete(t.Context(), AutopilotKindMotion, Request{Message: "Plan."}); err != nil {
+		t.Fatal(err)
+	}
+	if system := provider.request.Messages[0].Content; !strings.Contains(system, `{"said":"mmm","seconds_ago":90}`) {
+		t.Fatal("planning did not see when the human spoke")
 	}
 }

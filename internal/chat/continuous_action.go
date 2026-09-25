@@ -57,7 +57,7 @@ func continuousActionSchema(schema json.RawMessage, state MotionContext) json.Ra
 }
 
 const continuousActionGuide = `LIVE CHAT DECISION: Include top-level "action" before "edits" and "reply".
-Choose "none" for conversation, questions, feedback, or keeping the current motion; emit empty edits. Choose "update" to carry out a motion edit while running. Choose "start" only when the user asks to begin movement from stopped, including starting with the unchanged current settings. Adjusting settings while stopped does not authorize starting. While paused, choose "none" and explain that motion must first be resumed using the app.
+Choose "none" for conversation, questions, feedback, or keeping the current motion; emit empty edits. Choose "update" to carry out a motion edit while running, including a change you decide on in answer to how the motion feels or how close they say they are, such as slowing down when it is too much; a reply that promises a change without the edit changes nothing. Choose "start" only when the user asks to begin movement from stopped, including starting with the unchanged current settings. Adjusting settings while stopped does not authorize starting. While paused, choose "none" and explain that motion must first be resumed using the app.
 Interpret the whole request in context. A request can both change a control and ask for an explanation. A restriction on one control does not cancel an edit to another. Preserve controls the user wants kept; change only what they ask for. Timing within a stroke and the speed of a variation layer are separate from overall pace. Describe the edit actually emitted; do not claim an edit when action is none.`
 
 // continuousKeepGuide is offered only while continuous Autopilot composes the

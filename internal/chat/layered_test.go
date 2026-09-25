@@ -33,9 +33,17 @@ func TestLayeredPartialEditsPreserveOtherAxesAndEvolveGeometry(t *testing.T) {
 	if err != nil || relative.Layers[1].PeriodCycles != before.Layers[1].PeriodCycles+4 {
 		t.Fatal("relative timing did not add to the current period", err)
 	}
+	// A relative speed step past a saved limit goes as far as the limit allows.
+	for raw, want := range map[string]int{
+		`{"edits":{"change_by":{"speed_percent":-100}},"reply":"As slow as allowed."}`: limits.SpeedMinPercent,
+		`{"edits":{"change_by":{"speed_percent":100}},"reply":"As fast as allowed."}`:  limits.SpeedMaxPercent,
+	} {
+		if _, clamped, _, err := ParseLayeredReply(raw, before, limits); err != nil || clamped.SpeedPercent != want {
+			t.Fatalf("relative speed was not clamped to %d: %d %v", want, clamped.SpeedPercent, err)
+		}
+	}
 	for _, raw := range []string{
 		`{"edits":{"controls":{"turn_softness_percent":80}},"reply":"bad"}`,
-		`{"edits":{"change_by":{"speed_percent":-100}},"reply":"bad"}`,
 		`{"edits":{"layers":[{"axis":"center","amount_percent":50},{"axis":"center","period_cycles":8}]},"reply":"bad"}`,
 		`{"edits":{"layers":[{"axis":"pace","shape":"random"}]},"reply":"bad"}`,
 		`{"edits":{"layers":[{"axis":"pace","period_cycles":8}],"remove_layers":["pace"]},"reply":"bad"}`,
@@ -197,5 +205,23 @@ func TestLayeredProductionAuthorityAndNoRepair(t *testing.T) {
 				t.Fatalf("unexpected result %+v err=%v calls=%d", result, err, provider.calls)
 			}
 		})
+	}
+}
+
+// Every example the contract shows the model must itself be a valid reply.
+func TestLayeredContractExamplesParse(t *testing.T) {
+	limits := config.DefaultSettings().Motion
+	examples := 0
+	for _, line := range strings.Split(layeredContract, "\n") {
+		if !strings.HasPrefix(line, `{"edits":`) {
+			continue
+		}
+		examples++
+		if _, _, _, err := ParseLayeredReply(line, DefaultLayeredScore(25), limits); err != nil {
+			t.Fatalf("contract example does not parse: %s: %v", line, err)
+		}
+	}
+	if examples < 8 {
+		t.Fatalf("found only %d contract examples", examples)
 	}
 }

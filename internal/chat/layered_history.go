@@ -3,7 +3,9 @@ package chat
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
+	"time"
 )
 
 // recentUserRequestLimit bounds how many of the latest human lines planning
@@ -11,36 +13,44 @@ import (
 // crowd a long history window; these lines stay visible regardless.
 const recentUserRequestLimit = 8
 
+// RecentUserRequest is one recent human line and when it was committed.
+type RecentUserRequest struct {
+	Text string
+	At   time.Time
+}
+
 // RecentUserRequests keeps bounded human intent available independently of
 // automated assistant check-ins. The session's normal message retention applies.
 func (l *MessageLog) RecentUserRequests(sessionID string) ([]string, error) {
-	return l.RecentUserRequestsContext(context.Background(), sessionID)
+	timeline, err := l.RecentUserRequestTimelineContext(context.Background(), sessionID)
+	texts, _ := UserRequestTimeline(timeline, time.Now())
+	return texts, err
 }
 
-// RecentUserRequestsContext reads bounded human intent with the caller's lifetime.
-func (l *MessageLog) RecentUserRequestsContext(ctx context.Context, sessionID string) ([]string, error) {
+// RecentUserRequestTimelineContext reads bounded human intent, with when each
+// line was said, within the caller's lifetime.
+func (l *MessageLog) RecentUserRequestTimelineContext(ctx context.Context, sessionID string) ([]RecentUserRequest, error) {
 	// Blank rows are skipped below, so read a little past the limit.
-	rows, err := l.db.SQL().QueryContext(ctx, `SELECT content FROM messages WHERE session_id = ? AND role = ? AND committed = 1 ORDER BY seq DESC LIMIT ?`, sessionID, MessageRoleUser, 2*recentUserRequestLimit)
+	rows, err := l.db.SQL().QueryContext(ctx, `SELECT content, created_at FROM messages WHERE session_id = ? AND role = ? AND committed = 1 ORDER BY seq DESC LIMIT ?`, sessionID, MessageRoleUser, 2*recentUserRequestLimit)
 	if err != nil {
 		return nil, fmt.Errorf("read user requests: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var newestFirst []string
+	var lines []RecentUserRequest
 	for rows.Next() {
-		var content string
-		if err := rows.Scan(&content); err != nil {
+		var content, created string
+		if err := rows.Scan(&content, &created); err != nil {
 			return nil, err
 		}
-		newestFirst = append(newestFirst, content)
+		// An unreadable timestamp leaves the line's age unknown, not wrong.
+		at, _ := time.Parse(time.RFC3339Nano, created)
+		lines = append(lines, RecentUserRequest{Text: content, At: at})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	lines := make([]string, 0, len(newestFirst))
-	for i := len(newestFirst) - 1; i >= 0; i-- {
-		lines = append(lines, newestFirst[i])
-	}
-	return SelectRecentUserRequests(lines), nil
+	slices.Reverse(lines)
+	return SelectRecentUserRequestTimeline(lines), nil
 }
 
 // SelectRecentUserRequests returns the latest non-blank human lines, oldest
@@ -48,14 +58,40 @@ func (l *MessageLog) RecentUserRequestsContext(ctx context.Context, sessionID st
 // standing wish or small talk is for the model to judge in context, not for a
 // word list to decide before it sees them.
 func SelectRecentUserRequests(lines []string) []string {
-	selected := make([]string, 0, recentUserRequestLimit)
+	timeline := make([]RecentUserRequest, len(lines))
+	for i, line := range lines {
+		timeline[i].Text = line
+	}
+	texts, _ := UserRequestTimeline(SelectRecentUserRequestTimeline(timeline), time.Time{})
+	return texts
+}
+
+// SelectRecentUserRequestTimeline is SelectRecentUserRequests for lines that
+// carry when they were said.
+func SelectRecentUserRequestTimeline(lines []RecentUserRequest) []RecentUserRequest {
+	selected := make([]RecentUserRequest, 0, recentUserRequestLimit)
 	for i := len(lines) - 1; i >= 0 && len(selected) < recentUserRequestLimit; i-- {
-		if text := strings.TrimSpace(lines[i]); text != "" {
-			selected = append(selected, boundedPromptData(text, 2000))
+		if text := strings.TrimSpace(lines[i].Text); text != "" {
+			selected = append(selected, RecentUserRequest{Text: boundedPromptData(text, 2000), At: lines[i].At})
 		}
 	}
-	for i, j := 0, len(selected)-1; i < j; i, j = i+1, j-1 {
-		selected[i], selected[j] = selected[j], selected[i]
-	}
+	slices.Reverse(selected)
 	return selected
+}
+
+// UserRequestTimeline splits recent lines into the texts and ages a motion
+// context carries. Ages are omitted unless every line has a time, so a model
+// is never shown a guessed age.
+func UserRequestTimeline(lines []RecentUserRequest, now time.Time) ([]string, []int) {
+	texts := make([]string, len(lines))
+	ages := make([]int, len(lines))
+	for i, line := range lines {
+		texts[i] = line.Text
+		if line.At.IsZero() || now.IsZero() {
+			ages = nil
+		} else if ages != nil {
+			ages[i] = max(0, int(now.Sub(line.At).Seconds()))
+		}
+	}
+	return texts, ages
 }

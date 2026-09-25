@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -9,9 +10,9 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
-func (s *Server) contextualChatMotion(settings config.Settings, requests []string) chat.MotionContext {
+func (s *Server) contextualChatMotion(settings config.Settings, requests []chat.RecentUserRequest) chat.MotionContext {
 	state := s.chatMotionContext(settings.Motion, settings.LLM)
-	state.UserRequests = requests
+	state.UserRequests, state.UserRequestSecondsAgo = chat.UserRequestTimeline(requests, time.Now())
 	return state
 }
 func mapLayeredAutopilotCommand(command *chat.MotionCommand, settings config.MotionSettings, say string, next modes.TimingPreference) (modes.Decision, error) {

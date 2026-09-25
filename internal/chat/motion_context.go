@@ -37,6 +37,13 @@ type MotionContext struct {
 	// asked. Only then can live chat declare or release that wish.
 	Autopilot    bool
 	StandingHold bool
+	// UserRequestSecondsAgo, when known, says how long ago each line in
+	// UserRequests was said, in the same order. Planning uses it to judge how
+	// long a requested slow stretch has lasted before rebuilding.
+	UserRequestSecondsAgo []int
+	// EarlierScores are distinct scores that played earlier in this Autopilot
+	// session, newest first, so a person can ask for one again.
+	EarlierScores []EarlierScore
 }
 
 type promptSpeedRange struct {

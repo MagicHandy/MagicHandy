@@ -38,7 +38,7 @@ type chatMotionDispatch struct {
 }
 
 type interactiveChatPromptContext struct {
-	UserRequests        []string
+	UserRequests        []chat.RecentUserRequest
 	Capabilities        chat.Capabilities
 	History             []llm.Message
 	ConversationContext *chat.ConversationContext
@@ -48,6 +48,9 @@ type interactiveChatPromptContext struct {
 	// It is carried so the status event and per-message provenance can report who
 	// the reply came from without resolving it a second time.
 	Persona *persona.Persona
+	// HistoryAt says when each History message was logged, in the same order;
+	// a zero time is unknown.
+	HistoryAt []time.Time
 }
 
 type sseEmitter func(string, any) error
@@ -274,13 +277,15 @@ func (s *Server) loadInteractiveChatPromptContext(ctx context.Context, sessionID
 		Persona:      active,
 	}
 	if result.Capabilities.MotionMode == chat.MotionModeLayered || result.Capabilities.MotionMode == chat.MotionModeCreativeV2 {
-		result.UserRequests, err = s.chatLog.RecentUserRequestsContext(ctx, sessionID)
+		result.UserRequests, err = s.chatLog.RecentUserRequestTimelineContext(ctx, sessionID)
 		if err != nil {
 			return interactiveChatPromptContext{}, err
 		}
 	}
 	for _, message := range loggedHistory {
 		result.History = append(result.History, llm.Message{Role: message.Role, Content: message.Content})
+		at, _ := time.Parse(time.RFC3339Nano, message.CreatedAt)
+		result.HistoryAt = append(result.HistoryAt, at)
 	}
 	if result.Capabilities.Voice == chat.VoiceUtility {
 		return result, nil
@@ -493,9 +498,7 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		return
 	}
 	replyCommitted = true
-	if stay := result.Response.StayUnchanged; stay != nil {
-		s.autopilotHold.record(sessionID, *stay)
-	}
+	s.afterLiveChatTurn(sessionID, result.Response)
 	dispatch, motionErr := s.dispatchChatMotionAt(ctx, result.Response.Motion, &stopSequence)
 	if s.chatCanceled(ctx, stopSequence) {
 		if speech != nil {

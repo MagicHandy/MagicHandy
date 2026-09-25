@@ -83,6 +83,11 @@ type speechScheduleState struct {
 type motionHistoryState struct {
 	recentPatternIDs    []string
 	recentPositionBands []PositionBand
+	recentSpeeds        []speedMark
+	earlierPhrases      []phraseMark
+	// currentPhraseHeard is set when the person speaks while the current
+	// phrase plays; such phrases stay recallable longer.
+	currentPhraseHeard bool
 	// Speed age and direction distinguish deliberate plateaus from accidents
 	// in the session facts handed to the model.
 	speedChangedAt time.Time

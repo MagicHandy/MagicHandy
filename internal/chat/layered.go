@@ -151,6 +151,12 @@ func ApplyLayeredEdit(edit LayeredEdit, current motion.FlowSpec, limits config.M
 	}
 	encoded, _ = json.Marshal(fields)
 	_ = json.Unmarshal(encoded, &next)
+	if _, relative := edit.ChangeBy["speed_percent"]; relative {
+		// A relative step past a saved speed limit has one reading: go as far as
+		// the limit allows. Rejecting it kept the old pace after a request to
+		// slow right down. Absolute speeds stay bounded by the schema.
+		next.SpeedPercent = min(max(next.SpeedPercent, limits.SpeedMinPercent), limits.SpeedMaxPercent)
+	}
 	if err := applyLayeredGeometryEdit(&next, edit); err != nil {
 		return current, err
 	}
