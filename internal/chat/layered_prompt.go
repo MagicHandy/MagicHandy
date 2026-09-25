@@ -31,7 +31,7 @@ User: switch to full and base strokes and slow to 20 percent
 {"edits":{"geometry":"full_and_base","controls":{"speed_percent":20}},"reply":"Broad and local base strokes at the slower pace."}
 
 Independent refinements (human requests or authorized AUTOPILOT EXPLORATION):
-- stroke_width:{min_percent,max_percent}: both shortest and widest stroke, 10..outer band width. Equal values fix width. It changes width, not location.
+- stroke_width:{min_percent,max_percent}: min_percent is the shortest stroke and max_percent the widest, each 10..outer band width. To give every stroke one width, set both to that width. It changes width, not location.
 - controls: partial absolute min_percent/max_percent (the outer band 0..100: min_percent is the deepest point any stroke can reach, max_percent the shallowest), speed_percent (saved limits), anchor_percent (placement inside the outer band: 0 its lower end, 100 its upper end, 50 center), memory_cycles (2..32; reach trend duration), pace_variation_percent (0..40), variation_mode (drift or waves).
 - change_by: signed numeric control changes; never set and adjust the same field. Stay inside saved limits. Gentler primarily reduces speed; jerk/hammer do not authorize a speed increase.
 - ` + continuousPaceGuide + `
