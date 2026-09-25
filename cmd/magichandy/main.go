@@ -30,12 +30,14 @@ var (
 
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintf(os.Stderr, "magichandy: %v\n", err)
+		if !errors.As(err, new(reportedError)) {
+			fmt.Fprintf(os.Stderr, "magichandy: %v\n", err)
+		}
 		os.Exit(1)
 	}
 }
 
-func run(args []string, stdout io.Writer, stderr io.Writer) error {
+func run(args []string, stdout io.Writer, stderr io.Writer) (err error) {
 	flags := flag.NewFlagSet("magichandy", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 
@@ -47,6 +49,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	browserFlags := addBrowserFlags(flags)
 	ttsFlags := addTTSModuleFlags(flags)
 	logLevel := flags.String("log-level", "info", "structured log level: debug, info, warn, or error")
+	consoleMode := addConsoleFlag(flags)
 	showVersion := flags.Bool("version", false, "print version and exit")
 	prepareUninstall := flags.Bool("prepare-uninstall", false, "stop the installed app and its managed workers before uninstall")
 
@@ -65,7 +68,16 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	logger := logging.New(stderr, level)
+	consoleUI, err := startLaunchConsole(*consoleMode, configurationOnly(languageFlags, ttsFlags), stdout, stderr)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if consoleUI.finish(err) && err != nil {
+			err = reportedError{err}
+		}
+	}()
+	logger := consoleUI.logger(stderr, level)
 	installerShutdown, closeInstallerShutdown := installerShutdownListener(logger)
 	defer closeInstallerShutdown()
 
@@ -92,6 +104,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		_ = store.Close()
 		return err
 	}
+	consoleUI.serverPrepared(security, *simulateMotion)
 
 	api, err := httpapi.New(web.FS(), logger, store, runtime, httpapi.VersionInfo{
 		Version: version,
@@ -102,16 +115,30 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		return err
 	}
 	defer api.Close()
+	consoleUI.connect(api, security.BaseURL)
 
 	server := newHTTPServer(address, api.Handler(), security.TLSConfig)
+	return serveUntilStopped(server, api, security, logger, consoleUI, installerShutdown, browserFlags)
+}
 
+// serveUntilStopped serves until an interrupt, the Windows uninstaller or the
+// launch console's Quit asks the app to stop, then shuts down cleanly.
+func serveUntilStopped(
+	server *http.Server,
+	api *httpapi.Server,
+	security serverSecurity,
+	logger *slog.Logger,
+	consoleUI *launchConsole,
+	installerShutdown <-chan struct{},
+	browserFlags browserLaunchFlags,
+) error {
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 
 	errCh := make(chan error, 1)
 	go func() {
 		logger.Info("server starting", "url", security.BaseURL, "authentication_required", security.AuthenticationRequired)
-		errCh <- serveHTTP(server)
+		errCh <- serveHTTP(server, consoleUI.ready())
 	}()
 	launchBrowserWhenReady(*browserFlags.open, *browserFlags.setup, security.BaseURL, logger)
 
@@ -121,6 +148,9 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 	case <-installerShutdown:
 		logger.Info("shutdown requested by Windows uninstaller")
 		stopSignals()
+	case <-consoleUI.quitRequested():
+		logger.Info("shutdown requested from the console")
+		stopSignals()
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
@@ -128,6 +158,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) error {
 		return err
 	}
 
+	consoleUI.stopping()
 	return shutdownHTTPServer(server, api, logger)
 }
 

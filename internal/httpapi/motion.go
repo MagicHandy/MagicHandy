@@ -345,6 +345,27 @@ func (s *Server) handleMotionStop(w http.ResponseWriter, r *http.Request) {
 	s.handleEmergencyStop(w, r, "ui_stop")
 }
 
+// ConsoleStopResult is the outcome of a Stop from the launch console.
+type ConsoleStopResult struct {
+	// Available reports that a motion engine or device transport received it.
+	Available bool
+	// Confirmed reports that the device acknowledged it.
+	Confirmed bool
+}
+
+// ConsoleStop serves the launch console's Stop key. It shares the Stop
+// button's emergency-stop path, admission and audit, so the device can be
+// stopped from the console window even with no browser open.
+func (s *Server) ConsoleStop(ctx context.Context) (ConsoleStopResult, error) {
+	outcome, err := s.emergencyStopWithAdmission(ctx, "console_stop", &s.stopAdmission)
+	available, confirmed := stopConfirmation(outcome, err)
+	result := ConsoleStopResult{Available: available, Confirmed: confirmed}
+	if err != nil {
+		return result, errors.New(s.safeMotionErrorMessage(err))
+	}
+	return result, nil
+}
+
 func (s *Server) handleEmergencyStop(w http.ResponseWriter, r *http.Request, reason string) {
 	finishUnreadBody(w, r)
 	outcome, err := s.emergencyStopWithAdmission(r.Context(), reason, &s.stopAdmission)
