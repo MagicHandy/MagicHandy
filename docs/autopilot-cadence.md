@@ -2,13 +2,27 @@
 
 ## Continuous motion follow-up
 
-Layered and Creative v2 distinguish an autonomous session with no human motion
-direction from continuation of a requested character. The former can author
-controls within saved limits; the latter preserves the character and refreshes
-its realization. Exact repetition forbids evolution. Questions do not erase
-earlier directions from the retained session. The adapter forwards session
-observations and sampling preferences. Speech gets mode-specific semantic
-controls even with chat-only authority. See the
+Layered and Creative v2 Autopilot read up to eight recent human lines and
+judge which still apply, such as a pace, a region, a feel or a wish to keep the
+motion exactly as it is. They develop whatever those lines leave open, within
+saved limits. While Autopilot composes, live chat declares that wish with
+`stay_unchanged`. The server then holds planning boundaries without inference
+and reports `requested_hold` until chat releases the wish or a new run starts.
+Questions do not erase earlier directions from the retained session.
+
+Continuous planning also sees time. Each recent human line carries how long ago
+it was said, both in the motion context and in the planning history. The
+planning facts give the speeds of the stretches that began in the last three
+minutes and how long pace has stayed in the lower third of the saved range. A
+live chat turn that leaves the motion unchanged moves the next planning
+boundary to now, so the planner answers a remark that chat answered only in
+words within seconds. Chat that changes the motion re-arms its own segment as
+before. Live chat, but never planning, can bring back one of the run's earlier
+distinct scores. The
+adapter forwards session observations and sampling preferences. Speech gets
+mode-specific semantic controls even with chat-only authority. See
+[ADR 0031](decisions/0031-model-judged-autopilot-continuity.md), the
+[naturalness review](motion-naturalness-review-2026-09-24.md) and the
 [full-build review](llama-autopilot-review-2026-09-05.md).
 
 Status: implementation contract (2026-08-22)
@@ -57,6 +71,8 @@ repeated timing values, and allow speech generation latency to disturb motion.
   postpones speech; it cannot stall or stop motion.
 - User chat invalidates stale autonomous decisions, blocks new autonomous
   inference until the interactive turn finishes, and resets the speech clock.
+  In the continuous modes, a chat turn that leaves the motion unchanged also
+  brings the next planning boundary forward to now.
 - Autopilot never deepens an existing TTS backlog.
 - When audio is enabled, the next speech interval begins after browser playback
   completes. A bounded fallback prevents a lost browser acknowledgement from

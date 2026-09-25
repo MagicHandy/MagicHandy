@@ -68,6 +68,12 @@ type AssistantResponse struct {
 	Reply   string         `json:"reply"`
 	NewMood *Mood          `json:"new_mood,omitempty"`
 	Motion  *MotionCommand `json:"motion,omitempty"`
+	// StayUnchanged is a live continuous-chat turn's reading of a standing
+	// wish while Autopilot composes: true when the human wants the motion to
+	// stay exactly as it is from now on, false otherwise. The model interprets
+	// the conversation; the host only remembers the answer and holds Autopilot
+	// motion while it stands. Autopilot's own turns never set it.
+	StayUnchanged *bool `json:"stay_unchanged,omitempty"`
 	// continuousAction is the model's live-chat decision before state checks.
 	// Only the validated Motion command is exposed to the rest of the app.
 	continuousAction string

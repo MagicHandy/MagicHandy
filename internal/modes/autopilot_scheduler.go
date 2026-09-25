@@ -232,12 +232,137 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 		m.history.previousSpeed = previousSpeed
 		m.history.speedChangedAt = now
 	}
+	m.rememberSpeedLocked(choice.segment.SpeedPercent, now)
 	m.motion.swayPoints = m.planSwayLocked(now, duration, *choice, generation)
 	m.motion.nextRetry = time.Time{}
 	if m.speech.deadline.IsZero() && m.speech.waitingID == "" {
 		m.scheduleSpeechLocked(now, TimingNormal)
 	}
 	return true
+}
+
+// SpeedStep is one recent stretch's speed and how long ago it began.
+type SpeedStep struct {
+	SpeedPercent int
+	SecondsAgo   int
+}
+
+type speedMark struct {
+	speedPercent int
+	at           time.Time
+}
+
+// EarlierScore is a distinct continuous score that played earlier in the run.
+type EarlierScore struct {
+	Flow              *motion.FlowSpec
+	StartedSecondsAgo int
+	PlayedSeconds     int
+}
+
+type phraseMark struct {
+	flow         *motion.FlowSpec
+	since, until time.Time
+	// heard marks a score that played while the person spoke.
+	heard bool
+}
+
+// rememberEarlierPhraseLocked keeps the continuous score that is being
+// replaced, so a person can ask for it again. A score that returns replaces
+// its older entry. Callers hold m.mu.
+func (m *Manager) rememberEarlierPhraseLocked(now time.Time) {
+	flow, heard := m.history.currentPhrase.Flow, m.history.currentPhraseHeard
+	m.history.currentPhraseHeard = false
+	// A score replaced at the moment it began never played.
+	if flow == nil || m.history.phraseChangedAt.IsZero() || !now.After(m.history.phraseChangedAt) {
+		return
+	}
+	marks := m.history.earlierPhrases[:0:0]
+	for _, mark := range m.history.earlierPhrases {
+		if sameFlowPhrase(mark.flow, flow) {
+			heard = heard || mark.heard
+			continue
+		}
+		marks = append(marks, mark)
+	}
+	marks = append(marks, phraseMark{flow: motion.CloneFlowSpec(flow), since: m.history.phraseChangedAt, until: now, heard: heard})
+	m.history.earlierPhrases = keepEarlierPhrases(marks)
+}
+
+// keepEarlierPhrases keeps the three latest scores and up to three older ones
+// that played while the person spoke, oldest first. Planning can change the
+// character every stretch, and a person refers back to what they were feeling
+// when they spoke.
+func keepEarlierPhrases(marks []phraseMark) []phraseMark {
+	const latest, heard = 3, 3
+	keep := make([]bool, len(marks))
+	kept := 0
+	for i := len(marks) - 1; i >= 0; i-- {
+		if len(marks)-i <= latest || (marks[i].heard && kept < heard) {
+			keep[i] = true
+			if len(marks)-i > latest {
+				kept++
+			}
+		}
+	}
+	out := make([]phraseMark, 0, latest+heard)
+	for i, mark := range marks {
+		if keep[i] {
+			out = append(out, mark)
+		}
+	}
+	return out
+}
+
+func (m *Manager) earlierScoresLocked(now time.Time) []EarlierScore {
+	scores := make([]EarlierScore, 0, len(m.history.earlierPhrases))
+	for i := len(m.history.earlierPhrases) - 1; i >= 0; i-- {
+		mark := m.history.earlierPhrases[i]
+		// The score that is playing now is not an earlier one.
+		if m.history.currentPhrase.Flow != nil && sameFlowPhrase(mark.flow, m.history.currentPhrase.Flow) {
+			continue
+		}
+		scores = append(scores, EarlierScore{Flow: motion.CloneFlowSpec(mark.flow),
+			StartedSecondsAgo: max(0, int(now.Sub(mark.since)/time.Second)), PlayedSeconds: max(0, int(mark.until.Sub(mark.since)/time.Second))})
+	}
+	return scores
+}
+
+// EarlierScores reports the run's earlier distinct continuous scores, newest
+// first, for a live chat turn. Planning turns do not see them: they re-read an
+// old "go back" and recalled again after chat had already answered it.
+func (m *Manager) EarlierScores() []EarlierScore {
+	now := m.options.Now()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.loop.mode != ModeAutopilot {
+		return nil
+	}
+	return m.earlierScoresLocked(now)
+}
+
+// rememberSpeedLocked keeps the speeds of the stretches that began in the last
+// three minutes, so planning can tell how long a slow or fast stretch has
+// lasted. A count limit alone capped that at six stretches, which at a short
+// cadence never reached the minute or two a slow stretch is held before it
+// rebuilds. Callers hold m.mu.
+func (m *Manager) rememberSpeedLocked(speed int, at time.Time) {
+	if speed <= 0 {
+		return
+	}
+	const window, limit = 3 * time.Minute, 16
+	marks := append(m.history.recentSpeeds, speedMark{speedPercent: speed, at: at})
+	for len(marks) > limit || (len(marks) > 1 && at.Sub(marks[0].at) > window) {
+		marks = marks[1:]
+	}
+	m.history.recentSpeeds = marks
+}
+
+func (m *Manager) recentSpeedStepsLocked(now time.Time) []SpeedStep {
+	steps := make([]SpeedStep, 0, len(m.history.recentSpeeds))
+	for _, mark := range m.history.recentSpeeds {
+		steps = append(steps, SpeedStep{SpeedPercent: mark.speedPercent, SecondsAgo: max(0, int(now.Sub(mark.at)/time.Second))})
+	}
+	return steps
 }
 
 // rememberPositionBandLocked retains only enough compiled history for the
@@ -279,6 +404,7 @@ func (m *Manager) observeAutopilotPhraseLocked(now time.Time, choice segmentChoi
 	if !m.history.currentPhrase.hasContent() || !sameFeltMotionPhrase(
 		m.history.currentPhrase, choice.segment, m.history.currentPerceptual, choice.appliedPerceptual,
 	) {
+		m.rememberEarlierPhraseLocked(now)
 		m.history.currentPhrase = clonePhraseSegment(choice.segment)
 		m.history.currentPerceptual = clonePerceptualSummaryPointer(choice.appliedPerceptual)
 		m.history.phraseChangedAt = now
@@ -302,6 +428,7 @@ func (m *Manager) observeInteractivePhraseLocked(
 	if !m.history.currentPhrase.hasContent() || !sameFeltMotionPhrase(
 		m.history.currentPhrase, segment, m.history.currentPerceptual, perceptual,
 	) {
+		m.rememberEarlierPhraseLocked(now)
 		m.history.currentPhrase = clonePhraseSegment(segment)
 		m.history.currentPerceptual = clonePerceptualSummaryPointer(perceptual)
 		m.history.phraseChangedAt = now

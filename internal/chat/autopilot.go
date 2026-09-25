@@ -8,9 +8,21 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
+// SpeedStep is one recent stretch's speed and how long ago it began.
+type SpeedStep struct {
+	SpeedPercent int
+	SecondsAgo   int
+}
+
 // AutopilotContext is bounded semantic context for an autonomous model turn.
 // It contains no transport or engine details.
 type AutopilotContext struct {
+	// LastHumanSecondsAgo, when known, is how long ago the person last spoke.
+	// Continuous planning uses it to judge how long a slow stretch has lasted.
+	LastHumanSecondsAgo *int
+	// RecentSpeeds lists recent stretch speeds and how long ago each began,
+	// oldest first.
+	RecentSpeeds         []SpeedStep
 	Style                string
 	SegmentIndex         int
 	RecentPatternIDs     []string
@@ -112,6 +124,10 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	fmt.Fprintf(&builder, "Autopilot motion decision %d. You are steering the device autonomously between chat turns.\n", context.SegmentIndex+1)
 	fmt.Fprintf(&builder, "Motion style preference: %s. Allowed speed range: %d-%d%%.\n", context.Style, context.SpeedMinPercent, context.SpeedMaxPercent)
 	if context.MotionMode == MotionModeLayered || context.MotionMode == MotionModeCreativeV2 {
+		if context.LastHumanSecondsAgo != nil {
+			fmt.Fprintf(&builder, "The person last spoke %s ago, and chat has replied to them in words. This turn chooses the motion from here; it is not a reply to their last message.\n",
+				formatSessionSpan(*context.LastHumanSecondsAgo))
+		}
 		writeContinuousAutopilotContext(&builder, context)
 		return builder.String()
 	}

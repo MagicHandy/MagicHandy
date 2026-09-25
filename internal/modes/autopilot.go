@@ -98,6 +98,10 @@ type DecisionInput struct {
 	// history cannot supply it because motion-only decisions are intentionally
 	// not published as dialogue.
 	RecentPositionBands []PositionBand
+	// RecentSpeeds is the same kind of memory for pace: the speed each recent
+	// stretch used and how long ago it began, oldest first. Without it every
+	// planning turn after "that's too much" looked like the moment it was said.
+	RecentSpeeds []SpeedStep
 	// MotionFeedback is populated only for one semantic quality retry after a
 	// model-elected update compiled as continuity.
 	MotionFeedback string
@@ -117,7 +121,10 @@ type Decision struct {
 	Pattern *motion.PatternDefinition
 	Say     string
 	Hold    bool
-	Next    TimingPreference
+	// Requested marks a hold the human asked for in chat, so status can say why
+	// Autopilot is leaving the motion alone. It behaves exactly like Hold.
+	Requested bool
+	Next      TimingPreference
 	// Variability is how much the target should wander before the next boundary.
 	Variability VariabilityPreference
 }
@@ -144,6 +151,8 @@ type segmentChoice struct {
 	timing          TimingPreference
 	variability     VariabilityPreference
 	decisionLatency time.Duration
+	// requested marks a hold the human asked for; its source stays "hold".
+	requested bool
 	// Backend facts visible to the decision are retained with its trace so a
 	// hold or update can be audited against the exact accumulated context.
 	sessionTracking          bool
@@ -222,14 +231,14 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 	if decision.Hold {
 		if segment, pattern, ok := m.heldSegment(); ok {
 			return segmentChoice{
-				segment: segment, pattern: pattern, source: "hold",
+				segment: segment, pattern: pattern, source: "hold", requested: decision.Requested,
 				say: decision.Say, timing: timing, variability: variability,
 				decisionLatency: latency,
 			}
 		}
 		if !fallback || dynamicMode {
 			return segmentChoice{
-				source: "hold", say: decision.Say, timing: timing,
+				source: "hold", requested: decision.Requested, say: decision.Say, timing: timing,
 				variability: variability, decisionLatency: latency,
 			}
 		}
@@ -327,6 +336,7 @@ func (m *Manager) decisionInput() DecisionInput {
 		SegmentIndex:        m.motion.segmentIdx,
 		RecentPatternIDs:    append([]string(nil), m.history.recentPatternIDs...),
 		RecentPositionBands: append([]PositionBand(nil), m.history.recentPositionBands...),
+		RecentSpeeds:        m.recentSpeedStepsLocked(now),
 		SpeedMinPercent:     settings.SpeedMinPercent,
 		SpeedMaxPercent:     settings.SpeedMaxPercent,
 		LastSay:             m.speech.lastSay,
@@ -463,6 +473,9 @@ func (m *Manager) rememberChoice(mode string, choice segmentChoice) {
 	}
 	if mode == ModeAutopilot {
 		m.events.decisionSource = choice.source
+		if choice.requested {
+			m.events.decisionSource = "requested_hold"
+		}
 	}
 	if choice.source == "hold" || !choice.segment.hasContent() {
 		return

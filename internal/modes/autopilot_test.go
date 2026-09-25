@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -996,4 +997,179 @@ func TestAutopilotTraceRecordsDecisionSource(t *testing.T) {
 		}
 		return false
 	})
+}
+
+// A hold the human asked for behaves exactly like any other hold; only the
+// reported source differs, so status can say why Autopilot leaves motion alone.
+func TestAutopilotRequestedHoldKeepsSegmentAndReportsWhy(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	library := &motion.PatternDefinition{ID: "custom-wave", Name: "Custom wave"}
+	decider := &fakeDecider{decisions: []Decision{
+		{Segment: Segment{PatternID: library.ID, SpeedPercent: 40, DurationMillis: 4000}, Pattern: library},
+		{Hold: true, Requested: true},
+	}}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+	clock.Advance(150 * time.Second)
+	waitFor(t, time.Second, func() bool {
+		return decider.callCount() >= 2 && manager.Status().DecisionSource == "requested_hold"
+	})
+	if _, retargets := engine.counts(); retargets != 0 {
+		t.Fatalf("requested hold produced %d engine retargets", retargets)
+	}
+}
+
+// A chat turn that leaves the motion unchanged can still say something the
+// planner must answer. It plans again as soon as the turn completes instead of
+// waiting out the rest of the segment; chat activity alone does not.
+func TestAutopilotReconsidersPromptlyAfterUnchangedChat(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	library := &motion.PatternDefinition{ID: "custom-wave", Name: "Custom wave"}
+	decider := &fakeDecider{decisions: []Decision{
+		{Segment: Segment{PatternID: library.ID, SpeedPercent: 40, DurationMillis: 4000}, Pattern: library},
+		{Segment: Segment{PatternID: library.ID, SpeedPercent: 18, DurationMillis: 4000}, Pattern: library},
+	}}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+	clock.Advance(time.Second)
+
+	manager.NotifyChatActivityComplete(manager.NotifyChatActivity())
+	time.Sleep(50 * time.Millisecond)
+	if calls := decider.callCount(); calls != 1 {
+		t.Fatalf("chat activity alone re-planned early: %d decisions", calls)
+	}
+
+	activity := manager.NotifyChatActivity()
+	manager.ReconsiderAfterChat()
+	manager.NotifyChatActivityComplete(activity)
+	waitFor(t, time.Second, func() bool { return decider.callCount() >= 2 })
+}
+
+// Motion-only decisions are never published as dialogue, so the planner
+// learns what pace its recent stretches used, and how long ago, from the
+// scheduler. Without it a slow stretch never looked old enough to rebuild.
+func TestAutopilotRemembersRecentStretchSpeeds(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	library := &motion.PatternDefinition{ID: "custom-wave", Name: "Custom wave"}
+	decider := &fakeDecider{decisions: []Decision{
+		{Segment: Segment{PatternID: library.ID, SpeedPercent: 40, DurationMillis: 4000}, Pattern: library},
+		{Segment: Segment{PatternID: library.ID, SpeedPercent: 18, DurationMillis: 4000}, Pattern: library},
+		{Segment: Segment{PatternID: library.ID, SpeedPercent: 16, DurationMillis: 4000}, Pattern: library},
+	}}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+	advanceUntil(t, clock, func() bool { return decider.callCount() >= 3 })
+	decider.mu.Lock()
+	speeds := decider.inputs[2].RecentSpeeds
+	decider.mu.Unlock()
+	if len(speeds) != 2 || speeds[0].SpeedPercent != 40 || speeds[1].SpeedPercent != 18 || speeds[0].SecondsAgo <= speeds[1].SecondsAgo {
+		t.Fatalf("recent stretch speeds %+v", speeds)
+	}
+}
+
+// A slow stretch is held for a minute or two before it rebuilds, so the speed
+// history covers three minutes rather than a fixed number of stretches.
+func TestRecentStretchSpeedsCoverThreeMinutes(t *testing.T) {
+	var m Manager
+	start := time.Unix(0, 0)
+	for i := range 20 {
+		m.rememberSpeedLocked(15, start.Add(time.Duration(i)*14*time.Second))
+	}
+	steps := m.recentSpeedStepsLocked(start.Add(19 * 14 * time.Second))
+	if len(steps) != 13 || steps[0].SecondsAgo != 168 || steps[len(steps)-1].SecondsAgo != 0 {
+		t.Fatalf("recent stretch speeds %+v", steps)
+	}
+}
+
+// A person can ask for a pattern that played earlier, so the scheduler keeps
+// the run's recent distinct continuous scores, newest first; a score that
+// comes back replaces its older entry.
+func TestAutopilotRemembersEarlierDistinctScores(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	flow := func(anchor int) *motion.FlowSpec {
+		spec := motion.DefaultFlowSpec()
+		spec.AnchorPercent = anchor
+		return &spec
+	}
+	decider := &fakeDecider{decisions: []Decision{
+		{Segment: Segment{Flow: flow(0), SpeedPercent: 30, DurationMillis: 4000}},
+		{Segment: Segment{Flow: flow(100), SpeedPercent: 30, DurationMillis: 4000}},
+		{Segment: Segment{Flow: flow(0), SpeedPercent: 40, DurationMillis: 4000}},
+		{Segment: Segment{Flow: flow(50), SpeedPercent: 40, DurationMillis: 4000}},
+		{Segment: Segment{Flow: flow(25), SpeedPercent: 40, DurationMillis: 4000}},
+	}}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+	advanceUntil(t, clock, func() bool { return len(manager.EarlierScores()) == 3 })
+	// Anchors 0, 100, 0, 50 played before 25: the returning 0 is listed once,
+	// newest first, and the playing score is not an earlier one.
+	earlier := manager.EarlierScores()
+	if earlier[0].Flow.AnchorPercent != 50 || earlier[1].Flow.AnchorPercent != 0 || earlier[2].Flow.AnchorPercent != 100 ||
+		earlier[0].StartedSecondsAgo >= earlier[1].StartedSecondsAgo || earlier[1].StartedSecondsAgo >= earlier[2].StartedSecondsAgo {
+		t.Fatalf("earlier scores %+v", earlier)
+	}
+}
+
+// Planning can change the character every stretch, so a score that played
+// while the person spoke stays recallable after newer scores would have pushed
+// it out.
+func TestAutopilotKeepsScoresHeardWhileThePersonSpoke(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	var decisions []Decision
+	for _, anchor := range []int{0, 100, 50, 25, 75, 10, 90} {
+		spec := motion.DefaultFlowSpec()
+		spec.AnchorPercent = anchor
+		decisions = append(decisions, Decision{Segment: Segment{Flow: &spec, SpeedPercent: 30, DurationMillis: 4000}})
+	}
+	decider := &fakeDecider{decisions: decisions}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+	advanceUntil(t, clock, func() bool { return len(manager.EarlierScores()) == 1 })
+	// The person speaks while anchor 100 plays.
+	manager.NotifyChatActivityComplete(manager.NotifyChatActivity())
+	advanceUntil(t, clock, func() bool {
+		earlier := manager.EarlierScores()
+		return len(earlier) > 0 && earlier[0].Flow.AnchorPercent == 10
+	})
+	var anchors []int
+	for _, score := range manager.EarlierScores() {
+		anchors = append(anchors, score.Flow.AnchorPercent)
+	}
+	if !slices.Equal(anchors, []int{10, 75, 25, 100}) {
+		t.Fatalf("earlier anchors %v, want the three latest and the heard 100", anchors)
+	}
+}
+
+// advanceUntil keeps the fake clock moving in small steps until cond holds,
+// so a test does not depend on how many ticks one planning boundary takes.
+func advanceUntil(t *testing.T, clock *fakeClock, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal("condition not reached while advancing the clock")
+		}
+		clock.Advance(10 * time.Second)
+		time.Sleep(2 * time.Millisecond)
+	}
 }

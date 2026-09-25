@@ -11,41 +11,44 @@ import (
 const PromptHistoryLimit = 64
 const maxPromptHistoryBytes = 24000
 
-// Continuous chat must see examples of its own response format. Replaying
-// legacy motion.action envelopes teaches a conflicting control vocabulary.
 // History carries speech only; the current authoritative score carries motion.
-func continuousMessages(system string, history []llm.Message, message string, mode MotionMode) []llm.Message {
-	// Internal evaluators may supply complete prior JSON instead of the plain
-	// speech stored by production. Extract that speech before legacy sanitation
-	// can quote the whole old edit object as a reply.
-	spokenHistory := append([]llm.Message(nil), history...)
-	for i, prior := range spokenHistory {
-		var response struct {
-			Reply string `json:"reply"`
-		}
-		if prior.Role == "assistant" && json.Unmarshal([]byte(prior.Content), &response) == nil && response.Reply != "" {
-			spokenHistory[i].Content = response.Reply
-		}
-	}
-	messages := buildMessages(system, spokenHistory, message)
+// Earlier turns used to be replayed as {"edits":[]} envelopes, which put a
+// standing example of changing nothing in front of every planning turn and
+// misreported turns that did edit. The JSON schema enforces the reply format,
+// so the prior turns no longer need to demonstrate it. Replaying legacy
+// motion.action envelopes would also teach a conflicting control vocabulary.
+func continuousMessages(system string, history []llm.Message, message string) []llm.Message {
+	messages := buildMessages(system, spokenHistory(history), message)
+	// buildMessages re-serializes assistant speech in the catalog contract;
+	// unwrap it again so only the words remain.
 	for i := 1; i < len(messages)-1; i++ {
-		if messages[i].Role != "assistant" {
-			continue
+		if messages[i].Role == "assistant" {
+			messages[i].Content = spokenReply(messages[i].Content)
 		}
-		var previous struct {
-			Reply string `json:"reply"`
-		}
-		if json.Unmarshal([]byte(messages[i].Content), &previous) != nil {
-			continue
-		}
-		var edits any = map[string]any{}
-		if mode == MotionModeCreativeV2 {
-			edits = []any{}
-		}
-		encoded, _ := json.Marshal(map[string]any{"edits": edits, "reply": previous.Reply})
-		messages[i].Content = string(encoded)
 	}
 	return messages
+}
+
+// spokenHistory extracts the reply from any structured assistant turn, since
+// evaluators may supply complete prior JSON instead of the stored speech.
+func spokenHistory(history []llm.Message) []llm.Message {
+	spoken := append([]llm.Message(nil), history...)
+	for i, prior := range spoken {
+		if prior.Role == "assistant" {
+			spoken[i].Content = spokenReply(prior.Content)
+		}
+	}
+	return spoken
+}
+
+func spokenReply(content string) string {
+	var response struct {
+		Reply string `json:"reply"`
+	}
+	if json.Unmarshal([]byte(content), &response) == nil && response.Reply != "" {
+		return response.Reply
+	}
+	return content
 }
 
 func continuousOutputGuard(capabilities Capabilities) string {

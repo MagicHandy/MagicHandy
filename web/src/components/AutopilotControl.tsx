@@ -11,6 +11,7 @@ const decisionSourceCopy: Partial<Record<string, MessageKey>> = {
   model: "Assistant selected",
   fallback: "Planner fallback",
   hold: "Continuing current pattern",
+  requested_hold: "Keeping the motion as you asked",
   speech: "Spoken check-in changed motion",
 };
 

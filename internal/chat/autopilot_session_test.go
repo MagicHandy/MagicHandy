@@ -197,3 +197,33 @@ func TestDynamicAutopilotPromptFitsUserMessageBudgetWithTrackedSession(t *testin
 			len(message), maxUserMessageBytes-reserveBytes, reserveBytes)
 	}
 }
+
+// A slow stretch the person asked for should last an appropriate period and
+// then rebuild. The planner can only judge that if it knows how long ago they
+// spoke; that time sits right beside the pace guidance.
+func TestContinuousPlanningKnowsHowLongAgoThePersonSpoke(t *testing.T) {
+	score := FreshCreativeV2Score(15)
+	ago := 60
+	context := AutopilotContext{MotionMode: MotionModeCreativeV2, CurrentSpeed: 15, CurrentFlow: &score,
+		SpeedMinPercent: 15, SpeedMaxPercent: 54, LastHumanSecondsAgo: &ago}
+	message := AutopilotMotionMessage(context)
+	spoke := strings.Index(message, "The person last spoke 60 seconds ago, and chat has replied to them in words.")
+	pace := strings.Index(message, "within a few points of 15%")
+	if spoke < 0 || pace < 0 || spoke > pace {
+		t.Fatalf("the time since the person spoke is missing or follows the pace guidance:\n%s", message)
+	}
+	context.LastHumanSecondsAgo = nil
+	if strings.Contains(AutopilotMotionMessage(context), "The person last spoke") {
+		t.Fatal("an unknown time was stated")
+	}
+}
+
+func TestContinuousPlanningSeesItsRecentStretchSpeeds(t *testing.T) {
+	score := FreshLayeredScore(16)
+	message := AutopilotMotionMessage(AutopilotContext{MotionMode: MotionModeLayered, CurrentSpeed: 16, CurrentFlow: &score,
+		SpeedMinPercent: 15, SpeedMaxPercent: 54, RecentSpeeds: []SpeedStep{{30, 150}, {18, 110}, {16, 70}, {15, 30}}})
+	if !strings.Contains(message, "Your recent stretch speeds, oldest to newest, over the last 3 minutes: 30%, 18%, 16%, 15%.") ||
+		!strings.Contains(message, "Pace has stayed in the lower third of the saved range for 2 minutes.") {
+		t.Fatalf("recent stretch speeds are missing:\n%s", message)
+	}
+}

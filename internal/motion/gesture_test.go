@@ -74,12 +74,13 @@ func TestGestureNativeCharacterAndReplay(t *testing.T) {
 	s.Gesture.FocusPercent = 0
 	s.Gesture.FocusWidthPercent = 45
 	s.Gesture.ReboundCount, s.Gesture.ReboundDecayPercent = 3, 75
-	legs := gestureLegs(s)
+	legs := travelLegs(t, gestureLegs(s))
 	full, local, shrinking := false, false, false
 	for index, leg := range legs {
 		span := math.Abs(leg.to - leg.from)
-		full = full || span == 90
+		full = full || span >= 80
 		local = local || (span < 46 && span >= 10)
+		// The explicitly held base is where rebounds arrive, exactly.
 		if index > 3 && span < math.Abs(legs[index-2].to-legs[index-2].from) && leg.to == 5 {
 			shrinking = true
 		}
@@ -87,11 +88,12 @@ func TestGestureNativeCharacterAndReplay(t *testing.T) {
 	if !full || !local || !shrinking {
 		t.Fatalf("missing broad/local/rebound travel: %v/%v/%v", full, local, shrinking)
 	}
-	if !reflect.DeepEqual(legs, gestureLegs(s)) {
+	if !reflect.DeepEqual(gestureLegs(s), gestureLegs(s)) {
 		t.Fatal("saved realization not replayable")
 	}
+	before := gestureLegs(s)
 	s.Seed++
-	if reflect.DeepEqual(legs, gestureLegs(s)) {
+	if reflect.DeepEqual(before, gestureLegs(s)) {
 		t.Fatal("seed does not develop motion")
 	}
 	s.Gesture.FocusMixPercent = 100
@@ -100,10 +102,23 @@ func TestGestureNativeCharacterAndReplay(t *testing.T) {
 			t.Fatal("focus-only stroke escaped local band")
 		}
 	}
+}
+
+func TestGestureFullOnlyStrokesVaryTheirLandingWithoutLocalWork(t *testing.T) {
+	s := gestureFixture()
 	s.Gesture.FocusMixPercent = 0
+	// Full strokes land a little inside either edge from stroke to stroke, so
+	// no single point is struck every time; no local work appears.
+	variation := float64(s.Gesture.VariationPercent) / 100
+	for _, leg := range travelLegs(t, gestureLegs(s)) {
+		if span := math.Abs(leg.to - leg.from); span > 90 || span < 90*(1-2*landingInset*variation)-1e-9 {
+			t.Fatal("full-only requested but local motion remains", span)
+		}
+	}
+	s.Gesture.VariationPercent = 0
 	for _, leg := range gestureLegs(s) {
-		if math.Abs(leg.to-leg.from) != 90 {
-			t.Fatal("full-only requested but local motion remains")
+		if math.Abs(leg.to-leg.from) != 90 || leg.rest != 0 {
+			t.Fatal("zero variation no longer repeats every full stroke exactly")
 		}
 	}
 }

@@ -4,6 +4,11 @@
 - Status: Proposed for review
 - Extends: ADRs 0023 and 0024
 
+Update: [ADR 0031](0031-model-judged-autopilot-continuity.md) also removes the
+word-based limits this decision left on backend-generated Autopilot decisions.
+While continuous Autopilot composes, live chat adds a required `stay_unchanged`
+declaration.
+
 ## Context
 
 Live users reported valid Creative v2 and Layered replies being rejected as

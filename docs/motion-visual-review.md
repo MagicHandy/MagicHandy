@@ -165,3 +165,40 @@ intent, so a failed selection still has a plot. Rejected responses have an
 explicit non-moving record. Pass reports to `-llm` and `--captured`; retain
 failed runs as well as successful ones. See the
 [Creative v2 review](creative-v2-motion-review-2026-09-05.md).
+
+## Continuous Autopilot sessions
+
+`TestLiveContinuousAutopilotSession` in
+`internal/httpapi/continuous_session_live_test.go` requires
+`liveeval,magichandy_labs`. It drives consecutive Creative v2 or Layered
+Autopilot decisions through the production `AutopilotService`, parser,
+validator and shared compiler. Between turns it carries the score, compiled
+feel, recent position bands, spoken check-ins and human lines, as the scheduler
+and chat log do. A human line gets a real interactive chat turn. A standing
+`stay_unchanged` wish then holds later decisions without a model call, as the
+server does. Motion-turn replies are recorded but, as in the app, never spoken.
+The harness builds no engine or transport, so it cannot move a device.
+
+Set `MAGICHANDY_LIVE_LLAMA_URL` to a loopback llama.cpp server,
+`MAGICHANDY_SESSION_MODE` to `creative_v2` or `layered`, and optionally
+`MAGICHANDY_SESSION_TURNS`, `MAGICHANDY_SESSION_RUNS` and
+`MAGICHANDY_SESSION_REQUESTS` (`turn:text|turn:text`).
+`MAGICHANDY_EXPERIMENT_CAPTURE` names the ignored report. Each report records
+its limits, every raw response, accepted scores with seeds, failures, and
+20 Hz shared-plan samples of each 14-second stretch.
+
+`TestReplayContinuousSession` recompiles a report's exact scores and seeds
+with the current engine, reading `MAGICHANDY_REPLAY_INPUT` and writing
+`MAGICHANDY_EXPERIMENT_CAPTURE`. A generator change can then be compared on
+identical model decisions. Export reports with `-continuous` to render every
+accepted score and failed decision:
+
+```powershell
+go run -tags magichandy_labs ./cmd/motion-atlas -catalog=false `
+  -continuous .scratch/session.json -output .scratch/session-atlas.json
+python scripts/render-motion-atlas.py .scratch/session-atlas.json .scratch/session-atlas
+```
+
+The atlas shows each score's steady loop. The report's samples show each
+stretch as it was played, including where a phrase resumed. See the
+[naturalness review](motion-naturalness-review-2026-09-24.md).

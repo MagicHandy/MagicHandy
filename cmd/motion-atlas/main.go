@@ -26,6 +26,7 @@ func main() {
 	mediaFilters := flag.Bool("media-filters", false, "include inert paired-script filter, rate and device-limit comparisons")
 	reports := flag.String("llm", "", "comma-separated live LLM report paths")
 	sessions := flag.String("sessions", "", "comma-separated full-app Autopilot captures")
+	continuous := flag.String("continuous", "", "comma-separated continuous Autopilot session reports")
 	flag.Parse()
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMinPercent, settings.SpeedMaxPercent = 10, 43
@@ -72,6 +73,11 @@ func main() {
 	for _, path := range strings.Split(*sessions, ",") {
 		if path != "" {
 			entries = append(entries, readAutopilotSessions(path)...)
+		}
+	}
+	for _, path := range strings.Split(*continuous, ",") {
+		if path != "" {
+			entries = append(entries, readContinuousSessions(path)...)
 		}
 	}
 	data, err := json.MarshalIndent(map[string]any{"schema": "magichandy.motion-atlas.v1", "settings": settings, "entries": entries}, "", "  ")

@@ -2,10 +2,12 @@ package chat
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
@@ -42,5 +44,30 @@ func TestLabRefreshesNumericPlanningContextWithoutHardwareNames(t *testing.T) {
 		if input.Envelope.PositionMinPercent != 0 || input.Envelope.PositionMaxPercent != 100 || input.Envelope.ProfilePeakVelocityPerSecond != wantPeak {
 			t.Fatalf("profile reference or semantic coordinates incorrect: %+v", input.Envelope)
 		}
+	}
+}
+
+// Continuous Lab methods share production's continuation policy, which reads
+// the human's latest lines from the planning context. Lab history carries the
+// human turns and replies, so those lines must reach that field.
+func TestLabContinuationSeesTheLatestHumanLines(t *testing.T) {
+	provider := &scriptedProvider{responses: []string{`{"edits":[],"reply":"Holding."}`}}
+	history := []llm.Message{{Role: "user", Content: "Slow it down a little."}, {Role: "assistant", Content: `{"edits":[],"reply":"Slower."}`},
+		{Role: "user", Content: "Keep it exactly like this now."}, {Role: "assistant", Content: `{"edits":[],"reply":"Keeping it."}`}}
+	trial := RunLLMLab(t.Context(), provider, "test", "creative_v2", LLMLabPrompts()["creative_v2"], CreativeV2ContinuationMessage(),
+		FreshCreativeV2Score(25), config.DefaultSettings().Motion, history, true)
+	if !trial.Valid {
+		t.Fatal(trial.Error)
+	}
+	content := provider.requests[0].Messages[len(provider.requests[0].Messages)-1].Content
+	encoded, _, _ := strings.Cut(content, "\nRequest:")
+	var input struct {
+		Requests []string `json:"recent_user_requests_oldest_first"`
+	}
+	if err := json.Unmarshal([]byte(encoded), &input); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Slow it down a little.", "Keep it exactly like this now."}; !slices.Equal(input.Requests, want) {
+		t.Fatalf("continuation saw %q, want %q", input.Requests, want)
 	}
 }

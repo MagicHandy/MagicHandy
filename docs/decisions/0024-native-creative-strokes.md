@@ -4,6 +4,13 @@
 - Status: Implemented for review; no merge or release authorized
 - Extends: ADRs 0002, 0015, 0019 and 0023
 
+Update: [ADR 0031](0031-model-judged-autopilot-continuity.md) makes unequal
+timing, rebounds and strong inertia temporary accents during Autopilot. It
+phrases strokes inside the shared plan with breathing pace, short flurries,
+rare rests and varied landings, and raises the default variation to 50. Live
+chat, not host word matching, declares an exact hold. The remaining decisions
+stand.
+
 ## Context
 
 The original Creative contract can describe reach and four range textures, but

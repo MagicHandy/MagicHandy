@@ -115,6 +115,13 @@ describe("AutopilotControl", () => {
     expect(app.show).toHaveBeenCalledWith("Autopilot stopped.");
   });
 
+  it("says when Autopilot is holding because the user asked", () => {
+    app.state = { modes: { mode: "autopilot", segment_index: 3, decision_source: "requested_hold" }, settings: {} };
+    render(<AutopilotControl />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Segment 3 · Keeping the motion as you asked");
+  });
+
   it("keeps the control visible but disabled for read-only clients", () => {
     app.readOnly = true;
     render(<AutopilotControl />);

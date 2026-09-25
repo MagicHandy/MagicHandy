@@ -18,6 +18,9 @@ func (m *Manager) resetForModeStartLocked(mode string) {
 	m.motion.swayPoints = nil
 	m.history.previousSpeed = 0
 	m.history.speedChangedAt = time.Time{}
+	m.history.recentSpeeds = nil
+	m.history.earlierPhrases = nil
+	m.history.currentPhraseHeard = false
 	m.history.currentPhrase = Segment{}
 	m.history.currentPerceptual = nil
 	m.history.phraseChangedAt = time.Time{}

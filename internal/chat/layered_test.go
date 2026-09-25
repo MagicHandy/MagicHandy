@@ -33,9 +33,17 @@ func TestLayeredPartialEditsPreserveOtherAxesAndEvolveGeometry(t *testing.T) {
 	if err != nil || relative.Layers[1].PeriodCycles != before.Layers[1].PeriodCycles+4 {
 		t.Fatal("relative timing did not add to the current period", err)
 	}
+	// A relative speed step past a saved limit goes as far as the limit allows.
+	for raw, want := range map[string]int{
+		`{"edits":{"change_by":{"speed_percent":-100}},"reply":"As slow as allowed."}`: limits.SpeedMinPercent,
+		`{"edits":{"change_by":{"speed_percent":100}},"reply":"As fast as allowed."}`:  limits.SpeedMaxPercent,
+	} {
+		if _, clamped, _, err := ParseLayeredReply(raw, before, limits); err != nil || clamped.SpeedPercent != want {
+			t.Fatalf("relative speed was not clamped to %d: %d %v", want, clamped.SpeedPercent, err)
+		}
+	}
 	for _, raw := range []string{
 		`{"edits":{"controls":{"turn_softness_percent":80}},"reply":"bad"}`,
-		`{"edits":{"change_by":{"speed_percent":-100}},"reply":"bad"}`,
 		`{"edits":{"layers":[{"axis":"center","amount_percent":50},{"axis":"center","period_cycles":8}]},"reply":"bad"}`,
 		`{"edits":{"layers":[{"axis":"pace","shape":"random"}]},"reply":"bad"}`,
 		`{"edits":{"layers":[{"axis":"pace","period_cycles":8}],"remove_layers":["pace"]},"reply":"bad"}`,
@@ -135,29 +143,27 @@ func TestLayeredGeometryOperationsAreAtomicAndKeepPace(t *testing.T) {
 	}
 }
 
-func TestLayeredContinuationHonorsExactHoldAndLaterChanges(t *testing.T) {
+func TestLayeredAutopilotLeavesExactHoldsToTheModel(t *testing.T) {
 	hold := "Keep this exact pattern repeating. No changes from now on."
 	for _, tc := range []struct {
-		requests []string
-		hold     bool
+		raw  string
+		held bool
 	}{
-		{[]string{"Vary the motion.", hold}, true},
-		{[]string{hold, "What does the pace layer do?"}, true},
-		{[]string{hold, "Actually, vary the motion again."}, false},
-		{[]string{"Alternate tip and base. Keep speed unchanged."}, false},
+		{`{"edits":{},"reply":"Keeping the exact score."}`, true},
+		// A later judgment that the wish no longer applies is the model's to make.
+		{`{"edits":{"evolve":true},"reply":"Fresh."}`, false},
 	} {
-		if LayeredExactHoldRequested(tc.requests) != tc.hold {
-			t.Fatal(tc.requests)
+		provider := &layeredTestProvider{raw: tc.raw}
+		spec := DefaultLayeredScore(25)
+		service := AutopilotService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeLayered}, MotionContext: &MotionContext{Running: true, Layered: &spec, UserRequests: []string{hold}}}
+		response, err := service.Complete(t.Context(), AutopilotKindMotion, Request{Message: "Continue"})
+		if err != nil || (response.Motion == nil) != tc.held || provider.calls != 1 {
+			t.Fatal("exact hold handling", tc.raw, response.Motion, err)
 		}
-	}
-	provider := &layeredTestProvider{raw: `{"edits":{"evolve":true},"reply":"Fresh."}`}
-	spec := DefaultLayeredScore(25)
-	service := AutopilotService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeLayered}, MotionContext: &MotionContext{Running: true, Layered: &spec, UserRequests: []string{hold}}}
-	if _, err := service.Complete(t.Context(), AutopilotKindMotion, Request{Message: "Continue"}); err == nil {
-		t.Fatal("accepted evolution during exact hold")
-	}
-	if provider.calls != 1 || !strings.Contains(provider.request.Messages[len(provider.request.Messages)-1].Content, "HOLD EXACT") {
-		t.Fatal("hold policy not provided without repair")
+		last := provider.request.Messages[len(provider.request.Messages)-1].Content
+		if !strings.Contains(provider.request.Messages[0].Content, hold) || !strings.Contains(last, `asks for change, return "edits":{} with a brief reply and change nothing, not even speed: that wish outranks every other instruction in this turn`) {
+			t.Fatal("the hold wish or the hold instruction did not reach the model")
+		}
 	}
 }
 
@@ -199,5 +205,23 @@ func TestLayeredProductionAuthorityAndNoRepair(t *testing.T) {
 				t.Fatalf("unexpected result %+v err=%v calls=%d", result, err, provider.calls)
 			}
 		})
+	}
+}
+
+// Every example the contract shows the model must itself be a valid reply.
+func TestLayeredContractExamplesParse(t *testing.T) {
+	limits := config.DefaultSettings().Motion
+	examples := 0
+	for _, line := range strings.Split(layeredContract, "\n") {
+		if !strings.HasPrefix(line, `{"edits":`) {
+			continue
+		}
+		examples++
+		if _, _, _, err := ParseLayeredReply(line, DefaultLayeredScore(25), limits); err != nil {
+			t.Fatalf("contract example does not parse: %s: %v", line, err)
+		}
+	}
+	if examples < 8 {
+		t.Fatalf("found only %d contract examples", examples)
 	}
 }

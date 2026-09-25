@@ -63,10 +63,11 @@ func TestCreativeV2LiveMapping(t *testing.T) {
 		{"fresh", "Keep varying within this same character.", func(a, b motion.FlowSpec) bool {
 			return a.Seed != b.Seed && *a.Gesture == *b.Gesture && a.SpeedPercent == b.SpeedPercent
 		}},
-		{"autopilot", CreativeV2ContinuationMessage(nil), func(a, b motion.FlowSpec) bool {
+		{"autopilot", CreativeV2ContinuationMessage(), func(a, b motion.FlowSpec) bool {
 			return a.Seed != b.Seed && *a.Gesture == *b.Gesture && a.MinPercent == b.MinPercent && a.MaxPercent == b.MaxPercent && a.SpeedPercent == b.SpeedPercent
 		}},
-		{"hold", CreativeV2ContinuationMessage([]string{"Keep this exact score unchanged."}), func(a, b motion.FlowSpec) bool { return reflect.DeepEqual(a, b) }},
+		{"hold-request", "Keep this exact score unchanged from now on.", func(a, b motion.FlowSpec) bool { return reflect.DeepEqual(a, b) }},
+		{"hold", CreativeV2ContinuationMessage(), func(a, b motion.FlowSpec) bool { return reflect.DeepEqual(a, b) }},
 	}
 	independent := []scenario{
 		{"reverse-bias", "Make downward travel noticeably faster than upward travel, keeping the band and speed setting.", func(a, b motion.FlowSpec) bool {
@@ -109,7 +110,10 @@ func TestCreativeV2LiveMapping(t *testing.T) {
 			if trial.Valid {
 				current = trial.After
 			}
-			history = append(history, llm.Message{Role: "user", Content: sc.message}, llm.Message{Role: "assistant", Content: trial.Raw})
+			// Like the Lab, history keeps only human turns; continuations read them.
+			if sc.message != CreativeV2ContinuationMessage() {
+				history = append(history, llm.Message{Role: "user", Content: sc.message}, llm.Message{Role: "assistant", Content: trial.Raw})
+			}
 		}
 	}
 }

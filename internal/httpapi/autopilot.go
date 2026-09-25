@@ -10,6 +10,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
@@ -28,6 +29,9 @@ func autopilotCosmeticFeedback(input modes.DecisionInput) string {
 // autopilotDecide runs the strict motion-only model contract. It never asks for
 // or publishes a chat line.
 func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput) (modes.Decision, error) {
+	if held, ok := s.requestedAutopilotHold(ctx); ok {
+		return held, nil
+	}
 	response, err := s.autopilotModelTurn(ctx, input, chat.AutopilotKindMotion)
 	if err != nil {
 		return modes.Decision{}, err
@@ -170,6 +174,9 @@ func (s *Server) autopilotModelTurn(
 		Capabilities:          capabilities,
 	}
 	modelContext := autopilotPromptContext(input, capabilities)
+	if ages := motionContext.UserRequestSecondsAgo; len(ages) > 0 {
+		modelContext.LastHumanSecondsAgo = &ages[len(ages)-1]
+	}
 	message := chat.AutopilotMotionMessage(modelContext)
 	if kind == chat.AutopilotKindSpeech {
 		message = chat.AutopilotSpeechMessage(modelContext)
@@ -181,8 +188,18 @@ func (s *Server) autopilotModelTurn(
 	defer releaseLLM()
 	return service.Complete(providerCtx, kind, chat.Request{
 		Message: message,
-		History: promptContext.History,
+		History: autopilotHistory(kind, settings, promptContext),
 	})
+}
+
+// autopilotHistory is the conversation an Autopilot turn sees. Continuous
+// planning marks when each human line was said, so an old line is not read as
+// a reaction to the pace chosen since.
+func autopilotHistory(kind chat.AutopilotKind, settings config.Settings, promptContext interactiveChatPromptContext) []llm.Message {
+	if kind == chat.AutopilotKindMotion && continuousChatMode(settings.LLM.MotionGenerationMode) {
+		return chat.PlanningHistory(promptContext.History, promptContext.HistoryAt, time.Now())
+	}
+	return promptContext.History
 }
 
 // autopilotTemperature turns Motion change rate into genuine sampling breadth
@@ -242,6 +259,9 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 		modelContext.MeanStrokeLength = int(math.Round(input.CurrentPerceptual.MeanStrokePercent))
 		modelContext.LocalStrokeCV = int(math.Round(input.CurrentPerceptual.MinimumLocalStrokeCV * 100))
 		modelContext.LocalStrokeRange = int(math.Round(input.CurrentPerceptual.MinimumLocalStrokeRange))
+	}
+	for _, step := range input.RecentSpeeds {
+		modelContext.RecentSpeeds = append(modelContext.RecentSpeeds, chat.SpeedStep{SpeedPercent: step.SpeedPercent, SecondsAgo: step.SecondsAgo})
 	}
 	for _, band := range input.RecentPositionBands {
 		modelContext.RecentPositionBands = append(modelContext.RecentPositionBands, chat.PositionBand{

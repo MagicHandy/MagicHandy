@@ -1,14 +1,15 @@
 package chat
 
 import (
-	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
-func TestContinuousHistoryRetainsVoiceAndUsesCurrentContract(t *testing.T) {
+func TestContinuousHistoryRetainsVoiceAndCarriesSpeechOnly(t *testing.T) {
 	for _, mode := range []MotionMode{MotionModeLayered, MotionModeCreativeV2} {
 		raw := `{"action":"none","edits":{},"reply":"No change."}`
 		score := DefaultLayeredScore(25)
@@ -22,9 +23,10 @@ func TestContinuousHistoryRetainsVoiceAndUsesCurrentContract(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		history := provider.request.Messages[1].Content
-		if !json.Valid([]byte(history)) || !strings.Contains(history, `"edits":`) || strings.Contains(history, `"motion":`) || !strings.Contains(history, "An earlier reply.") {
-			t.Fatal("history taught the wrong contract", history)
+		// A replayed {"edits":[]} envelope was a standing example of changing
+		// nothing, and misreported turns that had edited the score.
+		if history := provider.request.Messages[1].Content; history != "An earlier reply." {
+			t.Fatal("history replayed an edit envelope instead of speech", history)
 		}
 		system := provider.request.Messages[0].Content
 		if !strings.Contains(system, finalVoiceCheck(VoiceExplicit)) || !strings.HasSuffix(system, continuousOutputGuard(*service.Capabilities)) {
@@ -60,20 +62,21 @@ func TestPromptHistoryRetainsLongSessionWithinByteBudget(t *testing.T) {
 
 func TestContinuousHistoryAcceptsStructuredPriorRepliesWithoutReplayingEdits(t *testing.T) {
 	history := []llm.Message{{Role: "assistant", Content: `{"edits":[{"speed_percent":99}],"reply":"A prior reply."}`}}
-	got := continuousMessages("system", history, "What happened?", MotionModeCreativeV2)
-	if got[1].Content != `{"edits":[],"reply":"A prior reply."}` || !strings.Contains(history[0].Content, "speed_percent") {
+	got := continuousMessages("system", history, "What happened?")
+	if got[1].Content != "A prior reply." || !strings.Contains(history[0].Content, "speed_percent") {
 		t.Fatal("structured history was replayed, double quoted or mutated", got)
 	}
 }
 
-func TestHumanMotionDirectionsSurviveLaterConversation(t *testing.T) {
+func TestRecentUserRequestsKeepTheLatestHumanLinesUnfiltered(t *testing.T) {
 	log := openTestLog(t)
-	_, err := log.Append(MessageRoleUser, "Keep this exact pattern repeating. No changes from now on.", "test")
-	if err != nil {
-		t.Fatal(err)
+	lines := []string{"Keep this exact pattern repeating. No changes from now on."}
+	for index := range 12 {
+		lines = append(lines, fmt.Sprintf("Question %d about your day.", index))
 	}
-	for range 30 {
-		if _, err := log.Append(MessageRoleUser, "What does the pace layer do?", "test"); err != nil {
+	lines = append(lines, "harder", "Manten la velocidad actual")
+	for _, line := range lines {
+		if _, err := log.Append(MessageRoleUser, line, "test"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -82,41 +85,42 @@ func TestHumanMotionDirectionsSurviveLaterConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	requests, err := log.RecentUserRequests(id)
-	if err != nil || !LayeredExactHoldRequested(requests) {
-		t.Fatal("conversation displaced exact hold", requests, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// No word list decides what counts: small talk, slang and other languages
+	// all reach the model, newest last, and the model judges what still applies.
+	want := []string{"Question 6 about your day.", "Question 7 about your day.", "Question 8 about your day.", "Question 9 about your day.",
+		"Question 10 about your day.", "Question 11 about your day.", "harder", "Manten la velocidad actual"}
+	if strings.Join(requests, "|") != strings.Join(want, "|") {
+		t.Fatal("recent requests", requests)
+	}
+	if got := SelectRecentUserRequests([]string{"only", " ", ""}); len(got) != 1 || got[0] != "only" {
+		t.Fatal("blank lines were counted", got)
 	}
 }
 
-func TestNonEnglishAndNegativeDirectionsCannotUnlockExploration(t *testing.T) {
-	for _, request := range []string{"Manten la velocidad actual", "Mantem este movimento", "この速度を維持", "不要加快速度", "What is the pace? Do not increase it."} {
-		if !HasMotionDirection([]string{request}) {
-			t.Fatal("lost human constraint", request)
-		}
-	}
-	if HasMotionDirection(nil) || HasMotionDirection([]string{"Hello", "What does the pace layer do?"}) {
-		t.Fatal("ordinary English conversation locked an empty score")
-	}
-}
-
-func TestContinuousAutopilotExploresOnlyWithoutHumanConstraints(t *testing.T) {
-	for _, guided := range []bool{false, true} {
+func TestContinuousAutopilotJudgesHumanRequestsInsteadOfLocking(t *testing.T) {
+	for _, requests := range [][]string{nil, {"Keep working the tip at this pace.", "No aumentes la velocidad."}} {
 		score := FreshCreativeV2Score(25)
-		provider := &layeredTestProvider{raw: `{"edits":[{"focus":{"position_percent":0,"width_percent":45,"mix_percent":60}},{"speed_percent":35}],"reply":"A broader lower-end contrast."}`}
-		state := &MotionContext{Running: true, Layered: &score}
-		if guided {
-			state.UserRequests = []string{"Keep working the tip at this pace."}
-		}
+		provider := &layeredTestProvider{raw: `{"edits":[{"focus":{"position_percent":0,"width_percent":45,"mix_percent":60,"roam_percent":0}},{"speed_percent":35}],"reply":"A broader lower-end contrast."}`}
+		state := &MotionContext{Running: true, Layered: &score, UserRequests: requests}
 		service := AutopilotService{Provider: provider, Temperature: .81, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeCreativeV2}, MotionContext: state}
 		result, err := service.Complete(t.Context(), AutopilotKindMotion, Request{Message: "Session so far: 120 seconds."})
-		if (err != nil) != guided {
-			t.Fatal("incorrect autonomy boundary", guided, err)
+		// The host no longer overrules the model with a word-matched lock; the
+		// saved limits the parser enforces are the hard boundary.
+		if err != nil || result.Motion == nil || result.Motion.Layered.Gesture.FocusPercent != 0 || result.Motion.Layered.SpeedPercent != 35 {
+			t.Fatal("autopilot decision was not accepted", requests, err)
 		}
-		if !guided && (result.Motion == nil || result.Motion.Layered.Gesture.FocusPercent != 0) {
-			t.Fatal("autonomy did not author its controls")
-		}
+		system := provider.request.Messages[0].Content
 		last := provider.request.Messages[len(provider.request.Messages)-1].Content
-		if !strings.Contains(last, "120 seconds") || provider.request.Temperature != .81 {
-			t.Fatal("autonomy lost context or sampling")
+		if !strings.Contains(last, "120 seconds") || !strings.Contains(last, "honor whatever in them still applies") || provider.request.Temperature != .81 {
+			t.Fatal("autonomy lost context, policy or sampling")
+		}
+		for _, request := range requests {
+			if !strings.Contains(system, request) {
+				t.Fatal("a human request did not reach the model verbatim", request)
+			}
 		}
 	}
 }
@@ -157,5 +161,43 @@ func TestContinuousSpeechWithMotionAuthorityUsesItsOwnContract(t *testing.T) {
 	message := provider.request.Messages[len(provider.request.Messages)-1].Content
 	if strings.Contains(message, "Set next") || !strings.Contains(message, "edits/reply contract") {
 		t.Fatal("mixed speech contracts", message)
+	}
+}
+
+// Planning judges how long a requested slow stretch has lasted from how long
+// ago the human spoke, so the chat log's times reach the model as ages.
+func TestRecentUserRequestsCarryHowLongAgoTheyWereSaid(t *testing.T) {
+	log := openTestLog(t)
+	for _, line := range []string{"that's too much", "mmm"} {
+		if _, err := log.Append(MessageRoleUser, line, "test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	id, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	timeline, err := log.RecentUserRequestTimelineContext(t.Context(), id)
+	if err != nil || len(timeline) != 2 || timeline[0].Text != "that's too much" || timeline[0].At.IsZero() {
+		t.Fatalf("timeline %+v: %v", timeline, err)
+	}
+	texts, ages := UserRequestTimeline(timeline, timeline[1].At.Add(90*time.Second))
+	if len(ages) != 2 || ages[1] != 90 || ages[0] < ages[1] || texts[1] != "mmm" {
+		t.Fatalf("ages %v for %v", ages, texts)
+	}
+	// A line without a time never gets a guessed age.
+	if _, unknown := UserRequestTimeline([]RecentUserRequest{{Text: "old"}, timeline[1]}, time.Now()); unknown != nil {
+		t.Fatal("an unknown time produced an age", unknown)
+	}
+
+	score := FreshCreativeV2Score(25)
+	provider := &layeredTestProvider{raw: `{"edits":[],"reply":"Staying slow."}`}
+	state := &MotionContext{Running: true, Layered: &score, UserRequests: texts, UserRequestSecondsAgo: ages}
+	service := AutopilotService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeCreativeV2}, MotionContext: state}
+	if _, err := service.Complete(t.Context(), AutopilotKindMotion, Request{Message: "Plan."}); err != nil {
+		t.Fatal(err)
+	}
+	if system := provider.request.Messages[0].Content; !strings.Contains(system, `{"said":"mmm","seconds_ago":90}`) {
+		t.Fatal("planning did not see when the human spoke")
 	}
 }

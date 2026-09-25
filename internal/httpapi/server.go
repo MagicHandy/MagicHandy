@@ -98,6 +98,8 @@ type Server struct {
 	intiface            intifaceRuntime
 	motion              motionRuntime
 	lab                 llmLabRuntime
+	// autopilotHold remembers a human's standing wish to keep continuous motion.
+	autopilotHold       autopilotStandingHold
 	llm                 llmRuntime
 	llmRequests         llmRequestCoordinator
 	llmAutoloadMu       sync.Mutex

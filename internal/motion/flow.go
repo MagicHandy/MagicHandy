@@ -231,13 +231,20 @@ func (s FlowSpec) field(u float64, salt uint32) float64 {
 }
 
 func (s FlowSpec) signal(u float64, handyModel string) (position, millisPerCycle float64) {
+	position, _, millisPerCycle = s.flowState(u, handyModel)
+	return position, millisPerCycle
+}
+
+// flowState evaluates the layered score at cycle position u: where the carrier
+// puts the stroke, how wide the stroke window is, and the local clock.
+func (s FlowSpec) flowState(u float64, handyModel string) (position, span, millisPerCycle float64) {
 	lo, hi, speed, floor := s.band(u)
 	width := hi - lo
 	ceiling := width
 	if s.RangeCeilingPercent > 0 {
 		ceiling = clampFloat(float64(s.RangeCeilingPercent), floor, width)
 	}
-	span := floor + (ceiling-floor)*s.field(u, 0x9e3779b9)
+	span = floor + (ceiling-floor)*s.field(u, 0x9e3779b9)
 	anchor := float64(s.AnchorPercent) / 100
 	paceVariation := float64(s.PaceVariationPercent) / 100
 	pace := 1 - paceVariation + paceVariation*s.field(u, 0x85ebca6b)
@@ -277,5 +284,5 @@ func (s FlowSpec) signal(u float64, handyModel string) (position, millisPerCycle
 	// Smooth local clock limiting anticipates tight strokes without imposing
 	// their time requirement on every broad stroke. Exact extrema still gate playback.
 	period := math.Pow(math.Pow(desired, 8)+math.Pow(accelerationTime, 8)+math.Pow(jerkTime, 8), 1.0/8)
-	return position, 1000 * period
+	return position, span, 1000 * period
 }

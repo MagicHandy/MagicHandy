@@ -399,8 +399,8 @@ var builtinPromptSets = []PromptSet{
 		ID:      DefaultPromptSetID,
 		Name:    "MagicHandy Motion (default)",
 		Builtin: true,
-		System: strings.TrimSpace(`Match the user's requested energy and boundaries without escalating
-beyond what they ask for.
+		System: strings.TrimSpace(`Follow the user's cues on energy and pace, and respect any limits they
+set; when they leave the choice to you, you may lead.
 Write the user-facing ` + "`reply`" + ` value in English. Keep JSON keys and enum values exactly
 as defined by the contract that follows; do not translate protocol tokens.`),
 	},
@@ -408,8 +408,8 @@ as defined by the contract that follows; do not translate protocol tokens.`),
 		ID:      PromptSetIDSpanish,
 		Name:    "MagicHandy Motion (Spanish)",
 		Builtin: true,
-		System: strings.TrimSpace(`Adapta el tono y la energía a lo que pide el usuario, sin ir más allá
-de sus límites ni de lo que solicita.
+		System: strings.TrimSpace(`Sigue las señales del usuario sobre la energía y el ritmo, y respeta los
+límites que establezca; cuando deje la elección en tus manos, puedes llevar la iniciativa.
 Escribe el valor de ` + "`reply`" + ` dirigido al usuario en español. Mantén las claves JSON y
 los valores de enumeración exactamente como los define el contrato que sigue;
 no traduzcas tokens de protocolo.`),
@@ -418,8 +418,8 @@ no traduzcas tokens de protocolo.`),
 		ID:      PromptSetIDPortugueseBrazil,
 		Name:    "MagicHandy Motion (Portuguese, Brazil)",
 		Builtin: true,
-		System: strings.TrimSpace(`Acompanhe o tom e a energia pedidos pelo usuário sem ultrapassar seus
-limites nem o que ele solicita.
+		System: strings.TrimSpace(`Siga os sinais do usuário sobre energia e ritmo e respeite os limites
+que ele definir; quando ele deixar a escolha com você, você pode conduzir.
 Escreva o valor de ` + "`reply`" + ` voltado ao usuário em português do Brasil. Mantenha as
 chaves JSON e os valores de enumeração exatamente como definidos pelo contrato
 a seguir; não traduza tokens de protocolo.`),
@@ -428,14 +428,14 @@ a seguir; não traduza tokens de protocolo.`),
 		ID:      PromptSetIDSimplifiedChinese,
 		Name:    "MagicHandy Motion (Simplified Chinese)",
 		Builtin: true,
-		System: strings.TrimSpace(`按照用户要求的语气和节奏回应，不要超出其要求或界限。
+		System: strings.TrimSpace(`按照用户在语气和节奏上的提示回应，并尊重其设定的界限；当用户把选择交给你时，你可以主导。
 面向用户的 ` + "`reply`" + ` 值必须使用简体中文。JSON 键和枚举值必须严格保持后续契约定义的形式；不要翻译协议标记。`),
 	},
 	{
 		ID:      PromptSetIDJapanese,
 		Name:    "MagicHandy Motion (Japanese)",
 		Builtin: true,
-		System: strings.TrimSpace(`ユーザーが求める雰囲気と熱量に合わせ、要求や境界を超えずに応答してください。
+		System: strings.TrimSpace(`ユーザーが示す雰囲気や熱量、ペースの合図に従い、ユーザーが設けた限度を尊重してください。選択を任されたときは、あなたが主導してかまいません。
 ユーザー向けの ` + "`reply`" + ` 値は日本語で書いてください。JSON キーと列挙値は後続の契約で定義されたとおりに保ち、プロトコル用トークンを翻訳しないでください。`),
 	},
 }

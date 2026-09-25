@@ -35,6 +35,7 @@ func (m *Manager) NotifyChatActivity() uint64 {
 	m.cancelOperationLocked()
 	m.motion.pending = nil
 	m.motion.swayPoints = nil
+	m.history.currentPhraseHeard = true
 	m.speech.waitingID = ""
 	m.speech.fallbackAt = time.Time{}
 	m.scheduleSpeechLocked(now, TimingNormal)
@@ -50,6 +51,30 @@ func (m *Manager) NotifyChatActivityComplete(activityID uint64) {
 	m.mu.Lock()
 	m.chat.completeActivity(activityID)
 	m.mu.Unlock()
+}
+
+// ReconsiderAfterChat brings Autopilot's next planning boundary forward to now
+// after a live chat turn that left the motion unchanged. The planner reads the
+// human's latest words, and without this a remark such as "that's too much"
+// waited for the rest of the current segment, up to the cadence maximum. Chat
+// that changes the motion re-arms its own segment instead. The planner still
+// runs only after the chat activity completes.
+func (m *Manager) ReconsiderAfterChat() {
+	now := m.options.Now()
+	m.mu.Lock()
+	if m.loop.mode != ModeAutopilot || m.user.stopped || m.user.paused || m.chat.pending {
+		m.mu.Unlock()
+		return
+	}
+	m.motion.pending = nil
+	if m.motion.deadline.After(now) {
+		m.motion.deadline = now
+	}
+	if m.motion.planAt.After(now) {
+		m.motion.planAt = now
+	}
+	m.mu.Unlock()
+	m.trace(ModeAutopilot, "chat_reconsider", nil, "planning boundary moved forward after chat")
 }
 
 // CancelChatTarget releases a failed interactive handoff so the active mode can
@@ -108,6 +133,7 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 			m.history.previousSpeed = previousSpeed
 			m.history.speedChangedAt = now
 		}
+		m.rememberSpeedLocked(segment.SpeedPercent, now)
 		m.observeInteractivePhraseLocked(now, segment, perceptual)
 		m.rememberPositionBandLocked(perceptual)
 		m.events.decisionSource = "interactive"
