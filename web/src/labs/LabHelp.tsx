@@ -37,14 +37,14 @@ export function LabHelp() {
           <dt>{t("New library")}</dt><dd>{t("Compare action names, descriptive IDs and opaque handles for the same pattern catalog. The three modes change naming, not motion.")}</dd>
         </dl>
         <p>{t("Legacy built-ins are disabled on update and cannot be re-enabled. Their saved names and weights remain available with their exports.")}</p>
-        <p>{t("Creative v2 develops reach, timing and location continuously across 64 cycles. Focus roaming moves both endpoints; set it to zero to hold a location. Mixed focus changes stroke width. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. The finite realization repeats until evolved; safety limits still apply.")}</p>
+        <p>{t("Creative v2 develops reach, timing and location continuously across 64 cycles. Focus roaming moves both endpoints; set it to zero to hold a location. Mixed focus changes stroke width. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. Variation lets the phrase breathe: the pace eases off or briefly quickens, landing points and accents vary from stroke to stroke, and a few turns linger. The finite realization repeats until evolved; safety limits still apply.")}</p>
       </>}
       {topic==="autopilot"&&<>
         <p>{t("Enable Autopilot and press Start test. It continues this Lab conversation using the selected model, prompt and schema after each quiet interval. You can test it with or without Live motion.")}</p>
         <p>{t("Sending a message interrupts an Autopilot reply. Failed output pauses Autopilot for inspection. Stop ends the session and cancels pending replies, even without a connected device.")}</p>
         <p>{t("Lab Autopilot tests the selected conversation contract. Production Autopilot has additional planning policies and is not changed by these settings.")}</p>
-        <p>{t("Layered starts with fresh variation and refreshes it during Autopilot. Exact repetition requests take priority. Four recent human requests remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.")}</p>
-        <p>{t("Creative v2 also refreshes its realization during Autopilot, preserving the requested character. Without continuation the finite score repeats. Exact repetition requests keep the current realization.")}</p>
+        <p>{t("Layered starts with fresh variation. During Autopilot the model reads the latest human messages, keeps whatever in them still applies, including a wish to keep the motion exactly as it is, and develops the rest. Those messages remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.")}</p>
+        <p>{t("Creative v2 Autopilot uses the same judgment. When a planning turn changes other controls, an accent it does not choose again (unequal timing, rebounds or strong inertia) fades, so accents last only while they keep being chosen. Without continuation the finite score repeats.")}</p>
       </>}
       {topic==="motion"&&<>
         <p>{t("This generator plays the continuous score below.")}</p>
