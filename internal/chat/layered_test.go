@@ -143,6 +143,26 @@ func TestLayeredGeometryOperationsAreAtomicAndKeepPace(t *testing.T) {
 	}
 }
 
+func TestLayeredGeometryJudgesLayersByEffect(t *testing.T) {
+	limits := config.DefaultSettings().Motion
+	before := DefaultLayeredScore(25)
+	// Stilling the center layer is what base anchoring asks for, so it agrees.
+	_, next, _, err := ParseLayeredReply(`{"edits":{"geometry":"base_anchor","controls":{"min_percent":0},"layers":[{"axis":"center","amount_percent":0}]},"reply":"Every stroke reaches the base."}`, before, limits)
+	if err != nil || next.AnchorPercent != 0 || next.MinPercent != 0 {
+		t.Fatal("rejected a still center layer under base anchoring", err)
+	}
+	for _, layer := range next.Layers {
+		if layer.Axis == "center" && layer.AmountPercent != 0 {
+			t.Fatal("still center layer gained movement")
+		}
+	}
+	// A moving center layer still contradicts the anchor.
+	_, next, _, err = ParseLayeredReply(`{"edits":{"geometry":"base_anchor","layers":[{"axis":"center","amount_percent":30}]},"reply":"bad"}`, before, limits)
+	if err == nil || !reflect.DeepEqual(next, before) {
+		t.Fatal("accepted a moving center layer under base anchoring")
+	}
+}
+
 func TestLayeredAutopilotLeavesExactHoldsToTheModel(t *testing.T) {
 	hold := "Keep this exact pattern repeating. No changes from now on."
 	for _, tc := range []struct {
