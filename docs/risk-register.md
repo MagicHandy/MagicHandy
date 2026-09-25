@@ -1,5 +1,22 @@
 # MagicHandy Risk Register
 
+## 2026-09-25 Autopilot continuity and motion phrasing
+
+Word lists no longer govern Autopilot continuity. Creative v2 and Layered
+Autopilot judge the latest human lines. Within saved limits, an automatic
+decision may now raise speed or widen the band after a human request if the
+model judges that the request no longer applies. A misreading could raise pace
+after an earlier "slower", inside the user's band. The mitigations are the
+prompt, the standing hold and the visible status, not a host rule. Live chat
+declares a standing wish to keep the motion unchanged. A misread there freezes
+Autopilot until chat or a fresh run releases it, and the status shows the hold.
+Unrequested accents fade at random, so live runs differ, but every accepted
+score and seed can be replayed. At high speed a Creative v2 rest lasts about as
+long as a stroke. Layered pace falls 1–5% for mixed and variable-reach
+geometries, while alternating ends gain up to 39%. Kinematic limits, Stop,
+controller ownership and the transport path are unchanged. Physical acceptance
+remains open; see the [review](motion-naturalness-review-2026-09-24.md).
+
 ## 2026-09-06 datastore and observation follow-up
 
 Canceled/expired writers no longer wait behind an unrelated transaction before

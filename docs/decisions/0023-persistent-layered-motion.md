@@ -4,6 +4,13 @@
 - Status: Implemented for review; no merge or release authorized
 - Extends: ADRs 0015, 0019 and 0022
 
+Update: [ADR 0031](0031-model-judged-autopilot-continuity.md) replaces the
+host-enforced continuation limits below. Autopilot reads up to eight recent
+human lines and judges which still apply. Word matching no longer selects a
+hold or forbids raising speed or widening the band within saved limits. Live
+chat declares a standing wish to keep the motion unchanged. Flow scores compile
+from legs between turning points. The remaining decisions stand.
+
 ## Context
 
 The user's relative/layer experiment preserved motion better than ordered

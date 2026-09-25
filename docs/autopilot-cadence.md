@@ -2,13 +2,17 @@
 
 ## Continuous motion follow-up
 
-Layered and Creative v2 distinguish an autonomous session with no human motion
-direction from continuation of a requested character. The former can author
-controls within saved limits; the latter preserves the character and refreshes
-its realization. Exact repetition forbids evolution. Questions do not erase
-earlier directions from the retained session. The adapter forwards session
-observations and sampling preferences. Speech gets mode-specific semantic
-controls even with chat-only authority. See the
+Layered and Creative v2 Autopilot read up to eight recent human lines and
+judge which still apply, such as a pace, a region, a feel or a wish to keep the
+motion exactly as it is. They develop whatever those lines leave open, within
+saved limits. While Autopilot composes, live chat declares that wish with
+`stay_unchanged`. The server then holds planning boundaries without inference
+and reports `requested_hold` until chat releases the wish or a new run starts.
+Questions do not erase earlier directions from the retained session. The
+adapter forwards session observations and sampling preferences. Speech gets
+mode-specific semantic controls even with chat-only authority. See
+[ADR 0031](decisions/0031-model-judged-autopilot-continuity.md), the
+[naturalness review](motion-naturalness-review-2026-09-24.md) and the
 [full-build review](llama-autopilot-review-2026-09-05.md).
 
 Status: implementation contract (2026-08-22)

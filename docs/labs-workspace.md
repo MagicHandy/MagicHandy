@@ -70,16 +70,19 @@ Enable **Autopilot** with or without Live motion. After a quiet interval (20
 seconds by default; configurable 5–120), the backend requests a continuation
 with the same model, prompt, schema, current score and matching conversation.
 Layered and Creative v2 add a random delay of up to half the quiet interval, always respecting
-the configured minimum. It starts with a fresh variation seed and can refresh
-that seed on continuation without replacing the requested geometry or pace.
+the configured minimum. It starts with a fresh variation seed. Like production
+Autopilot, a Layered or Creative v2 continuation reads the latest human lines,
+keeps whatever still applies (including a wish to keep the motion exactly as
+it is) and develops the rest within saved limits
+([ADR 0031](decisions/0031-model-judged-autopilot-continuity.md)).
 Drift and unequal smooth dwell times vary the motion inside those constraints.
 Each score still has a finite repeat period; fresh realizations require an
-accepted evolution edit, normally from Autopilot. Explicit exact-repetition
-requests take priority. Seeds are retained in exports for reproducible review.
-A manual message cancels an in-flight automatic turn and restarts the quiet
-interval. There is one inference request per turn, without repair or fallback.
-Malformed output and automatic proposals that increase speed or widen the
-current requested band pause Autopilot for inspection. Stop remains independent
+accepted evolution edit, normally from Autopilot. Seeds are retained in exports
+for reproducible review. A manual message cancels an in-flight automatic turn
+and restarts the quiet interval. There is one inference request per turn,
+without repair or fallback. Malformed output pauses Autopilot for inspection.
+For the other experimental methods, automatic proposals that increase speed or
+widen the current requested band also pause it. Stop remains independent
 of the provider and transport result. A live transport failure is shown beside
 the accepted reply; a valid proposal does not imply it reached the device.
 

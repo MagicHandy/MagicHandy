@@ -1,5 +1,36 @@
 # Goal Scorecard
 
+## 2026-09-25 — Autopilot continuity and motion phrasing
+
+In simulated Gemma 12B Creative v2 sessions, fast-upswipe stroke pairs fall
+from 70% to 15%, and rejected Autopilot decisions from 17 of 40 to 0. Live chat
+now declares standing holds: all eight scripted hold scenarios were read
+correctly. Layered's alternating geometry gains up to 39% effective pace. See
+[the review](motion-naturalness-review-2026-09-24.md) and
+[ADR 0031](decisions/0031-model-judged-autopilot-continuity.md). No dependency
+was added.
+
+| Artifact | Previous checkpoint (`970ccee3`) | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,004,736 B | 22,026,240 B | +21,504 B |
+| Main JS, raw / Node gzip-9 | 872,616 / 239,864 B | 873,369 / 240,066 B | +753 / +202 B |
+| Main CSS, raw / Node gzip-9 | 149,743 / 27,029 B | 149,743 / 27,029 B | 0 |
+| All embedded assets | 2,257,163 B | 2,261,363 B | +4,200 B |
+
+Lazy locale chunks grow 703–903 raw and 354–412 gzip bytes each, and the Labs
+chunk 318 / 152 bytes. Two paired fresh simulator starts reached health in
+665/528 ms for `main` and 560/528 ms for this build, with private memory of
+57.7/57.6 and 58.4/57.2 MB. The first-start working sets were 71.6 and 72.4 MB;
+second starts were 24.0 and 23.7 MB. These overlap, so they neither close nor
+widen the startup or RSS waivers.
+
+Go test/vet/lint (including the Labs and live-evaluation tags), the pure-Go
+build, the frontend typecheck, localization and 659 tests, the bundle build and
+the PowerShell 5.1 installer tests pass. There is no local C toolchain, so the
+race detector and PowerShell 7 runs are left to CI. A current-source isolated
+simulator passes the review-LLM probe and a text-only chat with no repair,
+fallback or motion.
+
 ## 2026-09-20 — Mobile Chat spacing and connection alignment
 
 The message log at 390 × 844 grows from 240px to 521px while keeping the
