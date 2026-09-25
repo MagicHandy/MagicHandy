@@ -195,11 +195,21 @@ func newHTTPServer(address string, handler http.Handler, tlsConfig *tls.Config) 
 	}
 }
 
-func serveHTTP(server *http.Server) error {
+// serveHTTP binds the listener, reports that the app can be opened, and
+// serves until shutdown. A bind failure, such as a port in use, returns
+// before ready is called.
+func serveHTTP(server *http.Server, ready func()) error {
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return err
+	}
+	if ready != nil {
+		ready()
+	}
 	if server.TLSConfig != nil {
 		// Certificates are loaded and validated before the API starts; empty paths
 		// tell net/http to use TLSConfig.Certificates without reading them again.
-		return server.ListenAndServeTLS("", "")
+		return server.ServeTLS(listener, "", "")
 	}
-	return server.ListenAndServe()
+	return server.Serve(listener)
 }
