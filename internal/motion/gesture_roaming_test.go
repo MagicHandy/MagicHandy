@@ -40,8 +40,9 @@ func TestGestureRoamingKeepsOverlappingWindowsAndReplay(t *testing.T) {
 				s.LoopCycles, s.Seed = cycles, seed
 				s.Gesture.FocusRoamPercent, s.Gesture.FocusMixPercent, s.Gesture.FocusWidthPercent = roam, 100, 10
 				legs := gestureLegs(s)
-				for i, leg := range legs {
-					next := legs[(i+1)%len(legs)]
+				travel := travelLegs(t, legs)
+				for i, leg := range travel {
+					next := travel[(i+1)%len(travel)]
 					if leg.to != next.from || (leg.to-leg.from)*(next.to-next.from) >= 0 || math.Abs(leg.to-leg.from) < 4.9999 {
 						t.Fatalf("cycles %d roam %d seed %d: lost a full directional reversal", cycles, roam, seed)
 					}
@@ -59,4 +60,22 @@ func TestGestureRoamingKeepsOverlappingWindowsAndReplay(t *testing.T) {
 			}
 		}
 	}
+}
+
+// travelLegs drops lingering rests, checking that each is a brief hold at the
+// previous stroke's end rather than hidden travel.
+func travelLegs(t *testing.T, legs []gestureLeg) []gestureLeg {
+	t.Helper()
+	travel := make([]gestureLeg, 0, len(legs))
+	for _, leg := range legs {
+		if leg.rest == 0 {
+			travel = append(travel, leg)
+			continue
+		}
+		if leg.from != leg.to || leg.rest < lingerMinimumSeconds || leg.rest > lingerMinimumSeconds+lingerSpanSeconds ||
+			(len(travel) > 0 && travel[len(travel)-1].to != leg.from) {
+			t.Fatalf("a lingering turn moved or lasted %.3f s", leg.rest)
+		}
+	}
+	return travel
 }

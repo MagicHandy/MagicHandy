@@ -2,6 +2,7 @@ package motion
 
 import (
 	"errors"
+	"fmt"
 	"math"
 )
 
@@ -9,18 +10,35 @@ import (
 // crest. Unlike a rest-to-rest primitive, its turn has nonzero acceleration:
 // it starts returning without settling at every destination.
 func gestureProgress(u, inertia float64) (position, velocity, acceleration float64) {
+	return legProgress(u, inertia, 0)
+}
+
+// legProgress is one stroke's normalized travel. Softness blends the rounded
+// half-cycle toward a septic stroke whose ends have no velocity, acceleration
+// or jerk, the same blend the historical continuous carrier used for its soft
+// turns. Inertia time-warps either shape toward a later velocity crest.
+func legProgress(u, inertia, softness float64) (position, velocity, acceleration float64) {
 	k := 0.65 * inertia
 	x := u - k*math.Sin(math.Pi*u)/math.Pi
 	dx, ddx := 1-k*math.Cos(math.Pi*u), k*math.Pi*math.Sin(math.Pi*u)
 	f := (1 - math.Cos(math.Pi*x)) / 2
 	df := math.Pi * math.Sin(math.Pi*x) / 2
 	ddf := math.Pi * math.Pi * math.Cos(math.Pi*x) / 2
+	if softness > 0 {
+		rest := 1 - x
+		septic := x * x * x * x * (35 + x*(-84+x*(70-20*x)))
+		dSeptic := 140 * x * x * x * rest * rest * rest
+		ddSeptic := 420 * x * x * rest * rest * (1 - 2*x)
+		f += softness * (septic - f)
+		df += softness * (dSeptic - df)
+		ddf += softness * (ddSeptic - ddf)
+	}
 	return f, df * dx, ddf*dx*dx + df*ddx
 }
 
 func gestureLegCurve(leg gestureLeg, duration int64) Curve {
-	_, _, start := gestureProgress(0, leg.inertia)
-	_, _, end := gestureProgress(1, leg.inertia)
+	_, _, start := legProgress(0, leg.inertia, leg.softness)
+	_, _, end := legProgress(1, leg.inertia, leg.softness)
 	gain := (leg.to - leg.from) / float64(duration*duration)
 	return gestureTurnCurve(leg, duration, start*gain, end*gain)
 }
@@ -30,14 +48,14 @@ func gestureTurnCurve(leg gestureLeg, duration int64, startAcceleration, endAcce
 	points := make([]CurvePoint, intervals+1)
 	velocities, accelerations := make([]float64, intervals+1), make([]float64, intervals+1)
 	distance := leg.to - leg.from
-	_, _, nativeStart := gestureProgress(0, leg.inertia)
-	_, _, nativeEnd := gestureProgress(1, leg.inertia)
+	_, _, nativeStart := legProgress(0, leg.inertia, leg.softness)
+	_, _, nativeEnd := legProgress(1, leg.inertia, leg.softness)
 	deltaStart := startAcceleration*float64(duration*duration) - distance*nativeStart
 	deltaEnd := endAcceleration*float64(duration*duration) - distance*nativeEnd
 	for index := range points {
 		at := int64(math.Round(float64(index) * float64(duration) / intervals))
 		u := float64(at) / float64(duration)
-		x, v, a := gestureProgress(u, leg.inertia)
+		x, v, a := legProgress(u, leg.inertia, leg.softness)
 		cx, cv, ca := gestureAccelerationBlend(u, deltaStart, deltaEnd)
 		points[index] = CurvePoint{at, leg.from + distance*x + cx}
 		velocities[index] = (distance*v + cv) / float64(duration)
@@ -70,6 +88,13 @@ func compileGestureCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	if err != nil {
 		return Curve{}, err
 	}
+	return assembleLegCurve(legs, curves, "creative v2")
+}
+
+// assembleLegCurve joins fitted strokes into one looping curve and verifies the
+// actual interpolant: every stroke must stay monotonic, so the only reversals
+// are the authored turns between strokes.
+func assembleLegCurve(legs []gestureLeg, curves []Curve, name string) (Curve, error) {
 	result := Curve{loop: true}
 	for legIndex, curve := range curves {
 		start := 0
@@ -87,7 +112,7 @@ func compileGestureCurve(spec FlowSpec, handyModel string) (Curve, error) {
 		result.duration += curve.duration
 	}
 	if len(result.points) < 3 || len(result.points) > maximumCurvePoints {
-		return Curve{}, errors.New("creative v2 produced an invalid stroke count")
+		return Curve{}, fmt.Errorf("%s produced an invalid stroke count", name)
 	}
 	result.authoredKnots = append(result.authoredKnots, result.points[len(result.points)-1])
 	result.quintics = buildQuinticSegments(result.points, result.slopes, result.accelerations)
@@ -99,7 +124,7 @@ func compileGestureCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	for _, segment := range result.quintics {
 		for _, coefficient := range segment.coefficients {
 			if math.IsNaN(coefficient) || math.IsInf(coefficient, 0) {
-				return Curve{}, errors.New("creative v2 produced a non-finite curve")
+				return Curve{}, fmt.Errorf("%s produced a non-finite curve", name)
 			}
 		}
 		c := segment.coefficients
@@ -107,7 +132,7 @@ func compileGestureCurve(spec FlowSpec, handyModel string) (Curve, error) {
 		candidates := append([]float64{0, 1}, cubicRootsInUnitInterval(20*c[5], 12*c[4], 6*c[3], 2*c[2])...)
 		for _, u := range candidates {
 			if sign*segment.velocity(u) < -1e-9 {
-				return Curve{}, errors.New("creative v2 interpolation introduced an unintended reversal")
+				return Curve{}, errors.New(name + " interpolation introduced an unintended reversal")
 			}
 		}
 	}

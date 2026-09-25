@@ -4,6 +4,12 @@ import "math"
 
 type gestureBand struct {
 	low, high, pace float64
+	// Per-stroke character. A requested accent is a tendency that breathes
+	// through the phrase, not a constant stamped on every stroke.
+	contrast, inertia float64
+	// lingerTop and lingerBottom are rests, in seconds, at this stroke's upper
+	// turn and at the lower turn that follows it.
+	lingerTop, lingerBottom float64
 }
 
 // Reach and clock are correlated fields, not a choice between local/full
@@ -50,8 +56,17 @@ func gestureBands(s FlowSpec) []gestureBand {
 		}
 		span := full + (math.Max(10, width*scale)-full)*locality[i]
 		low := float64(s.MinPercent) + (full-span)*anchors[i]
-		bands[i] = gestureBand{low: low, high: low + span,
-			pace: 1 + 0.4*variation*(2*s.driftField(float64(i), 0x46a32)-1)}
+		phrase := s.gesturePhrase(i, cycles, variation)
+		// Full-only reach is a hard spatial request, so a flurry there only
+		// quickens; with local reach allowed it also shortens in place.
+		if mix > 0 {
+			low, span = shortenForFlurry(low, span, phrase.flurrySpan, anchors[i])
+		}
+		held := g.FocusRoamPercent == 0 && mix > 0
+		low, high := s.landing(i, low, low+span, variation, held && anchors[i] <= 1e-9, held && anchors[i] >= 1-1e-9)
+		bands[i] = gestureBand{low: low, high: high, pace: phrase.timeScale,
+			contrast: math.Min(0.8, float64(g.ContrastPercent)/100*phrase.accent), inertia: phrase.inertia,
+			lingerTop: phrase.lingerTop, lingerBottom: phrase.lingerBottom}
 	}
 	return bands
 }
