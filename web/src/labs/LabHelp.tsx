@@ -20,8 +20,9 @@ export function LabHelp() {
     <nav className="lab-help-topics" aria-label={t("Help topics")}>{topics.map((id,index)=><a key={id} href={`#/labs/help/${id}`} aria-current={id===topic?"page":undefined}>{labels[index]}</a>)}</nav>
     <article className="lab-help-content"><h2 ref={heading} tabIndex={-1}>{labels[topics.indexOf(topic)]}</h2>
       {topic==="conversation"&&<>
-        <p>{t("Choose a test mode and chat normally. Enable Live motion and press Start test to apply accepted replies to the device. Without Live motion, replies update only the plotted score.")}</p>
-        <p>{t("Start replaces current motion and repeats the selected test until Stop. Saved motion limits apply.")}</p>
+        <p>{t("Choose a test mode and chat, or tap a quick request. Turn on Live motion to play the current score on the device and apply each accepted reply; without it, replies update only the plotted score.")}</p>
+        <p>{t("Live motion and Autopilot start a test as soon as they are turned on and replace current motion until Stop. Changing the mode during a test restarts it in the new mode. Saved motion limits apply.")}</p>
+        <p>{t("Compare modes puts the message, or the last one sent, to each main mode from its starting score and shows each reply with its reach and a plotted estimate. Nothing is saved or played.")}</p>
         <p>{t("One model call per reply; rejected output stays visible. No repair or automatic fallback.")}</p>
         <p>{t("Configure opens model, schema and prompt options. End the test before changing its configuration. Lab prompts and conversation are separate from production chat.")}</p>
         <p>{t("The latest 20 turns stay in this app session. New chat or an app restart clears them. Saved observations remain. Export the conversation to keep all available replies and prompts.")}</p>
@@ -29,6 +30,9 @@ export function LabHelp() {
       {topic==="modes"&&<>
         <p>{t("Changing the interface loads its default prompt. The next reply uses the selected model, prompt and matching conversation history.")}</p>
         <dl><dt>{t("Creative v2")}</dt><dd>{t("Generate asymmetric sweeps, localized strokes and shrinking rebounds. Edit focus, sweep, rebounds or inertia while preserving other controls. Switching to or from this generator starts a new Lab score.")}</dd>
+          <dt>{t("Stroke ends")}</dt><dd>{t("Describe each stroke by where it turns: how deep it goes and where it turns back near the tip, each with its own variation. Accents weave in plunges, flicks and pauses. Switching to or from the stroke modes starts a new Lab score.")}</dd>
+          <dt>{t("Groove and accents")}</dt><dd>{t("A steady groove set by its deepest and shallowest points and its feel, with accents woven in now and then.")}</dd>
+          <dt>{t("Plain words")}</dt><dd>{t("Everyday words for how deep every stroke goes, how far it pulls back, variety, accents and pace. The app builds the strokes from the words.")}</dd>
           <dt>{t("Layered")}</dt><dd>{t("The production Layered contract: edit reach, location and pace independently. Partial edits preserve other layers. Drift varies irregularly; alternation reaches both extremes. Evolve refreshes the details without replacing the geometry.")}</dd>
           <dt>{t("Relative and layer edits")}</dt><dd>{t("Ask for relative changes or edit one layer. Existing layers and section differences are preserved unless you explicitly change them.")}</dd>
           <dt>{t("Single controls")}</dt><dd>{t("Test direct changes to range, anchor, pace and variation.")}</dd>
@@ -40,7 +44,7 @@ export function LabHelp() {
         <p>{t("Creative v2 develops reach, timing and location continuously across 64 cycles. Focus roaming moves both endpoints; set it to zero to hold a location. Mixed focus changes stroke width. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. Variation lets the phrase breathe: the pace eases off or briefly quickens, landing points and accents vary from stroke to stroke, and a few turns linger. The finite realization repeats until evolved; safety limits still apply.")}</p>
       </>}
       {topic==="autopilot"&&<>
-        <p>{t("Enable Autopilot and press Start test. It continues this Lab conversation using the selected model, prompt and schema after each quiet interval. You can test it with or without Live motion.")}</p>
+        <p>{t("Turn on Autopilot to continue this Lab conversation with the selected model, prompt and schema after each quiet interval, with or without Live motion.")}</p>
         <p>{t("Sending a message interrupts an Autopilot reply. Failed output pauses Autopilot for inspection. Stop ends the session and cancels pending replies, even without a connected device.")}</p>
         <p>{t("Lab Autopilot tests the selected conversation contract. Production Autopilot has additional planning policies and is not changed by these settings.")}</p>
         <p>{t("Layered starts with fresh variation. During Autopilot the model reads the latest human messages, keeps whatever in them still applies, including a wish to keep the motion exactly as it is, and develops the rest. Those messages remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.")}</p>
