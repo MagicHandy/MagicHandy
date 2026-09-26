@@ -1,5 +1,18 @@
 # MagicHandy Risk Register
 
+## 2026-09-26 Page return keeps the last view
+
+Returning to a hidden page used to discard the app state, which remounted every
+route. Unsent chat drafts were lost on each tab switch, and a page that turned
+visible every few seconds, as an embedded or occluded browser can, restarted
+its work on each return and never finished loading Chat. A return now keeps
+the last view on screen, stale and read-only, while it rediscovers state and
+controller status and reopens the event stream. The view can show old values
+for the moment that rediscovery takes. It cannot enable controls, reclaim
+control or resume motion, and events from the closed stream are still ignored.
+A new backend epoch still discards the view. Kinematic limits, Stop,
+controller ownership and the transport path are unchanged.
+
 ## 2026-09-26 LLM Lab stroke score and immediate test switches
 
 The LLM Lab can play a new Lab-only score that describes strokes by where

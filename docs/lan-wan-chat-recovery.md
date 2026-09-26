@@ -27,6 +27,9 @@ SSE status/message events can update a visible placeholder's sequence, but
 cannot advance the durable read cursor. At stream completion, the browser
 reconciles all committed changes since its last accepted page, merging matching
 placeholders without duplicating the user's message or assistant reply.
+Hiding the page cancels reads. Returning reconciles the same way, from the last
+accepted revision with speech suppressed, and keeps the rendered history in
+place; only a conversation that never loaded starts over.
 
 ## Persistence and upgrades
 

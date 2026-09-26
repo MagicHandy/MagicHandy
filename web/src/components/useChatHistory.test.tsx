@@ -162,13 +162,13 @@ describe("committed conversation recovery", () => {
     expect(advanceCursor.mock.calls.every((call) => call[2]?.epoch === "process-two")).toBe(true);
   });
 
-  it("closes hidden reads and does not replay recovery speech on return", async () => {
+  it("closes hidden reads and catches up on return without replaying speech", async () => {
     let visibility: DocumentVisibilityState = "visible";
     vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
     const tail = deferred<ChatMessagesResponse>();
     getMessages.mockResolvedValueOnce(page([row(1, 1, "earlier", "tts-old")], 1, { reset: true }))
       .mockReturnValueOnce(tail.promise)
-      .mockResolvedValueOnce(page([row(1), row(2, 2, "recovered", "tts-recovered")], 2, { reset: true }));
+      .mockResolvedValueOnce(page([row(2, 2, "recovered", "tts-recovered")], 2, { first_seq: 1 }));
     const props = { ...options(), revision: 1, latestSeq: 1 };
     const view = renderHook(useChatHistory, { initialProps: props });
     await waitFor(() => expect(view.result.current.messages).toHaveLength(1));
@@ -180,9 +180,38 @@ describe("committed conversation recovery", () => {
     await act(async () => tail.resolve(page([row(2, 2, "obsolete tail", "tts-obsolete")], 2, { first_seq: 1 })));
     expect(view.result.current.messages).toHaveLength(1);
     act(() => { visibility = "visible"; document.dispatchEvent(new Event("visibilitychange")); });
+    expect(view.result.current.messages).toHaveLength(1);
+    expect(view.result.current.historyLoading).toBe(false);
     await waitFor(() => expect(view.result.current.messages.map((item) => item.seq)).toEqual([1, 2]));
     expect(props.queueSpeech).not.toHaveBeenCalled();
-    expect(getMessages.mock.calls[2][2]?.revision).toBe(0);
+    expect(getMessages.mock.calls[2][2]?.revision).toBe(1);
+  });
+
+  it("keeps the rendered conversation through repeated visibility changes", async () => {
+    let visibility: DocumentVisibilityState = "visible";
+    vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
+    getMessages.mockResolvedValueOnce(page([row(1, 1, "kept", "tts-kept")], 1, { reset: true }));
+    const props = { ...options(), revision: 1, latestSeq: 1 };
+    const view = renderHook(useChatHistory, { initialProps: props });
+    await waitFor(() => expect(view.result.current.messages).toHaveLength(1));
+    getMessages.mockImplementation((_session, _after, request) => new Promise((_resolve, reject) => {
+      request?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+    }));
+    for (let flicker = 0; flicker < 4; flicker++) {
+      act(() => { visibility = "hidden"; document.dispatchEvent(new Event("visibilitychange")); });
+      act(() => { visibility = "visible"; document.dispatchEvent(new Event("visibilitychange")); });
+      expect(view.result.current.messages.map((item) => item.text)).toEqual(["kept"]);
+      expect(view.result.current.historyLoading).toBe(false);
+    }
+    expect(getMessages.mock.calls.slice(1).map((call) => call[2]?.revision)).toEqual([1, 1, 1, 1]);
+    getMessages.mockReset();
+    getMessages.mockResolvedValue(page([row(2, 2, "while away", "tts-away")], 2, { first_seq: 1 }));
+    act(() => { visibility = "hidden"; document.dispatchEvent(new Event("visibilitychange")); });
+    act(() => { visibility = "visible"; document.dispatchEvent(new Event("visibilitychange")); });
+    await waitFor(() => expect(view.result.current.messages.map((item) => item.text)).toEqual(["kept", "while away"]));
+    expect(getMessages).toHaveBeenCalledOnce();
+    expect(props.queueSpeech).not.toHaveBeenCalled();
+    expect(view.result.current.tailError).toBe("");
   });
 
   it("rechecks observer status before queueing speech from a pending read", async () => {

@@ -240,7 +240,9 @@ model. See the [observation contract](lan-wan-observations.md) and the original
 The controller heartbeat runs independently of full-state polling. A stream
 error retains the newest known motion and requires a fresh state request before
 clearing the stale/read-only indicator. A hidden document stops its requests,
-heartbeat and stream; returning requires a full resync. Server restart retires
+heartbeat and stream. Returning keeps the last view on screen, stale and
+read-only, until a fresh snapshot arrives, so routes and drafts survive
+switching tabs or unlocking a phone. Server restart retires
 old responses and event callbacks. Neither reconnect nor visibility return
 automatically reclaims control or resumes motion. Retry timers are bounded and
 jittered, and malformed protected controller metadata leaves controls disabled.

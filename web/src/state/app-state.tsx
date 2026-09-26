@@ -99,21 +99,40 @@ export function AppStateProvider({ children, enabled = true }: { children: React
     return tracked;
   }, [enabled]);
 
-  const resync = useCallback(() => {
-    if (!enabled || !pollingEnabled.current) return;
+  // Hiding, returning and a new backend epoch each invalidate the current
+  // view: a request admitted earlier can no longer clear the stale marker,
+  // so the page stays read-only until a fresh snapshot arrives.
+  const invalidate = useCallback(() => {
     const previous = activeRequest.current;
     activeRequest.current = null;
     inFlight.current = null;
     previous?.abort();
     freshnessBarrier.current++;
+    setStale(true);
+  }, []);
+
+  // A returning page keeps its last view on screen, stale and read-only,
+  // while it rediscovers state and reopens the event stream. Discarding the
+  // view would remount every route and lose drafts, and a page that turns
+  // visible repeatedly would never finish loading.
+  const revalidate = useCallback(() => {
+    if (!enabled || !pollingEnabled.current) return;
+    invalidate();
+    setStreamGeneration((value) => value + 1);
+    void performRefresh();
+  }, [enabled, invalidate, performRefresh]);
+
+  // A new backend epoch discards the old process's view entirely.
+  const resync = useCallback(() => {
+    if (!enabled || !pollingEnabled.current) return;
+    invalidate();
     stateObservation.current = null;
     liveObservation.current = null;
     setState(null);
     setLiveMotion(null);
-    setStale(true);
     setStreamGeneration((value) => value + 1);
     void performRefresh();
-  }, [enabled, performRefresh]);
+  }, [enabled, invalidate, performRefresh]);
 
   useEffect(() => {
     const currentEpoch = stateObservation.current?.observation?.epoch;
@@ -168,25 +187,17 @@ export function AppStateProvider({ children, enabled = true }: { children: React
 
   useEffect(() => {
     if (!enabled) return;
-    const resume = () => {
-      if (document.visibilityState !== "hidden") {
-        resync();
-      } else {
-        const previous = activeRequest.current;
-        activeRequest.current = null;
-        inFlight.current = null;
-        previous?.abort();
-        freshnessBarrier.current++;
-        setStale(true);
-      }
+    const changed = () => {
+      if (document.visibilityState !== "hidden") revalidate();
+      else invalidate();
     };
-    document.addEventListener("visibilitychange", resume);
-    window.addEventListener("pageshow", resume);
+    document.addEventListener("visibilitychange", changed);
+    window.addEventListener("pageshow", changed);
     return () => {
-      document.removeEventListener("visibilitychange", resume);
-      window.removeEventListener("pageshow", resume);
+      document.removeEventListener("visibilitychange", changed);
+      window.removeEventListener("pageshow", changed);
     };
-  }, [enabled, resync]);
+  }, [enabled, invalidate, revalidate]);
 
   // Live motion over SSE for a responsive visualizer; the poll snapshot remains
   // the source of truth and reconciles this between events.

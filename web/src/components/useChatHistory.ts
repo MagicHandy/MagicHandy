@@ -192,14 +192,21 @@ export function useChatHistory(options: HistoryOptions) {
     return () => { alive.current = false; cancelReads(); };
   }, [options.sessionId, options.epoch, options.backendOnline, loadHistory, cancelReads]);
 
+  // Hiding cancels reads. Returning catches up from the delivered revision
+  // without replaying speech and keeps the rendered history in place; only a
+  // conversation that never loaded starts over.
   useEffect(() => {
     const changed = () => {
       cancelReads();
-      if (pageVisible()) { seeded.current = false; void loadHistory(); }
+      if (!pageVisible()) return;
+      if (!seeded.current) { void loadHistory(); return; }
+      recoveringSpeech.current = true;
+      needsTail.current = true;
+      void reconcileHistory();
     };
     document.addEventListener("visibilitychange", changed);
     return () => document.removeEventListener("visibilitychange", changed);
-  }, [cancelReads, loadHistory]);
+  }, [cancelReads, loadHistory, reconcileHistory]);
 
   useEffect(() => {
     if (options.busy || Date.now() < retryAt.current) return;
