@@ -1,5 +1,22 @@
 # Goal Scorecard
 
+## 2026-09-26 — Returning to the page keeps the view
+
+Returning to a hidden page no longer remounts every route. The page keeps its
+last view, stale and read-only, while it rediscovers state, and Chat catches up
+from its delivered revision. Unsent drafts survive a tab switch. A page that
+turns visible repeatedly no longer loops and settles once it stays visible.
+Emulating one return every two seconds, the previous build flashed the startup
+screen four times in twelve seconds and ended on "Loading conversation…"; this
+build kept the conversation and made one state, controller, notice and chat
+read per return. No dependency was added.
+
+| Artifact | Previous checkpoint (`0e012547`) | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,297,088 B | 22,297,088 B | 0 |
+| Main JS, raw / Node gzip-9 | 876,759 / 240,883 B | 876,809 / 240,881 B | +50 / −2 B |
+| All embedded assets | 2,289,537 B | 2,289,587 B | +50 B |
+
 ## 2026-09-26 — LLM Lab stroke vocabularies
 
 The LLM Lab gains three stroke-score modes, a one-message comparison across

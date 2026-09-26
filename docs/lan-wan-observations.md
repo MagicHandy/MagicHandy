@@ -72,7 +72,11 @@ observations are accepted only for unprotected compatibility fixtures.
   source, including events delivered after a replacement source connects.
 - Hiding the document aborts polling/controller requests, closes the stream
   and stops heartbeat renewal. Visibility return or `pageshow` invalidates the
-  prior view and immediately rediscovers state and controller status.
+  prior view and immediately rediscovers state and controller status. The
+  invalid view stays mounted, stale and read-only, so a return cannot remount
+  routes, discard drafts or restart the conversation from its first message.
+  Only a new backend epoch discards it. Chat history catches up from its
+  delivered revision without replaying speech.
 - Returning to a page does not invoke takeover, Start or Resume. If the backend
   lease expired, the page remains an observer until the existing explicit
   stop-first takeover flow succeeds. Emergency Stop stays mounted.
@@ -91,7 +95,9 @@ orders controller reads and renewal within one ownership generation.
 Browser tests cover a twenty-second blocked state request with continuing
 heartbeats, delayed motion packets, a pre-failure poll, server restart, old
 callbacks after reconnect, one bounded heartbeat/reconnect loop, malformed
-controller metadata, and hiding/resuming a phone-style tab after lease expiry.
+controller metadata, hiding/resuming a phone-style tab after lease expiry, and
+repeated brief returns, which keep one mounted view with one state read and
+one stream per return and settle once the page stays visible.
 API tests cover controller response reordering and an aborted delayed response.
 Existing state lifecycle and subscription tests remain in place.
 
