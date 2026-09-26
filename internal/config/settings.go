@@ -722,9 +722,9 @@ func DefaultSettings() Settings {
 			ReasoningMode:        LLMReasoningOff,
 			ChatVoice:            LLMChatVoiceUtility,
 			UserAnatomy:          LLMUserAnatomyPenis,
-			// Creative is the primary model-facing motion vocabulary. Pattern Library
-			// remains available as an explicit saved choice.
-			MotionGenerationMode: LLMMotionModeDynamic,
+			// Creative v2 is the model-facing motion vocabulary for new installs.
+			// Creative, Layered and Pattern Library remain explicit saved choices.
+			MotionGenerationMode: LLMMotionModeCreativeV2,
 		},
 		Voice: VoiceSettings{
 			TTSProvider:        VoiceProviderNone,
@@ -1092,9 +1092,10 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 		settings.LLM.CustomAnatomy = ""
 	}
 	// Motion generation mode is additive, so it does not force a schema
-	// migration. Documents that predate the selector adopt the current Creative
-	// default; a saved chat-only capability becomes Off. Explicit saved Pattern
-	// Library and Off choices remain untouched.
+	// migration. Documents that predate the selector keep Creative, the
+	// vocabulary they already used, even though new installs start on
+	// Creative v2; a saved chat-only capability becomes Off. Explicit saved
+	// choices remain untouched.
 	if _, present := header.LLM["motion_generation_mode"]; !present {
 		settings.LLM.MotionGenerationMode = LLMMotionModeDynamic
 		if settings.LLM.MotionCapabilities != nil && !settings.LLM.MotionCapabilities.Motion {
