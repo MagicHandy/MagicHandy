@@ -32,6 +32,9 @@ func LLMLabPrompts() map[string]string {
 	return map[string]string{
 		"creative_v2":         labPlanningContextGuide + creativeV2Contract + "\n\n" + depthFrame,
 		"layered":             labPlanningContextGuide + layeredContract + "\n\n" + depthFrame,
+		LabMethodStrokeEnds:   labPlanningContextGuide + strokeEndsContract + "\n\n" + depthFrame,
+		LabMethodGroove:       labPlanningContextGuide + grooveContract + "\n\n" + depthFrame,
+		LabMethodPlainWords:   labPlanningContextGuide + plainWordsContract + "\n\n" + depthFrame,
 		"library":             libraryLabPrompt("library"),
 		"library_descriptive": libraryLabPrompt("library_descriptive"),
 		"library_actions":     libraryLabPrompt("library_actions"),
@@ -87,12 +90,15 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 	if method == "creative_v2" {
 		score = creativeV2ScoreContext(current)
 	}
+	if IsStrokeLabMethod(method) {
+		score = strokeLabContext(method, current, limits)
+	}
 	labContext := map[string]any{
 		"current_score": score, "current_recipe": recipeID,
 		"saved_limits":    map[string]int{"speed_min_percent": limits.SpeedMinPercent, "speed_max_percent": limits.SpeedMaxPercent},
 		"engine_envelope": motion.CurrentPlanningEnvelope(limits),
 	}
-	if method == "layered" || method == "creative_v2" {
+	if method == "layered" || method == "creative_v2" || IsStrokeLabMethod(method) {
 		// Their continuation policy reads the human's latest lines here, as in
 		// production. Lab history carries only human turns and replies.
 		labContext["recent_user_requests_oldest_first"] = labRecentUserRequests(history)
@@ -146,8 +152,14 @@ func ParseLLMLab(raw, method string, current motion.FlowSpec, limits config.Moti
 		response, next, changed, err := ParseCreativeV2Reply(raw, current, limits)
 		return response.Reply, next, changed, err
 	}
+	if IsStrokeLabMethod(method) {
+		return ParseStrokeLab(raw, method, current, limits)
+	}
 	if current.Gesture != nil {
 		return "", current, nil, errors.New("start a new score when leaving Creative v2")
+	}
+	if current.Strokes != nil {
+		return "", current, nil, errors.New("start a new score when leaving the stroke test modes")
 	}
 	if method == "layered" {
 		response, next, changed, err := ParseLayeredReply(raw, current, limits)
