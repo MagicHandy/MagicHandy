@@ -53,7 +53,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("remote observation ordering", () => {
-  it("resyncs after phone-style backgrounding and does not reclaim an expired controller or resume motion", async () => {
+  it("revalidates after phone-style backgrounding without reclaiming an expired controller or resuming motion", async () => {
     vi.mocked(api.getState).mockResolvedValue(full("boot-a", 1, 2, true));
     render(<AppStateProvider><Harness /></AppStateProvider>);
     await act(async () => {});
@@ -67,16 +67,49 @@ describe("remote observation ordering", () => {
     vi.mocked(api.controllerState).mockResolvedValue(expired);
     vi.mocked(api.controllerHeartbeat).mockResolvedValue(expired);
     vi.mocked(api.getState).mockReturnValueOnce(resumed.promise);
+    const sources = NetworkEventSource.instances.length;
     visibility.mockReturnValue("visible");
     act(() => document.dispatchEvent(new Event("visibilitychange")));
-    expect(current.state).toBeNull();
+    // The last view stays mounted but cannot be acted on until rediscovered.
+    expect(current.state?.observation?.revision).toBe(1);
+    expect(current.stale).toBe(true);
     expect(current.readOnly).toBe(true);
+    expect(NetworkEventSource.instances).toHaveLength(sources + 1);
     await act(async () => resumed.resolve({ ...full("boot-a", 61, 62), controller: expired }));
     act(() => previous.emit(motion("boot-a", 999, true)));
     expect(current.motion?.engine?.running).toBe(false);
     expect(current.readOnly).toBe(true);
     expect(api.takeControl).not.toHaveBeenCalled();
     expect(api.resumeMotion).not.toHaveBeenCalled();
+  });
+  it("keeps one mounted view and settles after the page turns visible repeatedly", async () => {
+    const states: Array<AppState | null> = [];
+    function Recorder() { states.push(useAppState().state); return null; }
+    // Like the backend, every state read carries a new observation revision.
+    let revision = 0;
+    vi.mocked(api.getState).mockImplementation(async () => full("boot-a", ++revision));
+    render(<AppStateProvider><Recorder /><Harness /></AppStateProvider>);
+    await act(async () => {});
+    expect(current.readOnly).toBe(false);
+    const loaded = states.length;
+    const reads = vi.mocked(api.getState).mock.calls.length;
+    const sources = NetworkEventSource.instances.length;
+    const visibility = vi.spyOn(document, "visibilityState", "get");
+    // An embedded or occluded browser can report a brief return every few seconds.
+    for (let flicker = 0; flicker < 5; flicker++) {
+      visibility.mockReturnValue("hidden");
+      act(() => document.dispatchEvent(new Event("visibilitychange")));
+      await act(async () => vi.advanceTimersByTimeAsync(2000));
+      visibility.mockReturnValue("visible");
+      act(() => document.dispatchEvent(new Event("visibilitychange")));
+      await act(async () => vi.advanceTimersByTimeAsync(5));
+    }
+    expect(states.slice(loaded).every((state) => state !== null)).toBe(true);
+    expect(vi.mocked(api.getState).mock.calls.length - reads).toBe(5);
+    expect(NetworkEventSource.instances.length - sources).toBe(5);
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(current.stale).toBe(false);
+    expect(current.readOnly).toBe(false);
   });
   it("cannot enable protected controls from a malformed controller response", async () => {
     vi.mocked(api.controllerState).mockResolvedValue({} as ControllerSnapshot);
