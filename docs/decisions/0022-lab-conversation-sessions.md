@@ -4,6 +4,15 @@
 - Status: Implemented for review; no release or merge authorized
 - Supersedes: ADR 0020's manual legacy playback and preview-only LLM Lab behavior
 
+Update: the [stroke vocabulary review](../lab-stroke-modes-review-2026-09-26.md)
+replaces the test-mode list with buttons for the five main modes and a More
+modes list. Live motion and Autopilot are switches that take effect at once,
+with no separate Start step: changing either restarts the test with the new
+options, and turning both off ends it. Changing the mode restarts a running
+test in the new mode. Compare modes puts one message to each main mode through
+a stateless request that records nothing and never plays. The remaining
+decisions stand.
+
 ## Context
 
 The Lab had become a proposal inspector with substantial permanent documentation.

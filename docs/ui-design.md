@@ -272,10 +272,12 @@ lab routes redirect to the enabled workspace.
 Motion Lab compares Creative, anchored range and continuous flow using
 backend-computed curves and estimates. LLM Lab owns a separate conversation,
 editable experimental prompts, simple/sequence/layer/relative-edit contracts, raw replies
-and applied-field diagnostics. Chat and its composer fill the main column;
-the current preview, experiment setup and storage details live beside it.
-Accepted changes are labeled “Preview updated,” without claiming confirmed
-intent or physical quality. Replies and score edits affect previews only; Start or
+and applied-field diagnostics. Chat and its composer fill the main column
+under one row of mode buttons and immediate Live motion and Autopilot
+switches; the current preview and any mode comparison live beside it, and
+setup stays in Configure. Accepted changes are labeled “Preview updated,”
+without claiming confirmed intent or physical quality. Replies, comparisons
+and score edits affect previews only; turning on Live motion, Start or
 Audition explicitly begins motion. The permanent Stop stays reachable.
 The workspace and its CSS load on demand. Disabled lab endpoints and auditions
 are rejected by the backend; disabling Labs cancels pending lab work and stops

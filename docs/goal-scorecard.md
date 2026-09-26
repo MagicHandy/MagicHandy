@@ -1,5 +1,28 @@
 # Goal Scorecard
 
+## 2026-09-26 — LLM Lab stroke vocabularies
+
+The LLM Lab gains three stroke-score modes, a one-message comparison across
+modes and a streamlined page. In a Gemma 12B depth suite run through the Lab,
+Plain words met the requested depth in 27 of 27 turns, Creative v2 in 23,
+Stroke ends and Groove and accents in 18, and Layered in 9 with 9 rejections.
+No stroke mode moved the wrong way. See
+[the review](lab-stroke-modes-review-2026-09-26.md). No dependency was added.
+
+| Artifact | Previous checkpoint (`b188a954`) | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,199,808 B | 22,297,088 B | +97,280 B |
+| Main JS, raw / Node gzip-9 | 873,369 / 240,066 B | 876,759 / 240,883 B | +3,390 / +817 B |
+| Main CSS, raw / Node gzip-9 | 149,743 / 27,029 B | 149,743 / 27,029 B | 0 |
+| All embedded assets | 2,261,363 B | 2,289,537 B | +28,174 B |
+
+The main JS grows by the new English strings. The Labs chunk grows 5,790 raw
+and 1,737 gzip bytes, and its CSS 3,773 and 649, for the comparison panel,
+switches and quick requests. Lazy locale chunks grow 3,420–4,308 raw and
+1,439–1,669 gzip bytes each. The binary remains under the 30 MB target.
+Startup and memory were not re-measured: the change adds no startup work, and
+the new code runs only when the Lab is used.
+
 ## 2026-09-25 — Branded launch console
 
 The console window that opens with MagicHandy on Windows is now an interactive

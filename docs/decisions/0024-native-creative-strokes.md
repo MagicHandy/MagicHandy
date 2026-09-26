@@ -16,6 +16,11 @@ motion prompt one depth frame: 0 is the base and deepest point, 100 the tip.
 The Creative v2 contract now describes range, focus position and mix by the
 depth they produce. No control or engine behavior changed.
 
+Update: the LLM Lab's stroke score reuses this decision's joint leg fit and
+turn construction for strokes described by where they turn. It is a Lab
+experiment that production modes do not produce; see [the stroke vocabulary
+review](../lab-stroke-modes-review-2026-09-26.md).
+
 ## Context
 
 The original Creative contract can describe reach and four range textures, but

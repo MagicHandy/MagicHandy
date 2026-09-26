@@ -11,7 +11,7 @@ receive this setting. See ADRs 0021 and 0022.
 
 | Tab | Route | Purpose |
 | --- | --- | --- |
-| LLM Lab | `#/labs/chat` | Live conversation with a selected motion schema and prompt; optional live motion and Autopilot. |
+| LLM Lab | `#/labs/chat` | Live conversation with a selected motion schema and prompt; optional live motion and Autopilot; one request compared across modes. |
 | Motion Lab | `#/labs/motion` | Edit and compare shared-engine scores, inspect output, and start selected tests. |
 | Guided tests | `#/labs/tests` | Follow saved rounds, rate each result, and add comments. |
 | Observations | `#/labs/observations` | Save, inspect, export, or explicitly reuse review evidence. |
@@ -26,12 +26,15 @@ Emergency Stop remains mounted regardless of the route or controller status.
 
 ## Conversation testing
 
-The title bar's **Test mode** selects the response contract and default prompt:
-Creative v2, Layered, relative and layer edits, direct controls, ordered sections, simultaneous layers,
-or the catalog using action names, descriptive IDs, or opaque handles. The three
-catalog interfaces use identical motion content. **Configure** contains the
-model override, schema constraint, prompt editor and Autopilot interval.
-Configuration is held fixed while a test session is active.
+Mode buttons select the response contract and default prompt for the five
+main modes: Creative v2, Layered, Stroke ends, Groove and accents, and Plain
+words. **More modes** holds relative and layer edits, direct controls, ordered
+sections, simultaneous layers, and the catalog using action names, descriptive
+IDs, or opaque handles. The three catalog interfaces use identical motion
+content. **Configure** contains the model override, schema constraint, prompt
+editor, Autopilot interval and export. Changing the mode during a test restarts
+the test in the new mode; the rest of the configuration is held fixed while a
+test runs.
 
 **Creative v2** tests the same native stroke contract as its main-chat mode.
 Ask for a focus location and width, local/full mixing, a fast direction with a
@@ -50,6 +53,16 @@ Turn softness is not offered to this model contract. See [the Layered review](
 layered-motion-review-2026-09-05.md) and [ADR 0023](
 decisions/0023-persistent-layered-motion.md).
 
+**Stroke ends**, **Groove and accents** and **Plain words** test possible
+replacements for Layered. They edit one stroke score through three
+vocabularies: turn positions as numbers, a groove with accents, or everyday
+words for how deep every stroke goes and how far it pulls back. The score says
+where every stroke bottoms out and turns back, in absolute slider positions,
+with seeded variation and occasional accents, and compiles through the shared
+engine like Creative v2. An invalid value rejects the whole reply. Changing
+into or out of these modes starts a new Lab score. See [the stroke vocabulary
+review](lab-stroke-modes-review-2026-09-26.md).
+
 Each inference request receives the current score, saved numeric speed bounds,
 and the engine's semantic coordinate range and profile-derived peak velocity
 ceiling. Device version names and unrelated motion settings are excluded from
@@ -58,20 +71,21 @@ calibration and physical stroke-window mapping remain backend responsibilities.
 These values refresh from settings for each turn. The full settings still live
 in exported trials so a reviewer can reproduce the compiled output.
 
-Type and send messages normally. Without a session, accepted replies update the
-backend score and its optional **Motion output** plot. Enable **Live motion**
-and press **Start test** to start the score through the shared engine; later
-accepted changes retarget that same run automatically. No per-reply audition
-is required. Stop ends the test and cancels pending work. A plain Stop message
+Type and send messages normally, or tap a quick request such as Deeper or Just
+the tip. Without a session, accepted replies update the backend score and the
+**Motion now** plot. Turning on **Live motion** starts the score through the
+shared engine at once; later accepted changes retarget that same run
+automatically. No per-reply audition is required. Stop ends the test and cancels pending work. A plain Stop message
 also bypasses inference. Simulation and unavailable transport remain explicit.
 The main production motion mode can remain Off while Lab contracts are tested.
 
-Enable **Autopilot** with or without Live motion. After a quiet interval (20
-seconds by default; configurable 5–120), the backend requests a continuation
-with the same model, prompt, schema, current score and matching conversation.
-Layered and Creative v2 add a random delay of up to half the quiet interval, always respecting
-the configured minimum. It starts with a fresh variation seed. Like production
-Autopilot, a Layered or Creative v2 continuation reads the latest human lines,
+Turn on **Autopilot** with or without Live motion; it also starts at once.
+After a quiet interval (20 seconds by default; configurable 5–120), the backend
+requests a continuation with the same model, prompt, schema, current score and
+matching conversation. Layered, Creative v2 and the stroke modes add a random
+delay of up to half the quiet interval, always respecting the configured
+minimum. It starts with a fresh variation seed. Like production Autopilot, a
+continuation in these modes reads the latest human lines,
 keeps whatever still applies (including a wish to keep the motion exactly as
 it is) and develops the rest within saved limits
 ([ADR 0031](decisions/0031-model-judged-autopilot-continuity.md)).
@@ -93,12 +107,20 @@ admitted Start, and conditional retargeting against the expected current plan.
 A reply cannot overwrite a newer plan or restart a stopped run. Controller
 handoff, global Stop, Labs disablement and shutdown cancel the session.
 
-User/assistant bubbles and the composer dominate the page. Enter sends,
-Shift+Enter adds a line, and IME composition does not send. Cancel generation
-keeps the draft. Response details expose the exact raw output, changed fields,
-model, timing and call count. Creating a guided test is available there rather
-than occupying every reply. Status polling fetches the full conversation only
-when revision, busy state or session configuration changes.
+The conversation and composer fill the main column. Each reply is a compact
+entry with its outcome and mode; **Details** exposes the exact raw output,
+changed fields, model, timing and call count, and creating a guided test is
+available there. **Send again** repeats a message. Enter sends, Shift+Enter
+adds a line, and IME composition does not send. Cancel generation keeps the
+draft. Status polling fetches the full conversation only when revision, busy
+state or session configuration changes.
+
+**Compare modes** sends the typed message, or the last one sent, to each main
+mode in turn, each from its own starting score. Every result shows the reply,
+its outcome, the reach and a 12-second plotted estimate, and **Try this mode**
+switches to that mode. A comparison is not saved, changes neither the
+conversation nor the score, and never plays. It is unavailable while a reply is
+generating or a test runs.
 
 ## Motion and catalog
 
