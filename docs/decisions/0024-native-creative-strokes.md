@@ -21,6 +21,9 @@ turn construction for strokes described by where they turn. It is a Lab
 experiment that production modes do not produce; see [the stroke vocabulary
 review](../lab-stroke-modes-review-2026-09-26.md).
 
+Update: new installs start on Creative v2; settings saved before the mode
+selector keep Creative. See [ADR 0015](0015-selectable-llm-motion-modes.md).
+
 ## Context
 
 The original Creative contract can describe reach and four range textures, but

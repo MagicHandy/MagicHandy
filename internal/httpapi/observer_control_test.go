@@ -37,6 +37,8 @@ func TestGrantedChatSharesTextAndRecoveryWithoutHostDiagnostics(t *testing.T) {
 	s, store, admin, adminCookie := newControllerSessionFixture(t, provider)
 	if _, _, err := s.store.Update(func(settings config.Settings) (config.Settings, error) {
 		settings.LLM.Model = "private-host-model-fixture"
+		// The scripted reply uses the Creative contract.
+		settings.LLM.MotionGenerationMode = config.LLMMotionModeDynamic
 		return settings, nil
 	}); err != nil {
 		t.Fatal(err)

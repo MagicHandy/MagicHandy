@@ -429,8 +429,9 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   or named-anchor geometry, an optional long stroke-length envelope, independent
   center/rhythm variation, pace, and a decision horizon, with no catalog in its
   prompt. Both compile through the same target, plan,
-  retarget, limit, transport, trace, and Stop path. Creative is the default;
-  Pattern Library and Off remain persisted alternatives, while matched real-
+  retarget, limit, transport, trace, and Stop path. New installs start on
+  Creative v2; settings from before the selector keep Creative, and Creative,
+  Layered, Pattern Library and Off remain persisted alternatives, while matched real-
   device A/B acceptance stays open (ADR 0015). Each turn receives the authoritative mode-specific engine snapshot and
   user speed bands. Provider-native
   controls carry visible latency/quality warnings; no hardware tuning knob is

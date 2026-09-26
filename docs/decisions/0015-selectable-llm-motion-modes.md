@@ -9,6 +9,12 @@ persisted alternatives. The default change is a product choice informed by
 iterative installed-session feedback and model evaluation, not a claim that the
 remaining real-device A/B acceptance is complete.
 
+Update (2026-09-26): at the user's request, new installs start on Creative v2
+(`creative_v2`, [ADR 0024](0024-native-creative-strokes.md)). Settings saved
+before the mode selector existed still adopt Creative, the vocabulary they
+used, and every explicitly saved mode is unchanged. Creative, Layered, Pattern
+Library and Off remain explicit choices.
+
 ## Context
 
 MagicHandy's original LLM contract only let the model choose enabled library
