@@ -6,11 +6,37 @@ Accepted; amended 2026-09-25 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.49 package-preserving releases.
+reviewed alpha.14 through alpha.50 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.50 amendment
+
+On 2026-09-26 the user requested an update release with the depth
+corrections for Creative v2 and Layered chat, the new LLM Lab modes, a
+page-return fix and Creative v2 as the default for new installs. PRs #279,
+#280, #281 and #282 passed all thirteen checks before merging. This
+amendment adds only `0.1.0-alpha.50` to the reviewed-unsigned Windows alpha
+policy; it grants no standing permission to later versions.
+
+The update gives every motion prompt one depth frame, described in the
+[depth review](../motion-depth-review-2026-09-25.md). The optional LLM Lab
+gains a Lab-only stroke score with three model vocabularies, a mode
+comparison and a streamlined page, described in the
+[stroke vocabulary review](../lab-stroke-modes-review-2026-09-26.md). A page
+returning from the background keeps its view instead of reloading, and new
+installs start on Creative v2 ([ADR 0015](0015-selectable-llm-motion-modes.md)).
+No dependency was added.
+
+The native x64 loader, non-solid ZIP compression, three public assets, four
+pure-Go payload executables, and data-preserving over-install contract remain.
+Main-tip provenance, full quality gates, adapter tests, source and exact-binary
+vulnerability scans, exact-artifact Defender scanning, manifests, checksums,
+and installer lifecycle verification remain mandatory. The original Microsoft
+case does not pre-clear these new hashes; trusted Authenticode remains the
+long-term policy.
 
 ### Alpha.49 amendment
 
@@ -269,7 +295,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.49 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.50 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -383,11 +409,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.49 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.50 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.49 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.50 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
