@@ -124,6 +124,18 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-26 LLM Lab stroke vocabularies
+
+Three LLM Lab modes test possible replacements for Layered: Stroke ends,
+Groove and accents, and Plain words. They edit one Lab-only stroke score whose
+turns are absolute slider positions, compiled through the Creative v2 joint
+leg fit and the shared engine. The Lab page selects modes with buttons, starts
+tests from immediate Live motion and Autopilot switches, offers one-tap quick
+requests, and compares one message across the five main modes without
+recording or playing. In a Gemma 12B depth suite, Plain words met the
+requested depth in 27 of 27 turns. Main chat is unchanged. See
+[the review](docs/lab-stroke-modes-review-2026-09-26.md).
+
 ### 2026-09-19 motion transport quality corrections
 
 The shared sampler now preserves representable reversals under immediate

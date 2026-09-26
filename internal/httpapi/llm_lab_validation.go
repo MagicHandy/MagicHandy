@@ -25,7 +25,7 @@ func (s *Server) validateLabTrial(trial chat.LLMLabTrial, state llmLabState) cha
 // rule. The continuous methods match production: the model judges which recent
 // requests still apply, and saved limits bound what it may choose.
 func validateLabAutopilot(trial chat.LLMLabTrial) chat.LLMLabTrial {
-	if !trial.Autopilot || !trial.Valid || trial.Method == "layered" || trial.Method == "creative_v2" {
+	if !trial.Autopilot || !trial.Valid || trial.Method == "layered" || trial.Method == "creative_v2" || chat.IsStrokeLabMethod(trial.Method) {
 		return trial
 	}
 	if !labAutopilotWithinRequest(trial.Before, trial.After) {

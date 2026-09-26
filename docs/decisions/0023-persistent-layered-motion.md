@@ -19,6 +19,11 @@ A geometry that removes an axis's movement accepts a zero-amount layer on that
 axis, and the stroke width field says how to give every stroke one width.
 Geometry stays band-relative; the review lists the open question.
 
+Update: the [stroke vocabulary review](../lab-stroke-modes-review-2026-09-26.md)
+tests three possible replacements for this contract in the LLM Lab. They edit
+a stroke score whose turns are absolute slider positions, so depth no longer
+depends on a band the model must also move. Layered itself is unchanged.
+
 ## Context
 
 The user's relative/layer experiment preserved motion better than ordered

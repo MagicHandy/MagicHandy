@@ -15,6 +15,11 @@ func CloneFlowSpec(spec *FlowSpec) *FlowSpec {
 		gesture := *spec.Gesture
 		cloned.Gesture = &gesture
 	}
+	if spec.Strokes != nil {
+		strokes := *spec.Strokes
+		strokes.Accents = slices.Clone(spec.Strokes.Accents)
+		cloned.Strokes = &strokes
+	}
 	cloned.Steps, cloned.Layers = slices.Clone(spec.Steps), slices.Clone(spec.Layers)
 	return &cloned
 }

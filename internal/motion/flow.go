@@ -14,22 +14,24 @@ import (
 // It does not use DynamicDefinition, span profiles, authored reversal routes,
 // or the Creative interval fitter. All values are semantic, never wire points.
 type FlowSpec struct {
-	Gesture              *GestureSpec `json:"gesture,omitempty"`
-	MinPercent           int          `json:"min_percent"`
-	MaxPercent           int          `json:"max_percent"`
-	SpeedPercent         int          `json:"speed_percent"`
-	RangeFloorPercent    int          `json:"range_floor_percent"`
-	RangeCeilingPercent  int          `json:"range_ceiling_percent,omitempty"`
-	AnchorPercent        int          `json:"anchor_percent"`
-	MemoryCycles         int          `json:"memory_cycles"`
-	PaceVariationPercent int          `json:"pace_variation_percent"`
-	VariationMode        string       `json:"variation_mode,omitempty"`
-	TurnSoftnessPercent  int          `json:"turn_softness_percent,omitempty"`
-	CadenceHoldPercent   int          `json:"cadence_hold_percent,omitempty"`
-	Seed                 uint32       `json:"seed"`
-	LoopCycles           int          `json:"loop_cycles,omitempty"`
-	Steps                []FlowStep   `json:"steps,omitempty"`
-	Layers               []FlowLayer  `json:"layers,omitempty"`
+	Gesture *GestureSpec `json:"gesture,omitempty"`
+	// Strokes is an LLM Lab experiment; see StrokeSpec.
+	Strokes              *StrokeSpec `json:"strokes,omitempty"`
+	MinPercent           int         `json:"min_percent"`
+	MaxPercent           int         `json:"max_percent"`
+	SpeedPercent         int         `json:"speed_percent"`
+	RangeFloorPercent    int         `json:"range_floor_percent"`
+	RangeCeilingPercent  int         `json:"range_ceiling_percent,omitempty"`
+	AnchorPercent        int         `json:"anchor_percent"`
+	MemoryCycles         int         `json:"memory_cycles"`
+	PaceVariationPercent int         `json:"pace_variation_percent"`
+	VariationMode        string      `json:"variation_mode,omitempty"`
+	TurnSoftnessPercent  int         `json:"turn_softness_percent,omitempty"`
+	CadenceHoldPercent   int         `json:"cadence_hold_percent,omitempty"`
+	Seed                 uint32      `json:"seed"`
+	LoopCycles           int         `json:"loop_cycles,omitempty"`
+	Steps                []FlowStep  `json:"steps,omitempty"`
+	Layers               []FlowLayer `json:"layers,omitempty"`
 }
 
 // FlowStep is a section of one continuous score, not a separate motion run.
@@ -61,6 +63,9 @@ func DefaultFlowSpec() FlowSpec {
 // clipping model output. Physical speed limits remain backend authoritative.
 func (s FlowSpec) Validate(settings config.MotionSettings) error {
 	if err := s.validateGesture(); err != nil {
+		return err
+	}
+	if err := s.validateStrokes(); err != nil {
 		return err
 	}
 	if err := s.validateControls(settings); err != nil {
@@ -137,10 +142,14 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 	var curve Curve
 	var err error
 	name := "Continuous flow"
-	if spec.Gesture != nil {
+	switch {
+	case spec.Gesture != nil:
 		curve, err = compileGestureCurve(spec, settings.HandyModel)
 		name = "Creative v2"
-	} else {
+	case spec.Strokes != nil:
+		curve, err = compileStrokeCurve(spec, settings.HandyModel)
+		name = "Stroke score"
+	default:
 		curve, err = compileFlowCurve(spec, settings.HandyModel)
 	}
 	if err != nil {
@@ -157,9 +166,9 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 	content := &preparedMotion{id: id, name: name, curve: curve,
 		referenceRate: referenceTravelRateForSpeed(peakSpeed, settings.HandyModel),
 		acceleration:  flowAccelerationBudget, jerk: flowJerkBudget}
-	if spec.Gesture != nil {
-		// The new grammar uses Creative's existing runtime envelope. Historical
-		// flow comparisons keep their quieter authoring budget unchanged.
+	if spec.Gesture != nil || spec.Strokes != nil {
+		// The generated-stroke grammars use Creative's existing runtime envelope.
+		// Historical flow comparisons keep their quieter authoring budget.
 		content.acceleration, content.jerk = runtimeMaxAccelerationPercentPerSecond2, runtimeMaxJerkPercentPerSecond3
 	}
 	return MotionTarget{Label: name, Source: TargetSourceMotionLab,

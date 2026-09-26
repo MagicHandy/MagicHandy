@@ -16,6 +16,9 @@ func LLMLabSchema(method string, limits config.MotionSettings) json.RawMessage {
 	if method == "layered" {
 		return LayeredResponseSchema(limits, false)
 	}
+	if IsStrokeLabMethod(method) {
+		return StrokeLabSchema(method, limits)
+	}
 	if strings.HasPrefix(method, "library") {
 		return libraryLabSchema(method, limits)
 	}

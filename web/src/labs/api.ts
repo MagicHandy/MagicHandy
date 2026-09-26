@@ -4,7 +4,9 @@ import type { MotionSettings } from "../api/types";
 
 export interface FlowStep { min_percent: number; max_percent: number; speed_percent: number; cycles: number }
 export interface FlowLayer { axis: "range" | "center" | "pace"; amount_percent: number; period_cycles: number; phase_percent: number; shape?: "wave" | "drift" | "alternate" }
+export interface StrokeTurn { at_percent: number; vary_to_percent: number; character: string }
 export interface FlowSpec {
+  strokes?: {bottom: StrokeTurn; top: StrokeTurn; accents?: Array<{move: string; rate: string}>; variation_percent: number};
 	gesture?: {focus_percent:number;focus_width_percent:number;focus_mix_percent:number;focus_roam_percent?:number;faster_direction:string;contrast_percent:number;inertia_percent:number;rebound_count:number;rebound_decay_percent:number;variation_percent:number};
   min_percent: number; max_percent: number; speed_percent: number; range_floor_percent: number;
   anchor_percent: number; memory_cycles: number; pace_variation_percent: number; seed: number;
@@ -24,6 +26,11 @@ export interface LLMLabState {
 	  session?:LabSession;
   current: FlowSpec; turns: LabTrial[]; revision: number; busy: boolean; prompts: Record<string,string>;
   model: string; settings_key: string; limits: MotionSettings;
+}
+export interface LabCompareResult {
+  trial: LabTrial;
+  perceptual: {position_min_percent: number; position_max_percent: number; pace: {effective_percent: number}};
+  trace: number[];
 }
 export interface LabSession {
   active:boolean; live:boolean; autopilot:boolean; method:string; prompt:string; model:string;
@@ -50,6 +57,7 @@ export const labApi = {
   session: (body:Omit<LabSession,"active">) => request<LLMLabState>("POST", "/api/labs/llm/session", body),
   chat: (body: {message:string;method:string;prompt:string;model:string;revision:number;schema_guided:boolean}, signal?: AbortSignal) => request<LLMLabState>("POST", "/api/labs/llm/chat", body, signal),
   reset: (spec?: FlowSpec, method?:string) => request<LLMLabState>("POST", "/api/labs/llm/reset", {spec,method}),
+  compare: (body: {message:string;method:string;model:string;schema_guided:boolean}, signal?: AbortSignal) => request<LabCompareResult>("POST", "/api/labs/llm/compare", body, signal),
   start: (preview: FlowPreview, candidate: FlowCandidate) => {
     if (candidate.flow) return request("POST", "/api/motion/start", {lab:{method:"flow",flow:candidate.flow,settings_key:preview.settings_key}});
     const spec = preview.spec;

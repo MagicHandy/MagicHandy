@@ -1,5 +1,21 @@
 # MagicHandy Risk Register
 
+## 2026-09-26 LLM Lab stroke score and immediate test switches
+
+The LLM Lab can play a new Lab-only score that describes strokes by where
+they turn. It compiles through FlowTarget, the joint leg fit's velocity,
+acceleration and jerk budgets, and the shared engine. Stop, saved limits,
+controller ownership and the transport path are unchanged. Live motion and
+Autopilot are now switches: turning Live motion on starts motion at once,
+where a separate Start was needed before. It remains an explicit action on a
+Labs page that is off by default, and opening the page starts nothing. Compare
+modes makes one model request per main mode and never plays, records or
+dispatches. Accents add occasional strokes to the base or across the whole
+length even when the usual strokes stay shallow, but only when a reply adds
+them. Loops hold 64 strokes, so short tip work repeats every 16–30
+seconds, as in Creative v2. Physical acceptance remains open; see the
+[review](lab-stroke-modes-review-2026-09-26.md).
+
 ## 2026-09-25 Depth language in continuous motion
 
 Every prompt that can move the device now states one depth frame: 0 is the
