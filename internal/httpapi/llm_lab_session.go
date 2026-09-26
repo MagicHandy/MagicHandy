@@ -207,7 +207,7 @@ func (s *Server) runLabAutopilot(ctx context.Context, options labConversationSes
 
 func labAutopilotDelay(options labConversationSession) time.Duration {
 	delay := time.Duration(options.IntervalSeconds) * time.Second
-	if options.Method == "layered" || options.Method == "creative_v2" {
+	if options.Method == "layered" || options.Method == "creative_v2" || chat.IsStrokeLabMethod(options.Method) {
 		// #nosec G404 -- Scheduling jitter; never shorter than the user's quiet interval.
 		delay += time.Duration(rand.Float64() * 0.5 * float64(delay))
 	}
@@ -220,6 +220,8 @@ func labContinuationMessage(method, fallback string) string {
 		return chat.LayeredContinuationMessage()
 	case "creative_v2":
 		return chat.CreativeV2ContinuationMessage()
+	case chat.LabMethodStrokeEnds, chat.LabMethodGroove, chat.LabMethodPlainWords:
+		return chat.StrokeLabContinuationMessage(method)
 	default:
 		return fallback
 	}

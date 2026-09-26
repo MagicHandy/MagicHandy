@@ -118,6 +118,7 @@ self	POST /api/controller/heartbeat
 control	POST /api/controller/takeover
 host	POST /api/host/path-picker
 host	POST /api/labs/llm/chat
+host	POST /api/labs/llm/compare
 host	POST /api/labs/llm/reset
 host	POST /api/labs/llm/session
 host	POST /api/labs/observations

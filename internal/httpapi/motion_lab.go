@@ -20,6 +20,7 @@ func (s *Server) motionLabRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/labs/llm/status", s.withLabs(s.handleLLMLabStatus))
 	mux.HandleFunc("POST /api/labs/llm/chat", s.withLabs(s.handleLLMLabChat))
 	mux.HandleFunc("POST /api/labs/llm/reset", s.withLabs(s.handleLLMLabReset))
+	mux.HandleFunc("POST /api/labs/llm/compare", s.withLabs(s.handleLLMLabCompare))
 	mux.HandleFunc("GET /api/labs/observations", s.withLabs(s.handleLabObservations))
 	mux.HandleFunc("POST /api/labs/observations", s.withLabs(s.handleSaveLabObservation))
 	mux.HandleFunc("DELETE /api/labs/observations/{id}", s.withLabs(s.handleDeleteLabObservation))

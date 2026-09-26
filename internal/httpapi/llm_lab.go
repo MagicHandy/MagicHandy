@@ -95,14 +95,7 @@ func (s *Server) handleLLMLabReset(w http.ResponseWriter, r *http.Request) {
 	}
 	settings, _ := s.store.Snapshot()
 	if body.Spec == nil {
-		initial := motion.DefaultFlowSpec()
-		if body.Method == "layered" {
-			initial = chat.FreshLayeredScore(25)
-		}
-		if body.Method == "creative_v2" {
-			initial = chat.FreshCreativeV2Score(25)
-		}
-		initial.SpeedPercent = max(settings.Motion.SpeedMinPercent, min(initial.SpeedPercent, settings.Motion.SpeedMaxPercent))
+		initial := labStartingScore(body.Method, settings.Motion)
 		body.Spec = &initial
 	}
 	if err := body.Spec.Validate(settings.Motion); err != nil {
