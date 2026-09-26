@@ -11,6 +11,11 @@ rare rests and varied landings, and raises the default variation to 50. Live
 chat, not host word matching, declares an exact hold. The remaining decisions
 stand.
 
+Update: the [depth review](../motion-depth-review-2026-09-25.md) gives every
+motion prompt one depth frame: 0 is the base and deepest point, 100 the tip.
+The Creative v2 contract now describes range, focus position and mix by the
+depth they produce. No control or engine behavior changed.
+
 ## Context
 
 The original Creative contract can describe reach and four range textures, but

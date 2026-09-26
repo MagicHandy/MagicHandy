@@ -11,6 +11,14 @@ hold or forbids raising speed or widening the band within saved limits. Live
 chat declares a standing wish to keep the motion unchanged. Flow scores compile
 from legs between turning points. The remaining decisions stand.
 
+Update: the [depth review](../motion-depth-review-2026-09-25.md) gives every
+motion prompt one depth frame: 0 is the base and deepest point, 100 the tip.
+The Layered contract now says that the band, anchor and stroke width decide
+depth together, and that base and tip in geometry names are the band's ends.
+A geometry that removes an axis's movement accepts a zero-amount layer on that
+axis, and the stroke width field says how to give every stroke one width.
+Geometry stays band-relative; the review lists the open question.
+
 ## Context
 
 The user's relative/layer experiment preserved motion better than ordered

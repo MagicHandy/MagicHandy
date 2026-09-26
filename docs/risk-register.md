@@ -1,5 +1,22 @@
 # MagicHandy Risk Register
 
+## 2026-09-25 Depth language in continuous motion
+
+Every prompt that can move the device now states one depth frame: 0 is the
+base and deepest point, 100 the tip. The Creative v2 and Layered contracts
+named the ends only by number, and in a reported session a request to go
+deeper sent strokes toward the tip while the reply described the opposite. The
+frame defines depth rather than matching words, so a misreading stays
+possible. In the Gemma 12B depth suite, Creative v2 chat met the requested
+depth in 44 of 45 turns, against 19 of 45 on `main`, and no turn moved the
+wrong way (5 before). Layered moved the right way in 35 of 45 turns, against
+25, but met the requested depth in only 9 (none on `main`): its anchors and
+widths act inside the outer band, and Gemma rarely moves the band, so base
+anchoring can stop at the band's floor while the reply claims the base.
+Kinematic limits, Stop, controller ownership, the stroke window and the
+transport path are unchanged. Physical acceptance remains open; see the
+[review](motion-depth-review-2026-09-25.md).
+
 ## 2026-09-25 Autopilot continuity and motion phrasing
 
 Word lists no longer govern Autopilot continuity. Creative v2 and Layered

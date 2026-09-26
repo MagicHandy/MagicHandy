@@ -523,12 +523,7 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 			sections = appendPromptSection(sections, "reaction_style", "Reaction style", style)
 		}
 	}
-	sections = appendPromptSection(sections, "response_contract", "Response contract",
-		contractForMotionState(capabilities, motionContext))
-	if capabilities.Motion && capabilities.Patterns {
-		sections = appendPromptSection(sections, "pattern_catalog", "Pattern catalog",
-			curationInstructions(patterns))
-	}
+	sections = appendContractSections(sections, capabilities, motionContext, patterns)
 	if capabilities.Voice != VoiceUtility && conversationContext != nil {
 		if contextText := conversationContextInstructionsForLocale(locale, *conversationContext, capabilities); contextText != "" {
 			sections = appendPromptSection(sections, "conversation_context", "Conversation context", contextText)

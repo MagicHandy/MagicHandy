@@ -9,7 +9,7 @@ import (
 // Speech needs the same semantic motion facts even when its authority is chat
 // only. A Flow ID is not a catalog pattern, and Dynamic has no catalog ID.
 func writeAutopilotMotionFacts(builder *strings.Builder, context AutopilotContext, planning bool) {
-	builder.WriteString("Motion domain: one linear stroking slider, 0% at the base and 100% at the tip. These are commanded estimates, not physical feedback.\n")
+	builder.WriteString("Motion domain: one linear stroking slider, 0% at the base, the deepest point, and 100% at the tip, the shallowest. These are commanded estimates, not physical feedback.\n")
 	if context.CurrentSpeed <= 0 {
 		builder.WriteString("No motion target is active yet.\n")
 		return

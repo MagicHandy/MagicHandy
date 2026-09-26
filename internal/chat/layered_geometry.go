@@ -73,16 +73,19 @@ func validateLayeredGeometry(s motion.FlowSpec, geometry string) error {
 		return motion.FlowLayer{}
 	}
 	full := func(l motion.FlowLayer) bool { return l.AmountPercent == 100 && l.Shape == "alternate" }
+	// A geometry that removes an axis's movement is satisfied by the effect,
+	// not by the layer's absence: a zero-amount layer moves nothing.
+	still := func(name string) bool { return axis(name).AmountPercent == 0 }
 	valid := true
 	switch geometry {
 	case "alternate_ends":
-		valid = s.RangeFloorPercent <= s.RangeCeilingPercent && s.RangeCeilingPercent <= ((s.MaxPercent-s.MinPercent)/2) && full(axis("center")) && axis("range").Axis == ""
+		valid = s.RangeFloorPercent <= s.RangeCeilingPercent && s.RangeCeilingPercent <= ((s.MaxPercent-s.MinPercent)/2) && full(axis("center")) && still("range")
 	case "full_and_tip", "full_and_base":
 		anchor := 100
 		if geometry == "full_and_base" {
 			anchor = 0
 		}
-		valid = s.AnchorPercent == anchor && s.RangeCeilingPercent == s.MaxPercent-s.MinPercent && s.RangeFloorPercent < s.RangeCeilingPercent && full(axis("range")) && axis("center").Axis == ""
+		valid = s.AnchorPercent == anchor && s.RangeCeilingPercent == s.MaxPercent-s.MinPercent && s.RangeFloorPercent < s.RangeCeilingPercent && full(axis("range")) && still("center")
 	case "tip_anchor", "base_anchor", "centered":
 		anchor := 50
 		if geometry == "tip_anchor" {
@@ -91,7 +94,7 @@ func validateLayeredGeometry(s motion.FlowSpec, geometry string) error {
 		if geometry == "base_anchor" {
 			anchor = 0
 		}
-		valid = s.AnchorPercent == anchor && axis("center").Axis == ""
+		valid = s.AnchorPercent == anchor && still("center")
 	}
 	if !valid {
 		return errors.New("edits conflict with the selected geometry")

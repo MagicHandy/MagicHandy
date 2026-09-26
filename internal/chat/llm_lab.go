@@ -30,8 +30,8 @@ Always preserve the distinction between range, pace, and timing of variation.`
 // LLMLabPrompts isolates experimental control interfaces from production prompting.
 func LLMLabPrompts() map[string]string {
 	return map[string]string{
-		"creative_v2":         labPlanningContextGuide + creativeV2Contract,
-		"layered":             labPlanningContextGuide + layeredContract,
+		"creative_v2":         labPlanningContextGuide + creativeV2Contract + "\n\n" + depthFrame,
+		"layered":             labPlanningContextGuide + layeredContract + "\n\n" + depthFrame,
 		"library":             libraryLabPrompt("library"),
 		"library_descriptive": libraryLabPrompt("library_descriptive"),
 		"library_actions":     libraryLabPrompt("library_actions"),
