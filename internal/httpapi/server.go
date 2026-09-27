@@ -30,6 +30,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/netaccess"
 	"github.com/mapledaemon/MagicHandy/internal/patterns"
 	"github.com/mapledaemon/MagicHandy/internal/persona"
+	"github.com/mapledaemon/MagicHandy/internal/remote"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 	"github.com/mapledaemon/MagicHandy/internal/updatecheck"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
@@ -140,6 +141,7 @@ type Server struct {
 	patterns            *patterns.Library
 	media               *media.Catalog
 	mediaSync           *mediaSyncRuntime
+	remote              *remote.Hub
 	started             time.Time
 	version             VersionInfo
 	handler             http.Handler
@@ -210,6 +212,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		updates:             newUpdateChecker(runtime, version),
 		controller:          newControllerRuntime(),
 		commands:            newCommandRuntime(),
+		remote:              remote.NewHub(nil),
 		hostPathPicker:      systemHostPathPicker,
 		personalization:     personalization,
 		lifecycleCtx:        lifecycleCtx,
@@ -402,13 +405,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/transport/bluetooth/state", s.handleBluetoothState)
 	mux.HandleFunc("GET /api/transport/bluetooth/events", s.handleBluetoothEvents)
 	mux.HandleFunc("POST /api/transport/bluetooth/stop", s.handleBluetoothStop)
-	mux.HandleFunc("GET /api/transport/intiface/status", s.handleIntifaceStatus)
-	mux.HandleFunc("POST /api/transport/intiface/connect", s.handleIntifaceConnect)
-	mux.HandleFunc("POST /api/transport/intiface/disconnect", s.handleIntifaceDisconnect)
-	mux.HandleFunc("POST /api/transport/intiface/scan", s.handleIntifaceStartScan)
-	mux.HandleFunc("DELETE /api/transport/intiface/scan", s.handleIntifaceStopScan)
-	mux.HandleFunc("POST /api/transport/intiface/select", s.handleIntifaceSelect)
-	mux.HandleFunc("GET /api/transport/intiface/diagnostics", s.handleIntifaceDiagnostics)
+	s.intifaceRoutes(mux)
 	mux.HandleFunc("GET /api/motion/state", s.handleMotionState)
 	mux.HandleFunc("GET /api/motion/events", s.handleMotionEvents)
 	s.motionLabRoutes(mux)
@@ -425,6 +422,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/modes/autopilot/arc", s.handleAutopilotArc)
 	s.libraryRoutes(mux)
 	s.mediaRoutes(mux)
+	s.remoteRoutes(mux)
 	s.voiceRoutes(mux)
 	s.setupRoutes(mux)
 	s.traceRoutes(mux)

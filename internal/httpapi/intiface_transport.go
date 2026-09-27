@@ -41,6 +41,16 @@ func newIntifaceRuntime(runtime Runtime) intifaceRuntime {
 	}
 }
 
+func (s *Server) intifaceRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/transport/intiface/status", s.handleIntifaceStatus)
+	mux.HandleFunc("POST /api/transport/intiface/connect", s.handleIntifaceConnect)
+	mux.HandleFunc("POST /api/transport/intiface/disconnect", s.handleIntifaceDisconnect)
+	mux.HandleFunc("POST /api/transport/intiface/scan", s.handleIntifaceStartScan)
+	mux.HandleFunc("DELETE /api/transport/intiface/scan", s.handleIntifaceStopScan)
+	mux.HandleFunc("POST /api/transport/intiface/select", s.handleIntifaceSelect)
+	mux.HandleFunc("GET /api/transport/intiface/diagnostics", s.handleIntifaceDiagnostics)
+}
+
 func (s *Server) handleIntifaceStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.clientIntifaceSnapshot(r))
 }

@@ -22,6 +22,7 @@ linters:
             - internal/modes/**/*.go
             - internal/patterns/**/*.go
             - internal/media/**/*.go
+            - internal/remote/**/*.go
             - internal/voice/**/*.go
           deny:
             - pkg: github.com/mapledaemon/MagicHandy/internal/httpapi
@@ -51,6 +52,18 @@ linters:
               desc: Voice workers are separate processes; the LLM client is not their concern.
             - pkg: github.com/mapledaemon/MagicHandy/internal/modes
               desc: Voice must not drive autonomous modes directly.
+        remote-relays-intent-only:
+          files:
+            - internal/remote/**/*.go
+          deny:
+            - pkg: github.com/mapledaemon/MagicHandy/internal/motion
+              desc: The remote queues intent for the desktop; it never reaches the engine (ADR 0032).
+            - pkg: github.com/mapledaemon/MagicHandy/internal/transport
+              desc: The remote queues intent for the desktop; it never reaches a device (ADR 0032).
+            - pkg: github.com/mapledaemon/MagicHandy/internal/chat
+              desc: Remote chat messages are sent by the desktop's own chat, not by the queue.
+            - pkg: github.com/mapledaemon/MagicHandy/internal/media
+              desc: The desktop's player carries out video commands; the queue does not open media.
         pure-go-core:
           files:
             - $all

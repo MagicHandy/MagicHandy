@@ -120,7 +120,8 @@ func controlRoute(r *http.Request) bool {
 	case "/api/controller/takeover", "/api/media/sync", "/api/media/duration", "/api/media/script-offset", "/api/media/playback",
 		"/api/voice/transcriptions", "/api/voice/preferences", "/api/voice/input-preferences", "/api/library/feedback",
 		"/api/transport/bluetooth/status", "/api/transport/bluetooth/ack", "/api/settings/llm-motion-mode",
-		"/api/media/videos/tags", "/api/media/tags/rename", "/api/media/tags/delete":
+		"/api/media/videos/tags", "/api/media/tags/rename", "/api/media/tags/delete",
+		"/api/remote/presence", "/api/remote/commands":
 		return true
 	default:
 		return false
