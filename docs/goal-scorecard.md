@@ -12,10 +12,10 @@ dependency was added.
 | Artifact | Previous checkpoint (`c29b5600`) | This checkpoint | Change |
 | --- | ---: | ---: | ---: |
 | Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,297,088 B | 22,504,960 B | +207,872 B |
-| Main JS, raw / Node gzip-9 | 876,809 / 240,881 B | 921,955 / 252,580 B | +45,146 / +11,699 B |
+| Main JS, raw / Node gzip-9 | 876,809 / 240,881 B | 921,971 / 252,589 B | +45,162 / +11,708 B |
 | Main CSS, raw / Node gzip-9 | 149,743 / 27,029 B | 155,890 / 27,931 B | +6,147 / +902 B |
-| Remote page chunk, JS + CSS, raw / Node gzip-9 | — | 16,706 / 5,636 B | new, on demand |
-| All embedded assets | 2,289,587 B | 2,386,037 B | +96,450 B |
+| Remote page chunk, JS + CSS, raw / Node gzip-9 | — | 16,900 / 5,691 B | new, on demand |
+| All embedded assets | 2,289,587 B | 2,386,247 B | +96,660 B |
 
 The main JS grows by the curation dialogs and filters, the tag manager, the
 chat side view, the split player, the remote executor and their English

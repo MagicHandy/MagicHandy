@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { RemoteVideoPresence } from "../api/remote-types";
 import type { MediaSyncStatus } from "../api/types";
 import { syncStatusLabel } from "../components/SyncedVideoPlayer";
-import { PauseIcon, PlayIcon, VolumeIcon, VolumeMutedIcon } from "../shell/icons";
+import { ArrowLeftIcon, ArrowRightIcon, PauseIcon, PlayIcon, VolumeIcon, VolumeMutedIcon } from "../shell/icons";
 import { formatClock } from "../videos/format";
 import type { RemoteSend } from "./useRemoteCommands";
 
@@ -63,8 +63,15 @@ export function RemoteVideoControls({ video, position, send }: Props) {
       </div>
 
       <div className="remote-transport">
-        <button type="button" className="btn btn-secondary remote-skip" disabled={!video.ready} onClick={() => void send({ target: "video", action: "seek_by", ms: -SKIP_MS })}>
-          {t("Back 10 s")}
+        <button
+          type="button"
+          className="btn btn-secondary remote-skip"
+          disabled={!video.ready}
+          aria-label={t("Back 10 s")}
+          title={t("Back 10 s")}
+          onClick={() => void send({ target: "video", action: "seek_by", ms: -SKIP_MS })}
+        >
+          <ArrowLeftIcon size={16} />{t("{seconds} s", { seconds: SKIP_MS / 1000 })}
         </button>
         <button
           type="button"
@@ -75,8 +82,15 @@ export function RemoteVideoControls({ video, position, send }: Props) {
         >
           {video.playing ? <PauseIcon size={28} /> : <PlayIcon size={28} />}
         </button>
-        <button type="button" className="btn btn-secondary remote-skip" disabled={!video.ready} onClick={() => void send({ target: "video", action: "seek_by", ms: SKIP_MS })}>
-          {t("Forward 10 s")}
+        <button
+          type="button"
+          className="btn btn-secondary remote-skip"
+          disabled={!video.ready}
+          aria-label={t("Forward 10 s")}
+          title={t("Forward 10 s")}
+          onClick={() => void send({ target: "video", action: "seek_by", ms: SKIP_MS })}
+        >
+          {t("{seconds} s", { seconds: SKIP_MS / 1000 })}<ArrowRightIcon size={16} />
         </button>
       </div>
 
