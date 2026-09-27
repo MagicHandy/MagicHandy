@@ -1,7 +1,10 @@
 import { t } from "../i18n";
-import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref, type SyntheticEvent } from "react";
 import { api } from "../api/client";
 import type { MediaVideo } from "../api/types";
+import type { MediaPlaybackEvent } from "../media/mediaElement";
+
+export type { MediaPlaybackEvent } from "../media/mediaElement";
 
 interface Props {
   video: MediaVideo;
@@ -14,15 +17,13 @@ interface Props {
   onDuration?: (durationMillis: number) => void;
   onTimeChange?: (timeMillis: number) => void;
   onVideoUpdate?: (video: MediaVideo) => void;
-  playerRef?: MutableRefObject<HTMLVideoElement | null>;
+  playerRef?: Ref<HTMLVideoElement>;
   onPlaybackEvent?: (event: MediaPlaybackEvent, player: HTMLVideoElement) => void;
   synchronized?: boolean;
   /** Offered when the browser refuses to decode this file. */
   onRequestConversion?: () => void;
   conversionBusy?: boolean;
 }
-
-export type MediaPlaybackEvent = "play" | "playing" | "pause" | "seeking" | "seeked" | "ended" | "ratechange" | "waiting" | "stalled" | "canplay" | "error";
 
 // MediaError codes that mean "this browser cannot play these bytes" rather than
 // "these bytes did not arrive". MEDIA_ERR_SRC_NOT_SUPPORTED is what Firefox
@@ -62,7 +63,8 @@ export function MediaVideoPlayer({
   const internalPlayerRef = useRef<HTMLVideoElement | null>(null);
   const setPlayerRef = useCallback((node: HTMLVideoElement | null) => {
     internalPlayerRef.current = node;
-    if (playerRef) playerRef.current = node;
+    if (typeof playerRef === "function") playerRef(node);
+    else if (playerRef) (playerRef as { current: HTMLVideoElement | null }).current = node;
   }, [playerRef]);
 
   useEffect(() => {
@@ -217,6 +219,7 @@ export function MediaVideoPlayer({
           onSeeked={(event) => onPlaybackEvent?.("seeked", event.currentTarget)}
           onEnded={(event) => onPlaybackEvent?.("ended", event.currentTarget)}
           onRateChange={(event) => onPlaybackEvent?.("ratechange", event.currentTarget)}
+          onVolumeChange={(event) => onPlaybackEvent?.("volumechange", event.currentTarget)}
           onWaiting={(event) => onPlaybackEvent?.("waiting", event.currentTarget)}
           onStalled={(event) => onPlaybackEvent?.("stalled", event.currentTarget)}
           onCanPlay={(event) => {
