@@ -2402,5 +2402,6 @@
   "Control moved to another tab; send the command again.": "控制权已转到另一个标签页，请重新发送指令。",
   "No video is open on the desktop.": "桌面端没有打开的视频。",
   "The video is not ready for that yet.": "视频尚未准备好执行此操作。",
-  "The desktop is still answering. Send again when the reply finishes.": "桌面端仍在回复。请在回复结束后再发送。"
+  "The desktop is still answering. Send again when the reply finishes.": "桌面端仍在回复。请在回复结束后再发送。",
+  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "在有人点击桌面端的 MagicHandy 页面之前，桌面端浏览器会阻止播放声音。请在那里点击一次，或先将视频静音。"
 }

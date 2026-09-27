@@ -55,7 +55,6 @@
   color: var(--danger);
 }
 .media-player-heading {
-  align-items: flex-start;
   margin-bottom: 12px;
 }
 .media-player-heading > div {

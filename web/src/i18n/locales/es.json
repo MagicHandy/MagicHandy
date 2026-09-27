@@ -2402,5 +2402,6 @@
   "Control moved to another tab; send the command again.": "El control pasó a otra pestaña; vuelve a enviar el comando.",
   "No video is open on the desktop.": "No hay ningún video abierto en el escritorio.",
   "The video is not ready for that yet.": "El video todavía no está listo para eso.",
-  "The desktop is still answering. Send again when the reply finishes.": "El escritorio sigue respondiendo. Vuelve a enviar cuando termine la respuesta."
+  "The desktop is still answering. Send again when the reply finishes.": "El escritorio sigue respondiendo. Vuelve a enviar cuando termine la respuesta.",
+  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "El navegador del escritorio bloquea el sonido hasta que alguien haga clic en la página de MagicHandy allí. Haz clic una vez o silencia primero el video."
 }

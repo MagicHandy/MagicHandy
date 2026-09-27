@@ -6,10 +6,9 @@ import { SyncedVideoPlayer } from "../components/SyncedVideoPlayer";
 import type { VideoPlayerHandle } from "../media/playbackController";
 import { useRemoteVideoSurface } from "../remote/RemoteExecutorProvider";
 import { ArrowLeftIcon, ChatIcon, PencilIcon } from "../shell/icons";
-import { RatingStars, TagChips } from "./CurationControls";
 import { videoTitle } from "./curation";
-import { formatFileSize, formatLocation } from "./format";
 import { VideoChatSide } from "./VideoChatSide";
+import { VideoDescription } from "./VideoDescription";
 
 const CHAT_OPEN_KEY = "magichandy-video-chat-open";
 
@@ -49,21 +48,12 @@ export function VideoPlayerPage({
   const remoteSurface = useMemo(() => handle ? { handle, title, openChat } : null, [handle, title, openChat]);
   useRemoteVideoSurface(remoteSurface);
 
-  const details = video.has_funscript
-    ? t("{size} / {location} / script found", { size: formatFileSize(video.size_bytes), location: formatLocation(video.location_path) })
-    : t("{size} / {location}", { size: formatFileSize(video.size_bytes), location: formatLocation(video.location_path) });
   return (
     <section className="library-view video-player-view" aria-label={t("Video playback")}>
       <div className="media-player-heading">
         <button type="button" className="btn btn-secondary compact-command" onClick={onBack}><ArrowLeftIcon />{t("Videos")}</button>
         <div className="media-player-title">
           <h2>{title}</h2>
-          {title !== video.display_name && <span className="media-player-file">{video.display_name}</span>}
-          <span>{details}</span>
-          {(video.rating || (video.tags?.length ?? 0) > 0) && (
-            <span className="media-player-curation"><RatingStars rating={video.rating} /><TagChips tags={video.tags} limit={8} /></span>
-          )}
-          {video.notes && <p className="media-player-notes">{video.notes}</p>}
         </div>
         <div className="media-player-actions">
           {canCurate && (
@@ -92,6 +82,7 @@ export function VideoPlayerPage({
               <a href="#/settings/media">{t("Set up FFmpeg")}</a>
             </p>
           )}
+          <VideoDescription key={video.id} video={video} title={title} />
         </div>
         {chatOpen && <VideoChatSide synchronized={video.has_funscript} onClose={() => showChat(false)} />}
       </div>

@@ -11,15 +11,15 @@ dependency was added.
 
 | Artifact | Previous checkpoint (`c29b5600`) | This checkpoint | Change |
 | --- | ---: | ---: | ---: |
-| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,297,088 B | 22,502,400 B | +205,312 B |
-| Main JS, raw / Node gzip-9 | 876,809 / 240,881 B | 920,974 / 252,313 B | +44,165 / +11,432 B |
-| Main CSS, raw / Node gzip-9 | 149,743 / 27,029 B | 155,510 / 27,861 B | +5,767 / +832 B |
-| Remote page chunk, JS + CSS, raw / Node gzip-9 | — | 16,706 / 5,635 B | new, on demand |
-| All embedded assets | 2,289,587 B | 2,383,502 B | +93,915 B |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,297,088 B | 22,504,960 B | +207,872 B |
+| Main JS, raw / Node gzip-9 | 876,809 / 240,881 B | 921,955 / 252,580 B | +45,146 / +11,699 B |
+| Main CSS, raw / Node gzip-9 | 149,743 / 27,029 B | 155,890 / 27,931 B | +6,147 / +902 B |
+| Remote page chunk, JS + CSS, raw / Node gzip-9 | — | 16,706 / 5,636 B | new, on demand |
+| All embedded assets | 2,289,587 B | 2,386,037 B | +96,450 B |
 
 The main JS grows by the curation dialogs and filters, the tag manager, the
 chat side view, the split player, the remote executor and their English
-strings. Lazy locale chunks grow 6,109–7,868 raw and 2,109–2,287 gzip bytes
+strings. Lazy locale chunks grow 6,382–8,225 raw and 2,209–2,400 gzip bytes
 each. The binary grows by those assets and the catalog, remote and route code,
 and remains under the 30 MB target. Startup and memory were not re-measured:
 the one-time schema step is the only new startup work, and the remote hub

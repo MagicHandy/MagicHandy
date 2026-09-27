@@ -62,7 +62,9 @@ Video cards keep opening the player; a separate pencil action edits the title,
 rating, notes and tags. The grid adds tag, rating and script filters, and
 Manage tags renames or removes a tag everywhere. Ratings are outline stars
 that fill in the accent hue. Tags are compact chips, never pills. The player
-heading shows the curation under the file details.
+heading holds only the title and its actions. The file name, size, location,
+script pairing, rating, tags and notes sit in a Details section below the video
+and its timeline, folded each time a video opens, so the picture leads.
 
 The player's Chat action opens the active conversation in a side column. The
 picture keeps playing while it opens or closes, and below 1000px the chat

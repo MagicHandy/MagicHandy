@@ -2402,5 +2402,6 @@
   "Control moved to another tab; send the command again.": "Control moved to another tab; send the command again.",
   "No video is open on the desktop.": "No video is open on the desktop.",
   "The video is not ready for that yet.": "The video is not ready for that yet.",
-  "The desktop is still answering. Send again when the reply finishes.": "The desktop is still answering. Send again when the reply finishes."
+  "The desktop is still answering. Send again when the reply finishes.": "The desktop is still answering. Send again when the reply finishes.",
+  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first."
 }

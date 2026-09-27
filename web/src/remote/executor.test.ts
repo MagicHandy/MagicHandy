@@ -67,6 +67,7 @@ function setup() {
     }),
     withdraw: vi.fn(),
     navigate: vi.fn(),
+    canPlaySound: vi.fn(() => true),
     now: () => Date.now(),
   };
   const executor = new RemoteExecutor(deps);
@@ -145,6 +146,29 @@ describe("remote executor", () => {
     await vi.advanceTimersByTimeAsync(250);
     expect(reports.flatMap((report) => report.outcomes ?? []).map((outcome) => outcome.error)).toEqual([
       REMOTE_OUTCOMES.noVideo, REMOTE_OUTCOMES.notReady, REMOTE_OUTCOMES.unknown,
+    ]);
+  });
+
+  it("asks for a click on the desktop instead of starting sound the browser would refuse", async () => {
+    const { executor, deps, reports } = setup();
+    deps.canPlaySound.mockReturnValue(false);
+    executor.setEligible(true);
+    const video = fakeHandle();
+    executor.setVideo({ handle: video.handle, title: "Take 07" });
+    executor.execute(command("video", "play"));
+    executor.execute(command("video", "toggle"));
+    expect(video.commands.play).not.toHaveBeenCalled();
+    expect(video.commands.toggle).not.toHaveBeenCalled();
+
+    // Pausing needs no click, and a muted video may always start.
+    executor.execute(command("video", "pause"));
+    video.update({ muted: true });
+    executor.execute(command("video", "play"));
+    expect(video.commands.pause).toHaveBeenCalledTimes(1);
+    expect(video.commands.play).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(reports.flatMap((report) => report.outcomes ?? []).map((outcome) => outcome.error ?? "ok")).toEqual([
+      REMOTE_OUTCOMES.needsClick, REMOTE_OUTCOMES.needsClick, "ok", "ok",
     ]);
   });
 

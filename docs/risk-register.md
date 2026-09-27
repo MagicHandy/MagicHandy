@@ -10,7 +10,9 @@ does runs each command through its own player and composer, with its own
 controller authority and Stop fence. Commands wait at most ten seconds, are
 dropped by Emergency Stop and by a change of desktop, and reach only the tab
 that holds control. Another account cannot send commands and sees only that a
-desktop is present; observers see nothing. Opening a video never starts it.
+desktop is present; observers see nothing. Opening a video never starts it,
+and a play the desktop browser would refuse for sound, on a page nobody has
+clicked, is refused before paired motion arms.
 The desktop shows no sign that a remote is connected, so anyone signed in to
 the same account elsewhere can drive it; that is the same trust as taking
 control from that account. Curation needs control permission and writes only

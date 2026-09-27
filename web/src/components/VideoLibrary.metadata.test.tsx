@@ -142,8 +142,14 @@ describe("VideoLibrary curation", () => {
 
     const player = screen.getByRole("region", { name: "Video playback" });
     expect(within(player).getByRole("heading", { name: "Evening take" })).toBeInTheDocument();
-    expect(within(player).getByText("alpha_take_07")).toBeInTheDocument();
-    expect(within(player).getByText("Good first half.")).toBeInTheDocument();
+    // The file and curation sit in a folded Details section below the player.
+    const details = within(player).getByText("Details").closest("details")!;
+    expect(details).not.toHaveAttribute("open");
+    expect(details).toContainElement(within(player).getByText("alpha_take_07"));
+    expect(details).toContainElement(within(player).getByText("Good first half."));
+    expect(details).toContainElement(within(player).getByText("Calm"));
+    fireEvent.click(within(details).getByText("Details"));
+    expect(details).toHaveAttribute("open");
     fireEvent.click(within(player).getByRole("button", { name: "Edit details" }));
     expect(screen.getByRole("dialog", { name: "Video details" })).toBeInTheDocument();
   });

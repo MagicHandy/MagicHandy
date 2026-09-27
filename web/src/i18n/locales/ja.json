@@ -2402,5 +2402,6 @@
   "Control moved to another tab; send the command again.": "制御権が別のタブに移りました。コマンドをもう一度送信してください。",
   "No video is open on the desktop.": "デスクトップで開いている動画はありません。",
   "The video is not ready for that yet.": "動画はまだその操作を受け付けられません。",
-  "The desktop is still answering. Send again when the reply finishes.": "デスクトップはまだ応答中です。応答が終わってからもう一度送信してください。"
+  "The desktop is still answering. Send again when the reply finishes.": "デスクトップはまだ応答中です。応答が終わってからもう一度送信してください。",
+  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "デスクトップのブラウザーは、そこで MagicHandy のページが一度クリックされるまで音声の再生をブロックします。一度クリックするか、先に動画をミュートしてください。"
 }

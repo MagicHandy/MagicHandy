@@ -79,7 +79,10 @@ motion path.
 - **Execution.** A video command calls the player's own command, which returns
   whether it was accepted; a paired script still arms, seeks and stops through
   media sync. Opening a video only opens it: playback starts when someone
-  presses play. A chat message goes through the desktop composer, with the
+  presses play. Browsers refuse to start sound on a page nobody has clicked,
+  and for a paired video that refusal would come after motion armed. So a
+  remote play on such a desktop is refused with that reason; a muted video
+  may start. A chat message goes through the desktop composer, with the
   composer's Stop fence, and the desktop speaks the reply. Outcomes are
   canonical English sentences that the phone translates.
 - **Audience.** Observers cannot read remote state. Another account learns only

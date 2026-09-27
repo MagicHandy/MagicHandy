@@ -30,6 +30,11 @@ export interface RemoteExecutorDependencies {
   report: (presence: RemotePresence) => Promise<unknown>;
   withdraw: () => void;
   navigate: (hash: string) => void;
+  /**
+   * Whether this page may start playback with sound. Browsers refuse it until
+   * someone has clicked the page; defaults to the page's user activation.
+   */
+  canPlaySound?: () => boolean;
   now?: () => number;
 }
 
@@ -37,6 +42,7 @@ export interface RemoteExecutorDependencies {
 export const REMOTE_OUTCOMES = {
   noVideo: "No video is open on the desktop.",
   notReady: "The video is not ready for that yet.",
+  needsClick: "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.",
   noChat: "No chat is open on the desktop.",
   chatBusy: "The desktop is still answering. Send again when the reply finishes.",
   chatUnavailable: "The desktop chat cannot send right now.",
@@ -77,6 +83,7 @@ export function videoPresence(surface: RemoteVideoSurface): RemoteVideoPresence 
 export class RemoteExecutor {
   private readonly deps: RemoteExecutorDependencies;
   private readonly now: () => number;
+  private readonly canPlaySound: () => boolean;
   private eligible = false;
   private disposed = false;
   private route = "";
@@ -97,6 +104,7 @@ export class RemoteExecutor {
   constructor(deps: RemoteExecutorDependencies) {
     this.deps = deps;
     this.now = deps.now ?? (() => Date.now());
+    this.canPlaySound = deps.canPlaySound ?? (() => navigator.userActivation?.hasBeenActive !== false);
   }
 
   /** Only a visible tab that holds control reports and takes commands. */
@@ -169,6 +177,11 @@ export class RemoteExecutor {
     const video = this.video;
     if (!video) return failure(REMOTE_OUTCOMES.noVideo);
     const controls = video.handle.commands;
+    // A refused play() would arm paired motion and then stop it again. Ask for
+    // the click instead of trying.
+    const snapshot = video.handle.getSnapshot();
+    const starts = command.action === "play" || (command.action === "toggle" && !snapshot.playbackIntent);
+    if (starts && !snapshot.muted && !this.canPlaySound()) return failure(REMOTE_OUTCOMES.needsClick);
     let accepted: boolean;
     switch (command.action) {
       case "play": accepted = controls.play(); break;

@@ -228,7 +228,7 @@
   padding-block: 6px;
 }
 
-/* Player heading curation */
+/* Player heading: the title and its actions only. */
 .media-player-title {
   display: flex;
   flex: 1;
@@ -236,21 +236,50 @@
   gap: 3px;
   min-width: 0;
 }
-.media-player-curation {
+.media-player-edit {
+  flex: none;
+}
+
+/* Details below the player and its timeline, folded by default so the
+   picture leads. */
+.video-description {
+  border-top: 1px solid var(--line);
+}
+.video-description > summary {
+  padding: 10px 0 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+.video-description > summary:hover {
+  color: var(--text);
+}
+.video-description-body {
+  display: grid;
+  gap: 8px;
+  padding: 2px 0 8px;
+}
+.video-description-curation {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
-.media-player-notes {
+.video-description-notes {
   max-width: 70ch;
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 0.78rem;
+  margin: 0;
+  font-size: 0.85rem;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
-.media-player-edit {
-  flex: none;
+.video-description-file {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
 }
 
 /* Dialogs */

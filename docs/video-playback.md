@@ -341,8 +341,10 @@ downsampling is reused at canvas resolution):
 - **Curation and chat** (ADR 0032): each card has an edit action for its
   title, rating, notes and tags, the grid filters by tags, rating and script,
   and a tag manager renames or removes tags across the library. The player
-  page shows the curation and can open the active conversation beside the
-  picture without remounting the player; with it open, fullscreen takes both.
+  heading keeps only the title and actions; file details and curation fold
+  into a Details section below the timeline, closed by default. The page can
+  open the active conversation beside the picture without remounting the
+  player; with it open, fullscreen takes both.
 - **Phone remote** (ADR 0032): `#/remote` asks the desktop tab that holds
   control to play, pause, seek, set volume or speed, open or close a video, or
   to open its chat and send a message. The desktop runs each command through
