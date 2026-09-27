@@ -69,8 +69,10 @@ transcoding, codec bundling" and a no-transcoding scope wall. This document is
 the deliberate revisit those notes asked for, not scope drift. The wall's
 substance survives intact:
 
-- MagicHandy is still **not a media manager**. No tagging, no scrapers, no
-  metadata editing, no hover previews, no scrubbing sprites, no deduplication.
+- MagicHandy is still **not a media manager**. No scrapers, no automatic
+  tagging, no hover previews, no scrubbing sprites, no deduplication. Hand
+  curation in the catalog came later, by
+  [ADR 0032](decisions/0032-video-curation-and-remote.md).
 - Nothing heavy still happens **implicitly**. No decoding at startup, on a
   timer, or as a side effect of opening a page.
 - FFmpeg is still **never bundled** and never a requirement to use the app.
@@ -522,7 +524,8 @@ Against a generated fixture set, with FFmpeg 8.1.1:
 Recorded so they are not proposed later as small additions:
 
 - Hover previews, scrubber sprites, animated thumbnails.
-- Perceptual-hash deduplication, tagging, scrapers, metadata editing.
+- Perceptual-hash deduplication, automatic tagging, scrapers, and metadata
+  written into media files. (Hand-entered catalog curation is ADR 0032.)
 - Batch/queued conversion pipelines beyond the bounded library sweep. One file
   on request, or one explicit pass over files that cannot play; a general queue
   is how a utility becomes a media manager.

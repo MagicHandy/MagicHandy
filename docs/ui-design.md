@@ -56,6 +56,31 @@ labels, preventing off-screen controls from creating an extra document scrollbar
 Keep dynamic resizing, read-only clients, connection panels and short viewports
 in the visual checks. See [mobile Chat review](chat-mobile-review-2026-09-20.md).
 
+## Video curation and the phone remote
+
+Video cards keep opening the player; a separate pencil action edits the title,
+rating, notes and tags. The grid adds tag, rating and script filters, and
+Manage tags renames or removes a tag everywhere. Ratings are outline stars
+that fill in the accent hue. Tags are compact chips, never pills. The player
+heading shows the curation under the file details.
+
+The player's Chat action opens the active conversation in a side column. The
+picture keeps playing while it opens or closes, and below 1000px the chat
+stacks under the video. With the chat open, fullscreen takes the video and the
+chat together.
+
+`#/remote` joins the rail after Videos. It is a one-column page built for a
+phone: a connection line (a green dot when a desktop is taking commands, amber
+when it is another account's or the stream is reconnecting), a Video or Chat
+switch, then the controls for that choice. Video has a 72px play/pause button
+between 10-second skips, a position slider, mute, volume, speed and a
+searchable catalog to open from; opening a video never starts it. Chat shows
+the recent conversation with the desktop's persona name and a composer. Every
+target is at least 44px. A failed command shows its reason in amber under the
+switch; a command still waiting after 0.7 s says so. Red remains only on Stop,
+which stays in the rail as on every page. See
+[ADR 0032](decisions/0032-video-curation-and-remote.md).
+
 ## Informational notices
 
 Explanatory notices use the shared dismissal component and catalog. Their ×

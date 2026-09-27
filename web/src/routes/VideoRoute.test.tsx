@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { VideoRoute, videoIDFromRoute, videoRoute } from "./VideoRoute";
+import { videoIDFromRoute, videoRoute } from "../videos/route";
+import { VideoRoute } from "./VideoRoute";
 
 const app = vi.hoisted(() => ({ backendOnline: true, readOnly: false, state: { stop_sequence: 7 } }));
 

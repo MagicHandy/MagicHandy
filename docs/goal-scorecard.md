@@ -1,5 +1,30 @@
 # Goal Scorecard
 
+## 2026-09-27 — Video curation, chat beside the video and a phone remote
+
+Catalog videos carry a title, rating, notes and tags, and the player page
+opens the active chat beside the picture. A phone remote at `#/remote` asks
+the desktop tab that holds control to drive its video or send to its chat;
+the desktop runs each command through its own player and composer. The remote
+page loads only when it is opened, so desktops never download it. No
+dependency was added.
+
+| Artifact | Previous checkpoint (`c29b5600`) | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,297,088 B | 22,502,400 B | +205,312 B |
+| Main JS, raw / Node gzip-9 | 876,809 / 240,881 B | 920,974 / 252,313 B | +44,165 / +11,432 B |
+| Main CSS, raw / Node gzip-9 | 149,743 / 27,029 B | 155,510 / 27,861 B | +5,767 / +832 B |
+| Remote page chunk, JS + CSS, raw / Node gzip-9 | — | 16,706 / 5,635 B | new, on demand |
+| All embedded assets | 2,289,587 B | 2,383,502 B | +93,915 B |
+
+The main JS grows by the curation dialogs and filters, the tag manager, the
+chat side view, the split player, the remote executor and their English
+strings. Lazy locale chunks grow 6,109–7,868 raw and 2,109–2,287 gzip bytes
+each. The binary grows by those assets and the catalog, remote and route code,
+and remains under the 30 MB target. Startup and memory were not re-measured:
+the one-time schema step is the only new startup work, and the remote hub
+starts no goroutines and holds at most 32 commands and 16 outcomes.
+
 ## 2026-09-26 — Returning to the page keeps the view
 
 Returning to a hidden page no longer remounts every route. The page keeps its

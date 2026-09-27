@@ -13,8 +13,11 @@ a deliberate non-goal ("ScriptPlayer territory"). That disposition is
 the non-goal do not disappear; they become this design's guardrails:
 
 - MagicHandy stays a **chat-first controller with a media library**, not a
-  media manager: no transcoding, no tagging/metadata editing, no external
-  player integration, no codec bundling.
+  media manager: no transcoding during playback, no metadata scrapers, no
+  external player integration, no codec bundling. Hand curation — a title,
+  rating, notes and tags kept in the catalog — was added by
+  [ADR 0032](decisions/0032-video-curation-and-remote.md); it never writes to
+  media files.
 - The video feature adds **zero new motion pathways**: paired funscripts play
   through the one motion engine and the transport boundary like every other
   motion source (ADR 0002/0006).
@@ -335,6 +338,16 @@ downsampling is reused at canvas resolution):
   root are deleted when Settings is saved), and Scan now with progress and the
   last scan summary. Startup reconciles rows to saved locations without scanning
   files, closing a crash window after settings save.
+- **Curation and chat** (ADR 0032): each card has an edit action for its
+  title, rating, notes and tags, the grid filters by tags, rating and script,
+  and a tag manager renames or removes tags across the library. The player
+  page shows the curation and can open the active conversation beside the
+  picture without remounting the player; with it open, fullscreen takes both.
+- **Phone remote** (ADR 0032): `#/remote` asks the desktop tab that holds
+  control to play, pause, seek, set volume or speed, open or close a video, or
+  to open its chat and send a message. The desktop runs each command through
+  the same player commands as its own controls, so paired motion still arms
+  and stops through media sync. Opening a video never starts playback.
 - **Funscript import preview** (M0): after a funscript is parsed, an optional
   modal uses the same player above the existing timeline. Exact-basename media
   is selected first when present, another catalog video can be chosen, and the
@@ -500,6 +513,11 @@ limiting disabled and the saved maximum temporarily at 30% for startup safety:
 | `POST /api/media/duration` | controller | M0 | browser-reported `duration_ms` backfill |
 | `GET /api/media/videos/{id}/funscript` | read | M1 | bounded paired script for the timeline |
 | `POST /api/media/sync` | controller | M2 | play/pause/seek/heartbeat anchor events |
+| `PATCH /api/media/videos/{id}/metadata` | control permission | ADR 0032 | title, rating, notes and tags for one video |
+| `POST /api/media/videos/tags` / `POST /api/media/tags/rename` / `POST /api/media/tags/delete` | control permission | ADR 0032 | bulk tagging, tag rename (merging) and removal |
+| `POST` / `DELETE /api/remote/presence` | controller at its generation / own tab | ADR 0032 | the desktop reports or withdraws what it shows |
+| `GET /api/remote/state` / `GET /api/remote/events` | control permission | ADR 0032 | the phone reads the desktop's video and chat |
+| `POST /api/remote/commands` | control permission, same account | ADR 0032 | the phone queues a video or chat command |
 
 ## Slices (each is one reviewable PR with its own validation)
 
@@ -742,6 +760,8 @@ remains open.
 
 - [video-playback-panel.md](video-playback-panel.md) — the floating playback
   panel: per-video offset, smoothing, and peak rounding.
+- [decisions/0032](decisions/0032-video-curation-and-remote.md) — library
+  curation, chat beside the video and the phone remote.
 - [media-tooling.md](media-tooling.md) — proposed thumbnails, optional FFmpeg,
   and offline format conversion (plan only).
 - [feature-ideas.md](feature-ideas.md) — the reversed non-goal row.

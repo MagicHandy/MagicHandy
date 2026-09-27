@@ -1,6 +1,5 @@
 import { t } from "../i18n";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { VideoPlayerHandle } from "../media/playbackController";
 import { ArrowLeftIcon } from "../shell/icons";
 import { tagCounts } from "../videos/curation";
 import { TagManagerDialog } from "../videos/TagManagerDialog";
@@ -23,7 +22,6 @@ interface Props {
   selectedID?: string;
   /** Present when the route owns selection; otherwise the library keeps its own. */
   onSelect?: (id: string) => void;
-  onPlayerHandleChange?: (handle: VideoPlayerHandle | null) => void;
 }
 
 // Mirrors media.ConvertedSuffix. Fixed on both sides: changing it would orphan
@@ -40,7 +38,7 @@ interface ConversionFollowTarget {
 // The Videos workspace: the catalog grid, or the player page for the open
 // video. Catalog data, library maintenance and playback each have their own
 // owner; this component only decides which view is showing.
-export function VideoLibrary({ locked, hostAdministration = true, stopSequence, canCurate = !locked, selectedID: routedSelection, onSelect, onPlayerHandleChange }: Props) {
+export function VideoLibrary({ locked, hostAdministration = true, stopSequence, canCurate = !locked, selectedID: routedSelection, onSelect }: Props) {
   const hostLocked = locked || !hostAdministration;
   const catalog = useMediaCatalog();
   const reloadCatalog = catalog.reload;
@@ -151,7 +149,6 @@ export function VideoLibrary({ locked, hostAdministration = true, stopSequence, 
         onVideoUpdate={catalog.replaceVideo}
         onRequestConversion={() => void startConversion([selected.id])}
         onEditDetails={() => setEditingID(selected.id)}
-        onHandleChange={onPlayerHandleChange}
       />
     );
   } else {

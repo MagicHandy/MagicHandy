@@ -6,11 +6,12 @@ import { t, translateKnown } from "../i18n";
 // malformed-response state. Chat can start, adjust, and stop motion through
 // the backend contract; the frontend sends only text. When speak-replies is
 // on, the controller tab (the audio-lease owner) plays the ordered speech queue.
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { streamChat } from "../api/client";
 import type { ChatMessageDiagnostics } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
+import { useRemoteChatSurface } from "../remote/RemoteExecutorProvider";
 import { useVoicePlayback } from "../state/voice-playback";
 import { VoiceComposerControls } from "./VoiceComposerControls";
 import { useChatHistory, type ChatDisplayMessage } from "./useChatHistory";
@@ -115,6 +116,18 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   const asrConfigured = Boolean(voiceSettings?.enabled && voiceSettings.asr_provider && voiceSettings.asr_provider !== "none");
   const asrWorker = state?.voice?.workers?.asr;
   const asrReady = asrWorker?.state === "running" && asrWorker.model_state === "ready";
+
+  // A phone remote sends through this composer's path, so its message is
+  // fenced by the same Stop sequence and spoken by this tab (ADR 0032).
+  const remoteSend = useRef<(text: string) => void>(() => undefined);
+  useLayoutEffect(() => {
+    remoteSend.current = (text) => void sendText(text, state?.stop_sequence);
+  });
+  const remoteReady = !locked && !voiceActive;
+  const remoteChat = useMemo(() => ({
+    sessionId, personaName: assistantName, busy, ready: remoteReady, send: (text: string) => remoteSend.current(text),
+  }), [sessionId, assistantName, busy, remoteReady]);
+  useRemoteChatSurface(remoteChat);
 
   async function sendText(input: string, stopSequence?: number) {
     const text = input.trim();

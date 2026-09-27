@@ -7,17 +7,18 @@ import { AppStateProvider, useAppState, useMotionState } from "./app-state";
 vi.mock("../api/client", () => ({
   clientId: "subscription-profile",
   COMMAND_RECOVERED_EVENT: "magichandy:command-recovered",
+  REMOTE_COMMAND_EVENT: "magichandy:remote-command",
   api: { getState: vi.fn(async () => ({ controller: { read_only: false }, motion: { available: true } }) as AppState) },
 }));
 
 class EventSourceFixture {
   static source: EventSourceFixture;
-  listener?: EventListener;
+  readonly listeners = new Map<string, EventListener>();
   close = vi.fn();
   constructor() { EventSourceFixture.source = this; }
-  addEventListener(_event: string, listener: EventListener) { this.listener = listener; }
+  addEventListener(event: string, listener: EventListener) { this.listeners.set(event, listener); }
   emit(position: number) {
-    this.listener?.(new MessageEvent("motion", { data: JSON.stringify({ available: true, engine: { running: true, position_percent: position } }) }));
+    this.listeners.get("motion")?.(new MessageEvent("motion", { data: JSON.stringify({ available: true, engine: { running: true, position_percent: position } }) }));
   }
 }
 
@@ -50,4 +51,24 @@ it("does not rerender a large conversation or library on motion-only events", as
   if (import.meta.env.VITE_PROFILE_SUBSCRIPTIONS) console.info(JSON.stringify({ motionEvents: 80, rowsPerView: 500, extraRenders: { conversation: renders.conversation - baseline.conversation, library: renders.library - baseline.library }, commits, duration }));
   expect(renders).toEqual(baseline);
   expect(liveRenders - baselineLive).toBe(80);
+});
+
+it("hands phone commands from the motion stream to the remote executor without rerendering", async () => {
+  vi.stubGlobal("EventSource", EventSourceFixture);
+  const received: unknown[] = [];
+  const receive = (event: Event) => received.push((event as CustomEvent).detail);
+  window.addEventListener("magichandy:remote-command", receive);
+  let renders = 0;
+  function View() {
+    useAppState();
+    renders++;
+    return null;
+  }
+  render(<AppStateProvider><View /></AppStateProvider>);
+  await act(async () => {});
+  const baseline = renders;
+  act(() => EventSourceFixture.source.listeners.get("remote_command")?.(new MessageEvent("remote_command", { data: JSON.stringify({ id: "phone-1", action: "pause" }) })));
+  window.removeEventListener("magichandy:remote-command", receive);
+  expect(received).toEqual([{ id: "phone-1", action: "pause" }]);
+  expect(renders).toBe(baseline);
 });

@@ -1,9 +1,10 @@
 // Package remote relays intent from a signed-in phone to the desktop tab that
 // holds control: play, pause or seek its open video, open another video, or
-// send a chat message. The desktop tab carries each command out through its own
-// controls, with its own controller authority, so this package adds no motion
-// path and never talks to the engine or a transport. It only queues commands,
-// records what the desktop reports about itself, and tells remotes.
+// open the chat and send it a message. The desktop tab carries each command
+// out through its own controls, with its own controller authority, so this
+// package adds no motion path and never talks to the engine or a transport.
+// It only queues commands, records what the desktop reports about itself, and
+// tells remotes.
 package remote
 
 import (
@@ -90,9 +91,10 @@ type VideoPresence struct {
 
 // ChatPresence describes the desktop's open conversation.
 type ChatPresence struct {
-	SessionID string `json:"session_id"`
-	Busy      bool   `json:"busy"`
-	Ready     bool   `json:"ready"`
+	SessionID   string `json:"session_id"`
+	PersonaName string `json:"persona_name,omitempty"`
+	Busy        bool   `json:"busy"`
+	Ready       bool   `json:"ready"`
 }
 
 // Presence is what the desktop tab reports about itself.
@@ -159,6 +161,7 @@ func (h *Hub) Report(executor Identity, presence Presence) State {
 	presence.Outcomes = nil
 	presence.Route = clip(presence.Route, 40)
 	presence.Video = cleanVideo(presence.Video)
+	presence.Chat = cleanChat(presence.Chat)
 	h.executor = executor
 	h.presence = &presence
 	h.presenceAt = now
@@ -210,7 +213,7 @@ func (h *Hub) Send(sender Identity, command Command) (Command, error) {
 	switch {
 	case command.Target == "video" && command.Action != "open" && h.presence.Video == nil:
 		return Command{}, fmt.Errorf("%w: no video is open on the desktop", ErrTargetUnavailable)
-	case command.Target == "chat" && h.presence.Chat == nil:
+	case command.Target == "chat" && command.Action != "open" && h.presence.Chat == nil:
 		return Command{}, fmt.Errorf("%w: no chat is open on the desktop", ErrTargetUnavailable)
 	}
 	if len(h.pending) >= maxPending {
@@ -343,7 +346,11 @@ func (c Command) Validate() error {
 	case "video":
 		return c.validateVideo()
 	case "chat":
-		if c.Action != "send" {
+		switch c.Action {
+		case "open":
+			return nil
+		case "send":
+		default:
 			return invalidCommand("unknown chat action")
 		}
 		text := strings.TrimSpace(c.Text)
@@ -411,6 +418,16 @@ func cleanVideo(video *VideoPresence) *VideoPresence {
 	cleaned := *video
 	cleaned.Title = clip(cleaned.Title, maxTitle)
 	cleaned.SyncState = clip(cleaned.SyncState, 40)
+	return &cleaned
+}
+
+func cleanChat(chat *ChatPresence) *ChatPresence {
+	if chat == nil {
+		return nil
+	}
+	cleaned := *chat
+	cleaned.SessionID = clip(cleaned.SessionID, 128)
+	cleaned.PersonaName = clip(cleaned.PersonaName, 80)
 	return &cleaned
 }
 

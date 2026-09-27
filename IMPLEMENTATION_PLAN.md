@@ -124,6 +124,16 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-09-27 video curation, chat beside the video and phone remote
+
+Catalog videos carry a title, rating, notes and tags (schema v27), edited per
+video or in bulk and filtered in the grid. The player page opens the active
+conversation beside the picture. A phone remote at `#/remote` asks the desktop
+tab that holds control to drive its video or send to its chat; the desktop runs
+each command through its own player and composer, so no motion path is added.
+The player was first split into session, element and control owners. See
+[ADR 0032](docs/decisions/0032-video-curation-and-remote.md).
+
 ### 2026-09-26 LLM Lab stroke vocabularies
 
 Three LLM Lab modes test possible replacements for Layered: Stroke ends,
@@ -2241,6 +2251,8 @@ the existing shared trim timeline; that preview remains motion-free.
 This phase supersedes the feature-ideas "video sync player" non-goal by
 explicit direction (2026-07-19); the non-goal's concerns are carried as
 guardrails (no transcoding, no media management, no new motion pathway).
+ADR 0032 later allowed hand curation in the catalog and a phone remote that
+drives the desktop's own player.
 
 ## Done Criteria
 
@@ -2256,7 +2268,8 @@ guardrails (no transcoding, no media management, no new motion pathway).
 ## Out Of Scope
 
 - transcoding or codec bundling (`.mkv` excluded), external players, media
-  tagging/management, multi-axis funscript variants, network exposure
+  management beyond ADR 0032's hand curation, multi-axis funscript variants,
+  network exposure
 
 # Phase 20: Authenticated LAN HTTPS, Accounts, And Account GUI
 

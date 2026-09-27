@@ -2,7 +2,7 @@ import { t, translateKnown } from "../i18n";
 // Permanent left navigation rail: product identity, page links, and the pinned
 // Stop footer. The rail is present on every route (docs/ui-navigation-redesign.md).
 import { useAppState, useHashRoute } from "../state/app-state";
-import { ChatIcon, LibraryIcon, ModesIcon, PersonaIcon, SettingsIcon, VideoIcon } from "./icons";
+import { ChatIcon, LibraryIcon, ModesIcon, PersonaIcon, RemoteIcon, SettingsIcon, VideoIcon } from "./icons";
 import { StopButton } from "./StopButton";
 import {LAB_BASE,LabsNavLink} from "@labs";
 
@@ -14,6 +14,7 @@ const LINKS = [
   { base: "modes", href: "#/modes", label: "Preset modes", Icon: ModesIcon },
   { base: "library", href: "#/library", label: "Pattern library", Icon: LibraryIcon },
   { base: "videos", href: "#/videos", label: "Videos", Icon: VideoIcon },
+  { base: "remote", href: "#/remote", label: "Remote", Icon: RemoteIcon },
   { base: "settings", href: "#/settings", label: "Settings", Icon: SettingsIcon },
 ] as const;
 

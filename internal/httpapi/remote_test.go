@@ -189,8 +189,9 @@ func TestEmergencyStopDropsWaitingRemoteCommands(t *testing.T) {
 func TestRemoteStaysWithinOneAccount(t *testing.T) {
 	s, store, admin, _, _ := newRemoteFixture(t)
 	operator := newAdmissionIdentity(t, store, admin.ID, "operator", true)
-	if response := authenticatedControlRequest(s, operator.cookie, http.MethodPost, "/api/remote/commands", "operator-tab", `{"target":"video","action":"pause"}`); response.Code != http.StatusForbidden {
-		t.Fatalf("another account commanded the desktop: %d", response.Code)
+	response := authenticatedControlRequest(s, operator.cookie, http.MethodPost, "/api/remote/commands", "operator-tab", `{"target":"video","action":"pause"}`)
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"other_account"`) {
+		t.Fatalf("another account commanded the desktop: %d %s", response.Code, response.Body.String())
 	}
 	state := readRemoteState(t, s, operator.cookie)
 	if !state.Connected || !state.OtherAccount || state.Video != nil || state.Chat != nil {

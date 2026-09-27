@@ -4,6 +4,7 @@
 // payloads — only the semantic endpoints below.
 import type { AccessAuditPage } from "./audit-types";
 import type { RecoveryCodeStatus, IssuedRecoveryCodes } from "./access-types";
+import type { RemoteCommand, RemoteCommandInput, RemotePresence, RemoteState } from "./remote-types";
 import type {
   AppState,
   AutopilotSettings,
@@ -138,6 +139,8 @@ export const clientId = resolveControllerClientID(browserSessionStorage(), brows
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
 export const AUTHENTICATION_REQUIRED_EVENT = "magichandy:authentication-required";
 export const COMMAND_RECOVERED_EVENT = "magichandy:command-recovered";
+// A phone's command for this tab, forwarded from its motion stream.
+export const REMOTE_COMMAND_EVENT = "magichandy:remote-command";
 
 // Transport metadata copied from backend snapshots. It never grants local
 // ownership; the server independently checks session, tab and generation.
@@ -203,7 +206,7 @@ export async function request<T>(
     path !== "/api/chat/cursor" && path !== "/api/notice-preferences" &&
     !/^\/api\/transport\/bluetooth\/(?:status|ack)$/.test(path) &&
     !(path === "/api/transport/bluetooth/disconnect" && extraHeaders?.["X-MagicHandy-Gateway-Generation"]) &&
-    !/^\/api\/(?:auth|accounts|network|controller)(?:\/|$)/.test(path);
+    !/^\/api\/(?:auth|accounts|network|controller|remote)(?:\/|$)/.test(path);
   const headers: Record<string, string> = { Accept: "application/json", ...controllerRequestHeaders(delivery), ...extraHeaders };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   let res: Response;
@@ -614,6 +617,12 @@ export const api = {
     request<{ renamed: number; tags: MediaTagCount[] }>("POST", "/api/media/tags/rename", { from, to }),
   deleteMediaTag: (tag: string) =>
     request<{ removed: number; tags: MediaTagCount[] }>("POST", "/api/media/tags/delete", { tag }),
+  reportRemotePresence: (presence: RemotePresence, signal?: AbortSignal) =>
+    request<{ remote: RemoteState }>("POST", "/api/remote/presence", presence, signal),
+  withdrawRemotePresence: () => request<{ status: string }>("DELETE", "/api/remote/presence", undefined, undefined, undefined, true),
+  remoteState: (signal?: AbortSignal) => request<{ remote: RemoteState }>("GET", "/api/remote/state", undefined, signal),
+  sendRemoteCommand: (command: RemoteCommandInput) => request<{ command: RemoteCommand }>("POST", "/api/remote/commands", command),
+  remoteEventsURL: () => `/api/remote/events?client_id=${encodeURIComponent(clientId)}`,
   saveMediaPlayback: (patch: Partial<{
     script_smoothing_percent: number;
     peak_rounding_ms: number;

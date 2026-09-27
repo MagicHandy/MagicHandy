@@ -2,8 +2,10 @@ package remote
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 type fakeClock struct{ at time.Time }
@@ -96,6 +98,18 @@ func TestCommandsNeedTheSurfaceTheyTarget(t *testing.T) {
 	hub.Report(desktop, videoPresence())
 	if _, err := hub.Send(phone, Command{Target: "chat", Action: "send", Text: "hi"}); !errors.Is(err, ErrTargetUnavailable) {
 		t.Fatalf("chat command without a chat err = %v", err)
+	}
+	// Opening the chat is how a phone gets one when the desktop shows none.
+	mustSend(t, hub, Command{Target: "chat", Action: "open"})
+}
+
+func TestReportsAreBounded(t *testing.T) {
+	hub, _ := newTestHub()
+	long := strings.Repeat("é", 500)
+	state := hub.Report(desktop, Presence{Route: long, Video: &VideoPresence{VideoID: "clip", Title: long}, Chat: &ChatPresence{SessionID: "s", PersonaName: long}})
+	if utf8.RuneCountInString(state.Route) != 40 || utf8.RuneCountInString(state.Video.Title) != maxTitle || utf8.RuneCountInString(state.Chat.PersonaName) != 80 {
+		t.Fatalf("report was not clipped: route %d, title %d, persona %d runes",
+			utf8.RuneCountInString(state.Route), utf8.RuneCountInString(state.Video.Title), utf8.RuneCountInString(state.Chat.PersonaName))
 	}
 }
 

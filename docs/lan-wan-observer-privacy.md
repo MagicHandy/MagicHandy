@@ -35,8 +35,8 @@ content and library exports remain shared installation content. This is an
 explicit shared-content policy, not per-account isolation.
 
 Detailed Labs, trace, prompt-diagnostic and transport-inspection routes require
-administrator admission. The 207-registration table now contains 119 host,
-34 shared, 30 semantic-control, 14 self-service, 6 public and 4 gateway entries.
+administrator admission. The 230-registration table now contains 126 host,
+37 semantic-control, 36 shared, 17 self-service, 10 public and 4 gateway entries.
 Implicit HEAD follows the same policy. Physical Handy model/calibration changes
 within the quick-settings endpoint also require administrator access; a rejected
 mixed patch cannot partially apply its semantic fields.
@@ -45,6 +45,23 @@ The projections live in focused `internal/httpapi/client_*.go` files. Shared
 chat events allow explicitly reviewed fields and reject unknown event shapes.
 New payload fields and event types require an audience decision. Domain stores
 and the shared motion engine do not become aware of HTTP account roles.
+
+## Video curation and the phone remote
+
+[ADR 0032](decisions/0032-video-curation-and-remote.md) adds these audience
+decisions:
+
+| Payload | Observer | Controlling account | Another controlling account |
+| --- | --- | --- | --- |
+| Video title, rating, notes and tags | Read, as shared library content | Read and edit | Read and edit |
+| Remote state (`/api/remote/state`, `/api/remote/events`) | Refused | The desktop's page name, open video (title, play intent, position, duration, volume, mute, speed, sync state, script readiness), open chat (session ID, persona name, busy, ready), waiting-command count and recent outcomes | Only that a desktop is present |
+| `remote_command` on the motion stream | Never sent | Sent only to the tab that reported presence and still holds control, from the same account | Never sent |
+| Remote command errors | Refused | A `code` and a sentence; no identity | Refused with `other_account` |
+
+Presence and command IDs name no account or tab. A chat command carries the
+message the phone's own account wrote. Presence reports are not device commands
+and are not audited. A remote command that moves the device is audited as the
+desktop's own media sync or chat request, like a press on the desktop.
 
 ## Public Stop and browser lifetime
 

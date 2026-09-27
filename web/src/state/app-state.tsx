@@ -11,7 +11,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { api, clientId, COMMAND_RECOVERED_EVENT } from "../api/client";
+import { api, clientId, COMMAND_RECOVERED_EVENT, REMOTE_COMMAND_EVENT } from "../api/client";
 import type { AppState, MotionInfo, NotificationCategory } from "../api/types";
 import { notificationCategories } from "../notification-preferences";
 import { useControllerConnection } from "./controller-connection";
@@ -250,6 +250,16 @@ export function AppStateProvider({ children, enabled = true }: { children: React
           motionRevision.current++;
           liveObservation.current = next;
           setLiveMotion(next);
+        } catch {
+          /* ignore */
+        }
+      });
+      // The desktop that holds control receives phone commands on this stream
+      // (ADR 0032); the remote executor, not app state, carries them out.
+      currentSource.addEventListener("remote_command", (ev) => {
+        if (!active()) return;
+        try {
+          window.dispatchEvent(new CustomEvent(REMOTE_COMMAND_EVENT, { detail: JSON.parse((ev as MessageEvent).data) as unknown }));
         } catch {
           /* ignore */
         }

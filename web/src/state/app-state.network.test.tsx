@@ -6,17 +6,17 @@ import { AppStateProvider, useAppState, useMotionState } from "./app-state";
 
 vi.mock("../api/client", () => ({
   api: { getState: vi.fn(), controllerState: vi.fn(), controllerHeartbeat: vi.fn(), takeControl: vi.fn(), resumeMotion: vi.fn() },
-  clientId: "network-tab", COMMAND_RECOVERED_EVENT: "magichandy:command-recovered",
+  clientId: "network-tab", COMMAND_RECOVERED_EVENT: "magichandy:command-recovered", REMOTE_COMMAND_EVENT: "magichandy:remote-command",
 }));
 
 class NetworkEventSource {
   static instances: NetworkEventSource[] = [];
-  listener?: EventListener;
+  readonly listeners = new Map<string, EventListener>();
   onerror?: () => void;
   close = vi.fn();
   constructor() { NetworkEventSource.instances.push(this); }
-  addEventListener(_name: string, listener: EventListener) { this.listener = listener; }
-  emit(value: MotionInfo) { this.listener?.(new MessageEvent("motion", { data: JSON.stringify(value) })); }
+  addEventListener(name: string, listener: EventListener) { this.listeners.set(name, listener); }
+  emit(value: MotionInfo) { this.listeners.get("motion")?.(new MessageEvent("motion", { data: JSON.stringify(value) })); }
 }
 
 function deferred<T>() {

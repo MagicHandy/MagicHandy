@@ -98,10 +98,11 @@ func (s *Server) handleRemotePresence(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"remote": s.remote.Report(executor, presence)})
 }
 
-// handleRemoteWithdraw ends a tab's presence. A closing tab may already have
-// lost control, so only its own session and tab identity are required.
+// handleRemoteWithdraw ends a tab's presence when it closes, hides or loses
+// control. By then it may no longer hold control, so only its own session and
+// tab identity are required.
 func (s *Server) handleRemoteWithdraw(w http.ResponseWriter, r *http.Request) {
-	s.remote.Withdraw(remoteIdentity(r, clientIDFromRequest(r)), "The desktop closed the video and chat.")
+	s.remote.Withdraw(remoteIdentity(r, clientIDFromRequest(r)), "The desktop stopped taking commands.")
 	writeJSON(w, http.StatusOK, map[string]any{"status": "withdrawn"})
 }
 
@@ -126,18 +127,23 @@ func (s *Server) handleRemoteCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sent, err := s.remote.Send(remoteIdentity(r, clientIDFromRequest(r)), command)
-	switch {
-	case err == nil:
+	if err == nil {
 		writeJSON(w, http.StatusAccepted, map[string]any{"command": sent})
-	case errors.Is(err, remote.ErrInvalidCommand):
-		writeError(w, http.StatusBadRequest, err)
-	case errors.Is(err, remote.ErrOtherAccount):
-		writeError(w, http.StatusForbidden, err)
-	case errors.Is(err, remote.ErrBusy):
-		writeError(w, http.StatusTooManyRequests, err)
-	default:
-		writeError(w, http.StatusConflict, err)
+		return
 	}
+	// The code lets the phone word the failure in its own language.
+	status, code := http.StatusConflict, "no_desktop"
+	switch {
+	case errors.Is(err, remote.ErrInvalidCommand):
+		status, code = http.StatusBadRequest, "invalid"
+	case errors.Is(err, remote.ErrOtherAccount):
+		status, code = http.StatusForbidden, "other_account"
+	case errors.Is(err, remote.ErrBusy):
+		status, code = http.StatusTooManyRequests, "busy"
+	case errors.Is(err, remote.ErrTargetUnavailable):
+		code = "target_unavailable"
+	}
+	writeJSON(w, status, map[string]string{"error": err.Error(), "code": code})
 }
 
 // deliverRemoteCommands forwards commands queued for this tab on its existing

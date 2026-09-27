@@ -1,9 +1,10 @@
 import { t } from "../i18n";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { MediaVideo } from "../api/types";
 import { needsConversion } from "../api/types";
 import { SyncedVideoPlayer } from "../components/SyncedVideoPlayer";
 import type { VideoPlayerHandle } from "../media/playbackController";
+import { useRemoteVideoSurface } from "../remote/RemoteExecutorProvider";
 import { ArrowLeftIcon, ChatIcon, PencilIcon } from "../shell/icons";
 import { RatingStars, TagChips } from "./CurationControls";
 import { videoTitle } from "./curation";
@@ -25,24 +26,28 @@ interface Props {
   onVideoUpdate: (video: MediaVideo) => void;
   onRequestConversion: () => void;
   onEditDetails: () => void;
-  onHandleChange?: (handle: VideoPlayerHandle | null) => void;
 }
 
 export function VideoPlayerPage({
   video, locked, stopSequence, hostLocked, hostAdministration, canCurate, toolsAvailable, conversionBusy,
-  onBack, onVideoUpdate, onRequestConversion, onEditDetails, onHandleChange,
+  onBack, onVideoUpdate, onRequestConversion, onEditDetails,
 }: Props) {
   const title = videoTitle(video);
   const [chatOpen, setChatOpen] = useState(readChatPreference);
+  const [handle, setHandle] = useState<VideoPlayerHandle | null>(null);
 
-  function showChat(open: boolean) {
+  const showChat = useCallback((open: boolean) => {
     setChatOpen(open);
     try {
       localStorage.setItem(CHAT_OPEN_KEY, String(open));
     } catch {
       // The choice still applies to this page when storage is blocked.
     }
-  }
+  }, []);
+  const openChat = useCallback(() => showChat(true), [showChat]);
+  // The phone remote drives this player through the same commands as its controls.
+  const remoteSurface = useMemo(() => handle ? { handle, title, openChat } : null, [handle, title, openChat]);
+  useRemoteVideoSurface(remoteSurface);
 
   const details = video.has_funscript
     ? t("{size} / {location} / script found", { size: formatFileSize(video.size_bytes), location: formatLocation(video.location_path) })
@@ -77,7 +82,7 @@ export function VideoPlayerPage({
             onVideoUpdate={onVideoUpdate}
             conversionBusy={conversionBusy}
             onRequestConversion={hostLocked || !toolsAvailable ? undefined : onRequestConversion}
-            onHandleChange={onHandleChange}
+            onHandleChange={setHandle}
           />
           {!hostAdministration && needsConversion(video) && <p className="form-status media-playback-error" role="alert">{t("Host settings and diagnostics are managed by an administrator.")}</p>}
           {hostAdministration && !toolsAvailable && needsConversion(video) && (

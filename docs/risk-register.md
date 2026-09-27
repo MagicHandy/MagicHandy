@@ -1,5 +1,22 @@
 # MagicHandy Risk Register
 
+## 2026-09-27 Phone remote and library curation
+
+A second device can now make the desktop act. A phone signed in to the same
+account can play, pause and seek the desktop's video, open another one, and
+send to its chat; with a paired script, play starts synchronized motion as a
+press on the desktop would. The phone never holds control: the desktop tab that
+does runs each command through its own player and composer, with its own
+controller authority and Stop fence. Commands wait at most ten seconds, are
+dropped by Emergency Stop and by a change of desktop, and reach only the tab
+that holds control. Another account cannot send commands and sees only that a
+desktop is present; observers see nothing. Opening a video never starts it.
+The desktop shows no sign that a remote is connected, so anyone signed in to
+the same account elsewhere can drive it; that is the same trust as taking
+control from that account. Curation needs control permission and writes only
+catalog rows. Physical acceptance of phone control over a paired video remains
+open with R25. See [ADR 0032](decisions/0032-video-curation-and-remote.md).
+
 ## 2026-09-26 Page return keeps the last view
 
 Returning to a hidden page used to discard the app state, which remounted every

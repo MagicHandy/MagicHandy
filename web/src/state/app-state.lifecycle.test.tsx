@@ -4,16 +4,16 @@ import { api, COMMAND_RECOVERED_EVENT } from "../api/client";
 import type { AppState, MotionInfo } from "../api/types";
 import { AppStateProvider, useAppState, useMotionState } from "./app-state";
 
-vi.mock("../api/client", () => ({ api: { getState: vi.fn(), controllerState: vi.fn(), controllerHeartbeat: vi.fn() }, clientId: "test-tab", COMMAND_RECOVERED_EVENT: "magichandy:command-recovered" }));
+vi.mock("../api/client", () => ({ api: { getState: vi.fn(), controllerState: vi.fn(), controllerHeartbeat: vi.fn() }, clientId: "test-tab", COMMAND_RECOVERED_EVENT: "magichandy:command-recovered", REMOTE_COMMAND_EVENT: "magichandy:remote-command" }));
 
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
-  listener?: EventListener;
+  readonly listeners = new Map<string, EventListener>();
   onerror?: () => void;
   close = vi.fn();
   constructor() { FakeEventSource.instances.push(this); }
-  addEventListener(_name: string, listener: EventListener) { this.listener = listener; }
-  emit(motion: MotionInfo) { this.listener?.(new MessageEvent("motion", { data: JSON.stringify(motion) })); }
+  addEventListener(name: string, listener: EventListener) { this.listeners.set(name, listener); }
+  emit(motion: MotionInfo) { this.listeners.get("motion")?.(new MessageEvent("motion", { data: JSON.stringify(motion) })); }
 }
 
 function deferred<T>() {

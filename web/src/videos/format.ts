@@ -2,7 +2,12 @@ import { t } from "../i18n";
 
 export function formatDuration(durationMillis: number | null | undefined): string {
   if (!durationMillis || durationMillis <= 0) return "Duration unknown";
-  const total = Math.round(durationMillis / 1000);
+  return formatClock(durationMillis);
+}
+
+/** A position or length as m:ss or h:mm:ss; zero reads 0:00. */
+export function formatClock(millis: number): string {
+  const total = Math.max(0, Math.round((Number.isFinite(millis) ? millis : 0) / 1000));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const seconds = total % 60;
