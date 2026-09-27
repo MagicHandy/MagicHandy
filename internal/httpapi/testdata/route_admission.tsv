@@ -58,6 +58,7 @@ host	GET /api/llm/runtime
 shared	GET /api/llm/status
 shared	GET /api/media/job
 shared	GET /api/media/scan
+shared	GET /api/media/tags
 host	GET /api/media/tools
 shared	GET /api/media/videos
 shared	GET /api/media/videos/{id}/funscript
@@ -102,6 +103,7 @@ shared	GET /api/voice/status
 public	GET /healthz
 self	PATCH /api/auth/sessions/{id}
 host	PATCH /api/library/patterns/{id}
+control	PATCH /api/media/videos/{id}/metadata
 host	PATCH /api/memory/{id}
 host	PATCH /api/personas/{id}
 host	PATCH /api/personas/{id}/lore/{lore_id}
@@ -145,7 +147,10 @@ control	POST /api/media/playback
 host	POST /api/media/scan
 control	POST /api/media/script-offset
 control	POST /api/media/sync
+control	POST /api/media/tags/delete
+control	POST /api/media/tags/rename
 host	POST /api/media/thumbnails
+control	POST /api/media/videos/tags
 host	POST /api/media/videos/{id}/thumbnail
 host	POST /api/memory
 host	POST /api/memory/clear

@@ -58,6 +58,9 @@ func (s *Server) clientVideos(r *http.Request, videos []media.Video) []media.Vid
 			ScannedAt: video.ScannedAt, ScriptOffsetMillis: video.ScriptOffsetMillis, ThumbnailGeneratedAt: video.ThumbnailGeneratedAt,
 			Compatibility: video.Compatibility, VideoCodec: video.VideoCodec, AudioCodec: video.AudioCodec,
 			Superseded: video.Superseded, ContainerType: video.ContainerType,
+			// Curation is shared installation content, like the titles
+			// observers already see.
+			Title: video.Title, Rating: video.Rating, Notes: video.Notes, Tags: video.Tags,
 		})
 	}
 	return views

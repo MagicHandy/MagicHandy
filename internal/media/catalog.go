@@ -73,6 +73,12 @@ type Video struct {
 	// beats any server-side table: MKV plays in Chrome and not in Firefox, and
 	// only the browser in front of the user knows which one it is.
 	ContainerType string `json:"container_type"`
+	// Title, Rating, Notes and Tags are the user's curation. The display name
+	// stays the file's stem; a title only changes what the library shows.
+	Title  *string  `json:"title"`
+	Rating *int     `json:"rating"`
+	Notes  *string  `json:"notes"`
+	Tags   []string `json:"tags"`
 }
 
 // NeedsConversion reports whether this row is a repair candidate.
@@ -86,7 +92,7 @@ func (v Video) NeedsConversion() bool {
 const videoColumns = `id, location_path, relative_path, display_name, size_bytes,
 	       modified_at, duration_ms, funscript_relative_path, missing, scanned_at,
 	       script_offset_ms, thumbnail_generated_at, compatibility, video_codec,
-	       audio_codec, superseded`
+	       audio_codec, superseded, title, rating, notes`
 
 // Summary is the constant-size media snapshot used by the regular app poll.
 type Summary struct {
@@ -213,6 +219,9 @@ func (c *Catalog) List(ctx context.Context) ([]Video, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if err := c.attachTags(ctx, videos); err != nil {
+		return nil, err
+	}
 	return videos, nil
 }
 
@@ -237,7 +246,14 @@ func (c *Catalog) Video(ctx context.Context, id string) (Video, error) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return Video{}, ErrVideoNotFound
 	}
-	return video, err
+	if err != nil {
+		return Video{}, err
+	}
+	videos := []Video{video}
+	if err := c.attachTagsFor(ctx, videos); err != nil {
+		return Video{}, err
+	}
+	return videos[0], nil
 }
 
 // SetDuration stores browser-decoded metadata without probing media in Go.
@@ -377,12 +393,14 @@ type rowScanner interface {
 func scanVideo(row rowScanner) (Video, error) {
 	var video Video
 	var duration sql.NullInt64
-	var funscript, thumbnail, compatibility, videoCodec, audioCodec sql.NullString
+	var funscript, thumbnail, compatibility, videoCodec, audioCodec, title, notes sql.NullString
+	var rating sql.NullInt64
 	var missing, superseded int
 	err := row.Scan(
 		&video.ID, &video.LocationPath, &video.RelativePath, &video.DisplayName,
 		&video.SizeBytes, &video.ModifiedAt, &duration, &funscript, &missing, &video.ScannedAt,
 		&video.ScriptOffsetMillis, &thumbnail, &compatibility, &videoCodec, &audioCodec, &superseded,
+		&title, &rating, &notes,
 	)
 	if err != nil {
 		return Video{}, err
@@ -402,6 +420,13 @@ func scanVideo(row rowScanner) (Video, error) {
 	}
 	video.VideoCodec = optionalString(videoCodec)
 	video.AudioCodec = optionalString(audioCodec)
+	video.Title = optionalString(title)
+	video.Notes = optionalString(notes)
+	if rating.Valid {
+		value := int(rating.Int64)
+		video.Rating = &value
+	}
+	video.Tags = []string{}
 	// A value this binary does not recognize is treated as unknown rather than
 	// trusted, so a row written by a newer build cannot suppress a repair
 	// offer or assert a playability claim this code cannot interpret.

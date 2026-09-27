@@ -112,13 +112,15 @@ func controlRoute(r *http.Request) bool {
 	}
 	if strings.HasPrefix(route, "/api/voice/requests/") ||
 		(strings.HasPrefix(route, "/api/library/") && strings.HasSuffix(route, "/play")) ||
-		singleResourceAction(route, "/api/library/feedback/", "/undo") {
+		singleResourceAction(route, "/api/library/feedback/", "/undo") ||
+		singleResourceAction(route, "/api/media/videos/", "/metadata") {
 		return true
 	}
 	switch route {
 	case "/api/controller/takeover", "/api/media/sync", "/api/media/duration", "/api/media/script-offset", "/api/media/playback",
 		"/api/voice/transcriptions", "/api/voice/preferences", "/api/voice/input-preferences", "/api/library/feedback",
-		"/api/transport/bluetooth/status", "/api/transport/bluetooth/ack", "/api/settings/llm-motion-mode":
+		"/api/transport/bluetooth/status", "/api/transport/bluetooth/ack", "/api/settings/llm-motion-mode",
+		"/api/media/videos/tags", "/api/media/tags/rename", "/api/media/tags/delete":
 		return true
 	default:
 		return false

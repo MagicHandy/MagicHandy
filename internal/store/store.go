@@ -19,7 +19,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 26
+	CurrentSchemaVersion = 27
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -575,6 +575,9 @@ var migrations = [][]string{
 	noticePreferencesSchema,
 	// v25 -> v26: an explicitly issued permanent control permission has no expiry.
 	permanentControlSchema,
+	// v26 -> v27: user titles, ratings, notes and tags for catalog videos. The
+	// guarded hook adds the columns and the cascading tag table.
+	{`SELECT 1`},
 }
 
 func migrateAccountProfiles(ctx context.Context, tx *sql.Tx) error {
@@ -898,6 +901,8 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		err = migrateSessionManagement(ctx, tx)
 	case 23:
 		err = migrateAccessAudit(ctx, tx)
+	case 27:
+		err = migrateVideoMetadata(ctx, tx)
 	default:
 		return nil
 	}
