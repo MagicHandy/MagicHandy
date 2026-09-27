@@ -39,11 +39,13 @@ import type {
   ManagedLlamaRuntimeBuild,
   MediaScanState,
   MediaFunscript,
+  MediaMetadataPatch,
   MediaJobState,
   MediaToolStatus,
   MediaSyncEvent,
   MediaSyncStatus,
   MediaPlaybackSettings,
+  MediaTagCount,
   MediaVideo,
   OllamaModelInfo,
   OllamaModelScan,
@@ -604,6 +606,14 @@ export const api = {
     request<{ funscript: MediaFunscript }>("GET", `/api/media/videos/${encodeURIComponent(id)}/funscript`, undefined, signal),
   saveMediaScriptOffset: (id: string, scriptOffsetMillis: number) =>
     request("POST", "/api/media/script-offset", { id, script_offset_ms: scriptOffsetMillis }),
+  saveMediaMetadata: (id: string, patch: MediaMetadataPatch) =>
+    request<{ video: MediaVideo }>("PATCH", `/api/media/videos/${encodeURIComponent(id)}/metadata`, patch),
+  tagMediaVideos: (ids: string[], add: string[], remove: string[]) =>
+    request<{ videos: MediaVideo[] }>("POST", "/api/media/videos/tags", { ids, add, remove }),
+  renameMediaTag: (from: string, to: string) =>
+    request<{ renamed: number; tags: MediaTagCount[] }>("POST", "/api/media/tags/rename", { from, to }),
+  deleteMediaTag: (tag: string) =>
+    request<{ removed: number; tags: MediaTagCount[] }>("POST", "/api/media/tags/delete", { tag }),
   saveMediaPlayback: (patch: Partial<{
     script_smoothing_percent: number;
     peak_rounding_ms: number;

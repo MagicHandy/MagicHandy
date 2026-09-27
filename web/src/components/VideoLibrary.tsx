@@ -1,9 +1,12 @@
 import { t } from "../i18n";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { VideoPlayerHandle } from "../media/playbackController";
 import { ArrowLeftIcon } from "../shell/icons";
+import { tagCounts } from "../videos/curation";
+import { TagManagerDialog } from "../videos/TagManagerDialog";
 import { useMediaCatalog } from "../videos/useMediaCatalog";
 import { useMediaMaintenance } from "../videos/useMediaMaintenance";
+import { VideoDetailsDialog } from "../videos/VideoDetailsDialog";
 import { VideoGrid } from "../videos/VideoGrid";
 import { VideoPlayerPage } from "../videos/VideoPlayerPage";
 
@@ -11,6 +14,11 @@ interface Props {
   locked: boolean;
   hostAdministration?: boolean;
   stopSequence?: number;
+  /**
+   * The account may edit titles, ratings, notes and tags. Curation is library
+   * content, so it does not need this tab to hold the controller lease.
+   */
+  canCurate?: boolean;
   /** The open video when the route owns selection. */
   selectedID?: string;
   /** Present when the route owns selection; otherwise the library keeps its own. */
@@ -32,7 +40,7 @@ interface ConversionFollowTarget {
 // The Videos workspace: the catalog grid, or the player page for the open
 // video. Catalog data, library maintenance and playback each have their own
 // owner; this component only decides which view is showing.
-export function VideoLibrary({ locked, hostAdministration = true, stopSequence, selectedID: routedSelection, onSelect, onPlayerHandleChange }: Props) {
+export function VideoLibrary({ locked, hostAdministration = true, stopSequence, canCurate = !locked, selectedID: routedSelection, onSelect, onPlayerHandleChange }: Props) {
   const hostLocked = locked || !hostAdministration;
   const catalog = useMediaCatalog();
   const reloadCatalog = catalog.reload;
@@ -51,6 +59,11 @@ export function VideoLibrary({ locked, hostAdministration = true, stopSequence, 
   const { videos, loading } = catalog;
   const { job, setConversionError } = maintenance;
   const selected = videos.find((video) => video.id === selectedID);
+  const [editingID, setEditingID] = useState("");
+  const [managingTags, setManagingTags] = useState(false);
+  const tags = useMemo(() => tagCounts(videos), [videos]);
+  const tagSuggestions = useMemo(() => tags.map((entry) => entry.tag), [tags]);
+  const editing = videos.find((video) => video.id === editingID);
 
   // Converting the open video hides the original and adds a repaired sibling
   // under a new identifier. Match the new row by root/name and exclude every ID
@@ -104,17 +117,16 @@ export function VideoLibrary({ locked, hostAdministration = true, stopSequence, 
     if (started) setConversionTarget(followTarget ? { ...followTarget, jobStartedAt: started.started_at } : null);
   }
 
+  let view: ReactNode;
   if (selectedID && !selected && (conversionTarget || loading)) {
-    return (
+    view = (
       <section className="library-view video-player-view" aria-label={t("Video playback")} aria-busy="true">
         <button type="button" className="btn btn-secondary compact-command" onClick={leaveVideo}><ArrowLeftIcon />{t("Videos")}</button>
         <div className="empty-state compact-empty" role="status"><h2>{conversionTarget ? t("Refreshing catalog") : t("Loading videos")}</h2></div>
       </section>
     );
-  }
-
-  if (selectedID && !loading && (!selected || selected.missing)) {
-    return (
+  } else if (selectedID && !loading && (!selected || selected.missing)) {
+    view = (
       <section className="library-view video-player-view" aria-label={t("Video playback")}>
         <button type="button" className="btn btn-secondary compact-command" onClick={leaveVideo}><ArrowLeftIcon />{t("Videos")}</button>
         <div className="empty-state compact-empty" role="alert">
@@ -124,34 +136,60 @@ export function VideoLibrary({ locked, hostAdministration = true, stopSequence, 
         </div>
       </section>
     );
-  }
-
-  if (selected && !selected.missing) {
-    return (
+  } else if (selected && !selected.missing) {
+    view = (
       <VideoPlayerPage
         video={selected}
         locked={locked}
         stopSequence={stopSequence}
         hostLocked={hostLocked}
         hostAdministration={hostAdministration}
+        canCurate={canCurate}
         toolsAvailable={Boolean(maintenance.tools?.available)}
         conversionBusy={conversionBusy}
         onBack={leaveVideo}
         onVideoUpdate={catalog.replaceVideo}
         onRequestConversion={() => void startConversion([selected.id])}
+        onEditDetails={() => setEditingID(selected.id)}
         onHandleChange={onPlayerHandleChange}
+      />
+    );
+  } else {
+    view = (
+      <VideoGrid
+        catalog={catalog}
+        maintenance={maintenance}
+        hostLocked={hostLocked}
+        hostAdministration={hostAdministration}
+        canCurate={canCurate}
+        onOpen={select}
+        onConvertAll={() => void startConversion([])}
+        onEditDetails={(video) => setEditingID(video.id)}
+        onManageTags={() => setManagingTags(true)}
       />
     );
   }
 
   return (
-    <VideoGrid
-      catalog={catalog}
-      maintenance={maintenance}
-      hostLocked={hostLocked}
-      hostAdministration={hostAdministration}
-      onOpen={select}
-      onConvertAll={() => void startConversion([])}
-    />
+    <>
+      {view}
+      {editing && canCurate && (
+        <VideoDetailsDialog
+          key={editing.id}
+          video={editing}
+          tagSuggestions={tagSuggestions}
+          onClose={() => setEditingID("")}
+          onSaved={catalog.replaceVideo}
+        />
+      )}
+      {managingTags && canCurate && (
+        <TagManagerDialog
+          tags={tags}
+          locked={!canCurate}
+          onClose={() => setManagingTags(false)}
+          onChanged={() => void catalog.reload()}
+        />
+      )}
+    </>
   );
 }

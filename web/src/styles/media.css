@@ -48,83 +48,7 @@
   min-width: 132px;
   padding-block: 8px;
 }
-.media-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 12px;
-}
-.media-card {
-  min-width: 0;
-  display: grid;
-  grid-template-rows: auto auto auto;
-  gap: 9px;
-  padding: 0 0 11px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.media-card:hover:not([aria-disabled="true"]),
-.media-card:focus-visible {
-  border-color: var(--accent);
-}
-.media-card:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-.media-card[aria-disabled="true"] {
-  opacity: 0.56;
-  cursor: not-allowed;
-}
-.media-card-visual {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-inset);
-  color: var(--muted);
-}
-.media-card-visual svg + svg {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  color: var(--accent);
-}
-.media-card-copy,
-.media-card-badges {
-  display: flex;
-  min-width: 0;
-  margin-inline: 11px;
-}
-.media-card-copy {
-  flex-direction: column;
-  gap: 3px;
-}
-.media-card-copy strong {
-  overflow: hidden;
-  font-size: 0.88rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.media-card-copy span {
-  color: var(--muted);
-  font-size: 0.72rem;
-}
-.media-card-copy .media-card-location {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.media-card-badges {
-  min-height: 20px;
-  gap: 5px;
-}
+/* The catalog grid, cards and curation controls live in video-library.css. */
 .media-missing-badge,
 .media-playback-error,
 .media-preview-readout [data-warning] {
@@ -855,16 +779,6 @@
 }
 
 /* Media tooling: covers, the repair affordance, and long-job progress. */
-/* The cover fills the existing 16:9 slot without contributing to layout height.
-   Left in flow it sizes to its own aspect ratio, which is taller than the slot
-   and pushes the badge row past the card's hidden overflow. */
-.media-card-thumbnail {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
 .media-convert-badge {
   color: var(--warn);
 }

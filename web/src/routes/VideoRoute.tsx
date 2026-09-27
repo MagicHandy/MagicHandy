@@ -35,6 +35,7 @@ export function VideoRoute() {
           locked={!backendOnline || readOnly}
           hostAdministration={state?.capabilities?.configure_host !== false}
           stopSequence={state?.stop_sequence}
+          canCurate={backendOnline && state?.capabilities?.control !== false}
           selectedID={videoIDFromRoute(route)}
           onSelect={select}
         />

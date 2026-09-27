@@ -1,0 +1,480 @@
+/* video-library.css — the video catalog grid, its cards, filters and bulk
+   selection, and the curation dialogs (details, tags). The player and its
+   panels stay in media.css. */
+
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+/* The card is a frame around two sibling controls: the whole-card play (or
+   select) button and a small edit button, which cannot nest inside it. */
+.media-card {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.media-card:hover:not([data-missing]),
+.media-card:focus-within,
+.media-card[data-selected] {
+  border-color: var(--accent);
+}
+.media-card[data-missing] {
+  opacity: 0.56;
+}
+.media-card-open {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  gap: 9px;
+  padding: 0 0 11px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.media-card-open:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.media-card-open[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+.media-card-visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-inset);
+  color: var(--muted);
+}
+.media-card-visual svg + svg {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  color: var(--accent);
+}
+/* The cover fills the 16:9 slot without contributing to layout height. Left in
+   flow it sizes to its own aspect ratio, which is taller than the slot and
+   pushes the badge row past the card's hidden overflow. */
+.media-card-thumbnail {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.media-card-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--accent-ink);
+}
+.media-card[data-selected] .media-card-check {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.media-card-edit {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  background: var(--surface);
+  opacity: 0;
+}
+.media-card:hover .media-card-edit,
+.media-card-edit:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .media-card-edit {
+    opacity: 1;
+  }
+}
+.media-card-copy,
+.media-card-badges {
+  display: flex;
+  min-width: 0;
+  margin-inline: 11px;
+}
+.media-card-copy {
+  flex-direction: column;
+  gap: 3px;
+}
+.media-card-copy strong {
+  overflow: hidden;
+  font-size: 0.88rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-card-copy span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.media-card-copy .media-card-location,
+.media-card-copy .media-card-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-card-badges {
+  min-height: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.media-card-open > .video-tags {
+  margin-inline: 11px;
+}
+
+/* Ratings and tags */
+.video-rating {
+  display: inline-flex;
+  gap: 1px;
+  color: var(--accent);
+}
+.video-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.video-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 1px 7px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bg-inset);
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.video-tag-more {
+  border-style: dashed;
+}
+
+/* Filters and bulk selection */
+.media-filter-bar,
+.media-selection-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block: -2px 12px;
+}
+.media-selection-bar {
+  padding: 8px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-tint);
+}
+.media-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.media-filter select {
+  min-width: 120px;
+  padding-block: 6px;
+}
+.media-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent-tint);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.media-filter-spacer {
+  flex: 1;
+}
+.media-selection-count {
+  min-width: 90px;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.media-selection-bar input {
+  flex: 1 1 180px;
+  min-width: 140px;
+  padding-block: 6px;
+}
+
+/* Player heading curation */
+.media-player-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.media-player-curation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.media-player-notes {
+  max-width: 70ch;
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+.media-player-edit {
+  flex: none;
+}
+
+/* Dialogs */
+.video-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.video-dialog header,
+.video-dialog-body,
+.video-dialog footer {
+  padding: 16px 18px;
+}
+.video-dialog header {
+  border-bottom: 1px solid var(--line);
+}
+.video-dialog h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.video-dialog-body {
+  overflow-y: auto;
+}
+.video-dialog footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-inset);
+}
+.video-details-form textarea {
+  resize: vertical;
+}
+.video-rating-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+.video-star {
+  color: var(--muted);
+}
+.video-star[data-filled] {
+  color: var(--accent);
+}
+.video-tag-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.video-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.video-tag-list .video-tag {
+  padding-right: 3px;
+  color: var(--text);
+  font-size: 0.78rem;
+}
+.video-tag-list button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.video-tag-list button:hover,
+.video-tag-list button:focus-visible {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.video-tag-manager-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.video-tag-manager-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding-block: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.video-tag-manager-list .video-tag {
+  color: var(--text);
+  font-size: 0.8rem;
+}
+.video-tag-count {
+  flex: 1;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+.video-tag-actions,
+.video-tag-confirm,
+.video-tag-rename {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.video-tag-rename {
+  flex: 1;
+}
+.video-tag-rename input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Watching with the chat beside the video */
+.media-player-actions {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.video-watch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+.video-watch[data-chat-open] {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+}
+.video-watch-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.video-chat-side {
+  position: sticky;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  height: min(78vh, 760px);
+  min-height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.video-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.video-chat-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.video-chat-title strong,
+.video-chat-title span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.video-chat-title span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.video-chat-note {
+  margin: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+.video-chat-side .chat {
+  padding: 10px;
+}
+.video-chat-side .chat-log {
+  min-height: 0;
+}
+.video-chat-state {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 12px;
+  color: var(--muted);
+}
+/* Fullscreen with the chat open keeps the conversation beside the picture. */
+.video-watch:fullscreen {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 28vw);
+  align-items: stretch;
+  padding: 12px;
+  background: var(--bg);
+}
+.video-watch:fullscreen .video-chat-side {
+  position: static;
+  height: auto;
+  max-height: none;
+}
+@media (max-width: 1000px) {
+  .video-watch[data-chat-open] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .video-chat-side {
+    position: static;
+    height: clamp(360px, 60dvh, 620px);
+  }
+}

@@ -15,7 +15,6 @@ import (
 func (s *Server) mediaMetadataRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/media/videos/{id}/metadata", s.handleMediaMetadata)
 	mux.HandleFunc("POST /api/media/videos/tags", s.handleMediaBulkTags)
-	mux.HandleFunc("GET /api/media/tags", s.handleMediaTags)
 	mux.HandleFunc("POST /api/media/tags/rename", s.handleMediaTagRename)
 	mux.HandleFunc("POST /api/media/tags/delete", s.handleMediaTagDelete)
 }
@@ -54,16 +53,6 @@ func (s *Server) handleMediaBulkTags(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"videos": s.clientVideos(r, videos)})
-}
-
-func (s *Server) handleMediaTags(w http.ResponseWriter, r *http.Request) {
-	tags, err := s.media.Tags(r.Context())
-	if err != nil {
-		s.logger.Error("media tag list failed", "error", err)
-		writeError(w, http.StatusInternalServerError, errors.New("tags could not be loaded"))
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
 }
 
 func (s *Server) handleMediaTagRename(w http.ResponseWriter, r *http.Request) {

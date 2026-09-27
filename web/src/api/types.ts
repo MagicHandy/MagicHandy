@@ -607,6 +607,24 @@ export interface MediaVideo {
   audio_codec?: string | null;
   superseded?: boolean;
   container_type?: string;
+  /** The user's display title; the file name stays in display_name. */
+  title?: string | null;
+  rating?: number | null;
+  notes?: string | null;
+  tags?: string[];
+}
+
+/** Fields present change; an empty title or note and a zero rating clear. */
+export interface MediaMetadataPatch {
+  title?: string;
+  rating?: number;
+  notes?: string;
+  tags?: string[];
+}
+
+export interface MediaTagCount {
+  tag: string;
+  count: number;
 }
 
 // canPlayContainer asks this browser's own engine whether it opens a container,

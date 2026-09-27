@@ -256,3 +256,22 @@ export const CheckIcon = ({ size = 18, className }: P) => (
     <path d="m5 12 4 4L19 6" />
   </svg>
 );
+export const StarIcon = ({ size = 18, className, filled = false }: P & { filled?: boolean }) => (
+  <svg {...base(size, className)} fill={filled ? "currentColor" : "none"}>
+    <path d="M12 3.8l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8z" />
+  </svg>
+);
+export const TagIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <path d="M3.5 12.5V4h8.5l8.5 8.5-8 8z" />
+    <circle cx="8" cy="8.5" r="1.4" />
+  </svg>
+);
+export const RemoteIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <rect x="7" y="2.5" width="10" height="19" rx="2.5" />
+    <circle cx="12" cy="8" r="2" />
+    <path d="M10 13.5h4" />
+    <path d="M10 16.5h4" />
+  </svg>
+);

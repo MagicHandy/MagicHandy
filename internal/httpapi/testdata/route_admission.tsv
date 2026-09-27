@@ -58,7 +58,6 @@ host	GET /api/llm/runtime
 shared	GET /api/llm/status
 shared	GET /api/media/job
 shared	GET /api/media/scan
-shared	GET /api/media/tags
 host	GET /api/media/tools
 shared	GET /api/media/videos
 shared	GET /api/media/videos/{id}/funscript

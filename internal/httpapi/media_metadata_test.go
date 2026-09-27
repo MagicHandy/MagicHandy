@@ -73,15 +73,12 @@ func TestMediaMetadataRoundTripWithoutControllerLease(t *testing.T) {
 		t.Fatalf("bulk status = %d: %s", bulk.Code, bulk.Body.String())
 	}
 
-	tags := serveMetadata(t, server, http.MethodGet, "/api/media/tags", "", nil)
-	var listed struct {
-		Tags []media.TagCount `json:"tags"`
-	}
-	if err := json.Unmarshal(tags.Body.Bytes(), &listed); err != nil {
+	listed, err := server.media.Tags(t.Context())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if len(listed.Tags) != 2 || listed.Tags[0] != (media.TagCount{Tag: "Build", Count: 2}) || listed.Tags[1] != (media.TagCount{Tag: "calm", Count: 1}) {
-		t.Fatalf("tags = %+v", listed.Tags)
+	if len(listed) != 2 || listed[0] != (media.TagCount{Tag: "Build", Count: 2}) || listed[1] != (media.TagCount{Tag: "calm", Count: 1}) {
+		t.Fatalf("tags = %+v", listed)
 	}
 
 	rename := serveMetadata(t, server, http.MethodPost, "/api/media/tags/rename", `{"from":"calm","to":"Slow"}`, nil)
