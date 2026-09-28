@@ -53,15 +53,17 @@ type Identity struct {
 // Command is one request from a remote. Fields beyond Target and Action
 // depend on the action; Validate states which ones are required.
 type Command struct {
-	ID       string    `json:"id"`
-	Sequence uint64    `json:"sequence"`
-	Target   string    `json:"target"`
-	Action   string    `json:"action"`
-	VideoID  string    `json:"video_id,omitempty"`
-	Millis   *int64    `json:"ms,omitempty"`
-	Value    *float64  `json:"value,omitempty"`
-	Flag     *bool     `json:"flag,omitempty"`
-	Text     string    `json:"text,omitempty"`
+	ID       string   `json:"id"`
+	Sequence uint64   `json:"sequence"`
+	Target   string   `json:"target"`
+	Action   string   `json:"action"`
+	VideoID  string   `json:"video_id,omitempty"`
+	Millis   *int64   `json:"ms,omitempty"`
+	Value    *float64 `json:"value,omitempty"`
+	Flag     *bool    `json:"flag,omitempty"`
+	Text     string   `json:"text,omitempty"`
+	// Source is the video's motion source for the "source" action.
+	Source   string    `json:"source,omitempty"`
 	IssuedAt time.Time `json:"issued_at"`
 }
 
@@ -87,6 +89,10 @@ type VideoPresence struct {
 	SyncState      string  `json:"sync_state,omitempty"`
 	// Ready is false while a paired script is still loading.
 	Ready bool `json:"ready"`
+	// MotionSource is what moves the device for this video: script, chat or off.
+	MotionSource string `json:"motion_source,omitempty"`
+	// HasScript reports a paired script, which the script source needs.
+	HasScript bool `json:"has_script"`
 }
 
 // ChatPresence describes the desktop's open conversation.
@@ -370,28 +376,38 @@ var maxSeekMillis = (30 * 24 * time.Hour).Milliseconds()
 func (c Command) validateVideo() error {
 	switch c.Action {
 	case "play", "pause", "toggle", "close":
+		return nil
 	case "seek", "seek_by":
 		return c.validateSeek()
-	case "volume":
-		if c.Value == nil || *c.Value < 0 || *c.Value > 1 {
-			return invalidCommand("volume must be from 0 to 1")
-		}
-	case "rate":
-		if c.Value == nil || *c.Value < 0.25 || *c.Value > 4 {
-			return invalidCommand("the playback rate must be from 0.25 to 4")
-		}
-	case "mute":
-		if c.Flag == nil {
-			return invalidCommand("mute needs a flag")
-		}
+	case "volume", "rate", "mute":
+		return c.validateLevel()
 	case "open":
 		if strings.TrimSpace(c.VideoID) == "" || len(c.VideoID) > 128 {
 			return invalidCommand("open needs a video id")
 		}
+		return nil
+	case "source":
+		switch c.Source {
+		case "script", "chat", "off":
+			return nil
+		}
+		return invalidCommand("the motion source must be script, chat or off")
 	default:
 		return invalidCommand("unknown video action")
 	}
-	return nil
+}
+
+func (c Command) validateLevel() error {
+	switch {
+	case c.Action == "volume" && (c.Value == nil || *c.Value < 0 || *c.Value > 1):
+		return invalidCommand("volume must be from 0 to 1")
+	case c.Action == "rate" && (c.Value == nil || *c.Value < 0.25 || *c.Value > 4):
+		return invalidCommand("the playback rate must be from 0.25 to 4")
+	case c.Action == "mute" && c.Flag == nil:
+		return invalidCommand("mute needs a flag")
+	default:
+		return nil
+	}
 }
 
 func (c Command) validateSeek() error {
@@ -418,6 +434,7 @@ func cleanVideo(video *VideoPresence) *VideoPresence {
 	cleaned := *video
 	cleaned.Title = clip(cleaned.Title, maxTitle)
 	cleaned.SyncState = clip(cleaned.SyncState, 40)
+	cleaned.MotionSource = clip(cleaned.MotionSource, 10)
 	return &cleaned
 }
 

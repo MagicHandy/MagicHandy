@@ -28,6 +28,58 @@ type chatStreamRequest struct {
 	// History remains accepted for client compatibility. The handler ignores
 	// it and rebuilds model history from the selected canonical session.
 	History []llm.Message `json:"history,omitempty"`
+	// MotionOwner is set by a chat beside an open video when something other
+	// than the chat drives the device: "script" or "off". The turn is then
+	// chat-only and the model is told who drives (ADR 0032).
+	MotionOwner string `json:"motion_owner,omitempty"`
+}
+
+// chatTurnSettings applies a request's motion owner to this turn's copy of the
+// settings: while a video's script or the viewer's Off choice owns the device,
+// the turn is chat-only.
+func chatTurnSettings(settings config.Settings, owner string) (config.Settings, chat.MotionHolder) {
+	holder, _ := chatMotionHolder(owner)
+	if holder != chat.MotionHolderSettings {
+		settings.LLM.MotionGenerationMode = config.LLMMotionModeOff
+	}
+	return settings, holder
+}
+
+// admitChatTurn checks that this tab may start a turn now: it holds control,
+// the session resolves, and the request carries the current Stop sequence.
+func (s *Server) admitChatTurn(w http.ResponseWriter, r *http.Request, requested string) (string, uint64, bool) {
+	if !s.requireController(w, r) {
+		return "", 0, false
+	}
+	sessionID, err := s.chatWorkspace.ResolveActive(r.Context(), requested)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return "", 0, false
+	}
+	if strings.TrimSpace(r.Header.Get(stopSequenceHeader)) == "" {
+		writeError(w, http.StatusConflict, errors.New("chat requires the current Emergency Stop sequence"))
+		return "", 0, false
+	}
+	stopSequence, err := s.requestStopSequence(r)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return "", 0, false
+	}
+	return sessionID, stopSequence, true
+}
+
+// chatMotionHolder maps a request's motion owner onto the prompt layer.
+func chatMotionHolder(owner string) (chat.MotionHolder, bool) {
+	switch owner {
+	case "":
+		return chat.MotionHolderSettings, true
+	case "script":
+		return chat.MotionHolderVideoScript, true
+	case "off":
+		return chat.MotionHolderVideoOff, true
+	default:
+		return chat.MotionHolderSettings, false
+	}
 }
 
 type chatMotionDispatch struct {
@@ -67,21 +119,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		s.handleChatStopFastPath(w, r, body.SessionID, body.Message, settings.LLM)
 		return
 	}
-	if !s.requireController(w, r) {
-		return
-	}
-	sessionID, err := s.chatWorkspace.ResolveActive(r.Context(), body.SessionID)
-	if err != nil {
-		writeError(w, http.StatusConflict, err)
-		return
-	}
-	if strings.TrimSpace(r.Header.Get(stopSequenceHeader)) == "" {
-		writeError(w, http.StatusConflict, errors.New("chat requires the current Emergency Stop sequence"))
-		return
-	}
-	stopSequence, err := s.requestStopSequence(r)
-	if err != nil {
-		writeError(w, http.StatusConflict, err)
+	settings, motionHolder := chatTurnSettings(settings, body.MotionOwner)
+	sessionID, stopSequence, ok := s.admitChatTurn(w, r, body.SessionID)
+	if !ok {
 		return
 	}
 	chatCtx, finishChat, err := s.chatWorkspace.BeginTurn(r.Context(), sessionID)
@@ -107,6 +147,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	capabilities := promptContext.Capabilities
+	capabilities.MotionHolder = motionHolder
 	patternChoices, err := s.chatPatternChoicesFor(capabilities)
 	if err != nil {
 		s.writeLibraryStorageError(w, err)
@@ -239,6 +280,10 @@ func decodeChatStreamRequest(w http.ResponseWriter, r *http.Request) (chatStream
 	message, err := chat.ValidateUserMessage(body.Message)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
+		return chatStreamRequest{}, false
+	}
+	if _, ok := chatMotionHolder(body.MotionOwner); !ok {
+		writeError(w, http.StatusBadRequest, errors.New(`motion_owner must be "script", "off" or empty`))
 		return chatStreamRequest{}, false
 	}
 	body.Message = message

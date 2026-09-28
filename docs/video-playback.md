@@ -340,16 +340,26 @@ downsampling is reused at canvas resolution):
   files, closing a crash window after settings save.
 - **Curation and chat** (ADR 0032): each card has an edit action for its
   title, rating, notes and tags, the grid filters by tags, rating and script,
-  and a tag manager renames or removes tags across the library. The player
-  heading keeps only the title and actions; file details and curation fold
-  into a Details section below the timeline, closed by default. The page can
-  open the active conversation beside the picture without remounting the
-  player; with it open, fullscreen takes both.
+  and a tag manager renames or removes tags across the library. File details
+  and curation fold into a Details section below the timeline, closed by
+  default. The page can open the active conversation beside the picture
+  without remounting the player; with it open, fullscreen takes both.
+- **Watch layout** (ADR 0032): as on livestream pages, the picture comes first
+  and fills the workspace width and the height the status bar leaves; one bar
+  under it holds back, title, motion source, chat and editing, and the chat is
+  a full-height column beside it. Below 1000px the chat stacks under the video.
+- **Motion source** (ADR 0032): Script, Chat or Off decides what moves the
+  device while the video plays. Script is the default for a paired video and
+  unavailable without a script; Off is the default otherwise. Switching stops
+  the old source and starts the new one; with Chat the video plays unsynced.
+  While Script or Off drives, the chat beside the video replies in words only
+  and says who drives.
 - **Phone remote** (ADR 0032): `#/remote` asks the desktop tab that holds
   control to play, pause, seek, set volume or speed, open or close a video, or
-  to open its chat and send a message. The desktop runs each command through
-  the same player commands as its own controls, so paired motion still arms
-  and stops through media sync. Opening a video never starts playback.
+  to open its chat and send a message, or to switch the motion source. The
+  desktop runs each command through the same player commands as its own
+  controls, so paired motion still arms and stops through media sync. Opening
+  a video never starts playback.
 - **Funscript import preview** (M0): after a funscript is parsed, an optional
   modal uses the same player above the existing timeline. Exact-basename media
   is selected first when present, another catalog video can be chosen, and the

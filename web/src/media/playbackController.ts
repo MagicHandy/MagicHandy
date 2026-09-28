@@ -227,6 +227,19 @@ export class VideoPlaybackController implements VideoPlayerHandle {
 
   attach = (element: HTMLVideoElement | null): void => {
     this.media.attach(element);
+    if (!element) return;
+    // A controller can take over an element that is already in use, when the
+    // viewer switches the motion source. Start from what the element shows.
+    const patch: Partial<PlaybackSnapshot> = {
+      currentTimeMillis: mediaTimeMillis(element),
+      volume: element.volume,
+      muted: element.muted,
+      playbackRate: element.playbackRate,
+    };
+    // A paired video only plays once its run is armed, so only a plain one
+    // inherits playback that is already under way.
+    if (!this.synchronized && !element.paused) patch.playbackIntent = true;
+    this.update(patch);
   };
 
   setDuration = (durationMillis: number): void => {

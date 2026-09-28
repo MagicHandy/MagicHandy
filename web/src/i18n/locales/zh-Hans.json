@@ -2403,5 +2403,12 @@
   "No video is open on the desktop.": "桌面端没有打开的视频。",
   "The video is not ready for that yet.": "视频尚未准备好执行此操作。",
   "The desktop is still answering. Send again when the reply finishes.": "桌面端仍在回复。请在回复结束后再发送。",
-  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "在有人点击桌面端的 MagicHandy 页面之前，桌面端浏览器会阻止播放声音。请在那里点击一次，或先将视频静音。"
+  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "在有人点击桌面端的 MagicHandy 页面之前，桌面端浏览器会阻止播放声音。请在那里点击一次，或先将视频静音。",
+  "Motion source": "运动来源",
+  "The script moves the device. The chat talks but cannot change the motion.": "脚本驱动设备。聊天可以对话，但不能更改运动。",
+  "The chat moves the device. It is not synced to the picture.": "聊天驱动设备，与画面不同步。",
+  "Nothing moves the device while this video plays. The chat only talks.": "播放此视频时不会驱动设备。聊天只进行对话。",
+  "This video has no script.": "此视频没有脚本。",
+  "Motion could not be stopped.": "无法停止运动。",
+  "Back to videos": "返回视频"
 }

@@ -120,15 +120,54 @@ const contractChatOnlyWithMood = `Return exactly one JSON object and no markdown
 Always return an object with one required string field named "reply" and, when useful, the optional "new_mood" field described below.
 Motion control is disabled by the user's settings: never include a "motion" key, and if asked to move the device, explain that motion control is switched off in Settings.`
 
+// While a video is open, the viewer chooses what moves the device. A reply
+// must then say who drives instead of blaming Settings, and must never claim
+// a motion change it cannot make.
+const (
+	chatOnlySettingsReason    = `Motion control is disabled by the user's settings: never include a "motion" key, and if asked to move the device, explain that motion control is switched off in Settings.`
+	chatOnlyVideoScriptReason = `The video the person is watching has a paired script, and that script is moving the device in time with the picture: never include a "motion" key, and never claim to start, change or stop the motion. If asked to change it, say that the video's script is driving and that they can switch the motion source to Chat beside the video.`
+	chatOnlyVideoOffReason    = `The person chose no motion for the video they are watching: never include a "motion" key, and never claim to move the device. If asked to move it, say that motion is off for this video and that they can choose Chat as the motion source beside the video.`
+)
+
+// videoMotionNote restates who drives right before the final instructions,
+// where a small model weighs it most, with one example of declining. Without
+// it, a persona reply narrated a faster, deeper pace the script never took.
+func videoMotionNote(capabilities Capabilities) string {
+	if capabilities.Motion {
+		return ""
+	}
+	switch capabilities.MotionHolder {
+	case MotionHolderVideoScript:
+		return `The person is watching a video whose paired script moves the device right now, in time with the picture. Nothing you write changes that motion: do not say or describe that the pace, depth, rhythm or intensity is changing. You can talk about the video, the moment and how it feels. If they ask for different motion, say that the video's script sets it and that they can switch the motion source to Chat beside the video.
+Example, when asked to go faster, slower, harder or deeper: {"reply":"The video's script is setting the pace right now, so I can't change it. Switch the motion source to Chat beside the video and I'll take over."}`
+	case MotionHolderVideoOff:
+		return `The person is watching a video and chose no motion for it, so nothing moves the device. Nothing you write moves it: do not say or describe that the device is moving, starting, or getting faster, slower, harder or deeper, and do not promise to do it. Every request for motion gets the same answer until they choose Chat as the motion source beside the video.
+Example, when asked to start, go faster, slow down or go harder: {"reply":"Motion is off for this video, so nothing is moving. Choose Chat as the motion source beside the video and I'll take over."}`
+	default:
+		return ""
+	}
+}
+
+func chatOnlyContract(capabilities Capabilities) string {
+	reason := chatOnlySettingsReason
+	switch capabilities.MotionHolder {
+	case MotionHolderVideoScript:
+		reason = chatOnlyVideoScriptReason
+	case MotionHolderVideoOff:
+		reason = chatOnlyVideoOffReason
+	}
+	if capabilities.MoodTracking {
+		return strings.Replace(contractChatOnlyWithMood, chatOnlySettingsReason, reason, 1) + "\n" + moodContractInstructions()
+	}
+	return strings.Replace(contractChatOnly, chatOnlySettingsReason, reason, 1)
+}
+
 // contractInstructions composes the code-owned contract for the enabled
 // capability set. Disabled methods are simply never described — the model
 // cannot follow instructions it never saw, and the parser strips strays.
 func contractInstructions(capabilities Capabilities) string {
 	if !capabilities.Motion {
-		if capabilities.MoodTracking {
-			return contractChatOnlyWithMood + "\n" + moodContractInstructions()
-		}
-		return contractChatOnly
+		return chatOnlyContract(capabilities)
 	}
 	if capabilities.MotionMode == MotionModeLayered {
 		text := layeredContract
@@ -182,7 +221,22 @@ type Capabilities struct {
 	// MoodTracking permits inert reply-register metadata for interactive,
 	// non-utility chat. It never grants a motion capability.
 	MoodTracking bool
+	// MotionHolder says what owns the device when a turn is chat-only for a
+	// reason other than Settings, so the reply can say who drives.
+	MotionHolder MotionHolder
 }
+
+// MotionHolder names what owns the device during a chat-only turn.
+type MotionHolder string
+
+const (
+	// MotionHolderSettings is the zero value: the user switched LLM motion off.
+	MotionHolderSettings MotionHolder = ""
+	// MotionHolderVideoScript means an open video's paired script drives the device.
+	MotionHolderVideoScript MotionHolder = "video_script"
+	// MotionHolderVideoOff means the viewer chose no motion for the open video.
+	MotionHolderVideoOff MotionHolder = "video_off"
+)
 
 // MotionMode selects the one model-facing motion vocabulary composed for a
 // turn. The zero value preserves the legacy pattern/speed contract in tests.
@@ -554,6 +608,9 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 	if capabilities.Motion && motionContext != nil {
 		sections = appendPromptSection(sections, "motion_context", "Motion context",
 			motionContextInstructions(*motionContext, capabilities, patterns))
+	}
+	if note := videoMotionNote(capabilities); note != "" {
+		sections = appendPromptSection(sections, "video_motion", "Video motion", note)
 	}
 	sections = appendPromptSection(sections, "output_guard", "Final output guard", promptOutputGuard(capabilities))
 	texts := make([]string, 0, len(sections))

@@ -12,7 +12,12 @@ dropped by Emergency Stop and by a change of desktop, and reach only the tab
 that holds control. Another account cannot send commands and sees only that a
 desktop is present; observers see nothing. Opening a video never starts it,
 and a play the desktop browser would refuse for sound, on a page nobody has
-clicked, is refused before paired motion arms.
+clicked, is refused before paired motion arms. A motion source switch (Script,
+Chat or Off) now names one owner while a video plays: switching stops the old
+source first, and while the script or Off drives, the chat beside the video can
+only talk. The model is told who drives; in a live check it declined every
+motion request, but a model can still word a reply loosely, and only the
+device state is enforced.
 The desktop shows no sign that a remote is connected, so anyone signed in to
 the same account elsewhere can drive it; that is the same trust as taking
 control from that account. Curation needs control permission and writes only

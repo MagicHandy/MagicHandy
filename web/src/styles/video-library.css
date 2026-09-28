@@ -416,33 +416,99 @@
   justify-content: flex-end;
   gap: 8px;
 }
+/* ---- Watch page (ADR 0032) ----
+   Laid out like a livestream page: the picture first, filling the width and
+   the height the status bar leaves, one compact bar under it, the chat as a
+   full-height column beside it, and everything else folded below. */
+.workspace:has(> .video-page[data-watching]) {
+  padding: 12px;
+}
+.video-page[data-watching] {
+  width: 100% !important;
+}
 .video-watch {
+  --watch-stage-h: calc(100dvh - var(--status-h) - 24px);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 14px;
+  gap: 10px 12px;
 }
 .video-watch[data-chat-open] {
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 380px);
 }
-.video-watch-main {
+.video-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
+}
+.video-stage .media-player {
+  gap: 8px;
+}
+.video-stage .media-funscript {
+  margin-top: 0;
+  padding-top: 6px;
+}
+.video-watch-below {
+  grid-column: 1;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
 }
+
+/* The bar under the picture: back, title, motion source, chat, edit. */
+.video-watch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+.video-watch-title {
+  flex: 1 1 12rem;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 1rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.video-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.video-source-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.video-source-choice legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.video-source-choice .segmented-choice {
+  grid-template-columns: repeat(3, minmax(56px, auto));
+}
+
 .video-chat-side {
+  grid-row: 1 / span 2;
+  grid-column: 2;
   position: sticky;
-  top: 12px;
+  top: 0;
   display: flex;
   flex-direction: column;
-  height: min(78vh, 760px);
-  min-height: 420px;
+  height: clamp(420px, var(--watch-stage-h), 1400px);
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: var(--surface);
 }
+
 .video-chat-head {
   display: flex;
   align-items: center;
@@ -486,24 +552,58 @@
   padding: 14px 12px;
   color: var(--muted);
 }
+
+/* Wide enough for a column: the stage fills the window, so the picture gets
+   all the height the script strip and the bar leave. */
+@media (min-width: 1001px) and (min-height: 520px) {
+  .video-stage {
+    height: var(--watch-stage-h);
+  }
+  .video-stage .media-player {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .video-stage .media-video-frame {
+    flex: 1 1 auto;
+    min-height: 200px;
+  }
+  .video-stage .media-video-frame video,
+  .video-stage .media-player[data-synchronized] .media-video-frame video {
+    height: 100%;
+    max-height: none;
+    aspect-ratio: auto;
+  }
+}
+/* Narrow: the picture at its own shape, the chat below it, as phone apps do. */
+@media (max-width: 1000px) {
+  .video-stage .media-video-frame video,
+  .video-stage .media-player[data-synchronized] .media-video-frame video {
+    max-height: 70dvh;
+    aspect-ratio: auto 16 / 9;
+  }
+  .video-watch[data-chat-open] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .video-chat-side {
+    grid-row: auto;
+    grid-column: 1;
+    position: static;
+    height: clamp(360px, 60dvh, 620px);
+  }
+}
 /* Fullscreen with the chat open keeps the conversation beside the picture. */
 .video-watch:fullscreen {
+  --watch-stage-h: calc(100vh - 24px);
   grid-template-columns: minmax(0, 1fr) minmax(300px, 28vw);
   align-items: stretch;
   padding: 12px;
   background: var(--bg);
 }
+.video-watch:fullscreen .video-watch-below {
+  display: none;
+}
 .video-watch:fullscreen .video-chat-side {
   position: static;
   height: auto;
   max-height: none;
-}
-@media (max-width: 1000px) {
-  .video-watch[data-chat-open] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .video-chat-side {
-    position: static;
-    height: clamp(360px, 60dvh, 620px);
-  }
 }

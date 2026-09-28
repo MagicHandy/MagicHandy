@@ -66,10 +66,15 @@ heading holds only the title and its actions. The file name, size, location,
 script pairing, rating, tags and notes sit in a Details section below the video
 and its timeline, folded each time a video opens, so the picture leads.
 
-The player's Chat action opens the active conversation in a side column. The
-picture keeps playing while it opens or closes, and below 1000px the chat
+The watch page follows livestream sites: the picture comes first and takes
+the whole workspace width and the height the status bar leaves, with no page
+heading above it and no content-width cap. One bar under the picture holds a
+back arrow, the title, the motion source switch (Motion: Script, Chat, Off),
+the Chat toggle and an edit icon. Chat opens as a full-height column beside
+the picture and keeps playing while it opens or closes; below 1000px the chat
 stacks under the video. With the chat open, fullscreen takes the video and the
-chat together.
+chat together. The chat column's note says who moves the device for the chosen
+source, and Script is dimmed with an explanation when a video has none.
 
 `#/remote` joins the rail after Videos. It is a one-column page built for a
 phone: a connection line (a green dot when a desktop is taking commands, amber
@@ -77,7 +82,8 @@ when it is another account's or the stream is reconnecting), a Video or Chat
 switch, then the controls for that choice. Video has a 72px play/pause button
 between 10-second skips, a position slider, mute, volume, speed and a
 searchable catalog to open from; opening a video never starts it. Chat shows
-the recent conversation with the desktop's persona name and a composer. Every
+the recent conversation with the desktop's persona name and a composer. The
+Video view also has the motion source switch with the same note. Every
 target is at least 44px. A failed command shows its reason in amber under the
 switch; a command still waiting after 0.7 s says so. Red remains only on Stop,
 which stays in the rail as on every page. See

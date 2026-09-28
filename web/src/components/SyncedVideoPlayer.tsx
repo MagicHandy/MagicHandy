@@ -23,27 +23,34 @@ interface Props {
   conversionBusy?: boolean;
   /** Receives the open video's command surface, and null when it closes. */
   onHandleChange?: (handle: VideoPlayerHandle | null) => void;
+  /**
+   * Whether the paired script drives the device. Off when the viewer picks
+   * another motion source; the video then plays as a plain one.
+   */
+  synchronized?: boolean;
 }
 
 // The view for one open video. Playback decisions live in
 // VideoPlaybackController; this component wires the element and the app's
 // lock, Stop and duration state into it and renders its snapshot.
-export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, onRequestConversion, conversionBusy, onHandleChange }: Props) {
+export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, onRequestConversion, conversionBusy, onHandleChange, synchronized = video.has_funscript }: Props) {
   const { state, refresh } = useAppState();
   const refreshRef = useRef(refresh);
   refreshRef.current = refresh;
   const videoElement = useRef<HTMLVideoElement | null>(null);
-  // One controller per opened video. The props read here only seed it; the
-  // effects below keep lock, Stop and duration current afterwards.
+  // One controller per opened video and motion source. The props read here
+  // only seed it; the effects below keep lock, Stop and duration current.
+  // Switching the source replaces the controller on the same element.
+  const paired = video.has_funscript && synchronized;
   const controller = useMemo(() => new VideoPlaybackController(
-    { videoID: video.id, synchronized: video.has_funscript, durationMillis: video.duration_ms ?? 0, locked, stopSequence },
+    { videoID: video.id, synchronized: paired, durationMillis: video.duration_ms ?? 0, locked, stopSequence },
     {
       mediaSync: (event, sequence, signal, keepalive) => api.mediaSync(event, sequence, signal, keepalive),
       saveMediaPlayback: (patch) => api.saveMediaPlayback(patch),
       loadScript: async (id, signal) => (await api.mediaFunscript(id, signal)).funscript,
       refresh: () => refreshRef.current(),
     },
-  ), [video.id, video.has_funscript]);
+  ), [video.id, paired]);
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const [timelineHidden, setTimelineHidden] = useState(readTimelinePreference);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -132,7 +139,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       onTimeChange={controller.handleTimeChange}
       playerRef={attachPlayer}
       onPlaybackEvent={controller.handleMediaEvent}
-      synchronized={video.has_funscript}
+      synchronized={paired}
       onRequestConversion={onRequestConversion}
       conversionBusy={conversionBusy}
     >

@@ -1,29 +1,32 @@
 # Goal Scorecard
 
-## 2026-09-27 — Video curation, chat beside the video and a phone remote
+## 2026-09-27 — Video curation, a watch page, a motion source and a phone remote
 
-Catalog videos carry a title, rating, notes and tags, and the player page
-opens the active chat beside the picture. A phone remote at `#/remote` asks
-the desktop tab that holds control to drive its video or send to its chat;
-the desktop runs each command through its own player and composer. The remote
-page loads only when it is opened, so desktops never download it. No
-dependency was added.
+Catalog videos carry a title, rating, notes and tags. The watch page puts the
+picture first, as livestream sites do: at 1280×800 with the chat closed the
+picture grows from 966×368 to 994×591. A Script, Chat or Off switch decides
+what moves the device while a video plays. A phone remote at `#/remote` asks
+the desktop tab that holds control to drive its video, switch that source or
+send to its chat; the desktop runs each command through its own player and
+composer. The remote page loads only when it is opened, so desktops never
+download it. No dependency was added.
 
 | Artifact | Previous checkpoint (`c29b5600`) | This checkpoint | Change |
 | --- | ---: | ---: | ---: |
-| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,297,088 B | 22,504,960 B | +207,872 B |
-| Main JS, raw / Node gzip-9 | 876,809 / 240,881 B | 921,971 / 252,589 B | +45,162 / +11,708 B |
-| Main CSS, raw / Node gzip-9 | 149,743 / 27,029 B | 155,890 / 27,931 B | +6,147 / +902 B |
-| Remote page chunk, JS + CSS, raw / Node gzip-9 | — | 16,900 / 5,691 B | new, on demand |
-| All embedded assets | 2,289,587 B | 2,386,247 B | +96,660 B |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,297,088 B | 22,521,856 B | +224,768 B |
+| Main JS, raw / Node gzip-9 | 876,809 / 240,881 B | 925,158 / 253,608 B | +48,349 / +12,727 B |
+| Main CSS, raw / Node gzip-9 | 149,743 / 27,029 B | 157,587 / 28,275 B | +7,844 / +1,246 B |
+| Remote page chunk, JS + CSS, raw / Node gzip-9 | — | 17,421 / 5,820 B | new, on demand |
+| All embedded assets | 2,289,587 B | 2,394,311 B | +104,724 B |
 
 The main JS grows by the curation dialogs and filters, the tag manager, the
-chat side view, the split player, the remote executor and their English
-strings. Lazy locale chunks grow 6,382–8,225 raw and 2,209–2,400 gzip bytes
-each. The binary grows by those assets and the catalog, remote and route code,
-and remains under the 30 MB target. Startup and memory were not re-measured:
-the one-time schema step is the only new startup work, and the remote hub
-starts no goroutines and holds at most 32 commands and 16 outcomes.
+watch page and its motion source switch, the split player, the remote executor
+and their English strings. Lazy locale chunks grow 6,945–9,013 raw and
+2,410–2,615 gzip bytes each. The binary grows by those assets and the catalog,
+remote, chat and route code, and remains under the 30 MB target. Startup and
+memory were not re-measured: the one-time schema step is the only new startup
+work, and the remote hub starts no goroutines and holds at most 32 commands and
+16 outcomes.
 
 ## 2026-09-26 — Returning to the page keeps the view
 

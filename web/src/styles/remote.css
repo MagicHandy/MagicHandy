@@ -225,3 +225,18 @@
 .remote-chat-form .btn {
   min-height: 44px;
 }
+
+/* ---- Motion source ---- */
+.remote-source {
+  display: grid;
+  gap: 6px;
+}
+.remote-source .segmented-option span {
+  min-height: 44px;
+  font-size: 0.85rem;
+}
+.remote-source-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}

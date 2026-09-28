@@ -54,11 +54,13 @@ decisions:
 | Payload | Observer | Controlling account | Another controlling account |
 | --- | --- | --- | --- |
 | Video title, rating, notes and tags | Read, as shared library content | Read and edit | Read and edit |
-| Remote state (`/api/remote/state`, `/api/remote/events`) | Refused | The desktop's page name, open video (title, play intent, position, duration, volume, mute, speed, sync state, script readiness), open chat (session ID, persona name, busy, ready), waiting-command count and recent outcomes | Only that a desktop is present |
+| Remote state (`/api/remote/state`, `/api/remote/events`) | Refused | The desktop's page name, open video (title, play intent, position, duration, volume, mute, speed, sync state, script readiness, motion source, whether a script is paired), open chat (session ID, persona name, busy, ready), waiting-command count and recent outcomes | Only that a desktop is present |
 | `remote_command` on the motion stream | Never sent | Sent only to the tab that reported presence and still holds control, from the same account | Never sent |
 | Remote command errors | Refused | A `code` and a sentence; no identity | Refused with `other_account` |
 
-Presence and command IDs name no account or tab. A chat command carries the
+Presence and command IDs name no account or tab. A chat request's
+`motion_owner` only narrows that turn to words; it adds nothing to any
+response. A chat command carries the
 message the phone's own account wrote. Presence reports are not device commands
 and are not audited. A remote command that moves the device is audited as the
 desktop's own media sync or chat request, like a press on the desktop.

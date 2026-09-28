@@ -7,6 +7,7 @@
 import type { RemoteChatPresence, RemoteCommand, RemoteOutcome, RemotePresence, RemoteVideoPresence } from "../api/remote-types";
 import type { MessageKey } from "../i18n";
 import type { VideoPlayerHandle } from "../media/playbackController";
+import type { MotionSource } from "../videos/motionSource";
 import { videoRoute } from "../videos/route";
 
 export interface RemoteVideoSurface {
@@ -14,6 +15,12 @@ export interface RemoteVideoSurface {
   title: string;
   /** Opens the conversation beside this video. */
   openChat?: () => void;
+  /** What moves the device while this video plays. */
+  motionSource?: MotionSource;
+  /** A paired script exists, so Script is a possible source. */
+  hasScript?: boolean;
+  /** Switches the motion source; false when that is not possible now. */
+  setMotionSource?: (source: MotionSource) => boolean;
 }
 
 export interface RemoteChatSurface {
@@ -42,6 +49,7 @@ export interface RemoteExecutorDependencies {
 export const REMOTE_OUTCOMES = {
   noVideo: "No video is open on the desktop.",
   notReady: "The video is not ready for that yet.",
+  noScript: "This video has no script.",
   needsClick: "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.",
   noChat: "No chat is open on the desktop.",
   chatBusy: "The desktop is still answering. Send again when the reply finishes.",
@@ -77,6 +85,8 @@ export function videoPresence(surface: RemoteVideoSurface): RemoteVideoPresence 
     synchronized: surface.handle.synchronized,
     ...(surface.handle.synchronized ? { sync_state: snapshot.sync.state } : {}),
     ready: !snapshot.scriptLoading,
+    ...(surface.motionSource ? { motion_source: surface.motionSource } : {}),
+    has_script: Boolean(surface.hasScript),
   };
 }
 
@@ -176,6 +186,7 @@ export class RemoteExecutor {
     }
     const video = this.video;
     if (!video) return failure(REMOTE_OUTCOMES.noVideo);
+    if (command.action === "source") return this.runSource(video, command.source);
     const controls = video.handle.commands;
     // A refused play() would arm paired motion and then stop it again. Ask for
     // the click instead of trying.
@@ -195,6 +206,15 @@ export class RemoteExecutor {
       default: return failure(REMOTE_OUTCOMES.unknown);
     }
     return accepted ? done : failure(REMOTE_OUTCOMES.notReady);
+  }
+
+  private runSource(video: RemoteVideoSurface, source: string | undefined): Result {
+    if ((source !== "script" && source !== "chat" && source !== "off") || !video.setMotionSource) return failure(REMOTE_OUTCOMES.unknown);
+    if (source === "script" && !video.hasScript) return failure(REMOTE_OUTCOMES.noScript);
+    // Arriving at the script mid-play starts a new run, which needs sound.
+    const snapshot = video.handle.getSnapshot();
+    if (source === "script" && snapshot.playbackIntent && !snapshot.muted && !this.canPlaySound()) return failure(REMOTE_OUTCOMES.needsClick);
+    return video.setMotionSource(source) ? done : failure(REMOTE_OUTCOMES.notReady);
   }
 
   private runChat(command: RemoteCommand): Result {
@@ -295,5 +315,5 @@ function chatPresence(chat: RemoteChatSurface): RemoteChatPresence {
 }
 
 function videoSignature(video: RemoteVideoPresence): string {
-  return [video.video_id, video.playing, video.volume, video.muted, video.rate, video.ready, video.sync_state ?? "", video.duration_ms].join("|");
+  return [video.video_id, video.playing, video.volume, video.muted, video.rate, video.ready, video.sync_state ?? "", video.duration_ms, video.motion_source ?? ""].join("|");
 }

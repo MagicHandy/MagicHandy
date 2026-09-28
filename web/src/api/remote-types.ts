@@ -2,6 +2,8 @@
 // desktop tab that holds control carries them out with its own controls and
 // reports what it shows. None of these reach the device directly.
 
+import type { MotionSource } from "../videos/motionSource";
+
 export interface RemoteVideoPresence {
   video_id: string;
   title: string;
@@ -16,6 +18,10 @@ export interface RemoteVideoPresence {
   sync_state?: string;
   /** False while a paired script is still loading. */
   ready: boolean;
+  /** What moves the device while this video plays. */
+  motion_source?: MotionSource;
+  /** A paired script exists, so Script is a possible source. */
+  has_script?: boolean;
 }
 
 export interface RemoteChatPresence {
@@ -58,6 +64,7 @@ export type RemoteCommandInput =
   | { target: "video"; action: "volume" | "rate"; value: number }
   | { target: "video"; action: "mute"; flag: boolean }
   | { target: "video"; action: "open"; video_id: string }
+  | { target: "video"; action: "source"; source: MotionSource }
   | { target: "chat"; action: "open" }
   | { target: "chat"; action: "send"; text: string };
 
@@ -71,5 +78,6 @@ export interface RemoteCommand {
   value?: number;
   flag?: boolean;
   text?: string;
+  source?: string;
   issued_at: string;
 }

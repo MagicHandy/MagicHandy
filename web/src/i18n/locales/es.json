@@ -2403,5 +2403,12 @@
   "No video is open on the desktop.": "No hay ningún video abierto en el escritorio.",
   "The video is not ready for that yet.": "El video todavía no está listo para eso.",
   "The desktop is still answering. Send again when the reply finishes.": "El escritorio sigue respondiendo. Vuelve a enviar cuando termine la respuesta.",
-  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "El navegador del escritorio bloquea el sonido hasta que alguien haga clic en la página de MagicHandy allí. Haz clic una vez o silencia primero el video."
+  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "El navegador del escritorio bloquea el sonido hasta que alguien haga clic en la página de MagicHandy allí. Haz clic una vez o silencia primero el video.",
+  "Motion source": "Origen del movimiento",
+  "The script moves the device. The chat talks but cannot change the motion.": "El script mueve el dispositivo. El chat conversa, pero no puede cambiar el movimiento.",
+  "The chat moves the device. It is not synced to the picture.": "El chat mueve el dispositivo. No está sincronizado con la imagen.",
+  "Nothing moves the device while this video plays. The chat only talks.": "Nada mueve el dispositivo mientras se reproduce este video. El chat solo conversa.",
+  "This video has no script.": "Este video no tiene script.",
+  "Motion could not be stopped.": "No se pudo detener el movimiento.",
+  "Back to videos": "Volver a los videos"
 }

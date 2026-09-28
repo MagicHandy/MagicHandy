@@ -963,6 +963,10 @@
 .workspace-head {
   margin: 0 0 18px;
 }
+/* A heading kept only for focus and screen readers must not size the page. */
+.workspace > .workspace-head.visually-hidden {
+  width: 1px;
+}
 .workspace-head h1 {
   margin: 0;
   font-size: 1.5rem;

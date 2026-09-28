@@ -26,6 +26,7 @@ vi.mock("../api/client", () => ({
 
 vi.mock("../state/app-state", () => ({
   useAppState: () => ({ state: { settings: { media: {}, motion: {} } }, refresh: vi.fn() }),
+  useToast: () => ({ show: vi.fn() }),
 }));
 
 const idleScan = {

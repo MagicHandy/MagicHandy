@@ -131,7 +131,9 @@ video or in bulk and filtered in the grid. The player page opens the active
 conversation beside the picture. A phone remote at `#/remote` asks the desktop
 tab that holds control to drive its video or send to its chat; the desktop runs
 each command through its own player and composer, so no motion path is added.
-The player was first split into session, element and control owners. See
+The player was first split into session, element and control owners. The
+watch page puts the picture first, as livestream sites do, and a Script, Chat
+or Off switch decides what moves the device while a video plays. See
 [ADR 0032](docs/decisions/0032-video-curation-and-remote.md).
 
 ### 2026-09-26 LLM Lab stroke vocabularies

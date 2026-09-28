@@ -10,9 +10,10 @@ const mounts = vi.hoisted(() => ({ player: 0 }));
 vi.mock("../api/client", () => ({ api: { getChatSessions: vi.fn() } }));
 vi.mock("../state/app-state", () => ({
   useAppState: () => ({ state: { chat: { active_session_id: "session-2" } } }),
+  useToast: () => ({ show: vi.fn() }),
 }));
 vi.mock("../components/ChatPanel", () => ({
-  ChatPanel: ({ sessionId, personaName }: { sessionId: string; personaName?: string }) => <div data-testid="chat-panel" data-session={sessionId}>{personaName}</div>,
+  ChatPanel: ({ sessionId, personaName, motionOwner }: { sessionId: string; personaName?: string; motionOwner?: string }) => <div data-testid="chat-panel" data-session={sessionId} data-motion-owner={motionOwner}>{personaName}</div>,
 }));
 vi.mock("../components/SyncedVideoPlayer", async () => {
   const { useEffect } = await import("react");
@@ -44,10 +45,11 @@ describe("chat beside the video", () => {
   });
 
   it("shows the active conversation and says who moves the device", async () => {
-    render(<VideoChatSide synchronized onClose={vi.fn()} />);
+    render(<VideoChatSide source="script" onClose={vi.fn()} />);
     expect(await screen.findByTestId("chat-panel")).toHaveAttribute("data-session", "session-2");
+    expect(screen.getByTestId("chat-panel")).toHaveAttribute("data-motion-owner", "script");
     expect(screen.getByText("Evening chat")).toBeInTheDocument();
-    expect(screen.getByText("The video's script moves the device. If the chat starts motion, it takes over and the video pauses.")).toBeInTheDocument();
+    expect(screen.getByText("The script moves the device. The chat talks but cannot change the motion.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open Chat" })).toHaveAttribute("href", "#/chat");
   });
 

@@ -53,6 +53,20 @@ describe("VideoPlaybackController commands", () => {
     document.body.replaceChildren();
   });
 
+  it("takes over an element in use when the motion source changes", () => {
+    const element = document.createElement("video");
+    Object.defineProperty(element, "paused", { configurable: true, get: () => false });
+    element.volume = 0.4;
+    element.muted = true;
+    const plain = new VideoPlaybackController({ videoID: "paired", synchronized: false, durationMillis: 20_000, locked: false, stopSequence: 1 }, deps);
+    plain.attach(element);
+    expect(plain.getSnapshot()).toMatchObject({ playbackIntent: true, volume: 0.4, muted: true });
+    // A paired run only plays once armed, so it starts from rest.
+    const paired = new VideoPlaybackController({ videoID: "paired", synchronized: true, durationMillis: 20_000, locked: false, stopSequence: 1 }, deps);
+    paired.attach(element);
+    expect(paired.getSnapshot()).toMatchObject({ playbackIntent: false, volume: 0.4, muted: true });
+  });
+
   it("drives an unpaired video directly and reports element state", () => {
     const controller = new VideoPlaybackController({ videoID: "plain", synchronized: false, durationMillis: 60_000, locked: false, stopSequence: 1 }, deps);
     controller.connect();

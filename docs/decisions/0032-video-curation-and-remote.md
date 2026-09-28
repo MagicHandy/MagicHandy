@@ -24,6 +24,10 @@ have entrenched that shape, so the player was split first. Commands now pass
 through one controller that on-screen controls, keyboard gestures and the
 remote share.
 
+A follow-up asked for the largest possible picture, informed by how
+livestream sites combine video and chat, and for the sketch's switch between
+the script and the chat as what moves the device.
+
 ## Decision
 
 ### Curation is library content
@@ -46,9 +50,51 @@ a tag onto an existing one merges them.
 The player page can open the active conversation beside the picture. It is
 the same backend session as the Chat page, so its replies are spoken by the
 tab that holds control. Opening or closing the chat keeps the player mounted.
-With the chat open, fullscreen takes the video and the chat together. A paired
-script still moves the device; if the chat starts motion, it takes over like
-any other source and the video pauses.
+With the chat open, fullscreen takes the video and the chat together. The
+chat moves the device only when Chat is the motion source, below.
+
+### A watch page that puts the picture first
+
+Livestream pages keep the picture first and the chat in a column beside it
+that can be collapsed; their theatre modes, and popular extensions to them,
+give the picture more room and keep stream details reachable without leaving
+it. The player page follows that shape:
+
+- The video fills the workspace width and the height the status bar leaves,
+  beside the full-height chat column when it is open. The route heading stays
+  for screen readers only, and the page drops the content-width cap.
+- One bar under the picture holds back, the title, the motion source, the chat
+  toggle and editing. Details, curation and conversion notices fold below.
+- Below 1000px the picture keeps its shape at the top and the chat stacks
+  under it, as phone apps do. Fullscreen with the chat open keeps it beside the
+  picture. The persistent Stop stays in the shell; nothing overlays it.
+
+At 1280×800 with the chat closed, the picture grows from 966×368 to 994×591.
+
+### One motion source at a time
+
+A switch beside the picture chooses what moves the device while the video
+plays: Script, Chat or Off.
+
+- Script is the default when a script is paired, Off otherwise, and Script is
+  unavailable without one. The choice lasts while the video is open.
+- Switching is a Stop and a fresh start. Leaving Script closes the run with its
+  controller while the picture keeps playing. Leaving Chat stops Autopilot and
+  chat motion through the ordinary mode stop, not Emergency Stop, so speech and
+  the conversation go on. Arriving at Script mid-play holds the picture and
+  arms a new run from there once the script is ready.
+- With Chat, the video plays as a plain one and the chat and Autopilot move the
+  device, not synced to the picture.
+- While Script or Off drives, a message sent from the chat beside the video is
+  words only. The request names the owner (`motion_owner`), so the turn
+  composes the chat-only contract with that reason and a closing "Video motion"
+  note with one example of declining. Without the note, a persona reply
+  narrated a faster, deeper pace the script never took. With it, a live
+  Gemma 12B check through the phone remote declined 9 of 9 motion requests
+  with the reason and a pointer to the switch, kept neutral questions
+  conversational, and never moved the device.
+- The phone remote shows and switches the source too. A switch to Script
+  mid-play on a desktop page nobody has clicked is refused, as a sound Play is.
 
 ### A phone remote that asks the desktop
 
@@ -59,15 +105,16 @@ motion path.
 
 - **Presence.** The controller tab reports what it shows: its page, the open
   video (title, play intent, position, duration, volume, mute, speed, sync
-  state, whether the script has loaded) and the open conversation (session,
-  persona name, busy, ready). It reports on changes and every five seconds. A
+  state, whether the script has loaded, the motion source, whether a script is
+  paired) and the open conversation (session, persona name, busy, ready). It
+  reports on changes and every five seconds. A
   report needs the controller at its current generation. It is not a device
   command: it takes no command ticket, never waits behind live control, adds
   nothing to the audit log and does not renew login idle time. Presence lapses
   after 20 seconds. A hidden tab, a tab that loses control and a closing tab
   withdraw it.
 - **Commands.** Video: play, pause, toggle, seek, seek by, volume, mute,
-  speed, open and close. Chat: open and send. The phone needs control
+  speed, motion source, open and close. Chat: open and send. The phone needs control
   permission and the same account as the desktop. Commands wait at most ten
   seconds, at most 32 at a time; a late command is dropped, never run late.
   Emergency Stop drops every waiting command, and so does a change of desktop.
@@ -110,12 +157,19 @@ Stop remains in the shell on every route.
   second media clock.
 - Keyword rules for chat-driven playback. Letting the model act on the video
   is left for a later, stronger model.
+- Letting chat motion replace a running script, as before this change: the
+  source that started last took over and the video paused. The switch makes
+  the owner explicit instead.
+- A chat overlaid on the picture, as some livestream extensions offer. The
+  column keeps the picture unobstructed; an overlay can follow if wanted.
 
 ## Consequences
 
 - Five routes join the admission matrix: presence (control) and its
   withdrawal (control), state and events (shared admission, handler requires
   control) and commands (control). Curation adds four control routes.
+- The chat stream accepts `motion_owner` (`script` or `off`); other values
+  are rejected. Chat elsewhere is unchanged.
 - The desktop must stay visible. A hidden protected tab gives up control
   after 15 seconds, as any controller tab does.
 - One desktop at a time: the tab that holds control. A second desktop tab

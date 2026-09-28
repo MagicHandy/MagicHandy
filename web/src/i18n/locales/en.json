@@ -2403,5 +2403,12 @@
   "No video is open on the desktop.": "No video is open on the desktop.",
   "The video is not ready for that yet.": "The video is not ready for that yet.",
   "The desktop is still answering. Send again when the reply finishes.": "The desktop is still answering. Send again when the reply finishes.",
-  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first."
+  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.",
+  "Motion source": "Motion source",
+  "The script moves the device. The chat talks but cannot change the motion.": "The script moves the device. The chat talks but cannot change the motion.",
+  "The chat moves the device. It is not synced to the picture.": "The chat moves the device. It is not synced to the picture.",
+  "Nothing moves the device while this video plays. The chat only talks.": "Nothing moves the device while this video plays. The chat only talks.",
+  "This video has no script.": "This video has no script.",
+  "Motion could not be stopped.": "Motion could not be stopped.",
+  "Back to videos": "Back to videos"
 }

@@ -23,11 +23,16 @@ interface Props {
   personaName?: string;
   onBusyChange?: (busy: boolean) => void;
   onSessionChanged?: () => void;
+  /**
+   * Beside an open video, the video's script or the viewer's Off choice can
+   * own the device; replies are then words only (ADR 0032).
+   */
+  motionOwner?: "script" | "off";
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChanged }: Props) {
+export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChanged, motionOwner }: Props) {
   const { backendOnline, readOnly, state, refresh } = useAppState();
   const { show } = useToast();
   const { queueSpeech } = useVoicePlayback();
@@ -232,7 +237,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
             warning: true,
           } : x)));
         }
-      }, controller.signal, stopSequence);
+      }, controller.signal, stopSequence, motionOwner);
     } catch (e) {
       if (controller.signal.aborted || !mounted.current || streamGeneration.current !== requestGeneration) return;
       const message = e instanceof Error ? translateKnown(e.message) : t("Chat failed.");

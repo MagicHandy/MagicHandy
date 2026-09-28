@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "../api/client";
 import type { RemoteState } from "../api/remote-types";
@@ -98,6 +98,19 @@ describe("phone remote", () => {
 
     publish(desktop({ revision: 4, recent: [{ command_id: "sent-1", ok: false, error: "The video is not ready for that yet." }] }));
     expect(screen.getByRole("alert")).toHaveTextContent("The video is not ready for that yet.");
+  });
+
+  it("switches what moves the device on the desktop", async () => {
+    render(<RemoteRoute />);
+    publish(desktop({ video: { ...desktop().video!, motion_source: "script", has_script: true } }));
+    const source = within(screen.getByRole("group", { name: "Motion source" }));
+    expect(source.getByRole("radio", { name: "Script" })).toBeChecked();
+    expect(screen.getByText("The script moves the device. The chat talks but cannot change the motion.")).toBeInTheDocument();
+    fireEvent.click(source.getByRole("radio", { name: "Chat" }));
+    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "video", action: "source", source: "chat" }));
+
+    publish(desktop({ revision: 4, video: { ...desktop().video!, synchronized: false, motion_source: "off", has_script: false } }));
+    expect(within(screen.getByRole("group", { name: "Motion source" })).getByRole("radio", { name: "Script" })).toBeDisabled();
   });
 
   it("opens a catalog video on the desktop", async () => {

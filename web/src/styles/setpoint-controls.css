@@ -199,6 +199,10 @@
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
-.segmented-field:disabled .segmented-option {
+.segmented-field:disabled .segmented-option,
+.segmented-option[data-disabled] {
   cursor: not-allowed;
+}
+.segmented-option[data-disabled] span {
+  opacity: 0.45;
 }

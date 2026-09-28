@@ -12,16 +12,17 @@ export function VideoRoute() {
     window.location.hash = videoRoute(id);
   }, []);
 
+  const selectedID = videoIDFromRoute(route);
   return (
     <>
-      <WorkspaceHead title={t("Videos")} wide />
-      <div className="video-page" data-requires-backend>
+      <WorkspaceHead title={t("Videos")} wide hidden={Boolean(selectedID)} />
+      <div className="video-page" data-requires-backend data-watching={selectedID ? true : undefined}>
         <VideoLibrary
           locked={!backendOnline || readOnly}
           hostAdministration={state?.capabilities?.configure_host !== false}
           stopSequence={state?.stop_sequence}
           canCurate={backendOnline && state?.capabilities?.control !== false}
-          selectedID={videoIDFromRoute(route)}
+          selectedID={selectedID}
           onSelect={select}
         />
       </div>

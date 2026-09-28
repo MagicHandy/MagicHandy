@@ -97,7 +97,7 @@ describe("remote executor", () => {
       route: "videos",
       video: {
         video_id: "clip", title: "Take 07", playing: true, position_ms: 12_000, duration_ms: 90_000,
-        volume: 0.8, muted: false, rate: 1, synchronized: true, sync_state: "idle", ready: true,
+        volume: 0.8, muted: false, rate: 1, synchronized: true, sync_state: "idle", ready: true, has_script: false,
       },
     });
 
@@ -170,6 +170,30 @@ describe("remote executor", () => {
     expect(reports.flatMap((report) => report.outcomes ?? []).map((outcome) => outcome.error ?? "ok")).toEqual([
       REMOTE_OUTCOMES.needsClick, REMOTE_OUTCOMES.needsClick, "ok", "ok",
     ]);
+  });
+
+  it("switches the motion source through the page and never restarts a script the browser would refuse", async () => {
+    const { executor, deps, reports } = setup();
+    executor.setEligible(true);
+    const video = fakeHandle({ playbackIntent: true });
+    const setMotionSource = vi.fn(() => true);
+    executor.setVideo({ handle: video.handle, title: "Take 07", motionSource: "chat", hasScript: true, setMotionSource });
+    executor.execute(command("video", "source", { source: "off" }));
+    expect(setMotionSource).toHaveBeenLastCalledWith("off");
+
+    // A switch to the script mid-play starts a new run, which needs sound.
+    deps.canPlaySound.mockReturnValue(false);
+    executor.execute(command("video", "source", { source: "script" }));
+    expect(setMotionSource).toHaveBeenCalledTimes(1);
+
+    executor.setVideo({ handle: video.handle, title: "Take 07", motionSource: "off", hasScript: false, setMotionSource });
+    executor.execute(command("video", "source", { source: "script" }));
+    executor.execute(command("video", "source", { source: "autopilot" }));
+    await vi.advanceTimersByTimeAsync(250);
+    expect(reports.flatMap((report) => report.outcomes ?? []).map((outcome) => outcome.error ?? "ok")).toEqual([
+      "ok", REMOTE_OUTCOMES.needsClick, REMOTE_OUTCOMES.noScript, REMOTE_OUTCOMES.unknown,
+    ]);
+    expect(last(reports)?.video).toMatchObject({ motion_source: "off", has_script: false });
   });
 
   it("opens and closes videos by navigating, and never runs commands while not eligible", async () => {

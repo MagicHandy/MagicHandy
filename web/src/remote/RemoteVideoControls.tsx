@@ -2,9 +2,11 @@ import { t, translateKnown } from "../i18n";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RemoteVideoPresence } from "../api/remote-types";
 import type { MediaSyncStatus } from "../api/types";
+import { SegmentedChoice } from "../components/SetpointControls";
 import { syncStatusLabel } from "../components/SyncedVideoPlayer";
 import { ArrowLeftIcon, ArrowRightIcon, PauseIcon, PlayIcon, VolumeIcon, VolumeMutedIcon } from "../shell/icons";
 import { formatClock } from "../videos/format";
+import { motionSourceNote, motionSourceOptions } from "../videos/motionSource";
 import type { RemoteSend } from "./useRemoteCommands";
 
 // The same speeds as the desktop player's own control.
@@ -33,6 +35,7 @@ export function RemoteVideoControls({ video, position, send }: Props) {
   const syncLabel = video.synchronized
     ? translateKnown(syncStatusLabel({ active: false, state: (video.sync_state ?? "idle") as MediaSyncStatus["state"] }, false, null))
     : t("Video only; the device is not following a script");
+  const source = video.motion_source ?? (video.synchronized ? "script" : "off");
 
   return (
     <section className="remote-video" aria-label={t("Desktop video")}>
@@ -41,6 +44,17 @@ export function RemoteVideoControls({ video, position, send }: Props) {
         <p className="remote-video-state">
           {!video.ready ? t("Loading the paired script…") : syncLabel}
         </p>
+      </div>
+
+      <div className="remote-source">
+        <SegmentedChoice
+          className="remote-source-choice"
+          label={t("Motion source")}
+          value={source}
+          options={motionSourceOptions(Boolean(video.has_script))}
+          onChange={(next) => void send({ target: "video", action: "source", source: next })}
+        />
+        <p className="remote-source-note">{motionSourceNote(source)}</p>
       </div>
 
       <div className="remote-scrubber">

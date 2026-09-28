@@ -2403,5 +2403,12 @@
   "No video is open on the desktop.": "デスクトップで開いている動画はありません。",
   "The video is not ready for that yet.": "動画はまだその操作を受け付けられません。",
   "The desktop is still answering. Send again when the reply finishes.": "デスクトップはまだ応答中です。応答が終わってからもう一度送信してください。",
-  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "デスクトップのブラウザーは、そこで MagicHandy のページが一度クリックされるまで音声の再生をブロックします。一度クリックするか、先に動画をミュートしてください。"
+  "The desktop browser blocks sound until someone clicks the MagicHandy page there. Click it once, or mute the video first.": "デスクトップのブラウザーは、そこで MagicHandy のページが一度クリックされるまで音声の再生をブロックします。一度クリックするか、先に動画をミュートしてください。",
+  "Motion source": "モーションの操作元",
+  "The script moves the device. The chat talks but cannot change the motion.": "スクリプトがデバイスを動かします。チャットは会話できますが、モーションは変更できません。",
+  "The chat moves the device. It is not synced to the picture.": "チャットがデバイスを動かします。映像とは同期しません。",
+  "Nothing moves the device while this video plays. The chat only talks.": "この動画の再生中はデバイスを動かしません。チャットは会話のみです。",
+  "This video has no script.": "この動画にはスクリプトがありません。",
+  "Motion could not be stopped.": "モーションを停止できませんでした。",
+  "Back to videos": "動画一覧に戻る"
 }

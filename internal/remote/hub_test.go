@@ -245,6 +245,8 @@ func TestValidateRejectsIncompleteCommands(t *testing.T) {
 		{Target: "chat", Action: "send", Text: "   "},
 		{Target: "chat", Action: "send", Text: string(long)},
 		{Target: "chat", Action: "stop"},
+		{Target: "video", Action: "source"},
+		{Target: "video", Action: "source", Source: "autopilot"},
 	} {
 		if err := command.Validate(); !errors.Is(err, ErrInvalidCommand) {
 			t.Errorf("Validate(%+v) = %v, want invalid", command, err)
@@ -255,6 +257,8 @@ func TestValidateRejectsIncompleteCommands(t *testing.T) {
 		{Target: "video", Action: "volume", Value: floatPointer(0)},
 		{Target: "video", Action: "mute", Flag: boolPointer(true)},
 		{Target: "video", Action: "rate", Value: floatPointer(1.25)},
+		{Target: "video", Action: "source", Source: "chat"},
+		{Target: "video", Action: "source", Source: "off"},
 	} {
 		if err := command.Validate(); err != nil {
 			t.Errorf("Validate(%+v) = %v", command, err)

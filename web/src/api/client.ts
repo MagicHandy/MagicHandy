@@ -958,13 +958,15 @@ export async function streamChat(
   onEvent: (e: ChatStreamEvent) => void,
   signal?: AbortSignal,
   stopSequence?: number,
+  /** Beside an open video: what drives the device when the chat does not. */
+  motionOwner?: "script" | "off",
 ): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/json", ...controllerRequestHeaders() };
   if (stopSequence !== undefined) headers["X-MagicHandy-Stop-Sequence"] = String(stopSequence);
   const res = await fetch("/api/chat/stream", {
     method: "POST",
     headers,
-    body: JSON.stringify({ session_id: sessionId, message }),
+    body: JSON.stringify(motionOwner ? { session_id: sessionId, message, motion_owner: motionOwner } : { session_id: sessionId, message }),
     signal,
   });
   if (!res.ok) {
