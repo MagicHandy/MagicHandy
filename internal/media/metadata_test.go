@@ -30,7 +30,7 @@ func curatedLibrary(t *testing.T, names ...string) (*Catalog, map[string]string)
 	return catalog, ids
 }
 
-func TestMetadataNormalizationBounds(t *testing.T) {
+func TestTitleAndNotesNormalization(t *testing.T) {
 	if title, err := NormalizeTitle("  Evening take  "); err != nil || title == nil || *title != "Evening take" {
 		t.Fatalf("NormalizeTitle = %v, %v", title, err)
 	}
@@ -45,6 +45,9 @@ func TestMetadataNormalizationBounds(t *testing.T) {
 	if notes, err := NormalizeNotes("line one\nline two"); err != nil || notes == nil || !strings.Contains(*notes, "\n") {
 		t.Fatalf("notes lost their line break: %v, %v", notes, err)
 	}
+}
+
+func TestRatingBounds(t *testing.T) {
 	for _, rating := range []int{-1, 6} {
 		if _, err := NormalizeRating(rating); !errors.Is(err, ErrInvalidMetadata) {
 			t.Fatalf("rating %d was accepted", rating)
@@ -53,6 +56,9 @@ func TestMetadataNormalizationBounds(t *testing.T) {
 	if rating, err := NormalizeRating(0); err != nil || rating != nil {
 		t.Fatalf("rating 0 must clear, got %v, %v", rating, err)
 	}
+}
+
+func TestTagNormalizationAndBounds(t *testing.T) {
 	tags, err := NormalizeTags([]string{"  slow   build ", "Calm", "calm", "Alpha"}, MaxVideoTags)
 	if err != nil {
 		t.Fatalf("NormalizeTags: %v", err)

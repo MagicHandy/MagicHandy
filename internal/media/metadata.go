@@ -67,7 +67,8 @@ func normalizeText(value string, maxRunes int, multiline bool, field string) (*s
 		return nil, fmt.Errorf("%w: %s must be at most %d characters", ErrInvalidMetadata, field, maxRunes)
 	}
 	for _, character := range value {
-		if unicode.IsControl(character) && !(multiline && (character == '\n' || character == '\t' || character == '\r')) {
+		layout := multiline && (character == '\n' || character == '\t' || character == '\r')
+		if unicode.IsControl(character) && !layout {
 			return nil, fmt.Errorf("%w: %s contains a control character", ErrInvalidMetadata, field)
 		}
 	}
@@ -136,66 +137,86 @@ func sortTags(tags []string) {
 // UpdateMetadata applies a patch to one video and returns the updated row.
 func (c *Catalog) UpdateMetadata(ctx context.Context, id string, patch MetadataPatch) (Video, error) {
 	id = strings.TrimSpace(id)
-	var title, notes *string
-	var rating *int
-	var tags []string
-	var err error
-	if patch.Title != nil {
-		if title, err = NormalizeTitle(*patch.Title); err != nil {
-			return Video{}, err
-		}
-	}
-	if patch.Rating != nil {
-		if rating, err = NormalizeRating(*patch.Rating); err != nil {
-			return Video{}, err
-		}
-	}
-	if patch.Notes != nil {
-		if notes, err = NormalizeNotes(*patch.Notes); err != nil {
-			return Video{}, err
-		}
-	}
-	if patch.Tags != nil {
-		if tags, err = NormalizeTags(*patch.Tags, MaxVideoTags); err != nil {
-			return Video{}, err
-		}
+	values, err := normalizeMetadataPatch(patch)
+	if err != nil {
+		return Video{}, err
 	}
 	err = c.db.WithTx(ctx, func(tx *sql.Tx) error {
 		if err := requireVideoRow(ctx, tx, id); err != nil {
 			return err
 		}
-		if patch.Title != nil {
-			if _, err := tx.ExecContext(ctx, `UPDATE media_videos SET title = ? WHERE id = ?`, nullableString(title), id); err != nil {
-				return err
-			}
-		}
-		if patch.Rating != nil {
-			if _, err := tx.ExecContext(ctx, `UPDATE media_videos SET rating = ? WHERE id = ?`, nullableInt(rating), id); err != nil {
-				return err
-			}
-		}
-		if patch.Notes != nil {
-			if _, err := tx.ExecContext(ctx, `UPDATE media_videos SET notes = ? WHERE id = ?`, nullableString(notes), id); err != nil {
-				return err
-			}
-		}
-		if patch.Tags != nil {
-			if _, err := tx.ExecContext(ctx, `DELETE FROM media_video_tags WHERE video_id = ?`, id); err != nil {
-				return err
-			}
-			now := time.Now().UTC().Format(time.RFC3339Nano)
-			for _, tag := range tags {
-				if err := insertTag(ctx, tx, id, tag, now); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
+		return applyMetadataPatch(ctx, tx, id, patch, values)
 	})
 	if err != nil {
 		return Video{}, err
 	}
 	return c.Video(ctx, id)
+}
+
+// normalizedMetadata holds a patch's validated values. Which fields change is
+// still read from the patch, where a nil field means "leave unchanged".
+type normalizedMetadata struct {
+	title, notes *string
+	rating       *int
+	tags         []string
+}
+
+func normalizeMetadataPatch(patch MetadataPatch) (normalizedMetadata, error) {
+	var values normalizedMetadata
+	var err error
+	if patch.Title != nil {
+		if values.title, err = NormalizeTitle(*patch.Title); err != nil {
+			return values, err
+		}
+	}
+	if patch.Rating != nil {
+		if values.rating, err = NormalizeRating(*patch.Rating); err != nil {
+			return values, err
+		}
+	}
+	if patch.Notes != nil {
+		if values.notes, err = NormalizeNotes(*patch.Notes); err != nil {
+			return values, err
+		}
+	}
+	if patch.Tags != nil {
+		if values.tags, err = NormalizeTags(*patch.Tags, MaxVideoTags); err != nil {
+			return values, err
+		}
+	}
+	return values, nil
+}
+
+func applyMetadataPatch(ctx context.Context, tx *sql.Tx, id string, patch MetadataPatch, values normalizedMetadata) error {
+	for _, column := range []struct {
+		changed bool
+		query   string
+		value   any
+	}{
+		{patch.Title != nil, `UPDATE media_videos SET title = ? WHERE id = ?`, nullableString(values.title)},
+		{patch.Rating != nil, `UPDATE media_videos SET rating = ? WHERE id = ?`, nullableInt(values.rating)},
+		{patch.Notes != nil, `UPDATE media_videos SET notes = ? WHERE id = ?`, nullableString(values.notes)},
+	} {
+		if !column.changed {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, column.query, column.value, id); err != nil {
+			return err
+		}
+	}
+	if patch.Tags == nil {
+		return nil
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM media_video_tags WHERE video_id = ?`, id); err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	for _, tag := range values.tags {
+		if err := insertTag(ctx, tx, id, tag, now); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // UpdateTags adds and removes tags across several videos in one transaction.
