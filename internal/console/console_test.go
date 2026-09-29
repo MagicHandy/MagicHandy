@@ -80,7 +80,7 @@ func frameText(v view) string {
 func TestFrameShowsWandWordmarkLinkAndKeys(t *testing.T) {
 	text := frameText(runningView(richGlyphs, 100, 30))
 	for _, want := range []string{"★", "╱", "█▀▄▀█ ▄▀█ █▀▀ █ █▀▀ █ █ ▄▀█ █▄ █ █▀▄ █▄█", "Local-first control for The Handy",
-		"Version 0.1.0-alpha.48", "● Running since 11:04", "Open    http://127.0.0.1:49717", "Access  Local only (this computer)",
+		"Version 0.1.0-alpha.48", "● Running since 11:04", "App     http://127.0.0.1:49717", "Access  Local only (this computer)",
 		"Server starting", "[O] Open in browser", "[C] Copy link", "[S] Stop motion", "[D] Details", "[Q] Quit",
 		"Ctrl+click the link or press O"} {
 		if !strings.Contains(text, want) {
@@ -95,7 +95,7 @@ func TestAddressIsAClickableLink(t *testing.T) {
 	v := runningView(richGlyphs, 100, 30)
 	var rendered string
 	for _, row := range compose(v) {
-		if text := row.render(99); strings.Contains(visible(text), "Open    ") {
+		if text := row.render(99); strings.Contains(visible(text), "App     ") {
 			rendered = text
 		}
 	}

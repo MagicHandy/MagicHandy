@@ -153,7 +153,7 @@ motion path.
   in command JSON. `internal/remote` imports none of motion,
   transport, chat, media, modes, voice, LLM or the HTTP edge.
 
-The phone page (`#/remote`) switches between Video and Chat. Video shows the
+The dedicated remote interface (moved from `#/remote` by [ADR 0033](0033-remote-listener-and-account-scope.md)) switches between Video and Chat on phones. Desktop shows both panes. Video shows the
 transport, a position slider, volume, mute, speed and a searchable catalog to
 open from. Chat shows the recent conversation and a composer. The persistent
 Stop remains in the shell on every route.
@@ -202,3 +202,7 @@ a portal into the fullscreen root, with reserved space above the picture.
   control over a paired video remains open with Phase 18 M3.
 - Review findings and validation are recorded in
   [the completion review](../claude-progress-review-2026-09-29.md).
+
+The original same-account boundary is extended by ADR 0033: explicitly granted
+remote-only accounts can control their issuing administrator’s desktop. The
+separate listener serves a reduced API with session audience checks.

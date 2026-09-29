@@ -527,10 +527,11 @@ export const api = {
   validateNetwork: (config: NetworkConfig) => request<{ valid: boolean; config: NetworkConfig; message: string }>("POST", "/api/network/validate", { config }),
   saveNetwork: (config: NetworkConfig, password: string) => request<{ restart_required: boolean }>("PUT", "/api/network", { config, password }),
   networkReport: () => request<Record<string, unknown>>("GET", "/api/network/report"),
-  createAccount: (username: string, password: string, role: AccountRole) =>
-    request<{ account: UserAccount }>("POST", "/api/accounts", { username, password, role }),
+  createAccount: (username: string, password: string, role: AccountRole, interface_access: "full" | "remote" = "full") =>
+    request<{ account: UserAccount }>("POST", "/api/accounts", { username, password, role, interface_access }),
   resetAccountPassword: (id: string, password: string) =>
     request<null>("PUT", `/api/accounts/${encodeURIComponent(id)}/password`, { password }),
+  setAccountInterfaceAccess: (id: string, interface_access: "full" | "remote") => request("PUT", `/api/accounts/${encodeURIComponent(id)}/interface-access`, { interface_access }),
   setAccountDisabled: (id: string, disabled: boolean) =>
     request<null>("PUT", `/api/accounts/${encodeURIComponent(id)}/disabled`, { disabled }),
   controlIdentities: () =>
@@ -620,6 +621,8 @@ export const api = {
   reportRemotePresence: (presence: RemotePresence, signal?: AbortSignal) =>
     request<{ remote: RemoteState }>("POST", "/api/remote/presence", presence, signal),
   withdrawRemotePresence: () => request<{ status: string }>("DELETE", "/api/remote/presence", undefined, undefined, undefined, true),
+  remoteVideos: (query: string, offset = 0, signal?: AbortSignal) => request<{ videos: import("./remote-types").RemoteVideoItem[]; has_more: boolean; next_offset: number }>("GET", `/api/remote/videos?q=${encodeURIComponent(query)}&offset=${offset}`, undefined, signal),
+  remoteMessages: (sessionID: string, signal?: AbortSignal) => request<{ messages: import("./remote-types").RemoteDisplayMessage[] }>("GET", `/api/remote/chat/messages?session_id=${encodeURIComponent(sessionID)}`, undefined, signal),
   remoteState: (signal?: AbortSignal) => request<{ remote: RemoteState }>("GET", "/api/remote/state", undefined, signal),
   sendRemoteCommand: (command: RemoteCommandInput, stopSequence: number) =>
     request<{ command: RemoteCommand }>("POST", "/api/remote/commands", command, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),

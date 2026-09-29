@@ -28,9 +28,7 @@ const (
 func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/remote/presence", s.handleRemotePresence)
 	mux.HandleFunc("DELETE /api/remote/presence", s.handleRemoteWithdraw)
-	mux.HandleFunc("GET /api/remote/state", s.handleRemoteState)
-	mux.HandleFunc("GET /api/remote/events", s.handleRemoteEvents)
-	mux.HandleFunc("POST /api/remote/commands", s.handleRemoteCommand)
+	s.remoteClientRoutes(mux)
 	mux.HandleFunc("POST /api/remote/commands/{id}/claim", s.handleRemoteClaim)
 }
 
@@ -39,6 +37,10 @@ func remoteIdentity(r *http.Request, clientID string) remote.Identity {
 	if session, ok := authenticatedSession(r); ok {
 		identity.AccountID = session.session.Account.ID
 		identity.SessionKey = session.session.Key
+		identity.DesktopAccountID = session.session.RemoteDesktopAccount()
+		if session.session.ControlGrant != nil {
+			identity.GrantID = session.session.ControlGrant.ID
+		}
 	}
 	return identity
 }
@@ -46,7 +48,7 @@ func remoteIdentity(r *http.Request, clientID string) remote.Identity {
 // The remote is a control feature: an observer cannot send commands, so it
 // has no reason to see what the desktop is showing either.
 func (s *Server) requireRemoteControl(w http.ResponseWriter, r *http.Request) bool {
-	if s.capabilities(r).Control {
+	if s.capabilities(r).RemoteControl {
 		return true
 	}
 	writeError(w, http.StatusForbidden, errors.New("this account does not have permission to control motion"))
@@ -118,7 +120,7 @@ func (s *Server) handleRemoteState(w http.ResponseWriter, r *http.Request) {
 	if !s.requireRemoteControl(w, r) {
 		return
 	}
-	state, _ := s.remote.State(remoteIdentity(r, clientIDFromRequest(r)))
+	state := s.remoteState(r)
 	writeJSON(w, http.StatusOK, map[string]any{"remote": state})
 }
 
@@ -190,7 +192,11 @@ func (s *Server) remoteSenderActive(r *http.Request, sender remote.Identity) boo
 		return !s.auth.authenticationRequired() && sender.AccountID == ""
 	}
 	session, err := s.accounts.CheckSession(r.Context(), sender.SessionKey)
-	return err == nil && session.Account.ID == sender.AccountID && session.CanControl(time.Now())
+	grantID := ""
+	if session.ControlGrant != nil {
+		grantID = session.ControlGrant.ID
+	}
+	return err == nil && session.Account.ID == sender.AccountID && session.RemoteDesktopAccount() == sender.DesktopAccount() && grantID == sender.GrantID && session.CanUseRemote(time.Now())
 }
 
 // Revalidate queued intent immediately before execution. A buffered SSE event
@@ -271,8 +277,12 @@ func (s *Server) handleRemoteEvents(w http.ResponseWriter, r *http.Request) {
 	var sent remote.State
 	first := true
 	for {
+		if !s.remoteSenderActive(r, viewer) {
+			return
+		}
 		state, changed := s.remote.State(viewer)
-		if first || state.Revision != sent.Revision || state.Connected != sent.Connected {
+		state.StopSequence, state.CanControl = s.stopSequence.Load(), true
+		if first || state.Revision != sent.Revision || state.Connected != sent.Connected || state.StopSequence != sent.StopSequence {
 			if err := writeSSE(w, "state", state); err != nil {
 				return
 			}

@@ -49,7 +49,18 @@ type Identity struct {
 	ClientID  string
 	AccountID string
 	// Private, non-bearer session identity, never exposed in remote payloads.
-	SessionKey string `json:"-"`
+	SessionKey       string `json:"-"`
+	DesktopAccountID string `json:"-"`
+	GrantID          string `json:"-"`
+}
+
+// DesktopAccount is the backend-authorized desktop audience. HTTP constructs
+// it from a live grant; this value is never accepted from a command payload.
+func (i Identity) DesktopAccount() string {
+	if i.DesktopAccountID != "" {
+		return i.DesktopAccountID
+	}
+	return i.AccountID
 }
 
 // Command is one request from a remote. Fields beyond Target and Action
@@ -105,6 +116,8 @@ type VideoPresence struct {
 type ChatPresence struct {
 	SessionID   string `json:"session_id"`
 	PersonaName string `json:"persona_name,omitempty"`
+	LatestSeq   int64  `json:"latest_seq,omitempty"`
+	Revision    int64  `json:"revision,omitempty"`
 	Busy        bool   `json:"busy"`
 	Ready       bool   `json:"ready"`
 }
@@ -119,8 +132,10 @@ type Presence struct {
 
 // State is what remotes see. It carries no account or tab identity.
 type State struct {
-	Revision  uint64 `json:"revision"`
-	Connected bool   `json:"connected"`
+	StopSequence uint64 `json:"stop_sequence"`
+	CanControl   bool   `json:"can_control"`
+	Revision     uint64 `json:"revision"`
+	Connected    bool   `json:"connected"`
 	// OtherAccount is set, and every detail withheld, when the desktop is
 	// signed in to an account other than the viewer's.
 	OtherAccount bool           `json:"other_account,omitempty"`
@@ -222,7 +237,7 @@ func (h *Hub) Send(sender Identity, command Command) (Command, error) {
 	if !h.presentLocked(now) {
 		return Command{}, ErrNoDesktop
 	}
-	if sender.AccountID != h.executor.AccountID {
+	if sender.DesktopAccount() != h.executor.AccountID {
 		return Command{}, ErrOtherAccount
 	}
 	switch {
@@ -277,7 +292,7 @@ func (h *Hub) State(viewer Identity) (State, <-chan struct{}) {
 	now := h.now()
 	h.expireLocked(now)
 	state := h.stateLocked(now)
-	if viewer.AccountID != h.executor.AccountID {
+	if viewer.DesktopAccount() != h.executor.AccountID {
 		state = State{Connected: state.Connected, OtherAccount: state.Connected, Recent: []Outcome{}}
 	}
 	return state, h.changed
@@ -460,6 +475,8 @@ func cleanChat(chat *ChatPresence) *ChatPresence {
 	cleaned := *chat
 	cleaned.SessionID = clip(cleaned.SessionID, 128)
 	cleaned.PersonaName = clip(cleaned.PersonaName, 80)
+	cleaned.LatestSeq = max(0, cleaned.LatestSeq)
+	cleaned.Revision = max(0, cleaned.Revision)
 	return &cleaned
 }
 

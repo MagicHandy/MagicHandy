@@ -2254,7 +2254,11 @@ This phase supersedes the feature-ideas "video sync player" non-goal by
 explicit direction (2026-07-19); the non-goal's concerns are carried as
 guardrails (no transcoding, no media management, no new motion pathway).
 ADR 0032 later allowed hand curation in the catalog and a phone remote that
-drives the desktop's own player.
+drives the desktop's own player. ADR 0033 moves that remote to a separate port
+with a restricted API, phone/desktop layouts, and schema v29 account/session
+interface scopes. Remote-only operators require explicit delegation to the
+granting administrator's desktop. See the
+[capability and account review](docs/remote-access-review-2026-09-29.md).
 
 ## Done Criteria
 

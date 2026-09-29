@@ -26,6 +26,8 @@ export interface RemoteVideoSurface {
 export interface RemoteChatSurface {
   sessionId: string;
   personaName: string;
+  latestSeq?: number;
+  revision?: number;
   /** A reply is streaming; the next message waits for it. */
   busy: boolean;
   /** The composer could send now: history loaded, this tab not read-only. */
@@ -162,7 +164,8 @@ export class RemoteExecutor {
     const previous = this.chat;
     this.chat = surface;
     if (previous?.sessionId !== surface?.sessionId || previous?.personaName !== surface?.personaName ||
-      previous?.busy !== surface?.busy || previous?.ready !== surface?.ready) {
+      previous?.busy !== surface?.busy || previous?.ready !== surface?.ready ||
+      previous?.latestSeq !== surface?.latestSeq || previous?.revision !== surface?.revision) {
       this.schedule(0);
     }
   }
@@ -355,7 +358,9 @@ export class RemoteExecutor {
 }
 
 function chatPresence(chat: RemoteChatSurface): RemoteChatPresence {
-  return { session_id: chat.sessionId, persona_name: chat.personaName, busy: chat.busy, ready: chat.ready };
+  return { session_id: chat.sessionId, persona_name: chat.personaName, busy: chat.busy, ready: chat.ready,
+    ...(chat.latestSeq !== undefined ? { latest_seq: chat.latestSeq } : {}),
+    ...(chat.revision !== undefined ? { revision: chat.revision } : {}) };
 }
 
 function videoSignature(video: RemoteVideoPresence): string {

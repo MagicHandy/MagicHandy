@@ -4,7 +4,7 @@ import type { ControlGrant } from "../api/types";
 import type { ControlGrantDuration } from "../api/access-types";
 import { t } from "../i18n";
 
-export function ControlGrantPanel({ accountID, disabled }: { accountID: string; disabled: boolean }) {
+export function ControlGrantPanel({ accountID, disabled, remoteOnly = false }: { accountID: string; disabled: boolean; remoteOnly?: boolean }) {
   const [grant, setGrant] = useState<ControlGrant | null>(null);
   const [duration, setDuration] = useState<ControlGrantDuration>(60);
   const [busy, setBusy] = useState(true);
@@ -33,7 +33,7 @@ export function ControlGrantPanel({ accountID, disabled }: { accountID: string; 
     finally { setBusy(false); }
   };
   return <div className="account-reset-form account-control-permission">
-    <p className="hint-block">{loaded && (grant ? grant.expires_at === null ? t("Permanent control permission. It remains active until revoked or replaced.") : t("Control permission expires {time}.", { time: new Date(grant.expires_at).toLocaleString() }) : t("Observer access. This account can view shared content and use Stop."))} {t("Control permission allows motion, chat and synchronized playback. Host settings and module installation remain administrator-only.")}</p>
+    <p className="hint-block">{loaded && (grant ? grant.expires_at === null ? t("Permanent control permission. It remains active until revoked or replaced.") : t("Control permission expires {time}.", { time: new Date(grant.expires_at).toLocaleString() }) : remoteOnly ? t("No remote control permission. This account can sign in and use Stop.") : t("Observer access. This account can view shared content and use Stop."))} {remoteOnly ? t("This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations.") : t("Control permission allows motion, chat and synchronized playback. Host settings and module installation remain administrator-only.")}</p>
     {busy && !loaded && <p className="form-status" role="status">{t("Checking…")}</p>}
     <label className="field"><span className="label">{t("Control permission duration")}</span><select value={duration} disabled={busy || disabled || !loaded} onChange={(event) => setDuration(event.target.value === "permanent" ? "permanent" : Number(event.target.value))}><option value={15}>{t("15 minutes")}</option><option value={60}>{t("1 hour")}</option><option value={240}>{t("4 hours")}</option><option value={720}>{t("12 hours")}</option><option value="permanent">{t("Permanent")}</option></select></label>
     <button className="btn btn-secondary" type="button" disabled={busy || disabled || !loaded} onClick={() => void change(false)}>{grant ? t("Replace control permission") : t("Grant control permission")}</button>

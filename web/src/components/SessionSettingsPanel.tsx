@@ -141,6 +141,7 @@ export function SessionSettingsPanel({ backendOnline, onSignedOut }: {
         <div className="session-summary">
           <div className="session-heading"><strong>{sessionLabel(session)}</strong>
           <span className="session-flags">
+            <span>{session.interface === "remote" ? t("Remote interface") : t("Full application")}</span>
             {session.current && <span>{t("This browser")}</span>}
             {session.controller && <span>{t("Active controller")}</span>}
             {session.device_gateway && <span>{t("Bluetooth browser")}</span>}

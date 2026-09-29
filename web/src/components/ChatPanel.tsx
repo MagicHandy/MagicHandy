@@ -136,7 +136,8 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   const remoteReady = !locked && !voiceActive;
   const remoteChat = useMemo(() => ({
     sessionId, personaName: assistantName, busy, ready: remoteReady, send: (text: string, stopSequence: number) => remoteSend.current(text, stopSequence),
-  }), [sessionId, assistantName, busy, remoteReady]);
+    latestSeq: activeChat?.latest_seq, revision: activeChat?.revision,
+  }), [sessionId, assistantName, busy, remoteReady, activeChat?.latest_seq, activeChat?.revision]);
   useRemoteChatSurface(remoteChat);
 
   async function sendText(input: string, stopSequence?: number) {

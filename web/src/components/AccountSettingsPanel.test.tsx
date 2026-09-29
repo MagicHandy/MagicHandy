@@ -11,7 +11,7 @@ vi.mock("../state/app-state", () => ({ useHashRoute: () => state.route, useToast
 vi.mock("./NetworkSettingsPanel", () => ({ NetworkSettingsPanel: () => <div>Network configuration fixture</div> }));
 vi.mock("./SessionSettingsPanel", () => ({ SessionSettingsPanel: () => <div>Own sessions fixture</div> }));
 vi.mock("./AuditSettingsPanel", () => ({ AuditSettingsPanel: () => <div>Access history fixture</div> }));
-vi.mock("../api/client", () => ({ api: { accounts: vi.fn(), controlGrant: vi.fn(), recoveryCodeStatus: vi.fn(), accountProfileImageURL: () => "" } }));
+vi.mock("../api/client", () => ({ api: { accounts: vi.fn(), createAccount: vi.fn(), controlGrant: vi.fn(), recoveryCodeStatus: vi.fn(), accountProfileImageURL: () => "" } }));
 const accounts = vi.mocked(api.accounts), grant = vi.mocked(api.controlGrant);
 const operator = { id: "b".repeat(32), username: "operator", role: "operator", disabled: false, has_profile_image: false } as UserAccount;
 
@@ -23,6 +23,20 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("account settings task navigation", () => {
+  it("creates remote-only accounts as scoped operators without automatically granting control", async () => {
+    state.route = "#/settings/access/accounts";
+    render(<AccountSettingsPanel backendOnline />);
+    await screen.findByText("operator", { selector: "strong" });
+    fireEvent.click(screen.getByRole("button", { name: "Add an account" }));
+    fireEvent.change(screen.getByLabelText("Username"), { target: { value: "remote-user" } });
+    fireEvent.change(screen.getByLabelText("Role"), { target: { value: "remote" } });
+    fireEvent.change(screen.getByLabelText("Password", { exact: true }), { target: { value: "synthetic remote password" } });
+    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "synthetic remote password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    expect(api.createAccount).toHaveBeenCalledWith("remote-user", "synthetic remote password", "operator", "remote");
+    expect(grant).not.toHaveBeenCalled();
+    await screen.findByRole("button", { name: "Add an account" });
+  });
   it("opens a focused profile without loading administration or unrelated panels", () => {
     render(<AccountSettingsPanel backendOnline />);
     const nav = screen.getByRole("navigation", { name: "Access sections" });

@@ -233,3 +233,7 @@ control	PUT /api/voice/preferences
 public	GET /api/notice-preferences
 public	PUT /api/notice-preferences
 public	DELETE /api/notice-preferences
+
+host	PUT /api/accounts/{id}/interface-access
+shared	GET /api/remote/videos
+shared	GET /api/remote/chat/messages

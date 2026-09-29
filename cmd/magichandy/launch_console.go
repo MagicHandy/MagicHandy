@@ -70,9 +70,15 @@ func (c *launchConsole) serverPrepared(security serverSecurity, simulated bool) 
 	c.dashboard.SetServer(security.BaseURL, accessDescription(security), simulated)
 }
 
+func (c *launchConsole) remotePrepared(url string) {
+	if c != nil {
+		c.dashboard.SetRemote(url)
+	}
+}
+
 // connect gives the console keys their actions. Stop uses the same
 // emergency-stop path as the app's Stop button.
-func (c *launchConsole) connect(api *httpapi.Server, baseURL string) {
+func (c *launchConsole) connect(api *httpapi.Server, baseURL, remoteURL string) {
 	if c == nil {
 		return
 	}
@@ -81,6 +87,13 @@ func (c *launchConsole) connect(api *httpapi.Server, baseURL string) {
 			return openSystemBrowser(strings.TrimRight(baseURL, "/") + "/" + browserLaunchRoute(false))
 		},
 		Copy: clipboardCopier(baseURL),
+		OpenRemote: func() error {
+			if remoteURL == "" {
+				return nil
+			}
+			return openSystemBrowser(remoteURL)
+		},
+		CopyRemote: clipboardCopier(remoteURL),
 		Stop: func(ctx context.Context) (console.StopOutcome, error) {
 			result, err := api.ConsoleStop(ctx)
 			switch {

@@ -22,12 +22,23 @@ export function listenParts(value: string): { host: string; port: string } {
 }
 const hostPort = (host: string, port: string) => `${host.includes(":") ? `[${host}]` : host}:${port}`;
 
+function originPort(value: string): number | undefined {
+  try { const url = new URL(value); return Number(url.port || (url.protocol === "https:" ? 443 : 80)); }
+  catch { return undefined; }
+}
+
+export function remotePorts(draft: NetworkConfig) {
+  let local = draft.remote_port || Number(listenParts(draft.listen_address).port) + 1;
+  if (!draft.remote_port && !draft.remote_public_url && local === originPort(draft.public_url)) local += 1;
+  return { local, external: originPort(draft.remote_public_url || "") ?? local };
+}
+
 export function configForScope(scope: NetworkScope, current: NetworkConfig, status: NetworkStatus): NetworkConfig {
   if (networkScope(current) === scope && current.mode !== "legacy") return current;
   const port = listenParts(current.listen_address).port;
   const address = scope === "local" ? "127.0.0.1" : status.interfaces.find((item) => item.private)?.address ?? status.interfaces.find((item) => !item.loopback)?.address ?? "";
   const listen = address ? hostPort(address, port) : "";
-  return { mode: scope === "local" ? "local" : "direct_https", listen_address: listen, public_url: scope === "lan" && listen ? `https://${listen}` : "",
+  return { remote_port:current.remote_port, remote_public_url:scope === "local" ? "" : current.remote_public_url, mode: scope === "local" ? "local" : "direct_https", listen_address: listen, public_url: scope === "lan" && listen ? `https://${listen}` : "",
     trusted_proxies: [], tls_certificate: "", tls_private_key: "", ...(scope === "local" ? {} : { scope, certificate_mode: scope === "lan" ? "local_ca" : "automatic_public" }) };
 }
 
@@ -36,6 +47,7 @@ export function NetworkPortChecklist({ draft }: { draft: NetworkConfig }) {
   const { port } = listenParts(draft.listen_address);
   const automatic = draft.certificate_mode === "automatic_public";
   const localCA = draft.certificate_mode === "local_ca";
+  const { local: remotePort, external: remotePublicPort } = remotePorts(draft);
   return <>{scope !== "local" && <ol className="network-checklist">
       <li>{t("Protect access with your administrator account.")}</li>
       {automatic ? <>
@@ -45,6 +57,7 @@ export function NetworkPortChecklist({ draft }: { draft: NetworkConfig }) {
         <li>{t("Allow incoming TCP {port} for MagicHandy on private networks in this computer's firewall. Router port forwarding is not needed.", { port })}</li>
         {localCA && <li>{t("Download the local trust certificate after setup and install it as a trusted root on each client device, including this computer. Never bypass a certificate warning.")}</li>}
       </> : <li>{t("Open the HTTPS port at your reverse proxy or host firewall. Forward only the app's HTTPS listener; keep model and voice worker ports private.")}</li>}
+      {remotePort !== -1 && <li>{draft.mode === "trusted_proxy" ? t("Configure a separate HTTPS proxy origin for the remote and forward it to TCP {port}. Keep the backend port private.", { port: remotePort }) : scope === "lan" ? t("For the remote interface, also allow incoming TCP {port} on private networks.", { port: remotePort }) : t("For the remote interface, forward public TCP {external} to local TCP {port} and allow TCP {port} in the host firewall.", { external: remotePublicPort, port: remotePort })}</li>}
       <li>{t("After saving, restart MagicHandy and sign in at the displayed HTTPS address. Test from another device.")}</li>
     </ol>}</>;
 }
@@ -64,6 +77,12 @@ export function NetworkSetupFields({ draft, status, locked, discovery, detecting
       <label className="field"><span className="label">{t("Listen address and port")}</span><input type="text" value={draft.listen_address} list="network-interfaces" disabled={locked} spellCheck={false} onChange={(event) => changeListen(event.target.value)} /><datalist id="network-interfaces">{status.interfaces.filter((item) => scope === "local" ? item.loopback : !item.loopback).map((item) => <option key={`${item.name}/${item.address}`} value={hostPort(item.address, port)}>{item.name}</option>)}</datalist>{scope !== "local" && <span className="hint">{t("Use this computer's network IP. Reserve it in your router so forwarding stays correct.")}</span>}</label>
       {scope !== "local" && <label className="field"><span className="label">{t("HTTPS address")}</span><input type="text" value={draft.public_url} disabled={locked || localCA} spellCheck={false} onChange={(event) => patch({ public_url: event.target.value })} /><span className="hint">{automatic ? t("Use a public IP or your domain. Public access uses TCP 443; it can forward to a different local port.") : t("The exact address clients use, including a nonstandard port. No path or credentials.")}</span></label>}
     </div>
+    <details className="network-remote-options"><summary>{t("Remote interface")}</summary>
+      <div className="settings-grid two">
+        <label className="field"><span className="label">{t("Remote port")}</span><input type="number" min={-1} max={65535} value={draft.remote_port ?? 0} disabled={locked} onChange={event => patch({ remote_port:Number(event.target.value), ...(Number(event.target.value) === -1 ? { remote_public_url:"" } : {}) })} /><span className="hint">{t("0 uses the next port after the app. -1 disables the remote. Changes apply after restart.")}</span></label>
+        {scope !== "local" && draft.remote_port !== -1 && <label className="field"><span className="label">{t("Remote HTTPS address")}</span><input type="url" value={draft.remote_public_url || ""} disabled={locked} spellCheck={false} onChange={event => patch({ remote_public_url:event.target.value })} /><span className="hint">{t("Optional separate HTTPS origin for a proxy or external port. Direct HTTPS uses the same hostname as the app.")}</span></label>}
+      </div>
+    </details>
     {automatic && <div className="network-discovery">
       <button type="button" className="btn btn-secondary" disabled={locked || detecting} onClick={detect}>{detecting ? t("Detecting address...") : t("Detect public IP and certificate service")}</button>
       <p className="hint-block">{t("Detection contacts ipify and Let's Encrypt. A detected address may belong to a VPN or shared ISP connection; it does not prove that incoming connections can reach this computer.")}</p>

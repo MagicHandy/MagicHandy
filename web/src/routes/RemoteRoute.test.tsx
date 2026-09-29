@@ -3,7 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, api } from "../api/client";
 import type { RemoteState } from "../api/remote-types";
 import type { MediaVideo } from "../api/types";
-import { RemoteRoute } from "./RemoteRoute";
+import { RemoteRoute as RemotePage } from "./RemoteRoute";
+import { useRemoteState } from "../remote/useRemoteState";
+
+function RemoteRoute() {
+  const canControl = (app.value.state.capabilities as { control?: boolean } | undefined)?.control !== false;
+  const view = useRemoteState(app.value.backendOnline && canControl);
+  return <RemotePage remote={{...view, state:view.state ? {...view.state,stop_sequence:app.value.state.stop_sequence as number} : null}} canControl={canControl} />;
+}
 
 const app = vi.hoisted(() => ({
   value: { backendOnline: true, readOnly: true, state: { stop_sequence: 3, capabilities: { control: true }, chat: { latest_seq: 4 } } as Record<string, unknown> },
@@ -18,8 +25,8 @@ vi.mock("../api/client", async (importOriginal) => {
       remoteState: vi.fn(),
       remoteEventsURL: () => "/api/remote/events?client_id=phone",
       sendRemoteCommand: vi.fn(),
-      mediaVideos: vi.fn(),
-      getChatMessages: vi.fn(),
+      remoteVideos: vi.fn(),
+      remoteMessages: vi.fn(),
     },
   };
 });
@@ -68,7 +75,7 @@ describe("phone remote", () => {
     FakeEventSource.instances = [];
     vi.stubGlobal("EventSource", FakeEventSource);
     app.value = { backendOnline: true, readOnly: true, state: { stop_sequence: 3, capabilities: { control: true }, chat: { latest_seq: 4 } } };
-    vi.mocked(api.mediaVideos).mockResolvedValue({ videos: catalog } as Awaited<ReturnType<typeof api.mediaVideos>>);
+    vi.mocked(api.remoteVideos).mockResolvedValue({ videos: catalog.map(video => ({id:video.id,title:video.title || video.display_name,duration_ms:video.duration_ms,has_funscript:video.has_funscript})), has_more:false,next_offset:catalog.length });
     vi.mocked(api.remoteState).mockResolvedValue({ remote: desktop({ connected: false, video: undefined }) });
     vi.mocked(api.sendRemoteCommand).mockImplementation(async (command) => ({
       command: { id: "sent-1", sequence: 1, stop_sequence: 3, issued_at: "", ...command },
@@ -172,11 +179,10 @@ describe("phone remote", () => {
   });
 
   it("sends chat through the desktop and keeps a message the desktop could not send", async () => {
-    vi.mocked(api.getChatMessages).mockResolvedValue({
-      session_id: "session-2", latest_seq: 2, cursor: 0,
+    vi.mocked(api.remoteMessages).mockResolvedValue({
       messages: [
-        { seq: 1, role: "user", content: "Hi there", created_at: "" },
-        { seq: 2, role: "assistant", content: "Hello from the desktop", created_at: "" },
+        { seq: 1, role: "user", content: "Hi there" },
+        { seq: 2, role: "assistant", content: "Hello from the desktop" },
       ],
     });
     localStorage.setItem("magichandy-remote-mode", "chat");
@@ -204,6 +210,18 @@ describe("phone remote", () => {
     await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "chat", action: "open" }, 3));
   });
 
+  it("refreshes committed messages when a reply finishes between presence reports", async () => {
+    vi.mocked(api.remoteMessages).mockResolvedValueOnce({ messages: [{ seq: 1, role: "user", content: "Before" }] })
+      .mockResolvedValueOnce({ messages: [{ seq: 2, role: "assistant", content: "Fast completed reply" }] });
+    render(<RemoteRoute />);
+    const chat = { session_id: "session-2", busy: false, ready: true, latest_seq: 1, revision: 1 };
+    publish(desktop({ route: "chat", video: undefined, chat }));
+    expect(await screen.findByText("Before")).toBeInTheDocument();
+    publish(desktop({ revision: 8, route: "chat", video: undefined, chat: { ...chat, latest_seq: 2, revision: 2 } }));
+    expect(await screen.findByText("Fast completed reply")).toBeInTheDocument();
+    expect(screen.queryByText("Before")).not.toBeInTheDocument();
+  });
+
   it("tells another account and observers what they can do", () => {
     const view = render(<RemoteRoute />);
     publish({ revision: 0, connected: true, other_account: true, pending: 0, recent: [] });
@@ -214,7 +232,7 @@ describe("phone remote", () => {
     FakeEventSource.instances = [];
     app.value = { ...app.value, state: { capabilities: { control: false } } };
     render(<RemoteRoute />);
-    expect(screen.getByText("This account can watch but not control. Ask the administrator for a control permission to use the remote.")).toBeInTheDocument();
+    expect(screen.getByText("Ask the administrator for a control permission to use this remote.")).toBeInTheDocument();
     expect(FakeEventSource.instances).toHaveLength(0);
   });
 });

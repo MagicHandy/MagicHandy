@@ -30,6 +30,8 @@ const (
 // Config is persisted separately from live settings: changes apply on restart.
 // Certificate paths belong to the host. Private-key contents never enter JSON.
 type Config struct {
+	RemotePort      int      `json:"remote_port,omitempty"`
+	RemotePublicURL string   `json:"remote_public_url,omitempty"`
 	Mode            string   `json:"mode"`
 	ListenAddress   string   `json:"listen_address"`
 	PublicURL       string   `json:"public_url"`
@@ -51,6 +53,7 @@ type Policy struct {
 // Validate rejects ambiguous origins, wildcard trust and insecure remote modes.
 // It does not bind a socket, resolve DNS or read certificate/key files.
 func Validate(config Config) (*Policy, error) {
+	config.RemotePublicURL = strings.TrimSpace(config.RemotePublicURL)
 	config.Mode = strings.TrimSpace(config.Mode)
 	config.ListenAddress = strings.TrimSpace(config.ListenAddress)
 	config.PublicURL = strings.TrimSpace(config.PublicURL)
@@ -60,6 +63,9 @@ func Validate(config Config) (*Policy, error) {
 	}
 	config.ListenAddress = address
 	policy := &Policy{Config: config}
+	if err := validateRemoteConfig(config); err != nil {
+		return nil, err
+	}
 	if config.Mode == Local {
 		if !ip.IsLoopback() || config.PublicURL != "" || len(config.TrustedProxies) != 0 || config.TLSCertificate != "" || config.TLSPrivateKey != "" || config.Scope != "" || config.CertificateMode != "" || config.AcceptedTerms != "" {
 			return nil, errors.New("local mode requires a loopback listener without public URL, proxy or TLS settings")
@@ -78,12 +84,17 @@ func Validate(config Config) (*Policy, error) {
 		return nil, err
 	}
 	if config.Mode == DirectHTTPS {
-		if (config.CertificateMode == "" && (strings.TrimSpace(config.TLSCertificate) == "" || strings.TrimSpace(config.TLSPrivateKey) == "")) || len(config.TrustedProxies) != 0 {
-			return nil, errors.New("direct HTTPS requires a certificate and private key, without trusted proxy entries")
-		}
-		return policy, nil
+		return validateDirectHTTPS(policy)
 	}
 	return validateProxy(policy, ip)
+}
+
+func validateDirectHTTPS(policy *Policy) (*Policy, error) {
+	config := policy.Config
+	if (config.CertificateMode == "" && (strings.TrimSpace(config.TLSCertificate) == "" || strings.TrimSpace(config.TLSPrivateKey) == "")) || len(config.TrustedProxies) != 0 {
+		return nil, errors.New("direct HTTPS requires a certificate and private key, without trusted proxy entries")
+	}
+	return policy, nil
 }
 
 func listenAddress(address string) (netip.Addr, string, error) {

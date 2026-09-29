@@ -69,6 +69,7 @@ type Runtime struct {
 	Accounts               *accounts.Store
 	AuthenticationRequired bool
 	SecureCookies          bool
+	RemoteURL              string
 	AllowedBrowserHosts    []string
 	NetworkPolicy          *netaccess.Policy
 	NetworkCertificates    netaccess.CertificateProvider
@@ -141,6 +142,7 @@ type Server struct {
 	patterns            *patterns.Library
 	media               *media.Catalog
 	mediaSync           *mediaSyncRuntime
+	remoteURL           string
 	remote              *remote.Hub
 	started             time.Time
 	version             VersionInfo
@@ -213,6 +215,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		controller:          newControllerRuntime(),
 		commands:            newCommandRuntime(),
 		remote:              remote.NewHub(nil),
+		remoteURL:           runtime.RemoteURL,
 		hostPathPicker:      systemHostPathPicker,
 		personalization:     personalization,
 		lifecycleCtx:        lifecycleCtx,
@@ -373,7 +376,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routes(mux *http.ServeMux) {
 	s.auditRoutes(mux)
-	mux.HandleFunc("GET /healthz", s.handleHealth)
+	s.publicShellRoutes(mux)
 	s.authenticationRoutes(mux)
 	s.networkRoutes(mux)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
@@ -414,7 +417,6 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/motion/quick", s.handleMotionQuick)
 	mux.HandleFunc("POST /api/motion/pause", s.handleMotionPause)
 	mux.HandleFunc("POST /api/motion/resume", s.handleMotionResume)
-	mux.HandleFunc("POST /api/motion/stop", s.handleMotionStop)
 	mux.HandleFunc("GET /api/modes", s.handleModesGet)
 	mux.HandleFunc("POST /api/modes/start", s.handleModeStart)
 	mux.HandleFunc("POST /api/modes/stop", s.handleModeStop)
@@ -426,7 +428,6 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.voiceRoutes(mux)
 	s.setupRoutes(mux)
 	s.traceRoutes(mux)
-	mux.HandleFunc("GET /", s.handleStatic)
 }
 
 func (s *Server) settingsAndUpdateRoutes(mux *http.ServeMux) {
@@ -742,6 +743,9 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if name == "index.html" && requestInterface(r) == accounts.InterfaceRemote {
+		data = bytes.Replace(data, []byte("<html"), []byte(`<html data-application-interface="remote"`), 1)
+	}
 	setStaticHeaders(w, name)
 	serveBoundedContent(w, r, name, time.Time{}, bytes.NewReader(data))
 }

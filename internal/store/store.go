@@ -19,7 +19,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 28
+	CurrentSchemaVersion = 29
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -580,6 +580,8 @@ var migrations = [][]string{
 	{`SELECT 1`},
 	// v27 -> v28: Unicode keys make tag lookup match tag normalization.
 	{`SELECT 1`},
+	// v28 -> v29: scoped account access and interface-bound sessions.
+	{`SELECT 1`},
 }
 
 func migrateAccountProfiles(ctx context.Context, tx *sql.Tx) error {
@@ -907,6 +909,8 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		err = migrateVideoMetadata(ctx, tx)
 	case 28:
 		err = migrateMediaTagKeys(ctx, tx)
+	case 29:
+		err = migrateInterfaceAccess(ctx, tx)
 	default:
 		return nil
 	}

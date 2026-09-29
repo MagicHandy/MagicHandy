@@ -1,4 +1,5 @@
 import { App } from "../App";
+import { RemoteApplication } from "../remote/RemoteApplication";
 import { I18nProvider } from "../i18n";
 import { AppStateProvider, ToastProvider } from "./app-state";
 import { useAuth } from "./auth";
@@ -10,12 +11,13 @@ import { NoticePreferencesProvider } from "./notice-preferences";
 // settings drafts, routes and device work cannot survive the identity change.
 export function ApplicationProviders() {
   const { status } = useAuth();
+  const remoteInterface = document.documentElement.dataset.applicationInterface === "remote" || status?.interface === "remote";
   const accessGranted = Boolean(status && (!status.authentication_required || status.authenticated));
   const audience = status?.authentication_required && !status.authenticated ? "signed-out" : status?.session_id ? `session:${status.session_id}` : status?.account ? `account:${status.account.id}` : "local";
-  return <ApplicationAudience key={audience}><AppStateProvider enabled={accessGranted}>
+  return <ApplicationAudience key={audience}><AppStateProvider enabled={accessGranted && !remoteInterface}>
     <I18nProvider fallbackLocale={status?.ui_locale}>
       <NoticePreferencesProvider enabled={Boolean(status)} scope={status?.authenticated && status.account ? "account" : "browser"}>
-        <ToastProvider audience={audience}><App /></ToastProvider>
+        <ToastProvider audience={audience}>{remoteInterface ? <RemoteApplication /> : <App />}</ToastProvider>
       </NoticePreferencesProvider>
     </I18nProvider>
   </AppStateProvider></ApplicationAudience>;

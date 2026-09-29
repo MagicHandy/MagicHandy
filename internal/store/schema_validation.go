@@ -101,11 +101,11 @@ var requiredSchemaTables = []schemaTable{
 	{name: "media_video_tags", columns: columns("video_id:TEXT", "tag:TEXT", "tag_key:TEXT", "created_at:TEXT"), primaryKey: []string{"video_id", "tag_key"}},
 	{name: "user_accounts", columns: columns(
 		"id:TEXT", "username:TEXT", "username_key:TEXT", "role:TEXT", "password_hash:TEXT",
-		"disabled:INTEGER", "last_login_at:TEXT", "created_at:TEXT", "updated_at:TEXT", "profile_updated_at:TEXT",
+		"disabled:INTEGER", "last_login_at:TEXT", "created_at:TEXT", "updated_at:TEXT", "profile_updated_at:TEXT", "interface_access:TEXT",
 	), primaryKey: []string{"id"}},
 	{name: "user_sessions", columns: columns(
 		"token_hash:TEXT", "user_id:TEXT", "created_at:TEXT", "last_seen_at:TEXT", "expires_at:TEXT", "control_account_id:TEXT?",
-		"public_id:TEXT", "device_name:TEXT", "client_browser:TEXT", "client_platform:TEXT",
+		"public_id:TEXT", "device_name:TEXT", "client_browser:TEXT", "client_platform:TEXT", "interface:TEXT",
 	), primaryKey: []string{"token_hash"}},
 	{name: "user_account_links", columns: columns(
 		"owner_user_id:TEXT", "linked_user_id:TEXT", "label:TEXT", "status:TEXT", "created_at:TEXT", "updated_at:TEXT",

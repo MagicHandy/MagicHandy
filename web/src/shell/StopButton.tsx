@@ -9,7 +9,7 @@ import { useAppState, useToast } from "../state/app-state";
 import { stopAllAudioPlayback } from "../util/audio";
 import { StopIcon } from "./icons";
 
-export function StopButton({ className = "" }: { className?: string }) {
+export function StopButton({ className = "", onStopped }: { className?: string; onStopped?: () => void }) {
   const { show } = useToast();
   const { refresh, state } = useAppState();
   const lastStopSequence = useRef<number | undefined>(undefined);
@@ -36,8 +36,9 @@ export function StopButton({ className = "" }: { className?: string }) {
       show(message, "error");
     } finally {
       refresh();
+      onStopped?.();
     }
-  }, [show, refresh]);
+  }, [show, refresh, onStopped]);
 
   useEffect(() => {
     const sequence = state?.stop_sequence;

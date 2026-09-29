@@ -36,6 +36,10 @@ func (s *Store) ProfileImageDir() string {
 
 // SaveProfileImage validates and atomically replaces one account image.
 func (s *Store) SaveProfileImage(ctx context.Context, id string, data []byte) (Account, error) {
+	return s.saveProfileImage(ctx, id, "", data)
+}
+
+func (s *Store) saveProfileImage(ctx context.Context, id, actorKey string, data []byte) (Account, error) {
 	if err := validateProfileImage(data); err != nil {
 		return Account{}, err
 	}
@@ -45,7 +49,7 @@ func (s *Store) SaveProfileImage(ctx context.Context, id string, data []byte) (A
 	if _, err := s.accountByID(ctx, id); err != nil {
 		return Account{}, err
 	}
-	if err := s.writeProfileImage(ctx, id, data); err != nil {
+	if err := s.writeProfileImage(ctx, id, actorKey, data); err != nil {
 		return Account{}, err
 	}
 	return s.accountByID(ctx, id)
@@ -72,7 +76,7 @@ func validateProfileImage(data []byte) error {
 	return nil
 }
 
-func (s *Store) writeProfileImage(ctx context.Context, id string, data []byte) error {
+func (s *Store) writeProfileImage(ctx context.Context, id, actorKey string, data []byte) error {
 	path, err := s.profileImagePath(id)
 	if err != nil {
 		return err
@@ -93,7 +97,7 @@ func (s *Store) writeProfileImage(ctx context.Context, id string, data []byte) e
 		_ = os.Remove(temporary)
 		return fmt.Errorf("finalize profile image: %w", err)
 	}
-	if err := s.stampProfileImage(ctx, id, s.now().Format(time.RFC3339Nano)); err != nil {
+	if err := s.stampProfileImage(ctx, id, actorKey, s.now().Format(time.RFC3339Nano)); err != nil {
 		var restoreErr error
 		if hadPrevious {
 			restoreErr = os.WriteFile(path, previous, 0o600) // #nosec G703 -- validated account ID.
@@ -108,8 +112,17 @@ func (s *Store) writeProfileImage(ctx context.Context, id string, data []byte) e
 	return nil
 }
 
-func (s *Store) stampProfileImage(ctx context.Context, id, stamp string) error {
+func (s *Store) stampProfileImage(ctx context.Context, id, actorKey, stamp string) error {
 	return s.db.WithTx(ctx, func(tx *sql.Tx) error {
+		if actorKey != "" {
+			owner, err := s.liveSessionOwner(ctx, tx, actorKey)
+			if err != nil {
+				return err
+			}
+			if owner != id {
+				return ErrInvalidSession
+			}
+		}
 		result, err := tx.ExecContext(ctx, `
 			UPDATE user_accounts SET profile_updated_at = ?, updated_at = ? WHERE id = ?
 		`, stamp, s.now().Format(time.RFC3339Nano), id)
@@ -155,9 +168,13 @@ func (s *Store) OpenProfileImage(ctx context.Context, id string) (*os.File, erro
 
 // DeleteProfileImage returns the account to its generated monogram.
 func (s *Store) DeleteProfileImage(ctx context.Context, id string) (Account, error) {
+	return s.deleteProfileImage(ctx, id, "")
+}
+
+func (s *Store) deleteProfileImage(ctx context.Context, id, actorKey string) (Account, error) {
 	s.profileMu.Lock()
 	defer s.profileMu.Unlock()
-	account, err := s.accountByID(ctx, id)
+	_, err := s.accountByID(ctx, id)
 	if err != nil {
 		return Account{}, err
 	}
@@ -165,10 +182,7 @@ func (s *Store) DeleteProfileImage(ctx context.Context, id string) (Account, err
 	if err != nil {
 		return Account{}, err
 	}
-	if !account.HasProfileImage {
-		return account, nil
-	}
-	if err := s.stampProfileImage(ctx, id, ""); err != nil {
+	if err := s.stampProfileImage(ctx, id, actorKey, ""); err != nil {
 		if hadFile {
 			path, pathErr := s.profileImagePath(id)
 			if pathErr != nil {

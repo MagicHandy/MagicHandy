@@ -28,7 +28,7 @@ export function AppShell({
   return (
     <VoicePlaybackProvider>
       <div className="app-shell">
-        <NavRail authenticationLocked={authenticationLocked} />
+        <NavRail authenticationLocked={authenticationLocked} remoteURL={authenticationStatus?.remote_url} />
         <StatusBar
           authenticationLocked={authenticationLocked}
           authenticationStatus={authenticationStatus}

@@ -13,6 +13,7 @@ type accountCapabilities struct {
 	Control       bool `json:"control"`
 	ConfigureHost bool `json:"configure_host"`
 	SharedData    bool `json:"shared_data"`
+	RemoteControl bool `json:"remote_control"`
 }
 
 const administratorHostAccessRequired = "administrator access required for host configuration, files and module management"
@@ -20,10 +21,10 @@ const administratorHostAccessRequired = "administrator access required for host 
 func (s *Server) capabilities(r *http.Request) accountCapabilities {
 	if session, ok := authenticatedSession(r); ok {
 		return accountCapabilities{Control: session.session.CanControl(time.Now()),
-			ConfigureHost: session.session.Account.Role == accounts.RoleAdmin, SharedData: true}
+			ConfigureHost: requestInterface(r) == accounts.InterfaceFull && session.session.Account.FullAccess() && session.session.Account.Role == accounts.RoleAdmin, SharedData: requestInterface(r) == accounts.InterfaceFull && session.session.Account.FullAccess(), RemoteControl: session.session.CanUseRemote(time.Now())}
 	}
 	local := !s.auth.authenticationRequired()
-	return accountCapabilities{Control: local, ConfigureHost: local, SharedData: local}
+	return accountCapabilities{Control: local && requestInterface(r) == accounts.InterfaceFull, ConfigureHost: local && requestInterface(r) == accounts.InterfaceFull, SharedData: local && requestInterface(r) == accounts.InterfaceFull, RemoteControl: local}
 }
 
 // Every mutation outside the explicit control/self-service allowlist requires
@@ -36,6 +37,10 @@ func (s *Server) authorizeRoutes(next http.Handler) http.Handler {
 			return
 		}
 		capabilities := s.capabilities(r)
+		if session, ok := authenticatedSession(r); ok && (!session.session.Account.FullAccess() || session.session.Interface == accounts.InterfaceRemote) {
+			rejectRequest(w, r, http.StatusForbidden, accounts.ErrInterfaceAccess)
+			return
+		}
 		if capabilities.ConfigureHost || selfServiceRoute(r) || bluetoothGatewaySessionRoute(r) || (readRequest(r) && !hostPrivateRead(r.URL.Path)) {
 			next.ServeHTTP(w, r)
 			return

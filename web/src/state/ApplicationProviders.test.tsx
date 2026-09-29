@@ -5,6 +5,8 @@ import { api } from "../api/client";
 import type { AppState } from "../api/types";
 import { ApplicationProviders } from "./ApplicationProviders";
 
+vi.mock("../remote/RemoteApplication", () => ({ RemoteApplication: () => <div>Dedicated remote fixture</div> }));
+
 const auth = vi.hoisted(() => ({ status: { authentication_required: true, authenticated: true, session_id: "admin-login", ui_locale: "en" } }));
 vi.mock("./auth", () => ({ useAuth: () => auth }));
 vi.mock("../api/client", () => ({
@@ -36,7 +38,16 @@ class EventSourceFixture {
   addEventListener() {}
 }
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); delete document.documentElement.dataset.applicationInterface; });
+
+it("mounts the remote shell without starting the full app state connection", () => {
+  document.documentElement.dataset.applicationInterface = "remote";
+  vi.mocked(api.getState).mockClear();
+  render(<ApplicationProviders />);
+  expect(screen.getByText("Dedicated remote fixture")).toBeInTheDocument();
+  expect(screen.queryByRole("textbox", { name: "Settings draft" })).not.toBeInTheDocument();
+  expect(api.getState).not.toHaveBeenCalled();
+});
 
 it("discards host snapshots, drafts and delayed responses when the login changes", async () => {
   vi.stubGlobal("EventSource", EventSourceFixture);

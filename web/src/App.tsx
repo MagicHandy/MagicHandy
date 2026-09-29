@@ -1,5 +1,5 @@
 import { t, translateKnown, useLocale } from "./i18n";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { api } from "./api/client";
 import type { ManagedLLMDuplicateSnapshot } from "./api/types";
 import { ManagedLLMDuplicateDialog } from "./components/ManagedLLMDuplicateDialog";
@@ -21,8 +21,13 @@ import { normalizeTheme } from "./theme";
 import { useAuth } from "./state/auth";
 import {LAB_BASE,LabsRoute,legacyLabRoute} from "@labs";
 
-// The phone remote is used from phones, so desktops never load its page.
-const RemoteRoute = lazy(() => import("./routes/RemoteRoute").then((module) => ({ default: module.RemoteRoute })));
+// Old bookmarks lead to the separate remote origin, never another app page.
+function RemoteRoute() {
+  const { status } = useAuth();
+  return <section className="panel"><h1>{t("Remote")}</h1>
+    {status?.remote_url ? <a href={status.remote_url}>{t("Open remote interface")}</a> : <p>{t("Remote interface disabled")}</p>}
+  </section>;
+}
 
 export function App() {
   useLocale();

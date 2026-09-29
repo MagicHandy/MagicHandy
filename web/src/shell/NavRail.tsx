@@ -25,7 +25,7 @@ export function routeBase(hash: string): string {
   return LINKS.some((link) => link.base === candidate) ? candidate : "chat";
 }
 
-export function NavRail({ authenticationLocked = false }: { authenticationLocked?: boolean }) {
+export function NavRail({ authenticationLocked = false, remoteURL }: { authenticationLocked?: boolean; remoteURL?: string }) {
   const active = routeBase(useHashRoute());
   const { state } = useAppState();
   const owner = state?.settings?.device?.hsp_dispatch_owner ?? "cloud";
@@ -44,8 +44,8 @@ export function NavRail({ authenticationLocked = false }: { authenticationLocked
         </span>
       </div>
       {!authenticationLocked && <div className="nav-links">
-        {LINKS.map((l) => (
-          <a key={l.base} className="nav-link" href={l.href} aria-label={translateKnown(l.label)} aria-current={active === l.base ? "page" : undefined}>
+        {LINKS.filter(l => l.base !== "remote" || remoteURL).map((l) => (
+          <a key={l.base} className="nav-link" href={l.base === "remote" ? remoteURL : l.href} target={l.base === "remote" ? "_blank" : undefined} rel={l.base === "remote" ? "noreferrer" : undefined} aria-label={translateKnown(l.label)} aria-current={active === l.base ? "page" : undefined}>
             <span className="icon"><l.Icon /></span>
             <span className="label">{translateKnown(l.label)}</span>
           </a>

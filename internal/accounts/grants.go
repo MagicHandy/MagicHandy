@@ -24,8 +24,7 @@ type ControlGrant struct {
 
 // CanControl reports authority at the supplied instant, including grant expiry.
 func (s Session) CanControl(now time.Time) bool {
-	return !s.Account.Disabled && (s.Account.Role == RoleAdmin || (s.ControlGrant != nil &&
-		(s.ControlGrant.ExpiresAt == nil || now.Before(*s.ControlGrant.ExpiresAt))))
+	return normalizedInterface(s.Interface) == InterfaceFull && s.Account.FullAccess() && s.CanUseRemote(now)
 }
 
 // ControlGrant returns a permanent or unexpired permission, or nil for an observer.

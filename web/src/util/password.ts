@@ -1,4 +1,4 @@
-export const MIN_PASSWORD_CHARACTERS = 8;
+export const MIN_PASSWORD_CHARACTERS = 15;
 
 export type PasswordConfirmationState = "empty" | "match" | "mismatch";
 

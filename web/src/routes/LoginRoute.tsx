@@ -24,7 +24,7 @@ export function LoginRoute() {
     if (busy) return;
     const normalized = username.trim();
     if (bootstrap && !passwordMeetsMinimum(password)) {
-      setError(t("Use a password or passphrase of at least 8 characters."));
+      setError(t("Use a password or passphrase of at least 15 characters."));
       return;
     }
     if (bootstrap && password !== confirmation) {
@@ -91,7 +91,7 @@ export function LoginRoute() {
                 disabled={busy}
                 onChange={(event) => setPassword(event.target.value)}
               />
-              {bootstrap && <span className="hint">{t("At least 8 characters. A long, unique passphrase is recommended.")}</span>}
+              {bootstrap && <span className="hint">{t("At least 15 characters. A long, unique passphrase is recommended.")}</span>}
             </label>
             {bootstrap && <PasswordConfirmationField
               password={password}
@@ -106,6 +106,7 @@ export function LoginRoute() {
             </button>
           </form>
         )}
+        {auth.status?.interface !== "remote" && auth.status?.remote_url && <a className="auth-recovery-link" href={auth.status.remote_url}>{t("Open remote interface")}</a>}
         {!bootstrap && !recovery && auth.status?.initialized && <button className="auth-recovery-link" type="button" disabled={busy} onClick={() => { setPassword(""); setConfirmation(""); setError(""); setRecovery(true); }}>{t("Forgot password?")}</button>}
         <DismissibleNotice id="sign-in-safety" className="auth-safety-note">
           <strong>{t("Emergency Stop remains available.")}</strong>

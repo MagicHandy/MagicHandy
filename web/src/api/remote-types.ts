@@ -27,6 +27,8 @@ export interface RemoteVideoPresence {
 export interface RemoteChatPresence {
   session_id: string;
   persona_name?: string;
+  latest_seq?: number;
+  revision?: number;
   busy: boolean;
   ready: boolean;
 }
@@ -46,6 +48,8 @@ export interface RemotePresence {
 }
 
 export interface RemoteState {
+  stop_sequence?: number;
+  can_control?: boolean;
   revision: number;
   connected: boolean;
   /** The desktop is signed in to another account; every detail is withheld. */
@@ -57,6 +61,9 @@ export interface RemoteState {
   recent: RemoteOutcome[];
   updated_at?: string;
 }
+
+export interface RemoteVideoItem { id: string; title: string; duration_ms: number | null; has_funscript: boolean }
+export interface RemoteDisplayMessage { seq: number; role: string; content: string; truncated?: boolean }
 
 export type RemoteCommandInput = (
   | { target: "video"; action: "play" | "pause" | "toggle" | "close" }

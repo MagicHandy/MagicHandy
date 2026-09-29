@@ -26,9 +26,18 @@ func (s *Server) networkRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) protectNetworkRequests(next http.Handler) http.Handler {
+	return protectNetworkPolicyValue(func() *netaccess.Policy { return s.networkPolicy }, next)
+}
+
+func protectNetworkPolicy(policy *netaccess.Policy, next http.Handler) http.Handler {
+	return protectNetworkPolicyValue(func() *netaccess.Policy { return policy }, next)
+}
+
+func protectNetworkPolicyValue(current func() *netaccess.Policy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.networkPolicy != nil {
-			accepted, err := s.networkPolicy.Accept(r)
+		policy := current()
+		if policy != nil {
+			accepted, err := policy.Accept(r)
 			if err != nil {
 				rejectRequest(w, r, http.StatusForbidden, err)
 				return
@@ -73,6 +82,7 @@ func (s *Server) handleNetworkStatus(w http.ResponseWriter, r *http.Request) {
 		"restart_required": saved != nil && !reflect.DeepEqual(*saved, active),
 		"interfaces":       networkInterfaces(), "forwarded": netaccess.IsForwarded(r),
 		"authentication_required": s.auth.authenticationRequired(), "secure_cookie": s.auth.options.SecureCookies}
+	payload["remote_url"] = s.remoteURL
 	payload["request_admission"] = s.requestAdmission.snapshot()
 	payload["stop_admission"] = s.stopAdmission.snapshot()
 	payload["preparation"] = s.networkAutomation.Snapshot()

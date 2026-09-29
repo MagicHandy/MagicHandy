@@ -206,6 +206,10 @@ func serveHTTP(server *http.Server, ready func()) error {
 	if ready != nil {
 		ready()
 	}
+	return serveBoundListener(server, listener)
+}
+
+func serveBoundListener(server *http.Server, listener net.Listener) error {
 	if server.TLSConfig != nil {
 		// Certificates are loaded and validated before the API starts; empty paths
 		// tell net/http to use TLSConfig.Certificates without reading them again.

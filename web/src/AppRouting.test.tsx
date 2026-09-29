@@ -157,11 +157,11 @@ describe("App route lifetime", () => {
     expect(screen.queryByText("Library route")).not.toBeInTheDocument();
   });
 
-  it("routes the phone remote", async () => {
+  it("keeps old remote bookmarks as a migration screen", async () => {
     app.route = "#/remote";
     render(<App />);
 
-    expect(await screen.findByText("Remote route")).toBeInTheDocument();
+    expect(await screen.findByText("Remote interface disabled")).toBeInTheDocument();
     expect(screen.queryByText("Chat route")).not.toBeInTheDocument();
   });
 });

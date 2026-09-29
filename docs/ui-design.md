@@ -76,18 +76,18 @@ stacks under the video. With the chat open, fullscreen takes the video and the
 chat together. The chat column's note says who moves the device for the chosen
 source, and Script is dimmed with an explanation when a video has none.
 
-`#/remote` joins the rail after Videos. It is a one-column page built for a
-phone: a connection line (a green dot when a desktop is taking commands, amber
-when it is another account's or the stream is reconnecting), a Video or Chat
-switch, then the controls for that choice. Video has a 72px play/pause button
-between 10-second skips, a position slider, mute, volume, speed and a
-searchable catalog to open from; opening a video never starts it. Chat shows
-the recent conversation with the desktop's persona name and a composer. The
-Video view also has the motion source switch with the same note. Every
-target is at least 44px. A failed command shows its reason in amber under the
-switch; a command still waiting after 0.7 s says so. Red remains only on Stop,
-which stays in the rail as on every page. See
-[ADR 0032](decisions/0032-video-curation-and-remote.md).
+The rail's Remote link opens the dedicated remote origin in another tab; the
+legacy `#/remote` bookmark only links there. The remote has its own sign-in and
+account self-service, without the main rail, controller acquisition or host
+settings. Phone layouts use a compact filled Video/Chat segmented choice and a
+single-row header with an accessible account icon. Desktop shows video and chat
+side by side. Controls use 36px targets, a 48px play button, whole-second clocks,
+10-second skips, mute, volume, speed, source choice and searchable catalog pages.
+Opening a video never starts it. Committed chat text stays bounded to the active
+conversation. Selected choices use a filled surface, never a left accent or
+underline. A stale connection hides controls; errors remain explicit. Red is
+reserved for the always-mounted Stop in a footer outside the scrolling content.
+See [ADR 0033](decisions/0033-remote-listener-and-account-scope.md).
 
 ## Informational notices
 

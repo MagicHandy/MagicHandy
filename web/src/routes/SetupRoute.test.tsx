@@ -160,18 +160,18 @@ describe("SetupRoute", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Administrator username" }), { target: { value: "owner" } });
     const password = screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!;
     const confirmation = screen.getByText("Confirm password", { selector: ".label" }).closest("label")!.querySelector("input")!;
-    fireEvent.change(password, { target: { value: "eight888" } });
+    fireEvent.change(password, { target: { value: "fifteen-char8888" } });
     fireEvent.change(confirmation, { target: { value: "eight889" } });
     expect(confirmation).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByText("The passwords do not match.")).toHaveAttribute("data-state", "mismatch");
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
 
-    fireEvent.change(confirmation, { target: { value: "eight888" } });
+    fireEvent.change(confirmation, { target: { value: "fifteen-char8888" } });
     expect(confirmation).toHaveAttribute("aria-invalid", "false");
     expect(screen.getByText("Passwords match.")).toHaveAttribute("data-state", "match");
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    await waitFor(() => expect(bootstrapAccount).toHaveBeenCalledWith("owner", "eight888"));
+    await waitFor(() => expect(bootstrapAccount).toHaveBeenCalledWith("owner", "fifteen-char8888"));
     expect(await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" })).toBeInTheDocument();
   });
 
@@ -184,8 +184,8 @@ describe("SetupRoute", () => {
     await waitFor(() => expect(screen.getByRole("radio", { name: /^Public/ })).toBeEnabled());
     fireEvent.click(screen.getByRole("radio", { name: /^Public/ }));
     fireEvent.change(screen.getByLabelText("Administrator username"), { target: { value: "owner" } });
-    fireEvent.change(screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!, { target: { value: "eight888" } });
-    fireEvent.change(screen.getByText("Confirm password", { selector: ".label" }).closest("label")!.querySelector("input")!, { target: { value: "eight888" } });
+    fireEvent.change(screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!, { target: { value: "fifteen-char8888" } });
+    fireEvent.change(screen.getByText("Confirm password", { selector: ".label" }).closest("label")!.querySelector("input")!, { target: { value: "fifteen-char8888" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(await screen.findByRole("button", { name: "Set up HTTPS and save" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Choose who can open MagicHandy" })).toBeVisible();
@@ -203,8 +203,8 @@ describe("SetupRoute", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /require an account and password/i }));
     fireEvent.change(screen.getByRole("textbox", { name: "Administrator username" }), { target: { value: "owner" } });
     const password = screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!;
-    fireEvent.change(password, { target: { value: "eight888" } });
-    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "eight888" } });
+    fireEvent.change(password, { target: { value: "fifteen-char8888" } });
+    fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "fifteen-char8888" } });
     fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });

@@ -35,9 +35,9 @@ func TestPasswordValidationBounds(t *testing.T) {
 		password string
 		wantErr  bool
 	}{
-		{name: "seven ASCII characters", password: strings.Repeat("a", MinPasswordCharacters-1), wantErr: true},
-		{name: "eight ASCII characters", password: strings.Repeat("a", MinPasswordCharacters)},
-		{name: "eight multibyte characters", password: strings.Repeat("密", MinPasswordCharacters)},
+		{name: "fourteen ASCII characters", password: strings.Repeat("a", MinPasswordCharacters-1), wantErr: true},
+		{name: "fifteen ASCII characters", password: strings.Repeat("a", MinPasswordCharacters)},
+		{name: "fifteen multibyte characters", password: strings.Repeat("密", MinPasswordCharacters)},
 		{name: "maximum bytes", password: strings.Repeat("a", MaxPasswordBytes)},
 		{name: "over maximum bytes", password: strings.Repeat("a", MaxPasswordBytes+1), wantErr: true},
 		{name: "invalid UTF-8", password: string([]byte{0xff, 0xfe, 0xfd, 0xfc, 0xfb, 0xfa, 0xf9, 0xf8}), wantErr: true},

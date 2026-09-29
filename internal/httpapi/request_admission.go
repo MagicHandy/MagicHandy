@@ -148,6 +148,6 @@ func (s *Server) matchesRequestSession(r *http.Request, key string) bool {
 	if key == "" {
 		return false
 	}
-	cookie, err := r.Cookie(s.sessionCookieName())
+	cookie, err := r.Cookie(s.sessionCookieName(r))
 	return err == nil && accounts.MatchesSessionKey(strings.TrimSpace(cookie.Value), key)
 }

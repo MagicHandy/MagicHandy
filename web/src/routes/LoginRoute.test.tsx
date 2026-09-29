@@ -55,19 +55,19 @@ describe("LoginRoute", () => {
     fireEvent.change(confirmation, { target: { value: "short77" } });
     expect(screen.getByText("Passwords match.")).toHaveAttribute("data-state", "match");
     fireEvent.click(screen.getByRole("button", { name: "Create administrator" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("at least 8 characters");
+    expect(await screen.findByRole("alert")).toHaveTextContent("at least 15 characters");
     expect(auth.bootstrap).not.toHaveBeenCalled();
 
-    fireEvent.change(password, { target: { value: "eight888" } });
+    fireEvent.change(password, { target: { value: "fifteen-char8888" } });
     fireEvent.change(confirmation, { target: { value: "eight889" } });
     expect(confirmation).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByText("The passwords do not match.")).toHaveAttribute("data-state", "mismatch");
 
-    fireEvent.change(confirmation, { target: { value: "eight888" } });
+    fireEvent.change(confirmation, { target: { value: "fifteen-char8888" } });
     expect(confirmation).toHaveAttribute("aria-invalid", "false");
     expect(screen.getByText("Passwords match.")).toHaveAttribute("data-state", "match");
     fireEvent.click(screen.getByRole("button", { name: "Create administrator" }));
-    await waitFor(() => expect(auth.bootstrap).toHaveBeenCalledWith("owner", "eight888"));
+    await waitFor(() => expect(auth.bootstrap).toHaveBeenCalledWith("owner", "fifteen-char8888"));
   });
 
   it("requires first-account setup on the host computer", () => {

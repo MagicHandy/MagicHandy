@@ -19,8 +19,8 @@ describe("account recovery sign-in boundary", () => {
   it("validates the replacement password and confirmation before sending credentials", () => {
     render(<AccountRecoveryForm initialUsername="owner" onBack={vi.fn()} />);
     fill("short"); submit();
-    expect(screen.getByRole("alert")).toHaveTextContent("at least 8 characters");
-    fill("long password", "different password"); submit();
+    expect(screen.getByRole("alert")).toHaveTextContent("at least 15 characters");
+    fill("a sufficiently long password", "different password"); submit();
     expect(screen.getByRole("alert")).toHaveTextContent("passwords do not match");
     expect(recover).not.toHaveBeenCalled();
   });

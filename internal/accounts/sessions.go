@@ -41,6 +41,7 @@ type SessionInfo struct {
 	ExpiresAt     time.Time     `json:"expires_at"`
 	IdleExpiresAt time.Time     `json:"idle_expires_at"`
 	Current       bool          `json:"current"`
+	Interface     string        `json:"interface"`
 	Key           string        `json:"-"`
 }
 
@@ -78,7 +79,7 @@ func (s *Store) ListOwnSessions(ctx context.Context, actorKey string) ([]Session
 		return nil, err
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT token_hash, public_id, device_name, client_browser, client_platform,
-		created_at, last_seen_at, expires_at FROM user_sessions WHERE user_id = ?
+		created_at, last_seen_at, expires_at, interface FROM user_sessions WHERE user_id = ?
 		ORDER BY (token_hash = ?) DESC, created_at DESC, token_hash DESC LIMIT ?`, owner, actorKey, MaxSessionsPerAccount)
 	if err != nil {
 		return nil, err
@@ -88,7 +89,7 @@ func (s *Store) ListOwnSessions(ctx context.Context, actorKey string) ([]Session
 		var item SessionInfo
 		var expires string
 		if err := rows.Scan(&item.Key, &item.ID, &item.Name, &item.Client.Browser, &item.Client.Platform,
-			&item.CreatedAt, &item.LastActiveAt, &expires); err != nil {
+			&item.CreatedAt, &item.LastActiveAt, &expires, &item.Interface); err != nil {
 			_ = rows.Close()
 			return nil, err
 		}

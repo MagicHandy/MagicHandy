@@ -22,6 +22,7 @@ export interface ManagedSession {
   expires_at: string;
   idle_expires_at: string;
   current: boolean;
+  interface?: "full" | "remote";
   controller: boolean;
   device_gateway: boolean;
 }
@@ -36,6 +37,7 @@ export interface UserAccount {
   id: string;
   username: string;
   role: AccountRole;
+  interface_access?: "full" | "remote";
   disabled: boolean;
   has_profile_image: boolean;
   profile_updated_at?: string;
@@ -52,6 +54,8 @@ export interface ControlIdentity {
 }
 
 export interface AuthenticationStatus {
+  interface?: "full" | "remote";
+  remote_url?: string;
   session_id?: string;
   capabilities?: AccountCapabilities;
   initialized: boolean;
@@ -67,6 +71,7 @@ export interface AccountCapabilities {
   control: boolean;
   configure_host: boolean;
   shared_data: boolean;
+  remote_control?: boolean;
 }
 
 export interface ControlGrant {
@@ -80,6 +85,8 @@ export interface ControlGrant {
 export type ControlGrantDuration = number | "permanent";
 
 export interface NetworkConfig {
+  remote_port?: number;
+  remote_public_url?: string;
   mode: "local" | "direct_https" | "trusted_proxy" | "legacy";
   listen_address: string;
   public_url: string;
@@ -107,6 +114,7 @@ export interface CertificatePreparation {
 }
 
 export interface NetworkStatus {
+  remote_url?: string;
   active: NetworkConfig;
   saved: NetworkConfig | null;
   restart_required: boolean;
