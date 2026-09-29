@@ -42,13 +42,25 @@ function Assert-Throws([scriptblock]$Action, [string]$Pattern, [string]$Message)
 }
 
 function Get-AvailableLoopbackPort {
-    $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
-    try {
-        $listener.Start()
-        return ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
-    } finally {
-        $listener.Stop()
+    param([switch]$WithRemote)
+    for ($attempt = 0; $attempt -lt 32; $attempt++) {
+        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+        $remoteListener = $null
+        try {
+            $listener.Start()
+            $port = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+            if ($WithRemote) {
+                if ($port -eq 65535) { continue }
+                $remoteListener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $port + 1)
+                try { $remoteListener.Start() } catch [System.Net.Sockets.SocketException] { continue }
+            }
+            return $port
+        } finally {
+            if ($null -ne $remoteListener) { $remoteListener.Stop() }
+            $listener.Stop()
+        }
     }
+    throw 'Could not find available loopback ports for the installer fixture.'
 }
 
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("magichandy-installer-test-" + [Guid]::NewGuid().ToString('N'))
@@ -1544,7 +1556,7 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     Write-Host 'Checking running app Stop and process-tree teardown before rebuild...'
     $runtimeRepo = Join-Path $tempRoot 'running-app-repo'
     $runtimeData = Join-Path $tempRoot 'running app data with spaces'
-    $runtimePort = Get-AvailableLoopbackPort
+    $runtimePort = Get-AvailableLoopbackPort -WithRemote
     New-Item -ItemType Directory -Force -Path $runtimeRepo | Out-Null
     foreach ($file in @('go.mod', 'go.sum')) {
         Copy-Item -LiteralPath (Join-Path $Repo $file) -Destination $runtimeRepo
@@ -1683,7 +1695,7 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     }
     Assert-True -Condition (-not [bool](Get-ChildItem -LiteralPath $runtimeRepo -Filter '.installer-build-*' -Directory)) -Message 'staged builds should leave no temporary binary set'
     Assert-True -Condition (-not (Test-Path -LiteralPath "$runtimeExe~")) -Message 'staged replacement should not create a Go executable backup'
-    $relaunchPort = Get-AvailableLoopbackPort
+    $relaunchPort = Get-AvailableLoopbackPort -WithRemote
     $relaunchData = Join-Path $tempRoot 'verified relaunch data with spaces'
     Start-MagicHandyApp -RepositoryPath $runtimeRepo -DataDir $relaunchData -Port $relaunchPort -NoBrowser
     try {
@@ -1887,8 +1899,10 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     Assert-True -Condition $stopFailureRejected -Message 'a failed active Stop must abort rebuild preparation'
 
     Write-Host 'Checking multiple checkout instances are refused before any forced teardown...'
-    $multiPortA = Get-AvailableLoopbackPort
-    do { $multiPortB = Get-AvailableLoopbackPort } while ($multiPortB -eq $multiPortA)
+    $multiPortA = Get-AvailableLoopbackPort -WithRemote
+    # Each application now owns two adjacent listeners. Two individually free
+    # main ports can still collide with one another's remote during startup.
+    do { $multiPortB = Get-AvailableLoopbackPort -WithRemote } while ([Math]::Abs($multiPortB - $multiPortA) -lt 2)
     $multiArgsA = & $supportModule { param($Address, $DataDir) New-MagicHandyAppArgumentLine -Address $Address -DataDir $DataDir } "127.0.0.1:$multiPortA" (Join-Path $tempRoot 'multi-data-a')
     $multiArgsB = & $supportModule { param($Address, $DataDir) New-MagicHandyAppArgumentLine -Address $Address -DataDir $DataDir } "127.0.0.1:$multiPortB" (Join-Path $tempRoot 'multi-data-b')
     $multiProcessA = Start-Process -FilePath $runtimeExe -ArgumentList $multiArgsA -PassThru -WindowStyle Hidden
@@ -1903,6 +1917,10 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
             if (-not ($multiReadyA -and $multiReadyB)) { Start-Sleep -Milliseconds 100 }
         } while (-not ($multiReadyA -and $multiReadyB) -and [DateTime]::UtcNow -lt $multiDeadline)
         Assert-True -Condition ($multiReadyA -and $multiReadyB) -Message 'both test app instances should become ready'
+        foreach ($mainPort in @($multiPortA, $multiPortB)) {
+            $remoteStatus = Invoke-RestMethod -Uri "http://127.0.0.1:$($mainPort + 1)/api/auth/status" -TimeoutSec 2
+            Assert-Equal -Expected 'remote' -Actual $remoteStatus.interface -Message 'each app should own a separate remote listener'
+        }
         $multipleRejected = $false
         try {
             & $supportModule { param($RepositoryPath, $Port) Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port } $runtimeRepo $multiPortA

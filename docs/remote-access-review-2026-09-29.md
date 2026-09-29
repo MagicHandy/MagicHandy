@@ -32,7 +32,7 @@ writes also reject a login issued to the remote interface.
 | Reconnect / stale desktop / wrong account / failed command | Explicit status; stale controls hidden; bounded retry and one-shot command admission. |
 | Desktop not in front, host asleep or app offline | Cannot play independently. Stop remains callable, but successful physical delivery requires the core and device connection. |
 | Phone-local video/audio streaming, remote microphone/TTS playback, fullscreen request | Not implemented. The desktop owns media/audio; browsers require local gestures for some actions. |
-| Playlist/next/previous, choose a different persona or historical conversation, dedicated reply-cancel button | Not implemented. These are future features, not reasons to expose full-app APIs. Stop already cancels active work. |
+| Playlist/next/previous, choose a different persona or historical conversation, direct mode/pattern selection, dedicated reply-cancel button | Not implemented. These are future features, not reasons to expose full-app APIs. Stop already cancels active work. |
 | Pair/manage hardware, edit filters/calibration, configure workers or network | Intentionally restricted to the main application. |
 
 ## Design work
@@ -49,6 +49,9 @@ counts were not treated as implemented features.
 - Full Go suite, Windows race suite, vet and golangci-lint pass with architecture,
   goroutine-lifecycle and admission gates enabled; no new dependency.
 - Frontend typecheck, localization, 736 tests in 96 files and canonical build pass.
+- Installer tests pass in PowerShell 7 and Windows PowerShell 5.1. Runtime fixtures
+  reserve non-overlapping app/remote port pairs and verify both remote listeners;
+  the multi-instance teardown refusal remains enforced.
 - Schema-v28 migration tests preserve existing accounts/logins and are idempotent.
   Interface, grant replacement, cross-port cookie/origin, public Stop and protected
   display-API tests cover denial and valid scoped reads; conversation tests check
@@ -61,8 +64,10 @@ counts were not treated as implemented features.
 - Review LLM: local Ollama `huihui_ai/granite4.1-abliterated:3b`, real generation plus
   a text-only application chat with no repair, fallback or motion.
 - Final review URLs: main `http://127.0.0.12:50205`, remote
-  `http://127.0.0.12:50206`. The current remote completed a 1.657s Ollama
-  reply in one provider call without repair/fallback. Live revocation produced
+  `http://127.0.0.12:50206`. The final review app passed real LLM readiness and
+  completed a text-only reply through the remote. Earlier live verification
+  completed a 1.657s Ollama reply in one provider call without repair/fallback.
+  Live revocation produced
   403 for remote reads while Stop returned 200; restoring the grant restored reads.
   At 390px, the header fits one row and the transport labels do not wrap.
   The desktop chat composer stays above Stop at short viewport heights.
