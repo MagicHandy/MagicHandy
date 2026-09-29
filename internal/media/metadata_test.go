@@ -80,6 +80,34 @@ func TestTagNormalizationAndBounds(t *testing.T) {
 	}
 }
 
+func TestUnicodeTagsKeepOneSpellingThroughBulkRenameAndDelete(t *testing.T) {
+	catalog, ids := curatedLibrary(t, "one", "two")
+	for _, edit := range []struct{ id, tag string }{{ids["one"], "Été"}, {ids["one"], "été"}, {ids["two"], "ÉTÉ"}} {
+		if _, err := catalog.UpdateTags(t.Context(), []string{edit.id}, []string{edit.tag}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tags, err := catalog.Tags(t.Context())
+	if err != nil || len(tags) != 1 || tags[0] != (TagCount{Tag: "Été", Count: 2}) {
+		t.Fatalf("Unicode tags duplicated: %+v, %v", tags, err)
+	}
+	if count, err := catalog.RenameTag(t.Context(), "ÉTÉ", "été"); err != nil || count != 2 {
+		t.Fatalf("case rename: %d, %v", count, err)
+	}
+	if _, err := catalog.UpdateTags(t.Context(), []string{ids["one"]}, []string{"Hiver"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if count, err := catalog.RenameTag(t.Context(), "ÉTÉ", "Hiver"); err != nil || count != 2 {
+		t.Fatalf("merge: %d, %v", count, err)
+	}
+	if _, err := catalog.UpdateTags(t.Context(), []string{ids["one"]}, nil, []string{"HIVER"}); err != nil {
+		t.Fatal(err)
+	}
+	if count, err := catalog.DeleteTag(t.Context(), "hiver"); err != nil || count != 1 {
+		t.Fatalf("delete: %d, %v", count, err)
+	}
+}
+
 func TestUpdateMetadataPatchesAndClearsCuration(t *testing.T) {
 	catalog, ids := curatedLibrary(t, "clip")
 	id := ids["clip"]

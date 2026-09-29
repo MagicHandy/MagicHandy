@@ -78,12 +78,12 @@ func assertVideoMetadataConstraints(t *testing.T, db *sql.DB) {
 			t.Fatal(rejected.reason)
 		}
 	}
-	if _, err := db.Exec(`INSERT INTO media_video_tags(video_id, tag, created_at) VALUES('video', 'Calm', 'now')`); err != nil {
+	if _, err := db.Exec(`INSERT INTO media_video_tags(video_id, tag, tag_key, created_at) VALUES('video', 'Calm', 'calm', 'now')`); err != nil {
 		t.Fatalf("insert tag: %v", err)
 	}
 	for _, rejected := range []struct{ statement, reason string }{
-		{`INSERT INTO media_video_tags(video_id, tag, created_at) VALUES('video', 'calm', 'now')`, "a tag differing only by case was stored twice"},
-		{`INSERT INTO media_video_tags(video_id, tag, created_at) VALUES('missing-video', 'calm', 'now')`, "a tag for an unknown video was stored"},
+		{`INSERT INTO media_video_tags(video_id, tag, tag_key, created_at) VALUES('video', 'calm', 'calm', 'now')`, "a tag differing only by case was stored twice"},
+		{`INSERT INTO media_video_tags(video_id, tag, tag_key, created_at) VALUES('missing-video', 'calm', 'calm', 'now')`, "a tag for an unknown video was stored"},
 	} {
 		if _, err := db.Exec(rejected.statement); err == nil {
 			t.Fatal(rejected.reason)

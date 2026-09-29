@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/remote"
@@ -30,12 +31,14 @@ func (s *Server) remoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/remote/state", s.handleRemoteState)
 	mux.HandleFunc("GET /api/remote/events", s.handleRemoteEvents)
 	mux.HandleFunc("POST /api/remote/commands", s.handleRemoteCommand)
+	mux.HandleFunc("POST /api/remote/commands/{id}/claim", s.handleRemoteClaim)
 }
 
 func remoteIdentity(r *http.Request, clientID string) remote.Identity {
 	identity := remote.Identity{ClientID: clientID}
 	if session, ok := authenticatedSession(r); ok {
 		identity.AccountID = session.session.Account.ID
+		identity.SessionKey = session.session.Key
 	}
 	return identity
 }
@@ -95,6 +98,11 @@ func (s *Server) handleRemotePresence(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, errors.New("too many command outcomes in one report"))
 		return
 	}
+	// Reading the body may have waited across logout or a controller handoff.
+	if r.Context().Err() != nil || !s.remoteExecutorActive(r, executor.ClientID) || !s.remoteSenderActive(r, executor) {
+		writeError(w, http.StatusConflict, remote.ErrCommandUnavailable)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"remote": s.remote.Report(executor, presence)})
 }
 
@@ -121,13 +129,28 @@ func (s *Server) handleRemoteCommand(w http.ResponseWriter, r *http.Request) {
 	if !s.requireRemoteControl(w, r) {
 		return
 	}
+	sequence, ok := s.remoteStopSequence(w, r)
+	if !ok {
+		return
+	}
 	var command remote.Command
 	if err := decodeJSON(r, &command); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	sent, err := s.remote.Send(remoteIdentity(r, clientIDFromRequest(r)), command)
+	sender := remoteIdentity(r, clientIDFromRequest(r))
+	if !s.remoteSenderActive(r, sender) || s.stopSequence.Load() != sequence {
+		writeError(w, http.StatusConflict, remote.ErrCommandUnavailable)
+		return
+	}
+	command.StopSequence = sequence
+	sent, err := s.remote.Send(sender, command)
 	if err == nil {
+		if s.stopSequence.Load() != sequence {
+			s.remote.Cancel(sent.ID, "Emergency Stop cleared the command.")
+			writeError(w, http.StatusConflict, remote.ErrCommandUnavailable)
+			return
+		}
 		writeJSON(w, http.StatusAccepted, map[string]any{"command": sent})
 		return
 	}
@@ -144,6 +167,63 @@ func (s *Server) handleRemoteCommand(w http.ResponseWriter, r *http.Request) {
 		code = "target_unavailable"
 	}
 	writeJSON(w, status, map[string]string{"error": err.Error(), "code": code})
+}
+
+func (s *Server) remoteStopSequence(w http.ResponseWriter, r *http.Request) (uint64, bool) {
+	if strings.TrimSpace(r.Header.Get(stopSequenceHeader)) == "" {
+		writeError(w, http.StatusConflict, errors.New("remote commands require the current Emergency Stop sequence"))
+		return 0, false
+	}
+	sequence, err := s.requestStopSequence(r)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return 0, false
+	}
+	return sequence, true
+}
+
+func (s *Server) remoteSenderActive(r *http.Request, sender remote.Identity) bool {
+	if r.Context().Err() != nil {
+		return false
+	}
+	if sender.SessionKey == "" {
+		return !s.auth.authenticationRequired() && sender.AccountID == ""
+	}
+	session, err := s.accounts.CheckSession(r.Context(), sender.SessionKey)
+	return err == nil && session.Account.ID == sender.AccountID && session.CanControl(time.Now())
+}
+
+// Revalidate queued intent immediately before execution. A buffered SSE event
+// must not survive expiry, Stop, logout, a changed desktop or a changed video.
+// The returned Stop sequence must also fence the actual player/chat request.
+func (s *Server) handleRemoteClaim(w http.ResponseWriter, r *http.Request) {
+	executor, ok := s.remoteExecutor(w, r)
+	if !ok {
+		return
+	}
+	sequence, ok := s.remoteStopSequence(w, r)
+	if !ok {
+		return
+	}
+	id := r.PathValue("id")
+	sender, found := s.remote.CommandSender(executor, id)
+	if !found || !s.remoteSenderActive(r, sender) {
+		if found {
+			s.remote.Cancel(id, "The command is no longer available. Send it again.")
+		}
+		writeError(w, http.StatusConflict, remote.ErrCommandUnavailable)
+		return
+	}
+	command, remaining, err := s.remote.Claim(executor, id)
+	if err != nil || command.StopSequence != sequence || s.stopSequence.Load() != sequence {
+		if err == nil {
+			s.remote.Cancel(id, "Emergency Stop cleared the command.")
+		}
+		writeError(w, http.StatusConflict, remote.ErrCommandUnavailable)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, map[string]any{"command": command, "remaining_ms": remaining.Milliseconds()})
 }
 
 // deliverRemoteCommands forwards commands queued for this tab on its existing

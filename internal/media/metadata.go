@@ -114,7 +114,7 @@ func NormalizeTags(values []string, limit int) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		key := strings.ToLower(tag)
+		key := dbstore.MediaTagKey(tag)
 		if _, duplicate := seen[key]; duplicate {
 			continue
 		}
@@ -135,13 +135,13 @@ func sortTags(tags []string) {
 }
 
 // UpdateMetadata applies a patch to one video and returns the updated row.
-func (c *Catalog) UpdateMetadata(ctx context.Context, id string, patch MetadataPatch) (Video, error) {
+func (c *Catalog) UpdateMetadata(ctx context.Context, id string, patch MetadataPatch, authorize ...MetadataAuthorization) (Video, error) {
 	id = strings.TrimSpace(id)
 	values, err := normalizeMetadataPatch(patch)
 	if err != nil {
 		return Video{}, err
 	}
-	err = c.db.WithTx(ctx, func(tx *sql.Tx) error {
+	err = c.metadataTx(ctx, authorize, func(tx *sql.Tx) error {
 		if err := requireVideoRow(ctx, tx, id); err != nil {
 			return err
 		}
@@ -221,7 +221,7 @@ func applyMetadataPatch(ctx context.Context, tx *sql.Tx, id string, patch Metada
 
 // UpdateTags adds and removes tags across several videos in one transaction.
 // Every video must exist; one that does not fails the whole edit.
-func (c *Catalog) UpdateTags(ctx context.Context, ids []string, add, remove []string) ([]Video, error) {
+func (c *Catalog) UpdateTags(ctx context.Context, ids []string, add, remove []string, authorize ...MetadataAuthorization) ([]Video, error) {
 	cleanIDs := make([]string, 0, len(ids))
 	seen := make(map[string]struct{}, len(ids))
 	for _, id := range ids {
@@ -250,13 +250,13 @@ func (c *Catalog) UpdateTags(ctx context.Context, ids []string, add, remove []st
 		return nil, fmt.Errorf("%w: choose a tag to add or remove", ErrInvalidMetadata)
 	}
 	now := time.Now().UTC().Format(time.RFC3339Nano)
-	err = c.db.WithTx(ctx, func(tx *sql.Tx) error {
+	err = c.metadataTx(ctx, authorize, func(tx *sql.Tx) error {
 		for _, id := range cleanIDs {
 			if err := requireVideoRow(ctx, tx, id); err != nil {
 				return err
 			}
 			for _, tag := range removeTags {
-				if _, err := tx.ExecContext(ctx, `DELETE FROM media_video_tags WHERE video_id = ? AND tag = ?`, id, tag); err != nil {
+				if _, err := tx.ExecContext(ctx, `DELETE FROM media_video_tags WHERE video_id = ? AND tag_key = ?`, id, dbstore.MediaTagKey(tag)); err != nil {
 					return err
 				}
 			}
@@ -278,23 +278,15 @@ func (c *Catalog) UpdateTags(ctx context.Context, ids []string, add, remove []st
 	if err != nil {
 		return nil, err
 	}
-	updated := make([]Video, 0, len(cleanIDs))
-	for _, id := range cleanIDs {
-		video, err := c.Video(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		updated = append(updated, video)
-	}
-	return updated, nil
+	return c.metadataVideos(ctx, cleanIDs)
 }
 
 // Tags lists every tag in use with the number of videos carrying it.
 func (c *Catalog) Tags(ctx context.Context) ([]TagCount, error) {
 	rows, err := c.db.SQL().QueryContext(ctx, `
 		SELECT MIN(tag), COUNT(*) FROM media_video_tags
-		GROUP BY tag
-		ORDER BY tag
+		GROUP BY tag_key
+		ORDER BY tag_key
 	`)
 	if err != nil {
 		return nil, err
@@ -313,7 +305,7 @@ func (c *Catalog) Tags(ctx context.Context) ([]TagCount, error) {
 
 // RenameTag renames a tag everywhere. Renaming onto an existing tag merges
 // the two, and the new spelling is applied to every video carrying it.
-func (c *Catalog) RenameTag(ctx context.Context, from, to string) (int, error) {
+func (c *Catalog) RenameTag(ctx context.Context, from, to string, authorize ...MetadataAuthorization) (int, error) {
 	from, err := NormalizeTag(from)
 	if err != nil {
 		return 0, err
@@ -323,38 +315,39 @@ func (c *Catalog) RenameTag(ctx context.Context, from, to string) (int, error) {
 		return 0, err
 	}
 	var affected int
-	err = c.db.WithTx(ctx, func(tx *sql.Tx) error {
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM media_video_tags WHERE tag = ?`, from).Scan(&affected); err != nil {
+	fromKey, toKey := dbstore.MediaTagKey(from), dbstore.MediaTagKey(to)
+	err = c.metadataTx(ctx, authorize, func(tx *sql.Tx) error {
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM media_video_tags WHERE tag_key = ?`, fromKey).Scan(&affected); err != nil {
 			return err
 		}
-		if !strings.EqualFold(from, to) {
+		if fromKey != toKey {
 			// A video already carrying the target keeps one copy of it.
 			if _, err := tx.ExecContext(ctx, `
 				DELETE FROM media_video_tags
-				WHERE tag = ? AND video_id IN (SELECT video_id FROM media_video_tags WHERE tag = ?)
-			`, from, to); err != nil {
+				WHERE tag_key = ? AND video_id IN (SELECT video_id FROM media_video_tags WHERE tag_key = ?)
+			`, fromKey, toKey); err != nil {
 				return err
 			}
-			if _, err := tx.ExecContext(ctx, `UPDATE media_video_tags SET tag = ? WHERE tag = ?`, to, from); err != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE media_video_tags SET tag = ?, tag_key = ? WHERE tag_key = ?`, to, toKey, fromKey); err != nil {
 				return err
 			}
 		}
 		// The typed spelling becomes the library's spelling of the tag.
-		_, err := tx.ExecContext(ctx, `UPDATE media_video_tags SET tag = ? WHERE tag = ?`, to, to)
+		_, err := tx.ExecContext(ctx, `UPDATE media_video_tags SET tag = ? WHERE tag_key = ?`, to, toKey)
 		return err
 	})
 	return affected, err
 }
 
 // DeleteTag removes a tag from every video and reports how many carried it.
-func (c *Catalog) DeleteTag(ctx context.Context, tag string) (int, error) {
+func (c *Catalog) DeleteTag(ctx context.Context, tag string, authorize ...MetadataAuthorization) (int, error) {
 	tag, err := NormalizeTag(tag)
 	if err != nil {
 		return 0, err
 	}
 	var affected int64
-	err = c.db.WithTx(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, `DELETE FROM media_video_tags WHERE tag = ?`, tag)
+	err = c.metadataTx(ctx, authorize, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `DELETE FROM media_video_tags WHERE tag_key = ?`, dbstore.MediaTagKey(tag))
 		if err != nil {
 			return err
 		}
@@ -368,7 +361,8 @@ func (c *Catalog) DeleteTag(ctx context.Context, tag string) (int, error) {
 // exists in another spelling is stored the way it is already written.
 func insertTag(ctx context.Context, tx *sql.Tx, videoID, tag, now string) error {
 	var existing string
-	err := tx.QueryRowContext(ctx, `SELECT tag FROM media_video_tags WHERE tag = ? LIMIT 1`, tag).Scan(&existing)
+	key := dbstore.MediaTagKey(tag)
+	err := tx.QueryRowContext(ctx, `SELECT tag FROM media_video_tags WHERE tag_key = ? LIMIT 1`, key).Scan(&existing)
 	switch {
 	case err == nil:
 		tag = existing
@@ -376,9 +370,9 @@ func insertTag(ctx context.Context, tx *sql.Tx, videoID, tag, now string) error 
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `
-		INSERT INTO media_video_tags(video_id, tag, created_at) VALUES(?, ?, ?)
-		ON CONFLICT(video_id, tag) DO NOTHING
-	`, videoID, tag, now)
+		INSERT INTO media_video_tags(video_id, tag, tag_key, created_at) VALUES(?, ?, ?, ?)
+		ON CONFLICT(video_id, tag_key) DO NOTHING
+	`, videoID, tag, key, now)
 	return err
 }
 
@@ -422,35 +416,39 @@ func (c *Catalog) attachTags(ctx context.Context, videos []Video) error {
 
 // attachTagsFor loads the tags of a few rows by identifier.
 func (c *Catalog) attachTagsFor(ctx context.Context, videos []Video) error {
-	for index := range videos {
-		tags, err := c.videoTags(ctx, videos[index].ID)
-		if err != nil {
+	if len(videos) == 0 {
+		return nil
+	}
+	ids := make([]string, len(videos))
+	for index, video := range videos {
+		ids[index] = video.ID
+	}
+	placeholders, args := metadataIDs(ids)
+	rows, err := c.db.SQL().QueryContext(ctx, `SELECT video_id, tag FROM media_video_tags WHERE video_id IN (`+placeholders+`)`, args...)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	byID := make(map[string][]string, len(ids))
+	for rows.Next() {
+		var id, tag string
+		if err := rows.Scan(&id, &tag); err != nil {
 			return err
 		}
+		byID[id] = append(byID[id], tag)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for index := range videos {
+		tags := byID[videos[index].ID]
+		if tags == nil {
+			tags = []string{}
+		}
+		sortTags(tags)
 		videos[index].Tags = tags
 	}
 	return nil
-}
-
-func (c *Catalog) videoTags(ctx context.Context, id string) ([]string, error) {
-	rows, err := c.db.SQL().QueryContext(ctx, `SELECT tag FROM media_video_tags WHERE video_id = ?`, id)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	tags := []string{}
-	for rows.Next() {
-		var tag string
-		if err := rows.Scan(&tag); err != nil {
-			return nil, err
-		}
-		tags = append(tags, tag)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	sortTags(tags)
-	return tags, nil
 }
 
 // carryCuration copies a source row's curation onto its converted copy inside
@@ -466,9 +464,9 @@ func carryCuration(ctx context.Context, tx *sql.Tx, sourceID, targetID string) e
 		return err
 	}
 	_, err := tx.ExecContext(ctx, `
-		INSERT INTO media_video_tags(video_id, tag, created_at)
-		SELECT ?, tag, created_at FROM media_video_tags WHERE video_id = ?
-		ON CONFLICT(video_id, tag) DO NOTHING
+		INSERT INTO media_video_tags(video_id, tag, tag_key, created_at)
+		SELECT ?, tag, tag_key, created_at FROM media_video_tags WHERE video_id = ?
+		ON CONFLICT(video_id, tag_key) DO NOTHING
 	`, targetID, sourceID)
 	return err
 }

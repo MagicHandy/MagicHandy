@@ -67,6 +67,46 @@ describe("VideoPlaybackController commands", () => {
     expect(paired.getSnapshot()).toMatchObject({ playbackIntent: false, volume: 0.4, muted: true });
   });
 
+  it("awaits the old script's Stop and blocks re-arming during a source handoff", async () => {
+    const controller = new VideoPlaybackController({ videoID: "paired", synchronized: true, durationMillis: 20_000, locked: false, stopSequence: 5 }, deps);
+    controller.connect();
+    const element = mountVideo(controller);
+    await waitFor(() => expect(controller.getSnapshot().scriptLoading).toBe(false));
+    controller.commands.play();
+    await waitFor(() => expect(controller.getSnapshot().sync.active).toBe(true));
+    let finish!: (value: { sync: MediaSyncStatus }) => void;
+    mediaSync.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    let resolved = false;
+    const releasing = controller.releaseMotion(5).then((value) => { resolved = true; return value; });
+    expect(controller.commands.play()).toBe(false);
+    fireEvent.play(element);
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+    expect(controller.getSnapshot().playbackIntent).toBe(false);
+    finish({ sync: { active: false, state: "paused" } });
+    expect(await releasing).toBe(true);
+    const starts = mediaSync.mock.calls.filter(([event]) => event.state === "playing");
+    expect(starts).toHaveLength(1);
+    controller.disconnect();
+  });
+
+  it("keeps a failed handoff paused and does not need another transport Stop after Emergency Stop", async () => {
+    const controller = new VideoPlaybackController({ videoID: "paired", synchronized: true, durationMillis: 20_000, locked: false, stopSequence: 5 }, deps);
+    controller.connect();
+    mountVideo(controller);
+    await waitFor(() => expect(controller.getSnapshot().scriptLoading).toBe(false));
+    controller.commands.play();
+    await waitFor(() => expect(controller.getSnapshot().sync.active).toBe(true));
+    mediaSync.mockRejectedValueOnce(new Error("transport unavailable"));
+    expect(await controller.releaseMotion(5)).toBe(false);
+    expect(controller.getSnapshot().playbackIntent).toBe(false);
+    controller.setStopSequence(6);
+    mediaSync.mockClear();
+    expect(await controller.releaseMotion(6)).toBe(true);
+    expect(mediaSync).not.toHaveBeenCalled();
+    controller.disconnect();
+  });
+
   it("drives an unpaired video directly and reports element state", () => {
     const controller = new VideoPlaybackController({ videoID: "plain", synchronized: false, durationMillis: 60_000, locked: false, stopSequence: 1 }, deps);
     controller.connect();

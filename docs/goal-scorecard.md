@@ -1,5 +1,28 @@
 # Goal Scorecard
 
+## 2026-09-29 — Video and remote completion review
+
+The review adds one-shot remote admission, awaited source handoffs, fullscreen
+Stop, transactional curation admission and indexed Unicode tag keys. Bulk edit
+readback uses two queries instead of up to 1,000. No dependency was added.
+See [the review and validation](claude-progress-review-2026-09-29.md).
+
+| Artifact | Claude checkpoint (`453ff2da`) | Reviewed checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,521,856 B | 22,565,888 B | +44,032 B |
+| Main JS, raw / Node gzip-9 | 925,158 / 253,608 B | 928,754 / 254,526 B | +3,596 / +918 B |
+| Main CSS, raw / Node gzip-9 | 157,587 / 28,275 B | 158,156 / 28,406 B | +569 / +131 B |
+| Remote JS + CSS, raw / Node gzip-9 | 17,421 / 5,820 B | 18,268 / 6,073 B | +847 / +253 B |
+| All embedded assets | 2,394,311 B | 2,399,323 B | +5,012 B |
+
+The simulator review process with browser clients and two synthetic catalog rows
+used 72,519,680 B working set and 57,741,312 B private memory at the measured
+checkpoint. This is an interactive review measurement, not an idle-baseline or
+soak comparison. The existing SQLite memory waiver remains applicable. A warm
+restart reached the server-starting log 73 ms after process creation; this is
+not a cold-start benchmark. Migration tests cover v26 and v27 data. The main
+bundle's existing 900 kB advisory warning remains enabled.
+
 ## 2026-09-27 — Video curation, a watch page, a motion source and a phone remote
 
 Catalog videos carry a title, rating, notes and tags. The watch page puts the

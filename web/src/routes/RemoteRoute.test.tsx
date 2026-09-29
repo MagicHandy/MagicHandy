@@ -6,7 +6,7 @@ import type { MediaVideo } from "../api/types";
 import { RemoteRoute } from "./RemoteRoute";
 
 const app = vi.hoisted(() => ({
-  value: { backendOnline: true, readOnly: true, state: { capabilities: { control: true }, chat: { latest_seq: 4 } } as Record<string, unknown> },
+  value: { backendOnline: true, readOnly: true, state: { stop_sequence: 3, capabilities: { control: true }, chat: { latest_seq: 4 } } as Record<string, unknown> },
 }));
 
 vi.mock("../state/app-state", () => ({ useAppState: () => app.value }));
@@ -67,15 +67,57 @@ describe("phone remote", () => {
     localStorage.clear();
     FakeEventSource.instances = [];
     vi.stubGlobal("EventSource", FakeEventSource);
-    app.value = { backendOnline: true, readOnly: true, state: { capabilities: { control: true }, chat: { latest_seq: 4 } } };
+    app.value = { backendOnline: true, readOnly: true, state: { stop_sequence: 3, capabilities: { control: true }, chat: { latest_seq: 4 } } };
     vi.mocked(api.mediaVideos).mockResolvedValue({ videos: catalog } as Awaited<ReturnType<typeof api.mediaVideos>>);
     vi.mocked(api.remoteState).mockResolvedValue({ remote: desktop({ connected: false, video: undefined }) });
     vi.mocked(api.sendRemoteCommand).mockImplementation(async (command) => ({
-      command: { id: "sent-1", sequence: 1, issued_at: "", ...command },
+      command: { id: "sent-1", sequence: 1, stop_sequence: 3, issued_at: "", ...command },
     }));
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("does not let an old HTTP read overwrite reconnected stream state", async () => {
+    vi.useFakeTimers();
+    let finish!: (value: { remote: RemoteState }) => void;
+    vi.mocked(api.remoteState).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    render(<RemoteRoute />);
+    publish(desktop());
+    act(() => FakeEventSource.instances[0].onerror?.());
+    expect(screen.queryByRole("button", { name: "Play" })).not.toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    publish(desktop({ revision: 4, video: { ...desktop().video!, video_id: "other", title: "New video" } }));
+    await act(async () => finish({ remote: desktop({ connected: false, video: undefined }) }));
+    expect(screen.getByRole("heading", { name: "New video" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
+  });
+
+  it.each(["video", "stop"])("discards a pending scrub when the %s changes", async (change) => {
+    vi.useFakeTimers();
+    const view = render(<RemoteRoute />);
+    publish(desktop());
+    fireEvent.change(screen.getByRole("slider", { name: "Position" }), { target: { value: "45000" } });
+    if (change === "video") publish(desktop({ revision: 4, video: { ...desktop().video!, video_id: "other" } }));
+    else {
+      app.value = { ...app.value, state: { ...app.value.state, stop_sequence: 4 } };
+      view.rerender(<RemoteRoute />);
+    }
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    expect(api.sendRemoteCommand).not.toHaveBeenCalled();
+  });
+
+  it("does not restore controls from a read that finishes after going offline", async () => {
+    let finish!: (value: { remote: RemoteState }) => void;
+    vi.mocked(api.remoteState).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const view = render(<RemoteRoute />);
+    publish(desktop());
+    act(() => FakeEventSource.instances[0].onerror?.());
+    app.value = { ...app.value, backendOnline: false };
+    view.rerender(<RemoteRoute />);
+    await act(async () => finish({ remote: desktop() }));
+    expect(screen.queryByRole("button", { name: "Play" })).not.toBeInTheDocument();
   });
 
   it("explains how to get a desktop when none is taking commands", () => {
@@ -92,9 +134,9 @@ describe("phone remote", () => {
     expect(screen.getByRole("heading", { name: "Evening take" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
-    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "video", action: "play" }));
+    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "video", action: "play", video_id: "take-7" }, 3));
     fireEvent.click(screen.getByRole("button", { name: "Forward 10 s" }));
-    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenLastCalledWith({ target: "video", action: "seek_by", ms: 10_000 }));
+    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenLastCalledWith({ target: "video", action: "seek_by", ms: 10_000, video_id: "take-7" }, 3));
 
     publish(desktop({ revision: 4, recent: [{ command_id: "sent-1", ok: false, error: "The video is not ready for that yet." }] }));
     expect(screen.getByRole("alert")).toHaveTextContent("The video is not ready for that yet.");
@@ -107,7 +149,7 @@ describe("phone remote", () => {
     expect(source.getByRole("radio", { name: "Script" })).toBeChecked();
     expect(screen.getByText("The script moves the device. The chat talks but cannot change the motion.")).toBeInTheDocument();
     fireEvent.click(source.getByRole("radio", { name: "Chat" }));
-    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "video", action: "source", source: "chat" }));
+    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "video", action: "source", source: "chat", video_id: "take-7" }, 3));
 
     publish(desktop({ revision: 4, video: { ...desktop().video!, synchronized: false, motion_source: "off", has_script: false } }));
     expect(within(screen.getByRole("group", { name: "Motion source" })).getByRole("radio", { name: "Script" })).toBeDisabled();
@@ -118,7 +160,7 @@ describe("phone remote", () => {
     publish(desktop({ video: undefined }));
     expect(screen.getByText("The desktop is not showing a video. Open one below.")).toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: /Evening take/ }));
-    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "video", action: "open", video_id: "take-7" }));
+    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "video", action: "open", video_id: "take-7" }, 3));
   });
 
   it("words refused commands itself", async () => {
@@ -145,7 +187,7 @@ describe("phone remote", () => {
 
     fireEvent.change(screen.getByLabelText("Message"), { target: { value: "Slower please" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "chat", action: "send", text: "Slower please" }));
+    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "chat", action: "send", text: "Slower please", session_id: "session-2" }, 3));
     expect(screen.getByLabelText("Message")).toHaveValue("");
 
     publish(desktop({ revision: 5, route: "chat", video: undefined, chat: { session_id: "session-2", busy: true, ready: true },
@@ -159,7 +201,7 @@ describe("phone remote", () => {
     render(<RemoteRoute />);
     publish(desktop());
     fireEvent.click(screen.getByRole("button", { name: "Open chat on the desktop" }));
-    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "chat", action: "open" }));
+    await waitFor(() => expect(api.sendRemoteCommand).toHaveBeenCalledWith({ target: "chat", action: "open" }, 3));
   });
 
   it("tells another account and observers what they can do", () => {

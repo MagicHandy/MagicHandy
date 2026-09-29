@@ -78,6 +78,8 @@ export interface VideoPlayerHandle {
   readonly videoID: string;
   readonly synchronized: boolean;
   readonly commands: VideoPlayerCommands;
+  getStopSequence(): number | undefined;
+  releaseMotion(stopSequence: number): Promise<boolean>;
   getSnapshot(): PlaybackSnapshot;
   subscribe(listener: () => void): () => void;
 }
@@ -111,6 +113,7 @@ export class VideoPlaybackController implements VideoPlayerHandle {
 
   private connected = false;
   private locked: boolean;
+  private releasing = false;
   private latestStopSequence: number | undefined;
   private capturedStopSequence: number | undefined;
   // Every request, continuation and wait carries a generation. Advancing one
@@ -185,6 +188,8 @@ export class VideoPlaybackController implements VideoPlayerHandle {
 
   getSnapshot = (): PlaybackSnapshot => this.snapshot;
 
+  getStopSequence = (): number | undefined => this.latestStopSequence;
+
   private update(patch: Partial<PlaybackSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...patch };
     for (const listener of this.listeners) listener();
@@ -223,6 +228,28 @@ export class VideoPlaybackController implements VideoPlayerHandle {
     this.activeSync = false;
     const player = this.media.element;
     if (player) this.session.close(player);
+  }
+
+  /** A source handoff waits for Stop and leaves playback paused. Teardown closes the session. */
+  async releaseMotion(stopSequence: number): Promise<boolean> {
+    if (this.releasing || !this.connected || this.locked || stopSequence !== this.latestStopSequence) return false;
+    const player = this.media.element;
+    if (!player) return false;
+    this.releasing = true;
+    this.abandonRun();
+    this.activeSync = false;
+    this.stopHeartbeat();
+    try {
+      // An unarmed run, or one fenced by Emergency Stop, has nothing left to
+      // stop. Keep this session usable if an ordinary Stop fails and the page
+      // stays on the old source; only teardown permanently closes its fence.
+      const stopped = this.session.armedStopSequence !== stopSequence ||
+        await this.stopPlaybackMotion(player, "paused", "pause");
+      return stopped && this.connected && stopSequence === this.latestStopSequence;
+    } finally {
+      this.releasing = false;
+      this.syncHeartbeat();
+    }
   }
 
   attach = (element: HTMLVideoElement | null): void => {
@@ -305,6 +332,7 @@ export class VideoPlaybackController implements VideoPlayerHandle {
 
   /** The on-screen play/pause control for a paired video. */
   togglePlayback = (): void => {
+    if (this.releasing) return;
     const player = this.media.element;
     const script = this.snapshot.script;
     if (!player || !script) return;
@@ -345,7 +373,7 @@ export class VideoPlaybackController implements VideoPlayerHandle {
 
   /** Paired videos wait for their script; an unloadable one plays as a plain video. */
   private commandsBlocked(): boolean {
-    return this.synchronized && this.snapshot.scriptLoading;
+    return this.releasing || (this.synchronized && this.snapshot.scriptLoading);
   }
 
   private play(): boolean {
@@ -419,6 +447,7 @@ export class VideoPlaybackController implements VideoPlayerHandle {
 
   /** Freezes the picture and stops motion; one commit re-arms at the target. */
   beginSeek = (): void => {
+    if (this.releasing) return;
     const player = this.media.element;
     if (!player || !this.snapshot.script || this.locked || (this.seekGesture && !this.seekGesture.committed)) return;
     const previousStop = this.seekGesture?.stop;
@@ -578,6 +607,10 @@ export class VideoPlaybackController implements VideoPlayerHandle {
   };
 
   handleMediaEvent = (event: MediaPlaybackEvent, player: HTMLVideoElement): void => {
+    if (this.releasing) {
+      if (event === "play" || event === "playing") this.holdVideo(player);
+      return;
+    }
     this.media.observe(player);
     this.update({ currentTimeMillis: mediaTimeMillis(player) });
     if (event === "ratechange") this.update({ playbackRate: player.playbackRate });

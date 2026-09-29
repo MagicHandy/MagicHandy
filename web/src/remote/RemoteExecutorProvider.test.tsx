@@ -5,12 +5,12 @@ import { REMOTE_COMMAND_EVENT, api } from "../api/client";
 import type { VideoPlayerHandle } from "../media/playbackController";
 import { RemoteExecutorProvider, useRemoteVideoSurface } from "./RemoteExecutorProvider";
 
-const app = vi.hoisted(() => ({ value: { backendOnline: true, readOnly: false, state: { capabilities: { control: true } } } }));
+const app = vi.hoisted(() => ({ value: { backendOnline: true, readOnly: false, state: { capabilities: { control: true }, stop_sequence: 3 } } }));
 
 vi.mock("../state/app-state", () => ({ useAppState: () => app.value }));
 vi.mock("../api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api/client")>();
-  return { ...actual, api: { reportRemotePresence: vi.fn(), withdrawRemotePresence: vi.fn() } };
+  return { ...actual, api: { reportRemotePresence: vi.fn(), withdrawRemotePresence: vi.fn(), claimRemoteCommand: vi.fn() } };
 });
 
 function player(): VideoPlayerHandle {
@@ -21,6 +21,8 @@ function player(): VideoPlayerHandle {
   };
   return {
     videoID: "clip",
+    getStopSequence: () => 3,
+    releaseMotion: vi.fn(async () => true),
     synchronized: false,
     commands: {
       play: vi.fn(() => true), pause: vi.fn(() => true), toggle: vi.fn(() => true), seekTo: vi.fn(() => true),
@@ -39,8 +41,9 @@ function Player({ handle }: { handle: VideoPlayerHandle }) {
 describe("remote executor provider", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    app.value = { backendOnline: true, readOnly: false, state: { capabilities: { control: true } } };
+    app.value = { backendOnline: true, readOnly: false, state: { capabilities: { control: true }, stop_sequence: 3 } };
     vi.mocked(api.reportRemotePresence).mockResolvedValue({ remote: { revision: 1, connected: true, pending: 0, recent: [] } });
+    vi.mocked(api.claimRemoteCommand).mockImplementation(async (id) => ({ command: { id, sequence: 1, target: "video", action: "pause", video_id: "clip", stop_sequence: 3, issued_at: "" }, remaining_ms: 10_000 }));
     vi.mocked(api.withdrawRemotePresence).mockResolvedValue({ status: "withdrawn" });
   });
 
@@ -52,9 +55,9 @@ describe("remote executor provider", () => {
     })));
 
     window.dispatchEvent(new CustomEvent(REMOTE_COMMAND_EVENT, {
-      detail: { id: "phone-1", sequence: 1, target: "video", action: "pause", issued_at: "" },
+      detail: { id: "phone-1", sequence: 1, target: "video", action: "pause", stop_sequence: 3, issued_at: "" },
     }));
-    expect(handle.commands.pause).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(handle.commands.pause).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(api.reportRemotePresence).toHaveBeenLastCalledWith(expect.objectContaining({
       outcomes: [{ command_id: "phone-1", ok: true }],
     })));
@@ -63,7 +66,7 @@ describe("remote executor provider", () => {
     view.rerender(<StrictMode><RemoteExecutorProvider route="videos"><Player handle={handle} /></RemoteExecutorProvider></StrictMode>);
     await waitFor(() => expect(api.withdrawRemotePresence).toHaveBeenCalled());
     window.dispatchEvent(new CustomEvent(REMOTE_COMMAND_EVENT, {
-      detail: { id: "phone-2", sequence: 2, target: "video", action: "play", issued_at: "" },
+      detail: { id: "phone-2", sequence: 2, target: "video", action: "play", stop_sequence: 3, issued_at: "" },
     }));
     expect(handle.commands.play).not.toHaveBeenCalled();
   });

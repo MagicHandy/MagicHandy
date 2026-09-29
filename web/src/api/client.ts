@@ -4,7 +4,7 @@
 // payloads — only the semantic endpoints below.
 import type { AccessAuditPage } from "./audit-types";
 import type { RecoveryCodeStatus, IssuedRecoveryCodes } from "./access-types";
-import type { RemoteCommand, RemoteCommandInput, RemotePresence, RemoteState } from "./remote-types";
+import type { RemoteClaim, RemoteCommand, RemoteCommandInput, RemotePresence, RemoteState } from "./remote-types";
 import type {
   AppState,
   AutopilotSettings,
@@ -621,7 +621,10 @@ export const api = {
     request<{ remote: RemoteState }>("POST", "/api/remote/presence", presence, signal),
   withdrawRemotePresence: () => request<{ status: string }>("DELETE", "/api/remote/presence", undefined, undefined, undefined, true),
   remoteState: (signal?: AbortSignal) => request<{ remote: RemoteState }>("GET", "/api/remote/state", undefined, signal),
-  sendRemoteCommand: (command: RemoteCommandInput) => request<{ command: RemoteCommand }>("POST", "/api/remote/commands", command),
+  sendRemoteCommand: (command: RemoteCommandInput, stopSequence: number) =>
+    request<{ command: RemoteCommand }>("POST", "/api/remote/commands", command, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  claimRemoteCommand: (id: string, stopSequence: number) =>
+    request<RemoteClaim>("POST", `/api/remote/commands/${encodeURIComponent(id)}/claim`, {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
   remoteEventsURL: () => `/api/remote/events?client_id=${encodeURIComponent(clientId)}`,
   saveMediaPlayback: (patch: Partial<{
     script_smoothing_percent: number;

@@ -58,7 +58,7 @@ export interface RemoteState {
   updated_at?: string;
 }
 
-export type RemoteCommandInput =
+export type RemoteCommandInput = (
   | { target: "video"; action: "play" | "pause" | "toggle" | "close" }
   | { target: "video"; action: "seek" | "seek_by"; ms: number }
   | { target: "video"; action: "volume" | "rate"; value: number }
@@ -66,7 +66,8 @@ export type RemoteCommandInput =
   | { target: "video"; action: "open"; video_id: string }
   | { target: "video"; action: "source"; source: MotionSource }
   | { target: "chat"; action: "open" }
-  | { target: "chat"; action: "send"; text: string };
+  | { target: "chat"; action: "send"; text: string }
+) & { video_id?: string; session_id?: string };
 
 export interface RemoteCommand {
   id: string;
@@ -74,10 +75,17 @@ export interface RemoteCommand {
   target: "video" | "chat";
   action: string;
   video_id?: string;
+  session_id?: string;
+  stop_sequence: number;
   ms?: number;
   value?: number;
   flag?: boolean;
   text?: string;
   source?: string;
   issued_at: string;
+}
+
+export interface RemoteClaim {
+  command: RemoteCommand;
+  remaining_ms: number;
 }

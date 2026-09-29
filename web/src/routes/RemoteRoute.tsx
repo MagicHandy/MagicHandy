@@ -20,10 +20,10 @@ export function RemoteRoute() {
   const { backendOnline, readOnly, state: appState } = useAppState();
   const canControl = appState?.capabilities?.control !== false;
   const remote = useRemoteState(backendOnline && canControl);
-  const { send, status } = useRemoteCommands(remote.state);
+  const { send, status } = useRemoteCommands(remote.state, appState?.stop_sequence);
   const [mode, setMode] = useState<RemoteMode>(readMode);
   const state = remote.state;
-  const reachable = Boolean(state?.connected && !state.other_account);
+  const reachable = Boolean(backendOnline && !remote.stale && state?.connected && !state.other_account);
   const now = useNow(Boolean(state?.video?.playing), 500);
 
   function chooseMode(next: RemoteMode) {
@@ -60,14 +60,14 @@ export function RemoteRoute() {
             {reachable && state && mode === "video" && (
               <>
                 {state.video ? (
-                  <RemoteVideoControls video={state.video} position={remotePosition(state, remote.receivedAt, now)} send={send} />
+                  <RemoteVideoControls key={`${state.video.video_id}:${appState?.stop_sequence}`} video={state.video} position={remotePosition(state, remote.receivedAt, now)} send={send} />
                 ) : (
                   <p className="remote-notice">{t("The desktop is not showing a video. Open one below.")}</p>
                 )}
                 <RemoteVideoPicker currentID={state.video?.video_id} send={send} />
               </>
             )}
-            {reachable && state && mode === "chat" && <RemoteChat state={state} send={send} latestSeq={appState?.chat?.latest_seq} />}
+            {reachable && state && mode === "chat" && <RemoteChat key={state.chat?.session_id} state={state} send={send} latestSeq={appState?.chat?.latest_seq} />}
           </>
         )}
       </div>

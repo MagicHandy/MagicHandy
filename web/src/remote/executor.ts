@@ -4,7 +4,7 @@
 // chat message to the open conversation. Nothing here talks to the device;
 // every effect still passes the player's and chat's own admission and Stop.
 
-import type { RemoteChatPresence, RemoteCommand, RemoteOutcome, RemotePresence, RemoteVideoPresence } from "../api/remote-types";
+import type { RemoteChatPresence, RemoteClaim, RemoteCommand, RemoteOutcome, RemotePresence, RemoteVideoPresence } from "../api/remote-types";
 import type { MessageKey } from "../i18n";
 import type { VideoPlayerHandle } from "../media/playbackController";
 import type { MotionSource } from "../videos/motionSource";
@@ -20,7 +20,7 @@ export interface RemoteVideoSurface {
   /** A paired script exists, so Script is a possible source. */
   hasScript?: boolean;
   /** Switches the motion source; false when that is not possible now. */
-  setMotionSource?: (source: MotionSource) => boolean;
+  setMotionSource?: (source: MotionSource, stopSequence: number) => Promise<boolean>;
 }
 
 export interface RemoteChatSurface {
@@ -30,10 +30,11 @@ export interface RemoteChatSurface {
   busy: boolean;
   /** The composer could send now: history loaded, this tab not read-only. */
   ready: boolean;
-  send: (text: string) => void;
+  send: (text: string, stopSequence: number) => boolean;
 }
 
 export interface RemoteExecutorDependencies {
+  claim: (id: string, stopSequence: number) => Promise<RemoteClaim>;
   report: (presence: RemotePresence) => Promise<unknown>;
   withdraw: () => void;
   navigate: (hash: string) => void;
@@ -95,6 +96,10 @@ export class RemoteExecutor {
   private readonly now: () => number;
   private readonly canPlaySound: () => boolean;
   private eligible = false;
+  private stopSequence: number | undefined;
+  private authority = "";
+  private generation = 0;
+  private execution: Promise<void> = Promise.resolve();
   private disposed = false;
   private route = "";
   private video: RemoteVideoSurface | null = null;
@@ -113,7 +118,7 @@ export class RemoteExecutor {
 
   constructor(deps: RemoteExecutorDependencies) {
     this.deps = deps;
-    this.now = deps.now ?? (() => Date.now());
+    this.now = deps.now ?? (() => performance.now());
     this.canPlaySound = deps.canPlaySound ?? (() => navigator.userActivation?.hasBeenActive !== false);
   }
 
@@ -121,8 +126,21 @@ export class RemoteExecutor {
   setEligible(eligible: boolean): void {
     if (eligible === this.eligible || this.disposed) return;
     this.eligible = eligible;
+    this.generation += 1;
     if (eligible) this.schedule(0);
     else this.stopReporting();
+  }
+
+  /** A claim response from an earlier Stop or controller lease cannot act. */
+  setAdmission(stopSequence: number | undefined, authority: string): void {
+    if (stopSequence === this.stopSequence && authority === this.authority) return;
+    this.stopSequence = stopSequence;
+    this.authority = authority;
+    this.generation += 1;
+  }
+
+  cancelPending(): void {
+    this.generation += 1;
   }
 
   setRoute(route: string): void {
@@ -149,21 +167,45 @@ export class RemoteExecutor {
     }
   }
 
-  /** Runs a delivered command once; a redelivery after a reconnect is ignored. */
-  execute(command: RemoteCommand): void {
-    if (!command?.id || this.seen.has(command.id) || this.disposed) return;
+  /** Delivery is a notification; the backend must still admit execution. */
+  execute(command: RemoteCommand): Promise<void> {
+    if (!command?.id || this.seen.has(command.id) || this.disposed) return Promise.resolve();
     this.seen.add(command.id);
     if (this.seen.size > SEEN_LIMIT) this.seen.delete(this.seen.values().next().value!);
     // Not ours to run now: the queue drops it when control or presence moves.
-    if (!this.eligible) return;
+    const generation = this.generation;
+    this.execution = this.execution.then(() => this.executeClaimed(command, generation));
+    return this.execution;
+  }
+
+  private async executeClaimed(delivered: RemoteCommand, generation: number): Promise<void> {
+    if (!this.admitted(delivered, generation)) return;
+    const started = this.now();
+    let command: RemoteCommand;
+    try {
+      const claim = await this.deps.claim(delivered.id, delivered.stop_sequence);
+      command = claim.command;
+      // Deduct the whole round trip conservatively. Host and browser clocks
+      // need not agree, and a suspended tab must not replay old intent.
+      if (command.id !== delivered.id || !Number.isFinite(claim.remaining_ms) ||
+        claim.remaining_ms <= this.now() - started || !this.admitted(command, generation)) return;
+    } catch {
+      // Expired, canceled, revoked, or already claimed. Never retry execution.
+      return;
+    }
     let result: Result;
     try {
-      result = command.target === "chat" ? this.runChat(command) : this.runVideo(command);
+      result = command.target === "chat" ? this.runChat(command) : await this.runVideo(command);
     } catch {
       result = failure(REMOTE_OUTCOMES.notReady);
     }
     this.outcomes.push(result.ok ? { command_id: command.id, ok: true } : { command_id: command.id, ok: false, error: result.error });
     this.schedule(0);
+  }
+
+  private admitted(command: RemoteCommand, generation: number): boolean {
+    return !this.disposed && this.eligible && generation === this.generation &&
+      this.stopSequence !== undefined && command.stop_sequence === this.stopSequence;
   }
 
   dispose(): void {
@@ -173,20 +215,21 @@ export class RemoteExecutor {
     this.disposed = true;
   }
 
-  private runVideo(command: RemoteCommand): Result {
+  private async runVideo(command: RemoteCommand): Promise<Result> {
     if (command.target !== "video") return failure(REMOTE_OUTCOMES.unknown);
     if (command.action === "open") {
       if (!command.video_id) return failure(REMOTE_OUTCOMES.unknown);
       this.deps.navigate(videoRoute(command.video_id));
       return done;
     }
-    if (command.action === "close") {
-      if (this.video) this.deps.navigate(videoRoute(""));
-      return done;
-    }
     const video = this.video;
     if (!video) return failure(REMOTE_OUTCOMES.noVideo);
-    if (command.action === "source") return this.runSource(video, command.source);
+    if (command.video_id !== video.handle.videoID || command.stop_sequence !== video.handle.getStopSequence()) return failure(REMOTE_OUTCOMES.notReady);
+    if (command.action === "close") {
+      this.deps.navigate(videoRoute(""));
+      return done;
+    }
+    if (command.action === "source") return this.runSource(video, command);
     const controls = video.handle.commands;
     // A refused play() would arm paired motion and then stop it again. Ask for
     // the click instead of trying.
@@ -208,13 +251,14 @@ export class RemoteExecutor {
     return accepted ? done : failure(REMOTE_OUTCOMES.notReady);
   }
 
-  private runSource(video: RemoteVideoSurface, source: string | undefined): Result {
+  private async runSource(video: RemoteVideoSurface, command: RemoteCommand): Promise<Result> {
+    const source = command.source;
     if ((source !== "script" && source !== "chat" && source !== "off") || !video.setMotionSource) return failure(REMOTE_OUTCOMES.unknown);
     if (source === "script" && !video.hasScript) return failure(REMOTE_OUTCOMES.noScript);
     // Arriving at the script mid-play starts a new run, which needs sound.
     const snapshot = video.handle.getSnapshot();
     if (source === "script" && snapshot.playbackIntent && !snapshot.muted && !this.canPlaySound()) return failure(REMOTE_OUTCOMES.needsClick);
-    return video.setMotionSource(source) ? done : failure(REMOTE_OUTCOMES.notReady);
+    return await video.setMotionSource(source, command.stop_sequence) ? done : failure(REMOTE_OUTCOMES.notReady);
   }
 
   private runChat(command: RemoteCommand): Result {
@@ -228,10 +272,10 @@ export class RemoteExecutor {
     const chat = this.chat;
     const text = command.text?.trim() ?? "";
     if (!chat) return failure(REMOTE_OUTCOMES.noChat);
+    if (command.session_id !== chat.sessionId) return failure(REMOTE_OUTCOMES.chatUnavailable);
     if (chat.busy) return failure(REMOTE_OUTCOMES.chatBusy);
     if (!chat.ready || !text) return failure(REMOTE_OUTCOMES.chatUnavailable);
-    chat.send(text);
-    return done;
+    return chat.send(text, command.stop_sequence) ? done : failure(REMOTE_OUTCOMES.chatUnavailable);
   }
 
   private readonly videoChanged = (): void => {

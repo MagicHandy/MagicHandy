@@ -24,12 +24,12 @@ export function filtersActive(filters: VideoFilters): boolean {
 }
 
 export function filterVideos(videos: MediaVideo[], filters: VideoFilters): MediaVideo[] {
-  const needle = filters.query.trim().toLocaleLowerCase();
-  const wanted = filters.tags.map((tag) => tag.toLocaleLowerCase());
+  const needle = filters.query.trim().toLowerCase();
+  const wanted = filters.tags.map((tag) => tag.toLowerCase());
   return videos.filter((video) => {
     if (needle && !searchText(video).includes(needle)) return false;
     if (wanted.length > 0) {
-      const tags = new Set((video.tags ?? []).map((tag) => tag.toLocaleLowerCase()));
+      const tags = new Set((video.tags ?? []).map((tag) => tag.toLowerCase()));
       if (!wanted.every((tag) => tags.has(tag))) return false;
     }
     if (filters.minimumRating > 0 && (video.rating ?? 0) < filters.minimumRating) return false;
@@ -42,7 +42,7 @@ export function filterVideos(videos: MediaVideo[], filters: VideoFilters): Media
 function searchText(video: MediaVideo): string {
   return [video.title ?? "", video.display_name, video.location_path, ...(video.tags ?? []), video.notes ?? ""]
     .join(" ")
-    .toLocaleLowerCase();
+    .toLowerCase();
 }
 
 /** Unavailable entries always sort after playable ones. */
@@ -62,7 +62,7 @@ export function tagCounts(videos: MediaVideo[]): MediaTagCount[] {
   const counts = new Map<string, MediaTagCount>();
   for (const video of videos) {
     for (const tag of video.tags ?? []) {
-      const key = tag.toLocaleLowerCase();
+      const key = tag.toLowerCase();
       const entry = counts.get(key);
       if (entry) entry.count += 1;
       else counts.set(key, { tag, count: 1 });
@@ -78,6 +78,6 @@ export function splitTagInput(value: string): string[] {
 
 /** Reuses the library's spelling of a tag that already exists. */
 export function canonicalTag(tag: string, known: readonly string[]): string {
-  const key = tag.toLocaleLowerCase();
-  return known.find((candidate) => candidate.toLocaleLowerCase() === key) ?? tag;
+  const key = tag.toLowerCase();
+  return known.find((candidate) => candidate.toLowerCase() === key) ?? tag;
 }

@@ -115,7 +115,7 @@
   width: 100%;
   height: 100%;
   overflow: auto;
-  padding: 12px;
+  padding: 60px 12px 12px;
   background: var(--bg);
 }
 .media-player:fullscreen .media-video-frame video {
@@ -424,7 +424,7 @@
     padding: 6px;
   }
   .media-transport-controls {
-    grid-template-columns: 30px 48px minmax(0, 1fr) 30px 54px 30px;
+    grid-template-columns: 30px max-content minmax(0, 1fr) 30px 54px 30px;
     grid-template-rows: 16px 30px;
     display: grid;
     gap: 3px 5px;
@@ -451,6 +451,7 @@
     width: auto;
     justify-self: start;
   }
+  .media-transport-seek + .media-transport-time::before { content: "/ "; }
   .media-transport-volume-control {
     grid-column: 4;
     grid-row: 2;

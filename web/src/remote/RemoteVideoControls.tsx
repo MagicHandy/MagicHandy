@@ -170,9 +170,10 @@ function useSettledValue(reported: number, tolerance: number, commit: (value: nu
     settling.current = true;
     clearTimeout(settle.current);
     clearTimeout(release.current);
+    const commit = latestCommit.current;
     settle.current = setTimeout(() => {
       settling.current = false;
-      latestCommit.current(value);
+      commit(value);
       release.current = setTimeout(() => setDraft(null), DRAFT_TIMEOUT_MS);
     }, SETTLE_MS);
   }, []);

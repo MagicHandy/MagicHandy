@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { RemoteCommand, RemotePresence } from "../api/remote-types";
+import type { RemoteClaim, RemoteCommand, RemotePresence } from "../api/remote-types";
 import type { PlaybackSnapshot, VideoPlayerCommands, VideoPlayerHandle } from "../media/playbackController";
 import { REMOTE_OUTCOMES, RemoteExecutor, type RemoteChatSurface } from "./executor";
 
@@ -33,6 +33,8 @@ function fakeHandle(overrides: Partial<PlaybackSnapshot> = {}, synchronized = tr
   const handle: VideoPlayerHandle = {
     videoID: "clip",
     synchronized,
+    getStopSequence: () => 3,
+    releaseMotion: vi.fn(async () => true),
     commands,
     getSnapshot: () => snapshot,
     subscribe: (listener) => {
@@ -53,14 +55,18 @@ function fakeHandle(overrides: Partial<PlaybackSnapshot> = {}, synchronized = tr
 const last = <T,>(items: T[]): T | undefined => items[items.length - 1];
 
 let sequence = 0;
+const delivered = new Map<string, RemoteCommand>();
 function command(target: "video" | "chat", action: string, fields: Partial<RemoteCommand> = {}): RemoteCommand {
   sequence += 1;
-  return { id: `command-${sequence}`, sequence, target, action, issued_at: "2026-09-27T12:00:00Z", ...fields };
+  const value = { id: `command-${sequence}`, sequence, target, action, stop_sequence: 3, video_id: "clip", session_id: "session-2", issued_at: "2026-09-27T12:00:00Z", ...fields };
+  delivered.set(value.id, value);
+  return value;
 }
 
 function setup() {
   const reports: RemotePresence[] = [];
   const deps = {
+    claim: vi.fn(async (id: string): Promise<RemoteClaim> => ({ command: delivered.get(id)!, remaining_ms: 10_000 })),
     report: vi.fn(async (presence: RemotePresence) => {
       reports.push(presence);
       return {};
@@ -71,6 +77,7 @@ function setup() {
     now: () => Date.now(),
   };
   const executor = new RemoteExecutor(deps);
+  executor.setAdmission(3, "lease-1");
   return { executor, deps, reports };
 }
 
@@ -81,6 +88,64 @@ describe("remote executor", () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it.each(["stop", "local-stop", "lease", "hidden", "expired"])("rejects a delayed claim after %s", async (change) => {
+    const { executor, deps } = setup();
+    const video = fakeHandle();
+    executor.setVideo({ handle: video.handle, title: "Take 07" });
+    executor.setEligible(true);
+    let finish!: (claim: RemoteClaim) => void;
+    deps.claim.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const intent = command("video", "play");
+    const pending = executor.execute(intent);
+    await Promise.resolve();
+    if (change === "stop") executor.setAdmission(4, "lease-1");
+    if (change === "local-stop") executor.cancelPending();
+    if (change === "lease") executor.setAdmission(3, "lease-2");
+    if (change === "hidden") { executor.setEligible(false); executor.setEligible(true); }
+    if (change === "expired") vi.setSystemTime(Date.now() + 11_000);
+    finish({ command: intent, remaining_ms: 10_000 });
+    await pending;
+    expect(video.commands.play).not.toHaveBeenCalled();
+    executor.dispose();
+  });
+
+  it("never runs a canceled claim or retargets an old command", async () => {
+    const { executor, deps } = setup();
+    const video = fakeHandle();
+    executor.setVideo({ handle: video.handle, title: "Take 07" });
+    executor.setEligible(true);
+    deps.claim.mockRejectedValueOnce(new Error("cleared by Stop"));
+    await executor.execute(command("video", "play"));
+    await executor.execute(command("video", "seek", { video_id: "old-video", ms: 1234 }));
+    const send = vi.fn(() => true);
+    executor.setChat({ sessionId: "new-chat", personaName: "Nova", busy: false, ready: true, send });
+    await executor.execute(command("chat", "send", { session_id: "old-chat", text: "hello" }));
+    expect(video.commands.play).not.toHaveBeenCalled();
+    expect(video.commands.seekTo).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+    executor.dispose();
+  });
+
+  it("waits for the source handoff before acknowledging it or running the next command", async () => {
+    const { executor, deps, reports } = setup();
+    const video = fakeHandle();
+    let finish!: (ok: boolean) => void;
+    const setMotionSource = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    executor.setVideo({ handle: video.handle, title: "Take 07", hasScript: true, setMotionSource });
+    executor.setEligible(true);
+    const switching = executor.execute(command("video", "source", { source: "chat" }));
+    await vi.advanceTimersByTimeAsync(0);
+    const playing = executor.execute(command("video", "play"));
+    expect(deps.claim).toHaveBeenCalledTimes(1);
+    expect(reports.flatMap((report) => report.outcomes ?? [])).toHaveLength(0);
+    finish(false);
+    await switching;
+    await playing;
+    await vi.advanceTimersByTimeAsync(250);
+    expect(reports.flatMap((report) => report.outcomes ?? []).map((outcome) => outcome.ok)).toEqual([false, true]);
+    executor.dispose();
   });
 
   it("reports what the tab shows only while it is eligible", async () => {
@@ -119,10 +184,10 @@ describe("remote executor", () => {
     await vi.advanceTimersByTimeAsync(0);
 
     const seek = command("video", "seek", { ms: 30_000 });
-    executor.execute(seek);
-    executor.execute(seek);
-    executor.execute(command("video", "volume", { value: 0.4 }));
-    executor.execute(command("video", "mute", { flag: true }));
+    await executor.execute(seek);
+    await executor.execute(seek);
+    await executor.execute(command("video", "volume", { value: 0.4 }));
+    await executor.execute(command("video", "mute", { flag: true }));
     await vi.advanceTimersByTimeAsync(250);
 
     expect(video.commands.seekTo).toHaveBeenCalledTimes(1);
@@ -137,12 +202,12 @@ describe("remote executor", () => {
   it("says why a command could not run", async () => {
     const { executor, reports } = setup();
     executor.setEligible(true);
-    executor.execute(command("video", "play"));
+    await executor.execute(command("video", "play"));
     const video = fakeHandle();
     vi.mocked(video.commands.play).mockReturnValue(false);
     executor.setVideo({ handle: video.handle, title: "Take 07" });
-    executor.execute(command("video", "play"));
-    executor.execute(command("video", "eject"));
+    await executor.execute(command("video", "play"));
+    await executor.execute(command("video", "eject"));
     await vi.advanceTimersByTimeAsync(250);
     expect(reports.flatMap((report) => report.outcomes ?? []).map((outcome) => outcome.error)).toEqual([
       REMOTE_OUTCOMES.noVideo, REMOTE_OUTCOMES.notReady, REMOTE_OUTCOMES.unknown,
@@ -155,15 +220,15 @@ describe("remote executor", () => {
     executor.setEligible(true);
     const video = fakeHandle();
     executor.setVideo({ handle: video.handle, title: "Take 07" });
-    executor.execute(command("video", "play"));
-    executor.execute(command("video", "toggle"));
+    await executor.execute(command("video", "play"));
+    await executor.execute(command("video", "toggle"));
     expect(video.commands.play).not.toHaveBeenCalled();
     expect(video.commands.toggle).not.toHaveBeenCalled();
 
     // Pausing needs no click, and a muted video may always start.
-    executor.execute(command("video", "pause"));
+    await executor.execute(command("video", "pause"));
     video.update({ muted: true });
-    executor.execute(command("video", "play"));
+    await executor.execute(command("video", "play"));
     expect(video.commands.pause).toHaveBeenCalledTimes(1);
     expect(video.commands.play).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(250);
@@ -176,19 +241,19 @@ describe("remote executor", () => {
     const { executor, deps, reports } = setup();
     executor.setEligible(true);
     const video = fakeHandle({ playbackIntent: true });
-    const setMotionSource = vi.fn(() => true);
+    const setMotionSource = vi.fn(async () => true);
     executor.setVideo({ handle: video.handle, title: "Take 07", motionSource: "chat", hasScript: true, setMotionSource });
-    executor.execute(command("video", "source", { source: "off" }));
-    expect(setMotionSource).toHaveBeenLastCalledWith("off");
+    await executor.execute(command("video", "source", { source: "off" }));
+    expect(setMotionSource).toHaveBeenLastCalledWith("off", 3);
 
     // A switch to the script mid-play starts a new run, which needs sound.
     deps.canPlaySound.mockReturnValue(false);
-    executor.execute(command("video", "source", { source: "script" }));
+    await executor.execute(command("video", "source", { source: "script" }));
     expect(setMotionSource).toHaveBeenCalledTimes(1);
 
     executor.setVideo({ handle: video.handle, title: "Take 07", motionSource: "off", hasScript: false, setMotionSource });
-    executor.execute(command("video", "source", { source: "script" }));
-    executor.execute(command("video", "source", { source: "autopilot" }));
+    await executor.execute(command("video", "source", { source: "script" }));
+    await executor.execute(command("video", "source", { source: "autopilot" }));
     await vi.advanceTimersByTimeAsync(250);
     expect(reports.flatMap((report) => report.outcomes ?? []).map((outcome) => outcome.error ?? "ok")).toEqual([
       "ok", REMOTE_OUTCOMES.needsClick, REMOTE_OUTCOMES.noScript, REMOTE_OUTCOMES.unknown,
@@ -198,14 +263,14 @@ describe("remote executor", () => {
 
   it("opens and closes videos by navigating, and never runs commands while not eligible", async () => {
     const { executor, deps } = setup();
-    executor.execute(command("video", "open", { video_id: "a b" }));
+    await executor.execute(command("video", "open", { video_id: "a b" }));
     expect(deps.navigate).not.toHaveBeenCalled();
 
     executor.setEligible(true);
-    executor.execute(command("video", "open", { video_id: "a b" }));
+    await executor.execute(command("video", "open", { video_id: "a b" }));
     expect(deps.navigate).toHaveBeenLastCalledWith("#/videos/a%20b");
     executor.setVideo({ handle: fakeHandle().handle, title: "Take 07" });
-    executor.execute(command("video", "close"));
+    await executor.execute(command("video", "close"));
     expect(deps.navigate).toHaveBeenLastCalledWith("#/videos");
   });
 
@@ -214,19 +279,19 @@ describe("remote executor", () => {
     executor.setEligible(true);
     const openChat = vi.fn();
     executor.setVideo({ handle: fakeHandle().handle, title: "Take 07", openChat });
-    executor.execute(command("chat", "open"));
+    await executor.execute(command("chat", "open"));
     expect(openChat).toHaveBeenCalledTimes(1);
     executor.setVideo(null);
-    executor.execute(command("chat", "open"));
+    await executor.execute(command("chat", "open"));
     expect(deps.navigate).toHaveBeenLastCalledWith("#/chat");
 
-    const send = vi.fn();
+    const send = vi.fn(() => true);
     const chat: RemoteChatSurface = { sessionId: "session-2", personaName: "Nova", busy: false, ready: true, send };
     executor.setChat(chat);
-    executor.execute(command("chat", "send", { text: "  hello  " }));
-    expect(send).toHaveBeenCalledWith("hello");
+    await executor.execute(command("chat", "send", { text: "  hello  " }));
+    expect(send).toHaveBeenCalledWith("hello", 3);
     executor.setChat({ ...chat, busy: true });
-    executor.execute(command("chat", "send", { text: "again" }));
+    await executor.execute(command("chat", "send", { text: "again" }));
     expect(send).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(250);
 
@@ -265,7 +330,7 @@ describe("remote executor", () => {
       .mockRejectedValueOnce(new Error("this tab does not hold control"));
     executor.setEligible(true);
     executor.setVideo({ handle: fakeHandle().handle, title: "Take 07" });
-    executor.execute(command("video", "pause"));
+    await executor.execute(command("video", "pause"));
     await vi.advanceTimersByTimeAsync(0);
     expect(deps.report).toHaveBeenCalledTimes(1);
     // Retries wait 0.5 s, then 1 s, then 2 s; not one every 200 ms.

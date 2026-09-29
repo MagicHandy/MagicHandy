@@ -98,7 +98,7 @@ var requiredSchemaTables = []schemaTable{
 		"video_codec:TEXT?", "audio_codec:TEXT?", "superseded:INTEGER",
 		"title:TEXT?", "rating:INTEGER?", "notes:TEXT?",
 	), primaryKey: []string{"id"}},
-	{name: "media_video_tags", columns: columns("video_id:TEXT", "tag:TEXT", "created_at:TEXT"), primaryKey: []string{"video_id", "tag"}},
+	{name: "media_video_tags", columns: columns("video_id:TEXT", "tag:TEXT", "tag_key:TEXT", "created_at:TEXT"), primaryKey: []string{"video_id", "tag_key"}},
 	{name: "user_accounts", columns: columns(
 		"id:TEXT", "username:TEXT", "username_key:TEXT", "role:TEXT", "password_hash:TEXT",
 		"disabled:INTEGER", "last_login_at:TEXT", "created_at:TEXT", "updated_at:TEXT", "profile_updated_at:TEXT",
@@ -130,7 +130,7 @@ var requiredSchemaIndexes = []schemaIndex{
 	{table: "settings_recoveries", name: "settings_recoveries_recovered_at", columns: indexColumns("-recovered_at", "-id")},
 	{table: "media_videos", name: "media_videos_location_relative", unique: true, columns: indexColumns("location_path", "relative_path")},
 	{table: "media_videos", name: "media_videos_missing_name", columns: indexColumns("missing", "display_name", "id")},
-	{table: "media_video_tags", name: "media_video_tags_tag", columns: indexColumns("tag", "video_id")},
+	{table: "media_video_tags", name: "media_video_tags_tag", columns: indexColumns("tag_key", "video_id")},
 	{table: "user_accounts", name: "user_accounts_username_key", unique: true, columns: indexColumns("username_key")},
 	{table: "user_sessions", name: "user_sessions_user_expiry", columns: indexColumns("user_id", "expires_at")},
 	{table: "user_sessions", name: "user_sessions_public_id", unique: true, columns: indexColumns("public_id")},

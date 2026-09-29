@@ -1,14 +1,14 @@
 import { t, translateKnown } from "../i18n";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { MediaVideo } from "../api/types";
+import type { MediaVideo, MediaVideoUpdate } from "../api/types";
 import { needsConversion } from "../api/types";
 import { SegmentedChoice } from "../components/SetpointControls";
 import { SyncedVideoPlayer } from "../components/SyncedVideoPlayer";
 import type { VideoPlayerHandle } from "../media/playbackController";
 import { useRemoteVideoSurface } from "../remote/RemoteExecutorProvider";
 import { ArrowLeftIcon, ChatIcon, PencilIcon } from "../shell/icons";
-import { useToast } from "../state/app-state";
+import { useAppState, useToast } from "../state/app-state";
 import { videoTitle } from "./curation";
 import { defaultMotionSource, motionSourceNote, motionSourceOptions, type MotionSource } from "./motionSource";
 import { VideoChatSide } from "./VideoChatSide";
@@ -26,7 +26,7 @@ interface Props {
   toolsAvailable: boolean;
   conversionBusy: boolean;
   onBack: () => void;
-  onVideoUpdate: (video: MediaVideo) => void;
+  onVideoUpdate: (video: MediaVideoUpdate) => void;
   onRequestConversion: () => void;
   onEditDetails: () => void;
 }
@@ -40,16 +40,30 @@ export function VideoPlayerPage({
 }: Props) {
   const title = videoTitle(video);
   const { show } = useToast();
+  const { state } = useAppState();
   const [chatOpen, setChatOpen] = useState(readChatPreference);
   const [handle, setHandle] = useState<VideoPlayerHandle | null>(null);
   const [choice, setChoice] = useState<{ videoID: string; source: MotionSource } | null>(null);
-  const source = choice?.videoID === video.id ? choice.source : defaultMotionSource(video.has_funscript);
-  const latest = useRef({ source, handle });
+  const [switching, setSwitching] = useState(false);
+  const transition = useRef(false);
+  const generation = useRef(0);
+  // Opening a video must not call an existing Autopilot/chat run "Off".
+  // Seed from the backend once per video; selecting Script or Off then drains
+  // that run through the ordinary mode stop before changing the choice.
+  const initialSource = useMemo<MotionSource>(() => {
+    const engine = state?.motion?.engine;
+    const existing = state?.modes?.running || engine?.running || engine?.starting || engine?.paused;
+    return existing && engine?.target?.media_id !== video.id ? "chat" : defaultMotionSource(video.has_funscript);
+  }, [video.id, video.has_funscript]);
+  const source = choice?.videoID === video.id ? choice.source : initialSource;
+  const latest = useRef({ source, handle, locked, stopSequence, videoID: video.id });
   useLayoutEffect(() => {
-    latest.current = { source, handle };
+    latest.current = { source, handle, locked, stopSequence, videoID: video.id };
   });
-  // The video to arm once its script loads, after a switch to Script mid-play.
-  const resumeWithScript = useRef("");
+  useLayoutEffect(() => {
+    generation.current += 1;
+    return () => { generation.current += 1; };
+  }, [video.id, locked, stopSequence]);
 
   const showChat = useCallback((open: boolean) => {
     setChatOpen(open);
@@ -61,39 +75,35 @@ export function VideoPlayerPage({
   }, []);
   const openChat = useCallback(() => showChat(true), [showChat]);
 
-  // Switching is a Stop and a fresh start. Leaving the script closes its run
-  // with its controller; leaving the chat stops Autopilot and chat motion.
-  // Arriving at the script mid-play holds the picture and arms a new run
-  // from there once the script is ready.
-  const chooseSource = useCallback((next: MotionSource): boolean => {
-    const { source: current, handle: player } = latest.current;
+  // Keep the old choice until Stop is acknowledged. Starting the new script
+  // requires Play; a delayed load can never turn a previous choice into motion.
+  const chooseSource = useCallback(async (next: MotionSource, expectedStop = latest.current.stopSequence): Promise<boolean> => {
+    const { source: current, handle: player, locked: unavailable, stopSequence: sequence, videoID } = latest.current;
+    if (transition.current || unavailable || sequence === undefined || expectedStop !== sequence ||
+      (next === "script" && !video.has_funscript) || videoID !== video.id) return false;
     if (next === current) return true;
-    if (locked || (next === "script" && !video.has_funscript)) return false;
-    if (next === "script" && player?.getSnapshot().playbackIntent) {
-      player.commands.pause();
-      resumeWithScript.current = video.id;
+    if (!player) return false;
+    const admitted = generation.current;
+    transition.current = true;
+    setSwitching(true);
+    try {
+      if (current === "script") {
+        if (!await player.releaseMotion(sequence)) throw new Error(t("Motion could not be stopped."));
+      } else {
+        player.commands.pause();
+        if (current === "chat") await api.stopMode();
+      }
+      if (generation.current !== admitted || latest.current.handle !== player || latest.current.stopSequence !== sequence) return false;
+      setChoice({ videoID, source: next });
+      return true;
+    } catch (reason) {
+      if (generation.current === admitted) show(reason instanceof Error ? translateKnown(reason.message) : t("Motion could not be stopped."), "error");
+      return false;
+    } finally {
+      transition.current = false;
+      setSwitching(false);
     }
-    setChoice({ videoID: video.id, source: next });
-    if (current === "chat") {
-      void api.stopMode().catch((reason: unknown) => {
-        show(reason instanceof Error ? translateKnown(reason.message) : t("Motion could not be stopped."), "error");
-      });
-    }
-    return true;
-  }, [locked, show, video.has_funscript, video.id]);
-
-  useEffect(() => {
-    if (!handle?.synchronized) return undefined;
-    const resume = () => {
-      if (resumeWithScript.current !== handle.videoID) return;
-      const snapshot = handle.getSnapshot();
-      if (snapshot.scriptLoading) return;
-      resumeWithScript.current = "";
-      if (snapshot.script) handle.commands.play();
-    };
-    resume();
-    return handle.subscribe(resume);
-  }, [handle]);
+  }, [show, video.has_funscript, video.id]);
 
   // The phone remote drives this player through the same commands as its controls.
   const remoteSurface = useMemo(() => handle ? {
@@ -126,17 +136,17 @@ export function VideoPlayerPage({
                 label={t("Motion source")}
                 value={source}
                 options={motionSourceOptions(video.has_funscript)}
-                disabled={locked}
+                disabled={locked || switching}
                 onChange={(next) => void chooseSource(next)}
               />
             </div>
-            <button type="button" className="btn btn-secondary compact-command" aria-pressed={chatOpen} onClick={() => showChat(!chatOpen)}><ChatIcon size={16} />{t("Chat")}</button>
+            <button type="button" className="btn btn-secondary compact-command video-chat-toggle" aria-pressed={chatOpen} onClick={() => showChat(!chatOpen)}><ChatIcon size={16} />{t("Chat")}</button>
             {canCurate && (
               <button type="button" className="icon-button media-player-edit" aria-label={t("Edit details")} title={t("Edit details")} onClick={onEditDetails}><PencilIcon size={16} /></button>
             )}
           </div>
         </div>
-        {chatOpen && <VideoChatSide source={source} onClose={() => showChat(false)} />}
+        {chatOpen && <VideoChatSide source={source} switching={switching} onClose={() => showChat(false)} />}
         <div className="video-watch-below">
           {!hostAdministration && needsConversion(video) && <p className="form-status media-playback-error" role="alert">{t("Host settings and diagnostics are managed by an administrator.")}</p>}
           {hostAdministration && !toolsAvailable && needsConversion(video) && (

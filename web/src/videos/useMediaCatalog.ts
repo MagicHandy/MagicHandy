@@ -1,7 +1,7 @@
 import { t } from "../i18n";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { MediaVideo } from "../api/types";
+import type { MediaVideo, MediaVideoUpdate } from "../api/types";
 
 export interface MediaCatalog {
   videos: MediaVideo[];
@@ -9,7 +9,7 @@ export interface MediaCatalog {
   error: string;
   reload: (signal?: AbortSignal) => Promise<void>;
   /** Replaces one row with a newer server copy without a catalog reload. */
-  replaceVideo: (video: MediaVideo) => void;
+  replaceVideo: (video: MediaVideoUpdate) => void;
   replaceVideos: (videos: MediaVideo[]) => void;
 }
 
@@ -49,11 +49,16 @@ export function useMediaCatalog(): MediaCatalog {
     };
   }, [reload]);
 
-  const replaceVideo = useCallback((video: MediaVideo) => {
-    setVideos((current) => current.map((entry) => entry.id === video.id ? video : entry));
+  const replaceVideo = useCallback((video: MediaVideoUpdate) => {
+    // A read begun before this acknowledged edit must not undo it.
+    loadGeneration.current += 1;
+    setLoading(false);
+    setVideos((current) => current.map((entry) => entry.id === video.id ? { ...entry, ...video } : entry));
   }, []);
 
   const replaceVideos = useCallback((updated: MediaVideo[]) => {
+    loadGeneration.current += 1;
+    setLoading(false);
     const byID = new Map(updated.map((video) => [video.id, video]));
     setVideos((current) => current.map((entry) => byID.get(entry.id) ?? entry));
   }, []);

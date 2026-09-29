@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from "react";
 import { api, REMOTE_COMMAND_EVENT } from "../api/client";
 import type { RemoteCommand } from "../api/remote-types";
 import { useAppState } from "../state/app-state";
@@ -18,6 +18,7 @@ export function RemoteExecutorProvider({ route, children }: { route: string; chi
   const { backendOnline, readOnly, state } = useAppState();
   const visible = useDocumentVisible();
   const executor = useMemo(() => new RemoteExecutor({
+    claim: (id, stopSequence) => api.claimRemoteCommand(id, stopSequence),
     report: (presence) => api.reportRemotePresence(presence),
     withdraw: () => void api.withdrawRemotePresence().catch(() => undefined),
     navigate: (hash) => {
@@ -27,15 +28,23 @@ export function RemoteExecutorProvider({ route, children }: { route: string; chi
   const eligible = backendOnline && !readOnly && state?.capabilities?.control !== false && visible;
 
   // Unmounting only steps back, so StrictMode's remount resumes the same executor.
-  useEffect(() => {
+  useLayoutEffect(() => {
+    executor.setAdmission(state?.stop_sequence, `${state?.controller?.epoch ?? ""}:${state?.controller?.generation ?? ""}`);
+  }, [executor, state?.stop_sequence, state?.controller?.epoch, state?.controller?.generation]);
+  useLayoutEffect(() => {
     executor.setEligible(eligible);
     return () => executor.setEligible(false);
   }, [executor, eligible]);
   useEffect(() => executor.setRoute(route), [executor, route]);
   useEffect(() => {
-    const receive = (event: Event) => executor.execute((event as CustomEvent<RemoteCommand>).detail);
+    const receive = (event: Event) => void executor.execute((event as CustomEvent<RemoteCommand>).detail);
+    const stop = () => executor.cancelPending();
     window.addEventListener(REMOTE_COMMAND_EVENT, receive);
-    return () => window.removeEventListener(REMOTE_COMMAND_EVENT, receive);
+    window.addEventListener("magichandy:emergency-stop", stop);
+    return () => {
+      window.removeEventListener(REMOTE_COMMAND_EVENT, receive);
+      window.removeEventListener("magichandy:emergency-stop", stop);
+    };
   }, [executor]);
 
   const surfaces = useMemo<RemoteSurfaces>(() => ({

@@ -48,23 +48,29 @@ var (
 type Identity struct {
 	ClientID  string
 	AccountID string
+	// Private, non-bearer session identity, never exposed in remote payloads.
+	SessionKey string `json:"-"`
 }
 
 // Command is one request from a remote. Fields beyond Target and Action
 // depend on the action; Validate states which ones are required.
 type Command struct {
-	ID       string   `json:"id"`
-	Sequence uint64   `json:"sequence"`
-	Target   string   `json:"target"`
-	Action   string   `json:"action"`
-	VideoID  string   `json:"video_id,omitempty"`
-	Millis   *int64   `json:"ms,omitempty"`
-	Value    *float64 `json:"value,omitempty"`
-	Flag     *bool    `json:"flag,omitempty"`
-	Text     string   `json:"text,omitempty"`
+	ID           string   `json:"id"`
+	Sequence     uint64   `json:"sequence"`
+	Target       string   `json:"target"`
+	Action       string   `json:"action"`
+	VideoID      string   `json:"video_id,omitempty"`
+	SessionID    string   `json:"session_id,omitempty"`
+	StopSequence uint64   `json:"stop_sequence"`
+	Millis       *int64   `json:"ms,omitempty"`
+	Value        *float64 `json:"value,omitempty"`
+	Flag         *bool    `json:"flag,omitempty"`
+	Text         string   `json:"text,omitempty"`
 	// Source is the video's motion source for the "source" action.
 	Source   string    `json:"source,omitempty"`
 	IssuedAt time.Time `json:"issued_at"`
+	sender   Identity
+	claimed  bool
 }
 
 // Outcome reports what happened to a command.
@@ -161,6 +167,9 @@ func (h *Hub) Report(executor Identity, presence Presence) State {
 	if h.presence != nil && h.executor != executor {
 		h.dropPendingLocked(now, "The desktop changed; send the command again.")
 	}
+	if h.executor.AccountID != executor.AccountID {
+		h.recent = nil
+	}
 	for _, outcome := range presence.Outcomes {
 		h.completeLocked(outcome, now)
 	}
@@ -225,8 +234,13 @@ func (h *Hub) Send(sender Identity, command Command) (Command, error) {
 	if len(h.pending) >= maxPending {
 		return Command{}, ErrBusy
 	}
+	if err := h.bindTargetLocked(&command); err != nil {
+		return Command{}, err
+	}
 	command.Text = strings.TrimSpace(command.Text)
 	command.VideoID = strings.TrimSpace(command.VideoID)
+	command.sender = sender
+	command.claimed = false
 	h.sequence++
 	command.ID = rand.Text()
 	command.Sequence = h.sequence
@@ -247,7 +261,7 @@ func (h *Hub) Commands(executor Identity, after uint64) ([]Command, <-chan struc
 	}
 	commands := make([]Command, 0, len(h.pending))
 	for _, command := range h.pending {
-		if command.Sequence > after {
+		if !command.claimed && command.Sequence > after {
 			commands = append(commands, command)
 		}
 	}
@@ -263,8 +277,8 @@ func (h *Hub) State(viewer Identity) (State, <-chan struct{}) {
 	now := h.now()
 	h.expireLocked(now)
 	state := h.stateLocked(now)
-	if state.Connected && viewer.AccountID != h.executor.AccountID {
-		state = State{Connected: true, OtherAccount: true, Recent: []Outcome{}}
+	if viewer.AccountID != h.executor.AccountID {
+		state = State{Connected: state.Connected, OtherAccount: state.Connected, Recent: []Outcome{}}
 	}
 	return state, h.changed
 }
@@ -432,6 +446,7 @@ func cleanVideo(video *VideoPresence) *VideoPresence {
 		return nil
 	}
 	cleaned := *video
+	cleaned.VideoID = clip(cleaned.VideoID, 128)
 	cleaned.Title = clip(cleaned.Title, maxTitle)
 	cleaned.SyncState = clip(cleaned.SyncState, 40)
 	cleaned.MotionSource = clip(cleaned.MotionSource, 10)

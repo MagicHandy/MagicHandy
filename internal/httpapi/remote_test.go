@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,11 +17,18 @@ import (
 
 const remoteVideoPresence = `{"route":"videos","video":{"video_id":"clip","title":"Take 07","ready":true,"rate":1,"volume":1}}`
 
+func authenticatedRemoteRequest(server *Server, cookie *http.Cookie, method, route, clientID, body string, prepare ...func(*http.Request)) *httptest.ResponseRecorder {
+	edits := []func(*http.Request){func(r *http.Request) {
+		r.Header.Set(stopSequenceHeader, strconv.FormatUint(server.stopSequence.Load(), 10))
+	}}
+	return authenticatedControlRequest(server, cookie, method, route, clientID, body, append(edits, prepare...)...)
+}
+
 func newRemoteFixture(t *testing.T) (*Server, *accounts.Store, accounts.Account, *http.Cookie, *http.Cookie) {
 	t.Helper()
 	s, store, admin, desktop := newControllerSessionFixture(t)
 	claimAuthenticatedController(t, s, desktop)
-	if response := authenticatedControlRequest(s, desktop, http.MethodPost, "/api/remote/presence", "test-controller", remoteVideoPresence); response.Code != http.StatusOK {
+	if response := authenticatedRemoteRequest(s, desktop, http.MethodPost, "/api/remote/presence", "test-controller", remoteVideoPresence); response.Code != http.StatusOK {
 		t.Fatalf("presence: %d %s", response.Code, response.Body.String())
 	}
 	token, _, err := store.NewSession(t.Context(), admin.ID)
@@ -32,7 +40,7 @@ func newRemoteFixture(t *testing.T) (*Server, *accounts.Store, accounts.Account,
 
 func readRemoteState(t *testing.T, s *Server, cookie *http.Cookie) remote.State {
 	t.Helper()
-	response := authenticatedControlRequest(s, cookie, http.MethodGet, "/api/remote/state", "phone-tab", "")
+	response := authenticatedRemoteRequest(s, cookie, http.MethodGet, "/api/remote/state", "phone-tab", "")
 	if response.Code != http.StatusOK {
 		t.Fatalf("remote state: %d %s", response.Code, response.Body.String())
 	}
@@ -112,14 +120,14 @@ func nextSSEEvent(t *testing.T, reader *bufio.Reader) (string, string) {
 func TestRemotePresenceBelongsToTheControllerTab(t *testing.T) {
 	s, store, admin, desktop := newControllerSessionFixture(t)
 	claimAuthenticatedController(t, s, desktop)
-	if response := authenticatedControlRequest(s, desktop, http.MethodPost, "/api/remote/presence", "another-tab", remoteVideoPresence); response.Code != http.StatusConflict {
+	if response := authenticatedRemoteRequest(s, desktop, http.MethodPost, "/api/remote/presence", "another-tab", remoteVideoPresence); response.Code != http.StatusConflict {
 		t.Fatalf("a tab without control reported presence: %d", response.Code)
 	}
 	stale := func(r *http.Request) { r.Header.Set(controllerGenerationHeader, "999") }
-	if response := authenticatedControlRequest(s, desktop, http.MethodPost, "/api/remote/presence", "test-controller", remoteVideoPresence, stale); response.Code != http.StatusConflict {
+	if response := authenticatedRemoteRequest(s, desktop, http.MethodPost, "/api/remote/presence", "test-controller", remoteVideoPresence, stale); response.Code != http.StatusConflict {
 		t.Fatalf("a stale generation reported presence: %d", response.Code)
 	}
-	if response := authenticatedControlRequest(s, desktop, http.MethodPost, "/api/remote/presence", "test-controller", remoteVideoPresence); response.Code != http.StatusOK {
+	if response := authenticatedRemoteRequest(s, desktop, http.MethodPost, "/api/remote/presence", "test-controller", remoteVideoPresence); response.Code != http.StatusOK {
 		t.Fatalf("controller presence: %d %s", response.Code, response.Body.String())
 	}
 	observer := newAdmissionIdentity(t, store, admin.ID, "observer", false)
@@ -128,7 +136,7 @@ func TestRemotePresenceBelongsToTheControllerTab(t *testing.T) {
 		{http.MethodGet, "/api/remote/events", ""},
 		{http.MethodPost, "/api/remote/commands", `{"target":"video","action":"play"}`},
 	} {
-		if response := authenticatedControlRequest(s, observer.cookie, request.method, request.route, "observer-tab", request.body); response.Code != http.StatusForbidden {
+		if response := authenticatedRemoteRequest(s, observer.cookie, request.method, request.route, "observer-tab", request.body); response.Code != http.StatusForbidden {
 			t.Errorf("observer %s %s = %d, want 403", request.method, request.route, response.Code)
 		}
 	}
@@ -137,7 +145,7 @@ func TestRemotePresenceBelongsToTheControllerTab(t *testing.T) {
 func TestRemoteCommandReachesTheDesktopAndReportsItsOutcome(t *testing.T) {
 	s, _, _, desktop, phone := newRemoteFixture(t)
 	stream := openMotionStream(t, s, desktop, "test-controller")
-	response := authenticatedControlRequest(s, phone, http.MethodPost, "/api/remote/commands", "phone-tab", `{"target":"video","action":"seek","ms":5000}`)
+	response := authenticatedRemoteRequest(s, phone, http.MethodPost, "/api/remote/commands", "phone-tab", `{"target":"video","action":"seek","ms":5000}`)
 	if response.Code != http.StatusAccepted {
 		t.Fatalf("send: %d %s", response.Code, response.Body.String())
 	}
@@ -149,7 +157,7 @@ func TestRemoteCommandReachesTheDesktopAndReportsItsOutcome(t *testing.T) {
 		t.Fatalf("the command was delivered twice on one stream: %+v", again)
 	}
 	report := `{"route":"videos","video":{"video_id":"clip","title":"Take 07","ready":true,"rate":1,"volume":1,"position_ms":5000},"outcomes":[{"command_id":"` + command.ID + `","ok":true}]}`
-	if response := authenticatedControlRequest(s, desktop, http.MethodPost, "/api/remote/presence", "test-controller", report); response.Code != http.StatusOK {
+	if response := authenticatedRemoteRequest(s, desktop, http.MethodPost, "/api/remote/presence", "test-controller", report); response.Code != http.StatusOK {
 		t.Fatalf("outcome report: %d", response.Code)
 	}
 	state := readRemoteState(t, s, phone)
@@ -161,7 +169,7 @@ func TestRemoteCommandReachesTheDesktopAndReportsItsOutcome(t *testing.T) {
 func TestCommandsOnlyReachTheExecutorTab(t *testing.T) {
 	s, _, _, desktop, phone := newRemoteFixture(t)
 	other := openMotionStream(t, s, phone, "phone-tab")
-	if response := authenticatedControlRequest(s, phone, http.MethodPost, "/api/remote/commands", "phone-tab", `{"target":"video","action":"pause"}`); response.Code != http.StatusAccepted {
+	if response := authenticatedRemoteRequest(s, phone, http.MethodPost, "/api/remote/commands", "phone-tab", `{"target":"video","action":"pause"}`); response.Code != http.StatusAccepted {
 		t.Fatalf("send: %d", response.Code)
 	}
 	if command, ok := nextRemoteCommand(t, other); ok {
@@ -174,10 +182,10 @@ func TestCommandsOnlyReachTheExecutorTab(t *testing.T) {
 
 func TestEmergencyStopDropsWaitingRemoteCommands(t *testing.T) {
 	s, _, _, desktop, phone := newRemoteFixture(t)
-	if response := authenticatedControlRequest(s, phone, http.MethodPost, "/api/remote/commands", "phone-tab", `{"target":"video","action":"play"}`); response.Code != http.StatusAccepted {
+	if response := authenticatedRemoteRequest(s, phone, http.MethodPost, "/api/remote/commands", "phone-tab", `{"target":"video","action":"play"}`); response.Code != http.StatusAccepted {
 		t.Fatalf("send: %d", response.Code)
 	}
-	if response := authenticatedControlRequest(s, desktop, http.MethodPost, "/api/motion/stop", "test-controller", `{}`); response.Code != http.StatusOK {
+	if response := authenticatedRemoteRequest(s, desktop, http.MethodPost, "/api/motion/stop", "test-controller", `{}`); response.Code != http.StatusOK {
 		t.Fatalf("stop: %d", response.Code)
 	}
 	state := readRemoteState(t, s, phone)
@@ -189,7 +197,7 @@ func TestEmergencyStopDropsWaitingRemoteCommands(t *testing.T) {
 func TestRemoteStaysWithinOneAccount(t *testing.T) {
 	s, store, admin, _, _ := newRemoteFixture(t)
 	operator := newAdmissionIdentity(t, store, admin.ID, "operator", true)
-	response := authenticatedControlRequest(s, operator.cookie, http.MethodPost, "/api/remote/commands", "operator-tab", `{"target":"video","action":"pause"}`)
+	response := authenticatedRemoteRequest(s, operator.cookie, http.MethodPost, "/api/remote/commands", "operator-tab", `{"target":"video","action":"pause"}`)
 	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), `"code":"other_account"`) {
 		t.Fatalf("another account commanded the desktop: %d %s", response.Code, response.Body.String())
 	}
@@ -201,11 +209,11 @@ func TestRemoteStaysWithinOneAccount(t *testing.T) {
 
 func TestCommandsForATabThatLostControlAreDropped(t *testing.T) {
 	s, _, _, desktop, laptop := newRemoteFixture(t)
-	if response := authenticatedControlRequest(s, laptop, http.MethodPost, "/api/controller/takeover", "laptop-tab", `{}`); response.Code != http.StatusOK {
+	if response := authenticatedRemoteRequest(s, laptop, http.MethodPost, "/api/controller/takeover", "laptop-tab", `{}`); response.Code != http.StatusOK {
 		t.Fatalf("takeover: %d %s", response.Code, response.Body.String())
 	}
 	// The old desktop's presence has not expired, so the phone can still queue.
-	if response := authenticatedControlRequest(s, laptop, http.MethodPost, "/api/remote/commands", "phone-tab", `{"target":"video","action":"play"}`); response.Code != http.StatusAccepted {
+	if response := authenticatedRemoteRequest(s, laptop, http.MethodPost, "/api/remote/commands", "phone-tab", `{"target":"video","action":"play"}`); response.Code != http.StatusAccepted {
 		t.Fatalf("send: %d", response.Code)
 	}
 	if command, ok := nextRemoteCommand(t, openMotionStream(t, s, desktop, "test-controller")); ok {

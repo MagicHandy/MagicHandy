@@ -113,7 +113,8 @@ func controlRoute(r *http.Request) bool {
 	if strings.HasPrefix(route, "/api/voice/requests/") ||
 		(strings.HasPrefix(route, "/api/library/") && strings.HasSuffix(route, "/play")) ||
 		singleResourceAction(route, "/api/library/feedback/", "/undo") ||
-		singleResourceAction(route, "/api/media/videos/", "/metadata") {
+		singleResourceAction(route, "/api/media/videos/", "/metadata") ||
+		singleResourceAction(route, "/api/remote/commands/", "/claim") {
 		return true
 	}
 	switch route {

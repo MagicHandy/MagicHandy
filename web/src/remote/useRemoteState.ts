@@ -12,37 +12,51 @@ export interface RemoteView {
   refresh: () => void;
 }
 
-const newer = (next: RemoteState, current: RemoteState | null) =>
-  !current || next.revision >= current.revision || next.connected !== current.connected || next.other_account !== current.other_account;
-
 // What the desktop shows, for the phone. The stream is open only while this
 // page is in front; a read fills the gap after a drop.
 export function useRemoteState(enabled: boolean): RemoteView {
   const [view, setView] = useState<Omit<RemoteView, "refresh">>({ state: null, receivedAt: 0, stale: false, error: "" });
-  const current = useRef<RemoteState | null>(null);
-  const accept = useCallback((next: RemoteState, fromStream: boolean) => {
-    if (!fromStream && !newer(next, current.current)) return;
-    current.current = next;
-    setView({ state: next, receivedAt: Date.now(), stale: false, error: "" });
-  }, []);
-
-  const refresh = useCallback(() => {
-    void api.remoteState().then(
-      (response) => accept(response.remote, false),
-      (reason: unknown) => setView((previous) => ({ ...previous, stale: true, error: reason instanceof Error ? reason.message : "" })),
-    );
-  }, [accept]);
+  const refreshCurrent = useRef<() => void>(() => undefined);
+  const refresh = useCallback(() => refreshCurrent.current(), []);
 
   useEffect(() => {
+    setView({ state: null, receivedAt: 0, stale: true, error: "" });
     if (!enabled) return;
     let source: EventSource | null = null;
     let closed = false;
     let failures = 0;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let observation = 0;
+    let read: AbortController | undefined;
+    const accept = (next: RemoteState) => {
+      observation += 1;
+      setView({ state: next, receivedAt: Date.now(), stale: false, error: "" });
+    };
+    const refresh = () => {
+      read?.abort();
+      const request = new AbortController();
+      read = request;
+      const observed = observation;
+      const current = () => !closed && !request.signal.aborted && observed === observation;
+      void api.remoteState(request.signal).then(
+        (response) => { if (current()) accept(response.remote); },
+        (reason: unknown) => {
+          if (current()) setView((previous) => ({ ...previous, stale: true, error: reason instanceof Error ? reason.message : "" }));
+        },
+      );
+    };
+    refreshCurrent.current = refresh;
     const disconnect = () => {
       clearTimeout(retryTimer);
       source?.close();
       source = null;
+    };
+    const retry = () => {
+      disconnect();
+      setView((previous) => ({ ...previous, stale: true }));
+      refresh();
+      failures += 1;
+      retryTimer = setTimeout(connect, Math.min(10_000, 1_000 * 2 ** Math.min(failures - 1, 4)));
     };
     const connect = () => {
       disconnect();
@@ -51,6 +65,7 @@ export function useRemoteState(enabled: boolean): RemoteView {
       try {
         current = new EventSource(api.remoteEventsURL());
       } catch {
+        retry();
         return;
       }
       source = current;
@@ -58,32 +73,34 @@ export function useRemoteState(enabled: boolean): RemoteView {
         if (source !== current) return;
         failures = 0;
         try {
-          accept(JSON.parse((event as MessageEvent).data) as RemoteState, true);
+          accept(JSON.parse((event as MessageEvent).data) as RemoteState);
         } catch {
           /* ignore */
         }
       });
       current.onerror = () => {
         if (source !== current) return;
-        disconnect();
-        setView((previous) => ({ ...previous, stale: true }));
-        refresh();
-        failures += 1;
-        retryTimer = setTimeout(connect, Math.min(10_000, 1_000 * 2 ** Math.min(failures - 1, 4)));
+        retry();
       };
     };
     const visibility = () => {
-      if (document.visibilityState === "hidden") disconnect();
+      if (document.visibilityState === "hidden") {
+        disconnect();
+        read?.abort();
+        setView((previous) => ({ ...previous, stale: true }));
+      }
       else connect();
     };
     connect();
     document.addEventListener("visibilitychange", visibility);
     return () => {
       closed = true;
+      read?.abort();
+      refreshCurrent.current = () => undefined;
       disconnect();
       document.removeEventListener("visibilitychange", visibility);
     };
-  }, [accept, enabled, refresh]);
+  }, [enabled]);
 
   return { ...view, refresh };
 }

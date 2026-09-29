@@ -28,11 +28,12 @@ interface Props {
    * own the device; replies are then words only (ADR 0032).
    */
   motionOwner?: "script" | "off";
+  disabled?: boolean;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChanged, motionOwner }: Props) {
+export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChanged, motionOwner, disabled = false }: Props) {
   const { backendOnline, readOnly, state, refresh } = useAppState();
   const { show } = useToast();
   const { queueSpeech } = useVoicePlayback();
@@ -111,7 +112,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   }
 
   const historyUnavailable = historyLoading || Boolean(historyError);
-  const locked = !backendOnline || !state || readOnly || historyUnavailable;
+  const locked = disabled || !backendOnline || !state || readOnly || historyUnavailable;
   const assistantName = personaName?.trim() || "MagicHandy";
 
   // Speech input shows only when it can work: voice on and an ASR provider
@@ -124,13 +125,17 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
 
   // A phone remote sends through this composer's path, so its message is
   // fenced by the same Stop sequence and spoken by this tab (ADR 0032).
-  const remoteSend = useRef<(text: string) => void>(() => undefined);
+  const remoteSend = useRef<(text: string, stopSequence: number) => boolean>(() => false);
   useLayoutEffect(() => {
-    remoteSend.current = (text) => void sendText(text, state?.stop_sequence);
+    remoteSend.current = (text, stopSequence) => {
+      if (locked || busyRef.current || voiceActive || !text.trim() || stopSequence !== state?.stop_sequence) return false;
+      void sendText(text, stopSequence);
+      return true;
+    };
   });
   const remoteReady = !locked && !voiceActive;
   const remoteChat = useMemo(() => ({
-    sessionId, personaName: assistantName, busy, ready: remoteReady, send: (text: string) => remoteSend.current(text),
+    sessionId, personaName: assistantName, busy, ready: remoteReady, send: (text: string, stopSequence: number) => remoteSend.current(text, stopSequence),
   }), [sessionId, assistantName, busy, remoteReady]);
   useRemoteChatSurface(remoteChat);
 

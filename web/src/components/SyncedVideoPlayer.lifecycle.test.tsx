@@ -115,7 +115,9 @@ describe("synchronized video lifecycle", () => {
     result.rerender(<SyncedVideoPlayer video={plain} locked stopSequence={8} />);
     expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
     expect(mediaSync).not.toHaveBeenCalled();
-    expect(player).toHaveAttribute("controls");
+    expect(player).not.toHaveAttribute("controls");
+    expect(screen.getByRole("button", { name: "Enter fullscreen" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
   });
 
   it("retains the pending Stop across repeated buffering events", async () => {

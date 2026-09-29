@@ -126,7 +126,7 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ### 2026-09-27 video curation, chat beside the video and phone remote
 
-Catalog videos carry a title, rating, notes and tags (schema v27), edited per
+Catalog videos carry a title, rating, notes and tags (schema v28), edited per
 video or in bulk and filtered in the grid. The player page opens the active
 conversation beside the picture. A phone remote at `#/remote` asks the desktop
 tab that holds control to drive its video or send to its chat; the desktop runs

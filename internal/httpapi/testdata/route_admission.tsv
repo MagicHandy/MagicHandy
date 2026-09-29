@@ -178,6 +178,7 @@ host	POST /api/personas/{id}/lore
 host	POST /api/personas/{id}/portrait
 host	POST /api/prompt-sets
 control	POST /api/remote/commands
+control	POST /api/remote/commands/{id}/claim
 control	POST /api/remote/presence
 host	POST /api/settings/reset
 host	POST /api/setup/complete

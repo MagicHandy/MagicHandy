@@ -622,6 +622,9 @@ export interface MediaMetadataPatch {
   tags?: string[];
 }
 
+/** Acknowledged server fields; player metadata must not replace newer curation. */
+export type MediaVideoUpdate = Pick<MediaVideo, "id"> & Partial<MediaVideo>;
+
 export interface MediaTagCount {
   tag: string;
   count: number;

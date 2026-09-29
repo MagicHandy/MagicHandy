@@ -1,5 +1,5 @@
 import { t, translateKnown } from "../i18n";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
 import type { RemoteCommandInput, RemoteOutcome, RemoteState } from "../api/remote-types";
 
@@ -14,23 +14,33 @@ export interface RemoteCommandStatus {
 const WAITING_NOTICE_MS = 700;
 
 /** Sends commands and follows the newest one until the desktop reports it. */
-export function useRemoteCommands(state: RemoteState | null) {
+export function useRemoteCommands(state: RemoteState | null, stopSequence: number | undefined) {
   const [lastID, setLastID] = useState("");
   const [sendError, setSendError] = useState("");
   const [waitingVisible, setWaitingVisible] = useState(false);
+  const request = useRef(0);
 
   const send = useCallback<RemoteSend>(async (command) => {
+    if (stopSequence === undefined) return "";
+    const current = ++request.current;
     setSendError("");
     try {
-      const response = await api.sendRemoteCommand(command);
-      setLastID(response.command.id);
+      const bound = command.action === "open" ? command : command.target === "video"
+        ? { ...command, video_id: state?.video?.video_id }
+        : { ...command, session_id: state?.chat?.session_id };
+      const response = await api.sendRemoteCommand(bound, stopSequence);
+      if (current === request.current) setLastID(response.command.id);
       return response.command.id;
     } catch (reason) {
-      setLastID("");
-      setSendError(remoteSendError(reason));
+      if (current === request.current) {
+        setLastID("");
+        setSendError(remoteSendError(reason));
+      }
       return "";
     }
-  }, []);
+  }, [state?.video?.video_id, state?.chat?.session_id, stopSequence]);
+
+  useEffect(() => () => { request.current += 1; }, [stopSequence]);
 
   const outcome = outcomeFor(state, lastID);
   const waiting = Boolean(lastID) && !outcome;

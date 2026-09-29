@@ -10,6 +10,7 @@ import { chatMotionOwner, motionSourceNote, type MotionSource } from "./motionSo
 interface Props {
   /** What moves the device while the video plays. */
   source: MotionSource;
+  switching?: boolean;
   onClose: () => void;
 }
 
@@ -17,7 +18,7 @@ interface Props {
 // Chat page shows, so switching pages keeps one conversation, and replies are
 // spoken by this tab when it holds control, as on the Chat page. Unless the
 // chat is the motion source, its replies are words only.
-export function VideoChatSide({ source, onClose }: Props) {
+export function VideoChatSide({ source, switching, onClose }: Props) {
   const { state } = useAppState();
   const activeID = state?.chat?.active_session_id ?? "";
   const [workspace, setWorkspace] = useState<ChatSessionsResponse | null>(null);
@@ -62,7 +63,7 @@ export function VideoChatSide({ source, onClose }: Props) {
           <button type="button" className="btn btn-secondary compact-command" onClick={() => void load()}>{t("Retry")}</button>
         </div>
       ) : session ? (
-        <ChatPanel key={session.id} sessionId={session.id} personaName={session.persona_name} motionOwner={chatMotionOwner(source)} onSessionChanged={() => void load()} />
+        <ChatPanel key={session.id} sessionId={session.id} personaName={session.persona_name} disabled={switching} motionOwner={chatMotionOwner(source)} onSessionChanged={() => void load()} />
       ) : (
         <div className="video-chat-state" role="status">{t("Loading chats...")}</div>
       )}

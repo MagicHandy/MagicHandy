@@ -38,11 +38,14 @@ function RemoteChatSession({ chat, state, send, latestSeq }: Props & { chat: Rem
   const [loadError, setLoadError] = useState("");
   const [draft, setDraft] = useState("");
   const [sent, setSent] = useState<{ id: string; text: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const submitting = useRef(false);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const abort = new AbortController();
     api.getChatMessages(chat.session_id, 0, { signal: abort.signal }).then((page) => {
+      if (abort.signal.aborted) return;
       setMessages(page.messages.slice(-SHOWN_MESSAGES));
       setLoadError("");
     }, (reason: unknown) => {
@@ -66,14 +69,18 @@ function RemoteChatSession({ chat, state, send, latestSeq }: Props & { chat: Rem
 
   async function submit() {
     const text = draft.trim();
-    if (!text || chat.busy || sent) return;
+    if (!text || chat.busy || !chat.ready || sent || submitting.current) return;
+    submitting.current = true;
+    setSending(true);
     setDraft("");
     const id = await send({ target: "chat", action: "send", text });
     if (id) setSent({ id, text });
     else setDraft((current) => current || text);
+    submitting.current = false;
+    setSending(false);
   }
 
-  const blocked = chat.busy || !chat.ready || Boolean(sent);
+  const blocked = chat.busy || !chat.ready || sending || Boolean(sent);
   return (
     <section className="remote-chat" aria-label={t("Desktop chat")}>
       <div className="remote-chat-log" ref={logRef} role="log" aria-live="polite">

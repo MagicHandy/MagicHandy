@@ -1,7 +1,7 @@
 import { formatNumber, t, translateKnown } from "../i18n";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api } from "../api/client";
-import type { MediaSyncStatus, MediaVideo } from "../api/types";
+import type { MediaSyncStatus, MediaVideo, MediaVideoUpdate } from "../api/types";
 import { VideoPlaybackController, type SyncOperation, type VideoPlayerHandle } from "../media/playbackController";
 import { ChevronUpIcon, GearIcon } from "../shell/icons";
 import { formatTimelineTime } from "./ImportTimeline";
@@ -17,7 +17,7 @@ interface Props {
   video: MediaVideo;
   locked: boolean;
   stopSequence?: number;
-  onVideoUpdate?: (video: MediaVideo) => void;
+  onVideoUpdate?: (video: MediaVideoUpdate) => void;
   /** Offered by the library when the browser refuses to decode this file. */
   onRequestConversion?: () => void;
   conversionBusy?: boolean;
@@ -59,8 +59,8 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     controller.connect();
     return () => controller.disconnect();
   }, [controller]);
-  useEffect(() => controller.setLocked(locked), [controller, locked]);
-  useEffect(() => controller.setStopSequence(stopSequence), [controller, stopSequence]);
+  useLayoutEffect(() => controller.setLocked(locked), [controller, locked]);
+  useLayoutEffect(() => controller.setStopSequence(stopSequence), [controller, stopSequence]);
   // Persisted decoder metadata can arrive during playback. It updates the
   // controls without replacing the script or resetting the active session.
   useEffect(() => controller.setDuration(video.duration_ms ?? 0), [controller, video.duration_ms]);
@@ -94,9 +94,9 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     const container = player?.closest<HTMLElement>("[data-fullscreen-root]") ?? player?.closest<HTMLElement>(".media-player");
     if (!container) return;
     if (document.fullscreenElement) {
-      if (document.exitFullscreen) void document.exitFullscreen();
+      if (document.exitFullscreen) void document.exitFullscreen().catch(() => undefined);
     } else if (container.requestFullscreen) {
-      void container.requestFullscreen();
+      void container.requestFullscreen().catch(() => undefined);
     }
   }
 
@@ -113,13 +113,14 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
       video={video}
       allowMetadataWrite={!locked}
       allowLibraryWrite={!locked && state?.capabilities?.configure_host !== false}
-      controlsEnabled={!scriptLoading && !script}
+      controlsEnabled={false}
       busy={scriptLoading}
-      videoOverlay={script ? (
+      videoOverlay={!scriptLoading ? (
         <SynchronizedVideoControls
-          autoHide={snapshot.playbackIntent && sync.active && !operation}
+          synchronized={Boolean(script)}
+          autoHide={snapshot.playbackIntent && (!script || sync.active) && !operation}
           currentTimeMillis={snapshot.currentTimeMillis}
-          durationMillis={snapshot.durationMillis || script.duration_ms}
+          durationMillis={snapshot.durationMillis || script?.duration_ms || 0}
           muted={snapshot.muted}
           playbackIntent={snapshot.playbackIntent}
           playbackRate={snapshot.playbackRate}
@@ -130,7 +131,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
           onSeekCancel={controller.cancelSeek}
           onSeekCommit={controller.commitSeek}
           onSeekStart={controller.beginSeek}
-          onTogglePlayback={controller.togglePlayback}
+          onTogglePlayback={() => { controller.commands.toggle(); }}
           onVolumeChange={controller.setVolume}
         />
       ) : undefined}

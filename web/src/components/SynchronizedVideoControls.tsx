@@ -16,6 +16,7 @@ import {
 import { formatTimelineTime } from "./ImportTimeline";
 
 interface Props {
+  synchronized?: boolean;
   autoHide: boolean;
   currentTimeMillis: number;
   durationMillis: number;
@@ -36,6 +37,7 @@ interface Props {
 const AUTO_HIDE_DELAY_MS = 2_000;
 
 export function SynchronizedVideoControls({
+  synchronized = true,
   autoHide,
   currentTimeMillis,
   durationMillis,
@@ -169,17 +171,17 @@ export function SynchronizedVideoControls({
       onFocusCapture={handleFocus}
       onBlurCapture={handleBlur}
     >
-      <div className="media-transport-controls" role="group" aria-label={t("Synchronized video controls")}>
+      <div className="media-transport-controls" role="group" aria-label={synchronized ? t("Synchronized video controls") : t("Video playback")}>
         <button
           type="button"
           className="icon-button media-transport-play"
-          title={playbackIntent ? t("Pause video and motion") : t("Play video with paired motion")}
-          aria-label={playbackIntent ? t("Pause video and motion") : t("Play video with paired motion")}
+          title={synchronized ? (playbackIntent ? t("Pause video and motion") : t("Play video with paired motion")) : (playbackIntent ? t("Pause") : t("Play"))}
+          aria-label={synchronized ? (playbackIntent ? t("Pause video and motion") : t("Play video with paired motion")) : (playbackIntent ? t("Pause") : t("Play"))}
           onClick={onTogglePlayback}
         >
           {playbackIntent ? <PauseIcon /> : <PlayIcon />}
         </button>
-        <span className="media-transport-time" aria-hidden="true">{formatTimelineTime(displayedTime)}</span>
+        <span className="media-transport-time" aria-hidden="true">{formatTimelineTime(Math.floor(displayedTime / 1000) * 1000)}</span>
         <input
           type="range"
           className="media-transport-seek"
@@ -210,7 +212,7 @@ export function SynchronizedVideoControls({
             else if (dragging.current) cancelPointerSeek();
           }}
         />
-        <span className="media-transport-time" aria-hidden="true">{formatTimelineTime(duration)}</span>
+        <span className="media-transport-time" aria-hidden="true">{formatTimelineTime(Math.floor(duration / 1000) * 1000)}</span>
         <div className="media-transport-volume-control">
           <button
             type="button"
