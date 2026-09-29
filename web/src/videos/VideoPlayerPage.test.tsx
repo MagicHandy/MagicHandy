@@ -6,11 +6,14 @@ import type { MediaVideo } from "../api/types";
 import type { VideoPlayerHandle } from "../media/playbackController";
 import { VideoPlayerPage } from "./VideoPlayerPage";
 
-const app = vi.hoisted(() => ({ modesRunning: false }));
+const app = vi.hoisted(() => ({ modesRunning: false, mediaID: "" }));
 
 vi.mock("../api/client", () => ({ api: { getChatSessions: vi.fn(), stopMode: vi.fn() } }));
 vi.mock("../state/app-state", () => ({
-  useAppState: () => ({ state: { chat: { active_session_id: "session-2" }, modes: { running: app.modesRunning } } }),
+  useAppState: () => ({ state: {
+    chat: { active_session_id: "session-2" }, modes: { running: app.modesRunning },
+    motion: { engine: { running: Boolean(app.mediaID), target: { media_id: app.mediaID } } },
+  } }),
   useToast: () => ({ show: vi.fn() }),
 }));
 vi.mock("../components/ChatPanel", () => ({
@@ -49,6 +52,7 @@ describe("motion source beside the video", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     app.modesRunning = false;
+    app.mediaID = "";
     releaseMotion.mockResolvedValue(true);
     localStorage.setItem("magichandy-video-chat-open", "true");
     vi.mocked(api.getChatSessions).mockResolvedValue({
@@ -81,6 +85,13 @@ describe("motion source beside the video", () => {
     fireEvent.click(option("Off"));
     await waitFor(() => expect(option("Off")).toBeChecked());
     expect(api.stopMode).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the new video's script selected while a previous video's run drains", async () => {
+    app.mediaID = "previous-video";
+    renderPage(base);
+    expect(option("Script")).toBeChecked();
+    expect(await screen.findByTestId("chat-panel")).toHaveAttribute("data-motion-owner", "script");
   });
 
   it("hands motion to the chat without the script, and stops chat motion when leaving it", async () => {

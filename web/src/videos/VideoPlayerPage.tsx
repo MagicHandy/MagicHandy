@@ -52,8 +52,9 @@ export function VideoPlayerPage({
   // that run through the ordinary mode stop before changing the choice.
   const initialSource = useMemo<MotionSource>(() => {
     const engine = state?.motion?.engine;
-    const existing = state?.modes?.running || engine?.running || engine?.starting || engine?.paused;
-    return existing && engine?.target?.media_id !== video.id ? "chat" : defaultMotionSource(video.has_funscript);
+    const backgroundMotion = !engine?.target?.media_id && (engine?.running || engine?.starting || engine?.paused);
+    const existing = state?.modes?.running || backgroundMotion;
+    return existing ? "chat" : defaultMotionSource(video.has_funscript);
   }, [video.id, video.has_funscript]);
   const source = choice?.videoID === video.id ? choice.source : initialSource;
   const latest = useRef({ source, handle, locked, stopSequence, videoID: video.id });
