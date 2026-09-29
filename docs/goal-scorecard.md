@@ -10,13 +10,13 @@ through a focused shared component. No dependency or generated image was shipped
 
 | Artifact | Prior reviewed checkpoint (`b7f13b40`) | This checkpoint | Change |
 | --- | ---: | ---: | ---: |
-| Windows amd64, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,565,888 B | 22,683,648 B | +117,760 B |
-| Main JS, raw / Node gzip-9 | 928,746 / 254,524 B | 954,445 / 261,165 B | +25,699 / +6,641 B |
-| Main CSS, raw / Node gzip-9 | 158,156 / 28,406 B | 164,991 / 29,627 B | +6,835 / +1,221 B |
+| Windows amd64, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,565,888 B | 22,691,840 B | +125,952 B |
+| Main JS, raw / Node gzip-9 | 928,746 / 254,524 B | 956,088 / 261,457 B | +27,342 / +6,933 B |
+| Main CSS, raw / Node gzip-9 | 158,156 / 28,406 B | 169,876 / 30,354 B | +11,720 / +1,948 B |
 | Separate remote JS/CSS chunk, raw | 18,268 B | folded into entry | — |
-| All embedded assets | 2,399,315 B | 2,429,017 B | +29,702 B |
+| All embedded assets | 2,399,315 B | 2,436,924 B | +37,609 B |
 
-The current review process with two authenticated interfaces, two synthetic videos
+The earlier review process with two authenticated interfaces, two synthetic videos
 and completed account/LLM requests used 97,427,456 B working set and 84,127,744 B
 private memory at the sampled point. Authentication's bounded Argon2 work is part
 of this workload. This is not an idle or soak comparison; the existing SQLite
@@ -24,6 +24,9 @@ memory waiver remains. The core remains below the 30 MB binary budget. The main
 bundle's 900 kB advisory stays enabled. Video catalog responses cap at 60 rows;
 chat responses cap at 40 committed messages and 2048 characters per message.
 See [the standards and capability review](remote-access-review-2026-09-29.md).
+The current artifact sizes include the flat-control visual refinement and saved
+sidebar preference. Its extra CSS costs 727 B gzip over the first remote design;
+no dependency or image asset was added.
 
 ## 2026-09-29 — Video and remote completion review
 

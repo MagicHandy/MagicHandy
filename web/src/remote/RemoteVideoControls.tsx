@@ -44,17 +44,9 @@ export function RemoteVideoControls({ video, position, send }: Props) {
         <p className="remote-video-state">
           {!video.ready ? t("Loading the paired script…") : syncLabel}
         </p>
-      </div>
-
-      <div className="remote-source">
-        <SegmentedChoice
-          className="remote-source-choice"
-          label={t("Motion source")}
-          value={source}
-          options={motionSourceOptions(Boolean(video.has_script))}
-          onChange={(next) => void send({ target: "video", action: "source", source: next })}
-        />
-        <p className="remote-source-note">{motionSourceNote(source)}</p>
+        <button type="button" className="btn btn-secondary remote-close" onClick={() => void send({ target: "video", action: "close" })}>
+          {t("Close video")}
+        </button>
       </div>
 
       <div className="remote-scrubber">
@@ -109,6 +101,7 @@ export function RemoteVideoControls({ video, position, send }: Props) {
       </div>
 
       <div className="remote-audio">
+        <div className="remote-volume">
         <button
           type="button"
           className="icon-button remote-mute"
@@ -130,6 +123,8 @@ export function RemoteVideoControls({ video, position, send }: Props) {
           aria-valuetext={t("{n}%", { n: volume.draft ?? Math.round(video.volume * 100) })}
           onChange={(event) => volume.change(Number(event.target.value))}
         />
+        <output className="remote-volume-value" htmlFor="remote-volume">{t("{n}%", { n: volume.draft ?? Math.round(video.volume * 100) })}</output>
+        </div>
         <label className="remote-rate">
           <span>{t("Speed")}</span>
           <select value={String(video.rate)} aria-label={t("Video playback speed")} disabled={!video.ready} onChange={(event) => void send({ target: "video", action: "rate", value: Number(event.target.value) })}>
@@ -139,9 +134,16 @@ export function RemoteVideoControls({ video, position, send }: Props) {
         </label>
       </div>
 
-      <button type="button" className="btn btn-secondary remote-close" onClick={() => void send({ target: "video", action: "close" })}>
-        {t("Close video")}
-      </button>
+      <div className="remote-source">
+        <SegmentedChoice
+          className="remote-source-choice"
+          label={t("Motion source")}
+          value={source}
+          options={motionSourceOptions(Boolean(video.has_script))}
+          onChange={(next) => void send({ target: "video", action: "source", source: next })}
+        />
+        <p className="remote-source-note">{motionSourceNote(source)}</p>
+      </div>
     </section>
   );
 }

@@ -1045,6 +1045,7 @@ export interface PublicSettings {
     setup_completed?: boolean;
     update_check_mode?: "automatic" | "manual" | string;
     notification_categories?: NotificationCategory[];
+    show_remote_navigation?: boolean;
   };
   media?: MediaSettingsPayload;
   device: {
@@ -1302,6 +1303,7 @@ export interface SettingsUpdate {
     setup_completed: boolean;
     update_check_mode: "automatic" | "manual" | string;
     notification_categories: NotificationCategory[];
+    show_remote_navigation?: boolean;
   };
   media: MediaSettingsPayload;
   device: {

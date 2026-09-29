@@ -2442,5 +2442,7 @@
   "Account access changed": "账号访问权限已更改",
   "this account can sign in only to the remote interface": "此账号只能登录遥控界面。",
   "For the remote interface, forward public TCP {external} to local TCP {port} and allow TCP {port} in the host firewall.": "使用远程界面时，请将公网 TCP {external} 转发至本地 TCP {port}，并在主机防火墙中允许 TCP {port}。",
-  "This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations.": "此权限向该仅限远程的账户共享视频库、你的桌面播放和当前对话，不授予设置、文件或其他对话的访问权。"
+  "This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations.": "此权限向该仅限远程的账户共享视频库、你的桌面播放和当前对话，不授予设置、文件或其他对话的访问权。",
+  "Show Remote in sidebar": "在侧边栏显示遥控器",
+  "Hides only the shortcut. The remote remains available at its own address. Applies to every browser after Save settings.": "仅隐藏快捷入口。遥控器仍可通过其独立地址访问。保存设置后将应用于所有浏览器。"
 }

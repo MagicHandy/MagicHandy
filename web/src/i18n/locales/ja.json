@@ -2442,5 +2442,7 @@
   "Account access changed": "アカウントのアクセスを変更",
   "this account can sign in only to the remote interface": "このアカウントはリモート画面にのみログインできます。",
   "For the remote interface, forward public TCP {external} to local TCP {port} and allow TCP {port} in the host firewall.": "リモート画面には、公開 TCP {external} をローカル TCP {port} に転送し、ホストのファイアウォールで TCP {port} を許可してください。",
-  "This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations.": "この権限は、動画ライブラリ、デスクトップでの再生、現在の会話をリモート専用アカウントと共有します。設定、ファイル、その他の会話へのアクセスは許可しません。"
+  "This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations.": "この権限は、動画ライブラリ、デスクトップでの再生、現在の会話をリモート専用アカウントと共有します。設定、ファイル、その他の会話へのアクセスは許可しません。",
+  "Show Remote in sidebar": "サイドバーにリモートを表示",
+  "Hides only the shortcut. The remote remains available at its own address. Applies to every browser after Save settings.": "ショートカットだけを非表示にします。リモートは専用アドレスから引き続き利用できます。「設定を保存」後、すべてのブラウザーに適用されます。"
 }

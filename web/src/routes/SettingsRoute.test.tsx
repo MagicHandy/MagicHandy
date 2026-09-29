@@ -269,7 +269,7 @@ describe("SettingsRoute", () => {
     })));
   });
 
-  it("persists the selected interface language", async () => {
+  it("persists interface language and remote sidebar visibility together", async () => {
     app.hash = "#/settings/general";
     getSettings.mockResolvedValue({ settings: settings("normal") });
     render(<SettingsRoute />);
@@ -277,12 +277,15 @@ describe("SettingsRoute", () => {
     const language = await screen.findByRole("combobox", { name: "Language" });
     expect(language).toHaveValue("en");
     expect(screen.getByRole("option", { name: "Português (Brasil)" })).toHaveValue("pt-BR");
+    expect(screen.getByRole("checkbox", { name: "Show Remote in sidebar" })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show Remote in sidebar" }));
     fireEvent.change(language, { target: { value: "ja" } });
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
     expect(saveSettings.mock.calls[0][0].ui).toEqual({
       locale: "ja",
+      show_remote_navigation: false,
       theme: "steel-azure",
       setup_completed: true,
       update_check_mode: "automatic",
@@ -311,6 +314,7 @@ describe("SettingsRoute", () => {
     expect(saveSettings.mock.calls[0][0].ui).toEqual({
       locale: "en",
       theme: "deep-violet",
+      show_remote_navigation: true,
       setup_completed: true,
       update_check_mode: "automatic",
       notification_categories: ["system", "voice", "updates"],

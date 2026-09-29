@@ -2442,5 +2442,7 @@
   "Account access changed": "Account access changed",
   "this account can sign in only to the remote interface": "this account can sign in only to the remote interface",
   "For the remote interface, forward public TCP {external} to local TCP {port} and allow TCP {port} in the host firewall.": "For the remote interface, forward public TCP {external} to local TCP {port} and allow TCP {port} in the host firewall.",
-  "This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations.": "This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations."
+  "This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations.": "This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations.",
+  "Show Remote in sidebar": "Show Remote in sidebar",
+  "Hides only the shortcut. The remote remains available at its own address. Applies to every browser after Save settings.": "Hides only the shortcut. The remote remains available at its own address. Applies to every browser after Save settings."
 }

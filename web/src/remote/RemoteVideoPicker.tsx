@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import type { RemoteVideoItem } from "../api/remote-types";
 import { formatDuration } from "../videos/format";
+import { VideoIcon } from "../shell/icons";
 import type { RemoteSend } from "./useRemoteCommands";
 
 // Display-only, bounded catalog pages: no file paths or private metadata.
@@ -29,14 +30,16 @@ export function RemoteVideoPicker({ currentID, send }: { currentID?: string; sen
     return () => { clearTimeout(timer);abort.abort(); };
   },[query,offset]);
   return <section className="remote-picker" aria-label={t("Open a video on the desktop")}>
-    <div className="remote-section-heading"><h2>{t("Video library")}</h2></div>
+    <div className="remote-section-heading"><h2>{t("Video library")}</h2>
     <input type="search" className="remote-picker-search" value={query} placeholder={t("Search titles and tags")} aria-label={t("Search videos")}
       onChange={event => { setQuery(event.target.value);setOffset(0);setItems([]);setNext(null); }} />
+    </div>
     {error && <p className="form-status" role="alert">{error}</p>}
     {loading && <p className="form-status" role="status">{t("Loading videos")}</p>}
     {!error && !loading && items.length === 0 && <p className="form-status">{query ? t("No videos match the filters.") : t("No videos yet")}</p>}
     <ul className="remote-picker-list">{items.map(video => <li key={video.id}>
       <button type="button" className="remote-picker-item" aria-current={video.id === currentID || undefined} onClick={() => void send({ target:"video",action:"open",video_id:video.id })}>
+        <span className="remote-picker-symbol" aria-hidden="true"><VideoIcon size={22} /></span>
         <span className="remote-picker-title">{video.title}</span><span className="remote-picker-meta">{translateKnown(formatDuration(video.duration_ms))}{video.has_funscript && <span>{t("Script")}</span>}</span>
       </button>
     </li>)}</ul>

@@ -30,7 +30,7 @@ export function RemoteRoute({ remote, canControl, onRefresh }: { remote: RemoteV
     }
   }
 
-  return <div className="remote-page">
+  return <div className="remote-page" data-mode={mode}>
     <div className="remote-connection-row"><RemoteConnection remote={remote} /><button className="btn btn-secondary small" type="button" onClick={onRefresh || remote.refresh}>{t("Refresh")}</button></div>
     {!canControl ? <p className="remote-notice" role="status">{t("Ask the administrator for a control permission to use this remote.")}</p> : <>
       <SegmentedChoice className="remote-mode" label={t("Control")} value={mode}
@@ -52,7 +52,7 @@ export function RemoteRoute({ remote, canControl, onRefresh }: { remote: RemoteV
   </div>;
 }
 
-function RemoteConnection({ remote }: { remote: RemoteView }) {
+export function RemoteConnection({ remote }: { remote: RemoteView }) {
   const state = remote.state;
   let tone: "ok" | "warn" | "idle" = "idle";
   let text: string;

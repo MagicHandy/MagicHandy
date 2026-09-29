@@ -2442,5 +2442,7 @@
   "Account access changed": "Acceso de cuenta cambiado",
   "this account can sign in only to the remote interface": "Esta cuenta solo puede iniciar sesión en la interfaz remota.",
   "For the remote interface, forward public TCP {external} to local TCP {port} and allow TCP {port} in the host firewall.": "Para la interfaz remota, reenvía el puerto TCP público {external} al TCP local {port} y permite TCP {port} en el cortafuegos del equipo.",
-  "This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations.": "Este permiso comparte la biblioteca de vídeos, la reproducción del escritorio y tu conversación activa con esta cuenta de solo control remoto. No da acceso a ajustes, archivos ni otras conversaciones."
+  "This permission shares the video library, your desktop playback and your active conversation with this remote-only account. It does not grant access to settings, files, or other conversations.": "Este permiso comparte la biblioteca de vídeos, la reproducción del escritorio y tu conversación activa con esta cuenta de solo control remoto. No da acceso a ajustes, archivos ni otras conversaciones.",
+  "Show Remote in sidebar": "Mostrar Control remoto en la barra lateral",
+  "Hides only the shortcut. The remote remains available at its own address. Applies to every browser after Save settings.": "Solo oculta el acceso directo. El control remoto sigue disponible en su propia dirección. Se aplica a todos los navegadores después de Guardar ajustes."
 }

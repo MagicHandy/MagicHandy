@@ -8,6 +8,7 @@ const app = vi.hoisted(() => ({
   route: "#/chat",
   refresh: vi.fn(),
   show: vi.fn(),
+  showRemoteNavigation: true,
 }));
 
 vi.mock("../api/client", () => ({
@@ -20,6 +21,7 @@ vi.mock("../state/app-state", () => ({
   useAppState: () => ({
     state: {
       settings: {
+        ui: { show_remote_navigation: app.showRemoteNavigation },
         device: { hsp_dispatch_owner: "cloud_rest" },
         llm: { motion_generation_mode: "pattern", motion_capabilities: { motion: true } },
       },
@@ -52,6 +54,17 @@ describe("shell accessibility", () => {
   it("names the manual speed slider explicitly", () => {
     render(<ManualMotionTest />);
     expect(screen.getByRole("slider", { name: "Speed" })).toHaveValue("50");
+  });
+
+  it("honors saved remote shortcut visibility without hiding Stop", () => {
+    app.showRemoteNavigation = true;
+    const view = render(<NavRail remoteURL="https://localhost:49718/" />);
+    expect(screen.getByRole("link", { name: "Remote" })).toHaveAttribute("href", "https://localhost:49718/");
+    app.showRemoteNavigation = false;
+    view.rerender(<NavRail remoteURL="https://localhost:49718/" />);
+    expect(screen.queryByRole("link", { name: "Remote" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Emergency Stop" })).toBeInTheDocument();
+    app.showRemoteNavigation = true;
   });
 
   it("updates the document title and focuses the route heading", () => {

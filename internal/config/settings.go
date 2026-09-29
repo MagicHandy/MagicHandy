@@ -870,6 +870,10 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		if update.UI.NotificationCategories != nil {
 			next.UI.NotificationCategories = append([]string{}, update.UI.NotificationCategories...)
 		}
+		if update.UI.ShowRemoteNavigation != nil {
+			show := *update.UI.ShowRemoteNavigation
+			next.UI.ShowRemoteNavigation = &show
+		}
 	}
 	if update.Media != nil {
 		next.Media = normalizeMediaSettings(mergeMediaUpdate(next.Media, *update.Media))

@@ -42,6 +42,8 @@ type UISettings struct {
 	SetupCompleted         bool     `json:"setup_completed"`
 	UpdateCheckMode        string   `json:"update_check_mode,omitempty"`
 	NotificationCategories []string `json:"notification_categories"`
+	// Omitted by older clients; nil retains the default visible shortcut.
+	ShowRemoteNavigation *bool `json:"show_remote_navigation,omitempty"`
 }
 
 // IsSupportedLocale reports whether locale has bundled UI and prompt catalogs.

@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { t, translateKnown } from "../i18n";
 import { useAuth } from "../state/auth";
 import { LoginRoute } from "../routes/LoginRoute";
-import { RemoteRoute } from "../routes/RemoteRoute";
+import { RemoteConnection, RemoteRoute } from "../routes/RemoteRoute";
 import { StopButton } from "../shell/StopButton";
-import { PersonaIcon } from "../shell/icons";
+import { PersonaIcon, RefreshIcon } from "../shell/icons";
 import { SessionSettingsPanel } from "../components/SessionSettingsPanel";
 import { RecoveryCodesPanel } from "../components/RecoveryCodesPanel";
 import { NoticePreferencesPanel } from "../components/NoticePreferencesPanel";
@@ -40,6 +40,10 @@ export function RemoteApplication() {
   return <div className="remote-application">
     <header className="remote-header">
       <h1>{t("MagicHandy Remote")}</h1>
+      {signedIn && <div className="remote-header-status">
+        <RemoteConnection remote={remote} />
+        <button className="icon-button" type="button" aria-label={t("Refresh")} title={t("Refresh")} onClick={() => { void auth.refresh(); remote.refresh(); }}><RefreshIcon /></button>
+      </div>}
       {auth.status?.authenticated && <div className="remote-account-actions">
         <button className="btn btn-secondary small remote-account-button" type="button" aria-label={t("Your account")} title={auth.status.account?.username} aria-expanded={accountOpen} onClick={() => setAccountOpen(value => !value)}><PersonaIcon /><span>{auth.status.account?.username}</span></button>
         <button className="btn btn-secondary small" type="button" disabled={signingOut} onClick={() => void logout()}>{t("Sign out")}</button>

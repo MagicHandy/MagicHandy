@@ -44,11 +44,22 @@ icon, while desktop places the two control areas side by side. No decorative acc
 lines, glow effects, card grid, or extra navigation tier was added. Mockup playlist
 counts were not treated as implemented features.
 
+The visual follow-up restores the concepts' structural borders: full-height
+desktop pane separation, pane headings, a divided chat composer, outlined volume
+controls and ruled library rows. Buttons have solid fills and crisp corners; the
+remote overrides the main application's gradients and shadows. The desktop status
+joins the header to leave more space for the catalog. General settings persists
+the optional Remote sidebar shortcut in the existing settings database. It does
+not disable the listener. Browser verification covered hiding, reloading and
+restoring the shortcut, plus 390px phone video/chat and desktop layouts.
+
 ## Verification
 
 - Full Go suite, Windows race suite, vet and golangci-lint pass with architecture,
   goroutine-lifecycle and admission gates enabled; no new dependency.
-- Frontend typecheck, localization, 736 tests in 96 files and canonical build pass.
+- Frontend typecheck, localization, 737 tests in 96 files and canonical build pass.
+  The added UI preference passes config tests, race tests and vet; older clients
+  cannot reset the saved shortcut preference by omitting the new field.
 - Installer tests pass in PowerShell 7 and Windows PowerShell 5.1. Runtime fixtures
   reserve non-overlapping app/remote port pairs and verify both remote listeners;
   the multi-instance teardown refusal remains enforced.
@@ -63,8 +74,8 @@ counts were not treated as implemented features.
   not WAN timing or real-device acceptance claims.
 - Review LLM: local Ollama `huihui_ai/granite4.1-abliterated:3b`, real generation plus
   a text-only application chat with no repair, fallback or motion.
-- Final review URLs: main `http://127.0.0.12:50205`, remote
-  `http://127.0.0.12:50206`. The final review app passed real LLM readiness and
+- Final review URLs: main `http://127.0.0.14:50235`, remote
+  `http://127.0.0.14:50236`. The final review app passed real LLM readiness and
   completed a text-only reply through the remote. Earlier live verification
   completed a 1.657s Ollama reply in one provider call without repair/fallback.
   Live revocation produced

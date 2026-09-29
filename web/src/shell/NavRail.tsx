@@ -44,7 +44,7 @@ export function NavRail({ authenticationLocked = false, remoteURL }: { authentic
         </span>
       </div>
       {!authenticationLocked && <div className="nav-links">
-        {LINKS.filter(l => l.base !== "remote" || remoteURL).map((l) => (
+        {LINKS.filter(l => l.base !== "remote" || (remoteURL && state?.settings?.ui?.show_remote_navigation !== false)).map((l) => (
           <a key={l.base} className="nav-link" href={l.base === "remote" ? remoteURL : l.href} target={l.base === "remote" ? "_blank" : undefined} rel={l.base === "remote" ? "noreferrer" : undefined} aria-label={translateKnown(l.label)} aria-current={active === l.base ? "page" : undefined}>
             <span className="icon"><l.Icon /></span>
             <span className="label">{translateKnown(l.label)}</span>

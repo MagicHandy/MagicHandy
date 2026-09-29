@@ -76,12 +76,19 @@ stacks under the video. With the chat open, fullscreen takes the video and the
 chat together. The chat column's note says who moves the device for the chosen
 source, and Script is dimmed with an explanation when a video has none.
 
-The rail's Remote link opens the dedicated remote origin in another tab; the
-legacy `#/remote` bookmark only links there. The remote has its own sign-in and
+The rail's Remote link opens the dedicated remote origin in another tab. General
+settings has a saved "Show Remote in sidebar" switch; it changes the shortcut
+across browsers without shutting down the listener. Older settings writes preserve
+that choice. The legacy `#/remote` bookmark only links there. The remote has its own sign-in and
 account self-service, without the main rail, controller acquisition or host
 settings. Phone layouts use a compact filled Video/Chat segmented choice and a
 single-row header with an accessible account icon. Desktop shows video and chat
-side by side. Controls use 36px targets, a 48px play button, whole-second clocks,
+side by side, separated by a continuous neutral border. The desktop connection
+readout joins the header; the chat composer has its own bottom divider. The phone
+keeps an outlined connection row and an inset Video/Chat selector. Flat controls
+use visible borders and solid fills, without inherited button gradients, shadows
+or rounded badges. Playback, motion source and library sections have clear neutral
+dividers. Controls use 36px targets, a 52px play button, whole-second clocks,
 10-second skips, mute, volume, speed, source choice and searchable catalog pages.
 Opening a video never starts it. Committed chat text stays bounded to the active
 conversation. Selected choices use a filled surface, never a left accent or
