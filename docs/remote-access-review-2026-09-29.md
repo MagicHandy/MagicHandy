@@ -60,11 +60,12 @@ counts were not treated as implemented features.
   not WAN timing or real-device acceptance claims.
 - Review LLM: local Ollama `huihui_ai/granite4.1-abliterated:3b`, real generation plus
   a text-only application chat with no repair, fallback or motion.
-- Final review URLs: main `http://127.0.0.12:50185`, remote
-  `http://127.0.0.12:50186`. The current remote completed a 1.657s Ollama
+- Final review URLs: main `http://127.0.0.12:50205`, remote
+  `http://127.0.0.12:50206`. The current remote completed a 1.657s Ollama
   reply in one provider call without repair/fallback. Live revocation produced
   403 for remote reads while Stop returned 200; restoring the grant restored reads.
   At 390px, the header fits one row and the transport labels do not wrap.
+  The desktop chat composer stays above Stop at short viewport heights.
 - Local trace and machine-readable QA reports live under
   `.scratch/remote-review-20260929/` and remain excluded from Git. Installed-instance
   data and credentials were not used. The preview browser's native confirmation

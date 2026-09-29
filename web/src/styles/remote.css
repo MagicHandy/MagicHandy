@@ -65,6 +65,10 @@
 .remote-account { max-width:760px; }
 .remote-account>.group { border-top:1px solid var(--line);margin-top:20px;padding-top:20px; }
 .remote-empty { max-width:640px;margin:auto; }
+@media(min-width:880px) {
+ .remote-chat { height:max(280px,calc(100dvh - 245px)); }
+ .remote-chat-column { position:sticky;top:0;align-self:start; }
+}
 @media(max-width:879px) {
  .remote-header { padding:10px 12px;flex-wrap:wrap;gap:8px; }
  .remote-header h1 { font-size:1rem; }
