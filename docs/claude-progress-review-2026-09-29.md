@@ -14,7 +14,7 @@ motion recipes, transports and LLM mode defaults were not changed.
 | P1 | An SSE command buffered in the desktop could execute after queue expiry or Emergency Stop, using a newly observed Stop sequence. | A one-shot backend claim revalidates expiry, original login/grant, target and executor. Execution retains the original Stop sequence and discards late claim responses. Local Stop invalidates pending execution immediately. |
 | P1 | A remote play/seek/message could affect the video or conversation opened after the command was sent. | Bind target identifiers when sending, check them again when claiming and executing, and discard pending scrubs when their video or Stop sequence changes. |
 | P1 | Remote outcomes remained visible to another account after the desktop disconnected or expired; replacing its account retained history. | Redact regardless of presence, clear old-account history on replacement, and keep the private sender reference out of serialized commands. |
-| P1 | The source switch announced its new owner before the previous source stopped. Its deferred script-load callback could resume after Stop. | Serialize the handoff, await Stop, keep the old choice on failure, invalidate stale completions, and require Play to start a newly selected script. Opening a video reflects existing background motion instead of calling it Off. |
+| P1 | The source switch announced its new owner before the previous source stopped. Its deferred script-load callback could resume after Stop. | Serialize the handoff, await Stop, keep the old choice on failure, invalidate stale completions, and require Play to start a newly selected script. Opening a video reflects existing background motion instead of calling it Off; a previous video draining does not change the new video’s default source. |
 | P1 | Fullscreen excluded the global Emergency Stop. Native controls on a plain video could enter fullscreen without the app controls. | Move the same Stop control into the fullscreen root and reserve space for it. Plain and paired videos share the app playback controls. |
 | P1 | A curation request admitted before logout or grant revocation could commit afterward. | Revalidate login and control permission inside the catalog write transaction. No account dependency is introduced into media. |
 | P2 | A late HTTP read could overwrite fresh remote stream state; stale controls remained usable. | Fence reads by stream observation and connection lifetime, abort on disable, retry failed stream construction, and hide unavailable controls. |
@@ -30,7 +30,7 @@ motion recipes, transports and LLM mode defaults were not changed.
   goroutine-lifecycle gates remain enabled.
 - `govulncheck v1.8.0` found no reachable vulnerabilities. Three advisories
   exist in required modules without affected packages/symbols used here.
-- Frontend typechecking, localization checks, all **731 tests in 96 files**,
+- Frontend typechecking, localization checks, all **732 tests in 96 files**,
   and the canonical production build passed. Existing bundle-size warnings
   remain advisory; their thresholds were not changed.
 - Migration tests cover released schema v26 and a v27 preview containing

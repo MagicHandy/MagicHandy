@@ -10,10 +10,10 @@ See [the review and validation](claude-progress-review-2026-09-29.md).
 | Artifact | Claude checkpoint (`453ff2da`) | Reviewed checkpoint | Change |
 | --- | ---: | ---: | ---: |
 | Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,521,856 B | 22,565,888 B | +44,032 B |
-| Main JS, raw / Node gzip-9 | 925,158 / 253,608 B | 928,754 / 254,526 B | +3,596 / +918 B |
+| Main JS, raw / Node gzip-9 | 925,158 / 253,608 B | 928,746 / 254,524 B | +3,588 / +916 B |
 | Main CSS, raw / Node gzip-9 | 157,587 / 28,275 B | 158,156 / 28,406 B | +569 / +131 B |
-| Remote JS + CSS, raw / Node gzip-9 | 17,421 / 5,820 B | 18,268 / 6,073 B | +847 / +253 B |
-| All embedded assets | 2,394,311 B | 2,399,323 B | +5,012 B |
+| Remote JS + CSS, raw / Node gzip-9 | 17,421 / 5,820 B | 18,268 / 6,071 B | +847 / +251 B |
+| All embedded assets | 2,394,311 B | 2,399,315 B | +5,004 B |
 
 The simulator review process with browser clients and two synthetic catalog rows
 used 72,519,680 B working set and 57,741,312 B private memory at the measured
