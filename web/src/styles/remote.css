@@ -94,7 +94,7 @@
 .remote-section-heading h2 { margin: 0; font-size: 1.1rem; font-weight: 600; white-space: nowrap; }
 .remote-picker-search { width: min(52%, 260px); min-height: 36px; font-size: .875rem; }
 .remote-picker-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--remote-line); }
-.remote-picker-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 64px; padding: 10px 4px; border: 0; border-bottom: 1px solid var(--remote-line); border-radius: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.remote-picker-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 64px; padding: 10px 4px; border: 1px solid var(--remote-line); border-top: 0; border-radius: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .remote-picker-item:hover { background: var(--surface-2); }
 .remote-picker-item[aria-current="true"] { background: var(--accent-tint); }
 .remote-picker-symbol { display: grid; flex: 0 0 auto; place-items: center; width: 48px; height: 36px; border: 1px solid var(--remote-line); color: var(--muted); }

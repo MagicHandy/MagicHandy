@@ -46,7 +46,8 @@ counts were not treated as implemented features.
 
 The visual follow-up restores the concepts' structural borders: full-height
 desktop pane separation, pane headings, a divided chat composer, outlined volume
-controls and ruled library rows. Buttons have solid fills and crisp corners; the
+controls and library rows with full outer borders and shared horizontal dividers.
+Buttons have solid fills and crisp corners; the
 remote overrides the main application's gradients and shadows. The desktop status
 joins the header to leave more space for the catalog. General settings persists
 the optional Remote sidebar shortcut in the existing settings database. It does
@@ -74,8 +75,8 @@ restoring the shortcut, plus 390px phone video/chat and desktop layouts.
   not WAN timing or real-device acceptance claims.
 - Review LLM: local Ollama `huihui_ai/granite4.1-abliterated:3b`, real generation plus
   a text-only application chat with no repair, fallback or motion.
-- Final review URLs: main `http://127.0.0.14:50235`, remote
-  `http://127.0.0.14:50236`. The final review app passed real LLM readiness and
+- Final review URLs: main `http://127.0.0.14:50245`, remote
+  `http://127.0.0.14:50246`. The final review app passed real LLM readiness and
   completed a text-only reply through the remote. Earlier live verification
   completed a 1.657s Ollama reply in one provider call without repair/fallback.
   Live revocation produced

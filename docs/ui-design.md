@@ -88,7 +88,8 @@ readout joins the header; the chat composer has its own bottom divider. The phon
 keeps an outlined connection row and an inset Video/Chat selector. Flat controls
 use visible borders and solid fills, without inherited button gradients, shadows
 or rounded badges. Playback, motion source and library sections have clear neutral
-dividers. Controls use 36px targets, a 52px play button, whole-second clocks,
+dividers. Library rows also have left and right borders, sharing their horizontal
+dividers without doubling the stroke. Controls use 36px targets, a 52px play button, whole-second clocks,
 10-second skips, mute, volume, speed, source choice and searchable catalog pages.
 Opening a video never starts it. Committed chat text stays bounded to the active
 conversation. Selected choices use a filled surface, never a left accent or
