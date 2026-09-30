@@ -113,7 +113,7 @@ describe("VideoLibrary", () => {
     expect(within(playerView).getByRole("slider", { name: /funscript timeline/i })).toBeInTheDocument();
     expect(within(playerView).getByText("Ready to synchronize on play")).toBeInTheDocument();
 
-    fireEvent.click(within(playerView).getByRole("button", { name: "Videos" }));
+    fireEvent.click(within(playerView).getByRole("button", { name: "Back to videos" }));
     expect(await screen.findByRole("button", { name: "Play Alpha session" })).toBeInTheDocument();
   });
 
@@ -197,6 +197,7 @@ describe("VideoLibrary", () => {
 // QuickSettings and ChatPanel do; these tests render it outside the provider.
 vi.mock("../state/app-state", () => ({
   useAppState: () => ({ state: { settings: { media: {}, motion: {} } }, refresh: vi.fn() }),
+  useToast: () => ({ show: vi.fn() }),
 }));
     expect(screen.getByLabelText("Session")).toBeInTheDocument();
 

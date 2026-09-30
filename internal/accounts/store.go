@@ -58,6 +58,7 @@ type Account struct {
 	ID               string `json:"id"`
 	Username         string `json:"username"`
 	Role             string `json:"role"`
+	InterfaceAccess  string `json:"interface_access"`
 	Disabled         bool   `json:"disabled"`
 	HasProfileImage  bool   `json:"has_profile_image"`
 	ProfileUpdatedAt string `json:"profile_updated_at,omitempty"`
@@ -73,6 +74,7 @@ type Session struct {
 	// Key is a non-bearer database identity used only for server-side lifetime
 	// checks. It must never be serialized or accepted as a login credential.
 	Key              string        `json:"-"`
+	Interface        string        `json:"interface"`
 	Account          Account       `json:"account"`
 	ControlAccountID string        `json:"control_account_id"`
 	ExpiresAt        time.Time     `json:"expires_at"`
@@ -148,13 +150,13 @@ func (s *Store) count(ctx context.Context, condition string) (int, error) {
 // the shared serialized writer so simultaneous bootstrap requests cannot both
 // succeed.
 func (s *Store) BootstrapAdmin(ctx context.Context, username, password string) (Account, error) {
-	return s.create(ctx, username, password, RoleAdmin, true, "")
+	return s.create(ctx, username, password, RoleAdmin, true, "", InterfaceFull)
 }
 
 // Create adds an account for trusted internal callers. HTTP mutations must use
 // CreateForSession so revocation is serialized with the write.
 func (s *Store) Create(ctx context.Context, username, password, role string) (Account, error) {
-	return s.create(ctx, username, password, role, false, "")
+	return s.create(ctx, username, password, role, false, "", InterfaceFull)
 }
 
 // CreateForSession creates an account only while the acting administrator's
@@ -163,10 +165,10 @@ func (s *Store) CreateForSession(ctx context.Context, actorKey, username, passwo
 	if actorKey == "" {
 		return Account{}, ErrInvalidSession
 	}
-	return s.create(ctx, username, password, role, false, actorKey)
+	return s.create(ctx, username, password, role, false, actorKey, InterfaceFull)
 }
 
-func (s *Store) create(ctx context.Context, username, password, role string, bootstrap bool, actorKey string) (Account, error) {
+func (s *Store) create(ctx context.Context, username, password, role string, bootstrap bool, actorKey, access string) (Account, error) {
 	username, usernameKey, err := normalizeUsername(username)
 	if err != nil {
 		return Account{}, err
@@ -174,6 +176,10 @@ func (s *Store) create(ctx context.Context, username, password, role string, boo
 	role = strings.ToLower(strings.TrimSpace(role))
 	if role != RoleAdmin && role != RoleOperator {
 		return Account{}, fmt.Errorf("%w: role must be admin or operator", ErrInvalidRole)
+	}
+	access = normalizedInterface(access)
+	if (access != InterfaceFull && access != InterfaceRemote) || (access == InterfaceRemote && role != RoleOperator) {
+		return Account{}, ErrInterfaceAccess
 	}
 	passwordHash, err := s.hashPassword(ctx, password)
 	if err != nil {
@@ -184,7 +190,7 @@ func (s *Store) create(ctx context.Context, username, password, role string, boo
 		return Account{}, err
 	}
 	now := s.now().Format(time.RFC3339Nano)
-	account := Account{ID: id, Username: username, Role: role, CreatedAt: now, UpdatedAt: now}
+	account := Account{ID: id, Username: username, Role: role, InterfaceAccess: access, CreatedAt: now, UpdatedAt: now}
 	err = s.db.WithTx(ctx, func(tx *sql.Tx) error {
 		if actorKey != "" {
 			if _, err := s.liveAdministrator(ctx, tx, actorKey); err != nil {
@@ -211,9 +217,9 @@ func (s *Store) create(ctx context.Context, username, password, role string, boo
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO user_accounts(
 				id, username, username_key, role, password_hash, disabled,
-				last_login_at, created_at, updated_at, profile_updated_at
-			) VALUES(?, ?, ?, ?, ?, 0, '', ?, ?, '')
-		`, id, username, usernameKey, role, passwordHash, now, now)
+				last_login_at, created_at, updated_at, profile_updated_at, interface_access
+			) VALUES(?, ?, ?, ?, ?, 0, '', ?, ?, '', ?)
+		`, id, username, usernameKey, role, passwordHash, now, now, access)
 		if err != nil {
 			return err
 		}
@@ -229,7 +235,7 @@ func (s *Store) create(ctx context.Context, username, password, role string, boo
 // package, even to another backend package.
 func (s *Store) List(ctx context.Context) ([]Account, error) {
 	rows, err := s.db.SQL().QueryContext(ctx, `
-		SELECT id, username, role, disabled, last_login_at, created_at, updated_at, profile_updated_at
+		SELECT id, username, role, disabled, last_login_at, created_at, updated_at, profile_updated_at, interface_access
 		FROM user_accounts
 		ORDER BY username_key, id
 	`)
@@ -296,10 +302,14 @@ func (s *Store) NewSession(ctx context.Context, accountID string) (string, Sessi
 // NewSessionWithClient records only a coarse, untrusted browser/platform hint.
 // The independent management ID is never accepted as a bearer credential.
 func (s *Store) NewSessionWithClient(ctx context.Context, accountID string, client SessionClient) (string, Session, error) {
-	return s.newSessionWithClient(ctx, accountID, client, nil)
+	return s.newSessionWithClient(ctx, accountID, client, nil, InterfaceFull)
 }
 
-func (s *Store) newSessionWithClient(ctx context.Context, accountID string, client SessionClient, proof *passwordProof) (string, Session, error) {
+func (s *Store) newSessionWithClient(ctx context.Context, accountID string, client SessionClient, proof *passwordProof, audience string) (string, Session, error) {
+	audience = normalizedInterface(audience)
+	if audience != InterfaceFull && audience != InterfaceRemote {
+		return "", Session{}, ErrInterfaceAccess
+	}
 	raw := make([]byte, 32)
 	if err := s.randomBytes(raw); err != nil {
 		return "", Session{}, fmt.Errorf("generate session token: %w", err)
@@ -319,11 +329,11 @@ func (s *Store) newSessionWithClient(ctx context.Context, accountID string, clie
 	err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 		var disabled int
 		if err := tx.QueryRowContext(ctx, `
-			SELECT id, username, role, disabled, last_login_at, created_at, updated_at, profile_updated_at
+			SELECT id, username, role, disabled, last_login_at, created_at, updated_at, profile_updated_at, interface_access
 			FROM user_accounts WHERE id = ?
 		`, accountID).Scan(
 			&account.ID, &account.Username, &account.Role, &disabled,
-			&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt, &account.ProfileUpdatedAt,
+			&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt, &account.ProfileUpdatedAt, &account.InterfaceAccess,
 		); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrNotFound
@@ -335,6 +345,9 @@ func (s *Store) newSessionWithClient(ctx context.Context, accountID string, clie
 		if account.Disabled {
 			return ErrInvalidCredentials
 		}
+		if audience == InterfaceFull && !account.FullAccess() {
+			return ErrInterfaceAccess
+		}
 		if proof != nil {
 			if err := proof.revalidate(ctx, tx); err != nil {
 				return err
@@ -345,9 +358,9 @@ func (s *Store) newSessionWithClient(ctx context.Context, accountID string, clie
 			account.LastLoginAt, account.UpdatedAt = now, now
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO user_sessions(token_hash, user_id, created_at, last_seen_at, expires_at, public_id, client_browser, client_platform)
-			VALUES(?, ?, ?, ?, ?, ?, ?, ?)
-		`, tokenHash, accountID, now, now, expires.Format(time.RFC3339Nano), publicID, client.Browser, client.Platform); err != nil {
+			INSERT INTO user_sessions(token_hash, user_id, created_at, last_seen_at, expires_at, public_id, client_browser, client_platform, interface)
+			VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, tokenHash, accountID, now, now, expires.Format(time.RFC3339Nano), publicID, client.Browser, client.Platform, audience); err != nil {
 			return err
 		}
 		// Keep the newly issued login even when clocks give several logins the
@@ -369,7 +382,7 @@ func (s *Store) newSessionWithClient(ctx context.Context, accountID string, clie
 	if err != nil {
 		return "", Session{}, fmt.Errorf("create user session: %w", err)
 	}
-	return token, Session{ID: publicID, Key: tokenHash, Account: account, ControlAccountID: account.ID, ExpiresAt: expires}, nil
+	return token, Session{ID: publicID, Key: tokenHash, Interface: audience, Account: account, ControlAccountID: account.ID, ExpiresAt: expires}, nil
 }
 
 // ResolveSession authenticates a token and advances its idle timestamp at most
@@ -401,10 +414,10 @@ func (s *Store) CheckSession(ctx context.Context, key string) (Session, error) {
 func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (Session, error) {
 	var account Account
 	var disabled int
-	var lastSeenRaw, expiresRaw, controlAccountID, publicID string
+	var lastSeenRaw, expiresRaw, controlAccountID, publicID, audience string
 	err := s.db.SQL().QueryRowContext(ctx, `
 		SELECT a.id, a.username, a.role, a.disabled, a.last_login_at, a.created_at, a.updated_at,
-		       a.profile_updated_at, s.last_seen_at, s.expires_at, s.public_id,
+		       a.profile_updated_at, a.interface_access, s.last_seen_at, s.expires_at, s.public_id, s.interface,
 		       CASE
 		         WHEN EXISTS (
 		           SELECT 1
@@ -423,7 +436,7 @@ func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (
 	`, key).Scan(
 		&account.ID, &account.Username, &account.Role, &disabled,
 		&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt,
-		&account.ProfileUpdatedAt, &lastSeenRaw, &expiresRaw, &publicID, &controlAccountID,
+		&account.ProfileUpdatedAt, &account.InterfaceAccess, &lastSeenRaw, &expiresRaw, &publicID, &audience, &controlAccountID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrInvalidSession
@@ -463,7 +476,7 @@ func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (
 	if controlAccountID == "" {
 		controlAccountID = account.ID
 	}
-	session := Session{ID: publicID, Key: key, Account: account, ControlAccountID: controlAccountID, ExpiresAt: expires}
+	session := Session{ID: publicID, Key: key, Interface: audience, Account: account, ControlAccountID: controlAccountID, ExpiresAt: expires}
 	if account.Role != RoleAdmin {
 		session.ControlGrant, err = s.ControlGrant(ctx, account.ID)
 	}
@@ -645,7 +658,7 @@ func scanAccount(row rowScanner) (Account, error) {
 	var disabled int
 	err := row.Scan(
 		&account.ID, &account.Username, &account.Role, &disabled,
-		&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt, &account.ProfileUpdatedAt,
+		&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt, &account.ProfileUpdatedAt, &account.InterfaceAccess,
 	)
 	account.Disabled = disabled != 0
 	account.HasProfileImage = account.ProfileUpdatedAt != ""

@@ -5,7 +5,7 @@ import { t } from "../i18n";
 // just a settings form in a worse place.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { MediaPlaybackSettings, MediaSyncStatus, MediaVideo } from "../api/types";
+import type { MediaPlaybackSettings, MediaSyncStatus, MediaVideo, MediaVideoUpdate } from "../api/types";
 import { CloseIcon } from "../shell/icons";
 import { PlaybackFilterEffect } from "./PlaybackFilterEffect";
 
@@ -31,7 +31,7 @@ interface Props {
   limitSpeed: boolean;
   speedLimitPercent: number;
   onClose: () => void;
-  onVideoUpdate?: (video: MediaVideo) => void;
+  onVideoUpdate?: (video: MediaVideoUpdate) => void;
   onFiltersChanging?: () => void;
   onFiltersChanged?: (patch: MediaPlaybackPatch) => Promise<MediaPlaybackSettings>;
 }
@@ -113,7 +113,7 @@ export function PlaybackPanel({
         .then(() => {
           if (!mounted.current) return;
           setError("");
-          onVideoUpdate?.({ ...video, script_offset_ms: millis });
+          onVideoUpdate?.({ id: video.id, script_offset_ms: millis });
         })
         .catch((reason: unknown) => {
           if (mounted.current) setError(reason instanceof Error ? reason.message : "Offset could not be saved.");

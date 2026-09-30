@@ -22,7 +22,7 @@ export function AccountRecoveryForm({ initialUsername, onBack }: { initialUserna
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
-    if (!passwordMeetsMinimum(password)) { setError(t("Use a password or passphrase of at least 8 characters.")); return; }
+    if (!passwordMeetsMinimum(password)) { setError(t("Use a password or passphrase of at least 15 characters.")); return; }
     if (password !== confirmation) { setError(t("The passwords do not match.")); return; }
     const controller = new AbortController();
     const request = { controller, timer: 0 };

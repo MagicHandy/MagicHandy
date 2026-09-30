@@ -25,6 +25,7 @@ host	DELETE /api/personas/{id}
 host	DELETE /api/personas/{id}/lore/{lore_id}
 host	DELETE /api/personas/{id}/portrait
 host	DELETE /api/prompt-sets/{id}
+control	DELETE /api/remote/presence
 host	DELETE /api/setup/install
 host	DELETE /api/transport/intiface/scan
 host	DELETE /api/voice/module/update
@@ -76,6 +77,8 @@ shared	GET /api/personas/{id}/export
 shared	GET /api/personas/{id}/lore
 shared	GET /api/personas/{id}/portrait
 shared	GET /api/prompt-sets
+shared	GET /api/remote/events
+shared	GET /api/remote/state
 shared	GET /api/settings
 host	GET /api/setup
 host	GET /api/setup/install/{id}/report
@@ -102,6 +105,7 @@ shared	GET /api/voice/status
 public	GET /healthz
 self	PATCH /api/auth/sessions/{id}
 host	PATCH /api/library/patterns/{id}
+control	PATCH /api/media/videos/{id}/metadata
 host	PATCH /api/memory/{id}
 host	PATCH /api/personas/{id}
 host	PATCH /api/personas/{id}/lore/{lore_id}
@@ -145,7 +149,10 @@ control	POST /api/media/playback
 host	POST /api/media/scan
 control	POST /api/media/script-offset
 control	POST /api/media/sync
+control	POST /api/media/tags/delete
+control	POST /api/media/tags/rename
 host	POST /api/media/thumbnails
+control	POST /api/media/videos/tags
 host	POST /api/media/videos/{id}/thumbnail
 host	POST /api/memory
 host	POST /api/memory/clear
@@ -170,6 +177,9 @@ host	POST /api/personas/{id}/duplicate
 host	POST /api/personas/{id}/lore
 host	POST /api/personas/{id}/portrait
 host	POST /api/prompt-sets
+control	POST /api/remote/commands
+control	POST /api/remote/commands/{id}/claim
+control	POST /api/remote/presence
 host	POST /api/settings/reset
 host	POST /api/setup/complete
 host	POST /api/setup/install
@@ -223,3 +233,7 @@ control	PUT /api/voice/preferences
 public	GET /api/notice-preferences
 public	PUT /api/notice-preferences
 public	DELETE /api/notice-preferences
+
+host	PUT /api/accounts/{id}/interface-access
+shared	GET /api/remote/videos
+shared	GET /api/remote/chat/messages

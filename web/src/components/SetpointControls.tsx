@@ -3,6 +3,10 @@ import { useId, type CSSProperties } from "react";
 export interface SetpointOption<Value extends string> {
   value: Value;
   label: string;
+  /** A segmented choice can offer an option that does not apply right now. */
+  disabled?: boolean;
+  /** Explains a disabled option. */
+  title?: string;
 }
 
 interface SetpointSliderProps<Value extends string> {
@@ -103,12 +107,13 @@ export function SegmentedChoice<Value extends string>({
       <legend>{label}</legend>
       <div className="segmented-choice" role="radiogroup" aria-label={label}>
         {options.map((option) => (
-          <label className="segmented-option" key={option.value}>
+          <label className="segmented-option" key={option.value} title={option.title} data-disabled={option.disabled || undefined}>
             <input
               type="radio"
               name={name}
               value={option.value}
               checked={option.value === value}
+              disabled={option.disabled}
               onChange={() => onChange(option.value)}
             />
             <span>{option.label}</span>

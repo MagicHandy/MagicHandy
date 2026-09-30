@@ -130,11 +130,13 @@ func (s *Server) handleMotionEvents(w http.ResponseWriter, r *http.Request) {
 	setSSEHeaders(w)
 	w.WriteHeader(http.StatusOK)
 
+	remoteTab := remoteIdentity(r, clientIDFromRequest(r))
+	var remoteAfter uint64
 	emit := func() bool {
 		if err := writeSSE(w, "motion", s.clientMotionState(r)); err != nil {
 			return false
 		}
-		return true
+		return s.deliverRemoteCommands(w, r, remoteTab, &remoteAfter)
 	}
 	if !emit() {
 		return
@@ -501,6 +503,10 @@ func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context
 	finishLab := s.cancelLabSession()
 	if s.mediaSync != nil {
 		s.mediaSync.Invalidate(reason)
+	}
+	// A remote command requested before this Stop must not run after it.
+	if s.remote != nil {
+		s.remote.Clear("Emergency Stop cleared the command.")
 	}
 	s.chatWorkspace.CancelTurns()
 	// No lock is taken around invalidation: the epoch above is already

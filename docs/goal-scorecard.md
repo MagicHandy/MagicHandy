@@ -1,5 +1,105 @@
 # Goal Scorecard
 
+## 2026-09-29 — Terminal activity retention
+
+The [terminal fix](console-activity-review-2026-09-29.md) separates visible
+activity from hidden polling and uses two 400-entry rings. Full-history insertion
+allocates zero times in the regression test, replacing the previous allocation
+and copy on each overflow. Entry strings are shared; both histories remain bounded.
+The Windows amd64 pure-Go binary, Go 1.26.8 with `-trimpath -ldflags -w`, is
+**22,700,032 B**, up **3,072 B** from `94c5f346`. There are no new dependencies or
+UI assets. The existing idle/soak memory waiver is unchanged.
+
+## 2026-09-29 — Capability-aware chat prompts
+
+The [prompt regression review](prompt-regression-review-2026-09-29.md) adds no
+dependency or UI payload. The Windows amd64 pure-Go binary, built with Go 1.26.8
+and `-trimpath -ldflags -w`, is **22,696,960 B**, up **5,120 B** from `9e36b2be`
+(22,691,840 B). Embedded assets remain **2,436,921 B**. Motion-enabled prompt
+content is byte-identical across 240 compared compositions. Chat-only history
+removes obsolete command envelopes and keeps the existing 24,000-byte bound.
+This does not remeasure the existing idle/soak memory waiver or claim physical
+latency improvements.
+
+## 2026-09-29 — Dedicated remote and account scope
+
+A second listener shares the existing backend/engine. Remote accounts receive a
+reduced API and bounded display queries. The new remote shell is part of the
+canonical entry bundle so its Stop control mounts immediately; the former lazy
+remote chunk is folded into that bundle. Password/account self-service is reused
+through a focused shared component. No dependency or generated image was shipped.
+
+| Artifact | Prior reviewed checkpoint (`b7f13b40`) | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,565,888 B | 22,691,840 B | +125,952 B |
+| Main JS, raw / Node gzip-9 | 928,746 / 254,524 B | 956,088 / 261,456 B | +27,342 / +6,932 B |
+| Main CSS, raw / Node gzip-9 | 158,156 / 28,406 B | 169,873 / 30,352 B | +11,717 / +1,946 B |
+| Separate remote JS/CSS chunk, raw | 18,268 B | folded into entry | — |
+| All embedded assets | 2,399,315 B | 2,436,921 B | +37,606 B |
+
+The earlier review process with two authenticated interfaces, two synthetic videos
+and completed account/LLM requests used 97,427,456 B working set and 84,127,744 B
+private memory at the sampled point. Authentication's bounded Argon2 work is part
+of this workload. This is not an idle or soak comparison; the existing SQLite
+memory waiver remains. The core remains below the 30 MB binary budget. The main
+bundle's 900 kB advisory stays enabled. Video catalog responses cap at 60 rows;
+chat responses cap at 40 committed messages and 2048 characters per message.
+See [the standards and capability review](remote-access-review-2026-09-29.md).
+The current artifact sizes include the flat-control visual refinement and saved
+sidebar preference. Its extra CSS costs 725 B gzip over the first remote design;
+no dependency or image asset was added.
+
+## 2026-09-29 — Video and remote completion review
+
+The review adds one-shot remote admission, awaited source handoffs, fullscreen
+Stop, transactional curation admission and indexed Unicode tag keys. Bulk edit
+readback uses two queries instead of up to 1,000. No dependency was added.
+See [the review and validation](claude-progress-review-2026-09-29.md).
+
+| Artifact | Claude checkpoint (`453ff2da`) | Reviewed checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,521,856 B | 22,565,888 B | +44,032 B |
+| Main JS, raw / Node gzip-9 | 925,158 / 253,608 B | 928,746 / 254,524 B | +3,588 / +916 B |
+| Main CSS, raw / Node gzip-9 | 157,587 / 28,275 B | 158,156 / 28,406 B | +569 / +131 B |
+| Remote JS + CSS, raw / Node gzip-9 | 17,421 / 5,820 B | 18,268 / 6,071 B | +847 / +251 B |
+| All embedded assets | 2,394,311 B | 2,399,315 B | +5,004 B |
+
+The simulator review process with browser clients and two synthetic catalog rows
+used 72,519,680 B working set and 57,741,312 B private memory at the measured
+checkpoint. This is an interactive review measurement, not an idle-baseline or
+soak comparison. The existing SQLite memory waiver remains applicable. A warm
+restart reached the server-starting log 73 ms after process creation; this is
+not a cold-start benchmark. Migration tests cover v26 and v27 data. The main
+bundle's existing 900 kB advisory warning remains enabled.
+
+## 2026-09-27 — Video curation, a watch page, a motion source and a phone remote
+
+Catalog videos carry a title, rating, notes and tags. The watch page puts the
+picture first, as livestream sites do: at 1280×800 with the chat closed the
+picture grows from 966×368 to 994×591. A Script, Chat or Off switch decides
+what moves the device while a video plays. A phone remote at `#/remote` asks
+the desktop tab that holds control to drive its video, switch that source or
+send to its chat; the desktop runs each command through its own player and
+composer. The remote page loads only when it is opened, so desktops never
+download it. No dependency was added.
+
+| Artifact | Previous checkpoint (`c29b5600`) | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64 core, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,297,088 B | 22,521,856 B | +224,768 B |
+| Main JS, raw / Node gzip-9 | 876,809 / 240,881 B | 925,158 / 253,608 B | +48,349 / +12,727 B |
+| Main CSS, raw / Node gzip-9 | 149,743 / 27,029 B | 157,587 / 28,275 B | +7,844 / +1,246 B |
+| Remote page chunk, JS + CSS, raw / Node gzip-9 | — | 17,421 / 5,820 B | new, on demand |
+| All embedded assets | 2,289,587 B | 2,394,311 B | +104,724 B |
+
+The main JS grows by the curation dialogs and filters, the tag manager, the
+watch page and its motion source switch, the split player, the remote executor
+and their English strings. Lazy locale chunks grow 6,945–9,013 raw and
+2,410–2,615 gzip bytes each. The binary grows by those assets and the catalog,
+remote, chat and route code, and remains under the 30 MB target. Startup and
+memory were not re-measured: the one-time schema step is the only new startup
+work, and the remote hub starts no goroutines and holds at most 32 commands and
+16 outcomes.
+
 ## 2026-09-26 — Returning to the page keeps the view
 
 Returning to a hidden page no longer remounts every route. The page keeps its

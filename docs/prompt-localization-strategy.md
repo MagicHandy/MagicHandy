@@ -16,6 +16,11 @@ Use hybrid localized prompts for local models:
   whitespace-normalized, length-bounded, and JSON-quoted; saved memories remain
   bounded list entries.
 - Keep the final output guard last, after every localized or dynamic block.
+- For video chat, localize the instructions for selecting the Chat motion source
+  without supplying a fixed spoken reply. A source selection is not evidence of
+  active playback. Chat-only guards and schemas must not advertise motion.
+- Autopilot speech repairs use the same language reminders as interactive
+  repairs; motion-only repairs do not introduce reply text.
 
 Do not translate protocol tokens such as `reply`, `motion`, `action`,
 `pattern_id`, `speed_percent`, `none`, `start`, `target`, `stop`, `stroke`,

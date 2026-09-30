@@ -2,7 +2,7 @@ import { t, translateKnown } from "../i18n";
 // Permanent left navigation rail: product identity, page links, and the pinned
 // Stop footer. The rail is present on every route (docs/ui-navigation-redesign.md).
 import { useAppState, useHashRoute } from "../state/app-state";
-import { ChatIcon, LibraryIcon, ModesIcon, PersonaIcon, SettingsIcon, VideoIcon } from "./icons";
+import { ChatIcon, LibraryIcon, ModesIcon, PersonaIcon, RemoteIcon, SettingsIcon, VideoIcon } from "./icons";
 import { StopButton } from "./StopButton";
 import {LAB_BASE,LabsNavLink} from "@labs";
 
@@ -14,6 +14,7 @@ const LINKS = [
   { base: "modes", href: "#/modes", label: "Preset modes", Icon: ModesIcon },
   { base: "library", href: "#/library", label: "Pattern library", Icon: LibraryIcon },
   { base: "videos", href: "#/videos", label: "Videos", Icon: VideoIcon },
+  { base: "remote", href: "#/remote", label: "Remote", Icon: RemoteIcon },
   { base: "settings", href: "#/settings", label: "Settings", Icon: SettingsIcon },
 ] as const;
 
@@ -24,7 +25,7 @@ export function routeBase(hash: string): string {
   return LINKS.some((link) => link.base === candidate) ? candidate : "chat";
 }
 
-export function NavRail({ authenticationLocked = false }: { authenticationLocked?: boolean }) {
+export function NavRail({ authenticationLocked = false, remoteURL }: { authenticationLocked?: boolean; remoteURL?: string }) {
   const active = routeBase(useHashRoute());
   const { state } = useAppState();
   const owner = state?.settings?.device?.hsp_dispatch_owner ?? "cloud";
@@ -43,8 +44,8 @@ export function NavRail({ authenticationLocked = false }: { authenticationLocked
         </span>
       </div>
       {!authenticationLocked && <div className="nav-links">
-        {LINKS.map((l) => (
-          <a key={l.base} className="nav-link" href={l.href} aria-label={translateKnown(l.label)} aria-current={active === l.base ? "page" : undefined}>
+        {LINKS.filter(l => l.base !== "remote" || (remoteURL && state?.settings?.ui?.show_remote_navigation !== false)).map((l) => (
+          <a key={l.base} className="nav-link" href={l.base === "remote" ? remoteURL : l.href} target={l.base === "remote" ? "_blank" : undefined} rel={l.base === "remote" ? "noreferrer" : undefined} aria-label={translateKnown(l.label)} aria-current={active === l.base ? "page" : undefined}>
             <span className="icon"><l.Icon /></span>
             <span className="label">{translateKnown(l.label)}</span>
           </a>

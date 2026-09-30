@@ -120,15 +120,52 @@ const contractChatOnlyWithMood = `Return exactly one JSON object and no markdown
 Always return an object with one required string field named "reply" and, when useful, the optional "new_mood" field described below.
 Motion control is disabled by the user's settings: never include a "motion" key, and if asked to move the device, explain that motion control is switched off in Settings.`
 
+// While a video is open, the viewer chooses what moves the device. A reply
+// must then say who drives instead of blaming Settings, and must never claim
+// a motion change it cannot make.
+const (
+	chatOnlySettingsReason    = `Motion control is disabled by the user's settings: never include a "motion" key, and if asked to move the device, explain that motion control is switched off in Settings.`
+	chatOnlyVideoScriptReason = `The video's selected motion source is its paired script. This chat cannot start, stop or change the device. Do not include a "motion" key. Source selection does not tell you whether playback or synchronized motion is currently running. If asked to change motion, explain that Script owns it and that choosing Chat beside the video is required for chat control; saved motion settings and control permissions still apply.`
+	chatOnlyVideoOffReason    = `The video's selected motion source is Off. This chat cannot start, stop or change the device. Do not include a "motion" key. If asked to change motion, explain that motion is off for this video and that choosing Chat beside the video is required for chat control; saved motion settings and control permissions still apply.`
+)
+
+// videoMotionNote restates who drives right before the final instructions,
+// where a small model weighs it most. It describes authority, not an observed
+// playback state or a stock reply that overrides the selected voice/language.
+func videoMotionNote(capabilities Capabilities) string {
+	if capabilities.Motion {
+		return ""
+	}
+	switch capabilities.MotionHolder {
+	case MotionHolderVideoScript:
+		return `VIDEO MOTION AUTHORITY: Script is selected. Your reply cannot change the device's pace, depth, rhythm or intensity. Do not claim to have changed them or assume the video is playing. You can still discuss the scene and the person's experience in the selected voice and language. Explain the source choice only when relevant to their request; do not turn every reply into control instructions.`
+	case MotionHolderVideoOff:
+		return `VIDEO MOTION AUTHORITY: Off is selected. Your reply cannot move the device; do not claim or promise to start or change it. You can still discuss the scene and the person's experience in the selected voice and language. Explain the source choice only when relevant to their request; do not turn every reply into control instructions.`
+	default:
+		return ""
+	}
+}
+
+func chatOnlyContract(capabilities Capabilities) string {
+	reason := chatOnlySettingsReason
+	switch capabilities.MotionHolder {
+	case MotionHolderVideoScript:
+		reason = chatOnlyVideoScriptReason
+	case MotionHolderVideoOff:
+		reason = chatOnlyVideoOffReason
+	}
+	if capabilities.MoodTracking {
+		return strings.Replace(contractChatOnlyWithMood, chatOnlySettingsReason, reason, 1) + "\n" + moodContractInstructions()
+	}
+	return strings.Replace(contractChatOnly, chatOnlySettingsReason, reason, 1)
+}
+
 // contractInstructions composes the code-owned contract for the enabled
 // capability set. Disabled methods are simply never described — the model
 // cannot follow instructions it never saw, and the parser strips strays.
 func contractInstructions(capabilities Capabilities) string {
 	if !capabilities.Motion {
-		if capabilities.MoodTracking {
-			return contractChatOnlyWithMood + "\n" + moodContractInstructions()
-		}
-		return contractChatOnly
+		return chatOnlyContract(capabilities)
 	}
 	if capabilities.MotionMode == MotionModeLayered {
 		text := layeredContract
@@ -182,7 +219,22 @@ type Capabilities struct {
 	// MoodTracking permits inert reply-register metadata for interactive,
 	// non-utility chat. It never grants a motion capability.
 	MoodTracking bool
+	// MotionHolder says what owns the device when a turn is chat-only for a
+	// reason other than Settings, so the reply can say who drives.
+	MotionHolder MotionHolder
 }
+
+// MotionHolder names what owns the device during a chat-only turn.
+type MotionHolder string
+
+const (
+	// MotionHolderSettings is the zero value: the user switched LLM motion off.
+	MotionHolderSettings MotionHolder = ""
+	// MotionHolderVideoScript means an open video's paired script drives the device.
+	MotionHolderVideoScript MotionHolder = "video_script"
+	// MotionHolderVideoOff means the viewer chose no motion for the open video.
+	MotionHolderVideoOff MotionHolder = "video_off"
+)
 
 // MotionMode selects the one model-facing motion vocabulary composed for a
 // turn. The zero value preserves the legacy pattern/speed contract in tests.
@@ -554,6 +606,9 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 	if capabilities.Motion && motionContext != nil {
 		sections = appendPromptSection(sections, "motion_context", "Motion context",
 			motionContextInstructions(*motionContext, capabilities, patterns))
+	}
+	if note := videoMotionNote(capabilities); note != "" {
+		sections = appendPromptSection(sections, "video_motion", "Video motion", note+"\n"+videoControlInstructions(locale))
 	}
 	sections = appendPromptSection(sections, "output_guard", "Final output guard", promptOutputGuard(capabilities))
 	texts := make([]string, 0, len(sections))

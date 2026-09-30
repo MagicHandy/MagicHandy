@@ -424,6 +424,7 @@ describe("ChatPanel history", () => {
       expect.any(Function),
       expect.any(AbortSignal),
       1,
+      undefined,
     ));
   });
 

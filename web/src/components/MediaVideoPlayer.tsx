@@ -1,7 +1,10 @@
 import { t } from "../i18n";
-import { useCallback, useEffect, useRef, useState, type MutableRefObject, type ReactNode, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref, type SyntheticEvent } from "react";
 import { api } from "../api/client";
-import type { MediaVideo } from "../api/types";
+import type { MediaVideo, MediaVideoUpdate } from "../api/types";
+import type { MediaPlaybackEvent } from "../media/mediaElement";
+
+export type { MediaPlaybackEvent } from "../media/mediaElement";
 
 interface Props {
   video: MediaVideo;
@@ -13,16 +16,14 @@ interface Props {
   busy?: boolean;
   onDuration?: (durationMillis: number) => void;
   onTimeChange?: (timeMillis: number) => void;
-  onVideoUpdate?: (video: MediaVideo) => void;
-  playerRef?: MutableRefObject<HTMLVideoElement | null>;
+  onVideoUpdate?: (video: MediaVideoUpdate) => void;
+  playerRef?: Ref<HTMLVideoElement>;
   onPlaybackEvent?: (event: MediaPlaybackEvent, player: HTMLVideoElement) => void;
   synchronized?: boolean;
   /** Offered when the browser refuses to decode this file. */
   onRequestConversion?: () => void;
   conversionBusy?: boolean;
 }
-
-export type MediaPlaybackEvent = "play" | "playing" | "pause" | "seeking" | "seeked" | "ended" | "ratechange" | "waiting" | "stalled" | "canplay" | "error";
 
 // MediaError codes that mean "this browser cannot play these bytes" rather than
 // "these bytes did not arrive". MEDIA_ERR_SRC_NOT_SUPPORTED is what Firefox
@@ -62,7 +63,8 @@ export function MediaVideoPlayer({
   const internalPlayerRef = useRef<HTMLVideoElement | null>(null);
   const setPlayerRef = useCallback((node: HTMLVideoElement | null) => {
     internalPlayerRef.current = node;
-    if (playerRef) playerRef.current = node;
+    if (typeof playerRef === "function") playerRef(node);
+    else if (playerRef) (playerRef as { current: HTMLVideoElement | null }).current = node;
   }, [playerRef]);
 
   useEffect(() => {
@@ -86,7 +88,7 @@ export function MediaVideoPlayer({
     compatibilityReported.current = state;
     try {
       await api.reportMediaCompatibility(video.id, state);
-      onVideoUpdate?.({ ...video, compatibility: state });
+      onVideoUpdate?.({ id: video.id, compatibility: state });
     } catch {
       // A read-only tab losing this race costs nothing: the next controller
       // playback reports the same result.
@@ -143,7 +145,7 @@ export function MediaVideoPlayer({
       if (!blob) return;
       const response = await api.saveMediaThumbnail(video.id, blob);
       if (response.status === "saved") {
-        onVideoUpdate?.({ ...video, thumbnail_generated_at: new Date().toISOString() });
+        onVideoUpdate?.({ id: video.id, thumbnail_generated_at: new Date().toISOString() });
       }
     } catch {
       // A cover is a nicety. Failing to store one must never disturb playback,
@@ -161,7 +163,7 @@ export function MediaVideoPlayer({
     reported.current = reportKey;
     try {
       await api.saveMediaDuration(video.id, durationMillis);
-      onVideoUpdate?.({ ...video, duration_ms: durationMillis });
+      onVideoUpdate?.({ id: video.id, duration_ms: durationMillis });
     } catch {
       // Playback remains useful when a read-only tab wins a metadata race or
       // the catalog write fails. The next controller playback can retry.
@@ -217,6 +219,7 @@ export function MediaVideoPlayer({
           onSeeked={(event) => onPlaybackEvent?.("seeked", event.currentTarget)}
           onEnded={(event) => onPlaybackEvent?.("ended", event.currentTarget)}
           onRateChange={(event) => onPlaybackEvent?.("ratechange", event.currentTarget)}
+          onVolumeChange={(event) => onPlaybackEvent?.("volumechange", event.currentTarget)}
           onWaiting={(event) => onPlaybackEvent?.("waiting", event.currentTarget)}
           onStalled={(event) => onPlaybackEvent?.("stalled", event.currentTarget)}
           onCanPlay={(event) => {

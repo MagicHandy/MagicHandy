@@ -192,6 +192,53 @@ func TestChatStreamStartsMotionThroughMotionEngine(t *testing.T) {
 	}
 }
 
+// A chat beside an open video never moves the device while the video's script
+// or the viewer's Off choice owns it, even if the model sends motion anyway.
+func TestChatBesideAVideoStaysChatOnlyWhileTheVideoOwnsMotion(t *testing.T) {
+	for _, owner := range []string{"script", "off"} {
+		t.Run(owner, func(t *testing.T) {
+			fake := transport.NewFake()
+			provider := &scriptedLLMProvider{responses: []string{
+				`{"reply":"Sure.","motion":{"action":"start","pattern_id":"flow-pace-wave","speed_percent":30}}`,
+			}}
+			server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: provider})
+			t.Cleanup(server.Close)
+
+			body := postChatStream(t, server, `{"message":"go faster","motion_owner":"`+owner+`"}`)
+			if !strings.Contains(body, `"reply":"Sure."`) || strings.Contains(body, "event: motion") {
+				t.Fatalf("chat beside the video:\n%s", body)
+			}
+			if commands := fake.Commands(); len(commands) != 0 {
+				t.Fatalf("the device moved: %+v", commands)
+			}
+			provider.mu.Lock()
+			system := provider.requests[0].Messages[0].Content
+			provider.mu.Unlock()
+			want := "video's selected motion source is its paired script"
+			if owner == "off" {
+				want = "motion is off for this video"
+			}
+			if !strings.Contains(system, want) || strings.Contains(system, "switched off in Settings") {
+				t.Fatalf("the model was not told who drives:\n%s", system)
+			}
+		})
+	}
+}
+
+func TestChatStreamRejectsAnUnknownMotionOwner(t *testing.T) {
+	server := newTestServer(t)
+	t.Cleanup(server.Close)
+	request := httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(`{"message":"hi","motion_owner":"autopilot"}`))
+	request = withController(request)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set(stopSequenceHeader, strconv.FormatUint(server.stopSequence.Load(), 10))
+	recorder := httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("unknown motion owner status = %d", recorder.Code)
+	}
+}
+
 func TestChatStreamStartsAndRetargetsDynamicMotionThroughOneEngine(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{

@@ -73,7 +73,7 @@ func TestSetupCompletionSignsOutBootstrapSessionOnLoopbackHTTP(t *testing.T) {
 	server, _ := newAuthenticationTestServer(t, false, false, nil)
 
 	bootstrap := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", strings.NewReader(`{
-		"username":"owner","password":"eight888"
+		"username":"owner","password":"fifteen-char8888"
 	}`))
 	bootstrap.Header.Set("Content-Type", "application/json")
 	bootstrap.Host = "127.0.0.1:49717"
@@ -139,7 +139,7 @@ func TestSetupCompletionSignsOutBootstrapSessionOnLoopbackHTTP(t *testing.T) {
 
 func TestCompletedSetupReconfigurationPreservesOrdinarySession(t *testing.T) {
 	server, accountStore := newAuthenticationTestServer(t, true, false, nil)
-	admin, err := accountStore.BootstrapAdmin(t.Context(), "owner", "eight888")
+	admin, err := accountStore.BootstrapAdmin(t.Context(), "owner", "fifteen-char8888")
 	if err != nil {
 		t.Fatalf("BootstrapAdmin: %v", err)
 	}

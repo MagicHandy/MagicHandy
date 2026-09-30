@@ -77,7 +77,7 @@ func (s *Server) handleRevokeOwnSession(w http.ResponseWriter, r *http.Request, 
 	}
 	current := key == actor.Key
 	if current {
-		s.clearSessionCookie(w)
+		s.clearSessionCookie(w, r)
 	}
 	s.endRevokedSessions(r.Context(), actor.Key, []string{key})
 	s.writeSessionManagementJSON(w, r, map[string]any{"revoked": 1, "current_revoked": current})

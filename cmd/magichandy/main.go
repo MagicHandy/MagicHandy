@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,7 +21,6 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/httpapi"
 	"github.com/mapledaemon/MagicHandy/internal/logging"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
-	"github.com/mapledaemon/MagicHandy/web"
 )
 
 var (
@@ -43,6 +43,7 @@ func run(args []string, stdout io.Writer, stderr io.Writer) (err error) {
 
 	addr := flags.String("addr", "", "HTTP listen address override")
 	securityFlags := addServerSecurityFlags(flags)
+	remoteFlags := addRemoteFlags(flags)
 	dataDir := flags.String("data-dir", "", "app data directory for settings and diagnostics")
 	simulateMotion := flags.Bool("simulate-motion", false, "route all motion to the in-process simulator instead of a configured device")
 	languageFlags := addLanguageFlags(flags)
@@ -104,29 +105,28 @@ func run(args []string, stdout io.Writer, stderr io.Writer) (err error) {
 		_ = store.Close()
 		return err
 	}
-	consoleUI.serverPrepared(security, *simulateMotion)
-
-	api, err := httpapi.New(web.FS(), logger, store, runtime, httpapi.VersionInfo{
-		Version: version,
-		Commit:  commit,
-	})
+	api, remoteSecurity, remoteAddress, err := createApplicationAPI(store, runtime, security, address, remoteFlags, logger)
 	if err != nil {
-		_ = store.Close()
 		return err
 	}
 	defer api.Close()
-	consoleUI.connect(api, security.BaseURL)
+	consoleUI.serverPrepared(security, *simulateMotion)
+	consoleUI.remotePrepared(remoteSecurity.BaseURL)
+	consoleUI.connect(api, security.BaseURL, remoteSecurity.BaseURL)
 
 	server := newHTTPServer(address, api.Handler(), security.TLSConfig)
-	return serveUntilStopped(server, api, security, logger, consoleUI, installerShutdown, browserFlags)
+	remoteServer := makeRemoteHTTPServer(api, remoteAddress, remoteSecurity)
+	return serveUntilStopped(server, remoteServer, api, security, remoteSecurity, logger, consoleUI, installerShutdown, browserFlags)
 }
 
 // serveUntilStopped serves until an interrupt, the Windows uninstaller or the
 // launch console's Quit asks the app to stop, then shuts down cleanly.
 func serveUntilStopped(
 	server *http.Server,
+	remoteServer *http.Server,
 	api *httpapi.Server,
 	security serverSecurity,
+	remoteSecurity serverSecurity,
 	logger *slog.Logger,
 	consoleUI *launchConsole,
 	installerShutdown <-chan struct{},
@@ -135,10 +135,42 @@ func serveUntilStopped(
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 
-	errCh := make(chan error, 1)
+	// Bind both sockets before announcing readiness. A remote bind failure must
+	// not leave a half-started main app or a stray serving goroutine.
+	mainListener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = mainListener.Close() }()
+	var remoteListener net.Listener
+	if remoteServer != nil {
+		remoteListener, err = net.Listen("tcp", remoteServer.Addr)
+		if err != nil {
+			return fmt.Errorf("remote listener %s: %w; choose -remote-port or use -remote-port -1", remoteServer.Addr, err)
+		}
+		defer func() { _ = remoteListener.Close() }()
+	}
+	errCh := make(chan error, 2)
 	go func() {
 		logger.Info("server starting", "url", security.BaseURL, "authentication_required", security.AuthenticationRequired)
-		errCh <- serveHTTP(server, consoleUI.ready())
+		if ready := consoleUI.ready(); ready != nil {
+			ready()
+		}
+		errCh <- serveBoundListener(server, mainListener)
+	}()
+	if remoteServer != nil {
+		go func() {
+			logger.Info("remote interface starting", "url", remoteSecurity.BaseURL, "listen", remoteServer.Addr, "authentication_required", remoteSecurity.AuthenticationRequired)
+			errCh <- serveBoundListener(remoteServer, remoteListener)
+		}()
+	} else {
+		logger.Info("remote interface disabled")
+	}
+	defer func() {
+		if remoteServer != nil {
+			_ = remoteServer.Close()
+		}
+		_ = server.Close()
 	}()
 	launchBrowserWhenReady(*browserFlags.open, *browserFlags.setup, security.BaseURL, logger)
 
@@ -159,6 +191,14 @@ func serveUntilStopped(
 	}
 
 	consoleUI.stopping()
+	if remoteServer != nil {
+		api.Quiesce()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := remoteServer.Shutdown(ctx); err != nil {
+			logger.Warn("remote interface shutdown failed", "error", err)
+		}
+	}
 	return shutdownHTTPServer(server, api, logger)
 }
 

@@ -16,11 +16,13 @@ func (s *Store) liveAdministrator(ctx context.Context, tx *sql.Tx, actorKey stri
 	if err != nil {
 		return "", err
 	}
-	var role string
-	if err := tx.QueryRowContext(ctx, `SELECT role FROM user_accounts WHERE id = ?`, owner).Scan(&role); err != nil {
+	var role, access, audience string
+	if err := tx.QueryRowContext(ctx, `SELECT a.role, a.interface_access, s.interface
+		FROM user_accounts a JOIN user_sessions s ON s.user_id = a.id
+		WHERE a.id = ? AND s.token_hash = ?`, owner, actorKey).Scan(&role, &access, &audience); err != nil {
 		return "", err
 	}
-	if role != RoleAdmin {
+	if role != RoleAdmin || access != InterfaceFull || audience != InterfaceFull {
 		return "", ErrAdministratorRequired
 	}
 	return owner, nil

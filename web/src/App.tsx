@@ -1,5 +1,5 @@
 import { t, translateKnown, useLocale } from "./i18n";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { api } from "./api/client";
 import type { ManagedLLMDuplicateSnapshot } from "./api/types";
 import { ManagedLLMDuplicateDialog } from "./components/ManagedLLMDuplicateDialog";
@@ -12,6 +12,7 @@ import { SettingsRoute } from "./routes/SettingsRoute";
 import { SetupRoute } from "./routes/SetupRoute";
 import { LoginRoute } from "./routes/LoginRoute";
 import { VideoRoute } from "./routes/VideoRoute";
+import { RemoteExecutorProvider } from "./remote/RemoteExecutorProvider";
 import { AppShell } from "./shell/AppShell";
 import { routeBase } from "./shell/NavRail";
 import { useAppState, useHashRoute } from "./state/app-state";
@@ -19,6 +20,14 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { normalizeTheme } from "./theme";
 import { useAuth } from "./state/auth";
 import {LAB_BASE,LabsRoute,legacyLabRoute} from "@labs";
+
+// Old bookmarks lead to the separate remote origin, never another app page.
+function RemoteRoute() {
+  const { status } = useAuth();
+  return <section className="panel"><h1>{t("Remote")}</h1>
+    {status?.remote_url ? <a href={status.remote_url}>{t("Open remote interface")}</a> : <p>{t("Remote interface disabled")}</p>}
+  </section>;
+}
 
 export function App() {
   useLocale();
@@ -174,7 +183,7 @@ export function App() {
             <button type="button" className="btn btn-secondary" onClick={refresh}>{t("Retry core connection")}</button>
           )}
         </section>
-      ) : <ErrorBoundary key={contentBase}>
+      ) : <RemoteExecutorProvider route={contentBase}><ErrorBoundary key={contentBase}>
         {contentBase === "setup" && !hostAdministration ? (
           <section className="panel"><h1>{t("Setup")}</h1><p>{t("Host settings and diagnostics are managed by an administrator.")}</p><a href="#/settings/access">{t("Access")}</a></section>
         ) : contentBase === "setup" ? (
@@ -187,6 +196,8 @@ export function App() {
           <PatternLibraryRoute />
         ) : contentBase === "videos" ? (
           <VideoRoute />
+        ) : contentBase === "remote" ? (
+          <Suspense fallback={<p role="status">{t("Loading…")}</p>}><RemoteRoute /></Suspense>
         ) : contentBase === "settings" ? (
           <SettingsRoute />
         ) : contentBase === LAB_BASE ? (
@@ -194,7 +205,7 @@ export function App() {
         ) : (
           <ChatRoute />
         )}
-      </ErrorBoundary>}
+      </ErrorBoundary></RemoteExecutorProvider>}
       {askBeforeSetup && (
         <SetupPromptDialog
           pending={dismissingSetupPrompt}

@@ -6,11 +6,12 @@ import { t, translateKnown } from "../i18n";
 // malformed-response state. Chat can start, adjust, and stop motion through
 // the backend contract; the frontend sends only text. When speak-replies is
 // on, the controller tab (the audio-lease owner) plays the ordered speech queue.
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { streamChat } from "../api/client";
 import type { ChatMessageDiagnostics } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
+import { useRemoteChatSurface } from "../remote/RemoteExecutorProvider";
 import { useVoicePlayback } from "../state/voice-playback";
 import { VoiceComposerControls } from "./VoiceComposerControls";
 import { useChatHistory, type ChatDisplayMessage } from "./useChatHistory";
@@ -22,11 +23,17 @@ interface Props {
   personaName?: string;
   onBusyChange?: (busy: boolean) => void;
   onSessionChanged?: () => void;
+  /**
+   * Beside an open video, the video's script or the viewer's Off choice can
+   * own the device; replies are then words only (ADR 0032).
+   */
+  motionOwner?: "script" | "off";
+  disabled?: boolean;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChanged }: Props) {
+export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChanged, motionOwner, disabled = false }: Props) {
   const { backendOnline, readOnly, state, refresh } = useAppState();
   const { show } = useToast();
   const { queueSpeech } = useVoicePlayback();
@@ -105,7 +112,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   }
 
   const historyUnavailable = historyLoading || Boolean(historyError);
-  const locked = !backendOnline || !state || readOnly || historyUnavailable;
+  const locked = disabled || !backendOnline || !state || readOnly || historyUnavailable;
   const assistantName = personaName?.trim() || "MagicHandy";
 
   // Speech input shows only when it can work: voice on and an ASR provider
@@ -115,6 +122,23 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   const asrConfigured = Boolean(voiceSettings?.enabled && voiceSettings.asr_provider && voiceSettings.asr_provider !== "none");
   const asrWorker = state?.voice?.workers?.asr;
   const asrReady = asrWorker?.state === "running" && asrWorker.model_state === "ready";
+
+  // A phone remote sends through this composer's path, so its message is
+  // fenced by the same Stop sequence and spoken by this tab (ADR 0032).
+  const remoteSend = useRef<(text: string, stopSequence: number) => boolean>(() => false);
+  useLayoutEffect(() => {
+    remoteSend.current = (text, stopSequence) => {
+      if (locked || busyRef.current || voiceActive || !text.trim() || stopSequence !== state?.stop_sequence) return false;
+      void sendText(text, stopSequence);
+      return true;
+    };
+  });
+  const remoteReady = !locked && !voiceActive;
+  const remoteChat = useMemo(() => ({
+    sessionId, personaName: assistantName, busy, ready: remoteReady, send: (text: string, stopSequence: number) => remoteSend.current(text, stopSequence),
+    latestSeq: activeChat?.latest_seq, revision: activeChat?.revision,
+  }), [sessionId, assistantName, busy, remoteReady, activeChat?.latest_seq, activeChat?.revision]);
+  useRemoteChatSurface(remoteChat);
 
   async function sendText(input: string, stopSequence?: number) {
     const text = input.trim();
@@ -219,7 +243,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
             warning: true,
           } : x)));
         }
-      }, controller.signal, stopSequence);
+      }, controller.signal, stopSequence, motionOwner);
     } catch (e) {
       if (controller.signal.aborted || !mounted.current || streamGeneration.current !== requestGeneration) return;
       const message = e instanceof Error ? translateKnown(e.message) : t("Chat failed.");

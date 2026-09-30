@@ -40,7 +40,7 @@ func convertedRelativePath(relativePath string) string {
 // adoptConvertedFile catalogs the output and retires the source in one
 // transaction, so the library never shows the conversion half-applied.
 //
-// Two things are carried across deliberately:
+// Three things are carried across deliberately:
 //
 //   - The paired script, because the pairing is a property of the content and
 //     the content did not change.
@@ -48,6 +48,8 @@ func convertedRelativePath(relativePath string) string {
 //     script is the same file, so its bias is identical. Making someone
 //     re-calibrate a file they just converted is a small, entirely avoidable
 //     annoyance.
+//   - The title, rating, notes and tags, because they describe the content,
+//     and conversion does not change the content.
 //
 // The source row is hidden rather than deleted. Nothing is removed from disk,
 // and deleting the converted file makes the original reappear on the next scan.
@@ -97,6 +99,9 @@ func (c *Catalog) adoptConvertedFile(ctx context.Context, source Video, info Str
 			// and unknown is the honest state until the browser says otherwise.
 			string(CompatibilityUnknown), nullableText(info.VideoCodec), nullableText(info.AudioCodec),
 		); err != nil {
+			return err
+		}
+		if err := carryCuration(ctx, tx, source.ID, id); err != nil {
 			return err
 		}
 		_, err := tx.ExecContext(ctx,

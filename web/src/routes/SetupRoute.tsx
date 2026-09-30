@@ -211,7 +211,7 @@ export function SetupRoute() {
       });
     } else if (currentStep === "access" && accessChoice === "protected" && !auth.status?.initialized && !createdAdministrator) {
       if (!passwordMeetsMinimum(administratorPassword)) {
-        throw new Error(t("Use a password or passphrase of at least 8 characters."));
+        throw new Error(t("Use a password or passphrase of at least 15 characters."));
       }
       if (administratorPassword !== administratorConfirmation) {
         throw new Error(t("The passwords do not match."));
@@ -534,7 +534,7 @@ function AccessStep({
     {initialized ? <DismissibleNotice id="setup-protection" className="setup-notice"><strong>{t("Password protection is active.")}</strong><span>{t("Manage accounts, passwords, and your profile image from Settings > Access.")}</span></DismissibleNotice> : choice === "protected" && <div className="setup-subsection account-setup-fields">
       <label className="field"><span className="label">{t("Administrator username")}</span><input type="text" autoComplete="username" spellCheck={false} value={username} disabled={locked} onChange={(event) => setUsername(event.target.value)} /></label>
       <div className="setup-fields two-columns">
-        <label className="field"><span className="label">{t("Password")}</span><input type="password" autoComplete="new-password" value={password} disabled={locked} onChange={(event) => setPassword(event.target.value)} /><span className="hint">{t("At least 8 characters. A long, unique passphrase is recommended.")}</span></label>
+        <label className="field"><span className="label">{t("Password")}</span><input type="password" autoComplete="new-password" value={password} disabled={locked} onChange={(event) => setPassword(event.target.value)} /><span className="hint">{t("At least 15 characters. A long, unique passphrase is recommended.")}</span></label>
         <PasswordConfirmationField password={password} confirmation={confirmation} disabled={locked} onChange={setConfirmation} />
       </div>
       <p className="hint-block">{t("The password goes directly to the local account API. It is never written to installer logs, command lines, response files, or settings.")}</p>

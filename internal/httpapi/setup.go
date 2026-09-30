@@ -840,7 +840,7 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, errors.New("setup was saved, but the temporary setup session could not be revoked"))
 			return
 		}
-		s.clearSessionCookie(w)
+		s.clearSessionCookie(w, r)
 		w.Header().Set("Clear-Site-Data", `"cookies"`)
 		payload["signed_out"] = true
 	}

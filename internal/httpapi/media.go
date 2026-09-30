@@ -26,6 +26,7 @@ func (s *Server) mediaRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/media/script-offset", s.handleMediaScriptOffset)
 	mux.HandleFunc("POST /api/media/playback", s.handleMediaPlayback)
 	s.mediaToolRoutes(mux)
+	s.mediaMetadataRoutes(mux)
 }
 
 func (s *Server) handleMediaVideoFunscript(w http.ResponseWriter, r *http.Request) {

@@ -80,7 +80,7 @@ func frameText(v view) string {
 func TestFrameShowsWandWordmarkLinkAndKeys(t *testing.T) {
 	text := frameText(runningView(richGlyphs, 100, 30))
 	for _, want := range []string{"★", "╱", "█▀▄▀█ ▄▀█ █▀▀ █ █▀▀ █ █ ▄▀█ █▄ █ █▀▄ █▄█", "Local-first control for The Handy",
-		"Version 0.1.0-alpha.48", "● Running since 11:04", "Open    http://127.0.0.1:49717", "Access  Local only (this computer)",
+		"Version 0.1.0-alpha.48", "● Running since 11:04", "App     http://127.0.0.1:49717", "Access  Local only (this computer)",
 		"Server starting", "[O] Open in browser", "[C] Copy link", "[S] Stop motion", "[D] Details", "[Q] Quit",
 		"Ctrl+click the link or press O"} {
 		if !strings.Contains(text, want) {
@@ -95,7 +95,7 @@ func TestAddressIsAClickableLink(t *testing.T) {
 	v := runningView(richGlyphs, 100, 30)
 	var rendered string
 	for _, row := range compose(v) {
-		if text := row.render(99); strings.Contains(visible(text), "Open    ") {
+		if text := row.render(99); strings.Contains(visible(text), "App     ") {
 			rendered = text
 		}
 	}
@@ -163,10 +163,11 @@ func TestHandlerShowsActivityAndHidesRequestsUntilDetails(t *testing.T) {
 	logger.Debug("not shown at info")
 	d.drainEvents(d.state)
 
-	if len(d.state.entries) != 3 {
-		t.Fatalf("entries = %+v", d.state.entries)
+	entries := d.state.entries.snapshot()
+	if len(entries) != 3 {
+		t.Fatalf("entries = %+v", entries)
 	}
-	started, request, warning := d.state.entries[0], d.state.entries[1], d.state.entries[2]
+	started, request, warning := entries[0], entries[1], entries[2]
 	if started.message != "Server starting" || started.detail != "component=server  url=http://127.0.0.1:49717" || started.verbose {
 		t.Fatalf("lifecycle entry = %+v", started)
 	}
@@ -179,7 +180,7 @@ func TestHandlerShowsActivityAndHidesRequestsUntilDetails(t *testing.T) {
 
 	v := runningView(richGlyphs, 100, 30)
 	v.entries = nil
-	for _, e := range d.state.entries {
+	for _, e := range entries {
 		if !e.verbose {
 			v.entries = append(v.entries, e)
 		}

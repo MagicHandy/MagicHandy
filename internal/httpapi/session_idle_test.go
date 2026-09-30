@@ -42,6 +42,7 @@ func TestAutomaticBrowserAcknowledgementsDoNotRenewLoginIdleTime(t *testing.T) {
 		{http.MethodPost, "/api/transport/bluetooth/disconnect", `{"client_id":"unbound-browser"}`},
 		{http.MethodPost, "/api/voice/requests/missing/played", `{}`},
 		{http.MethodPost, "/api/media/duration", `{"id":"missing","duration_ms":1000}`},
+		{http.MethodPost, "/api/remote/presence", `{"route":"videos"}`},
 		{http.MethodPost, "/api/media/sync", `{"video_id":"missing","session_id":"player","event_sequence":1,"state":"playing","event":"heartbeat","media_time_ms":0,"playback_rate":1}`},
 	} {
 		t.Run(request.route, func(t *testing.T) {

@@ -1,3 +1,4 @@
+import { AccountPasswordPanel } from "./AccountPasswordPanel";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import type { AccountRole, UserAccount } from "../api/types";
@@ -6,9 +7,8 @@ import { useAuth } from "../state/auth";
 import { useHashRoute, useToast } from "../state/app-state";
 import { PencilIcon, TrashIcon } from "../shell/icons";
 import { PROFILE_IMAGE_MAX_EDGE, resizeImageToJPEG } from "../util/profile-image";
-import { passwordMeetsMinimum } from "../util/password";
 import { AccountAvatar } from "./AccountAvatar";
-import { PasswordConfirmationField } from "./PasswordConfirmationField";
+import { PasswordConfirmationField, newPasswordError } from "./PasswordConfirmationField";
 import { NetworkSettingsPanel } from "./NetworkSettingsPanel";
 import { ControlGrantPanel } from "./ControlGrantPanel";
 import { SessionSettingsPanel } from "./SessionSettingsPanel";
@@ -49,7 +49,7 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
         <AccessSettingsNavigation section={section} administrator={administrator} />
         <div className="access-content" key={`${auth.status.session_id || account.id}:${account.role}:${section}`}>
           {section === "profile" && <><ProfileGroup account={account} disabled={!backendOnline} onChanged={auth.refresh} /><NoticePreferencesPanel /><LinkedProfilesGroup /></>}
-          {section === "security" && <><PasswordGroup disabled={!backendOnline} onChanged={auth.refresh} /><RecoveryCodesPanel backendOnline={backendOnline} /></>}
+          {section === "security" && <><AccountPasswordPanel disabled={!backendOnline} onChanged={auth.refresh} /><RecoveryCodesPanel backendOnline={backendOnline} /></>}
           {section === "sessions" && <SessionSettingsPanel backendOnline={backendOnline} onSignedOut={auth.refresh} />}
           {section === "network" && administrator && <NetworkSettingsPanel backendOnline={backendOnline} administrator />}
           {(section === "accounts" || section === "history") && administrator && <AccountDirectory current={account} backendOnline={backendOnline} history={section === "history"} />}
@@ -149,7 +149,7 @@ function BootstrapAccountForm({ disabled, onCreated }: {
         <label className="field"><span className="label">{t("New password")}</span><input type="password" autoComplete="new-password" value={password} disabled={disabled || busy} onChange={(event) => setPassword(event.target.value)} /></label>
         <PasswordConfirmationField password={password} confirmation={confirmation} disabled={disabled || busy} onChange={setConfirmation} />
       </div>
-      <p className="hint-block">{t("Use at least 8 characters and a unique passphrase. MagicHandy never stores or returns the plaintext password.")}</p>
+      <p className="hint-block">{t("Use at least 15 characters and a unique passphrase. MagicHandy never stores or returns the plaintext password.")}</p>
       {error && <p className="form-status auth-error" role="alert">{error}</p>}
       <button className="btn btn-primary" type="submit" disabled={disabled || busy || !username.trim() || !password}>{busy ? t("Creating…") : t("Enable password protection")}</button>
     </form>
@@ -207,7 +207,7 @@ function ProfileGroup({ account, disabled, onChanged }: {
         </span>
         <span className="account-profile-copy">
           <strong>{account.username}</strong>
-          <span>{account.role === "admin" ? t("Administrator") : t("Operator")}</span>
+          <span>{account.role === "admin" ? t("Administrator") : account.interface_access === "remote" ? t("Remote only") : t("Operator")}</span>
           <small>{t("Used in the account selector and future linked control sessions.")}</small>
         </span>
       </div>
@@ -217,51 +217,6 @@ function ProfileGroup({ account, disabled, onChanged }: {
   );
 }
 
-function PasswordGroup({ disabled, onChanged }: { disabled: boolean; onChanged: () => Promise<unknown> }) {
-  const { show } = useToast();
-  const [current, setCurrent] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    const validation = newPasswordError(password, confirmation);
-    if (validation) {
-      setError(validation);
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      await api.authChangePassword(current, password);
-      show(t("Password changed. Sign in again with the new password."), "success");
-      await onChanged();
-    } catch (reason) {
-      setError(errorMessage(reason));
-    } finally {
-      setBusy(false);
-      setCurrent("");
-      setPassword("");
-      setConfirmation("");
-    }
-  };
-  return (
-    <section className="group">
-      <h3 className="group-title">{t("Change your password")}</h3>
-      <form className="account-form" onSubmit={(event) => void submit(event)}>
-        <div className="settings-grid two">
-          <label className="field"><span className="label">{t("Current password")}</span><input type="password" autoComplete="current-password" value={current} disabled={disabled || busy} onChange={(event) => setCurrent(event.target.value)} /></label>
-          <label className="field"><span className="label">{t("New password")}</span><input type="password" autoComplete="new-password" value={password} disabled={disabled || busy} onChange={(event) => setPassword(event.target.value)} /></label>
-          <PasswordConfirmationField password={password} confirmation={confirmation} disabled={disabled || busy} onChange={setConfirmation} />
-        </div>
-        <p className="hint-block">{t("Changing your password signs out every browser session for this account.")}</p>
-        {error && <p className="form-status auth-error" role="alert">{error}</p>}
-        <button className="btn btn-secondary" type="submit" disabled={disabled || busy || !current || !password}>{busy ? t("Changing…") : t("Change password")}</button>
-      </form>
-    </section>
-  );
-}
 
 function LinkedProfilesGroup() {
   const identities = useAuth().status?.control_identities ?? [];
@@ -304,6 +259,14 @@ function AccountList({ current, accounts, disabled, onChanged }: {
       setBusy("");
     }
   };
+  const changeAccess = async (account: UserAccount, access: "full" | "remote") => {
+    if (access === (account.interface_access || "full")) return;
+    if (!window.confirm(t("Change access for {username}? All of their sessions and control permissions will be revoked.", { username: account.username }))) return;
+    setBusy(account.id);setError("");
+    try { await api.setAccountInterfaceAccess(account.id,access);await onChanged();show(t("Account access updated. Grant control again when appropriate.")); }
+    catch (reason) { setError(errorMessage(reason)); }
+    finally { setBusy(""); }
+  };
   const reset = async (event: FormEvent, account: UserAccount) => {
     event.preventDefault();
     const validation = newPasswordError(password, confirmation);
@@ -331,7 +294,7 @@ function AccountList({ current, accounts, disabled, onChanged }: {
         <li className="account-row" key={account.id}>
           <div className="account-row-summary">
             <AccountAvatar account={account} />
-            <span className="account-row-name"><strong>{account.username}</strong><span className="account-row-meta"><small>{account.role === "admin" ? t("Administrator") : t("Operator")}</small><small>{account.disabled ? t("Disabled") : t("Enabled")}</small></span>
+            <span className="account-row-name"><strong>{account.username}</strong><span className="account-row-meta"><small>{account.role === "admin" ? t("Administrator") : account.interface_access === "remote" ? t("Remote only") : t("Operator")}</small><small>{account.disabled ? t("Disabled") : t("Enabled")}</small></span>
               <small>{account.last_login_at ? t("Last sign-in {time}", { time: new Date(account.last_login_at).toLocaleString() }) : t("Never signed in")}</small>
             </span>
             <span className="row-actions">
@@ -345,7 +308,10 @@ function AccountList({ current, accounts, disabled, onChanged }: {
             <PasswordConfirmationField password={password} confirmation={confirmation} disabled={disabled || Boolean(busy)} onChange={setConfirmation} />
             <button className="btn btn-primary" type="submit" disabled={disabled || Boolean(busy) || !password}>{busy ? t("Saving…") : t("Save new password")}</button>
           </form>}
-          {account.role === "operator" && permissionID === account.id && <ControlGrantPanel accountID={account.id} disabled={disabled || account.disabled || Boolean(busy)} />}
+          {account.role === "operator" && permissionID === account.id && <div className="account-access-editor">
+            <label className="field"><span className="label">{t("Interface access")}</span><select value={account.interface_access || "full"} disabled={disabled || Boolean(busy)} onChange={event => void changeAccess(account,event.target.value as "full" | "remote")}><option value="full">{t("Full application")}</option><option value="remote">{t("Remote only")}</option></select></label>
+            <ControlGrantPanel key={`${account.id}:${account.interface_access}`} accountID={account.id} remoteOnly={account.interface_access === "remote"} disabled={disabled || account.disabled || Boolean(busy)} />
+          </div>}
         </li>
       ))}
       {error && <li className="form-status auth-error" role="alert">{error}</li>}
@@ -356,7 +322,7 @@ function AccountList({ current, accounts, disabled, onChanged }: {
 function CreateAccountForm({ disabled, onCreated }: { disabled: boolean; onCreated: () => Promise<void> }) {
   const { show } = useToast();
   const [username, setUsername] = useState("");
-  const [role, setRole] = useState<AccountRole>("operator");
+  const [role, setRole] = useState<AccountRole | "remote">("operator");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
@@ -371,7 +337,8 @@ function CreateAccountForm({ disabled, onCreated }: { disabled: boolean; onCreat
     setBusy(true);
     setError("");
     try {
-      await api.createAccount(username.trim(), password, role);
+      if (role === "remote") await api.createAccount(username.trim(), password, "operator", "remote");
+      else await api.createAccount(username.trim(), password, role);
       setUsername("");
       setPassword("");
       setConfirmation("");
@@ -386,10 +353,10 @@ function CreateAccountForm({ disabled, onCreated }: { disabled: boolean; onCreat
   };
   return (
     <form className="account-form account-create-form" onSubmit={(event) => void submit(event)}>
-      <h4>{t("Add an account")}</h4>
+      <h4>{t("Add an account")}</h4><p className="hint-block">{t("Remote-only accounts can use the remote interface and manage their own login. A control permission connects them to the granting administrator’s desktop.")}</p>
       <div className="settings-grid two">
         <label className="field"><span className="label">{t("Username")}</span><input type="text" autoComplete="off" spellCheck={false} value={username} disabled={disabled || busy} onChange={(event) => setUsername(event.target.value)} /></label>
-        <label className="field"><span className="label">{t("Role")}</span><select value={role} disabled={disabled || busy} onChange={(event) => setRole(event.target.value as AccountRole)}><option value="operator">{t("Operator")}</option><option value="admin">{t("Administrator")}</option></select></label>
+        <label className="field"><span className="label">{t("Role")}</span><select value={role} disabled={disabled || busy} onChange={(event) => setRole(event.target.value as AccountRole | "remote")}><option value="operator">{t("Operator")}</option><option value="remote">{t("Remote only")}</option><option value="admin">{t("Administrator")}</option></select></label>
         <label className="field"><span className="label">{t("Password")}</span><input type="password" autoComplete="new-password" value={password} disabled={disabled || busy} onChange={(event) => setPassword(event.target.value)} /></label>
         <PasswordConfirmationField password={password} confirmation={confirmation} disabled={disabled || busy} onChange={setConfirmation} />
       </div>
@@ -397,10 +364,4 @@ function CreateAccountForm({ disabled, onCreated }: { disabled: boolean; onCreat
       <button className="btn btn-primary" type="submit" disabled={disabled || busy || !username.trim() || !password}>{busy ? t("Creating…") : t("Create account")}</button>
     </form>
   );
-}
-
-function newPasswordError(password: string, confirmation: string): string {
-  if (!passwordMeetsMinimum(password)) return t("Use a password or passphrase of at least 8 characters.");
-  if (password !== confirmation) return t("The passwords do not match.");
-  return "";
 }

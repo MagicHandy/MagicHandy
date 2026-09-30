@@ -43,10 +43,11 @@ vi.mock("./routes/ChatRoute", () => ({ ChatRoute: () => <div>Chat route</div> })
 vi.mock("./routes/PresetModesRoute", () => ({ PresetModesRoute: () => <div>Modes route</div> }));
 vi.mock("./routes/PatternLibraryRoute", () => ({ PatternLibraryRoute: () => <div>Library route</div> }));
 vi.mock("./routes/VideoRoute", () => ({ VideoRoute: () => <div>Videos route</div> }));
+vi.mock("./routes/RemoteRoute", () => ({ RemoteRoute: () => <div>Remote route</div> }));
 vi.mock("./routes/SetupRoute", () => ({ SetupRoute: () => <div>Setup route</div> }));
 
 const client = vi.hoisted(() => ({ completeSetup: vi.fn().mockResolvedValue({ settings: {} }), llmDuplicates: vi.fn().mockRejectedValue(new Error("no")) }));
-vi.mock("./api/client", () => ({ api: client }));
+vi.mock("./api/client", () => ({ api: client, REMOTE_COMMAND_EVENT: "magichandy:remote-command" }));
 
 describe("App route lifetime", () => {
   beforeEach(() => {
@@ -154,5 +155,13 @@ describe("App route lifetime", () => {
 
     expect(screen.getByText("Videos route")).toBeInTheDocument();
     expect(screen.queryByText("Library route")).not.toBeInTheDocument();
+  });
+
+  it("keeps old remote bookmarks as a migration screen", async () => {
+    app.route = "#/remote";
+    render(<App />);
+
+    expect(await screen.findByText("Remote interface disabled")).toBeInTheDocument();
+    expect(screen.queryByText("Chat route")).not.toBeInTheDocument();
   });
 });

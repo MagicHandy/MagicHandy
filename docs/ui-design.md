@@ -16,8 +16,13 @@ stream of JSON logs.
   (Local only, LAN + local, Public, trusted proxy) and notes sign-in, and a
   simulated run says no device moves.
 - **Recent activity.** Log records appear as plain sentences with their
-  details. Warnings are amber. Per-request lines are hidden until Details is
-  on, because the browser polls several times a second.
+  details. Warnings and failed HTTP requests remain visible; warnings are amber.
+  Successful request lines are hidden until Details is on, because the browser
+  polls several times a second. Visible activity and the full request history
+  each retain up to 400 records independently, so background polling cannot
+  erase the normal view. Details shows the latest combined stream; switching
+  back restores the retained activity. An empty view says there is no activity
+  to display yet.
 - **Keys.** O opens the app in the browser, C copies the link, S or Esc stops
   motion, D toggles details, and Q asks for a second Q before quitting.
   Ctrl+C and closing the window still shut the app down cleanly.
@@ -55,6 +60,47 @@ The workspace establishes a positioning context for its absolute accessibility
 labels, preventing off-screen controls from creating an extra document scrollbar.
 Keep dynamic resizing, read-only clients, connection panels and short viewports
 in the visual checks. See [mobile Chat review](chat-mobile-review-2026-09-20.md).
+
+## Video curation and the phone remote
+
+Video cards keep opening the player; a separate pencil action edits the title,
+rating, notes and tags. The grid adds tag, rating and script filters, and
+Manage tags renames or removes a tag everywhere. Ratings are outline stars
+that fill in the accent hue. Tags are compact chips, never pills. The player
+heading holds only the title and its actions. The file name, size, location,
+script pairing, rating, tags and notes sit in a Details section below the video
+and its timeline, folded each time a video opens, so the picture leads.
+
+The watch page follows livestream sites: the picture comes first and takes
+the whole workspace width and the height the status bar leaves, with no page
+heading above it and no content-width cap. One bar under the picture holds a
+back arrow, the title, the motion source switch (Motion: Script, Chat, Off),
+the Chat toggle and an edit icon. Chat opens as a full-height column beside
+the picture and keeps playing while it opens or closes; below 1000px the chat
+stacks under the video. With the chat open, fullscreen takes the video and the
+chat together. The chat column's note says who moves the device for the chosen
+source, and Script is dimmed with an explanation when a video has none.
+
+The rail's Remote link opens the dedicated remote origin in another tab. General
+settings has a saved "Show Remote in sidebar" switch; it changes the shortcut
+across browsers without shutting down the listener. Older settings writes preserve
+that choice. The legacy `#/remote` bookmark only links there. The remote has its own sign-in and
+account self-service, without the main rail, controller acquisition or host
+settings. Phone layouts use a compact filled Video/Chat segmented choice and a
+single-row header with an accessible account icon. Desktop shows video and chat
+side by side, separated by a continuous neutral border. The desktop connection
+readout joins the header; the chat composer has its own bottom divider. The phone
+keeps an outlined connection row and an inset Video/Chat selector. Flat controls
+use visible borders and solid fills, without inherited button gradients, shadows
+or rounded badges. Playback, motion source and library sections have clear neutral
+dividers. Library rows also have left and right borders, sharing their horizontal
+dividers without doubling the stroke. Controls use 36px targets, a 52px play button, whole-second clocks,
+10-second skips, mute, volume, speed, source choice and searchable catalog pages.
+Opening a video never starts it. Committed chat text stays bounded to the active
+conversation. Selected choices use a filled surface, never a left accent or
+underline. A stale connection hides controls; errors remain explicit. Red is
+reserved for the always-mounted Stop in a footer outside the scrolling content.
+See [ADR 0033](decisions/0033-remote-listener-and-account-scope.md).
 
 ## Informational notices
 

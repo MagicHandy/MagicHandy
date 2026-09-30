@@ -42,7 +42,7 @@ func TestSetupCompletionDefaultsOnlyForExistingDocuments(t *testing.T) {
 	}
 }
 
-func TestUpdateCheckModePersistsAndSurvivesOlderUIWrites(t *testing.T) {
+func TestOptionalUIPreferencesPersistAndSurviveOlderUIWrites(t *testing.T) {
 	dir := t.TempDir()
 	store, err := OpenStore(dir)
 	if err != nil {
@@ -50,6 +50,8 @@ func TestUpdateCheckModePersistsAndSurvivesOlderUIWrites(t *testing.T) {
 	}
 	settings, _ := store.Snapshot()
 	settings.UI.UpdateCheckMode = UpdateCheckManual
+	showRemote := false
+	settings.UI.ShowRemoteNavigation = &showRemote
 	if _, err := store.Save(settings); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -63,6 +65,9 @@ func TestUpdateCheckModePersistsAndSurvivesOlderUIWrites(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = reloaded.Close() })
 	current, _ := reloaded.Snapshot()
+	if current.UI.ShowRemoteNavigation == nil || *current.UI.ShowRemoteNavigation {
+		t.Fatal("reloaded settings lost the hidden remote shortcut")
+	}
 	if current.UI.UpdateCheckMode != UpdateCheckManual {
 		t.Fatalf("reloaded update check mode = %q, want %q", current.UI.UpdateCheckMode, UpdateCheckManual)
 	}
@@ -87,6 +92,9 @@ func TestUpdateCheckModePersistsAndSurvivesOlderUIWrites(t *testing.T) {
 	}
 	if next.UI.UpdateCheckMode != UpdateCheckManual {
 		t.Fatalf("older UI update reset update check mode to %q", next.UI.UpdateCheckMode)
+	}
+	if next.UI.ShowRemoteNavigation == nil || *next.UI.ShowRemoteNavigation {
+		t.Fatal("older UI update reset remote shortcut visibility")
 	}
 	if !reflect.DeepEqual(next.UI.NotificationCategories, DefaultNotificationCategories) {
 		t.Fatalf("older UI update reset notification categories to %v", next.UI.NotificationCategories)

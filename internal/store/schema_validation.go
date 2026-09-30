@@ -96,14 +96,16 @@ var requiredSchemaTables = []schemaTable{
 		"modified_at:TEXT", "duration_ms:INTEGER?", "funscript_relative_path:TEXT?", "missing:INTEGER", "scanned_at:TEXT",
 		"script_offset_ms:INTEGER", "thumbnail_generated_at:TEXT?", "compatibility:TEXT",
 		"video_codec:TEXT?", "audio_codec:TEXT?", "superseded:INTEGER",
+		"title:TEXT?", "rating:INTEGER?", "notes:TEXT?",
 	), primaryKey: []string{"id"}},
+	{name: "media_video_tags", columns: columns("video_id:TEXT", "tag:TEXT", "tag_key:TEXT", "created_at:TEXT"), primaryKey: []string{"video_id", "tag_key"}},
 	{name: "user_accounts", columns: columns(
 		"id:TEXT", "username:TEXT", "username_key:TEXT", "role:TEXT", "password_hash:TEXT",
-		"disabled:INTEGER", "last_login_at:TEXT", "created_at:TEXT", "updated_at:TEXT", "profile_updated_at:TEXT",
+		"disabled:INTEGER", "last_login_at:TEXT", "created_at:TEXT", "updated_at:TEXT", "profile_updated_at:TEXT", "interface_access:TEXT",
 	), primaryKey: []string{"id"}},
 	{name: "user_sessions", columns: columns(
 		"token_hash:TEXT", "user_id:TEXT", "created_at:TEXT", "last_seen_at:TEXT", "expires_at:TEXT", "control_account_id:TEXT?",
-		"public_id:TEXT", "device_name:TEXT", "client_browser:TEXT", "client_platform:TEXT",
+		"public_id:TEXT", "device_name:TEXT", "client_browser:TEXT", "client_platform:TEXT", "interface:TEXT",
 	), primaryKey: []string{"token_hash"}},
 	{name: "user_account_links", columns: columns(
 		"owner_user_id:TEXT", "linked_user_id:TEXT", "label:TEXT", "status:TEXT", "created_at:TEXT", "updated_at:TEXT",
@@ -128,6 +130,7 @@ var requiredSchemaIndexes = []schemaIndex{
 	{table: "settings_recoveries", name: "settings_recoveries_recovered_at", columns: indexColumns("-recovered_at", "-id")},
 	{table: "media_videos", name: "media_videos_location_relative", unique: true, columns: indexColumns("location_path", "relative_path")},
 	{table: "media_videos", name: "media_videos_missing_name", columns: indexColumns("missing", "display_name", "id")},
+	{table: "media_video_tags", name: "media_video_tags_tag", columns: indexColumns("tag_key", "video_id")},
 	{table: "user_accounts", name: "user_accounts_username_key", unique: true, columns: indexColumns("username_key")},
 	{table: "user_sessions", name: "user_sessions_user_expiry", columns: indexColumns("user_id", "expires_at")},
 	{table: "user_sessions", name: "user_sessions_public_id", unique: true, columns: indexColumns("public_id")},
@@ -143,6 +146,7 @@ var requiredSchemaForeignKeys = []schemaForeignKey{
 	{table: "chat_workspace", column: "active_session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "RESTRICT"},
 	{table: "chat_session_cursors", column: "session_id", parentTable: "chat_sessions", parentColumn: "id", onDelete: "CASCADE"},
 	{table: "persona_lore", column: "persona_id", parentTable: "personas", parentColumn: "id", onDelete: "CASCADE"},
+	{table: "media_video_tags", column: "video_id", parentTable: "media_videos", parentColumn: "id", onDelete: "CASCADE"},
 	{
 		table:        "pattern_feedback",
 		column:       "pattern_id",

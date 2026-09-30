@@ -7,7 +7,7 @@ function Fixture() {
   const [confirmation, setConfirmation] = useState("");
   return (
     <PasswordConfirmationField
-      password="eight888"
+      password="fifteen-char8888"
       confirmation={confirmation}
       onChange={setConfirmation}
     />
@@ -26,7 +26,7 @@ describe("PasswordConfirmationField", () => {
     expect(input).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByText("The passwords do not match.")).toHaveAttribute("data-state", "mismatch");
 
-    fireEvent.change(input, { target: { value: "eight888" } });
+    fireEvent.change(input, { target: { value: "fifteen-char8888" } });
     expect(input).toHaveAttribute("aria-invalid", "false");
     expect(screen.getByText("Passwords match.")).toHaveAttribute("data-state", "match");
   });

@@ -2,11 +2,15 @@ package chat
 
 import "encoding/json"
 
-// PatternResponseSchema constrains the compact library action vocabulary.
+// PatternResponseSchema constrains chat-only replies or the compact library
+// action vocabulary, according to this turn's capabilities.
 // Intent, lifecycle authority and actual motion still pass normal validation.
 // It never supplies a missing action or selects a pattern.
 func PatternResponseSchema(patterns []PatternChoice, capabilities Capabilities, state *MotionContext) json.RawMessage {
-	if !capabilities.Motion || capabilities.MotionMode == MotionModeDynamic || !capabilities.Patterns {
+	if !capabilities.Motion {
+		return chatOnlyResponseSchema(capabilities)
+	}
+	if capabilities.MotionMode == MotionModeDynamic || !capabilities.Patterns {
 		return nil
 	}
 	minimum, maximum := 1, 100
@@ -37,5 +41,19 @@ func PatternResponseSchema(patterns []PatternChoice, capabilities Capabilities, 
 		fields["new_mood"] = map[string]any{"type": "string", "enum": Moods()}
 	}
 	encoded, _ := json.Marshal(object(fields, []string{"reply"}))
+	return encoded
+}
+
+// Grammar support is an additional guard against historical motion examples;
+// the parser still strips disabled capabilities for providers without schemas.
+func chatOnlyResponseSchema(capabilities Capabilities) json.RawMessage {
+	fields := map[string]any{"reply": map[string]any{"type": "string"}}
+	if capabilities.MoodTracking {
+		fields["new_mood"] = map[string]any{"type": "string", "enum": Moods()}
+	}
+	encoded, _ := json.Marshal(map[string]any{
+		"type": "object", "properties": fields,
+		"required": []string{"reply"}, "additionalProperties": false,
+	})
 	return encoded
 }

@@ -135,6 +135,7 @@ export function SettingsRoute() {
     setS((cur) => (cur ? {
       ...cur,
       ui: {
+        ...cur.ui,
         locale: cur.ui?.locale ?? "en",
         theme: cur.ui?.theme ?? DEFAULT_THEME,
         setup_completed: cur.ui?.setup_completed ?? true,
@@ -198,6 +199,7 @@ export function SettingsRoute() {
         setup_completed: s.ui?.setup_completed ?? true,
         update_check_mode: s.ui?.update_check_mode ?? "automatic",
         notification_categories: notificationCategories(s.ui?.notification_categories),
+        show_remote_navigation: s.ui?.show_remote_navigation ?? true,
       },
       // Playback filters save through their immediate endpoint. Omitting them
       // here prevents a stale Settings draft from overwriting newer values.
@@ -415,6 +417,11 @@ export function SettingsRoute() {
                 disabled={locked}
                 onChange={(theme) => patchUI({ theme })}
               />
+              <label className="toggle-line">
+                <span className="toggle"><input type="checkbox" checked={s.ui?.show_remote_navigation !== false} disabled={locked} onChange={event => patchUI({ show_remote_navigation: event.target.checked })} /><span className="track" aria-hidden="true" /></span>
+                <span>{t("Show Remote in sidebar")}</span>
+              </label>
+              <p className="hint-block">{t("Hides only the shortcut. The remote remains available at its own address. Applies to every browser after Save settings.")}</p>
             </div>
             <LabsSettings/>
             <div className="group">

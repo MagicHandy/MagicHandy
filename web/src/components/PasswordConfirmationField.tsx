@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { t } from "../i18n";
-import { passwordConfirmationState } from "../util/password";
+import { passwordConfirmationState, passwordMeetsMinimum } from "../util/password";
 
 export function PasswordConfirmationField({
   password,
@@ -50,4 +50,10 @@ export function PasswordConfirmationField({
       </span>
     </label>
   );
+}
+
+export function newPasswordError(password: string, confirmation: string): string {
+  if (!passwordMeetsMinimum(password)) return t("Use a password or passphrase of at least 15 characters.");
+  if (password !== confirmation) return t("The passwords do not match.");
+  return "";
 }

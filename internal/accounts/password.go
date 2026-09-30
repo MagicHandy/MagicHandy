@@ -15,7 +15,7 @@ import (
 
 const (
 	// MinPasswordCharacters is the minimum accepted Unicode password length.
-	MinPasswordCharacters = 8
+	MinPasswordCharacters = 15
 	// MaxPasswordBytes bounds password-hashing work and request memory.
 	MaxPasswordBytes = 1024
 

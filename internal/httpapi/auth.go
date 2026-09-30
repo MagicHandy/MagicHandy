@@ -86,14 +86,8 @@ func newAuthenticationComponents(store *config.Store, runtime Runtime) (*account
 
 func (s *Server) authenticationRoutes(mux *http.ServeMux) {
 	s.controlGrantRoutes(mux)
-	s.sessionManagementRoutes(mux)
-	s.accountRecoveryRoutes(mux)
-	s.noticePreferenceRoutes(mux)
-	mux.HandleFunc("GET /api/auth/status", s.handleAuthenticationStatus)
+	s.authenticationPortalRoutes(mux)
 	mux.HandleFunc("POST /api/auth/bootstrap", s.handleAuthenticationBootstrap)
-	mux.HandleFunc("POST /api/auth/login", credentialHandler(s.handleAuthenticationLogin))
-	mux.HandleFunc("POST /api/auth/logout", s.handleAuthenticationLogout)
-	mux.HandleFunc("PUT /api/auth/password", credentialHandler(s.handleAuthenticationPassword))
 	mux.HandleFunc("GET /api/auth/control-identities", s.handleControlIdentities)
 	mux.HandleFunc("PUT /api/auth/control-identity", s.handleControlIdentity)
 	mux.HandleFunc("PUT /api/auth/profile-image", s.handleProfileImageUpload)
@@ -102,6 +96,7 @@ func (s *Server) authenticationRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/accounts", s.handleAccountCreate)
 	mux.HandleFunc("PUT /api/accounts/{id}/password", credentialHandler(s.handleAccountPassword))
 	mux.HandleFunc("PUT /api/accounts/{id}/disabled", s.handleAccountDisabled)
+	mux.HandleFunc("PUT /api/accounts/{id}/interface-access", s.handleAccountInterfaceAccess)
 	mux.HandleFunc("GET /api/accounts/{id}/profile-image", s.handleProfileImage)
 }
 
@@ -130,7 +125,7 @@ func (s *Server) authenticateRequests(next http.Handler) http.Handler {
 			writeBoundedJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "session verification is temporarily unavailable; retry shortly"})
 			return
 		} else if token != "" {
-			s.clearSessionCookie(w)
+			s.clearSessionCookie(w, r)
 		}
 
 		if s.auth.authenticationRequired() && !isPublicAuthenticationRequest(r) {
@@ -171,7 +166,7 @@ func isPublicAuthenticationRequest(r *http.Request) bool {
 }
 
 func (s *Server) sessionFromRequest(r *http.Request) (accounts.Session, string, error) {
-	cookie, err := r.Cookie(s.sessionCookieName())
+	cookie, err := r.Cookie(s.sessionCookieName(r))
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
 		return accounts.Session{}, "", accounts.ErrInvalidSession
 	}
@@ -185,6 +180,9 @@ func (s *Server) sessionFromRequest(r *http.Request) (accounts.Session, string, 
 	session, err := resolve(ctx, token)
 	if err != nil {
 		return accounts.Session{}, token, err
+	}
+	if session.Interface != requestInterface(r) || (requestInterface(r) == accounts.InterfaceFull && !session.Account.FullAccess()) {
+		return accounts.Session{}, token, accounts.ErrInvalidSession
 	}
 	return session, token, nil
 }
@@ -219,18 +217,24 @@ func (s *Server) writeAuthenticationRequired(w http.ResponseWriter) {
 	writeBoundedJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 }
 
-func (s *Server) sessionCookieName() string {
+func (s *Server) sessionCookieName(r *http.Request) string {
+	if requestInterface(r) == accounts.InterfaceRemote {
+		if s.auth.options.SecureCookies {
+			return "__Host-MagicHandy-Remote-Session"
+		}
+		return "MagicHandy-Remote-Session"
+	}
 	if s.auth.options.SecureCookies {
 		return secureSessionCookieName
 	}
 	return loopbackSessionCookieName
 }
 
-func (s *Server) setSessionCookie(w http.ResponseWriter, token string) {
+func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
 	// #nosec G124 -- Secure is mandatory in TLS mode and deliberately false only
 	// for the trusted loopback-HTTP mode; HttpOnly and SameSite stay mandatory.
 	http.SetCookie(w, &http.Cookie{
-		Name:     s.sessionCookieName(),
+		Name:     s.sessionCookieName(r),
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
@@ -240,11 +244,11 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, token string) {
 	w.Header().Set("Cache-Control", "no-store")
 }
 
-func (s *Server) clearSessionCookie(w http.ResponseWriter) {
+func (s *Server) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	// #nosec G124 -- deletion must exactly match the mode-specific cookie flags;
 	// the non-Secure variant exists only for trusted loopback HTTP.
 	http.SetCookie(w, &http.Cookie{
-		Name:     s.sessionCookieName(),
+		Name:     s.sessionCookieName(r),
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
@@ -293,11 +297,13 @@ func (s *Server) handleAuthenticationStatus(w http.ResponseWriter, r *http.Reque
 	currentSessionID := ""
 	if session, ok := authenticatedSession(r); ok {
 		currentSessionID = session.session.ID
-		controlIdentities, err = s.accounts.ControlIdentities(r.Context(), account.ID, session.session.ControlAccountID)
-		if err != nil {
-			s.logger.Warn("control identities could not be listed", "error", err)
-			writeBoundedJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "account status is unavailable"})
-			return
+		if requestInterface(r) == accounts.InterfaceFull {
+			controlIdentities, err = s.accounts.ControlIdentities(r.Context(), account.ID, session.session.ControlAccountID)
+			if err != nil {
+				s.logger.Warn("control identities could not be listed", "error", err)
+				writeBoundedJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "account status is unavailable"})
+				return
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -305,7 +311,9 @@ func (s *Server) handleAuthenticationStatus(w http.ResponseWriter, r *http.Reque
 		"authentication_required": s.auth.authenticationRequired(),
 		"authenticated":           authenticated,
 		"account":                 optionalAccount(account, authenticated),
-		"bootstrap_available":     isLocalHostRequest(r),
+		"bootstrap_available":     requestInterface(r) == accounts.InterfaceFull && isLocalHostRequest(r),
+		"interface":               requestInterface(r),
+		"remote_url":              s.remoteURL,
 		"ui_locale":               settings.UI.Locale,
 		"control_identities":      controlIdentities,
 		"session_id":              currentSessionID,
@@ -363,7 +371,7 @@ func (s *Server) handleAuthenticationBootstrap(w http.ResponseWriter, r *http.Re
 		return
 	}
 	s.bootstrapController(r.WithContext(audit.WithActor(r.Context(), audit.Actor{Type: "account", AccountID: account.ID, SessionID: session.ID})), session.Key)
-	s.setSessionCookie(w, token)
+	s.setSessionCookie(w, r, token)
 	s.logger.Info("initial administrator account created", "account_id", account.ID)
 	writeJSON(w, http.StatusCreated, map[string]any{"account": account})
 }
@@ -397,7 +405,7 @@ func (s *Server) handleAuthenticationPassword(w http.ResponseWriter, r *http.Req
 		}
 		return
 	}
-	s.clearSessionCookie(w)
+	s.clearSessionCookie(w, r)
 	w.Header().Set("Clear-Site-Data", `"cookies"`)
 	s.endRevokedSessions(r.Context(), current.session.Key, keys)
 	w.WriteHeader(http.StatusNoContent)
@@ -453,7 +461,7 @@ func (s *Server) handleControlIdentity(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleProfileImageUpload(w http.ResponseWriter, r *http.Request) {
-	account, ok := authenticatedAccount(r)
+	current, ok := authenticatedSession(r)
 	if !ok {
 		s.writeAuthenticationRequired(w)
 		return
@@ -467,9 +475,11 @@ func (s *Server) handleProfileImageUpload(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusRequestEntityTooLarge, errors.New("profile image is too large"))
 		return
 	}
-	updated, err := s.accounts.SaveProfileImage(r.Context(), account.ID, data)
+	updated, err := s.accounts.SaveOwnProfileImage(r.Context(), current.session.Key, data)
 	if err != nil {
-		if errors.Is(err, accounts.ErrProfileImageInvalid) {
+		if errors.Is(err, accounts.ErrInvalidSession) {
+			s.writeAuthenticationRequired(w)
+		} else if errors.Is(err, accounts.ErrProfileImageInvalid) {
 			writeError(w, http.StatusBadRequest, err)
 		} else {
 			s.logger.Warn("account profile image could not be saved", "error", err)
@@ -481,13 +491,17 @@ func (s *Server) handleProfileImageUpload(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleProfileImageDelete(w http.ResponseWriter, r *http.Request) {
-	account, ok := authenticatedAccount(r)
+	current, ok := authenticatedSession(r)
 	if !ok {
 		s.writeAuthenticationRequired(w)
 		return
 	}
-	updated, err := s.accounts.DeleteProfileImage(r.Context(), account.ID)
+	updated, err := s.accounts.DeleteOwnProfileImage(r.Context(), current.session.Key)
 	if err != nil {
+		if errors.Is(err, accounts.ErrInvalidSession) {
+			s.writeAuthenticationRequired(w)
+			return
+		}
 		s.logger.Warn("account profile image could not be removed", "error", err)
 		writeError(w, http.StatusInternalServerError, errors.New("profile image could not be removed"))
 		return
@@ -536,9 +550,13 @@ func (s *Server) handleAuthenticationLogin(w http.ResponseWriter, r *http.Reques
 	var session accounts.Session
 	_, allowed, err := s.authenticateAccount(r, body.Username, func() (accounts.Account, error) {
 		var err error
-		token, session, err = s.accounts.LoginWithClient(r.Context(), body.Username, body.Password, sessionClientHint(r))
+		token, session, err = s.accounts.LoginForInterface(r.Context(), body.Username, body.Password, sessionClientHint(r), requestInterface(r))
 		return session.Account, err
 	})
+	if errors.Is(err, accounts.ErrInterfaceAccess) {
+		writeError(w, http.StatusForbidden, err)
+		return
+	}
 	if errors.Is(err, errAuthenticationThrottled) {
 		writeError(w, http.StatusTooManyRequests, errAuthenticationThrottled)
 		return
@@ -552,7 +570,7 @@ func (s *Server) handleAuthenticationLogin(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusUnauthorized, accounts.ErrInvalidCredentials)
 		return
 	}
-	s.setSessionCookie(w, token)
+	s.setSessionCookie(w, r, token)
 	writeBoundedJSON(w, http.StatusOK, session)
 }
 
@@ -567,8 +585,7 @@ func (s *Server) handleAuthenticationLogout(w http.ResponseWriter, r *http.Reque
 		s.writeSessionManagementError(w, err)
 		return
 	}
-	s.clearSessionCookie(w)
-	w.Header().Set("Clear-Site-Data", `"cookies"`)
+	s.clearSessionCookie(w, r)
 	s.endRevokedSessions(r.Context(), key, []string{key})
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -598,21 +615,22 @@ func (s *Server) handleAccountCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Role     string `json:"role"`
+		Username        string `json:"username"`
+		Password        string `json:"password"`
+		Role            string `json:"role"`
+		InterfaceAccess string `json:"interface_access"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	account, err := s.accounts.CreateForSession(r.Context(), current.session.Key, body.Username, body.Password, body.Role)
+	account, err := s.accounts.CreateWithAccessForSession(r.Context(), current.session.Key, body.Username, body.Password, body.Role, body.InterfaceAccess)
 	if err != nil {
 		if errors.Is(err, accounts.ErrInvalidSession) {
 			s.writeAuthenticationRequired(w)
 		} else if errors.Is(err, accounts.ErrAdministratorRequired) {
 			writeError(w, http.StatusForbidden, err)
-		} else if isAccountInputError(err) || errors.Is(err, accounts.ErrUsernameTaken) {
+		} else if isAccountInputError(err) || errors.Is(err, accounts.ErrInterfaceAccess) || errors.Is(err, accounts.ErrUsernameTaken) {
 			writeError(w, http.StatusBadRequest, err)
 		} else {
 			s.logger.Warn("user account could not be created", "error", err)
@@ -655,7 +673,7 @@ func (s *Server) handleAccountPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if current.session.Account.ID == r.PathValue("id") {
-		s.clearSessionCookie(w)
+		s.clearSessionCookie(w, r)
 	}
 	s.endRevokedSessions(r.Context(), current.session.Key, keys)
 	w.WriteHeader(http.StatusNoContent)
@@ -699,7 +717,7 @@ func (s *Server) handleAccountDisabled(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Disabled {
 		if current.session.Account.ID == r.PathValue("id") {
-			s.clearSessionCookie(w)
+			s.clearSessionCookie(w, r)
 		}
 		s.endRevokedSessions(r.Context(), current.session.Key, keys)
 		// Disabling a grant's issuer also removes that grant's authority.

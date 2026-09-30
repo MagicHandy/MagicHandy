@@ -28,6 +28,7 @@ type entry struct {
 type view struct {
 	version     string
 	url         string
+	remoteURL   string
 	access      string
 	simulated   bool
 	phase       phase
@@ -71,6 +72,9 @@ func compose(v view) []line {
 	}
 	for _, e := range entries {
 		rows = append(rows, activityLine(v, e))
+	}
+	if len(entries) == 0 && room > 0 {
+		rows = append(rows, line{plain(margin+"No activity to display yet.", colorMuted)})
 	}
 	for len(rows) < v.rows-len(footer) {
 		rows = append(rows, line{})
@@ -138,8 +142,11 @@ func status(v view) []line {
 	}
 	rows := []line{state}
 	if v.url != "" {
-		rows = append(rows, line{plain(margin+"  Open    ", colorMuted),
+		rows = append(rows, line{plain(margin+"  App     ", colorMuted),
 			span{text: v.url, color: colorAccent, underline: true, link: v.url}})
+	}
+	if v.remoteURL != "" {
+		rows = append(rows, line{plain(margin+"  Remote  ", colorMuted), span{text: v.remoteURL, color: colorAccent, underline: true, link: v.remoteURL}})
 	}
 	if v.access != "" {
 		rows = append(rows, line{plain(margin+"  Access  ", colorMuted), plain(v.access, colorText)})
@@ -196,6 +203,9 @@ func footer(v view) []line {
 	if v.canCopy {
 		keys = append(keys, key{"C", "Copy link", "Copy", colorAccent})
 	}
+	if v.remoteURL != "" {
+		keys = append(keys, key{"R", "Open remote", "Remote", colorAccent}, key{"L", "Copy remote link", "Copy remote", colorAccent})
+	}
 	keys = append(keys, key{"S", "Stop motion", "Stop", colorDanger}, key{"D", "Details", "Details", colorAccent}, key{"Q", "Quit", "Quit", colorAccent})
 	keyRow := keyLine(keys, false)
 	if keyRow.width() > v.columns-len(margin) {
@@ -214,11 +224,24 @@ func footer(v view) []line {
 	default:
 		hint = append(hint, plain("Press O to open MagicHandy in your browser. "+closeWarning, colorMuted))
 	}
-	return []line{
-		{plain(margin, colorText), plain(strings.Repeat("─", rule), colorLine)},
-		keyRow,
-		hint,
+	rows := []line{{plain(margin, colorText), plain(strings.Repeat("─", rule), colorLine)}}
+	if keyRow.width() <= v.columns-len(margin) {
+		rows = append(rows, keyRow)
+	} else {
+		var group []key
+		for _, item := range keys {
+			candidate := append(append([]key(nil), group...), item)
+			if len(group) > 0 && keyLine(candidate, true).width() > v.columns-len(margin) {
+				rows = append(rows, keyLine(group, true))
+				group = nil
+			}
+			group = append(group, item)
+		}
+		if len(group) > 0 {
+			rows = append(rows, keyLine(group, true))
+		}
 	}
+	return append(rows, hint)
 }
 
 func keyLine(keys []key, compact bool) line {

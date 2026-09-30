@@ -110,7 +110,7 @@ func (s *Server) handleRecoverPassword(w http.ResponseWriter, r *http.Request) {
 	actorKey := ""
 	if current, ok := authenticatedSession(r); ok && current.session.Account.ID == result.AccountID {
 		actorKey = current.session.Key
-		s.clearSessionCookie(w)
+		s.clearSessionCookie(w, r)
 	}
 	s.endRevokedSessions(r.Context(), actorKey, result.SessionKeys)
 	s.writeSessionManagementJSON(w, r, map[string]bool{"recovered": true})

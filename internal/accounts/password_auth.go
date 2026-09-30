@@ -23,11 +23,11 @@ func (s *Store) checkPassword(ctx context.Context, username, password string) (p
 	if found {
 		var disabled int
 		err := s.db.SQL().QueryRowContext(ctx, `SELECT id, username, role, disabled,
-			last_login_at, created_at, updated_at, profile_updated_at, password_hash
+			last_login_at, created_at, updated_at, profile_updated_at, interface_access, password_hash
 			FROM user_accounts WHERE username_key = ?`, usernameKey).Scan(
 			&proof.account.ID, &proof.account.Username, &proof.account.Role, &disabled,
 			&proof.account.LastLoginAt, &proof.account.CreatedAt, &proof.account.UpdatedAt,
-			&proof.account.ProfileUpdatedAt, &proof.encoded)
+			&proof.account.ProfileUpdatedAt, &proof.account.InterfaceAccess, &proof.encoded)
 		proof.account.Disabled = disabled != 0
 		proof.account.HasProfileImage = proof.account.ProfileUpdatedAt != ""
 		if errors.Is(err, sql.ErrNoRows) {
@@ -71,9 +71,15 @@ func (p passwordProof) revalidate(ctx context.Context, tx *sql.Tx) error {
 // it and creates the session in the same transaction. HTTP password login must
 // use this method, not separate Authenticate and NewSession calls.
 func (s *Store) LoginWithClient(ctx context.Context, username, password string, client SessionClient) (string, Session, error) {
+	return s.LoginForInterface(ctx, username, password, client, InterfaceFull)
+}
+
+// LoginForInterface binds a new opaque login to one listener in the same transaction
+// that revalidates the account and password proof.
+func (s *Store) LoginForInterface(ctx context.Context, username, password string, client SessionClient, audience string) (string, Session, error) {
 	proof, err := s.checkPassword(ctx, username, password)
 	if err != nil {
 		return "", Session{}, err
 	}
-	return s.newSessionWithClient(ctx, proof.account.ID, client, &proof)
+	return s.newSessionWithClient(ctx, proof.account.ID, client, &proof, audience)
 }

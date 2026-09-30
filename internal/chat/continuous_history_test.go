@@ -62,7 +62,7 @@ func TestPromptHistoryRetainsLongSessionWithinByteBudget(t *testing.T) {
 
 func TestContinuousHistoryAcceptsStructuredPriorRepliesWithoutReplayingEdits(t *testing.T) {
 	history := []llm.Message{{Role: "assistant", Content: `{"edits":[{"speed_percent":99}],"reply":"A prior reply."}`}}
-	got := continuousMessages("system", history, "What happened?")
+	got := spokenMessages("system", history, "What happened?")
 	if got[1].Content != "A prior reply." || !strings.Contains(history[0].Content, "speed_percent") {
 		t.Fatal("structured history was replayed, double quoted or mutated", got)
 	}

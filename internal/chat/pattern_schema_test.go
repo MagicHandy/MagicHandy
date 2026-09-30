@@ -48,8 +48,8 @@ func TestAutopilotCatalogExampleMatchesItsOwnParserAndSchema(t *testing.T) {
 	}
 }
 
-func TestLibrarySchemaIsNotAttachedToCreativeOrDisabledMotion(t *testing.T) {
-	for _, capabilities := range []Capabilities{{}, {Motion: true, Patterns: true, MotionMode: MotionModeDynamic}} {
+func TestLibrarySchemaIsNotAttachedToCreativeMotion(t *testing.T) {
+	for _, capabilities := range []Capabilities{{Motion: true}, {Motion: true, Patterns: true, MotionMode: MotionModeDynamic}} {
 		if len(PatternResponseSchema(continuousTestChoices(), capabilities, nil)) != 0 {
 			t.Fatal("library grammar restricted a different contract")
 		}

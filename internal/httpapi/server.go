@@ -30,6 +30,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/netaccess"
 	"github.com/mapledaemon/MagicHandy/internal/patterns"
 	"github.com/mapledaemon/MagicHandy/internal/persona"
+	"github.com/mapledaemon/MagicHandy/internal/remote"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 	"github.com/mapledaemon/MagicHandy/internal/updatecheck"
 	"github.com/mapledaemon/MagicHandy/internal/voice"
@@ -68,6 +69,7 @@ type Runtime struct {
 	Accounts               *accounts.Store
 	AuthenticationRequired bool
 	SecureCookies          bool
+	RemoteURL              string
 	AllowedBrowserHosts    []string
 	NetworkPolicy          *netaccess.Policy
 	NetworkCertificates    netaccess.CertificateProvider
@@ -140,6 +142,8 @@ type Server struct {
 	patterns            *patterns.Library
 	media               *media.Catalog
 	mediaSync           *mediaSyncRuntime
+	remoteURL           string
+	remote              *remote.Hub
 	started             time.Time
 	version             VersionInfo
 	handler             http.Handler
@@ -210,6 +214,8 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		updates:             newUpdateChecker(runtime, version),
 		controller:          newControllerRuntime(),
 		commands:            newCommandRuntime(),
+		remote:              remote.NewHub(nil),
+		remoteURL:           runtime.RemoteURL,
 		hostPathPicker:      systemHostPathPicker,
 		personalization:     personalization,
 		lifecycleCtx:        lifecycleCtx,
@@ -370,7 +376,7 @@ func (s *Server) Handler() http.Handler {
 
 func (s *Server) routes(mux *http.ServeMux) {
 	s.auditRoutes(mux)
-	mux.HandleFunc("GET /healthz", s.handleHealth)
+	s.publicShellRoutes(mux)
 	s.authenticationRoutes(mux)
 	s.networkRoutes(mux)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
@@ -402,13 +408,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/transport/bluetooth/state", s.handleBluetoothState)
 	mux.HandleFunc("GET /api/transport/bluetooth/events", s.handleBluetoothEvents)
 	mux.HandleFunc("POST /api/transport/bluetooth/stop", s.handleBluetoothStop)
-	mux.HandleFunc("GET /api/transport/intiface/status", s.handleIntifaceStatus)
-	mux.HandleFunc("POST /api/transport/intiface/connect", s.handleIntifaceConnect)
-	mux.HandleFunc("POST /api/transport/intiface/disconnect", s.handleIntifaceDisconnect)
-	mux.HandleFunc("POST /api/transport/intiface/scan", s.handleIntifaceStartScan)
-	mux.HandleFunc("DELETE /api/transport/intiface/scan", s.handleIntifaceStopScan)
-	mux.HandleFunc("POST /api/transport/intiface/select", s.handleIntifaceSelect)
-	mux.HandleFunc("GET /api/transport/intiface/diagnostics", s.handleIntifaceDiagnostics)
+	s.intifaceRoutes(mux)
 	mux.HandleFunc("GET /api/motion/state", s.handleMotionState)
 	mux.HandleFunc("GET /api/motion/events", s.handleMotionEvents)
 	s.motionLabRoutes(mux)
@@ -417,7 +417,6 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/motion/quick", s.handleMotionQuick)
 	mux.HandleFunc("POST /api/motion/pause", s.handleMotionPause)
 	mux.HandleFunc("POST /api/motion/resume", s.handleMotionResume)
-	mux.HandleFunc("POST /api/motion/stop", s.handleMotionStop)
 	mux.HandleFunc("GET /api/modes", s.handleModesGet)
 	mux.HandleFunc("POST /api/modes/start", s.handleModeStart)
 	mux.HandleFunc("POST /api/modes/stop", s.handleModeStop)
@@ -425,10 +424,10 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/modes/autopilot/arc", s.handleAutopilotArc)
 	s.libraryRoutes(mux)
 	s.mediaRoutes(mux)
+	s.remoteRoutes(mux)
 	s.voiceRoutes(mux)
 	s.setupRoutes(mux)
 	s.traceRoutes(mux)
-	mux.HandleFunc("GET /", s.handleStatic)
 }
 
 func (s *Server) settingsAndUpdateRoutes(mux *http.ServeMux) {
@@ -744,6 +743,9 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if name == "index.html" && requestInterface(r) == accounts.InterfaceRemote {
+		data = bytes.Replace(data, []byte("<html"), []byte(`<html data-application-interface="remote"`), 1)
+	}
 	setStaticHeaders(w, name)
 	serveBoundedContent(w, r, name, time.Time{}, bytes.NewReader(data))
 }

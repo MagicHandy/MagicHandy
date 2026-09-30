@@ -138,6 +138,15 @@ func (c *controllerRuntime) Authority(actor controllerIdentity) (controllerSnaps
 	return snapshot, c.ownerCtx
 }
 
+// Holds reports whether actor is the active controller. Unlike Authority it
+// never claims or renews a local lease, so a long-lived stream can watch
+// control without keeping it.
+func (c *controllerRuntime) Holds(actor controllerIdentity) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.snapshotLocked(actor).Active
+}
+
 // BeginLoss fences every client before callers stop shared motion. The mutex is
 // never held across transport or database work. FinishLoss opens takeover only
 // after that stop has completed (or failed with local invalidation preserved).

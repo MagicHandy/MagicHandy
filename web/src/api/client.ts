@@ -4,6 +4,7 @@
 // payloads — only the semantic endpoints below.
 import type { AccessAuditPage } from "./audit-types";
 import type { RecoveryCodeStatus, IssuedRecoveryCodes } from "./access-types";
+import type { RemoteClaim, RemoteCommand, RemoteCommandInput, RemotePresence, RemoteState } from "./remote-types";
 import type {
   AppState,
   AutopilotSettings,
@@ -39,11 +40,13 @@ import type {
   ManagedLlamaRuntimeBuild,
   MediaScanState,
   MediaFunscript,
+  MediaMetadataPatch,
   MediaJobState,
   MediaToolStatus,
   MediaSyncEvent,
   MediaSyncStatus,
   MediaPlaybackSettings,
+  MediaTagCount,
   MediaVideo,
   OllamaModelInfo,
   OllamaModelScan,
@@ -136,6 +139,8 @@ export const clientId = resolveControllerClientID(browserSessionStorage(), brows
 export const CLIENT_HEADER = "X-MagicHandy-Client-ID";
 export const AUTHENTICATION_REQUIRED_EVENT = "magichandy:authentication-required";
 export const COMMAND_RECOVERED_EVENT = "magichandy:command-recovered";
+// A phone's command for this tab, forwarded from its motion stream.
+export const REMOTE_COMMAND_EVENT = "magichandy:remote-command";
 
 // Transport metadata copied from backend snapshots. It never grants local
 // ownership; the server independently checks session, tab and generation.
@@ -201,7 +206,7 @@ export async function request<T>(
     path !== "/api/chat/cursor" && path !== "/api/notice-preferences" &&
     !/^\/api\/transport\/bluetooth\/(?:status|ack)$/.test(path) &&
     !(path === "/api/transport/bluetooth/disconnect" && extraHeaders?.["X-MagicHandy-Gateway-Generation"]) &&
-    !/^\/api\/(?:auth|accounts|network|controller)(?:\/|$)/.test(path);
+    !/^\/api\/(?:auth|accounts|network|controller|remote)(?:\/|$)/.test(path);
   const headers: Record<string, string> = { Accept: "application/json", ...controllerRequestHeaders(delivery), ...extraHeaders };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   let res: Response;
@@ -522,10 +527,11 @@ export const api = {
   validateNetwork: (config: NetworkConfig) => request<{ valid: boolean; config: NetworkConfig; message: string }>("POST", "/api/network/validate", { config }),
   saveNetwork: (config: NetworkConfig, password: string) => request<{ restart_required: boolean }>("PUT", "/api/network", { config, password }),
   networkReport: () => request<Record<string, unknown>>("GET", "/api/network/report"),
-  createAccount: (username: string, password: string, role: AccountRole) =>
-    request<{ account: UserAccount }>("POST", "/api/accounts", { username, password, role }),
+  createAccount: (username: string, password: string, role: AccountRole, interface_access: "full" | "remote" = "full") =>
+    request<{ account: UserAccount }>("POST", "/api/accounts", { username, password, role, interface_access }),
   resetAccountPassword: (id: string, password: string) =>
     request<null>("PUT", `/api/accounts/${encodeURIComponent(id)}/password`, { password }),
+  setAccountInterfaceAccess: (id: string, interface_access: "full" | "remote") => request("PUT", `/api/accounts/${encodeURIComponent(id)}/interface-access`, { interface_access }),
   setAccountDisabled: (id: string, disabled: boolean) =>
     request<null>("PUT", `/api/accounts/${encodeURIComponent(id)}/disabled`, { disabled }),
   controlIdentities: () =>
@@ -604,6 +610,25 @@ export const api = {
     request<{ funscript: MediaFunscript }>("GET", `/api/media/videos/${encodeURIComponent(id)}/funscript`, undefined, signal),
   saveMediaScriptOffset: (id: string, scriptOffsetMillis: number) =>
     request("POST", "/api/media/script-offset", { id, script_offset_ms: scriptOffsetMillis }),
+  saveMediaMetadata: (id: string, patch: MediaMetadataPatch) =>
+    request<{ video: MediaVideo }>("PATCH", `/api/media/videos/${encodeURIComponent(id)}/metadata`, patch),
+  tagMediaVideos: (ids: string[], add: string[], remove: string[]) =>
+    request<{ videos: MediaVideo[] }>("POST", "/api/media/videos/tags", { ids, add, remove }),
+  renameMediaTag: (from: string, to: string) =>
+    request<{ renamed: number; tags: MediaTagCount[] }>("POST", "/api/media/tags/rename", { from, to }),
+  deleteMediaTag: (tag: string) =>
+    request<{ removed: number; tags: MediaTagCount[] }>("POST", "/api/media/tags/delete", { tag }),
+  reportRemotePresence: (presence: RemotePresence, signal?: AbortSignal) =>
+    request<{ remote: RemoteState }>("POST", "/api/remote/presence", presence, signal),
+  withdrawRemotePresence: () => request<{ status: string }>("DELETE", "/api/remote/presence", undefined, undefined, undefined, true),
+  remoteVideos: (query: string, offset = 0, signal?: AbortSignal) => request<{ videos: import("./remote-types").RemoteVideoItem[]; has_more: boolean; next_offset: number }>("GET", `/api/remote/videos?q=${encodeURIComponent(query)}&offset=${offset}`, undefined, signal),
+  remoteMessages: (sessionID: string, signal?: AbortSignal) => request<{ messages: import("./remote-types").RemoteDisplayMessage[] }>("GET", `/api/remote/chat/messages?session_id=${encodeURIComponent(sessionID)}`, undefined, signal),
+  remoteState: (signal?: AbortSignal) => request<{ remote: RemoteState }>("GET", "/api/remote/state", undefined, signal),
+  sendRemoteCommand: (command: RemoteCommandInput, stopSequence: number) =>
+    request<{ command: RemoteCommand }>("POST", "/api/remote/commands", command, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  claimRemoteCommand: (id: string, stopSequence: number) =>
+    request<RemoteClaim>("POST", `/api/remote/commands/${encodeURIComponent(id)}/claim`, {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  remoteEventsURL: () => `/api/remote/events?client_id=${encodeURIComponent(clientId)}`,
   saveMediaPlayback: (patch: Partial<{
     script_smoothing_percent: number;
     peak_rounding_ms: number;
@@ -939,13 +964,15 @@ export async function streamChat(
   onEvent: (e: ChatStreamEvent) => void,
   signal?: AbortSignal,
   stopSequence?: number,
+  /** Beside an open video: what drives the device when the chat does not. */
+  motionOwner?: "script" | "off",
 ): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/json", ...controllerRequestHeaders() };
   if (stopSequence !== undefined) headers["X-MagicHandy-Stop-Sequence"] = String(stopSequence);
   const res = await fetch("/api/chat/stream", {
     method: "POST",
     headers,
-    body: JSON.stringify({ session_id: sessionId, message }),
+    body: JSON.stringify(motionOwner ? { session_id: sessionId, message, motion_owner: motionOwner } : { session_id: sessionId, message }),
     signal,
   });
   if (!res.ok) {

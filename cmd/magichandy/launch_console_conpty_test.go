@@ -144,7 +144,7 @@ func TestLaunchConsoleInPseudoConsole(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, out)
 	}
 	address := "127.0.0.1:" + strconv.Itoa(freeLoopbackPort(t))
-	commandLine := `"` + executable + `" -simulate-motion -addr ` + address + ` -data-dir "` + filepath.Join(t.TempDir(), "data") + `"`
+	commandLine := `"` + executable + `" -simulate-motion -remote-port -1 -addr ` + address + ` -data-dir "` + filepath.Join(t.TempDir(), "data") + `"`
 	run, process, cleanup := startInPseudoConsole(t, commandLine)
 	defer cleanup()
 	defer func() {
@@ -163,6 +163,7 @@ func TestLaunchConsoleInPseudoConsole(t *testing.T) {
 		"[O] Open in browser", "[S] Stop motion", "★"} {
 		run.waitForText(t, want)
 	}
+	verifyConsoleActivityAfterPolling(t, run, link)
 	run.press("s")
 	run.waitForText(t, "Motion stopped")
 	run.press("q")

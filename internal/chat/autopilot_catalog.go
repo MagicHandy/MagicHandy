@@ -32,7 +32,9 @@ func autopilotPatternSchema(patterns []PatternChoice, capabilities Capabilities,
 	fields := schema["properties"].(map[string]any)
 	delete(fields, "new_mood")
 	fields["next"] = map[string]any{"type": "string", "enum": []string{"soon", "normal", "later"}}
-	fields["variability"] = map[string]any{"type": "string", "enum": []string{"settled", "normal", "restless"}}
+	if capabilities.Motion || kind == AutopilotKindMotion {
+		fields["variability"] = map[string]any{"type": "string", "enum": []string{"settled", "normal", "restless"}}
+	}
 	if kind == AutopilotKindMotion {
 		delete(fields, "reply")
 		fields["intent"] = map[string]any{"type": "string"}
@@ -40,8 +42,10 @@ func autopilotPatternSchema(patterns []PatternChoice, capabilities Capabilities,
 	} else {
 		schema["required"] = []string{"reply", "next"}
 	}
-	motionProperties := fields["motion"].(map[string]any)["properties"].(map[string]any)
-	motionProperties["action"] = map[string]any{"type": "string", "enum": []string{MotionActionNone, MotionActionTarget}}
+	if capabilities.Motion {
+		motionProperties := fields["motion"].(map[string]any)["properties"].(map[string]any)
+		motionProperties["action"] = map[string]any{"type": "string", "enum": []string{MotionActionNone, MotionActionTarget}}
+	}
 	encoded, _ := json.Marshal(schema)
 	return encoded
 }

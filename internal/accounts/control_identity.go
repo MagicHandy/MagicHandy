@@ -38,7 +38,7 @@ func (s *Store) ControlIdentities(ctx context.Context, ownerID, selectedID strin
 
 	rows, err := s.db.SQL().QueryContext(ctx, `
 		SELECT a.id, a.username, a.role, a.disabled, a.last_login_at,
-		       a.created_at, a.updated_at, a.profile_updated_at, l.label
+		       a.created_at, a.updated_at, a.profile_updated_at, a.interface_access, l.label
 		FROM user_account_links l
 		JOIN user_accounts a ON a.id = l.linked_user_id
 		WHERE l.owner_user_id = ? AND l.status = 'active' AND a.disabled = 0
@@ -56,7 +56,7 @@ func (s *Store) ControlIdentities(ctx context.Context, ownerID, selectedID strin
 		if err := rows.Scan(
 			&account.ID, &account.Username, &account.Role, &disabled,
 			&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt,
-			&account.ProfileUpdatedAt, &label,
+			&account.ProfileUpdatedAt, &account.InterfaceAccess, &label,
 		); err != nil {
 			return nil, fmt.Errorf("scan linked control identity: %w", err)
 		}
@@ -92,13 +92,8 @@ func (s *Store) SetControlIdentity(ctx context.Context, token, targetAccountID s
 	}
 	targetAccountID = strings.TrimSpace(targetAccountID)
 	return s.db.WithTx(ctx, func(tx *sql.Tx) error {
-		var ownerID string
-		if err := tx.QueryRowContext(ctx, `
-			SELECT user_id FROM user_sessions WHERE token_hash = ?
-		`, hashSessionToken(token)).Scan(&ownerID); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return ErrInvalidSession
-			}
+		ownerID, err := s.liveSessionOwner(ctx, tx, hashSessionToken(token))
+		if err != nil {
 			return err
 		}
 		if targetAccountID == "" || targetAccountID == ownerID {
@@ -109,7 +104,7 @@ func (s *Store) SetControlIdentity(ctx context.Context, token, targetAccountID s
 		}
 
 		var allowed int
-		err := tx.QueryRowContext(ctx, `
+		err = tx.QueryRowContext(ctx, `
 			SELECT 1
 			FROM user_account_links l
 			JOIN user_accounts a ON a.id = l.linked_user_id
@@ -153,7 +148,7 @@ func (s *Store) CanViewProfile(ctx context.Context, viewer Account, targetAccoun
 
 func (s *Store) accountByID(ctx context.Context, accountID string) (Account, error) {
 	row := s.db.SQL().QueryRowContext(ctx, `
-		SELECT id, username, role, disabled, last_login_at, created_at, updated_at, profile_updated_at
+		SELECT id, username, role, disabled, last_login_at, created_at, updated_at, profile_updated_at, interface_access
 		FROM user_accounts WHERE id = ?
 	`, accountID)
 	account, err := scanAccount(row)

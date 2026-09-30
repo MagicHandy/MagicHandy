@@ -5,6 +5,7 @@ import type { NetworkConfig, NetworkStatus } from "../api/types";
 import { setLocaleForTest } from "../i18n";
 import english from "../i18n/locales/en.json";
 import { NetworkSettingsPanel } from "./NetworkSettingsPanel";
+import { remotePorts } from "./NetworkSetupFields";
 
 vi.mock("../api/client", () => ({ api: { networkStatus: vi.fn(), validateNetwork: vi.fn(), saveNetwork: vi.fn(), networkReport: vi.fn(), discoverInternet: vi.fn(), prepareNetworkCertificate: vi.fn(), certificatePreparation: vi.fn() } }));
 const config: NetworkConfig = { mode: "local", listen_address: "127.0.0.1:49717", public_url: "", tls_certificate: "", tls_private_key: "", trusted_proxies: [] };
@@ -18,6 +19,11 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("network access settings", () => {
+  it("shows the actual remote ports behind public forwarding", () => {
+    expect(remotePorts({ ...config, public_url: "https://example.test:49718" })).toEqual({ local: 49719, external: 49719 });
+    expect(remotePorts({ ...config, remote_port: 51000, remote_public_url: "https://remote.example.test" })).toEqual({ local: 51000, external: 443 });
+    expect(remotePorts({ ...config, remote_port: -1 })).toEqual({ local: -1, external: -1 });
+  });
   it("requires host validation and password confirmation, and invalidates validation after edits", async () => {
     render(<NetworkSettingsPanel backendOnline administrator />);
     await screen.findByRole("radio", { name: /Local only/ });

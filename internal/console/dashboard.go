@@ -28,7 +28,9 @@ type Actions struct {
 	// Open opens the app in the default browser.
 	Open func() error
 	// Copy puts the app link on the clipboard. Nil hides the key.
-	Copy func() error
+	Copy       func() error
+	OpenRemote func() error
+	CopyRemote func() error
 	// Stop stops motion through the app's emergency-stop path.
 	Stop func(context.Context) (StopOutcome, error)
 	// Quit begins a clean shutdown of the app.
@@ -64,7 +66,8 @@ type Dashboard struct {
 
 type dashState struct {
 	view         view
-	entries      []entry
+	entries      entryHistory
+	activity     entryHistory
 	actions      Actions
 	noticeUntil  time.Time
 	quitArmed    time.Time
@@ -111,6 +114,11 @@ func (d *Dashboard) SetServer(url, access string, simulated bool) {
 		s.title = "MagicHandy" + " - " + url
 		_, _ = d.term.Write([]byte(titleSequence(s.title)))
 	})
+}
+
+// SetRemote records the separate remote origin. An empty address means disabled.
+func (d *Dashboard) SetRemote(url string) {
+	d.update(func(s *dashState) { s.view.remoteURL = url })
 }
 
 // SetActions connects the keys to the app.
@@ -249,9 +257,9 @@ func (d *Dashboard) drainEvents(s *dashState) {
 }
 
 func (s *dashState) add(e entry) {
-	s.entries = append(s.entries, e)
-	if len(s.entries) > maxEntries {
-		s.entries = append(s.entries[:0:0], s.entries[len(s.entries)-maxEntries:]...)
+	s.entries.add(e)
+	if !e.verbose {
+		s.activity.add(e)
 	}
 }
 
@@ -282,6 +290,22 @@ func (d *Dashboard) handleKey(s *dashState, key rune) {
 				}
 				d.note(slog.LevelInfo, "Copied the link", "")
 			}()
+		}
+	case 'r', 'l':
+		if s.view.remoteURL != "" {
+			action, done := s.actions.OpenRemote, "Opened the remote in your browser"
+			if unicode.ToLower(key) == 'l' {
+				action, done = s.actions.CopyRemote, "Copied the remote link"
+			}
+			if action != nil {
+				go func() {
+					if err := action(); err != nil {
+						d.note(slog.LevelWarn, "Remote link action failed", err.Error())
+						return
+					}
+					d.note(slog.LevelInfo, done, "")
+				}()
+			}
 		}
 	case 's', 0x1b:
 		if stop := s.actions.Stop; stop != nil {
@@ -340,10 +364,10 @@ func (d *Dashboard) draw(s *dashState) {
 	}
 	v := s.view
 	v.columns, v.rows = columns, rows
-	for _, e := range s.entries {
-		if v.details || !e.verbose {
-			v.entries = append(v.entries, e)
-		}
+	if v.details {
+		v.entries = s.entries.snapshot()
+	} else {
+		v.entries = s.activity.snapshot()
 	}
 	if skipped := d.dropped.Load(); skipped > 0 {
 		v.entries = append(v.entries, entry{at: now, level: slog.LevelWarn,

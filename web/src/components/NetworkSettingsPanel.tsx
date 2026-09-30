@@ -144,6 +144,7 @@ export function NetworkSettingsPanel({ backendOnline, administrator, initialScop
   return <section className="group network-settings">
     {!initialScope && <h3 className="group-title">{t("LAN and WAN access")}</h3>}
     {status && <p className="form-status">{t("Running:")} <strong>{modeName(status.active.mode)}</strong> · {status.active.public_url || status.active.listen_address}{status.restart_required && <> · <strong>{t("Restart required")}</strong></>}</p>}
+    {status?.remote_url && <p className="network-result">{t("Remote interface:")} <a href={status.remote_url} target="_blank" rel="noreferrer">{status.remote_url}</a></p>}
     {draft && status && <>
       {!initialScope && <AccessScopeChoices value={networkScope(draft)} disabled={locked} onChange={(scope) => { setDraft(configForScope(scope, draft, status)); setValidated(""); setError(""); setMessage(""); }} />}
       <NetworkSetupFields draft={draft} status={status} locked={locked} discovery={discovery} detecting={detecting} patch={patch} detect={() => void detect()} />

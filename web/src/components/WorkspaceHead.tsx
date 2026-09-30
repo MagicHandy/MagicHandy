@@ -5,7 +5,9 @@ import { useEffect, useRef } from "react";
 // `wide` matches the header to the wide two-column (.split) content width so
 // the title left-aligns with the content below it instead of sitting in the
 // narrower default column.
-export function WorkspaceHead({ title, lede, wide }: { title: string; lede?: string; wide?: boolean }) {
+// `hidden` keeps the heading for screen readers and focus while a page such
+// as the watch page gives its space to content.
+export function WorkspaceHead({ title, lede, wide, hidden }: { title: string; lede?: string; wide?: boolean; hidden?: boolean }) {
   const ref = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     const pageTitle = `${title} | MagicHandy`;
@@ -16,7 +18,7 @@ export function WorkspaceHead({ title, lede, wide }: { title: string; lede?: str
     };
   }, [title]);
   return (
-    <header className="workspace-head" data-wide={wide || undefined}>
+    <header className={hidden ? "workspace-head visually-hidden" : "workspace-head"} data-wide={(wide && !hidden) || undefined}>
       <h1 ref={ref} tabIndex={-1}>{title}</h1>
       {lede && <p className="lede">{lede}</p>}
     </header>

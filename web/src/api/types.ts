@@ -607,6 +607,27 @@ export interface MediaVideo {
   audio_codec?: string | null;
   superseded?: boolean;
   container_type?: string;
+  /** The user's display title; the file name stays in display_name. */
+  title?: string | null;
+  rating?: number | null;
+  notes?: string | null;
+  tags?: string[];
+}
+
+/** Fields present change; an empty title or note and a zero rating clear. */
+export interface MediaMetadataPatch {
+  title?: string;
+  rating?: number;
+  notes?: string;
+  tags?: string[];
+}
+
+/** Acknowledged server fields; player metadata must not replace newer curation. */
+export type MediaVideoUpdate = Pick<MediaVideo, "id"> & Partial<MediaVideo>;
+
+export interface MediaTagCount {
+  tag: string;
+  count: number;
 }
 
 // canPlayContainer asks this browser's own engine whether it opens a container,
@@ -1024,6 +1045,7 @@ export interface PublicSettings {
     setup_completed?: boolean;
     update_check_mode?: "automatic" | "manual" | string;
     notification_categories?: NotificationCategory[];
+    show_remote_navigation?: boolean;
   };
   media?: MediaSettingsPayload;
   device: {
@@ -1281,6 +1303,7 @@ export interface SettingsUpdate {
     setup_completed: boolean;
     update_check_mode: "automatic" | "manual" | string;
     notification_categories: NotificationCategory[];
+    show_remote_navigation?: boolean;
   };
   media: MediaSettingsPayload;
   device: {

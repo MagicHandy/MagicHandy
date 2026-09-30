@@ -18,7 +18,8 @@ func passiveSessionRequest(r *http.Request) bool {
 	switch r.URL.Path {
 	case "/api/auth/logout", "/api/controller/heartbeat", "/api/chat/cursor",
 		"/api/transport/bluetooth/status", "/api/transport/bluetooth/ack",
-		"/api/transport/bluetooth/disconnect", "/api/media/sync", "/api/media/duration":
+		"/api/transport/bluetooth/disconnect", "/api/media/sync", "/api/media/duration",
+		"/api/remote/presence":
 		return true
 	}
 	return strings.HasPrefix(r.URL.Path, "/api/voice/requests/") && strings.HasSuffix(r.URL.Path, "/played")

@@ -119,6 +119,22 @@ func internalBoundaryRules(internal string) []importRule {
 			},
 		},
 		{
+			name: "the remote relays intent and never reaches the device (ADR 0032)",
+			appliesTo: func(importPath string) bool {
+				return strings.HasPrefix(importPath, internal+"remote")
+			},
+			forbidden: []string{
+				internal + "chat",
+				internal + "httpapi",
+				internal + "llm",
+				internal + "media",
+				internal + "modes",
+				internal + "motion",
+				internal + "transport",
+				internal + "voice",
+			},
+		},
+		{
 			name: "voice never touches motion or the semantic planners (ADR 0003)",
 			appliesTo: func(importPath string) bool {
 				return strings.HasPrefix(importPath, internal+"voice")

@@ -7,12 +7,12 @@ import {
 } from "./password";
 
 describe("password policy helpers", () => {
-  it("uses an eight-character floor for ASCII and multibyte Unicode", () => {
-    expect(MIN_PASSWORD_CHARACTERS).toBe(8);
-    expect(passwordMeetsMinimum("1234567")).toBe(false);
-    expect(passwordMeetsMinimum("12345678")).toBe(true);
+  it("uses an fifteen-character floor for ASCII and multibyte Unicode", () => {
+    expect(MIN_PASSWORD_CHARACTERS).toBe(15);
+    expect(passwordMeetsMinimum("12345678901234")).toBe(false);
+    expect(passwordMeetsMinimum("123456789012345")).toBe(true);
     expect(passwordCharacterCount("🔒🔒🔒🔒🔒🔒🔒🔒")).toBe(8);
-    expect(passwordMeetsMinimum("🔒🔒🔒🔒🔒🔒🔒🔒")).toBe(true);
+    expect(passwordMeetsMinimum("🔒".repeat(15))).toBe(true);
   });
 
   it("reports confirmation only after the user starts typing it", () => {
