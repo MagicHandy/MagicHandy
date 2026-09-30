@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const llamaCPPProviderName = "llama_cpp"
@@ -253,7 +254,9 @@ type openAIChatChunk struct {
 		CompletionTokens int `json:"completion_tokens"`
 	} `json:"usage"`
 	Timings struct {
-		PromptMillis float64 `json:"prompt_ms"`
+		PromptMillis    float64 `json:"prompt_ms"`
+		PredictedMillis float64 `json:"predicted_ms"`
+		PredictedTokens int     `json:"predicted_n"`
 	} `json:"timings"`
 	Error *struct {
 		Message string `json:"message"`
@@ -339,8 +342,15 @@ func modelListed(model string, models []string) bool {
 
 func (chunk openAIChatChunk) progress() ProviderProgress {
 	activity := false
+	reasoning := 0
 	for _, choice := range chunk.Choices {
 		activity = activity || choice.Delta.Content != "" || choice.Delta.ReasoningContent != "" || choice.Message.Content != ""
+		reasoning += utf8.RuneCountInString(choice.Delta.ReasoningContent)
 	}
-	return ProviderProgress{Activity: activity, PromptEvalMillis: int64(chunk.Timings.PromptMillis), PromptTokens: chunk.Usage.PromptTokens, GeneratedTokens: chunk.Usage.CompletionTokens}
+	return ProviderProgress{
+		Activity: activity, PromptEvalMillis: int64(chunk.Timings.PromptMillis),
+		PromptTokens: chunk.Usage.PromptTokens, GeneratedTokens: chunk.Usage.CompletionTokens,
+		ReasoningChars: reasoning,
+		DecodeMillis:   int64(chunk.Timings.PredictedMillis), DecodeTokens: chunk.Timings.PredictedTokens,
+	}
 }

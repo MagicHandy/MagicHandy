@@ -2,8 +2,8 @@
 
 [gui-installer.md](gui-installer.md) records the architecture: Inno Setup is a
 thin Windows shell and the embedded app owns interactive setup at `#/setup`.
-This document describes the implemented eight-step experience and the remaining
-work. The reference sketch is
+This document describes the implemented Easy and Custom setup paths and the
+remaining work. The reference sketch is
 [setup-wizard-sketch.svg](setup-wizard-sketch.svg); it is illustrative rather
 than a second UI specification.
 
@@ -12,7 +12,8 @@ than a second UI specification.
 1. **One decision owner.** Normal `install.ps1`, the setup EXE, and Settings all
    lead to the same embedded flow.
 2. **Safe to skip.** Every optional step can be skipped and setup never
-   commands motion, starts capture, or enables voice implicitly.
+   commands motion or starts capture. Voice turns on only for a module the user
+   chose on the Voice step, and only through its visible "turn on" choice.
 3. **Honest cost.** Runtime and voice choices show why they are useful, their
    license, hardware constraint, and approximate disk impact before install.
 4. **Recoverable.** Setup is re-runnable from Settings and interrupted jobs can
@@ -22,6 +23,24 @@ than a second UI specification.
 6. **Credential narrowness.** If password protection is selected, the password
    goes directly from the in-app form to the local account API. The thin
    installer never sees or persists it.
+
+## Easy And Custom Setup
+
+The Welcome step offers two paths ([ADR 0037](decisions/0037-easy-setup.md)):
+
+- **Easy setup** (default, recommended): four steps. Welcome, Your setup,
+  Install, Finish. The backend assesses the computer
+  (`assessment` in `GET /api/setup/status`) and reports met, partly met or
+  not met for chat, voice output and voice input, with a reason code and the
+  disk space each needs. It picks the first curated model the GPU holds, or
+  keeps a ready model that is already selected. The page asks how explicit
+  chat should be, whether to speak replies aloud (Chatterbox Turbo on the
+  assessed device), whether to talk instead of typing (Parakeet), and
+  optionally the Handy connection key. **Install and continue** submits the
+  same install plan as Custom setup. Access stays local-only, and chat is
+  skipped when its requirements are not met.
+- **Custom setup**: the seven steps below. Welcome, Access, Device, Chat AI,
+  Voice, Install, Finish.
 
 ## Entry And Completion
 
@@ -44,54 +63,51 @@ including the always-reachable Emergency Stop.
    - chat reply language
 
 2. Access
-   - Only this computer: loopback with no sign-in (default, Recommended)
+   - Only this computer: loopback with no sign-in (default)
    - Require an account and password: create the first local administrator
-   - explain that this does not enable LAN access or configure certificates
+   - remote use (LAN + local, Public) stays folded behind "Use MagicHandy from a
+     phone or another computer" and is always available in Settings > Access
 
 3. Device
-   - Handy Cloud REST + write-only connection key + non-motion check
+   - Handy Cloud REST + write-only connection key + non-motion check, with a
+     hint that the key is shown in the Handy Onboarding app
    - Browser Bluetooth
    - Intiface Central
+   - Handy model: Original / 2 Standard / 2 Pro (sets stroke length and speed)
    - skip
 
-4. Model runtime
-   - managed verified llama.cpp runtime: auto / CPU / CUDA (default, Recommended)
-   - existing Ollama service
-   - external compatible llama.cpp server
-   - skip chat setup
+4. Chat AI
+   - engine: managed verified llama.cpp (default, Recommended with an NVIDIA
+     GPU) / existing Ollama service / external llama.cpp server / skip chat
+   - managed model: a curated download rated against the detected GPU
+     (ADR 0034), a model already in the store, or "add a model later"
+   - import a GGUF or copy one from an Ollama library (folded)
+   - Ollama model or external server model identifier
 
-5. Model
-   - select or import a GGUF for managed llama.cpp
-   - scan an existing Ollama library and explicitly copy one compatible model
-     into the managed store
-   - select a model exposed by Ollama
-   - enter the external server's model identifier
-   - skip
-
-6. Voice (both optional)
+5. Voice (both optional)
    - output: none / Faster Qwen3-TTS / Chatterbox / external compatible server
    - input: install Parakeet or skip
+   - turn voice on when installation finishes (modules that need no reference)
 
-7. Install
+6. Install
    - review the selected local components as one plan
    - install sequentially with per-component state, progress, terminal output,
      Cancel, and Retry
 
-8. Finish
+7. Finish
    - data directory
-   - selected runtime and voice path
+   - selected runtime, model and voice state
    - local address and pre-motion reminder
 ```
 
 The Phase 15 StrokeGPT-ReVibed importer is not implemented, so no migration
-step or disabled placeholder is shown. Curated GGUF model downloads remain
-absent until a real model catalog, hashes, licenses, and download handlers exist.
+step or disabled placeholder is shown.
 
 ## Access Choice
 
 The local no-login path stays selected by default. Choosing protected access
 reveals username, password, and confirmation fields in the same graphite/steel
-setup surface. A passphrase must contain at least 8 Unicode characters, with a
+setup surface. A passphrase must contain at least 15 Unicode characters, with a
 longer unique passphrase still recommended. Confirmation reports match or
 mismatch as text and a compact icon while the user types, uses `aria-live` and
 `aria-invalid`, and does not rely on color alone. Continue calls the one-time
@@ -105,8 +121,10 @@ Reopening an already completed setup shows status rather than a second bootstrap
 form and does not sign out an administrator who entered through the normal login
 screen.
 
-The Access step starts with **Local only**, **LAN + local**, or **Public**.
-Local only retains optional account protection. Remote choices create the first
+Most installs stay on one computer, so the Access step opens on Local only with
+the optional account checkbox. **Use MagicHandy from a phone or another
+computer** reveals **Local only**, **LAN + local**, and **Public**; a saved remote
+configuration opens them directly. Local only retains optional account protection. Remote choices create the first
 administrator and keep the user on Access to finish the shared HTTPS guide.
 LAN setup creates a local certificate and offers its public trust root for
 download. Public setup detects the egress IPv4 and CA terms, accepts an optional
@@ -125,44 +143,59 @@ receives the login screen's local-setup guidance. See
 The exact UX and future linked-session seam are specified in
 [account-gui-design.md](account-gui-design.md).
 
-## Runtime Choice
+## Chat AI Choice
 
-The current managed option installs checksum-pinned official Windows bundles.
-It is the fresh-install default and keeps the **Recommended** badge because it
-gives MagicHandy a pinned, app-owned runner whose startup, model loading,
-diagnostics, and shutdown are under application control. CPU downloads about
-18 MiB. CUDA downloads about 628 MiB, installs about 1.1 GiB, and requires a
-compatible NVIDIA driver and GPU. Neither option installs a compiler or CUDA
-Toolkit. The screen states those costs before the user continues.
+The engine and its model are one step, so a chosen engine cannot be dropped by
+skipping a separate model step. The current managed option installs
+checksum-pinned official Windows bundles. It is the fresh-install default and
+keeps the **Recommended** badge on NVIDIA hardware because it gives MagicHandy a
+pinned, app-owned runner whose startup, model loading, diagnostics, and shutdown
+are under application control. CPU downloads about 18 MiB. CUDA downloads about
+615 MiB, installs about 1.1 GiB, and requires a compatible NVIDIA driver and GPU.
+Neither option installs a compiler or CUDA Toolkit. The screen states those
+costs before the user continues. Without an NVIDIA GPU the step starts on Skip
+and states that CPU replies are too slow for live chat; the engines stay
+selectable for users with a model server elsewhere.
+
+For managed llama.cpp the step lists the curated catalog (ADR 0034) with each
+model's size, measured graphics memory, fit for the detected GPU, license, and
+source page. The default is preselected only when the GPU holds it or its memory
+could not be read. A model already in the store, including a catalog digest that
+was imported earlier, is reused instead of downloaded. **Add a model later**
+installs only the engine and finishes with a pointer to Settings > Chat > Model.
+GGUF import and read-only Ollama library scanning with an explicit copy remain
+under **Import a model file instead**; a finished import is selected
+automatically. Continue stays disabled until a model choice is ready, and the
+step says why. The footer's **Skip for now** skips chat entirely.
 
 Ollama is never preselected or marked Recommended. It is an explicit option for
 an existing installation and can save the managed runtime footprint by
-using the user's daemon and model library. The model step also supports a
-different workflow: read-only scanning of an Ollama library followed by an
-explicit copy of one compatible GGUF into MagicHandy's checksummed managed
-store. External llama.cpp is similarly user-owned. The runtime choice is saved
-when leaving the runtime step, so skipping model selection does not silently
-discard it.
+using the user's daemon and model library. External llama.cpp is similarly
+user-owned.
 
 ## Voice Choice
 
 Faster Qwen3-TTS is offered only when an NVIDIA GPU is detected and uses CUDA.
 Chatterbox offers CPU and CUDA. Each module shows its code/model licenses,
 approximate disk impact, and reference requirement. The server installation
-can be configured for app auto-launch, but installing assets keeps voice and
-Speak replies disabled.
+can be configured for app auto-launch.
 
-Parakeet is a selectable component with runner/model license and download size
-shown. Reference WAV and exact transcript selection, provider tuning,
-enabling voice, and starting workers remain in Settings > Voice, where they can
-be tested with the rest of the voice controls.
+Chatterbox is marked **Ready after install** because its included voice needs
+no reference. When it or Parakeet is chosen, **Turn voice on when installation
+finishes** appears, checked by default. With it on, a successful install turns
+voice on and, for Chatterbox, spoken chat replies; the settings transition then
+starts the workers. Faster Qwen3-TTS stays off because it cannot speak until a
+reference WAV and its exact transcript are set in Settings > Voice, which the
+step says. An external voice server is configured later in Settings > Voice.
+Provider tuning remains in Settings > Voice.
 
 ## Installation Jobs
 
-Runtime, model, and voice pages collect choices; they do not expose independent
+The Chat AI and Voice pages collect choices; they do not expose independent
 build buttons. Continuing from Voice submits one reviewed plan to the backend.
-The backend runs managed llama.cpp, local TTS, and Parakeet sequentially through
-one queue. A queued or running plan blocks another install and exposes bounded,
+The backend runs managed llama.cpp, the chosen catalog model download, local
+TTS, and Parakeet sequentially through one queue. A downloaded model is selected
+as the chat model once it is verified. A queued or running plan blocks another install and exposes bounded,
 always-visible terminal output plus per-component state and progress. One Cancel
 action owns the helper process tree and terminates it on cancellation or server
 shutdown. Failed/cancelled plans remain visible after refresh and can be
@@ -179,7 +212,7 @@ the existing shell. The main pane has a small step label, task-sized heading,
 unframed explanatory copy, and flat radio choice rows. It does not use a
 marketing hero, gradients, nested cards, glow, or decorative animation.
 
-Below 780 px the progress rail becomes an eight-position top stepper. Below 560 px
+Below 780 px the progress rail becomes a seven-position top stepper. Below 560 px
 two-column fields collapse and action buttons wrap. The job indicator respects
 `prefers-reduced-motion`; all text and paths wrap rather than forcing horizontal
 overflow.
@@ -208,14 +241,19 @@ slots.
   administrator, never sends the password through installer-owned state, and
   does not enable LAN exposure. Finishing a protected first run revokes the
   temporary setup session and requires the new password through the login UI.
-- Runtime choice persists before model selection can be skipped.
-- Managed llama.cpp is the fresh-install Recommended default; Ollama is never
-  selected implicitly.
+- Choosing "add a model later" keeps the managed runtime in the install plan.
+- Managed llama.cpp is the fresh-install Recommended default on NVIDIA hardware;
+  Ollama is never selected implicitly; chat starts skipped without NVIDIA.
+- The recommended catalog model is preselected only when the detected GPU holds
+  it, downloads inside the plan with resume, and is selected once verified.
 - A compatible Ollama-library model can be scanned and explicitly imported
-  from the setup model step.
-- Cloud key stays write-only and connection check causes no motion.
+  from the Chat AI step.
+- Cloud key stays write-only and connection check causes no motion; the Handy
+  model choice is saved with the Device step.
 - One explicit reviewed plan owns every selected local install; it is
-  controller-gated, visible, cancellable, retryable, and leaves voice disabled.
+  controller-gated, visible, cancellable, and retryable. Voice turns on only
+  for a chosen module that needs no reference, and only when the visible
+  "turn on" choice is kept.
 - Setup can be abandoned and resumed without losing completed writes.
 - Setup is re-runnable from Settings and completion returns to Chat.
 - 1280x800 and 390x844 visual checks show no overlap, clipping, or horizontal
@@ -229,4 +267,5 @@ slots.
 - [Windows release packaging](windows-release-packaging.md)
 - [UI design guidelines](ui-design-guidelines.md)
 - [ADR 0011](decisions/0011-windows-installer-shell.md)
+- [ADR 0034: curated model downloads](decisions/0034-curated-model-downloads.md)
 - [IMPLEMENTATION_PLAN Phase 16](../IMPLEMENTATION_PLAN.md)

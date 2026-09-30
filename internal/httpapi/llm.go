@@ -90,6 +90,7 @@ func (s *Server) resolveLLMProvider(ctx context.Context, settings config.LLMSett
 				RunnerPath:          paths.runner,
 				ModelPath:           paths.model,
 				ContextSize:         settings.LlamaCPPContextSize,
+				ChatTemplateFile:    paths.template,
 			})
 		} else {
 			provider, err = llm.NewLlamaCPPProvider(options)
@@ -273,9 +274,15 @@ func (s *Server) llmState(ctx context.Context) any {
 	}
 	var managedRuntimeInstalled bool
 	if managed {
-		runtimeStatus := s.managedLLM.Snapshot().Runtime
+		runtimeSnapshot := s.managedLLM.Snapshot()
+		runtimeStatus := runtimeSnapshot.Runtime
 		state["managed_runtime"] = runtimeStatus.State
 		state["managed_ready"] = false
+		// Versions and an in-progress install let the UI announce a runtime
+		// update and whether MagicHandy is already applying it.
+		state["managed_runtime_version"] = runtimeStatus.Version
+		state["managed_runtime_expected"] = runtimeStatus.ExpectedVersion
+		state["managed_runtime_updating"] = managedRuntimeBuildInProgress(runtimeSnapshot.Build)
 		managedRuntimeInstalled = runtimeStatus.Installed
 	}
 	if s.models != nil {
@@ -405,10 +412,10 @@ func llmRuntimeSettingsChanged(previous, next config.LLMSettings) bool {
 	return llmCacheKey(previous, "") != llmCacheKey(next, "")
 }
 
-type managedProviderPaths struct{ runner, model, key string }
+type managedProviderPaths struct{ runner, model, template, key string }
 
 func (s *Server) managedProviderPaths(ctx context.Context, settings config.LLMSettings) (managedProviderPaths, error) {
-	var managedRunnerPath, managedModelPath, managedKey string
+	var managedRunnerPath, managedModelPath, managedTemplatePath, managedKey string
 	if settings.Provider == config.LLMProviderLlamaCPP && settings.LlamaCPPMode == config.LlamaCPPModeManaged {
 		runtimeSnapshot := s.managedLLM.Snapshot()
 		if managedRuntimeBuildInProgress(runtimeSnapshot.Build) {
@@ -425,10 +432,19 @@ func (s *Server) managedProviderPaths(ctx context.Context, settings config.LLMSe
 		if model.State != "ready" {
 			return managedProviderPaths{}, fmt.Errorf("selected managed llama.cpp model %q is %s: %s", settings.Model, model.State, model.Message)
 		}
+		if model.TemplateFix != "" {
+			// A known or user-chosen template fix replaces the model's own chat
+			// template; the fix is part of the cache key so toggling it restarts
+			// the runner.
+			managedTemplatePath, err = s.models.TemplateFixFile(model.TemplateFix)
+			if err != nil {
+				return managedProviderPaths{}, fmt.Errorf("prepare the chat template fix for %q: %w", settings.Model, err)
+			}
+		}
 		managedRunnerPath = runtimeStatus.RunnerPath
 		managedModelPath = model.ModelPath
-		managedKey = strings.Join([]string{runtimeStatus.Commit, runtimeStatus.Backend, managedRunnerPath, model.ID, model.UpdatedAt, managedModelPath}, "\x00")
+		managedKey = strings.Join([]string{runtimeStatus.Commit, runtimeStatus.Backend, managedRunnerPath, model.ID, model.UpdatedAt, managedModelPath, model.TemplateFix}, "\x00")
 	}
 
-	return managedProviderPaths{managedRunnerPath, managedModelPath, managedKey}, nil
+	return managedProviderPaths{managedRunnerPath, managedModelPath, managedTemplatePath, managedKey}, nil
 }

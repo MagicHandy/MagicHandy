@@ -15,6 +15,7 @@ host	DELETE /api/labs/tests/{id}
 host	DELETE /api/library/patterns/{id}
 host	DELETE /api/library/programs/{id}
 host	DELETE /api/llm/imports/{id}
+host	DELETE /api/llm/model-check
 host	DELETE /api/llm/models/{id}
 host	DELETE /api/llm/runtime/build
 host	DELETE /api/media/job
@@ -51,8 +52,10 @@ host	GET /api/labs/tests/{id}
 shared	GET /api/library
 shared	GET /api/library/patterns/{id}/export
 shared	GET /api/library/programs/{id}/export
+host	GET /api/llm/catalog
 host	GET /api/llm/duplicates
 host	GET /api/llm/imports/{id}
+host	GET /api/llm/model-check
 host	GET /api/llm/models
 host	GET /api/llm/ollama/models
 host	GET /api/llm/runtime
@@ -136,9 +139,12 @@ control	POST /api/library/patterns/{id}/play
 host	POST /api/library/preview
 control	POST /api/library/programs/{id}/play
 host	POST /api/llm/duplicates/terminate
+host	POST /api/llm/imports/catalog
 host	POST /api/llm/imports/gguf
 host	POST /api/llm/imports/ollama
 host	POST /api/llm/load
+host	POST /api/llm/model-check
+host	POST /api/llm/models/{id}/template-fix
 host	POST /api/llm/ollama/scan
 host	POST /api/llm/runtime/build
 host	POST /api/llm/unload

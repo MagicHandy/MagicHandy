@@ -2,6 +2,8 @@
 // client ID so the backend controller lease can pick one active controller;
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
+import type { LLMCatalog } from "./catalog-types";
+import type { ModelCheckReport } from "./model-check-types";
 import type { AccessAuditPage } from "./audit-types";
 import type { RecoveryCodeStatus, IssuedRecoveryCodes } from "./access-types";
 import type { RemoteClaim, RemoteCommand, RemoteCommandInput, RemotePresence, RemoteState } from "./remote-types";
@@ -32,6 +34,7 @@ import type {
   LibraryPattern,
   LLMModelImport,
   LLMModelManagerSnapshot,
+  ManagedLLMModel,
   LLMProviderStatus,
   ManagedLLMDuplicateSnapshot,
   SetupInstallPlan,
@@ -436,6 +439,7 @@ function normalizePersonas(payload: PersonasPayload): PersonasPayload {
       && typeof item.name === "string"
       && typeof item.description === "string"
       && typeof item.chat_voice === "string"
+      && (item.reply_length === undefined || typeof item.reply_length === "string")
       && typeof item.reaction_style === "string"
       && typeof item.prompt_set_id === "string"
       && typeof item.default_focus_area === "string"
@@ -757,9 +761,17 @@ export const api = {
     request<{ import: LLMModelImport }>("POST", "/api/llm/imports/ollama", { path, candidate_id }),
   importGGUFModel: (path: string, display_name: string) =>
     request<{ import: LLMModelImport }>("POST", "/api/llm/imports/gguf", { path, display_name }),
+  llmCatalog: () => request<LLMCatalog>("GET", "/api/llm/catalog"),
+  downloadCatalogModel: (id: string) =>
+    request<{ import: LLMModelImport }>("POST", "/api/llm/imports/catalog", { id }),
   llmImport: (id: string) => request<{ import: LLMModelImport }>("GET", `/api/llm/imports/${encodeURIComponent(id)}`),
   cancelLLMImport: (id: string) => request<{ import: LLMModelImport }>("DELETE", `/api/llm/imports/${encodeURIComponent(id)}`),
   deleteLLMModel: (id: string) => request<null>("DELETE", `/api/llm/models/${encodeURIComponent(id)}`),
+  setModelTemplateFix: (id: string, enabled: boolean) =>
+    request<ManagedLLMModel>("POST", `/api/llm/models/${encodeURIComponent(id)}/template-fix`, { enabled }),
+  modelCheck: () => request<ModelCheckReport>("GET", "/api/llm/model-check"),
+  startModelCheck: () => request<ModelCheckReport>("POST", "/api/llm/model-check"),
+  cancelModelCheck: () => request<ModelCheckReport>("DELETE", "/api/llm/model-check"),
 
   // Settings.
   getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),
@@ -782,6 +794,7 @@ export const api = {
     ui_locale?: string;
     chat_locale?: string;
     device_owner?: string;
+    handy_model?: string;
     connection_key?: string;
     llm?: PublicSettings["llm"];
   }) => request<{ settings: PublicSettings }>("PUT", "/api/setup/preferences", body),

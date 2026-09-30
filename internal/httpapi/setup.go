@@ -20,6 +20,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
 const setupJobOutputLimit = 24 * 1024
@@ -48,6 +49,9 @@ type setupVoiceModule struct {
 	SourceURL            string   `json:"source_url"`
 	SourceRevision       string   `json:"source_revision"`
 	Port                 int      `json:"port"`
+	// ReadyAfterInstall marks a module that can speak with no further setup,
+	// so the wizard may turn it on when installation finishes.
+	ReadyAfterInstall bool `json:"ready_after_install"`
 }
 
 var setupVoiceModules = []setupVoiceModule{
@@ -67,6 +71,7 @@ var setupVoiceModules = []setupVoiceModule{
 		License: "MIT", Model: "ResembleAI/chatterbox-turbo", ModelLicense: "MIT",
 		PythonVersion: "3.10", DiskEstimate: "Several GiB for Python, PyTorch, dependencies, and model cache.",
 		SupportedDevices:     []string{config.TTSDeviceCPU, config.TTSDeviceCUDA},
+		ReadyAfterInstall:    true,
 		ReferenceRequirement: "The included Emily voice works immediately; a local WAV can be selected later.",
 		SourceURL:            "https://github.com/devnen/Chatterbox-TTS-Server.git",
 		SourceRevision:       "915ae289340e10c6047f27f47e22eae9bf350c32", Port: 8992,
@@ -78,12 +83,16 @@ type setupVoiceInstallRequest struct {
 	Device     string `json:"device"`
 	AutoLaunch bool   `json:"auto_launch"`
 	updateFrom *config.VoiceSettings
+	// enable is set by an install plan whose user asked for voice to be on
+	// when installation finishes.
+	enable bool
 }
 
 type setupPreferencesRequest struct {
 	UILocale      string              `json:"ui_locale"`
 	ChatLocale    string              `json:"chat_locale"`
 	DeviceOwner   string              `json:"device_owner"`
+	HandyModel    string              `json:"handy_model"`
 	ConnectionKey *string             `json:"connection_key,omitempty"`
 	LLM           *config.LLMSettings `json:"llm,omitempty"`
 }
@@ -96,6 +105,7 @@ type setupVoiceInstallResult struct {
 	Module     setupVoiceModule
 	Device     string
 	AutoLaunch bool
+	Enable     bool
 	Root       string
 	updateFrom *config.VoiceSettings
 }
@@ -103,6 +113,7 @@ type setupVoiceInstallResult struct {
 type setupParakeetInstallResult struct {
 	ServerPath string
 	ModelPath  string
+	Enable     bool
 }
 
 type setupJob struct {
@@ -149,6 +160,7 @@ type setupManager struct {
 	preflightParakeet    func(string) error
 	downloadParakeet     func(context.Context, string) error
 	runParakeetInstaller func(context.Context, string, setupParakeetInstallResult) error
+	downloadModel        func(context.Context, string, llm.CatalogModel) error
 	hardwareMu           sync.Mutex
 	hardwareOnce         sync.Once
 	hardware             map[string]any
@@ -402,7 +414,7 @@ func (m *setupManager) installVoice(
 	if err == nil && ctx.Err() == nil && m.onInstalled != nil {
 		err = m.onInstalled(context.WithoutCancel(ctx), setupVoiceInstallResult{
 			Module: module, Device: request.Device, AutoLaunch: request.AutoLaunch, Root: root,
-			updateFrom: request.updateFrom,
+			Enable: request.enable, updateFrom: request.updateFrom,
 		})
 		if err == nil {
 			err = activateVoiceInstallCandidate(moduleHome, root)
@@ -645,32 +657,6 @@ func stringInSlice(value string, values []string) bool {
 	return false
 }
 
-func setupHardwareSnapshot() map[string]any {
-	snapshot := map[string]any{
-		"platform": runtime.GOOS + "/" + runtime.GOARCH,
-		"nvidia":   false,
-		"cuda":     false,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	command := exec.CommandContext(ctx, "nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits") // #nosec G204 -- fixed diagnostic command.
-	configureSetupProcess(command)
-	if output, err := command.Output(); err == nil {
-		parts := strings.SplitN(strings.TrimSpace(string(output)), ",", 2)
-		if len(parts) > 0 && strings.TrimSpace(parts[0]) != "" {
-			snapshot["nvidia"] = true
-			snapshot["gpu_name"] = strings.TrimSpace(parts[0])
-		}
-		if len(parts) == 2 {
-			snapshot["vram_mib"] = strings.TrimSpace(parts[1])
-		}
-	}
-	if _, err := exec.LookPath("nvcc"); err == nil {
-		snapshot["cuda"] = true
-	}
-	return snapshot
-}
-
 func (s *Server) setupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/setup", s.handleSetupStatus)
 	mux.HandleFunc("GET /api/setup/install/{id}/report", s.handleSetupFailureReport)
@@ -692,32 +678,13 @@ func (s *Server) handleSetupPreferences(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	request.UILocale = strings.TrimSpace(request.UILocale)
-	request.ChatLocale = strings.TrimSpace(request.ChatLocale)
-	request.DeviceOwner = strings.TrimSpace(request.DeviceOwner)
-	if (request.UILocale == "") != (request.ChatLocale == "") {
-		writeError(w, http.StatusBadRequest, errors.New("UI and chat locales must be provided together"))
+	if status, err := normalizeSetupPreferences(&request); err != nil {
+		writeError(w, status, err)
 		return
 	}
-	if request.UILocale != "" && (!config.IsSupportedLocale(request.UILocale) || !config.IsSupportedLocale(request.ChatLocale)) {
-		writeError(w, http.StatusBadRequest, errors.New("setup locale is unsupported"))
+	if request.HandyModel != "" && !s.capabilities(r).ConfigureHost {
+		writeError(w, http.StatusForbidden, errors.New(administratorHostAccessRequired))
 		return
-	}
-	if request.DeviceOwner != "" && !stringInSlice(request.DeviceOwner, []string{
-		config.DispatchOwnerCloudREST,
-		config.DispatchOwnerBrowserBluetooth,
-		config.DispatchOwnerIntiface,
-	}) {
-		writeError(w, http.StatusBadRequest, errors.New("setup device transport is unsupported"))
-		return
-	}
-	if request.ConnectionKey != nil {
-		trimmed := strings.TrimSpace(*request.ConnectionKey)
-		if trimmed == "" {
-			writeError(w, http.StatusBadRequest, errors.New("connection key cannot be empty"))
-			return
-		}
-		request.ConnectionKey = &trimmed
 	}
 
 	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
@@ -731,6 +698,9 @@ func (s *Server) handleSetupPreferences(w http.ResponseWriter, r *http.Request) 
 		}
 		if request.DeviceOwner != "" {
 			current.Device.HSPDispatchOwner = request.DeviceOwner
+		}
+		if request.HandyModel != "" {
+			current.Motion.HandyModel = request.HandyModel
 		}
 		if request.ConnectionKey != nil {
 			current.Device.HandyConnectionKey = *request.ConnectionKey
@@ -748,7 +718,44 @@ func (s *Server) handleSetupPreferences(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, payload)
 }
 
-func (s *Server) handleSetupStatus(w http.ResponseWriter, _ *http.Request) {
+// normalizeSetupPreferences trims the request and rejects values outside the
+// closed choices the wizard offers.
+func normalizeSetupPreferences(request *setupPreferencesRequest) (int, error) {
+	request.UILocale = strings.TrimSpace(request.UILocale)
+	request.ChatLocale = strings.TrimSpace(request.ChatLocale)
+	request.DeviceOwner = strings.TrimSpace(request.DeviceOwner)
+	request.HandyModel = strings.TrimSpace(request.HandyModel)
+	if (request.UILocale == "") != (request.ChatLocale == "") {
+		return http.StatusBadRequest, errors.New("UI and chat locales must be provided together")
+	}
+	if request.UILocale != "" && (!config.IsSupportedLocale(request.UILocale) || !config.IsSupportedLocale(request.ChatLocale)) {
+		return http.StatusBadRequest, errors.New("setup locale is unsupported")
+	}
+	if request.DeviceOwner != "" && !stringInSlice(request.DeviceOwner, []string{
+		config.DispatchOwnerCloudREST,
+		config.DispatchOwnerBrowserBluetooth,
+		config.DispatchOwnerIntiface,
+	}) {
+		return http.StatusBadRequest, errors.New("setup device transport is unsupported")
+	}
+	if request.HandyModel != "" && !stringInSlice(request.HandyModel, []string{
+		config.HandyModelOriginal,
+		config.HandyModel2Standard,
+		config.HandyModel2Pro,
+	}) {
+		return http.StatusBadRequest, errors.New("setup Handy model is unsupported")
+	}
+	if request.ConnectionKey != nil {
+		trimmed := strings.TrimSpace(*request.ConnectionKey)
+		if trimmed == "" {
+			return http.StatusBadRequest, errors.New("connection key cannot be empty")
+		}
+		request.ConnectionKey = &trimmed
+	}
+	return http.StatusOK, nil
+}
+
+func (s *Server) handleSetupStatus(w http.ResponseWriter, r *http.Request) {
 	settings, status := s.store.Snapshot()
 	parakeet := setupParakeet
 	parakeetStatus := inspectParakeetAppModule(settings.Voice.ASRWorkerPath, s.voiceExecutable, status.DataDir)
@@ -758,10 +765,13 @@ func (s *Server) handleSetupStatus(w http.ResponseWriter, _ *http.Request) {
 		"parakeet": setupScriptPresent(s.voiceExecutable, "install-parakeet-module.ps1"),
 		"voice":    setupScriptPresent(s.voiceExecutable, "install-tts-module.ps1"),
 	}
+	hardware := s.setup.HardwareSnapshot()
+	parakeetInstalled := voiceModuleFlag(parakeetStatus.RunnerInstalled) && voiceModuleFlag(parakeetStatus.ModelInstalled)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"required":        !settings.UI.SetupCompleted,
 		"data_dir":        status.DataDir,
-		"hardware":        s.setup.HardwareSnapshot(),
+		"hardware":        hardware,
+		"assessment":      s.assessSetup(r.Context(), hardware, helpers, status.DataDir, parakeetInstalled),
 		"voice_modules":   setupVoiceModules,
 		"llama_runtime":   setupLlamaRuntime,
 		"parakeet":        parakeet,
@@ -874,6 +884,13 @@ func (s *Server) applyInstalledVoiceModule(ctx context.Context, result setupVoic
 			current.Voice.TTSModel = config.DefaultChatterboxModel
 			current.Voice.TTSVoice = config.DefaultChatterboxVoice
 			current.Voice.TTSHealthPath = config.DefaultChatterboxHealthPath
+		}
+		// A module that needs no reference voice can speak at once, so the
+		// wizard's "turn on when finished" choice switches voice and spoken
+		// replies on. Other modules stay off until their reference is set.
+		if result.Enable && result.Module.ReadyAfterInstall {
+			current.Voice.Enabled = true
+			current.Voice.SpeakReplies = true
 		}
 		return current, nil
 	})

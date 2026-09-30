@@ -140,7 +140,7 @@ screen anatomy, visual treatment, and branding slots — lives in
    connection check. Existing settings surface, embedded.
 4. **LLM runtime** — the Recommended fresh-install default is a pinned managed
    **verified release** (backend auto/CPU/CUDA), with download and installed
-   size visible. CPU downloads about 18 MiB. CUDA downloads about 628 MiB,
+   size visible. CPU downloads about 18 MiB. CUDA downloads about 615 MiB,
    installs about 1.1 GiB, and requires a compatible NVIDIA driver. Neither
    installs a compiler or CUDA Toolkit. **Use existing Ollama** is never
    selected implicitly and avoids that managed-runtime footprint; users may
@@ -191,7 +191,7 @@ where the logic lives.
 | Gap | Where it lands |
 | --- | --- |
 | Release plumbing: setup EXE, portable ZIP, version metadata, PR artifacts, tag publication | Implemented; `v0.1.0-alpha.13` restores explicitly reviewed unsigned setup publication with exact-artifact Defender and lifecycle gates |
-| Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Implemented with official `b9966` CPU and CUDA 12.4 assets |
+| Prebuilt CPU/CUDA llama.cpp runtime bundles, manifests, checksums, licenses | Implemented with official `b11149` CPU and CUDA 12.4 assets |
 | Inno Setup script, destination/shortcut choices, explicit retain/purge uninstall | Implemented and covered by release lifecycle acceptance |
 | First-run detection, `#/setup`, re-run from Settings | Implemented |
 | Access choice, first local administrator, and credential-safe installer boundary | Implemented; LAN certificate provisioning remains separate |

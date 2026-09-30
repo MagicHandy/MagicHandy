@@ -69,6 +69,7 @@ var requiredSchemaTables = []schemaTable{
 		"id:TEXT", "name:TEXT", "description:TEXT", "chat_voice:TEXT", "reaction_style:TEXT",
 		"prompt_set_id:TEXT", "default_focus_area:TEXT", "lore_mode:TEXT",
 		"portrait_updated_at:TEXT", "last_used_at:TEXT", "created_at:TEXT", "updated_at:TEXT",
+		"reply_length:TEXT",
 	), primaryKey: []string{"id"}},
 	{name: "persona_lore", columns: columns(
 		"id:TEXT", "persona_id:TEXT", "text:TEXT", "keywords_json:TEXT", "enabled:INTEGER",

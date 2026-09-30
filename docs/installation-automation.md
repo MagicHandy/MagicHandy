@@ -68,9 +68,11 @@ Optional dependencies stay outside the core process:
 | Faster Qwen3-TTS | `uv`, managed Python 3.11, CUDA PyTorch, pinned source/model | Faster NVIDIA voice cloning |
 | Chatterbox | `uv`, managed Python 3.10, PyTorch, pinned source/model | CPU fallback and broader NVIDIA compatibility |
 
-The managed llama.cpp path downloads official `b9966` Windows artifacts with
+The managed llama.cpp path downloads official `b11149` Windows artifacts with
 fixed sizes and SHA-256 digests. CPU is approximately 18 MiB compressed; CUDA
-is approximately 628 MiB compressed and 1.1 GiB installed. Neither path needs
+is approximately 615 MiB compressed and 1.1 GiB installed. When a release moves
+the pin, the app updates an installed runtime at startup unless the user chose
+manual runtime updates (ADR 0036). Neither path needs
 Git, CMake, Visual Studio, MSYS2, or the CUDA Toolkit. Choosing existing Ollama
 or skipping chat setup avoids the managed runtime's disk use.
 

@@ -1047,7 +1047,15 @@ is bounded to half the cap, and repair requests reasoning off to leave more
 budget for JSON. Unsupported external models may ignore or reject the override.
 These controls never claim an unmeasured general speedup or expose unproven
 threads/GPU/cache knobs. Context size remains the managed-only reviewed
-exception, not a general provider tuning surface.
+exception, not a general provider tuning surface. Context size, maximum output,
+reasoning, timeout and their guidance sit under a collapsed **Advanced
+generation settings** disclosure; Model loading stays visible because it trades
+first-reply latency against idle memory. The LLM motion select carries a
+one-sentence description of the selected mode. Managed models begin with
+**Download a tested model**: each curated entry shows size, measured graphics
+memory against the detected GPU, license and source links, and a Download,
+Resume download, or In your store state; progress uses the ordinary import
+rows (ADR 0034).
 
 Device requirements and app-managed voice modules are status/notice surfaces,
 not fake form fields. Cloud REST firmware v4/API v3 appears as a semantic note.

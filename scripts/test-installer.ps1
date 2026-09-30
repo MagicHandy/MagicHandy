@@ -867,7 +867,9 @@ func main() {
     Assert-True -Condition ($innoSource.Contains('DisableDirPage=no')) -Message 'Windows setup should always expose the destination chooser'
     Assert-True -Condition (-not [regex]::IsMatch($innoSource, '(?i)password|credential|user account')) -Message 'thin Inno Setup must never collect or transport account credentials'
     $setupRouteSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'web\src\routes\SetupRoute.tsx'))
-    Assert-True -Condition ($setupRouteSource.Contains('Require an account and password')) -Message 'the embedded setup wizard should own the password-protection choice'
+    # The Access step's choices live beside the other step components.
+    $setupStepsSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'web\src\components\SetupSteps.tsx'))
+    Assert-True -Condition ($setupStepsSource.Contains('Require an account and password')) -Message 'the embedded setup wizard should own the password-protection choice'
     Assert-True -Condition ($setupRouteSource.Contains('await auth.bootstrap(')) -Message 'the embedded setup wizard should create the first account directly through the local auth API'
     Assert-True -Condition ($innoSource.Contains('Name: "desktopicon"')) -Message 'Windows setup should offer a desktop shortcut'
     Assert-True -Condition ($innoSource.Contains('Flags: unchecked')) -Message 'desktop shortcut should remain opt-in'
@@ -919,10 +921,10 @@ func main() {
     $builderErrors = $null
     $builderAst = [System.Management.Automation.Language.Parser]::ParseFile($builderPath, [ref]$builderTokens, [ref]$builderErrors)
     foreach ($expected in @(
-        'llama-b9966-bin-win-cpu-x64.zip',
-        'a2e791df47c8abd09e23f85a00699d6d6552445f6bba21e810263eaeefbf672a',
-        'llama-b9966-bin-win-cuda-12.4-x64.zip',
-        'bd95fbe38267b41ba109f922b978985e3ce982fef47040f90534a291617fcee9',
+        'llama-b11149-bin-win-cpu-x64.zip',
+        'd1cb5f9ef7bbb7068954b4c9767d5b5309e20bcefeb61d4aafc47f9581f38752',
+        'llama-b11149-bin-win-cuda-12.4-x64.zip',
+        'd3140fe21ab2e665a706ca27923b27ca264f1c564b5837abea4566cc49c16096',
         'cudart-llama-bin-win-cuda-12.4-x64.zip',
         '8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6',
         "source = 'verified_upstream_release'",

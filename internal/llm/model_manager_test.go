@@ -492,7 +492,7 @@ func TestModelImportStopsAfterExpectedSize(t *testing.T) {
 	job, err := manager.startImport(modelImportSpec{
 		DisplayName: "Bounded copy", Source: ModelSourceGGUF,
 		SourcePath: source, SizeBytes: 8, Format: "gguf",
-	})
+	}, manager.runImport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -517,7 +517,7 @@ func TestModelImportRevalidatesCopiedGGUF(t *testing.T) {
 	job, err := manager.startImport(modelImportSpec{
 		DisplayName: "  Changed source  ", Source: ModelSourceGGUF,
 		SourcePath: source, SizeBytes: int64(len(data)), Format: "gguf",
-	})
+	}, manager.runImport)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -578,7 +578,7 @@ func TestModelManagerBoundsConcurrentImports(t *testing.T) {
 	_, err = manager.startImport(modelImportSpec{
 		DisplayName: "third", Source: ModelSourceGGUF,
 		SourcePath: filepath.Join(t.TempDir(), "third.gguf"), SizeBytes: 8,
-	})
+	}, manager.runImport)
 	if err == nil || !strings.Contains(err.Error(), "at most 2") {
 		t.Fatalf("third concurrent import error = %v", err)
 	}
@@ -629,6 +629,9 @@ type ggufFixtureOptions struct {
 	embeddedVision bool
 	topLevelVision bool
 	splitCount     uint16
+	// architecture defaults to llama; chatTemplate is written when set.
+	architecture string
+	chatTemplate string
 }
 
 type ollamaFixture struct {
@@ -695,6 +698,13 @@ func testGGUFData(t testing.TB, options ggufFixtureOptions) []byte {
 	if options.embeddedVision || options.topLevelVision {
 		metadataCount++
 	}
+	if options.chatTemplate != "" {
+		metadataCount++
+	}
+	architecture := options.architecture
+	if architecture == "" {
+		architecture = "llama"
+	}
 	if options.splitCount > 0 {
 		metadataCount++
 	}
@@ -705,8 +715,8 @@ func testGGUFData(t testing.TB, options ggufFixtureOptions) []byte {
 
 	writeString("general.architecture")
 	writeNumber(uint32(ggufTypeString))
-	writeString("llama")
-	writeString("llama.context_length")
+	writeString(architecture)
+	writeString(architecture + ".context_length")
 	writeNumber(uint32(ggufTypeUint32))
 	writeNumber(uint32(4096))
 	writeString("tokenizer.ggml.tokens")
@@ -723,6 +733,11 @@ func testGGUFData(t testing.TB, options ggufFixtureOptions) []byte {
 		writeString(key)
 		writeNumber(uint32(ggufTypeUint32))
 		writeNumber(uint32(1152))
+	}
+	if options.chatTemplate != "" {
+		writeString("tokenizer.chat_template")
+		writeNumber(uint32(ggufTypeString))
+		writeString(options.chatTemplate)
 	}
 	if options.splitCount > 0 {
 		writeString("split.count")

@@ -12,6 +12,7 @@ import { rebaseSettingsDraft } from "../util/settings-draft";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { ThemePicker } from "../components/ThemePicker";
 import { UpdateSettingsPanel } from "../components/UpdateSettingsPanel";
+import { RuntimeUpdateSettings } from "../components/RuntimeUpdateSettings";
 import { LOCALE_OPTIONS, normalizeLocale, t, translateKnown, type MessageKey } from "../i18n";
 import { useAppState, useHashRoute, useToast } from "../state/app-state";
 import type { MediaSettingsPayload } from "../api/types";
@@ -432,6 +433,12 @@ export function SettingsRoute() {
                 preferenceDisabled={locked}
                 checkDisabled={!backendOnline || loading}
                 onAutomaticChange={(automatic) => patchUI({ update_check_mode: automatic ? "automatic" : "manual" })}
+              />
+              <RuntimeUpdateSettings
+                automatic={(s.ui?.runtime_update_mode ?? "automatic") !== "manual"}
+                preferenceDisabled={locked}
+                actionDisabled={locked || !backendOnline}
+                onAutomaticChange={(automatic) => patchUI({ runtime_update_mode: automatic ? "automatic" : "manual" })}
               />
             </div>
             <div className="group">

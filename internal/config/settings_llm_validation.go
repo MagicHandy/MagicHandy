@@ -71,6 +71,9 @@ func validateLLMBehaviorSettings(settings LLMSettings) error {
 	if !ValidLLMChatVoice(settings.ChatVoice) {
 		return fmt.Errorf("unknown LLM chat voice %q", settings.ChatVoice)
 	}
+	if !ValidLLMReplyLength(settings.ReplyLength) {
+		return fmt.Errorf("unknown LLM reply length %q", settings.ReplyLength)
+	}
 	return nil
 }
 

@@ -15,7 +15,7 @@ func TestProviderProgressSeparatesThinkingFromVisibleText(t *testing.T) {
 			name: "llama.cpp",
 			body: "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"private reasoning\"}}]}\n" +
 				"data: {\"choices\":[{\"delta\":{\"content\":\"Ready\"}}]}\n" +
-				"data: {\"choices\":[{\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":41,\"completion_tokens\":7},\"timings\":{\"prompt_ms\":123.5}}\n" +
+				"data: {\"choices\":[{\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":41,\"completion_tokens\":7},\"timings\":{\"prompt_ms\":123.5,\"predicted_ms\":70.2,\"predicted_n\":7}}\n" +
 				"data: [DONE]\n",
 			read: func(body string, delta func(string) error, progress func(ProviderProgress)) (string, error) {
 				return readOpenAIEventStream(strings.NewReader(body), delta, progress)
@@ -25,7 +25,7 @@ func TestProviderProgressSeparatesThinkingFromVisibleText(t *testing.T) {
 			name: "ollama",
 			body: "{\"message\":{\"thinking\":\"private reasoning\"}}\n" +
 				"{\"message\":{\"content\":\"Ready\"}}\n" +
-				"{\"done\":true,\"load_duration\":10000000,\"prompt_eval_duration\":123500000,\"prompt_eval_count\":41,\"eval_count\":7}\n",
+				"{\"done\":true,\"load_duration\":10000000,\"prompt_eval_duration\":123500000,\"prompt_eval_count\":41,\"eval_count\":7,\"eval_duration\":70200000}\n",
 			read: func(body string, delta func(string) error, progress func(ProviderProgress)) (string, error) {
 				return readOllamaStream(strings.NewReader(body), delta, progress)
 			},
@@ -52,6 +52,12 @@ func TestProviderProgressSeparatesThinkingFromVisibleText(t *testing.T) {
 			last := updates[len(updates)-1]
 			if last.PromptEvalMillis != 123 || last.PromptTokens != 41 || last.GeneratedTokens != 7 {
 				t.Fatalf("missing provider phase metrics: %+v", last)
+			}
+			if updates[0].ReasoningChars != len("private reasoning") || updates[1].ReasoningChars != 0 {
+				t.Fatalf("reasoning counts = %d, %d", updates[0].ReasoningChars, updates[1].ReasoningChars)
+			}
+			if last.DecodeMillis != 70 || last.DecodeTokens != 7 {
+				t.Fatalf("decode timing = %d ms, %d tokens", last.DecodeMillis, last.DecodeTokens)
 			}
 			if test.name == "ollama" && last.LoadMillis != 10 {
 				t.Fatalf("load millis=%d", last.LoadMillis)

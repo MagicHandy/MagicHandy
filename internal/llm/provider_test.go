@@ -198,6 +198,9 @@ func runManagedLlamaRunnerHelper() {
 			_ = file.Close()
 		}
 	}
+	if output := os.Getenv("MAGICHANDY_TEST_LLAMA_RUNNER_OUTPUT"); output != "" {
+		_, _ = os.Stderr.WriteString(output + "\n")
+	}
 	if message := os.Getenv("MAGICHANDY_TEST_LLAMA_RUNNER_EXIT"); message != "" {
 		_, _ = os.Stderr.WriteString(message + "\n")
 		return

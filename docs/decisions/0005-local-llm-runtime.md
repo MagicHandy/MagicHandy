@@ -189,6 +189,12 @@ Negative:
 - llama.cpp behavior can change across runner versions, so runner pinning matters
 - maintaining two providers increases test surface
 
+## Amendment (2026-09-30)
+
+The pin moved to `b11149` / `d2e54583` (upstream `v0.5.0`), and a release that
+moves the pin now updates an installed runtime at startup unless the user chose
+manual runtime updates. See [ADR 0036](0036-managed-runtime-updates.md).
+
 ## Revisit Criteria
 
 Revisit this decision if:

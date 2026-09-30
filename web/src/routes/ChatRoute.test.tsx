@@ -114,6 +114,7 @@ describe("ChatRoute", () => {
 	  expect(mode.children).toHaveLength(6);
 	  expect(within(mode).getAllByRole("radio")).toHaveLength(5);
 	  expect(mode.querySelectorAll('[aria-hidden="true"]')).toHaveLength(1);
+    expect(within(controls).getByText("The AI picks from your enabled library patterns and sets the speed.")).toBeInTheDocument();
 
     fireEvent.click(within(mode).getByRole("radio", { name: "Creative" }));
     await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("dynamic"));

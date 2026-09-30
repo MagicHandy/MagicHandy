@@ -19,7 +19,7 @@ const (
 	DatabaseFileName = "magichandy.db"
 
 	// CurrentSchemaVersion is mirrored into PRAGMA user_version.
-	CurrentSchemaVersion = 29
+	CurrentSchemaVersion = 30
 
 	// LegacyStatusAbsent records that a legacy JSON file was not present.
 	LegacyStatusAbsent = "absent"
@@ -582,6 +582,8 @@ var migrations = [][]string{
 	{`SELECT 1`},
 	// v28 -> v29: scoped account access and interface-bound sessions.
 	{`SELECT 1`},
+	// v29 -> v30: an optional per-persona reply length; empty follows Settings.
+	{`SELECT 1`},
 }
 
 func migrateAccountProfiles(ctx context.Context, tx *sql.Tx) error {
@@ -911,6 +913,8 @@ func runMigrationHook(ctx context.Context, tx *sql.Tx, version int) error {
 		err = migrateMediaTagKeys(ctx, tx)
 	case 29:
 		err = migrateInterfaceAccess(ctx, tx)
+	case 30:
+		err = migratePersonaReplyLength(ctx, tx)
 	default:
 		return nil
 	}

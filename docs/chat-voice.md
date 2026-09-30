@@ -14,6 +14,13 @@ The setting changes user-facing reply language only. Motion authorization,
 capability gates, speed bands, strict parsing, repair, engine admission, and
 Emergency Stop are unchanged.
 
+A companion setting, `Settings > Chat > Model > Reply length` (`llm.reply_length`),
+is `short`, `balanced` (default) or `detailed`. Balanced composes nothing, so the
+reviewed prompts are unchanged. Short and Detailed add one localized line after
+the final voice check, and Detailed raises the chat output budget to at least
+512 tokens. A persona may override it; an empty persona value follows Settings
+([ADR 0035](decisions/0035-model-test-and-template-fixes.md)).
+
 ## Result
 
 MagicHandy's sanitized output was primarily a prompt-construction defect, not

@@ -111,6 +111,68 @@
   min-height: 42px;
 }
 
+.capability-mode-help {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.model-advanced {
+  margin: 2px 0 12px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.model-advanced > summary {
+  min-height: 42px;
+  padding: 11px 2px;
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.model-advanced > .form-status {
+  margin: 0 0 10px;
+}
+
+.model-catalog {
+  margin: 4px 0 14px;
+}
+
+.model-catalog-head {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.model-catalog-head > * {
+  margin: 0;
+}
+
+.model-catalog-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.model-identity .model-catalog-badge {
+  display: inline-block;
+  margin: 0 0 0 8px;
+  vertical-align: 1px;
+}
+
+.model-catalog-source {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 6px 0 0;
+}
+
+.model-identity .model-catalog-source span {
+  display: inline;
+  margin: 0;
+}
+
 .managed-runtime {
   margin: 4px 0 14px;
   padding: 14px 0;
@@ -516,4 +578,133 @@
   gap: 8px;
   border-top: 1px solid var(--line);
   background: var(--bg-inset);
+}
+
+/* Model test window: verdicts come from the backend; dots reuse the shared
+   status states so pass/warn/fail read the same as elsewhere. */
+.model-check-dialog {
+  width: min(720px, 100%);
+  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.model-check-dialog header,
+.model-check-body,
+.model-check-dialog footer {
+  padding: 16px 18px;
+}
+
+.model-check-dialog header {
+  border-bottom: 1px solid var(--line);
+}
+
+.model-check-dialog h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.model-check-body {
+  display: grid;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.model-check-body > p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.model-check-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.model-check-progress progress {
+  width: 100%;
+}
+
+.model-check-verdict {
+  margin: 0;
+  font-weight: 600;
+}
+
+.model-check-items {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.model-check-items li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.model-check-items li .status-dot {
+  margin-top: 6px;
+}
+
+.model-check-items li > span:last-child {
+  display: grid;
+  gap: 4px;
+}
+
+.model-check-items small {
+  color: var(--muted);
+}
+
+.model-check-items .btn {
+  justify-self: start;
+  margin-top: 4px;
+}
+
+.model-check-turns ol {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+
+.model-check-turns q {
+  font-weight: 600;
+}
+
+.model-check-turns p {
+  margin: 4px 0;
+}
+
+.model-check-turns small {
+  color: var(--muted);
+}
+
+.model-check-dialog footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-inset);
+}
+
+@media (max-width: 640px) {
+  .model-check-dialog {
+    max-height: calc(100dvh - 16px);
+  }
+
+  .model-check-dialog header,
+  .model-check-body,
+  .model-check-dialog footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
 }

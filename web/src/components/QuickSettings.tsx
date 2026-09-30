@@ -207,7 +207,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
   );
 }
 
-function handyModelLabel(model: string): string {
+export function handyModelLabel(model: string): string {
   switch (model) {
     case "handy_2_standard": return "2 Standard";
     case "handy_2_pro": return "2 Pro";
@@ -215,7 +215,7 @@ function handyModelLabel(model: string): string {
   }
 }
 
-function handyModelDetail(model: string): string {
+export function handyModelDetail(model: string): string {
   switch (model) {
     case "handy_2_standard": return "125 mm · 32–400 mm/s";
     case "handy_2_pro": return "125 mm · 32–450 mm/s";

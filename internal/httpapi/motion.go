@@ -830,6 +830,8 @@ func (s *Server) Close() {
 			s.networkAutomation.Close()
 		}
 		s.closeAccessWorkers()
+		s.stopModelCheck()
+		s.runtimeUpdateWG.Wait()
 		s.stopLLMAutoload()
 		if s.setup != nil {
 			s.setup.Close()

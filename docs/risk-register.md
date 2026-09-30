@@ -856,6 +856,12 @@ MSVC/MSYS2/CUDA Toolkit, and preserves valid legacy source-built runtimes. Real
 network CPU and CUDA installs completed locally; the CUDA runner detected the
 RTX GPU. R13 remains High for curated model downloads and hardware-fit guidance.
 
+Runtime update follow-up (2026-09-30): the pin moved to `b11149` / `d2e5458`
+(upstream `v0.5.0`). The E4B, 12B and 12B QAT catalog models measured the same
+on it. An installed older runtime now updates at startup with the backend
+already in use unless `ui.runtime_update_mode` is `manual`. The notification
+center announces available, running and finished runtime updates (ADR 0036).
+
 Managed-endpoint hardening (2026-07-21): live diagnosis found NVIDIA Broadcast
 occupying the former fixed managed port 8080 while the installed CUDA runner and
 Gemma model loaded normally on an isolated loopback port. Managed mode now keeps
@@ -1860,6 +1866,10 @@ Mitigation:
   those two explicit paths
 - keep Inno Setup thin: files, shortcuts, uninstall metadata, and launch only;
   all optional decisions and progress remain in the backend-authoritative GUI
+- download curated chat models only from a built-in catalog of
+  content-addressed registry blobs pinned by size and SHA-256, never from a
+  user-supplied URL; resume partials, hash every byte before commit, and show
+  license and source before the reviewed plan runs (ADR 0034)
 - collect optional runtime/voice choices without executing them, show purpose,
   license, hardware, and disk cost first, then require one controller-gated GUI
   action to submit the reviewed installation plan

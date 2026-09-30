@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -32,6 +33,9 @@ const (
 	// process/thread priority; model latency is preferable to starving the UI
 	// during frequent autonomous prompt prefill.
 	managedLlamaPriority = -1
+	// managedLlamaLogVerbosity is the lowest level at which the pinned
+	// llama-server logs where the model's layers were placed.
+	managedLlamaLogVerbosity = 4
 )
 
 // ManagedLlamaCPPOptions configures a managed llama-server process.
@@ -40,6 +44,9 @@ type ManagedLlamaCPPOptions struct {
 	RunnerPath  string
 	ModelPath   string
 	ContextSize int
+	// ChatTemplateFile replaces the model's embedded chat template when a
+	// known template fix applies; empty keeps the embedded template.
+	ChatTemplateFile string
 }
 
 // ManagedLlamaCPPProvider starts and owns one configured llama-server process.
@@ -51,7 +58,9 @@ type ManagedLlamaCPPProvider struct {
 	runnerPath       string
 	modelPath        string
 	contextSize      int
+	chatTemplateFile string
 	client           *LlamaCPPProvider
+	loadReport       *loadReportWatcher
 
 	mu       sync.Mutex
 	process  *exec.Cmd
@@ -88,7 +97,9 @@ func NewManagedLlamaCPPProvider(options ManagedLlamaCPPOptions) (*ManagedLlamaCP
 		runnerPath:       strings.TrimSpace(options.RunnerPath),
 		modelPath:        strings.TrimSpace(options.ModelPath),
 		contextSize:      options.ContextSize,
+		chatTemplateFile: strings.TrimSpace(options.ChatTemplateFile),
 		client:           client,
+		loadReport:       &loadReportWatcher{},
 		stderr:           newTailBuffer(4096),
 	}, nil
 }
@@ -345,7 +356,14 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 		"--ctx-size", strconv.Itoa(p.contextSize),
 		"--parallel", strconv.Itoa(managedLlamaParallelSlots),
 		"--prio", strconv.Itoa(managedLlamaPriority),
+		// The pinned build reports GPU layer placement ("offloaded N/M layers
+		// to GPU") only at verbosity 4, which the model test needs. At this
+		// level it adds load and slot bookkeeping, never prompt or reply text.
+		"-lv", strconv.Itoa(managedLlamaLogVerbosity),
 		"-m", p.modelPath,
+	}
+	if p.chatTemplateFile != "" {
+		args = append(args, "--chat-template-file", p.chatTemplateFile)
 	}
 
 	// #nosec G204 -- runner/model paths were validated beneath app-owned stores
@@ -354,8 +372,10 @@ func (p *ManagedLlamaCPPProvider) startLocked() error {
 	command.Dir = filepath.Dir(p.runnerPath)
 	configureManagedLlamaProcess(command)
 	p.stderr.Reset()
-	command.Stderr = p.stderr
-	command.Stdout = p.stderr
+	p.loadReport.Reset()
+	output := io.MultiWriter(p.stderr, p.loadReport)
+	command.Stderr = output
+	command.Stdout = output
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("start llama.cpp runner: %w", err)
 	}
@@ -529,6 +549,11 @@ func availableManagedLlamaPort(host string, preferredPort int) (int, error) {
 		return 0, fmt.Errorf("release managed llama.cpp fallback endpoint: %w", err)
 	}
 	return port, nil
+}
+
+// LoadReport returns what the runner reported while loading the model.
+func (p *ManagedLlamaCPPProvider) LoadReport() ManagedLoadReport {
+	return p.loadReport.Report()
 }
 
 type tailBuffer struct {

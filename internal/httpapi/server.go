@@ -101,13 +101,18 @@ type Server struct {
 	motion              motionRuntime
 	lab                 llmLabRuntime
 	// autopilotHold remembers a human's standing wish to keep continuous motion.
-	autopilotHold       autopilotStandingHold
-	llm                 llmRuntime
-	llmRequests         llmRequestCoordinator
-	llmAutoloadMu       sync.Mutex
-	llmAutoloadCancel   context.CancelFunc
-	llmAutoloadWG       sync.WaitGroup
-	llmAutoloadID       uint64
+	autopilotHold     autopilotStandingHold
+	llm               llmRuntime
+	llmRequests       llmRequestCoordinator
+	llmAutoloadMu     sync.Mutex
+	llmAutoloadCancel context.CancelFunc
+	llmAutoloadWG     sync.WaitGroup
+	llmAutoloadID     uint64
+	modelCheck        modelCheckRuntimeState
+	// runtimeUpdater starts a managed llama.cpp install; tests replace it so
+	// nothing downloads a runtime.
+	runtimeUpdater      func(backend string) (llm.ManagedLlamaRuntimeBuild, error)
+	runtimeUpdateWG     sync.WaitGroup
 	models              *llm.ModelManager
 	managedLLM          *llm.ManagedLlamaRuntimeManager
 	setup               *setupManager
@@ -281,7 +286,13 @@ func (s *Server) activate(runtime Runtime, settings config.Settings) {
 	admitted := s.admitHTTPRequests(s.authenticateRequests(authorized))
 	browser := protectBrowserRequests(runtime.AllowedBrowserHosts, admitted)
 	s.handler = logRequests(s.logger, securityHeaders(runtime.SecureCookies, s.protectNetworkRequests(browser)))
-	s.startLLMAutoload(settings.LLM)
+	if s.runtimeUpdater == nil && s.managedLLM != nil {
+		s.runtimeUpdater = s.managedLLM.StartBuild
+	}
+	// An automatic runtime update loads the model itself once it finishes.
+	if !s.startManagedRuntimeUpdate(settings) {
+		s.startLLMAutoload(settings.LLM)
+	}
 	s.startVoiceAutoload(settings.Voice)
 	s.startMediaAutoScan(settings.Media)
 	s.startAccessWatchdog()
@@ -508,10 +519,16 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/llm/runtime/build", s.handleCancelManagedLLMRuntimeBuild)
 	mux.HandleFunc("GET /api/llm/models", s.handleLLMModels)
 	mux.HandleFunc("DELETE /api/llm/models/{id}", s.handleDeleteLLMModel)
+	mux.HandleFunc("POST /api/llm/models/{id}/template-fix", s.handleLLMModelTemplateFix)
+	mux.HandleFunc("GET /api/llm/model-check", s.handleModelCheck)
+	mux.HandleFunc("POST /api/llm/model-check", s.handleStartModelCheck)
+	mux.HandleFunc("DELETE /api/llm/model-check", s.handleCancelModelCheck)
 	mux.HandleFunc("GET /api/llm/ollama/models", s.handleOllamaModels)
 	mux.HandleFunc("POST /api/llm/ollama/scan", s.handleOllamaScan)
 	mux.HandleFunc("POST /api/llm/imports/ollama", s.handleOllamaImport)
 	mux.HandleFunc("POST /api/llm/imports/gguf", s.handleGGUFImport)
+	mux.HandleFunc("POST /api/llm/imports/catalog", s.handleCatalogDownload)
+	mux.HandleFunc("GET /api/llm/catalog", s.handleLLMCatalog)
 	mux.HandleFunc("GET /api/llm/imports/{id}", s.handleLLMImport)
 	mux.HandleFunc("DELETE /api/llm/imports/{id}", s.handleCancelLLMImport)
 }

@@ -39,7 +39,7 @@ $resolvedDataDir = [System.IO.Path]::GetFullPath($DataDir)
 New-Item -ItemType Directory -Force -Path $resolvedDataDir | Out-Null
 
 Write-Host 'Managed llama.cpp is optional. Installing it keeps inference under MagicHandy control and avoids requiring Ollama.'
-Write-Host 'MagicHandy downloads official b9966 Windows bundles and verifies pinned SHA-256 digests. CPU is about 18 MiB; CUDA is about 628 MiB and only requires a compatible NVIDIA driver.' -ForegroundColor DarkGray
+Write-Host 'MagicHandy downloads official b11149 Windows bundles and verifies pinned SHA-256 digests. CPU is about 18 MiB; CUDA is about 615 MiB and only requires a compatible NVIDIA driver.' -ForegroundColor DarkGray
 
 & $BuildScript -DataDir $resolvedDataDir -Backend $Backend
 if ($LASTEXITCODE -ne 0) {

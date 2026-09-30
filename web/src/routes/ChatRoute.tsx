@@ -7,6 +7,7 @@ import { ChatPanel } from "../components/ChatPanel";
 import { ChatSessionDialog } from "../components/ChatSessionDialog";
 import { ChatTabs } from "../components/ChatTabs";
 import { LiveMotionVisualizer } from "../components/LiveMotionVisualizer";
+import { llmMotionModeHelp } from "../components/LLMMotionModeHelp";
 import { QuickSettings } from "../components/QuickSettings";
 import { SegmentedChoice } from "../components/SetpointControls";
 import { VoiceQuickControls } from "../components/VoiceQuickControls";
@@ -204,6 +205,7 @@ export function ChatRoute() {
               disabled={!backendOnline || readOnly || changingMotionMode}
               onChange={(mode) => void changeMotionMode(mode)}
             />
+            <p className="chat-motion-help">{llmMotionModeHelp(motionMode)}</p>
             <AutopilotControl />
             <VoiceQuickControls />
             <div className="divider" />

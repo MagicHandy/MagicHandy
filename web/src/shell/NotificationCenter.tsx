@@ -97,6 +97,43 @@ export function NotificationCenter({ open, onOpenChange, restoreFocusOnClose = t
     });
   }, [backendOnline, push, ttsUpdate?.available, ttsUpdate?.id]);
 
+  const llm = state?.llm;
+  const runtimeState = typeof llm?.managed_runtime === "string" ? llm.managed_runtime : "";
+  const runtimeExpected = typeof llm?.managed_runtime_expected === "string" ? llm.managed_runtime_expected : "";
+  const runtimeUpdating = llm?.managed_runtime_updating === true;
+  const wasRuntimeUpdating = useRef(false);
+  useEffect(() => {
+    if (!backendOnline || !runtimeExpected || state?.settings?.ui?.setup_completed === false) return;
+    if (runtimeUpdating) {
+      push({
+        title: t("Updating llama.cpp"),
+        detail: t("Installing llama.cpp {version}. Chat is available again when it finishes.", { version: runtimeExpected }),
+        category: "updates",
+        tone: "info",
+        href: "#/settings/general",
+        sourceKey: `runtime-updating:${runtimeExpected}`,
+      });
+    } else if (runtimeState === "outdated") {
+      push({
+        title: t("llama.cpp update available"),
+        detail: t("llama.cpp {version} is ready to install. Open General settings to update now.", { version: runtimeExpected }),
+        category: "updates",
+        tone: "info",
+        href: "#/settings/general",
+        sourceKey: `runtime-update:${runtimeExpected}`,
+      });
+    } else if (runtimeState === "ready" && wasRuntimeUpdating.current) {
+      push({
+        title: t("llama.cpp updated"),
+        detail: t("MagicHandy now uses llama.cpp {version}.", { version: runtimeExpected }),
+        category: "updates",
+        tone: "success",
+        sourceKey: `runtime-updated:${runtimeExpected}`,
+      });
+    }
+    wasRuntimeUpdating.current = runtimeUpdating;
+  }, [backendOnline, push, runtimeExpected, runtimeState, runtimeUpdating, state?.settings?.ui?.setup_completed]);
+
   const setupComplete = state?.settings?.ui?.setup_completed !== false;
   const automaticUpdateChecks = state?.settings?.ui?.update_check_mode !== "manual";
   const releaseBuild = /^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(state?.version?.trim() ?? "");

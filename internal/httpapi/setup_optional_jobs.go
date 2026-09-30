@@ -22,9 +22,19 @@ type setupLlamaInstallRequest struct {
 }
 
 type setupInstallPlanRequest struct {
-	Llama    *setupLlamaInstallRequest `json:"llama,omitempty"`
-	Voice    *setupVoiceInstallRequest `json:"voice,omitempty"`
-	Parakeet bool                      `json:"parakeet"`
+	Llama    *setupLlamaInstallRequest  `json:"llama,omitempty"`
+	Model    *setupModelDownloadRequest `json:"model,omitempty"`
+	Voice    *setupVoiceInstallRequest  `json:"voice,omitempty"`
+	Parakeet bool                       `json:"parakeet"`
+	// EnableVoice turns installed voice features on when they need no
+	// further setup. It never enables anything that was not installed.
+	EnableVoice bool `json:"enable_voice"`
+}
+
+// setupModelDownloadRequest names a curated catalog entry; free-form URLs are
+// never accepted.
+type setupModelDownloadRequest struct {
+	CatalogID string `json:"catalog_id"`
 }
 
 type setupPlanTask struct {
@@ -46,8 +56,8 @@ var setupLlamaRuntime = setupLlamaRuntimeCatalog{
 	Name:          "Managed llama.cpp",
 	Summary:       "A pinned app-owned local LLM runner. Installing it avoids requiring a separate Ollama runtime.",
 	License:       "MIT",
-	SourceVersion: "b9966 (c749cb0)",
-	DiskEstimate:  "CPU downloads about 18 MiB; CUDA downloads about 628 MiB and installs about 1.1 GiB.",
+	SourceVersion: "b11149 (d2e5458)",
+	DiskEstimate:  "CPU downloads about 18 MiB; CUDA downloads about 615 MiB and installs about 1.1 GiB.",
 	BuildDependencies: []string{
 		"PowerShell 5.1 or newer",
 		"A compatible NVIDIA driver and GPU for CUDA",
@@ -162,11 +172,11 @@ func (m *setupManager) StartParakeetInstall() (setupJob, error) {
 
 func (m *setupManager) runParakeetInstall(ctx context.Context, id string) {
 	defer m.wg.Done()
-	err := m.installParakeet(ctx, id)
+	err := m.installParakeet(ctx, id, false)
 	m.finishJob(ctx, id, err, "Parakeet")
 }
 
-func (m *setupManager) installParakeet(ctx context.Context, id string) error {
+func (m *setupManager) installParakeet(ctx context.Context, id string, enable bool) error {
 	m.updateJob(id, setupJobRunning, "Checking Parakeet storage and worker state.", "")
 	if m.preflightParakeet == nil {
 		return errors.New("managed Parakeet preflight is unavailable")
@@ -192,6 +202,7 @@ func (m *setupManager) installParakeet(ctx context.Context, id string) error {
 		return err
 	}
 	result := parakeetInstallPaths(m.dataDir)
+	result.Enable = enable
 	if m.runParakeetInstaller == nil {
 		return errors.New("managed Parakeet installer is unavailable")
 	}
@@ -248,7 +259,7 @@ func (m *setupManager) runParakeetPowerShellInstaller(
 }
 
 func (m *setupManager) StartInstallPlan(request setupInstallPlanRequest) (setupJob, error) {
-	tasks := make([]setupPlanTask, 0, 3)
+	tasks := make([]setupPlanTask, 0, 4)
 	if request.Llama != nil {
 		backend, err := m.validateLlamaInstall(*request.Llama)
 		if err != nil {
@@ -259,11 +270,19 @@ func (m *setupManager) StartInstallPlan(request setupInstallPlanRequest) (setupJ
 			run:  func(ctx context.Context, id string) error { return m.installLlama(ctx, id, backend) },
 		})
 	}
+	if request.Model != nil {
+		task, err := m.modelDownloadTask(*request.Model)
+		if err != nil {
+			return setupJob{}, err
+		}
+		tasks = append(tasks, task)
+	}
 	if request.Voice != nil {
 		module, normalized, err := m.validateVoiceInstall(*request.Voice)
 		if err != nil {
 			return setupJob{}, err
 		}
+		normalized.enable = request.EnableVoice
 		tasks = append(tasks, setupPlanTask{
 			step: setupJobStep{ID: "voice_module", Label: module.Name, Status: setupJobQueued},
 			run:  func(ctx context.Context, id string) error { return m.installVoice(ctx, id, module, normalized) },
@@ -273,9 +292,10 @@ func (m *setupManager) StartInstallPlan(request setupInstallPlanRequest) (setupJ
 		if runtime.GOOS != "windows" || runtime.GOARCH != "amd64" {
 			return setupJob{}, errors.New("managed Parakeet installation is currently supported on Windows/amd64 only")
 		}
+		enable := request.EnableVoice
 		tasks = append(tasks, setupPlanTask{
 			step: setupJobStep{ID: "parakeet", Label: "Parakeet speech input", Status: setupJobQueued},
-			run:  m.installParakeet,
+			run:  func(ctx context.Context, id string) error { return m.installParakeet(ctx, id, enable) },
 		})
 	}
 	if len(tasks) == 0 {
@@ -294,6 +314,20 @@ func (m *setupManager) StartInstallPlan(request setupInstallPlanRequest) (setupJ
 	m.wg.Add(1)
 	go m.runInstallPlan(ctx, job.ID, tasks)
 	return job, nil
+}
+
+func (m *setupManager) modelDownloadTask(request setupModelDownloadRequest) (setupPlanTask, error) {
+	model, ok := llm.FindCatalogModel(request.CatalogID)
+	if !ok {
+		return setupPlanTask{}, fmt.Errorf("unknown catalog model %q", strings.TrimSpace(request.CatalogID))
+	}
+	if m.downloadModel == nil {
+		return setupPlanTask{}, errors.New("model downloads are unavailable in this build")
+	}
+	return setupPlanTask{
+		step: setupJobStep{ID: "chat_model", Label: model.DisplayName, Status: setupJobQueued},
+		run:  func(ctx context.Context, id string) error { return m.downloadModel(ctx, id, model) },
+	}, nil
 }
 
 func (m *setupManager) runInstallPlan(ctx context.Context, id string, tasks []setupPlanTask) {
@@ -413,6 +447,9 @@ func (s *Server) applyInstalledParakeet(ctx context.Context, result setupParakee
 		current.Voice.ParakeetServerPath = result.ServerPath
 		current.Voice.ParakeetModelPath = result.ModelPath
 		current.Voice.ParakeetServerPort = config.DefaultParakeetServerPort
+		if result.Enable {
+			current.Voice.Enabled = true
+		}
 		return current, nil
 	})
 	return errors.Join(saveErr, runtimeErr)

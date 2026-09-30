@@ -62,9 +62,16 @@
 }
 
 .chat-motion-mode {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+}
+
+.chat-motion-help {
+  margin: 0 0 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.4;
 }
 
 .chat-motion-mode .segmented-option span {

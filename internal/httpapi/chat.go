@@ -164,7 +164,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		Provider:              provider,
 		Prompt:                prompt,
 		Model:                 settings.LLM.Model,
-		MaxTokens:             settings.LLM.MaxOutputTokens,
+		MaxTokens:             settings.LLM.ChatMaxOutputTokens(effectiveReplyLength(settings.LLM, promptContext.Persona)),
 		ReasoningMode:         settings.LLM.ReasoningMode,
 		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
 		PromptBudget:          chatPromptBudget(settings.LLM),
@@ -1128,7 +1128,28 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 		capabilities.Voice = chatVoiceLevel(active.ChatVoice)
 		capabilities.Style = chatReactionStyle(active.ReactionStyle)
 	}
+	capabilities.ReplyLength = chatReplyLength(effectiveReplyLength(settings, active))
 	return capabilities
+}
+
+// effectiveReplyLength is the persona's override when it sets one, else the
+// Settings reply length.
+func effectiveReplyLength(settings config.LLMSettings, active *persona.Persona) string {
+	if active != nil && active.ReplyLength != "" {
+		return active.ReplyLength
+	}
+	return settings.ReplyLength
+}
+
+func chatReplyLength(length string) chat.ReplyLength {
+	switch length {
+	case config.LLMReplyLengthShort:
+		return chat.ReplyLengthShort
+	case config.LLMReplyLengthDetailed:
+		return chat.ReplyLengthDetailed
+	default:
+		return chat.ReplyLengthBalanced
+	}
 }
 
 func chatVoiceLevel(voice string) chat.VoiceLevel {

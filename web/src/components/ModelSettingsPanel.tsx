@@ -2,6 +2,7 @@ import { t, translateKnown } from "../i18n";
 import { DismissibleNotice } from "./DismissibleNotice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
+import type { LLMCatalog, LLMCatalogModel } from "../api/catalog-types";
 import type {
   LLMModelImport,
   LLMModelManagerSnapshot,
@@ -17,6 +18,10 @@ import { RefreshIcon, TrashIcon, UploadIcon } from "../shell/icons";
 import { useToast } from "../state/app-state";
 import { formatBytes } from "../util/format";
 import { HostPathField } from "./HostPathField";
+import { llmMotionModeHelp } from "./LLMMotionModeHelp";
+import { ModelCatalogDownloads } from "./ModelCatalog";
+import { ModelCheckDialog } from "./ModelCheckDialog";
+import { ReplyLengthField } from "./ReplyLengthField";
 import { OllamaLibraryImport } from "./OllamaLibraryImport";
 
 type LLMSettings = PublicSettings["llm"];
@@ -30,12 +35,13 @@ interface ModelSettingsPanelProps {
   llamaContextSizes: number[];
   reasoningModes: string[];
   maxOutputOptions: number[];
+  replyLengths?: string[];
   locked: boolean;
   patch: (next: Partial<LLMSettings>) => void;
 }
 
 const message = (error: unknown) => (error instanceof Error ? translateKnown(error.message) : t("Request failed"));
-const isActiveImport = (job: LLMModelImport) => job.status === "queued" || job.status === "copying";
+const isActiveImport = (job: LLMModelImport) => job.status === "queued" || job.status === "copying" || job.status === "downloading";
 const isActiveRuntimeBuild = (build?: ManagedLlamaRuntimeBuild) => build?.status === "queued" || build?.status === "building";
 const providerLabel = (provider: string) => provider === "llama_cpp" ? "llama.cpp" : provider === "ollama" ? "Ollama" : provider;
 const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic / provider default" : mode === "off" ? "Disabled when supported" : mode;
@@ -44,9 +50,10 @@ const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic / provider
 // experimental patterns (mirrors config.DefaultLLMMotionCapabilities).
 const defaultCapabilities: LLMMotionCapabilities = { motion: true, patterns: true, area_focus: true, experimental_patterns: false };
 
-export function ModelSettingsPanel({ settings, saved, providers, llamaModes, managedLoadPolicies = [], llamaContextSizes, reasoningModes, maxOutputOptions, locked, patch }: ModelSettingsPanelProps) {
+export function ModelSettingsPanel({ settings, saved, providers, llamaModes, managedLoadPolicies = [], llamaContextSizes, reasoningModes, maxOutputOptions, replyLengths = [], locked, patch }: ModelSettingsPanelProps) {
   const { show } = useToast();
   const [manager, setManager] = useState<LLMModelManagerSnapshot | null>(null);
+  const [catalog, setCatalog] = useState<LLMCatalog | null>(null);
   const [managerMessage, setManagerMessage] = useState("");
   const [status, setStatus] = useState<LLMProviderStatus | null>(null);
   const [ollamaModels, setOllamaModels] = useState<OllamaModelInfo[]>([]);
@@ -59,6 +66,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
   const [busy, setBusy] = useState("");
   const [confirmRemove, setConfirmRemove] = useState("");
   const [runtimeBackend, setRuntimeBackend] = useState<"auto" | "cpu" | "cuda">("auto");
+  const [showCheck, setShowCheck] = useState(false);
   const mounted = useRef(true);
   const managerRefresh = useRef<Promise<void> | null>(null);
   const statusGeneration = useRef(0);
@@ -118,6 +126,15 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
     }
   }, []);
 
+  const refreshCatalog = useCallback(async () => {
+    try {
+      const next = await api.llmCatalog();
+      if (mounted.current && Array.isArray(next?.models)) setCatalog(next);
+    } catch {
+      // The curated list is optional; imports keep working without it.
+    }
+  }, []);
+
   const refreshStatus = useCallback(async () => {
     const generation = ++statusGeneration.current;
     try {
@@ -162,6 +179,12 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
     void refreshManager();
     void refreshStatus();
   }, [refreshManager, refreshStatus]);
+
+  // Refresh the curated list when imports settle so "In your store" and
+  // resumable partials stay current.
+  useEffect(() => {
+    if (!activeImports) void refreshCatalog();
+  }, [activeImports, refreshCatalog]);
 
   useEffect(() => {
     if (settings.provider === "ollama" || showOllamaImport) void refreshOllamaModels();
@@ -260,6 +283,21 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
       setGGUFPath("");
       setGGUFName("");
       show(t("GGUF import started."));
+    } catch (error) {
+      show(message(error), "error");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function downloadCatalogModel(model: LLMCatalogModel) {
+    setBusy(`catalog:${model.id}`);
+    try {
+      const response = await api.downloadCatalogModel(model.id);
+      mergeImport(response.import);
+      show(response.import.status === "complete"
+        ? t("{name} is already in your model store.", { name: model.display_name })
+        : t("Download started. The model is verified before it enters the store."));
     } catch (error) {
       show(message(error), "error");
     } finally {
@@ -386,59 +424,74 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
           </>
         )}
 
-        <div className="model-generation-settings" aria-label={t("Generation optimizations")}>
-          {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
-            <>
-              <label className="field">
-                <span className="label">{t("Model loading")}</span>
-                <select value={managedLoadPolicy} disabled={locked} onChange={(event) => patch({ managed_load_policy: event.target.value })}>
-                  {(managedLoadPolicies.length ? managedLoadPolicies : ["startup", "on_demand"]).map((policy) => <option key={policy} value={policy}>{policy === "startup" ? t("At startup") : policy === "on_demand" ? t("On demand") : policy}</option>)}
-                </select>
-              </label>
+        {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
+          <div className="model-generation-settings">
+            <label className="field">
+              <span className="label">{t("Model loading")}</span>
+              <select value={managedLoadPolicy} disabled={locked} onChange={(event) => patch({ managed_load_policy: event.target.value })}>
+                {(managedLoadPolicies.length ? managedLoadPolicies : ["startup", "on_demand"]).map((policy) => <option key={policy} value={policy}>{policy === "startup" ? t("At startup") : policy === "on_demand" ? t("On demand") : policy}</option>)}
+              </select>
+            </label>
+          </div>
+        )}
+        <details className="model-advanced">
+          <summary>{t("Advanced generation settings")}</summary>
+          <p className="form-status">{t("The defaults suit the tested models. Change these only to fix a specific problem.")}</p>
+          <div className="model-generation-settings" aria-label={t("Generation optimizations")}>
+            {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
               <label className="field">
                 <span className="label">{t("Context size")}</span>
                 <select value={contextSize} disabled={locked} onChange={(event) => patch({ llama_cpp_context_size: Number(event.target.value) })}>
                   {contextSizeOptions.map((tokens) => <option key={tokens} value={tokens}>{t("{count} tokens", { count: tokens })}</option>)}
                 </select>
               </label>
-            </>
-          )}
-          <label className="field">
-            <span className="label">{t("Maximum output")}</span>
-            <select value={settings.max_output_tokens} disabled={locked} onChange={(event) => patch({ max_output_tokens: Number(event.target.value) })}>
-              {outputOptions.map((tokens) => <option key={tokens} value={tokens}>{t("{count} tokens", { count: tokens })}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            <span className="label">{t("Thinking / reasoning")}</span>
-            <select value={settings.reasoning_mode} disabled={locked} onChange={(event) => patch({ reasoning_mode: event.target.value })}>
-              {(reasoningModes.length ? reasoningModes : [settings.reasoning_mode]).map((mode) => <option key={mode} value={mode}>{translateKnown(reasoningLabel(mode))}</option>)}
-            </select>
-          </label>
-          <label className="field model-timeout"><span className="label">{t("Timeout ms")}</span><input type="number" min={1000} max={300000} value={settings.request_timeout_ms} disabled={locked} onChange={(event) => patch({ request_timeout_ms: Number(event.target.value) })} /></label>
-        </div>
-        <DismissibleNotice id="model-generation" className="generation-notes">
-          <strong>{t("Generation guidance")}</strong>
+            )}
+            <label className="field">
+              <span className="label">{t("Maximum output")}</span>
+              <select value={settings.max_output_tokens} disabled={locked} onChange={(event) => patch({ max_output_tokens: Number(event.target.value) })}>
+                {outputOptions.map((tokens) => <option key={tokens} value={tokens}>{t("{count} tokens", { count: tokens })}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              <span className="label">{t("Thinking / reasoning")}</span>
+              <select value={settings.reasoning_mode} disabled={locked} onChange={(event) => patch({ reasoning_mode: event.target.value })}>
+                {(reasoningModes.length ? reasoningModes : [settings.reasoning_mode]).map((mode) => <option key={mode} value={mode}>{translateKnown(reasoningLabel(mode))}</option>)}
+              </select>
+            </label>
+            <label className="field model-timeout"><span className="label">{t("Timeout ms")}</span><input type="number" min={1000} max={300000} value={settings.request_timeout_ms} disabled={locked} onChange={(event) => patch({ request_timeout_ms: Number(event.target.value) })} /></label>
+          </div>
+          <DismissibleNotice id="model-generation" className="generation-notes">
+            <strong>{t("Generation guidance")}</strong>
+            {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
+              <>
+                <p>{managedLoadPolicy === "startup" ? t("Startup loading keeps the model ready for the first chat and Autopilot decision, but reserves RAM and VRAM while idle.") : t("On-demand loading saves idle RAM and VRAM, but the first request must wait for the model to load.")}</p>
+                <p>{t("Larger contexts use more RAM and VRAM. A context smaller than the prompt cannot fit the request. This applies only to managed llama.cpp after Save.")}</p>
+              </>
+            )}
+            <p>{t("The selected cap covers reasoning plus visible JSON, so low limits can truncate JSON. The current pinned managed llama.cpp limits automatic reasoning to half that budget; every repair requests reasoning off to leave more budget for JSON.")}</p>
+            <p>{settings.reasoning_mode === "off"
+              ? t("Requesting disabled reasoning is recommended for compact structured replies from small {provider} models. Unsupported models may ignore or reject it.", { provider: providerLabel(settings.provider) })
+              : t("Automatic reasoning may improve difficult intent interpretation, but can add hidden tokens and latency before the visible reply.")}</p>
+          </DismissibleNotice>
+        </details>
+
+        <div className="row-actions model-runtime-actions">
           {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
             <>
-              <p>{managedLoadPolicy === "startup" ? t("Startup loading keeps the model ready for the first chat and Autopilot decision, but reserves RAM and VRAM while idle.") : t("On-demand loading saves idle RAM and VRAM, but the first request must wait for the model to load.")}</p>
-              <p>{t("Larger contexts use more RAM and VRAM. A context smaller than the prompt cannot fit the request. This applies only to managed llama.cpp after Save.")}</p>
+              <button type="button" className="btn btn-secondary" disabled={locked || dirty || !managedConfigured || runtimeBuildActive || busy !== "" || status?.loading} onClick={() => void runtimeAction("load")}>{busy === "load" ? t("Loading...") : t("Load")}</button>
+              <button type="button" className="btn btn-secondary" disabled={locked || dirty || runtimeBuildActive || busy !== "" || !status?.loaded} onClick={() => void runtimeAction("unload")}>{busy === "unload" ? t("Unloading...") : t("Unload")}</button>
             </>
           )}
-          <p>{t("The selected cap covers reasoning plus visible JSON, so low limits can truncate JSON. The current pinned managed llama.cpp limits automatic reasoning to half that budget; every repair requests reasoning off to leave more budget for JSON.")}</p>
-          <p>{settings.reasoning_mode === "off"
-            ? t("Requesting disabled reasoning is recommended for compact structured replies from small {provider} models. Unsupported models may ignore or reject it.", { provider: providerLabel(settings.provider) })
-            : t("Automatic reasoning may improve difficult intent interpretation, but can add hidden tokens and latency before the visible reply.")}</p>
-        </DismissibleNotice>
+          <button type="button" className="btn btn-secondary" title={t("Check the selected model for common problems")} disabled={locked || dirty || runtimeBuildActive || busy !== ""} onClick={() => setShowCheck(true)}>{t("Test model")}</button>
+          {dirty && <span className="form-status">{t("Save settings before runtime actions.")}</span>}
+        </div>
+        {showCheck && <ModelCheckDialog locked={locked} onClose={() => { setShowCheck(false); void refreshStatus(); }} onModelChanged={() => void refreshManager()} />}
 
-        {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
-          <div className="row-actions model-runtime-actions">
-            <button type="button" className="btn btn-secondary" disabled={locked || dirty || !managedConfigured || runtimeBuildActive || busy !== "" || status?.loading} onClick={() => void runtimeAction("load")}>{busy === "load" ? t("Loading...") : t("Load")}</button>
-            <button type="button" className="btn btn-secondary" disabled={locked || dirty || runtimeBuildActive || busy !== "" || !status?.loaded} onClick={() => void runtimeAction("unload")}>{busy === "unload" ? t("Unloading...") : t("Unload")}</button>
-            {dirty && <span className="form-status">{t("Save settings before runtime actions.")}</span>}
-          </div>
-        )}
+      </div>
 
+      <div className="group">
+        <h4 className="group-title">{t("Replies")}</h4>
+        <ReplyLengthField value={settings.reply_length || "balanced"} options={replyLengths} locked={locked} onChange={(reply_length) => patch({ reply_length })} />
       </div>
 
       <div className="group">
@@ -458,6 +511,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
               <option value="off">{t("Off")}</option>
             </select>
           </label>
+          <p className="capability-mode-help">{llmMotionModeHelp(settings.motion_generation_mode || (capabilities.motion ? "dynamic" : "off"))}</p>
           {(settings.motion_generation_mode || "dynamic") === "pattern" && (
             <>
               <label className="capability-gate" title={t("Allow tip, shaft, base, and full-range targets")}>
@@ -515,11 +569,14 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
           />
         )}
 
+        <ModelCatalogDownloads catalog={catalog} imports={manager?.imports ?? []} locked={locked || !manager} busy={busy} onDownload={(model) => void downloadCatalogModel(model)} />
+
         {manager ? (
           <>
             <ImportProgress jobs={manager.imports ?? []} locked={locked} busy={busy} onCancel={cancelImport} />
             <ManagedModels
               models={manager.models ?? []}
+              downloadedIDs={new Set((catalog?.models ?? []).map((model) => model.installed_model_id ?? "").filter(Boolean))}
               selectedID={settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" ? settings.model : ""}
               protectedID={protectedManagedModelID}
               locked={locked}
@@ -570,7 +627,7 @@ function ManagedRuntime({
           </select>
         </label>
         <button type="button" className="btn btn-secondary" disabled={locked || active || busy !== "" || !runtime?.build_supported} title={runtime?.build_supported ? t("Install the pinned app-owned llama.cpp runtime") : t("Managed runtime installation currently requires Windows x64")} onClick={() => void onBuild()}>
-          {runtime?.installed ? t("Install / switch runtime") : t("Install runtime")}
+          {runtime?.state === "outdated" ? t("Update runtime") : runtime?.installed ? t("Install / switch runtime") : t("Install runtime")}
         </button>
         {active && <button type="button" className="btn btn-secondary" disabled={locked || busy === "runtime-cancel"} onClick={() => void onCancel()}>{t("Cancel install")}</button>}
       </div>
@@ -596,9 +653,10 @@ function LlamaServerModels({ models, selected, locked, onUse }: { models: string
 }
 
 function ManagedModels({
-  models, selectedID, protectedID, locked, busy, confirmRemove, setConfirmRemove, onUse, onRemove,
+  models, downloadedIDs, selectedID, protectedID, locked, busy, confirmRemove, setConfirmRemove, onUse, onRemove,
 }: {
   models: ManagedLLMModel[];
+  downloadedIDs: Set<string>;
   selectedID: string;
   protectedID: string;
   locked: boolean;
@@ -616,7 +674,7 @@ function ManagedModels({
         const protectedModel = selected || protectedID === model.id;
         return (
           <div className={`model-row${selected ? " model-row-selected" : ""}`} key={model.id}>
-            <ModelIdentity name={model.display_name} metadata={[model.parameter_size, model.quantization, formatBytes(model.size_bytes), model.source === "ollama" ? "Ollama import" : "GGUF import"]} />
+            <ModelIdentity name={model.display_name} metadata={[model.parameter_size, model.quantization, formatBytes(model.size_bytes), downloadedIDs.has(model.id) ? t("Tested download") : model.source === "ollama" ? "Ollama import" : "GGUF import", templateFixLabel(model)]} />
             <div className={`model-state model-state-${model.state}`}>{model.message ? t("{state}: {message}", { state: translateKnown(model.state), message: model.message }) : translateKnown(model.state)}</div>
             <div className="model-row-actions">
               {confirmRemove === model.id ? (
@@ -673,6 +731,12 @@ function OllamaDaemonModels({ models, selected, message, locked, onUse }: { mode
       </div>
     </details>
   );
+}
+
+// Names the chat template fix a model runs with, or one the model test offers.
+function templateFixLabel(model: ManagedLLMModel): string | undefined {
+  if (model.template_fix) return model.template_fix_source === "known" ? t("Chat template fixed") : t("Template fix on");
+  return model.template_fix_offer ? t("Template fix available") : undefined;
 }
 
 function ModelIdentity({ name, metadata }: { name: string; metadata: Array<string | undefined> }) {

@@ -64,7 +64,12 @@ flags, and validation commands.
 - A Handy with firmware v4 and API v3 access, or a supported linear actuator
   connected through Intiface Central.
 - A local LLM is needed for Chat and Autopilot, but not for manual, pattern, or
-  video control. Models are not bundled.
+  video control. Models are not bundled. **Easy setup** checks your computer,
+  picks a tested, checksum-verified model that fits and asks only how explicit
+  chat should be and whether you want voice. Local chat needs an NVIDIA GPU: the
+  recommended 12B model wants about 10 GB of graphics memory, and a smaller E4B
+  model covers 6 to 8 GB cards. **Settings > Chat > Model > Test model** checks
+  any model for common problems.
 
 ## Safety And Privacy
 

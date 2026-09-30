@@ -1,5 +1,59 @@
 # Goal Scorecard
 
+## 2026-09-30 — Model test, template fixes, runtime updates and Easy setup
+
+This checkpoint adds the user-started model test and known Gemma 4 chat
+template fixes ([ADR 0035](decisions/0035-model-test-and-template-fixes.md)),
+reply length with a persona override, release-pinned llama.cpp updates on
+`b11149` ([ADR 0036](decisions/0036-managed-runtime-updates.md)), Easy setup
+([ADR 0037](decisions/0037-easy-setup.md)) and a three-entry model catalog. No
+dependency was added. The one embedded template is 18,842 B, and the GGUF
+scan that finds template digests reuses the existing bounded metadata read.
+
+| Artifact | Prior checkpoint (2026-09-29) | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,800,896 B | 23,020,032 B | +219,136 B |
+| Main JS, raw / Node gzip-9 | 971,398 / 265,817 B | 1,011,353 / 275,500 B | +39,955 / +9,683 B |
+| Main CSS, raw / Node gzip-9 | 171,423 / 30,603 B | 173,735 / 30,901 B | +2,312 / +298 B |
+| All embedded assets | 2,476,835 B | 2,581,775 B | +104,940 B |
+
+About a third of the JS growth is the 152 new English strings in the entry
+catalog; each lazy locale chunk grows by its translations. The rest is the
+model test window, Easy setup and runtime update panels. The core stays below
+the 30 MB binary budget; the main bundle was already over the 900 kB advisory
+and the advisory stays enabled. The model test holds no state beyond one
+report of five turns. The runtime line watcher keeps at most 4 KiB of partial
+output, and resident memory is otherwise unchanged. The existing SQLite memory
+waiver remains.
+
+CI race time is the one limit this checkpoint crossed. On main,
+`internal/httpapi` already took 586 s of the default 10-minute `go test -race`
+timeout (run 36653072900). The 15 new tests pushed it past 600 s on a contended
+runner. The three race steps now pass `-timeout 20m`: coverage is unchanged, and
+a hung test still fails.
+
+## 2026-09-29 — Setup streamlining and curated model downloads
+
+Guided setup gains a Chat AI step with curated, checksum-pinned model downloads
+([ADR 0034](decisions/0034-curated-model-downloads.md)), a Handy model choice,
+folded remote access and an opt-in voice turn-on. Settings gains the same
+download list and folds generation tuning away. No dependency was added; the
+catalog is two Go structs, and the downloader reuses the standard library.
+
+| Artifact | Prior checkpoint (`f3739bf0`) | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Windows amd64, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -ldflags -w` | 22,700,032 B | 22,800,896 B | +100,864 B |
+| Main JS, raw / Node gzip-9 | 956,088 / 261,456 B | 971,398 / 265,817 B | +15,310 / +4,361 B |
+| Main CSS, raw / Node gzip-9 | 169,873 / 30,352 B | 171,423 / 30,603 B | +1,550 / +251 B |
+| All embedded assets | 2,436,921 B | 2,476,835 B | +39,914 B |
+
+Most of the JS growth is the new English strings in the entry catalog and the
+merged setup step; each lazy locale chunk grows by its translations. The core
+stays below the 30 MB binary budget and the main bundle's existing 900 kB
+advisory stays enabled. Downloading adds no resident memory; loading the
+selected model follows the existing Model loading policy. The existing SQLite
+memory waiver remains.
+
 ## 2026-09-29 — Terminal activity retention
 
 The [terminal fix](console-activity-review-2026-09-29.md) separates visible
