@@ -125,24 +125,22 @@ Motion control is disabled by the user's settings: never include a "motion" key,
 // a motion change it cannot make.
 const (
 	chatOnlySettingsReason    = `Motion control is disabled by the user's settings: never include a "motion" key, and if asked to move the device, explain that motion control is switched off in Settings.`
-	chatOnlyVideoScriptReason = `The video the person is watching has a paired script, and that script is moving the device in time with the picture: never include a "motion" key, and never claim to start, change or stop the motion. If asked to change it, say that the video's script is driving and that they can switch the motion source to Chat beside the video.`
-	chatOnlyVideoOffReason    = `The person chose no motion for the video they are watching: never include a "motion" key, and never claim to move the device. If asked to move it, say that motion is off for this video and that they can choose Chat as the motion source beside the video.`
+	chatOnlyVideoScriptReason = `The video's selected motion source is its paired script. This chat cannot start, stop or change the device. Do not include a "motion" key. Source selection does not tell you whether playback or synchronized motion is currently running. If asked to change motion, explain that Script owns it and that choosing Chat beside the video is required for chat control; saved motion settings and control permissions still apply.`
+	chatOnlyVideoOffReason    = `The video's selected motion source is Off. This chat cannot start, stop or change the device. Do not include a "motion" key. If asked to change motion, explain that motion is off for this video and that choosing Chat beside the video is required for chat control; saved motion settings and control permissions still apply.`
 )
 
 // videoMotionNote restates who drives right before the final instructions,
-// where a small model weighs it most, with one example of declining. Without
-// it, a persona reply narrated a faster, deeper pace the script never took.
+// where a small model weighs it most. It describes authority, not an observed
+// playback state or a stock reply that overrides the selected voice/language.
 func videoMotionNote(capabilities Capabilities) string {
 	if capabilities.Motion {
 		return ""
 	}
 	switch capabilities.MotionHolder {
 	case MotionHolderVideoScript:
-		return `The person is watching a video whose paired script moves the device right now, in time with the picture. Nothing you write changes that motion: do not say or describe that the pace, depth, rhythm or intensity is changing. You can talk about the video, the moment and how it feels. If they ask for different motion, say that the video's script sets it and that they can switch the motion source to Chat beside the video.
-Example, when asked to go faster, slower, harder or deeper: {"reply":"The video's script is setting the pace right now, so I can't change it. Switch the motion source to Chat beside the video and I'll take over."}`
+		return `VIDEO MOTION AUTHORITY: Script is selected. Your reply cannot change the device's pace, depth, rhythm or intensity. Do not claim to have changed them or assume the video is playing. You can still discuss the scene and the person's experience in the selected voice and language. Explain the source choice only when relevant to their request; do not turn every reply into control instructions.`
 	case MotionHolderVideoOff:
-		return `The person is watching a video and chose no motion for it, so nothing moves the device. Nothing you write moves it: do not say or describe that the device is moving, starting, or getting faster, slower, harder or deeper, and do not promise to do it. Every request for motion gets the same answer until they choose Chat as the motion source beside the video.
-Example, when asked to start, go faster, slow down or go harder: {"reply":"Motion is off for this video, so nothing is moving. Choose Chat as the motion source beside the video and I'll take over."}`
+		return `VIDEO MOTION AUTHORITY: Off is selected. Your reply cannot move the device; do not claim or promise to start or change it. You can still discuss the scene and the person's experience in the selected voice and language. Explain the source choice only when relevant to their request; do not turn every reply into control instructions.`
 	default:
 		return ""
 	}
@@ -610,7 +608,7 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 			motionContextInstructions(*motionContext, capabilities, patterns))
 	}
 	if note := videoMotionNote(capabilities); note != "" {
-		sections = appendPromptSection(sections, "video_motion", "Video motion", note)
+		sections = appendPromptSection(sections, "video_motion", "Video motion", note+"\n"+videoControlInstructions(locale))
 	}
 	sections = appendPromptSection(sections, "output_guard", "Final output guard", promptOutputGuard(capabilities))
 	texts := make([]string, 0, len(sections))

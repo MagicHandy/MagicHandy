@@ -180,7 +180,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		validationMessage = contextualDynamicCorrectionIntent(userMessage, request.History)
 	}
 
-	messages := buildMessages(systemPrompt, request.History, userMessage)
+	messages := capabilityMessages(systemPrompt, request.History, userMessage, capabilities)
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
 		Messages:              messages,
 		Model:                 s.Model,

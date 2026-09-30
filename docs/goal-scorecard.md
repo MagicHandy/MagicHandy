@@ -1,5 +1,16 @@
 # Goal Scorecard
 
+## 2026-09-29 — Capability-aware chat prompts
+
+The [prompt regression review](prompt-regression-review-2026-09-29.md) adds no
+dependency or UI payload. The Windows amd64 pure-Go binary, built with Go 1.26.8
+and `-trimpath -ldflags -w`, is **22,696,960 B**, up **5,120 B** from `9e36b2be`
+(22,691,840 B). Embedded assets remain **2,436,921 B**. Motion-enabled prompt
+content is byte-identical across 240 compared compositions. Chat-only history
+removes obsolete command envelopes and keeps the existing 24,000-byte bound.
+This does not remeasure the existing idle/soak memory waiver or claim physical
+latency improvements.
+
 ## 2026-09-29 — Dedicated remote and account scope
 
 A second listener shares the existing backend/engine. Remote accounts receive a

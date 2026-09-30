@@ -96,11 +96,13 @@ plays: Script, Chat or Off.
 - While Script or Off drives, a message sent from the chat beside the video is
   words only. The request names the owner (`motion_owner`), so the turn
   composes the chat-only contract with that reason and a closing "Video motion"
-  note with one example of declining. Without the note, a persona reply
-  narrated a faster, deeper pace the script never took. With it, a live
-  Gemma 12B check through the phone remote declined 9 of 9 motion requests
-  with the reason and a pointer to the switch, kept neutral questions
-  conversational, and never moved the device.
+  note. The note describes the selected authority without asserting that
+  playback is running, and retains the selected voice and language. The source
+  instructions distinguish choosing Chat from opening the chat panel; saved
+  motion settings and permissions still apply. Chat-only history carries speech,
+  and its final guard and schema contain no motion vocabulary. The original
+  Gemma remote check declined 9/9 requests; the [prompt regression review](../prompt-regression-review-2026-09-29.md)
+  removes its stock-reply examples and checks both owners in all five languages.
 - The phone remote shows and switches the source too. Its acknowledgement waits
   for the actual handoff rather than reporting an optimistic choice as success.
 

@@ -2,6 +2,12 @@
 
 Status: implemented and live-validated 2026-07-25.
 
+The [2026-09-29 regression review](prompt-regression-review-2026-09-29.md)
+removes stock operator replies introduced by video chat, preserves all selected
+registers and persona text, and separates factual capability explanations from
+ordinary conversation. It also makes the final guard and history match chat-only
+authority. The historical quality measurements below were not rerun in that pass.
+
 The setting is at `Settings > Prompts & memory > Chat voice`. It selects one of
 four code-owned reply registers: `utility`, `warm`, `intimate`, or `explicit`.
 The setting changes user-facing reply language only. Motion authorization,

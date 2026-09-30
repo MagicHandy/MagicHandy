@@ -214,7 +214,7 @@ func TestChatBesideAVideoStaysChatOnlyWhileTheVideoOwnsMotion(t *testing.T) {
 			provider.mu.Lock()
 			system := provider.requests[0].Messages[0].Content
 			provider.mu.Unlock()
-			want := "the video's script is driving"
+			want := "video's selected motion source is its paired script"
 			if owner == "off" {
 				want = "motion is off for this video"
 			}

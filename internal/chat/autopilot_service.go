@@ -103,7 +103,7 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		kind,
 		s.PromptBudget,
 	)
-	messages := buildMessages(system, request.History, message)
+	messages := capabilityMessages(system, request.History, message, s.Capabilities)
 	temperature := s.Temperature
 	if temperature <= 0 {
 		temperature = 0.45
@@ -426,13 +426,17 @@ func autopilotOutputGuard(kind AutopilotKind, capabilities Capabilities) string 
 }
 
 func autopilotRepairPrompt(promptID string, kind AutopilotKind, parseError error) string {
+	preserveSpeech := ""
+	if kind == AutopilotKindSpeech {
+		preserveSpeech = "\n" + repairLanguageInstruction(promptID) + " Preserve the selected voice and persona. If only JSON structure or timing is invalid, keep the valid reply text unchanged. If correcting motion requires different wording, change only what is needed to make the reply truthful."
+	}
 	return fmt.Sprintf(`Repair your previous MagicHandy Autopilot %s response.
 
-Return exactly one JSON object matching the Autopilot contract in the system prompt. Do not add markdown, comments, code fences, or extra keys.
+Return exactly one JSON object matching the Autopilot contract in the system prompt. Do not add markdown, comments, code fences, or extra keys.%s
 
 Validation error:
 %s
 
 Prompt set:
-%s`, kind, strings.TrimSpace(parseError.Error()), promptID)
+%s`, kind, preserveSpeech, strings.TrimSpace(parseError.Error()), promptID)
 }

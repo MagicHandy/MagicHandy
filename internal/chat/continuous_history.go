@@ -2,6 +2,7 @@ package chat
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
@@ -11,13 +12,22 @@ import (
 const PromptHistoryLimit = 64
 const maxPromptHistoryBytes = 24000
 
+func capabilityMessages(system string, history []llm.Message, message string, capabilities Capabilities) []llm.Message {
+	if !capabilities.Motion {
+		return spokenMessages(system, history, message)
+	}
+	return buildMessages(system, history, message)
+}
+
 // History carries speech only; the current authoritative score carries motion.
 // Earlier turns used to be replayed as {"edits":[]} envelopes, which put a
 // standing example of changing nothing in front of every planning turn and
 // misreported turns that did edit. The JSON schema enforces the reply format,
 // so the prior turns no longer need to demonstrate it. Replaying legacy
 // motion.action envelopes would also teach a conflicting control vocabulary.
-func continuousMessages(system string, history []llm.Message, message string) []llm.Message {
+// Chat-only turns use this same history: a previous mode's command must not
+// become an example of authority that this turn does not have.
+func spokenMessages(system string, history []llm.Message, message string) []llm.Message {
 	messages := buildMessages(system, spokenHistory(history), message)
 	// buildMessages re-serializes assistant speech in the catalog contract;
 	// unwrap it again so only the words remain.
@@ -34,7 +44,7 @@ func continuousMessages(system string, history []llm.Message, message string) []
 func spokenHistory(history []llm.Message) []llm.Message {
 	spoken := append([]llm.Message(nil), history...)
 	for i, prior := range spoken {
-		if prior.Role == "assistant" {
+		if strings.EqualFold(strings.TrimSpace(prior.Role), "assistant") {
 			spoken[i].Content = spokenReply(prior.Content)
 		}
 	}
@@ -64,6 +74,9 @@ func continuousOutputGuard(capabilities Capabilities) string {
 }
 
 func promptOutputGuard(capabilities Capabilities) string {
+	if !capabilities.Motion {
+		return chatOnlyOutputGuard(capabilities)
+	}
 	if capabilities.Motion && (capabilities.MotionMode == MotionModeLayered || capabilities.MotionMode == MotionModeCreativeV2) {
 		return continuousOutputGuard(capabilities)
 	}
@@ -71,4 +84,12 @@ func promptOutputGuard(capabilities Capabilities) string {
 		return finalOutputGuardWithMood
 	}
 	return finalOutputGuard
+}
+
+func chatOnlyOutputGuard(capabilities Capabilities) string {
+	guard := `FINAL OUTPUT RULE: Return one JSON object with only a string "reply"`
+	if capabilities.MoodTracking {
+		guard += ` and, when useful, optional "new_mood" from the listed moods`
+	}
+	return guard + `. No motion commands, edits, analysis, markdown or extra keys. Keep the selected voice, persona and reply language. A request for unavailable device control needs a brief, factual explanation of that limit; this explanation is allowed even when the voice normally avoids discussing controls. Do not claim or promise a device change. Otherwise continue the conversation without repeating setup instructions.`
 }
