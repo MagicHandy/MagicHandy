@@ -106,8 +106,10 @@ jobs:
       - name: Go tests
         run: go test ./...
 
+      # internal/httpapi needs more than the default 10-minute timeout under
+      # the race detector; see docs/goal-scorecard.md (2026-09-30).
       - name: Race tests
-        run: go test -race ./...
+        run: go test -race -timeout 20m ./...
 
       - name: CGO-free build
         run: CGO_ENABLED=0 go build ./cmd/magichandy

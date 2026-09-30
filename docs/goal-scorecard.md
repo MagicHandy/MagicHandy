@@ -26,6 +26,12 @@ report of five turns. The runtime line watcher keeps at most 4 KiB of partial
 output, and resident memory is otherwise unchanged. The existing SQLite memory
 waiver remains.
 
+CI race time is the one limit this checkpoint crossed. On main,
+`internal/httpapi` already took 586 s of the default 10-minute `go test -race`
+timeout (run 36653072900). The 15 new tests pushed it past 600 s on a contended
+runner. The three race steps now pass `-timeout 20m`: coverage is unchanged, and
+a hung test still fails.
+
 ## 2026-09-29 — Setup streamlining and curated model downloads
 
 Guided setup gains a Chat AI step with curated, checksum-pinned model downloads
