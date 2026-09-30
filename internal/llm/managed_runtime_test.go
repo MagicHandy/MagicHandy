@@ -38,7 +38,7 @@ func TestManagedRuntimeInstallerMaterializesPinnedLicense(t *testing.T) {
 
 func TestInspectManagedLlamaRuntimeValidatesAppOwnedManifest(t *testing.T) {
 	dataDir := t.TempDir()
-	runnerRelative := "installs/b9966-cpu-c749cb0/bin/llama-server.exe"
+	runnerRelative := "installs/b11149-cpu-d2e5458/bin/llama-server.exe"
 	writeManagedRuntimeFixture(t, dataDir, managedRuntimeManifest{
 		SchemaVersion: managedRuntimeManifestVersion,
 		Runtime:       "llama.cpp",
@@ -158,5 +158,32 @@ func writeManagedRuntimeFixture(t *testing.T, dataDir string, manifest managedRu
 	}
 	if err := os.WriteFile(filepath.Join(root, "active.json"), payload, 0o600); err != nil {
 		t.Fatalf("write manifest: %v", err)
+	}
+}
+
+func TestPruneSupersededRuntimeInstallsKeepsOnlyTheActiveRuntime(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"b9966-cuda-c749cb0", "b11149-cuda-d2e5458", "b11149-cuda-d2e5458.partial-abc"} {
+		if err := os.MkdirAll(filepath.Join(root, "installs", name, "bin"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	active := filepath.Join(root, "installs", "b11149-cuda-d2e5458", "bin", "llama-server.exe")
+	pruneSupersededRuntimeInstalls(root, active)
+	entries, err := os.ReadDir(filepath.Join(root, "installs"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	if len(names) != 2 || names[0] != "b11149-cuda-d2e5458" || names[1] != "b11149-cuda-d2e5458.partial-abc" {
+		t.Fatalf("installs after pruning = %v, want only the active runtime and an in-progress stage", names)
+	}
+	// A runner outside the install tree prunes nothing.
+	pruneSupersededRuntimeInstalls(root, filepath.Join(t.TempDir(), "llama-server.exe"))
+	if entries, _ := os.ReadDir(filepath.Join(root, "installs")); len(entries) != 2 {
+		t.Fatalf("pruning ran for a runner outside the install tree: %d entries", len(entries))
 	}
 }

@@ -7,3 +7,4 @@ web/**/*.js text eol=lf
 web/**/*.json text eol=lf
 web/**/*.ts text eol=lf
 web/**/*.tsx text eol=lf
+internal/llm/templates/*.jinja text eol=lf

@@ -338,6 +338,51 @@
   width: fit-content;
 }
 
+.setup-warning {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--warn);
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.setup-access-local {
+  display: grid;
+  gap: 8px;
+  padding: 12px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.setup-access-local > p {
+  margin: 0;
+}
+
+.setup-remote-toggle {
+  justify-self: start;
+}
+
+.setup-choices-inline {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.setup-import-options {
+  border-top: 1px solid var(--line);
+}
+
+.setup-import-options > summary {
+  min-height: 40px;
+  padding: 10px 2px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.setup-import-options > .setup-method + .setup-method {
+  margin-top: 14px;
+}
+
 .setup-hardware,
 .setup-inline-status {
   display: flex;
@@ -621,6 +666,10 @@
     padding-left: 0;
   }
 
+  .setup-choices-inline {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .setup-method {
     padding: 14px;
   }
@@ -706,4 +755,51 @@
   display: grid;
   gap: 0.5rem;
   margin-block: 0.5rem;
+}
+
+/* Easy Setup: one page of requirement verdicts and three questions. */
+.easy-setup-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.easy-setup-section h2 {
+  margin: 0;
+}
+
+.easy-requirement {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+
+.easy-requirement .status-dot {
+  margin-top: 6px;
+}
+
+.easy-requirement > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.easy-requirement small {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  color: var(--muted);
+}
+
+.easy-requirement-state {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.easy-setup .toggle-line[data-disabled] {
+  opacity: 0.6;
 }

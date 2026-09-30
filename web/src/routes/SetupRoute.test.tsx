@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
+import type { LLMCatalog } from "../api/catalog-types";
 import type { LLMModelManagerSnapshot, PublicSettings } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 import { useAuth } from "../state/auth";
@@ -49,12 +50,39 @@ const managedModel = {
   state: "ready",
 } as const;
 
+const catalogModel = {
+  id: "gemma-fixture",
+  display_name: "Gemma 4 12B fixture",
+  summary: "The tested default: reliable motion commands and replies in about two seconds.",
+  family: "gemma4",
+  parameter_size: "11.9B",
+  quantization: "Q4_K_M",
+  size_bytes: 7381381696,
+  sha256: "b".repeat(64),
+  license: "Apache-2.0 (Gemma 4)",
+  license_url: "https://ai.google.dev/gemma/docs/gemma_4_license",
+  source_name: "fixture/gemma:latest",
+  source_url: "https://ollama.com/fixture/gemma",
+  download_url: "https://registry.ollama.ai/v2/fixture/gemma/blobs/sha256:" + "b".repeat(64),
+  vram_mib: 8144,
+  min_vram_mib: 10240,
+  default: true,
+} as const;
+
+function catalogFixture(fit: LLMCatalog["models"][number]["fit"], nvidia = true): LLMCatalog {
+  return {
+    models: [{ ...catalogModel, fit }],
+    hardware: nvidia ? { nvidia: true, gpu_name: "Test NVIDIA GPU", vram_mib: 16303 } : { nvidia: false },
+  };
+}
+
 function freshSettings(): PublicSettings {
   return {
     version: 2,
     server: { port: 49717 },
     ui: { locale: "en", theme: "steel-azure", setup_completed: false },
     device: { hsp_dispatch_owner: "cloud_rest", connection_key_set: false },
+    motion: { handy_model: "handy_original" },
     llm: {
       provider: "llama_cpp",
       llama_cpp_mode: "managed",
@@ -64,6 +92,30 @@ function freshSettings(): PublicSettings {
       prompt_set: "magichandy_motion_v1",
     },
   } as PublicSettings;
+}
+
+async function continueTo(heading: string) {
+  fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+  await screen.findByRole("heading", { name: heading });
+}
+
+// Easy Setup is the default path; these tests walk the Custom steps.
+async function startCustomSetup() {
+  await screen.findByRole("heading", { name: "Set up MagicHandy" });
+  fireEvent.click(screen.getByRole("radio", { name: /Custom setup/ }));
+  await continueTo("Choose who can open MagicHandy");
+}
+
+async function skipTo(heading: string) {
+  fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+  await screen.findByRole("heading", { name: heading });
+}
+
+async function openChatStep() {
+  render(<SetupRoute />);
+  await startCustomSetup();
+  await continueTo("Choose how MagicHandy reaches your device");
+  await skipTo("Set up the chat AI");
 }
 
 describe("SetupRoute", () => {
@@ -98,6 +150,8 @@ describe("SetupRoute", () => {
     vi.spyOn(api, "setupStatus").mockResolvedValue(setupFixture);
     vi.spyOn(api, "networkStatus").mockResolvedValue({ active: { mode: "local", listen_address: "127.0.0.1:49717", public_url: "", trusted_proxies: [], tls_certificate: "", tls_private_key: "" }, saved: null, restart_required: false, interfaces: [{ name: "Ethernet", address: "192.168.1.8", loopback: false, private: true }], forwarded: false, authentication_required: false, secure_cookie: false });
     vi.spyOn(api, "llmModels").mockResolvedValue(modelFixture);
+    vi.spyOn(api, "llmCatalog").mockResolvedValue(catalogFixture("recommended"));
+    vi.spyOn(api, "getSettings").mockImplementation(async () => ({ settings }));
     vi.spyOn(api, "ollamaModels").mockResolvedValue({ available: true, models: [] });
     vi.spyOn(api, "scanOllamaModels").mockResolvedValue({
       path: "C:\\Users\\Test\\.ollama\\models",
@@ -141,6 +195,7 @@ describe("SetupRoute", () => {
     vi.spyOn(api, "saveSetupPreferences").mockImplementation(async (update) => {
       if (update.ui_locale) settings = { ...settings, ui: { ...settings.ui, locale: update.ui_locale } };
       if (update.device_owner) settings = { ...settings, device: { ...settings.device, hsp_dispatch_owner: update.device_owner } };
+      if (update.handy_model) settings = { ...settings, motion: { ...settings.motion, handy_model: update.handy_model } };
       if (update.llm) settings = { ...settings, llm: { ...settings.llm, ...update.llm } };
       return { settings };
     });
@@ -153,9 +208,7 @@ describe("SetupRoute", () => {
   it("creates the first administrator inside the Access step before continuing", async () => {
     render(<SetupRoute />);
 
-    await screen.findByRole("heading", { name: "Set up MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
+    await startCustomSetup();
     fireEvent.click(screen.getByRole("checkbox", { name: /require an account and password/i }));
     fireEvent.change(screen.getByRole("textbox", { name: "Administrator username" }), { target: { value: "owner" } });
     const password = screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!;
@@ -175,13 +228,26 @@ describe("SetupRoute", () => {
     expect(await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" })).toBeInTheDocument();
   });
 
+  it("keeps remote access folded away until the user asks for it", async () => {
+    render(<SetupRoute />);
+    await startCustomSetup();
+
+    expect(screen.getByText(/opens only on this computer/i)).toBeVisible();
+    expect(screen.queryByRole("radio", { name: /^Public/ })).not.toBeInTheDocument();
+    const reveal = screen.getByRole("button", { name: "Use MagicHandy from a phone or another computer" });
+    await waitFor(() => expect(reveal).toBeEnabled());
+    fireEvent.click(reveal);
+    expect(screen.getByRole("radio", { name: /^Local only/ })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /^LAN \+ local/ })).toBeInTheDocument();
+  });
+
   it("keeps Public setup in the Access step until HTTPS is saved", async () => {
     vi.spyOn(api, "discoverInternet").mockResolvedValue({ public_ip: "8.8.8.8", terms_url: "https://letsencrypt.org/documents/test.pdf", ip_error: false, ca_error: false, external_port: 443 });
     render(<SetupRoute />);
-    await screen.findByRole("heading", { name: "Set up MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
-    await waitFor(() => expect(screen.getByRole("radio", { name: /^Public/ })).toBeEnabled());
+    await startCustomSetup();
+    const reveal = screen.getByRole("button", { name: "Use MagicHandy from a phone or another computer" });
+    await waitFor(() => expect(reveal).toBeEnabled());
+    fireEvent.click(reveal);
     fireEvent.click(screen.getByRole("radio", { name: /^Public/ }));
     fireEvent.change(screen.getByLabelText("Administrator username"), { target: { value: "owner" } });
     fireEvent.change(screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!, { target: { value: "fifteen-char8888" } });
@@ -197,26 +263,18 @@ describe("SetupRoute", () => {
   it("ends the temporary bootstrap session when protected setup finishes", async () => {
     render(<SetupRoute />);
 
-    await screen.findByRole("heading", { name: "Set up MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
+    await startCustomSetup();
     fireEvent.click(screen.getByRole("checkbox", { name: /require an account and password/i }));
     fireEvent.change(screen.getByRole("textbox", { name: "Administrator username" }), { target: { value: "owner" } });
     const password = screen.getByText("Password", { selector: ".label" }).closest("label")!.querySelector("input")!;
     fireEvent.change(password, { target: { value: "fifteen-char8888" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "fifteen-char8888" } });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await continueTo("Choose how MagicHandy reaches your device");
+    await skipTo("Set up the chat AI");
+    await skipTo("Add voice features");
+    await skipTo("Installing selected features");
+    await continueTo("Setup is ready");
 
-    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    await screen.findByRole("heading", { name: "Choose your model runtime" });
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    await screen.findByRole("heading", { name: "Add voice features" });
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    await screen.findByRole("heading", { name: "Installing selected features" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-
-    await screen.findByRole("heading", { name: "Setup is ready" });
     expect(screen.getByText("Sign-in required after setup")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Finish and sign in" }));
 
@@ -225,75 +283,115 @@ describe("SetupRoute", () => {
     expect(window.location.hash).toBe("#/chat");
   });
 
-  it("persists a runtime choice before model selection can be skipped", async () => {
+  it("saves the Handy model and connection owner from the Device step", async () => {
     render(<SetupRoute />);
+    await startCustomSetup();
+    await continueTo("Choose how MagicHandy reaches your device");
 
-    await screen.findByRole("heading", { name: "Set up MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    await screen.findByRole("heading", { name: "Choose your model runtime" });
+    expect(screen.getByText(/Handy Onboarding app/)).toBeVisible();
+    expect(screen.getByRole("radio", { name: /^Original/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /^2 Pro/ }));
+    await continueTo("Set up the chat AI");
+
+    expect(api.saveSetupPreferences).toHaveBeenCalledWith(expect.objectContaining({
+      device_owner: "cloud_rest",
+      handy_model: "handy_2_pro",
+    }));
+  });
+
+  it("saves the Ollama engine choice when leaving the chat step", async () => {
+    vi.mocked(api.ollamaModels).mockResolvedValue({ available: true, models: [{ name: "gemma3:4b", size_bytes: 4096 }] as never });
+    await openChatStep();
     fireEvent.click(screen.getByRole("radio", { name: /use my existing ollama/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: "Ollama model" }), { target: { value: "gemma3:4b" } });
+    await continueTo("Add voice features");
 
-    await screen.findByRole("heading", { name: "Choose a chat model" });
     await waitFor(() => expect(api.saveSetupPreferences).toHaveBeenCalledWith(expect.objectContaining({
-      llm: expect.objectContaining({ provider: "ollama" }),
+      llm: expect.objectContaining({ provider: "ollama", model: "gemma3:4b" }),
     })));
   });
 
-  it("keeps managed llama.cpp as the recommended default without a build action", async () => {
-    render(<SetupRoute />);
+  it("keeps managed llama.cpp and the tested download as the defaults", async () => {
+    await openChatStep();
 
-    await screen.findByRole("heading", { name: "Set up MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-
-    await screen.findByRole("heading", { name: "Choose your model runtime" });
     expect(screen.getByRole("radio", { name: /Managed llama\.cpp.*Recommended/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Gemma 4 12B fixture/ })).toBeChecked();
+    expect(screen.getByText(/Detected Test NVIDIA GPU with 15\.9 GiB of graphics memory/)).toBeVisible();
+    expect(screen.getByRole("link", { name: "License terms" })).toHaveAttribute("href", catalogModel.license_url);
     expect(screen.queryByRole("button", { name: /build managed|install managed/i })).not.toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Use my existing Ollama/i })).not.toBeChecked();
   });
 
-  it("returns the workspace to the top when the wizard advances", async () => {
-    const workspace = document.createElement("main");
-    workspace.id = "workspace";
-    document.body.append(workspace);
-    const result = render(<SetupRoute />, { container: workspace });
+  it("downloads the recommended model as part of the installation plan", async () => {
+    await openChatStep();
+    await continueTo("Add voice features");
+    await continueTo("Installing selected features");
 
-    await screen.findByRole("heading", { name: "Set up MagicHandy" });
-    workspace.scrollTop = 420;
-    workspace.scrollLeft = 25;
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(api.installSetupPlan).toHaveBeenCalledWith({
+      llama: { backend: "auto" },
+      model: { catalog_id: "gemma-fixture" },
+      parakeet: false,
+    });
+  });
 
-    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
-    expect(workspace.scrollTop).toBe(0);
-    expect(workspace.scrollLeft).toBe(0);
-    result.unmount();
-    workspace.remove();
+  it("keeps the engine install when the model is added later", async () => {
+    await openChatStep();
+    fireEvent.click(screen.getByRole("radio", { name: /Add a model later/ }));
+    await continueTo("Add voice features");
+    await continueTo("Installing selected features");
+
+    expect(api.installSetupPlan).toHaveBeenCalledWith({ llama: { backend: "auto" }, parakeet: false });
+  });
+
+  it("explains why Continue is unavailable until a model is chosen", async () => {
+    vi.mocked(api.llmModels).mockResolvedValue({ ...modelFixture, models: [managedModel] });
+    await openChatStep();
+    fireEvent.click(screen.getByRole("radio", { name: /Use a model already in MagicHandy/ }));
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+    expect(screen.getByText("Choose a model to download or import, or pick Add a model later.")).toBeVisible();
+    fireEvent.change(screen.getByRole("combobox", { name: "Managed model" }), { target: { value: managedModel.id } });
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  });
+
+  it("keeps a saved external model name and uses an installed catalog model when switching to managed", async () => {
+    settings = { ...settings, llm: { ...settings.llm, llama_cpp_mode: "external", model: "my-server-model" } };
+    vi.mocked(useAppState).mockReturnValue({
+      state: { settings },
+      backendOnline: true,
+      readOnly: false,
+      refresh: vi.fn(async () => undefined),
+    } as unknown as ReturnType<typeof useAppState>);
+    vi.mocked(api.llmCatalog).mockResolvedValue({ ...catalogFixture("recommended"), models: [{ ...catalogModel, fit: "recommended", installed_model_id: "gemma-installed" }] });
+    await openChatStep();
+
+    expect(screen.getByRole("radio", { name: /External llama\.cpp server/ })).toBeChecked();
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Model" })).toHaveValue("my-server-model"));
+
+    fireEvent.click(screen.getByRole("radio", { name: /Managed llama\.cpp/ }));
+    expect(screen.getByRole("radio", { name: /Gemma 4 12B fixture/ })).toBeChecked();
+    await continueTo("Add voice features");
+    expect(api.saveSetupPreferences).toHaveBeenLastCalledWith({
+      llm: expect.objectContaining({ provider: "llama_cpp", llama_cpp_mode: "managed", model: "gemma-installed" }),
+    });
+    await continueTo("Installing selected features");
+    expect(api.installSetupPlan).toHaveBeenCalledWith({ llama: { backend: "auto" }, parakeet: false });
+  });
+
+  it("starts with chat skipped when no NVIDIA card is available", async () => {
+    vi.mocked(api.setupStatus).mockResolvedValue({ ...setupFixture, hardware: { platform: "windows/amd64", nvidia: false, cuda: false } });
+    vi.mocked(api.llmCatalog).mockResolvedValue(catalogFixture("no_gpu", false));
+    await openChatStep();
+
+    await waitFor(() => expect(screen.getByRole("radio", { name: /Skip chat model setup/ })).toBeChecked());
+    expect(screen.getByText(/No NVIDIA graphics card was found/)).toBeVisible();
+    expect(screen.getByRole("radio", { name: /Managed llama\.cpp/ })).not.toHaveTextContent("Recommended");
   });
 
   it("imports a selected model from an existing Ollama library during managed setup", async () => {
-    render(<SetupRoute />);
+    await openChatStep();
+    fireEvent.click(screen.getByText("Import a model file instead"));
 
-    await screen.findByRole("heading", { name: "Set up MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    await screen.findByRole("heading", { name: "Choose your model runtime" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-
-    await screen.findByRole("heading", { name: "Choose a chat model" });
-    expect(screen.getByRole("region", { name: "Managed model" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Import a GGUF file" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Import from an existing Ollama library" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Ollama models path" }), {
@@ -319,26 +417,25 @@ describe("SetupRoute", () => {
     } as unknown as ReturnType<typeof useAppState>);
     vi.mocked(api.llmModels).mockResolvedValue({ ...modelFixture, models: [managedModel] });
 
-    render(<SetupRoute />);
+    await openChatStep();
+    await waitFor(() => expect(screen.getByRole("radio", { name: /Use a model already in MagicHandy/ })).toBeChecked());
+    await continueTo("Add voice features");
+    await continueTo("Installing selected features");
 
-    await screen.findByRole("heading", { name: "Set up MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    await screen.findByRole("heading", { name: "Choose your model runtime" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose a chat model" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Add voice features" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-
-    await screen.findByRole("heading", { name: "Installing selected features" });
     expect(api.installSetupPlan).toHaveBeenCalledWith({ llama: { backend: "auto" }, parakeet: false });
     expect(screen.getByRole("progressbar", { name: "Installation progress" })).toHaveAttribute("value", "0");
     expect(screen.getByRole("log", { name: "Installation terminal output" })).toBeInTheDocument();
     expect(screen.getByRole("log", { name: "Installation terminal output" })).toHaveTextContent("Waiting for installer output...");
+  });
+
+  it("asks the backend to turn chosen voice features on after installing them", async () => {
+    await openChatStep();
+    await skipTo("Add voice features");
+    fireEvent.click(screen.getByRole("radio", { name: /Parakeet/i }));
+    expect(screen.getByRole("checkbox", { name: /Turn voice on when installation finishes/ })).toBeChecked();
+    await continueTo("Installing selected features");
+
+    expect(api.installSetupPlan).toHaveBeenCalledWith({ parakeet: true, enable_voice: true });
   });
 
   it("preselects Parakeet when the backend finds a saved runtime or resumable partial", async () => {
@@ -346,18 +443,81 @@ describe("SetupRoute", () => {
       ...setupFixture,
       parakeet: { ...setupFixture.parakeet, preselected: true },
     });
-    render(<SetupRoute />);
+    await openChatStep();
+    await skipTo("Add voice features");
 
-    await screen.findByRole("heading", { name: "Set up MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-    await screen.findByRole("heading", { name: "Choose your model runtime" });
-    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
-
-    await screen.findByRole("heading", { name: "Add voice features" });
     expect(screen.getByRole("radio", { name: /Parakeet/i })).toBeChecked();
+  });
+
+  const chatterboxModule = {
+    id: "chatterbox", name: "Chatterbox Turbo", provider: "chatterbox",
+    summary: "Local voice cloning with CPU fallback.", license: "MIT", model: "ResembleAI/chatterbox-turbo",
+    model_license: "MIT", python_version: "3.10", disk_estimate: "Several GiB",
+    supported_devices: ["cpu", "cuda"], recommended_for_nvidia: false, ready_after_install: true,
+    reference_requirement: "The included voice works immediately.", source_url: "https://example.invalid",
+    source_revision: "fixture", port: 8992,
+  };
+
+  it("Easy setup installs the model it picked and the voice features chosen", async () => {
+    vi.mocked(api.setupStatus).mockResolvedValue({
+      ...setupFixture,
+      voice_modules: [...setupFixture.voice_modules, chatterboxModule],
+      assessment: {
+        free_disk_bytes: 200 * 2 ** 30,
+        chat: { status: "met", reason: "gpu_fits", bytes: 8 * 2 ** 30, vram_mib: 8144, min_vram_mib: 10240 },
+        voice_output: { status: "met", reason: "gpu", bytes: 6 * 2 ** 30 },
+        voice_input: { status: "met", reason: "cpu", bytes: 800 * 2 ** 20 },
+        model_id: catalogModel.id, runtime_backend: "cuda", voice_module: "chatterbox", voice_device: "cuda",
+      },
+    });
+    render(<SetupRoute />);
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    expect(screen.getByRole("radio", { name: /Easy setup/ })).toBeChecked();
+    await continueTo("Easy setup");
+
+    expect(screen.getByText("Chat: Gemma 4 12B fixture")).toBeVisible();
+    expect(screen.getAllByText("Requirements met")).toHaveLength(3);
+    fireEvent.click(screen.getByRole("radio", { name: /Explicit/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Talk instead of typing/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
+    await screen.findByRole("heading", { name: "Installing selected features" });
+
+    expect(api.saveSetupPreferences).toHaveBeenCalledWith({
+      llm: expect.objectContaining({ chat_voice: "explicit", provider: "llama_cpp", llama_cpp_mode: "managed" }),
+    });
+    expect(api.installSetupPlan).toHaveBeenCalledWith({
+      llama: { backend: "auto" },
+      model: { catalog_id: catalogModel.id },
+      voice: { module: "chatterbox", device: "cuda", auto_launch: true },
+      parakeet: true,
+      enable_voice: true,
+    });
+  });
+
+  it("Easy setup says which requirements a computer without an NVIDIA card misses", async () => {
+    vi.mocked(api.setupStatus).mockResolvedValue({
+      ...setupFixture,
+      hardware: { platform: "windows/amd64", nvidia: false, cuda: false },
+      assessment: {
+        free_disk_bytes: 200 * 2 ** 30,
+        chat: { status: "unmet", reason: "no_nvidia", bytes: 0 },
+        voice_output: { status: "partial", reason: "cpu", bytes: 6 * 2 ** 30 },
+        voice_input: { status: "met", reason: "cpu", bytes: 800 * 2 ** 20 },
+        runtime_backend: "cpu", voice_module: "chatterbox", voice_device: "cpu",
+      },
+    });
+    vi.mocked(api.llmCatalog).mockResolvedValue(catalogFixture("no_gpu", false));
+    render(<SetupRoute />);
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    await continueTo("Easy setup");
+
+    expect(screen.getByText("Local chat needs an NVIDIA graphics card")).toBeVisible();
+    expect(screen.getByText("Requirements not met")).toBeVisible();
+    expect(screen.getByText("Requirements partly met")).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "How explicit should chat be?" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
+    await screen.findByRole("heading", { name: "Installing selected features" });
+    expect(api.installSetupPlan).not.toHaveBeenCalled();
   });
 });

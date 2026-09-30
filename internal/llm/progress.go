@@ -8,6 +8,14 @@ type ProviderProgress struct {
 	PromptEvalMillis int64
 	PromptTokens     int
 	GeneratedTokens  int
+	// ReasoningChars counts hidden reasoning characters in this update. The
+	// text itself never leaves the provider; the count lets the model check
+	// notice a model that reasons silently while thinking is off.
+	ReasoningChars int
+	// DecodeMillis and DecodeTokens time the generation phase when the
+	// provider reports it, for a tokens-per-second figure.
+	DecodeMillis int64
+	DecodeTokens int
 }
 
 func reportProgress(callbacks []func(ProviderProgress), progress ProviderProgress) {

@@ -55,6 +55,7 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 		LLMMaxOutputTokens: []int{128, 256, 512, 1024},
 		LLMMotionModes:     []string{LLMMotionModeDynamic, LLMMotionModePattern, LLMMotionModeLayered, LLMMotionModeCreativeV2, LLMMotionModeOff},
 		LLMChatVoices:      LLMChatVoices(),
+		LLMReplyLengths:    LLMReplyLengths(),
 		LLMUserAnatomies: []string{
 			LLMUserAnatomyPenis,
 			LLMUserAnatomyVagina,

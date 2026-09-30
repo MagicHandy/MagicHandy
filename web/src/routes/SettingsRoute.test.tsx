@@ -414,7 +414,7 @@ describe("SettingsRoute", () => {
     const panel = view.container.querySelector(".panel");
     expect(panel).not.toBeNull();
     expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Chat");
-    expect(panel?.querySelectorAll(".settings-content > .group")).toHaveLength(3);
+    expect(panel?.querySelectorAll(".settings-content > .group")).toHaveLength(4);
     expect(panel?.querySelectorAll(".group .group")).toHaveLength(0);
     expect(screen.getByRole("group", { name: "Motion generation" })).toBeInTheDocument();
   });

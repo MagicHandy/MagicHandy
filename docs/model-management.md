@@ -7,9 +7,10 @@ quality-first path; Ollama remains a first-class external provider. The model
 manager gives llama.cpp a durable inventory without making model downloads or
 runtime discovery part of startup.
 
-The inventory, local imports, and app-owned llama.cpp release lifecycle are
-implemented. Curated model downloads and hardware-fit recommendations remain
-release work.
+The inventory, local imports, app-owned llama.cpp release lifecycle, and
+curated downloads with GPU-fit ratings are implemented. The curated catalog and
+its trust model are recorded in
+[ADR 0034](decisions/0034-curated-model-downloads.md).
 
 ## Ownership Boundaries
 
@@ -25,6 +26,8 @@ release work.
 - Ollama owns its daemon and library. MagicHandy may read its manifests and
   blobs during an explicit import, but never modifies or deletes them.
 - Provider status and model listing never download or load a model.
+- Curated downloads start only from an explicit Download action or a reviewed
+  setup plan, and only for an ID from the built-in catalog.
 
 ## Model Records
 
@@ -40,9 +43,54 @@ Each managed record includes:
 - import/update timestamps
 - computed file state (`ready`, `missing`, or `changed`)
 
-The inventory is not a model-quality catalog. JSON reliability, prompt fit,
-license URLs, context limits, RAM/VRAM guidance, and curated source URLs belong
-to the later curated catalog.
+The inventory is not a model-quality catalog. JSON reliability and prompt fit
+live in [model-suitability.md](model-suitability.md); license links, source
+pages, measured graphics memory and pinned digests live in the curated catalog.
+
+## Curated Downloads
+
+`internal/llm/model_catalog.go` ships three tested Gemma 4 builds, in preference
+order: the 12B heretic default (a content-addressed Ollama registry blob), a
+lighter 12B QAT build and an E4B QAT build for 6 to 8 GB cards (Hugging Face
+files pinned to one repository commit). `GET /api/llm/catalog` returns each
+entry with a `fit` for the detected GPU (`recommended` for the first entry the
+card holds, `supported`, `below_minimum`, `unknown_vram`, `no_gpu`), the managed
+model ID when the digest is already in the store, and the size of any resumable
+partial.
+`POST /api/llm/imports/catalog` takes a catalog ID, checks free space for the
+remaining bytes plus 512 MiB, and starts an import job with status
+`downloading`. The job resumes from `downloads/catalog-<sha256>.partial`, hashes
+the saved prefix and every new byte, rejects any other size or digest, validates
+the GGUF, and commits through the normal store path with source `ollama` for
+registry blobs or `gguf` for Hugging Face files.
+Cancellation and transport failures keep the partial; a checksum failure
+discards it. Startup removes only partials whose digest the catalog no longer
+lists.
+
+## Chat Template Fixes
+
+The metadata scan that rejects unsupported GGUFs also records the architecture
+and the SHA-256 of the embedded chat template. Known defective templates map to
+a fix (`knownTemplateFixes` in `internal/llm/model_fixes.go`). Today the only fix
+is `gemma4-close-thinking`: Google's canonical Gemma 4 template with the thought
+channel closed when thinking is off. Without it, fine-tuned E4B builds reason
+silently on every turn. A model with a known template runs with
+`--chat-template-file` pointing at `models/templates/<fix>.jinja`, which is
+written from the binary. A Gemma 4 model whose template has the same defect but
+was never measured is only offered the fix (`template_fix_offer`), and the user
+turns it on per model from the model test. The choice lives in `app_kv` as
+`llm.template_fix_overrides`. See
+[ADR 0035](decisions/0035-model-test-and-template-fixes.md).
+
+## Model Test
+
+Settings > Chat > Model > **Test model** opens a window that runs five scripted
+turns through the real chat service against the selected model. It reports
+load time, GPU layer placement, the template fix state, runtime currency,
+hidden reasoning, reply-format repairs, truncation, speed, reply length and
+refusals. The user starts it; it never runs automatically and never commands
+motion. API: `GET`/`POST`/`DELETE /api/llm/model-check` (host-only), and
+`POST /api/llm/models/{id}/template-fix` with `{"enabled": bool}`.
 
 ## Storage Layout
 
@@ -54,6 +102,8 @@ data/
       <model-id>/
         model.gguf
         metadata.json
+    templates/
+      gemma4-close-thinking.jinja   written from the binary when a fix applies
   downloads/
     model-import-<job-id>.partial
   runtimes/
@@ -62,7 +112,7 @@ data/
       .tools/                   embedded installer and upstream license
       downloads/                resumable archive partials during installation
       installs/
-        b9966-<backend>-c749cb0/
+        b11149-<backend>-d2e5458/
           runtime.json
           provenance.json
           LICENSE-llama.cpp
@@ -77,8 +127,8 @@ does not immediately unlink an active copy.
 ## Managed llama.cpp Runtime Installation
 
 Managed mode never asks for `llama-server` or GGUF paths. MagicHandy pins
-llama.cpp release `b9966` at commit
-`c749cb041706647f460bb918cccc9d91995205ab` and embeds the PowerShell installer
+llama.cpp release `b11149` (the build for upstream `v0.5.0`) at commit
+`d2e54583c7452353eb35d40431281f6ee984332f` and embeds the PowerShell installer
 plus upstream MIT license in the Go binary. **Install runtime** is an explicit,
 controller-gated action. The same helper is called by `install.ps1` when the
 user accepts its managed-runtime prompt. No Git, CMake, C++ compiler, MSYS2, or
@@ -88,15 +138,22 @@ The helper:
 
 1. requires Windows/amd64 and chooses CUDA in `auto` mode when a working NVIDIA
    driver and GPU are present, otherwise CPU;
-2. downloads official `b9966` Windows CPU or CUDA 12.4 runner/runtime archives
+2. downloads official `b11149` Windows CPU or CUDA 12.4 runner/runtime archives
    over HTTPS with retry and partial resume;
 3. verifies exact archive sizes and SHA-256 digests before extraction;
 4. rejects rooted, traversing, duplicate, or symbolic-link archive entries;
-5. probes the resulting executable for commit `c749cb0` and, for CUDA, requires
+5. probes the resulting executable for commit `d2e5458` and, for CUDA, requires
    a detected CUDA device;
 6. copies the complete binary/DLL set and MIT license into a versioned staging
    directory and records archive provenance; and
 7. atomically writes `active.json` only after the install is valid.
+
+When a release moves the pin, an installed older runtime reports `outdated`.
+With `ui.runtime_update_mode` set to `automatic` (the default), startup installs
+the pinned runtime with the backend already in use and loads the model when it
+finishes. With `manual`, the notification center and Settings > General >
+Updates offer **Update now**. See
+[ADR 0036](decisions/0036-managed-runtime-updates.md).
 
 Extraction intermediates use a job-specific temporary directory beneath the
 runtime root and are removed after success or failure. Verified archives are

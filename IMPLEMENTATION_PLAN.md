@@ -457,9 +457,15 @@ second source of truth. Resolved by Phase 13.0 (parity row 9 closed).
   import, read-only Ollama library discovery/import, daemon model listing,
   external llama.cpp model listing, SHA-256 verification,
   progress/cancellation, and guarded ID-based selection/removal. Managed mode
-  builds pinned llama.cpp `b9966` source into app-owned runtime storage through
-  the installer or controller-gated Model UI; no runner/model path settings.
-  Curated model downloads remain release work.
+  installs the pinned llama.cpp `b11149` release into app-owned runtime storage
+  through the installer or controller-gated Model UI; no runner/model path
+  settings. A release that moves the pin updates an installed runtime at startup
+  unless the user chose manual runtime updates (ADR 0036). Curated downloads of
+  three tested Gemma 4 builds (12B default, lighter 12B QAT, E4B QAT for 6 to
+  8 GB cards) are pinned by size and SHA-256, resumable, rated against the
+  detected GPU, and offered in guided setup and Settings > Chat > Model
+  (ADR 0034). Known chat template defects are fixed at launch, and a
+  user-started model test checks any model for common problems (ADR 0035).
 - Optional voice remains disabled until the user enables it. Once configured,
   enabled speech input and enabled chat speech autoload their respective workers
   and models on app startup; failures stay isolated and visible.
@@ -2054,8 +2060,9 @@ metadata, active-process over-install, explicit retention, bounded clean purge,
 and fresh reinstall state. The first unsigned Windows prerelease is
 `v0.1.0-alpha.1`; `v0.1.0-alpha.2` replaces its managed llama.cpp source-build
 failure surface with verified upstream CPU/CUDA bundles. Broader clean-machine
-acceptance of voice components, curated model downloads, signing, and final
-budget evidence remain open.
+acceptance of voice components, signing, and final budget evidence remain open.
+Curated model downloads passed a live registry download with cancel and resume
+(ADR 0034).
 
 Delivered ahead of this phase (#55, #56, #61, #62, #64, #65): the
 model-manager foundation now
@@ -2068,7 +2075,7 @@ Ollama is never selected implicitly and is presented as the existing-runtime,
 lower-disk alternative. Compatible Ollama-library GGUF files can be scanned and
 explicitly copied into the managed store from the setup model picker. CPU uses
 an approximately 18 MiB official archive. CUDA uses checksum-pinned CUDA 12.4
-runner/runtime archives, approximately 628 MiB compressed and 1.1 GiB installed,
+runner/runtime archives, approximately 615 MiB compressed and 1.1 GiB installed,
 with only a compatible NVIDIA driver. The source installer can bootstrap
 WinGet/Go/Git, build all first-party workers, persist non-secret choices, and reuse them from a
 fast-forward-only updater. The installer/update reliability pass additionally
@@ -2086,8 +2093,17 @@ The command-line flow installs Faster Qwen without reference prompts; the GUI
 owns its reference WAV and exact transcript. Managed TTS setup clears obsolete
 worker overrides and verifies its Python, upstream server, adapter, and model or
 voice files against the runtime readiness contract before reporting success.
-Phase 16 still owns broader clean-machine voice acceptance, curated
-checksum-pinned model downloads, and hardware-fit recommendations.
+Phase 16 still owns broader clean-machine voice acceptance. Curated
+checksum-pinned model downloads and GPU-fit recommendations shipped with the
+setup streamlining work: a seven-step wizard whose Chat AI step merges engine
+and model, keeps the engine when the model is added later, asks for the Handy
+model on the Device step, folds remote access away, and can turn a ready voice
+on after installation (ADR 0034, [setup-wizard-design.md](docs/setup-wizard-design.md)).
+The 2026-09-30 evaluation added a measured E4B QAT build, so 6 to 8 GB cards now
+get a recommendation. It also added the model test and known template fixes
+(ADR 0035), release-pinned runtime updates with notifications (ADR 0036), and
+Easy setup (ADR 0037). Easy setup assesses the computer and asks only for
+explicitness, voice output and voice input.
 
 **GUI installer decision** (ADR 0011; evaluation in
 [docs/gui-installer.md](docs/gui-installer.md)): the heavily interactive

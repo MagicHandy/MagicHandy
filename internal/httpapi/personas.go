@@ -86,6 +86,7 @@ func (s *Server) personasPayload(ctx context.Context) (map[string]any, error) {
 		"prompt_sets":       sets,
 		"options": map[string]any{
 			"chat_voices":       config.LLMChatVoices(),
+			"reply_lengths":     config.LLMReplyLengths(),
 			"reaction_styles":   config.LLMReactionStyles(),
 			"focus_areas":       chat.AreaZones(),
 			"lore_modes":        persona.LoreModes(),

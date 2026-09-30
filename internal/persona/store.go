@@ -62,11 +62,13 @@ var (
 // from the same column: the timestamp doubles as an existence flag and as the
 // cache-buster a tile URL needs when a portrait is replaced in place.
 type Persona struct {
-	ID                string `json:"id"`
-	Name              string `json:"name"`
-	Description       string `json:"description"`
-	ChatVoice         string `json:"chat_voice"`
-	ReactionStyle     string `json:"reaction_style"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	ChatVoice     string `json:"chat_voice"`
+	ReactionStyle string `json:"reaction_style"`
+	// ReplyLength overrides the Settings reply length; empty follows it.
+	ReplyLength       string `json:"reply_length"`
 	PromptSetID       string `json:"prompt_set_id"`
 	DefaultFocusArea  string `json:"default_focus_area"`
 	LoreMode          string `json:"lore_mode"`
@@ -86,6 +88,7 @@ type Draft struct {
 	Description      *string `json:"description,omitempty"`
 	ChatVoice        *string `json:"chat_voice,omitempty"`
 	ReactionStyle    *string `json:"reaction_style,omitempty"`
+	ReplyLength      *string `json:"reply_length,omitempty"`
 	PromptSetID      *string `json:"prompt_set_id,omitempty"`
 	DefaultFocusArea *string `json:"default_focus_area,omitempty"`
 	LoreMode         *string `json:"lore_mode,omitempty"`
@@ -242,11 +245,11 @@ func (s *Store) Update(ctx context.Context, id string, draft Draft) (Persona, er
 		_, execErr := tx.ExecContext(ctx, `
 			UPDATE personas SET
 				name = ?, description = ?, chat_voice = ?, reaction_style = ?,
-				prompt_set_id = ?, default_focus_area = ?, lore_mode = ?,
+				reply_length = ?, prompt_set_id = ?, default_focus_area = ?, lore_mode = ?,
 				updated_at = ?
 			WHERE id = ?
 		`, updated.Name, updated.Description, updated.ChatVoice, updated.ReactionStyle,
-			updated.PromptSetID, updated.DefaultFocusArea, updated.LoreMode,
+			updated.ReplyLength, updated.PromptSetID, updated.DefaultFocusArea, updated.LoreMode,
 			updated.UpdatedAt, id)
 		return execErr
 	})
@@ -391,7 +394,7 @@ func ValidID(id string) bool {
 }
 
 const selectColumns = `
-	SELECT id, name, description, chat_voice, reaction_style, prompt_set_id,
+	SELECT id, name, description, chat_voice, reaction_style, reply_length, prompt_set_id,
 		default_focus_area, lore_mode,
 		(SELECT COUNT(*) FROM persona_lore WHERE persona_id = personas.id),
 		portrait_updated_at, last_used_at, created_at, updated_at
@@ -406,7 +409,7 @@ type rowScanner interface {
 func scanPersona(row rowScanner) (Persona, error) {
 	var item Persona
 	if err := row.Scan(&item.ID, &item.Name, &item.Description, &item.ChatVoice,
-		&item.ReactionStyle, &item.PromptSetID, &item.DefaultFocusArea,
+		&item.ReactionStyle, &item.ReplyLength, &item.PromptSetID, &item.DefaultFocusArea,
 		&item.LoreMode, &item.LoreCount,
 		&item.PortraitUpdatedAt, &item.LastUsedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
 		return Persona{}, err
@@ -418,11 +421,11 @@ func scanPersona(row rowScanner) (Persona, error) {
 func insert(ctx context.Context, tx *sql.Tx, item Persona) error {
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO personas(id, name, description, chat_voice, reaction_style,
-			prompt_set_id, default_focus_area, lore_mode, portrait_updated_at,
+			reply_length, prompt_set_id, default_focus_area, lore_mode, portrait_updated_at,
 			last_used_at, created_at, updated_at)
-		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, item.ID, item.Name, item.Description, item.ChatVoice, item.ReactionStyle,
-		item.PromptSetID, item.DefaultFocusArea, item.LoreMode,
+		item.ReplyLength, item.PromptSetID, item.DefaultFocusArea, item.LoreMode,
 		item.PortraitUpdatedAt, item.LastUsedAt, item.CreatedAt, item.UpdatedAt)
 	return err
 }
@@ -439,6 +442,9 @@ func applyDraft(item Persona, draft Draft) Persona {
 	}
 	if draft.ReactionStyle != nil {
 		item.ReactionStyle = normalizeToken(*draft.ReactionStyle)
+	}
+	if draft.ReplyLength != nil {
+		item.ReplyLength = normalizeToken(*draft.ReplyLength)
 	}
 	if draft.PromptSetID != nil {
 		item.PromptSetID = strings.TrimSpace(*draft.PromptSetID)
@@ -470,6 +476,9 @@ func validate(item Persona) error {
 	}
 	if !config.ValidLLMReactionStyle(item.ReactionStyle) {
 		return fmt.Errorf("%w: unknown reaction style %q", ErrInvalid, item.ReactionStyle)
+	}
+	if item.ReplyLength != "" && !config.ValidLLMReplyLength(item.ReplyLength) {
+		return fmt.Errorf("%w: unknown reply length %q", ErrInvalid, item.ReplyLength)
 	}
 	if !validFocusArea(item.DefaultFocusArea) {
 		return fmt.Errorf("%w: unknown starting zone %q", ErrInvalid, item.DefaultFocusArea)

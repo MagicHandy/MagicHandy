@@ -3,6 +3,7 @@
 // authoritative, so unknown fields are ignored and read sites use optional
 // chaining. See docs/decisions/0009-react-frontend.md (State Model Rules).
 
+import type { SetupAssessment } from "./setup-assessment-types";
 import type { AccountCapabilities } from "./access-types";
 export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus, InternetDiscovery, CertificatePreparation } from "./access-types";
 
@@ -357,6 +358,8 @@ export interface Persona {
   description: string;
   chat_voice: string;
   reaction_style: string;
+  // Empty follows the Settings reply length.
+  reply_length?: string;
   prompt_set_id: string;
   default_focus_area: string;
   lore_mode: string;
@@ -375,6 +378,7 @@ export interface PersonaDraft {
   description?: string;
   chat_voice?: string;
   reaction_style?: string;
+  reply_length?: string;
   prompt_set_id?: string;
   default_focus_area?: string;
   lore_mode?: string;
@@ -428,6 +432,7 @@ export interface PersonasPayload {
   persona?: Persona;
   options: {
     chat_voices: string[];
+    reply_lengths?: string[];
     reaction_styles: string[];
     focus_areas: string[];
     lore_modes: string[];
@@ -1022,6 +1027,7 @@ export interface OptionHints {
   llm_max_output_tokens?: number[];
 	llm_motion_modes?: Array<"dynamic" | "pattern" | "off" | string>;
   llm_chat_voices?: string[];
+  llm_reply_lengths?: string[];
   llm_user_anatomies?: LLMUserAnatomy[];
   prompt_sets?: string[];
   tts_providers?: string[];
@@ -1044,6 +1050,7 @@ export interface PublicSettings {
     theme?: string;
     setup_completed?: boolean;
     update_check_mode?: "automatic" | "manual" | string;
+    runtime_update_mode?: "automatic" | "manual" | string;
     notification_categories?: NotificationCategory[];
     show_remote_navigation?: boolean;
   };
@@ -1072,6 +1079,7 @@ export interface PublicSettings {
     max_output_tokens: number;
     reasoning_mode: string;
     chat_voice?: string;
+    reply_length?: string;
     user_anatomy?: LLMUserAnatomy;
     custom_anatomy?: string;
     persona_description?: string;
@@ -1136,8 +1144,10 @@ export interface SetupJob {
 
 export interface SetupInstallPlan {
   llama?: { backend: "auto" | "cpu" | "cuda" };
+  model?: { catalog_id: string };
   voice?: { module: string; device: "cpu" | "cuda"; auto_launch: boolean };
   parakeet: boolean;
+  enable_voice?: boolean;
 }
 
 export interface SetupVoiceModule {
@@ -1152,6 +1162,7 @@ export interface SetupVoiceModule {
   disk_estimate: string;
   supported_devices: string[];
   recommended_for_nvidia: boolean;
+  ready_after_install?: boolean;
   reference_requirement: string;
   source_url: string;
   source_revision: string;
@@ -1189,6 +1200,7 @@ export interface SetupStatus {
     preselected: boolean;
   };
   installation?: SetupJob;
+  assessment?: SetupAssessment;
   scripts_present: boolean;
   helpers: { llama: boolean; parakeet: boolean; voice: boolean };
 }
@@ -1212,13 +1224,19 @@ export interface ManagedLLMModel {
   updated_at: string;
   state: "ready" | "missing" | "changed" | "unsupported";
   message?: string;
+  architecture?: string;
+  // A chat template fix the runner applies, and why (known template or the
+  // user's choice); template_fix_offer names one the user may turn on.
+  template_fix?: string;
+  template_fix_source?: "known" | "user";
+  template_fix_offer?: string;
 }
 
 export interface LLMModelImport {
   id: string;
   source: "gguf" | "ollama";
   display_name: string;
-  status: "queued" | "copying" | "complete" | "failed" | "cancelled";
+  status: "queued" | "copying" | "downloading" | "complete" | "failed" | "cancelled";
   bytes_copied: number;
   total_bytes: number;
   model_id?: string;
@@ -1302,6 +1320,7 @@ export interface SettingsUpdate {
     theme: string;
     setup_completed: boolean;
     update_check_mode: "automatic" | "manual" | string;
+    runtime_update_mode?: "automatic" | "manual" | string;
     notification_categories: NotificationCategory[];
     show_remote_navigation?: boolean;
   };

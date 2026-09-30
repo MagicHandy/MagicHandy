@@ -138,7 +138,7 @@ func TestParakeetRepairStopsAndRestoresOnlyAfterVerification(t *testing.T) {
 		return nil
 	}
 	manager.job = &setupJobState{setupJob: setupJob{ID: "repair-test"}}
-	if err := manager.installParakeet(context.Background(), "repair-test"); err != nil {
+	if err := manager.installParakeet(context.Background(), "repair-test", false); err != nil {
 		t.Fatal(err)
 	}
 	if want := []string{"stop", "download", "install", "apply", "restore"}; !reflect.DeepEqual(order, want) {
@@ -156,7 +156,7 @@ func TestParakeetRepairDoesNotRestoreAfterFailedVerification(t *testing.T) {
 	restored := false
 	manager.restoreParakeet = func(context.Context) error { restored = true; return nil }
 	manager.job = &setupJobState{setupJob: setupJob{ID: "failed-repair-test"}}
-	if err := manager.installParakeet(context.Background(), "failed-repair-test"); err == nil {
+	if err := manager.installParakeet(context.Background(), "failed-repair-test", false); err == nil {
 		t.Fatal("repair without verified files succeeded")
 	}
 	if restored {

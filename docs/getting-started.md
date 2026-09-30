@@ -76,6 +76,18 @@ The guided setup explains each optional path before it runs:
 - Choosing the **managed llama.cpp runtime** downloads an official,
   checksum-pinned CPU or CUDA bundle. It does not install Git, CMake, Visual
   Studio, MSYS2, or the CUDA Toolkit.
+- **Easy setup** (the default on the first page) checks your GPU, disk space
+  and installers, says which of chat, voice output and voice input your computer
+  can run, picks the tested model that fits, and asks only how explicit chat
+  should be, whether to speak replies and whether to talk instead of typing.
+  **Custom setup** keeps every step and choice.
+- The Chat AI step offers tested chat models rated against your GPU: a 12B
+  model for cards with about 10 GB or more, and a faster E4B model for 6 to 8 GB
+  cards. The download (4 to 7 GB) runs in the install plan, resumes if
+  interrupted, is checked against a pinned SHA-256, and becomes the selected
+  model. Existing GGUF files and Ollama libraries can still be imported instead,
+  and "Add a model later" installs only the runtime. Without an NVIDIA GPU, chat
+  starts skipped because CPU replies are too slow for live use.
 - Choosing an **existing Ollama** install avoids the managed llama.cpp runtime
   and its disk use.
 - Managed llama.cpp is the tightly controlled path: MagicHandy pins and tunes
@@ -218,12 +230,25 @@ and selected model from app-owned inventories, never user-entered
 executable/model paths. You can import a standalone GGUF, or scan an existing
 Ollama models directory and explicitly copy a compatible model — imports show
 progress, verify SHA-256, and never modify the Ollama library. Models are
-never bundled or downloaded at startup.
+never bundled or downloaded at startup. The tested downloads are listed with a
+fit rating for your GPU.
+
+**Test model** (Settings > Chat > Model) sends a short scripted conversation
+through the selected model and reports silent reasoning, broken or cut-off
+replies, speed, GPU placement, reply length and refusals. It never moves the
+device. Known Gemma 4 builds whose chat template makes them reason silently are
+fixed automatically; for others, the test offers the fix. **Reply length**
+(Short, Balanced, Detailed) is in the same page and can be overridden per
+persona.
+
+The managed llama.cpp runtime is pinned by each release. When an update moves
+the pin, MagicHandy installs the new runtime at the next start unless
+**Settings > General > Updates > Update the llama.cpp runtime automatically** is
+off, in which case the notification bell offers the update.
 
 The Windows setup binary, portable ZIP, and first-run setup flow are documented
 in [windows-release-packaging.md](windows-release-packaging.md) and
-[gui-installer.md](gui-installer.md). Curated downloads and model-fit guidance
-remain planned.
+[gui-installer.md](gui-installer.md).
 
 ## Build and run by hand
 

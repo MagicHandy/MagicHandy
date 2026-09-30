@@ -333,8 +333,9 @@ window and direction; the buffered queue tail is diagnostics, not position.
   Advanced cannot shift or compress every control, and the stack remains
   visually centered in the rail.
 - The Chat Controls sidebar begins with a compact segmented `LLM motion` radio
-  choice for Creative / Pattern Library / Off. `Creative` is the user-facing
-  name for the persisted `dynamic` mode. Motion change rate uses eight numbered
+  choice for Creative / Pattern Library / Layered / Creative v2 / Off, followed
+  by one plain sentence describing the selected mode. `Creative` is the
+  user-facing name for the persisted `dynamic` mode. Motion change rate uses eight numbered
   stops without a redundant direction hint; Spoken check-ins and motion Style
   use labeled discrete sliders. The backend maps the numbered
   scale to its bounded timing windows and migrates legacy cadence presets;

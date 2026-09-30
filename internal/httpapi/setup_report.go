@@ -26,6 +26,7 @@ type setupFailureReport struct {
 func (s *Server) configureSetupManager() {
 	s.setup.prepareParakeet = s.prepareParakeetRepair
 	s.setup.restoreParakeet = s.restoreParakeetAfterRepair
+	s.setup.downloadModel = s.downloadCatalogModelForSetup
 	s.setup.reportVersion = s.version
 	s.setup.reportSecrets = func() []string {
 		settings, _ := s.store.Snapshot()

@@ -3,7 +3,9 @@ package llm
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +34,7 @@ const (
 	maxGGUFArrayElements   = 1 << 20
 	maxGGUFMetadataBytes   = 64 << 20
 	maxGGUFKeyBytes        = 64 << 10
+	maxGGUFTemplateBytes   = 1 << 20
 )
 
 var (
@@ -44,11 +47,43 @@ var (
 	)
 )
 
+// ggufInspection is the small, bounded part of a GGUF's metadata that the
+// managed runtime needs: whether the file fits the one-text-GGUF contract, and
+// enough about its chat template to recognize a known template defect.
+type ggufInspection struct {
+	Architecture string
+	// ChatTemplateSHA256 is the hex digest of the embedded chat template, or
+	// empty when the file carries none.
+	ChatTemplateSHA256 string
+	// ChatTemplateGemma4 marks a Gemma 4 turn/channel chat template.
+	ChatTemplateGemma4 bool
+	// ChatTemplateClosesThinking reports that the template closes an empty
+	// thought channel when thinking is off, as Google's later Gemma 4
+	// templates do.
+	ChatTemplateClosesThinking bool
+}
+
+func (inspection *ggufInspection) setChatTemplate(template string) {
+	digest := sha256.Sum256([]byte(template))
+	inspection.ChatTemplateSHA256 = hex.EncodeToString(digest[:])
+	inspection.ChatTemplateGemma4 = strings.Contains(template, "<|turn>model") && strings.Contains(template, "<|channel>")
+	// Templates spell the newline as a Jinja escape; accept a literal one too.
+	inspection.ChatTemplateClosesThinking = strings.Contains(template, `<|channel>thought\n<channel|>`) ||
+		strings.Contains(template, "<|channel>thought\n<channel|>")
+}
+
 // inspectManagedGGUF reads only the bounded metadata section needed to reject
 // files that require a runner contract beyond one text-only GGUF.
 func inspectManagedGGUF(ctx context.Context, source io.Reader, size int64) error {
+	_, err := inspectManagedGGUFMetadata(ctx, source, size)
+	return err
+}
+
+// inspectManagedGGUFMetadata validates the runner contract and collects the
+// architecture and chat template signature in the same bounded scan.
+func inspectManagedGGUFMetadata(ctx context.Context, source io.Reader, size int64) (ggufInspection, error) {
 	if size <= 0 {
-		return errNotGGUF
+		return ggufInspection{}, errNotGGUF
 	}
 	budget := int64(maxGGUFMetadataBytes)
 	if size < budget {
@@ -62,37 +97,61 @@ func inspectManagedGGUF(ctx context.Context, source io.Reader, size int64) error
 	}
 	metadataCount, err := readGGUFHeader(&reader)
 	if err != nil {
-		return err
+		return ggufInspection{}, err
 	}
 
+	var inspection ggufInspection
 	for index := uint64(0); index < metadataCount; index++ {
 		if err := ctx.Err(); err != nil {
-			return err
+			return ggufInspection{}, err
 		}
 		key, readErr := reader.readString(maxGGUFKeyBytes)
 		if readErr != nil {
-			return fmt.Errorf("GGUF metadata key %d is invalid: %w", index, readErr)
+			return ggufInspection{}, fmt.Errorf("GGUF metadata key %d is invalid: %w", index, readErr)
 		}
 		valueType, readErr := reader.readUint32()
 		if readErr != nil {
-			return fmt.Errorf("GGUF metadata value %q is invalid: %w", key, readErr)
+			return ggufInspection{}, fmt.Errorf("GGUF metadata value %q is invalid: %w", key, readErr)
 		}
 		if embeddedGGUFComponentKey(key) {
-			return errUnsupportedGGUFComponents
+			return ggufInspection{}, errUnsupportedGGUFComponents
 		}
-		if key == "split.count" {
-			count, valueErr := reader.readUnsigned(valueType)
-			if valueErr != nil {
-				return fmt.Errorf("GGUF metadata value %q is invalid: %w", key, valueErr)
-			}
-			if count > 1 {
-				return errUnsupportedGGUFSplit
-			}
-			continue
+		if readErr := inspectGGUFValue(&reader, key, valueType, &inspection); readErr != nil {
+			return ggufInspection{}, readErr
 		}
-		if readErr := reader.skipValue(valueType); readErr != nil {
-			return fmt.Errorf("GGUF metadata value %q is invalid: %w", key, readErr)
+	}
+	return inspection, nil
+}
+
+// inspectGGUFValue consumes one metadata value, keeping the few it needs.
+func inspectGGUFValue(reader *ggufMetadataReader, key string, valueType uint32, inspection *ggufInspection) error {
+	switch {
+	case key == "split.count":
+		count, err := reader.readUnsigned(valueType)
+		if err != nil {
+			return fmt.Errorf("GGUF metadata value %q is invalid: %w", key, err)
 		}
+		if count > 1 {
+			return errUnsupportedGGUFSplit
+		}
+		return nil
+	case key == "general.architecture" && valueType == ggufTypeString:
+		architecture, err := reader.readString(maxGGUFKeyBytes)
+		if err != nil {
+			return fmt.Errorf("GGUF metadata value %q is invalid: %w", key, err)
+		}
+		inspection.Architecture = strings.TrimSpace(architecture)
+		return nil
+	case key == "tokenizer.chat_template" && valueType == ggufTypeString:
+		template, err := reader.readString(maxGGUFTemplateBytes)
+		if err != nil {
+			return fmt.Errorf("GGUF metadata value %q is invalid: %w", key, err)
+		}
+		inspection.setChatTemplate(template)
+		return nil
+	}
+	if err := reader.skipValue(valueType); err != nil {
+		return fmt.Errorf("GGUF metadata value %q is invalid: %w", key, err)
 	}
 	return nil
 }

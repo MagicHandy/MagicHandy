@@ -37,10 +37,13 @@ var DefaultNotificationCategories = []string{
 
 // UISettings contains presentation preferences shared by every browser client.
 type UISettings struct {
-	Locale                 string   `json:"locale"`
-	Theme                  string   `json:"theme"`
-	SetupCompleted         bool     `json:"setup_completed"`
-	UpdateCheckMode        string   `json:"update_check_mode,omitempty"`
+	Locale          string `json:"locale"`
+	Theme           string `json:"theme"`
+	SetupCompleted  bool   `json:"setup_completed"`
+	UpdateCheckMode string `json:"update_check_mode,omitempty"`
+	// RuntimeUpdateMode is automatic when MagicHandy may install the llama.cpp
+	// runtime its release pins as soon as it starts; manual only notifies.
+	RuntimeUpdateMode      string   `json:"runtime_update_mode,omitempty"`
 	NotificationCategories []string `json:"notification_categories"`
 	// Omitted by older clients; nil retains the default visible shortcut.
 	ShowRemoteNavigation *bool `json:"show_remote_navigation,omitempty"`

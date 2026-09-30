@@ -26,6 +26,10 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 	if update.ChatVoice != nil {
 		chatVoice = *update.ChatVoice
 	}
+	replyLength := current.ReplyLength
+	if update.ReplyLength != nil {
+		replyLength = *update.ReplyLength
+	}
 	userAnatomy := current.UserAnatomy
 	if update.UserAnatomy != nil {
 		userAnatomy = *update.UserAnatomy
@@ -61,6 +65,7 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		MaxOutputTokens:      maxOutputTokens,
 		ReasoningMode:        reasoningMode,
 		ChatVoice:            chatVoice,
+		ReplyLength:          replyLength,
 		UserAnatomy:          userAnatomy,
 		CustomAnatomy:        customAnatomy,
 		PersonaDescription:   personaDescription,

@@ -48,10 +48,13 @@ type PortableArchive struct {
 
 // PortablePersona contains only user-authored and code-owned persona axes.
 type PortablePersona struct {
-	Name             string `json:"name"`
-	Description      string `json:"description"`
-	ChatVoice        string `json:"chat_voice"`
-	ReactionStyle    string `json:"reaction_style"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	ChatVoice     string `json:"chat_voice"`
+	ReactionStyle string `json:"reaction_style"`
+	// ReplyLength is omitted when the persona follows Settings, so those
+	// archives stay importable by builds that predate the field.
+	ReplyLength      string `json:"reply_length,omitempty"`
 	PromptSetID      string `json:"prompt_set_id"`
 	DefaultFocusArea string `json:"default_focus_area"`
 	LoreMode         string `json:"lore_mode"`
@@ -133,6 +136,7 @@ func (s *Store) ExportArchive(
 			Description:      item.Description,
 			ChatVoice:        item.ChatVoice,
 			ReactionStyle:    item.ReactionStyle,
+			ReplyLength:      item.ReplyLength,
 			PromptSetID:      item.PromptSetID,
 			DefaultFocusArea: item.DefaultFocusArea,
 			LoreMode:         item.LoreMode,
@@ -257,6 +261,7 @@ func (s *Store) ImportPortable(
 		Description:      portable.Persona.Description,
 		ChatVoice:        portable.Persona.ChatVoice,
 		ReactionStyle:    portable.Persona.ReactionStyle,
+		ReplyLength:      portable.Persona.ReplyLength,
 		PromptSetID:      strings.TrimSpace(promptSetID),
 		DefaultFocusArea: portable.Persona.DefaultFocusArea,
 		LoreMode:         portable.Persona.LoreMode,
@@ -406,6 +411,7 @@ func normalizePortablePersona(portable *PortableArchive) error {
 		Description:      collapseSpaces(portable.Persona.Description),
 		ChatVoice:        normalizeToken(portable.Persona.ChatVoice),
 		ReactionStyle:    normalizeToken(portable.Persona.ReactionStyle),
+		ReplyLength:      normalizeToken(portable.Persona.ReplyLength),
 		PromptSetID:      strings.TrimSpace(portable.Persona.PromptSetID),
 		DefaultFocusArea: normalizeToken(portable.Persona.DefaultFocusArea),
 		LoreMode:         normalizeToken(portable.Persona.LoreMode),
@@ -418,6 +424,7 @@ func normalizePortablePersona(portable *PortableArchive) error {
 		Description:      item.Description,
 		ChatVoice:        item.ChatVoice,
 		ReactionStyle:    item.ReactionStyle,
+		ReplyLength:      item.ReplyLength,
 		PromptSetID:      item.PromptSetID,
 		DefaultFocusArea: item.DefaultFocusArea,
 		LoreMode:         item.LoreMode,

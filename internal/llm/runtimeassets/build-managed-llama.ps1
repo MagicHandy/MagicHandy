@@ -11,28 +11,28 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$LlamaVersion = 'b9966'
-$LlamaCommit = 'c749cb041706647f460bb918cccc9d91995205ab'
-$LlamaReleaseURL = 'https://github.com/ggml-org/llama.cpp/releases/tag/b9966'
+$LlamaVersion = 'b11149'
+$LlamaCommit = 'd2e54583c7452353eb35d40431281f6ee984332f'
+$LlamaReleaseURL = 'https://github.com/ggml-org/llama.cpp/releases/tag/b11149'
 $LlamaAssets = @{
     cpu = @(
         [pscustomobject]@{
-            Name = 'llama-b9966-bin-win-cpu-x64.zip'
-            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b9966/llama-b9966-bin-win-cpu-x64.zip'
-            SHA256 = 'a2e791df47c8abd09e23f85a00699d6d6552445f6bba21e810263eaeefbf672a'
-            Bytes = 18211851L
+            Name = 'llama-b11149-bin-win-cpu-x64.zip'
+            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b11149/llama-b11149-bin-win-cpu-x64.zip'
+            SHA256 = 'd1cb5f9ef7bbb7068954b4c9767d5b5309e20bcefeb61d4aafc47f9581f38752'
+            Bytes = 18559583L
         }
     )
     cuda = @(
         [pscustomobject]@{
-            Name = 'llama-b9966-bin-win-cuda-12.4-x64.zip'
-            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b9966/llama-b9966-bin-win-cuda-12.4-x64.zip'
-            SHA256 = 'bd95fbe38267b41ba109f922b978985e3ce982fef47040f90534a291617fcee9'
-            Bytes = 267340684L
+            Name = 'llama-b11149-bin-win-cuda-12.4-x64.zip'
+            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b11149/llama-b11149-bin-win-cuda-12.4-x64.zip'
+            SHA256 = 'd3140fe21ab2e665a706ca27923b27ca264f1c564b5837abea4566cc49c16096'
+            Bytes = 253869752L
         },
         [pscustomobject]@{
             Name = 'cudart-llama-bin-win-cuda-12.4-x64.zip'
-            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b9966/cudart-llama-bin-win-cuda-12.4-x64.zip'
+            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b11149/cudart-llama-bin-win-cuda-12.4-x64.zip'
             SHA256 = '8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6'
             Bytes = 391443627L
         }

@@ -319,6 +319,9 @@ type LLMSettings struct {
 	// shapes prompt composition; the motion contract and every motion safety
 	// gate are identical at every level.
 	ChatVoice string `json:"chat_voice"`
+	// ReplyLength steers how long chat replies run; balanced leaves the
+	// prompt unchanged.
+	ReplyLength string `json:"reply_length"`
 	// UserAnatomy controls code-owned vocabulary independently of the partner
 	// persona. CustomAnatomy and PersonaDescription are quoted as data when
 	// composed into a non-utility chat prompt.
@@ -576,6 +579,7 @@ type PublicSettingsOptionHints struct {
 	LLMMaxOutputTokens      []int    `json:"llm_max_output_tokens"`
 	LLMMotionModes          []string `json:"llm_motion_modes"`
 	LLMChatVoices           []string `json:"llm_chat_voices"`
+	LLMReplyLengths         []string `json:"llm_reply_lengths"`
 	LLMUserAnatomies        []string `json:"llm_user_anatomies"`
 	LLMReactionStyles       []string `json:"llm_reaction_styles"`
 	PromptSets              []string `json:"prompt_sets"`
@@ -608,6 +612,8 @@ type LLMUpdate struct {
 	// ChatVoice replaces the saved voice when present; omitted preserves the
 	// current persisted value (older clients keep working).
 	ChatVoice *string `json:"chat_voice,omitempty"`
+	// ReplyLength replaces the saved length when present; omitted preserves it.
+	ReplyLength *string `json:"reply_length,omitempty"`
 	// UserAnatomy, CustomAnatomy, and PersonaDescription preserve saved values
 	// when omitted by an older settings client.
 	UserAnatomy        *string `json:"user_anatomy,omitempty"`
@@ -637,6 +643,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 		MaxOutputTokens:      &settings.MaxOutputTokens,
 		ReasoningMode:        &settings.ReasoningMode,
 		ChatVoice:            &settings.ChatVoice,
+		ReplyLength:          &settings.ReplyLength,
 		UserAnatomy:          &settings.UserAnatomy,
 		CustomAnatomy:        &settings.CustomAnatomy,
 		PersonaDescription:   &settings.PersonaDescription,
@@ -683,6 +690,7 @@ func DefaultSettings() Settings {
 			Theme:                  ThemeSteelAzure,
 			SetupCompleted:         false,
 			UpdateCheckMode:        UpdateCheckAutomatic,
+			RuntimeUpdateMode:      UpdateCheckAutomatic,
 			NotificationCategories: append([]string(nil), DefaultNotificationCategories...),
 		},
 		Media: MediaSettings{
@@ -721,6 +729,7 @@ func DefaultSettings() Settings {
 			MaxOutputTokens:      DefaultLLMMaxOutputTokens,
 			ReasoningMode:        LLMReasoningOff,
 			ChatVoice:            LLMChatVoiceUtility,
+			ReplyLength:          LLMReplyLengthBalanced,
 			UserAnatomy:          LLMUserAnatomyPenis,
 			// Creative v2 is the model-facing motion vocabulary for new installs.
 			// Creative, Layered and Pattern Library remain explicit saved choices.
@@ -866,6 +875,9 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		updateCheckMode := strings.TrimSpace(update.UI.UpdateCheckMode)
 		if updateCheckMode != "" {
 			next.UI.UpdateCheckMode = updateCheckMode
+		}
+		if runtimeUpdateMode := strings.TrimSpace(update.UI.RuntimeUpdateMode); runtimeUpdateMode != "" {
+			next.UI.RuntimeUpdateMode = runtimeUpdateMode
 		}
 		if update.UI.NotificationCategories != nil {
 			next.UI.NotificationCategories = append([]string{}, update.UI.NotificationCategories...)
@@ -1176,6 +1188,9 @@ func validateUISettings(settings UISettings) error {
 	if !oneOf(settings.UpdateCheckMode, UpdateCheckAutomatic, UpdateCheckManual) {
 		return fmt.Errorf("unknown update check mode %q", settings.UpdateCheckMode)
 	}
+	if !oneOf(settings.RuntimeUpdateMode, UpdateCheckAutomatic, UpdateCheckManual) {
+		return fmt.Errorf("unknown runtime update mode %q", settings.RuntimeUpdateMode)
+	}
 	seenCategories := make(map[string]struct{}, len(settings.NotificationCategories))
 	for _, category := range settings.NotificationCategories {
 		if !oneOf(category, NotificationCategoryApp, NotificationCategorySystem, NotificationCategoryLibrary, NotificationCategoryVoice, NotificationCategoryUpdates) {
@@ -1201,6 +1216,10 @@ func applyMissingDefaults(settings Settings) Settings {
 	settings.UI.Theme = strings.TrimSpace(settings.UI.Theme)
 	if settings.UI.Theme == "" {
 		settings.UI.Theme = defaults.UI.Theme
+	}
+	settings.UI.RuntimeUpdateMode = strings.TrimSpace(settings.UI.RuntimeUpdateMode)
+	if settings.UI.RuntimeUpdateMode == "" {
+		settings.UI.RuntimeUpdateMode = defaults.UI.RuntimeUpdateMode
 	}
 	settings.UI.UpdateCheckMode = strings.TrimSpace(settings.UI.UpdateCheckMode)
 	if settings.UI.UpdateCheckMode == "" {
@@ -1280,6 +1299,9 @@ func applyMissingLLMDefaults(settings LLMSettings, defaults LLMSettings) LLMSett
 	}
 	if settings.ChatVoice == "" {
 		settings.ChatVoice = defaults.ChatVoice
+	}
+	if settings.ReplyLength == "" {
+		settings.ReplyLength = defaults.ReplyLength
 	}
 	if settings.UserAnatomy == "" {
 		settings.UserAnatomy = defaults.UserAnatomy
@@ -1392,6 +1414,7 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.ReasoningMode = strings.TrimSpace(settings.ReasoningMode)
 	settings.MotionGenerationMode = strings.ToLower(strings.TrimSpace(settings.MotionGenerationMode))
 	settings.ChatVoice = strings.ToLower(strings.TrimSpace(settings.ChatVoice))
+	settings.ReplyLength = strings.ToLower(strings.TrimSpace(settings.ReplyLength))
 	settings.UserAnatomy = strings.ToLower(strings.TrimSpace(settings.UserAnatomy))
 	settings.CustomAnatomy = strings.Join(strings.Fields(settings.CustomAnatomy), " ")
 	settings.PersonaDescription = strings.Join(strings.Fields(settings.PersonaDescription), " ")

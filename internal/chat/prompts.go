@@ -222,6 +222,8 @@ type Capabilities struct {
 	// MotionHolder says what owns the device when a turn is chat-only for a
 	// reason other than Settings, so the reply can say who drives.
 	MotionHolder MotionHolder
+	// ReplyLength steers the reply's length; the zero value composes nothing.
+	ReplyLength ReplyLength
 }
 
 // MotionHolder names what owns the device during a chat-only turn.
@@ -597,6 +599,9 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 	}
 	sections = appendPromptSection(sections, "voice_check", "Final voice check",
 		finalVoiceCheckForLocale(locale, capabilities.Voice))
+	if length := replyLengthInstructionForLocale(locale, capabilities.ReplyLength); length != "" {
+		sections = appendPromptSection(sections, "reply_length", "Reply length", length)
+	}
 	if languageReminder := replyLanguageReminderForPromptID(set.ID); languageReminder != "" {
 		sections = appendPromptSection(sections, "language_reminder", "Language reminder", languageReminder)
 	}

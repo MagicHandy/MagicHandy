@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,6 +60,17 @@ type ModelRecord struct {
 	UpdatedAt     string `json:"updated_at"`
 	State         string `json:"state"`
 	Message       string `json:"message,omitempty"`
+	// Architecture is the GGUF general.architecture of a ready model.
+	Architecture string `json:"architecture,omitempty"`
+	// TemplateFix names the chat template fix the runner applies when this
+	// model launches, and TemplateFixSource says why (known or user).
+	TemplateFix       string `json:"template_fix,omitempty"`
+	TemplateFixSource string `json:"template_fix_source,omitempty"`
+	// TemplateFixOffer names a fix the user may turn on for a template with a
+	// recognized defect that MagicHandy has not measured.
+	TemplateFixOffer string `json:"template_fix_offer,omitempty"`
+
+	inspection ggufInspection
 }
 
 // ModelSnapshot is the backend-authoritative model-manager view.
@@ -75,6 +87,11 @@ type ModelManager struct {
 	modelsDir    string
 	downloadsDir string
 
+	// Catalog download transport knobs; tests shorten the delays.
+	downloadClient     *http.Client
+	downloadRetryDelay time.Duration
+	downloadIdleLimit  time.Duration
+
 	mu     sync.Mutex
 	jobs   map[string]*modelImportJob
 	closed bool
@@ -83,12 +100,14 @@ type ModelManager struct {
 	inventoryMu     sync.Mutex
 	compatibilityMu sync.Mutex
 	compatibility   map[string]modelCompatibilityCacheEntry
+	templateFixMu   sync.Mutex
 }
 
 type modelCompatibilityCacheEntry struct {
 	size          int64
 	modifiedNanos int64
 	reason        string
+	inspection    ggufInspection
 }
 
 // OpenModelManager opens the inventory and prepares private model directories.
@@ -114,12 +133,14 @@ func OpenModelManagerWithDatabase(database *dbstore.DB) (*ModelManager, error) {
 
 func openModelManagerWithDatabase(database *dbstore.DB, ownsDB bool) (*ModelManager, error) {
 	manager := &ModelManager{
-		db:            database,
-		ownsDB:        ownsDB,
-		modelsDir:     filepath.Join(database.DataDir(), "models", "gguf"),
-		downloadsDir:  filepath.Join(database.DataDir(), "downloads"),
-		jobs:          make(map[string]*modelImportJob),
-		compatibility: make(map[string]modelCompatibilityCacheEntry),
+		db:                 database,
+		ownsDB:             ownsDB,
+		modelsDir:          filepath.Join(database.DataDir(), "models", "gguf"),
+		downloadsDir:       filepath.Join(database.DataDir(), "downloads"),
+		downloadRetryDelay: time.Second,
+		downloadIdleLimit:  catalogDownloadIdleLimit,
+		jobs:               make(map[string]*modelImportJob),
+		compatibility:      make(map[string]modelCompatibilityCacheEntry),
 	}
 	for _, directory := range []string{manager.modelsDir, manager.downloadsDir} {
 		if err := os.MkdirAll(directory, 0o700); err != nil {
@@ -207,6 +228,7 @@ func (m *ModelManager) List(ctx context.Context) ([]ModelRecord, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	m.applyTemplateFixes(ctx, models)
 	return models, nil
 }
 
@@ -224,8 +246,9 @@ func (m *ModelManager) Model(ctx context.Context, id string) (ModelRecord, error
 	if err != nil {
 		return ModelRecord{}, modelInventoryError("read managed model", err)
 	}
-	record = m.modelFileStateContext(ctx, record)
-	return record, ctx.Err()
+	records := []ModelRecord{m.modelFileStateContext(ctx, record)}
+	m.applyTemplateFixes(ctx, records)
+	return records[0], ctx.Err()
 }
 
 func modelInventoryError(operation string, err error) error {
@@ -332,7 +355,21 @@ func (m *ModelManager) removeStalePartials() error {
 		return fmt.Errorf("read model downloads directory: %w", err)
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "model-import-") || !strings.HasSuffix(entry.Name(), ".partial") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".partial") {
+			continue
+		}
+		if sha, ok := strings.CutPrefix(strings.TrimSuffix(entry.Name(), ".partial"), "catalog-"); ok {
+			// Catalog downloads resume across restarts. A partial for a digest
+			// this release no longer lists can never complete, so drop it.
+			if catalogSHAKnown(sha) {
+				continue
+			}
+			if err := os.Remove(filepath.Join(m.downloadsDir, entry.Name())); err != nil {
+				return fmt.Errorf("remove retired model download: %w", err)
+			}
+			continue
+		}
+		if !strings.HasPrefix(entry.Name(), "model-import-") {
 			continue
 		}
 		info, err := entry.Info()
@@ -434,54 +471,58 @@ func (m *ModelManager) modelFileStateContext(ctx context.Context, record ModelRe
 		record.State = modelStateChanged
 		record.Message = "model file size changed after import"
 	default:
-		if reason := m.modelCompatibilityReason(ctx, record.ModelPath, info); reason != "" {
+		if reason, inspection := m.modelCompatibility(ctx, record.ModelPath, info); reason != "" {
 			record.State = modelStateUnsupported
 			record.Message = reason
 		} else {
 			record.State = modelStateReady
+			record.Architecture = inspection.Architecture
+			record.inspection = inspection
 		}
 	}
 	return record
 }
 
-func (m *ModelManager) modelCompatibilityReason(ctx context.Context, path string, info os.FileInfo) string {
+// modelCompatibility returns why a file cannot run (empty when it can) and
+// the metadata read on the way, cached until the file's size or time changes.
+func (m *ModelManager) modelCompatibility(ctx context.Context, path string, info os.FileInfo) (string, ggufInspection) {
 	m.compatibilityMu.Lock()
 	if cached, ok := m.compatibility[path]; ok &&
 		cached.size == info.Size() && cached.modifiedNanos == info.ModTime().UnixNano() {
 		m.compatibilityMu.Unlock()
-		return cached.reason
+		return cached.reason, cached.inspection
 	}
 	m.compatibilityMu.Unlock()
 	file, err := os.Open(path) // #nosec G304 -- path was validated as an app-owned managed model file.
 	if err != nil {
-		return "model file is unavailable"
+		return "model file is unavailable", ggufInspection{}
 	}
 	defer func() { _ = file.Close() }()
 	openedInfo, err := file.Stat()
 	if err != nil || openedInfo.Size() != info.Size() || openedInfo.ModTime() != info.ModTime() {
-		return "model file changed while compatibility was checked"
+		return "model file changed while compatibility was checked", ggufInspection{}
 	}
-	err = inspectManagedGGUF(ctx, file, openedInfo.Size())
+	inspection, err := inspectManagedGGUFMetadata(ctx, file, openedInfo.Size())
 	reason := ""
 	if err != nil {
 		reason = err.Error()
 	}
 	finalInfo, statErr := file.Stat()
 	if statErr != nil || finalInfo.Size() != openedInfo.Size() || finalInfo.ModTime() != openedInfo.ModTime() {
-		return "model file changed while compatibility was checked"
+		return "model file changed while compatibility was checked", ggufInspection{}
 	}
 	if err != nil {
 		var pathErr *os.PathError
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || errors.As(err, &pathErr) {
-			return reason
+			return reason, ggufInspection{}
 		}
 	}
 	m.compatibilityMu.Lock()
 	m.compatibility[path] = modelCompatibilityCacheEntry{
-		size: info.Size(), modifiedNanos: info.ModTime().UnixNano(), reason: reason,
+		size: info.Size(), modifiedNanos: info.ModTime().UnixNano(), reason: reason, inspection: inspection,
 	}
 	m.compatibilityMu.Unlock()
-	return reason
+	return reason, inspection
 }
 
 func (m *ModelManager) modelDirectory(record ModelRecord) (string, error) {

@@ -100,13 +100,13 @@ const modelManagerFixture: LLMModelManagerSnapshot = {
     current: true,
     build_supported: true,
     supported_backends: ["auto", "cpu", "cuda"],
-    expected_version: "b9966",
-    version: "b9966",
+    expected_version: "b11149",
+    version: "b11149",
     commit: "c749cb041706647f460bb918cccc9d91995205ab",
     backend: "cpu",
     source: "built_from_source",
     built_at: "2026-07-11T00:00:00Z",
-    message: "Managed llama.cpp b9966 (cpu) is installed.",
+    message: "Managed llama.cpp b11149 (cpu) is installed.",
   },
 };
 
@@ -930,7 +930,7 @@ describe("app shell safety invariants", () => {
           id: "runtime-build-complete",
           backend: "cpu",
           status: "complete",
-          message: "Managed llama.cpp b9966 (cpu) is installed.",
+          message: "Managed llama.cpp b11149 (cpu) is installed.",
           started_at: "now",
           updated_at: "now",
         },
@@ -939,7 +939,7 @@ describe("app shell safety invariants", () => {
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/model");
-    expect((await screen.findAllByText(/managed llama\.cpp b9966 \(cpu\) is installed/i)).length).toBeGreaterThanOrEqual(1);
+    expect((await screen.findAllByText(/managed llama\.cpp b11149 \(cpu\) is installed/i)).length).toBeGreaterThanOrEqual(1);
 
     await waitFor(() => {
       const statusCalls = fetch.mock.calls.filter(([url]) => String(url).includes("/api/llm/status"));

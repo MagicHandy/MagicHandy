@@ -9,6 +9,7 @@ import { PROFILE_IMAGE_MAX_EDGE, resizeImageToJPEG } from "../util/profile-image
 import { monogram } from "./PersonaGrid";
 import { PersonaLoreEditor } from "./PersonaLoreEditor";
 import { AREA_LABELS, STYLE_LABELS, VOICE_LABELS, personaOptionLabel } from "./persona-labels";
+import { replyLengthLabel } from "./ReplyLengthField";
 
 interface EditorProps {
   item: Persona;
@@ -264,6 +265,19 @@ export function PersonaEditor({
                 >
                   {options.reaction_styles.map((style) => (
                     <option key={style} value={style}>{personaOptionLabel(STYLE_LABELS, style)}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span className="label">{t("Reply length")}</span>
+                <select
+                  value={item.reply_length ?? ""}
+                  disabled={disabled}
+                  onChange={(event) => void patch({ reply_length: event.target.value })}
+                >
+                  <option value="">{t("Follow Settings")}</option>
+                  {(options.reply_lengths?.length ? options.reply_lengths : ["short", "balanced", "detailed"]).map((length) => (
+                    <option key={length} value={length}>{replyLengthLabel(length)}</option>
                   ))}
                 </select>
               </label>

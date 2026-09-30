@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const ollamaProviderName = "ollama"
@@ -193,6 +194,7 @@ type ollamaChatChunk struct {
 	PromptEvalDuration int64  `json:"prompt_eval_duration"`
 	PromptEvalCount    int    `json:"prompt_eval_count"`
 	EvalCount          int    `json:"eval_count"`
+	EvalDuration       int64  `json:"eval_duration"`
 	Done               bool   `json:"done"`
 	DoneReason         string `json:"done_reason,omitempty"`
 	Error              string `json:"error,omitempty"`
@@ -215,7 +217,12 @@ func readOllamaStream(body io.Reader, onDelta func(string) error, progress ...fu
 		if chunk.Error != "" {
 			return builder.String(), errors.New(chunk.Error)
 		}
-		reportProgress(progress, ProviderProgress{Activity: chunk.Message.Content != "" || chunk.Message.Thinking != "", LoadMillis: chunk.LoadDuration / int64(time.Millisecond), PromptEvalMillis: chunk.PromptEvalDuration / int64(time.Millisecond), PromptTokens: chunk.PromptEvalCount, GeneratedTokens: chunk.EvalCount})
+		reportProgress(progress, ProviderProgress{
+			Activity: chunk.Message.Content != "" || chunk.Message.Thinking != "", LoadMillis: chunk.LoadDuration / int64(time.Millisecond),
+			PromptEvalMillis: chunk.PromptEvalDuration / int64(time.Millisecond), PromptTokens: chunk.PromptEvalCount, GeneratedTokens: chunk.EvalCount,
+			ReasoningChars: utf8.RuneCountInString(chunk.Message.Thinking),
+			DecodeMillis:   chunk.EvalDuration / int64(time.Millisecond), DecodeTokens: chunk.EvalCount,
+		})
 		if chunk.Message.Content != "" {
 			if err := appendStreamDelta(&builder, chunk.Message.Content, onDelta); err != nil {
 				return builder.String(), err

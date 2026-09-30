@@ -20,9 +20,9 @@ import (
 
 const (
 	// ManagedLlamaVersion is the upstream release installed and owned by MagicHandy.
-	ManagedLlamaVersion = "b9966"
+	ManagedLlamaVersion = "b11149"
 	// ManagedLlamaCommit pins the exact upstream source represented by ManagedLlamaVersion.
-	ManagedLlamaCommit = "c749cb041706647f460bb918cccc9d91995205ab"
+	ManagedLlamaCommit = "d2e54583c7452353eb35d40431281f6ee984332f"
 
 	managedRuntimeManifestVersion = 1
 	managedRuntimeManifestLimit   = 32 * 1024
@@ -339,9 +339,36 @@ func (m *ManagedLlamaRuntimeManager) runBuild(ctx context.Context, id string) {
 		status := InspectManagedLlamaRuntime(m.dataDir)
 		if !status.Installed || !status.Current {
 			err = errors.New("runtime installation finished without activating the pinned managed runtime")
+		} else {
+			pruneSupersededRuntimeInstalls(m.root, status.RunnerPath)
 		}
 	}
 	m.finishBuild(ctx, id, err)
+}
+
+// pruneSupersededRuntimeInstalls removes install directories other than the
+// active one once a new runtime is verified and active, so release-pinned
+// updates do not accumulate a gigabyte per version. A directory still in use
+// (a runner that has not exited yet) fails to delete on Windows and is simply
+// retried after the next install.
+func pruneSupersededRuntimeInstalls(root, activeRunner string) {
+	installs := filepath.Join(root, "installs")
+	relative, err := filepath.Rel(installs, activeRunner)
+	if err != nil || !pathWithin(installs, activeRunner) {
+		return
+	}
+	active := strings.SplitN(filepath.ToSlash(relative), "/", 2)[0]
+	entries, err := os.ReadDir(installs)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !entry.IsDir() || strings.EqualFold(name, active) || strings.Contains(name, ".partial-") {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(installs, name))
+	}
 }
 
 func (m *ManagedLlamaRuntimeManager) finishBuild(ctx context.Context, id string, err error) {

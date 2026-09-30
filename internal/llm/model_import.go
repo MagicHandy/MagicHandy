@@ -88,7 +88,7 @@ func (m *ModelManager) StartOllamaImport(ctx context.Context, root, candidateID 
 		return ImportJob{}, fmt.Errorf("selected Ollama model cannot be imported: %s", selected.Reason)
 	}
 	if selected.ImportedModelID != "" {
-		return m.completedImport(*selected)
+		return m.recordCompletedImport(ModelSourceOllama, selected.Name, selected.SizeBytes, selected.ImportedModelID)
 	}
 	return m.startImport(modelImportSpec{
 		DisplayName: selected.Name, Source: ModelSourceOllama,
@@ -96,7 +96,7 @@ func (m *ModelManager) StartOllamaImport(ctx context.Context, root, candidateID 
 		ExpectedSHA: strings.TrimPrefix(selected.Digest, "sha256:"), SizeBytes: selected.SizeBytes,
 		Format: selected.Format, Family: selected.Family, ParameterSize: selected.ParameterSize,
 		Quantization: selected.Quantization, License: selected.License,
-	})
+	}, m.runImport)
 }
 
 // StartGGUFImport starts a managed copy of one user-selected GGUF file.
@@ -123,7 +123,7 @@ func (m *ModelManager) StartGGUFImport(path, displayName string) (ImportJob, err
 		SourcePath:  absolute,
 		SizeBytes:   info.Size(),
 		Format:      "gguf",
-	})
+	}, m.runImport)
 }
 
 // Import returns one import progress snapshot.
@@ -165,7 +165,9 @@ func (m *ModelManager) CancelImport(id string) (ImportJob, error) {
 	return snapshot, nil
 }
 
-func (m *ModelManager) startImport(spec modelImportSpec) (ImportJob, error) {
+// startImport registers a job and runs it on its own goroutine; run must call
+// m.wg.Done and report its outcome through finishImport.
+func (m *ModelManager) startImport(spec modelImportSpec, run func(context.Context, string, modelImportSpec)) (ImportJob, error) {
 	spec = normalizeImportSpec(spec)
 	if err := validateImportSpec(spec); err != nil {
 		return ImportJob{}, err
@@ -206,7 +208,7 @@ func (m *ModelManager) startImport(spec modelImportSpec) (ImportJob, error) {
 	}
 	m.jobs[id] = job
 	m.wg.Add(1)
-	go m.runImport(ctx, id, spec)
+	go run(ctx, id, spec)
 	return job.snapshot, nil
 }
 
@@ -402,16 +404,18 @@ func (m *ModelManager) finishImport(id, modelID string, importErr error) {
 	job.snapshot.Error = importErr.Error()
 }
 
-func (m *ModelManager) completedImport(candidate OllamaCandidate) (ImportJob, error) {
+// recordCompletedImport records a job for a model the store already holds, so
+// callers can follow the same job snapshot whether or not bytes moved.
+func (m *ModelManager) recordCompletedImport(source, displayName string, size int64, modelID string) (ImportJob, error) {
 	id, err := randomImportID()
 	if err != nil {
 		return ImportJob{}, err
 	}
 	now := nowText()
 	job := &modelImportJob{snapshot: ImportJob{
-		ID: id, Source: ModelSourceOllama, DisplayName: candidate.Name,
-		Status: ImportStatusComplete, BytesCopied: candidate.SizeBytes,
-		TotalBytes: candidate.SizeBytes, ModelID: candidate.ImportedModelID,
+		ID: id, Source: source, DisplayName: displayName,
+		Status: ImportStatusComplete, BytesCopied: size,
+		TotalBytes: size, ModelID: modelID,
 		StartedAt: now, UpdatedAt: now,
 	}}
 	m.mu.Lock()
@@ -544,5 +548,5 @@ func randomImportID() (string, error) {
 }
 
 func activeImportStatus(status string) bool {
-	return status == ImportStatusQueued || status == ImportStatusCopying
+	return status == ImportStatusQueued || status == ImportStatusCopying || status == ImportStatusDownloading
 }
