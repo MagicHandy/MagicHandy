@@ -163,10 +163,11 @@ func TestHandlerShowsActivityAndHidesRequestsUntilDetails(t *testing.T) {
 	logger.Debug("not shown at info")
 	d.drainEvents(d.state)
 
-	if len(d.state.entries) != 3 {
-		t.Fatalf("entries = %+v", d.state.entries)
+	entries := d.state.entries.snapshot()
+	if len(entries) != 3 {
+		t.Fatalf("entries = %+v", entries)
 	}
-	started, request, warning := d.state.entries[0], d.state.entries[1], d.state.entries[2]
+	started, request, warning := entries[0], entries[1], entries[2]
 	if started.message != "Server starting" || started.detail != "component=server  url=http://127.0.0.1:49717" || started.verbose {
 		t.Fatalf("lifecycle entry = %+v", started)
 	}
@@ -179,7 +180,7 @@ func TestHandlerShowsActivityAndHidesRequestsUntilDetails(t *testing.T) {
 
 	v := runningView(richGlyphs, 100, 30)
 	v.entries = nil
-	for _, e := range d.state.entries {
+	for _, e := range entries {
 		if !e.verbose {
 			v.entries = append(v.entries, e)
 		}

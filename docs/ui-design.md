@@ -16,8 +16,13 @@ stream of JSON logs.
   (Local only, LAN + local, Public, trusted proxy) and notes sign-in, and a
   simulated run says no device moves.
 - **Recent activity.** Log records appear as plain sentences with their
-  details. Warnings are amber. Per-request lines are hidden until Details is
-  on, because the browser polls several times a second.
+  details. Warnings and failed HTTP requests remain visible; warnings are amber.
+  Successful request lines are hidden until Details is on, because the browser
+  polls several times a second. Visible activity and the full request history
+  each retain up to 400 records independently, so background polling cannot
+  erase the normal view. Details shows the latest combined stream; switching
+  back restores the retained activity. An empty view says there is no activity
+  to display yet.
 - **Keys.** O opens the app in the browser, C copies the link, S or Esc stops
   motion, D toggles details, and Q asks for a second Q before quitting.
   Ctrl+C and closing the window still shut the app down cleanly.

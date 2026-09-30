@@ -3,14 +3,15 @@ package console
 import (
 	"context"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 )
 
-// requestMessage is the per-request log line. It is shown only with details
-// on, because the browser polls the app several times a second.
+// requestMessage is the per-request log line. Successful low-severity requests
+// are details-only because the browser polls the app several times a second.
 const requestMessage = "http request"
 
 // Handler returns a slog handler that shows log records as recent activity.
@@ -44,7 +45,8 @@ func (h *activityHandler) Handle(_ context.Context, record slog.Record) error {
 		e.at = time.Now()
 	}
 	if record.Message == requestMessage {
-		e.verbose = true
+		e.level = requestLevel(fields, e.level)
+		e.verbose = e.level < slog.LevelWarn
 		e.message = requestSummary(fields)
 	} else {
 		e.message = sentence(safeText(record.Message))
@@ -52,6 +54,24 @@ func (h *activityHandler) Handle(_ context.Context, record slog.Record) error {
 	}
 	h.dashboard.post(func(s *dashState) { s.add(e) })
 	return nil
+}
+
+// The request middleware logs HTTP outcomes at Info. Surface failures in the
+// activity view as well, while preserving any higher severity from the caller.
+func requestLevel(fields [][2]string, level slog.Level) slog.Level {
+	for _, field := range fields {
+		if field[0] != "status" {
+			continue
+		}
+		status, _ := strconv.Atoi(field[1])
+		if status >= 500 {
+			return max(level, slog.LevelError)
+		}
+		if status >= 400 {
+			return max(level, slog.LevelWarn)
+		}
+	}
+	return level
 }
 
 func (h *activityHandler) WithAttrs(attrs []slog.Attr) slog.Handler {

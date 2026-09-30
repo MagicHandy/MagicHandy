@@ -73,6 +73,9 @@ func compose(v view) []line {
 	for _, e := range entries {
 		rows = append(rows, activityLine(v, e))
 	}
+	if len(entries) == 0 && room > 0 {
+		rows = append(rows, line{plain(margin+"No activity to display yet.", colorMuted)})
+	}
 	for len(rows) < v.rows-len(footer) {
 		rows = append(rows, line{})
 	}

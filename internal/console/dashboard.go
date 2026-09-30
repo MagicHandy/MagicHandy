@@ -66,7 +66,8 @@ type Dashboard struct {
 
 type dashState struct {
 	view         view
-	entries      []entry
+	entries      entryHistory
+	activity     entryHistory
 	actions      Actions
 	noticeUntil  time.Time
 	quitArmed    time.Time
@@ -256,9 +257,9 @@ func (d *Dashboard) drainEvents(s *dashState) {
 }
 
 func (s *dashState) add(e entry) {
-	s.entries = append(s.entries, e)
-	if len(s.entries) > maxEntries {
-		s.entries = append(s.entries[:0:0], s.entries[len(s.entries)-maxEntries:]...)
+	s.entries.add(e)
+	if !e.verbose {
+		s.activity.add(e)
 	}
 }
 
@@ -363,10 +364,10 @@ func (d *Dashboard) draw(s *dashState) {
 	}
 	v := s.view
 	v.columns, v.rows = columns, rows
-	for _, e := range s.entries {
-		if v.details || !e.verbose {
-			v.entries = append(v.entries, e)
-		}
+	if v.details {
+		v.entries = s.entries.snapshot()
+	} else {
+		v.entries = s.activity.snapshot()
 	}
 	if skipped := d.dropped.Load(); skipped > 0 {
 		v.entries = append(v.entries, entry{at: now, level: slog.LevelWarn,

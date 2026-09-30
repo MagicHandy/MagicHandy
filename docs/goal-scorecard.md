@@ -1,5 +1,15 @@
 # Goal Scorecard
 
+## 2026-09-29 — Terminal activity retention
+
+The [terminal fix](console-activity-review-2026-09-29.md) separates visible
+activity from hidden polling and uses two 400-entry rings. Full-history insertion
+allocates zero times in the regression test, replacing the previous allocation
+and copy on each overflow. Entry strings are shared; both histories remain bounded.
+The Windows amd64 pure-Go binary, Go 1.26.8 with `-trimpath -ldflags -w`, is
+**22,700,032 B**, up **3,072 B** from `94c5f346`. There are no new dependencies or
+UI assets. The existing idle/soak memory waiver is unchanged.
+
 ## 2026-09-29 — Capability-aware chat prompts
 
 The [prompt regression review](prompt-regression-review-2026-09-29.md) adds no
