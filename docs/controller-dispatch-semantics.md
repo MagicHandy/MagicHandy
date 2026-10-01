@@ -64,6 +64,13 @@ This blocks cross-site requests and DNS-rebinding-style browser access while
 leaving non-browser localhost API clients compatible. MagicHandy does not emit
 CORS permission headers.
 
+One exception lets the main app link to the Remote on the next port. A
+top-level page load (`GET`/`HEAD`, `Sec-Fetch-Mode: navigate`,
+`Sec-Fetch-Dest: document`, no `Origin`) that the browser marks `same-site` may
+open a page outside `/api/`; only the app shell and `/healthz` live there. API
+requests and page loads from other sites keep the rule above, and the Host must
+still be allowed ([ADR 0033](decisions/0033-remote-listener-and-account-scope.md)).
+
 A custom controller header is therefore required for every mutating path. A
 query parameter cannot authorize motion or settings changes. Emergency Stop
 remains deliberately outside this ownership check.

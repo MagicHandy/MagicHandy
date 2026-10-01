@@ -164,6 +164,8 @@ func (m *ModelManager) TemplateFixFile(fix string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("unknown chat template fix %q", fix)
 	}
+	m.templateFileMu.Lock()
+	defer m.templateFileMu.Unlock()
 	directory := filepath.Join(filepath.Dir(m.modelsDir), "templates")
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return "", fmt.Errorf("create chat template directory: %w", err)

@@ -81,3 +81,25 @@ This remains a remote for a visible desktop browser, not unattended server playb
 The desktop controls the picture/audio clock and retains browser autoplay and
 visibility requirements. The capability and standards review records deliberate
 limits and possible follow-up work in [the review](../remote-access-review-2026-09-29.md).
+
+## Amendment (2026-09-30): opening the Remote from the main app
+
+The main app's Remote link never worked in alpha.51 or alpha.52. A link from the
+main port to the next port is a cross-origin, same-site page load, so browsers
+send `Sec-Fetch-Site: same-site`. The browser boundary accepted only `same-origin`
+or `none` and answered "browser requests must use an allowed MagicHandy origin".
+Reviews opened the Remote by typed address, which sends `none`, so it went unseen.
+
+Both listeners now also accept a page load that meets all of these conditions:
+- a top-level page load (`GET` or `HEAD`, `Sec-Fetch-Mode: navigate`,
+  `Sec-Fetch-Dest: document`);
+- marked `same-site` by the browser;
+- sent with no `Origin` header;
+- for a path outside `/api/`.
+
+Only the app shell and `/healthz` live outside `/api/`. The browser never hands
+the page to the one that linked it. API requests, frames, form posts and page
+loads from other sites keep the same-origin rule, and the Host allowlist still
+rejects rebound hostnames. This narrows the exact-origin rule in
+[ADR 0017](0017-authenticated-lan-https.md) for page loads only. There is still
+no cross-origin browser API access.

@@ -895,12 +895,27 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 
 func protectBrowserRequests(allowedHosts []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isBrowserRequest(r) && (!isAllowedBrowserHost(r.Host, allowedHosts) || !isSameOriginBrowserRequest(r)) {
+		if isBrowserRequest(r) && (!isAllowedBrowserHost(r.Host, allowedHosts) || (!isSameOriginBrowserRequest(r) && !isSiblingPageNavigation(r))) {
 			rejectRequest(w, r, http.StatusForbidden, errors.New("browser requests must use an allowed MagicHandy origin"))
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isSiblingPageNavigation admits a top-level page load that another MagicHandy
+// port on the same host started, such as the main app's link to the Remote on
+// the next port. The browser shows the page without handing it to the page
+// that linked to it, and only the app shell lives outside /api/, so API
+// requests and pages from other sites keep the same-origin rule.
+func isSiblingPageNavigation(r *http.Request) bool {
+	header := func(name string) string { return strings.ToLower(strings.TrimSpace(r.Header.Get(name))) }
+	return (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
+		r.URL.Path != "/api" && !strings.HasPrefix(r.URL.Path, "/api/") &&
+		r.Header.Get("Origin") == "" &&
+		header("Sec-Fetch-Site") == "same-site" &&
+		header("Sec-Fetch-Mode") == "navigate" &&
+		header("Sec-Fetch-Dest") == "document"
 }
 
 func isAllowedBrowserHost(host string, allowedHosts []string) bool {

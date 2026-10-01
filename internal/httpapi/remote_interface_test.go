@@ -144,6 +144,51 @@ func TestRemoteLogoutDoesNotClearMainCookie(t *testing.T) {
 	}
 }
 
+// siblingPageLoad is what a browser sends when a link on another MagicHandy
+// port opens this one, such as the main app's Remote menu item.
+func siblingPageLoad(method, host, path string, headers map[string]string) *http.Request {
+	r := httptest.NewRequest(method, "http://"+host+path, nil)
+	r.Header.Set("Sec-Fetch-Site", "same-site")
+	r.Header.Set("Sec-Fetch-Mode", "navigate")
+	r.Header.Set("Sec-Fetch-Dest", "document")
+	r.Header.Set("Sec-Fetch-User", "?1")
+	for name, value := range headers {
+		r.Header.Set(name, value)
+	}
+	return r
+}
+
+func TestSiblingPortLinksOpenThePageButAPIsStaySameOrigin(t *testing.T) {
+	s := newTestServer(t)
+	for host, handler := range map[string]http.Handler{
+		"127.0.0.1:49717": s.Handler(),
+		"127.0.0.1:49718": s.RemoteHandler(RemoteInterfaceOptions{}),
+	} {
+		t.Run(host, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, siblingPageLoad(http.MethodGet, host, "/", nil))
+			if w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
+				t.Fatalf("page opened from the sibling port: %d %q %s", w.Code, w.Header().Get("Content-Type"), w.Body.String())
+			}
+			for name, r := range map[string]*http.Request{
+				"API page load":    siblingPageLoad(http.MethodGet, host, "/api/auth/status", nil),
+				"form post":        siblingPageLoad(http.MethodPost, host, "/", nil),
+				"other site":       siblingPageLoad(http.MethodGet, host, "/", map[string]string{"Sec-Fetch-Site": "cross-site"}),
+				"script fetch":     siblingPageLoad(http.MethodGet, host, "/", map[string]string{"Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty"}),
+				"frame":            siblingPageLoad(http.MethodGet, host, "/", map[string]string{"Sec-Fetch-Dest": "iframe"}),
+				"with an Origin":   siblingPageLoad(http.MethodGet, host, "/", map[string]string{"Origin": "http://127.0.0.1:49717"}),
+				"rebound hostname": siblingPageLoad(http.MethodGet, "attacker.example:49718", "/", nil),
+			} {
+				w := httptest.NewRecorder()
+				handler.ServeHTTP(w, r)
+				if w.Code != http.StatusForbidden {
+					t.Errorf("%s: status %d, want %d", name, w.Code, http.StatusForbidden)
+				}
+			}
+		})
+	}
+}
+
 func TestRemoteInterfaceRejectsMainOriginButKeepsPublicStop(t *testing.T) {
 	s, _, _, _, _ := newRemoteFixture(t)
 	r := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:49718/api/motion/stop", strings.NewReader(`{}`))
