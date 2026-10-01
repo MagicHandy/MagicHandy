@@ -11,9 +11,10 @@ described in [ADR 0038](decisions/0038-freestyle-stroke-stream.md).
 | --- | --- | --- |
 | P1 | A settled ramp was compacted before the playhead, although neighboring timing and event blocks still read its earlier controls. Seed 1 at stroke 23 changed its lower turn from 81.846 to 62.333. | Retain the full surrounding timing and event-control context. Exact overlapping-stroke and compaction regressions cover multiple seeds and window starts. |
 | P2 | Select Intense, then edit Focus while the preset write is pending. The next Custom write restores Balanced pace, length and variety. | Serialize writes and merge only queued edited fields onto the acknowledged backend preset. |
-| P2 | Choose a one-minute Cooldown after more than a minute of Steady motion. It immediately reports finished and queues the end. | Each newly selected shape starts its own active-time arc. A completed wind-down remains terminal and reports its applied shape honestly. |
+| P2 | Choose a one-minute Cooldown after more than a minute of Steady motion, including a preference update between the tick's clock and planning reads. It immediately reports finished and queues the end. | Each planning snapshot reconciles its selected shape with a fresh active-time arc. A deterministic regression forces the update between reads. A completed wind-down remains terminal and reports its applied shape honestly. |
 | P2 | Older settings with Gentle or Intense would acquire Balanced Freestyle preferences. | Preserve the previously saved motion style when introducing the new section. |
 | Gate | Missing route admission entry, seven lint findings and an oversized API types file. | Add the controller-only policy, focused validation/test helpers and a separate Freestyle types file. Keep all gates enabled. |
+| Test | Linux race CI sometimes observed Cooldown's inactive status before its completion trace was appended after loop teardown. | Wait separately for the completion trace; both assertions remain required, with bounded waits. Production lifecycle ordering is unchanged. |
 
 The full race run also reproduced the stalled-content timeout already reviewed
 in PR #290. This branch carries its test-only bound fix from `050be97d`: socket
@@ -72,6 +73,9 @@ Real Cloud/Bluetooth/Intiface latency and felt acceptance remain open under R1.
 - Full `go test ./...`, Windows `go test -race -timeout 20m ./...`, `go vet`,
   `golangci-lint` and `CGO_ENABLED=0` build pass. The full HTTP API race package
   completed in 306.833 s locally; architecture and goleak gates remain enabled.
+- All Freestyle mode tests pass 100 consecutive race-enabled runs after the
+  forced mid-tick preference regression and completion-signal synchronization.
+  The full mode race package, vet and lint also pass after those fixes.
 - Typechecking, five-locale checks, all 757 frontend tests in 99 files and the
   canonical production UI build pass. No second shipping UI or stale bundle
   is introduced. Budgets are recorded in the scorecard.

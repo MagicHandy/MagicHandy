@@ -73,16 +73,18 @@ func TestFreestylePreferenceChangeRampsAfterQueuedMotion(t *testing.T) {
 	clock := &fakeClock{now: time.Unix(0, 0)}
 	preferences := defaultFreestylePreferences()
 	manager, _ := newFreestyleTestManager(t, engine, clock, preferences)
+	manager.options.Tick = time.Hour
 	if _, err := manager.Start(context.Background(), ModeFreestyle); err != nil {
 		t.Fatal(err)
 	}
-	waitForAutonomousStart(t, manager, engine)
+	manager.tickFreestyle(t.Context(), ModeFreestyle)
 	clock.Advance(20 * time.Second) // 25 strokes into the first window.
+	manager.tickFreestyle(t.Context(), ModeFreestyle)
 
 	preferences.update(func(settings *config.FreestyleSettings, _ *config.MotionSettings) {
 		settings.Feel, settings.PacePercent, settings.FocusPercent = config.FreestyleFeelCustom, 90, 80
 	})
-	waitFor(t, time.Second, func() bool { return retargetCount(engine) == 1 })
+	manager.tickFreestyle(t.Context(), ModeFreestyle)
 	flow := lastFreestyleTarget(engine)
 	window := flow.Freestyle
 	// The playhead is at stroke 25; the fake engine can edit from stroke 28.
@@ -97,7 +99,7 @@ func TestFreestylePreferenceChangeRampsAfterQueuedMotion(t *testing.T) {
 		t.Fatalf("queued history changed: %+v", window.Keyframes[0])
 	}
 	// Nothing further changes until the window runs low.
-	time.Sleep(20 * time.Millisecond)
+	manager.tickFreestyle(t.Context(), ModeFreestyle)
 	if retargetCount(engine) != 1 {
 		t.Fatalf("an unchanged stream was re-planned: %d retargets", retargetCount(engine))
 	}
@@ -139,9 +141,13 @@ func TestFreestyleCooldownComesToRestAndEnds(t *testing.T) {
 		t.Fatalf("cooldown did not plan its descent: %+v", start.Keyframes)
 	}
 	// The shape clock advances at most five seconds per tick.
-	for range 14 {
+	for step := 1; step <= 14; step++ {
 		clock.Advance(5 * time.Second)
-		time.Sleep(10 * time.Millisecond)
+		waitFor(t, time.Second, func() bool {
+			manager.mu.Lock()
+			defer manager.mu.Unlock()
+			return manager.freestyle.active >= time.Duration(step)*5*time.Second
+		})
 	}
 	waitFor(t, time.Second, func() bool {
 		flow := lastFreestyleTarget(engine)
@@ -160,13 +166,16 @@ func TestFreestyleCooldownComesToRestAndEnds(t *testing.T) {
 	if starts, _ := engine.counts(); starts != 1 {
 		t.Fatalf("a finished cooldown restarted: %d starts", starts)
 	}
-	found := false
-	for _, row := range traces.Rows() {
-		found = found || (row.Reason == "mode_stopped" && row.Planner != nil && row.Planner.Note == "freestyle_complete")
-	}
-	if !found {
-		t.Fatal("completion was not traced")
-	}
+	// Inactive is published before teardown drains the loop and appends its
+	// completion trace. Wait for that separate completion signal as well.
+	waitFor(t, time.Second, func() bool {
+		for _, row := range traces.Rows() {
+			if row.Reason == "mode_stopped" && row.Planner != nil && row.Planner.Note == "freestyle_complete" {
+				return true
+			}
+		}
+		return false
+	})
 }
 
 func TestFreestyleRecoveryResumesTheStreamFromRest(t *testing.T) {
@@ -199,20 +208,33 @@ func TestFreestyleShapeChangeBeginsANewArc(t *testing.T) {
 	clock := &fakeClock{now: time.Unix(0, 0)}
 	preferences := defaultFreestylePreferences()
 	manager, _ := newFreestyleTestManager(t, engine, clock, preferences)
+	// Drive ticks explicitly so the preference change can land between the
+	// tick's clock read and its planning read, rather than relying on timing.
+	manager.options.Tick = time.Hour
 	if _, err := manager.Start(t.Context(), ModeFreestyle); err != nil {
 		t.Fatal(err)
 	}
-	waitForAutonomousStart(t, manager, engine)
+	manager.tickFreestyle(t.Context(), ModeFreestyle)
 	for range 16 {
 		clock.Advance(5 * time.Second)
-		time.Sleep(10 * time.Millisecond)
+		manager.tickFreestyle(t.Context(), ModeFreestyle)
 	}
-	preferences.update(func(settings *config.FreestyleSettings, _ *config.MotionSettings) {
-		settings.Shape, settings.ShapeMinutes = config.FreestyleShapeCooldown, 1
-	})
-	waitFor(t, time.Second, func() bool {
-		return lastFreestyleTarget(engine).Freestyle.Keyframes[len(lastFreestyleTarget(engine).Freestyle.Keyframes)-1].Controls.EnergyPercent < 100
-	})
+	reads := 0
+	manager.options.FreestyleSettings = func() config.FreestyleSettings {
+		settings := preferences.get()
+		reads++
+		if reads == 1 {
+			preferences.update(func(next *config.FreestyleSettings, _ *config.MotionSettings) {
+				next.Shape, next.ShapeMinutes = config.FreestyleShapeCooldown, 1
+			})
+		}
+		return settings
+	}
+	manager.tickFreestyle(t.Context(), ModeFreestyle)
+	window := lastFreestyleTarget(engine).Freestyle
+	if window.EndStroke != 0 || window.Keyframes[len(window.Keyframes)-1].Controls.EnergyPercent >= 100 {
+		t.Fatalf("new cooldown should begin its descent without ending: %+v", window)
+	}
 	status := manager.Status().Freestyle
 	if status == nil || status.Ending || status.ShapeProgressPercent != 0 || status.EnergyPercent != 100 {
 		t.Fatalf("new cooldown inherited the old session clock: %+v", status)

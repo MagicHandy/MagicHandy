@@ -146,6 +146,12 @@ func (m *Manager) syncFreestyleShapeClock() {
 	preferences := m.freestylePreferences()
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.syncFreestyleShapeClockLocked(preferences)
+}
+
+// Reconcile each planning snapshot as well: preferences can change after the
+// tick's initial clock read, before it reads the controls for the next window.
+func (m *Manager) syncFreestyleShapeClockLocked(preferences config.FreestyleSettings) {
 	if m.freestyle.endStroke == 0 && m.freestyle.clockShape != preferences.Shape {
 		m.freestyle.clockShape = preferences.Shape
 		m.freestyle.active, m.freestyle.plannedAt = 0, 0
@@ -259,6 +265,7 @@ func (m *Manager) freestyleReplanReason(progress *motion.FreestyleProgress) stri
 	preferences := m.freestylePreferences()
 	basis := m.freestyleBasisFor(preferences)
 	m.mu.Lock()
+	m.syncFreestyleShapeClockLocked(preferences)
 	state := m.freestyle
 	m.mu.Unlock()
 	switch {
@@ -290,6 +297,7 @@ func (m *Manager) freestyleBasisFor(preferences config.FreestyleSettings) freest
 func (m *Manager) planFreestyleStart() freestylePlan {
 	preferences := m.freestylePreferences()
 	m.mu.Lock()
+	m.syncFreestyleShapeClockLocked(preferences)
 	state := m.freestyle
 	m.mu.Unlock()
 	from := 0
@@ -310,6 +318,7 @@ func (m *Manager) planFreestyleStart() freestylePlan {
 func (m *Manager) planFreestyleWindow(progress motion.FreestyleProgress) freestylePlan {
 	preferences := m.freestylePreferences()
 	m.mu.Lock()
+	m.syncFreestyleShapeClockLocked(preferences)
 	state := m.freestyle
 	state.keyframes = append([]motion.FreestyleKeyframe(nil), m.freestyle.keyframes...)
 	m.mu.Unlock()
