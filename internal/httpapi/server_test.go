@@ -585,7 +585,7 @@ func TestMissingAssetReturnsNotFound(t *testing.T) {
 }
 
 func TestServerStartupPrunesMediaOutsideConfiguredLocations(t *testing.T) {
-	store, err := config.OpenStore(t.TempDir())
+	store, err := openTestStore(t)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -645,7 +645,7 @@ func newTestServerWithRuntime(t *testing.T, runtime Runtime) *Server {
 	if runtime.Transport == nil {
 		runtime.Transport = transport.NewFake()
 	}
-	store, err := config.OpenStore(t.TempDir())
+	store, err := openTestStore(t)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}

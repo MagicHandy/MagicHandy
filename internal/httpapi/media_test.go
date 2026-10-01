@@ -24,7 +24,7 @@ func TestMediaAutoScanStartsAfterPersistentDomainsOpen(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "startup.mp4"), []byte("video"), 0o600); err != nil {
 		t.Fatalf("write video: %v", err)
 	}
-	store, err := config.OpenStore(t.TempDir())
+	store, err := openTestStore(t)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestMediaAutoScanRemainsOptIn(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "manual.mp4"), []byte("video"), 0o600); err != nil {
 		t.Fatalf("write video: %v", err)
 	}
-	store, err := config.OpenStore(t.TempDir())
+	store, err := openTestStore(t)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}

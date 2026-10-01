@@ -854,7 +854,7 @@ func TestVoiceWorkersAutoloadFromPersistedSettings(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			store, err := config.OpenStore(t.TempDir())
+			store, err := openTestStore(t)
 			if err != nil {
 				t.Fatal(err)
 			}
