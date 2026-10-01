@@ -32,6 +32,10 @@ func (s *Server) newModeManager() (*modes.Manager, error) {
 			settings, _ := s.store.Snapshot()
 			return settings.Motion
 		},
+		FreestyleSettings: func() config.FreestyleSettings {
+			settings, _ := s.store.Snapshot()
+			return settings.Freestyle
+		},
 		AutopilotSettings: func() config.AutopilotSettings {
 			settings, _ := s.store.Snapshot()
 			return settings.Autopilot
@@ -81,6 +85,42 @@ func (s *Server) handleAutopilotPreferences(w http.ResponseWriter, r *http.Reque
 	if runtimeErr != nil {
 		status = http.StatusBadGateway
 		payload["error"] = "Autopilot preferences were saved, but the active runtime could not apply them"
+	}
+	writeJSON(w, status, payload)
+}
+
+// handleFreestylePreferences saves Freestyle's feel, controls and shape. A
+// running stream reads them on its next tick and eases into them after the
+// motion already queued; nothing here touches the engine directly.
+func (s *Server) handleFreestylePreferences(w http.ResponseWriter, r *http.Request) {
+	if !s.requireController(w, r) {
+		return
+	}
+	var preferences config.FreestyleSettings
+	if err := decodeJSON(r, &preferences); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var updateErr error
+	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
+		current.Freestyle = preferences
+		var next config.Settings
+		next, updateErr = config.NormalizeSettings(current)
+		return next, updateErr
+	})
+	if updateErr != nil {
+		writeError(w, http.StatusBadRequest, updateErr)
+		return
+	}
+	if saveErr != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("freestyle preferences could not be saved"))
+		return
+	}
+	payload := map[string]any{"freestyle": saved.Freestyle}
+	status := http.StatusOK
+	if runtimeErr != nil {
+		status = http.StatusBadGateway
+		payload["error"] = "Freestyle preferences were saved, but the active runtime could not apply them"
 	}
 	writeJSON(w, status, payload)
 }

@@ -71,7 +71,9 @@ const (
 	speedJitterBandPortion = 0.20
 )
 
-// Planner deterministically builds freestyle segments. Given the same seed,
+// Planner deterministically builds pattern segments for Autopilot's
+// fallback when a model decision fails. Freestyle no longer uses it; it plays
+// the generated stroke stream in freestyle_stream.go. Given the same seed,
 // style, and settings, the segment sequence is reproducible; the seed and all
 // candidate scores are recorded in planner trace rows.
 type Planner struct {
@@ -81,7 +83,7 @@ type Planner struct {
 	segment int
 }
 
-// NewPlanner seeds the freestyle planner; a zero seed uses the clock and the
+// NewPlanner seeds the segment planner; a zero seed uses the clock and the
 // effective seed stays visible in every decision row.
 func NewPlanner(seed int64) *Planner {
 	if seed == 0 {

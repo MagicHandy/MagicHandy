@@ -1,7 +1,7 @@
 package config
 
 func publicSettingsOptionHints() PublicSettingsOptionHints {
-	return PublicSettingsOptionHints{
+	return withFreestyleOptionHints(PublicSettingsOptionHints{
 		HSPDispatchOwners: []string{
 			DispatchOwnerCloudREST,
 			DispatchOwnerBrowserBluetooth,
@@ -98,7 +98,14 @@ func publicSettingsOptionHints() PublicSettingsOptionHints {
 			LocaleJapanese,
 		},
 		Themes: SupportedUIThemes(),
-	}
+	})
+}
+
+func withFreestyleOptionHints(hints PublicSettingsOptionHints) PublicSettingsOptionHints {
+	hints.FreestyleFeels = []string{FreestyleFeelGentle, FreestyleFeelBalanced, FreestyleFeelIntense, FreestyleFeelCustom}
+	hints.FreestyleAccents = []string{FreestyleAccentEven, FreestyleAccentTip, FreestyleAccentBase}
+	hints.FreestyleShapes = []string{FreestyleShapeSteady, FreestyleShapeBuild, FreestyleShapeWaves, FreestyleShapeEdge, FreestyleShapeCooldown}
+	return hints
 }
 
 func voiceTTSProviderOptions() []string {

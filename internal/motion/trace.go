@@ -51,6 +51,7 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 		}
 	}
 	if e.running && e.plan.ID != "" {
+		state.Freestyle = e.plan.freestyleProgress(playbackMillis, e.nextSampleMillis)
 		current := e.currentSample
 		if !e.starting {
 			live := sampleMotionPath(e.plan, e.transition, playbackMillis)

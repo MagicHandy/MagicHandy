@@ -125,6 +125,9 @@ type ActiveMotionState struct {
 	// Perceptual is backend planning context. It stays out of the 8 Hz motion
 	// SSE snapshot; Autopilot records the compact values in decision traces.
 	Perceptual PerceptualSummary `json:"-"`
+	// Freestyle locates the playhead in a running Freestyle window for the
+	// mode manager. It is planning context and stays out of client snapshots.
+	Freestyle *FreestyleProgress `json:"-"`
 }
 
 // NewEngine creates a motion engine bound to one transport dispatcher.

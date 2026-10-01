@@ -252,9 +252,12 @@ func (p MotionPlan) retargetFromState(
 		preserved = false
 	}
 	if !preserved {
-		if p.Target.Flow != nil && p.Target.Flow.Gesture != nil && target.Flow != nil && target.Flow.Gesture != nil {
+		switch {
+		case target.Flow != nil && target.Flow.Freestyle != nil:
+			target, phase = chooseFreestylePhase(p, target, settings, streamMillis, currentPosition, currentDirection, currentVelocity)
+		case p.Target.Flow != nil && p.Target.Flow.Gesture != nil && target.Flow != nil && target.Flow.Gesture != nil:
 			phase = chooseGesturePhase(p, target, settings, streamMillis, currentPosition, currentDirection, currentVelocity)
-		} else {
+		default:
 			phase = chooseNearestPhase(target, settings, currentPosition, currentDirection, currentVelocity)
 		}
 	}

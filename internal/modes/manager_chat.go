@@ -127,7 +127,6 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 		m.motion.planAt = m.motion.deadline.Add(-m.planningLeadLocked(duration))
 		m.motion.pending = nil
 		m.motion.swayPoints = nil
-		m.motion.driftDone = true
 		m.motion.nextRetry = time.Time{}
 		if segment.SpeedPercent != previousSpeed {
 			m.history.previousSpeed = previousSpeed

@@ -58,8 +58,6 @@ type motionScheduleState struct {
 	segment          Segment
 	pattern          *motion.PatternDefinition
 	deadline         time.Time
-	driftAt          time.Time
-	driftDone        bool
 	nextRetry        time.Time
 	segmentIdx       int
 	planAt           time.Time

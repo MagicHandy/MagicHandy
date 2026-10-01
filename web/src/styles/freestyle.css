@@ -1,0 +1,51 @@
+/* Freestyle preferences on the Preset modes route: a feel, five named-stop
+   tendencies, an accent and the visible session shape. */
+.freestyle-preferences {
+  display: grid;
+  gap: 14px;
+  margin: 6px 0 0;
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.freestyle-scales {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 12px 28px;
+}
+
+.freestyle-scale .setpoint-scale {
+  height: 34px;
+}
+
+.freestyle-scale .setpoint-stop {
+  max-width: 22%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.freestyle-window {
+  display: grid;
+  grid-template-columns: auto 72px auto;
+  align-items: center;
+  justify-content: start;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.freestyle-window input[type="number"] {
+  min-width: 0;
+  padding: 6px;
+  text-align: center;
+}
+
+.freestyle-hint {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.freestyle-shape-status {
+  color: var(--text);
+}

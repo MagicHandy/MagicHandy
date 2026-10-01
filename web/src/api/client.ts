@@ -10,6 +10,7 @@ import type { RemoteClaim, RemoteCommand, RemoteCommandInput, RemotePresence, Re
 import type {
   AppState,
   AutopilotSettings,
+  FreestyleSettings,
   ChatStreamEvent,
   MemoryState,
   MotionStyle,
@@ -901,6 +902,8 @@ export const api = {
   voiceTranscribe: (audio: Blob, format: string, stopSequence?: number, signal?: AbortSignal) => uploadVoiceTranscription(audio, format, stopSequence, signal),
   saveVoicePreferences: (speak_replies: boolean) =>
     request<{ speak_replies: boolean }>("PUT", "/api/voice/preferences", { speak_replies }),
+  saveFreestylePreferences: (freestyle: FreestyleSettings) =>
+    request<{ freestyle: FreestyleSettings }>("PUT", "/api/modes/freestyle/preferences", freestyle),
   saveAutopilotPreferences: (autopilot: AutopilotSettings) =>
     request<{ autopilot: AutopilotSettings }>("PUT", "/api/modes/autopilot/preferences", autopilot),
   saveVoiceInputPreferences: (patch: Partial<{

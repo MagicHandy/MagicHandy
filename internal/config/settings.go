@@ -245,6 +245,7 @@ type Settings struct {
 	Media       MediaSettings       `json:"media"`
 	Device      DeviceSettings      `json:"device"`
 	Motion      MotionSettings      `json:"motion"`
+	Freestyle   FreestyleSettings   `json:"freestyle"`
 	Autopilot   AutopilotSettings   `json:"autopilot"`
 	LLM         LLMSettings         `json:"llm"`
 	Voice       VoiceSettings       `json:"voice"`
@@ -543,6 +544,7 @@ type PublicSettings struct {
 	Media       MediaSettings             `json:"media"`
 	Device      PublicDeviceSettings      `json:"device"`
 	Motion      MotionSettings            `json:"motion"`
+	Freestyle   FreestyleSettings         `json:"freestyle"`
 	Autopilot   AutopilotSettings         `json:"autopilot"`
 	LLM         LLMSettings               `json:"llm"`
 	Voice       PublicVoiceSettings       `json:"voice"`
@@ -567,6 +569,9 @@ type PublicSettingsOptionHints struct {
 	APIApplicationIDSources []string `json:"api_application_id_sources"`
 	DiagnosticsVerbosities  []string `json:"diagnostics_verbosities"`
 	MotionStyles            []string `json:"motion_styles"`
+	FreestyleFeels          []string `json:"freestyle_feels"`
+	FreestyleAccents        []string `json:"freestyle_accents"`
+	FreestyleShapes         []string `json:"freestyle_shapes"`
 	HandyModels             []string `json:"handy_models"`
 	AutopilotSpeechCadences []string `json:"autopilot_speech_cadences"`
 	AutopilotMotionCadences []string `json:"autopilot_motion_cadences"`
@@ -660,6 +665,7 @@ type SettingsUpdate struct {
 	Media              *MediaUpdate        `json:"media,omitempty"`
 	Device             DeviceUpdate        `json:"device"`
 	Motion             MotionSettings      `json:"motion"`
+	Freestyle          *FreestyleSettings  `json:"freestyle,omitempty"`
 	Autopilot          *AutopilotSettings  `json:"autopilot,omitempty"`
 	LLM                LLMUpdate           `json:"llm"`
 	Voice              VoiceUpdate         `json:"voice"`
@@ -715,6 +721,7 @@ func DefaultSettings() Settings {
 			Style:            MotionStyleBalanced,
 			HandyModel:       HandyModelOriginal,
 		},
+		Freestyle: DefaultFreestyleSettings(),
 		Autopilot: DefaultAutopilotSettings(),
 		LLM: LLMSettings{
 			Provider:             LLMProviderLlamaCPP,
@@ -804,6 +811,7 @@ func (s Settings) Public() PublicSettings {
 			ConnectionKeySet:         s.Device.HandyConnectionKey != "",
 		},
 		Motion:      s.Motion,
+		Freestyle:   s.Freestyle,
 		Autopilot:   s.Autopilot,
 		LLM:         s.LLM,
 		Voice:       publicVoiceSettings(s.Voice),
@@ -896,6 +904,9 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	next.Device.APIApplicationIDSource = update.Device.APIApplicationIDSource
 	next.Device.APIApplicationIDOverride = strings.TrimSpace(update.Device.APIApplicationIDOverride)
 	next.Motion = update.Motion
+	if update.Freestyle != nil {
+		next.Freestyle = *update.Freestyle
+	}
 	if update.Autopilot != nil {
 		next.Autopilot = *update.Autopilot
 	}
@@ -1166,6 +1177,9 @@ func validateSettings(settings Settings) error {
 	if err := validateMotionSettings(settings.Motion); err != nil {
 		return err
 	}
+	if err := validateFreestyleSettings(settings.Freestyle); err != nil {
+		return err
+	}
 	if err := validateAutopilotSettings(settings.Autopilot); err != nil {
 		return err
 	}
@@ -1257,6 +1271,7 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Motion.StrokeMaxPercent == 0 {
 		settings.Motion.StrokeMaxPercent = defaults.Motion.StrokeMaxPercent
 	}
+	settings.Freestyle = applyMissingFreestyleDefaults(settings.Freestyle, settings.Motion.Style)
 	settings.Autopilot = applyMissingAutopilotDefaults(settings.Autopilot, defaults.Autopilot)
 	settings.LLM = applyMissingLLMDefaults(settings.LLM, defaults.LLM)
 	settings.Voice = applyMissingVoiceDefaults(settings.Voice, defaults.Voice)

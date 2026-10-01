@@ -1148,3 +1148,20 @@ single motion path with no per-source divergence; trace export as one click.
   clients, motion SSE, and dispatch-owner switch behavior.
 - `docs/goals-and-guardrails.md`: maintainability norms for `web/`.
 - `docs/risk-register.md`: R9 (UI regression) and R12 (frontend debt).
+
+
+## Freestyle controls (2026-10-01)
+
+The Preset Modes workspace exposes backend-owned Gentle/Balanced/Intense/Custom
+feels, named-stop controls for pace, stroke length, focus, roaming and variety,
+direction accent, and Steady/Slow build/Waves/Edge/Cooldown shapes. Edits save
+immediately and ease into unqueued strokes. A moved control becomes Custom; a
+named feel's actual values come from the backend acknowledgement. Pending edits
+merge only the fields changed while a request is in flight.
+
+Shape phase/progress is backend state and its clock freezes during pause. A new
+shape starts from zero. Slow build and Cooldown expose a 1–240-minute arc; queued
+wind-down is shown as Coming to rest and disables preferences until it ends.
+The global Emergency Stop remains outside the workspace and available offline
+and to read-only clients. Global motion style no longer changes Freestyle's
+separate preferences after upgrade initialization. See [ADR 0038](decisions/0038-freestyle-stroke-stream.md).
