@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
-	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
@@ -61,7 +60,7 @@ func authenticatedControlRequest(server *Server, cookie *http.Cookie, method, ro
 
 func newControllerSessionFixture(t *testing.T, providers ...llm.Provider) (*Server, *accounts.Store, accounts.Account, *http.Cookie) {
 	t.Helper()
-	settings, err := config.OpenStore(t.TempDir())
+	settings, err := openTestStore(t)
 	if err != nil {
 		t.Fatal(err)
 	}

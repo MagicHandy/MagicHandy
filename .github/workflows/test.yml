@@ -44,8 +44,9 @@ jobs:
       - name: Test
         run: go test ./...
 
-      # internal/httpapi needs more than the default 10-minute timeout under
-      # the race detector; see docs/goal-scorecard.md (2026-09-30).
+      # Headroom for slow runners: internal/httpapi once came close to the
+      # default 10-minute timeout under the race detector; see
+      # docs/goal-scorecard.md (2026-09-30, httpapi race test time).
       - name: Race test
         run: go test -race -timeout 20m ./...
 

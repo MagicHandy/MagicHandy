@@ -94,8 +94,9 @@ These are enforced in CI from Phase 1, not aspirational.
 - `golangci-lint run` (must include `staticcheck`, `gocyclo`/`funlen`,
   `depguard` for import boundaries)
 - `go test ./...`
-- `go test -race -timeout 20m ./...` (the HTTP package needs more than the
-  default 10 minutes under the race detector)
+- `go test -race -timeout 20m ./...` (headroom: the HTTP package came close to
+  the default 10 minutes under the race detector before its tests started from
+  a migrated datastore; it now takes a little over 3 minutes)
 - `CGO_ENABLED=0 go build ./cmd/magichandy`
 
 ### Pure-Go rule

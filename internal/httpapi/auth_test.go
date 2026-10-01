@@ -300,7 +300,7 @@ func TestAccountManagementIsAdminOnlyAndNeverRequiresGUI(t *testing.T) {
 
 func TestEmergencyStopRemainsAvailableWhenAuthenticationExpires(t *testing.T) {
 	fake := transport.NewFake()
-	store, err := config.OpenStore(t.TempDir())
+	store, err := openTestStore(t)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -324,7 +324,7 @@ func TestEmergencyStopRemainsAvailableWhenAuthenticationExpires(t *testing.T) {
 }
 
 func TestExistingAccountRequiresAuthenticationAfterRestart(t *testing.T) {
-	store, err := config.OpenStore(t.TempDir())
+	store, err := openTestStore(t)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
@@ -570,7 +570,7 @@ func TestLoginUsesGenericFailuresAndThrottlesPerUsername(t *testing.T) {
 
 func newAuthenticationTestServer(t *testing.T, required, secure bool, allowedHosts []string) (*Server, *accounts.Store) {
 	t.Helper()
-	store, err := config.OpenStore(t.TempDir())
+	store, err := openTestStore(t)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
