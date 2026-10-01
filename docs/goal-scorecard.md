@@ -15,9 +15,9 @@ Gzip figures use Node gzip level 9, matching the preceding checkpoint.
 | Artifact | Baseline | This checkpoint | Change |
 | --- | ---: | ---: | ---: |
 | Core binary | 23,022,080 B | 23,151,616 B | +129,536 B |
-| Main JS, raw / gzip-9 | 1,011,353 / 275,500 B | 1,015,603 / 277,127 B | +4,250 / +1,627 B |
-| Main CSS, raw / gzip-9 | 173,735 / 30,901 B | 174,425 / 31,016 B | +690 / +115 B |
-| All embedded assets | 2,581,775 B | 2,593,832 B | +12,057 B |
+| Main JS, raw / gzip-9 | 1,011,353 / 275,500 B | 1,015,603 / 277,128 B | +4,250 / +1,628 B |
+| Main CSS, raw / gzip-9 | 173,735 / 30,901 B | 174,553 / 31,039 B | +818 / +138 B |
+| All embedded assets | 2,581,775 B | 2,593,960 B | +12,185 B |
 
 The core remains below 30 MB. The existing main-bundle advisory remains enabled.
 The 81-case shared-plan matrix compiled windows in 1.499–11.113 ms (median

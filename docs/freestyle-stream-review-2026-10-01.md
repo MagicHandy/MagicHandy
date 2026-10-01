@@ -84,7 +84,9 @@ Real Cloud/Bluetooth/Intiface latency and felt acceptance remain open under R1.
   probe (572 ms) is also retained locally.
 - Browser checks cover a preset followed by a custom slider edit, starting
   Freestyle, changing the running shape from zero, and Emergency Stop returning
-  it to idle. Desktop and 390-pixel layouts keep the global Stop visible.
+  it to idle. Desktop, 390-pixel and 320-pixel layouts keep the global Stop
+  visible. Endpoint scale labels wrap within their available spacing at 320 pixels
+  instead of overlapping the adjacent label.
   Handoff leaves Preset Modes idle, with Balanced and Steady selected.
 
 ## Reproduction

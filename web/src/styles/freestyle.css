@@ -20,9 +20,14 @@
 }
 
 .freestyle-scale .setpoint-stop {
-  max-width: 22%;
+  max-width: min(22%, 4em);
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.freestyle-scale .setpoint-stop:first-child,
+.freestyle-scale .setpoint-stop:last-child {
+  max-width: calc(25% - 2em - 4px);
 }
 
 .freestyle-window {
