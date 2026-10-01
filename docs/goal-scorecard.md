@@ -1,5 +1,14 @@
 # Goal Scorecard
 
+## 2026-09-30 — Remote link and template file fixes
+
+The main app's Remote link opens the Remote again; see the
+[ADR 0033](decisions/0033-remote-listener-and-account-scope.md) amendment.
+Concurrent loads no longer fail when they install the Gemma 4 template fix on
+Windows. No dependency, asset or UI change. The Windows amd64 binary (Go 1.26.8,
+`CGO_ENABLED=0`, `-trimpath -ldflags -w`) grows from 23,020,032 B to
+23,022,080 B (+2,048 B).
+
 ## 2026-09-30 — Model test, template fixes, runtime updates and Easy setup
 
 This checkpoint adds the user-started model test and known Gemma 4 chat

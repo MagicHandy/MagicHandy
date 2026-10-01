@@ -120,7 +120,9 @@ HTTP Basic bridge is retired so logout cannot be defeated by a browser's
 separate native credential cache.
 
 Allowed browser origins remain exact scheme/host/port matches. In LAN mode the
-Host must also match the configured listen IP. The native host-path picker
+Host must also match the configured listen IP. (Amended 2026-09-30: a same-site
+top-level page load outside `/api/`, such as the main app's link to the Remote,
+may open the page; see [ADR 0033](0033-remote-listener-and-account-scope.md).) The native host-path picker
 remains loopback-only even for an authenticated LAN administrator because it
 opens UI and reveals paths on the server computer.
 

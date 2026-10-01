@@ -101,6 +101,9 @@ type ModelManager struct {
 	compatibilityMu sync.Mutex
 	compatibility   map[string]modelCompatibilityCacheEntry
 	templateFixMu   sync.Mutex
+	// templateFileMu serializes template file writes: Windows refuses to
+	// rename over a file that another caller is reading or replacing.
+	templateFileMu sync.Mutex
 }
 
 type modelCompatibilityCacheEntry struct {
