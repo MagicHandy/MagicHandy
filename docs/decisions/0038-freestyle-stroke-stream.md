@@ -2,7 +2,8 @@
 
 Date: 2026-10-01
 
-Status: Proposed for PR review
+Status: Accepted; implementation reviewed and merged in PR #291, with release
+requested on 2026-10-01.
 
 ## Context
 
