@@ -20,6 +20,8 @@ type preparedMotion struct {
 	referenceRate float64
 	acceleration  float64
 	jerk          float64
+	// stream indexes a Freestyle window's strokes; nil for other content.
+	stream *streamWindow
 }
 
 func preparedPlan(id string, target MotionTarget, settings config.MotionSettings, phase float64, handoff int64, created time.Time) MotionPlan {

@@ -227,6 +227,7 @@ control	PUT /api/chat/sessions/{id}/save
 host	PUT /api/library/auto-disable
 control	PUT /api/modes/autopilot/arc
 control	PUT /api/modes/autopilot/preferences
+control	PUT /api/modes/freestyle/preferences
 host	PUT /api/network
 host	PUT /api/prompt-sets/{id}
 host	PUT /api/settings

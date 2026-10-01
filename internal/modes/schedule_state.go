@@ -35,7 +35,6 @@ func postpone(clock *time.Time, by time.Duration) {
 
 func (s *motionScheduleState) postpone(by time.Duration) {
 	postpone(&s.deadline, by)
-	postpone(&s.driftAt, by)
 	postpone(&s.planAt, by)
 	for i := range s.swayPoints {
 		s.swayPoints[i].at = s.swayPoints[i].at.Add(by)

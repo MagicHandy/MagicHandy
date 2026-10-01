@@ -486,3 +486,13 @@ Response details and motion plots stay available without displacing the chat.
 - ADR 0004 (frontend strategy) and ADR 0009 (React frontend migration): the UI
   is now React, but still statically built, embedded, and offline at runtime;
   these guidelines add no external asset fetch.
+
+
+### Freestyle preferences (2026-10-01)
+
+The Preset Modes preferences reuse SegmentedChoice and SetpointSlider. Feel,
+accent and shape are categorical; pace, length, focus, roaming and variety are
+five named stops. The grid fits narrow panes and tick labels wrap within their
+allocated width. Keep actual values and active shape status backend-owned,
+serialize pending edits, and preserve the shared global Stop outside the route.
+See [ADR 0038](decisions/0038-freestyle-stroke-stream.md).

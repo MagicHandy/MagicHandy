@@ -19,6 +19,14 @@ func normalizeFlowTarget(target MotionTarget, settings config.MotionSettings) Mo
 	if len(target.Flow.Steps) == 0 && target.Flow.SpeedPercent != target.SpeedPercent {
 		target.Flow.SpeedPercent, target.prepared = target.SpeedPercent, nil
 	}
+	// A Freestyle stream keeps its pace band inside changed live limits rather
+	// than failing validation when the user narrows them mid-session.
+	if stream := target.Flow.Freestyle; stream != nil {
+		minimum := clamp(stream.MinSpeedPercent, settings.SpeedMinPercent, target.Flow.SpeedPercent)
+		if minimum != stream.MinSpeedPercent {
+			stream.MinSpeedPercent, target.prepared = minimum, nil
+		}
+	}
 	if target.prepared != nil {
 		target.PatternID, target.PatternName = PatternID(target.prepared.id), target.prepared.name
 	} else {

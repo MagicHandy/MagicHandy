@@ -4,6 +4,8 @@
 // chaining. See docs/decisions/0009-react-frontend.md (State Model Rules).
 
 import type { SetupAssessment } from "./setup-assessment-types";
+import type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
+export type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { AccountCapabilities } from "./access-types";
 export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus, InternetDiscovery, CertificatePreparation } from "./access-types";
 
@@ -21,6 +23,7 @@ export interface MotionSettings {
   style: string;
   handy_model: HandyModel | string;
 }
+
 
 export interface AutopilotSettings {
   speech_cadence: "off" | "quiet" | "natural" | "talkative" | "custom" | string;
@@ -529,6 +532,7 @@ export interface ModesStatus {
   // Absent while the user has the bar switched off, so the UI renders nothing
   // rather than an empty bar.
   session_arc?: SessionArc;
+  freestyle?: FreestyleStatus;
   [k: string]: unknown;
 }
 
@@ -1015,6 +1019,9 @@ export interface OptionHints {
   api_application_id_sources?: string[];
   diagnostics_verbosities?: string[];
   motion_styles?: string[];
+  freestyle_feels?: string[];
+  freestyle_accents?: string[];
+  freestyle_shapes?: string[];
   handy_models?: HandyModel[];
   autopilot_speech_cadences?: string[];
   autopilot_motion_cadences?: string[];
@@ -1064,6 +1071,7 @@ export interface PublicSettings {
     connection_key_set: boolean;
   };
   motion: MotionSettings;
+  freestyle?: FreestyleSettings;
   autopilot: AutopilotSettings;
   llm: {
     provider: string;

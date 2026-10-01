@@ -50,6 +50,9 @@ type Options struct {
 	Current func() Engine
 	// Settings returns the current motion settings snapshot.
 	Settings func() config.MotionSettings
+	// FreestyleSettings returns Freestyle's durable preferences; nil uses
+	// the defaults.
+	FreestyleSettings func() config.FreestyleSettings
 	// AutopilotSettings returns durable cadence and speech-authority settings.
 	AutopilotSettings func() config.AutopilotSettings
 	// MotionGenerationMode keeps Autopilot fallback inside the selected model
@@ -106,6 +109,8 @@ type Status struct {
 	// Arc is the visible session progression bar. Absent when the user has the
 	// switch off, so the UI shows nothing rather than an empty bar.
 	Arc *SessionArc `json:"session_arc,omitempty"`
+	// Freestyle is the running stream's feel and visible session shape.
+	Freestyle *FreestyleStatus `json:"freestyle,omitempty"`
 }
 
 // Manager owns at most one active mode loop.
@@ -121,6 +126,7 @@ type Manager struct {
 	motion        motionScheduleState
 	speech        speechScheduleState
 	history       motionHistoryState
+	freestyle     freestyleState
 	events        modeEventState
 }
 
@@ -314,92 +320,6 @@ func (m *Manager) tickAutonomous(ctx context.Context, mode string) {
 	m.tickFreestyle(ctx, mode)
 }
 
-// tickFreestyle advances the deterministic segment and drift clocks.
-func (m *Manager) tickFreestyle(ctx context.Context, mode string) {
-	if ctx.Err() != nil || !m.modeActive(mode) {
-		return
-	}
-	engine := m.options.Current()
-	var snapshot motion.ActiveMotionState
-	if engine != nil {
-		snapshot = engine.Snapshot()
-	}
-
-	// A user pause suspends planning entirely: the segment clock freezes and
-	// nothing restarts motion until the user resumes.
-	if m.freezeIfPaused(mode, snapshot.Paused) {
-		return
-	}
-	m.thawDeadline()
-
-	if !snapshot.Running {
-		m.mu.Lock()
-		stopped := m.user.stopped
-		retryAt := m.motion.nextRetry
-		generation := m.loop.generation
-		m.mu.Unlock()
-		if stopped {
-			// The user stopped motion; the autonomous mode ends rather than
-			// fighting it.
-			go m.Stop("user_stop_observed")
-			return
-		}
-		if m.options.Now().Before(retryAt) {
-			return
-		}
-		m.startNextSegment(ctx, mode, mode+"_start", generation)
-		return
-	}
-
-	now := m.options.Now()
-	m.mu.Lock()
-	deadline := m.motion.deadline
-	driftAt := m.motion.driftAt
-	driftDone := m.motion.driftDone
-	segment := m.motion.segment
-	pattern := m.motion.pattern
-	retryAt := m.motion.nextRetry
-	generation := m.loop.generation
-	m.mu.Unlock()
-
-	if !driftDone && now.After(driftAt) {
-		operationCtx, finish, ok := m.beginStartOperation(ctx, mode, generation, 0)
-		if !ok {
-			return
-		}
-		defer finish()
-		if target, ok := segment.DriftTarget(modeLabel(mode), mode); ok {
-			target.Pattern = pattern
-			if _, err := engine.ApplyTarget(operationCtx, target, mode+"_drift"); err == nil {
-				if m.modeGenerationActive(mode, generation) {
-					m.trace(mode, "segment_drift", &diagnostics.MotionTracePlanner{
-						Mode:              mode,
-						Event:             "segment_drift",
-						PatternIdentifier: segmentContentIdentifier(segment),
-						DriftToPercent:    segment.DriftToSpeedPercent,
-					}, "")
-				}
-			}
-		}
-		if operationCtx.Err() != nil {
-			return
-		}
-		m.mu.Lock()
-		if m.loop.mode == mode && m.loop.generation == generation && !m.chat.pending {
-			m.motion.driftDone = true
-		}
-		m.mu.Unlock()
-		return
-	}
-
-	if now.After(deadline) {
-		if now.Before(retryAt) {
-			return
-		}
-		m.applyNextSegment(ctx, engine, mode, mode+"_segment", generation)
-	}
-}
-
 // startNextSegment starts the engine on a fresh segment (first start or
 // recovery restart). The engine loop must outlive the mode loop — stopping
 // a mode is a planning decision, and the explicit engine stop is a separate,
@@ -445,31 +365,6 @@ func (m *Manager) startNextSegment(ctx context.Context, mode string, reason stri
 	m.finishSegmentChoice(operationCtx, mode, reason, choice, state.RecentCommandLatencyMillis, generation)
 }
 
-// applyNextSegment retargets the running stream to the next segment.
-// Transitions ride the engine's phase-preserving / low-jump handoff — modes
-// never replace streams or touch transport.
-func (m *Manager) applyNextSegment(ctx context.Context, engine Engine, mode string, reason string, generation uint64) {
-	operationCtx, finish, ok := m.beginStartOperation(ctx, mode, generation, 0)
-	if !ok {
-		return
-	}
-	defer finish()
-
-	choice := m.nextSegmentChoice(operationCtx, mode)
-	if operationCtx.Err() != nil || !m.modeGenerationActive(mode, generation) {
-		return
-	}
-	state, err := engine.ApplyTarget(operationCtx, m.choiceTarget(mode, choice), reason)
-	if err != nil {
-		if operationCtx.Err() == nil {
-			m.backoff(mode, generation, "segment_failed", err)
-		}
-		return
-	}
-	choice.appliedPerceptual = clonePerceptualSummary(state.Perceptual)
-	m.finishSegmentChoice(operationCtx, mode, reason, choice, state.RecentCommandLatencyMillis, generation)
-}
-
 // choiceTarget builds the engine target for one segment choice, attaching any
 // resolved library pattern definition from an Autopilot curation decision.
 func (m *Manager) choiceTarget(mode string, choice segmentChoice) motion.MotionTarget {
@@ -480,18 +375,10 @@ func (m *Manager) choiceTarget(mode string, choice segmentChoice) motion.MotionT
 	return target
 }
 
-// finishSegmentChoice arms a first/recovered segment. Autopilot uses its own
-// cadence scheduler; Freestyle keeps the segment-duration clock.
-func (m *Manager) finishSegmentChoice(_ context.Context, mode string, reason string, choice segmentChoice, recentLatencyMillis int64, generation uint64) {
-	if mode == ModeAutopilot {
-		if !m.armAutopilotChoice(mode, &choice, generation) {
-			return
-		}
-		m.rememberChoice(mode, choice)
-		m.tracePlanned(mode, reason, choice)
-		return
-	}
-	if !m.armSegment(mode, choice.segment, choice.pattern, recentLatencyMillis, generation) {
+// finishSegmentChoice arms Autopilot's first or recovered segment on its own
+// cadence scheduler. Freestyle plays a stroke stream and has no segments.
+func (m *Manager) finishSegmentChoice(_ context.Context, mode string, reason string, choice segmentChoice, _ int64, generation uint64) {
+	if !m.armAutopilotChoice(mode, &choice, generation) {
 		return
 	}
 	m.rememberChoice(mode, choice)
@@ -509,38 +396,6 @@ func (m *Manager) nextPlannedSegment() (Segment, []diagnostics.PlannerScore) {
 		m.mu.Unlock()
 	}
 	return planner.NextSegment(m.options.Settings())
-}
-
-func (m *Manager) armSegment(mode string, segment Segment, pattern *motion.PatternDefinition, recentLatencyMillis int64, generation uint64) bool {
-	duration := time.Duration(segment.DurationMillis) * time.Millisecond
-	latencyFloor := time.Duration(max(int64(0), recentLatencyMillis))*time.Millisecond + modeDwellPadding
-	if latencyFloor > maximumLatencyDwell {
-		latencyFloor = maximumLatencyDwell
-	}
-	if duration < latencyFloor {
-		duration = latencyFloor
-	}
-	if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
-		duration = m.options.MaxSegmentDuration
-	}
-	now := m.options.Now()
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.loop.mode != mode || m.loop.generation != generation || m.user.stopped || m.user.paused || m.chat.pending {
-		return false
-	}
-	m.motion.segment = segment
-	m.motion.pattern = pattern
-	m.motion.segmentIdx++
-	m.motion.deadline = now.Add(duration)
-	if segment.DriftToSpeedPercent != 0 {
-		m.motion.driftAt = now.Add(duration / 2)
-		m.motion.driftDone = false
-	} else {
-		m.motion.driftDone = true
-	}
-	m.motion.nextRetry = time.Time{}
-	return true
 }
 
 func (m *Manager) modeActive(mode string) bool {
