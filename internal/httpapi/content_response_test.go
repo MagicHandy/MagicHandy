@@ -77,9 +77,12 @@ func TestStalledContentReleasesRequestCapacityOnHTTP1AndHTTP2(t *testing.T) {
 			}
 			// Deliberately do not read the large response. Flow control/socket
 			// buffers eventually fill and the per-write deadline must release it.
+			// Filling them can take several seconds before the 5 s deadline
+			// even starts under -race on a slow runner, so the bound is
+			// generous; a handler that is never released still fails.
 			select {
 			case <-done:
-			case <-time.After(8 * time.Second):
+			case <-time.After(20 * time.Second):
 				t.Fatal("stalled reader retained its handler")
 			}
 			if s.requestAdmission.snapshot()[ordinaryLane].Active != 0 {
