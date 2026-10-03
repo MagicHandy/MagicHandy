@@ -2,15 +2,39 @@
 
 ## Status
 
-Accepted; amended 2026-10-01 after Microsoft completed the false-positive
+Accepted; amended 2026-10-03 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.54 package-preserving releases.
+reviewed alpha.14 through alpha.55 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.55 amendment
+
+On 2026-10-03 the user requested an update release after the Creative v2
+response-validation investigation and hardening reviewed in PR #293. This
+amendment adds only `0.1.0-alpha.55` to the reviewed-unsigned Windows alpha
+policy; it grants no standing permission to later versions.
+
+Creative v2 now requires a non-empty reply in its output schema and identifies
+the specific field that fails validation. Invalid proposals retain the same
+one-generation, no-fallback rejection before shared-engine dispatch. The
+[investigation](../creative-v2-rejection-review-2026-10-03.md) records the
+regressions, successful local model checks and the reporting user's still
+unconfirmed cause. No dependency was added; the
+[goal scorecard](../goal-scorecard.md) records the binary change.
+
+The native x64 loader, non-solid ZIP compression, three public assets, four
+pure-Go payload executables, and data-preserving over-install contract remain.
+Source must reach main through reviewed pull requests and green CI. Main-tip
+provenance, full quality gates, adapter tests, source and exact-binary
+vulnerability scans, exact-artifact Defender scanning, manifests, checksums,
+and installer lifecycle verification remain mandatory. The original Microsoft
+case does not pre-clear these new hashes; trusted Authenticode remains the
+long-term policy.
 
 ### Alpha.54 amendment
 
