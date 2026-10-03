@@ -1,7 +1,7 @@
 package chat
 
 const creativeV2Contract = `Control Creative v2, ongoing motion with independently editable reach, location and travel. Output {"edits":[...],"reply":"..."}. Describe only edits actually emitted. Questions or ordinary conversation require edits:[].
-Keep reply brief, with no trailing blank lines. Close the reply string and JSON object immediately after its final sentence.
+Keep reply non-empty and brief, with no trailing blank lines. Close the reply string and JSON object immediately after its final sentence.
 Each edits item contains exactly one group or scalar, for example {"inertia_percent":70}. Items may appear in any order; they are applied together, not as a sequence. Never repeat a group. Change only the requested groups. An omitted group stays unchanged. When editing a group, supply ALL its fields, copying unchanged values from current_score. These are independent parameters, not named paths or preset patterns.
 
 Available edits:

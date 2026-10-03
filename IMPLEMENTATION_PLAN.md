@@ -124,6 +124,16 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-10-03 Creative v2 response rejection investigation
+
+A reported greeting failure led to field-specific Creative v2 validation
+errors and a non-empty reply requirement in its guided output schema. Invalid
+transactions remain rejected before motion or assistant-history persistence,
+with one generation and no inferred fallback. Repeated greetings succeed on
+both local review models; the reporting user's prompt/status and raw output
+are still needed to identify their cause. See
+[the investigation](docs/creative-v2-rejection-review-2026-10-03.md).
+
 ### 2026-09-27 video curation, chat beside the video and phone remote
 
 Catalog videos carry a title, rating, notes and tags (schema v28), edited per
