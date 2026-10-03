@@ -60,6 +60,14 @@ compatibility with those local endpoints, not a fix for the reported incident.
 No accepted proposal changes motion, so there is no new motion curve to render.
 The shared compiler, motion character, transport and Stop path are unchanged.
 
+Full local Go tests and race tests pass, including architecture and goroutine
+lifecycle gates (`internal/httpapi` race run: 303.143 s). Vet, a fresh-cache
+golangci-lint run (zero issues), the CGO-free build, frontend typecheck, all
+757 component tests and the unchanged production UI build pass. The isolated
+review app also completes the real LLM readiness probe, a text-only chat turn
+with LLM motion Off, and a subsequent Creative v2 greeting in the browser.
+Both replies are non-empty without repair, fallback or motion.
+
 ## Evidence to request for the reported incident
 
 Settings → Diagnostics provides **Copy exact prompt** and **Copy report**.
