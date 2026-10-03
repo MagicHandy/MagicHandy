@@ -10,8 +10,8 @@ The setup EXE is a thin Inno Setup shell with a native x64 loader and non-solid
 ultra-LZMA stream used by the withdrawn alpha.6 package. Microsoft completed its
 review of that exact alpha.6 file as `Not malware` and removed the detection.
 ADR 0014 therefore permits alpha.8 through alpha.11 and alpha.13 through
-alpha.54 setup publication through a dedicated policy bound to those versions
-and case. Alpha.9 through alpha.11 and alpha.13 through alpha.54 also add a
+alpha.55 setup publication through a dedicated policy bound to those versions
+and case. Alpha.9 through alpha.11 and alpha.13 through alpha.55 also add a
 Defender scan of the exact public artifact directory. Alpha.12's portable-only
 GitHub Release was withdrawn; its source tag remains immutable. A later unsigned
 setup fails closed until another explicit review decision. The exception does
