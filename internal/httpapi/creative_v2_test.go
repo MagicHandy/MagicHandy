@@ -11,6 +11,41 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
+func TestCreativeV2RejectedRepliesDoNotReachMotionOrAssistantHistory(t *testing.T) {
+	for _, tc := range []struct {
+		name, raw, problem string
+	}{
+		{"missing edits", `{"action":"start","reply":"Hello."}`, "edits must be a non-null array"},
+		{"null edits", `{"action":"start","edits":null,"reply":"Hello."}`, "edits must be a non-null array"},
+		{"too many edits", `{"action":"start","edits":[{},{},{},{},{},{},{},{},{}],"reply":"Hello."}`, "edits contains 9 items"},
+		{"blank reply", `{"action":"start","edits":[{"speed_percent":30}],"reply":" \n "}`, "reply must contain non-whitespace text"},
+		{"long reply", `{"action":"start","edits":[{"speed_percent":30}],"reply":"` + strings.Repeat("x", 12001) + `"}`, "reply is 12001 bytes"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := transport.NewFake()
+			provider := &scriptedLLMProvider{responses: []string{tc.raw}}
+			server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: provider})
+			t.Cleanup(server.Close)
+			saveSettings(t, server.store, func(s config.Settings) config.Settings {
+				s.LLM.MotionGenerationMode = config.LLMMotionModeCreativeV2
+				return s
+			})
+			before := server.currentMotionEngine()
+			response := postChatStream(t, server, `{"message":"hello"}`)
+			if !strings.Contains(response, "event: error") || !strings.Contains(response, tc.problem) || strings.Contains(response, "event: motion") || strings.Contains(response, "event: message") {
+				t.Fatalf("incorrect rejection stream: %s", response)
+			}
+			if before != server.currentMotionEngine() || len(fake.Commands()) != 0 || provider.callCount() != 1 {
+				t.Fatal("invalid response commanded motion or retried the model")
+			}
+			messages, _, _ := getChatMessages(t, server, "")
+			if len(messages) != 1 || messages[0].Role != chat.MessageRoleUser {
+				t.Fatalf("rejected output entered assistant history: %+v", messages)
+			}
+		})
+	}
+}
+
 func TestCreativeV2ProductionRetargetModeFenceAutopilotAndStop(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{

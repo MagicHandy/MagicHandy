@@ -58,8 +58,17 @@ func ParseCreativeV2Reply(raw string, current motion.FlowSpec, limits config.Mot
 		return AssistantResponse{}, current, nil, err
 	}
 	proposal.Reply = strings.TrimSpace(proposal.Reply)
-	if proposal.Edits == nil || len(proposal.Edits) > 8 || strings.TrimSpace(proposal.Reply) == "" || len(proposal.Reply) > 12000 {
-		return AssistantResponse{}, current, nil, errors.New("creative v2 requires up to eight edits ([] for no change) and a non-empty bounded reply")
+	if proposal.Edits == nil {
+		return AssistantResponse{}, current, nil, errors.New("creative v2 edits must be a non-null array; use [] for no change")
+	}
+	if len(proposal.Edits) > 8 {
+		return AssistantResponse{}, current, nil, fmt.Errorf("creative v2 edits contains %d items; at most 8 are allowed", len(proposal.Edits))
+	}
+	if proposal.Reply == "" {
+		return AssistantResponse{}, current, nil, errors.New("creative v2 reply must contain non-whitespace text")
+	}
+	if len(proposal.Reply) > 12000 {
+		return AssistantResponse{}, current, nil, fmt.Errorf("creative v2 reply is %d bytes; at most 12000 are allowed", len(proposal.Reply))
 	}
 	if proposal.NewMood != nil {
 		if _, ok := validMood(*proposal.NewMood); !ok {
@@ -214,7 +223,7 @@ func CreativeV2ResponseSchema(limits config.MotionSettings, mood bool) json.RawM
 	for _, name := range names {
 		choices = append(choices, object(map[string]any{name: edits[name]}, []string{name}))
 	}
-	fields := map[string]any{"edits": map[string]any{"type": "array", "maxItems": 8, "items": map[string]any{"oneOf": choices}}, "reply": map[string]any{"type": "string"}}
+	fields := map[string]any{"edits": map[string]any{"type": "array", "maxItems": 8, "items": map[string]any{"oneOf": choices}}, "reply": map[string]any{"type": "string", "minLength": 1}}
 	if mood {
 		fields["new_mood"] = map[string]any{"type": "string", "enum": Moods()}
 	}

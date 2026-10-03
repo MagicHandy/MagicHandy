@@ -1,5 +1,15 @@
 # Goal Scorecard
 
+## 2026-10-03 — Creative v2 rejection diagnostics
+
+The model schema now requires a non-empty reply and invalid transactions report
+their specific field. No dependency, runtime owner, stored data or UI asset is
+added. Windows amd64 binaries built with Go 1.26.8, `CGO_ENABLED=0`,
+`-trimpath -ldflags -w` measure 23,152,640 B at alpha.54 (`0e4102df`) and
+23,154,176 B with this change (+1,536 B). Embedded assets are unchanged. The
+existing SQLite RSS waiver remains; this is a validation/prompt change without
+new resident state. See [the investigation](creative-v2-rejection-review-2026-10-03.md).
+
 ## 2026-10-01 — Freestyle stroke stream
 
 Freestyle now supplies seeded overlapping stroke windows to the shared engine,
