@@ -94,6 +94,9 @@ export function SetupRoute() {
   const [voiceDevice, setVoiceDevice] = useState<"cpu" | "cuda">("cpu");
   const [voiceAutoLaunch, setVoiceAutoLaunch] = useState(true);
   const [voiceEnableAfterInstall, setVoiceEnableAfterInstall] = useState(true);
+  const [qwenWAV, setQwenWAV] = useState(state?.settings?.voice?.tts_reference_wav ?? "");
+  const [qwenTranscript, setQwenTranscript] = useState(state?.settings?.voice?.tts_reference_text ?? "");
+  const [qwenLater, setQwenLater] = useState(false);
   const [parakeetSelected, setParakeetSelected] = useState(false);
   const parakeetSelectionInitialized = useRef(false);
   const [accessChoice, setAccessChoice] = useState<AccessChoice>(auth.status?.initialized ? "protected" : "local");
@@ -185,6 +188,8 @@ export function SetupRoute() {
     setSettings(state.settings);
     setRuntimeChoice(initialRuntimeChoice(state.settings.llm));
     setHandyModel(initialHandyModel(state.settings));
+    setQwenWAV(state.settings.voice?.tts_reference_wav ?? "");
+    setQwenTranscript(state.settings.voice?.tts_reference_text ?? "");
   }, [settings, state?.settings]);
 
   useEffect(() => {
@@ -235,11 +240,10 @@ export function SetupRoute() {
     const assessment = setup?.assessment;
     if (mode !== "easy" || easyDefaultsApplied.current || !assessment || !models || !catalog || !settings) return;
     easyDefaultsApplied.current = true;
-    const readySelected = models.models.some((model) => model.state === "ready" && model.id === settings.llm.model);
-    if ((assessment.chat.status !== "unmet" && assessment.model_id) || readySelected) {
+    if ((assessment.chat.status !== "unmet" && assessment.model_id) || assessment.model_installed_id) {
       setRuntimeChoice("managed");
-      patchLLM({ provider: "llama_cpp", llama_cpp_mode: "managed" });
-      setModelChoice(readySelected || !assessment.model_id ? "store" : `download:${assessment.model_id}`);
+      patchLLM({ provider: "llama_cpp", llama_cpp_mode: "managed", ...(assessment.model_installed_id ? { model: assessment.model_installed_id } : {}) });
+      setModelChoice(assessment.model_installed_id ? "store" : `download:${assessment.model_id}`);
     } else {
       setRuntimeChoice("skip");
     }
@@ -425,6 +429,12 @@ export function SetupRoute() {
 
   const selectedCatalogModel = runtimeChoice === "managed" ? catalogChoiceModel(modelChoice, catalog) : undefined;
 
+  function selectEasyVoice(choice: VoiceChoice) {
+    setVoiceChoice(choice);
+    const option = setup?.assessment?.voice_options?.find((item) => item.module === choice);
+    if (option) setVoiceDevice(option.device);
+  }
+
   function installPlan(nextVoiceChoice = voiceChoice, nextParakeet = parakeetSelected): SetupInstallPlan {
     const plan: SetupInstallPlan = { parakeet: nextParakeet };
     if (runtimeChoice === "managed" && !(models?.runtime.installed && models.runtime.current)) {
@@ -439,9 +449,10 @@ export function SetupRoute() {
         module: module.id,
         device: module.id === "faster-qwen3-tts" ? "cuda" : voiceDevice,
         auto_launch: voiceAutoLaunch,
+        ...(module.id === "faster-qwen3-tts" && !qwenLater ? { reference: { wav: qwenWAV.trim(), transcript: qwenTranscript.trim() } } : {}),
       };
     }
-    if (voiceEnableAfterInstall && (module?.ready_after_install || nextParakeet)) plan.enable_voice = true;
+    if (voiceEnableAfterInstall && (module?.ready_after_install || plan.voice?.reference || nextParakeet)) plan.enable_voice = true;
     return plan;
   }
 
@@ -480,7 +491,8 @@ export function SetupRoute() {
     passwordMeetsMinimum(administratorPassword) &&
     administratorPassword === administratorConfirmation
   );
-  const currentStepReady = (currentStep !== "chat" || chatChoiceReady) && (currentStep !== "access" || (accessReady && networkLoaded && (!networkRequired || (!auth.status?.initialized && !createdAdministrator) || networkReady)));
+  const qwenReferenceReady = voiceChoice !== "faster-qwen3-tts" || qwenLater || Boolean(qwenWAV.trim() && qwenTranscript.trim());
+  const currentStepReady = ((currentStep !== "easy" && currentStep !== "voice") || qwenReferenceReady) && (currentStep !== "chat" || chatChoiceReady) && (currentStep !== "access" || (accessReady && networkLoaded && (!networkRequired || (!auth.status?.initialized && !createdAdministrator) || networkReady)));
   const canFinish = runtimeChoice === "skip" || (runtimeChoice === "managed"
     ? runtimeInstalled && (managedModelReady || modelChoice === "later")
     : chatChoiceReady);
@@ -544,12 +556,14 @@ export function SetupRoute() {
             setup={setup}
             settings={settings}
             catalog={catalog}
-            voiceOutput={voiceChoice !== "none"}
+            voiceChoice={voiceChoice}
             voiceInput={parakeetSelected}
             connectionKey={connectionKey}
             locked={locked || installationActive}
+            qwenReference={{ wav: qwenWAV, transcript: qwenTranscript, later: qwenLater, locked: locked || installationActive, setWAV: setQwenWAV, setTranscript: setQwenTranscript, setLater: setQwenLater }}
             setChatVoice={(chat_voice) => patchLLM({ chat_voice })}
-            setVoiceOutput={(enabled) => setVoiceChoice(enabled ? (setup.assessment?.voice_module ?? "chatterbox") as VoiceChoice : "none")}
+            setVoiceOutput={(enabled) => selectEasyVoice(enabled ? (setup.assessment?.voice_module ?? "chatterbox") as VoiceChoice : "none")}
+            setVoiceChoice={selectEasyVoice}
             setVoiceInput={setParakeetSelected}
             setConnectionKey={setConnectionKey}
           />}
@@ -614,6 +628,7 @@ export function SetupRoute() {
             enableAfterInstall={voiceEnableAfterInstall}
             parakeetSelected={parakeetSelected}
             locked={locked || installationActive}
+            qwenReference={{ wav: qwenWAV, transcript: qwenTranscript, later: qwenLater, locked: locked || installationActive, setWAV: setQwenWAV, setTranscript: setQwenTranscript, setLater: setQwenLater }}
             setChoice={setVoiceChoice}
             setDevice={setVoiceDevice}
             setAutoLaunch={setVoiceAutoLaunch}

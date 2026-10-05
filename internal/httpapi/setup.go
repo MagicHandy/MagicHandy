@@ -57,7 +57,7 @@ type setupVoiceModule struct {
 var setupVoiceModules = []setupVoiceModule{
 	{
 		ID: "faster-qwen3-tts", Name: "Faster Qwen3-TTS", Provider: config.VoiceTTSProviderFasterQwen,
-		Summary: "Fast local voice cloning for a compatible NVIDIA GPU.",
+		Summary: "Quick streaming speech and voice cloning on NVIDIA GPUs. Needs more graphics memory, plus a reference WAV and its exact transcript.",
 		License: "MIT", Model: config.DefaultFasterQwenModel, ModelLicense: "Apache-2.0",
 		PythonVersion: "3.11", DiskEstimate: "Several GiB for Python, CUDA PyTorch, dependencies, and model cache.",
 		SupportedDevices: []string{config.TTSDeviceCUDA}, RecommendedForNVIDIA: true,
@@ -67,7 +67,7 @@ var setupVoiceModules = []setupVoiceModule{
 	},
 	{
 		ID: "chatterbox", Name: "Chatterbox Turbo", Provider: config.VoiceTTSProviderChatterbox,
-		Summary: "Local voice cloning with CPU fallback and broad NVIDIA support.",
+		Summary: "A smaller GPU budget and an included English voice. Speaks sentence by sentence on GPU, or more slowly on CPU.",
 		License: "MIT", Model: "ResembleAI/chatterbox-turbo", ModelLicense: "MIT",
 		PythonVersion: "3.10", DiskEstimate: "Several GiB for Python, PyTorch, dependencies, and model cache.",
 		SupportedDevices:     []string{config.TTSDeviceCPU, config.TTSDeviceCUDA},
@@ -79,9 +79,10 @@ var setupVoiceModules = []setupVoiceModule{
 }
 
 type setupVoiceInstallRequest struct {
-	Module     string `json:"module"`
-	Device     string `json:"device"`
-	AutoLaunch bool   `json:"auto_launch"`
+	Module     string              `json:"module"`
+	Device     string              `json:"device"`
+	AutoLaunch bool                `json:"auto_launch"`
+	Reference  *setupQwenReference `json:"reference,omitempty"`
 	updateFrom *config.VoiceSettings
 	// enable is set by an install plan whose user asked for voice to be on
 	// when installation finishes.
@@ -107,6 +108,7 @@ type setupVoiceInstallResult struct {
 	AutoLaunch bool
 	Enable     bool
 	Root       string
+	Reference  *setupQwenReference
 	updateFrom *config.VoiceSettings
 }
 
@@ -272,6 +274,13 @@ func (m *setupManager) validateVoiceInstall(request setupVoiceInstallRequest) (s
 	if module.ID == "faster-qwen3-tts" && !m.hasNVIDIA() {
 		return setupVoiceModule{}, request, errors.New("an NVIDIA GPU is required for Faster Qwen3-TTS; choose Chatterbox CPU instead")
 	}
+	if request.Reference != nil && module.ID != "faster-qwen3-tts" {
+		return setupVoiceModule{}, request, errors.New("a sample and transcript are only used for Qwen3-TTS setup")
+	}
+	request.Reference, err = normalizeSetupQwenReference(request.Reference)
+	if err != nil {
+		return setupVoiceModule{}, request, err
+	}
 	return module, request, nil
 }
 
@@ -414,7 +423,7 @@ func (m *setupManager) installVoice(
 	if err == nil && ctx.Err() == nil && m.onInstalled != nil {
 		err = m.onInstalled(context.WithoutCancel(ctx), setupVoiceInstallResult{
 			Module: module, Device: request.Device, AutoLaunch: request.AutoLaunch, Root: root,
-			Enable: request.enable, updateFrom: request.updateFrom,
+			Enable: request.enable, Reference: request.Reference, updateFrom: request.updateFrom,
 		})
 		if err == nil {
 			err = activateVoiceInstallCandidate(moduleHome, root)
@@ -659,6 +668,7 @@ func stringInSlice(value string, values []string) bool {
 
 func (s *Server) setupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/setup", s.handleSetupStatus)
+	mux.HandleFunc("POST /api/setup/qwen/reference/check", s.handleSetupQwenReferenceCheck)
 	mux.HandleFunc("GET /api/setup/install/{id}/report", s.handleSetupFailureReport)
 	mux.HandleFunc("PUT /api/setup/preferences", s.handleSetupPreferences)
 	mux.HandleFunc("POST /api/setup/llm/install", s.handleSetupLlamaInstall)
@@ -795,6 +805,10 @@ func (s *Server) handleSetupVoiceInstall(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if request.Reference != nil && !s.capabilities(r).ConfigureHost {
+		writeError(w, http.StatusForbidden, errors.New(administratorHostAccessRequired))
+		return
+	}
 	job, err := s.setup.StartVoiceInstall(request)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
@@ -858,6 +872,12 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) applyInstalledVoiceModule(ctx context.Context, result setupVoiceInstallResult) error {
+	// Recheck after the long installation; a deleted/changed sample must not
+	// enable speech or partially replace the previous provider's settings.
+	reference, err := normalizeSetupQwenReference(result.Reference)
+	if err != nil {
+		return err
+	}
 	_, _, saveErr, runtimeErr := s.updateSettingsAndRuntime(ctx, func(current config.Settings) (config.Settings, error) {
 		if result.updateFrom != nil {
 			voice, err := applyVoiceModuleUpdate(current.Voice, result)
@@ -880,15 +900,18 @@ func (s *Server) applyInstalledVoiceModule(ctx context.Context, result setupVoic
 			current.Voice.TTSModel = config.DefaultFasterQwenModel
 			current.Voice.TTSVoice = config.DefaultFasterQwenVoice
 			current.Voice.TTSHealthPath = config.DefaultTTSHealthPath
+			if reference != nil {
+				current.Voice.TTSReferenceWAV = reference.WAV
+				current.Voice.TTSReferenceText = reference.Transcript
+			}
 		} else {
 			current.Voice.TTSModel = config.DefaultChatterboxModel
 			current.Voice.TTSVoice = config.DefaultChatterboxVoice
 			current.Voice.TTSHealthPath = config.DefaultChatterboxHealthPath
 		}
-		// A module that needs no reference voice can speak at once, so the
-		// wizard's "turn on when finished" choice switches voice and spoken
-		// replies on. Other modules stay off until their reference is set.
-		if result.Enable && result.Module.ReadyAfterInstall {
+		// Qwen can speak only when this installation explicitly supplied a
+		// validated sample and transcript. Choosing setup later keeps it off.
+		if result.Enable && (result.Module.ReadyAfterInstall || (result.Module.Provider == config.VoiceTTSProviderFasterQwen && reference != nil)) {
 			current.Voice.Enabled = true
 			current.Voice.SpeakReplies = true
 		}

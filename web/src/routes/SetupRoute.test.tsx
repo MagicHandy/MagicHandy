@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { LLMCatalog } from "../api/catalog-types";
-import type { LLMModelManagerSnapshot, PublicSettings } from "../api/types";
+import type { LLMModelManagerSnapshot, PublicSettings, SetupStatus } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 import { useAuth } from "../state/auth";
 import { setupFixture } from "../test/setup-fixture";
@@ -457,6 +457,144 @@ describe("SetupRoute", () => {
     reference_requirement: "The included voice works immediately.", source_url: "https://example.invalid",
     source_revision: "fixture", port: 8992,
   };
+
+  function easyVoiceSetup(insufficient = false): SetupStatus {
+    const memory = { status: insufficient ? "insufficient" as const : "fits" as const, llm_known: true, llm_vram_mib: 8400, voice_vram_mib: 4096, reserve_mib: 1024, required_mib: 13520, available_mib: insufficient ? 12288 : 16384 };
+    return {
+      ...setupFixture,
+      hardware: { ...setupFixture.hardware, vram_mib: String(memory.available_mib) },
+      voice_modules: [...setupFixture.voice_modules, chatterboxModule],
+      assessment: {
+        free_disk_bytes: 200 * 2 ** 30,
+        chat: { status: "met", reason: "gpu_fits", bytes: 8 * 2 ** 30, vram_mib: 8400, min_vram_mib: 10240 },
+        voice_output: { status: "met", reason: insufficient ? "gpu" : "qwen_gpu", bytes: (insufficient ? 6 : 8) * 2 ** 30 },
+        voice_input: { status: "met", reason: "cpu", bytes: 800 * 2 ** 20 },
+        model_id: catalogModel.id, runtime_backend: "cuda", voice_module: insufficient ? "chatterbox" : "faster-qwen3-tts", voice_device: "cuda",
+        voice_options: [
+          { module: "faster-qwen3-tts", device: "cuda", requirement: { status: insufficient ? "partial" : "met", reason: insufficient ? "qwen_insufficient" : "qwen_gpu", bytes: 8 * 2 ** 30 }, memory },
+          { module: "chatterbox", device: "cuda", requirement: { status: "met", reason: "gpu", bytes: 6 * 2 ** 30 }, memory: { ...memory, status: "fits", voice_vram_mib: 2048, required_mib: 11472 } },
+        ],
+      },
+    };
+  }
+
+  it("Easy setup prefers Qwen when the backend says the combination fits, and explains reference setup", async () => {
+    vi.mocked(api.setupStatus).mockResolvedValue(easyVoiceSetup());
+    render(<SetupRoute />);
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    await continueTo("Easy setup");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
+    expect(screen.getByRole("radio", { name: /Faster Qwen3-TTS/ })).toBeChecked();
+    expect(screen.getByText(/Qwen3-TTS requires an audio sample and its exact transcript/)).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Install and continue" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Set up voice later" }));
+    fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
+    await screen.findByRole("heading", { name: "Installing selected features" });
+    expect(api.installSetupPlan).toHaveBeenCalledWith({ llama: { backend: "auto" }, model: { catalog_id: catalogModel.id }, voice: { module: "faster-qwen3-tts", device: "cuda", auto_launch: true }, parakeet: false });
+  });
+
+  it("Easy setup warns about the combined budget but allows forcing Qwen installation", async () => {
+    vi.mocked(api.setupStatus).mockResolvedValue(easyVoiceSetup(true));
+    render(<SetupRoute />);
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    await continueTo("Easy setup");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
+    expect(screen.getByRole("radio", { name: /Chatterbox Turbo/ })).toBeChecked();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: /Faster Qwen3-TTS/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/You can still install this voice/);
+    fireEvent.click(screen.getByRole("button", { name: "Set up voice later" }));
+    expect(screen.getByRole("button", { name: "Install and continue" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
+    await screen.findByRole("heading", { name: "Installing selected features" });
+    expect(api.installSetupPlan).toHaveBeenCalledWith(expect.objectContaining({ voice: { module: "faster-qwen3-tts", device: "cuda", auto_launch: true } }));
+  });
+
+  it("Easy setup submits the backend's CPU fallback and clears the GPU warning when voice is off", async () => {
+    const setup = easyVoiceSetup(true);
+    const option = setup.assessment!.voice_options![1];
+    option.device = "cpu";
+    option.requirement = { ...option.requirement, status: "partial", reason: "cpu" };
+    option.memory = { ...option.memory, status: "fits", voice_vram_mib: 0, required_mib: 10240 };
+    setup.assessment!.voice_device = "cpu";
+    vi.mocked(api.setupStatus).mockResolvedValue(setup);
+    render(<SetupRoute />);
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    await continueTo("Easy setup");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
+    expect(screen.getByText(/Voice will run on the CPU/)).toBeVisible();
+    fireEvent.click(screen.getByRole("radio", { name: /Faster Qwen3-TTS/ }));
+    expect(screen.getByRole("alert")).toBeVisible();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
+    await screen.findByRole("heading", { name: "Installing selected features" });
+    expect(api.installSetupPlan).toHaveBeenCalledWith(expect.objectContaining({ voice: { module: "chatterbox", device: "cpu", auto_launch: true }, enable_voice: true }));
+  });
+
+  it("Easy setup labels unknown memory and still permits Qwen, but enforces its NVIDIA requirement", async () => {
+    const setup = easyVoiceSetup();
+    const qwen = setup.assessment!.voice_options![0];
+    qwen.memory = { ...qwen.memory, status: "unknown", llm_known: false };
+    qwen.requirement = { ...qwen.requirement, status: "partial", reason: "qwen_unknown" };
+    vi.mocked(api.setupStatus).mockResolvedValue(setup);
+    const view = render(<SetupRoute />);
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    await continueTo("Easy setup");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/memory use is unknown/);
+    fireEvent.click(screen.getByRole("button", { name: "Set up voice later" }));
+    expect(screen.getByRole("button", { name: "Install and continue" })).toBeEnabled();
+    view.unmount();
+
+    setup.hardware.nvidia = false;
+    setup.assessment!.voice_module = "chatterbox";
+    qwen.requirement = { status: "unmet", reason: "no_nvidia", bytes: 0 };
+    render(<SetupRoute />);
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    await continueTo("Easy setup");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
+    expect(screen.getByRole("radio", { name: /Faster Qwen3-TTS/ })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: /Chatterbox Turbo/ })).toBeChecked();
+  });
+
+  it("guides Qwen sample and exact transcript into the install plan without changing the current voice", async () => {
+    vi.mocked(api.setupStatus).mockResolvedValue(easyVoiceSetup());
+    vi.spyOn(api, "checkSetupQwenReference").mockResolvedValue({ duration_ms: 3000 });
+    render(<SetupRoute />);
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    await continueTo("Easy setup");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
+    expect(screen.getByRole("button", { name: "Install and continue" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Voice sample (WAV)" }), { target: { value: "C:\\voice\\sample.wav" } });
+    await screen.findByText(/Sample checked: 3.0 seconds/);
+    expect(screen.getByRole("button", { name: "Install and continue" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Exact words spoken in the sample" }), { target: { value: "  Hello, this is my voice.  " } });
+    expect(screen.getByRole("button", { name: "Install and continue" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
+    await screen.findByRole("heading", { name: "Installing selected features" });
+    expect(api.installSetupPlan).toHaveBeenCalledWith(expect.objectContaining({
+      voice: { module: "faster-qwen3-tts", device: "cuda", auto_launch: true, reference: { wav: "C:\\voice\\sample.wav", transcript: "Hello, this is my voice." } }, enable_voice: true,
+    }));
+    expect(api.saveSetupPreferences).not.toHaveBeenCalledWith(expect.objectContaining({ voice: expect.anything() }));
+  });
+
+  it("keeps a saved Qwen sample and transcript when setup is run again", async () => {
+    settings.voice = { ...settings.voice, tts_reference_wav: "C:\\voice\\saved.wav", tts_reference_text: "My saved words." };
+    vi.mocked(api.setupStatus).mockResolvedValue(easyVoiceSetup());
+    vi.spyOn(api, "checkSetupQwenReference").mockResolvedValue({ duration_ms: 4000 });
+    render(<SetupRoute />);
+    await screen.findByRole("heading", { name: "Set up MagicHandy" });
+    await continueTo("Easy setup");
+    fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
+    expect(screen.getByRole("textbox", { name: "Voice sample (WAV)" })).toHaveValue("C:\\voice\\saved.wav");
+    expect(screen.getByRole("textbox", { name: "Exact words spoken in the sample" })).toHaveValue("My saved words.");
+    fireEvent.click(screen.getByRole("button", { name: "Set up voice later" }));
+    fireEvent.click(screen.getByRole("button", { name: "Configure voice now" }));
+    expect(screen.getByRole("textbox", { name: "Exact words spoken in the sample" })).toHaveValue("My saved words.");
+  });
 
   it("Easy setup installs the model it picked and the voice features chosen", async () => {
     vi.mocked(api.setupStatus).mockResolvedValue({

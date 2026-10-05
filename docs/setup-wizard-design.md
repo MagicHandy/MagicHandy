@@ -30,15 +30,24 @@ The Welcome step offers two paths ([ADR 0037](decisions/0037-easy-setup.md)):
 
 - **Easy setup** (default, recommended): four steps. Welcome, Your setup,
   Install, Finish. The backend assesses the computer
-  (`assessment` in `GET /api/setup/status`) and reports met, partly met or
+  (`assessment` in `GET /api/setup`) and reports met, partly met or
   not met for chat, voice output and voice input, with a reason code and the
   disk space each needs. It picks the first curated model the GPU holds, or
   keeps a ready model that is already selected. The page asks how explicit
-  chat should be, whether to speak replies aloud (Chatterbox Turbo on the
-  assessed device), whether to talk instead of typing (Parakeet), and
+  chat should be, whether to speak replies aloud, whether to talk instead of
+  typing (Parakeet), and
   optionally the Handy connection key. **Install and continue** submits the
   same install plan as Custom setup. Access stays local-only, and chat is
   skipped when its requirements are not met.
+  Spoken replies prefer Qwen3-TTS when its combined LLM/voice VRAM estimate fits
+  on NVIDIA; otherwise Chatterbox is selected, on CPU if necessary. Both modules
+  remain visible choices with performance and reference-voice explanations.
+  Insufficient or unknown VRAM produces a warning and does not block selecting
+  Qwen. Selecting Qwen opens a guided sample-and-transcript panel on the same
+  page, or an explicit option to configure it later in Settings > Voice.
+  Its card and panel both explain that a sample and exact transcript are required
+  before it can speak. The estimate comes from the backend, including the actual selected
+  store model; the browser does not recalculate it (ADR 0037 amendment).
 - **Custom setup**: the seven steps below. Welcome, Access, Device, Chat AI,
   Voice, Install, Finish.
 
@@ -86,8 +95,14 @@ including the always-reachable Emergency Stop.
 
 5. Voice (both optional)
    - output: none / Faster Qwen3-TTS / Chatterbox / external compatible server
+     - Qwen3-TTS: NVIDIA required; preferred unless combined LLM/voice VRAM
+       estimate is insufficient (a manual choice is still allowed with a warning)
+       - configure now: choose WAV + enter its exact spoken words; backend
+         checks format and length; install with that validated reference
+       - set up voice later: install Qwen, leave spoken replies off
+     - Chatterbox: included Emily voice; GPU when it fits, CPU fallback otherwise
    - input: install Parakeet or skip
-   - turn voice on when installation finishes (modules that need no reference)
+   - turn voice on when installation finishes (included voice, or validated Qwen reference)
 
 6. Install
    - review the selected local components as one plan

@@ -432,6 +432,10 @@ func (s *Server) handleSetupInstallPlan(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if request.Voice != nil && request.Voice.Reference != nil && !s.capabilities(r).ConfigureHost {
+		writeError(w, http.StatusForbidden, errors.New(administratorHostAccessRequired))
+		return
+	}
 	job, err := s.setup.StartInstallPlan(request)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)

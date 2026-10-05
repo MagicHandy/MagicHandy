@@ -790,6 +790,8 @@ export const api = {
   // First-run setup. Product choices remain available after onboarding, so
   // these endpoints are also the repair/install path from Settings.
   setupStatus: () => request<SetupStatus>("GET", "/api/setup"),
+  checkSetupQwenReference: (wav: string, signal?: AbortSignal) =>
+    request<{ duration_ms: number }>("POST", "/api/setup/qwen/reference/check", { wav }, signal),
   setupFailureReport: (id: string) => download(`/api/setup/install/${encodeURIComponent(id)}/report`, "magichandy-install-failure.json"),
   saveSetupPreferences: (body: {
     ui_locale?: string;

@@ -8,6 +8,7 @@ import type {
   SetupStatus,
 } from "../api/types";
 import { DismissibleNotice } from "./DismissibleNotice";
+import { SetupQwenReference, type SetupQwenReferenceProps } from "./SetupQwenReference";
 import { AccessScopeChoices, configForScope, NetworkPortChecklist, type NetworkScope } from "./NetworkSetupFields";
 import { NetworkSettingsPanel } from "./NetworkSettingsPanel";
 import { PasswordConfirmationField } from "./PasswordConfirmationField";
@@ -122,26 +123,27 @@ export function DeviceStep({ settings, handyModel, connectionKey, connectionResu
   </div>;
 }
 
-export function VoiceStep({ setup, choice, device, autoLaunch, enableAfterInstall, parakeetSelected, locked, setChoice, setDevice, setAutoLaunch, setEnableAfterInstall, setParakeetSelected }: {
+export function VoiceStep({ setup, choice, device, autoLaunch, enableAfterInstall, parakeetSelected, locked, qwenReference, setChoice, setDevice, setAutoLaunch, setEnableAfterInstall, setParakeetSelected }: {
   setup: SetupStatus; choice: VoiceChoice; device: "cpu" | "cuda"; autoLaunch: boolean; enableAfterInstall: boolean; parakeetSelected: boolean; locked: boolean;
   setChoice: (choice: VoiceChoice) => void; setDevice: (device: "cpu" | "cuda") => void; setAutoLaunch: (enabled: boolean) => void;
   setEnableAfterInstall: (enabled: boolean) => void; setParakeetSelected: (selected: boolean) => void;
+  qwenReference?: SetupQwenReferenceProps;
 }) {
   const module = setup.voice_modules.find((item) => item.id === choice);
-  const canTurnOn = Boolean(module?.ready_after_install) || parakeetSelected;
+  const canTurnOn = Boolean(module?.ready_after_install) || parakeetSelected || Boolean(choice === "faster-qwen3-tts" && qwenReference && !qwenReference.later && qwenReference.wav.trim() && qwenReference.transcript.trim());
   return <div className="setup-copy">
     <p>{t("Voice is optional. Modules that need no reference voice can turn on as soon as they finish installing.")}</p>
     <h2>{t("Speech output")}</h2>
     <div className="setup-choices">
       <Choice selected={choice === "none"} title={t("No speech output")} detail={t("Use text chat only. This uses no model storage or VRAM.")} onSelect={() => setChoice("none")} />
-      {setup.voice_modules.map((item) => <Choice key={item.id} selected={choice === item.id} title={item.name} detail={`${item.summary} ${item.reference_requirement}`} badge={item.ready_after_install ? t("Ready after install") : item.recommended_for_nvidia ? t("Recommended for NVIDIA") : undefined} disabled={item.id === "faster-qwen3-tts" && !setup.hardware.nvidia} onSelect={() => setChoice(item.id as VoiceChoice)} />)}
+      {setup.voice_modules.map((item) => <Choice key={item.id} selected={choice === item.id} title={item.name} detail={`${translateKnown(item.summary)} ${translateKnown(item.reference_requirement)}`} badge={item.ready_after_install ? t("Ready after install") : item.recommended_for_nvidia ? t("Recommended for NVIDIA") : undefined} disabled={item.id === "faster-qwen3-tts" && !setup.hardware.nvidia} onSelect={() => setChoice(item.id as VoiceChoice)} />)}
       <Choice selected={choice === "external"} title={t("Existing compatible voice server")} detail={t("Configure its URL, model, and optional key later in Settings > Voice.")} onSelect={() => setChoice("external")} />
     </div>
     {module && <div className="setup-subsection">
       {module.supported_devices.length > 1 && <label className="field"><span className="label">{t("Execution device")}</span><select value={device} disabled={locked} onChange={(event) => setDevice(event.target.value as typeof device)}>{module.supported_devices.map((value) => <option key={value} value={value}>{value.toUpperCase()}</option>)}</select></label>}
       <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={autoLaunch} disabled={locked} onChange={(event) => setAutoLaunch(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>{t("Launch the local voice server with MagicHandy")}<small>{module.disk_estimate}</small></span></label>
       <p className="hint-block">{t("Code license: {code}. Model license: {model}.", { code: module.license, model: module.model_license })}</p>
-      {!module.ready_after_install && <p className="hint-block">{t("This voice needs a reference WAV and its exact transcript before it can speak. Add them in Settings > Voice, then press Start.")}</p>}
+      {choice === "faster-qwen3-tts" && qwenReference ? <SetupQwenReference {...qwenReference} /> : !module.ready_after_install && <p className="hint-block">{t("This voice needs a reference WAV and its exact transcript before it can speak. Add them in Settings > Voice, then press Start.")}</p>}
       <p className="setup-selection-state">{t("Selected for installation on the next step.")}</p>
     </div>}
     <div className="setup-divider" />
@@ -197,6 +199,9 @@ export function FinishStep({ setup, settings, models, runtimeChoice, modelPendin
       {settings.voice?.enabled && <div><dt>{t("Voice")}</dt><dd>{settings.voice.speak_replies ? t("On, speaking chat replies") : t("On")}</dd></div>}
       <div><dt>{t("Local address")}</dt><dd>{window.location.origin}</dd></div>
     </dl>
+    {voiceChoice === "faster-qwen3-tts" && <p className="setup-notice">{settings.voice?.tts_reference_wav && settings.voice?.tts_reference_text
+      ? t("Your Qwen voice sample and transcript are saved. You can test or change the voice in Settings > Voice.")
+      : t("Qwen3-TTS is installed. Spoken replies are off until you add an audio sample and its exact transcript in Settings > Voice.")}</p>}
     {requiresSignIn && <div className="setup-notice"><strong>{t("Sign-in required after setup")}</strong><span>{t("Finishing setup ends the temporary setup session. Sign in with the administrator password you just created.")}</span></div>}
     <DismissibleNotice id="setup-before-motion" className="setup-notice"><strong>{t("Before commanding motion")}</strong><span>{t("Connect The Handy, confirm the active transport, and review speed and stroke limits in the top-bar connection manager.")}</span></DismissibleNotice>
   </div>;
