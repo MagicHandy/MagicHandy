@@ -61,7 +61,7 @@ var setupVoiceModules = []setupVoiceModule{
 		License: "MIT", Model: config.DefaultFasterQwenModel, ModelLicense: "Apache-2.0",
 		PythonVersion: "3.11", DiskEstimate: "Several GiB for Python, CUDA PyTorch, dependencies, and model cache.",
 		SupportedDevices: []string{config.TTSDeviceCUDA}, RecommendedForNVIDIA: true,
-		ReferenceRequirement: "Add a reference WAV and its exact transcript in Voice settings after installation.",
+		ReferenceRequirement: "Configure the required audio sample and exact transcript here, or later in Settings > Voice.",
 		SourceURL:            "https://github.com/andimarafioti/faster-qwen3-tts.git",
 		SourceRevision:       "a70afc0f81f7f5f8801c3227968f1102f43f211c", Port: 8991,
 	},

@@ -196,13 +196,19 @@ approximate disk impact, and reference requirement. The server installation
 can be configured for app auto-launch.
 
 Chatterbox is marked **Ready after install** because its included voice needs
-no reference. When it or Parakeet is chosen, **Turn voice on when installation
-finishes** appears, checked by default. With it on, a successful install turns
-voice on and, for Chatterbox, spoken chat replies; the settings transition then
-starts the workers. Faster Qwen3-TTS stays off because it cannot speak until a
-reference WAV and its exact transcript are set in Settings > Voice, which the
-step says. An external voice server is configured later in Settings > Voice.
-Provider tuning remains in Settings > Voice.
+no reference. Qwen opens an inline guide for a local WAV and its exact transcript,
+with an explicit **Set up voice later** option. Its choice card and guide both
+explain that an audio sample and transcript are required before it can speak.
+The backend checks the sample's format and duration before installation and
+again before saving it; it does not verify the spoken words.
+
+When Chatterbox, a configured Qwen reference, or Parakeet is chosen, **Turn voice
+on when installation finishes** appears, checked by default. With it on, a
+successful install turns voice on and enables spoken replies for Chatterbox or
+Qwen with a validated reference; the settings transition starts the workers.
+Deferring Qwen's reference keeps spoken replies off, even when voice input is
+enabled. An external voice server and advanced provider tuning remain in
+Settings > Voice.
 
 ## Installation Jobs
 

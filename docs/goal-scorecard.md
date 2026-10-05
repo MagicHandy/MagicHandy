@@ -15,12 +15,12 @@ omit VCS build metadata from both binaries. Gzip uses Node level 9.
 
 | Artifact | Alpha.55 baseline | This change | Change |
 | --- | ---: | ---: | ---: |
-| Core binary | 23,153,664 B | 23,213,056 B | +59,392 B |
-| Main JS, raw / gzip-9 | 1,015,603 / 277,128 B | 1,028,131 / 280,238 B | +12,528 / +3,110 B |
+| Core binary | 23,153,664 B | 23,214,080 B | +60,416 B |
+| Main JS, raw / gzip-9 | 1,015,603 / 277,128 B | 1,028,321 / 280,263 B | +12,718 / +3,135 B |
 | Main CSS, raw / gzip-9 | 174,553 / 31,039 B | 174,553 / 31,039 B | unchanged |
-| All embedded assets | 2,593,960 B | 2,632,097 B | +38,137 B |
+| All embedded assets | 2,593,960 B | 2,633,135 B | +39,175 B |
 
-The UI uses existing controls/styles and 32 new strings in five locales. WAV
+The UI uses existing controls/styles and 33 new strings in five locales. WAV
 checks retain at most 16 MiB plus one byte temporarily and retain no audio in
 the app, logs or reports. The review app's warm working set was 77,230,080 B
 (73.7 MiB), with 62,238,720 B private memory after the browser/setup/LLM probe;

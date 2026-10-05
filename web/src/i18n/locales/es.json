@@ -2705,6 +2705,7 @@
   "Graphics memory estimate: {chat} for chat, {voice} for voice, plus {reserve} for the desktop. This is a planning estimate; larger contexts and other GPU apps can need more.": "Memoria gráfica estimada: {chat} para chat, {voice} para voz y {reserve} para el escritorio. Es una estimación orientativa; contextos mayores y otras aplicaciones de GPU pueden necesitar más.",
   "Voice will run on the CPU, keeping graphics memory available for chat.": "La voz usará la CPU y dejará la memoria gráfica disponible para el chat.",
   "Fit unconfirmed": "Compatibilidad sin confirmar",
+  "Configure the required audio sample and exact transcript here, or later in Settings > Voice.": "Configura aquí la muestra de audio y su transcripción exacta requeridas, o más tarde en Ajustes > Voz.",
   "Set up your Qwen voice": "Configura tu voz de Qwen",
   "Qwen3-TTS requires an audio sample and its exact transcript before it can speak. Choose one person speaking clearly, ideally 3 to 10 seconds, without music or background noise.": "Qwen3-TTS requiere una muestra de audio y su transcripción exacta para hablar. Elige una persona hablando claramente, preferiblemente de 3 a 10 segundos, sin música ni ruido de fondo.",
   "Qwen3-TTS will be installed, but spoken replies will stay off until you add the sample and transcript in Settings > Voice.": "Se instalará Qwen3-TTS, pero las respuestas habladas seguirán desactivadas hasta que añadas la muestra y la transcripción en Ajustes > Voz.",
