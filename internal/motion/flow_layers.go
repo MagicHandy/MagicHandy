@@ -20,6 +20,7 @@ func CloneFlowSpec(spec *FlowSpec) *FlowSpec {
 		strokes.Accents = slices.Clone(spec.Strokes.Accents)
 		cloned.Strokes = &strokes
 	}
+	cloned.Freestyle = cloneFreestyleSpec(spec.Freestyle)
 	cloned.Steps, cloned.Layers = slices.Clone(spec.Steps), slices.Clone(spec.Layers)
 	return &cloned
 }

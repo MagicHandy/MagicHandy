@@ -95,7 +95,12 @@ func compileGestureCurve(spec FlowSpec, handyModel string) (Curve, error) {
 // actual interpolant: every stroke must stay monotonic, so the only reversals
 // are the authored turns between strokes.
 func assembleLegCurve(legs []gestureLeg, curves []Curve, name string) (Curve, error) {
-	result := Curve{loop: true}
+	return assembleLegs(legs, curves, name, true)
+}
+
+// assembleLegs is assembleLegCurve for looping or finite content.
+func assembleLegs(legs []gestureLeg, curves []Curve, name string, loop bool) (Curve, error) {
+	result := Curve{loop: loop}
 	for legIndex, curve := range curves {
 		start := 0
 		if len(result.points) > 0 {

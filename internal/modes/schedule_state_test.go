@@ -43,7 +43,7 @@ func TestPausePreservesRelativeClocksWithoutArmingAbsentWork(t *testing.T) {
 	if !speech.fallbackAt.Equal(now.Add(2*time.Second+by)) || !history.arc.startedAt.Equal(now.Add(-time.Minute+by)) {
 		t.Fatal("speech or history clocks drifted during pause")
 	}
-	if !motion.planAt.IsZero() || !motion.driftAt.IsZero() || !speech.deadline.IsZero() || !history.phraseChangedAt.IsZero() {
+	if !motion.planAt.IsZero() || !speech.deadline.IsZero() || !history.phraseChangedAt.IsZero() {
 		t.Fatal("pause armed a previously absent deadline")
 	}
 }

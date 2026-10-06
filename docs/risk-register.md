@@ -902,6 +902,14 @@ tests cover both paths; R13 remains High for the existing open work.
 
 ## R14: Per-Source Motion Path Divergence
 
+Status 2026-10-01 (Freestyle): the generated stream supplies finite semantic
+windows to the same engine, sampler, sanitizer and transport interface. It owns
+no dispatch loop. Exact-overlap tests and a regression retaining timing/event
+control history protect queued continuations. New session shapes freeze on
+pause and never revive a stopped or finishing run. All 81 evaluated shared-plan
+outputs and fake-transport captures are retained for visual review; hardware
+feel remains open under R1. See [the review](freestyle-stream-review-2026-10-01.md).
+
 Status 2026-09-05 (Creative v2 review): a native stroke vocabulary compiles into
 the same prepared motion plan, sampler, sanitizer and conditional retargeting
 path. It owns no additional motion loop or transport policy. Its local timing

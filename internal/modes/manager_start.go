@@ -14,7 +14,6 @@ func (m *Manager) resetForModeStartLocked(mode string) {
 	m.chat.target = nil
 	m.chat.keepalive = false
 	m.chat.pending = false
-	m.motion.driftDone = true
 	m.motion.swayPoints = nil
 	m.history.previousSpeed = 0
 	m.history.speedChangedAt = time.Time{}
@@ -30,6 +29,10 @@ func (m *Manager) resetForModeStartLocked(mode string) {
 	m.history.arc = arcState{startedAt: m.options.Now()}
 	m.motion.deadline = time.Time{}
 	m.motion.nextRetry = time.Time{}
+	if mode == ModeFreestyle {
+		// A new run is a new stream: a fresh seed, controls and shape clock.
+		m.freestyle = freestyleState{seed: m.freestyleSeed()}
+	}
 	if mode == ModeFreestyle || mode == ModeAutopilot {
 		m.motion.planner = NewPlanner(m.options.Seed)
 		m.motion.segmentIdx = 0

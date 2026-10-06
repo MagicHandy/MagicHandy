@@ -124,6 +124,16 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-10-03 Creative v2 response rejection investigation
+
+A reported greeting failure led to field-specific Creative v2 validation
+errors and a non-empty reply requirement in its guided output schema. Invalid
+transactions remain rejected before motion or assistant-history persistence,
+with one generation and no inferred fallback. Repeated greetings succeed on
+both local review models; the reporting user's prompt/status and raw output
+are still needed to identify their cause. See
+[the investigation](docs/creative-v2-rejection-review-2026-10-03.md).
+
 ### 2026-09-27 video curation, chat beside the video and phone remote
 
 Catalog videos carry a title, rating, notes and tags (schema v28), edited per
@@ -2575,3 +2585,20 @@ cleanup race; preparation now releases its validation listener before reporting
 success or failure. No additional transport,
 motion generator, native dependency or hardware auto-connect was introduced.
 See [review and validation](docs/bluetooth-intiface-review-2026-09-20.md).
+
+
+## October 1 Freestyle continuation
+
+Implemented for PR review: replace Freestyle's repeated catalog segments with
+a seeded continuous stroke stream through the existing shared engine. Separate
+backend preferences provide feel presets, pace, length, focus, roaming, variety,
+direction accent and explicit session shapes. Exact overlapping windows and
+context-preserving keyframe compaction protect queued motion; pause freezes the
+arc and Stop cancels planning. Existing motion style initializes older installs'
+Freestyle feel. Autopilot's existing segment fallback remains.
+
+The 81-case shared-plan atlas and live fake-transport captures cover all feels,
+control changes, all shapes and final Stop. Physical feel and real-transport
+acceptance remain open. See [ADR 0038](docs/decisions/0038-freestyle-stroke-stream.md),
+[review evidence](docs/freestyle-stream-review-2026-10-01.md), and
+[budgets](docs/goal-scorecard.md#2026-10-01--freestyle-stroke-stream).

@@ -1,5 +1,51 @@
 # Goal Scorecard
 
+## 2026-10-03 — Creative v2 rejection diagnostics
+
+The model schema now requires a non-empty reply and invalid transactions report
+their specific field. No dependency, runtime owner, stored data or UI asset is
+added. Windows amd64 binaries built with Go 1.26.8, `CGO_ENABLED=0`,
+`-trimpath -ldflags -w` measure 23,152,640 B at alpha.54 (`0e4102df`) and
+23,154,176 B with this change (+1,536 B). Embedded assets are unchanged. The
+existing SQLite RSS waiver remains; this is a validation/prompt change without
+new resident state. See [the investigation](creative-v2-rejection-review-2026-10-03.md).
+
+## 2026-10-01 — Freestyle stroke stream
+
+Freestyle now supplies seeded overlapping stroke windows to the shared engine,
+with separate backend preferences and explicit session shapes. No dependency,
+transport, playback loop or embedded binary asset is added. See
+[ADR 0038](decisions/0038-freestyle-stroke-stream.md) and
+[the review](freestyle-stream-review-2026-10-01.md).
+
+Both binaries were measured from source on Windows amd64 with Go 1.26.8,
+`CGO_ENABLED=0`, `-trimpath -ldflags -w`; the baseline is `21087d5c`.
+Gzip figures use Node gzip level 9, matching the preceding checkpoint.
+
+| Artifact | Baseline | This checkpoint | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 23,022,080 B | 23,152,640 B | +130,560 B |
+| Main JS, raw / gzip-9 | 1,011,353 / 275,500 B | 1,015,603 / 277,128 B | +4,250 / +1,628 B |
+| Main CSS, raw / gzip-9 | 173,735 / 30,901 B | 174,553 / 31,039 B | +818 / +138 B |
+| All embedded assets | 2,581,775 B | 2,593,960 B | +12,185 B |
+
+The core remains below 30 MB. The existing main-bundle advisory remains enabled.
+The 81-case shared-plan matrix compiled windows in 1.499–11.113 ms (median
+3.004 ms); controls and finite curve/keyframe counts bound each window. Plotting
+scripts and their generated reports are optional development tooling and do not
+ship in the app.
+
+Warm process working set was 78.6 MiB while running the simulator, and 79.0 MiB
+idle after chat/UI review. A baseline simulator with an API client measured
+69.7 MiB active. These are different warm workloads (the review includes a live
+browser stream and chat), so the difference is not attributed to Freestyle.
+The existing SQLite RSS waiver remains; these are not fresh-process cold-start
+or physical-device budget measurements. No additional RSS exemption is introduced.
+
+The full local Windows race run passes with `internal/httpapi` at 306.833 s.
+Its stalled-reader fixture carries the already-reviewed #290 twenty-second
+outer wait; no production deadline, race coverage or gate is weakened.
+
 ## 2026-09-30 — httpapi race test time
 
 `internal/httpapi` tests now copy one migrated datastore per test binary instead

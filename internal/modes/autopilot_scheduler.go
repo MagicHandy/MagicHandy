@@ -225,9 +225,6 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	m.motion.deadline = now.Add(duration)
 	m.motion.planAt = m.motion.deadline.Add(-m.planningLeadLocked(duration))
 	m.motion.pending = nil
-	// tickAutopilot never read driftAt/driftDone, so the old midpoint step was
-	// write-only state here. Intra-segment variation is now the sway schedule.
-	m.motion.driftDone = true
 	if choice.segment.SpeedPercent != previousSpeed {
 		m.history.previousSpeed = previousSpeed
 		m.history.speedChangedAt = now

@@ -16,22 +16,24 @@ import (
 type FlowSpec struct {
 	Gesture *GestureSpec `json:"gesture,omitempty"`
 	// Strokes is an LLM Lab experiment; see StrokeSpec.
-	Strokes              *StrokeSpec `json:"strokes,omitempty"`
-	MinPercent           int         `json:"min_percent"`
-	MaxPercent           int         `json:"max_percent"`
-	SpeedPercent         int         `json:"speed_percent"`
-	RangeFloorPercent    int         `json:"range_floor_percent"`
-	RangeCeilingPercent  int         `json:"range_ceiling_percent,omitempty"`
-	AnchorPercent        int         `json:"anchor_percent"`
-	MemoryCycles         int         `json:"memory_cycles"`
-	PaceVariationPercent int         `json:"pace_variation_percent"`
-	VariationMode        string      `json:"variation_mode,omitempty"`
-	TurnSoftnessPercent  int         `json:"turn_softness_percent,omitempty"`
-	CadenceHoldPercent   int         `json:"cadence_hold_percent,omitempty"`
-	Seed                 uint32      `json:"seed"`
-	LoopCycles           int         `json:"loop_cycles,omitempty"`
-	Steps                []FlowStep  `json:"steps,omitempty"`
-	Layers               []FlowLayer `json:"layers,omitempty"`
+	Strokes *StrokeSpec `json:"strokes,omitempty"`
+	// Freestyle is one window of the Freestyle mode's generated stream.
+	Freestyle            *FreestyleSpec `json:"freestyle,omitempty"`
+	MinPercent           int            `json:"min_percent"`
+	MaxPercent           int            `json:"max_percent"`
+	SpeedPercent         int            `json:"speed_percent"`
+	RangeFloorPercent    int            `json:"range_floor_percent"`
+	RangeCeilingPercent  int            `json:"range_ceiling_percent,omitempty"`
+	AnchorPercent        int            `json:"anchor_percent"`
+	MemoryCycles         int            `json:"memory_cycles"`
+	PaceVariationPercent int            `json:"pace_variation_percent"`
+	VariationMode        string         `json:"variation_mode,omitempty"`
+	TurnSoftnessPercent  int            `json:"turn_softness_percent,omitempty"`
+	CadenceHoldPercent   int            `json:"cadence_hold_percent,omitempty"`
+	Seed                 uint32         `json:"seed"`
+	LoopCycles           int            `json:"loop_cycles,omitempty"`
+	Steps                []FlowStep     `json:"steps,omitempty"`
+	Layers               []FlowLayer    `json:"layers,omitempty"`
 }
 
 // FlowStep is a section of one continuous score, not a separate motion run.
@@ -66,6 +68,9 @@ func (s FlowSpec) Validate(settings config.MotionSettings) error {
 		return err
 	}
 	if err := s.validateStrokes(); err != nil {
+		return err
+	}
+	if err := s.validateFreestyle(settings); err != nil {
 		return err
 	}
 	if err := s.validateControls(settings); err != nil {
@@ -140,9 +145,13 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 		return MotionTarget{}, err
 	}
 	var curve Curve
+	var window *streamWindow
 	var err error
 	name := "Continuous flow"
 	switch {
+	case spec.Freestyle != nil:
+		curve, window, err = compileFreestyleCurve(spec, settings.HandyModel)
+		name = "Freestyle"
 	case spec.Gesture != nil:
 		curve, err = compileGestureCurve(spec, settings.HandyModel)
 		name = "Creative v2"
@@ -163,10 +172,10 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 	for _, step := range spec.Steps {
 		peakSpeed = max(peakSpeed, step.SpeedPercent)
 	}
-	content := &preparedMotion{id: id, name: name, curve: curve,
+	content := &preparedMotion{id: id, name: name, curve: curve, stream: window,
 		referenceRate: referenceTravelRateForSpeed(peakSpeed, settings.HandyModel),
 		acceleration:  flowAccelerationBudget, jerk: flowJerkBudget}
-	if spec.Gesture != nil || spec.Strokes != nil {
+	if spec.Gesture != nil || spec.Strokes != nil || spec.Freestyle != nil {
 		// The generated-stroke grammars use Creative's existing runtime envelope.
 		// Historical flow comparisons keep their quieter authoring budget.
 		content.acceleration, content.jerk = runtimeMaxAccelerationPercentPerSecond2, runtimeMaxJerkPercentPerSecond3

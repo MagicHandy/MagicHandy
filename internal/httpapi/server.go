@@ -431,6 +431,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/modes", s.handleModesGet)
 	mux.HandleFunc("POST /api/modes/start", s.handleModeStart)
 	mux.HandleFunc("POST /api/modes/stop", s.handleModeStop)
+	mux.HandleFunc("PUT /api/modes/freestyle/preferences", s.handleFreestylePreferences)
 	mux.HandleFunc("PUT /api/modes/autopilot/preferences", s.handleAutopilotPreferences)
 	mux.HandleFunc("PUT /api/modes/autopilot/arc", s.handleAutopilotArc)
 	s.libraryRoutes(mux)

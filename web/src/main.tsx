@@ -9,6 +9,7 @@ import "./styles/shell.css";
 import "./styles/components.css";
 import "./styles/setpoint-controls.css";
 import "./styles/autopilot.css";
+import "./styles/freestyle.css";
 import "./styles/chat.css";
 import "./styles/voice.css";
 import "./styles/library.css";

@@ -4,11 +4,10 @@ import { t, translateKnown } from "../i18n";
 // of the same motion engine.
 import { useRef, useState } from "react";
 import { api } from "../api/client";
+import { FreestylePreferences, freestyleShapeStatus } from "../components/FreestyleControls";
 import { WorkspaceHead } from "../components/WorkspaceHead";
 import { useAppState, useToast , useMotionState } from "../state/app-state";
 
-const STYLES = ["gentle", "balanced", "intense"] as const;
-const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 
 export function PresetModesRoute() {
@@ -18,11 +17,10 @@ export function PresetModesRoute() {
   const locked = !backendOnline || readOnly;
   const modes = state?.modes;
   const freestyleActive = modes?.mode === "freestyle" || modes?.active_mode === "freestyle";
-  const style = state?.settings?.motion?.style ?? "balanced";
+  const preferences = state?.settings?.freestyle;
+  const shapeStatus = freestyleActive ? freestyleShapeStatus(modes?.freestyle) : "";
   const [pending, setPending] = useState(false);
   const pendingRef = useRef(false);
-  const [stylePending, setStylePending] = useState(false);
-  const stylePendingRef = useRef(false);
 
   async function startFreestyle() {
     if (pendingRef.current || locked) return;
@@ -54,28 +52,14 @@ export function PresetModesRoute() {
       refresh();
     }
   }
-  async function setStyle(s: string) {
-    if (stylePendingRef.current || locked) return;
-    stylePendingRef.current = true;
-    setStylePending(true);
-    try {
-      await api.applyQuick({ style: s });
-    } catch (e) {
-      show(msg(e), "error");
-    } finally {
-      stylePendingRef.current = false;
-      setStylePending(false);
-      refresh();
-    }
-  }
 
   return (
     <>
-      <WorkspaceHead title={t("Preset modes")} lede="Deterministic autonomous motion through the shared engine." />
+      <WorkspaceHead title={t("Preset modes")} />
 
       <section className="panel">
         <h2 className="section-title">{t("Freestyle")}</h2>
-        <p className="hint-block">{t("Deterministic autonomous motion across bounded arrangement segments.")}</p>
+        <p className="hint-block">{t("One continuous stream of strokes that keeps evolving. Shape it with the controls below; changes ease in while it plays.")}</p>
         <div className="row-actions hint-block">
           {freestyleActive ? (
             <button type="button" className="btn btn-secondary" onClick={() => void stopModes()} disabled={locked || pending}>{t("Stop Freestyle")}</button>
@@ -83,28 +67,17 @@ export function PresetModesRoute() {
             <button type="button" className="btn btn-start" onClick={() => void startFreestyle()} disabled={locked || pending}>{t("Start Freestyle")}</button>
           )}
           {freestyleActive && motion?.engine?.paused && <span className="form-status">{t("Paused")}</span>}
+          {shapeStatus && <span className="form-status freestyle-shape-status" role="status">{shapeStatus}</span>}
         </div>
-        <div className="field">
-          <span className="label">{t("Style")}<span className="hint-inline">{t("biases pacing")}</span></span>
-          <div className="segmented" role="group" aria-label={t("Motion style")}>
-            {STYLES.map((s) => (
-              <button key={s} type="button" aria-pressed={style === s} disabled={locked || stylePending} onClick={() => void setStyle(s)}>
-                {translateKnown(cap(s))}
-              </button>
-            ))}
-          </div>
-        </div>
+        {preferences && (
+          <FreestylePreferences
+            value={preferences}
+            disabled={locked || modes?.freestyle?.ending === true}
+            onSaved={() => refresh()}
+            onError={(error) => show(msg(error), "error")}
+          />
+        )}
         {locked && <p className="form-status">{readOnly ? t("Read-only client.") : t("Core offline.")}</p>}
-      </section>
-
-      <section className="panel">
-        <h2 className="section-title">{t("Preset arrangements")}</h2>
-        <p className="coming-soon">{t("Saved arrangements are not available yet.")}</p>
-        <div className="chip-row" aria-hidden="true">
-          {["Slow build", "Waves", "Edge", "Steady", "Cooldown"].map((c) => (
-            <span key={c} className="chip chip-placeholder">{c}</span>
-          ))}
-        </div>
       </section>
     </>
   );

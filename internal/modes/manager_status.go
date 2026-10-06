@@ -16,6 +16,7 @@ func (m *Manager) Status() Status {
 	pendingMotion := m.motion.pending != nil
 	speechDeadline := m.speech.deadline
 	speechWaiting := m.speech.waitingID != ""
+	freestyle := m.freestyle
 	m.mu.Unlock()
 	now := m.options.Now()
 
@@ -27,6 +28,10 @@ func (m *Manager) Status() Status {
 	if mode != "" {
 		status.Style = m.options.Settings().Style
 		status.StatusAt = now.UTC().Format(time.RFC3339Nano)
+	}
+	if mode == ModeFreestyle {
+		status.Freestyle = m.freestyleStatus(freestyle)
+		status.Style = status.Freestyle.Feel
 	}
 	if !lastEventAt.IsZero() {
 		status.LastEventAt = lastEventAt.UTC().Format(time.RFC3339Nano)

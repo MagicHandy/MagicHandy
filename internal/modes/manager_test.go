@@ -32,6 +32,36 @@ type fakeEngine struct {
 	startEntered chan struct{}
 	startRelease chan struct{}
 	startOnce    sync.Once
+	// now and targetAt simulate a Freestyle window's playhead: one stroke per
+	// fakeStrokeMillis from the moment the window was applied.
+	now      func() time.Time
+	targetAt time.Time
+}
+
+const fakeStrokeMillis = 800
+
+func (f *fakeEngine) clock() time.Time {
+	if f.now != nil {
+		return f.now()
+	}
+	return time.Now()
+}
+
+// freestyleProgressLocked mirrors the engine's progress readout for a
+// Freestyle window. Caller holds f.mu.
+func (f *fakeEngine) freestyleProgressLocked() *motion.FreestyleProgress {
+	flow := f.target.Flow
+	if !f.running || flow == nil || flow.Freestyle == nil {
+		return nil
+	}
+	window := flow.Freestyle
+	total := int64(window.Strokes * fakeStrokeMillis)
+	elapsed := min(total, max(0, f.clock().Sub(f.targetAt).Milliseconds()))
+	playing := window.StartStroke + min(window.Strokes-1, int(elapsed/fakeStrokeMillis))
+	end := window.StartStroke + window.Strokes
+	return &motion.FreestyleProgress{Seed: flow.Seed, StartStroke: window.StartStroke, EndStroke: end,
+		PlayingStroke: playing, EditableStroke: min(end, playing+3), RemainingMillis: total - elapsed,
+		StrokeMillis: fakeStrokeMillis}
 }
 
 func (f *fakeEngine) Start(ctx context.Context, target motion.MotionTarget, _ config.MotionSettings) (motion.ActiveMotionState, error) {
@@ -53,6 +83,7 @@ func (f *fakeEngine) Start(ctx context.Context, target motion.MotionTarget, _ co
 	f.running = true
 	f.paused = false
 	f.target = target
+	f.targetAt = f.clock()
 	f.starts = append(f.starts, target)
 	return motion.ActiveMotionState{Running: true, Target: target}, nil
 }
@@ -66,13 +97,15 @@ func (f *fakeEngine) ApplyTarget(_ context.Context, target motion.MotionTarget, 
 		return motion.ActiveMotionState{}, f.targetErr
 	}
 	f.target = target
+	f.targetAt = f.clock()
 	return motion.ActiveMotionState{Running: f.running, Target: target}, nil
 }
 
 func (f *fakeEngine) Snapshot() motion.ActiveMotionState {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return motion.ActiveMotionState{Running: f.running, Paused: f.paused, Target: f.target}
+	return motion.ActiveMotionState{Running: f.running, Paused: f.paused, Target: f.target,
+		Freestyle: f.freestyleProgressLocked()}
 }
 
 func (f *fakeEngine) setState(running bool, paused bool) {
@@ -107,6 +140,9 @@ func (c *fakeClock) Advance(d time.Duration) {
 
 func newTestManager(t *testing.T, engine *fakeEngine, clock *fakeClock, traces *diagnostics.TraceRing) *Manager {
 	t.Helper()
+	engine.mu.Lock()
+	engine.now = clock.Now
+	engine.mu.Unlock()
 	manager, err := NewManager(Options{
 		Ensure:   func(context.Context) (Engine, error) { return engine, nil },
 		Current:  func() Engine { return engine },
@@ -175,19 +211,6 @@ func waitForAutonomousStart(t *testing.T, manager *Manager, engine *fakeEngine) 
 	})
 }
 
-func TestArmSegmentUsesLatencyAwareDwellFloor(t *testing.T) {
-	clock := &fakeClock{now: time.Unix(0, 0)}
-	manager := &Manager{options: Options{Now: clock.Now}, loop: modeLoopState{mode: ModeFreestyle, generation: 1}}
-	manager.armSegment(ModeFreestyle, Segment{DurationMillis: 1000}, nil, 9000, 1)
-	if got := manager.motion.deadline.Sub(clock.Now()); got != 9750*time.Millisecond {
-		t.Fatalf("latency dwell = %s, want 9.75s", got)
-	}
-	manager.armSegment(ModeFreestyle, Segment{DurationMillis: 1000}, nil, 30000, 1)
-	if got := manager.motion.deadline.Sub(clock.Now()); got != maximumLatencyDwell {
-		t.Fatalf("capped latency dwell = %s, want %s", got, maximumLatencyDwell)
-	}
-}
-
 func TestTransientStartFailureRetainsRecoveryBackoff(t *testing.T) {
 	clock := &fakeClock{now: time.Unix(100, 0)}
 	manager := &Manager{
@@ -232,7 +255,7 @@ func TestTerminalFailureCannotStopNewerModeGeneration(t *testing.T) {
 	}
 }
 
-func TestFreestyleCrossesSegmentBoundariesWithoutRestarting(t *testing.T) {
+func TestFreestyleContinuesOneStreamWithoutRestarting(t *testing.T) {
 	engine := &fakeEngine{}
 	clock := &fakeClock{now: time.Unix(0, 0)}
 	traces := diagnostics.NewTraceRing(256)
@@ -243,38 +266,42 @@ func TestFreestyleCrossesSegmentBoundariesWithoutRestarting(t *testing.T) {
 	}
 	waitForAutonomousStart(t, manager, engine)
 
-	// Cross four segment boundaries by jumping the planner clock.
+	// Play each window close to its end; the manager continues the stream.
 	for range 4 {
 		before := manager.Status().SegmentIndex
-		clock.Advance(150 * time.Second)
+		clock.Advance(90 * time.Second)
 		waitFor(t, 2*time.Second, func() bool { return manager.Status().SegmentIndex > before })
 	}
 
-	starts, retargets := engine.counts()
-	if starts != 1 {
-		t.Fatalf("starts = %d, want exactly 1 (segment changes must retarget, not restart)", starts)
+	engine.mu.Lock()
+	starts, targets := append([]motion.MotionTarget(nil), engine.starts...), append([]motion.MotionTarget(nil), engine.targets...)
+	engine.mu.Unlock()
+	if len(starts) != 1 || len(targets) < 4 {
+		t.Fatalf("starts=%d continuations=%d, want one start and every window a continuation", len(starts), len(targets))
 	}
-	if retargets < 4 {
-		t.Fatalf("retargets = %d, want >= 4", retargets)
+	first := starts[0].Flow
+	if first == nil || first.Freestyle == nil || first.Freestyle.StartStroke != 0 {
+		t.Fatalf("first window = %+v, want a stream from stroke 0", first)
 	}
-
-	// Planner decisions are traceable: seed, style, and full score tables.
-	countSegmentRows := func() int {
-		rows := 0
-		for _, row := range traces.Rows() {
-			if row.Planner != nil && row.Planner.Event == "freestyle_segment" {
-				rows++
-			}
+	previous := first.Freestyle.StartStroke
+	for _, target := range targets {
+		window := target.Flow.Freestyle
+		if target.Flow.Seed != first.Seed || window.StartStroke <= previous || window.FromStroke != 0 {
+			t.Fatalf("continuation left the stream: seed %d->%d start %d after %d", first.Seed, target.Flow.Seed, window.StartStroke, previous)
 		}
-		return rows
+		previous = window.StartStroke
 	}
-	waitFor(t, 2*time.Second, func() bool { return countSegmentRows() >= 4 })
+	rows := 0
 	for _, row := range traces.Rows() {
-		if row.Planner != nil && row.Planner.Event == "freestyle_segment" {
-			if row.Planner.Seed != 42 || len(row.Planner.Scores) != 3 || row.Planner.Style == "" {
-				t.Fatalf("planner row incomplete: %+v", row.Planner)
+		if row.Planner != nil && row.Planner.Event == "freestyle_continue" {
+			if row.Planner.Seed != int64(first.Seed) || row.Planner.Style == "" || row.Planner.PatternIdentifier != "freestyle_stream" {
+				t.Fatalf("continuation row incomplete: %+v", row.Planner)
 			}
+			rows++
 		}
+	}
+	if rows < 4 {
+		t.Fatalf("continuation rows = %d, want >= 4", rows)
 	}
 }
 
@@ -317,7 +344,7 @@ func TestFreestyleSuspendsWhilePausedAndUserPauseIsNeverOverridden(t *testing.T)
 		t.Fatalf("paused freestyle acted: starts=%d retargets=%d", starts, retargets)
 	}
 
-	// Resume: the planner continues.
+	// Resume: the stream continues.
 	engine.setState(true, false)
 	finishResume, admitted := manager.BeginUserResume()
 	if !admitted {
@@ -326,6 +353,9 @@ func TestFreestyleSuspendsWhilePausedAndUserPauseIsNeverOverridden(t *testing.T)
 	finishResume(true)
 	clock.Advance(300 * time.Second)
 	waitFor(t, time.Second, func() bool { return retargetCount(engine) >= 1 })
+	if status := manager.Status(); status.Freestyle == nil || status.Freestyle.Shape != config.FreestyleShapeSteady {
+		t.Fatalf("Freestyle status = %+v", status.Freestyle)
+	}
 }
 
 func TestOverlappingPauseFailureKeepsConfirmedLatch(t *testing.T) {
