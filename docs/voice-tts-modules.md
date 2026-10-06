@@ -18,6 +18,17 @@ The 0.6B model limits VRAM use relative to the 1.7B model and is the first model
 to test alongside a local LLM. Chatterbox Turbo is the fallback when the Faster
 Qwen runtime is unsuitable. Neither module is required to run MagicHandy.
 
+Easy Setup follows this preference too. It checks the selected chat model and
+voice together, with a desktop reserve, and falls back to Chatterbox on GPU or
+CPU when the estimate exceeds the GPU's total memory. Turning on spoken replies
+reveals both modules, their tradeoffs and a non-blocking memory warning. You can
+choose Qwen even below its estimate, then provide its reference WAV and exact
+transcript directly in the guided setup panel. An explicit "Set up voice later"
+choice leaves replies off until Settings > Voice completes configuration.
+Unknown GPU or model memory is explicitly
+unconfirmed. The numbers are planning estimates rather than measured peak
+allocations; see the [ADR 0037 amendment](decisions/0037-easy-setup.md).
+
 ## Installation Contract
 
 Choose a managed module in `install.ps1`, or run

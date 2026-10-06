@@ -1153,7 +1153,7 @@ export interface SetupJob {
 export interface SetupInstallPlan {
   llama?: { backend: "auto" | "cpu" | "cuda" };
   model?: { catalog_id: string };
-  voice?: { module: string; device: "cpu" | "cuda"; auto_launch: boolean };
+  voice?: { module: string; device: "cpu" | "cuda"; auto_launch: boolean; reference?: { wav: string; transcript: string } };
   parakeet: boolean;
   enable_voice?: boolean;
 }

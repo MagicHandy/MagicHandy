@@ -30,15 +30,24 @@ The Welcome step offers two paths ([ADR 0037](decisions/0037-easy-setup.md)):
 
 - **Easy setup** (default, recommended): four steps. Welcome, Your setup,
   Install, Finish. The backend assesses the computer
-  (`assessment` in `GET /api/setup/status`) and reports met, partly met or
+  (`assessment` in `GET /api/setup`) and reports met, partly met or
   not met for chat, voice output and voice input, with a reason code and the
   disk space each needs. It picks the first curated model the GPU holds, or
   keeps a ready model that is already selected. The page asks how explicit
-  chat should be, whether to speak replies aloud (Chatterbox Turbo on the
-  assessed device), whether to talk instead of typing (Parakeet), and
+  chat should be, whether to speak replies aloud, whether to talk instead of
+  typing (Parakeet), and
   optionally the Handy connection key. **Install and continue** submits the
   same install plan as Custom setup. Access stays local-only, and chat is
   skipped when its requirements are not met.
+  Spoken replies prefer Qwen3-TTS when its combined LLM/voice VRAM estimate fits
+  on NVIDIA; otherwise Chatterbox is selected, on CPU if necessary. Both modules
+  remain visible choices with performance and reference-voice explanations.
+  Insufficient or unknown VRAM produces a warning and does not block selecting
+  Qwen. Selecting Qwen opens a guided sample-and-transcript panel on the same
+  page, or an explicit option to configure it later in Settings > Voice.
+  Its card and panel both explain that a sample and exact transcript are required
+  before it can speak. The estimate comes from the backend, including the actual selected
+  store model; the browser does not recalculate it (ADR 0037 amendment).
 - **Custom setup**: the seven steps below. Welcome, Access, Device, Chat AI,
   Voice, Install, Finish.
 
@@ -86,8 +95,14 @@ including the always-reachable Emergency Stop.
 
 5. Voice (both optional)
    - output: none / Faster Qwen3-TTS / Chatterbox / external compatible server
+     - Qwen3-TTS: NVIDIA required; preferred unless combined LLM/voice VRAM
+       estimate is insufficient (a manual choice is still allowed with a warning)
+       - configure now: choose WAV + enter its exact spoken words; backend
+         checks format and length; install with that validated reference
+       - set up voice later: install Qwen, leave spoken replies off
+     - Chatterbox: included Emily voice; GPU when it fits, CPU fallback otherwise
    - input: install Parakeet or skip
-   - turn voice on when installation finishes (modules that need no reference)
+   - turn voice on when installation finishes (included voice, or validated Qwen reference)
 
 6. Install
    - review the selected local components as one plan
@@ -181,13 +196,19 @@ approximate disk impact, and reference requirement. The server installation
 can be configured for app auto-launch.
 
 Chatterbox is marked **Ready after install** because its included voice needs
-no reference. When it or Parakeet is chosen, **Turn voice on when installation
-finishes** appears, checked by default. With it on, a successful install turns
-voice on and, for Chatterbox, spoken chat replies; the settings transition then
-starts the workers. Faster Qwen3-TTS stays off because it cannot speak until a
-reference WAV and its exact transcript are set in Settings > Voice, which the
-step says. An external voice server is configured later in Settings > Voice.
-Provider tuning remains in Settings > Voice.
+no reference. Qwen opens an inline guide for a local WAV and its exact transcript,
+with an explicit **Set up voice later** option. Its choice card and guide both
+explain that an audio sample and transcript are required before it can speak.
+The backend checks the sample's format and duration before installation and
+again before saving it; it does not verify the spoken words.
+
+When Chatterbox, a configured Qwen reference, or Parakeet is chosen, **Turn voice
+on when installation finishes** appears, checked by default. With it on, a
+successful install turns voice on and enables spoken replies for Chatterbox or
+Qwen with a validated reference; the settings transition starts the workers.
+Deferring Qwen's reference keeps spoken replies off, even when voice input is
+enabled. An external voice server and advanced provider tuning remain in
+Settings > Voice.
 
 ## Installation Jobs
 

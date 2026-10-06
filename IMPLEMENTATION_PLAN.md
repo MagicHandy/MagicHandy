@@ -2114,6 +2114,13 @@ get a recommendation. It also added the model test and known template fixes
 (ADR 0035), release-pinned runtime updates with notifications (ADR 0036), and
 Easy setup (ADR 0037). Easy setup assesses the computer and asks only for
 explicitness, voice output and voice input.
+The 2026-10-05 amendment prefers Qwen3-TTS when the combined chat/voice VRAM
+allowance fits, exposes both modules with tradeoffs, and allows a manual Qwen
+choice with an insufficient/unknown-memory warning. Backend estimates describe
+the model actually selected, and Chatterbox can fall back to CPU (ADR 0037).
+Both setup paths offer an inline Qwen WAV/transcript guide with explicit defer,
+bounded backend validation and a server-side speech-enablement gate. A consultation
+with Claude Opus 5.5 kept this within the existing four-step Easy flow.
 
 **GUI installer decision** (ADR 0011; evaluation in
 [docs/gui-installer.md](docs/gui-installer.md)): the heavily interactive

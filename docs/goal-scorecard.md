@@ -1,5 +1,33 @@
 # Goal Scorecard
 
+## 2026-10-05 — Easy Setup voice selection and Qwen reference guide
+
+Easy Setup prefers Qwen3-TTS when its combined LLM/voice planning allowance
+fits, offers both voice modules with tradeoffs, and guides a local sample and
+exact transcript in the existing step. The backend owns memory verdicts and
+validates the reference before enabling speech. No dependency, transport or
+motion source is added. See the [review](easy-setup-voice-review-2026-10-05.md)
+and [ADR 0037 amendment](decisions/0037-easy-setup.md).
+
+Windows amd64, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -buildvcs=false
+-ldflags -w`. The baseline is a clean archive of `d54fe017`; identical flags
+omit VCS build metadata from both binaries. Gzip uses Node level 9.
+
+| Artifact | Alpha.55 baseline | This change | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 23,153,664 B | 23,214,080 B | +60,416 B |
+| Main JS, raw / gzip-9 | 1,015,603 / 277,128 B | 1,028,321 / 280,263 B | +12,718 / +3,135 B |
+| Main CSS, raw / gzip-9 | 174,553 / 31,039 B | 174,553 / 31,039 B | unchanged |
+| All embedded assets | 2,593,960 B | 2,633,135 B | +39,175 B |
+
+The UI uses existing controls/styles and 33 new strings in five locales. WAV
+checks retain at most 16 MiB plus one byte temporarily and retain no audio in
+the app, logs or reports. The review app's warm working set was 77,230,080 B
+(73.7 MiB), with 62,238,720 B private memory after the browser/setup/LLM probe;
+this is not a controlled baseline RSS comparison or a synthesis benchmark.
+The existing SQLite RSS waiver and main-bundle advisory remain unchanged; the
+core remains below the 30 MB budget.
+
 ## 2026-10-03 — Creative v2 rejection diagnostics
 
 The model schema now requires a non-empty reply and invalid transactions report

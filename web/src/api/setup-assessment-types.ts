@@ -16,7 +16,26 @@ export interface SetupAssessment {
   voice_input: SetupRequirement;
   model_id?: string;
   model_installed_id?: string;
+  model_name?: string;
   runtime_backend: "cpu" | "cuda";
   voice_module: string;
   voice_device: "cpu" | "cuda";
+  voice_options?: SetupVoiceOption[];
+}
+
+export interface SetupVoiceMemory {
+  status: "fits" | "insufficient" | "unknown" | "cpu";
+  llm_known: boolean;
+  llm_vram_mib: number;
+  voice_vram_mib: number;
+  reserve_mib: number;
+  required_mib: number;
+  available_mib: number;
+}
+
+export interface SetupVoiceOption {
+  module: "faster-qwen3-tts" | "chatterbox";
+  device: "cpu" | "cuda";
+  requirement: SetupRequirement;
+  memory: SetupVoiceMemory;
 }

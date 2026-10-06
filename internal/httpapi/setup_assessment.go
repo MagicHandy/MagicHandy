@@ -22,6 +22,7 @@ const (
 	setupCUDARuntimeBytes    = 1280 << 20
 	setupCPURuntimeBytes     = 64 << 20
 	setupChatterboxBytes     = 6 << 30
+	setupQwenBytes           = 8 << 30
 	setupParakeetBytes       = 800 << 20
 	setupModelDownloadMargin = 512 << 20
 )
@@ -41,15 +42,17 @@ type setupRequirement struct {
 // setupAssessment is what Easy Setup shows and installs: a verdict for chat,
 // voice output and voice input, and the choices it made for this machine.
 type setupAssessment struct {
-	FreeDiskBytes  uint64           `json:"free_disk_bytes"`
-	Chat           setupRequirement `json:"chat"`
-	VoiceOutput    setupRequirement `json:"voice_output"`
-	VoiceInput     setupRequirement `json:"voice_input"`
-	ModelID        string           `json:"model_id,omitempty"`
-	ModelInstalled string           `json:"model_installed_id,omitempty"`
-	RuntimeBackend string           `json:"runtime_backend"`
-	VoiceModule    string           `json:"voice_module"`
-	VoiceDevice    string           `json:"voice_device"`
+	FreeDiskBytes  uint64             `json:"free_disk_bytes"`
+	Chat           setupRequirement   `json:"chat"`
+	VoiceOutput    setupRequirement   `json:"voice_output"`
+	VoiceInput     setupRequirement   `json:"voice_input"`
+	ModelID        string             `json:"model_id,omitempty"`
+	ModelInstalled string             `json:"model_installed_id,omitempty"`
+	ModelName      string             `json:"model_name,omitempty"`
+	RuntimeBackend string             `json:"runtime_backend"`
+	VoiceModule    string             `json:"voice_module"`
+	VoiceDevice    string             `json:"voice_device"`
+	VoiceOptions   []setupVoiceOption `json:"voice_options"`
 }
 
 // assessSetup judges this machine for Easy Setup. Local chat needs an NVIDIA
@@ -71,14 +74,13 @@ func (s *Server) assessSetup(ctx context.Context, hardware map[string]any, helpe
 	}
 	assessment.Chat = s.assessSetupChat(ctx, &assessment, windows, nvidia, vram)
 
-	switch {
-	case !windows || !helpers["voice"]:
-		assessment.VoiceOutput = setupRequirement{Status: setupRequirementUnmet, Reason: "unavailable"}
-	case nvidia:
-		assessment.VoiceOutput = setupRequirement{Status: setupRequirementMet, Reason: "gpu", Bytes: setupChatterboxBytes}
-	default:
-		assessment.VoiceOutput = setupRequirement{Status: setupRequirementPartial, Reason: "cpu", Bytes: setupChatterboxBytes}
+	assessment.VoiceOptions = assessSetupVoice(assessment.Chat, windows && helpers["voice"], nvidia, vram)
+	preferred := assessment.VoiceOptions[0]
+	if preferred.Requirement.Status == setupRequirementUnmet || preferred.Memory.Status == "insufficient" {
+		preferred = assessment.VoiceOptions[1]
 	}
+	assessment.VoiceModule, assessment.VoiceDevice = preferred.Module, preferred.Device
+	assessment.VoiceOutput = preferred.Requirement
 	switch {
 	case !windows || !helpers["parakeet"]:
 		assessment.VoiceInput = setupRequirement{Status: setupRequirementUnmet, Reason: "unavailable"}
@@ -91,6 +93,12 @@ func (s *Server) assessSetup(ctx context.Context, hardware map[string]any, helpe
 }
 
 func (s *Server) assessSetupChat(ctx context.Context, assessment *setupAssessment, windows, nvidia bool, vram int) setupRequirement {
+	// Easy Setup keeps a ready selected model. Its memory verdict must describe
+	// that model, not a different catalog download the browser never installs.
+	settings, _ := s.store.Snapshot()
+	if requirement, ok := s.assessSelectedSetupChat(ctx, assessment, settings.LLM, nvidia, vram); ok {
+		return requirement
+	}
 	switch {
 	case !windows:
 		return setupRequirement{Status: setupRequirementUnmet, Reason: "platform"}
@@ -115,16 +123,16 @@ func (s *Server) assessSetupChat(ctx context.Context, assessment *setupAssessmen
 		return setupRequirement{Status: setupRequirementUnmet, Reason: "vram_below", MinVRAMMiB: smallest}
 	}
 	assessment.ModelID = chosen.ID
+	assessment.ModelName = chosen.DisplayName
 	requirement := setupRequirement{Status: setupRequirementMet, Reason: "gpu_fits", VRAMMiB: chosen.VRAMMiB, MinVRAMMiB: chosen.MinVRAMMiB}
 	if vram <= 0 {
 		requirement.Status, requirement.Reason = setupRequirementPartial, "vram_unknown"
 	}
-	if runtimeStatus := s.managedLLM.Snapshot().Runtime; !runtimeStatus.Installed || !runtimeStatus.Current {
-		requirement.Bytes = setupCPURuntimeBytes
-		if assessment.RuntimeBackend == config.TTSDeviceCUDA {
-			requirement.Bytes = setupCUDARuntimeBytes
-		}
+	if settings.LLM.LlamaCPPContextSize > config.DefaultLlamaCPPContextSize {
+		requirement.Status, requirement.Reason = setupRequirementPartial, "model_unknown"
+		requirement.VRAMMiB, requirement.MinVRAMMiB = 0, 0
 	}
+	requirement.Bytes = s.setupRuntimeBytes(assessment.RuntimeBackend)
 	installed, err := s.models.CatalogModelInstalled(ctx, *chosen)
 	if err == nil && installed != "" {
 		assessment.ModelInstalled = installed
@@ -134,4 +142,15 @@ func (s *Server) assessSetupChat(ctx context.Context, assessment *setupAssessmen
 		requirement.Bytes += uint64(remaining) + setupModelDownloadMargin //nolint:gosec // remaining is positive.
 	}
 	return requirement
+}
+
+func (s *Server) setupRuntimeBytes(backend string) uint64 {
+	status := s.managedLLM.Snapshot().Runtime
+	if status.Installed && status.Current {
+		return 0
+	}
+	if backend == config.TTSDeviceCUDA {
+		return setupCUDARuntimeBytes
+	}
+	return setupCPURuntimeBytes
 }

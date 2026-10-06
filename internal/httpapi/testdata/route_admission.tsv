@@ -191,6 +191,7 @@ host	POST /api/setup/complete
 host	POST /api/setup/install
 host	POST /api/setup/llm/install
 host	POST /api/setup/parakeet/install
+host	POST /api/setup/qwen/reference/check
 host	POST /api/setup/voice/install
 gateway	POST /api/transport/bluetooth/ack
 host	POST /api/transport/bluetooth/check
