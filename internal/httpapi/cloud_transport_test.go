@@ -324,7 +324,7 @@ func newCloudTestServer(t *testing.T, runtime Runtime) *Server {
 	if runtime.Transport == nil {
 		runtime.Transport = transport.NewFake()
 	}
-	store, err := config.OpenStore(t.TempDir())
+	store, err := openTestStore(t)
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}

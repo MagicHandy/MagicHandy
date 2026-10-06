@@ -46,6 +46,18 @@ The full local Windows race run passes with `internal/httpapi` at 306.833 s.
 Its stalled-reader fixture carries the already-reviewed #290 twenty-second
 outer wait; no production deadline, race coverage or gate is weakened.
 
+## 2026-09-30 — httpapi race test time
+
+`internal/httpapi` tests now copy one migrated datastore per test binary instead
+of migrating a fresh one for every server. In CI's full `go test -race ./...`
+step the package took 586 s on main (run 36653072900) and 491.7 s on
+run 36801914758; with this change it took 197.6 s (run 36802851199), and 168.2 s
+when run alone. The whole race step finished in 4 min 15 s. Without `-race` the
+package fell from 75.9 s to 56.5 s in CI, and opening one store from about 25 ms
+to 4 ms locally. Coverage is unchanged: every test still gets a private database
+through the normal `config.OpenStore` path, and `internal/store` tests still
+cover the migrations. The race steps keep `-timeout 20m` as headroom. About 37 s
+of the remaining time is fixed deadline waits in a few tests.
 
 ## 2026-09-30 — Remote link and template file fixes
 
