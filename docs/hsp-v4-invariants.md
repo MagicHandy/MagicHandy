@@ -122,10 +122,19 @@ ship a public Application ID, but diagnostics still need to distinguish a missin
 invalid, revoked, or overridden Application ID from a malformed user connection
 key. An Application ID failure is not a connection-key problem.
 
+Connection keys follow the current API v3 `ConnectionKey` schema: 5–64 ASCII
+letters or digits, with case preserved. Trim only pasted outer whitespace.
+The older manufacturer help article describes generated keys as 5–32
+characters; its minimum agrees with the API, and neither supports an
+eight-character minimum. See the [Cloud API reference review](handy-cloud-api-review-2026-10-07.md).
+
 Test expectation:
 
 - missing/invalid API v3 Application ID reports HSP unavailable and dispatches no motion (there is no HDSP path)
 - malformed connection key reports a specific validation error
+- five-, six- and seven-character keys are valid for the read-only connection probe;
+  64-character keys are valid, while short, overlong and non-alphanumeric keys
+  fail locally without exposing the key
 - auth failure marks HSP unavailable
 
 ## Invariant 9: Active Settings Changes Refresh Motion Immediately

@@ -17,7 +17,8 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
-const cloudTestConnectionKey = "test-connection-key"
+// A five-character key must work through the app's Cloud endpoints too.
+const cloudTestConnectionKey = "aB3dE"
 
 func TestResolveCloudApplicationIDFallsBackToBundled(t *testing.T) {
 	settings := config.DefaultSettings()
@@ -31,8 +32,11 @@ func TestResolveCloudApplicationIDFallsBackToBundled(t *testing.T) {
 
 func TestCloudConnectionCheckEndpointReadsState(t *testing.T) {
 	cloudServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/hsp/state" {
-			t.Fatalf("path = %q, want /hsp/state", r.URL.Path)
+		if r.Method != http.MethodGet || r.URL.Path != "/hsp/state" {
+			t.Fatalf("request = %s %s, want GET /hsp/state", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("X-Connection-Key") != cloudTestConnectionKey {
+			t.Fatal("connection check did not preserve the five-character key")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"hsp_available":true,"playback_state":"idle"}`))

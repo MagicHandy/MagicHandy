@@ -105,8 +105,8 @@ func BuildCloudAuthMetadata(prerequisites CloudPrerequisites) (CloudAuthMetadata
 		return CloudAuthMetadata{}, hspUnavailable("invalid_application_id", "application_id", "API v3 Application ID is malformed")
 	case key == "":
 		return CloudAuthMetadata{}, hspUnavailable("missing_connection_key", "connection_key", "Handy connection key is required")
-	case strings.ContainsAny(key, " \t\r\n") || len(key) < 8:
-		return CloudAuthMetadata{}, hspUnavailable("malformed_connection_key", "connection_key", "Handy connection key is malformed")
+	case !validCloudConnectionKey(key):
+		return CloudAuthMetadata{}, hspUnavailable("malformed_connection_key", "connection_key", "Handy connection key is malformed; expected 5 to 64 letters or digits")
 	case prerequisites.FirmwareMajor != 4:
 		return CloudAuthMetadata{}, hspUnavailable("firmware_v4_required", "firmware_major", "Handy firmware v4 is required for HSP")
 	case prerequisites.APIMajor != 3:
@@ -122,6 +122,21 @@ func BuildCloudAuthMetadata(prerequisites CloudPrerequisites) (CloudAuthMetadata
 		FirmwareMajor:    prerequisites.FirmwareMajor,
 		APIMajor:         prerequisites.APIMajor,
 	}, nil
+}
+
+// validCloudConnectionKey follows API v3's ConnectionKey schema, which permits
+// 5..64 ASCII letters or digits. Key existence is checked by the Cloud API.
+func validCloudConnectionKey(key string) bool {
+	if len(key) < 5 || len(key) > 64 {
+		return false
+	}
+	for _, character := range key {
+		if (character < 'a' || character > 'z') && (character < 'A' || character > 'Z') &&
+			(character < '0' || character > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 // BuildStrokeWindow shapes the HSP stroke-window Cloud REST request.
