@@ -1,5 +1,18 @@
 # Goal Scorecard
 
+## 2026-10-07 — Handy Cloud connection-key validation
+
+Cloud prerequisite validation now follows the current API v3 connection-key
+schema (5–64 ASCII letters or digits), accepting five-character keys that
+alpha.56 incorrectly rejected. See the [reference review](handy-cloud-api-review-2026-10-07.md).
+No dependency, resident state, motion source or UI asset is added.
+
+Windows amd64, Go 1.26.8, `CGO_ENABLED=0`, `-ldflags '-s -w'`: the alpha.56
+source baseline (`3498269f`) and candidate each measure 21,838,848 B (0 B
+change), with identical build flags. Both measurements include the same dev
+version and VCS state. The embedded UI is unchanged. The core remains below
+the 30 MB budget; existing RSS and UI-bundle advisories remain in effect.
+
 ## 2026-10-05 — Easy Setup voice selection and Qwen reference guide
 
 Easy Setup prefers Qwen3-TTS when its combined LLM/voice planning allowance

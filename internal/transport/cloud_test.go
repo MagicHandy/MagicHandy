@@ -9,7 +9,8 @@ import (
 	"testing"
 )
 
-const cloudSecretFixture = "user-secret-key"
+// Keep the minimum-length key in transport dispatch and redaction coverage.
+const cloudSecretFixture = "aB3dE"
 
 func TestCloudRequestGoldenShape(t *testing.T) {
 	builder := newCloudBuilder(t, CloudBuildOptions{})
