@@ -48,9 +48,9 @@ func (p *preparedLLMProvider) StreamChat(ctx context.Context, request llm.ChatRe
 	// saved configuration as well as its generation before touching a runtime.
 	current, _ := p.server.store.Snapshot()
 	currentSettings := current.LLM.ConversationSettings()
-	if p.settings.RequestRole == "refusal_fallback" {
+	if p.settings.RequestRole == "refusal_fallback" || p.settings.RequestRole == "local_check" {
 		stopSequence, hasEpoch := ctx.Value(refusalRetryStopKey{}).(uint64)
-		if !current.LLM.RetryRefusalLocally || p.settings.IsHosted() || !hasEpoch || p.server.chatCanceled(ctx, stopSequence) {
+		if (p.settings.RequestRole == "refusal_fallback" && !current.LLM.RetryRefusalLocally) || p.settings.IsHosted() || !hasEpoch || p.server.chatCanceled(ctx, stopSequence) {
 			return "", context.Canceled
 		}
 		currentSettings = current.LLM.LocalSettings()

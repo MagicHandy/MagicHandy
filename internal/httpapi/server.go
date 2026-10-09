@@ -524,6 +524,7 @@ func (s *Server) llmRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/llm/status", s.handleLLMStatus)
 	s.cloudPlanningRoutes(mux)
 	s.modelConnectionRoutes(mux)
+	mux.HandleFunc("POST /api/llm/local/test", s.handleSetupLocalModelTest)
 	mux.HandleFunc("POST /api/llm/load", s.handleLLMLoad)
 	mux.HandleFunc("POST /api/llm/unload", s.handleLLMUnload)
 	mux.HandleFunc("GET /api/llm/duplicates", s.handleManagedLLMDuplicates)

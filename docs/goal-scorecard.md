@@ -1,5 +1,26 @@
 # Goal Scorecard
 
+## 2026-10-09 — Guided local backup setup
+
+Compared with published `98ff285a`, on Windows amd64 Go 1.26.9,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`, with Node gzip
+level 9 and the single canonical embedded UI:
+
+| Artifact | Previous checkpoint | Guided backup setup | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 22,405,632 B | 22,429,696 B | +24,064 B |
+| Main JS, raw / gzip-9 | 1,102,208 / 297,394 B | 1,109,832 / 299,243 B | +7,624 / +1,849 B |
+| Main CSS, raw / gzip-9 | 176,544 / 31,473 B | 176,604 / 31,485 B | +60 / +12 B |
+| Complete embedded UI including index | 2,801,457 B | 2,818,566 B | +17,109 B |
+
+No dependency is added. The extra code implements the optional setup question,
+localized guidance, existing local editor reuse, and one explicit fixed-prompt
+local generation check. Normal local chat prompts and inference call counts
+are unchanged; the check runs only on user action. Stop cancels the existing
+local scheduler lane as well as hosted work. No new RSS, cold-start, or
+steady-state latency measurement is claimed. See the
+[setup and consultation review](setup-backup-review-2026-10-09.md).
+
 ## 2026-10-09 — Go security patch for the provider branch
 
 The published provider checkpoint's CI vulnerability gate reported 11 reachable

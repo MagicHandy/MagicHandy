@@ -22,9 +22,9 @@ function ConnectionOptions({ connections, local = true }: { connections: ModelCo
   </>;
 }
 
-export function ModelConnectionsPanel({ settings, saved, routing, locked, patch, localEditor }: {
+export function ModelConnectionsPanel({ settings, saved, routing, locked, patch, localEditor, setup = false }: {
   settings: PublicSettings["llm"]; saved: PublicSettings["llm"] | undefined; routing?: PublicSettings["model_routing"];
-  locked: boolean; patch: (next: Partial<PublicSettings["llm"]>) => void; localEditor?: ReactNode;
+  locked: boolean; patch: (next: Partial<PublicSettings["llm"]>) => void; localEditor?: ReactNode; setup?: boolean;
 }) {
   const connections = settings.connections ?? [];
   const planner = settings.motion_planner ?? defaultPlanner;
@@ -75,7 +75,7 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
 
   return <>
     <ModelRoutingSummary routing={routing} />
-    {draftChanged && <div className="model-routing-draft"><p className="hint" role="status">{t("Unsaved model changes. Chat still uses the saved routing above until you save settings.")}</p><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => { if (saved) patch(modelSettingsPatch(saved)); setManagedID(""); }}>{t("Discard model changes")}</button><p className="hint">{t("Saved accounts and API keys are not changed by Discard.")}</p></div>}
+    {draftChanged && !setup && <div className="model-routing-draft"><p className="hint" role="status">{t("Unsaved model changes. Chat still uses the saved routing above until you save settings.")}</p><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => { if (saved) patch(modelSettingsPatch(saved)); setManagedID(""); }}>{t("Discard model changes")}</button><p className="hint">{t("Saved accounts and API keys are not changed by Discard.")}</p></div>}
     <section className="model-role-section cloud-motion-settings" aria-label={t("Chat model settings")}>
       <h3 className="group-title">{t("Chat model")}</h3>
       <label className="field"><span className="visually-hidden">{t("Chat model")}</span><select value={conversationID} disabled={locked} onChange={event => chooseConnection(event.target.value, "chat")}>
@@ -86,14 +86,14 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
       {conversation && (planner.provider === "conversation" || planningConnection?.id === conversationID) && <p className="hint">{t("This connection is also used by Autopilot.")}</p>}
       {conversation ? <>
         {editor(conversation)}
-        <label className="field checkbox"><input type="checkbox" disabled={locked} checked={Boolean(settings.retry_refusal_locally)} onChange={event => patch({ retry_refusal_locally: event.target.checked })} /><span>{t("Retry declined chat requests with the local model")}</span></label>
+        {!setup && <><label className="field checkbox"><input type="checkbox" disabled={locked} checked={Boolean(settings.retry_refusal_locally)} onChange={event => patch({ retry_refusal_locally: event.target.checked })} /><span>{t("Retry declined chat requests with the local model")}</span></label>
         {settings.retry_refusal_locally && <>
           <DismissibleNotice id="model-local-retry" className="model-help"><p className="hint">{t("One local attempt after an explicit provider refusal, using your local prompt and the original conversation. Errors, incomplete output and refusal wording in an otherwise valid reply do not trigger a retry. Autopilot is unchanged.")}</p><p className="hint">{t("The local endpoint must be available. A cold model may take longer to load. No model is downloaded automatically.")}</p></DismissibleNotice>
           <p className="hint">{t("Local retry model: {provider} · {model}", { provider: settings.provider === "ollama" ? "Ollama" : "llama.cpp", model: settings.model || t("Choose a model") })}</p>
           {localEditor && (planner.provider === "local" || planner.connection_id === "local" ? <p className="hint">{t("Local model configuration is shared with Autopilot below.")}</p> : <details onToggle={event => setEditRetryModel(event.currentTarget.open)}><summary>{t("Configure local retry model")}</summary>{editRetryModel && localEditor}</details>)}
 
-        </>}
-        <DismissibleNotice id="model-chat-context" className="model-help"><details><summary>{t("Chat context and refusals")}</summary><p className="hint">{t("Included messages, enabled persona and memories are sent as written. Provider content rules still apply. A refusal stays with the selected provider unless you enable the local retry above.")}</p></details></DismissibleNotice>
+        </>}</>}
+        <DismissibleNotice id="model-chat-context" className="model-help"><details><summary>{t("Chat context and refusals")}</summary><p className="hint">{setup ? t("Included chat messages, enabled personas, and memories are sent to your selected provider. You can choose an optional local backup in the next step.") : t("Included messages, enabled persona and memories are sent as written. Provider content rules still apply. A refusal stays with the selected provider unless you enable the local retry above.")}</p></details></DismissibleNotice>
       </> : conversationID === "local" ? localEditor : <p role="alert">{t("The selected connection is unavailable. Choose a model before saving.")}</p>}
     </section>
     <section className="model-role-section cloud-motion-settings" aria-label={t("Autopilot model settings")}>
@@ -120,7 +120,7 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
       {managed && managed.id !== conversationID && managed.id !== planningConnection?.id ? editor(managed) : managed && <p className="hint">{t("This connection is configured in its model section above.")}</p>}
       <div className="button-row">{Object.keys(modelProviderNames).map(provider => <button type="button" className="btn btn-secondary" key={provider} disabled={locked || connections.length >= 16} onClick={() => addConnection(provider as ModelConnection["provider"])}>{t("Add {provider}", { provider: translateKnown(modelProviderNames[provider as ModelConnection["provider"]]) })}</button>)}</div>
     </details>
-    <DismissibleNotice id="model-save-guidance" className="model-help"><p className="hint">{t("Model choices apply when you save settings. Accounts and keys are saved immediately.")}</p></DismissibleNotice>
+    <DismissibleNotice id="model-save-guidance" className="model-help"><p className="hint">{setup ? t("Accounts and keys are saved immediately. Model choices apply when you continue.") : t("Model choices apply when you save settings. Accounts and keys are saved immediately.")}</p></DismissibleNotice>
     <DecisionsConnection locked={locked} onReadyChange={decisionsChanged} />
   </>;
 }

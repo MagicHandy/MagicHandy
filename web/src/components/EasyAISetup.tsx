@@ -56,7 +56,7 @@ export function EasyAISetup({ choice, combine, localAvailable, connection, setti
       <p className="hint-block">{combine ? t("Chat stays local; Autopilot varies the current motion without reading the conversation.") : t("Use this model for chat and motion. Included messages, personas and memories go to this provider.")}</p>
       {!localAvailable && <p className="hint-block">{t("A local AI model does not fit this computer. Use cloud only now, or configure another local server in Custom setup.")}</p>}
       <details><summary>{t("Context sharing details")}</summary>
-        <p className="hint-block">{combine ? t("Chat messages, personas, and memories stay out of the cloud motion request. You can change context sharing later in Settings > Model.") : t("Included chat messages, enabled personas, and memories are sent to your selected provider. Providers may refuse requests; MagicHandy does not rewrite or reroute them.")}</p>
+        <p className="hint-block">{combine ? t("Chat messages, personas, and memories stay out of the cloud motion request. You can change context sharing later in Settings > Model.") : t("Included chat messages, enabled personas, and memories are sent to your selected provider. You can choose an optional local backup in the next step.")}</p>
         {combine && <p className="hint-block">{t("The cloud planner follows motion settings and current movement, not the words in your conversation.")}</p>}
       </details>
     </>}

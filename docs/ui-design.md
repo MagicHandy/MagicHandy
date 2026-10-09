@@ -1226,3 +1226,21 @@ No Fast tier is offered without verified plan support.
 
 See [ADR 0039](decisions/0039-hosted-model-connections.md) and the
 [review evidence](cloud-model-review-2026-10-08.md).
+
+
+### Optional local backup after hosted setup (2026-10-09)
+
+When Chat uses ChatGPT or an API connection, Easy and Custom setup both show a
+separate Local backup (optional) step after the primary model configuration.
+New setups require an explicit choice; reconfiguration retains an enabled backup.
+Declining keeps automatic local retry off and schedules no backup download.
+Accepting reuses the local runtime/model controls and normal install plan while
+preserving the hosted Chat route. A backup requires a concrete model, rather
+than the primary local flow's "Add a model later" engine-only choice.
+
+Finish offers an explicit, text-only local generation check. Discovery alone
+cannot enable the final action. The probe uses the saved local configuration,
+never the hosted Chat route, conversation history or motion dispatch. Stop and
+controller takeover cancel the request. Descriptive refusal guidance remains
+dismissible; backup selection and check errors remain visible. Step navigation
+resets the inner setup scroller so the next question appears at the top.

@@ -22,7 +22,7 @@ func restrictPath(path string) error {
 }
 
 func lockCredentials(ctx context.Context, path string) (func(), error) {
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600) // #nosec G304 -- path is the host-owned credential store lock, never an HTTP or imported path.
 	if err != nil {
 		return nil, err
 	}

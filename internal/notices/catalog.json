@@ -20,5 +20,6 @@
   {"id": "model-response-speed", "label": "About response speed", "browser_only": false},
   {"id": "model-decisions", "label": "Optional Decisions API", "browser_only": false},
   {"id": "model-provider-privacy", "label": "Provider data collection", "browser_only": false},
-  {"id": "model-autopilot-context", "label": "Autopilot context sharing", "browser_only": false}
+  {"id": "model-autopilot-context", "label": "Autopilot context sharing", "browser_only": false},
+  {"id": "setup-local-backup", "label": "Local backup (optional)", "browser_only": false}
 ]

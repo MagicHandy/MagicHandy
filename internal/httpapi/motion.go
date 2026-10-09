@@ -501,6 +501,9 @@ func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context
 	}
 	s.controller.AdvanceStopGeneration()
 	sequence := s.stopSequence.Add(1)
+	// Local readiness checks and warmups are not chat turns. Cancel their
+	// scheduler lane too, including installations without account sessions.
+	s.llmRequests.invalidate()
 	s.cloudRequests.invalidate()
 	s.hostedRequests.invalidate()
 	finishLab := s.cancelLabSession()

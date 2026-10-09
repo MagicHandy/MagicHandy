@@ -803,3 +803,5 @@
 .easy-setup .toggle-line[data-disabled] {
   opacity: 0.6;
 }
+
+.setup-local-fields { border: 0; padding: 0; margin: 0; min-width: 0; }

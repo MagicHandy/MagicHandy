@@ -762,6 +762,7 @@ export const api = {
   cloudTest: (provider: string, model: string) => request<CloudPlanningStatus>("POST", "/api/llm/cloud/test", { provider, model }).then(checkedCloudStatus),
   cloudWelcome: () => request<CloudPlanningStatus>("POST", "/api/llm/cloud/welcome", {}).then(checkedCloudStatus),
   llmLoad: () => request<LLMProviderStatus>("POST", "/api/llm/load", {}),
+  checkSetupLocalModel: () => request<{ ready: boolean; message: string; model: string }>("POST", "/api/llm/local/test", {}),
   llmUnload: () => request<LLMProviderStatus>("POST", "/api/llm/unload", {}),
   llmDuplicates: () => request<ManagedLLMDuplicateSnapshot>("GET", "/api/llm/duplicates"),
   terminateLLMDuplicates: (pids: number[]) =>

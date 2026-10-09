@@ -33,6 +33,7 @@ describe("Easy hosted setup", () => {
     vi.mocked(useAppState).mockReturnValue({ state: { settings }, backendOnline: true, readOnly: false, refresh: vi.fn(async () => undefined) } as unknown as ReturnType<typeof useAppState>);
     vi.mocked(useToast).mockReturnValue({ show: vi.fn() } as unknown as ReturnType<typeof useToast>);
     vi.mocked(useAuth).mockReturnValue({ status: { initialized: false }, refresh: vi.fn() } as unknown as ReturnType<typeof useAuth>);
+    vi.spyOn(api, "networkStatus").mockResolvedValue({ active: { mode: "local", listen_address: "127.0.0.1:49717" }, saved: null } as never);
     vi.spyOn(api, "setupStatus").mockResolvedValue({ ...setupFixture, assessment });
     vi.spyOn(api, "llmModels").mockResolvedValue(emptyModels);
     vi.spyOn(api, "llmCatalog").mockResolvedValue({ models: [], hardware: { nvidia: true } });
@@ -46,6 +47,8 @@ describe("Easy hosted setup", () => {
     vi.spyOn(api, "modelConnectionModels").mockResolvedValue({ models: [{ id: "hosted-model", name: "Hosted model" }] });
     vi.spyOn(api, "modelConnectionTest").mockResolvedValue({ ready: true, message: "", provider: "compatible", model: "hosted-model" });
     vi.spyOn(api, "installSetupPlan").mockResolvedValue({ installation: { id: "install", status: "queued", kind: "install_plan" } as never });
+    vi.spyOn(api, "checkSetupLocalModel").mockResolvedValue({ ready: true, model: "local-model", message: "" });
+    vi.spyOn(api, "ollamaModels").mockResolvedValue({ available: true, models: [{ name: "installed-gemma", size_bytes: 1000 }] as never });
     vi.spyOn(api, "completeSetup").mockResolvedValue({ settings, signed_out: false });
     vi.spyOn(api, "saveSetupPreferences").mockImplementation(async update => {
       if (update.llm) settings = { ...settings, llm: { ...settings.llm, ...update.llm } };
@@ -85,11 +88,121 @@ describe("Easy hosted setup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Check model" }));
     await screen.findByText("Ready");
     fireEvent.click(continueButton());
+    await screen.findByRole("heading", { name: "Local backup (optional)" });
+    expect(continueButton()).toBeDisabled();
+    fireEvent.click(screen.getByRole("radio", { name: /^Continue without a backup/ }));
+    fireEvent.click(continueButton());
     await screen.findByRole("heading", { name: "Setup is ready" });
+    expect(settings.llm.retry_refusal_locally).toBe(false);
     expect(api.installSetupPlan).not.toHaveBeenCalled();
     expect(settings.llm.conversation_connection_id).toBe("openrouter-1");
     expect(settings.llm.motion_planner?.provider).toBe("conversation");
   });
+  it("offers an existing local backup after ChatGPT and checks it without changing the primary", async () => {
+    settings.llm = { ...settings.llm, provider: "ollama", model: "installed-gemma" };
+    await openEasy();
+    fireEvent.click(screen.getByRole("radio", { name: /^ChatGPT/ }));
+    await screen.findByRole("combobox", { name: "Available models" });
+    fireEvent.click(screen.getByRole("button", { name: "Check model" }));
+    await screen.findByText("Ready");
+    fireEvent.click(continueButton());
+    await screen.findByRole("heading", { name: "Local backup (optional)" });
+    fireEvent.click(screen.getByRole("radio", { name: /^Set up a local backup/ }));
+    expect(await screen.findByRole("combobox", { name: "Ollama model" })).toHaveValue("installed-gemma");
+    fireEvent.click(continueButton());
+    await screen.findByRole("heading", { name: "Setup is ready" });
+    expect(settings.llm).toMatchObject({ conversation_connection_id: "chatgpt-1", provider: "ollama", model: "installed-gemma", retry_refusal_locally: true });
+    expect(api.installSetupPlan).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Open MagicHandy" })).toBeDisabled();
+    vi.mocked(api.checkSetupLocalModel).mockResolvedValueOnce({ ready: false, message: "Local endpoint unavailable", model: "installed-gemma" });
+    fireEvent.click(screen.getByRole("button", { name: "Check local backup" }));
+    await screen.findByRole("alert");
+    expect(screen.getByRole("button", { name: "Open MagicHandy" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Check local backup" }));
+    await screen.findByRole("button", { name: "Local backup checked" });
+    expect(screen.getByRole("button", { name: "Open MagicHandy" })).toBeEnabled();
+  });
+
+  it("can leave Finish after a failed local check without restarting installation", async () => {
+    settings.llm = { ...settings.llm, provider: "ollama", model: "installed-gemma" };
+    await openEasy(); await chooseAPIModel();
+    fireEvent.click(screen.getByRole("button", { name: "Check model" }));
+    await screen.findByText("Ready"); fireEvent.click(continueButton());
+    await screen.findByRole("heading", { name: "Local backup (optional)" });
+    fireEvent.click(screen.getByRole("radio", { name: /^Set up a local backup/ }));
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    fireEvent.click(continueButton()); await screen.findByRole("heading", { name: "Setup is ready" });
+    vi.mocked(api.checkSetupLocalModel).mockResolvedValueOnce({ ready: false, message: "Unavailable", model: "installed-gemma" });
+    fireEvent.click(screen.getByRole("button", { name: "Check local backup" }));
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Continue without a backup" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Open MagicHandy" })).toBeEnabled());
+    expect(settings.llm.retry_refusal_locally).toBe(false);
+    expect(settings.llm.conversation_connection_id).toBe("openrouter-1");
+    expect(api.installSetupPlan).not.toHaveBeenCalled();
+  });
+
+  it("clears a stale local model when changing server types and explains the disabled Continue", async () => {
+    await openEasy(); await chooseAPIModel();
+    fireEvent.click(screen.getByRole("button", { name: "Check model" }));
+    await screen.findByText("Ready"); fireEvent.click(continueButton());
+    await screen.findByRole("heading", { name: "Local backup (optional)" });
+    expect(screen.getByText("Choose whether to set up a local backup.")).toBeVisible();
+    fireEvent.click(screen.getByRole("radio", { name: /^Set up a local backup/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /^Use my Ollama/ }));
+    expect(await screen.findByRole("combobox", { name: "Ollama model" })).toHaveValue("");
+    expect(continueButton()).toBeDisabled();
+    expect(screen.getByText("Choose a local model to continue.")).toBeVisible();
+    fireEvent.change(screen.getByRole("combobox", { name: "Ollama model" }), { target: { value: "installed-gemma" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check local backup" }));
+    await screen.findByRole("button", { name: "Local backup checked" });
+    fireEvent.click(continueButton()); await screen.findByRole("heading", { name: "Setup is ready" });
+    expect(screen.getByRole("button", { name: "Open MagicHandy" })).toBeEnabled();
+    expect(api.checkSetupLocalModel).toHaveBeenCalledOnce();
+  });
+
+  it("includes the selected managed backup download in the install plan while preserving API chat", async () => {
+    vi.mocked(api.llmCatalog).mockResolvedValue({ hardware: { nvidia: true }, models: [{ id: "backup-catalog", display_name: "Backup Gemma", fit: "recommended", size_bytes: 1000 }] as never });
+    await openEasy(); await chooseAPIModel();
+    fireEvent.click(screen.getByRole("button", { name: "Check model" }));
+    await screen.findByText("Ready");
+    fireEvent.click(continueButton());
+    await screen.findByRole("heading", { name: "Local backup (optional)" });
+    fireEvent.click(screen.getByRole("radio", { name: /^Set up a local backup/ }));
+    expect(screen.queryByRole("radio", { name: /^Add a model later/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
+    await screen.findByRole("heading", { name: "Installing selected features" });
+    expect(api.installSetupPlan).toHaveBeenCalledWith({ llama: { backend: "auto" }, model: { catalog_id: "backup-catalog" }, parakeet: false });
+    expect(settings.llm.conversation_connection_id).toBe("openrouter-1");
+    expect(settings.llm.retry_refusal_locally).toBe(true);
+  });
+
+  it("offers backup configuration in Custom setup and can turn off a previously enabled backup", async () => {
+    const connection = { ...newModelConnection("chatgpt", []), model: "hosted-model" };
+    settings.llm = { ...settings.llm, connections: [connection], conversation_connection_id: connection.id, retry_refusal_locally: true };
+    await openEasy();
+    // Saved custom settings are also supported by the Custom Chat AI page.
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(screen.getByRole("radio", { name: /^Custom setup/ }));
+    fireEvent.click(continueButton());
+    await screen.findByRole("heading", { name: "Choose who can open MagicHandy" });
+    await waitFor(() => expect(continueButton()).toBeEnabled());
+    fireEvent.click(continueButton());
+    await screen.findByRole("heading", { name: "Choose how MagicHandy reaches your device" });
+    fireEvent.click(screen.getByRole("button", { name: "Skip for now" }));
+    await screen.findByRole("heading", { name: "Set up the chat AI" });
+    expect(screen.queryByRole("checkbox", { name: "Retry declined chat requests with the local model" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Discard model changes" })).not.toBeInTheDocument();
+    fireEvent.click(continueButton());
+    await screen.findByRole("heading", { name: "Local backup (optional)" });
+    expect(screen.getByRole("radio", { name: /^Set up a local backup/ })).toBeChecked();
+    fireEvent.click(screen.getByRole("radio", { name: /^Continue without a backup/ }));
+    fireEvent.click(continueButton());
+    await screen.findByRole("heading", { name: "Add voice features" });
+    expect(settings.llm.conversation_connection_id).toBe(connection.id);
+    expect(settings.llm.retry_refusal_locally).toBe(false);
+  });
+
   it("keeps OpenRouter out of the ChatGPT path and saves the explicit local/cloud split", async () => {
     await openEasy();
     fireEvent.click(screen.getByRole("radio", { name: /^ChatGPT/ }));

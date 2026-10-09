@@ -35,6 +35,11 @@ chat refusal once with the saved local model. It uses the ordinary local prompt,
 existing local request lane and shared motion guards, reports the retry, and
 does not affect Autopilot. A simulated hosted refusal followed by real Gemma
 generation passed, as did cancellation tests for both stages and their boundary.
+Hosted setup now follows the primary connection with an explicit optional local
+backup step in both Easy and Custom flows. The existing install plan can add a
+managed backup without replacing hosted Chat; an existing Ollama or llama.cpp
+server can also be used. Finish checks a real local response, with Stop and
+controller takeover cancellation. Local-only setup and inference stay unchanged.
 
 The September 25 [motion naturalness review](docs/motion-naturalness-review-2026-09-24.md)
 removes Autopilot's word-based continuation limits. Creative v2 and Layered
