@@ -425,6 +425,7 @@ export function SettingsRoute() {
                 <span>{t("Show Remote in sidebar")}</span>
               </label>
               <p className="hint-block">{t("Hides only the shortcut. The remote remains available at its own address. Applies to every browser after Save settings.")}</p>
+            <p className="hint-block"><a href="#/settings/access/profile">{t("Manage hidden informational notices")}</a></p>
             </div>
             <LabsSettings/>
             <div className="group">
@@ -460,7 +461,6 @@ export function SettingsRoute() {
               <p className="hint-block">{t("Review device, model, and optional voice choices in the same guided flow used after installation.")}</p>
               <a className="btn btn-secondary settings-setup-link" href="#/setup/reconfigure">{t("Run setup again")}</a>
             </div>
-            <p className="hint-block"><a href="#/settings/access/profile">{t("Manage hidden informational notices")}</a></p>
           </>
         )}
 
@@ -475,8 +475,6 @@ export function SettingsRoute() {
                   <span id="device-firmware-requirement" className="label">{t("Firmware / API requirement")}</span>
                   <p>{firmwareRequirementLabel(s.device.firmware_api_requirement)}</p>
                 </DismissibleNotice>
-                <label className="field"><span className="label">{t("API application ID source")}</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
-                {s.device.api_application_id_source === "developer_override" && <label className="field"><span className="label">{t("Developer application ID")}</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>}
                 <label className="field"><span className="label">{t("Handy connection key")}{s.device.connection_key_set && <span className="badge">{t("set")}</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? t("set (leave blank to keep)") : t("Paste key")} value={newKey} disabled={locked} onChange={(e) => { setNewKey(e.target.value); if (e.target.value.trim()) setClearKey(false); }} /></label>
                 <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(e) => { setClearKey(e.target.checked); if (e.target.checked) setNewKey(""); }} /><span className="track" aria-hidden="true" /></span><span>{t("Clear connection key on save")}</span></label>
               </>}
@@ -484,10 +482,15 @@ export function SettingsRoute() {
                 <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
               </>}
             </div>
-            <div className="group">
+            <details className="group" open={s.device.api_application_id_source === "developer_override" ? true : undefined}>
+              <summary className="group-title">{t("Advanced")}</summary>
+              {owner === "cloud_rest" && <>
+                <label className="field"><span className="label">{t("API application ID source")}</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
+                {s.device.api_application_id_source === "developer_override" && <label className="field"><span className="label">{t("Developer application ID")}</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>}
+              </>}
               <h3 className="group-title">{t("Local server")}</h3>
               <label className="field"><span className="label">{t("Server port")}</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
-            </div>
+            </details>
             <ManualMotionTest />
           </>
         )}

@@ -1,5 +1,15 @@
 # UI Design
 
+## Setup and settings
+
+Settings and setup share compact controls and neutral section header bands, with
+flat bodies and short help at the relevant decision. Rectangular filled tabs
+replace line-based active indicators in Settings and setup progress. Advanced
+details remain available through labeled disclosures; errors, routing/privacy
+consequences and incomplete requirements are not hidden to make the screen look
+cleaner. The shared rules and responsive behavior are documented in
+[UI design guidelines](ui-design-guidelines.md#setup-and-settings-forms).
+
 ## Launch console
 
 On Windows, the Start menu and desktop shortcuts start `magichandy.exe` in a

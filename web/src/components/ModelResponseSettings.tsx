@@ -41,9 +41,11 @@ export function ModelResponseSettings({ connection, models, disabled, patch, com
     </details>
   </div>;
   return <div className="model-response-settings">
-    {connection.provider === "chatgpt" && <DismissibleNotice id="model-response-speed" className="model-help"><p className="hint">{t("Start with GPT-6 Sol and Low reasoning for responsive, reliable motion. GPT-6 Luna is quicker for simple edits but missed details in compound requests. GPT-6.1 Sol is a more deliberate alternative.")}</p></DismissibleNotice>}
     {effortField}
-    {connection.provider === "chatgpt" && <DismissibleNotice id="model-response-speed" className="model-help"><details><summary>{t("About response speed")}</summary>
+    {connection.provider === "chatgpt" && <DismissibleNotice id="model-response-speed" className="model-help">
+      <p className="hint">{t("Recommended for motion: GPT-6 Sol with Low reasoning.")}</p>
+      <details><summary>{t("About response speed")}</summary>
+      <p className="hint">{t("Start with GPT-6 Sol and Low reasoning for responsive, reliable motion. GPT-6 Luna is quicker for simple edits but missed details in compound requests. GPT-6.1 Sol is a more deliberate alternative.")}</p>
       <p className="hint">{t("Low reasoning favors quick updates. Faster service tiers are not verified for ChatGPT plan connections. Response time also depends on the network and account load.")}</p>
     </details></DismissibleNotice>}
   </div>;

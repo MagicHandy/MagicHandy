@@ -2933,5 +2933,6 @@
   "Retries a declined chat once locally. Not used for outages, sign-in problems or usage limits.": "Reintenta una vez localmente si se rechaza un chat. No se usa por interrupciones, problemas de inicio de sesión ni límites de uso.",
   "Install a local model": "Instalar un modelo local",
   "Use my Ollama": "Usar mi Ollama",
-  "Use my own server": "Usar mi propio servidor"
+  "Use my own server": "Usar mi propio servidor",
+  "Positive delays motion; negative advances it. A change during playback requires Play again.": "Un valor positivo retrasa el movimiento; uno negativo lo adelanta. Si lo cambias durante la reproducción, vuelve a pulsar Reproducir."
 }

@@ -25,6 +25,7 @@ import "./styles/settings-navigation.css";
 import "./styles/network-setup.css";
 import "./styles/cloud-motion.css";
 import "./styles/notices.css";
+import "./styles/settings-form.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

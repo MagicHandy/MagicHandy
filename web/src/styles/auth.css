@@ -643,7 +643,7 @@
    List density follows available content width rather than the window width. */
 .access-panel { border-radius: var(--radius-sm); box-shadow: none; }
 .access-panel > .section-title { padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
-.access-layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 22px; }
+.access-layout { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 20px; }
 .access-content { min-width: 0; container-type: inline-size; }
 .access-content > .group { padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; }
 .access-content > .group + .group { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }

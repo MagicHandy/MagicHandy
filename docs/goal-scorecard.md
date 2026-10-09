@@ -1,5 +1,23 @@
 # Goal Scorecard
 
+## 2026-10-09 — Compact settings and setup visual system
+
+Compared with published `7a17bb45`, on Windows amd64 Go 1.26.9,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`, Node gzip level 9:
+
+| Artifact | Previous checkpoint | Visual pass | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 22,429,696 B | 22,438,400 B | +8,704 B |
+| Main JS, raw / gzip-9 | 1,109,832 / 299,243 B | 1,110,785 / 299,476 B | +953 / +233 B |
+| Main CSS, raw / gzip-9 | 176,604 / 31,485 B | 183,365 / 32,520 B | +6,761 / +1,035 B |
+| Complete embedded UI including index | 2,818,566 B | 2,827,166 B | +8,600 B |
+
+No dependency was added. The small payload increase implements shared form
+hierarchy, rectangular navigation and responsive controls. Unopened Diagnostics
+no longer composes a prompt. Local inference prompts, adapters, model routing and
+call counts are unchanged. No new RSS, cold-start or comparative inference-latency
+claim is made. See the [design review](settings-design-review-2026-10-09.md).
+
 ## 2026-10-09 — Guided local backup setup
 
 Compared with published `98ff285a`, on Windows amd64 Go 1.26.9,

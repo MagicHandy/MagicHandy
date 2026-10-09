@@ -1,155 +1,55 @@
 .workspace > .setup-layout {
   width: min(100%, var(--content-wide-max));
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-height: 0;
 }
 
 .setup-layout {
   display: grid;
-  grid-template-columns: minmax(190px, 224px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line);
   background: var(--surface);
 }
 
-.setup-progress {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  padding: 20px 14px;
-  border-right: 1px solid var(--line);
-  background: var(--bg-inset);
-}
-
-.setup-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 8px 22px;
-}
-
-.setup-brand > span {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border: 1px solid var(--accent-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.setup-brand strong {
-  font-size: 1rem;
-  font-weight: 650;
-}
-
-.setup-progress ol {
-  display: grid;
-  gap: 3px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
+/* One step strip within the app shell; labels remain readable on narrow screens. */
+.setup-progress { min-width: 0; border-bottom: 1px solid var(--line); }
+.setup-progress ol { display: flex; flex-wrap: wrap; gap: 3px; margin: 0; padding: 5px 8px; list-style: none; }
 .setup-progress li button {
-  display: grid;
-  width: 100%;
-  min-height: 36px;
-  grid-template-columns: 24px minmax(0, 1fr);
-  gap: 8px;
+  display: flex;
   align-items: center;
-  padding: 6px 8px;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 9px;
   border: 1px solid transparent;
-  border-radius: 0;
+  border-radius: 3px;
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 0.82rem;
-  text-align: left;
-}
-
-.setup-progress li button > span {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  font-size: 0.7rem;
-}
-
-.setup-progress li[data-state="current"] button {
-  border-color: var(--line-strong);
-  background: var(--surface-2);
-  color: var(--text);
-  font-weight: 600;
-}
-
-.setup-progress li[data-state="current"] button > span {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.setup-progress li[data-state="complete"] button {
-  color: var(--text);
+  font-size: .8125rem;
   cursor: pointer;
 }
+.setup-progress li button > span { min-width: 12px; font-variant-numeric: tabular-nums; }
+.setup-progress li[data-state="current"] button { border-color: var(--line-strong); background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); color: var(--text); font-weight: 600; }
+.setup-progress li button:hover:not(:disabled, [aria-current]) { background: var(--surface-2); color: var(--text); }
+.setup-progress li[data-state="complete"] button > span { color: var(--accent); }
+.setup-progress li[data-state="complete"] button > span::before { content: "\2713"; }
+.setup-progress li button:disabled { cursor: default; opacity: 1; }
+.setup-progress li[data-state="pending"] button { color: var(--muted); }
+.setup-progress li button:focus-visible { outline-offset: -3px; }
 
-.setup-progress li[data-state="complete"] button > span {
-  border-color: var(--ok);
-  background: var(--ok);
-  color: var(--ok-ink);
-}
-
-.setup-progress li[data-state="complete"] button > span::before {
-  content: "\2713";
-}
-
-.setup-progress li button:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.setup-progress > p {
-  margin: auto 8px 0;
-  color: var(--muted);
-  font-size: 0.72rem;
-}
-
-.setup-main {
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.setup-head {
-  min-height: 88px;
-  padding: 20px clamp(20px, 4vw, 42px) 16px;
-  border-bottom: 1px solid var(--line);
-}
-
-.setup-head h1 {
-  margin: 0;
-  font-size: 1.45rem;
-  font-weight: 650;
-}
-
-.setup-body {
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding: 22px clamp(20px, 4vw, 42px);
-  scrollbar-gutter: stable;
-}
+.setup-main { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.setup-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; padding: 16px 22px 12px; }
+.setup-head h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+.setup-step-count { color: var(--muted); font-size: .8125rem; white-space: nowrap; }
+.setup-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 22px 18px; scrollbar-gutter: stable; }
 
 .setup-copy {
   display: grid;
-  gap: 16px;
-  max-width: 760px;
+  gap: 12px;
+  max-width: 780px;
 }
 
 .setup-copy > p,
@@ -168,18 +68,18 @@
 }
 
 .setup-model-library {
-  max-width: 820px;
-  gap: 18px;
+  max-width: 780px;
+  gap: 12px;
 }
 
 .setup-method {
   display: grid;
   gap: 14px;
   min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
 }
 
 .setup-method-head {
@@ -260,30 +160,33 @@
 
 .setup-choices {
   display: grid;
-  gap: 8px;
+  gap: 0;
+  border-block: 1px solid var(--line);
 }
 
 .setup-choice {
   display: grid;
-  min-height: 62px;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  min-height: 48px;
+  grid-template-columns: 18px minmax(0, 1fr);
   gap: 11px;
   align-items: start;
-  padding: 11px 13px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
 }
 
 .setup-choice:hover:not([data-disabled="true"]) {
-  border-color: var(--line-strong);
+  background: var(--surface-2);
 }
 
 .setup-choice[data-selected="true"] {
-  border-color: var(--accent);
-  background: var(--accent-tint);
+  box-shadow: inset 2px 0 0 var(--accent);
+  background: var(--bg-inset);
 }
+
+.setup-choice + .setup-choice { border-top: 1px solid var(--line); }
 
 .setup-choice[data-disabled="true"] {
   cursor: not-allowed;
@@ -301,23 +204,27 @@
 }
 
 .setup-choice-copy strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
   font-size: 0.9rem;
   font-weight: 650;
 }
 
 .setup-choice-copy small {
   color: var(--muted);
-  font-size: 0.76rem;
-  line-height: 1.45;
+  font-size: 0.8125rem;
+  line-height: 1.4;
 }
 
 .setup-badge {
   align-self: start;
-  padding: 2px 6px;
-  border: 1px solid var(--accent-strong);
-  border-radius: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
   color: var(--accent);
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -325,8 +232,7 @@
 .setup-subsection {
   display: grid;
   gap: 12px;
-  padding: 14px 0 0 29px;
-  border-top: 1px solid var(--line);
+  padding: 8px 0 0 29px;
 }
 
 .setup-subsection .field,
@@ -349,10 +255,9 @@
 .setup-access-local {
   display: grid;
   gap: 8px;
-  padding: 12px 13px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
 }
 
 .setup-access-local > p {
@@ -364,7 +269,7 @@
 }
 
 .setup-choices-inline {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .setup-import-options {
@@ -524,8 +429,9 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  min-height: 66px;
-  padding: 11px clamp(20px, 4vw, 42px);
+  min-height: 54px;
+  padding: 9px 22px;
+  background: var(--surface);
   border-top: 1px solid var(--line);
 }
 
@@ -589,57 +495,11 @@
 }
 
 @media (max-width: 780px) {
-  .workspace > .setup-layout {
-    flex: 0 0 auto;
-  }
-
-  .setup-layout {
-    grid-template-columns: minmax(0, 1fr);
-    min-height: 0;
-    overflow: visible;
-  }
-
-  .setup-progress {
-    padding: 12px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .setup-brand,
-  .setup-progress > p {
-    display: none;
-  }
-
-  .setup-progress ol {
-    grid-template-columns: repeat(8, minmax(0, 1fr));
-    gap: 2px;
-  }
-
-  .setup-progress li button {
-    min-height: 36px;
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
-    padding: 3px;
-    border: 1px solid transparent;
-    font-size: 0;
-  }
-
-  .setup-progress li[data-state="current"] button {
-    border-color: var(--line-strong);
-  }
-
-  .setup-progress li button > span {
-    font-size: 0.68rem;
-  }
-
-  .setup-main {
-    min-height: 620px;
-  }
-
-  .setup-body {
-    overflow: visible;
-    scrollbar-gutter: auto;
-  }
+  .workspace > .setup-layout { flex: 0 0 auto; }
+  .setup-body { overflow: visible; scrollbar-gutter: auto; }
+  .setup-actions { position: sticky; bottom: 0; z-index: 1; }
+  .setup-progress ol { padding-inline: 6px; }
+  .setup-progress li button { padding-inline: 7px; }
 }
 
 @media (max-width: 560px) {
@@ -671,7 +531,7 @@
   }
 
   .setup-method {
-    padding: 14px;
+    padding-block: 12px;
   }
 
   .setup-actions {
@@ -773,10 +633,10 @@
   grid-template-columns: auto 1fr;
   gap: 10px;
   align-items: start;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--bg-inset);
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
 }
 
 .easy-requirement .status-dot {

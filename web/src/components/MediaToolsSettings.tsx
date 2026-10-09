@@ -151,6 +151,7 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
         <span>{t("Show originals that have been converted")}<small>{t("Off hides a source file once a converted copy sits beside it. Nothing is deleted: delete the converted file and the original returns on the next scan.")}</small></span>
       </label>
 
+      <details><summary>{t("Advanced")}</summary>
       <label className="field">
         <span className="label">{t("Re-encode codec")}</span>
         <select
@@ -206,6 +207,7 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
         <small>{t("Only used when the source audio is not already AAC; existing AAC is copied without quality loss. 192 kbps suits speech and most soundtracks; raise it for music. This is a target bitrate: FFmpeg may use less or clamp it to the source channel count and sample rate.")}</small>
       </label>
 
+      </details>
       <div className="media-tool-actions">
         <button type="button" className="btn btn-secondary" disabled={disabled} onClick={() => void run(() => api.convertMedia([]), t("Conversion started."))}>{t("Convert everything that cannot play")}</button>
       </div>

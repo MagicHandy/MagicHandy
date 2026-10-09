@@ -174,8 +174,11 @@ export function MediaSettingsPanel({
           disabled={locked}
           onChange={(event) => onScriptOffsetChange(clampOffset(Number(event.target.value)))}
         />
-        <small>{t("Positive delays the device against the picture, negative advances it. Some offset is normal and is not a fault in the video or the script: scripts are authored to a particular sense of timing, screens add their own display delay, and the device takes real time to move. Start at 0, and adjust only if motion consistently feels early or late. A change during playback requires Play again.")}</small>
+        <small>{t("Positive delays motion; negative advances it. A change during playback requires Play again.")}</small>
       </label>
+      <details><summary>{t("Script offset") + " · " + t("Details")}</summary>
+        <p className="hint-block">{t("Positive delays the device against the picture, negative advances it. Some offset is normal and is not a fault in the video or the script: scripts are authored to a particular sense of timing, screens add their own display delay, and the device takes real time to move. Start at 0, and adjust only if motion consistently feels early or late. A change during playback requires Play again.")}</p>
+      </details>
       </div>
 
       <div className="group">

@@ -619,7 +619,6 @@ export function SetupRoute() {
   return (
     <section className="setup-layout" aria-labelledby="setup-title">
       <aside className="setup-progress" aria-label={t("Setup progress")}>
-        <div className="setup-brand"><span aria-hidden="true">M</span><strong>{t("MagicHandy")}</strong></div>
         <ol>
           {steps.map((item, index) => (
             <li key={item} data-state={index < step ? "complete" : index === step ? "current" : "pending"}>
@@ -629,13 +628,12 @@ export function SetupRoute() {
             </li>
           ))}
         </ol>
-        <p>{t("Every optional feature can be added later from Settings.")}</p>
       </aside>
 
       <div className="setup-main">
         <header className="setup-head">
-          <p className="eyebrow">{t("Step {current} of {total}", { current: step + 1, total: steps.length })}</p>
           <h1 id="setup-title">{title}</h1>
+          <span className="setup-step-count">{t("Step {current} of {total}", { current: step + 1, total: steps.length })}</span>
         </header>
 
         <div className="setup-body" ref={setupBody}>

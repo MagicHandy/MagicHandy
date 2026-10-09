@@ -614,10 +614,11 @@ describe("SetupRoute", () => {
     await continueTo("Easy setup");
 
     expect(screen.getByText("Chat: Gemma 4 12B fixture")).toBeVisible();
-    expect(screen.getAllByText("Requirements met")).toHaveLength(3);
+    expect(screen.getAllByText("Requirements met")).toHaveLength(1);
     fireEvent.click(screen.getByRole("radio", { name: /Explicit/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Talk instead of typing/ }));
+    expect(screen.getAllByText("Requirements met")).toHaveLength(3);
     fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
     await screen.findByRole("heading", { name: "Installing selected features" });
 

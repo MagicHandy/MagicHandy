@@ -164,14 +164,14 @@ export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInpu
             onSelect={() => setVoiceChoice(option.module)}
           />)}
         </div>}
-        <RequirementLine requirement={voiceRequirement} title={t("Voice output")} detail={voiceOutputText(voiceRequirement)} />
+        {(voiceOutput || voiceRequirement.status !== "met") && <RequirementLine requirement={voiceRequirement} title={t("Voice output")} detail={voiceOutputText(voiceRequirement)} />}
         {voiceOutput && selectedVoice && <SetupVoiceMemoryNotice memory={selectedVoice.memory} device={selectedVoice.device} />}
         {voiceChoice === "faster-qwen3-tts" && <SetupQwenReference {...qwenReference} />}
         <label className="toggle-line" data-disabled={!voiceInputAvailable || undefined}>
           <span className="toggle"><input type="checkbox" checked={voiceInput && voiceInputAvailable} disabled={locked || !voiceInputAvailable} onChange={(event) => setVoiceInput(event.target.checked)} /><span className="track" aria-hidden="true" /></span>
           <span>{t("Talk instead of typing")}<small>{t("Voice input")}</small></span>
         </label>
-        <RequirementLine requirement={assessment.voice_input} title={t("Voice input")} detail={voiceInputText(assessment.voice_input)} />
+        {(voiceInput || assessment.voice_input.status !== "met") && <RequirementLine requirement={assessment.voice_input} title={t("Voice input")} detail={voiceInputText(assessment.voice_input)} />}
       </section>
 
       <section className="easy-setup-section" aria-labelledby="easy-device-title">

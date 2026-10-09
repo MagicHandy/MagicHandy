@@ -24,6 +24,34 @@ authoritative wherever they differ).
 
 ## Design Tokens
 
+### Setup and settings forms
+
+Setup and settings use the shared treatment in `settings-form.css`: neutral
+section header bands, flat section bodies, square checkboxes, 34px desktop
+controls (44px for coarse pointers), and 2–4px corners. Avoid nested decorative
+cards. Labels use primary text; supporting copy uses the muted token at 13px or
+larger. Related help sits directly by its control. Single fields align labels
+and controls only when the field itself is wide enough, so fields inside a
+multi-column account form remain stacked.
+
+Settings navigation and setup progress use rectangular filled selections in a
+continuous neutral strip. Selected items change fill, border and weight; do not
+use an underline, animated indicator, or selected left-edge stripe. Keep
+`aria-current`, visible keyboard focus, readable step labels and mobile overflow
+controls. Setup retains its numbered step count and completed check marks.
+
+Distinguish information from selection: notices have an inset neutral surface
+and a full hairline border; selected radio rows have a subtle fill and accent
+edge. Technical details may be disclosed, but errors, partial/unmet requirements,
+data destinations and save timing stay available at the decision point. Successful
+requirements for unselected voice features need not consume space. Diagnostics
+prompt inspection is collapsed and loads only when opened, canceling on close.
+
+These styles are scoped; live controls, the app shell and Emergency Stop retain
+their own behavior and sizing. See the
+[October design review](settings-design-review-2026-10-09.md) for consultation
+provenance, visual checks and limitations.
+
 Use existing tokens instead of raw hex values in implementation, and do not
 invent parallel values. When this document calls out a current component-local
 value, either keep it local to that component or promote it to a token before
