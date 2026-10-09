@@ -1,5 +1,18 @@
 # Goal Scorecard
 
+## 2026-10-09 — Go security patch for the provider branch
+
+The published provider checkpoint's CI vulnerability gate reported 11 reachable
+Go standard-library vulnerabilities with Go 1.26.8. Raising `go.mod` to Go
+1.26.9 makes the unchanged `govulncheck@v1.8.0 ./...` gate report zero reachable
+vulnerabilities. No dependency or gate was removed.
+
+The same Windows amd64 pure-Go shipping build (`-trimpath -buildvcs=false
+-ldflags '-s -w'`) is 22,405,632 B, up 14,848 B from the 22,390,784 B provider
+checkpoint below. Frontend assets are unchanged. This is a toolchain comparison;
+the matched Go 1.26.8 feature measurements below remain intact. No new runtime
+memory or latency budget claim is made.
+
 ## 2026-10-09 — Provider settings separation and visible routing
 
 Compared with the published `c5e5240e` branch checkpoint below, using the same

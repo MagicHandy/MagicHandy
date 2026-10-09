@@ -204,6 +204,14 @@ again"; restoring it through Access > Informational notices made it visible
 again without changing model settings.
 The simulator is running at `http://127.0.0.1:50218/#/settings/chat/model`.
 
+After publishing the feature checkpoint, CI exposed 11 reachable Go standard-
+library vulnerabilities in the existing Go 1.26.8 toolchain. The follow-up raises
+`go.mod` to Go 1.26.9; the unchanged `govulncheck@v1.8.0 ./...` scan now reports
+zero reachable vulnerabilities. The review process was rebuilt with Go 1.26.9
+at the same URL. Selected-model readiness passed again, and text-only production
+chat returned `6 + 1 = 7.` in 2276 ms, one provider call, without repair, semantic
+fallback or motion. Frontend assets are unchanged.
+
 Binary and browser payload measurements are in the
 [scorecard](goal-scorecard.md). The optional new-process memory comparison was
 rejected by automatic approval review with only `blocked by policy` as its
