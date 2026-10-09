@@ -23,6 +23,7 @@ import "./styles/update.css";
 import "./styles/auth.css";
 import "./styles/settings-navigation.css";
 import "./styles/network-setup.css";
+import "./styles/cloud-motion.css";
 import "./styles/notices.css";
 
 const root = document.getElementById("root");

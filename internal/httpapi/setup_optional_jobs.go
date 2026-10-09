@@ -311,6 +311,11 @@ func (m *setupManager) StartInstallPlan(request setupInstallPlanRequest) (setupJ
 		steps[index] = task.step
 	}
 	job = m.setJobSteps(job.ID, steps)
+	m.mu.Lock()
+	m.job.retryPlan = cloneSetupInstallPlan(&request)
+	m.job.RetryAvailable = true
+	job = cloneSetupJob(m.job.setupJob)
+	m.mu.Unlock()
 	m.wg.Add(1)
 	go m.runInstallPlan(ctx, job.ID, tasks)
 	return job, nil

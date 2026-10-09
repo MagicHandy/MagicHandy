@@ -3,10 +3,12 @@ import type { SetupAssessment, SetupRequirement } from "../api/setup-assessment-
 import type { PublicSettings, SetupStatus } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { formatBytes } from "../util/format";
+import { setupRequiredBytes } from "../util/setup-space";
 import { SetupChoice } from "./SetupChoice";
 import type { VoiceChoice } from "./SetupSteps";
 import { SetupVoiceMemoryNotice } from "./SetupVoiceMemoryNotice";
 import { SetupQwenReference, type SetupQwenReferenceProps } from "./SetupQwenReference";
+import type { ReactNode } from "react";
 
 const MIB = 1024 * 1024;
 
@@ -37,6 +39,8 @@ function chatRequirementText(assessment: SetupAssessment, setup: SetupStatus, ca
   const gpu = setup.hardware.gpu_name || t("NVIDIA GPU");
   const total = setup.hardware.vram_mib ? formatBytes(Number(setup.hardware.vram_mib) * MIB) : "";
   switch (assessment.chat.reason) {
+    case "existing_server":
+      return { title: t("Chat: {model}", { model: assessment.model_name ?? "" }), detail: t("Your saved local server and model are kept. No managed model download is needed; connection settings remain available in Custom setup.") };
     case "gpu_fits":
       return {
         title: t("Chat: {model}", { model: assessment.model_name ?? model?.display_name ?? assessment.model_id ?? "" }),
@@ -78,7 +82,7 @@ function voiceInputText(requirement: SetupRequirement): string {
   return t("The speech recognition installer is not included in this installation.");
 }
 
-export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInput, connectionKey, locked, qwenReference, setChatVoice, setVoiceOutput, setVoiceChoice, setVoiceInput, setConnectionKey }: {
+export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInput, connectionKey, locked, qwenReference, aiSetup, useLocalAI, chatEnabled, setChatVoice, setVoiceOutput, setVoiceChoice, setVoiceInput, setConnectionKey }: {
   setup: SetupStatus;
   settings: PublicSettings;
   catalog: LLMCatalog | null;
@@ -87,6 +91,9 @@ export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInpu
   connectionKey: string;
   locked: boolean;
   qwenReference: SetupQwenReferenceProps;
+  aiSetup: ReactNode;
+  useLocalAI: boolean;
+  chatEnabled: boolean;
   setChatVoice: (voice: string) => void;
   setVoiceOutput: (enabled: boolean) => void;
   setVoiceChoice: (choice: VoiceChoice) => void;
@@ -99,12 +106,10 @@ export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInpu
   const voiceOutput = voiceChoice !== "none";
   const selectedVoice = assessment.voice_options?.find((option) => option.module === (voiceOutput ? voiceChoice : assessment.voice_module));
   const voiceRequirement = selectedVoice?.requirement ?? assessment.voice_output;
-  const chatAvailable = assessment.chat.status !== "unmet";
+  const chatAvailable = chatEnabled;
   const voiceOutputAvailable = voiceRequirement.status !== "unmet";
   const voiceInputAvailable = assessment.voice_input.status !== "unmet";
-  const needed = (chatAvailable ? assessment.chat.bytes : 0)
-    + (voiceOutput && voiceOutputAvailable ? voiceRequirement.bytes : 0)
-    + (voiceInput && voiceInputAvailable ? assessment.voice_input.bytes : 0);
+  const needed = setupRequiredBytes(assessment, useLocalAI && settings.llm.provider === "llama_cpp" && settings.llm.llama_cpp_mode === "managed", voiceChoice, voiceInput);
   const shortOfSpace = assessment.free_disk_bytes > 0 && needed > assessment.free_disk_bytes;
   const hardware = setup.hardware.nvidia
     ? t("Detected {gpu} with {memory} of graphics memory.", { gpu: setup.hardware.gpu_name || t("NVIDIA GPU"), memory: setup.hardware.vram_mib ? formatBytes(Number(setup.hardware.vram_mib) * MIB) : t("unknown") })
@@ -118,13 +123,14 @@ export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInpu
 
   return (
     <div className="setup-copy easy-setup">
-      <p>{t("MagicHandy checked this computer and picked what fits. Answer three questions, then it installs everything in one go.")}</p>
-      <section className="easy-setup-section" aria-labelledby="easy-system-title">
+      <p>{t("Choose how AI should run, then add voice or a device if you want. MagicHandy installs only what you select.")}</p>
+      {aiSetup}
+      {useLocalAI && <section className="easy-setup-section" aria-labelledby="easy-system-title">
         <h2 id="easy-system-title">{t("Your computer")}</h2>
         <p className="hint-block">{hardware}</p>
         {assessment.free_disk_bytes > 0 && <p className="hint-block">{t("{free} of free disk space.", { free: formatBytes(assessment.free_disk_bytes) })}</p>}
         <RequirementLine requirement={assessment.chat} title={chat.title} detail={chat.detail} />
-      </section>
+      </section>}
 
       {chatAvailable && (
         <section className="easy-setup-section" aria-labelledby="easy-voice-title">
@@ -135,6 +141,7 @@ export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInpu
             ))}
           </div>
           <p className="hint-block">{t("This changes wording only. Motion limits and Stop work the same at every level, and you can change it any time in Settings or per persona.")}</p>
+          {!useLocalAI && <p className="hint-block">{t("Your cloud provider's content rules still apply, including at the Explicit setting.")}</p>}
         </section>
       )}
 
@@ -182,14 +189,13 @@ export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInpu
   );
 }
 
-// SetupModeChoice offers Easy Setup, which assesses the computer and asks
-// three questions, beside the full step-by-step Custom setup.
+// SetupModeChoice offers a guided path beside the detailed Custom setup.
 export function SetupModeChoice({ mode, setMode }: { mode: "easy" | "custom"; setMode: (mode: "easy" | "custom") => void }) {
   return (
     <section className="easy-setup-section" aria-labelledby="setup-mode-title">
       <h2 id="setup-mode-title">{t("How would you like to set up?")}</h2>
       <div className="setup-choices" role="radiogroup" aria-labelledby="setup-mode-title">
-        <SetupChoice selected={mode === "easy"} title={t("Easy setup")} detail={t("MagicHandy checks this computer, picks a chat model that fits and asks only how explicit chat should be and whether you want voice.")} badge={t("Recommended")} onSelect={() => setMode("easy")} />
+        <SetupChoice selected={mode === "easy"} title={t("Easy setup")} detail={t("Choose local AI, ChatGPT, or an API provider. MagicHandy guides the connection and offers optional voice.")} badge={t("Recommended")} onSelect={() => setMode("easy")} />
         <SetupChoice selected={mode === "custom"} title={t("Custom setup")} detail={t("Choose each part yourself: who can open MagicHandy, the device connection, the chat engine and model, and voice modules.")} onSelect={() => setMode("custom")} />
       </div>
     </section>

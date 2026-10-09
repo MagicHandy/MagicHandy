@@ -2,6 +2,7 @@ package modes
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -121,6 +122,8 @@ type Decision struct {
 	Pattern *motion.PatternDefinition
 	Say     string
 	Hold    bool
+	// Abstain holds without starting a replacement when no segment exists.
+	Abstain bool
 	// Requested marks a hold the human asked for in chat, so status can say why
 	// Autopilot is leaving the motion alone. It behaves exactly like Hold.
 	Requested bool
@@ -209,7 +212,8 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		if !fallback {
 			return segmentChoice{source: "speech_error", note: err.Error(), decisionLatency: latency}
 		}
-		if dynamicMode {
+		var cloudOutcome interface{ HoldMotion() bool }
+		if dynamicMode || (errors.As(err, &cloudOutcome) && cloudOutcome.HoldMotion()) {
 			if segment, pattern, ok := m.heldSegment(); ok {
 				return segmentChoice{
 					segment: segment, pattern: pattern, source: "hold", note: err.Error(),
@@ -236,7 +240,7 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 				decisionLatency: latency,
 			}
 		}
-		if !fallback || dynamicMode {
+		if !fallback || dynamicMode || decision.Abstain {
 			return segmentChoice{
 				source: "hold", requested: decision.Requested, say: decision.Say, timing: timing,
 				variability: variability, decisionLatency: latency,

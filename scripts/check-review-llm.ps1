@@ -8,7 +8,9 @@ param(
     [ValidateRange(5, 300)]
     [int]$TimeoutSeconds = 120,
 
-    [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession
+    [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession,
+
+    [string]$ClientID
 )
 
 Set-StrictMode -Version Latest
@@ -17,6 +19,7 @@ $ErrorActionPreference = 'Stop'
 $reviewBaseUrl = $BaseUrl.TrimEnd('/')
 $reviewAppRequest = @{}
 if ($null -ne $WebSession) { $reviewAppRequest['WebSession'] = $WebSession }
+if (-not [string]::IsNullOrWhiteSpace($ClientID)) { $reviewAppRequest['Headers'] = @{ 'X-MagicHandy-Client-ID' = $ClientID } }
 
 function Get-OptionalProperty {
     param(
@@ -58,6 +61,22 @@ try {
     $providerBaseUrl = ([string](Get-OptionalProperty $status 'base_url')).TrimEnd('/')
     $model = [string](Get-OptionalProperty $status 'model')
     $message = [string](Get-OptionalProperty $status 'message')
+
+    if ($provider -in @('chatgpt', 'openai', 'openrouter', 'compatible')) {
+        Assert-ReviewCondition (-not [string]::IsNullOrWhiteSpace($ClientID)) `
+            'For a hosted model, pass the current review tab ClientID or run Test connection in the app; this probe never takes over another controller.'
+        $saved = Invoke-RestMethod -Method Get -Uri "$reviewBaseUrl/api/settings" -TimeoutSec 15 @reviewAppRequest
+        $savedLLM = $saved.settings.llm
+        $selected = @($savedLLM.connections | Where-Object id -EQ $savedLLM.conversation_connection_id)
+        Assert-ReviewCondition ($selected.Count -eq 1) 'The review conversation connection is unavailable.'
+        $body = @{ connection = $selected[0] } | ConvertTo-Json -Depth 8 -Compress
+        $result = Invoke-RestMethod -Method Post -Uri "$reviewBaseUrl/api/llm/connections/test" `
+            -ContentType 'application/json' -Body $body -TimeoutSec $TimeoutSeconds @reviewAppRequest
+        Assert-ReviewCondition ([bool](Get-OptionalProperty $result 'ready')) `
+            "The review model failed its actual text generation: $($result.message)"
+        [pscustomobject]@{ ready = $true; app_url = $reviewBaseUrl; provider = $result.provider; model = $result.model; reply = '{"ready":true}' } | ConvertTo-Json -Depth 4
+        exit 0
+    }
 
     Assert-ReviewCondition ([bool](Get-OptionalProperty $status 'available')) `
         "The review LLM provider '$provider' is unavailable: $message"

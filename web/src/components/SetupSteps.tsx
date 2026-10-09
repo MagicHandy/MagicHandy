@@ -85,14 +85,14 @@ export function AccessStep({
   </div>;
 }
 
-export function WelcomeStep({ settings, patch }: { settings: PublicSettings; patch: (patch: Partial<PublicSettings>) => void }) {
+export function WelcomeStep({ settings, patch, locked = false }: { settings: PublicSettings; patch: (patch: Partial<PublicSettings>) => void; locked?: boolean }) {
   const locale = settings.ui?.locale ?? "en";
   const chatLocale = promptLocale(settings.llm.prompt_set, locale);
   return <div className="setup-copy">
     <p>{t("Setup configures local services and optional models. Nothing downloads, builds, connects, or moves the device without a separate action.")}</p>
     <div className="setup-fields two-columns">
-      <label className="field"><span className="label">{t("App language")}</span><select value={locale} onChange={(event) => patch({ ui: { ...settings.ui, locale: event.target.value } })}>{LOCALE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-      <label className="field"><span className="label">{t("Chat reply language")}</span><select value={chatLocale} onChange={(event) => patch({ llm: { ...settings.llm, prompt_set: promptSet(event.target.value) } })}>{LOCALE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      <label className="field"><span className="label">{t("App language")}</span><select disabled={locked} value={locale} onChange={(event) => patch({ ui: { ...settings.ui, locale: event.target.value } })}>{LOCALE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      <label className="field"><span className="label">{t("Chat reply language")}</span><select disabled={locked} value={chatLocale} onChange={(event) => patch({ llm: { ...settings.llm, prompt_set: promptSet(event.target.value) } })}>{LOCALE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
     </div>
     <DismissibleNotice id="setup-device-safety" className="setup-notice"><strong>{t("Device safety remains active during setup.")}</strong><span>{t("Emergency Stop stays available. Connection checks never command motion.")}</span></DismissibleNotice>
   </div>;
@@ -188,7 +188,9 @@ export function FinishStep({ setup, settings, models, runtimeChoice, modelPendin
       ? modelPending
         ? t("Managed llama.cpp is installed. Add a model in Settings > Chat > Model to start chatting.")
         : t("Managed llama.cpp, verified with {model}", { model: selectedModel?.display_name || settings.llm.model })
-      : `${runtimeChoice === "ollama" ? "Ollama" : "External llama.cpp"} | ${settings.llm.model}`;
+      : runtimeChoice === "hosted"
+        ? `${settings.llm.connections?.find(connection => connection.id === settings.llm.conversation_connection_id)?.name ?? t("Hosted model")} | ${settings.llm.connections?.find(connection => connection.id === settings.llm.conversation_connection_id)?.model ?? ""}`
+        : `${runtimeChoice === "ollama" ? "Ollama" : "External llama.cpp"} | ${settings.llm.model}`;
   return <div className="setup-copy">
     <p>{t("Your choices are saved. Skipped features remain available from Settings without rerunning the Windows installer.")}</p>
     <dl className="setup-summary">

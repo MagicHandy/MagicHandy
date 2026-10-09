@@ -19,9 +19,10 @@ const (
 )
 
 type persistedSetupResult struct {
-	SchemaVersion int                 `json:"schema_version"`
-	Job           setupJob            `json:"job"`
-	FailureReport *setupFailureReport `json:"failure_report,omitempty"`
+	SchemaVersion int                      `json:"schema_version"`
+	Job           setupJob                 `json:"job"`
+	FailureReport *setupFailureReport      `json:"failure_report,omitempty"`
+	RetryPlan     *setupInstallPlanRequest `json:"retry_plan,omitempty"`
 }
 
 func (m *setupManager) setupResultPath() string {
@@ -47,6 +48,8 @@ func (m *setupManager) loadPersistedSetupJob() {
 		return
 	}
 	record.Job = sanitizePersistedSetupJob(record.Job)
+	record.Job.retryPlan = cloneSetupInstallPlan(record.RetryPlan)
+	record.Job.RetryAvailable = record.Job.retryPlan != nil
 	m.job = &setupJobState{setupJob: record.Job}
 	if record.FailureReport != nil && record.FailureReport.SchemaVersion == 1 && record.FailureReport.Installation.Status == setupJobFailed {
 		m.lastFailureReport = record.FailureReport
@@ -54,6 +57,7 @@ func (m *setupManager) loadPersistedSetupJob() {
 }
 
 func (m *setupManager) persistSetupJob(job setupJob) {
+	retryPlan := cloneSetupInstallPlan(job.retryPlan)
 	m.reportMu.Lock()
 	defer m.reportMu.Unlock()
 	if job.Status == setupJobFailed {
@@ -62,7 +66,7 @@ func (m *setupManager) persistSetupJob(job setupJob) {
 	}
 	job = sanitizePersistedSetupJob(job)
 	job.Output = ""
-	record := persistedSetupResult{SchemaVersion: setupResultSchema, Job: job, FailureReport: m.lastFailureReport}
+	record := persistedSetupResult{SchemaVersion: setupResultSchema, Job: job, FailureReport: m.lastFailureReport, RetryPlan: retryPlan}
 	// JSON escaping can expand a noisy terminal tail. Preserve metadata and a
 	// smaller complete-line tail rather than losing the durable failure entirely.
 	data, err := json.Marshal(record)

@@ -113,6 +113,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
+	settings.LLM = settings.LLM.ConversationSettings()
 	// Stop is a global safety action. It must not depend on chat storage, the
 	// selected tab, controller ownership, or an available model.
 	if isChatStopMessage(body.Message) {
@@ -130,6 +131,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer finishChat()
+	if settings.LLM.IsHosted() {
+		chatCtx = s.guardHostedChat(chatCtx)
+	}
 	activityID := s.modes.NotifyChatActivity()
 	defer s.modes.NotifyChatActivityComplete(activityID)
 	started := time.Now()
@@ -236,7 +240,7 @@ func (s *Server) completeInteractiveChat(
 	preparation time.Duration,
 	diagnostics *chat.MessageDiagnostics,
 ) (chat.Result, bool, error) {
-	providerCtx, schedulerWait, releaseLLM, err := s.llmRequests.acquire(ctx, llmRequestInteractive)
+	providerCtx, schedulerWait, releaseLLM, err := s.acquireConversationRequest(ctx, llmRequestInteractive)
 	if err != nil {
 		_ = emit("error", map[string]string{"message": err.Error()})
 		_ = emit("done", map[string]any{"ok": false})
@@ -248,6 +252,9 @@ func (s *Server) completeInteractiveChat(
 	result, completionErr := service.Complete(providerCtx, request, func(event chat.StreamEvent) error {
 		return emitChatStreamEvent(emit, event)
 	})
+	if providerCtx.Err() != nil {
+		completionErr = providerCtx.Err()
+	}
 	releaseLLM()
 	timedProvider.applyDiagnostics(diagnostics, started, preparation, schedulerWait)
 	return result, true, completionErr
@@ -619,7 +626,7 @@ func (s *Server) commitPendingChatReply(ctx context.Context, stopSequence uint64
 }
 
 func (s *Server) chatCanceled(ctx context.Context, stopSequence uint64) bool {
-	return ctx.Err() != nil || s.stopSequence.Load() != stopSequence
+	return ctx.Err() != nil || s.stopSequence.Load() != stopSequence || s.hostedChatRetired(ctx)
 }
 
 func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCommand) (chatMotionDispatch, error) {
@@ -1117,12 +1124,14 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 	resolved := settings.Capabilities()
 	mode := chatMotionMode(settings.MotionGenerationMode)
 	capabilities := chat.Capabilities{
-		Motion:               resolved.Motion && mode != chat.MotionModeOff,
-		MotionMode:           mode,
-		Patterns:             resolved.Motion && mode == chat.MotionModePattern && resolved.Patterns,
-		AreaFocus:            resolved.Motion && mode == chat.MotionModePattern && resolved.AreaFocus,
-		ExperimentalPatterns: resolved.Motion && mode == chat.MotionModePattern && resolved.ExperimentalPatterns,
-		Voice:                chatVoiceLevel(settings.ChatVoice),
+		HostedModel:              settings.IsHosted(),
+		PreserveConversationText: settings.IsHosted(),
+		Motion:                   resolved.Motion && mode != chat.MotionModeOff,
+		MotionMode:               mode,
+		Patterns:                 resolved.Motion && mode == chat.MotionModePattern && resolved.Patterns,
+		AreaFocus:                resolved.Motion && mode == chat.MotionModePattern && resolved.AreaFocus,
+		ExperimentalPatterns:     resolved.Motion && mode == chat.MotionModePattern && resolved.ExperimentalPatterns,
+		Voice:                    chatVoiceLevel(settings.ChatVoice),
 	}
 	if active != nil {
 		capabilities.Voice = chatVoiceLevel(active.ChatVoice)

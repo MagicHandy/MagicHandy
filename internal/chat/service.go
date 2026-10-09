@@ -204,6 +204,11 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	if parseErr == nil {
 		return Result{Response: response, Raw: raw}, nil
 	}
+	if capabilities.PreserveConversationText {
+		// Hosted refusals can arrive as ordinary prose or invalid contract JSON.
+		// Never reinterpret them through a second generation or semantic fallback.
+		return Result{Raw: raw, InitialMalformed: true, Malformed: true}, &llm.CloudError{Kind: "incomplete"}
+	}
 	if truncated {
 		parseErr = fmt.Errorf("assistant response was truncated before valid JSON: %w", parseErr)
 		// A response cut off at the output cap cannot be repaired by asking for

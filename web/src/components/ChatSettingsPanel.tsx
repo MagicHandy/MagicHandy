@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { PublicSettings } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { ModelSettingsPanel } from "./ModelSettingsPanel";
+import { ModelConnectionsPanel } from "./ModelConnectionsPanel";
 import { PromptSetEditor } from "./PromptSetEditor";
 import { MemoryManager } from "./MemoryManager";
 import { SettingsNavigation, SettingsNavigationLabel } from "./SettingsNavigation";
@@ -59,7 +60,7 @@ export function ChatSettingsPanel({ section, settings: s, saved, options: opt, l
       </SettingsNavigation>
       <div className="settings-content">
         {section === "model" && (
-          <ModelSettingsPanel
+          <ModelConnectionsPanel settings={s.llm} locked={locked} patch={patchLLM} localEditor={<ModelSettingsPanel
             settings={s.llm}
             saved={saved?.llm}
             providers={opt.llm_providers ?? []}
@@ -71,7 +72,7 @@ export function ChatSettingsPanel({ section, settings: s, saved, options: opt, l
             replyLengths={opt.llm_reply_lengths ?? []}
             locked={locked}
             patch={patchLLM}
-          />
+          />} />
         )}
 
         {section === "conversation" && (

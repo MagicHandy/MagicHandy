@@ -51,6 +51,11 @@ type llmLabState struct {
 
 func (s *Server) labState() llmLabState {
 	settings, _ := s.store.Snapshot()
+	settings.LLM = settings.LLM.ConversationSettings()
+	prompts := chat.LLMLabPrompts()
+	if settings.LLM.IsHosted() {
+		prompts = chat.HostedLLMLabPrompts()
+	}
 	s.lab.mu.Lock()
 	defer s.lab.mu.Unlock()
 	if s.lab.current == nil {
@@ -60,7 +65,7 @@ func (s *Server) labState() llmLabState {
 	}
 	return llmLabState{Current: *s.lab.current, Turns: append([]chat.LLMLabTrial{}, s.lab.turns...),
 		DirectiveTurns: append([]chat.LLMLabTrial{}, s.lab.directiveTurns...),
-		Revision:       s.lab.revision, Busy: s.lab.busy, Prompts: chat.LLMLabPrompts(), Model: settings.LLM.Model,
+		Revision:       s.lab.revision, Busy: s.lab.busy, Prompts: prompts, Model: settings.LLM.Model,
 		SettingsKey: motion.LabSettingsKey(settings.Motion), Limits: settings.Motion, Session: s.lab.session}
 }
 
@@ -199,14 +204,15 @@ func (s *Server) runLabChat(parent context.Context, body labChatRequest, automat
 	if automatic {
 		priority = llmRequestAutonomous
 	}
-	ctx, _, release, err := s.llmRequests.acquire(trialCtx, priority)
+	ctx, _, release, err := s.acquireConversationRequest(trialCtx, priority)
 	if err != nil {
 		return llmLabState{}, err
 	}
 	defer release()
 	settings, _ := s.store.Snapshot()
+	settings.LLM = settings.LLM.ConversationSettings()
 	if model := strings.TrimSpace(body.Model); model != "" {
-		settings.LLM.Model = model
+		settings.LLM = settings.LLM.WithModel(model)
 	}
 	provider, err := s.newLLMProvider(ctx, settings.LLM)
 	if err != nil {

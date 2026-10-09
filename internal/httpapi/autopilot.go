@@ -29,6 +29,26 @@ func autopilotCosmeticFeedback(input modes.DecisionInput) string {
 // autopilotDecide runs the strict motion-only model contract. It never asks for
 // or publishes a chat line.
 func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput) (modes.Decision, error) {
+	settings, _ := s.store.Snapshot()
+	planning, err := settings.LLM.PlanningSettings()
+	if err != nil {
+		return modes.Decision{}, err
+	}
+	if (settings.LLM.MotionPlanner.Provider == config.MotionPlannerDecisions || settings.LLM.MotionPlanner.ContextPolicy == config.ContextTechnical) && settings.LLM.MotionGenerationMode != config.LLMMotionModeOff {
+		return s.cloudAutopilotDecide(ctx, input, settings)
+	}
+	decision, err := s.localAutopilotDecide(ctx, input)
+	if err != nil && planning.IsHosted() {
+		err = cloudPlanningOutcome(err)
+	}
+	if planning.IsHosted() {
+		// A hosted abstention must never trigger the local library fallback.
+		decision.Abstain = true
+	}
+	return decision, err
+}
+
+func (s *Server) localAutopilotDecide(ctx context.Context, input modes.DecisionInput) (modes.Decision, error) {
 	if held, ok := s.requestedAutopilotHold(ctx); ok {
 		return held, nil
 	}
@@ -113,6 +133,10 @@ func (s *Server) autopilotModelTurn(
 	kind chat.AutopilotKind,
 ) (chat.AutopilotResponse, error) {
 	settings, _ := s.store.Snapshot()
+	settings, admission, err := s.autopilotRoleSettings(ctx, kind, settings)
+	if err != nil {
+		return chat.AutopilotResponse{}, err
+	}
 	sessionID, err := s.chatLog.ActiveSessionIDContext(ctx)
 	if err != nil {
 		return chat.AutopilotResponse{}, fmt.Errorf("resolve active chat: %w", err)
@@ -146,14 +170,7 @@ func (s *Server) autopilotModelTurn(
 	// segment while the transport-facing snapshot is temporarily idle. Keep the
 	// autonomous validator aligned with that semantic state: a hold can restart
 	// an owned segment, but it cannot start a brand-new Autopilot run.
-	if input.CurrentSpeed > 0 && (input.CurrentDynamic != nil || input.CurrentFlow != nil || input.CurrentPatternID != "") {
-		motionContext.Running = true
-		motionContext.Paused = false
-		motionContext.SpeedPercent = input.CurrentSpeed
-	}
-	if input.CurrentFlow != nil {
-		motionContext.Layered = motion.CloneFlowSpec(input.CurrentFlow)
-	}
+	motionContext = autopilotOwnedMotionContext(motionContext, input)
 	temperature := autopilotTemperature(kind, input.MotionChangeLevel)
 	if kind == chat.AutopilotKindMotion && strings.TrimSpace(input.MotionFeedback) != "" && temperature < 0.98 {
 		temperature = 0.98
@@ -181,21 +198,55 @@ func (s *Server) autopilotModelTurn(
 	if kind == chat.AutopilotKindSpeech {
 		message = chat.AutopilotSpeechMessage(modelContext)
 	}
-	providerCtx, _, releaseLLM, err := s.llmRequests.acquire(ctx, llmRequestAutonomous)
+	providerCtx, _, releaseLLM, err := s.acquireProviderRequest(ctx, llmRequestAutonomous, settings.LLM)
 	if err != nil {
 		return chat.AutopilotResponse{}, err
 	}
 	defer releaseLLM()
-	return service.Complete(providerCtx, kind, chat.Request{
+	response, err := service.Complete(providerCtx, kind, chat.Request{
 		Message: message,
 		History: autopilotHistory(kind, settings, promptContext),
 	})
+	if err == nil && settings.LLM.IsHosted() {
+		err = s.validateCloudAdmission(providerCtx, admission)
+	}
+	return response, err
+}
+
+func autopilotOwnedMotionContext(state chat.MotionContext, input modes.DecisionInput) chat.MotionContext {
+	if input.CurrentSpeed > 0 && (input.CurrentDynamic != nil || input.CurrentFlow != nil || input.CurrentPatternID != "") {
+		state.Running = true
+		state.Paused = false
+		state.SpeedPercent = input.CurrentSpeed
+	}
+	if input.CurrentFlow != nil {
+		state.Layered = motion.CloneFlowSpec(input.CurrentFlow)
+	}
+	return state
+}
+
+func (s *Server) autopilotRoleSettings(ctx context.Context, kind chat.AutopilotKind, settings config.Settings) (config.Settings, cloudPlanAdmission, error) {
+	source := settings
+	var err error
+	if kind == chat.AutopilotKindMotion {
+		settings.LLM, err = settings.LLM.PlanningSettings()
+	} else {
+		settings.LLM = settings.LLM.ConversationSettings()
+	}
+	var admission cloudPlanAdmission
+	if err == nil && settings.LLM.IsHosted() {
+		admission, err = s.captureCloudAdmission(ctx, source)
+	}
+	return settings, admission, err
 }
 
 // autopilotHistory is the conversation an Autopilot turn sees. Continuous
 // planning marks when each human line was said, so an old line is not read as
 // a reaction to the pace chosen since.
 func autopilotHistory(kind chat.AutopilotKind, settings config.Settings, promptContext interactiveChatPromptContext) []llm.Message {
+	if settings.LLM.IsHosted() {
+		return promptContext.History
+	}
 	if kind == chat.AutopilotKindMotion && continuousChatMode(settings.LLM.MotionGenerationMode) {
 		return chat.PlanningHistory(promptContext.History, promptContext.HistoryAt, time.Now())
 	}

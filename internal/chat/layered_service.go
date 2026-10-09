@@ -140,7 +140,11 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if s.TrustedMotionInput && s.AutonomousTemperature > 0 {
 		temperature = min(s.AutonomousTemperature, 1.2)
 	}
-	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Messages: spokenMessages(system, request.History, request.Message),
+	messages := spokenMessages(system, request.History, request.Message)
+	if capabilities.PreserveConversationText {
+		messages = verbatimMessages(system, request.History, request.Message)
+	}
+	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Messages: messages,
 		Model: s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
 		MaxTokens: maxTokens, ReasoningMode: s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens, JSONSchema: schema}, func(delta string) error {

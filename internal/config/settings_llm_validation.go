@@ -7,6 +7,9 @@ import (
 )
 
 func validateLLMSettings(settings LLMSettings) error {
+	if err := validateLLMConnections(settings); err != nil {
+		return err
+	}
 	if !oneOf(settings.Provider, LLMProviderLlamaCPP, LLMProviderOllama) {
 		return fmt.Errorf("unknown LLM provider %q", settings.Provider)
 	}
@@ -59,6 +62,13 @@ func validateLLMSettings(settings LLMSettings) error {
 		return fmt.Errorf("persona description must be at most %d characters", MaxLLMPersonaDescriptionChars)
 	}
 	return nil
+}
+
+func validateLLMConnections(settings LLMSettings) error {
+	if err := validateModelConnections(settings); err != nil {
+		return err
+	}
+	return validateMotionPlanner(settings.MotionPlanner)
 }
 
 func validateLLMBehaviorSettings(settings LLMSettings) error {

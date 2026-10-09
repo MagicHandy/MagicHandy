@@ -1165,3 +1165,42 @@ wind-down is shown as Coming to rest and disables preferences until it ends.
 The global Emergency Stop remains outside the workspace and available offline
 and to read-only clients. Global motion style no longer changes Freestyle's
 separate preferences after upgrade initialization. See [ADR 0038](decisions/0038-freestyle-stroke-stream.md).
+
+## Hosted model setup (2026-10-08)
+
+Easy setup first offers Local-only AI, ChatGPT and API / Cloud. OpenRouter and
+other API providers appear only after the third choice. Connection and model
+selection come before a separate combining question: keeping chat local assigns
+cloud Autopilot technical motion context, excluding conversation, personas and
+memories. Its wording explains that this planner varies current motion without
+reading chat. Cloud-only sends the included conversation context to the chosen
+provider and avoids local model/runtime downloads. Saved custom roles and local
+servers are preserved until explicitly changed.
+
+ChatGPT presents disconnected, pending, connected and reconnect states. A
+connected account is one compact status line; management actions are collapsed.
+The first-use plan acknowledgement is an ordinary note, without a fake modal.
+Catalog discovery is automatic after connection; Check model is explicit and
+explains that it uses text generation without motion. Manual IDs and longer
+privacy explanations are disclosures. Continue gives a reason when a model check,
+controller permission, backend connection or disk space is missing.
+
+Settings > Chat > Model leads with Chat and Autopilot model choices, then saved
+connections and collapsed Add connection / advanced controls. Model choices
+remain drafts until Save; accounts and keys save immediately. Readiness survives
+an unchanged editor switch or browser reload and is invalid after an endpoint,
+model, routing or credential change. Local Autopilot hides irrelevant sharing
+controls. All new text fields use the existing app styles and the global Stop
+remains reachable on desktop, narrow screens and read-only views.
+
+New ChatGPT choices recommend GPT-6 Sol with Low reasoning, based on the
+October 8 production motion fixture. Setup keeps this to one line and a
+collapsed Response speed disclosure; Settings explains the Luna/simple-edit
+and GPT-6.1 alternatives. Effort choices follow account metadata. Local model
+controls are unchanged. A successful check displays elapsed seconds without
+presenting a single text probe as a motion latency guarantee. Effort changes
+invalidate readiness. Small catalogs omit search; manual IDs stay secondary.
+No Fast tier is offered without verified plan support.
+
+See [ADR 0039](decisions/0039-hosted-model-connections.md) and the
+[review evidence](cloud-model-review-2026-10-08.md).

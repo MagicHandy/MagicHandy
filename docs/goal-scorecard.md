@@ -1,5 +1,90 @@
 # Goal Scorecard
 
+## 2026-10-08 — Latency-first motion follow-up and local isolation
+
+This supersedes the unresolved local working-set observation in the earlier
+same-day checkpoint below, while preserving that measurement. Same Windows
+amd64 toolchain and flags: Go 1.26.8, `CGO_ENABLED=0`, `-trimpath`,
+`-buildvcs=false`, `-ldflags '-s -w'`; gzip uses Node level 9. No dependencies
+were added. The comparison baseline remains alpha.57.
+
+| Artifact | Alpha.57 | Final follow-up | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 21,769,728 B | 22,315,520 B | +545,792 B |
+| Main JS, raw / gzip-9 | 1,028,321 / 280,263 B | 1,084,581 / 293,587 B | +56,260 / +13,324 B |
+| Main CSS, raw / gzip-9 | 174,553 / 31,039 B | 175,773 / 31,333 B | +1,220 / +294 B |
+| Complete embedded UI including index | 2,633,135 B | 2,757,260 B | +124,125 B |
+
+The module comparison identified Windows ACL support loaded by eager cloud
+credential-store initialization as the local-only working-set increase. Lazy
+initialization avoids that load when no credential store exists, while preserving
+protection on first use. The original matched probe was 24,592,384 B baseline
+versus 39,849,984 B eager candidate. With lazy storage, two subsequent matched
+startup probes measured:
+
+| Probe | Baseline WS / private bytes | Lazy candidate WS / private bytes |
+| --- | ---: | ---: |
+| Repeat 1 | 23,416,832 / 57,573,376 B | 23,343,104 / 57,208,832 B |
+| Repeat 2 | 22,986,752 / 56,832,000 B | 23,207,936 / 57,249,792 B |
+
+Those repetitions differed only in executable module identity; eager ACL DLLs
+were absent. An earlier first-launch lazy candidate was a retained outlier:
+72,085,504 B WS / 57,937,920 B private versus baseline 23,793,664 / 58,060,800 B.
+It loaded `apphelp.dll`; the full cause of the working-set spike is unestablished.
+Repeated steady probes do not establish p95 startup, Linux RSS or a soak result.
+These runtime probes used the final Go application code before the final
+setup-only disclosure change; artifact sizes above include that UI change.
+
+The local planning prompt is unchanged at 6,895 bytes. Real Gemma 12B warm
+median generation was 1,146 ms initially and 1,041 ms with final local isolation,
+with equal 75% fixture intent accuracy (6/8 and 12/16). These small samples
+support no observed regression, not a guaranteed speedup. Hosted guidance
+adds no local model call, extra planner loop or cloud request. The binary remains
+below 30 MB; existing SQLite and main-bundle advisories remain unchanged.
+See the [latency/visual review](cloud-motion-latency-review-2026-10-08.md).
+
+## 2026-10-08 — Hosted model connections and Easy setup
+
+Matched Windows amd64 builds use Go 1.26.8, `CGO_ENABLED=0`, `-trimpath`,
+`-buildvcs=false` and `-ldflags '-s -w'`. The baseline is alpha.57
+(`eb7f7c504e2b224866c9976271dcef932c90225d`), including its original embedded
+assets; the candidate is the final provider-review build. No Go or browser
+dependency is added. Raw/gzip sizes use file bytes and Node gzip level 9.
+
+| Artifact | Alpha.57 | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 21,769,728 B | 22,299,648 B | +529,920 B |
+| Main JS, raw / gzip-9 | 1,028,321 / 280,263 B | 1,080,110 / 292,343 B | +51,789 / +12,080 B |
+| Main CSS, raw / gzip-9 | 174,553 / 31,039 B | 175,773 / 31,333 B | +1,220 / +294 B |
+| All embedded UI assets | 2,633,135 B | 2,746,757 B | +113,622 B |
+
+Three fresh processes per final build used separate benchmark data, simulation,
+remote off and no browser/voice. Idle/cold measurements do not invoke the LLM.
+The runtime cohort used the same Go core before the final frontend-only catalog-readiness guard; binary/UI weights
+above include that guard.
+The external local test endpoint had gone offline before this final cohort;
+the final handoff app uses its verified ChatGPT connection. Medians follow;
+readiness timing includes PowerShell HTTP polling overhead.
+
+| Runtime measurement | Alpha.57 median | Candidate median |
+| --- | ---: | ---: |
+| Start to healthy | 512.9 ms | 515.0 ms |
+| Idle Windows working set | 23,580,672 B | 38,842,368 B |
+| Idle private bytes | 57,217,024 B | 57,929,728 B |
+
+The idle working set increased by 15,261,696 B (14.55 MiB); private bytes
+increased by 712,704 B. The cause has not been profiled. An earlier matched
+cohort, before the final saved-key lookup addition, completed local app chat
+without repair, fallback or motion: after-chat working-set medians were
+24,883,200 B baseline and 39,505,920 B candidate. That is supplementary evidence,
+not a final-build active-memory measurement. Windows working set and private
+bytes are distinct measures and do not establish Linux RSS, a soak result or
+p95 cold start. The core remains below 30 MB. The existing SQLite memory waiver
+and main-bundle advisory remain; no gate or exemption was changed. This
+checkpoint does not claim that the memory growth is resolved.
+See the [review](cloud-model-review-2026-10-08.md) and
+[ADR 0039](decisions/0039-hosted-model-connections.md).
+
 ## 2026-10-07 — Handy Cloud connection-key validation
 
 Cloud prerequisite validation now follows the current API v3 connection-key

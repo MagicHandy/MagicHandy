@@ -104,6 +104,7 @@ func (s *Server) handleStartModelCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
+	settings.LLM = settings.LLM.ConversationSettings()
 	s.modelCheck.mu.Lock()
 	if s.modelCheck.report.State == modelCheckRunning {
 		s.modelCheck.mu.Unlock()
@@ -191,7 +192,8 @@ func hasModelCheckItem(items []chat.ModelCheckItem, id string) bool {
 // LLM slot for the whole run, so Stop cancels it like any chat turn, and it
 // never hands a reply's motion to the engine.
 func (s *Server) executeModelCheck(ctx context.Context, settings config.Settings) error {
-	providerCtx, _, release, err := s.llmRequests.acquire(ctx, llmRequestInteractive)
+	settings.LLM = settings.LLM.ConversationSettings()
+	providerCtx, _, release, err := s.acquireProviderRequest(ctx, llmRequestInteractive, settings.LLM)
 	if err != nil {
 		return err
 	}

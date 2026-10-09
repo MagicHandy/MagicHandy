@@ -48,6 +48,10 @@ type VersionInfo struct {
 
 // Runtime contains app runtime collaborators exposed through HTTP diagnostics.
 type Runtime struct {
+	// OpenAI endpoints are injectable only for isolated protocol tests.
+	OpenAIHTTPClient       *http.Client
+	OpenAIIssuer           string
+	OpenAIBaseURL          string
 	Traces                 *diagnostics.TraceRing
 	Transport              transport.DiagnosticsProvider
 	MotionTransport        transport.Transport
@@ -104,6 +108,9 @@ type Server struct {
 	autopilotHold     autopilotStandingHold
 	llm               llmRuntime
 	llmRequests       llmRequestCoordinator
+	cloudRequests     llmRequestCoordinator
+	hostedRequests    hostedRequestLanes
+	cloudPlanning     cloudPlanningRuntime
 	llmAutoloadMu     sync.Mutex
 	llmAutoloadCancel context.CancelFunc
 	llmAutoloadWG     sync.WaitGroup
@@ -228,6 +235,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		started:             time.Now().UTC(),
 		version:             version,
 	}
+	server.initCloudPlanning(runtime)
 	if server.networkAutomation == nil {
 		server.networkAutomation = netaccess.NewAutomation(store.DataDir())
 	}
@@ -244,6 +252,9 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 	settings, _ := store.Snapshot()
 	if err := server.openRuntimeDomains(runtime, settings); err != nil {
 		lifecycleCancel()
+		if server.cloudPlanning.auth != nil {
+			server.cloudPlanning.auth.Close()
+		}
 		server.networkAutomation.Close()
 		managedLLM.Close()
 		_ = modelManager.Close()
@@ -511,6 +522,8 @@ func newUpdateChecker(runtime Runtime, version VersionInfo) *updatecheck.Checker
 
 func (s *Server) llmRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/llm/status", s.handleLLMStatus)
+	s.cloudPlanningRoutes(mux)
+	s.modelConnectionRoutes(mux)
 	mux.HandleFunc("POST /api/llm/load", s.handleLLMLoad)
 	mux.HandleFunc("POST /api/llm/unload", s.handleLLMUnload)
 	mux.HandleFunc("GET /api/llm/duplicates", s.handleManagedLLMDuplicates)

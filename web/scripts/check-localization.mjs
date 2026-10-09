@@ -19,7 +19,7 @@ const sameValueAllowed = {
 // Product names in the session client hints retain their official spelling.
 // Only these exact labels may pass unchanged; surrounding UI copy is localized.
 for (const allowed of Object.values(sameValueAllowed)) {
-  for (const brand of ["Chrome", "Microsoft Edge", "Firefox", "Safari", "Windows", "macOS", "Linux", "Android", "iOS"]) allowed.add(brand);
+  for (const brand of ["Chrome", "Microsoft Edge", "Firefox", "Safari", "Windows", "macOS", "Linux", "Android", "iOS", "ChatGPT", "OpenRouter", "OpenAI API"]) allowed.add(brand);
 }
 
 function walk(directory) {

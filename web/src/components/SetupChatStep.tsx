@@ -12,8 +12,9 @@ import { HostPathField } from "./HostPathField";
 import { CatalogSourceLine, catalogHardwareLine, catalogModelDetail } from "./ModelCatalog";
 import { OllamaLibraryImport } from "./OllamaLibraryImport";
 import { SetupChoice } from "./SetupChoice";
+import { ModelConnectionsPanel } from "./ModelConnectionsPanel";
 
-export type RuntimeChoice = "managed" | "ollama" | "external" | "skip";
+export type RuntimeChoice = "managed" | "ollama" | "external" | "hosted" | "skip";
 // "download:<catalog id>" picks a curated model (downloaded during Install
 // unless it is already in the store), "store" picks an imported model, and
 // "later" installs only the engine.
@@ -51,13 +52,14 @@ interface SetupChatStepProps {
 export function SetupChatStep(props: SetupChatStepProps) {
   const { choice, setup, catalog, select } = props;
   return <div className="setup-copy setup-model-library">
-    <p>{t("Chat and Autopilot need a local AI model. MagicHandy can download a tested one for you.")}</p>
-    <div className="setup-hardware"><span className="status-dot" data-state={setup.hardware.nvidia ? "ok" : "idle"} />{catalogHardwareLine(catalog, setup.hardware.nvidia, setup.hardware.gpu_name)}</div>
+    <p>{t("Choose a local model or a hosted connection. Hosted models do not need a local runtime download.")}</p>
+    {choice !== "hosted" && <div className="setup-hardware"><span className="status-dot" data-state={setup.hardware.nvidia ? "ok" : "idle"} />{catalogHardwareLine(catalog, setup.hardware.nvidia, setup.hardware.gpu_name)}</div>}
     <h2>{t("Chat engine")}</h2>
     <div className="setup-choices">
       <SetupChoice selected={choice === "managed"} title={t("Managed llama.cpp")} detail={t("App-owned, pinned, and checksum-verified. It avoids requiring Ollama or a compiler toolchain.")} badge={setup.hardware.nvidia ? t("Recommended") : undefined} onSelect={() => select("managed")} />
       <SetupChoice selected={choice === "ollama"} title={t("Use my existing Ollama")} detail={t("Uses no managed runtime disk. MagicHandy uses your existing Ollama service and model library.")} onSelect={() => select("ollama")} />
       <SetupChoice selected={choice === "external"} title={t("External llama.cpp server")} detail={t("Use a compatible server you manage. MagicHandy will not install or own that process.")} onSelect={() => select("external")} />
+      <SetupChoice selected={choice === "hosted"} title={t("Hosted model")} detail={t("Connect ChatGPT or an API provider. No local model is required.")} onSelect={() => select("hosted")} />
       <SetupChoice selected={choice === "skip"} title={t("Skip chat model setup")} detail={t("The app remains usable for manual, pattern, and video control.")} onSelect={() => select("skip")} />
     </div>
     {choice === "managed" && <ManagedChatSetup {...props} />}
@@ -73,6 +75,7 @@ export function SetupChatStep(props: SetupChatStepProps) {
       <p>{t("Enter the model identifier expected by your compatible llama.cpp server.")}</p>
       <label className="field"><span className="label">{t("Model")}</span><input value={props.settings.model} onChange={(event) => props.patchLLM({ model: event.target.value })} /></label>
     </div>}
+    {choice === "hosted" && <ModelConnectionsPanel settings={props.settings} locked={props.locked} patch={props.patchLLM} />}
   </div>;
 }
 

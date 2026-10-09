@@ -34,6 +34,7 @@ coverage.out
 /traces/
 /.scratch/
 https-private/
+openai-private/
 
 # Editor and OS metadata
 .idea/

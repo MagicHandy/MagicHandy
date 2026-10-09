@@ -53,6 +53,18 @@ shared	GET /api/library
 shared	GET /api/library/patterns/{id}/export
 shared	GET /api/library/programs/{id}/export
 host	GET /api/llm/catalog
+host	GET /api/llm/cloud
+host	GET /api/llm/cloud/models
+host	POST /api/llm/cloud/sign-in
+host	DELETE /api/llm/cloud/sign-in
+host	POST /api/llm/cloud/select
+host	POST /api/llm/cloud/disconnect
+host	PUT /api/llm/cloud/decisions-key
+host	POST /api/llm/cloud/test
+host	POST /api/llm/cloud/welcome
+host	POST /api/llm/connections/key
+host	POST /api/llm/connections/models
+host	POST /api/llm/connections/test
 host	GET /api/llm/duplicates
 host	GET /api/llm/imports/{id}
 host	GET /api/llm/model-check
@@ -189,6 +201,7 @@ control	POST /api/remote/presence
 host	POST /api/settings/reset
 host	POST /api/setup/complete
 host	POST /api/setup/install
+host	POST /api/setup/install/retry
 host	POST /api/setup/llm/install
 host	POST /api/setup/parakeet/install
 host	POST /api/setup/qwen/reference/check

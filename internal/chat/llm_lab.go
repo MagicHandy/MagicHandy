@@ -47,6 +47,14 @@ Example: {"reply":"A slow range swell over the carrier.","layers":[{"axis":"rang
 	}
 }
 
+// HostedLLMLabPrompts matches the hosted production contract without increasing
+// the token budget of local prompt comparisons.
+func HostedLLMLabPrompts() map[string]string {
+	prompts := LLMLabPrompts()
+	prompts["creative_v2"] = creativeV2ReachGuide + "\n\n" + prompts["creative_v2"]
+	return prompts
+}
+
 // LLMLabTrial retains raw failures as evidence, without repair or fallback.
 type LLMLabTrial struct {
 	Autopilot     bool                  `json:"autopilot,omitempty"`

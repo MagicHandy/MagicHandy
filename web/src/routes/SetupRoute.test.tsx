@@ -654,8 +654,8 @@ describe("SetupRoute", () => {
     expect(screen.getByText("Requirements not met")).toBeVisible();
     expect(screen.getByText("Requirements partly met")).toBeVisible();
     expect(screen.queryByRole("heading", { name: "How explicit should chat be?" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
-    await screen.findByRole("heading", { name: "Installing selected features" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Setup is ready" });
     expect(api.installSetupPlan).not.toHaveBeenCalled();
   });
 });

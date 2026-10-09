@@ -2,6 +2,26 @@
 
 ## Core Direction
 
+The October 8 hosted-model review adds named ChatGPT/API connections alongside
+the existing local models, with independent Chat and Autopilot assignments and
+explicit conversation or technical context sharing. Easy setup keeps advanced
+providers behind API / Cloud and asks about combining models separately.
+Hosted failures hold without local fallback; accepted targets use the existing
+shared engine. The implementation is on the review branch, with the final
+independent implementation pass still pending Claude's session-limit reset.
+See [ADR 0039](docs/decisions/0039-hosted-model-connections.md) and the
+[test and review evidence](docs/cloud-model-review-2026-10-08.md).
+
+The [latency and motion follow-up](docs/cloud-motion-latency-review-2026-10-08.md)
+keeps existing modes after comparing steering, adaptive streaming, numeric
+stroke vocabularies and phrase composition. Hosted Creative v2 gets explicit
+reach guidance; local prompts keep their original bytes. GPT-6 Sol / Low is
+the measured setup recommendation. Account-supported reasoning and timed
+readiness appear in setup/settings. Strict hosted action schemas now work in
+the real production chat path, and lazy credential initialization removes the
+observed local-only Windows memory overhead. New modes remain experimental
+where compiled geometry failed intent checks.
+
 The September 25 [motion naturalness review](docs/motion-naturalness-review-2026-09-24.md)
 removes Autopilot's word-based continuation limits. Creative v2 and Layered
 Autopilot judge the latest human lines, and live chat declares a standing wish

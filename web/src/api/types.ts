@@ -1073,27 +1073,7 @@ export interface PublicSettings {
   motion: MotionSettings;
   freestyle?: FreestyleSettings;
   autopilot: AutopilotSettings;
-  llm: {
-    provider: string;
-    llama_cpp_mode: string;
-    managed_load_policy?: "startup" | "on_demand" | string;
-    llama_cpp_base_url: string;
-    llama_cpp_context_size: number;
-    ollama_base_url: string;
-    ollama_models_path?: string;
-    model: string;
-    prompt_set: string;
-    request_timeout_ms: number;
-    max_output_tokens: number;
-    reasoning_mode: string;
-    chat_voice?: string;
-    reply_length?: string;
-    user_anatomy?: LLMUserAnatomy;
-    custom_anatomy?: string;
-    persona_description?: string;
-    motion_capabilities?: LLMMotionCapabilities;
-		motion_generation_mode: "dynamic" | "pattern" | "layered" | "creative_v2" | "off" | string;
-  };
+  llm: import('./llm-settings-types').LLMSettings;
   voice: VoiceSettings;
   chat?: {
     startup_behavior: "previous" | "new" | string;
@@ -1128,6 +1108,7 @@ export interface ManagedLLMDuplicateSnapshot {
 }
 
 export interface SetupJob {
+  retry_available?: boolean;
   id: string;
   kind: "llama_runtime" | "parakeet" | "voice_module" | string;
   module: string;

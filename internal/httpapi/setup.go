@@ -119,6 +119,8 @@ type setupParakeetInstallResult struct {
 }
 
 type setupJob struct {
+	RetryAvailable  bool `json:"retry_available,omitempty"`
+	retryPlan       *setupInstallPlanRequest
 	ID              string         `json:"id"`
 	Kind            string         `json:"kind"`
 	Module          string         `json:"module"`
@@ -232,6 +234,7 @@ func (m *setupManager) Snapshot() *setupJob {
 
 func cloneSetupJob(job setupJob) setupJob {
 	job.Steps = append([]setupJobStep(nil), job.Steps...)
+	job.retryPlan = cloneSetupInstallPlan(job.retryPlan)
 	return job
 }
 
@@ -675,6 +678,7 @@ func (s *Server) setupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/setup/parakeet/install", s.handleSetupParakeetInstall)
 	mux.HandleFunc("POST /api/setup/voice/install", s.handleSetupVoiceInstall)
 	mux.HandleFunc("POST /api/setup/install", s.handleSetupInstallPlan)
+	mux.HandleFunc("POST /api/setup/install/retry", s.handleSetupRetry)
 	mux.HandleFunc("DELETE /api/setup/install", s.handleSetupInstallCancel)
 	mux.HandleFunc("POST /api/setup/complete", s.handleSetupComplete)
 }
@@ -841,12 +845,15 @@ func (s *Server) handleSetupComplete(w http.ResponseWriter, r *http.Request) {
 	session, hasSession := authenticatedSession(r)
 	signOutAfterFirstCompletion := false
 	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
+		if err := s.validateSetupConnections(current); err != nil {
+			return current, err
+		}
 		signOutAfterFirstCompletion = !current.UI.SetupCompleted && hasSession
 		current.UI.SetupCompleted = true
 		return current, nil
 	})
 	if saveErr != nil {
-		writeError(w, http.StatusInternalServerError, errors.New("setup completion could not be saved"))
+		writeError(w, http.StatusConflict, saveErr)
 		return
 	}
 	payload := map[string]any{"settings": saved.Public()}

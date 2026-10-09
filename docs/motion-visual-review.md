@@ -166,6 +166,23 @@ explicit non-moving record. Pass reports to `-llm` and `--captured`; retain
 failed runs as well as successful ones. See the
 [Creative v2 review](creative-v2-motion-review-2026-09-05.md).
 
+For hosted motion comparisons, the development-only `cmd/cloud-motion-review`
+supports `-phase screen`, `suite` and `steering`, and retains raw output,
+compiled summaries and `intent_pass`. It has no transport. Use `-data-dir` with
+an existing signed-in profile and `-models gpt-6-sol/low`; credentials stay in
+the protected host store. `-local-model` instead uses an installed Ollama model
+and the original local prompt. Reports belong under `.scratch`.
+
+The production Creative v2 fixture also accepts `MAGICHANDY_HOSTED_DATA_DIR`.
+Set it to the existing signed-in profile and `MAGICHANDY_LIVE_MODEL` to a catalog
+model, then run the single test with `-tags liveeval,magichandy_labs -count=1`.
+It uses Low reasoning, the actual action schema and a fake transport. Set
+`MAGICHANDY_EXPERIMENT_CAPTURE` for output; pass that JSON to the atlas with
+`-llm` and to the renderer with `--captured`. No real device is needed. Retain
+schema rejections and wrong motion selections alongside passing runs. See the
+[hosted latency review](cloud-motion-latency-review-2026-10-08.md) for the
+247-case evaluation and the geometry failures that prevented prototype promotion.
+
 ## Continuous Autopilot sessions
 
 `TestLiveContinuousAutopilotSession` in

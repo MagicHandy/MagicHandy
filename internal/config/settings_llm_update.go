@@ -3,6 +3,17 @@ package config
 import "fmt"
 
 func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) {
+	connections, conversation := current.Connections, current.ConversationConnectionID
+	if update.Connections != nil {
+		connections = *update.Connections
+	}
+	if update.ConversationConnectionID != nil {
+		conversation = *update.ConversationConnectionID
+	}
+	planner := current.MotionPlanner
+	if update.MotionPlanner != nil {
+		planner = *update.MotionPlanner
+	}
 	if update.LlamaCPPContextSize != nil && !oneOfInt(*update.LlamaCPPContextSize, LlamaCPPContextSizes()...) {
 		return LLMSettings{}, fmt.Errorf("unsupported managed llama.cpp context size %d", *update.LlamaCPPContextSize)
 	}
@@ -52,24 +63,27 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		capabilities = &copied
 	}
 	return normalizeLLMStrings(LLMSettings{
-		Provider:             update.Provider,
-		LlamaCPPMode:         update.LlamaCPPMode,
-		ManagedLoadPolicy:    managedLoadPolicy,
-		LlamaCPPBaseURL:      update.LlamaCPPBaseURL,
-		LlamaCPPContextSize:  contextSize,
-		OllamaBaseURL:        update.OllamaBaseURL,
-		OllamaModelsPath:     update.OllamaModelsPath,
-		Model:                update.Model,
-		PromptSet:            update.PromptSet,
-		RequestTimeoutMillis: update.RequestTimeoutMillis,
-		MaxOutputTokens:      maxOutputTokens,
-		ReasoningMode:        reasoningMode,
-		ChatVoice:            chatVoice,
-		ReplyLength:          replyLength,
-		UserAnatomy:          userAnatomy,
-		CustomAnatomy:        customAnatomy,
-		PersonaDescription:   personaDescription,
-		MotionGenerationMode: motionGenerationMode,
-		MotionCapabilities:   capabilities,
+		Connections:              connections,
+		ConversationConnectionID: conversation,
+		MotionPlanner:            planner,
+		Provider:                 update.Provider,
+		LlamaCPPMode:             update.LlamaCPPMode,
+		ManagedLoadPolicy:        managedLoadPolicy,
+		LlamaCPPBaseURL:          update.LlamaCPPBaseURL,
+		LlamaCPPContextSize:      contextSize,
+		OllamaBaseURL:            update.OllamaBaseURL,
+		OllamaModelsPath:         update.OllamaModelsPath,
+		Model:                    update.Model,
+		PromptSet:                update.PromptSet,
+		RequestTimeoutMillis:     update.RequestTimeoutMillis,
+		MaxOutputTokens:          maxOutputTokens,
+		ReasoningMode:            reasoningMode,
+		ChatVoice:                chatVoice,
+		ReplyLength:              replyLength,
+		UserAnatomy:              userAnatomy,
+		CustomAnatomy:            customAnatomy,
+		PersonaDescription:       personaDescription,
+		MotionGenerationMode:     motionGenerationMode,
+		MotionCapabilities:       capabilities,
 	}), nil
 }

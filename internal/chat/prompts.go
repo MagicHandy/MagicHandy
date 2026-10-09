@@ -176,6 +176,9 @@ func contractInstructions(capabilities Capabilities) string {
 	}
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		text := creativeV2Contract
+		if capabilities.HostedModel {
+			text = creativeV2ReachGuide + "\n\n" + text
+		}
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()
 		}
@@ -206,12 +209,18 @@ func contractInstructions(capabilities Capabilities) string {
 // value is chat-only in the utility voice; callers resolve defaults from
 // settings.
 type Capabilities struct {
-	Motion               bool
-	MotionMode           MotionMode
-	Patterns             bool
-	AreaFocus            bool
-	ExperimentalPatterns bool
-	Voice                VoiceLevel
+	// HostedModel selects the measured hosted planning guidance. Local prompt
+	// size and wording stay unchanged, independently of context sharing policy.
+	HostedModel bool
+	// PreserveConversationText keeps included canonical messages verbatim for
+	// an explicitly selected hosted full-conversation role.
+	PreserveConversationText bool
+	Motion                   bool
+	MotionMode               MotionMode
+	Patterns                 bool
+	AreaFocus                bool
+	ExperimentalPatterns     bool
+	Voice                    VoiceLevel
 	// Style is the active persona's reaction style, or StyleNeutral. It sits
 	// beside Voice because it is the same kind of thing: a reply-shaping axis
 	// with no motion authority.
