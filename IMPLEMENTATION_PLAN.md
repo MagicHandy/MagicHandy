@@ -22,6 +22,20 @@ the real production chat path, and lazy credential initialization removes the
 observed local-only Windows memory overhead. New modes remain experimental
 where compiled geometry failed intent checks.
 
+The [October 9 provider settings review](docs/provider-settings-review-2026-10-09.md)
+gives OpenRouter, ChatGPT, OpenAI API and compatible endpoints their own Chat
+model selections and editors. Saved routing now comes from the backend role
+resolver. Separate hosted Autopilot defaults to technical context; incomplete
+assigned connections cannot be saved, and missing IDs cannot fall back locally.
+Opus 5.5 completed a source consultation for this module. Controlled live
+ChatGPT/Gemma language checks and deterministic routing/refusal tests passed;
+explicit roleplay support and live OpenRouter acceptance remain unestablished.
+The same-day follow-up adds a default-off toggle to retry an explicit hosted
+chat refusal once with the saved local model. It uses the ordinary local prompt,
+existing local request lane and shared motion guards, reports the retry, and
+does not affect Autopilot. A simulated hosted refusal followed by real Gemma
+generation passed, as did cancellation tests for both stages and their boundary.
+
 The September 25 [motion naturalness review](docs/motion-naturalness-review-2026-09-24.md)
 removes Autopilot's word-based continuation limits. Creative v2 and Layered
 Autopilot judge the latest human lines, and live chat declares a standing wish

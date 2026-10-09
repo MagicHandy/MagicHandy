@@ -307,6 +307,9 @@ export interface ChatMessageDiagnostics {
   generation_ms?: number;
   repair_ms?: number;
   provider_calls?: number;
+	refusal_fallback_from?: string;
+	refusal_fallback_model?: string;
+	declined_request_ms?: number;
   repaired?: boolean;
   semantic_fallback?: boolean;
   initial_malformed?: boolean;
@@ -1049,6 +1052,7 @@ export interface OptionHints {
 }
 
 export interface PublicSettings {
+  model_routing?: import("./cloud-types").ModelRoutingSnapshot;
   version: number;
   labs?: {enabled:boolean};
   server: { port: number };

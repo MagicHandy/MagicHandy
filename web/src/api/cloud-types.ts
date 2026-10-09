@@ -39,3 +39,11 @@ export interface CloudPlanningStatus {
   connection_keys?: Record<string, boolean>;
   connection_readiness?: Record<string, CloudPlanningStatus["readiness"]>;
 }
+
+// Read-only backend projection; never part of a settings update.
+export interface ModelRoute {
+  kind: "local" | "hosted" | "decisions" | "unavailable";
+  provider: string; connection_id?: string; model: string; endpoint_host?: string;
+  context_policy: "conversation" | "technical"; state: "configured" | "incomplete" | "unavailable";
+}
+export interface ModelRoutingSnapshot { chat: ModelRoute; autopilot: ModelRoute; local_retry?: ModelRoute }

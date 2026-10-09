@@ -1185,13 +1185,35 @@ explains that it uses text generation without motion. Manual IDs and longer
 privacy explanations are disclosures. Continue gives a reason when a model check,
 controller permission, backend connection or disk space is missing.
 
-Settings > Chat > Model leads with Chat and Autopilot model choices, then saved
-connections and collapsed Add connection / advanced controls. Model choices
-remain drafts until Save; accounts and keys save immediately. Readiness survives
+Settings > Chat > Model leads with backend-resolved saved routing, then independent
+Chat and Autopilot choices. Local, ChatGPT, OpenRouter, OpenAI API and compatible
+endpoints are direct selections, each with its own editor. A provider's editable
+name never replaces its identity. Named configurations and Decisions remain
+collapsed. Adding a named connection does not assign a role. Model choices
+remain drafts until Save; accounts and keys save immediately. Discard restores
+only model drafts and explicitly preserves saved credentials. A different hosted
+Autopilot defaults to motion-only sharing. Missing saved connections display as
+unavailable. Readiness survives
 an unchanged editor switch or browser reload and is invalid after an endpoint,
 model, routing or credential change. Local Autopilot hides irrelevant sharing
 controls. All new text fields use the existing app styles and the global Stop
 remains reachable on desktop, narrow screens and read-only views.
+
+Hosted Chat editors include a default-off local retry toggle. Its expanded
+explanation names the saved local model, requires an available local endpoint,
+and limits retries to explicit provider refusals. The local configuration
+disclosure reuses the existing editor without presenting the hosted Chat model's
+runtime status/actions as local readiness. Saving adds an On refusal destination
+to the backend routing summary. Streaming and persisted host-visible replies
+identify a local retry; diagnostics identify the declining and answering models.
+The toggle does not alter Autopilot or silently rewrite refusal text.
+
+Long provider/model explanations use the shared dismissible-notice catalog.
+They offer Just this time and Don't show again, with restoration through
+Informational notices. Their close controls work for read-only clients without
+unlocking model or credential controls. Routing rows, unsaved state, active
+errors and readiness are live state, not dismissible guidance. Compact unboxed
+notice styling keeps these explanations from adding another layer of cards.
 
 New ChatGPT choices recommend GPT-6 Sol with Low reasoning, based on the
 October 8 production motion fixture. Setup keeps this to one line and a

@@ -3,6 +3,10 @@ package config
 import "fmt"
 
 func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) {
+	retryRefusalLocally := current.RetryRefusalLocally
+	if update.RetryRefusalLocally != nil {
+		retryRefusalLocally = *update.RetryRefusalLocally
+	}
 	connections, conversation := current.Connections, current.ConversationConnectionID
 	if update.Connections != nil {
 		connections = *update.Connections
@@ -65,6 +69,7 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 	return normalizeLLMStrings(LLMSettings{
 		Connections:              connections,
 		ConversationConnectionID: conversation,
+		RetryRefusalLocally:      retryRefusalLocally,
 		MotionPlanner:            planner,
 		Provider:                 update.Provider,
 		LlamaCPPMode:             update.LlamaCPPMode,

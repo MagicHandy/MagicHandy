@@ -5,6 +5,7 @@ export interface LLMSettings {
 	  motion_planner?: import("./cloud-types").MotionPlannerSettings;
 	  connections?: import("./cloud-types").ModelConnection[];
 	  conversation_connection_id?: string;
+	  retry_refusal_locally?: boolean;
     provider: string;
     llama_cpp_mode: string;
     managed_load_policy?: "startup" | "on_demand" | string;

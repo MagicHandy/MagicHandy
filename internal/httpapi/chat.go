@@ -113,6 +113,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
+	localDefaults := settings.LLM.LocalSettings()
 	settings.LLM = settings.LLM.ConversationSettings()
 	// Stop is a global safety action. It must not depend on chat storage, the
 	// selected tab, controller ownership, or an available model.
@@ -184,12 +185,19 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	preparation := time.Since(started)
 	diagnostics := interactiveDiagnostics(settings.LLM, prompt.ID, promptContext.Persona)
-	result, ok, completionErr := s.completeInteractiveChat(chatCtx, service, chat.Request{
+	request := chat.Request{
 		Message: body.Message,
 		History: promptContext.History,
-	}, emit, started, preparation, &diagnostics)
+	}
+	result, ok, completionErr := s.completeInteractiveChat(chatCtx, settings.LLM, service, request, emit, started, preparation, &diagnostics)
 	if !ok {
 		return
+	}
+	if shouldRetryDeclinedChat(settings.LLM, completionErr) && !s.chatCanceled(chatCtx, stopSequence) {
+		result, ok, completionErr = s.retryDeclinedChat(chatCtx, stopSequence, localDefaults, settings, service, request, promptContext, sessionID, emit, started, &diagnostics)
+		if !ok {
+			return
+		}
 	}
 	applyPersonaStartingArea(&result, capabilities, promptContext.Persona)
 	s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, completionErr, sessionID,
@@ -233,6 +241,7 @@ func (s *Server) interruptChatSpeech(settings config.VoiceSettings) {
 
 func (s *Server) completeInteractiveChat(
 	ctx context.Context,
+	settings config.LLMSettings,
 	service chat.Service,
 	request chat.Request,
 	emit sseEmitter,
@@ -240,7 +249,7 @@ func (s *Server) completeInteractiveChat(
 	preparation time.Duration,
 	diagnostics *chat.MessageDiagnostics,
 ) (chat.Result, bool, error) {
-	providerCtx, schedulerWait, releaseLLM, err := s.acquireConversationRequest(ctx, llmRequestInteractive)
+	providerCtx, schedulerWait, releaseLLM, err := s.acquireProviderRequest(ctx, llmRequestInteractive, settings)
 	if err != nil {
 		_ = emit("error", map[string]string{"message": err.Error()})
 		_ = emit("done", map[string]any{"ok": false})

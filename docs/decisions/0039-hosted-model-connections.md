@@ -45,8 +45,16 @@ whole-message context budgets, with enabled persona and memory. Technical
 context excludes conversation, persona, memory, custom pattern IDs and custom
 anchor labels. It includes semantic motion, saved limits and recent numeric
 state. The UI explains that technical Autopilot varies current motion without
-interpreting the conversation. Refusals and malformed hosted output are held
-without repair, rewriting, rerouting or a local fallback.
+interpreting the conversation. By default, refusals and malformed hosted output
+are held without repair, rewriting, rerouting or a local fallback. The October 9
+user-requested amendment permits an explicit `retry_refusal_locally` setting:
+interactive chat may make one local generation after a typed provider refusal.
+Other errors and valid replies with refusal wording do not trigger it. The local
+attempt rebuilds the local contract, retains the original conversation, uses the
+local scheduler lane and shared validation/publication path, and cannot repair
+or recursively retry. It is visibly identified in chat and diagnostics. It does
+not change the saved primary provider or Autopilot behavior. Stop and source
+invalidation apply through both stages, including the gap between request lanes.
 
 ChatGPT sign-in uses a host-only loopback OAuth flow, PKCE, nonce/state checks,
 verified RS256 identity claims, and a stable UUID host identifier. Account and
@@ -81,6 +89,17 @@ and add constant types, then unwrap strictly before the original domain parser.
 Credential directories and Windows ACL support initialize on first use, so a
 disconnected local-only app does not pay their startup cost. Authorization and
 file protections still run inside the serialized storage transaction.
+
+The October 9 settings follow-up projects saved Chat and Autopilot routes from
+the backend runtime resolvers into the public settings snapshot. The UI renders
+that projection independently of unsaved edits. An unavailable connection cannot
+silently select a local route; assigned hosted roles require a nonempty model.
+Settings may retain unassigned configurations before credential setup, while
+setup completion still requires actual inference. Provider-specific editors and
+direct Chat model choices replace the shared connection editor. A separately
+selected hosted Autopilot defaults to technical context. See the
+[module review and language evidence](../provider-settings-review-2026-10-09.md),
+including the completed Opus 5.5 source consultation and its scope limits.
 
 ## Consequences and remaining evidence
 

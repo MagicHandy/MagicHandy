@@ -176,10 +176,13 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
             persona_name?: string;
             user_seq?: number;
             stop_sequence?: number;
+            refusal_fallback_from?: string;
+            refusal_fallback_model?: string;
           };
           const userSeq = Number(status.user_seq ?? 0);
           if (Number.isSafeInteger(userSeq) && userSeq > 0) setMessages((m) => m.map((x) => x.id === userId ? { ...x, seq: userSeq } : x));
           if (status.state === "deterministic_stop") mustRefreshStopState = true;
+          if (status.state === "retrying_local") { raw = ""; repairRaw = ""; initialReply = ""; }
           const statusDiagnostics: ChatMessageDiagnostics = {
             source: "interactive",
             provider: status.provider,
@@ -187,6 +190,8 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
             prompt_set: status.prompt_set,
             persona_id: status.persona_id,
             persona_name: status.persona_name,
+            refusal_fallback_from: status.refusal_fallback_from || (status.state === "retrying_local" ? "provider" : undefined),
+            refusal_fallback_model: status.refusal_fallback_model,
           };
           setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, diagnostics: statusDiagnostics } : x)));
         } else if (ev.event === "speech") {
@@ -311,6 +316,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
                       {m.role === "user" ? t("You") : m.diagnostics?.persona_name || "MagicHandy"}
                     </span>
                     <div className="chat-bubble">{m.text || (m.warning ? t("Malformed model JSON — the reply could not be parsed.") : "")}</div>
+                    {m.diagnostics?.refusal_fallback_from && <p className="form-status chat-sync-status" role={m.streaming ? "status" : undefined}>{m.streaming ? t("Provider declined; retrying with the local model…") : t("Local retry after a provider refusal.")}</p>}
                     {m.contentDownload && <p className="form-status chat-sync-status">{t("Long message preview.")} {" "}
                       <a href={m.contentDownload} download>{t("Download full message")}</a>
                     </p>}
@@ -444,6 +450,8 @@ function diagnosticRows(diagnostics: ChatMessageDiagnostics): Array<[string, str
   if (Number.isFinite(diagnostics.generation_ms)) rows.push([t("Generation"), `${Math.max(0, Math.round(diagnostics.generation_ms ?? 0))} ms`]);
   if (Number.isFinite(diagnostics.repair_ms) && (diagnostics.repair_ms ?? 0) > 0) rows.push([t("Repair"), `${Math.max(0, Math.round(diagnostics.repair_ms ?? 0))} ms`]);
   if ((diagnostics.provider_calls ?? 0) > 1) rows.push([t("Provider calls"), String(diagnostics.provider_calls)]);
+  if (diagnostics.refusal_fallback_from) rows.push([t("Declined provider"), [diagnostics.refusal_fallback_from, diagnostics.refusal_fallback_model].filter(Boolean).join(" · ")]);
+  if ((diagnostics.declined_request_ms ?? 0) > 0) rows.push([t("Before local retry"), `${diagnostics.declined_request_ms} ms`]);
   if (diagnostics.motion_action) rows.push([t("Motion"), translateKnown(diagnostics.motion_action)]);
   if (diagnostics.repaired) rows.push([t("Parser"), t("Repaired response")]);
   if (diagnostics.semantic_fallback) rows.push([t("Fallback"), t("Semantic fallback used")]);

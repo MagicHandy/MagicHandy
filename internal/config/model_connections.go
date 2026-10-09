@@ -135,6 +135,19 @@ func (s LLMSettings) ConversationSettings() LLMSettings {
 	if connection, ok := s.ConnectionByID(s.ConversationConnectionID); ok {
 		return s.WithConnection(connection)
 	}
+	if s.ConversationConnectionID != "" && s.ConversationConnectionID != "local" {
+		// Invalid/stale saved IDs must never silently disclose the conversation
+		// to the local fallback. Keep the request on the failing hosted path.
+		return s.WithConnection(ModelConnection{ID: s.ConversationConnectionID, Provider: "unavailable"})
+	}
+	return s
+}
+
+// LocalSettings resolves the saved local defaults before any hosted role view
+// has replaced Provider and Model. Call it on the persisted settings snapshot.
+func (s LLMSettings) LocalSettings() LLMSettings {
+	s.ConversationConnectionID = "local"
+	s.ActiveConnection = nil
 	return s
 }
 
@@ -200,13 +213,21 @@ func validateModelConnections(s LLMSettings) error {
 	if s.ConversationConnectionID != "" && s.ConversationConnectionID != "local" && !seen[s.ConversationConnectionID] {
 		return errors.New("selected conversation connection is unavailable")
 	}
+	if connection, ok := s.ConnectionByID(s.ConversationConnectionID); ok && connection.Model == "" {
+		return errors.New("select a model for the conversation connection")
+	}
 	if s.MotionPlanner.Provider == "connection" && s.MotionPlanner.ConnectionID != "local" && !seen[s.MotionPlanner.ConnectionID] {
 		return fmt.Errorf("selected motion connection is unavailable")
+	}
+	if s.MotionPlanner.Provider == "connection" {
+		if connection, ok := s.ConnectionByID(s.MotionPlanner.ConnectionID); ok && connection.Model == "" {
+			return errors.New("select a model for the Autopilot connection")
+		}
 	}
 	return nil
 }
 
 // IsHosted identifies runtime settings that use a hosted protocol adapter.
 func (s LLMSettings) IsHosted() bool {
-	return oneOf(s.Provider, LLMProviderChatGPT, LLMProviderOpenAI, LLMProviderOpenRouter, LLMProviderCompatible)
+	return s.ActiveConnection != nil || oneOf(s.Provider, LLMProviderChatGPT, LLMProviderOpenAI, LLMProviderOpenRouter, LLMProviderCompatible)
 }

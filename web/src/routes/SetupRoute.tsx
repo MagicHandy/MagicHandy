@@ -668,6 +668,7 @@ export function SetupRoute() {
             verifyCloud={verifyCloud}
           />}
           {currentStep === "chat" && <SetupChatStep
+            savedSettings={state?.settings}
             choice={runtimeChoice}
             modelChoice={modelChoice}
             backend={runtimeBackend}

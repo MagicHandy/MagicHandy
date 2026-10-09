@@ -468,20 +468,21 @@ type ChatSettings struct {
 
 // PublicSettings is the API-safe settings view. It intentionally omits secrets.
 type PublicSettings struct {
-	Version     int                       `json:"version"`
-	Server      ServerSettings            `json:"server"`
-	UI          UISettings                `json:"ui"`
-	Labs        LabsSettings              `json:"labs"`
-	Media       MediaSettings             `json:"media"`
-	Device      PublicDeviceSettings      `json:"device"`
-	Motion      MotionSettings            `json:"motion"`
-	Freestyle   FreestyleSettings         `json:"freestyle"`
-	Autopilot   AutopilotSettings         `json:"autopilot"`
-	LLM         LLMSettings               `json:"llm"`
-	Voice       PublicVoiceSettings       `json:"voice"`
-	Chat        ChatSettings              `json:"chat"`
-	Diagnostics DiagnosticsSettings       `json:"diagnostics"`
-	Options     PublicSettingsOptionHints `json:"options"`
+	Version      int                       `json:"version"`
+	Server       ServerSettings            `json:"server"`
+	UI           UISettings                `json:"ui"`
+	Labs         LabsSettings              `json:"labs"`
+	Media        MediaSettings             `json:"media"`
+	Device       PublicDeviceSettings      `json:"device"`
+	Motion       MotionSettings            `json:"motion"`
+	Freestyle    FreestyleSettings         `json:"freestyle"`
+	Autopilot    AutopilotSettings         `json:"autopilot"`
+	LLM          LLMSettings               `json:"llm"`
+	ModelRouting ModelRoutingSnapshot      `json:"model_routing"`
+	Voice        PublicVoiceSettings       `json:"voice"`
+	Chat         ChatSettings              `json:"chat"`
+	Diagnostics  DiagnosticsSettings       `json:"diagnostics"`
+	Options      PublicSettingsOptionHints `json:"options"`
 }
 
 // PublicDeviceSettings is the API-safe device settings view.
@@ -535,6 +536,7 @@ type PublicSettingsOptionHints struct {
 type LLMUpdate struct {
 	Connections              *[]ModelConnection     `json:"connections,omitempty"`
 	ConversationConnectionID *string                `json:"conversation_connection_id,omitempty"`
+	RetryRefusalLocally      *bool                  `json:"retry_refusal_locally,omitempty"`
 	MotionPlanner            *MotionPlannerSettings `json:"motion_planner,omitempty"`
 	Provider                 string                 `json:"provider"`
 	LlamaCPPMode             string                 `json:"llama_cpp_mode"`
@@ -571,6 +573,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 	return LLMUpdate{
 		Connections:              &settings.Connections,
 		ConversationConnectionID: &settings.ConversationConnectionID,
+		RetryRefusalLocally:      &settings.RetryRefusalLocally,
 		MotionPlanner:            &settings.MotionPlanner,
 		Provider:                 settings.Provider,
 		LlamaCPPMode:             settings.LlamaCPPMode,
@@ -747,14 +750,15 @@ func (s Settings) Public() PublicSettings {
 			APIApplicationIDOverride: s.Device.APIApplicationIDOverride,
 			ConnectionKeySet:         s.Device.HandyConnectionKey != "",
 		},
-		Motion:      s.Motion,
-		Freestyle:   s.Freestyle,
-		Autopilot:   s.Autopilot,
-		LLM:         s.LLM,
-		Voice:       publicVoiceSettings(s.Voice),
-		Chat:        s.Chat,
-		Diagnostics: s.Diagnostics,
-		Options:     publicSettingsOptionHints(),
+		Motion:       s.Motion,
+		Freestyle:    s.Freestyle,
+		Autopilot:    s.Autopilot,
+		LLM:          s.LLM,
+		ModelRouting: s.LLM.ModelRouting(),
+		Voice:        publicVoiceSettings(s.Voice),
+		Chat:         s.Chat,
+		Diagnostics:  s.Diagnostics,
+		Options:      publicSettingsOptionHints(),
 	}
 }
 

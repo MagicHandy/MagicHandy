@@ -1,5 +1,36 @@
 # Goal Scorecard
 
+## 2026-10-09 — Provider settings separation and visible routing
+
+Compared with the published `c5e5240e` branch checkpoint below, using the same
+Windows amd64 Go toolchain, `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`,
+`-ldflags '-s -w'`, and Node gzip level 9. The canonical embedded UI is rebuilt;
+no Go or browser dependency is added.
+
+| Artifact | Previous checkpoint | Provider settings follow-up | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 22,315,520 B | 22,390,784 B | +75,264 B |
+| Main JS, raw / gzip-9 | 1,084,581 / 293,587 B | 1,102,208 / 297,394 B | +17,627 / +3,807 B |
+| Main CSS, raw / gzip-9 | 175,773 / 31,333 B | 176,544 / 31,473 B | +771 / +140 B |
+| Complete embedded UI including index | 2,757,260 B | 2,801,457 B | +44,197 B |
+
+The added payload supports provider-specific editors, a backend-resolved saved
+routing summary, translated dismissible guidance, and an opt-in local retry after
+a typed hosted refusal. Local-only prompts, inference adapters, call counts and
+motion planning are unchanged. When explicitly enabled, a hosted refusal may add
+one local generation; the ordinary successful hosted path still uses one call. The backend adds
+two small route projections to public settings; it does not initialize cloud
+credentials or call an external service to produce them. A local-only settings
+view without hosted connections does not fetch cloud status or catalog data.
+
+The optional fresh-process memory comparison was blocked by automatic approval
+review (`blocked by policy`); no new Windows working-set, cold-start, Linux RSS
+or soak measurement is claimed. The previous matched local runtime measurements
+remain the available evidence, not a substitute for a new run. The binary stays
+below 30 MB; existing SQLite and main-bundle advisories are unchanged. Functional,
+race, live text and UI evidence is in the
+[provider settings review](provider-settings-review-2026-10-09.md).
+
 ## 2026-10-08 — Latency-first motion follow-up and local isolation
 
 This supersedes the unresolved local working-set observation in the earlier

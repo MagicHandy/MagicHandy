@@ -228,6 +228,9 @@ describe("ChatPanel history", () => {
           repair_ms: 22,
           provider_calls: 2,
           motion_action: "target",
+          refusal_fallback_from: "chatgpt",
+          refusal_fallback_model: "hosted-model",
+          declined_request_ms: 80,
         },
       }],
       latest_seq: 1,
@@ -238,6 +241,7 @@ describe("ChatPanel history", () => {
     render(<ChatPanel sessionId={SESSION_ID} />);
 
     expect(await screen.findByText("Diagnosed reply")).toBeInTheDocument();
+    expect(screen.getByText("Local retry after a provider refusal.")).toBeInTheDocument();
     const avatar = screen.getByRole("button", { name: "Show response diagnostics" });
     expect(avatar).toHaveAttribute("title", expect.stringContaining("Model: gemma-3"));
     fireEvent.focus(avatar);
@@ -247,6 +251,8 @@ describe("ChatPanel history", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent(/Model queue\s*31 ms/);
     expect(screen.getByRole("tooltip")).toHaveTextContent(/Repair\s*22 ms/);
     expect(screen.getByRole("tooltip")).toHaveTextContent(/Provider calls\s*2/);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(/Declined provider\s*chatgpt · hosted-model/);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(/Before local retry\s*80 ms/);
     fireEvent.blur(avatar);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });

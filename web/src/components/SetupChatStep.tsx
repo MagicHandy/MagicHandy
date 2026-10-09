@@ -30,6 +30,7 @@ interface SetupChatStepProps {
   modelChoice: ManagedModelChoice;
   backend: RuntimeBackend;
   settings: PublicSettings["llm"];
+  savedSettings?: PublicSettings;
   setup: SetupStatus;
   models: LLMModelManagerSnapshot | null;
   catalog: LLMCatalog | null;
@@ -75,7 +76,7 @@ export function SetupChatStep(props: SetupChatStepProps) {
       <p>{t("Enter the model identifier expected by your compatible llama.cpp server.")}</p>
       <label className="field"><span className="label">{t("Model")}</span><input value={props.settings.model} onChange={(event) => props.patchLLM({ model: event.target.value })} /></label>
     </div>}
-    {choice === "hosted" && <ModelConnectionsPanel settings={props.settings} locked={props.locked} patch={props.patchLLM} />}
+    {choice === "hosted" && <ModelConnectionsPanel settings={props.settings} saved={props.savedSettings?.llm} routing={props.savedSettings?.model_routing} locked={props.locked} patch={props.patchLLM} />}
   </div>;
 }
 

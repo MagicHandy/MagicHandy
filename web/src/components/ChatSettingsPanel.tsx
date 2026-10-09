@@ -42,10 +42,12 @@ const PROMPT_SET_LABELS: Record<string, string> = {
 };
 
 
-export function ChatSettingsPanel({ section, settings: s, saved, options: opt, locked, patchLLM, patchChat, actions }: {
+export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, modelRouting, options: opt, locked, patchLLM, patchChat, actions }: {
   section: ChatSettingsSection;
   settings: PublicSettings;
   saved: PublicSettings | null;
+  activeLLM?: PublicSettings["llm"];
+  modelRouting?: PublicSettings["model_routing"];
   options: PublicSettings["options"];
   locked: boolean;
   patchLLM: (next: Partial<PublicSettings["llm"]>) => void;
@@ -60,7 +62,8 @@ export function ChatSettingsPanel({ section, settings: s, saved, options: opt, l
       </SettingsNavigation>
       <div className="settings-content">
         {section === "model" && (
-          <ModelConnectionsPanel settings={s.llm} locked={locked} patch={patchLLM} localEditor={<ModelSettingsPanel
+          <ModelConnectionsPanel routing={modelRouting ?? saved?.model_routing} saved={activeLLM ?? saved?.llm} settings={s.llm} locked={locked} patch={patchLLM} localEditor={<ModelSettingsPanel
+            configurationOnly={(s.llm.conversation_connection_id || "local") !== "local"}
             settings={s.llm}
             saved={saved?.llm}
             providers={opt.llm_providers ?? []}

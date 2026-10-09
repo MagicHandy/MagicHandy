@@ -5,6 +5,7 @@ type LLMSettings struct {
 	RequestRole              string                `json:"-"`
 	Connections              []ModelConnection     `json:"connections,omitempty"`
 	ConversationConnectionID string                `json:"conversation_connection_id,omitempty"`
+	RetryRefusalLocally      bool                  `json:"retry_refusal_locally,omitempty"`
 	ActiveConnection         *ModelConnection      `json:"-"`
 	MotionPlanner            MotionPlannerSettings `json:"motion_planner"`
 	Provider                 string                `json:"provider"`

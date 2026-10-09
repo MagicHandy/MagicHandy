@@ -36,10 +36,13 @@ var (
 // assistant reply. Prompts, memories, request bodies, and credentials never
 // enter this payload.
 type MessageDiagnostics struct {
-	Source    string `json:"source,omitempty"`
-	Provider  string `json:"provider,omitempty"`
-	Model     string `json:"model,omitempty"`
-	PromptSet string `json:"prompt_set,omitempty"`
+	Source                string `json:"source,omitempty"`
+	Provider              string `json:"provider,omitempty"`
+	Model                 string `json:"model,omitempty"`
+	PromptSet             string `json:"prompt_set,omitempty"`
+	RefusalFallbackFrom   string `json:"refusal_fallback_from,omitempty"`
+	RefusalFallbackModel  string `json:"refusal_fallback_model,omitempty"`
+	DeclinedRequestMillis int64  `json:"declined_request_ms,omitempty"`
 	// PersonaID and PersonaName record who the reply came from. Storing the name
 	// alongside the id is what lets the transcript stay readable after a persona
 	// is renamed or deleted, and it is what a mid-conversation persona divider is

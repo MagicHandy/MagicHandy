@@ -370,8 +370,10 @@ export function SettingsRoute() {
     </select>
   );
   const owner = s.device.hsp_dispatch_owner;
+  const incompleteModel = s?.llm.connections?.some(connection => !connection.model.trim() && (connection.id === s.llm.conversation_connection_id || (s.llm.motion_planner?.provider === "connection" && connection.id === s.llm.motion_planner.connection_id))) ?? false;
   const saveActions = <div className="row-actions settings-actions">
-    <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving}>{saving ? t("Saving settings") : t("Save settings")}</button>
+    <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving || incompleteModel}>{saving ? t("Saving settings") : t("Save settings")}</button>
+    {incompleteModel && <p className="hint">{t("Choose a model for each selected connection before saving settings.")}</p>}
     {locked && <span className="form-status">{loading ? t("Refreshing settings") : backendOnline ? t("Read-only client") : t("Core offline")}</span>}
   </div>;
 
@@ -390,7 +392,7 @@ export function SettingsRoute() {
       {loading && <p className="form-status" role="status">{t("Refreshing settings…")}</p>}
 
       <section className="panel settings-panel">
-        {section === "chat" && <ChatSettingsPanel section={chatSection} settings={s} saved={saved} options={opt} locked={locked} patchLLM={patchLLM} patchChat={patchChat} actions={saveActions} />}
+        {section === "chat" && <ChatSettingsPanel section={chatSection} settings={s} saved={saved} activeLLM={state?.settings?.llm} modelRouting={state?.settings?.model_routing} options={opt} locked={locked} patchLLM={patchLLM} patchChat={patchChat} actions={saveActions} />}
 
         {section === "general" && (
           <>
