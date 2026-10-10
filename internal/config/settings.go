@@ -681,6 +681,9 @@ func DefaultSettings() Settings {
 			// Creative v2 is the model-facing motion vocabulary for new installs.
 			// Creative, Layered and Pattern Library remain explicit saved choices.
 			MotionGenerationMode: LLMMotionModeCreativeV2,
+			// A store with nothing saved serves these defaults unnormalized, and
+			// setup reads an empty planner as a customized saved assignment.
+			MotionPlanner: normalizeMotionPlanner(MotionPlannerSettings{}),
 		},
 		Voice: VoiceSettings{
 			TTSProvider:        VoiceProviderNone,
