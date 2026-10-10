@@ -93,14 +93,15 @@ func (s *Server) runLabCompare(parent context.Context, body labCompareRequest) (
 		return labCompareResult{}, err
 	}
 	defer finish()
-	ctx, _, release, err := s.llmRequests.acquire(trialCtx, llmRequestInteractive)
+	ctx, _, release, err := s.acquireConversationRequest(trialCtx, llmRequestInteractive)
 	if err != nil {
 		return labCompareResult{}, err
 	}
 	defer release()
 	settings, _ := s.store.Snapshot()
+	settings.LLM = settings.LLM.ConversationSettings()
 	if model := strings.TrimSpace(body.Model); model != "" {
-		settings.LLM.Model = model
+		settings.LLM = settings.LLM.WithModel(model)
 	}
 	provider, err := s.newLLMProvider(ctx, settings.LLM)
 	if err != nil {

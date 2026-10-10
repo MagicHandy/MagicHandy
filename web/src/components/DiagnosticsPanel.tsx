@@ -124,8 +124,6 @@ export function DiagnosticsPanel({
 
   return (
     <>
-      <PromptCompositionInspector />
-
       <div className="group">
         <h3 className="group-title">{t("Status report")}</h3>
         <p className="hint-block">{t("Everything below is what gets copied. No keys or credentials are included.")}</p>
@@ -144,6 +142,8 @@ export function DiagnosticsPanel({
           <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void exportLastMotionTrace()}>{t("Export last stopped trace")}</button>
         </div>
       </div>
+
+      <PromptCompositionInspector collapsible />
 
       <div className="group">
         <h3 className="group-title">{t("Reset")}</h3>

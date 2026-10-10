@@ -439,7 +439,7 @@ describe("app shell safety invariants", () => {
     const motionControls = screen.getByRole("complementary", { name: /motion controls/i });
     expect(within(motionControls).queryByRole("slider", { name: /speed min/i })).toBeNull();
     expect(within(motionControls).queryByRole("switch", { name: /reverse direction/i })).toBeNull();
-    expect(within(motionControls).getByRole("slider", { name: /style/i })).toHaveAttribute("aria-valuetext", "Balanced");
+    expect(within(within(motionControls).getByRole("radiogroup", { name: "Style" })).getByRole("radio", { name: "Balanced" })).toBeChecked();
   });
 
   it("shows a neutral connection state until the first backend snapshot arrives", async () => {
@@ -481,12 +481,12 @@ describe("app shell safety invariants", () => {
     }
   });
 
-  it("composes the hand, three signals, and Handy target without a runtime mask", async () => {
+  it("draws three signals and the Handy target as flat vector art without a bitmap or mask", async () => {
     installFetch();
     renderApp();
     fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
     const artwork = screen.getByRole("img", { name: /the handy wireless connection/i });
-    expect(artwork.querySelector("image")?.getAttribute("href")).toMatch(/conductor-hand-v2\.png/);
+    expect(artwork.querySelector("image")).toBeNull();
     expect(artwork.querySelector("mask")).toBeNull();
     expect(artwork.querySelector("clipPath")).toBeNull();
     expect(artwork.querySelectorAll(".connection-signal path")).toHaveLength(3);
@@ -496,7 +496,7 @@ describe("app shell safety invariants", () => {
     expect(artwork.querySelectorAll(".connection-error-mark path")).toHaveLength(2);
     expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "false");
     expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "disconnected");
-    expect(artwork).toHaveAttribute("viewBox", "0 0 360 260");
+    expect(artwork).toHaveAttribute("viewBox", "0 0 360 120");
     expect(artwork).toHaveAttribute("data-phase", "disconnected");
   });
 
@@ -1351,7 +1351,7 @@ describe("app shell safety invariants", () => {
     expect(screen.getByText(/reply preserved across reloads/i)).toBeInTheDocument();
   });
 
-  it("renders a Handy body and sleeve from the commanded engine estimate", async () => {
+  it("renders the selected Handy model from the commanded engine estimate", async () => {
     const state = {
       ...baseState,
       motion: {
@@ -1380,7 +1380,10 @@ describe("app shell safety invariants", () => {
     expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-range-min", "20");
     expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-range-max", "80");
     expect(within(detailed as HTMLElement).getByText("commanded")).toBeInTheDocument();
-    expect(within(detailed as HTMLElement).getByText("63%")).toBeInTheDocument();
+    // The fixture's original Handy reads millimetres of its 110 mm travel; the percent stays in the title.
+    expect(detailed).toHaveAttribute("data-kind", "handy-original");
+    expect(within(detailed as HTMLElement).getByText("70 mm")).toBeInTheDocument();
+    expect(detailed?.querySelector(".viz-commanded")).toHaveAttribute("title", "63%");
     expect(within(detailed as HTMLElement).getByText("20-80%")).toBeInTheDocument();
     expect(within(detailed as HTMLElement).getByText("35%")).toBeInTheDocument();
     expect(within(detailed as HTMLElement).getByText("Stroke")).toBeInTheDocument();

@@ -53,8 +53,8 @@ type AutopilotResponse struct {
 }
 
 // AutopilotService runs the dedicated autonomous contracts through the same
-// provider, personalization, history, semantic motion validation, and one-shot
-// repair policy used by interactive chat.
+// provider, personalization, history and semantic motion validation used by
+// interactive chat. Hosted output is held on failure; local output may repair.
 type AutopilotService struct {
 	Provider              llm.Provider
 	Prompt                PromptSet
@@ -74,7 +74,7 @@ type AutopilotService struct {
 	Capabilities        Capabilities
 }
 
-// Complete runs one autonomous decision and repairs malformed output once.
+// Complete runs one autonomous decision, with one repair for local output.
 func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, request Request) (AutopilotResponse, error) {
 	if s.Provider == nil {
 		return AutopilotResponse{}, errors.New("LLM provider is required")
@@ -131,6 +131,9 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	if parseErr == nil {
 		return response, nil
 	}
+	if s.Capabilities.PreserveConversationText {
+		return AutopilotResponse{}, &llm.CloudError{Kind: "incomplete"}
+	}
 	var patternErr unknownPatternError
 	if errors.As(parseErr, &patternErr) {
 		// The model selected outside the turn-specific autonomous catalog. A live
@@ -142,7 +145,10 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	if truncated {
 		parseErr = fmt.Errorf("autopilot response was truncated before valid JSON: %w", parseErr)
 	}
+	return s.repairPatternResponse(ctx, kind, prompt.ID, messages, raw, parseErr)
+}
 
+func (s AutopilotService) repairPatternResponse(ctx context.Context, kind AutopilotKind, promptID string, messages []llm.Message, raw string, parseErr error) (AutopilotResponse, error) {
 	repairContext := truncateUTF8Bytes(strings.TrimSpace(raw), 4096)
 	if repairContext == "" {
 		repairContext = emptyRepairContext
@@ -151,7 +157,7 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	repairMessages = append(repairMessages, llm.Message{Role: "assistant", Content: repairContext})
 	repairMessages = append(repairMessages, llm.Message{
 		Role:    "user",
-		Content: autopilotRepairPrompt(prompt.ID, kind, parseErr),
+		Content: autopilotRepairPrompt(promptID, kind, parseErr),
 	})
 	repairedRaw, repairErr := s.Provider.StreamChat(ctx, llm.ChatRequest{
 		Messages:             repairMessages,

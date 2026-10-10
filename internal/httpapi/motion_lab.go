@@ -84,6 +84,7 @@ func (s *Server) handleMotionLabProposal(w http.ResponseWriter, r *http.Request)
 	}
 	settings, _ := s.store.Snapshot()
 	// Reuse the cancellable interactive-work registration without appending to
+	settings.LLM = settings.LLM.ConversationSettings()
 	// the chat log. Emergency Stop cancels both queued and generating trials.
 	sessionID, err := s.chatLog.ActiveSessionID()
 	if err != nil {
@@ -100,7 +101,7 @@ func (s *Server) handleMotionLabProposal(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusConflict, errors.New("lab trial was canceled by Emergency Stop"))
 		return
 	}
-	ctx, _, release, err := s.llmRequests.acquire(trialCtx, llmRequestInteractive)
+	ctx, _, release, err := s.acquireConversationRequest(trialCtx, llmRequestInteractive)
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return

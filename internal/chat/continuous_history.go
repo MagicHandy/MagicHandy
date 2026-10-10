@@ -13,10 +13,31 @@ const PromptHistoryLimit = 64
 const maxPromptHistoryBytes = 24000
 
 func capabilityMessages(system string, history []llm.Message, message string, capabilities Capabilities) []llm.Message {
+	if capabilities.PreserveConversationText {
+		return verbatimMessages(system, history, message)
+	}
 	if !capabilities.Motion {
 		return spokenMessages(system, history, message)
 	}
 	return buildMessages(system, history, message)
+}
+
+func verbatimMessages(system string, history []llm.Message, message string) []llm.Message {
+	if len(history) > PromptHistoryLimit {
+		history = history[len(history)-PromptHistoryLimit:]
+	}
+	bytes, start := 0, len(history)
+	for start > 0 && bytes+len(history[start-1].Content) <= maxPromptHistoryBytes {
+		start--
+		bytes += len(history[start].Content)
+	}
+	messages := []llm.Message{{Role: "system", Content: system}}
+	for _, entry := range history[start:] {
+		if entry.Role == "user" || entry.Role == "assistant" {
+			messages = append(messages, entry)
+		}
+	}
+	return append(messages, llm.Message{Role: "user", Content: message})
 }
 
 // History carries speech only; the current authoritative score carries motion.

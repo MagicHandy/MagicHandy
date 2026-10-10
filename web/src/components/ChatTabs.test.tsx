@@ -48,6 +48,94 @@ describe("ChatTabs", () => {
     expect(newButton).not.toHaveClass("icon-button");
   });
 
+  it("roves the options menu with the keyboard and returns focus to its opener", () => {
+    const save = vi.fn();
+    const draft = { ...sessions[1], id: "three", title: "Second draft", saved: false };
+    render(
+      <ChatTabs
+        sessions={[...sessions, draft]}
+        activeId="one"
+        disabled={false}
+        onActivate={vi.fn()}
+        onNew={vi.fn()}
+        onSave={save}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    const opener = screen.getByRole("button", { name: "Open options for Second draft" });
+    fireEvent.click(opener);
+    const menu = screen.getByRole("menu", { name: "Second draft options" });
+    expect(opener).toHaveAttribute("aria-expanded", "true");
+    expect(opener).toHaveAttribute("aria-controls", menu.id);
+    const saveItem = screen.getByRole("menuitem", { name: "Save chat" });
+    const deleteItem = screen.getByRole("menuitem", { name: "Delete chat" });
+    expect(saveItem).toHaveFocus();
+    fireEvent.keyDown(saveItem, { key: "ArrowDown" });
+    expect(deleteItem).toHaveFocus();
+    fireEvent.keyDown(deleteItem, { key: "ArrowDown" });
+    expect(saveItem).toHaveFocus();
+    fireEvent.keyDown(saveItem, { key: "ArrowUp" });
+    expect(deleteItem).toHaveFocus();
+    fireEvent.keyDown(deleteItem, { key: "Home" });
+    expect(saveItem).toHaveFocus();
+    fireEvent.keyDown(saveItem, { key: "End" });
+    expect(deleteItem).toHaveFocus();
+
+    fireEvent.keyDown(deleteItem, { key: "Tab" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+
+    fireEvent.keyDown(opener, { key: "ArrowUp" });
+    expect(screen.getByRole("menuitem", { name: "Delete chat" })).toHaveFocus();
+    fireEvent.click(opener);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(opener).toHaveFocus();
+
+    fireEvent.keyDown(opener, { key: "ArrowDown" });
+    fireEvent.click(screen.getByRole("menuitem", { name: "Save chat" }));
+    expect(save).toHaveBeenCalledWith(draft);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    // Saving can remove the options button, so focus moves to the chat's tab.
+    expect(screen.getByRole("tab", { name: /Second draft/ })).toHaveFocus();
+
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete chat" }));
+    expect(screen.getByRole("tab", { name: /Working draft/ })).toHaveFocus();
+  });
+
+  it("skips disabled items and lets Escape reach Emergency Stop", () => {
+    const stop = vi.fn();
+    const listener = (event: KeyboardEvent) => { if (event.key === "Escape") stop(); };
+    window.addEventListener("keydown", listener);
+    try {
+      render(
+        <ChatTabs
+          sessions={sessions}
+          activeId="one"
+          disabled={false}
+          onActivate={vi.fn()}
+          onNew={vi.fn()}
+          onSave={vi.fn()}
+          onDelete={vi.fn()}
+        />,
+      );
+      const opener = screen.getByRole("button", { name: "Open options for Working draft" });
+      fireEvent.click(opener);
+      const saveItem = screen.getByRole("menuitem", { name: "Save chat" });
+      expect(screen.getByRole("menuitem", { name: "Delete chat" })).toBeDisabled();
+      fireEvent.keyDown(saveItem, { key: "ArrowDown" });
+      expect(saveItem).toHaveFocus();
+
+      fireEvent.keyDown(saveItem, { key: "Escape" });
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(opener).toHaveFocus();
+      expect(stop).toHaveBeenCalledOnce();
+    } finally {
+      window.removeEventListener("keydown", listener);
+    }
+  });
+
   it("does not put a disabled menu hit target beside New Chat", () => {
     render(
       <ChatTabs

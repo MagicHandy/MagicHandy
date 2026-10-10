@@ -30,6 +30,7 @@ func chatPromptBudget(settings config.LLMSettings) chat.PromptBudgetSettings {
 }
 
 func (s *Server) prepareLLMProvider(settings config.LLMSettings) (llm.Provider, error) {
+	settings = settings.ConversationSettings()
 	s.llm.mu.Lock()
 	generation := s.llm.generation
 	s.llm.mu.Unlock()
@@ -46,7 +47,22 @@ func (p *preparedLLMProvider) StreamChat(ctx context.Context, request llm.ChatRe
 	// Settings may have changed before this handle was prepared. Validate the
 	// saved configuration as well as its generation before touching a runtime.
 	current, _ := p.server.store.Snapshot()
-	if llmRuntimeSettingsChanged(current.LLM, p.settings) {
+	currentSettings := current.LLM.ConversationSettings()
+	if p.settings.RequestRole == "refusal_fallback" || p.settings.RequestRole == "local_check" {
+		stopSequence, hasEpoch := ctx.Value(refusalRetryStopKey{}).(uint64)
+		if (p.settings.RequestRole == "refusal_fallback" && !current.LLM.RetryRefusalLocally) || p.settings.IsHosted() || !hasEpoch || p.server.chatCanceled(ctx, stopSequence) {
+			return "", context.Canceled
+		}
+		currentSettings = current.LLM.LocalSettings()
+	}
+	if p.settings.RequestRole == "motion" {
+		var err error
+		currentSettings, err = current.LLM.PlanningSettings()
+		if err != nil {
+			return "", context.Canceled
+		}
+	}
+	if llmRuntimeSettingsChanged(currentSettings, p.settings) {
 		return "", context.Canceled
 	}
 	ctx = context.WithValue(ctx, llmGenerationKey{}, p.generation)

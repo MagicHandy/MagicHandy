@@ -38,7 +38,7 @@ func (s *Server) handleLabConversationStart(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	if err := normalizeLabConversationOptions(&options, chat.LLMLabPromptsFor(schemaUnenforced(settings.LLM))); err != nil {
+	if err := normalizeLabConversationOptions(&options, chat.LLMLabPromptsFor(schemaUnenforced(settings.LLM.ConversationSettings()))); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}

@@ -1,19 +1,22 @@
 import type { InternetDiscovery, NetworkConfig, NetworkStatus } from "../api/types";
+import type { ReactNode } from "react";
 import { t } from "../i18n";
+import { SetupChoice } from "./SetupChoice";
+import { SetupChoiceGroup } from "./SetupSection";
 
 export type NetworkScope = "local" | "lan" | "public";
 export const networkScope = (config: NetworkConfig): NetworkScope => config.mode === "local" || config.mode === "legacy" ? "local" : config.scope === "lan" ? "lan" : "public";
 
-export function AccessScopeChoices({ value, disabled, onChange }: { value: NetworkScope; disabled?: boolean; onChange: (value: NetworkScope) => void }) {
+export function AccessScopeChoices({ value, disabled, onChange, panel }: { value: NetworkScope; disabled?: boolean; onChange: (value: NetworkScope) => void; panel?: ReactNode }) {
   const choices: Array<{ id: NetworkScope; title: string; detail: string }> = [
     { id: "local", title: t("Local only"), detail: t("Use this computer. No open ports or certificates needed.") },
     { id: "lan", title: t("LAN + local"), detail: t("Use devices on your private network. Sign-in and local HTTPS required.") },
     { id: "public", title: t("Public"), detail: t("Use over the Internet. Sign-in, public HTTPS, and an open incoming port required.") },
   ];
-  return <fieldset className="network-scope"><legend>{t("Where will you use MagicHandy?")}</legend>{choices.map((choice) => <label key={choice.id} className="network-scope-option" data-selected={choice.id === value}>
-    <input type="radio" name="network-scope" value={choice.id} checked={choice.id === value} disabled={disabled} onChange={() => onChange(choice.id)} />
-    <span><strong>{choice.title}</strong><span>{choice.detail}</span></span>
-  </label>)}</fieldset>;
+  // The same choice list as Setup's, so the scope reads the same in both places.
+  return <SetupChoiceGroup label={t("Where will you use MagicHandy?")} panel={panel}>
+    {choices.map((choice) => <SetupChoice key={choice.id} selected={choice.id === value} title={choice.title} detail={choice.detail} disabled={disabled} onSelect={() => onChange(choice.id)} />)}
+  </SetupChoiceGroup>;
 }
 
 export function listenParts(value: string): { host: string; port: string } {

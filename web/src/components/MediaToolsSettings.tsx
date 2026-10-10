@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { MediaJobState, MediaSettingsPayload, MediaToolStatus } from "../api/types";
 import { HostPathField } from "./HostPathField";
+import { RangeInput } from "./RangeInput";
 
 // Mirrors internal/config bounds so the form cannot ask for a value the server
 // would silently clamp.
@@ -151,6 +152,7 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
         <span>{t("Show originals that have been converted")}<small>{t("Off hides a source file once a converted copy sits beside it. Nothing is deleted: delete the converted file and the original returns on the next scan.")}</small></span>
       </label>
 
+      <details><summary>{t("Advanced")}</summary>
       <label className="field">
         <span className="label">{t("Re-encode codec")}</span>
         <select
@@ -168,8 +170,7 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
 
       <label className="field">
         <span className="label">{t("Quality")}<span className="hint-inline">{t("CRF {value}", { value: formatNumber(crfValue) })}</span></span>
-        <input
-          type="range"
+        <RangeInput
           min={MIN_CRF}
           max={MAX_CRF}
           step={1}
@@ -194,8 +195,7 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
 
       <label className="field">
         <span className="label">{t("Audio bitrate")}<span className="hint-inline">{t("{rate} kbps", { rate: formatNumber(media.reencode_audio_kbps ?? 192) })}</span></span>
-        <input
-          type="range"
+        <RangeInput
           min={MIN_AUDIO_KBPS}
           max={MAX_AUDIO_KBPS}
           step={AUDIO_KBPS_STEP}
@@ -206,6 +206,7 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
         <small>{t("Only used when the source audio is not already AAC; existing AAC is copied without quality loss. 192 kbps suits speech and most soundtracks; raise it for music. This is a target bitrate: FFmpeg may use less or clamp it to the source channel count and sample rate.")}</small>
       </label>
 
+      </details>
       <div className="media-tool-actions">
         <button type="button" className="btn btn-secondary" disabled={disabled} onClick={() => void run(() => api.convertMedia([]), t("Conversion started."))}>{t("Convert everything that cannot play")}</button>
       </div>

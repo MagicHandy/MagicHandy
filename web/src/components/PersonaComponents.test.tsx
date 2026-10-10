@@ -537,6 +537,64 @@ describe("PersonaSwitcher", () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });
 
+  it("opens on the bound persona, roves with the keyboard and returns focus to the chip", async () => {
+    personas.mockResolvedValue(payload({
+      personas: [persona(), persona({ id: "persona-ash", name: "Ash" }), persona({ id: "persona-mara", name: "Mara" })],
+      active_persona_id: "persona-ash",
+    }));
+    selectSessionPersona.mockResolvedValue(payload({ active_persona_id: "persona-mara" }));
+    render(<PersonaSwitcher sessionID="chat-1" disabled={false} />);
+
+    const chip = await screen.findByRole("button", { name: /Ash/ });
+    fireEvent.click(chip);
+    const menu = screen.getByRole("menu", { name: "Personas" });
+    expect(chip).toHaveAttribute("aria-controls", menu.id);
+    const ash = within(menu).getByRole("menuitemradio", { name: /Ash/ });
+    expect(ash).toHaveFocus();
+    expect(ash).toHaveAttribute("tabindex", "0");
+
+    fireEvent.keyDown(ash, { key: "ArrowDown" });
+    const mara = within(menu).getByRole("menuitemradio", { name: /Mara/ });
+    expect(mara).toHaveFocus();
+    expect(ash).toHaveAttribute("tabindex", "-1");
+    fireEvent.keyDown(mara, { key: "ArrowDown" });
+    expect(within(menu).getByRole("menuitemradio", { name: /MagicHandy Default/ })).toHaveFocus();
+    fireEvent.keyDown(document.activeElement as Element, { key: "End" });
+    expect(mara).toHaveFocus();
+    fireEvent.keyDown(mara, { key: "Home" });
+    expect(within(menu).getByRole("menuitemradio", { name: /MagicHandy Default/ })).toHaveFocus();
+    fireEvent.keyDown(document.activeElement as Element, { key: "r" });
+    expect(within(menu).getByRole("menuitemradio", { name: /Rowan/ })).toHaveFocus();
+
+    fireEvent.keyDown(document.activeElement as Element, { key: "ArrowUp" });
+    fireEvent.click(document.activeElement as Element);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(chip).toHaveFocus();
+    await waitFor(() => expect(selectSessionPersona).toHaveBeenCalledWith("chat-1", ""));
+  });
+
+  it("opens from the keyboard and closes on Escape without consuming Emergency Stop", async () => {
+    personas.mockResolvedValue(payload({ active_persona_id: "persona-0123456789ab" }));
+    const stop = vi.fn();
+    const listener = (event: KeyboardEvent) => { if (event.key === "Escape") stop(); };
+    window.addEventListener("keydown", listener);
+    try {
+      render(<PersonaSwitcher sessionID="chat-1" disabled={false} />);
+      const chip = await screen.findByRole("button", { name: /Rowan/ });
+      chip.focus();
+      fireEvent.keyDown(chip, { key: "ArrowUp" });
+      const items = screen.getAllByRole("menuitemradio");
+      expect(items[items.length - 1]).toHaveFocus();
+
+      fireEvent.keyDown(items[items.length - 1], { key: "Escape" });
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      expect(chip).toHaveFocus();
+      expect(stop).toHaveBeenCalledOnce();
+    } finally {
+      window.removeEventListener("keydown", listener);
+    }
+  });
+
   it("reads MagicHandy when the session uses the generic default", async () => {
     personas.mockResolvedValue(payload());
     render(<PersonaSwitcher sessionID="chat-1" disabled={false} />);

@@ -3,8 +3,8 @@ import {t} from "../i18n";
 import {useHashRoute} from "../state/app-state";
 import {labApi} from "./api";
 
-export function LabHelpLink({section}:{section:string}) {
-  return <a className="lab-help-link" href={`#/labs/help/${section}`}>{t("Help")}</a>;
+export function LabHelpLink({section,label}:{section:string;label?:string}) {
+  return <a className="lab-help-link" href={`#/labs/help/${section}`}>{label??t("Help")}</a>;
 }
 
 export function LabHelp() {

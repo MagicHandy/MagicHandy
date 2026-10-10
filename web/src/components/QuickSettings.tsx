@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { HandyModel, MotionSettings } from "../api/types";
 import { RangeSlider } from "./RangeSlider";
-import { SegmentedChoice, SetpointSlider } from "./SetpointControls";
+import { SegmentedChoice } from "./SetpointControls";
 import { useAppState, useToast } from "../state/app-state";
 import { useApplicationAudience } from "../state/application-audience";
 
@@ -186,8 +186,8 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
         </span>
         <span>{t("Reverse direction")}</span>
       </label>}
-      {showStyle && <SetpointSlider
-        className="quick-style-setpoints"
+      {showStyle && <SegmentedChoice
+        className="quick-style-choice"
         label={t("Style")}
         hint={t("biases motion character")}
         value={vals.style}

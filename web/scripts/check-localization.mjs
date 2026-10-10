@@ -10,16 +10,16 @@ const localeNames = ["en", "es", "pt-BR", "zh-Hans", "ja"];
 const visibleAttributes = new Set(["alt", "aria-label", "aria-valuetext", "placeholder", "title", "label", "hint", "accessibleLabel", "unavailableTitle"]);
 const iconText = /^(?:M|Y|MH|MagicHandy|[\s+\-−–—×%/#:;,.…•·]+|\d+(?:\.\d+)?%?)$/u;
 const sameValueAllowed = {
-  es: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{count} tokens", "{count} videos", "{rounding} ms", "{millis} ms", "{seconds} s", "{size} / {location}", "{state}: {message}", "1 video", "Autopilot", "Base", "Chat", "Commit", "Error", "Esc", "Funscript", "General", "Intiface Central", "local / {owner}", "MagicHandy", "Normal", "Original", "script", "Vagina / vulva", "Video", "Videos", "Vulnerable", "Script", "{tag} ({count})"]),
-  "pt-BR": new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{count} tokens", "{rounding} ms", "{millis} ms", "{seconds} s", "{size} / {location}", "{state}: {message}", "Autopilot", "Base", "Chat", "Commit", "Esc", "Funscript", "Interface", "Intiface Central", "local / {owner}", "MagicHandy", "Normal", "Original", "script", "Status", "Tags", "Vagina / vulva", "Script", "Tag", "{tag} ({count})"]),
-  "zh-Hans": new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{rounding} ms", "{size} / {location}", "{state}: {message}", "Esc", "Funscript", "Intiface Central", "MagicHandy"]),
-  ja: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{rounding} ms", "{size} / {location}", "{state}: {message}", "Autopilot", "Esc", "Funscript", "Intiface Central", "MagicHandy"]),
+  es: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{count} tokens", "{count} videos", "{rounding} ms", "{millis} ms", "{n} mm", "{seconds} s", "{size} / {location}", "{state}: {message}", "1 video", "Autopilot", "Base", "Chat", "Commit", "Error", "Esc", "Funscript", "General", "Intiface Central", "local / {owner}", "MagicHandy", "Normal", "Original", "script", "Vagina / vulva", "Video", "Videos", "Vulnerable", "Script", "{tag} ({count})"]),
+  "pt-BR": new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{count} tokens", "{rounding} ms", "{millis} ms", "{n} mm", "{seconds} s", "{size} / {location}", "{state}: {message}", "Autopilot", "Base", "Chat", "Commit", "Esc", "Funscript", "Interface", "Intiface Central", "local / {owner}", "MagicHandy", "Normal", "Original", "script", "Status", "Tags", "Vagina / vulva", "Script", "Tag", "Volume", "{tag} ({count})"]),
+  "zh-Hans": new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{rounding} ms", "{n} mm", "{size} / {location}", "{state}: {message}", "Esc", "Funscript", "Intiface Central", "MagicHandy"]),
+  ja: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{rounding} ms", "{n} mm", "{size} / {location}", "{state}: {message}", "Autopilot", "Esc", "Funscript", "Intiface Central", "MagicHandy"]),
 };
 
 // Product names in the session client hints retain their official spelling.
 // Only these exact labels may pass unchanged; surrounding UI copy is localized.
 for (const allowed of Object.values(sameValueAllowed)) {
-  for (const brand of ["Chrome", "Microsoft Edge", "Firefox", "Safari", "Windows", "macOS", "Linux", "Android", "iOS"]) allowed.add(brand);
+  for (const brand of ["Chrome", "Microsoft Edge", "Firefox", "Safari", "Windows", "macOS", "Linux", "Android", "iOS", "ChatGPT", "OpenRouter", "OpenAI API"]) allowed.add(brand);
 }
 
 function walk(directory) {

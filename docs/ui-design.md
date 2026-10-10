@@ -1,5 +1,17 @@
 # UI Design
 
+## Setup and settings
+
+Settings and setup use the Graphite card treatment: one card per group with a
+header row, label-left/control-right field rows that stack in narrow columns, a
+switch row for every on/off setting, and short help at the relevant decision.
+Cards never nest. Navigation uses filled selection (the Settings section list,
+Chat and Access sub-section tabs, setup progress), never a line-based active
+indicator. Advanced details remain available through labeled disclosures;
+errors, routing/privacy consequences and incomplete requirements are not hidden
+to make the screen look cleaner. The shared rules and responsive behavior are
+documented in [UI design guidelines](ui-design-guidelines.md#cards-sections-fields).
+
 ## Launch console
 
 On Windows, the Start menu and desktop shortcuts start `magichandy.exe` in a
@@ -49,12 +61,12 @@ box is centered on both axes in the compact button and vertically aligned in
 the desktop button.
 
 Below 900px, Chat uses the available workspace height for the conversation,
-leaving the Controls heading visible underneath. Controls remain in the same
-scrolling workspace. The message log absorbs height changes; the composer stays
+leaving the first control card's heading (Motion status) visible underneath.
+The control cards remain in the same scrolling workspace. The message log absorbs height changes; the composer stays
 below the log and above the permanent Stop/navigation footer. At phone widths,
 8px outer margins, smaller internal gaps and full available bubble widths
-recover reading space. Compact chat tabs use a neutral outline instead of an
-accent underline; persona, tab and new-chat controls share a centered row.
+recover reading space. Chat tabs keep the desktop treatment (fill plus one
+bottom accent); persona, tab and new-chat controls share a centered row.
 
 The workspace establishes a positioning context for its absolute accessibility
 labels, preventing off-screen controls from creating an extra document scrollbar.
@@ -86,16 +98,16 @@ settings has a saved "Show Remote in sidebar" switch; it changes the shortcut
 across browsers without shutting down the listener. Older settings writes preserve
 that choice. The legacy `#/remote` bookmark only links there. The remote has its own sign-in and
 account self-service, without the main rail, controller acquisition or host
-settings. Phone layouts use a compact filled Video/Chat segmented choice and a
-single-row header with an accessible account icon. Desktop shows video and chat
-side by side, separated by a continuous neutral border. The desktop connection
-readout joins the header; the chat composer has its own bottom divider. The phone
-keeps an outlined connection row and an inset Video/Chat selector. Flat controls
-use visible borders and solid fills, without inherited button gradients, shadows
-or rounded badges. Playback, motion source and library sections have clear neutral
-dividers. Library rows also have left and right borders, sharing their horizontal
-dividers without doubling the stroke. Controls use 36px targets, a 52px play button, whole-second clocks,
-10-second skips, mute, volume, speed, source choice and searchable catalog pages.
+settings. It is laid out like Chat: the header carries the product lockup,
+the connection readout and the account chip; desktop widths show the Chat
+conversation card beside a column of control cards (Now playing, Video
+library), and phones show one of them at a time through a filled Video/Chat
+segmented choice, with the connection readout on its own row. Cards, rows,
+messages and the composer are the shared Graphite classes, with 40px targets
+(44px on touch screens). Library rows form one bordered list with the open video
+tinted. Play is the filled green start button; the remote also has whole-second
+clocks, 10-second skips, mute, volume, speed, source choice and searchable
+catalog pages.
 Opening a video never starts it. Committed chat text stays bounded to the active
 conversation. Selected choices use a filled surface, never a left accent or
 underline. A stale connection hides controls; errors remain explicit. Red is
@@ -126,8 +138,8 @@ edges on wide desktop layouts as well as narrow layouts.
 ## Settings organization
 
 Access setup uses three compact radio rows: **Local only**, **LAN + local**, and
-**Public**. The selected row has a neutral background; there is no accent stripe
-or underline. Local password protection is an optional checkbox rather than a
+**Public**. The selected row has the quiet accent tint used by every choice
+list; there is no accent stripe or underline. Local password protection is an optional checkbox rather than a
 second set of large choice cards. Initial setup and Access settings share the
 HTTPS fields and numbered checklist. Show exact inbound and forwarding ports,
 separate detected addresses from verified reachability, and keep advanced manual
@@ -172,15 +184,16 @@ Access uses task navigation with stable bookmarkable routes. Personal links are
 `#/settings/access` route opens Profile. An unavailable or unauthorized child
 route resolves to the caller's own profile, without fetching administrator data.
 These links are ordinary keyboard-accessible anchors with `aria-current` in
-labeled lists. A vertical divider separates navigation from content; row rules
-and a stronger group divider distinguish destinations. The selected link uses
-a neutral inset, full neutral outline and heavier label, with no colored edge
-marker. Desktop rows are 36px. Below 1000px, Settings, Access and Chat use a
-single horizontally scrolling row with compact labels. A neutral filled surface
-identifies the selected link; neither an underline nor a left-edge marker is
-used. Link targets are 28px high in a 32px strip, with 7px horizontal padding.
-Profile, Accounts, History, Media and Prompts use shorter visual labels in this
-layout while retaining their full accessible names and titles.
+labeled lists. Settings sections are a 196px vertical list beside the content;
+Access and Chat sub-sections are a row of compact tabs at the top of the
+content, with a hairline divider between link groups. A neutral filled surface
+and heavier label identify the selected link everywhere; neither an underline
+nor a left-edge marker is used. Section rows are 34px and sub-section tabs 32px.
+Below 1000px the section list becomes a horizontally scrolling row of the same
+filled tabs with compact labels. Profile, Accounts, History, Media and Prompts
+use shorter visual labels in that layout while retaining their full accessible
+names and titles. A tab's own heading stays available to assistive technology
+without repeating the tab label on screen.
 Small arrows expose overflow without selecting another page; the active route
 stays visible on entry, route changes and resizing without scrolling the page
 vertically. Group labels remain available to assistive technology. No wrapped
@@ -618,13 +631,14 @@ One component, one source of truth.
 - Distinguishes commanded/estimated position from device-confirmed position, and
   never presents a planned point slope as a measured device speed; when only an
   estimate is available, it is labeled as an estimate.
-- Uses a restrained vertical Handy 2-inspired body and sleeve rather than an
-  abstract progress bar. The configured stroke envelope surrounds the moving
-  sleeve, which follows the backend sample position. Detailed telemetry names
+- Draws the device the backend dispatches to: the Handy 2's dot display (Handy
+  2 Standard and Pro), the original Handy's front view, or a scanning bar for
+  Intiface's generic linear strokers. The stroke window is shown with the
+  position inside it, which follows the backend sample position; Handy models
+  read millimetres of the selected model's travel. Detailed telemetry names
   state, target speed, range, source, and the backend-resolved active pattern
-  without adding controls to the artwork. On Chat, this compact telemetry is a
-  full-width inset footer whose contents align with the control column rather
-  than a floating or partial-width nested panel.
+  without adding controls to the artwork. The Handy 2 front view and the
+  Intiface ribbon timeline ship disabled (see ui-design-guidelines.md).
 - Is never itself a click target: controls are separate, labeled elements
   (limits and direction live in the connection manager; style lives in Chat), not
   artwork turned into a mystery button.
@@ -802,16 +816,14 @@ hoc per-widget colors) are not.
   exposes a compact write-only connection-key field and the active API v3 ID
   source; owner choice, key clearing, developer ID override, and server addresses
   remain in Settings.
-- The connection artwork uses a transparent hand isolation derived from the
-  reviewed conductor reference. It renders at its intrinsic square ratio with
-  no runtime mask or clip. The scaled frame contains the hand, three
-  intense-blue SVG arcs, and the poster's tall capsule, domed body, LED, and
-  square marker. The arcs cascade toward the device while connecting and remain
-  visible when connected. Disconnected has no signal and keeps the square red;
-  only a failed connection attempt adds a briefly shaking red X. Reduced-motion
-  renders connection feedback statically.
-  [Connection artwork](connection-artwork.md) records the generated asset
-  provenance, SVG coordinates, state table, and refactor checklist.
+- The connection artwork is a flat vector status strip (no bitmap): three
+  signal arcs above the Handy-inspired capsule, domed body, LED, and square
+  marker. The arcs pulse in the accent hue while connecting and turn green when
+  connected. Disconnected has no signal and keeps the square red; only a failed
+  connection attempt adds a briefly shaking red X. Reduced-motion renders
+  connection feedback statically.
+  [Connection artwork](connection-artwork.md) records the construction, SVG
+  coordinates, state table, and refactor checklist.
 - Exactly one client may command the device. Additional clients open read-only:
   they can watch state and trigger Stop, but cannot send motion, rather than
   racing and showing a warning banner after the fact.
@@ -1165,3 +1177,82 @@ wind-down is shown as Coming to rest and disables preferences until it ends.
 The global Emergency Stop remains outside the workspace and available offline
 and to read-only clients. Global motion style no longer changes Freestyle's
 separate preferences after upgrade initialization. See [ADR 0038](decisions/0038-freestyle-stroke-stream.md).
+
+## Hosted model setup (2026-10-08)
+
+Easy setup first offers Local-only AI, ChatGPT and API / Cloud. OpenRouter and
+other API providers appear only after the third choice. Connection and model
+selection come before a separate combining question: keeping chat local assigns
+cloud Autopilot technical motion context, excluding conversation, personas and
+memories. Its wording explains that this planner varies current motion without
+reading chat. Cloud-only sends the included conversation context to the chosen
+provider and avoids local model/runtime downloads. Saved custom roles and local
+servers are preserved until explicitly changed.
+
+ChatGPT presents disconnected, pending, connected and reconnect states. A
+connected account is one compact status line; management actions are collapsed.
+The first-use plan acknowledgement is an ordinary note, without a fake modal.
+Catalog discovery is automatic after connection; Check model is explicit and
+explains that it uses text generation without motion. Manual IDs and longer
+privacy explanations are disclosures. Continue gives a reason when a model check,
+controller permission, backend connection or disk space is missing.
+
+Settings > Chat > Model leads with backend-resolved saved routing, then independent
+Chat and Autopilot choices. Local, ChatGPT, OpenRouter, OpenAI API and compatible
+endpoints are direct selections, each with its own editor. A provider's editable
+name never replaces its identity. Named configurations and Decisions remain
+collapsed. Adding a named connection does not assign a role. Model choices
+remain drafts until Save; accounts and keys save immediately. Discard restores
+only model drafts and explicitly preserves saved credentials. A different hosted
+Autopilot defaults to motion-only sharing. Missing saved connections display as
+unavailable. Readiness survives
+an unchanged editor switch or browser reload and is invalid after an endpoint,
+model, routing or credential change. Local Autopilot hides irrelevant sharing
+controls. All new text fields use the existing app styles and the global Stop
+remains reachable on desktop, narrow screens and read-only views.
+
+Hosted Chat editors include a default-off local retry toggle. Its expanded
+explanation names the saved local model, requires an available local endpoint,
+and limits retries to explicit provider refusals. The local configuration
+disclosure reuses the existing editor without presenting the hosted Chat model's
+runtime status/actions as local readiness. Saving adds an On refusal destination
+to the backend routing summary. Streaming and persisted host-visible replies
+identify a local retry; diagnostics identify the declining and answering models.
+The toggle does not alter Autopilot or silently rewrite refusal text.
+
+Long provider/model explanations use the shared dismissible-notice catalog.
+They offer Just this time and Don't show again, with restoration through
+Informational notices. Their close controls work for read-only clients without
+unlocking model or credential controls. Routing rows, unsaved state, active
+errors and readiness are live state, not dismissible guidance. Compact unboxed
+notice styling keeps these explanations from adding another layer of cards.
+
+New ChatGPT choices recommend GPT-6 Sol with Low reasoning, based on the
+October 8 production motion fixture. Setup keeps this to one line and a
+collapsed Response speed disclosure; Settings explains the Luna/simple-edit
+and GPT-6.1 alternatives. Effort choices follow account metadata. Local model
+controls are unchanged. A successful check displays elapsed seconds without
+presenting a single text probe as a motion latency guarantee. Effort changes
+invalidate readiness. Small catalogs omit search; manual IDs stay secondary.
+No Fast tier is offered without verified plan support.
+
+See [ADR 0039](decisions/0039-hosted-model-connections.md) and the
+[review evidence](cloud-model-review-2026-10-08.md).
+
+
+### Optional local backup after hosted setup (2026-10-09)
+
+When Chat uses ChatGPT or an API connection, Easy and Custom setup both show a
+separate Local backup (optional) step after the primary model configuration.
+New setups require an explicit choice; reconfiguration retains an enabled backup.
+Declining keeps automatic local retry off and schedules no backup download.
+Accepting reuses the local runtime/model controls and normal install plan while
+preserving the hosted Chat route. A backup requires a concrete model, rather
+than the primary local flow's "Add a model later" engine-only choice.
+
+Finish offers an explicit, text-only local generation check. Discovery alone
+cannot enable the final action. The probe uses the saved local configuration,
+never the hosted Chat route, conversation history or motion dispatch. Stop and
+controller takeover cancel the request. Descriptive refusal guidance remains
+dismissible; backup selection and check errors remain visible. Step navigation
+resets the inner setup scroller so the next question appears at the top.

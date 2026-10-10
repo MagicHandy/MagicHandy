@@ -424,6 +424,15 @@ func TestInteractiveChatTargetSuspendsAndReplacesAutopilotState(t *testing.T) {
 		lastInput.CurrentAreaFocus == nil || *lastInput.CurrentAreaFocus != *focus {
 		t.Fatalf("post-chat decision input = %+v, want the interactive target", lastInput)
 	}
+	assertChatSetPaceMarked(t, lastInput.RecentSpeeds, 28)
+}
+
+// The pace chat set stays marked for planning that is not shown the words.
+func assertChatSetPaceMarked(t *testing.T, steps []SpeedStep, speed int) {
+	t.Helper()
+	if len(steps) < 2 || steps[len(steps)-1].SpeedPercent != speed || !steps[len(steps)-1].Interactive || steps[0].Interactive {
+		t.Fatalf("post-chat speed history = %+v, want the chat-set pace marked", steps)
+	}
 }
 
 func TestPhraseAgeUsesAccumulatedPerceptualDifference(t *testing.T) {
@@ -1085,11 +1094,15 @@ func TestRecentStretchSpeedsCoverThreeMinutes(t *testing.T) {
 	var m Manager
 	start := time.Unix(0, 0)
 	for i := range 20 {
-		m.rememberSpeedLocked(15, start.Add(time.Duration(i)*14*time.Second))
+		m.rememberSpeedLocked(15, start.Add(time.Duration(i)*14*time.Second), i == 19)
 	}
 	steps := m.recentSpeedStepsLocked(start.Add(19 * 14 * time.Second))
 	if len(steps) != 13 || steps[0].SecondsAgo != 168 || steps[len(steps)-1].SecondsAgo != 0 {
 		t.Fatalf("recent stretch speeds %+v", steps)
+	}
+	// A speed set through chat stays marked, without any of the words.
+	if steps[0].Interactive || !steps[len(steps)-1].Interactive {
+		t.Fatalf("chat-set speed not marked: %+v", steps)
 	}
 }
 

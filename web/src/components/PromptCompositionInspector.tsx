@@ -6,12 +6,13 @@ import { useAppState, useToast } from "../state/app-state";
 
 const message = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Request failed");
 
-export function PromptCompositionInspector() {
+export function PromptCompositionInspector({ collapsible = false }: { collapsible?: boolean }) {
   const { backendOnline } = useAppState();
   const { show } = useToast();
   const [payload, setPayload] = useState<PromptCompositionPayload | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(!collapsible);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -26,10 +27,11 @@ export function PromptCompositionInspector() {
   }, []);
 
   useEffect(() => {
+    if (!expanded) return;
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
-  }, [load]);
+  }, [load, expanded]);
 
   const copy = async () => {
     if (!payload) return;
@@ -41,9 +43,7 @@ export function PromptCompositionInspector() {
     }
   };
 
-  return (
-    <div className="group prompt-inspector">
-      <h3 className="group-title">{t("Prompt composition")}</h3>
+  const contents = <>
       <p className="hint-block">
         {t("This is the exact system prompt the backend would compose for the active chat now. A new message can change Relevant only lore matches.")}
       </p>
@@ -95,8 +95,14 @@ export function PromptCompositionInspector() {
           </details>
         </>
       )}
-    </div>
-  );
+    </>;
+
+  return collapsible ? (
+    <details className="group prompt-inspector" open={expanded} onToggle={event => setExpanded(event.currentTarget.open)}>
+      <summary className="group-title">{t("Prompt composition")}</summary>
+      {expanded && contents}
+    </details>
+  ) : <div className="group prompt-inspector"><h3 className="group-title">{t("Prompt composition")}</h3>{contents}</div>;
 }
 
 function loreModeLabel(mode?: string): string {

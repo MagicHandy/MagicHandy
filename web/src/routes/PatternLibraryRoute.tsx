@@ -1,4 +1,5 @@
 import { t, translateKnown } from "../i18n";
+import { confirmThen } from "../util/confirm";
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { api } from "../api/client";
 import type { LibraryPattern, PatternInput, PatternLibrary, PatternPreview } from "../api/types";
@@ -145,19 +146,23 @@ export function PatternLibraryRoute() {
 
   async function removePattern(id: string) {
     const pattern = library.patterns.find((item) => item.id === id);
-    if (!pattern || !window.confirm(t("Delete {name}?", { name: pattern.name }))) return;
-    await withBusy(libraryActionKey.pattern(id), async () => {
-      await api.deletePattern(id);
-      setLibrary((current) => ({ ...current, patterns: current.patterns.filter((item) => item.id !== id) }));
+    if (!pattern) return;
+    confirmThen(t("Delete {name}?", { name: pattern.name }), { confirmLabel: t("Delete"), destructive: true }, () => {
+      void withBusy(libraryActionKey.pattern(id), async () => {
+        await api.deletePattern(id);
+        setLibrary((current) => ({ ...current, patterns: current.patterns.filter((item) => item.id !== id) }));
+      });
     });
   }
 
   async function removeProgram(id: string) {
     const program = library.programs.find((item) => item.id === id);
-    if (!program || !window.confirm(t("Delete {name}?", { name: program.name }))) return;
-    await withBusy(libraryActionKey.program(id), async () => {
-      await api.deleteProgram(id);
-      setLibrary((current) => ({ ...current, programs: current.programs.filter((item) => item.id !== id) }));
+    if (!program) return;
+    confirmThen(t("Delete {name}?", { name: program.name }), { confirmLabel: t("Delete"), destructive: true }, () => {
+      void withBusy(libraryActionKey.program(id), async () => {
+        await api.deleteProgram(id);
+        setLibrary((current) => ({ ...current, programs: current.programs.filter((item) => item.id !== id) }));
+      });
     });
   }
 

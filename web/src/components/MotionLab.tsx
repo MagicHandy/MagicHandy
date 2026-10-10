@@ -7,6 +7,7 @@ import { FlowComparison, auditionLabel } from "../labs/FlowComparison";
 import { ObservationEditor } from "../labs/Observations";
 import { LabHelpLink } from "../labs/LabHelp";
 import { CreateTestSequence } from "../labs/CreateTestSequence";
+import { RangeInput } from "./RangeInput";
 import "../styles/motion-lab.css";
 
 export function MotionLab() {
@@ -130,11 +131,12 @@ export function MotionLab() {
             <button className="btn btn-secondary" onClick={()=>void api.stopMotion().catch(reason=>show(String(reason),"error")).finally(refresh)}>{t("Stop")}</button>
             <button className="btn btn-secondary" disabled={!fresh} onClick={()=>exportLabReport("motion-lab-flow.json",{preview,selected:method,motion_simulated:state?.motion_simulated,exported_at:new Date().toISOString()})}>{t("Export comparison")}</button>
           </div>
-
-          <div><button className="btn btn-secondary" disabled={!fresh||readOnly||!backendOnline} onClick={()=>setObserved({target:{source:"motion",method,spec:preview.spec,settings_key:preview.settings_key},label:`${auditionLabel(method,preview.spec)} · ${preview.spec.min_percent}–${preview.spec.max_percent} · ${preview.spec.speed_percent}%`})}>{t("Observe preview")}</button></div>
+          <div className="row-actions">
+            <button className="btn btn-secondary" disabled={!fresh||readOnly||!backendOnline} onClick={()=>setObserved({target:{source:"motion",method,spec:preview.spec,settings_key:preview.settings_key},label:`${auditionLabel(method,preview.spec)} · ${preview.spec.min_percent}–${preview.spec.max_percent} · ${preview.spec.speed_percent}%`})}>{t("Observe preview")}</button>
+            <CreateTestSequence disabled={!fresh} target={{source:"motion",method,spec:preview.spec,settings_key:preview.settings_key}}/>
+            {continuous&&<CreateTestSequence experiments disabled={!fresh} target={{source:"motion",method,spec:preview.spec,settings_key:preview.settings_key}}/>}
+          </div>
           {observed&&<ObservationEditor key={JSON.stringify(observed.target)} target={observed.target} label={observed.label} close={()=>setObserved(null)}/>}
-          <div><CreateTestSequence disabled={!fresh} target={{source:"motion",method,spec:preview.spec,settings_key:preview.settings_key}}/></div>
-          {continuous&&<div><CreateTestSequence experiments disabled={!fresh} target={{source:"motion",method,spec:preview.spec,settings_key:preview.settings_key}}/></div>}
         </>}
       </div>
     </div>
@@ -144,5 +146,5 @@ export function MotionLab() {
 function LabSlider({label,value,min,max,change,disabled=false}:{label:string;value:number;min:number;max:number;change:(value:number)=>void;disabled?:boolean}) {
   const id=useId();
   return <label className="field" htmlFor={id}><span className="label">{label}<output htmlFor={id}>{value}</output></span>
-    <input id={id} type="range" min={min} max={max} value={value} disabled={disabled} onChange={event=>change(Number(event.target.value))}/></label>;
+    <RangeInput id={id} min={min} max={max} value={value} disabled={disabled} onChange={event=>change(Number(event.target.value))}/></label>;
 }

@@ -29,6 +29,31 @@ func autopilotCosmeticFeedback(input modes.DecisionInput) string {
 // autopilotDecide runs the strict motion-only model contract. It never asks for
 // or publishes a chat line.
 func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput) (modes.Decision, error) {
+	settings, _ := s.store.Snapshot()
+	planning, err := settings.LLM.PlanningSettings()
+	if err != nil {
+		return modes.Decision{}, err
+	}
+	// Technical context in the continuous modes uses the same planner as the
+	// conversation policy, shown motion state only (technicalMotionPlanning).
+	// Decisions, and technical planning in the other modes, select or refine
+	// prepared candidates instead.
+	planner := settings.LLM.MotionPlanner
+	if (planner.Provider == config.MotionPlannerDecisions || (planner.ContextPolicy == config.ContextTechnical && !continuousChatMode(settings.LLM.MotionGenerationMode))) && settings.LLM.MotionGenerationMode != config.LLMMotionModeOff {
+		return s.cloudAutopilotDecide(ctx, input, settings)
+	}
+	decision, err := s.localAutopilotDecide(ctx, input)
+	if err != nil && planning.IsHosted() {
+		err = cloudPlanningOutcome(err)
+	}
+	if planning.IsHosted() {
+		// A hosted abstention must never trigger the local library fallback.
+		decision.Abstain = true
+	}
+	return decision, err
+}
+
+func (s *Server) localAutopilotDecide(ctx context.Context, input modes.DecisionInput) (modes.Decision, error) {
 	if held, ok := s.requestedAutopilotHold(ctx); ok {
 		return held, nil
 	}
@@ -113,18 +138,14 @@ func (s *Server) autopilotModelTurn(
 	kind chat.AutopilotKind,
 ) (chat.AutopilotResponse, error) {
 	settings, _ := s.store.Snapshot()
-	sessionID, err := s.chatLog.ActiveSessionIDContext(ctx)
+	settings, admission, err := s.autopilotRoleSettings(ctx, kind, settings)
 	if err != nil {
-		return chat.AutopilotResponse{}, fmt.Errorf("resolve active chat: %w", err)
+		return chat.AutopilotResponse{}, err
 	}
-	promptContext, err := s.loadInteractiveChatPromptContext(ctx, sessionID, settings.LLM)
+	technical := kind == chat.AutopilotKindMotion && settings.LLM.MotionPlanner.ContextPolicy == config.ContextTechnical
+	promptContext, prompt, memories, err := s.autopilotPersonalization(ctx, settings.LLM, technical)
 	if err != nil {
-		return chat.AutopilotResponse{}, fmt.Errorf("resolve conversation context: %w", err)
-	}
-	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, promptContext.Persona)
-	prompt, memories, _, err := s.resolveInteractiveChatPersonalization(ctx, promptID)
-	if err != nil {
-		return chat.AutopilotResponse{}, fmt.Errorf("resolve personalization: %w", err)
+		return chat.AutopilotResponse{}, err
 	}
 	capabilities := promptContext.Capabilities
 	if kind == chat.AutopilotKindSpeech {
@@ -146,14 +167,7 @@ func (s *Server) autopilotModelTurn(
 	// segment while the transport-facing snapshot is temporarily idle. Keep the
 	// autonomous validator aligned with that semantic state: a hold can restart
 	// an owned segment, but it cannot start a brand-new Autopilot run.
-	if input.CurrentSpeed > 0 && (input.CurrentDynamic != nil || input.CurrentFlow != nil || input.CurrentPatternID != "") {
-		motionContext.Running = true
-		motionContext.Paused = false
-		motionContext.SpeedPercent = input.CurrentSpeed
-	}
-	if input.CurrentFlow != nil {
-		motionContext.Layered = motion.CloneFlowSpec(input.CurrentFlow)
-	}
+	motionContext = autopilotOwnedMotionContext(motionContext, input)
 	temperature := autopilotTemperature(kind, input.MotionChangeLevel)
 	if kind == chat.AutopilotKindMotion && strings.TrimSpace(input.MotionFeedback) != "" && temperature < 0.98 {
 		temperature = 0.98
@@ -174,6 +188,9 @@ func (s *Server) autopilotModelTurn(
 		Capabilities:          capabilities,
 	}
 	modelContext := autopilotPromptContext(input, capabilities)
+	if technical {
+		modelContext.Technical, modelContext.LastSay = true, ""
+	}
 	if ages := motionContext.UserRequestSecondsAgo; len(ages) > 0 {
 		modelContext.LastHumanSecondsAgo = &ages[len(ages)-1]
 	}
@@ -181,21 +198,82 @@ func (s *Server) autopilotModelTurn(
 	if kind == chat.AutopilotKindSpeech {
 		message = chat.AutopilotSpeechMessage(modelContext)
 	}
-	providerCtx, _, releaseLLM, err := s.llmRequests.acquire(ctx, llmRequestAutonomous)
+	providerCtx, _, releaseLLM, err := s.acquireProviderRequest(ctx, llmRequestAutonomous, settings.LLM)
 	if err != nil {
 		return chat.AutopilotResponse{}, err
 	}
 	defer releaseLLM()
-	return service.Complete(providerCtx, kind, chat.Request{
+	response, err := service.Complete(providerCtx, kind, chat.Request{
 		Message: message,
 		History: autopilotHistory(kind, settings, promptContext),
 	})
+	if err == nil && settings.LLM.IsHosted() {
+		err = s.validateCloudAdmission(providerCtx, admission)
+	}
+	return response, err
+}
+
+// autopilotPersonalization resolves what one Autopilot turn may know about the
+// person. Technical motion planning is shown motion state only: no
+// conversation, persona, memories or reaction style, with the code-owned default
+// behavior profile in the utility voice. Saved motion settings still apply.
+func (s *Server) autopilotPersonalization(ctx context.Context, settings config.LLMSettings, technical bool) (interactiveChatPromptContext, chat.PromptSet, []string, error) {
+	if technical {
+		capabilities := chatCapabilities(settings, nil)
+		capabilities.Voice, capabilities.Style = chat.VoiceUtility, chat.StyleNeutral
+		prompt, _ := chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
+		return interactiveChatPromptContext{Capabilities: capabilities}, prompt, nil, nil
+	}
+	sessionID, err := s.chatLog.ActiveSessionIDContext(ctx)
+	if err != nil {
+		return interactiveChatPromptContext{}, chat.PromptSet{}, nil, fmt.Errorf("resolve active chat: %w", err)
+	}
+	promptContext, err := s.loadInteractiveChatPromptContext(ctx, sessionID, settings)
+	if err != nil {
+		return interactiveChatPromptContext{}, chat.PromptSet{}, nil, fmt.Errorf("resolve conversation context: %w", err)
+	}
+	promptID := effectivePersonaPromptSet(settings.PromptSet, promptContext.Persona)
+	prompt, memories, _, err := s.resolveInteractiveChatPersonalization(ctx, promptID)
+	if err != nil {
+		return interactiveChatPromptContext{}, chat.PromptSet{}, nil, fmt.Errorf("resolve personalization: %w", err)
+	}
+	return promptContext, prompt, memories, nil
+}
+
+func autopilotOwnedMotionContext(state chat.MotionContext, input modes.DecisionInput) chat.MotionContext {
+	if input.CurrentSpeed > 0 && (input.CurrentDynamic != nil || input.CurrentFlow != nil || input.CurrentPatternID != "") {
+		state.Running = true
+		state.Paused = false
+		state.SpeedPercent = input.CurrentSpeed
+	}
+	if input.CurrentFlow != nil {
+		state.Layered = motion.CloneFlowSpec(input.CurrentFlow)
+	}
+	return state
+}
+
+func (s *Server) autopilotRoleSettings(ctx context.Context, kind chat.AutopilotKind, settings config.Settings) (config.Settings, cloudPlanAdmission, error) {
+	source := settings
+	var err error
+	if kind == chat.AutopilotKindMotion {
+		settings.LLM, err = settings.LLM.PlanningSettings()
+	} else {
+		settings.LLM = settings.LLM.ConversationSettings()
+	}
+	var admission cloudPlanAdmission
+	if err == nil && settings.LLM.IsHosted() {
+		admission, err = s.captureCloudAdmission(ctx, source)
+	}
+	return settings, admission, err
 }
 
 // autopilotHistory is the conversation an Autopilot turn sees. Continuous
 // planning marks when each human line was said, so an old line is not read as
 // a reaction to the pace chosen since.
 func autopilotHistory(kind chat.AutopilotKind, settings config.Settings, promptContext interactiveChatPromptContext) []llm.Message {
+	if settings.LLM.IsHosted() {
+		return promptContext.History
+	}
 	if kind == chat.AutopilotKindMotion && continuousChatMode(settings.LLM.MotionGenerationMode) {
 		return chat.PlanningHistory(promptContext.History, promptContext.HistoryAt, time.Now())
 	}
@@ -261,7 +339,7 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 		modelContext.LocalStrokeRange = int(math.Round(input.CurrentPerceptual.MinimumLocalStrokeRange))
 	}
 	for _, step := range input.RecentSpeeds {
-		modelContext.RecentSpeeds = append(modelContext.RecentSpeeds, chat.SpeedStep{SpeedPercent: step.SpeedPercent, SecondsAgo: step.SecondsAgo})
+		modelContext.RecentSpeeds = append(modelContext.RecentSpeeds, chat.SpeedStep{SpeedPercent: step.SpeedPercent, SecondsAgo: step.SecondsAgo, Interactive: step.Interactive})
 	}
 	for _, band := range input.RecentPositionBands {
 		modelContext.RecentPositionBands = append(modelContext.RecentPositionBands, chat.PositionBand{

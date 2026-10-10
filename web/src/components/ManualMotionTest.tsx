@@ -5,6 +5,7 @@ import { useId, useState } from "react";
 import { api } from "../api/client";
 import { useAppState, useToast , useMotionState } from "../state/app-state";
 import { ownsActiveMotion } from "../util/motion";
+import { RangeInput } from "./RangeInput";
 
 export function ManualMotionTest() {
   const { backendOnline, readOnly, refresh } = useAppState();
@@ -40,12 +41,6 @@ export function ManualMotionTest() {
       <h3 className="group-title">{t("Manual motion")}<span className="badge">{t("Testing")}</span>
       </h3>
       <p className="hint-block">{t("Drives the device directly to test the connection. Normal motion comes from chat and modes.")}</p>
-      <div className="row-actions hint-block">
-        <button type="button" className="btn btn-start" onClick={() => void start()} disabled={locked}>
-          {manualActive ? t("Restart test") : t("Start test")}
-        </button>
-        <button type="button" className="btn btn-secondary" onClick={() => void stop()} disabled={!backendOnline || !manualActive}>{t("Stop test")}</button>
-      </div>
       <label className="field">
         <span className="label">{t("Pattern")}</span>
         <select value={pattern} onChange={(e) => setPattern(e.target.value)} disabled={locked}>
@@ -56,8 +51,14 @@ export function ManualMotionTest() {
       </label>
       <label className="field" htmlFor={speedID}>
         <span className="label">{t("Speed")}<output htmlFor={speedID}>{speed}%</output></span>
-        <input id={speedID} aria-label={t("Speed")} type="range" min={1} max={100} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} disabled={locked} />
+        <RangeInput id={speedID} aria-label={t("Speed")} min={1} max={100} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} disabled={locked} />
       </label>
+      <div className="row-actions">
+        <button type="button" className="btn btn-start" onClick={() => void start()} disabled={locked}>
+          {manualActive ? t("Restart test") : t("Start test")}
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={() => void stop()} disabled={!backendOnline || !manualActive}>{t("Stop test")}</button>
+      </div>
     </div>
   );
 }

@@ -1,0 +1,51 @@
+/* Form rows, shared by Setup and Settings: the label and its explanation on
+   the left, the control on the right, rows ruled apart with --line. */
+.form-rows { display: grid; min-width: 0; }
+/* Nested row groups (a provider inside a setup panel) share the outer rhythm. */
+.form-rows .form-rows { display: contents; }
+.form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: 48px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.form-row > select,
+.form-row > input { width: min(300px, 100%); justify-self: end; }
+.form-row-stack { grid-template-columns: minmax(0, 1fr); }
+.form-row-stack > select,
+.form-row-stack > input { width: 100%; justify-self: stretch; }
+.form-row-plain { display: block; }
+.form-row-label { display: grid; gap: 2px; min-width: 0; }
+.form-row-label strong { color: var(--text); font-size: var(--fs-body); font-weight: 500; }
+.form-row-label small {
+  color: var(--muted);
+  font-size: var(--fs-hint);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.form-row-state { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-label); white-space: nowrap; }
+.form-input-action { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.form-row.toggle-line { min-height: 48px; font-weight: 500; }
+.form-row.toggle-line small { font-weight: 400; }
+.form-row.toggle-line small { display: block; margin-top: 2px; color: var(--muted); font-size: var(--fs-hint); line-height: 1.4; }
+.form-row-details,
+.form-row-disclosures {
+  display: grid;
+  gap: 6px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.form-row-details > :not(summary),
+.form-row-disclosures details > :not(summary) { margin-top: 8px; }
+.form-row-disclosures details p { margin-bottom: 0; }
+.form-row-note { margin: 0; padding-top: 8px; }
+@media (max-width: 560px) {
+  .form-row { grid-template-columns: minmax(0, 1fr); }
+  .form-row > select,
+  .form-row > input,
+  .form-row > .btn { width: 100%; justify-self: stretch; }
+}
+.form-row .network-checklist { margin: 0; }

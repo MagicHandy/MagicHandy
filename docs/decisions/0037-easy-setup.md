@@ -4,6 +4,13 @@ Date: 2026-09-30
 
 Status: Accepted
 
+The 2026-10-08 hosted-model amendment in [ADR 0039](0039-hosted-model-connections.md)
+adds explicit AI location and separate local/cloud combining questions, preserves
+saved local servers and custom assignments, skips local downloads for cloud-only,
+requires actual hosted generation readiness, and retries the recorded install
+plan. Its independent implementation review remains pending; the earlier local
+and voice decisions below remain the baseline.
+
 ## Context
 
 Guided setup has seven steps: welcome, access, device, chat AI, voice, install

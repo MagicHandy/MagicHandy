@@ -1,6 +1,5 @@
 import { t, translateKnown } from "../i18n";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import conductorHand from "../assets/conductor-hand-v2.png";
 import { api } from "../api/client";
 import type { BluetoothBridgeSnapshot, IntifaceTransportSnapshot } from "../api/types";
 import { BluetoothBridge, type BluetoothBridgeState } from "../components/BluetoothBridge";
@@ -11,14 +10,12 @@ import { ChevronUpIcon, CloseIcon, RefreshIcon, SettingsIcon, WirelessIcon } fro
 
 type ConnectionPhase = "connected" | "connecting" | "disconnected" | "error" | "initializing";
 
-// Similar circular arcs (uniform sag/half-width ratio 0.33, widths 70/114/158)
-// so all three waves share one curvature while keeping a wide, low cascade
-// between hand and device. Control points put each curve through its true
-// circle bottom.
+// Three concentric arcs radiate upward from the device glyph, inner to outer,
+// in the flat status strip at the top of the connection panel.
 const SIGNAL_PATHS = [
-  "M145 123 Q180 146.1 215 123",
-  "M123 137 Q180 174.6 237 137",
-  "M101 151 Q180 203.1 259 151",
+  "M166 34 Q176.5 25 187 34",
+  "M157 25 Q176.5 9 196 25",
+  "M148 16 Q176.5 -7 205 16",
 ];
 
 const emptyIntiface: IntifaceTransportSnapshot = {
@@ -309,28 +306,27 @@ function ConnectionArtwork({ phase }: { phase: ConnectionPhase }) {
     <svg
       className="connection-artwork"
       data-phase={phase}
-      viewBox="0 0 360 260"
+      viewBox="0 0 360 120"
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={phase === "initializing" ? t("The Handy connection status loading") : phase === "connecting" ? t("The Handy wireless connection in progress") : t("The Handy wireless connection")}
     >
-      <image className="connection-hand" href={conductorHand} x="47" y="-70" width="260" height="260" preserveAspectRatio="xMidYMid meet" />
       <g className="connection-signal" aria-hidden="true">
         {SIGNAL_PATHS.map((path, index) => <path key={path} d={path} style={{ "--signal-index": index } as CSSProperties} />)}
       </g>
       <g className="connection-error-mark" data-visible={phase === "error"} aria-hidden="true">
-        <path d="m169 139 22 22" />
-        <path d="m191 139-22 22" />
+        <path d="m167 11 19 19" />
+        <path d="m186 11-19 19" />
       </g>
       <g className="connection-handy" aria-hidden="true">
-        <rect className="connection-handy-body" x="146" y="184" width="27" height="70" rx="13.5" />
-        <path className="connection-handy-body" d="M180 254v-22.5c0-7.5 6-13.5 13.5-13.5s13.5 6 13.5 13.5V254Z" />
-        <circle className="connection-handy-led" cx="159.5" cy="219" r="3" />
+        <rect className="connection-handy-body" x="146" y="42" width="27" height="70" rx="13.5" />
+        <path className="connection-handy-body" d="M180 112v-22.5c0-7.5 6-13.5 13.5-13.5s13.5 6 13.5 13.5V112Z" />
+        <circle className="connection-handy-led" cx="159.5" cy="77" r="3" />
         <rect
           className="connection-handy-marker"
           data-state={phase === "connected" ? "connected" : phase === "connecting" ? "connecting" : phase === "initializing" ? "initializing" : "disconnected"}
           x="216"
-          y="247"
+          y="105"
           width="7"
           height="7"
         />

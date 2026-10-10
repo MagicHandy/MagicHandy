@@ -17,6 +17,8 @@ import { AppShell } from "./shell/AppShell";
 import { routeBase } from "./shell/NavRail";
 import { useAppState, useHashRoute } from "./state/app-state";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { WorkspaceHead } from "./components/WorkspaceHead";
+import { RemoteIcon } from "./shell/icons";
 import { normalizeTheme } from "./theme";
 import { useAuth } from "./state/auth";
 import {LAB_BASE,LabsRoute,legacyLabRoute} from "@labs";
@@ -24,9 +26,16 @@ import {LAB_BASE,LabsRoute,legacyLabRoute} from "@labs";
 // Old bookmarks lead to the separate remote origin, never another app page.
 function RemoteRoute() {
   const { status } = useAuth();
-  return <section className="panel"><h1>{t("Remote")}</h1>
-    {status?.remote_url ? <a href={status.remote_url}>{t("Open remote interface")}</a> : <p>{t("Remote interface disabled")}</p>}
-  </section>;
+  return <>
+    <WorkspaceHead title={t("Remote")} />
+    <section className="empty-state remote-launch">
+      <RemoteIcon size={28} />
+      {status?.remote_url ? <>
+        <p>{t("Remote interface:")} <code>{status.remote_url}</code></p>
+        <a className="btn btn-primary" href={status.remote_url}>{t("Open remote interface")}</a>
+      </> : <p>{t("Remote interface disabled")}</p>}
+    </section>
+  </>;
 }
 
 export function App() {

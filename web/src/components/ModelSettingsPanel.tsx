@@ -27,6 +27,7 @@ import { OllamaLibraryImport } from "./OllamaLibraryImport";
 type LLMSettings = PublicSettings["llm"];
 
 interface ModelSettingsPanelProps {
+  configurationOnly?: boolean;
   settings: LLMSettings;
   saved?: LLMSettings;
   providers: string[];
@@ -50,7 +51,7 @@ const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic / provider
 // experimental patterns (mirrors config.DefaultLLMMotionCapabilities).
 const defaultCapabilities: LLMMotionCapabilities = { motion: true, patterns: true, area_focus: true, experimental_patterns: false };
 
-export function ModelSettingsPanel({ settings, saved, providers, llamaModes, managedLoadPolicies = [], llamaContextSizes, reasoningModes, maxOutputOptions, replyLengths = [], locked, patch }: ModelSettingsPanelProps) {
+export function ModelSettingsPanel({ settings, saved, providers, llamaModes, managedLoadPolicies = [], llamaContextSizes, reasoningModes, maxOutputOptions, replyLengths = [], locked, patch, configurationOnly = false }: ModelSettingsPanelProps) {
   const { show } = useToast();
   const [manager, setManager] = useState<LLMModelManagerSnapshot | null>(null);
   const [catalog, setCatalog] = useState<LLMCatalog | null>(null);
@@ -137,6 +138,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
 
   const refreshStatus = useCallback(async () => {
     const generation = ++statusGeneration.current;
+    if (configurationOnly) { setStatus(null); return; }
     try {
       const next = await api.llmStatus();
       if (mounted.current && generation === statusGeneration.current) setStatus(next);
@@ -150,7 +152,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
         message: message(error),
       });
     }
-  }, [statusContextSize, statusModel, statusProvider]);
+  }, [statusContextSize, statusModel, statusProvider, configurationOnly]);
 
   const refreshOllamaModels = useCallback(async () => {
     const generation = ++ollamaGeneration.current;
@@ -362,10 +364,10 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
       <div className="group">
         <div className="model-section-head model-runtime-section-head">
           <h4 className="group-title">{t("Local LLM")}</h4>
-          <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite" aria-busy={status?.loading || undefined}>
+          {!configurationOnly && <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite" aria-busy={status?.loading || undefined}>
             <span className="status-dot" aria-hidden="true" />
             <span>{statusMessage}</span>
-          </div>
+          </div>}
         </div>
 
         <div className="model-runtime-grid">
@@ -475,7 +477,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
           </DismissibleNotice>
         </details>
 
-        <div className="row-actions model-runtime-actions">
+        {!configurationOnly && <div className="row-actions model-runtime-actions">
           {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
             <>
               <button type="button" className="btn btn-secondary" disabled={locked || dirty || !managedConfigured || runtimeBuildActive || busy !== "" || status?.loading} onClick={() => void runtimeAction("load")}>{busy === "load" ? t("Loading...") : t("Load")}</button>
@@ -484,7 +486,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
           )}
           <button type="button" className="btn btn-secondary" title={t("Check the selected model for common problems")} disabled={locked || dirty || runtimeBuildActive || busy !== ""} onClick={() => setShowCheck(true)}>{t("Test model")}</button>
           {dirty && <span className="form-status">{t("Save settings before runtime actions.")}</span>}
-        </div>
+        </div>}
         {showCheck && <ModelCheckDialog locked={locked} onClose={() => { setShowCheck(false); void refreshStatus(); }} onModelChanged={() => void refreshManager()} />}
 
       </div>
@@ -544,7 +546,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
             <p className="model-store-path">{manager?.store_path || (managerMessage ? t("Model store unavailable") : t("Loading model store"))}</p>
           </div>
           <div className="row-actions model-import-actions">
-            <button type="button" className="icon-btn model-refresh" aria-label={t("Refresh model list")} title={t("Refresh model list")} disabled={busy === "refresh"} onClick={() => void refreshModels()}><RefreshIcon size={17} /></button>
+            <button type="button" className="icon-button model-refresh" aria-label={t("Refresh model list")} title={t("Refresh model list")} disabled={busy === "refresh"} onClick={() => void refreshModels()}><RefreshIcon size={17} /></button>
             <button type="button" className="btn btn-secondary" aria-expanded={showGGUFImport} disabled={locked || !manager} onClick={() => setShowGGUFImport((value) => !value)}><UploadIcon size={16} />{t("Import GGUF")}</button>
             <button type="button" className="btn btn-secondary" aria-expanded={showOllamaImport} disabled={locked || !manager} onClick={() => setShowOllamaImport((value) => !value)}><UploadIcon size={16} />{t("Import from Ollama")}</button>
           </div>
@@ -685,7 +687,7 @@ function ManagedModels({
               ) : (
                 <>
                   <button type="button" className="btn btn-secondary" disabled={locked || selected || model.state !== "ready"} onClick={() => onUse(model)}>{selected ? t("Selected") : t("Use")}</button>
-                  <button type="button" className="icon-btn" aria-label={t("Remove {display_name}", { display_name: model.display_name })} title={t("Remove managed copy")} disabled={locked || protectedModel} onClick={() => setConfirmRemove(model.id)}><TrashIcon size={17} /></button>
+                  <button type="button" className="icon-button" aria-label={t("Remove {display_name}", { display_name: model.display_name })} title={t("Remove managed copy")} disabled={locked || protectedModel} onClick={() => setConfirmRemove(model.id)}><TrashIcon size={17} /></button>
                 </>
               )}
             </div>

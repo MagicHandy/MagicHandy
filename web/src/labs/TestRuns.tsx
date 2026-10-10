@@ -35,11 +35,10 @@ function TestRunHome() {
   return <section className="lab-tests-page">
     <div className="lab-panel lab-test-welcome"><span className="lab-eyebrow">{t("Guided tests")}</span> <LabHelpLink section="feedback"/><h2>{t("Small rounds. Useful feedback.")}</h2>
       <p>{t("Follow a sequence, rate each result and add a comment. Every answer helps, including problems and skipped tests.")}</p>
-      <button className="btn btn-primary" disabled={busy||readOnly||!backendOnline} onClick={()=>void create()}>{busy?t("Preparing tests…"):t("Start a motion feel check")}</button>
-      <button className="btn btn-secondary" disabled={busy||readOnly||!backendOnline} onClick={()=>void create(true)}>{t("Compare motion experiments")}</button>
-
-
-
+      <div className="row-actions">
+        <button className="btn btn-primary" disabled={busy||readOnly||!backendOnline} onClick={()=>void create()}>{busy?t("Preparing tests…"):t("Start a motion feel check")}</button>
+        <button className="btn btn-secondary" disabled={busy||readOnly||!backendOnline} onClick={()=>void create(true)}>{t("Compare motion experiments")}</button>
+      </div>
     </div>
     {error&&<p role="alert" className="form-status">{translateKnown(error)} <button className="btn btn-secondary" onClick={()=>setReload(value=>value+1)}>{t("Retry")}</button></p>}
     {!data&&!error&&<p role="status">{t("Loading…")}</p>}
@@ -102,7 +101,7 @@ function TestRunPage({id}:{id:string}) {
         {view.run.steps.filter(step=>step.feedback).map(step=><article key={step.id}><strong>{translateKnown(step.title)}</strong><p>{ratingLabel(step.feedback!.rating)} · {basisLabel(step.feedback!.basis)}</p><p className="lab-observation-text">{step.feedback!.comment||t("No comment")}</p><TestSource step={step}/></article>)}
       </details>}
       <TestStorage path={view.storage_path}/>
-      <div className="row-actions lab-test-delete">{confirmDelete?<><span>{t("Delete this sequence and its feedback?")}</span><button className="btn btn-secondary" disabled={locked||moving} onClick={()=>void remove()}>{t("Confirm delete")}</button><button className="btn btn-secondary" onClick={()=>setConfirmDelete(false)}>{t("Cancel")}</button></>:<button className="lab-text-button" disabled={locked||moving} onClick={()=>setConfirmDelete(true)}>{t("Delete sequence")}</button>}</div>
+      <div className="row-actions lab-test-delete">{confirmDelete?<><span>{t("Delete this sequence and its feedback?")}</span><button className="btn btn-danger-outline" disabled={locked||moving} onClick={()=>void remove()}>{t("Confirm delete")}</button><button className="btn btn-secondary" onClick={()=>setConfirmDelete(false)}>{t("Cancel")}</button></>:<button className="btn btn-danger-outline" disabled={locked||moving} onClick={()=>setConfirmDelete(true)}>{t("Delete sequence")}</button>}</div>
     </>}
   </section>;
 }

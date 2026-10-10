@@ -132,7 +132,7 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 			m.history.previousSpeed = previousSpeed
 			m.history.speedChangedAt = now
 		}
-		m.rememberSpeedLocked(segment.SpeedPercent, now)
+		m.rememberSpeedLocked(segment.SpeedPercent, now, true)
 		m.observeInteractivePhraseLocked(now, segment, perceptual)
 		m.rememberPositionBandLocked(perceptual)
 		m.events.decisionSource = "interactive"

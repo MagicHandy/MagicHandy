@@ -213,13 +213,16 @@ type Capabilities struct {
 	// such as an external OpenAI-compatible server. Its Creative v2 contract
 	// omits the reach guide: without the schema, local Gemma 12B wrote
 	// malformed edits with the guide (31/42 against 40/42 valid).
-	SchemaUnenforced     bool
-	Motion               bool
-	MotionMode           MotionMode
-	Patterns             bool
-	AreaFocus            bool
-	ExperimentalPatterns bool
-	Voice                VoiceLevel
+	SchemaUnenforced bool
+	// PreserveConversationText keeps included canonical messages verbatim for
+	// an explicitly selected hosted full-conversation role.
+	PreserveConversationText bool
+	Motion                   bool
+	MotionMode               MotionMode
+	Patterns                 bool
+	AreaFocus                bool
+	ExperimentalPatterns     bool
+	Voice                    VoiceLevel
 	// Style is the active persona's reaction style, or StyleNeutral. It sits
 	// beside Voice because it is the same kind of thing: a reply-shaping axis
 	// with no motion authority.

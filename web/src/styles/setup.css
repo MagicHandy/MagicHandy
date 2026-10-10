@@ -1,155 +1,57 @@
 .workspace > .setup-layout {
   width: min(100%, var(--content-wide-max));
-  flex: 1 1 0;
+  flex: 0 1 auto;
   min-height: 0;
 }
 
+/* Setup is a page like Settings, not a card: the step strip and heading sit
+   on the workspace, each section below is its own card, and the actions bar
+   sits on --bg with a top rule. One card level, never cards in a card. */
 .setup-layout {
   display: grid;
-  grid-template-columns: minmax(190px, 224px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--line);
-  background: var(--surface);
 }
 
-.setup-progress {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  padding: 20px 14px;
-  border-right: 1px solid var(--line);
-  background: var(--bg-inset);
-}
-
-.setup-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 8px 22px;
-}
-
-.setup-brand > span {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border: 1px solid var(--accent-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.setup-brand strong {
-  font-size: 1rem;
-  font-weight: 650;
-}
-
-.setup-progress ol {
-  display: grid;
-  gap: 3px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
+/* One step strip within the app shell; labels remain readable on narrow screens. */
+/* Step tabs share the app's filled tab selection. */
+.setup-progress { min-width: 0; border-bottom: 1px solid var(--line); }
+.setup-progress ol { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0 0 10px; list-style: none; }
 .setup-progress li button {
-  display: grid;
-  width: 100%;
-  min-height: 36px;
-  grid-template-columns: 24px minmax(0, 1fr);
-  gap: 8px;
+  display: flex;
   align-items: center;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: 0;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 0.82rem;
-  text-align: left;
-}
-
-.setup-progress li button > span {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  font-size: 0.7rem;
-}
-
-.setup-progress li[data-state="current"] button {
-  border-color: var(--line-strong);
-  background: var(--surface-2);
-  color: var(--text);
-  font-weight: 600;
-}
-
-.setup-progress li[data-state="current"] button > span {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.setup-progress li[data-state="complete"] button {
-  color: var(--text);
+  font-size: var(--fs-label);
   cursor: pointer;
 }
+.setup-progress li button > span { min-width: 12px; font-variant-numeric: tabular-nums; }
+.setup-progress li[data-state="current"] button { background: var(--surface-2); color: var(--text); font-weight: 600; }
+.setup-progress li button:hover:not(:disabled, [aria-current]) { background: color-mix(in srgb, var(--surface-2) 60%, transparent); color: var(--text); }
+.setup-progress li[data-state="complete"] button > span { color: var(--accent); }
+.setup-progress li[data-state="complete"] button > span::before { content: "\2713"; }
+.setup-progress li button:disabled { cursor: default; opacity: 1; }
+.setup-progress li[data-state="pending"] button { color: var(--muted); }
+.setup-progress li button:focus-visible { outline-offset: -2px; }
 
-.setup-progress li[data-state="complete"] button > span {
-  border-color: var(--ok);
-  background: var(--ok);
-  color: var(--ok-ink);
-}
-
-.setup-progress li[data-state="complete"] button > span::before {
-  content: "\2713";
-}
-
-.setup-progress li button:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
-.setup-progress > p {
-  margin: auto 8px 0;
-  color: var(--muted);
-  font-size: 0.72rem;
-}
-
-.setup-main {
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.setup-head {
-  min-height: 88px;
-  padding: 20px clamp(20px, 4vw, 42px) 16px;
-  border-bottom: 1px solid var(--line);
-}
-
-.setup-head h1 {
-  margin: 0;
-  font-size: 1.45rem;
-  font-weight: 650;
-}
-
-.setup-body {
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding: 22px clamp(20px, 4vw, 42px);
-  scrollbar-gutter: stable;
-}
+.setup-main { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }
+.setup-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; padding: 18px 0 14px; }
+.setup-head h1 { margin: 0; font-family: var(--font-display); font-size: var(--fs-title); font-weight: 600; }
+.setup-step-count { color: var(--muted); font-size: var(--fs-label); white-space: nowrap; }
+.setup-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 2px 20px 0; scrollbar-gutter: stable; }
 
 .setup-copy {
   display: grid;
-  gap: 16px;
-  max-width: 760px;
+  gap: 12px;
+  max-width: 780px;
 }
 
 .setup-copy > p,
@@ -163,23 +65,23 @@
 
 .setup-copy > h2 {
   margin-top: 4px;
-  font-size: 1rem;
+  font-size: var(--fs-heading);
   font-weight: 650;
 }
 
 .setup-model-library {
-  max-width: 820px;
-  gap: 18px;
+  max-width: 780px;
+  gap: 12px;
 }
 
 .setup-method {
   display: grid;
   gap: 14px;
   min-width: 0;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
 }
 
 .setup-method-head {
@@ -189,19 +91,19 @@
   border-bottom: 1px solid var(--line);
 }
 
-.setup-method-head h2,
+.setup-method-head h3,
 .setup-method-head p {
   margin: 0;
 }
 
-.setup-method-head h2 {
-  font-size: 1rem;
-  font-weight: 650;
+.setup-method-head h3 {
+  font-size: var(--fs-body);
+  font-weight: 600;
 }
 
 .setup-method-head p {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
 }
 
 .setup-method-body {
@@ -229,7 +131,7 @@
 .setup-method .ollama-candidates {
   max-height: min(300px, 34vh);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--bg-inset);
 }
 
@@ -251,48 +153,71 @@
   gap: 3px;
   padding: 11px 13px;
   background: var(--surface-2);
-  font-size: 0.84rem;
+  font-size: var(--fs-label);
 }
 
 .setup-notice span {
   color: var(--muted);
 }
 
+/* A choice list is one bordered list: rows ruled apart, the chosen row tinted. */
 .setup-choices {
   display: grid;
-  gap: 8px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
 }
+/* The chosen option's details open under it, tinted with it, inside the list. */
+.setup-choice-panel { padding: 0 14px 12px 40px; background: var(--accent-tint); }
+.setup-choice-panel + .setup-choice { border-top: 1px solid var(--line); }
 
 .setup-choice {
   display: grid;
-  min-height: 62px;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  gap: 11px;
+  min-height: 48px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 12px;
   align-items: start;
-  padding: 11px 13px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
 }
 
 .setup-choice:hover:not([data-disabled="true"]) {
-  border-color: var(--line-strong);
+  background: var(--surface-2);
 }
 
 .setup-choice[data-selected="true"] {
-  border-color: var(--accent);
   background: var(--accent-tint);
 }
+
+.setup-choice + .setup-choice { border-top: 1px solid var(--line); }
 
 .setup-choice[data-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.55;
 }
 
+/* A drawn radio: an inset ring, filled with the accent when chosen. */
 .setup-choice input {
-  margin: 3px 0 0;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  border: 1.5px solid var(--control-line);
+  border-radius: 50%;
+  background: var(--bg-inset);
+  appearance: none;
+  cursor: inherit;
 }
+.setup-choice input:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 3px var(--bg-inset);
+}
+.setup-choice input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .setup-choice-copy {
   display: grid;
@@ -301,33 +226,40 @@
 }
 
 .setup-choice-copy strong {
-  font-size: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-size: var(--fs-body);
   font-weight: 650;
 }
 
 .setup-choice-copy small {
   color: var(--muted);
-  font-size: 0.76rem;
-  line-height: 1.45;
+  font-size: var(--fs-label);
+  line-height: 1.4;
 }
 
+/* A quiet badge: neutral fill and border, never an accent. */
 .setup-badge {
   align-self: start;
-  padding: 2px 6px;
-  border: 1px solid var(--accent-strong);
-  border-radius: 4px;
-  color: var(--accent);
-  font-size: 0.65rem;
-  font-weight: 650;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+  color: var(--text-soft);
+  font-size: var(--fs-hint);
+  font-weight: 600;
   white-space: nowrap;
 }
 
+/* The Qwen reference form, inside a row of its choice panel. */
 .setup-subsection {
   display: grid;
-  gap: 12px;
-  padding: 14px 0 0 29px;
-  border-top: 1px solid var(--line);
+  gap: 10px;
 }
+.setup-subsection h3 { margin: 0; font-size: var(--fs-body); font-weight: 600; }
+.setup-subsection > p { margin: 0; color: var(--muted); font-size: var(--fs-label); }
 
 .setup-subsection .field,
 .setup-subsection .hint-block {
@@ -338,33 +270,47 @@
   width: fit-content;
 }
 
+/* Saved AI setup inside its choice panel. */
+.saved-ai-setup { display: grid; gap: 10px; padding-top: 12px; }
+.saved-ai-setup h3 { margin: 0; font-size: var(--fs-body); font-weight: 600; }
+.saved-ai-setup .hint-block,
+.saved-ai-setup .button-row { margin: 0; }
+
+/* Saved values read as rows: label left, value right. */
+.setup-summary-rows {
+  display: grid;
+  margin: 0;
+  border-block: 1px solid var(--line);
+}
+.setup-section > h2 + .setup-summary-rows { margin-top: -12px; border-block: 0; }
+.setup-summary-rows > div {
+  display: grid;
+  min-height: 40px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 0;
+}
+.setup-summary-rows > div + div {
+  border-top: 1px solid var(--line);
+}
+.setup-summary-rows dt {
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.setup-summary-rows dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-body);
+}
+
 .setup-warning {
   margin: 0;
   padding-left: 10px;
   border-left: 2px solid var(--warn);
   color: var(--text);
-  font-size: 0.8rem;
-}
-
-.setup-access-local {
-  display: grid;
-  gap: 8px;
-  padding: 12px 13px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-
-.setup-access-local > p {
-  margin: 0;
-}
-
-.setup-remote-toggle {
-  justify-self: start;
-}
-
-.setup-choices-inline {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  font-size: var(--fs-label);
 }
 
 .setup-import-options {
@@ -374,9 +320,6 @@
 .setup-import-options > summary {
   min-height: 40px;
   padding: 10px 2px;
-  font-size: 0.86rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .setup-import-options > .setup-method + .setup-method {
@@ -390,7 +333,7 @@
   gap: 8px;
   margin: 0;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
 }
 
 .setup-empty {
@@ -400,31 +343,22 @@
   text-align: center;
 }
 
-.setup-divider {
-  height: 1px;
-  margin-block: 3px;
-  background: var(--line);
-}
-
 .setup-job {
   display: grid;
   gap: 10px;
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid var(--line);
 }
 
 .setup-job > :first-child {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.82rem;
+  font-size: var(--fs-label);
 }
 
 .setup-selection-state {
   margin: 0;
   color: var(--text);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
   font-weight: 600;
 }
 
@@ -452,7 +386,7 @@
   gap: 8px;
   align-items: start;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-hint);
 }
 
 .setup-install-steps li[data-state="running"],
@@ -496,7 +430,7 @@
 
 .setup-job details {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-hint);
 }
 
 .setup-job pre {
@@ -524,8 +458,9 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  min-height: 66px;
-  padding: 11px clamp(20px, 4vw, 42px);
+  min-height: 54px;
+  padding: 10px 0;
+  background: var(--bg);
   border-top: 1px solid var(--line);
 }
 
@@ -542,30 +477,6 @@
 .setup-actions .btn-quiet:hover:not(:disabled) {
   background: var(--surface-2);
   color: var(--text);
-}
-
-.setup-summary {
-  display: grid;
-  margin: 0;
-  border-top: 1px solid var(--line);
-}
-
-.setup-summary > div {
-  display: grid;
-  grid-template-columns: 130px minmax(0, 1fr);
-  gap: 14px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.setup-summary dt {
-  color: var(--muted);
-}
-
-.setup-summary dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
 }
 
 .setup-loading {
@@ -589,57 +500,11 @@
 }
 
 @media (max-width: 780px) {
-  .workspace > .setup-layout {
-    flex: 0 0 auto;
-  }
-
-  .setup-layout {
-    grid-template-columns: minmax(0, 1fr);
-    min-height: 0;
-    overflow: visible;
-  }
-
-  .setup-progress {
-    padding: 12px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .setup-brand,
-  .setup-progress > p {
-    display: none;
-  }
-
-  .setup-progress ol {
-    grid-template-columns: repeat(8, minmax(0, 1fr));
-    gap: 2px;
-  }
-
-  .setup-progress li button {
-    min-height: 36px;
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
-    padding: 3px;
-    border: 1px solid transparent;
-    font-size: 0;
-  }
-
-  .setup-progress li[data-state="current"] button {
-    border-color: var(--line-strong);
-  }
-
-  .setup-progress li button > span {
-    font-size: 0.68rem;
-  }
-
-  .setup-main {
-    min-height: 620px;
-  }
-
-  .setup-body {
-    overflow: visible;
-    scrollbar-gutter: auto;
-  }
+  .workspace > .setup-layout { flex: 0 0 auto; }
+  .setup-body { overflow: visible; scrollbar-gutter: auto; }
+  .setup-actions { position: sticky; bottom: 0; z-index: 1; }
+  .setup-progress ol { padding-inline: 6px; }
+  .setup-progress li button { padding-inline: 7px; }
 }
 
 @media (max-width: 560px) {
@@ -650,7 +515,7 @@
   .setup-head,
   .setup-body,
   .setup-actions {
-    padding-inline: 14px;
+    padding-inline: 0;
   }
 
   .setup-choice {
@@ -662,16 +527,12 @@
     width: fit-content;
   }
 
-  .setup-subsection {
-    padding-left: 0;
-  }
-
-  .setup-choices-inline {
-    grid-template-columns: minmax(0, 1fr);
+  .setup-choice-panel {
+    padding-left: 14px;
   }
 
   .setup-method {
-    padding: 14px;
+    padding-block: 12px;
   }
 
   .setup-actions {
@@ -686,14 +547,16 @@
     display: none;
   }
 
+  .setup-action-reason {
+    flex: 1 1 100%;
+    order: -1;
+    text-align: left;
+  }
+
   .setup-actions .btn-primary {
     margin-left: auto;
   }
 
-  .setup-summary > div {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -730,7 +593,7 @@
 
 .setup-prompt-dialog h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--fs-heading);
   font-weight: 600;
 }
 
@@ -758,25 +621,20 @@
 }
 
 /* Easy Setup: one page of requirement verdicts and three questions. */
-.easy-setup-section {
+.setup-section {
   display: grid;
   gap: 10px;
   margin-top: 8px;
 }
 
-.easy-setup-section h2 {
+.setup-section h2 {
   margin: 0;
 }
 
-.easy-requirement {
-  display: grid;
-  grid-template-columns: auto 1fr;
+.easy-requirement.form-row {
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
   align-items: start;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--bg-inset);
 }
 
 .easy-requirement .status-dot {
@@ -803,3 +661,37 @@
 .easy-setup .toggle-line[data-disabled] {
   opacity: 0.6;
 }
+
+.setup-local-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.setup-choices > .setup-choice-panel:first-child { padding-left: 14px; background: transparent; }
+.setup-choices > .setup-choice-panel:first-child + .setup-choice { border-top: 1px solid var(--line); }
+
+/* Cards on a setup page are spaced by the page, not by their own margins,
+   so setup sections and the shared model cards keep one 16px rhythm. */
+.setup-body > .setup-copy,
+.setup-body > .setup-copy .setup-copy { gap: 16px; }
+.setup-copy > :is(.setup-section, .model-routing-snapshot, .model-role-section, .group, .model-routing-draft, .setup-local-fields) { margin: 0; }
+/* Collapsed cards (Named connections, Decisions API) use the Settings header. */
+.setup-layout details.group > summary {
+  display: flex;
+  align-items: center;
+  margin: 0 -16px;
+  padding: 12px 16px;
+  color: var(--text);
+  font-size: var(--fs-heading);
+  font-weight: 600;
+  list-style: none;
+}
+.setup-layout details.group[open] > summary { margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.setup-layout details.group:not([open]) { padding-bottom: 0; }
+.setup-layout details.group > summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+}
+.setup-layout details.group[open] > summary::after { transform: rotate(-135deg); }
+.setup-body > .setup-inline-status { margin-top: 12px; }

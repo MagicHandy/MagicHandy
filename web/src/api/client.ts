@@ -3,6 +3,8 @@
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
 import type { LLMCatalog } from "./catalog-types";
+import type { CloudPlanningStatus, ModelConnection, HostedModel } from "./cloud-types";
+import { checkedCloudStatus } from "./cloud-status";
 import type { ModelCheckReport } from "./model-check-types";
 import type { AccessAuditPage } from "./audit-types";
 import type { RecoveryCodeStatus, IssuedRecoveryCodes } from "./access-types";
@@ -746,7 +748,21 @@ export const api = {
 
   // LLM runtime.
   llmStatus: () => request<LLMProviderStatus>("GET", "/api/llm/status"),
+  cloudPlanningStatus: () => request<CloudPlanningStatus>("GET", "/api/llm/cloud").then(checkedCloudStatus),
+  modelConnectionKey: (connection: ModelConnection, api_key: string) => request<{ key_set: boolean }>("POST", "/api/llm/connections/key", { connection, api_key }),
+  modelConnectionKeyStatus: (connection: ModelConnection) => request<{ key_set: boolean }>("POST", "/api/llm/connections/key", { connection }),
+  modelConnectionModels: (connection: ModelConnection) => request<{ models: HostedModel[] }>("POST", "/api/llm/connections/models", { connection }),
+  modelConnectionTest: (connection: ModelConnection) => request<{ ready: boolean; state?: string; message: string; provider: string; model: string; elapsed_ms?: number }>("POST", "/api/llm/connections/test", { connection }),
+  cloudModels: () => request<CloudPlanningStatus>("GET", "/api/llm/cloud/models").then(checkedCloudStatus),
+  cloudSignIn: (profile_id = "") => request<{ authorization_url: string }>("POST", "/api/llm/cloud/sign-in", { profile_id }),
+  cloudCancelSignIn: () => request<CloudPlanningStatus>("DELETE", "/api/llm/cloud/sign-in").then(checkedCloudStatus),
+  cloudSelect: (profile_id: string) => request<CloudPlanningStatus>("POST", "/api/llm/cloud/select", { profile_id }).then(checkedCloudStatus),
+  cloudAccountDisconnect: (profile_id: string) => request<{ status: CloudPlanningStatus; revocation_confirmed: boolean }>("POST", "/api/llm/cloud/disconnect", { profile_id }),
+  cloudDecisionsKey: (api_key: string) => request<CloudPlanningStatus>("PUT", "/api/llm/cloud/decisions-key", { api_key }).then(checkedCloudStatus),
+  cloudTest: (provider: string, model: string) => request<CloudPlanningStatus>("POST", "/api/llm/cloud/test", { provider, model }).then(checkedCloudStatus),
+  cloudWelcome: () => request<CloudPlanningStatus>("POST", "/api/llm/cloud/welcome", {}).then(checkedCloudStatus),
   llmLoad: () => request<LLMProviderStatus>("POST", "/api/llm/load", {}),
+  checkSetupLocalModel: () => request<{ ready: boolean; message: string; model: string }>("POST", "/api/llm/local/test", {}),
   llmUnload: () => request<LLMProviderStatus>("POST", "/api/llm/unload", {}),
   llmDuplicates: () => request<ManagedLLMDuplicateSnapshot>("GET", "/api/llm/duplicates"),
   terminateLLMDuplicates: (pids: number[]) =>
@@ -811,6 +827,7 @@ export const api = {
     request<{ installation: SetupJob }>("POST", "/api/voice/module/update", { update_id }),
   cancelTTSModuleUpdate: (job_id: string) =>
     request<{ installation: SetupJob }>("DELETE", "/api/voice/module/update", { job_id }),
+  retrySetupPlan: () => request<{ installation: SetupJob }>("POST", "/api/setup/install/retry", {}),
   installSetupPlan: (plan: SetupInstallPlan) =>
     request<{ installation: SetupJob }>("POST", "/api/setup/install", plan),
   cancelSetupInstall: () => request<{ installation: SetupJob }>("DELETE", "/api/setup/install"),

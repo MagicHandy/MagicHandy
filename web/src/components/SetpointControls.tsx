@@ -1,4 +1,5 @@
 import { useId, type CSSProperties } from "react";
+import { RangeInput } from "./RangeInput";
 
 export interface SetpointOption<Value extends string> {
   value: Value;
@@ -44,9 +45,8 @@ export function SetpointSlider<Value extends string>({
         <span>{label}{hint && <small>{hint}</small>}</span>
         <output htmlFor={id}>{current.label}</output>
       </span>
-      <input
+      <RangeInput
         id={id}
-        type="range"
         min={0}
         max={Math.max(0, options.length - 1)}
         step={1}
@@ -54,7 +54,6 @@ export function SetpointSlider<Value extends string>({
         disabled={disabled || options.length < 2}
         aria-label={label}
         aria-valuetext={current.label}
-        style={{ "--setpoint-progress": stopPosition(index) } as CSSProperties}
         onChange={(event) => {
           const option = options[Number(event.target.value)];
           if (option) onChange(option.value);
@@ -81,30 +80,31 @@ export function SetpointSlider<Value extends string>({
 
 interface SegmentedChoiceProps<Value extends string> {
   label: string;
+  /** A short qualifier shown after the label. */
+  hint?: string;
   value: Value;
   options: ReadonlyArray<SetpointOption<Value>>;
   disabled?: boolean;
   onChange: (value: Value) => void;
   className?: string;
-  emptySlots?: number;
 }
 
 // Categorical choices are intentionally not rendered as a slider: spatial
 // order must not imply that Creative, Library, and Off are quantities.
 export function SegmentedChoice<Value extends string>({
   label,
+  hint,
   value,
   options,
   disabled = false,
   onChange,
   className = "",
-  emptySlots = 0,
 }: SegmentedChoiceProps<Value>) {
   const name = useId();
 
   return (
     <fieldset className={`segmented-field ${className}`.trim()} disabled={disabled}>
-      <legend>{label}</legend>
+      <legend>{label}{hint && <small>{hint}</small>}</legend>
       <div className="segmented-choice" role="radiogroup" aria-label={label}>
         {options.map((option) => (
           <label className="segmented-option" key={option.value} title={option.title} data-disabled={option.disabled || undefined}>
@@ -119,7 +119,6 @@ export function SegmentedChoice<Value extends string>({
             <span>{option.label}</span>
           </label>
         ))}
-        {Array.from({length:emptySlots},(_,index)=><span className="segmented-option segmented-placeholder" aria-hidden="true" key={`reserved-${index}`}><span /></span>)}
       </div>
     </fieldset>
   );

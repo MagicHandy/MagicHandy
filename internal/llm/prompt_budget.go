@@ -11,7 +11,7 @@ type PromptBudget struct {
 	HistoryMessagesDropped int `json:"history_messages_dropped"`
 }
 
-// BudgetChatRequest preserves complete system messages and the final exchange
+// BudgetChatRequest preserves complete system/developer messages and the final exchange
 // (including a repair's original user turn). Only oldest history is removed.
 // An oversized essential prompt fails clearly instead of losing control rules.
 func BudgetChatRequest(request ChatRequest, contextSize int) (ChatRequest, PromptBudget, error) {
@@ -28,7 +28,7 @@ func BudgetChatRequest(request ChatRequest, contextSize int) (ChatRequest, Promp
 	retained := make([]Message, 0, len(request.Messages))
 	tail := max(1, request.PreserveTailMessages)
 	for i, message := range request.Messages {
-		if budget.InputBytes > limit && message.Role != "system" && i < len(request.Messages)-tail {
+		if budget.InputBytes > limit && message.Role != "system" && message.Role != "developer" && i < len(request.Messages)-tail {
 			budget.InputBytes -= len(message.Content) + 64
 			budget.HistoryMessagesDropped++
 			continue

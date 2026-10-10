@@ -49,6 +49,236 @@ archive of alpha.57 (`eb7f7c50`) measures 23,214,080 B and this change
 ms with the guide and 1,158 ms without; the request suite was unchanged at
 742 ms. See [the review](creative-v2-reach-guide-review-2026-10-09.md).
 
+## 2026-10-09 — Local compatible defaults
+
+Compatible endpoints on this computer with nothing declared get the standard
+`json_schema` form and the app's sampling. No dependency, UI asset or resident
+state is added. Same build: 22,437,888 B before and 22,439,424 B after
+(+1,536 B). The three October 9 follow-ups together measure +1,024 B against
+`eb3c29c2`. See the
+[provider settings amendment](provider-settings-review-2026-10-09.md).
+
+## 2026-10-09 — Technical-context Autopilot
+
+Technical-context Autopilot in Creative v2 and Layered uses the shared continuous
+planner. No dependency, UI asset or resident state is added; the scheduler's
+speed history gains one flag per entry. Windows amd64, Go 1.26.9,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`: 22,437,376 B with
+the shared reach guide and 22,437,888 B with this change (+512 B). A technical
+planning turn now carries the full continuous Autopilot contract: local Gemma 12B
+median 1.3 s per decision, against about 0.9 s for the earlier refinement prompt,
+which could not change pace or reach. See
+[the Autopilot review](technical-autopilot-review-2026-10-09.md).
+
+## 2026-10-09 — Shared Creative v2 reach guide
+
+The hosted reach guide now leads the local Creative v2 contract too. Compared
+with `eb3c29c2` on Windows amd64 Go 1.26.9, `CGO_ENABLED=0`, `-trimpath
+-buildvcs=false -ldflags '-s -w'`, the core binary measures 22,438,400 B before
+and 22,437,376 B after (−1,024 B, from removing the hosted-only prompt variant).
+The local Creative v2 contract grows by 713 bytes; the Lab prompt measures 7,608
+bytes instead of 6,895. Local Gemma 12B warm median Lab latency was 1,267 ms with
+the guide and 1,103 ms without on the same steering fixture. No dependency, UI
+asset, model call or resident state is added. See the
+[shared-guide review](creative-v2-shared-reach-guide-2026-10-09.md).
+
+## 2026-10-09 — Graphite UI refactor
+
+Compared with `eb3c29c2`, on Windows amd64 Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, Node gzip level 9:
+
+| Artifact | Previous checkpoint | Graphite | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 22,438,400 B | 22,011,904 B | -426,496 B |
+| Main JS, raw / gzip-9 | 1,110,785 / 299,476 B | 1,117,990 / 301,502 B | +7,205 / +2,026 B |
+| Main CSS, raw / gzip-9 | 183,365 / 32,520 B | 190,557 / 33,334 B | +7,192 / +814 B |
+| Labs CSS chunk, raw | 15,855 B | 18,473 B | +2,618 B |
+| Complete embedded UI including index | 2,827,166 B | 2,401,030 B | -426,136 B |
+
+No dependency was added. Removing the generated connection-artwork bitmap
+(444,236 B) in favor of a flat vector strip outweighs the restyle. The in-app
+confirmation dialog that replaces `window.confirm`, the switch rows that
+replace stray checkboxes, and app-wide touch sizing account for most of the
+small JS and CSS growth. The motion visualizer rules moved from
+`components.css` to `visualizer.css` to stay under the stylesheet size
+ceiling. The review follow-ups (the shared `useMenu` keyboard primitive, one
+slider recipe through `RangeInput`, the docked playback rail, the compact Labs
+mode select, pattern plot scales and the compact phone controller readout)
+account for +3,437 / +1,297 B of the JS and +2,454 / +477 B of the CSS; all
+slider paint now lives in `setpoint-controls.css`. Moving the Labs chart scales
+into the same HTML axes adds +93 / +16 B of main JS, leaves the main CSS
+unchanged and trims 11 B from the Labs CSS chunk. No new RSS, cold-start or
+inference-latency claim is made. See
+[UI design guidelines](ui-design-guidelines.md).
+
+## 2026-10-09 — Compact settings and setup visual system
+
+Compared with published `7a17bb45`, on Windows amd64 Go 1.26.9,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`, Node gzip level 9:
+
+| Artifact | Previous checkpoint | Visual pass | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 22,429,696 B | 22,438,400 B | +8,704 B |
+| Main JS, raw / gzip-9 | 1,109,832 / 299,243 B | 1,110,785 / 299,476 B | +953 / +233 B |
+| Main CSS, raw / gzip-9 | 176,604 / 31,485 B | 183,365 / 32,520 B | +6,761 / +1,035 B |
+| Complete embedded UI including index | 2,818,566 B | 2,827,166 B | +8,600 B |
+
+No dependency was added. The small payload increase implements shared form
+hierarchy, rectangular navigation and responsive controls. Unopened Diagnostics
+no longer composes a prompt. Local inference prompts, adapters, model routing and
+call counts are unchanged. No new RSS, cold-start or comparative inference-latency
+claim is made. See the [design review](settings-design-review-2026-10-09.md).
+
+## 2026-10-09 — Guided local backup setup
+
+Compared with published `98ff285a`, on Windows amd64 Go 1.26.9,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`, with Node gzip
+level 9 and the single canonical embedded UI:
+
+| Artifact | Previous checkpoint | Guided backup setup | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 22,405,632 B | 22,429,696 B | +24,064 B |
+| Main JS, raw / gzip-9 | 1,102,208 / 297,394 B | 1,109,832 / 299,243 B | +7,624 / +1,849 B |
+| Main CSS, raw / gzip-9 | 176,544 / 31,473 B | 176,604 / 31,485 B | +60 / +12 B |
+| Complete embedded UI including index | 2,801,457 B | 2,818,566 B | +17,109 B |
+
+No dependency is added. The extra code implements the optional setup question,
+localized guidance, existing local editor reuse, and one explicit fixed-prompt
+local generation check. Normal local chat prompts and inference call counts
+are unchanged; the check runs only on user action. Stop cancels the existing
+local scheduler lane as well as hosted work. No new RSS, cold-start, or
+steady-state latency measurement is claimed. See the
+[setup and consultation review](setup-backup-review-2026-10-09.md).
+
+## 2026-10-09 — Go security patch for the provider branch
+
+The published provider checkpoint's CI vulnerability gate reported 11 reachable
+Go standard-library vulnerabilities with Go 1.26.8. Raising `go.mod` to Go
+1.26.9 makes the unchanged `govulncheck@v1.8.0 ./...` gate report zero reachable
+vulnerabilities. No dependency or gate was removed.
+
+The same Windows amd64 pure-Go shipping build (`-trimpath -buildvcs=false
+-ldflags '-s -w'`) is 22,405,632 B, up 14,848 B from the 22,390,784 B provider
+checkpoint below. Frontend assets are unchanged. This is a toolchain comparison;
+the matched Go 1.26.8 feature measurements below remain intact. No new runtime
+memory or latency budget claim is made.
+
+## 2026-10-09 — Provider settings separation and visible routing
+
+Compared with the published `c5e5240e` branch checkpoint below, using the same
+Windows amd64 Go toolchain, `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`,
+`-ldflags '-s -w'`, and Node gzip level 9. The canonical embedded UI is rebuilt;
+no Go or browser dependency is added.
+
+| Artifact | Previous checkpoint | Provider settings follow-up | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 22,315,520 B | 22,390,784 B | +75,264 B |
+| Main JS, raw / gzip-9 | 1,084,581 / 293,587 B | 1,102,208 / 297,394 B | +17,627 / +3,807 B |
+| Main CSS, raw / gzip-9 | 175,773 / 31,333 B | 176,544 / 31,473 B | +771 / +140 B |
+| Complete embedded UI including index | 2,757,260 B | 2,801,457 B | +44,197 B |
+
+The added payload supports provider-specific editors, a backend-resolved saved
+routing summary, translated dismissible guidance, and an opt-in local retry after
+a typed hosted refusal. Local-only prompts, inference adapters, call counts and
+motion planning are unchanged. When explicitly enabled, a hosted refusal may add
+one local generation; the ordinary successful hosted path still uses one call. The backend adds
+two small route projections to public settings; it does not initialize cloud
+credentials or call an external service to produce them. A local-only settings
+view without hosted connections does not fetch cloud status or catalog data.
+
+The optional fresh-process memory comparison was blocked by automatic approval
+review (`blocked by policy`); no new Windows working-set, cold-start, Linux RSS
+or soak measurement is claimed. The previous matched local runtime measurements
+remain the available evidence, not a substitute for a new run. The binary stays
+below 30 MB; existing SQLite and main-bundle advisories are unchanged. Functional,
+race, live text and UI evidence is in the
+[provider settings review](provider-settings-review-2026-10-09.md).
+
+## 2026-10-08 — Latency-first motion follow-up and local isolation
+
+This supersedes the unresolved local working-set observation in the earlier
+same-day checkpoint below, while preserving that measurement. Same Windows
+amd64 toolchain and flags: Go 1.26.8, `CGO_ENABLED=0`, `-trimpath`,
+`-buildvcs=false`, `-ldflags '-s -w'`; gzip uses Node level 9. No dependencies
+were added. The comparison baseline remains alpha.57.
+
+| Artifact | Alpha.57 | Final follow-up | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 21,769,728 B | 22,315,520 B | +545,792 B |
+| Main JS, raw / gzip-9 | 1,028,321 / 280,263 B | 1,084,581 / 293,587 B | +56,260 / +13,324 B |
+| Main CSS, raw / gzip-9 | 174,553 / 31,039 B | 175,773 / 31,333 B | +1,220 / +294 B |
+| Complete embedded UI including index | 2,633,135 B | 2,757,260 B | +124,125 B |
+
+The module comparison identified Windows ACL support loaded by eager cloud
+credential-store initialization as the local-only working-set increase. Lazy
+initialization avoids that load when no credential store exists, while preserving
+protection on first use. The original matched probe was 24,592,384 B baseline
+versus 39,849,984 B eager candidate. With lazy storage, two subsequent matched
+startup probes measured:
+
+| Probe | Baseline WS / private bytes | Lazy candidate WS / private bytes |
+| --- | ---: | ---: |
+| Repeat 1 | 23,416,832 / 57,573,376 B | 23,343,104 / 57,208,832 B |
+| Repeat 2 | 22,986,752 / 56,832,000 B | 23,207,936 / 57,249,792 B |
+
+Those repetitions differed only in executable module identity; eager ACL DLLs
+were absent. An earlier first-launch lazy candidate was a retained outlier:
+72,085,504 B WS / 57,937,920 B private versus baseline 23,793,664 / 58,060,800 B.
+It loaded `apphelp.dll`; the full cause of the working-set spike is unestablished.
+Repeated steady probes do not establish p95 startup, Linux RSS or a soak result.
+These runtime probes used the final Go application code before the final
+setup-only disclosure change; artifact sizes above include that UI change.
+
+The local planning prompt is unchanged at 6,895 bytes. Real Gemma 12B warm
+median generation was 1,146 ms initially and 1,041 ms with final local isolation,
+with equal 75% fixture intent accuracy (6/8 and 12/16). These small samples
+support no observed regression, not a guaranteed speedup. Hosted guidance
+adds no local model call, extra planner loop or cloud request. The binary remains
+below 30 MB; existing SQLite and main-bundle advisories remain unchanged.
+See the [latency/visual review](cloud-motion-latency-review-2026-10-08.md).
+
+## 2026-10-08 — Hosted model connections and Easy setup
+
+Matched Windows amd64 builds use Go 1.26.8, `CGO_ENABLED=0`, `-trimpath`,
+`-buildvcs=false` and `-ldflags '-s -w'`. The baseline is alpha.57
+(`eb7f7c504e2b224866c9976271dcef932c90225d`), including its original embedded
+assets; the candidate is the final provider-review build. No Go or browser
+dependency is added. Raw/gzip sizes use file bytes and Node gzip level 9.
+
+| Artifact | Alpha.57 | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 21,769,728 B | 22,299,648 B | +529,920 B |
+| Main JS, raw / gzip-9 | 1,028,321 / 280,263 B | 1,080,110 / 292,343 B | +51,789 / +12,080 B |
+| Main CSS, raw / gzip-9 | 174,553 / 31,039 B | 175,773 / 31,333 B | +1,220 / +294 B |
+| All embedded UI assets | 2,633,135 B | 2,746,757 B | +113,622 B |
+
+Three fresh processes per final build used separate benchmark data, simulation,
+remote off and no browser/voice. Idle/cold measurements do not invoke the LLM.
+The runtime cohort used the same Go core before the final frontend-only catalog-readiness guard; binary/UI weights
+above include that guard.
+The external local test endpoint had gone offline before this final cohort;
+the final handoff app uses its verified ChatGPT connection. Medians follow;
+readiness timing includes PowerShell HTTP polling overhead.
+
+| Runtime measurement | Alpha.57 median | Candidate median |
+| --- | ---: | ---: |
+| Start to healthy | 512.9 ms | 515.0 ms |
+| Idle Windows working set | 23,580,672 B | 38,842,368 B |
+| Idle private bytes | 57,217,024 B | 57,929,728 B |
+
+The idle working set increased by 15,261,696 B (14.55 MiB); private bytes
+increased by 712,704 B. The cause has not been profiled. An earlier matched
+cohort, before the final saved-key lookup addition, completed local app chat
+without repair, fallback or motion: after-chat working-set medians were
+24,883,200 B baseline and 39,505,920 B candidate. That is supplementary evidence,
+not a final-build active-memory measurement. Windows working set and private
+bytes are distinct measures and do not establish Linux RSS, a soak result or
+p95 cold start. The core remains below 30 MB. The existing SQLite memory waiver
+and main-bundle advisory remain; no gate or exemption was changed. This
+checkpoint does not claim that the memory growth is resolved.
+See the [review](cloud-model-review-2026-10-08.md) and
+[ADR 0039](decisions/0039-hosted-model-connections.md).
+
 ## 2026-10-07 — Handy Cloud connection-key validation
 
 Cloud prerequisite validation now follows the current API v3 connection-key

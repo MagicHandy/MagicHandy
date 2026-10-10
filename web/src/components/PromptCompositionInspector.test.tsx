@@ -90,4 +90,22 @@ describe("PromptCompositionInspector", () => {
     expect(await screen.findByText("Not selected")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+
+  it("defers diagnostics composition until opened and cancels when closed", async () => {
+    render(<PromptCompositionInspector collapsible />);
+    expect(promptComposition).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Copy exact prompt" })).not.toBeInTheDocument();
+
+    const disclosure = screen.getByText("Prompt composition").closest("details")!;
+    disclosure.open = true;
+    fireEvent(disclosure, new Event("toggle"));
+    expect(await screen.findByText("gemma-3")).toBeVisible();
+    const signal = promptComposition.mock.calls[0][0] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+
+    disclosure.open = false;
+    fireEvent(disclosure, new Event("toggle"));
+    await waitFor(() => expect(signal.aborted).toBe(true));
+    expect(screen.queryByRole("button", { name: "Copy exact prompt" })).not.toBeInTheDocument();
+  });
 });

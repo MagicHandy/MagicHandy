@@ -10,10 +10,9 @@
   display: grid;
   gap: 18px;
   padding: clamp(18px, 3vw, 28px);
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: var(--shadow);
 }
 
 .auth-head {
@@ -33,18 +32,18 @@
 }
 
 .auth-head h1 {
-  font-size: 1.35rem;
+  font-size: var(--fs-title);
 }
 
 .auth-mark {
   display: grid;
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
   place-items: center;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  background: var(--accent-tint);
+  background: var(--surface-2);
   color: var(--accent);
   font-weight: 700;
 }
@@ -72,7 +71,7 @@
   border: 0;
   background: transparent;
   color: var(--muted);
-  font-size: .8125rem;
+  font-size: var(--fs-label);
   line-height: 1.35;
   cursor: pointer;
 }
@@ -103,7 +102,7 @@
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
   line-height: 1.25;
 }
 
@@ -115,7 +114,7 @@
   border: 1px solid currentColor;
   border-radius: 50%;
   content: "✓";
-  font-size: 0.62rem;
+  font-size: var(--fs-micro);
   font-weight: 800;
 }
 
@@ -147,10 +146,10 @@
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: var(--accent-tint);
-  color: var(--accent);
-  font-size: 0.82rem;
+  border-radius: 50%;
+  background: var(--steel-deep);
+  color: var(--text);
+  font-size: var(--fs-label);
   font-weight: 700;
 }
 
@@ -164,7 +163,7 @@
   width: 28px;
   height: 28px;
   flex-basis: 28px;
-  font-size: 0.7rem;
+  font-size: var(--fs-hint);
 }
 
 .control-identity {
@@ -176,12 +175,12 @@
 .control-identity-trigger {
   display: grid;
   min-width: 132px;
-  height: 38px;
-  grid-template-columns: 28px minmax(0, 1fr) 16px;
+  height: 36px;
+  grid-template-columns: 26px minmax(0, 1fr) 16px;
   align-items: center;
   gap: 8px;
-  padding: 4px 7px;
-  border: 1px solid transparent;
+  padding: 0 8px 0 4px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
@@ -210,13 +209,13 @@
 
 .control-identity-trigger small {
   color: var(--muted);
-  font-size: 0.62rem;
+  font-size: var(--fs-micro);
   font-weight: 400;
 }
 
 .control-identity-trigger strong {
   color: var(--text);
-  font-size: 0.78rem;
+  font-size: var(--fs-hint);
   font-weight: 600;
 }
 
@@ -259,7 +258,7 @@
 .control-identity-panel footer,
 .control-identity-note {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 
 .control-identity-panel > footer {
@@ -308,7 +307,7 @@
 .control-identity-options small {
   overflow: hidden;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -341,7 +340,7 @@
 .account-profile-preview > .account-avatar {
   width: 100%;
   height: 100%;
-  font-size: 2rem;
+  font-size: var(--fs-display);
 }
 
 .account-profile-actions {
@@ -365,7 +364,7 @@
 }
 
 .account-profile-copy > strong {
-  font-size: 1rem;
+  font-size: var(--fs-heading);
 }
 
 .account-profile-copy > span,
@@ -380,7 +379,7 @@
 
 .account-create-form h4 {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--fs-body);
 }
 
 .account-list {
@@ -413,10 +412,10 @@
   overflow-wrap: anywhere;
 }
 
-.account-row-name strong { font-size: .875rem; }
+.account-row-name strong { font-size: var(--fs-body); }
 .account-row-name small {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
 }
 
 .account-row-meta {
@@ -487,13 +486,13 @@
 
 .session-summary small {
   color: var(--muted);
-  font-size: .75rem;
+  font-size: var(--fs-hint);
 }
 
 .session-heading,
 .session-metadata { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 12px; }
-.session-heading strong { font-size: .875rem; }
-.session-details summary { cursor: pointer; color: var(--accent); font-size: .75rem; }
+.session-heading strong { font-size: var(--fs-body); }
+.session-details summary { cursor: pointer; color: var(--accent); font-size: var(--fs-hint); }
 .session-details[open] { flex-basis: 100%; }
 .session-details small { display: block; margin-top: 4px; }
 
@@ -502,7 +501,7 @@
   flex-wrap: wrap;
   gap: 4px 12px;
   color: var(--accent);
-  font-size: .75rem;
+  font-size: var(--fs-hint);
 }
 .session-flags:empty { display: none; }
 
@@ -624,37 +623,33 @@
 }
 
 .audit-event-heading { justify-content: space-between; }
-.audit-event-meta { color: var(--muted); font-size: 0.85rem; margin-block: 4px; }
-.audit-references { margin-top: 6px; font-size: 0.85rem; }
+.audit-event-meta { color: var(--muted); font-size: var(--fs-label); margin-block: 4px; }
+.audit-references { margin-top: 6px; font-size: var(--fs-label); }
 .audit-references summary { cursor: pointer; }
 .audit-references dl { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr); gap: 4px 12px; }
 .audit-references dt { color: var(--muted); }
 .audit-references dd { margin: 0; overflow-wrap: anywhere; }
 
 .recovery-codes { display: grid; gap: 6px; list-style: none; margin: 12px 0; padding: 0; }
-.recovery-codes li { border: 1px solid var(--line); padding: 6px 8px; overflow-wrap: anywhere; }
+.recovery-codes li { border: 1px solid var(--line); border-radius: var(--radius-xs); padding: 6px 8px; font-family: var(--font-mono); overflow-wrap: anywhere; }
 .recovery-codes code { white-space: normal; }
-.recovery-toggle { border: 0; background: transparent; padding: 0; font-weight: 600; text-align: left; cursor: pointer; }
-.recovery-toggle:hover { color: var(--accent); }
-.recovery-toggle svg { transform: rotate(90deg); }
-.recovery-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* A card-header disclosure: the header spans the card, the chevron sits at the
+   end, and the header rule appears only while the card is open. */
+.recovery-toggle { display: flex; flex-direction: row-reverse; align-items: center; justify-content: space-between; gap: 8px; width: calc(100% + 32px); border: 0; background: transparent; padding: 0; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.recovery-toggle svg { flex: 0 0 auto; color: var(--muted); transform: rotate(180deg); }
+.recovery-toggle[aria-expanded="true"] svg { transform: none; }
+.settings-panel .group > .group-title.recovery-toggle[aria-expanded="false"] { margin-bottom: 0; border-bottom-color: transparent; }
+.settings-panel .group:has(> .recovery-toggle[aria-expanded="false"]) { padding-bottom: 0; }
 
-/* Access has one surface, a divided navigation rail and flat content sections.
-   List density follows available content width rather than the window width. */
-.access-panel { border-radius: var(--radius-sm); box-shadow: none; }
-.access-panel > .section-title { padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
-.access-layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 22px; }
+/* Access uses the shared settings frame: sub-section tabs above the content,
+   one card per group. List density follows the content width. */
+.access-layout { display: block; }
 .access-content { min-width: 0; container-type: inline-size; }
-.access-content > .group { padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; }
-.access-content > .group + .group { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
-.access-content > .group > .group-title,
-.access-section-header .group-title { color: var(--text); font-size: 1rem; text-transform: none; }
-.access-content .btn { min-height: 32px; padding: 5px 10px; border-radius: 4px; font-size: .8125rem; font-weight: 500; }
-.access-content .btn-secondary { background: transparent; }
-.access-content .btn-secondary:hover:not(:disabled) { background: var(--surface-2); }
-.access-content .audit-events > li { padding-block: 8px; font-size: .8125rem; }
+.access-section-header .group-title { color: var(--text); font-size: var(--fs-heading); text-transform: none; }
+.access-content .audit-events > li { padding-block: 8px; font-size: var(--fs-label); }
+.settings-panel :is(.account-form, .auth-form) > .btn { justify-self: start; }
 .access-content .audit-event-meta,
-.access-content .audit-references { font-size: .75rem; }
+.access-content .audit-references { font-size: var(--fs-hint); }
 
 @container (max-width: 540px) {
   .account-row-summary { grid-template-columns: 36px minmax(0, 1fr); gap: 6px 10px; }
@@ -666,7 +661,4 @@
   .session-actions { justify-content: start; }
 }
 
-@media (max-width: 1000px) {
-  .access-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .access-panel > .section-title { padding-bottom: 0; margin-bottom: 8px; border: 0; font-size: .8rem; color: var(--muted); }
-}
+

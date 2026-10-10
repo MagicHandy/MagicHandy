@@ -1,0 +1,55 @@
+/* Hosted model connections in Graphite: rows with the label and explanation
+   left and the control right, separated by --line rules. Tokens only. */
+.cloud-motion-settings .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.model-connection-editor { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.cloud-motion-settings input,
+.cloud-motion-settings select { min-width: 0; max-width: 100%; }
+.cloud-motion-settings .field.checkbox { flex-direction: row; align-items: baseline; }
+.cloud-motion-settings .field.checkbox input { flex: none; }
+.chatgpt-connection,
+.hosted-setup-connection { min-width: 0; margin: 0; }
+.manual-model { margin: 0; }
+
+/* The reason Continue is unavailable, beside it in the footer. */
+.setup-action-reason { min-width: 0; color: var(--muted); font-size: var(--fs-label); text-align: right; }
+
+.model-routing-snapshot { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.model-routing-snapshot dl { margin: 8px 0; }
+.model-routing-snapshot dl > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 4px 0; }
+.model-routing-snapshot dt { color: var(--muted); }
+.model-routing-snapshot dd { margin: 0; overflow-wrap: anywhere; }
+/* Unsaved routing is a notice: the one inset surface inside a card. */
+.model-routing-draft {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+.model-routing-draft .hint { margin: 0; }
+.model-role-section { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.model-help.dismissible-notice { margin: 8px 0; padding: 0; border: 0; background: transparent; }
+.model-help .hint { margin: 0; }
+.model-help .hint + .hint { margin-top: 8px; }
+.model-help .notice-dismiss { inset-block-start: 0; inset-inline-end: 0; }
+
+.chatgpt-welcome {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  margin: 2px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+.chatgpt-welcome p { margin: 0; color: var(--text-soft); font-size: var(--fs-label); }

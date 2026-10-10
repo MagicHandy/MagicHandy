@@ -23,8 +23,9 @@ export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minG
   const highRef = useRef<HTMLInputElement>(null);
   const activeBound = useRef<RangeBound | null>(null);
   const span = ceil - floor || 1;
-  const lowPct = ((minValue - floor) / span) * 100;
-  const highPct = ((maxValue - floor) / span) * 100;
+  // The bounds' positions from floor to ceil (0–1), for the shared fill.
+  const lowFill = Math.min(1, Math.max(0, (minValue - floor) / span));
+  const highFill = Math.min(1, Math.max(0, (maxValue - floor) / span));
 
   function changeBound(bound: RangeBound, candidate: number) {
     if (!Number.isFinite(candidate)) return;
@@ -79,7 +80,7 @@ export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minG
       </div>
       <div
         className="range-slider-track"
-        style={{ "--low": `${lowPct}%`, "--high": `${highPct}%` } as CSSProperties}
+        style={{ "--low-fill": lowFill, "--high-fill": highFill } as CSSProperties}
         onPointerDown={startPointerChange}
         onPointerMove={continuePointerChange}
         onPointerUp={finishPointerChange}

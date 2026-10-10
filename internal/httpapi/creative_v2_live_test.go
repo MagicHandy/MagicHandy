@@ -3,17 +3,22 @@
 package httpapi
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"net/http"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
+	"github.com/mapledaemon/MagicHandy/internal/openaiauth"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -22,10 +27,7 @@ func TestCreativeV2LiveProductionConversation(t *testing.T) {
 	if model == "" {
 		t.Skip("set MAGICHANDY_LIVE_MODEL")
 	}
-	native, err := llm.NewOllamaProvider(llm.HTTPProviderOptions{BaseURL: "http://127.0.0.1:11434", Model: model, Timeout: 90 * time.Second})
-	if err != nil {
-		t.Fatal(err)
-	}
+	native, hosted := creativeReviewProvider(t, model)
 	provider := &libraryLiveProvider{Provider: native}
 	fake := transport.NewFake()
 	traces := diagnostics.NewTraceRing(4096)
@@ -36,13 +38,18 @@ func TestCreativeV2LiveProductionConversation(t *testing.T) {
 		s.LLM.Model = model
 		s.LLM.ReasoningMode = "off"
 		s.LLM.MotionGenerationMode = config.LLMMotionModeCreativeV2
+		if hosted {
+			connection := config.ModelConnection{ID: "review", Name: "Review", Provider: config.LLMProviderChatGPT, Model: model, ReasoningEffort: "low"}.Normalize()
+			s.LLM.Connections, s.LLM.ConversationConnectionID = []config.ModelConnection{connection}, connection.ID
+			s.LLM.MotionPlanner = config.MotionPlannerSettings{Provider: "conversation", ContextPolicy: config.ContextConversation}
+		}
 		s.Motion.SpeedMinPercent, s.Motion.SpeedMaxPercent = 20, 80
 		return s
 	})
 	outputs := []map[string]any{}
 	defer func() {
-		if server.currentMotionEngine().Snapshot().Running {
-			_, _ = server.currentMotionEngine().Stop(t.Context(), "live evaluation complete")
+		if engine := server.currentMotionEngine(); engine != nil && engine.Snapshot().Running {
+			_, _ = engine.Stop(t.Context(), "live evaluation complete")
 		}
 		exportLabExperimentCapture(t, map[string]any{"model": model, "transport": "captured fake transport; no physical device", "scenario": "Live Creative v2 chat, same-stream retargets, Autopilot generation and Stop", "turns": outputs, "commands": fake.Commands(), "trace_rows": traces.Rows()})
 	}()
@@ -92,7 +99,7 @@ func TestCreativeV2LiveProductionConversation(t *testing.T) {
 	state := server.currentMotionEngine().Snapshot()
 	beforeCalls := provider.calls
 	decision, err := server.autopilotDecide(t.Context(), modes.DecisionInput{CurrentFlow: state.Target.Flow, CurrentSpeed: state.Target.SpeedPercent, SpeedMinPercent: 20, SpeedMaxPercent: 80})
-	if err != nil || decision.Hold || decision.Segment.Flow == nil || decision.Segment.Flow.Seed == state.Target.Flow.Seed || provider.calls-beforeCalls != 1 {
+	if err != nil || decision.Hold || decision.Segment.Flow == nil || (decision.Segment.Flow.Seed == state.Target.Flow.Seed && chat.CreativeV2CharacterUnchanged(*decision.Segment.Flow, *state.Target.Flow)) || provider.calls-beforeCalls != 1 {
 		t.Fatalf("Autopilot: %+v %v", decision, err)
 	}
 	settings, _ := server.store.Snapshot()
@@ -111,4 +118,52 @@ func TestCreativeV2LiveProductionConversation(t *testing.T) {
 		t.Fatalf("unexpected transport restart count %d", plays)
 	}
 	t.Logf("%s: five production edits, one Autopilot generation, one transport play, stopped", model)
+}
+
+// An explicit existing profile enables hosted evaluation without copying its
+// credentials into the fake server's disposable data. Only the token closure
+// reaches the provider; the harness always uses the fake transport above.
+func creativeReviewProvider(t *testing.T, model string) (llm.Provider, bool) {
+	t.Helper()
+	if directory := os.Getenv("MAGICHANDY_HOSTED_DATA_DIR"); directory != "" {
+		manager, err := openaiauth.Open(openaiauth.Options{DataDir: directory})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(manager.Close)
+		token, err := manager.ActiveTokenSource(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		provider, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: model, PlanUsage: true, ReasoningEffort: "low", Token: token, Timeout: 45 * time.Second, Client: &http.Client{Transport: creativeReviewTransport{t}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return provider, true
+	}
+	provider, err := llm.NewOllamaProvider(llm.HTTPProviderOptions{BaseURL: "http://127.0.0.1:11434", Model: model, Timeout: 90 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return provider, false
+}
+
+type creativeReviewTransport struct{ t *testing.T }
+
+func (p creativeReviewTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	response, err := http.DefaultTransport.RoundTrip(r)
+	if err == nil && response.StatusCode >= 400 {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 8192))
+		_ = response.Body.Close()
+		response.Body = io.NopCloser(bytes.NewReader(body))
+		// Even opt-in diagnostics keep remote messages and credentials private.
+		var failure struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		_ = json.Unmarshal(body, &failure)
+		p.t.Logf("live evaluation HTTP %d; invalid schema=%v", response.StatusCode, failure.Error.Code == "invalid_json_schema")
+	}
+	return response, err
 }

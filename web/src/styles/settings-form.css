@@ -1,0 +1,454 @@
+/* Settings and setup forms in Graphite: each group is a card with a header,
+   fields are rows (label and hint left, control right), switches sit at the
+   end of their row, and Save stays in reach at the foot of the column. */
+.settings-panel,
+.setup-layout {
+  font-size: var(--fs-body);
+}
+.settings-panel,
+.settings-content,
+.access-content,
+.setup-body {
+  container: settings-form / inline-size;
+}
+
+/* The settings column is not a card itself: its groups are. */
+.settings-panel {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+/* The section list already names the open section, so its heading stays for
+   assistive technology only instead of adding an off-scale second title. */
+.settings-panel > .section-title,
+.settings-content > .section-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.settings-panel :is(.group, .model-routing-snapshot, .model-role-section),
+.setup-layout :is(.group, .model-routing-snapshot, .model-role-section) {
+  padding: 0 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.settings-panel :is(.group, .media-tools-settings, .model-routing-snapshot, .model-role-section, .model-routing-draft) + :is(.group, .model-routing-snapshot, .model-role-section, .voice-request-queue, .model-routing-draft),
+.setup-layout :is(.model-routing-snapshot, .model-role-section) + :is(.group, .model-routing-snapshot, .model-role-section) {
+  margin-top: 16px;
+  padding-top: 0;
+  border-top: 1px solid var(--line);
+}
+/* Media tools are a run of cards, not a card around cards. */
+.settings-panel .media-tools-settings {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.settings-panel .group + .media-tools-settings {
+  margin-top: 16px;
+  padding-top: 0;
+  border-top: 0;
+}
+.settings-panel :is(.model-routing-snapshot, .model-role-section) > * + *,
+.setup-layout :is(.model-routing-snapshot, .model-role-section) > * + * {
+  margin-top: 10px;
+}
+.settings-panel .group.group > * + * {
+  margin-top: 12px;
+}
+.settings-panel :is(.group, .model-routing-snapshot, .model-role-section) > .group-title:first-child,
+.setup-layout :is(.group, .model-routing-snapshot, .model-role-section) > .group-title:first-child,
+.settings-panel summary.group-title {
+  margin: 0 -16px 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font-size: var(--fs-heading);
+  font-weight: 600;
+  text-transform: none;
+}
+/* A later title inside a card starts a section under a rule, not a header. */
+:is(.settings-panel, .setup-layout) :is(.group, .model-routing-snapshot, .model-role-section) > .group-title:not(:first-child) {
+  margin: 16px 0 10px;
+  padding: 14px 0 0;
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  text-transform: none;
+}
+.settings-panel .group.group > .group-title + *,
+.settings-panel :is(.model-routing-snapshot, .model-role-section) > .group-title + *,
+.setup-layout :is(.model-routing-snapshot, .model-role-section) > .group-title + * {
+  margin-top: 0;
+}
+/* A summary-headed disclosure group keeps its header style when closed. */
+.settings-panel details.group > summary:not(.group-title) {
+  margin: 0 -16px;
+  padding: 12px 16px;
+  color: var(--text);
+  font-size: var(--fs-heading);
+  font-weight: 600;
+}
+.settings-panel details.group[open] > summary:not(.group-title) {
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+/* Nested groups read as sections inside their card, not as boxes. */
+:is(.settings-panel, .setup-layout) :is(.group, .model-role-section, .model-routing-snapshot) .group {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+:is(.settings-panel, .setup-layout) :is(.group, .model-role-section, .model-routing-snapshot) .group + .group,
+:is(.settings-panel, .setup-layout) .model-role-section > .section-title {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+:is(.settings-panel, .setup-layout) :is(.group, .model-role-section, .model-routing-snapshot) .group .group-title {
+  margin: 0 0 10px;
+  padding: 0;
+  border: 0;
+  font-size: var(--fs-body);
+}
+:is(.settings-panel, .setup-layout) .model-role-section > .section-title {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:is(.settings-panel, .setup-layout) .model-role-section > .section-title + .group {
+  margin-top: 10px;
+}
+.settings-panel details.group:not([open]) {
+  padding-bottom: 0;
+}
+.settings-panel details.group:not([open]) > summary.group-title {
+  margin-bottom: 0;
+  border-bottom: 0;
+}
+.settings-panel :is(summary.group-title, details.group > summary) {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+}
+.settings-panel :is(summary.group-title, details.group > summary)::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+}
+.settings-panel details[open] > summary.group-title::after,
+.settings-panel details.group[open] > summary::after {
+  transform: rotate(-135deg);
+}
+
+:is(.settings-panel, .setup-layout) .field {
+  margin-bottom: 0;
+  gap: 6px;
+}
+:is(.settings-panel, .setup-layout) .field > .label {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+.settings-panel :is(.group, .settings-content) a:not(.btn),
+.setup-layout a:not(.btn) {
+  color: var(--accent);
+}
+:is(.settings-panel, .setup-layout) :is(.hint, .hint-block, .field > small) {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: var(--fs-hint);
+  line-height: 1.45;
+}
+:is(.settings-panel, .setup-layout) .row-actions {
+  gap: 8px;
+}
+:is(.settings-panel, .setup-layout) :is(h2, h3) {
+  font-weight: 600;
+}
+:is(.settings-panel, .setup-layout) summary {
+  cursor: pointer;
+  font-size: var(--fs-label);
+}
+:is(.settings-panel, .setup-layout) details[open] > summary {
+  margin-bottom: 10px;
+}
+
+/* A field with one short control is a row: label and hint on the left, the
+   control on the right. Wide content (paths, text, keys) stays stacked. The
+   field is its own size container, so a field in a narrow column (a two-up
+   grid, a phone) stays stacked; its children switch to the row placement.
+   Stacked items span both tracks, which leaves the auto track empty. */
+:is(.settings-panel, .setup-layout) .field:has(> .label):has(> input:not([type=checkbox], [type=radio], [type=password], [type=url]), > select) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 24px;
+  row-gap: 4px;
+  container: field-row / inline-size;
+}
+:is(.settings-panel, .setup-layout) .field > * {
+  grid-column: 1 / -1;
+}
+@container field-row (min-width: 560px) {
+  :is(.settings-panel, .setup-layout) .field > .label {
+    grid-column: 1;
+    grid-row: 1;
+    justify-content: flex-start;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  :is(.settings-panel, .setup-layout) .field > .label > output {
+    margin-inline-start: auto;
+  }
+  :is(.settings-panel, .setup-layout) .field > :is(input, select) {
+    grid-column: 2;
+    grid-row: 1;
+    width: 300px;
+  }
+  :is(.settings-panel, .setup-layout) .field:has(> :is(.hint, .hint-block, small)) > :is(input, select) {
+    grid-row: 1 / span 2;
+  }
+  :is(.settings-panel, .setup-layout) .field > :is(.hint, .hint-block, small) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
+
+/* Switch rows stay label-left, switch-right, with the hint under the label. */
+:is(.settings-panel, .setup-layout) .toggle-line + .hint-block {
+  margin-top: 2px;
+  padding-inline-end: 56px;
+}
+
+.setup-copy > p {
+  font-size: var(--fs-body);
+}
+.setup-section h2,
+.setup-section h3 {
+  margin: 0;
+  font-size: var(--fs-heading);
+}
+/* Inside a section, a sub-question is a section title, not a second header. */
+.setup-section h3 {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.setup-section > .hint-block {
+  margin: 0;
+}
+.model-response-settings {
+  display: grid;
+  gap: 6px;
+}
+.model-response-settings > .hint {
+  margin: 0;
+}
+.setup-action-reason:empty {
+  display: none;
+}
+/* Each setup section is a card with a header row, as in Settings. */
+.setup-layout .setup-section {
+  gap: 12px;
+  margin-top: 16px;
+  padding: 0 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.setup-layout .setup-section:first-child {
+  margin-top: 0;
+}
+.setup-body > .setup-section,
+.setup-body > .setup-copy {
+  max-width: 820px;
+}
+.setup-layout .setup-section > h2 {
+  margin: 0 -16px 2px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+/* The first rows of a card sit directly under its header rule. */
+.setup-section > h2 + .form-rows > :first-child { border-top: 0; }
+.setup-layout .setup-section > h2 .hint-inline {
+  margin-inline-start: 8px;
+}
+.settings-panel .update-settings {
+  gap: 8px;
+}
+.settings-panel .update-settings > p {
+  margin: 0;
+}
+.settings-panel .runtime-update-settings > p {
+  margin-block: 8px;
+}
+.settings-panel .account-profile-preview {
+  width: 64px;
+  height: 64px;
+  flex-basis: 64px;
+}
+.settings-panel :is(.voice-worker-row, .voice-module-readout, .voice-request-queue, .bluetooth-panel) {
+  padding: 10px 0;
+  border: 0;
+  border-radius: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+}
+.settings-panel .voice-workers {
+  gap: 0;
+}
+.settings-panel .meta-grid > div {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+/* Informational notices are the one inset surface inside a card. */
+:is(.settings-panel, .setup-layout) :is(.dismissible-notice, .setup-notice, .reference-guide) {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+:is(.settings-panel, .setup-layout) .model-help.dismissible-notice {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.settings-panel .notification-preference-list {
+  display: grid;
+  gap: 0 28px;
+}
+.settings-panel .notification-preference-list .toggle-line {
+  padding-block: 8px;
+  border-top: 1px solid var(--line);
+}
+.settings-panel .update-version-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.setup-layout .group-title {
+  color: var(--text);
+  font-size: var(--fs-heading);
+  text-transform: none;
+}
+@container settings-form (min-width: 660px) {
+  .settings-panel .notification-preference-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Save stays in reach at the foot of the settings column. */
+.settings-panel .settings-actions {
+  position: sticky;
+  bottom: calc(-1 * var(--workspace-pad-end, 0px));
+  z-index: 3;
+  margin-top: 16px;
+  padding: 12px 0 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+
+@container (max-width: 640px) {
+  .model-section-head {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .model-generation-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.settings-panel .model-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.settings-panel .model-import-actions .btn {
+  width: auto;
+  white-space: nowrap;
+}
+.settings-theme summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  list-style: none;
+  cursor: pointer;
+}
+.settings-theme summary::-webkit-details-marker {
+  display: none;
+}
+.settings-theme summary > span {
+  margin-inline-start: auto;
+  color: var(--muted);
+  font-weight: 400;
+}
+.settings-theme summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(45deg);
+}
+.settings-theme[open] summary::after {
+  transform: rotate(-135deg);
+}
+.settings-theme[open] > .theme-picker {
+  margin-top: 10px;
+}
+
+@media (max-width: 560px) {
+  .settings-panel .group,
+  .setup-layout .group {
+    padding-inline: 12px;
+  }
+  .settings-panel .group > .group-title {
+    margin-inline: -12px;
+    padding-inline: 12px;
+  }
+}
+@media (pointer: coarse) {
+  .settings-panel,
+  .setup-layout {
+    --control-h: 44px;
+  }
+  :is(.settings-panel, .setup-layout) :is(.toggle-line, summary) {
+    min-height: 44px;
+  }
+  .setup-progress li button {
+    min-height: 44px;
+  }
+  :is(.settings-panel, .setup-layout) .notice-dismiss {
+    width: 36px;
+    height: 36px;
+  }
+  :is(.settings-panel, .setup-layout) .notice-content {
+    padding-inline-end: 40px;
+  }
+}

@@ -1,128 +1,223 @@
-.settings-sidebar { align-self: start; border-inline-end: 1px solid var(--line-strong); padding-inline-end: 14px; }
-.settings-sidebar-group + .settings-sidebar-group { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line-strong); }
-.settings-sidebar-label { margin: 0 0 8px; color: var(--muted); font-size: .75rem; font-weight: 600; }
-.settings-sidebar ul { list-style: none; padding: 0; margin: 0; }
-.settings-sidebar li + li { border-top: 1px solid var(--line); }
+/* Settings navigation. The seven sections are a vertical list beside the
+   content; sub-sections (Chat, Access) are underline tabs above it. One pattern
+   per level, the same on every settings page. */
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+.settings-main {
+  min-width: 0;
+}
+
+.settings-navigation {
+  display: flex;
+  min-width: 0;
+}
+.settings-nav-scrollport {
+  min-width: 0;
+  flex: 1;
+}
+.settings-nav-scroll {
+  display: none;
+}
+.settings-nav-compact {
+  display: none;
+}
+
+/* Primary: the section list. */
+.settings-nav {
+  position: sticky;
+  top: 0;
+}
+.settings-nav .settings-nav-scrollport {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-nav a {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: var(--fs-body);
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.settings-nav a:hover:not([aria-current]) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.settings-nav a[aria-current="page"] {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}
+.settings-nav a:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Secondary: compact tabs at the top of the content. The selected tab is
+   filled like the section list; there is no underline indicator. */
+.settings-split {
+  display: block;
+}
+.settings-sidebar {
+  margin: 0 0 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.settings-sidebar .settings-nav-scrollport {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.settings-sidebar .settings-nav-scrollport::-webkit-scrollbar {
+  display: none;
+}
+.settings-sidebar-group {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+.settings-sidebar-group + .settings-sidebar-group {
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--line);
+}
+.settings-sidebar-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.settings-sidebar ul {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .settings-sidebar a {
   display: flex;
   align-items: center;
-  min-height: 36px;
-  padding: 7px 10px;
-  border: 1px solid transparent;
-  color: var(--muted);
-  text-decoration: none;
-  font-size: .8125rem;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-.settings-sidebar a:hover { color: var(--text); background: var(--surface-2); }
-.settings-sidebar a[aria-current="page"] { color: var(--text); font-weight: 600; background: var(--bg-inset); border-color: var(--line-strong); }
-.settings-sidebar a:focus-visible { outline-offset: -2px; }
-
-.settings-navigation { display: flex; min-width: 0; }
-.settings-nav-scrollport { min-width: 0; flex: 1; }
-.settings-nav-scroll { display: none; }
-.settings-nav-compact { display: none; }
-.settings-nav { margin-bottom: 18px; }
-.settings-nav .settings-nav-scrollport { display: flex; gap: 6px; flex-wrap: wrap; }
-.settings-nav a {
-  padding: 7px 13px;
+  min-height: 32px;
+  padding: 0 12px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--surface-2);
   color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 500;
   text-decoration: none;
-  font-size: .85rem;
+  white-space: nowrap;
 }
-.settings-nav a[aria-current="page"] { border-color: var(--accent); color: var(--text); }
+.settings-sidebar a:hover:not([aria-current]) {
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  color: var(--text);
+}
+.settings-sidebar a[aria-current="page"] {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}
+.settings-sidebar a:focus-visible {
+  outline-offset: -2px;
+}
+.settings-content {
+  min-width: 0;
+  container-type: inline-size;
+}
 
-.settings-panel { border-radius: var(--radius-sm); box-shadow: none; }
-.settings-split { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 22px; }
-.settings-content { min-width: 0; container-type: inline-size; }
-.settings-content > .section-title { font-size: 1rem; }
-.settings-panel > .group,
-.settings-content > .group,
-.settings-panel > .media-tools-settings { padding: 0; border: 0; border-radius: 0; background: transparent; }
-.settings-panel > .group + .group,
-.settings-content > .group + .group,
-.settings-panel > .group + .media-tools-settings { padding-top: 18px; margin-top: 18px; border-top: 1px solid var(--line); }
-.settings-panel .group-title { text-transform: none; color: var(--text); font-size: .9rem; }
-.settings-panel .settings-actions { border-top: 1px solid var(--line); padding-top: 14px; }
-
-/* Narrow navigation uses a neutral selected surface and concise labels.
-   The full accessible label and route stay unchanged at every width. */
+/* Narrow screens: the section list becomes a scrolling strip above the
+   content; labels switch to their compact form. Routes and accessible names
+   stay unchanged at every width. */
 @media (max-width: 1000px) {
-  .settings-split { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .settings-sidebar { padding-inline-end: 0; border-inline-end: 0; }
-  .settings-sidebar-group { display: flex; flex: none; }
-  .settings-sidebar-label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; clip-path: inset(50%); overflow: hidden; white-space: nowrap; }
-  .settings-sidebar-group + .settings-sidebar-group { margin: 0 0 0 8px; padding: 0 0 0 8px; border: 0; border-inline-start: 1px solid var(--line); }
-  .settings-sidebar ul { display: flex; }
-  .settings-sidebar li + li { border-top: 0; }
-  .settings-panel button.btn,
-  .settings-panel a.btn {
-    min-height: 32px;
-    padding: 5px 10px;
-    border-radius: 4px;
-    font-size: .8125rem;
-    line-height: 1.35;
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
   }
-  .settings-panel .icon-button,
-  .settings-panel .icon-btn { width: 32px; height: 32px; min-height: 32px; flex-basis: 32px; }
-  .settings-nav { margin-bottom: 12px; }
-  .settings-navigation { align-items: center; padding-block: 2px; border: 0; border-radius: 4px; background: var(--bg-inset); }
-  .settings-nav-full { display: none; }
-  .settings-nav-compact { display: inline; }
-  .settings-navigation .settings-nav-scrollport {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 0;
+  .settings-nav {
+    position: static;
+    align-items: center;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .settings-nav .settings-nav-scrollport {
+    flex-direction: row;
+    gap: 4px;
     overflow-x: auto;
     scrollbar-width: none;
   }
-  .settings-nav-scrollport::-webkit-scrollbar { display: none; }
-  .settings-navigation a {
-    display: flex;
-    align-items: center;
+  .settings-nav .settings-nav-scrollport::-webkit-scrollbar {
+    display: none;
+  }
+  .settings-nav a {
     flex: none;
-    min-height: 28px;
-    padding: 4px 7px;
-    border: 0;
-    border-radius: 3px;
-    background: transparent;
-    font-size: .8125rem;
-    font-weight: 500;
-    line-height: 1.35;
+    min-height: 36px;
+    padding: 0 12px;
     white-space: nowrap;
   }
-  .settings-navigation a[aria-current="page"] { border: 0; background: var(--surface-3); color: var(--text); font-weight: 500; }
-  .settings-navigation a:focus-visible { outline-offset: -2px; }
+  .settings-nav-full {
+    display: none;
+  }
+  .settings-nav-compact {
+    display: inline;
+  }
   .settings-nav-scroll {
     display: inline-flex;
-    flex: 0 0 24px;
-    width: 24px;
-    min-height: 28px;
+    flex: 0 0 26px;
+    width: 26px;
+    height: 30px;
     align-items: center;
     justify-content: center;
     padding: 0;
     border: 0;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     background: var(--surface-2);
     color: var(--text);
     cursor: pointer;
   }
-  .settings-nav-scroll:hover:not(:disabled) { background: var(--surface-3); }
-  .settings-nav-scroll:disabled { background: transparent; color: var(--muted); opacity: .4; cursor: default; }
-  .settings-nav-scroll:focus-visible { outline-offset: -2px; }
+  .settings-nav-scroll:hover:not(:disabled) {
+    background: var(--surface-3);
+  }
+  .settings-nav-scroll:disabled {
+    background: transparent;
+    color: var(--muted);
+    opacity: 0.4;
+    cursor: default;
+  }
 }
 
-@container (max-width: 640px) {
-  .model-section-head { align-items: stretch; flex-direction: column; gap: 8px; }
-  .model-generation-settings { grid-template-columns: minmax(0, 1fr); }
+@media (pointer: coarse) {
+  .settings-nav a,
+  .settings-sidebar a,
+  .settings-nav-scroll {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-nav a {
+    transition: none;
+  }
 }
 
-.settings-panel .model-import-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.settings-panel .model-import-actions .btn { width: auto; white-space: nowrap; }
-.settings-theme summary { padding-block: 5px; cursor: pointer; font-size: .85rem; }
-.settings-theme summary > span { margin-inline-start: 10px; color: var(--muted); }
-.settings-theme[open] > .theme-picker { margin-top: 10px; }
+/* The active tab already names a tabbed sub-section, so its heading is kept for
+   assistive technology only instead of repeating the tab label on screen. */
+.settings-split .settings-content > .section-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

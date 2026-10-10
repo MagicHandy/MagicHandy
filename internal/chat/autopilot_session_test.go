@@ -221,9 +221,33 @@ func TestContinuousPlanningKnowsHowLongAgoThePersonSpoke(t *testing.T) {
 func TestContinuousPlanningSeesItsRecentStretchSpeeds(t *testing.T) {
 	score := FreshLayeredScore(16)
 	message := AutopilotMotionMessage(AutopilotContext{MotionMode: MotionModeLayered, CurrentSpeed: 16, CurrentFlow: &score,
-		SpeedMinPercent: 15, SpeedMaxPercent: 54, RecentSpeeds: []SpeedStep{{30, 150}, {18, 110}, {16, 70}, {15, 30}}})
+		SpeedMinPercent: 15, SpeedMaxPercent: 54, RecentSpeeds: []SpeedStep{{SpeedPercent: 30, SecondsAgo: 150}, {SpeedPercent: 18, SecondsAgo: 110, Interactive: true},
+			{SpeedPercent: 16, SecondsAgo: 70}, {SpeedPercent: 15, SecondsAgo: 30}}})
 	if !strings.Contains(message, "Your recent stretch speeds, oldest to newest, over the last 3 minutes: 30%, 18%, 16%, 15%.") ||
 		!strings.Contains(message, "Pace has stayed in the lower third of the saved range for 2 minutes.") {
 		t.Fatalf("recent stretch speeds are missing:\n%s", message)
+	}
+}
+
+// Technical planning sees no words, so the pace a person set in chat is
+// marked, and the guidance that reads their words is replaced.
+func TestTechnicalPlanningMarksChatSetPaceWithoutWords(t *testing.T) {
+	score := FreshCreativeV2Score(18)
+	context := AutopilotContext{Technical: true, MotionMode: MotionModeCreativeV2, CurrentSpeed: 18, CurrentFlow: &score, SpeedMinPercent: 15, SpeedMaxPercent: 54,
+		RecentSpeeds: []SpeedStep{{SpeedPercent: 30, SecondsAgo: 150}, {SpeedPercent: 18, SecondsAgo: 110, Interactive: true}}}
+	message := AutopilotMotionMessage(context)
+	if !strings.Contains(message, "30%, 18% (set in chat).") || !strings.Contains(message, "motion state only") ||
+		!strings.Contains(message, "the person set the pace to 18% through chat 2 minutes ago") || !strings.Contains(message, "within a few points of 18%") ||
+		strings.Contains(message, "use the width") || strings.Contains(message, "When they say it is too much") {
+		t.Fatalf("technical planning context:\n%s", message)
+	}
+	// Once no recent speed came from chat, the whole saved range is open.
+	context.RecentSpeeds[1].Interactive = false
+	if message := AutopilotMotionMessage(context); !strings.Contains(message, "use the width of the saved 15-54% speed range") || strings.Contains(message, "set the pace to") {
+		t.Fatalf("technical pace without a chat-set speed:\n%s", message)
+	}
+	context.Technical, context.RecentSpeeds[1].Interactive = false, true
+	if message := AutopilotMotionMessage(context); strings.Contains(message, "(set in chat)") || strings.Contains(message, "motion state only") {
+		t.Fatalf("conversation planning changed:\n%s", message)
 	}
 }

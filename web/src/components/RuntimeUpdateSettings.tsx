@@ -74,7 +74,7 @@ export function RuntimeUpdateSettings({ automatic, preferenceDisabled, actionDis
       <p className="hint-block" role="status" aria-live="polite">{status}</p>
       {active && <progress className="runtime-build-progress" aria-label={t("Managed llama.cpp installation in progress")} />}
       {snapshot?.runtime_build?.status === "failed" && <p className="form-status form-status-error">{translateKnown(snapshot.runtime_build.message)}</p>}
-      <label className="toggle-line hint-block">
+      <label className="toggle-line">
         <span className="toggle">
           <input type="checkbox" checked={automatic} disabled={preferenceDisabled} onChange={(event) => onAutomaticChange(event.target.checked)} />
           <span className="track" aria-hidden="true" />

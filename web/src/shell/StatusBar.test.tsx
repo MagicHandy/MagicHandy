@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StatusBar } from "./StatusBar";
 
@@ -139,7 +139,12 @@ describe("StatusBar controller handoff", () => {
     };
     render(<StatusBar />);
 
-    expect(screen.getByLabelText("This tab is the controller")).toBeInTheDocument();
+    const readout = screen.getByLabelText("This tab is the controller");
+    expect(readout).toHaveTextContent("controller: you");
+    // Phones swap the full label for Take control's glyph and a short "You";
+    // the short form is decorative, the full label stays for assistive tech.
+    expect(within(readout).getByText("You")).toHaveAttribute("aria-hidden", "true");
+    expect(readout.querySelector("svg.status-controller-glyph")).toHaveAttribute("aria-hidden", "true");
     expect(screen.queryByRole("button", { name: "Take control" })).not.toBeInTheDocument();
   });
 });

@@ -1,43 +1,88 @@
-/* Steel Azure is the default visual system. themes.css may replace neutral and
-   interactive tokens; green = go, amber = warn, and red = Stop in every theme. */
+/* Graphite is the default visual system (docs/ui-design-guidelines.md).
+   themes.css may replace the neutral and interactive tokens. The safety colours
+   (go, caution, Stop) and every scale below are shared by all themes. */
 :root {
+  /* Surfaces, darkest to lightest. */
   --bg: #0e0f11;
-  --bg-inset: #101215;
-  --surface: #17191d;
-  --surface-2: #1e2126;
-  --surface-3: #262a30;
-  --line: #2d3138;
-  --line-strong: #3d434c;
-  --text: #eae9e4;
-  --muted: #98a0a9;
+  --bg-inset: #0b0c0e;
+  --surface: #16181b;
+  --surface-2: #1d2024;
+  --surface-3: #24282e;
+  --line: #262a30;
+  --line-strong: #353b43;
+
+  /* Text. */
+  --text: #e9e7e2;
+  --muted: #9aa1a9;
+
+  /* Interactive: one hue means "you can act on this". */
   --accent: #5b9dd9;
   --accent-strong: #497fb5;
   --accent-ink: #0b131c;
-  --accent-tint: rgba(91, 157, 217, 0.16);
+  --accent-tint: rgba(91, 157, 217, 0.15);
   --steel-deep: #3a5a7c;
-  --danger: #d13f45;
-  --danger-strong: #b73339;
-  --warn: #d8b66a;
+  --focus: #82b4e2;
+  --user-bubble: #1b2634;
+  --user-bubble-line: #2c3e52;
+
+  /* Derived from the themed tokens, so every theme keeps them coherent. */
+  --rail: color-mix(in srgb, var(--bg) 62%, var(--surface));
+  --text-soft: color-mix(in srgb, var(--text) 88%, var(--bg));
+  --faint: color-mix(in srgb, var(--muted) 66%, var(--bg));
+  /* Field boundaries must read at 3:1 against the card and the inset fill. */
+  --control-line: color-mix(in srgb, var(--muted) 62%, var(--surface));
+
+  /* Safety colours, identical in every theme: green is go, amber is caution,
+     red is Stop. */
   --ok: #4fc06d;
   --ok-strong: #3da55c;
   --ok-ink: #08130c;
-  --focus: #82b4e2;
-  --user-bubble: #28303b;
-  --user-bubble-line: #3a4450;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.38);
-  --shadow-soft: 0 3px 10px rgba(0, 0, 0, 0.28);
+  --go: #287d42;
+  --go-ink: #f2fbf4;
+  --warn: #d8b66a;
+  --danger: #d6453f;
+  --danger-strong: #b93a35;
+  /* Stop's fill keeps white text above 4.5:1; --danger stays for marks. */
+  --stop-fill: #c43c36;
+  --stop-fill-hover: #b03731;
+
+  /* Type: one family, seven sizes. Numbers use the mono face. */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  --fs-micro: 0.6875rem;
+  --fs-hint: 0.75rem;
+  --fs-label: 0.8125rem;
+  --fs-body: 0.875rem;
+  --fs-heading: 0.9375rem;
+  --fs-title: 1.375rem;
+  --fs-display: 1.75rem;
+
+  /* Shape: 6px on controls, 10px on panels and overlays. Only dots, switch
+     thumbs and avatars are fully round. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --control-h: 34px;
+  --control-h-sm: 28px;
+
+  /* Depth comes from the surface ladder. Only floating layers cast a shadow. */
+  --shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+  --shadow-soft: none;
+
   /* Global layers. Emergency Stop must remain above every route and overlay. */
   --layer-modal: 1000;
   --layer-feedback: 1100;
   --layer-emergency-stop: 1200;
+
   --gap: 16px;
-  --rail-width: clamp(212px, 18vw, 236px);
-  --status-h: 48px;
-  --content-max: 980px;
-  --content-wide-max: 1180px;
-  font-family: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, -apple-system, Roboto, sans-serif;
+  --rail-width: 212px;
+  --status-h: 52px;
+  /* The phone Stop/navigation footer; floating layers stay above it. */
+  --footer-h: 0px;
+  --content-max: 1280px;
+  --content-wide-max: 1280px;
+  font-family: var(--font-ui);
   color-scheme: dark;
 }
 
@@ -68,8 +113,15 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  line-height: 1.45;
-  font-size: 1rem;
+  font-family: var(--font-ui);
+  font-size: var(--fs-body);
+  line-height: 1.5;
+}
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 [hidden] {
@@ -95,23 +147,32 @@ body {
 
 .eyebrow {
   margin: 0 0 6px;
-  font-size: 0.72rem;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
-  letter-spacing: 0;
-  color: var(--accent);
+  letter-spacing: 0.06em;
+  color: var(--muted);
   font-weight: 600;
 }
 .hint-inline {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
   font-weight: 400;
+}
+span:not(.label) > .hint-inline {
+  margin-inline-start: 0.5em;
+}
+.hint {
+  color: var(--muted);
+  font-size: var(--fs-hint);
+  line-height: 1.45;
 }
 .hint-block {
   display: block;
   margin: 0 0 12px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
   font-weight: 400;
+  line-height: 1.45;
 }
 .hint-block.narrow {
   max-width: 52ch;

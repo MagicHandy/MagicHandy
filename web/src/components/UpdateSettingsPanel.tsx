@@ -50,9 +50,20 @@ export function UpdateSettingsPanel({ currentVersion, automatic, preferenceDisab
     <div className="update-settings">
       <div className="update-version-row">
         <span>{t("Installed version")}</span>
-        <strong>{installed}</strong>
+        <div className="update-version-actions"><strong>{installed}</strong>
+      <div className="actions update-actions">
+        <button type="button" className="btn btn-secondary" disabled={checkDisabled || checking} onClick={() => void checkNow()}>
+          {checking ? t("Checking for updates...") : t("Check now")}
+        </button>
+        {status?.state === "available" && status.latest && (
+          <a className="btn btn-primary" href={status.latest.url} target="_blank" rel="noreferrer">
+            {t("View release")}
+          </a>
+        )}
       </div>
-      <label className="toggle-line hint-block">
+        </div>
+      </div>
+      <label className="toggle-line">
         <span className="toggle">
           <input
             type="checkbox"
@@ -65,16 +76,6 @@ export function UpdateSettingsPanel({ currentVersion, automatic, preferenceDisab
         <span>{t("Check for updates automatically")}</span>
       </label>
       <p className="hint-block">{t("Automatic checks contact GitHub Releases after the app starts. No account or token is required.")}</p>
-      <div className="actions update-actions">
-        <button type="button" className="btn btn-secondary" disabled={checkDisabled || checking} onClick={() => void checkNow()}>
-          {checking ? t("Checking for updates...") : t("Check now")}
-        </button>
-        {status?.state === "available" && status.latest && (
-          <a className="btn btn-primary" href={status.latest.url} target="_blank" rel="noreferrer">
-            {t("View release")}
-          </a>
-        )}
-      </div>
       {status && <UpdateResult status={status} />}
     </div>
   );

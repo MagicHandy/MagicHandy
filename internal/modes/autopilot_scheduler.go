@@ -229,7 +229,7 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 		m.history.previousSpeed = previousSpeed
 		m.history.speedChangedAt = now
 	}
-	m.rememberSpeedLocked(choice.segment.SpeedPercent, now)
+	m.rememberSpeedLocked(choice.segment.SpeedPercent, now, false)
 	m.motion.swayPoints = m.planSwayLocked(now, duration, *choice, generation)
 	m.motion.nextRetry = time.Time{}
 	if m.speech.deadline.IsZero() && m.speech.waitingID == "" {
@@ -239,14 +239,17 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 }
 
 // SpeedStep is one recent stretch's speed and how long ago it began.
+// Interactive marks a speed the person set through chat; it carries no words.
 type SpeedStep struct {
 	SpeedPercent int
 	SecondsAgo   int
+	Interactive  bool
 }
 
 type speedMark struct {
 	speedPercent int
 	at           time.Time
+	interactive  bool
 }
 
 // EarlierScore is a distinct continuous score that played earlier in the run.
@@ -342,12 +345,12 @@ func (m *Manager) EarlierScores() []EarlierScore {
 // lasted. A count limit alone capped that at six stretches, which at a short
 // cadence never reached the minute or two a slow stretch is held before it
 // rebuilds. Callers hold m.mu.
-func (m *Manager) rememberSpeedLocked(speed int, at time.Time) {
+func (m *Manager) rememberSpeedLocked(speed int, at time.Time, interactive bool) {
 	if speed <= 0 {
 		return
 	}
 	const window, limit = 3 * time.Minute, 16
-	marks := append(m.history.recentSpeeds, speedMark{speedPercent: speed, at: at})
+	marks := append(m.history.recentSpeeds, speedMark{speedPercent: speed, at: at, interactive: interactive})
 	for len(marks) > limit || (len(marks) > 1 && at.Sub(marks[0].at) > window) {
 		marks = marks[1:]
 	}
@@ -357,7 +360,7 @@ func (m *Manager) rememberSpeedLocked(speed int, at time.Time) {
 func (m *Manager) recentSpeedStepsLocked(now time.Time) []SpeedStep {
 	steps := make([]SpeedStep, 0, len(m.history.recentSpeeds))
 	for _, mark := range m.history.recentSpeeds {
-		steps = append(steps, SpeedStep{SpeedPercent: mark.speedPercent, SecondsAgo: max(0, int(now.Sub(mark.at)/time.Second))})
+		steps = append(steps, SpeedStep{SpeedPercent: mark.speedPercent, SecondsAgo: max(0, int(now.Sub(mark.at)/time.Second)), Interactive: mark.interactive})
 	}
 	return steps
 }

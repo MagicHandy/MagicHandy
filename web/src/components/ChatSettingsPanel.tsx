@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { PublicSettings } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { ModelSettingsPanel } from "./ModelSettingsPanel";
+import { ModelConnectionsPanel } from "./ModelConnectionsPanel";
 import { PromptSetEditor } from "./PromptSetEditor";
 import { MemoryManager } from "./MemoryManager";
 import { SettingsNavigation, SettingsNavigationLabel } from "./SettingsNavigation";
@@ -41,10 +42,12 @@ const PROMPT_SET_LABELS: Record<string, string> = {
 };
 
 
-export function ChatSettingsPanel({ section, settings: s, saved, options: opt, locked, patchLLM, patchChat, actions }: {
+export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, modelRouting, options: opt, locked, patchLLM, patchChat, actions }: {
   section: ChatSettingsSection;
   settings: PublicSettings;
   saved: PublicSettings | null;
+  activeLLM?: PublicSettings["llm"];
+  modelRouting?: PublicSettings["model_routing"];
   options: PublicSettings["options"];
   locked: boolean;
   patchLLM: (next: Partial<PublicSettings["llm"]>) => void;
@@ -59,7 +62,8 @@ export function ChatSettingsPanel({ section, settings: s, saved, options: opt, l
       </SettingsNavigation>
       <div className="settings-content">
         {section === "model" && (
-          <ModelSettingsPanel
+          <ModelConnectionsPanel routing={modelRouting ?? saved?.model_routing} saved={activeLLM ?? saved?.llm} settings={s.llm} locked={locked} patch={patchLLM} localEditor={<ModelSettingsPanel
+            configurationOnly={(s.llm.conversation_connection_id || "local") !== "local"}
             settings={s.llm}
             saved={saved?.llm}
             providers={opt.llm_providers ?? []}
@@ -71,7 +75,7 @@ export function ChatSettingsPanel({ section, settings: s, saved, options: opt, l
             replyLengths={opt.llm_reply_lengths ?? []}
             locked={locked}
             patch={patchLLM}
-          />
+          />} />
         )}
 
         {section === "conversation" && (

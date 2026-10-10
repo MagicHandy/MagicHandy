@@ -136,3 +136,22 @@ func TestNotificationCategoriesPersistIncludingExplicitNone(t *testing.T) {
 		t.Fatal("duplicate notification categories were accepted")
 	}
 }
+
+// A store with nothing saved must serve the same planner a saved document
+// normalizes to, so first-run setup starts on Local-only AI rather than
+// presenting the placeholder defaults as a customized saved assignment.
+func TestFreshStoreServesNormalizedMotionPlanner(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("OpenStore: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	settings, _ := store.Snapshot()
+	want := MotionPlannerSettings{Provider: "conversation", ContextPolicy: ContextConversation}
+	if settings.LLM.MotionPlanner != want {
+		t.Fatalf("fresh motion planner = %+v, want %+v", settings.LLM.MotionPlanner, want)
+	}
+	if public := settings.Public().LLM.MotionPlanner; public != want {
+		t.Fatalf("fresh public motion planner = %+v, want %+v", public, want)
+	}
+}

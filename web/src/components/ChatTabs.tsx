@@ -1,8 +1,9 @@
 import { t, translateKnown } from "../i18n";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { ChatSession } from "../api/types";
 import { MoreHorizontalIcon, PlusIcon, SaveIcon, TrashIcon } from "../shell/icons";
 import { PersonaSwitcher } from "./PersonaSwitcher";
+import { useMenu, type MenuFocus } from "./useMenu";
 
 interface Props {
   sessions: ChatSession[];
@@ -17,11 +18,10 @@ interface Props {
   assistantMood?: string;
 }
 
-interface MenuState {
+interface MenuTarget {
   session: ChatSession;
   left: number;
   top: number;
-  opener: HTMLElement;
 }
 
 const PREFERRED_TAB_WIDTH = 236;
@@ -46,8 +46,7 @@ export function ChatTabs({
   onPersonaChanged,
   assistantMood,
 }: Props) {
-  const [menu, setMenu] = useState<MenuState | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menu = useMenu<MenuTarget>({ disabled });
   const activeRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -78,40 +77,40 @@ export function ChatTabs({
     return () => strip.removeEventListener("wheel", scrollOverflow);
   }, []);
 
-  useEffect(() => {
-    if (!menu) return;
-    menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
-    const close = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenu(null);
-    };
-    const key = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        menu.opener.focus();
-        setMenu(null);
-      }
-    };
-    window.addEventListener("mousedown", close);
-    window.addEventListener("keydown", key);
-    return () => {
-      window.removeEventListener("mousedown", close);
-      window.removeEventListener("keydown", key);
-    };
-  }, [menu]);
-
-  function openMenu(session: ChatSession, left: number, top: number, opener: HTMLElement) {
+  function openMenu(session: ChatSession, left: number, top: number, opener: HTMLElement, focus?: MenuFocus) {
     if (session.saved && session.active) {
-      setMenu(null);
+      menu.close(false);
       return;
     }
     const menuWidth = 190;
     const menuHeight = 96;
-    setMenu({
+    menu.show(opener, {
       session,
       left: Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8)),
       top: Math.max(8, Math.min(top, window.innerHeight - menuHeight - 8)),
-      opener,
-    });
+    }, focus);
+  }
+
+  function openFromButton(session: ChatSession, button: HTMLElement, focus?: MenuFocus) {
+    const rect = button.getBoundingClientRect();
+    openMenu(session, rect.right - 190, rect.bottom + 4, button, focus);
+  }
+
+  function menuButtonKeyDown(session: ChatSession, event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    openFromButton(session, event.currentTarget, event.key === "ArrowUp" ? "last" : "first");
+  }
+
+  const target = menu.value;
+
+  // Saving the active chat removes its options button and deleting removes the
+  // whole tab, so a chosen action hands focus to a tab that outlives it rather
+  // than to the opener.
+  function chooseAction(focusSessionID: string, action: () => void) {
+    menu.close(false);
+    document.getElementById(`chat-tab-${focusSessionID}`)?.focus();
+    action();
   }
 
   function moveTabFocus(session: ChatSession, key: string) {
@@ -185,12 +184,14 @@ export function ChatTabs({
                       className="chat-tab-menu-button"
                       aria-label={t("Open options for {title}", { title: session.title })}
                       aria-haspopup="menu"
-                      aria-expanded={menu?.session.id === session.id}
+                      aria-expanded={target?.session.id === session.id}
+                      aria-controls={target?.session.id === session.id ? menu.id : undefined}
                       disabled={disabled}
                       onClick={(event) => {
-                        const rect = event.currentTarget.getBoundingClientRect();
-                        openMenu(session, rect.right - 190, rect.bottom + 4, event.currentTarget);
+                        if (target?.session.id === session.id) menu.close();
+                        else openFromButton(session, event.currentTarget);
                       }}
+                      onKeyDown={(event) => menuButtonKeyDown(session, event)}
                     >
                       <MoreHorizontalIcon size={16} />
                     </button>
@@ -213,28 +214,27 @@ export function ChatTabs({
           </button>
         </div>
       </div>
-      {menu && (
+      {target && (
         <div
-          ref={menuRef}
+          {...menu.menuProps}
           className="chat-tab-menu"
-          role="menu"
-          aria-label={t("{title} options", { title: menu.session.title })}
-          style={{ left: menu.left, top: menu.top }}
+          aria-label={t("{title} options", { title: target.session.title })}
+          style={{ left: target.left, top: target.top }}
         >
           <button
             type="button"
             role="menuitem"
-            disabled={menu.session.saved}
-            onClick={() => { menu.opener.focus(); setMenu(null); onSave(menu.session); }}
+            disabled={target.session.saved}
+            onClick={() => chooseAction(target.session.id, () => onSave(target.session))}
           >
             <SaveIcon size={16} />
-            {menu.session.saved ? t("Saved") : t("Save chat")}
+            {target.session.saved ? t("Saved") : t("Save chat")}
           </button>
           <button
             type="button"
             role="menuitem"
-            disabled={menu.session.active}
-            onClick={() => { menu.opener.focus(); setMenu(null); onDelete(menu.session); }}
+            disabled={target.session.active}
+            onClick={() => chooseAction(activeId, () => onDelete(target.session))}
           >
             <TrashIcon size={16} />{t("Delete chat")}</button>
         </div>

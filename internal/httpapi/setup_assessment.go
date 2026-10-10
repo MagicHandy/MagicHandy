@@ -96,6 +96,10 @@ func (s *Server) assessSetupChat(ctx context.Context, assessment *setupAssessmen
 	// Easy Setup keeps a ready selected model. Its memory verdict must describe
 	// that model, not a different catalog download the browser never installs.
 	settings, _ := s.store.Snapshot()
+	if settings.LLM.Provider == config.LLMProviderOllama || settings.LLM.LlamaCPPMode == config.LlamaCPPModeExternal {
+		assessment.ModelName = settings.LLM.Model
+		return setupRequirement{Status: setupRequirementPartial, Reason: "existing_server"}
+	}
 	if requirement, ok := s.assessSelectedSetupChat(ctx, assessment, settings.LLM, nvidia, vram); ok {
 		return requirement
 	}

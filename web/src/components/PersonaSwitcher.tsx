@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { t } from "../i18n";
 import { api } from "../api/client";
 import type { DefaultPersona, Persona } from "../api/types";
 import { ChevronUpIcon } from "../shell/icons";
 import { monogram } from "./PersonaGrid";
+import { useMenu } from "./useMenu";
 
 // The chat header's persona control. Going to a separate page to change who you
 // are talking to is a trip too many, so the switcher lives where the
@@ -24,9 +25,8 @@ export function PersonaSwitcher({
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [defaultPersona, setDefaultPersona] = useState<DefaultPersona | null>(null);
   const [activeID, setActiveID] = useState("");
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const wrapper = useRef<HTMLDivElement>(null);
+  const menu = useMenu({ disabled });
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -50,32 +50,19 @@ export function PersonaSwitcher({
     return () => controller.abort();
   }, [load, sessionID]);
 
-  useEffect(() => {
-    if (!open) return;
-    const closeOutside = (event: MouseEvent) => {
-      if (!wrapper.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("mousedown", closeOutside);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      window.removeEventListener("mousedown", closeOutside);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [open]);
-
   const active = personas.find((item) => item.id === activeID);
   const current = active ?? defaultPersona;
+  // Choosing closes the menu and returns focus to the chip at once. The chip
+  // stays enabled (busy) during the request so focus has somewhere to land.
   const select = async (personaID: string) => {
+    menu.close();
+    if (busy) return;
     setBusy(true);
     try {
       const payload = await api.selectSessionPersona(sessionID, personaID);
       setPersonas(payload.personas);
       setDefaultPersona(payload.default_persona);
       setActiveID(payload.active_persona_id);
-      setOpen(false);
       onChanged?.();
     } catch {
       // Reload rather than guess: the server is the authority on what is bound.
@@ -89,14 +76,20 @@ export function PersonaSwitcher({
   const portrait = active ? api.personaPortraitURL(active) : "";
 
   return (
-    <div ref={wrapper} className="persona-switcher-wrap">
+    <div className="persona-switcher-wrap">
       <button
         type="button"
         className="persona-chip"
         aria-haspopup="menu"
-        aria-expanded={open}
-        disabled={disabled || busy}
-        onClick={() => setOpen((current) => !current)}
+        aria-expanded={menu.open}
+        aria-controls={menu.open ? menu.id : undefined}
+        aria-busy={busy || undefined}
+        disabled={disabled}
+        onClick={(event) => {
+          if (menu.open) menu.close();
+          else if (!busy) menu.show(event.currentTarget, undefined);
+        }}
+        onKeyDown={(event) => { if (!busy) menu.onTriggerKeyDown(event, undefined); }}
       >
         {active
           ? (portrait
@@ -106,15 +99,13 @@ export function PersonaSwitcher({
         <span className="persona-chip-name">{current.name}</span>
         <ChevronUpIcon size={14} className="persona-chip-chevron" />
       </button>
-      {open && (
-        <div className="persona-switcher" role="menu">
+      {menu.open && (
+        <div {...menu.menuProps} className="persona-switcher" aria-label={t("Personas")}>
           <button
             type="button"
             role="menuitemradio"
             aria-checked={!active}
-            aria-current={!active ? "true" : undefined}
             className="persona-switcher-option"
-            disabled={busy}
             onClick={() => void select("")}
           >
             <span className="persona-chip-avatar-text" aria-hidden="true">{monogram(defaultPersona.name)}</span>
@@ -131,9 +122,7 @@ export function PersonaSwitcher({
                 type="button"
                 role="menuitemradio"
                 aria-checked={item.id === activeID}
-                aria-current={item.id === activeID ? "true" : undefined}
                 className="persona-switcher-option"
-                disabled={busy}
                 onClick={() => void select(item.id)}
               >
                 {itemPortrait

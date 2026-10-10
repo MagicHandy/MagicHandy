@@ -38,11 +38,15 @@ func (s *Server) newLLMProvider(ctx context.Context, settings config.LLMSettings
 }
 
 func (s *Server) resolveLLMProvider(ctx context.Context, settings config.LLMSettings, retain bool) (llm.Provider, error) {
+	settings = settings.ConversationSettings()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if s.llm.provider != nil {
 		return s.llm.provider, nil
+	}
+	if settings.IsHosted() {
+		return s.hostedProvider(ctx, settings)
 	}
 
 	paths, err := s.managedProviderPaths(ctx, settings)
@@ -112,6 +116,7 @@ func (s *Server) resolveLLMProvider(ctx context.Context, settings config.LLMSett
 }
 
 func (s *Server) startLLMAutoload(settings config.LLMSettings) {
+	settings = settings.ConversationSettings()
 	if s.llm.provider != nil ||
 		settings.Provider != config.LLMProviderLlamaCPP ||
 		settings.LlamaCPPMode != config.LlamaCPPModeManaged ||
@@ -243,6 +248,10 @@ func managedRuntimeBuildInProgress(build *llm.ManagedLlamaRuntimeBuild) bool {
 }
 
 func selectedLLMBaseURL(settings config.LLMSettings) string {
+	settings = settings.ConversationSettings()
+	if settings.ActiveConnection != nil {
+		return settings.ActiveConnection.BaseURL
+	}
 	switch settings.Provider {
 	case config.LLMProviderOllama:
 		return settings.OllamaBaseURL
@@ -258,6 +267,7 @@ func selectedLLMBaseURL(settings config.LLMSettings) string {
 
 func (s *Server) llmState(ctx context.Context) any {
 	settings, _ := s.store.Snapshot()
+	settings.LLM = settings.LLM.ConversationSettings()
 	managed := settings.LLM.Provider == config.LLMProviderLlamaCPP && settings.LLM.LlamaCPPMode == config.LlamaCPPModeManaged
 	state := map[string]any{
 		"provider":                settings.LLM.Provider,
@@ -304,6 +314,7 @@ func (s *Server) llmState(ctx context.Context) any {
 
 func (s *Server) handleLLMStatus(w http.ResponseWriter, r *http.Request) {
 	settings, _ := s.store.Snapshot()
+	settings.LLM = settings.LLM.ConversationSettings()
 	provider, err := s.resolveLLMProvider(r.Context(), settings.LLM, false)
 	if err != nil {
 		writeJSON(w, http.StatusOK, s.clientProviderStatus(r, llm.ProviderStatus{
@@ -389,6 +400,10 @@ func closeLLMProvider(provider llm.Provider) error {
 }
 
 func llmCacheKey(settings config.LLMSettings, managedKey string) string {
+	settings = settings.ConversationSettings()
+	if settings.IsHosted() {
+		return hostedProviderKey(settings)
+	}
 	parts := []string{
 		settings.Provider,
 		settings.Model,

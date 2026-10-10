@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { confirmThen } from "../util/confirm";
 import { t, translateKnown } from "../i18n";
 import { api } from "../api/client";
 import type { Persona, PersonaDraft, PersonasPayload, PromptSet } from "../api/types";
@@ -178,6 +179,7 @@ export function PersonaEditor({
                     ref={fileInput}
                     type="file"
                     accept="image/*"
+                    tabIndex={-1}
                     className="visually-hidden"
                     onChange={(event) => void choosePortrait(event.target.files?.[0])}
                   />
@@ -334,11 +336,22 @@ export function PersonaEditor({
         <div className="persona-editor-window-actions">
           <button
             type="button"
-            className="btn btn-primary"
-            disabled={disabled || !dirty || name.trim() === ""}
-            onClick={() => void patch({ name: name.trim(), description: description.trim() })}
+            className="btn btn-danger-outline"
+            disabled={disabled}
+            onClick={() => {
+              // Says what survives: a transcript is not the persona's to take away.
+              confirmThen(
+                t("Delete {name}? Chats you have already had with them keep their messages.", { name: item.name }),
+                { confirmLabel: t("Delete persona"), destructive: true },
+                () => void run(async () => {
+                  const payload = await api.deletePersona(item.id);
+                  onClose();
+                  return payload;
+                }),
+              );
+            }}
           >
-            {t("Save")}
+            {t("Delete persona")}
           </button>
           <button
             type="button"
@@ -362,21 +375,11 @@ export function PersonaEditor({
           </button>
           <button
             type="button"
-            className="btn btn-danger-outline"
-            disabled={disabled}
-            onClick={() => {
-              // Says what survives: a transcript is not the persona's to take away.
-              if (!window.confirm(t("Delete {name}? Chats you have already had with them keep their messages.", { name: item.name }))) {
-                return;
-              }
-              void run(async () => {
-                const payload = await api.deletePersona(item.id);
-                onClose();
-                return payload;
-              });
-            }}
+            className="btn btn-primary"
+            disabled={disabled || !dirty || name.trim() === ""}
+            onClick={() => void patch({ name: name.trim(), description: description.trim() })}
           >
-            {t("Delete persona")}
+            {t("Save")}
           </button>
         </div>
       </section>

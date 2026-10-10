@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -500,6 +501,11 @@ func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context
 	}
 	s.controller.AdvanceStopGeneration()
 	sequence := s.stopSequence.Add(1)
+	// Local readiness checks and warmups are not chat turns. Cancel their
+	// scheduler lane too, including installations without account sessions.
+	s.llmRequests.invalidate()
+	s.cloudRequests.invalidate()
+	s.hostedRequests.invalidate()
 	finishLab := s.cancelLabSession()
 	if s.mediaSync != nil {
 		s.mediaSync.Invalidate(reason)
@@ -648,10 +654,8 @@ func (s *Server) updateSettingsAndRuntime(
 }
 
 func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous config.Settings, next config.Settings) error {
+	s.applyPlanningSettingsTransition(previous, next)
 	s.applyVoiceSettingsTransition(previous, next)
-	if s.modes != nil && previous.Autopilot != next.Autopilot {
-		s.modes.NotifyAutopilotSettingsChanged()
-	}
 	var runtimeErr error
 	if previous.Labs.Enabled && !next.Labs.Enabled {
 		runtimeErr = s.disableLabs(ctx)
@@ -692,6 +696,12 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 		return runtimeErr
 	}
 	return errors.Join(runtimeErr, s.refreshActiveMotion(ctx, next.Motion))
+}
+
+func (s *Server) applyPlanningSettingsTransition(previous, next config.Settings) {
+	if !reflect.DeepEqual(previous.LLM, next.LLM) || previous.Motion != next.Motion || previous.Autopilot != next.Autopilot {
+		s.invalidateCloudPlanning()
+	}
 }
 
 // stopMediaForPolicyChange ends an active clock-locked run when a setting it
@@ -826,6 +836,9 @@ func (s *Server) Quiesce() {
 func (s *Server) Close() {
 	s.closeOnce.Do(func() {
 		s.Quiesce()
+		if s.cloudPlanning.auth != nil {
+			s.cloudPlanning.auth.Close()
+		}
 		if s.networkAutomation != nil {
 			s.networkAutomation.Close()
 		}

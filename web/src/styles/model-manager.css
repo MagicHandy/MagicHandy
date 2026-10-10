@@ -33,7 +33,7 @@
   min-height: 28px;
   max-width: min(54ch, 60%);
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-label);
   text-align: right;
 }
 
@@ -58,9 +58,10 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 14px;
 }
-
-.model-timeout {
-  max-width: 260px;
+/* A lone field in a two-up grid takes the whole row. */
+.model-runtime-grid > .field:only-child,
+.capability-gates > .capability-mode {
+  grid-column: 1 / -1;
 }
 
 .model-generation-settings {
@@ -73,9 +74,9 @@
 .generation-notes {
   margin: -2px 0 14px;
   padding: 8px 12px;
-  background: var(--surface-1);
+  background: var(--bg-inset);
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-label);
 }
 
 .generation-notes p {
@@ -115,7 +116,7 @@
   grid-column: 1 / -1;
   margin: 0;
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-hint);
 }
 
 .model-advanced {
@@ -127,10 +128,6 @@
 .model-advanced > summary {
   min-height: 42px;
   padding: 11px 2px;
-  color: var(--text);
-  font-size: 0.86rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .model-advanced > .form-status {
@@ -221,7 +218,7 @@
   max-width: 62ch;
   color: var(--muted);
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
   overflow-wrap: anywhere;
 }
 
@@ -238,10 +235,12 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* Import forms: fields side by side, the action on its own line below them
+   (as with media locations), so it never floats beside a field's hint. */
 .model-import-form {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.55fr) auto;
-  align-items: end;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.55fr);
+  align-items: start;
   gap: 12px;
 }
 
@@ -250,15 +249,15 @@
   margin-bottom: 0;
 }
 
-.model-import-form .btn,
-.model-import-path .btn {
-  min-height: 42px;
+.model-import-form > .btn,
+.model-import-path > .btn {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .model-import-path {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -276,16 +275,12 @@
 .ollama-daemon-disclosure summary {
   min-height: 42px;
   padding: 11px 2px;
-  color: var(--text);
-  font-size: 0.86rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .ollama-daemon-count {
   margin-left: 8px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-hint);
   font-weight: 500;
 }
 
@@ -326,7 +321,7 @@
 }
 
 .model-row-selected {
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--accent-tint);
   padding-left: 12px;
 }
 
@@ -341,21 +336,21 @@
 }
 
 .model-identity strong {
-  font-size: 0.9rem;
+  font-size: var(--fs-body);
   font-weight: 600;
 }
 
 .model-identity span {
   margin-top: 3px;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--fs-hint);
 }
 
 .model-state,
 .model-candidate-result {
   max-width: 240px;
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-hint);
   text-align: right;
   overflow-wrap: anywhere;
 }
@@ -384,8 +379,6 @@
 .ollama-daemon-row .btn,
 .provider-model-row .btn,
 .model-import-job .btn {
-  min-height: 36px;
-  padding: 7px 12px;
   white-space: nowrap;
 }
 
@@ -409,13 +402,13 @@
 }
 
 .model-import-job strong {
-  font-size: 0.86rem;
+  font-size: var(--fs-body);
 }
 
 .model-import-job span {
   margin-top: 2px;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--fs-hint);
   overflow-wrap: anywhere;
 }
 
@@ -523,7 +516,7 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -540,7 +533,7 @@
 
 .managed-duplicate-dialog h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--fs-heading);
   font-weight: 600;
 }
 
@@ -560,10 +553,10 @@
   gap: 6px;
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--bg-inset);
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
 }
 
 .managed-duplicate-note {
@@ -589,7 +582,7 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -606,7 +599,7 @@
 
 .model-check-dialog h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--fs-heading);
   font-weight: 600;
 }
 

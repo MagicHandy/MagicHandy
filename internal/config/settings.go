@@ -302,75 +302,6 @@ type MotionSettings struct {
 	HandyModel           string `json:"handy_model"`
 }
 
-// LLMSettings contains local model provider settings.
-type LLMSettings struct {
-	Provider             string `json:"provider"`
-	LlamaCPPMode         string `json:"llama_cpp_mode"`
-	ManagedLoadPolicy    string `json:"managed_load_policy"`
-	LlamaCPPBaseURL      string `json:"llama_cpp_base_url"`
-	LlamaCPPContextSize  int    `json:"llama_cpp_context_size"`
-	OllamaBaseURL        string `json:"ollama_base_url"`
-	OllamaModelsPath     string `json:"ollama_models_path,omitempty"`
-	Model                string `json:"model"`
-	PromptSet            string `json:"prompt_set"`
-	RequestTimeoutMillis int    `json:"request_timeout_ms"`
-	MaxOutputTokens      int    `json:"max_output_tokens"`
-	ReasoningMode        string `json:"reasoning_mode"`
-	// ChatVoice selects how sexual the model's reply register may be. It only
-	// shapes prompt composition; the motion contract and every motion safety
-	// gate are identical at every level.
-	ChatVoice string `json:"chat_voice"`
-	// ReplyLength steers how long chat replies run; balanced leaves the
-	// prompt unchanged.
-	ReplyLength string `json:"reply_length"`
-	// UserAnatomy controls code-owned vocabulary independently of the partner
-	// persona. CustomAnatomy and PersonaDescription are quoted as data when
-	// composed into a non-utility chat prompt.
-	UserAnatomy        string `json:"user_anatomy"`
-	CustomAnatomy      string `json:"custom_anatomy"`
-	PersonaDescription string `json:"persona_description"`
-	// MotionGenerationMode selects the single model-facing motion vocabulary.
-	// Dynamic geometry and pattern IDs are never advertised together.
-	MotionGenerationMode string `json:"motion_generation_mode"`
-	// MotionCapabilities gates which motion control methods the model may
-	// use. A nil pointer means "never saved" and resolves to the defaults, so
-	// older payloads keep today's behavior; an explicit all-false is a valid
-	// saved choice (chat-only model).
-	MotionCapabilities *LLMMotionCapabilities `json:"motion_capabilities,omitempty"`
-}
-
-// LLMMotionCapabilities is the user-selected checkbox list of control methods
-// the model may use. Enforcement is server-side: disabled methods are neither
-// advertised in the prompt nor honored if the model emits them. Stop and all
-// user controls are unaffected — these gates only ever restrict the model.
-type LLMMotionCapabilities struct {
-	// Motion is the master gate: off makes the model chat-only.
-	Motion bool `json:"motion"`
-	// Patterns lets the model curate enabled library patterns.
-	Patterns bool `json:"patterns"`
-	// AreaFocus lets the model focus motion on a named zone (tip/shaft/base).
-	AreaFocus bool `json:"area_focus"`
-	// ExperimentalPatterns includes experimental-tagged patterns in the
-	// model's catalog. They stay visible and playable in the library UI
-	// regardless — this only gates model access.
-	ExperimentalPatterns bool `json:"experimental_patterns"`
-}
-
-// DefaultLLMMotionCapabilities matches the pre-gate behavior plus area focus;
-// experimental patterns are opt-in.
-func DefaultLLMMotionCapabilities() LLMMotionCapabilities {
-	return LLMMotionCapabilities{Motion: true, Patterns: true, AreaFocus: true, ExperimentalPatterns: false}
-}
-
-// Capabilities resolves the saved motion-capability gates, applying defaults
-// for payloads that predate the field.
-func (s LLMSettings) Capabilities() LLMMotionCapabilities {
-	if s.MotionCapabilities == nil {
-		return DefaultLLMMotionCapabilities()
-	}
-	return *s.MotionCapabilities
-}
-
 // VoiceSettings configures the optional voice worker processes (ADR 0003).
 // Voice is off by default; first-party and custom workers all speak the
 // versioned protocol. Paths are not secrets — the same trust model as other
@@ -537,20 +468,21 @@ type ChatSettings struct {
 
 // PublicSettings is the API-safe settings view. It intentionally omits secrets.
 type PublicSettings struct {
-	Version     int                       `json:"version"`
-	Server      ServerSettings            `json:"server"`
-	UI          UISettings                `json:"ui"`
-	Labs        LabsSettings              `json:"labs"`
-	Media       MediaSettings             `json:"media"`
-	Device      PublicDeviceSettings      `json:"device"`
-	Motion      MotionSettings            `json:"motion"`
-	Freestyle   FreestyleSettings         `json:"freestyle"`
-	Autopilot   AutopilotSettings         `json:"autopilot"`
-	LLM         LLMSettings               `json:"llm"`
-	Voice       PublicVoiceSettings       `json:"voice"`
-	Chat        ChatSettings              `json:"chat"`
-	Diagnostics DiagnosticsSettings       `json:"diagnostics"`
-	Options     PublicSettingsOptionHints `json:"options"`
+	Version      int                       `json:"version"`
+	Server       ServerSettings            `json:"server"`
+	UI           UISettings                `json:"ui"`
+	Labs         LabsSettings              `json:"labs"`
+	Media        MediaSettings             `json:"media"`
+	Device       PublicDeviceSettings      `json:"device"`
+	Motion       MotionSettings            `json:"motion"`
+	Freestyle    FreestyleSettings         `json:"freestyle"`
+	Autopilot    AutopilotSettings         `json:"autopilot"`
+	LLM          LLMSettings               `json:"llm"`
+	ModelRouting ModelRoutingSnapshot      `json:"model_routing"`
+	Voice        PublicVoiceSettings       `json:"voice"`
+	Chat         ChatSettings              `json:"chat"`
+	Diagnostics  DiagnosticsSettings       `json:"diagnostics"`
+	Options      PublicSettingsOptionHints `json:"options"`
 }
 
 // PublicDeviceSettings is the API-safe device settings view.
@@ -602,18 +534,22 @@ type PublicSettingsOptionHints struct {
 // LLMUpdate is the settings API write shape. New tuning fields are pointers so
 // older clients that omit them preserve the current persisted values.
 type LLMUpdate struct {
-	Provider             string  `json:"provider"`
-	LlamaCPPMode         string  `json:"llama_cpp_mode"`
-	ManagedLoadPolicy    *string `json:"managed_load_policy,omitempty"`
-	LlamaCPPBaseURL      string  `json:"llama_cpp_base_url"`
-	LlamaCPPContextSize  *int    `json:"llama_cpp_context_size,omitempty"`
-	OllamaBaseURL        string  `json:"ollama_base_url"`
-	OllamaModelsPath     string  `json:"ollama_models_path,omitempty"`
-	Model                string  `json:"model"`
-	PromptSet            string  `json:"prompt_set"`
-	RequestTimeoutMillis int     `json:"request_timeout_ms"`
-	MaxOutputTokens      *int    `json:"max_output_tokens,omitempty"`
-	ReasoningMode        *string `json:"reasoning_mode,omitempty"`
+	Connections              *[]ModelConnection     `json:"connections,omitempty"`
+	ConversationConnectionID *string                `json:"conversation_connection_id,omitempty"`
+	RetryRefusalLocally      *bool                  `json:"retry_refusal_locally,omitempty"`
+	MotionPlanner            *MotionPlannerSettings `json:"motion_planner,omitempty"`
+	Provider                 string                 `json:"provider"`
+	LlamaCPPMode             string                 `json:"llama_cpp_mode"`
+	ManagedLoadPolicy        *string                `json:"managed_load_policy,omitempty"`
+	LlamaCPPBaseURL          string                 `json:"llama_cpp_base_url"`
+	LlamaCPPContextSize      *int                   `json:"llama_cpp_context_size,omitempty"`
+	OllamaBaseURL            string                 `json:"ollama_base_url"`
+	OllamaModelsPath         string                 `json:"ollama_models_path,omitempty"`
+	Model                    string                 `json:"model"`
+	PromptSet                string                 `json:"prompt_set"`
+	RequestTimeoutMillis     int                    `json:"request_timeout_ms"`
+	MaxOutputTokens          *int                   `json:"max_output_tokens,omitempty"`
+	ReasoningMode            *string                `json:"reasoning_mode,omitempty"`
 	// ChatVoice replaces the saved voice when present; omitted preserves the
 	// current persisted value (older clients keep working).
 	ChatVoice *string `json:"chat_voice,omitempty"`
@@ -635,25 +571,29 @@ type LLMUpdate struct {
 // LLMUpdateFromSettings creates a complete write payload from a settings view.
 func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 	return LLMUpdate{
-		Provider:             settings.Provider,
-		LlamaCPPMode:         settings.LlamaCPPMode,
-		ManagedLoadPolicy:    &settings.ManagedLoadPolicy,
-		LlamaCPPBaseURL:      settings.LlamaCPPBaseURL,
-		LlamaCPPContextSize:  &settings.LlamaCPPContextSize,
-		OllamaBaseURL:        settings.OllamaBaseURL,
-		OllamaModelsPath:     settings.OllamaModelsPath,
-		Model:                settings.Model,
-		PromptSet:            settings.PromptSet,
-		RequestTimeoutMillis: settings.RequestTimeoutMillis,
-		MaxOutputTokens:      &settings.MaxOutputTokens,
-		ReasoningMode:        &settings.ReasoningMode,
-		ChatVoice:            &settings.ChatVoice,
-		ReplyLength:          &settings.ReplyLength,
-		UserAnatomy:          &settings.UserAnatomy,
-		CustomAnatomy:        &settings.CustomAnatomy,
-		PersonaDescription:   &settings.PersonaDescription,
-		MotionGenerationMode: &settings.MotionGenerationMode,
-		MotionCapabilities:   settings.MotionCapabilities,
+		Connections:              &settings.Connections,
+		ConversationConnectionID: &settings.ConversationConnectionID,
+		RetryRefusalLocally:      &settings.RetryRefusalLocally,
+		MotionPlanner:            &settings.MotionPlanner,
+		Provider:                 settings.Provider,
+		LlamaCPPMode:             settings.LlamaCPPMode,
+		ManagedLoadPolicy:        &settings.ManagedLoadPolicy,
+		LlamaCPPBaseURL:          settings.LlamaCPPBaseURL,
+		LlamaCPPContextSize:      &settings.LlamaCPPContextSize,
+		OllamaBaseURL:            settings.OllamaBaseURL,
+		OllamaModelsPath:         settings.OllamaModelsPath,
+		Model:                    settings.Model,
+		PromptSet:                settings.PromptSet,
+		RequestTimeoutMillis:     settings.RequestTimeoutMillis,
+		MaxOutputTokens:          &settings.MaxOutputTokens,
+		ReasoningMode:            &settings.ReasoningMode,
+		ChatVoice:                &settings.ChatVoice,
+		ReplyLength:              &settings.ReplyLength,
+		UserAnatomy:              &settings.UserAnatomy,
+		CustomAnatomy:            &settings.CustomAnatomy,
+		PersonaDescription:       &settings.PersonaDescription,
+		MotionGenerationMode:     &settings.MotionGenerationMode,
+		MotionCapabilities:       settings.MotionCapabilities,
 	}
 }
 
@@ -741,6 +681,9 @@ func DefaultSettings() Settings {
 			// Creative v2 is the model-facing motion vocabulary for new installs.
 			// Creative, Layered and Pattern Library remain explicit saved choices.
 			MotionGenerationMode: LLMMotionModeCreativeV2,
+			// A store with nothing saved serves these defaults unnormalized, and
+			// setup reads an empty planner as a customized saved assignment.
+			MotionPlanner: normalizeMotionPlanner(MotionPlannerSettings{}),
 		},
 		Voice: VoiceSettings{
 			TTSProvider:        VoiceProviderNone,
@@ -810,14 +753,15 @@ func (s Settings) Public() PublicSettings {
 			APIApplicationIDOverride: s.Device.APIApplicationIDOverride,
 			ConnectionKeySet:         s.Device.HandyConnectionKey != "",
 		},
-		Motion:      s.Motion,
-		Freestyle:   s.Freestyle,
-		Autopilot:   s.Autopilot,
-		LLM:         s.LLM,
-		Voice:       publicVoiceSettings(s.Voice),
-		Chat:        s.Chat,
-		Diagnostics: s.Diagnostics,
-		Options:     publicSettingsOptionHints(),
+		Motion:       s.Motion,
+		Freestyle:    s.Freestyle,
+		Autopilot:    s.Autopilot,
+		LLM:          s.LLM,
+		ModelRouting: s.LLM.ModelRouting(),
+		Voice:        publicVoiceSettings(s.Voice),
+		Chat:         s.Chat,
+		Diagnostics:  s.Diagnostics,
+		Options:      publicSettingsOptionHints(),
 	}
 }
 
@@ -1393,6 +1337,11 @@ func validateIntifaceServerAddress(address string) error {
 }
 
 func cloneSettings(settings Settings) Settings {
+	settings.LLM.Connections = append([]ModelConnection(nil), settings.LLM.Connections...)
+	for index := range settings.LLM.Connections {
+		settings.LLM.Connections[index].SupportedParameters = cloneStrings(settings.LLM.Connections[index].SupportedParameters)
+		settings.LLM.Connections[index].AllowedProviders = cloneStrings(settings.LLM.Connections[index].AllowedProviders)
+	}
 	settings.Media.LibraryPaths = append([]string{}, settings.Media.LibraryPaths...)
 	if settings.LLM.MotionCapabilities != nil {
 		capabilities := *settings.LLM.MotionCapabilities
@@ -1418,6 +1367,10 @@ func cloneStrings(values []string) []string {
 }
 
 func normalizeLLMStrings(settings LLMSettings) LLMSettings {
+	for index := range settings.Connections {
+		settings.Connections[index] = settings.Connections[index].Normalize()
+	}
+	settings.MotionPlanner = normalizeMotionPlanner(settings.MotionPlanner)
 	settings.Provider = strings.TrimSpace(settings.Provider)
 	settings.LlamaCPPMode = strings.TrimSpace(settings.LlamaCPPMode)
 	settings.ManagedLoadPolicy = strings.TrimSpace(settings.ManagedLoadPolicy)

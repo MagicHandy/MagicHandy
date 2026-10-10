@@ -234,7 +234,7 @@ describe("SetupRoute", () => {
 
     expect(screen.getByText(/opens only on this computer/i)).toBeVisible();
     expect(screen.queryByRole("radio", { name: /^Public/ })).not.toBeInTheDocument();
-    const reveal = screen.getByRole("button", { name: "Use MagicHandy from a phone or another computer" });
+    const reveal = screen.getByRole("checkbox", { name: /^Set up network access/ });
     await waitFor(() => expect(reveal).toBeEnabled());
     fireEvent.click(reveal);
     expect(screen.getByRole("radio", { name: /^Local only/ })).toBeChecked();
@@ -245,7 +245,7 @@ describe("SetupRoute", () => {
     vi.spyOn(api, "discoverInternet").mockResolvedValue({ public_ip: "8.8.8.8", terms_url: "https://letsencrypt.org/documents/test.pdf", ip_error: false, ca_error: false, external_port: 443 });
     render(<SetupRoute />);
     await startCustomSetup();
-    const reveal = screen.getByRole("button", { name: "Use MagicHandy from a phone or another computer" });
+    const reveal = screen.getByRole("checkbox", { name: /^Set up network access/ });
     await waitFor(() => expect(reveal).toBeEnabled());
     fireEvent.click(reveal);
     fireEvent.click(screen.getByRole("radio", { name: /^Public/ }));
@@ -614,10 +614,11 @@ describe("SetupRoute", () => {
     await continueTo("Easy setup");
 
     expect(screen.getByText("Chat: Gemma 4 12B fixture")).toBeVisible();
-    expect(screen.getAllByText("Requirements met")).toHaveLength(3);
+    expect(screen.getAllByText("Requirements met")).toHaveLength(1);
     fireEvent.click(screen.getByRole("radio", { name: /Explicit/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Speak replies aloud/ }));
     fireEvent.click(screen.getByRole("checkbox", { name: /Talk instead of typing/ }));
+    expect(screen.getAllByText("Requirements met")).toHaveLength(3);
     fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
     await screen.findByRole("heading", { name: "Installing selected features" });
 
@@ -654,8 +655,8 @@ describe("SetupRoute", () => {
     expect(screen.getByText("Requirements not met")).toBeVisible();
     expect(screen.getByText("Requirements partly met")).toBeVisible();
     expect(screen.queryByRole("heading", { name: "How explicit should chat be?" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
-    await screen.findByRole("heading", { name: "Installing selected features" });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await screen.findByRole("heading", { name: "Setup is ready" });
     expect(api.installSetupPlan).not.toHaveBeenCalled();
   });
 });

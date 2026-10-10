@@ -1,12 +1,94 @@
-/* Named set-point scales and compact categorical controls. */
+/* Sliders and segmented choices.
+
+   Every slider paints one flat recipe: a 4px --line-strong track filled with
+   --accent up to the value, and a 16px --text thumb with no border, shadow or
+   glow, inside a 20px hit area that grows to 32px on coarse pointers. That
+   covers native ranges (RangeInput), the named set-point scale and the
+   dual-thumb range; each keeps its native inputs for keyboard and assistive
+   technology. Chromium cannot paint a native range's filled part, so the
+   components publish the value's position as --range-fill (0 to 1); Firefox
+   paints ::-moz-range-progress itself. Focus rings the thumb. The recipe has
+   no specificity (:where), so a component's own class can still size it. */
+:root {
+  --range-track: 4px;
+  --range-thumb: 16px;
+  --range-hit: 20px;
+}
+@media (pointer: coarse) {
+  :root {
+    --range-hit: 32px;
+  }
+}
+:where(input[type="range"]) {
+  width: 100%;
+  height: var(--range-hit);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  appearance: none;
+  cursor: pointer;
+}
+/* The fill ends under the thumb's centre, which travels half a thumb in from
+   either end of the track. */
+:where(input[type="range"])::-webkit-slider-runnable-track {
+  height: var(--range-track);
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0 calc(var(--range-thumb) / 2 + (100% - var(--range-thumb)) * var(--range-fill, 0)),
+    var(--line-strong) 0
+  );
+}
+:where(input[type="range"])::-webkit-slider-thumb {
+  width: var(--range-thumb);
+  height: var(--range-thumb);
+  margin-top: calc((var(--range-track) - var(--range-thumb)) / 2);
+  appearance: none;
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+}
+:where(input[type="range"])::-moz-range-track {
+  height: var(--range-track);
+  border: 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+:where(input[type="range"])::-moz-range-progress {
+  height: var(--range-track);
+  border-radius: 999px;
+  background: var(--accent);
+}
+:where(input[type="range"])::-moz-range-thumb {
+  width: var(--range-thumb);
+  height: var(--range-thumb);
+  border: 0;
+  border-radius: 50%;
+  background: var(--text);
+}
+:where(input[type="range"]):focus-visible {
+  outline: none;
+}
+:where(input[type="range"]):focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+:where(input[type="range"]):focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Named set-point scale (SetpointSlider). It names only its two ends; the
+   current value sits beside the label, so tick labels never crowd or wrap
+   mid-word. The stop axis is inset by half the thumb, the centreline the
+   native thumb travels. */
 .setpoint-control {
-  --setpoint-thumb-size: 14px;
-  --setpoint-track-size: 4px;
   display: grid;
   min-width: 0;
-  gap: 5px;
+  gap: 4px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-label);
 }
 .setpoint-head {
   display: flex;
@@ -14,6 +96,8 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
+  color: var(--text);
+  font-weight: 500;
 }
 .setpoint-head > span {
   display: flex;
@@ -24,84 +108,22 @@
 }
 .setpoint-head small {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-hint);
   font-weight: 400;
 }
 .setpoint-head output {
-  color: var(--text);
-  font-size: 0.78rem;
-  font-weight: 600;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  font-weight: 500;
   white-space: nowrap;
-}
-.setpoint-control input[type="range"] {
-  width: 100%;
-  height: 20px;
-  min-height: 20px;
-  margin: 0;
-  padding: 0;
-  appearance: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-.setpoint-control input[type="range"]::-webkit-slider-runnable-track {
-  width: 100%;
-  height: var(--setpoint-track-size);
-  border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    var(--accent) 0 var(--setpoint-progress),
-    var(--line-strong) var(--setpoint-progress) 100%
-  );
-}
-.setpoint-control input[type="range"]::-webkit-slider-thumb {
-  width: var(--setpoint-thumb-size);
-  height: var(--setpoint-thumb-size);
-  margin-top: calc((var(--setpoint-track-size) - var(--setpoint-thumb-size)) / 2);
-  appearance: none;
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  background: var(--accent);
-}
-.setpoint-control input[type="range"]::-moz-range-track {
-  height: var(--setpoint-track-size);
-  border: 0;
-  border-radius: 999px;
-  background: var(--line-strong);
-}
-.setpoint-control input[type="range"]::-moz-range-progress {
-  height: var(--setpoint-track-size);
-  border-radius: 999px;
-  background: var(--accent);
-}
-.setpoint-control input[type="range"]::-moz-range-thumb {
-  width: calc(var(--setpoint-thumb-size) - 4px);
-  height: calc(var(--setpoint-thumb-size) - 4px);
-  border: 2px solid var(--surface);
-  border-radius: 50%;
-  background: var(--accent);
-}
-.setpoint-control input[type="range"]:focus-visible {
-  outline: none;
-}
-.setpoint-control input[type="range"]:focus-visible::-webkit-slider-thumb {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-.setpoint-control input[type="range"]:focus-visible::-moz-range-thumb {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-.setpoint-control input[type="range"]:disabled {
-  cursor: not-allowed;
 }
 .setpoint-scale {
   position: relative;
-  height: 22px;
-  margin-inline: calc(var(--setpoint-thumb-size) / 2);
+  height: 16px;
+  margin-inline: calc(var(--range-thumb) / 2);
   color: var(--muted);
-  font-size: 0.62rem;
-  line-height: 1.15;
+  font-size: var(--fs-micro);
+  line-height: 1.2;
 }
 .setpoint-stop {
   position: absolute;
@@ -110,7 +132,7 @@
   display: grid;
   width: max-content;
   justify-items: center;
-  gap: 3px;
+  gap: 2px;
   color: var(--muted);
   text-align: center;
   white-space: nowrap;
@@ -119,16 +141,12 @@
 .setpoint-stop::before {
   content: "";
   width: 1px;
-  height: 5px;
+  height: 3px;
   background: var(--line-strong);
 }
-.setpoint-stop[data-selected="true"] {
-  color: var(--text);
-  font-weight: 600;
-}
-.setpoint-stop[data-selected="true"]::before {
-  width: 2px;
-  background: var(--accent);
+/* Only the two ends are named. Middle stops keep their tick. */
+.setpoint-stop:not(:first-child):not(:last-child) {
+  font-size: 0;
 }
 .setpoint-stop:first-child {
   justify-items: start;
@@ -140,6 +158,93 @@
   text-align: end;
   transform: translateX(-100%);
 }
+
+/* Dual-thumb range (RangeSlider: speed or stroke low and high in one control).
+   Its own track and fill span the two values; the native inputs keep keyboard
+   and assistive semantics with transparent tracks, and the shared track
+   handles pointer input so close or overlapping thumbs stay reachable. */
+.range-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.range-slider-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text);
+  font-size: var(--fs-label);
+}
+.range-slider-value {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+}
+.range-slider-track {
+  position: relative;
+  height: var(--range-hit);
+  display: flex;
+  align-items: center;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.range-slider-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--range-track);
+  border-radius: 999px;
+  background: var(--line-strong);
+}
+/* Inset like the native fill: the thumbs' centres travel half a thumb in. */
+.range-slider-fill {
+  position: absolute;
+  left: calc(var(--range-thumb) / 2 + (100% - var(--range-thumb)) * var(--low-fill));
+  right: calc(var(--range-thumb) / 2 + (100% - var(--range-thumb)) * (1 - var(--high-fill)));
+  height: var(--range-track);
+  border-radius: 999px;
+  background: var(--accent);
+}
+.range-slider-input {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  pointer-events: none;
+}
+.range-slider-input::-webkit-slider-runnable-track {
+  background: transparent;
+}
+.range-slider-input::-moz-range-track,
+.range-slider-input::-moz-range-progress {
+  background: transparent;
+}
+.range-slider-input::-webkit-slider-thumb {
+  pointer-events: none;
+}
+.range-slider-input::-moz-range-thumb {
+  pointer-events: none;
+}
+.range-slider-low {
+  z-index: 1;
+}
+.range-slider-high {
+  z-index: 2;
+}
+.range-slider-input:focus {
+  z-index: 3;
+}
+.range-slider[data-disabled] {
+  opacity: 0.55;
+}
+.range-slider[data-disabled] .range-slider-input,
+.range-slider[data-disabled] .range-slider-track {
+  cursor: not-allowed;
+}
+
+/* Segmented choice: an inset track with the chosen option raised. */
 .segmented-field {
   min-width: 0;
   margin: 0;
@@ -149,26 +254,24 @@
 .segmented-field legend {
   margin-bottom: 6px;
   padding: 0;
-  color: var(--muted);
-  font-size: 0.75rem;
+  color: var(--text);
+  font-size: var(--fs-label);
+  font-weight: 500;
 }
 .segmented-choice {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+  gap: 2px;
   min-width: 0;
+  padding: 2px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  overflow: hidden;
   background: var(--bg-inset);
 }
 .segmented-option {
   position: relative;
   min-width: 0;
-  border-right: 1px solid var(--line);
   cursor: pointer;
-}
-.segmented-option:last-child {
-  border-right: 0;
 }
 .segmented-option input {
   position: absolute;
@@ -180,22 +283,28 @@
 }
 .segmented-option span {
   display: grid;
-  min-height: 32px;
-  padding: 5px 7px;
+  min-height: var(--control-h-sm);
+  padding: 3px 8px;
   place-items: center;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 0.72rem;
-  line-height: 1.15;
+  font-size: var(--fs-label);
+  line-height: 1.2;
   text-align: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
-.segmented-option input:checked + span {
-  background: var(--accent-tint);
+.segmented-option:hover input:not(:checked):not(:disabled) + span {
   color: var(--text);
 }
+.segmented-option input:checked + span {
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+  color: var(--text);
+  font-weight: 600;
+}
 .segmented-option input:focus-visible + span {
-  position: relative;
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
@@ -203,6 +312,12 @@
 .segmented-option[data-disabled] {
   cursor: not-allowed;
 }
-.segmented-option[data-disabled] span {
-  opacity: 0.45;
+.segmented-option[data-disabled] span,
+.segmented-field:disabled .segmented-option span {
+  opacity: 0.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .segmented-option span {
+    transition: none;
+  }
 }

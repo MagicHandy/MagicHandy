@@ -241,6 +241,9 @@ func TestChatCapabilitiesMarkUnenforcedSchema(t *testing.T) {
 		{config.LLMProviderOllama, config.LlamaCPPModeExternal, false},
 		{config.LLMProviderLlamaCPP, config.LlamaCPPModeManaged, false},
 		{config.LLMProviderLlamaCPP, config.LlamaCPPModeExternal, true},
+		// Hosted providers keep the guide even beside an external local default.
+		{config.LLMProviderChatGPT, config.LlamaCPPModeExternal, false},
+		{config.LLMProviderCompatible, config.LlamaCPPModeExternal, false},
 	}
 	for _, c := range cases {
 		settings := config.DefaultSettings().LLM

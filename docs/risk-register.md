@@ -1,5 +1,43 @@
 # MagicHandy Risk Register
 
+## R30: Hosted model privacy, authorization and late-result risk
+
+Level: High
+
+Opting into cloud conversation sends included messages, enabled persona and
+memory to the chosen provider. Technical Autopilot uses an allowlist of semantic
+motion, bounds and recent numeric state, excluding conversation and custom
+labels. Easy setup distinguishes these choices; no cloud provider is silently
+selected for a fresh installation. OpenRouter retention/fallback requests are
+routing constraints, not guarantees about accepted content or retention.
+
+Hosted refusal, malformed output, incomplete streams, quota and network failures
+hold without repair, local fallback or dispatch. Stop cancels all connection lanes;
+account/provider/settings/session/personalization changes reject stale results.
+Fixture tests include providers that ignore cancellation. Valid output still
+passes shared semantic validation and the existing engine and transport boundary.
+
+ChatGPT credentials live in a private host-only store, outside settings, logs,
+exports and browser storage. PKCE, state, nonce, verified identity claims,
+per-account registrations and serialized rotating refresh protect authorization.
+Loss of inference scope invalidates readiness and old token sources. Connection
+tests require real text generation and bind their result to exact connection
+metadata and credentials. Admission tests require controller/administrator and
+host-browser authority for the relevant mutations; Stop remains independent.
+
+Remaining: final independent implementation/security review, live own-key API
+vendor acceptance, WAN deployment and physical feedback. The latency follow-up
+recommends GPT-6 Sol / Low after passing compound production edits at median
+3.47 seconds, maximum 5.81 seconds. Small fixtures do not establish p95 or
+comfort. Adaptive and phrase prototypes remain experimental after visual intent
+failures; valid JSON alone does not establish correct motion. Local prompts
+remain unchanged, and lazy credential storage removes the profiled local-only
+working-set overhead. The scorecard retains the initial increase and later
+measurements without a new exemption. See the
+[latency and visual review](cloud-motion-latency-review-2026-10-08.md),
+[ADR 0039](decisions/0039-hosted-model-connections.md) and the
+[review](cloud-model-review-2026-10-08.md).
+
 ## 2026-09-27 Phone remote and library curation
 
 A second device can now make the desktop act. A phone signed in to the same

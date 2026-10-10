@@ -1,5 +1,6 @@
 import { t, translateKnown, type MessageKey } from "../i18n";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { confirmThen } from "../util/confirm";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { ChatSession, ChatSessionsResponse } from "../api/types";
 import { AutopilotControl } from "../components/AutopilotControl";
@@ -9,11 +10,11 @@ import { ChatTabs } from "../components/ChatTabs";
 import { LiveMotionVisualizer } from "../components/LiveMotionVisualizer";
 import { llmMotionModeHelp } from "../components/LLMMotionModeHelp";
 import { QuickSettings } from "../components/QuickSettings";
-import { SegmentedChoice } from "../components/SetpointControls";
 import { VoiceQuickControls } from "../components/VoiceQuickControls";
 import { useAppState, useToast } from "../state/app-state";
 
 type PendingChange = { action: "new" } | { action: "switch"; target: ChatSession };
+type MotionMode = "dynamic" | "pattern" | "layered" | "creative_v2" | "off";
 
 const errorMessage = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Chat session request failed.");
 
@@ -29,6 +30,8 @@ export function ChatRoute() {
   const [streaming, setStreaming] = useState(false);
   const [changingMotionMode, setChangingMotionMode] = useState(false);
   const [pendingChange, setPendingChange] = useState<PendingChange | null>(null);
+  const motionModeLabelId = useId();
+  const motionModeHelpId = useId();
 
   const loadSessions = useCallback(async () => {
     const generation = ++loadGeneration.current;
@@ -62,9 +65,16 @@ export function ChatRoute() {
   const locked = !backendOnline || readOnly || loading || operation || streaming;
   const savedMotionMode = state?.settings?.llm?.motion_generation_mode;
   const motionCapabilities = state?.settings?.llm?.motion_capabilities;
-  const motionMode = savedMotionMode === "dynamic" || savedMotionMode === "pattern" || savedMotionMode === "layered" || savedMotionMode === "creative_v2" || savedMotionMode === "off"
+  const motionMode: MotionMode = savedMotionMode === "dynamic" || savedMotionMode === "pattern" || savedMotionMode === "layered" || savedMotionMode === "creative_v2" || savedMotionMode === "off"
     ? savedMotionMode
     : motionCapabilities?.motion === false ? "off" : "dynamic";
+  const motionModeOptions: ReadonlyArray<{ value: MotionMode; label: string }> = [
+    { value: "creative_v2", label: t("Creative v2") },
+    { value: "dynamic", label: t("Creative") },
+    { value: "layered", label: t("Layered") },
+    { value: "pattern", label: t("Pattern library") },
+    { value: "off", label: t("Off") },
+  ];
 
   useEffect(() => {
     if (!workspace || loading || operation || streaming) return;
@@ -134,11 +144,13 @@ export function ChatRoute() {
   }
 
   function deleteSession(session: ChatSession) {
-    if (session.active || locked || !window.confirm(t("Delete {title}? This cannot be undone.", { title: session.title }))) return;
-    void applyWorkspace(() => api.deleteChatSession(session.id), "Chat deleted.");
+    if (session.active || locked) return;
+    confirmThen(t("Delete {title}? This cannot be undone.", { title: session.title }), { confirmLabel: t("Delete"), destructive: true }, () => {
+      void applyWorkspace(() => api.deleteChatSession(session.id), "Chat deleted.");
+    });
   }
 
-  async function changeMotionMode(mode: "dynamic" | "pattern" | "layered" | "creative_v2" | "off") {
+  async function changeMotionMode(mode: MotionMode) {
     if (mode === motionMode || changingMotionMode || !backendOnline || readOnly) return;
     setChangingMotionMode(true);
     try {
@@ -188,33 +200,35 @@ export function ChatRoute() {
         </section>
 
         <aside className="chat-sidebar" aria-label={t("Motion controls")}>
-          <div className="chat-sidebar-controls">
-            <h2 className="section-title">{t("Controls")}</h2>
-            <SegmentedChoice
-              className="chat-motion-mode"
-              label={t("LLM motion")}
-              value={motionMode}
-              options={[
-                { value: "dynamic", label: t("Creative") },
-                { value: "pattern", label: t("Pattern library") },
-                { value: "layered", label: t("Layered") },
-                { value: "creative_v2", label: t("Creative v2") },
-                { value: "off", label: t("Off") },
-              ]}
-              emptySlots={1}
-              disabled={!backendOnline || readOnly || changingMotionMode}
-              onChange={(mode) => void changeMotionMode(mode)}
-            />
-            <p className="chat-motion-help">{llmMotionModeHelp(motionMode)}</p>
-            <AutopilotControl />
-            <VoiceQuickControls />
-            <div className="divider" />
-            <h2 className="section-title">{t("Motion style")}</h2>
-            <QuickSettings section="style" />
-          </div>
-          <div className="chat-motion-status">
-            <h3 className="group-title">{t("Motion status")}</h3>
+          {/* Cards are headed groups inside the one sidebar landmark. */}
+          <div className="control-card chat-motion-status">
+            <h2 className="control-card-title">{t("Motion status")}</h2>
             <LiveMotionVisualizer />
+          </div>
+          <div className="control-card chat-autopilot-card">
+            <AutopilotControl />
+          </div>
+          <div className="control-card chat-motion-card">
+            <h2 className="control-card-title">{t("Motion")}</h2>
+            <div className="control-row chat-motion-mode">
+              <span className="control-row-label">
+                <span id={motionModeLabelId}>{t("LLM motion")}</span>
+                <small id={motionModeHelpId}>{llmMotionModeHelp(motionMode)}</small>
+              </span>
+              <select
+                aria-labelledby={motionModeLabelId}
+                aria-describedby={motionModeHelpId}
+                value={motionMode}
+                disabled={!backendOnline || readOnly || changingMotionMode}
+                onChange={(event) => void changeMotionMode(event.target.value as MotionMode)}
+              >
+                {motionModeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </div>
+            <div className="control-row control-row-stack">
+              <QuickSettings section="style" />
+            </div>
+            <VoiceQuickControls />
           </div>
         </aside>
       </div>

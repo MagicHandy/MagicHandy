@@ -362,6 +362,26 @@ describe("SyncedVideoPlayer", () => {
     expect(mediaSync.mock.calls.filter(([event]) => event.state === "playing")).toHaveLength(1);
   });
 
+  it("docks the playback panel in the player and returns focus to its trigger", async () => {
+    render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={16} />);
+    const trigger = await screen.findByRole("button", { name: "Playback settings for Paired session" });
+    expect(trigger).not.toHaveAttribute("aria-haspopup");
+    fireEvent.click(trigger);
+
+    const panel = screen.getByRole("region", { name: "Playback settings for Paired session" });
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(trigger).toHaveAttribute("aria-controls", panel.id);
+    // A direct child of the player, beside the frame and the script section,
+    // never inside the script section it would otherwise cover.
+    expect(panel.parentElement?.parentElement).toHaveClass("media-player");
+    expect(screen.getByRole("region", { name: "Paired funscript timeline" })).not.toContainElement(panel);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close playback settings" }));
+    expect(screen.queryByRole("region", { name: "Playback settings for Paired session" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(trigger).not.toHaveAttribute("aria-controls");
+  });
+
   it("keeps playback stopped when a filter write fails", async () => {
     saveMediaPlayback.mockRejectedValueOnce(new Error("Settings write failed"));
     render(<SyncedVideoPlayer video={video()} locked={false} stopSequence={16} />);

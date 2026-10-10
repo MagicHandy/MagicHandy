@@ -2,6 +2,57 @@
 
 ## Core Direction
 
+The October 8 hosted-model review adds named ChatGPT/API connections alongside
+the existing local models, with independent Chat and Autopilot assignments and
+explicit conversation or technical context sharing. Easy setup keeps advanced
+providers behind API / Cloud and asks about combining models separately.
+Hosted failures hold without local fallback; accepted targets use the existing
+shared engine. The implementation is on the review branch, with the final
+independent implementation pass still pending Claude's session-limit reset.
+See [ADR 0039](docs/decisions/0039-hosted-model-connections.md) and the
+[test and review evidence](docs/cloud-model-review-2026-10-08.md).
+
+The [latency and motion follow-up](docs/cloud-motion-latency-review-2026-10-08.md)
+keeps existing modes after comparing steering, adaptive streaming, numeric
+stroke vocabularies and phrase composition. Creative v2 gets explicit reach
+guidance, first for hosted models and since October 9 for local models too,
+which it raised from 18/24 to 24/24 on the same steering fixture
+([evidence](docs/creative-v2-shared-reach-guide-2026-10-09.md)), except an
+external llama.cpp server, which may drop the response schema. GPT-6 Sol / Low is
+the measured setup recommendation. Account-supported reasoning and timed
+readiness appear in setup/settings. Strict hosted action schemas now work in
+the real production chat path, and lazy credential initialization removes the
+observed local-only Windows memory overhead. New modes remain experimental
+where compiled geometry failed intent checks.
+
+The [October 9 provider settings review](docs/provider-settings-review-2026-10-09.md)
+gives OpenRouter, ChatGPT, OpenAI API and compatible endpoints their own Chat
+model selections and editors. Saved routing now comes from the backend role
+resolver. Separate hosted Autopilot defaults to technical context; incomplete
+assigned connections cannot be saved, and missing IDs cannot fall back locally.
+Opus 5.5 completed a source consultation for this module. Controlled live
+ChatGPT/Gemma language checks and deterministic routing/refusal tests passed;
+explicit roleplay support and live OpenRouter acceptance remain unestablished.
+The same-day follow-up adds a default-off toggle to retry an explicit hosted
+chat refusal once with the saved local model. It uses the ordinary local prompt,
+existing local request lane and shared motion guards, reports the retry, and
+does not affect Autopilot. A simulated hosted refusal followed by real Gemma
+generation passed, as did cancellation tests for both stages and their boundary.
+Hosted setup now follows the primary connection with an explicit optional local
+backup step in both Easy and Custom flows. The existing install plan can add a
+managed backup without replacing hosted Chat; an existing Ollama or llama.cpp
+server can also be used. Finish checks a real local response, with Stop and
+controller takeover cancellation. Local-only setup and inference stay unchanged.
+
+The October 9 follow-ups route technical-context Autopilot in Creative v2 and
+Layered through the shared continuous planner, shown motion state only, so it can
+develop pace and outer reach within saved limits instead of holding every
+session at its starting pace; a pace set through chat is kept while it is recent
+([review](docs/technical-autopilot-review-2026-10-09.md)). Compatible endpoints
+on this computer with nothing declared, such as LM Studio or an MLX server, get
+the standard `json_schema` form and the app's sampling, so local models are
+constrained to the contract.
+
 The September 25 [motion naturalness review](docs/motion-naturalness-review-2026-09-24.md)
 removes Autopilot's word-based continuation limits. Creative v2 and Layered
 Autopilot judge the latest human lines, and live chat declares a standing wish
@@ -1993,16 +2044,14 @@ and stroke limits moved from Chat into this
 manager and still use the semantic immediate-apply API. Reverse direction and
 motion style remain in Chat as motion behavior.
 
-The connecting state uses a reference-guided transparent isolation of the
-reviewed conductor hand. It renders directly at a fixed square source ratio,
-without the approximate SVG clip and luminance mask that distorted its shape.
-The scaled composition keeps the hand, three intense-blue vector arcs, and the
-poster's tall capsule, shorter domed body, LED, and square marker inside one
-frame. The arcs occupy the lower half and stagger toward the device while
-connecting; connected shows the complete signal. Disconnected shows no signal
-and a red square; only a failed connection attempt adds a briefly shaking red X.
-The square turns green when connected. `docs/connection-artwork.md` preserves
-the generation, construction, state, and refactor details.
+The connection state is a flat vector status strip: three signal arcs above
+the Handy-inspired capsule, shorter domed body, LED, and square marker. The arcs
+stagger in the accent hue while connecting and turn green when connected.
+Disconnected shows no signal and a red square; only a failed connection attempt
+adds a briefly shaking red X. The 2026-10-09 Graphite refactor removed the
+earlier generated conductor-hand bitmap (about 444 KB) from the shipped UI.
+`docs/connection-artwork.md` preserves the construction, state, and refactor
+details.
 Reduced-motion users get static state feedback. The non-modal disclosure
 restores focus on close, leaves Escape to Stop, and clears the reserved mobile
 Stop/footer region.

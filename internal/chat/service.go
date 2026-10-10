@@ -103,6 +103,8 @@ type Service struct {
 	// AutonomousTemperature is supplied only by the backend scheduler. Ordinary
 	// chat keeps its reviewed sampling controls.
 	AutonomousTemperature float64
+	// SingleAttempt disables local repair/salvage for an explicitly bounded retry.
+	SingleAttempt bool
 }
 
 func (s Service) capabilities() Capabilities {
@@ -203,6 +205,14 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	response, parseErr := s.parseAndValidateResponse(raw, capabilities, validationMessage)
 	if parseErr == nil {
 		return Result{Response: response, Raw: raw}, nil
+	}
+	if s.SingleAttempt {
+		return Result{Raw: raw, InitialMalformed: true, Malformed: true}, errors.New("the local retry did not produce a valid response")
+	}
+	if capabilities.PreserveConversationText {
+		// Hosted refusals can arrive as ordinary prose or invalid contract JSON.
+		// Never reinterpret them through a second generation or semantic fallback.
+		return Result{Raw: raw, InitialMalformed: true, Malformed: true}, &llm.CloudError{Kind: "incomplete"}
 	}
 	if truncated {
 		parseErr = fmt.Errorf("assistant response was truncated before valid JSON: %w", parseErr)
