@@ -55,8 +55,9 @@ describe("administrator access history", () => {
     list.mockResolvedValueOnce(page(20, false));
     fireEvent.click(screen.getByRole("button", { name: "Older events" }));
     await waitFor(() => expect(list).toHaveBeenLastCalledWith(120, expect.any(AbortSignal)));
+    // The request resolving and React rendering its page are separate steps.
+    expect(await screen.findByText("20 · event-20")).toBeInTheDocument();
     expect(within(screen.getByRole("list", { name: "Access events" })).getAllByRole("listitem")).toHaveLength(1);
-    expect(screen.getByText("20 · event-20")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Older events" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Newest events" }));
     await screen.findByText("120 · event-120");
