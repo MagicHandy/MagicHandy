@@ -117,8 +117,10 @@ Autopilot retains its independently assigned provider and existing failure polic
 
 The retry remains in the original chat turn and canonical history. It uses the
 original user request and conversation, the common saved prompt/persona profile,
-and the normal local model contract and budgets. Hosted Creative v2 reach guidance
-is excluded, as verified by captured request bodies. It takes the existing local
+and the normal local model contract and budgets, rebuilt rather than copied from
+the hosted request, as verified by captured request bodies. (The Creative v2 reach
+guidance was hosted-only here; since the October 9 amendment both contracts carry
+it once.) It takes the existing local
 request lane after releasing the hosted lane. It makes one local generation and
 disables malformed-output repair/salvage for this attempt. Both results still go
 through the existing parser, capability checks, motion engine and publication

@@ -1,5 +1,17 @@
 # Goal Scorecard
 
+## 2026-10-09 — Shared Creative v2 reach guide
+
+The hosted reach guide now leads the local Creative v2 contract too. Compared
+with `eb3c29c2` on Windows amd64 Go 1.26.9, `CGO_ENABLED=0`, `-trimpath
+-buildvcs=false -ldflags '-s -w'`, the core binary measures 22,438,400 B before
+and 22,437,376 B after (−1,024 B, from removing the hosted-only prompt variant).
+The local Creative v2 contract grows by 713 bytes; the Lab prompt measures 7,608
+bytes instead of 6,895. Local Gemma 12B warm median Lab latency was 1,267 ms with
+the guide and 1,103 ms without on the same steering fixture. No dependency, UI
+asset, model call or resident state is added. See the
+[shared-guide review](creative-v2-shared-reach-guide-2026-10-09.md).
+
 ## 2026-10-09 — Compact settings and setup visual system
 
 Compared with published `7a17bb45`, on Windows amd64 Go 1.26.9,

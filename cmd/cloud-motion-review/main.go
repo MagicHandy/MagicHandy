@@ -49,7 +49,7 @@ func main() {
 	repeats := flag.Int("repeats", 1, "repeats per case")
 	output := flag.String("output", ".scratch/cloud-motion-review.json", "report")
 	steering := flag.Bool("steering", false, "clarify hard reach versus focus preferences")
-	hostedGuidance := flag.Bool("hosted-guidance", true, "use final hosted production guidance")
+	reachGuide := flag.Bool("reach-guide", true, "include the shared Creative v2 reach guide; false reproduces the earlier baseline")
 	localModel := flag.String("local-model", "", "installed Ollama model for a local baseline")
 	dataDir := flag.String("data-dir", "", "existing signed-in app data directory; credentials are never copied")
 	flag.Parse()
@@ -113,8 +113,8 @@ func main() {
 				history := []llm.Message{}
 				for index, message := range cases {
 					prompt := chat.LLMLabPrompts()[method]
-					if *hostedGuidance && *localModel == "" {
-						prompt = chat.HostedLLMLabPrompts()[method]
+					if !*reachGuide {
+						prompt = chat.WithoutCreativeV2ReachGuide(prompt)
 					}
 					if *steering {
 						prompt = "Resolve requested reach before choosing texture. A request that confines ALL motion to a region requires the outer range to bound that region; focus alone cannot exclude broad strokes when mixed reach remains enabled. Inside a restricted range, broad and shorter strokes must both stay inside its endpoints. Do not confuse absolute slider positions with band-relative focus placement. Verify that the numeric edits actually realize the promised reach, copying only unrelated controls.\n\n" + prompt

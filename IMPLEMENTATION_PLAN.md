@@ -14,8 +14,10 @@ See [ADR 0039](docs/decisions/0039-hosted-model-connections.md) and the
 
 The [latency and motion follow-up](docs/cloud-motion-latency-review-2026-10-08.md)
 keeps existing modes after comparing steering, adaptive streaming, numeric
-stroke vocabularies and phrase composition. Hosted Creative v2 gets explicit
-reach guidance; local prompts keep their original bytes. GPT-6 Sol / Low is
+stroke vocabularies and phrase composition. Creative v2 gets explicit reach
+guidance, first for hosted models and since October 9 for local models too,
+which it raised from 18/24 to 24/24 on the same steering fixture
+([evidence](docs/creative-v2-shared-reach-guide-2026-10-09.md)). GPT-6 Sol / Low is
 the measured setup recommendation. Account-supported reasoning and timed
 readiness appear in setup/settings. Strict hosted action schemas now work in
 the real production chat path, and lazy credential initialization removes the

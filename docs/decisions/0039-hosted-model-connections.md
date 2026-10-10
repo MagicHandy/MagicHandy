@@ -79,8 +79,10 @@ late results, including a provider that ignores cancellation. A provider outage
 does not remove the global Stop or acquire hardware control.
 
 The October 8 latency follow-up keeps Creative v2 as the existing user-facing
-mode. Additional reach guidance is selected only for hosted models; local
-production/Lab contracts and one-call inference remain unchanged. Reasoning
+mode. Additional reach guidance was first selected only for hosted models. An
+October 9 amendment applies it to every Creative v2 contract, because it raised
+local steering as well ([evidence](../creative-v2-shared-reach-guide-2026-10-09.md));
+one-call inference is unchanged. Reasoning
 effort is a connection setting and part of readiness identity. ChatGPT exposes
 account-advertised efforts; new choices prefer Low when supported. Empirical
 guidance recommends GPT-6 Sol / Low, without claiming an unverified Fast tier.

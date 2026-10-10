@@ -175,10 +175,7 @@ func contractInstructions(capabilities Capabilities) string {
 		return text
 	}
 	if capabilities.MotionMode == MotionModeCreativeV2 {
-		text := creativeV2Contract
-		if capabilities.HostedModel {
-			text = creativeV2ReachGuide + "\n\n" + text
-		}
+		text := creativeV2ReachGuide + "\n\n" + creativeV2Contract
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()
 		}
@@ -209,9 +206,6 @@ func contractInstructions(capabilities Capabilities) string {
 // value is chat-only in the utility voice; callers resolve defaults from
 // settings.
 type Capabilities struct {
-	// HostedModel selects the measured hosted planning guidance. Local prompt
-	// size and wording stay unchanged, independently of context sharing policy.
-	HostedModel bool
 	// PreserveConversationText keeps included canonical messages verbatim for
 	// an explicitly selected hosted full-conversation role.
 	PreserveConversationText bool
