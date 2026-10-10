@@ -177,11 +177,31 @@ return:
   Take control (when read-only), the compact motion glyph, the bell, the
   control profile and the connection chip.
 
-The one authoritative visualizer keeps a compact vertical Handy 2-inspired body
-and sleeve in the status bar and its detailed form in the **Motion status**
-card at the top of Chat's control sidebar. One component, engine-driven, with
-position labeled as a commanded estimate and the active motion name resolved by
-the backend rather than inferred from client controls. Dynamic motion shows its
+The one authoritative visualizer is engine-driven and draws the device the
+backend dispatches to, in its compact status-bar form (30 × 40) and its detailed
+form in the **Motion status** card at the top of Chat's control sidebar
+(`web/src/components/visualizer/`):
+
+- **Handy 2 Standard and Pro** (Handy Cloud or Browser Bluetooth): the device's
+  own **dot display**, enlarged. A dot column shows full travel with the stroke
+  window lit in accent and the commanded position in `--text`; the position in
+  large 5 × 7 dots with millimetres of the 125 mm travel beneath; the status
+  LED in the corner. Idle shows dashes and an unlit column.
+- **Original Handy**: the **refined front** — near-flat cap and base section set
+  off by seams, the waisted front panel with power, cross pad and dash keys, the
+  status LED in its lower lobe, and the attachment (sleeve and band on a
+  bracket) moving along a range bracket. Depth is flat tone steps on the
+  surface ladder, never gradients or glow. Millimetres are of the 110 mm travel.
+- **Intiface** (any linear stroker): a **scanning bar** — a track with the
+  stroke window and a lit bar at the commanded position (top is the tip),
+  followed by a short trail of the positions shown in the last 0.4 s.
+- Published but **not enabled**: the Handy 2 front view and the Intiface ribbon
+  timeline (`DISABLED_VISUALIZER_KINDS`). They render through the same props
+  and tests but no device selects them.
+
+The state colour (`--ok`, `--warn`, `--accent`, `--danger`, `--muted`) is the
+LED, the lit bar and the status dot. Handy models read their commanded position
+in millimetres; Intiface reads percent of travel. Dynamic motion shows its
 anchor route (or center), span, effective pace, variation, decision horizon,
 and source without presenting it as a saved pattern. A saturated pace shows the
 effective/requested pair and exposes the backend limiter reason instead of

@@ -2935,5 +2935,6 @@
   "Use my own server": "Usar meu próprio servidor",
   "Positive delays motion; negative advances it. A change during playback requires Play again.": "Um valor positivo atrasa o movimento; um negativo o adianta. Se alterar durante a reprodução, pressione Reproduzir novamente.",
   "Now playing": "Tocando agora",
-  "Volume": "Volume"
+  "Volume": "Volume",
+  "{n} mm": "{n} mm"
 }

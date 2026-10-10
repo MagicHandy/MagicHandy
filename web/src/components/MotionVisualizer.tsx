@@ -1,23 +1,24 @@
 import { formatNumber, t } from "../i18n";
 // The single authoritative visualizer. It renders engine state only and labels
 // position as a commanded estimate — never a guessed or device-confirmed value.
-import type { CSSProperties } from "react";
+import type { ComponentType } from "react";
 import type { MotionInfo } from "../api/types";
 import { clampPercent } from "../util/format";
+import { handyTravelMillimetres, visualizerKind, type VisualizerDevice, type VisualizerKind } from "./visualizer/device";
+import { HandyDotDisplay } from "./visualizer/HandyDotDisplay";
+import { HandyTwoFront } from "./visualizer/HandyTwoFront";
+import { OriginalHandyFront } from "./visualizer/OriginalHandyFront";
+import { RibbonTrace } from "./visualizer/RibbonTrace";
+import { ScanBar } from "./visualizer/ScanBar";
+import type { DrawingProps } from "./visualizer/types";
 
-const DEVICE_CENTER_X = 48;
-const BODY_WIDTH = 48;
-const BODY_X = DEVICE_CENTER_X - BODY_WIDTH / 2;
-const TRACK_WIDTH = 9;
-const TRACK_X = DEVICE_CENTER_X - TRACK_WIDTH / 2;
-const TRACK_INNER_WIDTH = 7.8;
-const TRACK_INNER_X = TRACK_X + (TRACK_WIDTH - TRACK_INNER_WIDTH) / 2;
-const COLLAR_WIDTH = 16;
-const COLLAR_X = DEVICE_CENTER_X - COLLAR_WIDTH / 2;
-const SLEEVE_WIDTH = 14;
-const SLEEVE_X = DEVICE_CENTER_X - SLEEVE_WIDTH / 2;
-const SCREEN_WIDTH = 20;
-const SCREEN_X = DEVICE_CENTER_X - SCREEN_WIDTH / 2;
+const DRAWINGS: Record<VisualizerKind, ComponentType<DrawingProps>> = {
+  "handy-dots": HandyDotDisplay,
+  "handy-original": OriginalHandyFront,
+  scan: ScanBar,
+  "handy-front": HandyTwoFront,
+  ribbon: RibbonTrace,
+};
 
 function paceLimiterLabel(limiter: string): string {
   if (limiter === "device_velocity") return t("device velocity");
@@ -28,7 +29,14 @@ function paceLimiterLabel(limiter: string): string {
   return limiter.replaceAll("_", " ");
 }
 
-export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo | null; mini?: boolean }) {
+export function MotionVisualizer({ motion, mini = false, device, kind: kindOverride }: {
+  motion: MotionInfo | null;
+  mini?: boolean;
+  /** The dispatch owner and Handy model; selects the drawing. */
+  device?: VisualizerDevice;
+  /** Forces a drawing, including a disabled one (design review and tests). */
+  kind?: VisualizerKind;
+}) {
   const engine = motion?.engine;
   const running = engine?.running === true;
   const starting = engine?.starting === true;
@@ -122,14 +130,12 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   const dynamicMeta = dynamic
     ? `${dynamicSectionLabel || (dynamicAnchors.length ? dynamicAnchors.join(" → ") : `${t("Center")} ${dynamic.center_percent}%`)} · ${!dynamicSectionLabel && dynamicSpanProfile ? `${dynamicSpanProfile} · ` : ""}${dynamic.segment_seconds}s · ${source}`
     : "";
-  // The stroke channel and carriage ride on the device center axis. 100% is the
-  // top of the channel.
-  const travelTop = 30;
-  const travelBottom = 104;
-  const toChannelY = (percent: number) => travelBottom - ((travelBottom - travelTop) * percent) / 100;
-  const rangeTop = toChannelY(max);
-  const rangeBottom = toChannelY(min);
-  const carriageStyle = { "--viz-carriage-y": `${toChannelY(pos)}px` } as CSSProperties;
+  const model = engine?.settings?.handy_model || device?.model;
+  const kind = kindOverride ?? visualizerKind({ owner: device?.owner, model });
+  const Drawing = DRAWINGS[kind];
+  const handy = kind !== "scan" && kind !== "ribbon";
+  const travelMillimetres = handyTravelMillimetres(model);
+  const millimetres = Math.round((pos / 100) * travelMillimetres);
   const label = t("Motion {state}; pattern {pattern}; commanded position estimate {position} percent; stroke range {minimum} to {maximum} percent", {
     state: stateLabel,
     pattern: patternName,
@@ -139,46 +145,26 @@ export function MotionVisualizer({ motion, mini = false }: { motion: MotionInfo 
   });
 
   return (
-    <div className={`visualizer${mini ? " mini" : ""}`} data-state={state} role="img" aria-label={label}>
-      <svg
-        className="viz-device"
-        data-position={roundedPosition}
-        data-range-min={Math.round(min)}
-        data-range-max={Math.round(max)}
-        viewBox="0 0 96 132"
-        preserveAspectRatio="xMidYMid meet"
-        aria-hidden="true"
-      >
-        {/* Body: vertical capsule centered on the motion axis. */}
-        <rect className="viz-body" x={BODY_X} y="10" width={BODY_WIDTH} height="112" rx="24" />
-        <path className="viz-grip" d={`M${BODY_X + 10} 35h${BODY_WIDTH - 20}M${BODY_X + 10} 47h${BODY_WIDTH - 20}M${BODY_X + 10} 59h${BODY_WIDTH - 20}`} />
-        <rect className="viz-screen" x={SCREEN_X} y="66" width={SCREEN_WIDTH} height="26" rx="4" />
-        <circle className="viz-device-led" cx={DEVICE_CENTER_X} cy="36" r="2.6" />
-        {/* Stroke channel on the center axis, with the active range inside it. */}
-        <rect className="viz-track" x={TRACK_X} y="24" width={TRACK_WIDTH} height="84" rx="4.5" />
-        <rect
-          className="viz-stroke-range"
-          x={TRACK_INNER_X}
-          y={rangeTop}
-          width={TRACK_INNER_WIDTH}
-          height={Math.max(3, rangeBottom - rangeTop)}
-          rx="3.6"
-        />
-        {/* Sleeve carriage: collar + ribbed sleeve, moving vertically on the axis. */}
-        <g className="viz-carriage" style={carriageStyle}>
-          <rect className="viz-carriage-sleeve" x={SLEEVE_X} y="-9" width={SLEEVE_WIDTH} height="18" rx="6.5" />
-          <path
-            className="viz-sleeve-rib"
-            d={`M${SLEEVE_X + 3} -3.5h${SLEEVE_WIDTH - 6}M${SLEEVE_X + 3} 0h${SLEEVE_WIDTH - 6}M${SLEEVE_X + 3} 3.5h${SLEEVE_WIDTH - 6}`}
-          />
-          <rect className="viz-carriage-collar" x={COLLAR_X} y="-7.5" width={COLLAR_WIDTH} height="15" rx="5" />
-        </g>
-      </svg>
+    <div className={`visualizer${mini ? " mini" : ""}`} data-state={state} data-kind={kind} role="img" aria-label={label}>
+      <Drawing
+        position={pos}
+        min={min}
+        max={max}
+        active={active}
+        mini={mini}
+        travelMillimetres={travelMillimetres}
+        svgProps={{
+          className: "viz-device",
+          "data-position": roundedPosition,
+          "data-range-min": Math.round(min),
+          "data-range-max": Math.round(max),
+        } as DrawingProps["svgProps"]}
+      />
       {!mini && (
         <div className="viz-telemetry">
           <div className="viz-summary">
             <span className="viz-state"><span className="viz-state-dot" aria-hidden="true" />{stateLabel}</span>
-            <span className="viz-commanded"><strong>{roundedPosition}%</strong><small>{t("commanded")}</small></span>
+            <span className="viz-commanded" title={handy ? t("{n}%", { n: roundedPosition }) : undefined}><strong>{handy ? t("{n} mm", { n: millimetres }) : t("{n}%", { n: roundedPosition })}</strong><small>{t("commanded")}</small></span>
           </div>
           <div className="viz-pattern">
             <span>{dynamic ? t("Motion") : t("Pattern")}</span>

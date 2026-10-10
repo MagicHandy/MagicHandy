@@ -1,11 +1,29 @@
 /* The one motion visualizer: the compact status-bar form and the detailed
    form in Chat's Motion status card. Loaded right after components.css. */
+/* The one motion visualizer: the compact status-bar form and the detailed
+   form in Chat's Motion status card. The drawing follows the device:
+   handy-dots (Handy 2), handy-original, scan (Intiface); handy-front and
+   ribbon are published but not enabled. Loaded right after components.css. */
 .visualizer {
+  --viz-state: var(--muted);
+  --viz-drawing-w: 76px;
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr);
-  align-items: start;
-  gap: 12px;
+  grid-template-columns: var(--viz-drawing-w) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
   min-width: 0;
+}
+.visualizer[data-state="running"] { --viz-state: var(--ok); }
+.visualizer[data-state="paused"] { --viz-state: var(--warn); }
+.visualizer[data-state="starting"],
+.visualizer[data-state="completing"] { --viz-state: var(--accent); }
+.visualizer[data-state="error"] { --viz-state: var(--danger); }
+.visualizer[data-kind="scan"] { --viz-drawing-w: 28px; }
+.visualizer:is([data-kind="handy-original"], [data-kind="handy-front"]) { --viz-drawing-w: 96px; gap: 10px; }
+.visualizer[data-kind="handy-dots"],
+.visualizer[data-kind="ribbon"] {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
 }
 .visualizer.mini {
   display: block;
@@ -16,107 +34,89 @@
 .viz-device {
   display: block;
   width: 100%;
-  max-width: 58px;
   height: auto;
-  aspect-ratio: 96 / 132;
+  overflow: visible;
 }
+.visualizer[data-kind="handy-original"] .viz-device,
+.visualizer[data-kind="handy-front"] .viz-device { aspect-ratio: 160 / 220; }
+.visualizer[data-kind="scan"] .viz-device { aspect-ratio: 40 / 200; }
+.visualizer[data-kind="handy-dots"] .viz-device { aspect-ratio: 160 / 70; }
+.visualizer[data-kind="ribbon"] .viz-device { aspect-ratio: 300 / 92; }
 .visualizer.mini .viz-device {
   width: 30px;
-  max-width: none;
   height: 40px;
+  aspect-ratio: auto;
 }
-.viz-body {
-  fill: var(--surface-2);
-  stroke: var(--line-strong);
-  stroke-width: 1.2;
-}
-.viz-grip {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.05);
-  stroke-width: 1.4;
-  stroke-linecap: round;
-}
-.viz-screen {
-  fill: var(--bg-inset);
-  stroke: var(--line);
-  stroke-width: 0.8;
-}
-.viz-track {
-  fill: var(--bg);
-  stroke: var(--line-strong);
-  stroke-width: 1;
-}
-.viz-stroke-range {
-  fill: var(--accent-tint);
-  stroke: var(--accent-strong);
-  stroke-width: 1;
-}
+
+/* Moving parts ride a CSS transform so samples glide between updates. */
 .viz-carriage {
-  color: var(--muted);
-  transform: translateY(var(--viz-carriage-y));
-  transition: transform 0.13s linear, color 0.18s ease;
+  transform: translateY(var(--viz-carriage-y, 0));
+  transition: transform 0.13s linear;
 }
-.viz-carriage-collar {
-  fill: currentColor;
-  stroke: var(--text);
-  stroke-width: 0.7;
-}
-.viz-carriage-sleeve {
-  fill: rgba(210, 224, 236, 0.14);
-  stroke: var(--muted);
-  stroke-width: 0.7;
-}
-.viz-sleeve-rib {
-  fill: none;
-  stroke: rgba(200, 212, 224, 0.4);
-  stroke-width: 0.7;
-  stroke-linecap: round;
-}
-.viz-device-led {
-  fill: var(--muted);
-}
+.viz-device-led { fill: var(--viz-state); }
+.viz-device-led-ring { fill: none; stroke: var(--viz-state); stroke-opacity: 0.35; stroke-width: 1; }
+.viz-marker { fill: var(--text); }
+.viz-track { fill: none; stroke: var(--line-strong); stroke-width: 1.2; stroke-linecap: round; }
+.viz-stroke-range { fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
+
+/* Handy 2: the dot display. */
+[data-kind="handy-dots"] .viz-body { fill: var(--bg-inset); stroke: var(--line); stroke-width: 1; }
+[data-kind="handy-dots"] .viz-track { fill: var(--surface-2); stroke: none; }
+[data-kind="handy-dots"] .viz-stroke-range { fill: color-mix(in srgb, var(--accent) 45%, var(--bg-inset)); stroke: none; }
+[data-kind="handy-dots"] .viz-carriage { fill: var(--text); transform: none; }
+.viz-digit-on { fill: var(--text); }
+.viz-digit-off { fill: var(--surface); }
+.viz-digits-small { fill: var(--muted); }
+.visualizer:not([data-state="running"]):not([data-state="starting"]):not([data-state="completing"]):not([data-state="paused"]) .viz-digit-on { fill: var(--muted); }
+.visualizer[data-state="error"] .viz-digit-on { fill: var(--danger); }
+.visualizer.mini[data-kind="handy-dots"] .viz-body { fill: var(--bg-inset); stroke: var(--line-strong); }
+
+/* Original Handy and the Handy 2 front: flat tone steps, no gradients. */
+:is([data-kind="handy-original"], [data-kind="handy-front"]) .viz-body { fill: var(--surface-2); stroke: var(--line-strong); stroke-width: 1; }
+.viz-body-mini { stroke-width: 6; }
+.viz-body-outline { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+.viz-tone-cap { fill: color-mix(in srgb, var(--surface-2) 70%, var(--surface-3)); }
+.viz-tone-base { fill: color-mix(in srgb, var(--surface-2) 55%, var(--bg)); }
+.viz-tone-shade { fill: var(--surface); fill-opacity: 0.85; }
+.viz-tone-light { fill: var(--surface-3); fill-opacity: 0.7; }
+.viz-seam { fill: none; stroke: var(--bg); stroke-width: 1.1; }
+.viz-panel { fill: var(--surface); stroke: var(--line); stroke-width: 0.9; }
+.viz-panel-edge { fill: none; stroke: var(--line-strong); stroke-width: 0.8; stroke-linecap: round; }
+.viz-keys { fill: var(--surface-3); stroke: var(--line-strong); stroke-width: 0.5; }
+.viz-key-ring { fill: none; stroke: var(--faint); stroke-width: 0.9; stroke-linecap: round; }
+.viz-slot { fill: var(--bg-inset); }
+.viz-bracket { fill: var(--surface); stroke: var(--line-strong); stroke-width: 0.8; }
+.viz-sleeve { fill: color-mix(in srgb, var(--text) 12%, transparent); stroke: color-mix(in srgb, var(--text) 50%, transparent); stroke-width: 0.8; }
+.viz-sleeve-light { fill: none; stroke: color-mix(in srgb, var(--text) 22%, transparent); stroke-width: 2; stroke-linecap: round; }
+.viz-band { fill: var(--bg); stroke: var(--line-strong); stroke-width: 0.9; }
+.viz-band-edge { fill: none; stroke: var(--surface-3); stroke-width: 1; stroke-linecap: round; }
+.visualizer.mini :is(.viz-sleeve) { stroke-width: 5; }
+.visualizer.mini .viz-band { fill: var(--text); stroke: none; }
+.visualizer.mini .viz-track { stroke-width: 6; }
+.visualizer.mini .viz-stroke-range { stroke-width: 8; }
+
+/* Intiface: a track and a moving bar with its trail. */
+[data-kind="scan"] .viz-body { fill: var(--bg-inset); stroke: var(--line-strong); stroke-width: 1.2; }
+[data-kind="scan"] .viz-stroke-range { fill: color-mix(in srgb, var(--accent) 16%, transparent); stroke: none; }
+.viz-range-ticks { fill: none; stroke: var(--accent-strong); stroke-width: 1.5; }
+.viz-scan-bar,
+.viz-scan-trail { fill: var(--viz-state); }
+.visualizer.mini[data-kind="scan"] .viz-body { stroke-width: 1; }
+.visualizer[data-state="error"][data-kind="scan"] .viz-body { stroke: var(--danger); stroke-dasharray: 8 6; }
+
+/* Intiface ribbon (not enabled). */
+[data-kind="ribbon"] .viz-body { fill: var(--bg-inset); stroke: none; }
+.viz-range-lines { stroke: var(--accent-strong); stroke-width: 0.8; stroke-dasharray: 3 3; }
+.viz-ribbon-fill { fill: color-mix(in srgb, var(--accent) 10%, transparent); }
+.viz-ribbon-line { fill: none; stroke: var(--viz-state); stroke-width: 1.8; stroke-linejoin: round; }
+.viz-ribbon-now { fill: var(--viz-state); }
+
 .viz-state-dot {
   width: 7px;
   height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--muted);
-}
-.visualizer[data-state="running"] .viz-carriage {
-  color: var(--ok);
-}
-.visualizer[data-state="running"] .viz-device-led {
-  fill: var(--ok);
-}
-.visualizer[data-state="running"] .viz-state-dot {
-  background: var(--ok);
-}
-.visualizer[data-state="paused"] .viz-carriage {
-  color: var(--warn);
-}
-.visualizer[data-state="paused"] .viz-device-led {
-  fill: var(--warn);
-}
-.visualizer[data-state="paused"] .viz-state-dot {
-  background: var(--warn);
-}
-.visualizer[data-state="starting"] .viz-carriage,
-.visualizer[data-state="completing"] .viz-carriage {
-  color: var(--accent);
-}
-.visualizer[data-state="starting"] .viz-device-led,
-.visualizer[data-state="completing"] .viz-device-led {
-  fill: var(--accent);
-}
-.visualizer[data-state="starting"] .viz-state-dot,
-.visualizer[data-state="completing"] .viz-state-dot {
-  background: var(--accent);
-}
-.visualizer[data-state="error"] .viz-device-led {
-  fill: var(--danger);
-}
-.visualizer[data-state="error"] .viz-state-dot {
-  background: var(--danger);
+  background: var(--viz-state);
 }
 .viz-telemetry {
   display: grid;
@@ -125,6 +125,7 @@
 }
 .viz-summary {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
