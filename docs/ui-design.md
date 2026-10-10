@@ -98,18 +98,16 @@ settings has a saved "Show Remote in sidebar" switch; it changes the shortcut
 across browsers without shutting down the listener. Older settings writes preserve
 that choice. The legacy `#/remote` bookmark only links there. The remote has its own sign-in and
 account self-service, without the main rail, controller acquisition or host
-settings. Phone layouts use a compact filled Video/Chat segmented choice and a
-single-row header with an accessible account icon. Desktop shows video and chat
-side by side, separated by a continuous neutral border. The desktop connection
-readout joins the header; the chat composer has its own bottom divider. The phone
-keeps the connection row as a small card and an inset Video/Chat selector. The
-remote uses the shared Graphite controls (flat fills, no gradients, shadows or
-pill badges) with 40px targets, 44px on touch screens. Playback, motion source
-and library sections are separated by neutral rules; library rows form a plain
-ruled list with the open video tinted. Chat reads like desktop chat: bordered
-neutral reply bubbles and steel-tinted user turns. The remote has a 52px play button,
-whole-second clocks, 10-second skips, mute, volume, speed, source choice and
-searchable catalog pages.
+settings. It is laid out like Chat: the header carries the product lockup,
+the connection readout and the account chip; desktop widths show the Chat
+conversation card beside a column of control cards (Now playing, Video
+library), and phones show one of them at a time through a filled Video/Chat
+segmented choice, with the connection readout on its own row. Cards, rows,
+messages and the composer are the shared Graphite classes, with 40px targets
+(44px on touch screens). Library rows form one bordered list with the open video
+tinted. Play is the filled green start button; the remote also has whole-second
+clocks, 10-second skips, mute, volume, speed, source choice and searchable
+catalog pages.
 Opening a video never starts it. Committed chat text stays bounded to the active
 conversation. Selected choices use a filled surface, never a left accent or
 underline. A stale connection hides controls; errors remain explicit. Red is

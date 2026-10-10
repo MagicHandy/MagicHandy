@@ -40,14 +40,20 @@ export function RemoteApplication() {
 
   return <div className="remote-application">
     <header className="remote-header">
-      <h1>{t("MagicHandy Remote")}</h1>
+      <div className="nav-brand remote-brand">
+        <span className="nav-brand-mark" aria-hidden="true">M</span>
+        <h1 className="nav-brand-copy" aria-label={t("MagicHandy Remote")}>
+          <span className="nav-brand-name">{t("MagicHandy")}</span>
+          <span className="nav-brand-context">{t("Remote")}</span>
+        </h1>
+      </div>
       {signedIn && <div className="remote-header-status">
         <RemoteConnection remote={remote} />
-        <button className="icon-button" type="button" aria-label={t("Refresh")} title={t("Refresh")} onClick={() => { void auth.refresh(); remote.refresh(); }}><RefreshIcon /></button>
+        <button className="icon-button btn-quiet" type="button" aria-label={t("Refresh")} title={t("Refresh")} onClick={() => { void auth.refresh(); remote.refresh(); }}><RefreshIcon /></button>
       </div>}
       {auth.status?.authenticated && <div className="remote-account-actions">
-        <button className="btn btn-secondary small remote-account-button" type="button" aria-label={t("Your account")} title={auth.status.account?.username} aria-expanded={accountOpen} onClick={() => setAccountOpen(value => !value)}><PersonaIcon /><span>{auth.status.account?.username}</span></button>
-        <button className="btn btn-secondary small" type="button" disabled={signingOut} onClick={() => void logout()}>{t("Sign out")}</button>
+        <button className="btn btn-secondary btn-sm remote-account-button" type="button" aria-label={t("Your account")} title={auth.status.account?.username} aria-expanded={accountOpen} onClick={() => setAccountOpen(value => !value)}><PersonaIcon /><span>{auth.status.account?.username}</span></button>
+        <button className="btn btn-secondary btn-sm" type="button" disabled={signingOut} onClick={() => void logout()}>{t("Sign out")}</button>
       </div>}
     </header>
     <main className="remote-main">
@@ -55,7 +61,7 @@ export function RemoteApplication() {
       {!auth.status ? <section className="remote-empty" role="status"><p>{auth.error || t("Checking access…")}</p><button className="btn btn-secondary" type="button" onClick={() => void auth.refresh()}>{t("Retry core connection")}</button></section>
         : !signedIn ? <LoginRoute />
         : accountOpen ? <section className="remote-account settings-panel" aria-label={t("Your account")}>
-          <div className="remote-section-heading"><h2>{t("Your account")}</h2><button className="btn btn-secondary small" type="button" onClick={() => setAccountOpen(false)}>{t("Back to remote")}</button></div>
+          <div className="remote-account-heading"><h2>{t("Your account")}</h2><button className="btn btn-secondary btn-sm" type="button" onClick={() => setAccountOpen(false)}>{t("Back to remote")}</button></div>
           <AccountPasswordPanel disabled={false} onChanged={auth.refresh} />
           <RecoveryCodesPanel backendOnline />
           <SessionSettingsPanel backendOnline onSignedOut={auth.refresh} />

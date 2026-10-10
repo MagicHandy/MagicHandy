@@ -479,11 +479,24 @@ bottom `--accent` edge.
 
 ### Phone remote
 
-The remote at its own origin uses the same Graphite controls with touch sizing
-(`--control-h` 40px, 44px on coarse pointers): panes divided by rules, the
-video library as a plain ruled list with the open video tinted, chat in the
-desktop chat's message style, and the full-width Stop footer on `--rail`. Its
-account view reuses the Settings card treatment.
+The remote at its own origin is laid out like Chat, with touch sizing
+(`--control-h` 40px, 44px on coarse pointers):
+
+- **Header** on `--bg`: the product lockup (monogram, **MagicHandy**, context
+  **Remote**), then the connection readout (8px dot + text, as in the status
+  bar) with a borderless refresh icon, and the account chip and Sign out at
+  the end. On phones the readout moves to its own row under the header.
+- **Desktop chat** is the Chat conversation card: a small caps title row, the
+  same `.chat-message` replies with avatar and bubbles, and the one-field
+  composer. The phone composer uses 16px text so focusing it does not zoom.
+- **Control column** (`clamp(320px, 34vw, 440px)`): a **Now playing** control
+  card (title, scrubber, transport, then Volume, Speed and Motion source rows)
+  and a **Video library** control card (search, then one bordered list with the
+  open video tinted). Play is the filled `--go` start button; Pause is
+  secondary.
+- On phones a Video / Chat segmented choice shows one of the two at a time.
+- The full-width Stop footer sits on `--rail`; the account view uses the
+  Settings card treatment.
 
 ### Feedback layer
 

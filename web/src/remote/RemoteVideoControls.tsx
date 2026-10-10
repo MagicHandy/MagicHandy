@@ -39,15 +39,18 @@ export function RemoteVideoControls({ video, position, send }: Props) {
   const source = video.motion_source ?? (video.synchronized ? "script" : "off");
 
   return (
-    <section className="remote-video" aria-label={t("Desktop video")}>
+    <section className="control-card remote-video" aria-label={t("Desktop video")}>
+      <h2 className="control-card-title">
+        {t("Now playing")}
+        <button type="button" className="btn btn-secondary btn-sm remote-close" onClick={() => void send({ target: "video", action: "close" })}>
+          {t("Close video")}
+        </button>
+      </h2>
       <div className="remote-now-playing">
-        <h2>{video.title}</h2>
+        <h3>{video.title}</h3>
         <p className="remote-video-state">
           {!video.ready ? t("Loading the paired script…") : syncLabel}
         </p>
-        <button type="button" className="btn btn-secondary remote-close" onClick={() => void send({ target: "video", action: "close" })}>
-          {t("Close video")}
-        </button>
       </div>
 
       <div className="remote-scrubber">
@@ -81,12 +84,12 @@ export function RemoteVideoControls({ video, position, send }: Props) {
         </button>
         <button
           type="button"
-          className="btn btn-primary remote-play"
+          className={`btn remote-play ${video.playing ? "btn-secondary" : "btn-start"}`}
           disabled={!video.ready}
           aria-label={video.playing ? t("Pause") : t("Play")}
           onClick={() => void send({ target: "video", action: video.playing ? "pause" : "play" })}
         >
-          {video.playing ? <PauseIcon size={28} /> : <PlayIcon size={28} />}
+          {video.playing ? <PauseIcon size={24} /> : <PlayIcon size={24} />}
         </button>
         <button
           type="button"
@@ -100,11 +103,11 @@ export function RemoteVideoControls({ video, position, send }: Props) {
         </button>
       </div>
 
-      <div className="remote-audio">
-        <div className="remote-volume">
+      <div className="control-row remote-volume">
+        <span className="control-row-label" aria-hidden="true">{t("Volume")}</span>
         <button
           type="button"
-          className="icon-button remote-mute"
+          className="icon-button btn-quiet remote-mute"
           aria-pressed={video.muted}
           aria-label={video.muted ? t("Unmute video") : t("Mute video")}
           title={video.muted ? t("Unmute video") : t("Mute video")}
@@ -112,28 +115,28 @@ export function RemoteVideoControls({ video, position, send }: Props) {
         >
           {video.muted ? <VolumeMutedIcon /> : <VolumeIcon />}
         </button>
-        <label className="visually-hidden" htmlFor="remote-volume">{t("Video volume")}</label>
         <RangeInput
           id="remote-volume"
           min={0}
           max={100}
           step={5}
+          aria-label={t("Video volume")}
           value={volume.draft ?? Math.round(video.volume * 100)}
           aria-valuetext={t("{n}%", { n: volume.draft ?? Math.round(video.volume * 100) })}
           onChange={(event) => volume.change(Number(event.target.value))}
         />
         <output className="remote-volume-value" htmlFor="remote-volume">{t("{n}%", { n: volume.draft ?? Math.round(video.volume * 100) })}</output>
-        </div>
-        <label className="remote-rate">
-          <span>{t("Speed")}</span>
-          <select value={String(video.rate)} aria-label={t("Video playback speed")} disabled={!video.ready} onChange={(event) => void send({ target: "video", action: "rate", value: Number(event.target.value) })}>
-            {!RATES.includes(video.rate) && <option value={String(video.rate)}>{t("{rate}x", { rate: video.rate })}</option>}
-            {RATES.map((rate) => <option key={rate} value={String(rate)}>{t("{rate}x", { rate })}</option>)}
-          </select>
-        </label>
       </div>
 
-      <div className="remote-source">
+      <div className="control-row">
+        <label className="control-row-label" htmlFor="remote-rate">{t("Speed")}</label>
+        <select id="remote-rate" value={String(video.rate)} aria-label={t("Video playback speed")} disabled={!video.ready} onChange={(event) => void send({ target: "video", action: "rate", value: Number(event.target.value) })}>
+          {!RATES.includes(video.rate) && <option value={String(video.rate)}>{t("{rate}x", { rate: video.rate })}</option>}
+          {RATES.map((rate) => <option key={rate} value={String(rate)}>{t("{rate}x", { rate })}</option>)}
+        </select>
+      </div>
+
+      <div className="control-row control-row-stack remote-source">
         <SegmentedChoice
           className="remote-source-choice"
           label={t("Motion source")}
@@ -141,7 +144,7 @@ export function RemoteVideoControls({ video, position, send }: Props) {
           options={motionSourceOptions(Boolean(video.has_script))}
           onChange={(next) => void send({ target: "video", action: "source", source: next })}
         />
-        <p className="remote-source-note">{motionSourceNote(source)}</p>
+        <p className="hint">{motionSourceNote(source)}</p>
       </div>
     </section>
   );
