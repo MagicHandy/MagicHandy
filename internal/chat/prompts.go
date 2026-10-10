@@ -175,7 +175,7 @@ func contractInstructions(capabilities Capabilities) string {
 		return text
 	}
 	if capabilities.MotionMode == MotionModeCreativeV2 {
-		text := creativeV2Contract
+		text := creativeV2ReachGuide + "\n\n" + creativeV2Contract
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()
 		}

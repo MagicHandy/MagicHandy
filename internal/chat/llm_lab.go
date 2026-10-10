@@ -27,10 +27,16 @@ range_ceiling_percent optionally limits the widest span within the outer band: z
 Optional lab controls: variation_mode is "waves" (the original smooth spectral envelope) or "drift" (seeded correlated irregular variation). Neither changes the band or speed; both eventually repeat with the score. turn_softness_percent 0..100 redistributes travel symmetrically, from the original cosine at 0 to longer, gentler turnarounds at 100. cadence_hold_percent 0..100 moves from compensating stroke length to keeping a steadier beat as length changes. A higher cadence hold may reduce effective mean pace; do not change speed to compensate unless asked. These are hypotheses, not proven physical improvements. Omitted controls remain unchanged.
 Always preserve the distinction between range, pace, and timing of variation.`
 
+// WithoutCreativeV2ReachGuide returns a Creative v2 prompt as it was before the
+// shared reach guide, so evaluation tools can reproduce that baseline.
+func WithoutCreativeV2ReachGuide(prompt string) string {
+	return strings.TrimPrefix(prompt, creativeV2ReachGuide+"\n\n")
+}
+
 // LLMLabPrompts isolates experimental control interfaces from production prompting.
 func LLMLabPrompts() map[string]string {
 	return map[string]string{
-		"creative_v2":         labPlanningContextGuide + creativeV2Contract + "\n\n" + depthFrame,
+		"creative_v2":         creativeV2ReachGuide + "\n\n" + labPlanningContextGuide + creativeV2Contract + "\n\n" + depthFrame,
 		"layered":             labPlanningContextGuide + layeredContract + "\n\n" + depthFrame,
 		LabMethodStrokeEnds:   labPlanningContextGuide + strokeEndsContract + "\n\n" + depthFrame,
 		LabMethodGroove:       labPlanningContextGuide + grooveContract + "\n\n" + depthFrame,
