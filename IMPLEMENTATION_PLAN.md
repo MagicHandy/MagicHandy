@@ -124,6 +124,18 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-10-09 Creative v2 edits written without the response schema
+
+External OpenAI-compatible servers dropped the response schema that the
+llama.cpp provider sent in llama-server's own extension form, and the
+unconstrained model combined controls in one edit item, which the parser
+rejected. The provider now sends the standard `json_schema` form, which
+llama-server constrains identically, and the Creative v2 parser accepts the two
+shapes with one reading (several controls in one item, or an object of
+controls). Every other validation, the single generation and the absence of
+repair or fallback are unchanged. See
+[the investigation](docs/creative-v2-unconstrained-edits-review-2026-10-09.md).
+
 ### 2026-10-03 Creative v2 response rejection investigation
 
 A reported greeting failure led to field-specific Creative v2 validation

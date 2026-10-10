@@ -34,13 +34,52 @@ func TestCreativeV2PartialEditsAndRejectInvalidTransactions(t *testing.T) {
 		`{"edits":[{"inertia_percent":1.5}],"reply":"fraction"}`,
 		`{"edits":[{"sweep":{"faster_direction":"up","contrast_percent":40}}],"reply":"bad enum"}`,
 		`{"edits":[{"inertia_percent":20},{"inertia_percent":40}],"reply":"duplicate"}`,
-		`{"edits":[{"inertia_percent":20,"variation_percent":40}],"reply":"two groups in one item"}`,
+		`{"edits":[{"inertia_percent":20,"variation_percent":40},{"inertia_percent":40}],"reply":"duplicate across items"}`,
 		`{"edits":[{"seed":25}],"reply":"model seed"}`,
+		`{"edits":{"inertia_percent":20,"seed":25},"reply":"model seed in an object"}`,
+		`{"edits":"faster","reply":"not edits"}`,
 	} {
 		_, rejected, _, err := ParseCreativeV2Reply(raw, s, limits)
 		if err == nil || !reflect.DeepEqual(s, rejected) {
 			t.Fatalf("invalid transaction %s: %v", raw, err)
 		}
+	}
+}
+
+// A server that ignores the response schema lets the model write several
+// controls in one item, or an object of controls. These are local Gemma 12B
+// replies written without the schema, the reported "exactly one control group"
+// rejection. Items apply together, so each has the same reading as one control
+// per item; a group field outside its group still has no single reading.
+func TestCreativeV2AcceptsEditsWrittenWithoutTheSchema(t *testing.T) {
+	s := FreshCreativeV2Score(40)
+	limits := config.DefaultSettings().Motion
+	limits.SpeedMinPercent, limits.SpeedMaxPercent = 10, 80
+	for _, tc := range []struct{ unconstrained, canonical string }{
+		{`{"action":"update","edits":[{"speed_percent":50,"inertia_percent":40}],"reply":"Faster, with more inertia."}`,
+			`{"action":"update","edits":[{"speed_percent":50},{"inertia_percent":40}],"reply":"Faster, with more inertia."}`},
+		{`{"action":"update","edits":[{"focus":{"mix_percent":40,"position_percent":95,"roam_percent":0,"width_percent":25},"speed_percent":45}],"reply":"Faster, near the tip."}`,
+			`{"action":"update","edits":[{"speed_percent":45},{"focus":{"position_percent":95,"width_percent":25,"mix_percent":40,"roam_percent":0}}],"reply":"Faster, near the tip."}`},
+		{`{"action":"update","edits":[{"speed_percent":50,"variation_percent":80},{"rebounds":{"count":2,"retained_width_percent":60}}],"reply":"Faster and freer, with rebounds."}`,
+			`{"action":"update","edits":[{"speed_percent":50},{"variation_percent":80},{"rebounds":{"count":2,"retained_width_percent":60}}],"reply":"Faster and freer, with rebounds."}`},
+		{`{"action":"update","edits":{"sweep":{"contrast_percent":40,"faster_direction":"tip"},"variation_percent":85},"reply":"Quicker toward the tip."}`,
+			`{"action":"update","edits":[{"sweep":{"faster_direction":"tip","contrast_percent":40}},{"variation_percent":85}],"reply":"Quicker toward the tip."}`},
+		{`{"action":"update","edits":[{},{"speed_percent":30}],"reply":"Slower."}`,
+			`{"action":"update","edits":[{"speed_percent":30}],"reply":"Slower."}`},
+		{`{"action":"none","edits":{},"reply":"Holding."}`, `{"action":"none","edits":[],"reply":"Holding."}`},
+	} {
+		want, wantNext, wantChanged, err := ParseCreativeV2Reply(tc.canonical, s, limits)
+		if err != nil {
+			t.Fatalf("canonical %s: %v", tc.canonical, err)
+		}
+		got, next, changed, err := ParseCreativeV2Reply(tc.unconstrained, s, limits)
+		if err != nil || !reflect.DeepEqual(next, wantNext) || !reflect.DeepEqual(changed, wantChanged) || got.Reply != want.Reply || got.continuousAction != want.continuousAction {
+			t.Fatalf("%s: %v\n got %+v %v\nwant %+v %v", tc.unconstrained, err, next, changed, wantNext, wantChanged)
+		}
+	}
+	_, rejected, _, err := ParseCreativeV2Reply(`{"action":"update","edits":[{"mix_percent":0,"range":{"min_percent":5,"max_percent":95}},{"speed_percent":20}],"reply":"Slower, the whole length."}`, s, limits)
+	if err == nil || !strings.Contains(err.Error(), "mix_percent") || !reflect.DeepEqual(s, rejected) {
+		t.Fatalf("a focus field outside its group was accepted: %v", err)
 	}
 }
 

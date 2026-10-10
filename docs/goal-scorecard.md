@@ -1,5 +1,18 @@
 # Goal Scorecard
 
+## 2026-10-09 — Creative v2 edits written without the response schema
+
+The llama.cpp provider sends its response schema in the standard `json_schema`
+form, and the Creative v2 parser accepts edit items that combine controls. No
+dependency, resident state, motion source or UI asset is added. See
+[the investigation](creative-v2-unconstrained-edits-review-2026-10-09.md).
+
+Windows amd64, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -buildvcs=false
+-ldflags -w`: a clean archive of alpha.57 (`eb7f7c50`) measures 23,214,080 B
+and this change 23,217,664 B (+3,584 B). The embedded UI is unchanged. The core
+remains below the 30 MB budget; existing RSS and UI-bundle advisories remain in
+effect.
+
 ## 2026-10-07 — Handy Cloud connection-key validation
 
 Cloud prerequisite validation now follows the current API v3 connection-key
