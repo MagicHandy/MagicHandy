@@ -60,8 +60,8 @@ export function EasyAISetup({ choice, combine, localAvailable, connection, setti
           <p className="hint form-row-note">{t("Accounts and keys are saved immediately. Model choices apply when you continue.")}</p>
         </>}>
       <SetupChoice title={t("Local-only AI")} detail={t("Keep chat and motion planning on this computer. MagicHandy picks a model that fits.")} selected={choice === "local"} disabled={locked} onSelect={() => select("local")} />
-      <SetupChoice title={t("ChatGPT")} detail={t("Connect your ChatGPT plan, with the option to keep chat local.")} selected={choice === "chatgpt"} disabled={locked} onSelect={() => select("chatgpt")} />
-      <SetupChoice title={t("API / Cloud")} detail={t("Use advanced cloud models with a provider API key and separate billing.")} selected={choice === "cloud"} disabled={locked} onSelect={() => select("cloud")} />
+      <SetupChoice title={t("ChatGPT")} badge={t("Experimental")} detail={t("Connect your ChatGPT plan, with the option to keep chat local.")} selected={choice === "chatgpt"} disabled={locked} onSelect={() => select("chatgpt")} />
+      <SetupChoice title={t("API / Cloud")} badge={t("Experimental")} detail={t("Use advanced cloud models with a provider API key and separate billing.")} selected={choice === "cloud"} disabled={locked} onSelect={() => select("cloud")} />
     </SetupChoiceGroup>
   </section>;
 }

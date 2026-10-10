@@ -2939,5 +2939,7 @@
   "{n} mm": "{n} mm",
   "Connected": "Conectado",
   "Access paths": "Rutas de acceso",
-  "Set up network access": "Configurar el acceso por red"
+  "Set up network access": "Configurar el acceso por red",
+  "Experimental": "Experimental",
+  "External providers": "Proveedores externos"
 }

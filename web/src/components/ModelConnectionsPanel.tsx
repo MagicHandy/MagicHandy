@@ -113,7 +113,7 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
       {planningConnection && planningConnection.id !== conversationID && editor(planningConnection)}
       {(planner.provider === "local" || planner.connection_id === "local") && conversationID !== "local" && localEditor}
     </section>
-    <details className="group cloud-motion-settings"><summary>{t("Named connections")}</summary>
+    <details className="group cloud-motion-settings"><summary>{t("External providers")}</summary>
       <DismissibleNotice id="model-named-connections" className="model-help"><p className="hint">{t("Add another configuration for a provider, or rename an existing connection. The provider identity always stays visible in model choices.")}</p></DismissibleNotice>
       {connections.map(connection => <label className="field" key={connection.id}><span className="label">{translateKnown(modelProviderNames[connection.provider]) + " · " + connection.id}</span><input aria-label={t("Connection name") + " · " + connection.id} disabled={locked} value={connection.name} onChange={event => updateConnection(connection, { name: event.target.value })} /></label>)}
       <label className="field"><span className="label">{t("Configure named connection")}</span><select value={managedID} disabled={locked} onChange={event => setManagedID(event.target.value)}><option value="">{t("Choose a connection")}</option>{connections.map(connection => <option key={connection.id} value={connection.id}>{modelConnectionLabel(connection)}</option>)}</select></label>

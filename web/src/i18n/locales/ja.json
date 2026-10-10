@@ -2939,5 +2939,7 @@
   "{n} mm": "{n} mm",
   "Connected": "接続済み",
   "Access paths": "アクセス経路",
-  "Set up network access": "ネットワークアクセスを設定"
+  "Set up network access": "ネットワークアクセスを設定",
+  "Experimental": "試験運用",
+  "External providers": "外部プロバイダー"
 }

@@ -2939,5 +2939,7 @@
   "{n} mm": "{n} mm",
   "Connected": "Connected",
   "Access paths": "Access paths",
-  "Set up network access": "Set up network access"
+  "Set up network access": "Set up network access",
+  "Experimental": "Experimental",
+  "External providers": "External providers"
 }

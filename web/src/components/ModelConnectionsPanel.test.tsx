@@ -118,7 +118,7 @@ describe("saved model connection editing", () => {
     vi.spyOn(api, "modelConnectionKeyStatus").mockResolvedValue({ key_set: false });
     render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id } as PublicSettings["llm"]} />);
     await screen.findByText("Ready");
-    fireEvent.click(screen.getByText("Named connections"));
+    fireEvent.click(screen.getByText("External providers"));
     fireEvent.click(screen.getByRole("button", { name: "Add OpenRouter" }));
     expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue(chatgpt.id);
     expect(screen.getByRole("combobox", { name: "Autopilot model" })).toHaveValue("conversation");

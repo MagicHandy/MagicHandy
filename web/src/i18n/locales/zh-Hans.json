@@ -2939,5 +2939,7 @@
   "{n} mm": "{n} mm",
   "Connected": "已连接",
   "Access paths": "访问路径",
-  "Set up network access": "设置网络访问"
+  "Set up network access": "设置网络访问",
+  "Experimental": "实验性",
+  "External providers": "外部提供方"
 }
