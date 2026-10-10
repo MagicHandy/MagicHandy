@@ -98,4 +98,11 @@ describe("visualizer drawings", () => {
     const mini = render(<MotionVisualizer motion={running()} kind={kind} mini />);
     expect(mini.container.querySelector(".visualizer.mini .viz-device")).toBeInTheDocument();
   });
+
+  it("keeps the original Handy's status-bar drawing inside its own shapes", () => {
+    const { container } = render(<MotionVisualizer motion={running("handy_original")} device={{ owner: "cloud_rest" }} mini />);
+    // The travel line belongs to the detailed form; at 28 px it ran past the sleeve.
+    expect(container.querySelector(".viz-track")).not.toBeInTheDocument();
+    expect(container.querySelector(".viz-carriage .viz-sleeve")).toBeInTheDocument();
+  });
 });

@@ -24,8 +24,6 @@ export function OriginalHandyFront(props: DrawingProps) {
         <path className="viz-body viz-body-mini" d={BODY} />
         <path className="viz-panel" d={PANEL} />
         <circle className="viz-device-led" cx="104" cy="140" r="11" />
-        <path className="viz-track" d="M38 62V158" />
-        {props.active && <path className="viz-stroke-range" d={`M38 ${y(props.max)}V${y(props.min)}`} />}
         <g className="viz-carriage" style={carriage}>
           <rect className="viz-sleeve" x="16" y="-48" width="44" height="96" rx="14" />
           <rect className="viz-band" x="10" y="-17" width="56" height="34" rx="6" />
