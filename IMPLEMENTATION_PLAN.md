@@ -14,8 +14,10 @@ See [ADR 0039](docs/decisions/0039-hosted-model-connections.md) and the
 
 The [latency and motion follow-up](docs/cloud-motion-latency-review-2026-10-08.md)
 keeps existing modes after comparing steering, adaptive streaming, numeric
-stroke vocabularies and phrase composition. Hosted Creative v2 gets explicit
-reach guidance; local prompts keep their original bytes. GPT-6 Sol / Low is
+stroke vocabularies and phrase composition. Creative v2 gets explicit reach
+guidance, first for hosted models and since October 9 for local models too,
+which it raised from 18/24 to 24/24 on the same steering fixture
+([evidence](docs/creative-v2-shared-reach-guide-2026-10-09.md)). GPT-6 Sol / Low is
 the measured setup recommendation. Account-supported reasoning and timed
 readiness appear in setup/settings. Strict hosted action schemas now work in
 the real production chat path, and lazy credential initialization removes the
@@ -40,6 +42,15 @@ backup step in both Easy and Custom flows. The existing install plan can add a
 managed backup without replacing hosted Chat; an existing Ollama or llama.cpp
 server can also be used. Finish checks a real local response, with Stop and
 controller takeover cancellation. Local-only setup and inference stay unchanged.
+
+The October 9 follow-ups route technical-context Autopilot in Creative v2 and
+Layered through the shared continuous planner, shown motion state only, so it can
+develop pace and outer reach within saved limits instead of holding every
+session at its starting pace; a pace set through chat is kept while it is recent
+([review](docs/technical-autopilot-review-2026-10-09.md)). Compatible endpoints
+on this computer with nothing declared, such as LM Studio or an MLX server, get
+the standard `json_schema` form and the app's sampling, so local models are
+constrained to the contract.
 
 The September 25 [motion naturalness review](docs/motion-naturalness-review-2026-09-24.md)
 removes Autopilot's word-based continuation limits. Creative v2 and Layered

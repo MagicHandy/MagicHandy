@@ -150,13 +150,6 @@ func technicalStartingDecision(input modes.DecisionInput, settings config.Settin
 		speed = max(settings.Motion.SpeedMinPercent, min(25, settings.Motion.SpeedMaxPercent))
 	}
 	segment := modes.Segment{PatternID: input.CurrentPatternID, Flow: motion.CloneFlowSpec(input.CurrentFlow), Dynamic: input.CurrentDynamic, SpeedPercent: speed, AreaFocus: input.CurrentAreaFocus}
-	if segment.Flow == nil && continuousChatMode(settings.LLM.MotionGenerationMode) {
-		flow := chat.FreshLayeredScore(speed)
-		if settings.LLM.MotionGenerationMode == config.LLMMotionModeCreativeV2 {
-			flow = chat.FreshCreativeV2Score(speed)
-		}
-		segment.Flow = &flow
-	}
 	return modes.Decision{Segment: segment, Next: modes.TimingNormal, Variability: modes.VariabilitySettled}
 }
 
@@ -220,10 +213,6 @@ func (s *Server) cloudComposedCandidate(ctx context.Context, input modes.Decisio
 		return modes.Decision{}, err
 	}
 	evidence := technicalMotionEvidence(input, local, settings)
-	if continuousChatMode(settings.LLM.MotionGenerationMode) {
-		settings.LLM = planning
-		return composeCloudFlow(ctx, provider, settings, local, evidence)
-	}
 	if settings.LLM.MotionGenerationMode != config.LLMMotionModeDynamic {
 		return modes.Decision{}, &llm.CloudError{Kind: "unsupported"}
 	}
@@ -248,32 +237,6 @@ func (s *Server) cloudComposedCandidate(ctx context.Context, input modes.Decisio
 	candidate.Next = local.Next
 	candidate.Variability = local.Variability
 	return candidate, err
-}
-
-func composeCloudFlow(ctx context.Context, provider llm.Provider, settings config.Settings, local modes.Decision, evidence string) (modes.Decision, error) {
-	if local.Segment.Flow == nil {
-		return modes.Decision{}, &llm.CloudError{Kind: "incomplete"}
-	}
-	method := settings.LLM.MotionGenerationMode
-	prompt := chat.LLMLabPrompts()[method] + "\nThis is technical motion composition. Refine the supplied complete semantic proposal. Preserve its speed and position envelope. Return a brief technical reply and edits; an empty edit means keep the proposed score. No dialogue, personal data, tools, or device commands."
-	request := llm.ChatRequest{Model: settings.LLM.Model, MaxTokens: 1536, ReasoningMode: "off", Messages: []llm.Message{{Role: "system", Content: prompt}, {Role: "user", Content: "Current score and validated technical proposal: " + evidence}}, JSONSchema: chat.LLMLabSchema(method, settings.Motion)}
-	raw, err := provider.StreamChat(ctx, request, nil)
-	if err != nil {
-		return modes.Decision{}, err
-	}
-	_, after, changed, err := chat.ParseLLMLab(raw, method, *local.Segment.Flow, settings.Motion)
-	if err != nil {
-		return modes.Decision{}, &llm.CloudError{Kind: "incomplete"}
-	}
-	if after.SpeedPercent != local.Segment.SpeedPercent || after.MinPercent != local.Segment.Flow.MinPercent || after.MaxPercent != local.Segment.Flow.MaxPercent {
-		return modes.Decision{}, &llm.CloudError{Kind: "incomplete"}
-	}
-	if len(changed) == 0 {
-		return modes.Decision{Hold: true, Abstain: true, Next: modes.TimingNormal}, nil
-	}
-	local.Segment.Flow = motion.CloneFlowSpec(&after)
-	local.Say = ""
-	return local, nil
 }
 
 func (s *Server) cloudPatternCandidate(ctx context.Context, input modes.DecisionInput, local modes.Decision, settings config.Settings) (modes.Decision, error) {

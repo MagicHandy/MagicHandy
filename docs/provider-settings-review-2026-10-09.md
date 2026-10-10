@@ -117,8 +117,10 @@ Autopilot retains its independently assigned provider and existing failure polic
 
 The retry remains in the original chat turn and canonical history. It uses the
 original user request and conversation, the common saved prompt/persona profile,
-and the normal local model contract and budgets. Hosted Creative v2 reach guidance
-is excluded, as verified by captured request bodies. It takes the existing local
+and the normal local model contract and budgets, rebuilt rather than copied from
+the hosted request, as verified by captured request bodies. (The Creative v2 reach
+guidance was hosted-only here; since the October 9 amendment both contracts carry
+it once.) It takes the existing local
 request lane after releasing the hosted lane. It makes one local generation and
 disables malformed-output repair/salvage for this attempt. Both results still go
 through the existing parser, capability checks, motion engine and publication
@@ -167,6 +169,29 @@ with `MAGICHANDY_LIVE_MODEL`, the existing host auth directory in
 `MAGICHANDY_HOSTED_DATA_DIR` for ChatGPT, and `MAGICHANDY_EXPERIMENT_CAPTURE`
 pointing to an ignored report path. Do not commit captures, auth data, prompts from private
 history, or raw provider output.
+
+## Local compatible endpoints (amendment)
+
+A macOS user running an MLX model reported Creative v2 rejections ("each Creative
+v2 edit must name exactly one control group"). Servers on the user's own
+computer, such as LM Studio, MLX servers and llama-server, are natural
+"compatible" connections, but with automatic output and nothing declared the
+adapter sent no schema and no sampling, so the model wrote the contract
+unconstrained. A compatible endpoint on a loopback host, left on automatic
+output with no declared parameters, now gets the standard non-strict
+`json_schema` form with the original domain schema, plus the app's temperature,
+top_p and token limit. A 400 from that request reports the capability error,
+which now asks for another output mode. Declared parameters, explicit modes,
+remote endpoints and OpenRouter are unchanged.
+
+The production Creative v2 chat path ran 14 requests twice through a compatible
+connection to Ollama's OpenAI-compatible endpoint with a non-thinking local model
+(`huihui_ai/granite4.1-abliterated:8b`). The previous automatic default produced
+6/28 valid replies: 11 combined several controls in one edit item (the reported
+error), 4 omitted the action and 7 were not valid JSON. The new default produced
+28/28. Thinking models on a local server should have reasoning switched off in
+the server, since this adapter sends no reasoning extension. Reports are retained
+under `.scratch/compatible-local-20261009/`.
 
 ## Validation and scope
 

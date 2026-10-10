@@ -45,7 +45,15 @@ whole-message context budgets, with enabled persona and memory. Technical
 context excludes conversation, persona, memory, custom pattern IDs and custom
 anchor labels. It includes semantic motion, saved limits and recent numeric
 state. The UI explains that technical Autopilot varies current motion without
-interpreting the conversation. By default, refusals and malformed hosted output
+interpreting the conversation. An October 9 amendment runs technical Autopilot in
+Creative v2 and Layered through the same continuous planner as conversation
+context, shown motion state only: the built-in behavior profile and utility
+voice, without conversation, persona, memories, reaction style or spoken lines.
+It may change pace and outer reach within saved limits. Recent speeds note which
+were set through chat, without any words, and a chat-set pace is kept while it
+remains in the three-minute speed history. Pattern, Decisions and Dynamic
+technical planning are unchanged ([evidence](../technical-autopilot-review-2026-10-09.md)).
+By default, refusals and malformed hosted output
 are held without repair, rewriting, rerouting or a local fallback. The October 9
 user-requested amendment permits an explicit `retry_refusal_locally` setting:
 interactive chat may make one local generation after a typed provider refusal.
@@ -70,7 +78,11 @@ library candidates or keep-current, through the existing library path.
 OpenRouter defaults to denied data collection and disabled host fallbacks, asks
 for compatible parameter support and avoids automatic transforms. Metadata and
 privacy routing requests do not guarantee content acceptance or retention.
-Compatible endpoints send only capabilities the user declares. Remote endpoints
+Compatible endpoints send only capabilities the user declares. Amended October 9:
+a compatible endpoint on this computer left on automatic output with nothing
+declared, such as LM Studio, an MLX server or llama-server, gets the standard
+non-strict `json_schema` form and the app's temperature, top_p and token limit;
+a rejected request reports the capability error. Remote endpoints
 require HTTPS; loopback endpoints may use HTTP. Inference does not follow redirects.
 
 Request lanes are bounded and independent per connection. Stop cancels all
@@ -79,8 +91,10 @@ late results, including a provider that ignores cancellation. A provider outage
 does not remove the global Stop or acquire hardware control.
 
 The October 8 latency follow-up keeps Creative v2 as the existing user-facing
-mode. Additional reach guidance is selected only for hosted models; local
-production/Lab contracts and one-call inference remain unchanged. Reasoning
+mode. Additional reach guidance was first selected only for hosted models. An
+October 9 amendment applies it to every Creative v2 contract, because it raised
+local steering as well ([evidence](../creative-v2-shared-reach-guide-2026-10-09.md));
+one-call inference is unchanged. Reasoning
 effort is a connection setting and part of readiness identity. ChatGPT exposes
 account-advertised efforts; new choices prefer Low when supported. Empirical
 guidance recommends GPT-6 Sol / Low, without claiming an unverified Fast tier.

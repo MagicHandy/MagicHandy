@@ -53,9 +53,6 @@ func (s *Server) labState() llmLabState {
 	settings, _ := s.store.Snapshot()
 	settings.LLM = settings.LLM.ConversationSettings()
 	prompts := chat.LLMLabPrompts()
-	if settings.LLM.IsHosted() {
-		prompts = chat.HostedLLMLabPrompts()
-	}
 	s.lab.mu.Lock()
 	defer s.lab.mu.Unlock()
 	if s.lab.current == nil {

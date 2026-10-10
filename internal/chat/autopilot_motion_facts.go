@@ -60,6 +60,9 @@ func writeRecentSpeeds(builder *strings.Builder, context AutopilotContext) {
 	speeds := make([]string, len(steps))
 	for i, step := range steps {
 		speeds[i] = fmt.Sprintf("%d%%", step.SpeedPercent)
+		if context.Technical && step.Interactive {
+			speeds[i] += " (set in chat)"
+		}
 	}
 	fmt.Fprintf(builder, "Your recent stretch speeds, oldest to newest, over the last %s: %s.\n",
 		formatSessionSpan(steps[0].SecondsAgo), strings.Join(speeds, ", "))
@@ -80,6 +83,27 @@ func writeContinuousAutopilotContext(builder *strings.Builder, context Autopilot
 	level := normalizedMotionChangeLevel(context.MotionChangeLevel)
 	fmt.Fprintf(builder, "Motion change preference: %d/8 (%s). This is a preference for session development, not a mandatory change schedule.\n", level, motionChangeBias(level))
 	writeRecentSpeeds(builder, context)
+	if context.Technical {
+		// Without the conversation, a pace the person chose in chat is the only
+		// sign of what they want; the guidance below that reads their words
+		// cannot apply.
+		chosen := false
+		for i := len(context.RecentSpeeds) - 1; i >= 0 && !chosen; i-- {
+			if step := context.RecentSpeeds[i]; step.Interactive {
+				chosen = true
+				fmt.Fprintf(builder, "Pace: the person set the pace to %d%% through chat %s ago. Their words are not shared with this turn, so treat that pace as their choice, possibly a lasting one: keep speed_percent within a few points of %d%%, and develop the motion through texture, reach and location instead.\n",
+					step.SpeedPercent, formatSessionSpan(step.SecondsAgo), step.SpeedPercent)
+			}
+		}
+		if !chosen {
+			fmt.Fprintf(builder, "Pace: use the width of the saved %d-%d%% speed range across the session rather than settling into one comfortable band. Easing down is what makes the next climb land; several stretches in a row at nearly the same speed_percent read as flat.\n",
+				context.SpeedMinPercent, context.SpeedMaxPercent)
+		}
+		if context.MotionFeedback != "" {
+			fmt.Fprintf(builder, "Quality feedback: %s\n", context.MotionFeedback)
+		}
+		return
+	}
 	// Every axis collapses to one value unless the spread is asked for; the
 	// continuous modes never received the pace line the catalog modes use.
 	fmt.Fprintf(builder, "Pace: use the width of the saved %d-%d%% speed range across the session rather than settling into one comfortable band. Easing down is what makes the next climb land; several stretches in a row at nearly the same speed_percent read as flat. When they say it is too much, or say they are close and you choose to hold them off, set speed_percent within a few points of %d%% at once, not partway, and keep it there while that was less than about a minute ago. Once the pace has stayed in the lower third for a minute or two and they have said nothing new since, rebuild: raise speed_percent by about 5 points each stretch and keep rising over the following stretches until it suits the moment again. A wish for a slow pace, such as going slow to make it last, is lasting: keep pace in the lower third and vary it there until they say otherwise.\n",

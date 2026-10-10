@@ -6,7 +6,8 @@ Follow-up to [the connection/setup review](cloud-model-review-2026-10-08.md).
 ## Decision
 
 Keep the existing Creative v2 mode and shared motion engine. Add a short reach
-planning guide only for hosted models, and recommend **GPT-6 Sol with Low
+planning guide only for hosted models (amended October 9: the guide now leads
+every Creative v2 contract, see below), and recommend **GPT-6 Sol with Low
 reasoning** for a new ChatGPT connection. Preserve existing model selections.
 It was the fastest model to pass the compound production fixture in this review.
 GPT-6 Luna is a quicker simple-edit alternative, with a demonstrated compound
@@ -111,6 +112,13 @@ do not prove an improvement or rule out small differences. Local remains faster
 on this host. A discarded global-guide test passed 14/16 at warm median 1,263 ms;
 its record is retained to make the decision to isolate prompts reviewable.
 
+**October 9 amendment.** That global test used the first draft of the guide.
+With the final hosted guide, local Gemma 12B passed this steering fixture 24/24
+against 18/24 without it (three repeats each; warm medians 1,267 and 1,103 ms),
+and the repository's Creative v2 live request suite was not worse (97/102 and
+96/102). The guide now leads every Creative v2 contract, local and hosted. See
+[the shared-guide review](creative-v2-shared-reach-guide-2026-10-09.md).
+
 Module profiling also found eager Windows credential-store initialization added
 about 15 MB of local-only working set. Credential storage is now initialized on
 first actual use. A disconnected status read creates no files and loads no ACL
@@ -159,8 +167,8 @@ go run -tags magichandy_labs ./cmd/cloud-motion-review `
   -phase steering -repeats 2 -output .scratch/local-motion-review.json
 ```
 
-Use `-phase suite` for the seven-interface comparison, and
-`-hosted-guidance=false` for the original hosted baseline. The historical
+Use `-phase suite` for the seven-interface comparison, and `-reach-guide=false`
+for the baseline without the reach guide, hosted or local. The historical
 `-steering` option adds the first guide; leave it off for the final production
 guide. See [the visual-review workflow](motion-visual-review.md) for full-path
 capture and rendering.

@@ -268,10 +268,13 @@ func TestRefusalRetryRebuildsLocalMotionPrompt(t *testing.T) {
 	if !strings.Contains(stream, `"reply":"Local completion."`) || localCalls.Load() != 1 {
 		t.Fatalf("local contract failed: %s", stream)
 	}
-	guide := strings.TrimSpace(strings.TrimSuffix(chat.HostedLLMLabPrompts()["creative_v2"], chat.LLMLabPrompts()["creative_v2"]))
+	lab := chat.LLMLabPrompts()["creative_v2"]
+	guide := strings.TrimSpace(strings.TrimSuffix(lab, chat.WithoutCreativeV2ReachGuide(lab)))
 	remote, retry := <-hostedMessages, <-localMessages
-	if guide == "" || !strings.Contains(remote[0].Content, guide) || strings.Contains(retry[0].Content, guide) {
-		t.Fatal("retry carried the hosted motion guide instead of the local contract")
+	// Both stages share the reach guide; the retry rebuilds its own contract
+	// rather than appending to the hosted request's prompt.
+	if guide == "" || strings.Count(remote[0].Content, guide) != 1 || strings.Count(retry[0].Content, guide) != 1 {
+		t.Fatal("retry did not rebuild the shared Creative v2 contract")
 	}
 	assertNoRetryMotion(t, fake)
 }
