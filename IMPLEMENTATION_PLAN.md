@@ -43,6 +43,12 @@ managed backup without replacing hosted Chat; an existing Ollama or llama.cpp
 server can also be used. Finish checks a real local response, with Stop and
 controller takeover cancellation. Local-only setup and inference stay unchanged.
 
+The October 9 follow-ups route technical-context Autopilot in Creative v2 and
+Layered through the shared continuous planner, shown motion state only, so it can
+develop pace and outer reach within saved limits instead of holding every
+session at its starting pace; a pace set through chat is kept while it is recent
+([review](docs/technical-autopilot-review-2026-10-09.md)).
+
 The September 25 [motion naturalness review](docs/motion-naturalness-review-2026-09-24.md)
 removes Autopilot's word-based continuation limits. Creative v2 and Layered
 Autopilot judge the latest human lines, and live chat declares a standing wish

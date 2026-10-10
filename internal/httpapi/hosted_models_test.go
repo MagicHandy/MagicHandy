@@ -203,13 +203,53 @@ func TestTechnicalPlannerExcludesConversationAndCustomLabels(t *testing.T) {
 	}
 }
 
-func TestCloudEmptyEditsCannotStartDefaultScore(t *testing.T) {
-	provider := &scriptedLLMProvider{responses: []string{`{"reply":"Keep current","edits":{}}`}}
-	settings := config.DefaultSettings()
-	settings.LLM.MotionGenerationMode = config.LLMMotionModeLayered
-	decision, err := composeCloudFlow(t.Context(), provider, settings, technicalStartingDecision(modes.DecisionInput{}, settings), "technical")
-	if err != nil || !decision.Hold || !decision.Abstain || decision.Segment.Flow != nil {
-		t.Fatalf("empty edit started default motion: %+v, %v", decision, err)
+// Technical context in a continuous mode is shown motion state only, yet plans
+// with the same continuous Autopilot contract as the conversation policy,
+// pace and outer reach included. A chat-set speed is marked without words.
+func TestTechnicalAutopilotSharesMotionStateOnlyAndPlansPaceAndReach(t *testing.T) {
+	private := "private-conversation-persona-memory"
+	requests := make(chan []llm.Message, 1)
+	s, fake, connection := hostedFixture(t, func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Messages []llm.Message `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Error(err)
+		}
+		requests <- request.Messages
+		writeHostedFixtureReply(w, `{"edits":[{"speed_percent":55},{"range":{"min_percent":20,"max_percent":90}}],"reply":"Building up."}`)
+	})
+	session, err := s.chatLog.ActiveSessionID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.chatLog.AppendTo(session, chat.MessageRoleUser, private, "test", nil); err != nil {
+		t.Fatal(err)
+	}
+	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+		settings.Motion.SpeedMinPercent, settings.Motion.SpeedMaxPercent = 10, 80
+		settings.LLM.ConversationConnectionID = "local"
+		settings.LLM.PersonaDescription = private
+		settings.LLM.MotionPlanner = config.MotionPlannerSettings{Provider: "connection", ConnectionID: connection.ID, ContextPolicy: config.ContextTechnical}
+		settings.LLM.MotionGenerationMode = config.LLMMotionModeCreativeV2
+		return settings
+	})
+	flow := chat.FreshCreativeV2Score(30)
+	decision, err := s.autopilotDecide(t.Context(), modes.DecisionInput{CurrentFlow: &flow, CurrentSpeed: 30, SpeedMinPercent: 10, SpeedMaxPercent: 80,
+		RecentSpeeds: []modes.SpeedStep{{SpeedPercent: 40, SecondsAgo: 90}, {SpeedPercent: 30, SecondsAgo: 40, Interactive: true}}})
+	if err != nil || decision.Hold || !decision.Abstain || decision.Segment.SpeedPercent != 55 || decision.Segment.Flow == nil || decision.Segment.Flow.MinPercent != 20 || decision.Segment.Flow.MaxPercent != 90 {
+		t.Fatalf("technical plan was not accepted: %+v %v", decision, err)
+	}
+	messages := <-requests
+	var sent strings.Builder
+	for _, message := range messages {
+		sent.WriteString(message.Content)
+	}
+	if len(messages) != 2 || strings.Contains(sent.String(), private) || !strings.Contains(sent.String(), "motion state only") || !strings.Contains(sent.String(), "40%, 30% (set in chat)") {
+		t.Fatalf("technical planning shared personal context or lost motion state:\n%s", sent.String())
+	}
+	if len(fake.Commands()) != 0 {
+		t.Fatal("planning dispatched motion")
 	}
 }
 

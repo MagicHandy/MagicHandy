@@ -45,7 +45,15 @@ whole-message context budgets, with enabled persona and memory. Technical
 context excludes conversation, persona, memory, custom pattern IDs and custom
 anchor labels. It includes semantic motion, saved limits and recent numeric
 state. The UI explains that technical Autopilot varies current motion without
-interpreting the conversation. By default, refusals and malformed hosted output
+interpreting the conversation. An October 9 amendment runs technical Autopilot in
+Creative v2 and Layered through the same continuous planner as conversation
+context, shown motion state only: the built-in behavior profile and utility
+voice, without conversation, persona, memories, reaction style or spoken lines.
+It may change pace and outer reach within saved limits. Recent speeds note which
+were set through chat, without any words, and a chat-set pace is kept while it
+remains in the three-minute speed history. Pattern, Decisions and Dynamic
+technical planning are unchanged ([evidence](../technical-autopilot-review-2026-10-09.md)).
+By default, refusals and malformed hosted output
 are held without repair, rewriting, rerouting or a local fallback. The October 9
 user-requested amendment permits an explicit `retry_refusal_locally` setting:
 interactive chat may make one local generation after a typed provider refusal.

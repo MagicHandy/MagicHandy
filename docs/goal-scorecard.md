@@ -1,5 +1,17 @@
 # Goal Scorecard
 
+## 2026-10-09 — Technical-context Autopilot
+
+Technical-context Autopilot in Creative v2 and Layered uses the shared continuous
+planner. No dependency, UI asset or resident state is added; the scheduler's
+speed history gains one flag per entry. Windows amd64, Go 1.26.9,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`: 22,437,376 B with
+the shared reach guide and 22,437,888 B with this change (+512 B). A technical
+planning turn now carries the full continuous Autopilot contract: local Gemma 12B
+median 1.3 s per decision, against about 0.9 s for the earlier refinement prompt,
+which could not change pace or reach. See
+[the Autopilot review](technical-autopilot-review-2026-10-09.md).
+
 ## 2026-10-09 — Shared Creative v2 reach guide
 
 The hosted reach guide now leads the local Creative v2 contract too. Compared
