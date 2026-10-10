@@ -63,7 +63,7 @@
 [data-kind="handy-dots"] .viz-body { fill: var(--bg-inset); stroke: var(--line); stroke-width: 1; }
 [data-kind="handy-dots"] .viz-track { fill: var(--surface-2); stroke: none; }
 [data-kind="handy-dots"] .viz-stroke-range { fill: color-mix(in srgb, var(--accent) 45%, var(--bg-inset)); stroke: none; }
-[data-kind="handy-dots"] .viz-carriage { fill: var(--text); transform: none; }
+[data-kind="handy-dots"] .viz-carriage { fill: var(--text); }
 .viz-digit-on { fill: var(--text); }
 .viz-digit-off { fill: var(--surface); }
 .viz-digits-small { fill: var(--muted); }
