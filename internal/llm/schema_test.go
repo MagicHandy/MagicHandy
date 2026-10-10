@@ -40,13 +40,22 @@ func TestProviderPassesOptionalResponseSchema(t *testing.T) {
 			}
 			actual := captured["format"]
 			if kind == "llama_cpp" {
+				// The standard OpenAI form, which llama-server and other
+				// OpenAI-compatible servers all read.
 				var format struct {
-					Schema json.RawMessage `json:"schema"`
+					Type       string `json:"type"`
+					JSONSchema struct {
+						Name   string          `json:"name"`
+						Schema json.RawMessage `json:"schema"`
+					} `json:"json_schema"`
 				}
 				if err := json.Unmarshal(captured["response_format"], &format); err != nil {
 					t.Fatal(err)
 				}
-				actual = format.Schema
+				if format.Type != "json_schema" || format.JSONSchema.Name == "" {
+					t.Fatalf("response format = %s", captured["response_format"])
+				}
+				actual = format.JSONSchema.Schema
 			}
 			if string(actual) != string(schema) {
 				t.Fatalf("schema changed: %s", actual)
