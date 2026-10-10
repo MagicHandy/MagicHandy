@@ -1,5 +1,20 @@
 # Goal Scorecard
 
+## 2026-10-10 — Go 1.26.9 security toolchain
+
+With Go 1.26.8, the unchanged `govulncheck@v1.8.0 ./...` gate reported 11
+reachable Go standard-library vulnerabilities, and the packaged-executable scan
+reported 10. Raising `go.mod`, the source installer and the documented minimum
+to Go 1.26.9 makes both scans report zero reachable vulnerabilities. No
+dependency or gate was changed.
+
+Windows amd64, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`,
+built from `./cmd/magichandy`: `main` (`eb7f7c50`) measures 21,769,728 B with
+Go 1.26.8 and 21,785,088 B with this change on Go 1.26.9 (+15,360 B). Embedded
+assets are unchanged. This is a toolchain comparison; the Go 1.26.8
+measurements below remain valid for their checkpoints. No new runtime memory or
+latency claim is made, and the core remains below the 30 MB budget.
+
 ## 2026-10-09 — Creative v2 edits written without the response schema
 
 The llama.cpp provider sends its response schema in the standard `json_schema`

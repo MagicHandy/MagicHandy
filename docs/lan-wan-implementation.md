@@ -21,7 +21,7 @@ re-enabling an account does not restore its old sessions.
 
 The [release review](lan-wan-release-readiness-2026-09-19.md) records the delayed
 HTTPS request reproduction, fixes, supported deployment tests and boundaries.
-The compiler minimum is Go 1.26.8 throughout CI, release and the source installer.
+The compiler minimum is Go 1.26.9 throughout CI, release and the source installer.
 Source and exact packaged executable vulnerability scans are release gates.
 
 ## Current implementation work
