@@ -242,30 +242,18 @@
 .setup-copy > p {
   font-size: var(--fs-body);
 }
-.easy-setup-section h2,
-.easy-setup-section h3 {
+.setup-section h2,
+.setup-section h3 {
   margin: 0;
   font-size: var(--fs-heading);
 }
-.easy-setup-section > .hint-block {
+/* Inside a section, a sub-question is a section title, not a second header. */
+.setup-section h3 {
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.setup-section > .hint-block {
   margin: 0;
-}
-.hosted-setup-connection {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-}
-.hosted-setup-connection > * {
-  margin-block: 0;
-}
-.hosted-setup-connection > .btn {
-  justify-self: start;
-}
-.hosted-setup-connection .chatgpt-connection {
-  margin: 0;
-}
-.hosted-setup-connection .connected-account {
-  margin-block: 6px;
 }
 .model-response-settings {
   display: grid;
@@ -277,17 +265,31 @@
 .setup-action-reason:empty {
   display: none;
 }
-.setup-layout .easy-setup-section {
-  gap: 10px;
-  margin-top: 20px;
+/* Each setup section is a card with a header row, as in Settings. */
+.setup-layout .setup-section {
+  gap: 12px;
+  margin-top: 16px;
+  padding: 0 16px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
-.setup-body > .easy-setup-section {
-  max-width: 780px;
+.setup-layout .setup-section:first-child {
+  margin-top: 0;
 }
-.setup-layout .easy-setup-section > h2 {
-  margin-bottom: 0;
+.setup-body > .setup-section,
+.setup-body > .setup-copy {
+  max-width: 820px;
 }
-.setup-layout .easy-setup-section > h2 .hint-inline {
+.setup-layout .setup-section > h2 {
+  margin: 0 -16px 2px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+}
+/* The first rows of a card sit directly under its header rule. */
+.setup-section > h2 + .form-rows > :first-child { border-top: 0; }
+.setup-layout .setup-section > h2 .hint-inline {
   margin-inline-start: 8px;
 }
 .settings-panel .update-settings {

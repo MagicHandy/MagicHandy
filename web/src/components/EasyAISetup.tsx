@@ -2,6 +2,7 @@ import type { ModelConnection } from "../api/cloud-types";
 import type { PublicSettings } from "../api/types";
 import { t, translateKnown } from "../i18n";
 import { SetupChoice } from "./SetupChoice";
+import { SetupChoiceGroup } from "./SetupSection";
 import { HostedSetupConnection } from "./HostedSetupConnection";
 import { SavedAISetup } from "./SavedAISetup";
 
@@ -37,28 +38,30 @@ export function EasyAISetup({ choice, combine, localAvailable, connection, setti
   onReady: (ready: boolean) => void;
   editCustom: () => void;
 }) {
-  return <section className="easy-setup-section" aria-labelledby="easy-ai-title">
+  return <section className="setup-section" aria-labelledby="easy-ai-title">
     <h2 id="easy-ai-title">{t("Where should AI run?")}</h2>
-    <div className="setup-choices easy-ai-choices" role="radiogroup" aria-labelledby="easy-ai-title">
+    <SetupChoiceGroup className="easy-ai-choices" labelledBy="easy-ai-title" panel={choice === "local" ? !localAvailable && <p className="hint form-row-note">{t("Local AI is unavailable here. Continue without AI for now, or choose a cloud option.")}</p>
+      : choice === "saved" ? <SavedAISetup settings={settings} locked={locked} onReady={onReady} editCustom={editCustom} />
+        : <>
+          {choice === "cloud" && <label className="form-row"><span className="form-row-label"><strong>{t("Cloud provider")}</strong></span><select value={connection?.provider ?? "openrouter"} disabled={locked} onChange={event => setProvider(event.target.value as ModelConnection["provider"])}>
+            <option value="openrouter">{translateKnown("OpenRouter")}</option><option value="openai">{translateKnown("OpenAI API")}</option><option value="compatible">{t("Other compatible provider")}</option>
+          </select></label>}
+          {connection && <HostedSetupConnection key={connection.id} connection={connection} locked={locked} patch={patchConnection} onReady={onReady} />}
+          <label className="toggle-line form-row" data-disabled={!localAvailable || undefined}>
+            <span className="toggle"><input type="checkbox" checked={combine} disabled={locked || !localAvailable} onChange={event => setCombine(event.target.checked)} /><span className="track" aria-hidden="true" /></span>
+            <span>{t("Keep chat local; use this model for Autopilot")}<small>{!localAvailable ? t("A local AI model does not fit this computer. Use cloud only now, or configure another local server in Custom setup.") : combine ? t("Chat stays local; Autopilot varies the current motion without reading the conversation.") : t("Use this model for chat and motion. Included messages, personas and memories go to this provider.")}</small></span>
+          </label>
+          <div className="form-row-disclosures">
+            <details><summary>{t("Context sharing details")}</summary>
+              <p className="hint">{combine ? t("Chat messages, personas, and memories stay out of the cloud motion request. You can change context sharing later in Settings > Model.") : t("Included chat messages, enabled personas, and memories are sent to your selected provider. You can choose an optional local backup in the next step.")}</p>
+              {combine && <p className="hint">{t("The cloud planner follows motion settings and current movement, not the words in your conversation.")}</p>}
+            </details>
+          </div>
+          <p className="hint form-row-note">{t("Accounts and keys are saved immediately. Model choices apply when you continue.")}</p>
+        </>}>
       <SetupChoice title={t("Local-only AI")} detail={t("Keep chat and motion planning on this computer. MagicHandy picks a model that fits.")} selected={choice === "local"} disabled={locked} onSelect={() => select("local")} />
       <SetupChoice title={t("ChatGPT")} detail={t("Connect your ChatGPT plan, with the option to keep chat local.")} selected={choice === "chatgpt"} disabled={locked} onSelect={() => select("chatgpt")} />
       <SetupChoice title={t("API / Cloud")} detail={t("Use advanced cloud models with a provider API key and separate billing.")} selected={choice === "cloud"} disabled={locked} onSelect={() => select("cloud")} />
-    </div>
-    {choice === "local" && !localAvailable && <p className="hint-block">{t("Local AI is unavailable here. Continue without AI for now, or choose a cloud option.")}</p>}
-    {choice === "saved" && <SavedAISetup settings={settings} locked={locked} onReady={onReady} editCustom={editCustom} />}
-    {choice !== "local" && choice !== "saved" && <>
-      {choice === "cloud" && <label className="field"><span className="label">{t("Cloud provider")}</span><select value={connection?.provider ?? "openrouter"} disabled={locked} onChange={event => setProvider(event.target.value as ModelConnection["provider"])}>
-        <option value="openrouter">{translateKnown("OpenRouter")}</option><option value="openai">{translateKnown("OpenAI API")}</option><option value="compatible">{t("Other compatible provider")}</option>
-      </select></label>}
-      {connection && <HostedSetupConnection key={connection.id} connection={connection} locked={locked} patch={patchConnection} onReady={onReady} />}
-      <h3>{t("Combine local and cloud models?")}</h3>
-      <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={combine} disabled={locked || !localAvailable} onChange={event => setCombine(event.target.checked)} /><span className="track" aria-hidden="true" /></span><span>{t("Keep chat local; use this model for Autopilot")}</span></label>
-      <p className="hint-block">{combine ? t("Chat stays local; Autopilot varies the current motion without reading the conversation.") : t("Use this model for chat and motion. Included messages, personas and memories go to this provider.")}</p>
-      {!localAvailable && <p className="hint-block">{t("A local AI model does not fit this computer. Use cloud only now, or configure another local server in Custom setup.")}</p>}
-      <details><summary>{t("Context sharing details")}</summary>
-        <p className="hint-block">{combine ? t("Chat messages, personas, and memories stay out of the cloud motion request. You can change context sharing later in Settings > Model.") : t("Included chat messages, enabled personas, and memories are sent to your selected provider. You can choose an optional local backup in the next step.")}</p>
-        {combine && <p className="hint-block">{t("The cloud planner follows motion settings and current movement, not the words in your conversation.")}</p>}
-      </details>
-    </>}
+    </SetupChoiceGroup>
   </section>;
 }

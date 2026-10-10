@@ -234,7 +234,7 @@ describe("SetupRoute", () => {
 
     expect(screen.getByText(/opens only on this computer/i)).toBeVisible();
     expect(screen.queryByRole("radio", { name: /^Public/ })).not.toBeInTheDocument();
-    const reveal = screen.getByRole("button", { name: "Use MagicHandy from a phone or another computer" });
+    const reveal = screen.getByRole("checkbox", { name: /^Set up network access/ });
     await waitFor(() => expect(reveal).toBeEnabled());
     fireEvent.click(reveal);
     expect(screen.getByRole("radio", { name: /^Local only/ })).toBeChecked();
@@ -245,7 +245,7 @@ describe("SetupRoute", () => {
     vi.spyOn(api, "discoverInternet").mockResolvedValue({ public_ip: "8.8.8.8", terms_url: "https://letsencrypt.org/documents/test.pdf", ip_error: false, ca_error: false, external_port: 443 });
     render(<SetupRoute />);
     await startCustomSetup();
-    const reveal = screen.getByRole("button", { name: "Use MagicHandy from a phone or another computer" });
+    const reveal = screen.getByRole("checkbox", { name: /^Set up network access/ });
     await waitFor(() => expect(reveal).toBeEnabled());
     fireEvent.click(reveal);
     fireEvent.click(screen.getByRole("radio", { name: /^Public/ }));

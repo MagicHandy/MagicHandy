@@ -786,12 +786,12 @@ export function SetupRoute() {
           {error && <p className="form-status setup-error" role="alert">{error}</p>}
         </div>
 
-        <div className="setup-action-reason" role="status">
-          {readOnly ? t("Take control to change setup.") : !backendOnline ? t("The backend is offline. Setup changes are unavailable.") : currentStep === "easy" && !easyAIReady ? t("Check a model to continue.") : currentStep === "backup" && backupChoice === null ? t("Choose whether to set up a local backup.") : currentStep === "backup" && backupChoice && !backupModelReady ? t("Choose a local model to continue.") : null}
-        </div>
         <footer className="setup-actions">
           <button type="button" className="btn btn-secondary" disabled={step === 0 || installationActive || Boolean(busy)} onClick={() => setStep((current) => current - 1)}>{t("Back")}</button>
           <span className="setup-action-spacer" />
+          <div className="setup-action-reason" role="status">
+            {readOnly ? t("Take control to change setup.") : !backendOnline ? t("The backend is offline. Setup changes are unavailable.") : currentStep === "easy" && !easyAIReady ? t("Check a model to continue.") : currentStep === "backup" && backupChoice === null ? t("Choose whether to set up a local backup.") : currentStep === "backup" && backupChoice && !backupModelReady ? t("Choose a local model to continue.") : null}
+          </div>
           {step < steps.length - 1 && currentStep !== "install" && currentStep !== "access" && currentStep !== "easy" && currentStep !== "welcome" && currentStep !== "backup" && <button type="button" className="btn btn-quiet" disabled={installationActive || Boolean(busy)} onClick={skipStep}>{t("Skip for now")}</button>}
           {step < steps.length - 1 ? (
             <button type="button" className="btn btn-primary" disabled={locked || installationActive || !currentStepReady || (currentStep === "install" && !installationReady)} onClick={continueStep}>{busy === "continue" ? t("Saving...") : ((currentStep === "easy" && !hostedChat) || (currentStep === "backup" && mode === "easy")) && easyNeedsInstall ? t("Install and continue") : t("Continue")}</button>

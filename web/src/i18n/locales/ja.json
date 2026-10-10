@@ -2936,5 +2936,8 @@
   "Positive delays motion; negative advances it. A change during playback requires Play again.": "正の値は動作を遅らせ、負の値は動作を早めます。再生中に変更した場合は、もう一度再生してください。",
   "Now playing": "再生中",
   "Volume": "音量",
-  "{n} mm": "{n} mm"
+  "{n} mm": "{n} mm",
+  "Connected": "接続済み",
+  "Access paths": "アクセス経路",
+  "Set up network access": "ネットワークアクセスを設定"
 }

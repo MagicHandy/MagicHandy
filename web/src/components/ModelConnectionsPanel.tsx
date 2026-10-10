@@ -119,8 +119,8 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
       <label className="field"><span className="label">{t("Configure named connection")}</span><select value={managedID} disabled={locked} onChange={event => setManagedID(event.target.value)}><option value="">{t("Choose a connection")}</option>{connections.map(connection => <option key={connection.id} value={connection.id}>{modelConnectionLabel(connection)}</option>)}</select></label>
       {managed && managed.id !== conversationID && managed.id !== planningConnection?.id ? editor(managed) : managed && <p className="hint">{t("This connection is configured in its model section above.")}</p>}
       <div className="button-row">{Object.keys(modelProviderNames).map(provider => <button type="button" className="btn btn-secondary" key={provider} disabled={locked || connections.length >= 16} onClick={() => addConnection(provider as ModelConnection["provider"])}>{t("Add {provider}", { provider: translateKnown(modelProviderNames[provider as ModelConnection["provider"]]) })}</button>)}</div>
+      <DismissibleNotice id="model-save-guidance" className="model-help"><p className="hint">{setup ? t("Accounts and keys are saved immediately. Model choices apply when you continue.") : t("Model choices apply when you save settings. Accounts and keys are saved immediately.")}</p></DismissibleNotice>
     </details>
-    <DismissibleNotice id="model-save-guidance" className="model-help"><p className="hint">{setup ? t("Accounts and keys are saved immediately. Model choices apply when you continue.") : t("Model choices apply when you save settings. Accounts and keys are saved immediately.")}</p></DismissibleNotice>
     <DecisionsConnection locked={locked} onReadyChange={decisionsChanged} />
   </>;
 }

@@ -25,6 +25,7 @@ import "./styles/auth.css";
 import "./styles/settings-navigation.css";
 import "./styles/network-setup.css";
 import "./styles/cloud-motion.css";
+import "./styles/form-rows.css";
 import "./styles/notices.css";
 import "./styles/settings-form.css";
 

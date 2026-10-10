@@ -109,46 +109,51 @@ export function HostedSetupConnection({ connection, locked, patch, onReady }: {
   const connected = connection.provider === "chatgpt" ? accountReady : keySaved || Boolean(connection.no_authentication);
   const filtered = models.filter(model => `${model.name} ${model.id}`.toLowerCase().includes(search.toLowerCase())).slice(0, 50);
   const manualModel = <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={connection.model} disabled={disabled} onChange={event => patch({ model: event.target.value, reasoning_effort: "" })} /></label>;
-  return <div className="hosted-setup-connection cloud-motion-settings">
+  const checkModel = () => void run("check", async () => {
+    const current = connectionRef.current;
+    const snapshot = connectionSignature(current);
+    if (key.trim()) { keyRevision.current++; await api.modelConnectionKey(current, key); if (mounted.current) { setKey(""); savedKey.current = true; setKeySaved(true); } }
+    const result = await api.modelConnectionTest(current);
+    if (!mounted.current || signatureRef.current !== snapshot) return;
+    setTestMessage(result.ready ? modelReadyMessage(result.elapsed_ms) : result.message); readyRef.current(result.ready);
+    if (current.provider === "chatgpt") setNeedsAuthorization(result.state === "signed_out" || result.state === "permission");
+  });
+  // Rows: the credential, the model, then a check. Each has its label and
+  // explanation on the left and its control on the right.
+  return <div className="hosted-setup-connection form-rows">
     {connection.provider === "chatgpt" ? <ChatGPTConnection presentation="setup" locked={disabled} needsAuthorization={needsAuthorization} onChange={accountChanged} /> : <>
-      <p className="hint-block">{t("API providers use their own key and separate billing. Your key stays on this computer.")}</p>
-      {connection.provider === "compatible" && <label className="field"><span className="label">{t("API base URL")}</span><input type="text" value={connection.base_url} disabled={disabled} onChange={event => patch({ base_url: event.target.value })} /></label>}
-      {!connection.no_authentication && <label className="field"><span className="label">{t("API key")}</span><input type="password" autoComplete="off" value={key} disabled={disabled} placeholder={keySaved ? t("Saved key will be kept") : undefined} onChange={event => setKey(event.target.value)} /></label>}
-      {connection.provider === "compatible" && <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={Boolean(connection.no_authentication)} disabled={disabled} onChange={event => patch({ no_authentication: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("This endpoint does not require authentication")}</span></label>}
-      {!connected && <button type="button" className="btn btn-secondary" disabled={disabled || !key.trim()} onClick={() => void run("catalog", fetchModels)}>{t("Connect provider")}</button>}
-      {keySaved && <details><summary>{t("Manage key")}</summary><button type="button" className="btn btn-quiet" disabled={disabled} onClick={() => void run("key", async () => {
+      {connection.provider === "compatible" && <label className="form-row form-row-stack"><span className="form-row-label"><strong>{t("API base URL")}</strong></span><input type="text" value={connection.base_url} disabled={disabled} onChange={event => patch({ base_url: event.target.value })} /></label>}
+      {!connection.no_authentication && <div className="form-row form-row-stack">
+        <span className="form-row-label"><label htmlFor={`setup-key-${connection.id}`}><strong>{t("API key")}</strong></label><small id={`setup-key-help-${connection.id}`}>{t("API providers use their own key and separate billing. Your key stays on this computer.")}</small></span>
+        <div className="form-input-action">
+          <input id={`setup-key-${connection.id}`} aria-describedby={`setup-key-help-${connection.id}`} type="password" autoComplete="off" value={key} disabled={disabled} placeholder={keySaved ? t("Saved key will be kept") : undefined} onChange={event => setKey(event.target.value)} />
+          {!connected && <button type="button" className="btn btn-secondary" disabled={disabled || !key.trim()} onClick={() => void run("catalog", fetchModels)}>{t("Connect provider")}</button>}
+        </div>
+      </div>}
+      {connection.provider === "compatible" && <label className="toggle-line form-row"><span className="toggle"><input type="checkbox" checked={Boolean(connection.no_authentication)} disabled={disabled} onChange={event => patch({ no_authentication: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("This endpoint does not require authentication")}</span></label>}
+    </>}
+    {operation === "catalog" && <p className="hint form-row-note" role="status">{t("Fetching models...")}</p>}
+    {models.length > 20 && <label className="form-row"><span className="form-row-label"><strong>{t("Search models")}</strong></span><input type="text" value={search} disabled={disabled} onChange={event => setSearch(event.target.value)} /></label>}
+    {models.length > 0 && <label className="form-row"><span className="form-row-label"><strong>{t("Available models")}</strong></span><select value={connection.model} disabled={disabled} onChange={event => patch(selectedModelChange(models.find(model => model.id === event.target.value), event.target.value, connection))}>
+      <option value="">{t("Select an available model")}</option>
+      {connection.model && !filtered.some(model => model.id === connection.model) && <option value={connection.model}>{connection.model}</option>}
+      {filtered.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+    </select></label>}
+    {connected && <div className="form-row form-row-plain"><ModelResponseSettings connection={connection} models={models} disabled={disabled} patch={patch} compact /></div>}
+    {connected && <div className="form-row">
+      <span className="form-row-label"><small role="status">{testMessage || t("Check model uses a text-only request. Nothing moves.")}</small></span>
+      <button type="button" className="btn btn-secondary" disabled={disabled || !connection.model.trim()} onClick={checkModel}>{operation === "check" ? t("Checking model...") : t("Check model")}</button>
+    </div>}
+    {((connected || error) || keySaved) && <div className="form-row-disclosures">
+      {(connected || error) && <details className="manual-model"><summary>{t("Enter a model ID")}</summary>{manualModel}
+        <button type="button" className="btn btn-quiet" disabled={disabled} onClick={() => { catalogAttempt.current = ""; void run("catalog", fetchModels); }}>{t("Fetch available models")}</button>
+      </details>}
+      {keySaved && connection.provider !== "chatgpt" && <details><summary>{t("Manage key")}</summary><button type="button" className="btn btn-quiet" disabled={disabled} onClick={() => void run("key", async () => {
         keyRevision.current++;
         await api.modelConnectionKey(connectionRef.current, "");
         if (mounted.current) { setKey(""); savedKey.current = false; setKeySaved(false); setModels([]); setTestMessage(""); readyRef.current(false); catalogAttempt.current = ""; }
       })}>{t("Remove API key")}</button></details>}
-    </>}
-    {operation === "catalog" && <p role="status">{t("Fetching models...")}</p>}
-    {models.length > 0 && <>
-      {models.length > 20 && <label className="field"><span className="label">{t("Search models")}</span><input type="text" value={search} disabled={disabled} onChange={event => setSearch(event.target.value)} /></label>}
-      <label className="field"><span className="label">{t("Available models")}</span><select value={connection.model} disabled={disabled} onChange={event => patch(selectedModelChange(models.find(model => model.id === event.target.value), event.target.value, connection))}>
-        <option value="">{t("Select an available model")}</option>
-        {connection.model && !filtered.some(model => model.id === connection.model) && <option value={connection.model}>{connection.model}</option>}
-        {filtered.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
-      </select></label>
-    </>}
-    {connected && <ModelResponseSettings connection={connection} models={models} disabled={disabled} patch={patch} compact />}
-    {(connected || error) && <details className="manual-model"><summary>{t("Enter a model ID")}</summary>{manualModel}
-      <button type="button" className="btn btn-quiet" disabled={disabled} onClick={() => { catalogAttempt.current = ""; void run("catalog", fetchModels); }}>{t("Fetch available models")}</button>
-    </details>}
-    {connected && <div className="button-row">
-      <button type="button" className="btn btn-secondary" disabled={disabled || !connection.model.trim()} onClick={() => void run("check", async () => {
-        const current = connectionRef.current;
-        const snapshot = connectionSignature(current);
-        if (key.trim()) { keyRevision.current++; await api.modelConnectionKey(current, key); if (mounted.current) { setKey(""); savedKey.current = true; setKeySaved(true); } }
-        const result = await api.modelConnectionTest(current);
-        if (!mounted.current || signatureRef.current !== snapshot) return;
-        setTestMessage(result.ready ? modelReadyMessage(result.elapsed_ms) : result.message); readyRef.current(result.ready);
-        if (current.provider === "chatgpt") setNeedsAuthorization(result.state === "signed_out" || result.state === "permission");
-      })}>{operation === "check" ? t("Checking model...") : t("Check model")}</button>
-      {testMessage && <span role="status">{testMessage}</span>}
     </div>}
-    {connected && !testMessage && <p className="hint-block">{t("Check model uses a text-only request. Nothing moves.")}</p>}
-    <p className="hint-block">{t("Accounts and keys are saved immediately. Model choices apply when you continue.")}</p>
     {error && <p className="form-status form-status-error" role="alert">{error}</p>}
   </div>;
 }

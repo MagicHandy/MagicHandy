@@ -5,6 +5,7 @@ import { t, translateKnown, type MessageKey } from "../i18n";
 import { formatBytes } from "../util/format";
 import { setupRequiredBytes } from "../util/setup-space";
 import { SetupChoice } from "./SetupChoice";
+import { FieldRow } from "./SetupSection";
 import type { VoiceChoice } from "./SetupSteps";
 import { SetupVoiceMemoryNotice } from "./SetupVoiceMemoryNotice";
 import { SetupQwenReference, type SetupQwenReferenceProps } from "./SetupQwenReference";
@@ -23,7 +24,7 @@ function RequirementLine({ requirement, title, detail }: { requirement: SetupReq
   const tone = requirement.status === "met" ? "ok" : requirement.status === "partial" ? "warn" : "error";
   const state = requirement.status === "met" ? t("Requirements met") : requirement.status === "partial" ? t("Requirements partly met") : t("Requirements not met");
   return (
-    <div className="easy-requirement" data-status={requirement.status}>
+    <div className="easy-requirement form-row" data-status={requirement.status}>
       <span className="status-dot" data-state={tone} aria-hidden="true" />
       <span>
         <strong>{title}</strong>
@@ -125,15 +126,15 @@ export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInpu
     <div className="setup-copy easy-setup">
       <p>{t("Choose how AI should run, then add voice or a device if you want. MagicHandy installs only what you select.")}</p>
       {aiSetup}
-      {useLocalAI && <section className="easy-setup-section" aria-labelledby="easy-system-title">
+      {useLocalAI && <section className="setup-section" aria-labelledby="easy-system-title">
         <h2 id="easy-system-title">{t("Your computer")}</h2>
         <p className="hint-block">{hardware}</p>
         {assessment.free_disk_bytes > 0 && <p className="hint-block">{t("{free} of free disk space.", { free: formatBytes(assessment.free_disk_bytes) })}</p>}
-        <RequirementLine requirement={assessment.chat} title={chat.title} detail={chat.detail} />
+        <div className="form-rows"><RequirementLine requirement={assessment.chat} title={chat.title} detail={chat.detail} /></div>
       </section>}
 
       {chatAvailable && (
-        <section className="easy-setup-section" aria-labelledby="easy-voice-title">
+        <section className="setup-section" aria-labelledby="easy-voice-title">
           <h2 id="easy-voice-title">{t("How explicit should chat be?")}</h2>
           <div className="setup-choices" role="radiogroup" aria-labelledby="easy-voice-title">
             {EXPLICITNESS.map((level) => (
@@ -145,13 +146,14 @@ export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInpu
         </section>
       )}
 
-      <section className="easy-setup-section" aria-labelledby="easy-speech-title">
+      <section className="setup-section" aria-labelledby="easy-speech-title">
         <h2 id="easy-speech-title">{t("Voice")}</h2>
-        <label className="toggle-line" data-disabled={!voiceOutputAvailable || undefined}>
+        <div className="form-rows">
+        <label className="toggle-line form-row" data-disabled={!voiceOutputAvailable || undefined}>
           <span className="toggle"><input type="checkbox" checked={voiceOutput && voiceOutputAvailable} disabled={locked || !voiceOutputAvailable} onChange={(event) => setVoiceOutput(event.target.checked)} /><span className="track" aria-hidden="true" /></span>
           <span>{t("Speak replies aloud")}<small>{t("Voice output")}</small></span>
         </label>
-        {voiceOutput && assessment.voice_options && <div className="setup-choices" role="radiogroup" aria-label={t("Voice module")}>
+        {voiceOutput && assessment.voice_options && <div className="form-row form-row-plain"><div className="setup-choices" role="radiogroup" aria-label={t("Voice module")}>
           {assessment.voice_options.map((option) => <SetupChoice
             key={option.module}
             selected={voiceChoice === option.module}
@@ -163,25 +165,26 @@ export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInpu
             disabled={locked || option.requirement.status === "unmet"}
             onSelect={() => setVoiceChoice(option.module)}
           />)}
-        </div>}
+        </div></div>}
         {(voiceOutput || voiceRequirement.status !== "met") && <RequirementLine requirement={voiceRequirement} title={t("Voice output")} detail={voiceOutputText(voiceRequirement)} />}
-        {voiceOutput && selectedVoice && <SetupVoiceMemoryNotice memory={selectedVoice.memory} device={selectedVoice.device} />}
-        {voiceChoice === "faster-qwen3-tts" && <SetupQwenReference {...qwenReference} />}
-        <label className="toggle-line" data-disabled={!voiceInputAvailable || undefined}>
+        {voiceOutput && selectedVoice && <div className="form-row form-row-plain"><SetupVoiceMemoryNotice memory={selectedVoice.memory} device={selectedVoice.device} /></div>}
+        {voiceChoice === "faster-qwen3-tts" && <div className="form-row form-row-plain"><SetupQwenReference {...qwenReference} /></div>}
+        <label className="toggle-line form-row" data-disabled={!voiceInputAvailable || undefined}>
           <span className="toggle"><input type="checkbox" checked={voiceInput && voiceInputAvailable} disabled={locked || !voiceInputAvailable} onChange={(event) => setVoiceInput(event.target.checked)} /><span className="track" aria-hidden="true" /></span>
           <span>{t("Talk instead of typing")}<small>{t("Voice input")}</small></span>
         </label>
         {(voiceInput || assessment.voice_input.status !== "met") && <RequirementLine requirement={assessment.voice_input} title={t("Voice input")} detail={voiceInputText(assessment.voice_input)} />}
+        </div>
       </section>
 
-      <section className="easy-setup-section" aria-labelledby="easy-device-title">
+      <section className="setup-section" aria-labelledby="easy-device-title">
         <h2 id="easy-device-title">{t("Your Handy")}<span className="hint-inline">{t("optional")}</span></h2>
-        <label className="field">
-          <span className="label">{t("Handy connection key")}</span>
-          <input type="password" autoComplete="off" value={connectionKey} disabled={locked} placeholder={settings.device.connection_key_set ? t("Saved key will be kept") : t("Enter connection key")} onChange={(event) => setConnectionKey(event.target.value)} />
-          <span className="hint">{t("Connect your Handy in the official Handy Onboarding app; the key appears in the middle of its screen, under the picture of the device.")}</span>
-        </label>
-        <p className="hint-block">{t("Leave it empty to connect later from the top bar. Remote access stays off; Custom setup and Settings can turn it on.")}</p>
+        <div className="form-rows">
+          <FieldRow id="easy-device-key" label={t("Handy connection key")} hint={t("Connect your Handy in the official Handy Onboarding app; the key appears in the middle of its screen, under the picture of the device.")} stack>
+            <input id="easy-device-key" aria-describedby="easy-device-key-hint" type="password" autoComplete="off" value={connectionKey} disabled={locked} placeholder={settings.device.connection_key_set ? t("Saved key will be kept") : t("Enter connection key")} onChange={(event) => setConnectionKey(event.target.value)} />
+          </FieldRow>
+          <p className="hint form-row-note">{t("Leave it empty to connect later from the top bar. Remote access stays off; Custom setup and Settings can turn it on.")}</p>
+        </div>
       </section>
 
       <p className={shortOfSpace ? "form-status form-status-error" : "hint-block"} role={shortOfSpace ? "alert" : undefined}>{spaceMessage}</p>
@@ -192,7 +195,7 @@ export function EasySetupStep({ setup, settings, catalog, voiceChoice, voiceInpu
 // SetupModeChoice offers a guided path beside the detailed Custom setup.
 export function SetupModeChoice({ mode, setMode }: { mode: "easy" | "custom"; setMode: (mode: "easy" | "custom") => void }) {
   return (
-    <section className="easy-setup-section" aria-labelledby="setup-mode-title">
+    <section className="setup-section" aria-labelledby="setup-mode-title">
       <h2 id="setup-mode-title">{t("How would you like to set up?")}</h2>
       <div className="setup-choices" role="radiogroup" aria-labelledby="setup-mode-title">
         <SetupChoice selected={mode === "easy"} title={t("Easy setup")} detail={t("Choose local AI, ChatGPT, or an API provider. MagicHandy guides the connection and offers optional voice.")} badge={t("Recommended")} onSelect={() => setMode("easy")} />

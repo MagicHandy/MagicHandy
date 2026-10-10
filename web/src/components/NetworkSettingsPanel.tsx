@@ -142,7 +142,7 @@ export function NetworkSettingsPanel({ backendOnline, administrator, initialScop
   const needsPassword = status?.authentication_required && !password;
   const preparedForDraft = preparation?.state === "ready" && preparation.config?.public_url === draft?.public_url && preparation.config?.certificate_mode === draft?.certificate_mode;
   return <section className="group network-settings">
-    {!initialScope && <h3 className="group-title">{t("LAN and WAN access")}</h3>}
+    <h3 className="group-title">{t("LAN and WAN access")}</h3>
     {status && <p className="form-status">{t("Running:")} <strong>{modeName(status.active.mode)}</strong> · {status.active.public_url || status.active.listen_address}{status.restart_required && <> · <strong>{t("Restart required")}</strong></>}</p>}
     {status?.remote_url && <p className="network-result">{t("Remote interface:")} <a href={status.remote_url} target="_blank" rel="noreferrer">{status.remote_url}</a></p>}
     {draft && status && <>

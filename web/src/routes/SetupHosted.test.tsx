@@ -79,7 +79,7 @@ describe("Easy hosted setup", () => {
     expect(screen.queryByText("Role assignments")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: /^API \/ Cloud/ }));
     expect(screen.getByRole("combobox", { name: "Cloud provider" })).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Combine local and cloud models?" })).toBeVisible();
+    expect(screen.getByRole("checkbox", { name: /^Keep chat local; use this model for Autopilot/ })).toBeVisible();
     expect(screen.queryByText("Structured output")).not.toBeInTheDocument();
   });
   it("requires a real test and skips local runtime and model installation for cloud only", async () => {
@@ -267,7 +267,7 @@ describe("Easy hosted setup", () => {
     settings.llm = { ...settings.llm, llama_cpp_mode: "external", connections: [connection], conversation_connection_id: "local", motion_planner: planner };
     await openEasy();
     expect(screen.getByText("Keep your current AI setup")).toBeVisible();
-    expect(screen.queryByRole("heading", { name: "Combine local and cloud models?" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: /^Keep chat local; use this model for Autopilot/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Test saved AI setup" }));
     await screen.findByText("Ready");
     fireEvent.click(continueButton());

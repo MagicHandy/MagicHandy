@@ -41,16 +41,20 @@ export function SavedAISetup({ settings, locked, onReady, editCustom }: {
       if (mounted.current) { setMessage(error instanceof Error ? error.message : t("Request failed")); readyRef.current(false); }
     } finally { if (mounted.current) setBusy(false); }
   }
-  return <div className="setup-subsection">
+  const chatModel = conversation ? `${conversation.name} · ${conversation.model}` : settings.model;
+  const autopilotModel = motion ? `${motion.name} · ${motion.model}` : planner?.provider === "chatgpt" ? `ChatGPT · ${planner.model}` : planner?.provider === "decisions" ? t("Decisions library selection") : settings.model;
+  return <div className="saved-ai-setup">
     <h3>{t("Keep your current AI setup")}</h3>
-    <p>{t("Your saved model roles and context sharing are kept. Choosing an AI option above replaces these assignments; Custom setup can edit them individually.")}</p>
-    <p>{t("Saved chat model: {model}", { model: conversation ? `${conversation.name} · ${conversation.model}` : settings.model })}</p>
-    <p>{t("Saved Autopilot model: {model}", { model: motion ? `${motion.name} · ${motion.model}` : planner?.provider === "chatgpt" ? `ChatGPT · ${planner.model}` : planner?.provider === "decisions" ? t("Decisions library selection") : settings.model })}</p>
-    <p>{planner?.context_policy === "technical" ? t("Motion details only") : t("Conversation context")}</p>
+    <p className="hint-block">{t("Your saved model roles and context sharing are kept. Choosing an AI option above replaces these assignments; Custom setup can edit them individually.")}</p>
+    <dl className="setup-summary-rows">
+      <div><dt>{t("Chat model")}</dt><dd>{chatModel}</dd></div>
+      <div><dt>{t("Autopilot model")}</dt><dd>{autopilotModel}</dd></div>
+      <div><dt>{t("Autopilot context sharing")}</dt><dd>{planner?.context_policy === "technical" ? t("Motion details only") : t("Conversation context")}</dd></div>
+    </dl>
     <div className="button-row">
       <button type="button" className="btn btn-secondary" disabled={locked || busy} onClick={() => void test()}>{t("Test saved AI setup")}</button>
       <button type="button" className="btn btn-quiet" disabled={locked || busy} onClick={editCustom}>{t("Edit in Custom setup")}</button>
     </div>
-    {message && <p role="status">{message}</p>}
+    {message && <p className="form-status" role="status">{message}</p>}
   </div>;
 }

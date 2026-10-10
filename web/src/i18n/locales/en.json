@@ -2936,5 +2936,8 @@
   "Positive delays motion; negative advances it. A change during playback requires Play again.": "Positive delays motion; negative advances it. A change during playback requires Play again.",
   "Now playing": "Now playing",
   "Volume": "Volume",
-  "{n} mm": "{n} mm"
+  "{n} mm": "{n} mm",
+  "Connected": "Connected",
+  "Access paths": "Access paths",
+  "Set up network access": "Set up network access"
 }

@@ -44,7 +44,8 @@ export function ChatGPTConnection({ onChange, presentation = "settings", locked 
   }
   const connected = Boolean(active?.connected && active.plan_authorized && !needsAuthorization);
   const disabled = busy || locked;
-  const accountPicker = status && status.connection.profiles.length > 1 && <label className="field"><span className="label">{t("ChatGPT account")}</span>
+  const accountPicker = status && status.connection.profiles.length > 1 && <label className="form-row">
+    <span className="form-row-label"><strong>{t("ChatGPT account")}</strong></span>
     <select value={status.connection.active} disabled={disabled} onChange={event => {
       const profile = status.connection.profiles.find(item => item.id === event.target.value);
       if (profile?.connected) void run(() => api.cloudSelect(profile.id)); else if (profile && hostBrowser) void signIn(profile.id);
@@ -53,33 +54,39 @@ export function ChatGPTConnection({ onChange, presentation = "settings", locked 
       {status.connection.profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.label}</option>)}
     </select>
   </label>;
-  return <div className="chatgpt-connection cloud-motion-settings" data-presentation={presentation}>
-    {status?.connection.pending ? <>
-      <p role="status">{t("Complete sign-in in the opened window.")}</p>
-      <button className="btn btn-secondary" type="button" disabled={disabled} onClick={() => void run(api.cloudCancelSignIn)}>{t("Cancel sign-in")}</button>
-    </> : connected ? <>
-      <p className="connected-account"><strong>{t("ChatGPT connected")}</strong><span>{active?.label}</span></p>
-      <details><summary>{t("Manage account")}</summary>
-        {accountPicker}
-        <div className="button-row">
-          <button className="btn btn-secondary" type="button" disabled={disabled || !hostBrowser} onClick={() => void signIn()}>{t("Add account")}</button>
-          <button className="btn btn-secondary" type="button" disabled={disabled || !hostBrowser} onClick={() => void signIn(active?.id)}>{t("Reconnect")}</button>
-          <button className="btn btn-secondary" type="button" disabled={disabled} onClick={() => void run(async () => (await api.cloudAccountDisconnect(active?.id ?? "")).status)}>{t("Disconnect")}</button>
-          <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer">{t("Manage usage")}</a>
-        </div>
-      </details>
-    </> : <>
-      <p className="hint">{active && !active.plan_authorized ? t("Authorize ChatGPT plan use to enable inference.") : t("Use your ChatGPT plan. Account limits and provider content rules apply.")}</p>
+  const pending = Boolean(status?.connection.pending);
+  const summary = pending ? t("Complete sign-in in the opened window.")
+    : connected ? active?.label
+      : active && !active.plan_authorized ? t("Authorize ChatGPT plan use to enable inference.")
+        : t("Use your ChatGPT plan. Account limits and provider content rules apply.");
+  // One account row: what is connected on the left, the next action on the right.
+  return <div className="chatgpt-connection form-rows" data-presentation={presentation}>
+    <div className="form-row">
+      <span className="form-row-label">
+        <strong>{connected ? t("ChatGPT connected") : t("ChatGPT account")}</strong>
+        <small role={pending ? "status" : undefined}>{summary}</small>
+      </span>
+      {pending ? <button className="btn btn-secondary" type="button" disabled={disabled} onClick={() => void run(api.cloudCancelSignIn)}>{t("Cancel sign-in")}</button>
+        : connected ? <span className="form-row-state"><span className="status-dot" data-state="ok" aria-hidden="true" />{t("Connected")}</span>
+          : <button className="btn btn-secondary chatgpt-sign-in" type="button" disabled={disabled || !hostBrowser} onClick={() => void signIn(active?.id)}>{active ? t("Reconnect") : t("Continue with ChatGPT")}</button>}
+    </div>
+    {!pending && !connected && accountPicker}
+    {connected && <details className="form-row-details"><summary>{t("Manage account")}</summary>
       {accountPicker}
-      <button className="btn chatgpt-sign-in" type="button" disabled={disabled || !hostBrowser} onClick={() => void signIn(active?.id)}>{active ? t("Reconnect") : t("Continue with ChatGPT")}</button>
-    </>}
-    {!hostBrowser && <p className="hint">{t("Connect ChatGPT from MagicHandy on the host computer. Sign-in returns to that computer.")}</p>}
-    {status?.connection.message && !status.connection.pending && <p role="status">{status.connection.message}</p>}
-    {connected && active?.welcome_pending && <div className="chatgpt-welcome" role="note" aria-label={t("You're using your ChatGPT plan")}>
-      <h4>{t("You're using your ChatGPT plan")}</h4>
+      <div className="button-row">
+        <button className="btn btn-secondary" type="button" disabled={disabled || !hostBrowser} onClick={() => void signIn()}>{t("Add account")}</button>
+        <button className="btn btn-secondary" type="button" disabled={disabled || !hostBrowser} onClick={() => void signIn(active?.id)}>{t("Reconnect")}</button>
+        <button className="btn btn-secondary" type="button" disabled={disabled} onClick={() => void run(async () => (await api.cloudAccountDisconnect(active?.id ?? "")).status)}>{t("Disconnect")}</button>
+        <a className="btn btn-quiet" href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer">{t("Manage usage")}</a>
+      </div>
+    </details>}
+    {!hostBrowser && <p className="hint form-row-note">{t("Connect ChatGPT from MagicHandy on the host computer. Sign-in returns to that computer.")}</p>}
+    {status?.connection.message && !pending && <p className="hint form-row-note" role="status">{status.connection.message}</p>}
+    {connected && active?.welcome_pending && <div className="chatgpt-welcome notice" role="note" aria-label={t("You're using your ChatGPT plan")}>
+      <strong>{t("You're using your ChatGPT plan")}</strong>
       <p>{t("Eligible requests use your ChatGPT plan or authorized credits. You control usage in ChatGPT Settings.")}</p>
-      <button className="btn btn-secondary" type="button" disabled={disabled} onClick={() => void run(api.cloudWelcome)}>{t("Got it")}</button>
+      <button className="btn btn-secondary btn-sm" type="button" disabled={disabled} onClick={() => void run(api.cloudWelcome)}>{t("Got it")}</button>
     </div>}
-    {error && <p className="error-text" role="alert">{error}</p>}
+    {error && <p className="form-status form-status-error" role="alert">{error}</p>}
   </div>;
 }

@@ -226,6 +226,10 @@ func TestTechnicalAutopilotSharesMotionStateOnlyAndPlansPaceAndReach(t *testing.
 	if _, err := s.chatLog.AppendTo(session, chat.MessageRoleUser, private, "test", nil); err != nil {
 		t.Fatal(err)
 	}
+	// Long-term memories are the third thing the UI promises stays local.
+	if _, err := s.personalization.memory.Add(private); err != nil {
+		t.Fatal(err)
+	}
 	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
 		settings.Motion.SpeedMinPercent, settings.Motion.SpeedMaxPercent = 10, 80
 		settings.LLM.ConversationConnectionID = "local"
