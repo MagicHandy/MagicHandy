@@ -24,13 +24,18 @@ function Panel({ initial }: { initial: PublicSettings["llm"] }) {
   return <ModelConnectionsPanel routing={routing} settings={settings} saved={initial} locked={false} patch={change => setSettings(current => ({ ...current, ...change }))} />;
 }
 
-describe("saved model connection editing", () => {
+describe("model roles and external providers", () => {
   afterEach(async () => { await act(async () => {}); vi.restoreAllMocks(); });
-  it("keeps local retry opt-in and includes the toggle in model draft discard", async () => {
+  const quietCatalog = () => {
     vi.spyOn(api, "cloudPlanningStatus").mockResolvedValue(status);
     vi.spyOn(api, "modelConnectionModels").mockResolvedValue({ models: [] });
+    vi.spyOn(api, "modelConnectionKeyStatus").mockResolvedValue({ key_set: false });
+  };
+
+  it("keeps local retry opt-in and includes the toggle in model draft discard", async () => {
+    quietCatalog();
     render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id, provider: "ollama", model: "local-model" } as PublicSettings["llm"]} />);
-    const retry = screen.getByRole("checkbox", { name: "Retry declined chat requests with the local model" });
+    const retry = screen.getByRole("checkbox", { name: /^Retry declined chat requests with the local model/ });
     expect(retry).not.toBeChecked();
     fireEvent.click(retry);
     expect(retry).toBeChecked();
@@ -40,26 +45,25 @@ describe("saved model connection editing", () => {
     fireEvent.click(screen.getByRole("button", { name: "Discard model changes" }));
     expect(retry).not.toBeChecked();
   });
-  it("offers OpenRouter without a saved connection and separates its editor from ChatGPT", async () => {
-    vi.spyOn(api, "cloudPlanningStatus").mockResolvedValue(status);
-    vi.spyOn(api, "modelConnectionModels").mockResolvedValue({ models: [] });
-    vi.spyOn(api, "modelConnectionKeyStatus").mockResolvedValue({ key_set: false });
+
+  it("never creates a provider from a role choice; adding one leaves both roles alone", async () => {
+    quietCatalog();
     render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id } as PublicSettings["llm"]} />);
-    const choice = screen.getByRole("combobox", { name: "Chat model" });
-    expect(within(choice).getByRole("option", { name: "OpenRouter" })).toBeEnabled();
-    fireEvent.change(choice, { target: { value: "new:openrouter" } });
-    const editor = screen.getByRole("region", { name: "Chat model settings" });
-    expect(within(editor).getByLabelText("API key")).toBeVisible();
-    expect(within(editor).queryByText("ChatGPT connected")).not.toBeInTheDocument();
-    expect(within(editor).queryByText("Manage account")).not.toBeInTheDocument();
+    const chat = screen.getByRole("combobox", { name: "Chat model" });
+    expect(within(chat).queryByRole("option", { name: "OpenRouter" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add provider" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Add provider" })).getByRole("button", { name: /^OpenRouter/ }));
+    expect(chat).toHaveValue(chatgpt.id);
+    expect(screen.getByRole("combobox", { name: "Autopilot model" })).toHaveValue("conversation");
+    const providers = screen.getByRole("region", { name: "External providers" });
+    expect(within(providers).getByLabelText("API key")).toBeVisible();
+    expect(within(providers).queryByText("ChatGPT connected")).not.toBeInTheDocument();
+    expect(within(chat).getByRole("option", { name: "OpenRouter · Choose a model" })).toBeInTheDocument();
     expect(screen.getByText(/Unsaved model changes/)).toBeVisible();
-    const saved = screen.getByRole("region", { name: "Saved model routing" });
-    expect(within(saved).getByText(/Chat messages go to ChatGPT/)).toBeVisible();
-    expect(within(saved).queryByText(/OpenRouter/)).not.toBeInTheDocument();
-    fireEvent.change(choice, { target: { value: chatgpt.id } });
-    expect(screen.getByText(/Unsaved model changes/)).toBeVisible();
+    // The saved routing text stays with the saved destination until a save.
+    expect(screen.getByText(/Chat messages go to ChatGPT/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Discard model changes" }));
-    expect(within(choice).getByRole("option", { name: "OpenRouter" })).toBeEnabled();
+    expect(within(chat).queryByRole("option", { name: "OpenRouter · Choose a model" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Unsaved model changes/)).not.toBeInTheDocument();
   });
 
@@ -68,19 +72,18 @@ describe("saved model connection editing", () => {
     const router = { ...newModelConnection("openrouter", []), name: "ChatGPT", model: "vendor/model" };
     render(<Panel initial={{ connections: [router], conversation_connection_id: router.id } as PublicSettings["llm"]} />);
     expect(within(screen.getByRole("combobox", { name: "Chat model" })).getByRole("option", { name: "OpenRouter · ChatGPT · vendor/model" })).toBeVisible();
+    expect(within(screen.getByRole("region", { name: "External providers" })).getByText("OpenRouter")).toBeVisible();
   });
 
   it("discards model edits without losing persona drafts from another settings page", async () => {
-    vi.spyOn(api, "cloudPlanningStatus").mockResolvedValue(status);
-    vi.spyOn(api, "modelConnectionModels").mockResolvedValue({ models: [] });
-    vi.spyOn(api, "modelConnectionKeyStatus").mockResolvedValue({ key_set: false });
+    quietCatalog();
     const saved = { connections: [chatgpt], conversation_connection_id: chatgpt.id, persona_description: "Saved persona" } as PublicSettings["llm"];
     function DraftPanel() {
       const [draft, setDraft] = useState({ ...saved, persona_description: "Unsaved persona" });
       return <><output aria-label="Persona draft">{draft.persona_description}</output><ModelConnectionsPanel settings={draft} saved={saved} locked={false} patch={change => setDraft(current => ({ ...current, ...change }))} /></>;
     }
     render(<DraftPanel />);
-    fireEvent.change(screen.getByRole("combobox", { name: "Chat model" }), { target: { value: "new:openrouter" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Chat model" }), { target: { value: "local" } });
     fireEvent.click(screen.getByRole("button", { name: "Discard model changes" }));
     expect(screen.getByLabelText("Persona draft")).toHaveTextContent("Unsaved persona");
     expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue(chatgpt.id);
@@ -99,31 +102,34 @@ describe("saved model connection editing", () => {
   });
 
   it("changes Autopilot independently and states technical-only sharing", async () => {
-    vi.spyOn(api, "cloudPlanningStatus").mockResolvedValue(status);
-    vi.spyOn(api, "modelConnectionModels").mockResolvedValue({ models: [] });
-    vi.spyOn(api, "modelConnectionKeyStatus").mockResolvedValue({ key_set: false });
-    render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: "local", motion_planner: { provider: "connection", connection_id: chatgpt.id, model: "", context_policy: "technical" } } as PublicSettings["llm"]} />);
+    quietCatalog();
+    render(<Panel initial={{ connections: [chatgpt, compatible], conversation_connection_id: "local", motion_planner: { provider: "connection", connection_id: chatgpt.id, model: "", context_policy: "technical" } } as PublicSettings["llm"]} />);
     expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue("local");
     expect(screen.getByText("Autopilot receives motion details only. Chat messages, personas and memories are excluded from its requests.")).toBeVisible();
-    fireEvent.change(screen.getByRole("combobox", { name: "Autopilot model" }), { target: { value: "new:openrouter" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Autopilot model" }), { target: { value: compatible.id } });
     expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue("local");
-    expect(within(screen.getByRole("region", { name: "Autopilot model settings" })).getByLabelText("API key")).toBeVisible();
     expect(screen.getByRole("combobox", { name: "Autopilot context sharing" })).toHaveValue("technical");
   });
 
-
-  it("adds a named provider without assigning either role", async () => {
-    vi.spyOn(api, "cloudPlanningStatus").mockResolvedValue(status);
-    vi.spyOn(api, "modelConnectionModels").mockResolvedValue({ models: [] });
-    vi.spyOn(api, "modelConnectionKeyStatus").mockResolvedValue({ key_set: false });
-    render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id } as PublicSettings["llm"]} />);
-    await screen.findByText("Ready");
-    fireEvent.click(screen.getByText("External providers"));
-    fireEvent.click(screen.getByRole("button", { name: "Add OpenRouter" }));
-    expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue(chatgpt.id);
-    expect(screen.getByRole("combobox", { name: "Autopilot model" })).toHaveValue("conversation");
-    expect(screen.getByRole("combobox", { name: "Configure named connection" })).toHaveValue("openrouter-1");
-    expect(screen.getByLabelText("API key")).toBeVisible();
+  it("removes a provider in use after an inline confirmation and hands its roles to the local model", async () => {
+    quietCatalog();
+    render(<Panel initial={{ connections: [chatgpt, compatible], conversation_connection_id: compatible.id } as PublicSettings["llm"]} />);
+    const providers = screen.getByRole("region", { name: "External providers" });
+    fireEvent.click(within(providers).getByRole("button", { name: "Remove · Compatible API" }));
+    const confirm = screen.getByRole("alertdialog", { name: "Remove Compatible API?" });
+    expect(confirm).toHaveTextContent("Chat · Autopilot will switch to the local model.");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(within(providers).getByRole("button", { name: "Remove · Compatible API" })).toBeVisible();
+    fireEvent.click(within(providers).getByRole("button", { name: "Remove · Compatible API" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Remove" }));
+    expect(within(providers).queryByText("Compatible API")).not.toBeInTheDocument();
+    const chat = screen.getByRole("combobox", { name: "Chat model" });
+    expect(chat).toHaveValue("local");
+    expect(within(chat).queryByRole("option", { name: /Other compatible provider/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Unsaved model changes/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Discard model changes" }));
+    expect(within(providers).getByText("Compatible API")).toBeVisible();
+    expect(chat).toHaveValue(compatible.id);
   });
 
   it("does not let a late ChatGPT catalog enter the OpenRouter editor", async () => {
@@ -131,37 +137,36 @@ describe("saved model connection editing", () => {
     vi.spyOn(api, "modelConnectionKeyStatus").mockResolvedValue({ key_set: false });
     let finish!: (result: { models: Array<{ id: string; name: string }> }) => void;
     vi.spyOn(api, "modelConnectionModels").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
-    render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id } as PublicSettings["llm"]} />);
+    const router = newModelConnection("openrouter", [chatgpt]);
+    render(<Panel initial={{ connections: [chatgpt, router], conversation_connection_id: chatgpt.id } as PublicSettings["llm"]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit · ChatGPT" }));
     await waitFor(() => expect(api.modelConnectionModels).toHaveBeenCalled());
-    fireEvent.change(screen.getByRole("combobox", { name: "Chat model" }), { target: { value: "new:openrouter" } });
+    fireEvent.click(screen.getByRole("button", { name: "Edit · OpenRouter" }));
     await act(async () => { finish({ models: [{ id: "private-account-model", name: "Private account model" }] }); });
     expect(screen.queryByRole("option", { name: "Private account model" })).not.toBeInTheDocument();
     expect(screen.getByLabelText("API key")).toBeVisible();
   });
 
-  it("keeps exact readiness across editor changes and invalidates an edited endpoint", async () => {
+  it("shows exact readiness and drops it once the endpoint is edited", async () => {
     vi.spyOn(api, "cloudPlanningStatus").mockResolvedValue(status);
     vi.spyOn(api, "modelConnectionTest");
+    vi.spyOn(api, "modelConnectionModels").mockResolvedValue({ models: [] });
     vi.spyOn(api, "modelConnectionKeyStatus").mockResolvedValue({ key_set: false });
     render(<Panel initial={{ connections: [chatgpt, compatible], conversation_connection_id: chatgpt.id } as PublicSettings["llm"]} />);
-    await screen.findByText("Ready");
-    const editor = screen.getByRole("combobox", { name: "Chat model" });
-    fireEvent.change(editor, { target: { value: compatible.id } });
-    await screen.findByText("Ready");
-    fireEvent.change(editor, { target: { value: chatgpt.id } });
-    await screen.findByText("ChatGPT connected");
-    await waitFor(() => expect(screen.getByText("Ready")).toBeVisible());
-    fireEvent.change(editor, { target: { value: compatible.id } });
+    const providers = screen.getByRole("region", { name: "External providers" });
+    await within(providers).findByText("same-model · Ready");
+    fireEvent.click(within(providers).getByRole("button", { name: "Edit · Compatible API" }));
     fireEvent.change(screen.getByRole("textbox", { name: "API base URL" }), { target: { value: "http://127.0.0.1:9000/v1" } });
-    expect(screen.queryByText("Ready")).not.toBeInTheDocument();
+    expect(within(providers).queryByText("same-model · Ready")).not.toBeInTheDocument();
+    expect(within(providers).getByText("same-model · Not checked")).toBeVisible();
     expect(api.modelConnectionTest).not.toHaveBeenCalled();
   });
 
   it("renders a saved local Autopilot assignment honestly", async () => {
     vi.spyOn(api, "cloudPlanningStatus").mockResolvedValue(status);
     render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id, motion_planner: { provider: "local", model: "local-model", context_policy: "technical" } } as PublicSettings["llm"]} />);
-    await screen.findByText("ChatGPT connected");
     expect(screen.getByRole("combobox", { name: "Autopilot model" })).toHaveValue("local");
     expect(screen.queryByRole("combobox", { name: "Autopilot context sharing" })).not.toBeInTheDocument();
+    await act(async () => {});
   });
 });

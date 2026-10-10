@@ -12,18 +12,12 @@
 .cloud-motion-settings select { min-width: 0; max-width: 100%; }
 .cloud-motion-settings .field.checkbox { flex-direction: row; align-items: baseline; }
 .cloud-motion-settings .field.checkbox input { flex: none; }
-.chatgpt-connection,
-.hosted-setup-connection { min-width: 0; margin: 0; }
+.chatgpt-connection { min-width: 0; margin: 0; }
 .manual-model { margin: 0; }
 
 /* The reason Continue is unavailable, beside it in the footer. */
 .setup-action-reason { min-width: 0; color: var(--muted); font-size: var(--fs-label); text-align: right; }
 
-.model-routing-snapshot { margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
-.model-routing-snapshot dl { margin: 8px 0; }
-.model-routing-snapshot dl > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 4px 0; }
-.model-routing-snapshot dt { color: var(--muted); }
-.model-routing-snapshot dd { margin: 0; overflow-wrap: anywhere; }
 /* Unsaved routing is a notice: the one inset surface inside a card. */
 .model-routing-draft {
   display: grid;
@@ -36,7 +30,6 @@
   background: var(--bg-inset);
 }
 .model-routing-draft .hint { margin: 0; }
-.model-role-section { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .model-help.dismissible-notice { margin: 8px 0; padding: 0; border: 0; background: transparent; }
 .model-help .hint { margin: 0; }
 .model-help .hint + .hint { margin-top: 8px; }
@@ -53,3 +46,38 @@
   background: var(--bg-inset);
 }
 .chatgpt-welcome p { margin: 0; color: var(--text-soft); font-size: var(--fs-label); }
+
+/* External providers: one bordered list. The open provider's editor sits
+   under its row, tinted with it, inside the same border. */
+.provider-list { display: grid; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.provider-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 16px; min-height: 52px; padding: 10px 12px; }
+.provider-list > * + * { border-top: 1px solid var(--line); }
+.provider-row[data-open] { background: var(--accent-tint); }
+.provider-id { display: grid; gap: 3px; min-width: 0; }
+.provider-id strong { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-weight: 600; overflow-wrap: anywhere; }
+.provider-kind { color: var(--muted); font-size: var(--fs-label); font-weight: 400; }
+.provider-id small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); font-size: var(--fs-hint); }
+.provider-state, .provider-roles { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.provider-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.provider-editor { padding: 0 12px 10px; background: var(--accent-tint); }
+.provider-list > .provider-editor { border-top: 0; }
+.provider-editor > .form-rows > .form-row:first-child,
+.provider-editor > .form-rows > .chatgpt-connection > .form-row:first-child { border-top: 1px solid var(--line); }
+.provider-confirm { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 16px; padding: 12px; background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+.provider-confirm p { margin: 0; font-size: var(--fs-label); }
+.provider-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+.provider-add small { flex: 1 1 240px; margin: 0; }
+.provider-menu { display: grid; margin-top: 8px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
+.provider-menu > button { display: grid; gap: 2px; padding: 9px 12px; border: 0; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.provider-menu > button + button { border-top: 1px solid var(--line); }
+.provider-menu > button:hover:not(:disabled) { background: var(--surface-2); }
+.provider-menu > button:disabled { cursor: not-allowed; opacity: 0.55; }
+.provider-menu > button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.provider-menu strong { font-weight: 600; }
+.provider-menu small { color: var(--muted); font-size: var(--fs-hint); }
+.provider-menu .hint { margin: 0; padding: 8px 12px; border-top: 1px solid var(--line); }
+.model-roles .form-row:first-child { border-top: 0; }
+@media (max-width: 560px) {
+  .provider-row, .provider-confirm { grid-template-columns: minmax(0, 1fr); }
+  .provider-actions { justify-content: flex-start; }
+}

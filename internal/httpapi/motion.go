@@ -702,6 +702,33 @@ func (s *Server) applyPlanningSettingsTransition(previous, next config.Settings)
 	if !reflect.DeepEqual(previous.LLM, next.LLM) || previous.Motion != next.Motion || previous.Autopilot != next.Autopilot {
 		s.invalidateCloudPlanning()
 	}
+	s.removeDeletedConnectionKeys(previous.LLM.Connections, next.LLM.Connections)
+}
+
+// removeDeletedConnectionKeys runs only after a successful save, so a
+// discarded draft never loses a key. Only ids the save removed are touched.
+func (s *Server) removeDeletedConnectionKeys(previous, next []config.ModelConnection) {
+	if s.cloudPlanning.auth == nil {
+		return
+	}
+	kept := make(map[string]bool, len(next))
+	for _, connection := range next {
+		kept[connection.ID] = true
+	}
+	var removed []string
+	for _, connection := range previous {
+		if !kept[connection.ID] {
+			removed = append(removed, connection.ID)
+		}
+	}
+	if len(removed) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.cloudPlanning.auth.RemoveConnectionKeys(ctx, removed); err != nil {
+		s.logger.Warn("remove deleted model connection keys", "error", err)
+	}
 }
 
 // stopMediaForPolicyChange ends an active clock-locked run when a setting it
