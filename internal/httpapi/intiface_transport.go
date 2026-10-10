@@ -181,6 +181,16 @@ func (s *Server) handleIntifaceSelect(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = owner.SelectDevice(body.DeviceIndex, body.ActuatorIndex)
 	}
+	if err == nil && owner.Status().Scanning {
+		// The search is done once an actuator is chosen, and a scan left
+		// running keeps the Bluetooth radio busy beside the live connection.
+		// Best effort: the selection already succeeded either way.
+		scanCtx, cancelScan := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
+		if scanErr := owner.StopScanning(scanCtx); scanErr != nil {
+			s.logger.Warn("stop Intiface scan after device selection", "error", scanErr)
+		}
+		cancelScan()
+	}
 	s.writeIntifaceResult(w, err)
 }
 
