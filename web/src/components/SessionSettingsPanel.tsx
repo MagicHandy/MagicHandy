@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { confirmThen } from "../util/confirm";
 import { api } from "../api/client";
 import type { ManagedSession, ManagedSessionsResponse } from "../api/types";
 import { t, translateKnown } from "../i18n";
@@ -111,13 +112,15 @@ export function SessionSettingsPanel({ backendOnline, onSignedOut }: {
     const prompt = session.current
       ? t("Sign out this browser? All tabs sharing this login will need to sign in again.")
       : t("Sign out {name}? Any control or Bluetooth connection from that login will end.", { name: sessionLabel(session) });
-    if (window.confirm(prompt)) void mutate((signal) => api.revokeSession(session.id, signal), session.current);
+    confirmThen(prompt, { confirmLabel: t("Sign out") }, () => void mutate((signal) => api.revokeSession(session.id, signal), session.current));
   };
 
   const revokeOthers = () => {
-    if (window.confirm(t("Sign out all other logins for this account? Their control and Bluetooth connections will end, and Stop will be requested when needed."))) {
-      void mutate((signal) => api.revokeOtherSessions(signal));
-    }
+    confirmThen(
+      t("Sign out all other logins for this account? Their control and Bluetooth connections will end, and Stop will be requested when needed."),
+      { confirmLabel: t("Sign out other sessions") },
+      () => void mutate((signal) => api.revokeOtherSessions(signal)),
+    );
   };
 
   const rename = (event: FormEvent) => {

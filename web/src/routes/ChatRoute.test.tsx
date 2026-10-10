@@ -106,22 +106,18 @@ describe("ChatRoute", () => {
     render(<ChatRoute />);
 
     const controls = screen.getByRole("complementary", { name: "Motion controls" });
-    const mode = within(controls).getByRole("radiogroup", { name: "LLM motion" });
-    expect(within(mode).getByRole("radio", { name: "Creative" })).not.toBeChecked();
-    expect(within(mode).getByRole("radio", { name: "Pattern library" })).toBeChecked();
-    expect(within(mode).getByRole("radio", { name: "Off" })).toBeInTheDocument();
-	  expect(within(mode).getByRole("radio", { name: "Layered" })).not.toBeChecked();
-	  expect(mode.children).toHaveLength(6);
-	  expect(within(mode).getAllByRole("radio")).toHaveLength(5);
-	  expect(mode.querySelectorAll('[aria-hidden="true"]')).toHaveLength(1);
-    expect(within(controls).getByText("The AI picks from your enabled library patterns and sets the speed.")).toBeInTheDocument();
+    const mode = within(controls).getByRole("combobox", { name: "LLM motion" });
+    expect(mode).toHaveValue("pattern");
+    expect(within(mode).getAllByRole("option").map((option) => option.textContent))
+      .toEqual(["Creative v2", "Creative", "Layered", "Pattern library", "Off"]);
+    expect(mode).toHaveAccessibleDescription("The AI picks from your enabled library patterns and sets the speed.");
 
-    fireEvent.click(within(mode).getByRole("radio", { name: "Creative" }));
+    fireEvent.change(mode, { target: { value: "dynamic" } });
     await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("dynamic"));
-	  fireEvent.click(within(mode).getByRole("radio", { name: "Layered" }));
-	  await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("layered"));
-	  fireEvent.click(within(mode).getByRole("radio", { name: "Creative v2" }));
-	  await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("creative_v2"));
+    fireEvent.change(mode, { target: { value: "layered" } });
+    await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("layered"));
+    fireEvent.change(mode, { target: { value: "creative_v2" } });
+    await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("creative_v2"));
   });
 
   it("uses Creative while an older backend snapshot has no saved motion mode", async () => {
@@ -130,8 +126,7 @@ describe("ChatRoute", () => {
 
     await screen.findByText("Conversation content");
     const controls = screen.getByRole("complementary", { name: "Motion controls" });
-    const mode = within(controls).getByRole("radiogroup", { name: "LLM motion" });
-    expect(within(mode).getByRole("radio", { name: "Creative" })).toBeChecked();
+    expect(within(controls).getByRole("combobox", { name: "LLM motion" })).toHaveValue("dynamic");
   });
 
   it("shows only the backend mood for the active session", async () => {

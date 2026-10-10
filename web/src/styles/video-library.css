@@ -18,7 +18,9 @@
   background: var(--surface-2);
 }
 .media-card:hover:not([data-missing]),
-.media-card:focus-within,
+.media-card:focus-within {
+  border-color: var(--line-strong);
+}
 .media-card[data-selected] {
   border-color: var(--accent);
 }
@@ -82,7 +84,7 @@
   width: 24px;
   height: 24px;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--accent-ink);
 }
@@ -119,13 +121,13 @@
 }
 .media-card-copy strong {
   overflow: hidden;
-  font-size: 0.88rem;
+  font-size: var(--fs-body);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .media-card-copy span {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .media-card-copy .media-card-location,
 .media-card-copy .media-card-file {
@@ -162,11 +164,11 @@
   max-width: 100%;
   padding: 1px 7px;
   overflow: hidden;
-  border: 1px solid var(--line-strong);
-  border-radius: 6px;
-  background: var(--bg-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: var(--fs-hint);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -194,11 +196,10 @@
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-hint);
 }
 .media-filter select {
   min-width: 120px;
-  padding-block: 6px;
 }
 .media-filter-chip {
   display: inline-flex;
@@ -206,11 +207,11 @@
   gap: 5px;
   padding: 4px 8px;
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--accent-tint);
   color: var(--text);
   font: inherit;
-  font-size: 0.76rem;
+  font-size: var(--fs-hint);
   cursor: pointer;
 }
 .media-filter-spacer {
@@ -219,7 +220,7 @@
 .media-selection-count {
   min-width: 90px;
   color: var(--text);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
   font-weight: 600;
 }
 .media-selection-bar input {
@@ -249,7 +250,7 @@
   padding: 10px 0 6px;
   color: var(--muted);
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
 }
 .video-description > summary:hover {
   color: var(--text);
@@ -268,7 +269,7 @@
 .video-description-notes {
   max-width: 70ch;
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--fs-label);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -278,7 +279,7 @@
   gap: 2px 12px;
   margin: 0;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
   overflow-wrap: anywhere;
 }
 
@@ -290,7 +291,7 @@
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -304,7 +305,7 @@
 }
 .video-dialog h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--fs-heading);
   font-weight: 600;
 }
 .video-dialog-body {
@@ -327,7 +328,9 @@
   align-items: center;
   gap: 2px;
 }
+/* Stars are bare glyphs, not five boxed buttons. */
 .video-star {
+  border-color: transparent;
   color: var(--muted);
 }
 .video-star[data-filled] {
@@ -349,7 +352,7 @@
 .video-tag-list .video-tag {
   padding-right: 3px;
   color: var(--text);
-  font-size: 0.78rem;
+  font-size: var(--fs-hint);
 }
 .video-tag-list button {
   display: grid;
@@ -358,7 +361,7 @@
   height: 18px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -386,12 +389,12 @@
 }
 .video-tag-manager-list .video-tag {
   color: var(--text);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
 }
 .video-tag-count {
   flex: 1;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--fs-hint);
 }
 .video-tag-actions,
 .video-tag-confirm,
@@ -428,13 +431,14 @@
 }
 .video-watch {
   --watch-stage-h: calc(100dvh - var(--status-h) - 24px);
+  --watch-side-w: clamp(300px, 26vw, 380px);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 10px 12px;
 }
 .video-watch[data-chat-open] {
-  grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 380px);
+  grid-template-columns: minmax(0, 1fr) var(--watch-side-w);
 }
 .video-stage {
   display: flex;
@@ -470,7 +474,7 @@
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  font-size: 1rem;
+  font-size: var(--fs-heading);
   white-space: nowrap;
   text-overflow: ellipsis;
 }
@@ -481,7 +485,7 @@
 }
 .video-source-label {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
 }
 .video-source-choice legend {
   position: absolute;
@@ -543,14 +547,14 @@
 }
 .video-chat-title span {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .video-chat-note {
   margin: 0;
   padding: 8px 12px;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--fs-hint);
 }
 .video-chat-side .chat {
   padding: 10px;
@@ -607,7 +611,8 @@
 /* Fullscreen with the chat open keeps the conversation beside the picture. */
 .video-watch:fullscreen {
   --watch-stage-h: calc(100dvh - 72px);
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 28vw);
+  --watch-side-w: max(300px, 28vw);
+  grid-template-columns: minmax(0, 1fr) var(--watch-side-w);
   align-items: stretch;
   padding: 60px 12px 12px;
   background: var(--bg);
@@ -619,4 +624,31 @@
   position: static;
   height: auto;
   max-height: none;
+}
+/* With the chat beside the video, the playback rail docks over the top of the
+   chat column instead of narrowing the picture: the video, its transport, the
+   script plot and the motion-source switch stay as they were. */
+@media (min-width: 1001px) {
+  .video-watch[data-chat-open] {
+    position: relative;
+  }
+  .video-watch[data-chat-open] .media-player:has(> .playback-panel-layer) {
+    position: static;
+    padding-right: 0;
+  }
+  .video-watch[data-chat-open] .playback-panel-layer {
+    top: 0;
+    right: 0;
+    z-index: 3;
+    width: var(--watch-side-w);
+    max-height: var(--watch-stage-h);
+  }
+  .video-watch[data-chat-open] .playback-panel {
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow);
+  }
+  .video-watch[data-chat-open]:fullscreen .playback-panel-layer {
+    top: 60px;
+    right: 12px;
+  }
 }

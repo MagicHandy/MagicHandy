@@ -309,7 +309,7 @@ function LoreRow({
         {entry && onDelete && (
           <button
             type="button"
-            className="btn btn-secondary icon-btn"
+            className="icon-button"
             disabled={disabled}
             aria-label={t("Delete lore entry")}
             title={t("Delete lore entry")}

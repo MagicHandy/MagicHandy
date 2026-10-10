@@ -546,7 +546,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
             <p className="model-store-path">{manager?.store_path || (managerMessage ? t("Model store unavailable") : t("Loading model store"))}</p>
           </div>
           <div className="row-actions model-import-actions">
-            <button type="button" className="icon-btn model-refresh" aria-label={t("Refresh model list")} title={t("Refresh model list")} disabled={busy === "refresh"} onClick={() => void refreshModels()}><RefreshIcon size={17} /></button>
+            <button type="button" className="icon-button model-refresh" aria-label={t("Refresh model list")} title={t("Refresh model list")} disabled={busy === "refresh"} onClick={() => void refreshModels()}><RefreshIcon size={17} /></button>
             <button type="button" className="btn btn-secondary" aria-expanded={showGGUFImport} disabled={locked || !manager} onClick={() => setShowGGUFImport((value) => !value)}><UploadIcon size={16} />{t("Import GGUF")}</button>
             <button type="button" className="btn btn-secondary" aria-expanded={showOllamaImport} disabled={locked || !manager} onClick={() => setShowOllamaImport((value) => !value)}><UploadIcon size={16} />{t("Import from Ollama")}</button>
           </div>
@@ -687,7 +687,7 @@ function ManagedModels({
               ) : (
                 <>
                   <button type="button" className="btn btn-secondary" disabled={locked || selected || model.state !== "ready"} onClick={() => onUse(model)}>{selected ? t("Selected") : t("Use")}</button>
-                  <button type="button" className="icon-btn" aria-label={t("Remove {display_name}", { display_name: model.display_name })} title={t("Remove managed copy")} disabled={locked || protectedModel} onClick={() => setConfirmRemove(model.id)}><TrashIcon size={17} /></button>
+                  <button type="button" className="icon-button" aria-label={t("Remove {display_name}", { display_name: model.display_name })} title={t("Remove managed copy")} disabled={locked || protectedModel} onClick={() => setConfirmRemove(model.id)}><TrashIcon size={17} /></button>
                 </>
               )}
             </div>

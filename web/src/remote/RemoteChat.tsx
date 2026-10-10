@@ -81,24 +81,31 @@ function RemoteChatSession({ chat, state, send }: Props & { chat: RemoteChatPres
   const blocked = chat.busy || !chat.ready || sending || Boolean(sent);
   return (
     <section className="remote-chat" aria-label={t("Desktop chat")}>
-      <div className="remote-chat-log" ref={logRef} role="log" aria-live="polite">
+      <div className="chat-log remote-chat-log" ref={logRef} role="log" aria-live="polite">
         {loadError && <p className="form-status" role="alert">{loadError}</p>}
         {!loadError && messages.length === 0 && <p className="form-status">{t("No messages yet")}</p>}
-        {messages.map((message) => (
-          <div key={message.seq} className="remote-chat-message" data-role={message.role}>
-            <span className="chat-speaker">{message.role === "user" ? t("You") : chat.persona_name || "MagicHandy"}</span>
-            <div className="chat-bubble">{message.content}{message.truncated && <span>…</span>}</div>
-          </div>
-        ))}
+        {messages.map((message) => {
+          const speaker = message.role === "user" ? t("You") : chat.persona_name || "MagicHandy";
+          return (
+            <div key={message.seq} className="chat-message" data-role={message.role}>
+              <span className="chat-avatar" aria-hidden="true">{speaker.slice(0, 1).toUpperCase()}</span>
+              <div className="chat-body">
+                <span className="chat-speaker">{speaker}</span>
+                <div className="chat-bubble">{message.content}{message.truncated && <span>…</span>}</div>
+              </div>
+            </div>
+          );
+        })}
         {chat.busy && <p className="remote-chat-busy" role="status">{t("The desktop is answering…")}</p>}
       </div>
       <form
-        className="remote-chat-form"
+        className="chat-form remote-chat-form"
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
         }}
       >
+        <div className="chat-compose-row">
         <label className="visually-hidden" htmlFor="remote-chat-input">{t("Message")}</label>
         <textarea
           id="remote-chat-input"
@@ -108,7 +115,8 @@ function RemoteChatSession({ chat, state, send }: Props & { chat: RemoteChatPres
           placeholder={chat.ready ? t("Message the desktop chat…") : t("The desktop chat cannot send right now.")}
           onChange={(event) => setDraft(event.target.value)}
         />
-        <button type="submit" className="btn btn-primary" disabled={blocked || !draft.trim()}>{t("Send")}</button>
+        <button type="submit" className="btn btn-primary chat-send" disabled={blocked || !draft.trim()}>{t("Send")}</button>
+        </div>
       </form>
     </section>
   );

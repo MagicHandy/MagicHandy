@@ -23,16 +23,17 @@
   overflow: hidden;
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--text);
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: border-color 0.15s ease;
 }
 .persona-card:hover,
 .persona-card:focus-visible {
-  border-color: var(--accent);
+  border-color: var(--line-strong);
 }
 .persona-card:focus-visible {
   outline: 2px solid var(--focus);
@@ -40,7 +41,6 @@
 }
 .persona-card[aria-current="true"] {
   border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
 }
 .persona-card-default {
   display: block;
@@ -75,7 +75,7 @@
   border-radius: 50%;
   background: var(--surface-3);
   color: var(--muted);
-  font-size: 1.9rem;
+  font-size: var(--fs-display);
   font-weight: 700;
   line-height: 1;
   text-transform: uppercase;
@@ -98,7 +98,7 @@
 }
 .persona-card-copy strong {
   overflow: hidden;
-  font-size: 0.9rem;
+  font-size: var(--fs-body);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -106,7 +106,7 @@
   display: -webkit-box;
   overflow: hidden;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--fs-hint);
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -127,10 +127,9 @@
 }
 .persona-active-badge {
   margin-right: auto;
-  border-color: var(--accent);
-  background: var(--accent) !important;
-  color: var(--accent-ink);
-  font-weight: 700;
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface)) !important;
+  color: var(--text);
 }
 .persona-lore-badge {
   align-self: flex-start;
@@ -148,7 +147,7 @@
   cursor: default;
 }
 .persona-card-actions:hover {
-  border-color: var(--accent);
+  border-color: var(--line-strong);
   border-style: dashed;
 }
 .persona-card-action {
@@ -170,7 +169,6 @@
 }
 .persona-card-action:hover:not(:disabled) {
   background: var(--surface-2);
-  color: var(--accent);
 }
 .persona-card-action:focus-visible {
   z-index: 1;
@@ -184,14 +182,14 @@
 .persona-card-action .icon {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--accent);
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line-strong);
   border-radius: 50%;
   color: var(--accent);
 }
 .persona-card-action > span:last-child {
-  font-size: 0.86rem;
+  font-size: var(--fs-body);
   font-weight: 600;
   text-align: center;
 }
@@ -199,7 +197,7 @@
 .persona-count {
   margin: 10px 0 0;
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-hint);
 }
 
 /* --- Editor window ------------------------------------------------------- */
@@ -232,7 +230,7 @@
   max-height: min(max(660px, 84dvh), calc(100dvh - 40px));
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -250,7 +248,8 @@
 .persona-editor-window-head h2 {
   overflow: hidden;
   margin: 0;
-  font-size: 1.1rem;
+  font-size: var(--fs-heading);
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -349,7 +348,7 @@
   background: color-mix(in srgb, var(--surface-2) 88%, transparent);
 }
 .persona-portrait-action:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--line-strong);
   background: var(--surface-3);
 }
 .persona-portrait-action:focus-visible {
@@ -385,8 +384,9 @@
   border-top: 1px solid var(--line);
   background: var(--surface);
 }
+/* Delete stands apart on the left; the primary action closes the row. */
 .persona-editor-window-actions .btn-danger-outline {
-  margin-left: auto;
+  margin-right: auto;
 }
 
 .persona-lore-heading {
@@ -426,26 +426,29 @@
   position: relative;
   display: flex;
   min-width: 0;
-  max-width: 160px;
-  flex: 0 1 160px;
-  align-items: stretch;
+  max-width: 168px;
+  flex: 0 1 168px;
+  align-items: center;
+  padding-right: 6px;
+  margin-right: 2px;
   border-right: 1px solid var(--line);
 }
 .persona-chip {
   display: grid;
   width: 100%;
   min-width: 0;
-  height: 100%;
-  grid-template-columns: 24px minmax(0, 1fr) 14px;
-  gap: 6px;
+  height: 32px;
+  grid-template-columns: 22px minmax(0, 1fr) 14px;
+  gap: 7px;
   align-items: center;
-  padding: 5px 8px 0;
-  border: 0;
-  border-radius: 0;
-  background: var(--bg-inset);
+  padding: 0 7px 0 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 0.76rem;
+  font-size: var(--fs-label);
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -462,10 +465,10 @@
 }
 .persona-chip-avatar {
   flex: 0 0 auto;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   overflow: hidden;
-  border-radius: 3px;
+  border-radius: 50%;
   background: var(--bg-inset);
   object-fit: cover;
 }
@@ -473,12 +476,12 @@
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 3px;
-  background: var(--surface-3);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--steel-deep);
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -508,11 +511,11 @@
   max-width: calc(100vw - 24px);
   max-height: 320px;
   overflow-y: auto;
-  padding: 6px;
+  padding: 4px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: 0 14px 30px rgb(0 0 0 / 40%);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+  box-shadow: var(--shadow);
 }
 .persona-switcher-option {
   display: flex;
@@ -520,20 +523,20 @@
   align-items: center;
   padding: 6px 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: none;
   color: var(--text);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
   text-align: left;
   cursor: pointer;
 }
 .persona-switcher-option:hover,
 .persona-switcher-option:focus-visible {
-  background: var(--surface-3);
+  background: var(--surface-2);
 }
-.persona-switcher-option[aria-current="true"] {
-  color: var(--accent);
+.persona-switcher-option[aria-checked="true"] {
+  background: var(--accent-tint);
   font-weight: 600;
 }
 .persona-switcher-option-copy {
@@ -549,13 +552,13 @@
 }
 .persona-switcher-option-copy small {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 400;
 }
 .persona-switcher-empty {
   padding: 8px;
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-hint);
 }
 
 /* A conversation that changed persona mid-stream says so. Derived from adjacent
@@ -567,7 +570,7 @@
   align-items: center;
   margin: 6px 0;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .persona-divider::before,
 .persona-divider::after {

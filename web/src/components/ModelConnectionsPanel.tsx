@@ -86,7 +86,7 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
       {conversation && (planner.provider === "conversation" || planningConnection?.id === conversationID) && <p className="hint">{t("This connection is also used by Autopilot.")}</p>}
       {conversation ? <>
         {editor(conversation)}
-        {!setup && <><label className="field checkbox"><input type="checkbox" disabled={locked} checked={Boolean(settings.retry_refusal_locally)} onChange={event => patch({ retry_refusal_locally: event.target.checked })} /><span>{t("Retry declined chat requests with the local model")}</span></label>
+        {!setup && <><label className="toggle-line"><span className="toggle"><input type="checkbox" disabled={locked} checked={Boolean(settings.retry_refusal_locally)} onChange={event => patch({ retry_refusal_locally: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Retry declined chat requests with the local model")}</span></label>
         {settings.retry_refusal_locally && <>
           <DismissibleNotice id="model-local-retry" className="model-help"><p className="hint">{t("One local attempt after an explicit provider refusal, using your local prompt and the original conversation. Errors, incomplete output and refusal wording in an otherwise valid reply do not trigger a retry. Autopilot is unchanged.")}</p><p className="hint">{t("The local endpoint must be available. A cold model may take longer to load. No model is downloaded automatically.")}</p></DismissibleNotice>
           <p className="hint">{t("Local retry model: {provider} · {model}", { provider: settings.provider === "ollama" ? "Ollama" : "llama.cpp", model: settings.model || t("Choose a model") })}</p>

@@ -1,4 +1,5 @@
 import { formatNumber, t } from "../i18n";
+import { confirmThen } from "../util/confirm";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { MediaScanState, MediaSettingsPayload, MediaVideo } from "../api/types";
@@ -115,8 +116,9 @@ export function MediaSettingsPanel({
   }
 
   function removeLocation(location: string) {
-    if (!window.confirm(t("Remove {location} from the video library?", { location }))) return;
-    onChange({ library_paths: locations.filter((entry) => entry !== location) });
+    confirmThen(t("Remove {location} from the video library?", { location }), { confirmLabel: t("Remove"), destructive: true }, () => {
+      onChange({ library_paths: locations.filter((entry) => entry !== location) });
+    });
   }
 
   async function startScan() {

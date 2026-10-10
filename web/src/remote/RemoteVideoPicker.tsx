@@ -29,11 +29,10 @@ export function RemoteVideoPicker({ currentID, send }: { currentID?: string; sen
     },query && offset === 0 ? 200 : 0);
     return () => { clearTimeout(timer);abort.abort(); };
   },[query,offset]);
-  return <section className="remote-picker" aria-label={t("Open a video on the desktop")}>
-    <div className="remote-section-heading"><h2>{t("Video library")}</h2>
+  return <section className="control-card remote-picker" aria-label={t("Open a video on the desktop")}>
+    <h2 className="control-card-title">{t("Video library")}</h2>
     <input type="search" className="remote-picker-search" value={query} placeholder={t("Search titles and tags")} aria-label={t("Search videos")}
       onChange={event => { setQuery(event.target.value);setOffset(0);setItems([]);setNext(null); }} />
-    </div>
     {error && <p className="form-status" role="alert">{error}</p>}
     {loading && <p className="form-status" role="status">{t("Loading videos")}</p>}
     {!error && !loading && items.length === 0 && <p className="form-status">{query ? t("No videos match the filters.") : t("No videos yet")}</p>}
@@ -43,6 +42,6 @@ export function RemoteVideoPicker({ currentID, send }: { currentID?: string; sen
         <span className="remote-picker-title">{video.title}</span><span className="remote-picker-meta">{translateKnown(formatDuration(video.duration_ms))}{video.has_funscript && <span>{t("Script")}</span>}</span>
       </button>
     </li>)}</ul>
-    {next !== null && <button className="btn btn-secondary small" type="button" disabled={loading} onClick={() => setOffset(next)}>{t("Show more")}</button>}
+    {next !== null && <button className="btn btn-secondary btn-sm" type="button" disabled={loading} onClick={() => setOffset(next)}>{t("Show more")}</button>}
   </section>;
 }

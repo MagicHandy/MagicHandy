@@ -155,7 +155,7 @@ describe("QuickSettings", () => {
     result.rerender(<QuickSettings section="style" />);
     expect(screen.queryByRole("switch", { name: "Reverse direction" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-    expect(screen.getByRole("slider", { name: "Style" })).toHaveAttribute("aria-valuetext", "Balanced");
+    expect(within(screen.getByRole("radiogroup", { name: "Style" })).getByRole("radio", { name: "Balanced" })).toBeChecked();
   });
 
   it("reverts the latest optimistic value when the patch fails", async () => {

@@ -78,7 +78,7 @@ export function ChatGPTConnection({ onChange, presentation = "settings", locked 
     {connected && active?.welcome_pending && <div className="chatgpt-welcome" role="note" aria-label={t("You're using your ChatGPT plan")}>
       <h4>{t("You're using your ChatGPT plan")}</h4>
       <p>{t("Eligible requests use your ChatGPT plan or authorized credits. You control usage in ChatGPT Settings.")}</p>
-      <button className="btn" type="button" disabled={disabled} onClick={() => void run(api.cloudWelcome)}>{t("Got it")}</button>
+      <button className="btn btn-secondary" type="button" disabled={disabled} onClick={() => void run(api.cloudWelcome)}>{t("Got it")}</button>
     </div>}
     {error && <p className="error-text" role="alert">{error}</p>}
   </div>;

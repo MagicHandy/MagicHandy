@@ -5,6 +5,7 @@ import { MicrophoneIcon } from "../shell/icons";
 import { encodePCM16WAV, recordingToWAV } from "../util/recording";
 import { VoiceActivitySegmenter } from "../util/voice-activity";
 import { openPCMStream, type PCMStream } from "../util/voice-capture";
+import { RangeInput } from "./RangeInput";
 
 const HOLD_RECORDING_LIMIT_SECONDS = 30;
 const WARM_MICROPHONE_MS = 60_000;
@@ -654,9 +655,8 @@ export function VoiceComposerControls({
         <label className="voice-range-label" htmlFor="voice-input-sensitivity">
           <span>{t("Sensitivity")}</span><output>{sensitivity}</output>
         </label>
-        <input
+        <RangeInput
           id="voice-input-sensitivity"
-          type="range"
           min={1}
           max={100}
           value={sensitivity}
@@ -668,9 +668,8 @@ export function VoiceComposerControls({
         <label className="voice-range-label" htmlFor="voice-input-silence">
           <span>{t("End-of-speech delay")}</span><output>{t("{seconds} s", { seconds: (silenceMillis / 1000).toFixed(1) })}</output>
         </label>
-        <input
+        <RangeInput
           id="voice-input-silence"
-          type="range"
           min={300}
           max={3000}
           step={100}

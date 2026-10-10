@@ -1,5 +1,11 @@
 # Settings and setup visual review
 
+> **Superseded the same day.** The Graphite refactor replaced the header bands,
+> flat section bodies, square checkboxes and rectangular tab strip described
+> here with one card level, switch rows and filled tabs; see
+> [UI design guidelines](ui-design-guidelines.md). The rejection of underline
+> tab indicators recorded below still holds.
+
 This pass covers the shared presentation of General, Access, Device, Media,
 Chat, Voice and Diagnostics, plus Easy and Custom setup. The provider branch
 remains separate from `main` for later integration.

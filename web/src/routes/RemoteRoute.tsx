@@ -1,6 +1,7 @@
 import { t, translateKnown } from "../i18n";
 import { useEffect, useState } from "react";
 import { SegmentedChoice } from "../components/SetpointControls";
+import { RefreshIcon } from "../shell/icons";
 import { RemoteChat } from "../remote/RemoteChat";
 import { RemoteVideoControls } from "../remote/RemoteVideoControls";
 import { RemoteVideoPicker } from "../remote/RemoteVideoPicker";
@@ -31,20 +32,22 @@ export function RemoteRoute({ remote, canControl, onRefresh }: { remote: RemoteV
   }
 
   return <div className="remote-page" data-mode={mode}>
-    <div className="remote-connection-row"><RemoteConnection remote={remote} /><button className="btn btn-secondary small" type="button" onClick={onRefresh || remote.refresh}>{t("Refresh")}</button></div>
+    <div className="remote-connection-row"><RemoteConnection remote={remote} /><button className="icon-button btn-quiet" type="button" aria-label={t("Refresh")} title={t("Refresh")} onClick={onRefresh || remote.refresh}><RefreshIcon /></button></div>
     {!canControl ? <p className="remote-notice" role="status">{t("Ask the administrator for a control permission to use this remote.")}</p> : <>
       <SegmentedChoice className="remote-mode" label={t("Control")} value={mode}
         options={[{ value: "video", label: t("Video") }, { value: "chat", label: t("Chat") }]} onChange={chooseMode} />
       {status && <p className="remote-command-status" data-tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.message}</p>}
       {reachable && state && <div className="remote-workspace" data-mode={mode}>
         <section className="remote-video-column" aria-label={t("Video")}>
-          <h2 className="remote-pane-title">{t("Video")}</h2>
           {state.video ? <RemoteVideoControls key={`${state.video.video_id}:${state.stop_sequence}`} video={state.video} position={remotePosition(state, remote.receivedAt, now)} send={send} />
-            : <p className="remote-notice">{t("The desktop is not showing a video. Open one below.")}</p>}
+            : <div className="control-card remote-video-empty">
+              <h2 className="control-card-title">{t("Now playing")}</h2>
+              <p className="hint">{t("The desktop is not showing a video. Open one below.")}</p>
+            </div>}
           <RemoteVideoPicker currentID={state.video?.video_id} send={send} />
         </section>
-        <section className="remote-chat-column" aria-label={t("Desktop chat")}>
-          <h2 className="remote-pane-title">{t("Desktop chat")}</h2>
+        <section className="remote-chat-column chat-conversation" aria-label={t("Desktop chat")}>
+          <h2 className="control-card-title remote-chat-title">{t("Desktop chat")}</h2>
           <RemoteChat key={state.chat?.session_id} state={state} send={send} />
         </section>
       </div>}

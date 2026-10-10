@@ -7,6 +7,7 @@ import "./styles/tokens.css";
 import "./styles/themes.css";
 import "./styles/shell.css";
 import "./styles/components.css";
+import "./styles/visualizer.css";
 import "./styles/setpoint-controls.css";
 import "./styles/autopilot.css";
 import "./styles/freestyle.css";

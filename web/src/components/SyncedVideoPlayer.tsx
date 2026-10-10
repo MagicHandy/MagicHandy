@@ -1,5 +1,5 @@
 import { formatNumber, t, translateKnown } from "../i18n";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { api } from "../api/client";
 import type { MediaSyncStatus, MediaVideo, MediaVideoUpdate } from "../api/types";
 import { VideoPlaybackController, type SyncOperation, type VideoPlayerHandle } from "../media/playbackController";
@@ -54,6 +54,13 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot);
   const [timelineHidden, setTimelineHidden] = useState(readTimelinePreference);
   const [panelOpen, setPanelOpen] = useState(false);
+  const panelTrigger = useRef<HTMLButtonElement>(null);
+  const panelID = useId();
+  // Closing from inside the panel hands focus back to its trigger.
+  const closePanel = useCallback(() => {
+    if (document.getElementById(panelID)?.contains(document.activeElement)) panelTrigger.current?.focus();
+    setPanelOpen(false);
+  }, [panelID]);
 
   useEffect(() => {
     controller.connect();
@@ -146,7 +153,7 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
     >
       {scriptLoading && <div className="media-script-loading" role="status">{t("Preparing paired script and video")}</div>}
       {!scriptLoading && !script && scriptError && <p className="form-status media-playback-error" role="alert">{t("Script unavailable: {error}. Video playback will not command motion.", { error: scriptError })}</p>}
-      {script && (
+      {script && (<>
         <section className="media-funscript" aria-label={t("Paired funscript timeline")}>
           <div className="media-funscript-head">
             <div className="media-funscript-title">
@@ -164,11 +171,12 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
                 title={timelineHidden ? t("Show timeline") : t("Hide timeline")}
               ><ChevronUpIcon size={16} /></button>
               <button
+                ref={panelTrigger}
                 type="button"
                 className="icon-button media-playback-trigger"
                 onClick={() => setPanelOpen((open) => !open)}
                 aria-expanded={panelOpen}
-                aria-haspopup="dialog"
+                aria-controls={panelOpen ? panelID : undefined}
                 aria-label={t("Playback settings for {display_name}", { display_name: video.display_name })}
                 title={playbackSettingsTitle}
               ><GearIcon size={16} /></button>
@@ -195,24 +203,27 @@ export function SyncedVideoPlayer({ video, locked, stopSequence, onVideoUpdate, 
             <span className="media-sync-time">{formatTimelineTime(snapshot.currentTimeMillis)}</span>
           </div>
           {syncError && <p className="form-status media-playback-error" role="alert">{syncError}</p>}
-          {panelOpen && (
-            <PlaybackPanel
-              video={video}
-              sync={sync}
-              locked={locked}
-              setupOffsetMillis={state?.settings?.media?.script_offset_ms ?? 0}
-              smoothingPercent={state?.settings?.media?.script_smoothing_percent ?? 0}
-              roundingMillis={state?.settings?.media?.peak_rounding_ms ?? 0}
-              limitSpeed={state?.settings?.motion?.apply_video_speed_limit ?? false}
-              speedLimitPercent={state?.settings?.motion?.speed_max_percent ?? 100}
-              onClose={() => setPanelOpen(false)}
-              onVideoUpdate={onVideoUpdate}
-              onFiltersChanging={controller.beginFilterChange}
-              onFiltersChanged={controller.applyPlaybackFilters}
-            />
-          )}
         </section>
-      )}
+        {/* A direct child of the player, so wider screens dock it as the
+            player's side rail (media.css) instead of over the picture. */}
+        {panelOpen && (
+          <PlaybackPanel
+            id={panelID}
+            video={video}
+            sync={sync}
+            locked={locked}
+            setupOffsetMillis={state?.settings?.media?.script_offset_ms ?? 0}
+            smoothingPercent={state?.settings?.media?.script_smoothing_percent ?? 0}
+            roundingMillis={state?.settings?.media?.peak_rounding_ms ?? 0}
+            limitSpeed={state?.settings?.motion?.apply_video_speed_limit ?? false}
+            speedLimitPercent={state?.settings?.motion?.speed_max_percent ?? 100}
+            onClose={closePanel}
+            onVideoUpdate={onVideoUpdate}
+            onFiltersChanging={controller.beginFilterChange}
+            onFiltersChanged={controller.applyPlaybackFilters}
+          />
+        )}
+      </>)}
     </MediaVideoPlayer>
   );
 }

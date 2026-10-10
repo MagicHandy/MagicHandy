@@ -33,6 +33,35 @@ the guide and 1,103 ms without on the same steering fixture. No dependency, UI
 asset, model call or resident state is added. See the
 [shared-guide review](creative-v2-shared-reach-guide-2026-10-09.md).
 
+## 2026-10-09 — Graphite UI refactor
+
+Compared with `eb3c29c2`, on Windows amd64 Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, Node gzip level 9:
+
+| Artifact | Previous checkpoint | Graphite | Change |
+| --- | ---: | ---: | ---: |
+| Core binary | 22,438,400 B | 22,011,904 B | -426,496 B |
+| Main JS, raw / gzip-9 | 1,110,785 / 299,476 B | 1,117,990 / 301,502 B | +7,205 / +2,026 B |
+| Main CSS, raw / gzip-9 | 183,365 / 32,520 B | 190,557 / 33,334 B | +7,192 / +814 B |
+| Labs CSS chunk, raw | 15,855 B | 18,473 B | +2,618 B |
+| Complete embedded UI including index | 2,827,166 B | 2,401,030 B | -426,136 B |
+
+No dependency was added. Removing the generated connection-artwork bitmap
+(444,236 B) in favor of a flat vector strip outweighs the restyle. The in-app
+confirmation dialog that replaces `window.confirm`, the switch rows that
+replace stray checkboxes, and app-wide touch sizing account for most of the
+small JS and CSS growth. The motion visualizer rules moved from
+`components.css` to `visualizer.css` to stay under the stylesheet size
+ceiling. The review follow-ups (the shared `useMenu` keyboard primitive, one
+slider recipe through `RangeInput`, the docked playback rail, the compact Labs
+mode select, pattern plot scales and the compact phone controller readout)
+account for +3,437 / +1,297 B of the JS and +2,454 / +477 B of the CSS; all
+slider paint now lives in `setpoint-controls.css`. Moving the Labs chart scales
+into the same HTML axes adds +93 / +16 B of main JS, leaves the main CSS
+unchanged and trims 11 B from the Labs CSS chunk. No new RSS, cold-start or
+inference-latency claim is made. See
+[UI design guidelines](ui-design-guidelines.md).
+
 ## 2026-10-09 — Compact settings and setup visual system
 
 Compared with published `7a17bb45`, on Windows amd64 Go 1.26.9,

@@ -384,7 +384,7 @@ describe("AutopilotControl", () => {
     render(<AutopilotControl />);
 
     const advanced = screen.getByText("Advanced").closest("details");
-    const speechSelector = screen.getByRole("slider", { name: "Spoken check-ins" });
+    const speechSelector = screen.getByRole("combobox", { name: "Spoken check-ins" });
     const speechMinimum = screen.getByRole("spinbutton", { name: "Speech minimum seconds" });
     expect(advanced).not.toContainElement(speechMinimum);
     expect(speechSelector.parentElement?.nextElementSibling).toContainElement(speechMinimum);

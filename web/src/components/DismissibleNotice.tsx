@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t, translateKnown } from "../i18n";
 import { noticeDefinition } from "../notice-catalog";
 import { useNoticePreferences } from "../state/notice-preferences";
+import { CloseIcon } from "../shell/icons";
 
 export function DismissibleNotice({ id, className = "", children }: { id: string; className?: string; children: ReactNode }) {
   const preferences = useNoticePreferences();
@@ -36,6 +37,6 @@ export function DismissibleNotice({ id, className = "", children }: { id: string
         </div>
       </div> : children}
     </div>
-    {preferences && !asking && <button ref={close} className="notice-dismiss" type="button" aria-label={t("Dismiss {notice}", { notice: title })} title={t("Dismiss {notice}", { notice: title })} onClick={() => setAsking(true)}>×</button>}
+    {preferences && !asking && <button ref={close} className="notice-dismiss" type="button" aria-label={t("Dismiss {notice}", { notice: title })} title={t("Dismiss {notice}", { notice: title })} onClick={() => setAsking(true)}><CloseIcon size={14} /></button>}
   </div>;
 }

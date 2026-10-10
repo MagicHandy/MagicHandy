@@ -34,7 +34,7 @@
 }
 .media-catalog-count {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
   white-space: nowrap;
 }
 .media-sort {
@@ -42,11 +42,15 @@
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-hint);
 }
 .media-sort select {
   min-width: 132px;
-  padding-block: 8px;
+}
+/* Toolbar commands share the field height so a row lines up. */
+.media-library-toolbar .btn,
+.media-filter-bar .btn {
+  min-height: var(--control-h);
 }
 /* The catalog grid, cards and curation controls live in video-library.css. */
 .media-missing-badge,
@@ -63,12 +67,12 @@
 .media-player-heading h2 {
   margin: 0;
   overflow-wrap: anywhere;
-  font-size: 1rem;
+  font-size: var(--fs-heading);
   letter-spacing: 0;
 }
 .media-player-heading span {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
 }
 /* Every child of the player — the incompatible-file notice, the playback error
    row, the funscript timeline — used to sit at a zero gap from the video frame,
@@ -90,7 +94,10 @@
 .media-playback-error-row span {
   min-width: 0;
 }
+/* The transport adapts to the frame's own width (container queries below), so
+   it stays whole beside the playback rail or the chat as well as on phones. */
 .media-video-frame {
+  container: media-frame / inline-size;
   position: relative;
   width: 100%;
   display: grid;
@@ -189,7 +196,7 @@
   width: 66px;
   flex: 0 0 66px;
   color: rgba(244, 245, 246, 0.86);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
@@ -215,7 +222,7 @@
   place-items: center;
   padding: 8px 6px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: rgba(8, 10, 12, 0.86);
   opacity: 0;
   pointer-events: none;
@@ -246,16 +253,35 @@
   direction: rtl;
   writing-mode: vertical-lr;
 }
+/* The shared slider recipe stood upright: it fills from the bottom. */
+.media-transport-volume::-webkit-slider-runnable-track {
+  width: var(--range-track);
+  height: 100%;
+  background: linear-gradient(
+    to top,
+    var(--accent) 0 calc(var(--range-thumb) / 2 + (100% - var(--range-thumb)) * var(--range-fill, 0)),
+    var(--line-strong) 0
+  );
+}
+.media-transport-volume::-webkit-slider-thumb {
+  margin-top: 0;
+  margin-left: calc((var(--range-track) - var(--range-thumb)) / 2);
+}
+.media-transport-volume::-moz-range-track,
+.media-transport-volume::-moz-range-progress {
+  width: var(--range-track);
+}
 .media-transport-rate {
   width: 58px;
   height: 30px;
+  min-height: 30px;
   flex: 0 0 58px;
   padding: 0 4px;
   border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: rgba(8, 10, 12, 0.7);
   color: #f4f5f6;
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .media-script-loading {
   display: flex;
@@ -264,7 +290,7 @@
   min-height: 22px;
   margin-top: 8px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .media-script-loading::before {
   width: 7px;
@@ -314,12 +340,12 @@
   color: var(--accent);
 }
 .media-funscript-head strong {
-  font-size: 0.82rem;
+  font-size: var(--fs-label);
 }
 .media-funscript-head span,
 .media-sync-readout {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .media-funscript-head .media-script-length-warning {
   color: var(--warn);
@@ -358,7 +384,7 @@
   width: 100%;
   height: 4px;
   overflow: hidden;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   background: var(--line);
 }
 .media-timeline-collapsed span {
@@ -409,17 +435,17 @@
   }
 }
 
-@media (max-width: 720px) {
+@container media-frame (max-width: 700px) {
   .media-transport-controls {
     gap: 5px;
   }
   .media-transport-time {
     width: 50px;
     flex-basis: 50px;
-    font-size: 0.66rem;
+    font-size: var(--fs-micro);
   }
 }
-@media (max-width: 520px) {
+@container media-frame (max-width: 500px) {
   .media-transport-overlay {
     padding: 6px;
   }
@@ -467,7 +493,7 @@
     justify-self: end;
   }
 }
-@media (max-width: 340px) {
+@container media-frame (max-width: 320px) {
   .media-transport-seek + .media-transport-time {
     display: none;
   }
@@ -496,7 +522,7 @@
 }
 .media-dialog-header h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--fs-heading);
   letter-spacing: 0;
 }
 .media-dialog-header .eyebrow {
@@ -517,7 +543,7 @@
   gap: 8px;
   min-width: min(100%, 420px);
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-hint);
 }
 .media-preview-picker select {
   min-width: 0;
@@ -539,7 +565,7 @@
   gap: 10px;
   flex-wrap: wrap;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
 }
 .media-preview-readout strong {
   color: var(--text);
@@ -552,7 +578,7 @@
 .media-settings-subtitle {
   margin: 18px 0 8px;
   color: var(--text);
-  font-size: 0.78rem;
+  font-size: var(--fs-body);
   font-weight: 600;
 }
 .media-scan-options {
@@ -575,7 +601,7 @@
   margin: 14px 0 0;
   padding: 0;
   color: var(--text);
-  font-size: 0.78rem;
+  font-size: var(--fs-body);
   font-weight: 600;
 }
 .media-scan-options .toggle-line {
@@ -608,17 +634,16 @@
 }
 .media-location-row strong {
   overflow-wrap: anywhere;
-  font-size: 0.82rem;
+  font-size: var(--fs-label);
   font-weight: 600;
 }
 .media-location-row small {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .media-location-add {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   margin-top: 14px;
 }
@@ -626,7 +651,7 @@
   margin: 0;
 }
 .media-location-add > .btn {
-  min-height: 40px;
+  justify-self: start;
 }
 .media-scan-controls {
   justify-content: space-between;
@@ -639,7 +664,7 @@
 .media-scan-controls span,
 .media-scan-summary {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
 }
 .media-scan-progress {
   width: 100%;
@@ -650,9 +675,13 @@
 }
 
 
-/* ---- Floating playback panel ---- */
-/* It overlays the workspace instead of reflowing it: the whole point is to be
-   adjusted while the video plays, so nothing below it may move. */
+/* ---- Playback panel ----
+   It is adjusted while the video plays, so it must not cover what it is judged
+   against. Phones float it as a sheet above the Stop footer. Wider screens dock
+   it as a rail inside the player, beside the picture and the script plot, so
+   the transport and the motion-source switch below stay uncovered; the watch
+   page moves it over the chat column when the chat is open beside the video
+   (video-library.css). */
 .playback-panel-layer {
   position: fixed;
   inset: 0;
@@ -661,17 +690,50 @@
 }
 .playback-panel {
   position: absolute;
-  right: clamp(8px, 2.4vw, 22px);
-  bottom: clamp(8px, 2.4vw, 22px);
-  width: min(288px, calc(100vw - 16px));
-  max-height: calc(100vh - 32px);
+  right: 8px;
+  bottom: calc(var(--footer-h) + 8px);
+  left: 8px;
+  max-height: calc(100dvh - var(--footer-h) - var(--status-h) - 16px);
   overflow: auto;
   padding: 10px 12px 12px;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
   pointer-events: auto;
+}
+@media (min-width: 721px) {
+  .media-player:has(> .playback-panel-layer) {
+    --playback-rail-w: 288px;
+    position: relative;
+    padding-right: calc(var(--playback-rail-w) + 12px);
+  }
+  .playback-panel-layer {
+    position: absolute;
+    inset: 0 0 auto auto;
+    z-index: auto;
+    display: flex;
+    flex-direction: column;
+    width: var(--playback-rail-w);
+    max-height: 100%;
+    pointer-events: auto;
+  }
+  /* Docked, it is a flat panel of the player, not a floating layer. */
+  .playback-panel {
+    position: static;
+    min-height: 0;
+    max-height: none;
+    border-color: var(--line);
+    box-shadow: none;
+  }
+  .media-player:fullscreen:has(> .playback-panel-layer) {
+    padding-right: calc(var(--playback-rail-w) + 24px);
+  }
+  .media-player:fullscreen > .playback-panel-layer {
+    top: 60px;
+    right: 12px;
+    max-height: calc(100% - 72px);
+  }
 }
 .playback-panel-head {
   display: flex;
@@ -680,7 +742,7 @@
 }
 .playback-panel-head h2 {
   margin: 0;
-  font-size: 0.94rem;
+  font-size: var(--fs-heading);
   font-weight: 600;
 }
 .playback-panel-head span {
@@ -688,7 +750,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: var(--fs-hint);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -719,40 +781,50 @@
 .playback-panel-legend,
 .playback-panel-label {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
   letter-spacing: 0;
   text-transform: uppercase;
 }
 .playback-panel-legend span {
   text-transform: none;
   letter-spacing: 0;
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
 }
 .playback-panel-value {
   color: var(--text);
-  font-size: 0.86rem;
+  font-size: var(--fs-body);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .playback-panel-hint {
   margin: 4px 0 0;
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   line-height: 1.35;
 }
+/* Filters are switch rows: name, current value, switch at the end. */
 .playback-panel-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  font-size: 0.78rem;
+  gap: 10px;
+  min-height: 30px;
+  margin-top: 4px;
+  font-size: var(--fs-label);
+  cursor: pointer;
 }
-.playback-panel-toggle span {
+.playback-panel-toggle > span:first-child {
   flex: 1;
 }
+/* The value follows the switch in the DOM, so the label still names the
+   checkbox (an <output> is labelable too); it is shown before the switch. */
+.playback-panel-toggle > .toggle {
+  order: 2;
+}
 .playback-panel-toggle output {
+  order: 1;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-hint);
   font-variant-numeric: tabular-nums;
 }
 .playback-panel-foot {
@@ -767,15 +839,8 @@
   flex: 1;
   margin: 0;
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   line-height: 1.35;
-}
-@media (max-width: 720px) {
-  .playback-panel {
-    right: 8px;
-    left: 8px;
-    width: auto;
-  }
 }
 
 /* Media tooling: covers, the repair affordance, and long-job progress. */
@@ -804,7 +869,7 @@
 }
 .media-incompatible-copy span {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-hint);
 }
 .media-incompatible-actions,
 .media-tool-actions {
@@ -828,5 +893,5 @@
 }
 .media-tool-subsection {
   margin-top: 0;
-  font-size: 0.86rem;
+  font-size: var(--fs-body);
 }

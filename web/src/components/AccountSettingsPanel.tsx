@@ -1,4 +1,5 @@
 import { AccountPasswordPanel } from "./AccountPasswordPanel";
+import { confirmThen } from "../util/confirm";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import type { AccountRole, UserAccount } from "../api/types";
@@ -245,8 +246,18 @@ function AccountList({ current, accounts, disabled, onChanged }: {
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
   const [permissionID, setPermissionID] = useState("");
-  const toggle = async (account: UserAccount) => {
-    if (!account.disabled && !window.confirm(t("Disable {username}? Every active session for this account will be signed out.", { username: account.username }))) return;
+  const toggle = (account: UserAccount) => {
+    if (account.disabled) {
+      void applyToggle(account);
+      return;
+    }
+    confirmThen(
+      t("Disable {username}? Every active session for this account will be signed out.", { username: account.username }),
+      { confirmLabel: t("Disable"), destructive: true },
+      () => void applyToggle(account),
+    );
+  };
+  const applyToggle = async (account: UserAccount) => {
     setBusy(account.id);
     setError("");
     try {
@@ -259,9 +270,15 @@ function AccountList({ current, accounts, disabled, onChanged }: {
       setBusy("");
     }
   };
-  const changeAccess = async (account: UserAccount, access: "full" | "remote") => {
+  const changeAccess = (account: UserAccount, access: "full" | "remote") => {
     if (access === (account.interface_access || "full")) return;
-    if (!window.confirm(t("Change access for {username}? All of their sessions and control permissions will be revoked.", { username: account.username }))) return;
+    confirmThen(
+      t("Change access for {username}? All of their sessions and control permissions will be revoked.", { username: account.username }),
+      {},
+      () => void applyAccess(account, access),
+    );
+  };
+  const applyAccess = async (account: UserAccount, access: "full" | "remote") => {
     setBusy(account.id);setError("");
     try { await api.setAccountInterfaceAccess(account.id,access);await onChanged();show(t("Account access updated. Grant control again when appropriate.")); }
     catch (reason) { setError(errorMessage(reason)); }
@@ -298,7 +315,7 @@ function AccountList({ current, accounts, disabled, onChanged }: {
               <small>{account.last_login_at ? t("Last sign-in {time}", { time: new Date(account.last_login_at).toLocaleString() }) : t("Never signed in")}</small>
             </span>
             <span className="row-actions">
-              {account.id !== current.id && <button className="btn btn-secondary small" type="button" disabled={disabled || Boolean(busy)} onClick={() => void toggle(account)}>{account.disabled ? t("Enable") : t("Disable")}</button>}
+              {account.id !== current.id && <button className="btn btn-secondary small" type="button" disabled={disabled || Boolean(busy)} onClick={() => toggle(account)}>{account.disabled ? t("Enable") : t("Disable")}</button>}
               {account.id !== current.id && <button className="btn btn-secondary small" type="button" disabled={disabled || Boolean(busy)} onClick={() => { setResetID(resetID === account.id ? "" : account.id); setPassword(""); setConfirmation(""); setError(""); }}>{t("Reset password")}</button>}
               {account.role === "operator" && <button className="btn btn-secondary small" type="button" disabled={disabled} aria-expanded={permissionID === account.id} onClick={() => setPermissionID(permissionID === account.id ? "" : account.id)}>{t("Control permission")}</button>}
             </span>
@@ -309,7 +326,7 @@ function AccountList({ current, accounts, disabled, onChanged }: {
             <button className="btn btn-primary" type="submit" disabled={disabled || Boolean(busy) || !password}>{busy ? t("Saving…") : t("Save new password")}</button>
           </form>}
           {account.role === "operator" && permissionID === account.id && <div className="account-access-editor">
-            <label className="field"><span className="label">{t("Interface access")}</span><select value={account.interface_access || "full"} disabled={disabled || Boolean(busy)} onChange={event => void changeAccess(account,event.target.value as "full" | "remote")}><option value="full">{t("Full application")}</option><option value="remote">{t("Remote only")}</option></select></label>
+            <label className="field"><span className="label">{t("Interface access")}</span><select value={account.interface_access || "full"} disabled={disabled || Boolean(busy)} onChange={event => changeAccess(account,event.target.value as "full" | "remote")}><option value="full">{t("Full application")}</option><option value="remote">{t("Remote only")}</option></select></label>
             <ControlGrantPanel key={`${account.id}:${account.interface_access}`} accountID={account.id} remoteOnly={account.interface_access === "remote"} disabled={disabled || account.disabled || Boolean(busy)} />
           </div>}
         </li>

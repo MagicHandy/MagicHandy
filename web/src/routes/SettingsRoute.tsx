@@ -320,9 +320,13 @@ export function SettingsRoute() {
 
   if (onlyAccess) return <>
     <WorkspaceHead title={t("Settings")} />
-    <SettingsSections section="access" accessOnly={restricted} />
-    {restricted && <p className="hint-block">{t("Host settings and diagnostics are managed by an administrator.")}</p>}
-    <section className="panel settings-panel access-panel"><AccountSettingsPanel backendOnline={backendOnline} /></section>
+    <div className="settings-layout">
+      <SettingsSections section="access" accessOnly={restricted} />
+      <div className="settings-main">
+        {restricted && <p className="hint-block">{t("Host settings and diagnostics are managed by an administrator.")}</p>}
+        <section className="panel settings-panel access-panel"><AccountSettingsPanel backendOnline={backendOnline} /></section>
+      </div>
+    </div>
   </>;
 
   if (!s || !state) return (
@@ -380,7 +384,9 @@ export function SettingsRoute() {
   return (
     <>
       <WorkspaceHead title={t("Settings")} />
+      <div className="settings-layout">
       <SettingsSections section={section} />
+      <div className="settings-main">
 
       {loadError && (
         <div className="empty-state compact-empty" role="alert">
@@ -476,7 +482,7 @@ export function SettingsRoute() {
                   <p>{firmwareRequirementLabel(s.device.firmware_api_requirement)}</p>
                 </DismissibleNotice>
                 <label className="field"><span className="label">{t("Handy connection key")}{s.device.connection_key_set && <span className="badge">{t("set")}</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? t("set (leave blank to keep)") : t("Paste key")} value={newKey} disabled={locked} onChange={(e) => { setNewKey(e.target.value); if (e.target.value.trim()) setClearKey(false); }} /></label>
-                <label className="toggle-line hint-block"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(e) => { setClearKey(e.target.checked); if (e.target.checked) setNewKey(""); }} /><span className="track" aria-hidden="true" /></span><span>{t("Clear connection key on save")}</span></label>
+                <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(e) => { setClearKey(e.target.checked); if (e.target.checked) setNewKey(""); }} /><span className="track" aria-hidden="true" /></span><span>{t("Clear connection key on save")}</span></label>
               </>}
               {owner === "intiface" && <>
                 <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
@@ -540,6 +546,8 @@ export function SettingsRoute() {
 
         {section !== "chat" && saveActions}
       </section>
+      </div>
+      </div>
     </>
   );
 }

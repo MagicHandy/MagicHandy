@@ -1807,7 +1807,6 @@
   "View saved observations": "View saved observations",
   "Your observation": "Your observation",
   "{count} of {capacity} saved observations": "{count} of {capacity} saved observations",
-  "{seconds}s": "{seconds}s",
   "Creative baseline fixes the anchor at the center. Choose Anchored range to control it.": "Creative baseline fixes the anchor at the center. Choose Anchored range to control it.",
   "Historical reference: shares pace, outer band, shortest span and seed. Continuous layers, sections and gradual variation do not apply.": "Historical reference: shares pace, outer band, shortest span and seed. Continuous layers, sections and gradual variation do not apply.",
   "Historical settings: wander profile, 30% variation, minimum span 20.": "Historical settings: wander profile, 30% variation, minimum span 20.",
@@ -2934,5 +2933,8 @@
   "Install a local model": "Install a local model",
   "Use my Ollama": "Use my Ollama",
   "Use my own server": "Use my own server",
-  "Positive delays motion; negative advances it. A change during playback requires Play again.": "Positive delays motion; negative advances it. A change during playback requires Play again."
+  "Positive delays motion; negative advances it. A change during playback requires Play again.": "Positive delays motion; negative advances it. A change during playback requires Play again.",
+  "Now playing": "Now playing",
+  "Volume": "Volume",
+  "{n} mm": "{n} mm"
 }

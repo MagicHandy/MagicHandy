@@ -11,39 +11,41 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--line);
+  border-radius: var(--radius);
   background: var(--surface);
 }
 
 /* One step strip within the app shell; labels remain readable on narrow screens. */
+/* Step tabs share the app's filled tab selection. */
 .setup-progress { min-width: 0; border-bottom: 1px solid var(--line); }
-.setup-progress ol { display: flex; flex-wrap: wrap; gap: 3px; margin: 0; padding: 5px 8px; list-style: none; }
+.setup-progress ol { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 10px 12px; list-style: none; }
 .setup-progress li button {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
-  padding: 6px 9px;
-  border: 1px solid transparent;
-  border-radius: 3px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: .8125rem;
+  font-size: var(--fs-label);
   cursor: pointer;
 }
 .setup-progress li button > span { min-width: 12px; font-variant-numeric: tabular-nums; }
-.setup-progress li[data-state="current"] button { border-color: var(--line-strong); background: color-mix(in srgb, var(--accent) 14%, var(--surface-2)); color: var(--text); font-weight: 600; }
-.setup-progress li button:hover:not(:disabled, [aria-current]) { background: var(--surface-2); color: var(--text); }
+.setup-progress li[data-state="current"] button { background: var(--surface-2); color: var(--text); font-weight: 600; }
+.setup-progress li button:hover:not(:disabled, [aria-current]) { background: color-mix(in srgb, var(--surface-2) 60%, transparent); color: var(--text); }
 .setup-progress li[data-state="complete"] button > span { color: var(--accent); }
 .setup-progress li[data-state="complete"] button > span::before { content: "\2713"; }
 .setup-progress li button:disabled { cursor: default; opacity: 1; }
 .setup-progress li[data-state="pending"] button { color: var(--muted); }
-.setup-progress li button:focus-visible { outline-offset: -3px; }
+.setup-progress li button:focus-visible { outline-offset: -2px; }
 
 .setup-main { display: grid; min-width: 0; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto auto; }
 .setup-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; padding: 16px 22px 12px; }
-.setup-head h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
-.setup-step-count { color: var(--muted); font-size: .8125rem; white-space: nowrap; }
+.setup-head h1 { margin: 0; font-family: var(--font-display); font-size: var(--fs-title); font-weight: 600; }
+.setup-step-count { color: var(--muted); font-size: var(--fs-label); white-space: nowrap; }
 .setup-body { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 22px 18px; scrollbar-gutter: stable; }
 
 .setup-copy {
@@ -63,7 +65,7 @@
 
 .setup-copy > h2 {
   margin-top: 4px;
-  font-size: 1rem;
+  font-size: var(--fs-heading);
   font-weight: 650;
 }
 
@@ -95,13 +97,13 @@
 }
 
 .setup-method-head h2 {
-  font-size: 1rem;
+  font-size: var(--fs-heading);
   font-weight: 650;
 }
 
 .setup-method-head p {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
 }
 
 .setup-method-body {
@@ -129,7 +131,7 @@
 .setup-method .ollama-candidates {
   max-height: min(300px, 34vh);
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: var(--bg-inset);
 }
 
@@ -151,7 +153,7 @@
   gap: 3px;
   padding: 11px 13px;
   background: var(--surface-2);
-  font-size: 0.84rem;
+  font-size: var(--fs-label);
 }
 
 .setup-notice span {
@@ -182,8 +184,7 @@
 }
 
 .setup-choice[data-selected="true"] {
-  box-shadow: inset 2px 0 0 var(--accent);
-  background: var(--bg-inset);
+  background: var(--accent-tint);
 }
 
 .setup-choice + .setup-choice { border-top: 1px solid var(--line); }
@@ -208,13 +209,13 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 10px;
-  font-size: 0.9rem;
+  font-size: var(--fs-body);
   font-weight: 650;
 }
 
 .setup-choice-copy small {
   color: var(--muted);
-  font-size: 0.8125rem;
+  font-size: var(--fs-label);
   line-height: 1.4;
 }
 
@@ -222,9 +223,9 @@
   align-self: start;
   padding: 1px 5px;
   border: 1px solid var(--line-strong);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   color: var(--accent);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
   font-weight: 650;
   white-space: nowrap;
 }
@@ -249,7 +250,7 @@
   padding-left: 10px;
   border-left: 2px solid var(--warn);
   color: var(--text);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
 }
 
 .setup-access-local {
@@ -279,9 +280,6 @@
 .setup-import-options > summary {
   min-height: 40px;
   padding: 10px 2px;
-  font-size: 0.86rem;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .setup-import-options > .setup-method + .setup-method {
@@ -295,7 +293,7 @@
   gap: 8px;
   margin: 0;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
 }
 
 .setup-empty {
@@ -323,13 +321,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.82rem;
+  font-size: var(--fs-label);
 }
 
 .setup-selection-state {
   margin: 0;
   color: var(--text);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
   font-weight: 600;
 }
 
@@ -357,7 +355,7 @@
   gap: 8px;
   align-items: start;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-hint);
 }
 
 .setup-install-steps li[data-state="running"],
@@ -401,7 +399,7 @@
 
 .setup-job details {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--fs-hint);
 }
 
 .setup-job pre {
@@ -590,7 +588,7 @@
 
 .setup-prompt-dialog h2 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--fs-heading);
   font-weight: 600;
 }
 

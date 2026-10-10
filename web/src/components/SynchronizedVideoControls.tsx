@@ -14,6 +14,7 @@ import {
   VolumeMutedIcon,
 } from "../shell/icons";
 import { formatTimelineTime } from "./ImportTimeline";
+import { RangeInput } from "./RangeInput";
 
 interface Props {
   synchronized?: boolean;
@@ -182,8 +183,7 @@ export function SynchronizedVideoControls({
           {playbackIntent ? <PauseIcon /> : <PlayIcon />}
         </button>
         <span className="media-transport-time" aria-hidden="true">{formatTimelineTime(Math.floor(displayedTime / 1000) * 1000)}</span>
-        <input
-          type="range"
+        <RangeInput
           className="media-transport-seek"
           aria-label={t("Video position")}
           aria-valuetext={t("{current} of {duration}", {
@@ -224,8 +224,7 @@ export function SynchronizedVideoControls({
             {muted || volume === 0 ? <VolumeMutedIcon /> : <VolumeIcon />}
           </button>
           <div className="media-transport-volume-popover">
-            <input
-              type="range"
+            <RangeInput
               className="media-transport-volume"
               aria-label={t("Video volume")}
               min={0}
