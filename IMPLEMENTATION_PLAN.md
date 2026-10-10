@@ -196,6 +196,14 @@ enabled. Local Gemma 12B passed the eight-turn steering fixture 24/24 with it
 and 18/24 without, and the Creative v2 live request suite was not worse. See
 [the review](docs/creative-v2-reach-guide-review-2026-10-09.md).
 
+An external llama.cpp server may ignore the response schema. Without it, the
+guide made Gemma 12B write malformed replies (31/42 against 40/42 unconstrained),
+so an external server keeps the earlier contract; Ollama and the managed runtime
+enforce the schema and keep the guide. Requests with reasoning off also send
+`reasoning_effort: "none"`, which Ollama's OpenAI-compatible endpoint needs to
+stop a thinking model from spending its output budget (11/28 valid before,
+28/28 after).
+
 ### 2026-10-03 Creative v2 response rejection investigation
 
 A reported greeting failure led to field-specific Creative v2 validation
