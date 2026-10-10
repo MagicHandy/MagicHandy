@@ -1,5 +1,38 @@
 # Goal Scorecard
 
+## 2026-10-09 — Local compatible defaults
+
+Compatible endpoints on this computer with nothing declared get the standard
+`json_schema` form and the app's sampling. No dependency, UI asset or resident
+state is added. Same build: 22,437,888 B before and 22,439,424 B after
+(+1,536 B). The three October 9 follow-ups together measure +1,024 B against
+`eb3c29c2`. See the
+[provider settings amendment](provider-settings-review-2026-10-09.md).
+
+## 2026-10-09 — Technical-context Autopilot
+
+Technical-context Autopilot in Creative v2 and Layered uses the shared continuous
+planner. No dependency, UI asset or resident state is added; the scheduler's
+speed history gains one flag per entry. Windows amd64, Go 1.26.9,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`: 22,437,376 B with
+the shared reach guide and 22,437,888 B with this change (+512 B). A technical
+planning turn now carries the full continuous Autopilot contract: local Gemma 12B
+median 1.3 s per decision, against about 0.9 s for the earlier refinement prompt,
+which could not change pace or reach. See
+[the Autopilot review](technical-autopilot-review-2026-10-09.md).
+
+## 2026-10-09 — Shared Creative v2 reach guide
+
+The hosted reach guide now leads the local Creative v2 contract too. Compared
+with `eb3c29c2` on Windows amd64 Go 1.26.9, `CGO_ENABLED=0`, `-trimpath
+-buildvcs=false -ldflags '-s -w'`, the core binary measures 22,438,400 B before
+and 22,437,376 B after (−1,024 B, from removing the hosted-only prompt variant).
+The local Creative v2 contract grows by 713 bytes; the Lab prompt measures 7,608
+bytes instead of 6,895. Local Gemma 12B warm median Lab latency was 1,267 ms with
+the guide and 1,103 ms without on the same steering fixture. No dependency, UI
+asset, model call or resident state is added. See the
+[shared-guide review](creative-v2-shared-reach-guide-2026-10-09.md).
+
 ## 2026-10-09 — Graphite UI refactor
 
 Compared with `eb3c29c2`, on Windows amd64 Go 1.26.9, `CGO_ENABLED=0`,

@@ -9,14 +9,20 @@ import (
 )
 
 // SpeedStep is one recent stretch's speed and how long ago it began.
+// Interactive marks a speed the person set through chat.
 type SpeedStep struct {
 	SpeedPercent int
 	SecondsAgo   int
+	Interactive  bool
 }
 
 // AutopilotContext is bounded semantic context for an autonomous model turn.
 // It contains no transport or engine details.
 type AutopilotContext struct {
+	// Technical marks a planning turn that is shown motion state only: no
+	// conversation, persona or memory. It replaces guidance that depends on the
+	// person's words with what the motion history alone can say.
+	Technical bool
 	// LastHumanSecondsAgo, when known, is how long ago the person last spoke.
 	// Continuous planning uses it to judge how long a slow stretch has lasted.
 	LastHumanSecondsAgo *int
@@ -124,6 +130,9 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	fmt.Fprintf(&builder, "Autopilot motion decision %d. You are steering the device autonomously between chat turns.\n", context.SegmentIndex+1)
 	fmt.Fprintf(&builder, "Motion style preference: %s. Allowed speed range: %d-%d%%.\n", context.Style, context.SpeedMinPercent, context.SpeedMaxPercent)
 	if context.MotionMode == MotionModeLayered || context.MotionMode == MotionModeCreativeV2 {
+		if context.Technical {
+			builder.WriteString("This planning turn is shown motion state only: the conversation, persona and memories are not shared, so there are no human words to read. That is not a sign that the person is silent.\n")
+		}
 		if context.LastHumanSecondsAgo != nil {
 			fmt.Fprintf(&builder, "The person last spoke %s ago, and chat has replied to them in words. This turn chooses the motion from here; it is not a reply to their last message.\n",
 				formatSessionSpan(*context.LastHumanSecondsAgo))

@@ -34,7 +34,12 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 	if err != nil {
 		return modes.Decision{}, err
 	}
-	if (settings.LLM.MotionPlanner.Provider == config.MotionPlannerDecisions || settings.LLM.MotionPlanner.ContextPolicy == config.ContextTechnical) && settings.LLM.MotionGenerationMode != config.LLMMotionModeOff {
+	// Technical context in the continuous modes uses the same planner as the
+	// conversation policy, shown motion state only (technicalMotionPlanning).
+	// Decisions, and technical planning in the other modes, select or refine
+	// prepared candidates instead.
+	planner := settings.LLM.MotionPlanner
+	if (planner.Provider == config.MotionPlannerDecisions || (planner.ContextPolicy == config.ContextTechnical && !continuousChatMode(settings.LLM.MotionGenerationMode))) && settings.LLM.MotionGenerationMode != config.LLMMotionModeOff {
 		return s.cloudAutopilotDecide(ctx, input, settings)
 	}
 	decision, err := s.localAutopilotDecide(ctx, input)
@@ -137,18 +142,10 @@ func (s *Server) autopilotModelTurn(
 	if err != nil {
 		return chat.AutopilotResponse{}, err
 	}
-	sessionID, err := s.chatLog.ActiveSessionIDContext(ctx)
+	technical := kind == chat.AutopilotKindMotion && settings.LLM.MotionPlanner.ContextPolicy == config.ContextTechnical
+	promptContext, prompt, memories, err := s.autopilotPersonalization(ctx, settings.LLM, technical)
 	if err != nil {
-		return chat.AutopilotResponse{}, fmt.Errorf("resolve active chat: %w", err)
-	}
-	promptContext, err := s.loadInteractiveChatPromptContext(ctx, sessionID, settings.LLM)
-	if err != nil {
-		return chat.AutopilotResponse{}, fmt.Errorf("resolve conversation context: %w", err)
-	}
-	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, promptContext.Persona)
-	prompt, memories, _, err := s.resolveInteractiveChatPersonalization(ctx, promptID)
-	if err != nil {
-		return chat.AutopilotResponse{}, fmt.Errorf("resolve personalization: %w", err)
+		return chat.AutopilotResponse{}, err
 	}
 	capabilities := promptContext.Capabilities
 	if kind == chat.AutopilotKindSpeech {
@@ -191,6 +188,9 @@ func (s *Server) autopilotModelTurn(
 		Capabilities:          capabilities,
 	}
 	modelContext := autopilotPromptContext(input, capabilities)
+	if technical {
+		modelContext.Technical, modelContext.LastSay = true, ""
+	}
 	if ages := motionContext.UserRequestSecondsAgo; len(ages) > 0 {
 		modelContext.LastHumanSecondsAgo = &ages[len(ages)-1]
 	}
@@ -211,6 +211,33 @@ func (s *Server) autopilotModelTurn(
 		err = s.validateCloudAdmission(providerCtx, admission)
 	}
 	return response, err
+}
+
+// autopilotPersonalization resolves what one Autopilot turn may know about the
+// person. Technical motion planning is shown motion state only: no
+// conversation, persona, memories or reaction style, with the code-owned default
+// behavior profile in the utility voice. Saved motion settings still apply.
+func (s *Server) autopilotPersonalization(ctx context.Context, settings config.LLMSettings, technical bool) (interactiveChatPromptContext, chat.PromptSet, []string, error) {
+	if technical {
+		capabilities := chatCapabilities(settings, nil)
+		capabilities.Voice, capabilities.Style = chat.VoiceUtility, chat.StyleNeutral
+		prompt, _ := chat.BuiltinPromptSetByID(chat.DefaultPromptSetID)
+		return interactiveChatPromptContext{Capabilities: capabilities}, prompt, nil, nil
+	}
+	sessionID, err := s.chatLog.ActiveSessionIDContext(ctx)
+	if err != nil {
+		return interactiveChatPromptContext{}, chat.PromptSet{}, nil, fmt.Errorf("resolve active chat: %w", err)
+	}
+	promptContext, err := s.loadInteractiveChatPromptContext(ctx, sessionID, settings)
+	if err != nil {
+		return interactiveChatPromptContext{}, chat.PromptSet{}, nil, fmt.Errorf("resolve conversation context: %w", err)
+	}
+	promptID := effectivePersonaPromptSet(settings.PromptSet, promptContext.Persona)
+	prompt, memories, _, err := s.resolveInteractiveChatPersonalization(ctx, promptID)
+	if err != nil {
+		return interactiveChatPromptContext{}, chat.PromptSet{}, nil, fmt.Errorf("resolve personalization: %w", err)
+	}
+	return promptContext, prompt, memories, nil
 }
 
 func autopilotOwnedMotionContext(state chat.MotionContext, input modes.DecisionInput) chat.MotionContext {
@@ -312,7 +339,7 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 		modelContext.LocalStrokeRange = int(math.Round(input.CurrentPerceptual.MinimumLocalStrokeRange))
 	}
 	for _, step := range input.RecentSpeeds {
-		modelContext.RecentSpeeds = append(modelContext.RecentSpeeds, chat.SpeedStep{SpeedPercent: step.SpeedPercent, SecondsAgo: step.SecondsAgo})
+		modelContext.RecentSpeeds = append(modelContext.RecentSpeeds, chat.SpeedStep{SpeedPercent: step.SpeedPercent, SecondsAgo: step.SecondsAgo, Interactive: step.Interactive})
 	}
 	for _, band := range input.RecentPositionBands {
 		modelContext.RecentPositionBands = append(modelContext.RecentPositionBands, chat.PositionBand{

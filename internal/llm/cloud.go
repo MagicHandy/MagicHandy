@@ -36,7 +36,7 @@ func (e *CloudError) Error() string {
 	case "unsupported":
 		return "Decisions selects complete library patterns. Choose Library motion to use it."
 	case "capability":
-		return "This model or provider does not support the selected structured output policy."
+		return "This model or provider does not support the selected structured output policy. Choose another output mode for this connection."
 	default:
 		return "The cloud provider is unavailable. Motion was held."
 	}

@@ -5,16 +5,20 @@ import (
 	"testing"
 )
 
-func TestHostedReachGuideDoesNotChangeLocalContract(t *testing.T) {
-	local := Capabilities{Motion: true, MotionMode: MotionModeCreativeV2}
-	if got := contractInstructions(local); got != creativeV2Contract || strings.Contains(got, creativeV2ReachGuide) {
-		t.Fatal("hosted planning changed the local contract or token budget")
+// The reach guide raised hosted and local steering alike, so every Creative v2
+// model reads the same contract, in production and in the Lab.
+func TestReachGuideLeadsEveryCreativeV2Contract(t *testing.T) {
+	for _, hosted := range []bool{false, true} {
+		capabilities := Capabilities{Motion: true, MotionMode: MotionModeCreativeV2, PreserveConversationText: hosted}
+		if got := contractInstructions(capabilities); got != creativeV2ReachGuide+"\n\n"+creativeV2Contract {
+			t.Fatalf("Creative v2 contract for hosted=%t lost the reach guide or changed", hosted)
+		}
 	}
-	local.HostedModel = true
-	if got := contractInstructions(local); !strings.HasPrefix(got, creativeV2ReachGuide) || !strings.HasSuffix(got, creativeV2Contract) {
-		t.Fatal("hosted guide missing or local contract rewritten")
+	lab := LLMLabPrompts()["creative_v2"]
+	if !strings.HasPrefix(lab, creativeV2ReachGuide) || strings.Count(lab, creativeV2ReachGuide) != 1 {
+		t.Fatal("Lab prompt disagrees with production")
 	}
-	if strings.Contains(LLMLabPrompts()["creative_v2"], creativeV2ReachGuide) || !strings.HasPrefix(HostedLLMLabPrompts()["creative_v2"], creativeV2ReachGuide) {
-		t.Fatal("Lab prompt variants disagree with production")
+	if baseline := WithoutCreativeV2ReachGuide(lab); strings.Contains(baseline, creativeV2ReachGuide) || !strings.HasSuffix(lab, baseline) {
+		t.Fatal("evaluation baseline did not remove exactly the reach guide")
 	}
 }

@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -16,7 +18,9 @@ import (
 
 // CompatibleOptions declares protocol capabilities independently of llama.cpp.
 // OpenRouter discovers model support; generic servers use the explicit saved
-// capability policy. Neither path emits local health or sampling extensions.
+// capability policy, and a generic server on this computer with no saved policy
+// gets the standard defaults described at localDefaults. Neither path emits
+// local health or sampling extensions.
 type CompatibleOptions struct {
 	HTTPProviderOptions
 	Provider            string
@@ -94,9 +98,32 @@ func (p *CompatibleProvider) request(ctx context.Context, method, path string, b
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		_ = response.Body.Close()
+		if method == http.MethodPost && response.StatusCode == http.StatusBadRequest && p.localDefaults() {
+			// A local server that rejects the default structured request needs
+			// another output mode on its connection, not a retry.
+			return nil, &CloudError{Kind: "capability"}
+		}
 		return nil, cloudResponseError(response.StatusCode, "")
 	}
 	return response, nil
+}
+
+// localDefaults reports a generic server on this computer, such as LM Studio,
+// llama-server, an MLX server, vLLM or Ollama, left on automatic output with no
+// declared parameters. Such servers take the standard sampling parameters and
+// the non-strict json_schema form, which constrains decoding to the domain
+// schema; without it, local models write the contract unconstrained.
+func (p *CompatibleProvider) localDefaults() bool {
+	if p.options.Provider != "compatible" || p.options.OutputMode != "auto" || len(p.options.SupportedParameters) > 0 {
+		return false
+	}
+	parsed, err := url.Parse(p.options.BaseURL)
+	if err != nil {
+		return false
+	}
+	host := parsed.Hostname()
+	ip := net.ParseIP(host)
+	return host == "localhost" || (ip != nil && ip.IsLoopback())
 }
 
 // Models reads the provider's catalog without local health/load requests.
@@ -214,6 +241,9 @@ func (p *CompatibleProvider) StreamChat(ctx context.Context, request ChatRequest
 
 func (p *CompatibleProvider) completionBody(request ChatRequest, parameters []string) (map[string]any, bool, error) {
 	body := map[string]any{"model": p.options.Model, "messages": request.Messages, "stream": true}
+	if p.localDefaults() {
+		parameters = []string{"max_tokens", "temperature", "top_p"}
+	}
 	addCompatibleParameters(body, request, parameters)
 	if p.options.Provider == "openrouter" {
 		body["provider"] = map[string]any{"allow_fallbacks": p.options.AllowFallbacks, "require_parameters": true, "data_collection": p.options.DataCollection, "zdr": p.options.ZeroDataRetention}
@@ -253,6 +283,8 @@ func (p *CompatibleProvider) structuredCompletionBody(body map[string]any, schem
 			mode = "strict"
 		} else if slices.Contains(parameters, "response_format") {
 			mode = "json"
+		} else if p.localDefaults() {
+			mode = "schema"
 		}
 	}
 	if p.options.Provider == "openrouter" && mode == "strict" && !slices.Contains(parameters, "structured_outputs") {
@@ -269,6 +301,10 @@ func (p *CompatibleProvider) structuredCompletionBody(body map[string]any, schem
 		}
 		body["response_format"] = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "magichandy_response", "strict": true, "schema": schema}}
 		return body, true, nil
+	case "schema":
+		// Non-strict, with the original domain schema: the server constrains
+		// decoding to it, and the semantic parser still validates the result.
+		body["response_format"] = map[string]any{"type": "json_schema", "json_schema": map[string]any{"name": "magichandy_response", "schema": schema}}
 	case "json":
 		body["response_format"] = map[string]string{"type": "json_object"}
 	case "prompt":

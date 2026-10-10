@@ -92,6 +92,59 @@ func TestCompatibleEmitsOnlyDeclaredParameters(t *testing.T) {
 	}
 }
 
+// A server on this computer left on automatic output (LM Studio, an MLX server,
+// llama-server, vLLM, Ollama) gets the app's sampling and the standard
+// non-strict schema form. Declared policies and remote endpoints are unchanged.
+func TestCompatibleLocalServerDefaultsToSchemaAndSampling(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"reply":{"type":"string"}},"required":["reply"]}`)
+	request := ChatRequest{MaxTokens: 64, Temperature: .3, TopP: .95, JSONSchema: schema}
+	for _, tc := range []struct {
+		name, baseURL, mode string
+		declared            []string
+		format              string
+		sampling            bool
+	}{
+		{name: "loopback", baseURL: "http://127.0.0.1:1234/v1", format: `{"json_schema":{"name":"magichandy_response","schema":` + string(schema) + `},"type":"json_schema"}`, sampling: true},
+		{name: "localhost", baseURL: "http://localhost:8080/v1", format: `{"json_schema":{"name":"magichandy_response","schema":` + string(schema) + `},"type":"json_schema"}`, sampling: true},
+		{name: "remote", baseURL: "https://models.example.test/v1"},
+		{name: "explicit prompt", baseURL: "http://127.0.0.1:1234/v1", mode: "prompt"},
+		{name: "declared json", baseURL: "http://127.0.0.1:1234/v1", declared: []string{"response_format"}, format: `{"type":"json_object"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			provider, err := NewCompatibleProvider(CompatibleOptions{HTTPProviderOptions: HTTPProviderOptions{BaseURL: tc.baseURL, Model: "model"}, Provider: "compatible", OutputMode: tc.mode, SupportedParameters: tc.declared})
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, strict, err := provider.completionBody(request, tc.declared)
+			if err != nil || strict {
+				t.Fatalf("body: %v strict=%t", err, strict)
+			}
+			format, _ := json.Marshal(body["response_format"])
+			if body["response_format"] == nil {
+				format = nil
+			}
+			if string(format) != tc.format {
+				t.Fatalf("response_format = %s, want %s", format, tc.format)
+			}
+			_, hasTemperature := body["temperature"]
+			if hasTemperature != tc.sampling || (tc.sampling && (body["top_p"] != .95 || body["max_tokens"] != 64)) {
+				t.Fatalf("sampling = %v", body)
+			}
+		})
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusBadRequest) }))
+	defer server.Close()
+	provider, err := NewCompatibleProvider(CompatibleOptions{HTTPProviderOptions: HTTPProviderOptions{BaseURL: server.URL, Model: "model"}, Provider: "compatible"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = provider.StreamChat(t.Context(), ChatRequest{Messages: []Message{{Role: "user", Content: "test"}}, JSONSchema: schema}, nil)
+	var outcome *CloudError
+	if !errors.As(err, &outcome) || outcome.Kind != "capability" {
+		t.Fatalf("a local server rejecting the default request must name the output mode: %v", err)
+	}
+}
+
 func TestCompatibleNeverReleasesPartialOrRefusedOutput(t *testing.T) {
 	partial := "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"{\\\"reply\\\":\\\"partial\\\"}\"}}]}\n\n"
 	cases := map[string]string{
