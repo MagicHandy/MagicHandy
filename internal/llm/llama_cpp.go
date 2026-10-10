@@ -73,7 +73,12 @@ func (p *LlamaCPPProvider) StreamChat(ctx context.Context, request ChatRequest, 
 		if !json.Valid(request.JSONSchema) {
 			return "", errors.New("invalid response JSON schema")
 		}
-		body.ResponseFormat.Schema = request.JSONSchema
+		// llama-server constrains output identically with the standard json_schema
+		// form and its own json_object+schema extension. Other OpenAI-compatible
+		// servers used as an external server read only the standard form: LM
+		// Studio documents it for GGUF and MLX models, and Ollama's endpoint takes
+		// json_object as plain JSON mode and drops the schema.
+		body.ResponseFormat = &openAIResponseFormat{Type: "json_schema", JSONSchema: &openAIJSONSchema{Name: "magichandy_response", Schema: request.JSONSchema}}
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {
@@ -234,8 +239,13 @@ type openAIChatTemplateKwargs struct {
 }
 
 type openAIResponseFormat struct {
-	Type   string          `json:"type"`
-	Schema json.RawMessage `json:"schema,omitempty"`
+	Type       string            `json:"type"`
+	JSONSchema *openAIJSONSchema `json:"json_schema,omitempty"`
+}
+
+type openAIJSONSchema struct {
+	Name   string          `json:"name"`
+	Schema json.RawMessage `json:"schema"`
 }
 
 type openAIChatChunk struct {
