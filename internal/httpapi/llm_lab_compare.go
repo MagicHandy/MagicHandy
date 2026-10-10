@@ -72,8 +72,7 @@ func (s *Server) handleLLMLabCompare(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) runLabCompare(parent context.Context, body labCompareRequest) (labCompareResult, error) {
 	stopSequence := s.stopSequence.Load()
-	prompt, ok := chat.LLMLabPrompts()[body.Method]
-	if !ok {
+	if _, ok := chat.LLMLabPrompts()[body.Method]; !ok {
 		return labCompareResult{}, errors.New("unknown lab interface")
 	}
 	s.lab.mu.Lock()
@@ -108,6 +107,7 @@ func (s *Server) runLabCompare(parent context.Context, body labCompareRequest) (
 	if err != nil {
 		return labCompareResult{}, err
 	}
+	prompt := chat.LLMLabPromptsFor(schemaUnenforced(settings.LLM))[body.Method]
 	start := labStartingScore(body.Method, settings.Motion)
 	trial := chat.RunLLMLab(ctx, provider, settings.LLM.Model, body.Method, prompt, body.Message, start, settings.Motion, nil, body.SchemaGuided)
 	if ctx.Err() != nil || s.stopSequence.Load() != stopSequence {

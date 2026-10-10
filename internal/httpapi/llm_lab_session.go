@@ -37,7 +37,8 @@ func (s *Server) handleLabConversationStart(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if err := normalizeLabConversationOptions(&options); err != nil {
+	settings, _ := s.store.Snapshot()
+	if err := normalizeLabConversationOptions(&options, chat.LLMLabPromptsFor(schemaUnenforced(settings.LLM.ConversationSettings()))); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -276,8 +277,7 @@ func labAutopilotWithinRequest(before, after motion.FlowSpec) bool {
 	return true
 }
 
-func normalizeLabConversationOptions(options *labConversationSession) error {
-	prompts := chat.LLMLabPrompts()
+func normalizeLabConversationOptions(options *labConversationSession, prompts map[string]string) error {
 	if _, ok := prompts[options.Method]; !ok {
 		return errors.New("unknown lab interface")
 	}

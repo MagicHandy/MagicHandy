@@ -186,6 +186,15 @@ controls). Every other validation, the single generation and the absence of
 repair or fallback are unchanged. See
 [the investigation](docs/creative-v2-unconstrained-edits-review-2026-10-09.md).
 
+### 2026-10-09 Creative v2 reach guide
+
+The Creative v2 contract and its Lab prompt open with a short guide to resolve
+the requested reach before texture: a request that confines all motion to a
+region needs the outer range to bound it, since focus alone leaves broad strokes
+enabled. Local Gemma 12B passed the eight-turn steering fixture 24/24 with it
+and 18/24 without, and the Creative v2 live request suite was not worse. See
+[the review](docs/creative-v2-reach-guide-review-2026-10-09.md).
+
 ### 2026-10-03 Creative v2 response rejection investigation
 
 A reported greeting failure led to field-specific Creative v2 validation

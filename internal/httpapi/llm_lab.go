@@ -52,7 +52,7 @@ type llmLabState struct {
 func (s *Server) labState() llmLabState {
 	settings, _ := s.store.Snapshot()
 	settings.LLM = settings.LLM.ConversationSettings()
-	prompts := chat.LLMLabPrompts()
+	prompts := chat.LLMLabPromptsFor(schemaUnenforced(settings.LLM))
 	s.lab.mu.Lock()
 	defer s.lab.mu.Unlock()
 	if s.lab.current == nil {

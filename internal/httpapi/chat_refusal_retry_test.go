@@ -271,10 +271,11 @@ func TestRefusalRetryRebuildsLocalMotionPrompt(t *testing.T) {
 	lab := chat.LLMLabPrompts()["creative_v2"]
 	guide := strings.TrimSpace(strings.TrimSuffix(lab, chat.WithoutCreativeV2ReachGuide(lab)))
 	remote, retry := <-hostedMessages, <-localMessages
-	// Both stages share the reach guide; the retry rebuilds its own contract
-	// rather than appending to the hosted request's prompt.
-	if guide == "" || strings.Count(remote[0].Content, guide) != 1 || strings.Count(retry[0].Content, guide) != 1 {
-		t.Fatal("retry did not rebuild the shared Creative v2 contract")
+	// The retry rebuilds its own contract rather than appending to the hosted
+	// request's prompt. Its external server may drop the response schema, so
+	// that contract omits the reach guide the hosted request carries.
+	if guide == "" || strings.Count(remote[0].Content, guide) != 1 || strings.Contains(retry[0].Content, guide) || !strings.Contains(retry[0].Content, "Control Creative v2") {
+		t.Fatal("retry did not rebuild the local Creative v2 contract")
 	}
 	assertNoRetryMotion(t, fake)
 }

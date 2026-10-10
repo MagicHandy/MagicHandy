@@ -28,6 +28,16 @@ and this change 23,217,664 B (+3,584 B). The embedded UI is unchanged. The core
 remains below the 30 MB budget; existing RSS and UI-bundle advisories remain in
 effect.
 
+## 2026-10-09 — Creative v2 reach guide
+
+The Creative v2 contract and its Lab prompt gain a 713-byte reach guide. No
+dependency, UI asset, model call or resident state is added. Windows amd64, Go
+1.26.8, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags -w`: a clean
+archive of alpha.57 (`eb7f7c50`) measures 23,214,080 B and this change
+23,215,616 B (+1,536 B). Local Gemma 12B steering-fixture warm median was 1,319
+ms with the guide and 1,158 ms without; the request suite was unchanged at
+742 ms. See [the review](creative-v2-reach-guide-review-2026-10-09.md).
+
 ## 2026-10-09 — Local compatible defaults
 
 Compatible endpoints on this computer with nothing declared get the standard

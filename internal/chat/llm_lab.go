@@ -33,6 +33,16 @@ func WithoutCreativeV2ReachGuide(prompt string) string {
 	return strings.TrimPrefix(prompt, creativeV2ReachGuide+"\n\n")
 }
 
+// LLMLabPromptsFor returns the Lab prompts that match production for a
+// provider, omitting the reach guide where the response schema may be ignored.
+func LLMLabPromptsFor(schemaUnenforced bool) map[string]string {
+	prompts := LLMLabPrompts()
+	if schemaUnenforced {
+		prompts["creative_v2"] = WithoutCreativeV2ReachGuide(prompts["creative_v2"])
+	}
+	return prompts
+}
+
 // LLMLabPrompts isolates experimental control interfaces from production prompting.
 func LLMLabPrompts() map[string]string {
 	return map[string]string{
