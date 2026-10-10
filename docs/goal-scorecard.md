@@ -1,5 +1,14 @@
 # Goal Scorecard
 
+## 2026-10-09 — Local compatible defaults
+
+Compatible endpoints on this computer with nothing declared get the standard
+`json_schema` form and the app's sampling. No dependency, UI asset or resident
+state is added. Same build: 22,437,888 B before and 22,439,424 B after
+(+1,536 B). The three October 9 follow-ups together measure +1,024 B against
+`eb3c29c2`. See the
+[provider settings amendment](provider-settings-review-2026-10-09.md).
+
 ## 2026-10-09 — Technical-context Autopilot
 
 Technical-context Autopilot in Creative v2 and Layered uses the shared continuous

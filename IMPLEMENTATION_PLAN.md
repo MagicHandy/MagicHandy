@@ -47,7 +47,10 @@ The October 9 follow-ups route technical-context Autopilot in Creative v2 and
 Layered through the shared continuous planner, shown motion state only, so it can
 develop pace and outer reach within saved limits instead of holding every
 session at its starting pace; a pace set through chat is kept while it is recent
-([review](docs/technical-autopilot-review-2026-10-09.md)).
+([review](docs/technical-autopilot-review-2026-10-09.md)). Compatible endpoints
+on this computer with nothing declared, such as LM Studio or an MLX server, get
+the standard `json_schema` form and the app's sampling, so local models are
+constrained to the contract.
 
 The September 25 [motion naturalness review](docs/motion-naturalness-review-2026-09-24.md)
 removes Autopilot's word-based continuation limits. Creative v2 and Layered

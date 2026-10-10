@@ -78,7 +78,11 @@ library candidates or keep-current, through the existing library path.
 OpenRouter defaults to denied data collection and disabled host fallbacks, asks
 for compatible parameter support and avoids automatic transforms. Metadata and
 privacy routing requests do not guarantee content acceptance or retention.
-Compatible endpoints send only capabilities the user declares. Remote endpoints
+Compatible endpoints send only capabilities the user declares. Amended October 9:
+a compatible endpoint on this computer left on automatic output with nothing
+declared, such as LM Studio, an MLX server or llama-server, gets the standard
+non-strict `json_schema` form and the app's temperature, top_p and token limit;
+a rejected request reports the capability error. Remote endpoints
 require HTTPS; loopback endpoints may use HTTP. Inference does not follow redirects.
 
 Request lanes are bounded and independent per connection. Stop cancels all
