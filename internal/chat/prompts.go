@@ -176,6 +176,9 @@ func contractInstructions(capabilities Capabilities) string {
 	}
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		text := creativeV2ReachGuide + "\n\n" + creativeV2Contract
+		if capabilities.SchemaUnenforced {
+			text = creativeV2Contract
+		}
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()
 		}
@@ -206,6 +209,11 @@ func contractInstructions(capabilities Capabilities) string {
 // value is chat-only in the utility voice; callers resolve defaults from
 // settings.
 type Capabilities struct {
+	// SchemaUnenforced marks a provider that may ignore the response schema,
+	// such as an external OpenAI-compatible server. Its Creative v2 contract
+	// omits the reach guide: without the schema, local Gemma 12B wrote
+	// malformed edits with the guide (31/42 against 40/42 valid).
+	SchemaUnenforced     bool
 	Motion               bool
 	MotionMode           MotionMode
 	Patterns             bool

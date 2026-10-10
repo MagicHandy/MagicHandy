@@ -1117,6 +1117,7 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 	resolved := settings.Capabilities()
 	mode := chatMotionMode(settings.MotionGenerationMode)
 	capabilities := chat.Capabilities{
+		SchemaUnenforced:     schemaUnenforced(settings),
 		Motion:               resolved.Motion && mode != chat.MotionModeOff,
 		MotionMode:           mode,
 		Patterns:             resolved.Motion && mode == chat.MotionModePattern && resolved.Patterns,
@@ -1130,6 +1131,13 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 	}
 	capabilities.ReplyLength = chatReplyLength(effectiveReplyLength(settings, active))
 	return capabilities
+}
+
+// schemaUnenforced reports a provider that may drop the response schema. Ollama
+// and the managed llama.cpp runtime always enforce it; an external server is any
+// OpenAI-compatible endpoint, and some ignore structured output.
+func schemaUnenforced(settings config.LLMSettings) bool {
+	return settings.Provider == config.LLMProviderLlamaCPP && settings.LlamaCPPMode == config.LlamaCPPModeExternal
 }
 
 // effectiveReplyLength is the persona's override when it sets one, else the
