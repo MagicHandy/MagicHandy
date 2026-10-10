@@ -390,7 +390,6 @@
   "Disconnect": "断开",
   "Disconnected": "已断开连接",
   "Disconnecting": "正在断开",
-  "Dispatch owner": "指令来源",
   "Display name": "显示名称",
   "Dominant": "强势",
   "Drag to move the visible timeline range": "拖动以移动可见的时间轴范围",
@@ -2966,5 +2965,6 @@
   "You can add up to {max} providers. Remove one to add another.": "最多可添加 {max} 个提供方。请先移除一个再添加。",
   "Your OpenAI API key and billing.": "使用你自己的 OpenAI API 密钥和计费。",
   "{count} of {max}": "{count} / {max}",
-  "{roles} will switch to the local model. The saved API key is deleted when you save settings.": "{roles} 将切换到本地模型。保存设置时会删除已保存的 API 密钥。"
+  "{roles} will switch to the local model. The saved API key is deleted when you save settings.": "{roles} 将切换到本地模型。保存设置时会删除已保存的 API 密钥。",
+  "Protocol": "协议"
 }

@@ -390,7 +390,6 @@
   "Disconnect": "切断",
   "Disconnected": "未接続",
   "Disconnecting": "切断中",
-  "Dispatch owner": "送信元",
   "Display name": "表示名",
   "Dominant": "支配的",
   "Drag to move the visible timeline range": "ドラッグして表示されているタイムライン範囲を移動",
@@ -2966,5 +2965,6 @@
   "You can add up to {max} providers. Remove one to add another.": "プロバイダーは最大 {max} 個まで追加できます。追加するには 1 つ削除してください。",
   "Your OpenAI API key and billing.": "ご自身の OpenAI API キーと請求。",
   "{count} of {max}": "{count} / {max}",
-  "{roles} will switch to the local model. The saved API key is deleted when you save settings.": "{roles} はローカルモデルに切り替わります。保存済みの API キーは設定を保存したときに削除されます。"
+  "{roles} will switch to the local model. The saved API key is deleted when you save settings.": "{roles} はローカルモデルに切り替わります。保存済みの API キーは設定を保存したときに削除されます。",
+  "Protocol": "プロトコル"
 }
