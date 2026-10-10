@@ -1593,7 +1593,7 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     $runtimeProcess = Start-Process -FilePath $runtimeExe -ArgumentList $runtimeArguments -PassThru -WindowStyle Hidden
     try {
         $ready = $false
-        $readyDeadline = [DateTime]::UtcNow.AddSeconds(10)
+        $readyDeadline = [DateTime]::UtcNow.AddSeconds(30)
         do {
             try {
                 Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$runtimePort/api/state" -TimeoutSec 1 | Out-Null
@@ -1910,7 +1910,7 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     $multiProcessA = Start-Process -FilePath $runtimeExe -ArgumentList $multiArgsA -PassThru -WindowStyle Hidden
     $multiProcessB = Start-Process -FilePath $runtimeExe -ArgumentList $multiArgsB -PassThru -WindowStyle Hidden
     try {
-        $multiDeadline = [DateTime]::UtcNow.AddSeconds(10)
+        $multiDeadline = [DateTime]::UtcNow.AddSeconds(30)
         do {
             $multiReadyA = $false
             $multiReadyB = $false
