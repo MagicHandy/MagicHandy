@@ -93,8 +93,10 @@ does not remove the global Stop or acquire hardware control.
 The October 8 latency follow-up keeps Creative v2 as the existing user-facing
 mode. Additional reach guidance was first selected only for hosted models. An
 October 9 amendment applies it to every Creative v2 contract, because it raised
-local steering as well ([evidence](../creative-v2-shared-reach-guide-2026-10-09.md));
-one-call inference is unchanged. Reasoning
+local steering as well ([evidence](../creative-v2-shared-reach-guide-2026-10-09.md)).
+An October 10 amendment omits it for an external llama.cpp server, which may
+drop the response schema; without the schema the guide made local replies
+malformed. One-call inference is unchanged. Reasoning
 effort is a connection setting and part of readiness identity. ChatGPT exposes
 account-advertised efforts; new choices prefer Low when supported. Empirical
 guidance recommends GPT-6 Sol / Low, without claiming an unverified Fast tier.

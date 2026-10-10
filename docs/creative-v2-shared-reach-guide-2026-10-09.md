@@ -45,7 +45,7 @@ in the Lab. The hosted-only prompt variant and capability flag are removed; the
 local refusal retry still rebuilds its own contract. `cmd/cloud-motion-review
 -reach-guide=false` reproduces the earlier baseline for either kind of model.
 Hosted and local prompts can still diverge where a measured difference calls for
-it; none does today.
+it; none does today. An October 10 amendment below records one.
 
 ## Limits
 
@@ -54,3 +54,20 @@ speeds, one local model, temperature 0.1 in the Lab and the production sampling
 in the request suite. They do not establish physical comfort, behavior with
 other local models or natural conversational phrasing. Reports, the atlas and
 the probe source are retained under `.scratch/shared-reach-guide-20261009/`.
+
+## October 10 amendment: servers that drop the schema
+
+Every run above enforced the response schema. Before merging, the 14-request ×
+3 probe from the [unconstrained-edits review](creative-v2-unconstrained-edits-review-2026-10-09.md)
+was rerun with the same model through Ollama on this branch and on `main`.
+Without the schema, the guide made the model write malformed replies: JSON mode
+fell from 42/42 to 38/42 and unconstrained output from 40/42 to 31/42. With the
+schema, both were 42/42.
+
+Hosted providers, Ollama and the managed llama.cpp runtime enforce the schema
+and keep the guide. An external llama.cpp server may be any OpenAI-compatible
+endpoint, some of which ignore structured output, so its Creative v2 contract
+and Lab prompts, including the local refusal retry's, omit the guide. That
+restored 42/42, 42/42 and 40/42. The same rerun found and fixed reasoning left on
+through Ollama's OpenAI-compatible endpoint. Details are in the
+[`main` reach-guide review](creative-v2-reach-guide-review-2026-10-09.md#october-10-amendment-servers-that-drop-the-schema).
