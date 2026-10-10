@@ -1,9 +1,11 @@
 package chat
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -48,21 +50,19 @@ func ParseCreativeV2Reply(raw string, current motion.FlowSpec, limits config.Mot
 		return AssistantResponse{}, current, nil, errors.New("start a new Creative v2 score before using this interface")
 	}
 	var proposal struct {
-		Action        string                       `json:"action,omitempty"`
-		StayUnchanged *bool                        `json:"stay_unchanged,omitempty"`
-		Reply         string                       `json:"reply"`
-		NewMood       *Mood                        `json:"new_mood,omitempty"`
-		Edits         []map[string]json.RawMessage `json:"edits"`
+		Action        string          `json:"action,omitempty"`
+		StayUnchanged *bool           `json:"stay_unchanged,omitempty"`
+		Reply         string          `json:"reply"`
+		NewMood       *Mood           `json:"new_mood,omitempty"`
+		Edits         json.RawMessage `json:"edits"`
 	}
 	if err := decodeLabObject(raw, &proposal); err != nil {
 		return AssistantResponse{}, current, nil, err
 	}
 	proposal.Reply = strings.TrimSpace(proposal.Reply)
-	if proposal.Edits == nil {
-		return AssistantResponse{}, current, nil, errors.New("creative v2 edits must be a non-null array; use [] for no change")
-	}
-	if len(proposal.Edits) > 8 {
-		return AssistantResponse{}, current, nil, fmt.Errorf("creative v2 edits contains %d items; at most 8 are allowed", len(proposal.Edits))
+	items, err := creativeV2EditItems(proposal.Edits)
+	if err != nil {
+		return AssistantResponse{}, current, nil, err
 	}
 	if proposal.Reply == "" {
 		return AssistantResponse{}, current, nil, errors.New("creative v2 reply must contain non-whitespace text")
@@ -75,11 +75,43 @@ func ParseCreativeV2Reply(raw string, current motion.FlowSpec, limits config.Mot
 			return AssistantResponse{}, current, nil, errors.New("unknown mood")
 		}
 	}
-	next, err := applyCreativeV2Edits(proposal.Edits, current, limits)
+	next, err := applyCreativeV2Edits(items, current, limits)
 	if err != nil {
 		return AssistantResponse{}, current, nil, err
 	}
 	return AssistantResponse{Reply: proposal.Reply, NewMood: proposal.NewMood, StayUnchanged: proposal.StayUnchanged, continuousAction: proposal.Action}, next, labChangedControls(current, next), nil
+}
+
+// creativeV2EditItems returns one item per named control. The contract asks
+// for one group or scalar per item, and a schema-constrained decoder enforces
+// that. Servers that ignore the response schema let a model write several
+// controls in one item, or an object of controls. Items are applied together,
+// not as a sequence, so both shapes have exactly one reading. Repeated,
+// unknown and incomplete controls are still rejected by the caller.
+func creativeV2EditItems(raw json.RawMessage) ([]map[string]json.RawMessage, error) {
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, errors.New("creative v2 edits must be a non-null array; use [] for no change")
+	}
+	var items []map[string]json.RawMessage
+	if raw[0] == '{' {
+		items = make([]map[string]json.RawMessage, 1)
+		if err := json.Unmarshal(raw, &items[0]); err != nil {
+			return nil, fmt.Errorf("invalid lab JSON: %w", err)
+		}
+	} else if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, fmt.Errorf("invalid lab JSON: %w", err)
+	}
+	if len(items) > 8 {
+		return nil, fmt.Errorf("creative v2 edits contains %d items; at most 8 are allowed", len(items))
+	}
+	split := make([]map[string]json.RawMessage, 0, len(items))
+	for _, item := range items {
+		for _, name := range slices.Sorted(maps.Keys(item)) {
+			split = append(split, map[string]json.RawMessage{name: item[name]})
+		}
+	}
+	return split, nil
 }
 
 func applyCreativeV2Edits(items []map[string]json.RawMessage, current motion.FlowSpec, limits config.MotionSettings) (motion.FlowSpec, error) {
@@ -89,9 +121,6 @@ func applyCreativeV2Edits(items []map[string]json.RawMessage, current motion.Flo
 	_ = json.Unmarshal(encoded, &fields)
 	edits := map[string]json.RawMessage{}
 	for _, item := range items {
-		if len(item) != 1 {
-			return current, errors.New("each Creative v2 edit must name exactly one control group")
-		}
 		for name, value := range item {
 			if _, exists := edits[name]; exists {
 				return current, fmt.Errorf("duplicate Creative v2 edit: %s", name)

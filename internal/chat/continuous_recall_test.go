@@ -18,6 +18,10 @@ func TestRecallBringsBackAnEarlierScoreExactly(t *testing.T) {
 	}{
 		{name: "recall", raw: `{"action":"update","edits":[{"recall":1}],"reply":"Back to that."}`, speed: 45},
 		{name: "recall and slow down", raw: `{"action":"update","edits":[{"recall":1},{"speed_percent":30}],"reply":"That again, slower."}`, speed: 30},
+		// Written without the response schema.
+		{name: "recall and slow down in one item", raw: `{"action":"update","edits":[{"recall":1,"speed_percent":30}],"reply":"That again, slower."}`, speed: 30},
+		{name: "recall and slow down as an object", raw: `{"action":"update","edits":{"speed_percent":30,"recall":1},"reply":"That again, slower."}`, speed: 30},
+		{name: "two recalls", raw: `{"action":"update","edits":[{"recall":1,"speed_percent":30},{"recall":1}],"reply":"That again."}`, reject: true},
 		{name: "no such score", raw: `{"action":"update","edits":[{"recall":2}],"reply":"Back to that."}`, reject: true},
 	}
 	for _, tc := range cases {

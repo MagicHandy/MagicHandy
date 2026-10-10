@@ -137,8 +137,9 @@ func applyRecall(raw string, current motion.FlowSpec, scores []EarlierScore, mod
 func takeRecall(edits json.RawMessage, mode MotionMode) (int, json.RawMessage, bool, error) {
 	var id int
 	if mode == MotionModeCreativeV2 {
-		var items []map[string]json.RawMessage
-		if json.Unmarshal(edits, &items) != nil {
+		// Malformed edits are left for the parser to report.
+		items, err := creativeV2EditItems(edits)
+		if err != nil {
 			return 0, edits, false, nil
 		}
 		kept := make([]map[string]json.RawMessage, 0, len(items))
@@ -149,7 +150,7 @@ func takeRecall(edits json.RawMessage, mode MotionMode) (int, json.RawMessage, b
 				kept = append(kept, item)
 				continue
 			}
-			if found || len(item) != 1 || json.Unmarshal(value, &id) != nil {
+			if found || json.Unmarshal(value, &id) != nil {
 				return 0, edits, false, errors.New("recall must be a single edit naming one earlier score")
 			}
 			found = true

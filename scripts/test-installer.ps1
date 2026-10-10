@@ -1944,7 +1944,7 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
 
     Write-Host 'Checking selected-component plans...'
     $managedPlan = @(Get-MagicHandyProvisionPlan -State $loaded)
-    Assert-PlanContains -Plan $managedPlan -Pattern 'Go 1\.26\.8'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'Go 1\.26\.9'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Apply app UI language English and chat reply language English'
     Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verify.+managed llama\.cpp \(cuda\)'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'

@@ -46,6 +46,34 @@ func TestCreativeV2RejectedRepliesDoNotReachMotionOrAssistantHistory(t *testing.
 	}
 }
 
+// An external server that ignores the response schema lets the model put
+// several controls in one edit item. The reply reaches the shared engine as the
+// same target one control per item would, with one generation.
+func TestCreativeV2EditItemsWrittenWithoutTheSchemaReachTheSharedEngine(t *testing.T) {
+	fake := transport.NewFake()
+	provider := &scriptedLLMProvider{responses: []string{
+		`{"action":"start","edits":[{"focus":{"position_percent":100,"width_percent":25,"mix_percent":40,"roam_percent":0},"inertia_percent":70}],"reply":"Starting near the tip, with more inertia."}`,
+	}}
+	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: provider})
+	t.Cleanup(server.Close)
+	saveSettings(t, server.store, func(s config.Settings) config.Settings {
+		s.LLM.MotionGenerationMode = config.LLMMotionModeCreativeV2
+		return s
+	})
+	response := postChatStream(t, server, `{"message":"Start near the tip, with more inertia."}`)
+	if !strings.Contains(response, "event: motion") || strings.Contains(response, "event: malformed") || provider.callCount() != 1 {
+		t.Fatalf("edit items written without the schema did not start motion: %s", response)
+	}
+	engine := server.currentMotionEngine()
+	if flow := engine.Snapshot().Target.Flow; flow == nil || flow.Gesture == nil || flow.Gesture.FocusPercent != 100 || flow.Gesture.FocusMixPercent != 40 || flow.Gesture.InertiaPercent != 70 {
+		t.Fatalf("wrong shared-engine target: %+v", flow)
+	}
+	stop := postChatStream(t, server, `{"message":"Stop motion now."}`)
+	if engine.Snapshot().Running || !strings.Contains(stop, `"action":"stop"`) {
+		t.Fatalf("Stop failed: %s", stop)
+	}
+}
+
 func TestCreativeV2ProductionRetargetModeFenceAutopilotAndStop(t *testing.T) {
 	fake := transport.NewFake()
 	provider := &scriptedLLMProvider{responses: []string{
