@@ -414,9 +414,8 @@ describe("SettingsRoute", () => {
     const panel = view.container.querySelector(".panel");
     expect(panel).not.toBeNull();
     expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Chat");
-    expect(screen.getByRole("region", { name: "Chat model settings" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Autopilot model settings" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Saved model routing" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Model roles" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "External providers" })).toBeInTheDocument();
     expect(panel?.querySelectorAll(".group .group")).toHaveLength(0);
     expect(screen.getByRole("group", { name: "Motion generation" })).toBeInTheDocument();
   });

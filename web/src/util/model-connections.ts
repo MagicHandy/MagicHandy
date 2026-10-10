@@ -61,3 +61,25 @@ export function modelSettingsSignature(settings: LLMSettings): string {
     [...(settings.connections ?? [])].sort((a, b) => a.id.localeCompare(b.id)).map(connectionSignature),
   ]);
 }
+
+export type ModelRole = "chat" | "autopilot";
+
+// The roles that would stop working if this connection went away. Autopilot
+// set to "Same as conversation" follows chat.
+export function connectionRoles(settings: LLMSettings, id: string): ModelRole[] {
+  const chat = (settings.conversation_connection_id || "local") === id;
+  const planner = settings.motion_planner;
+  const autopilot = planner?.provider === "connection" ? planner.connection_id === id : (planner?.provider ?? "conversation") === "conversation" && chat;
+  return [...(chat ? ["chat" as const] : []), ...(autopilot ? ["autopilot" as const] : [])];
+}
+
+// Removing a connection hands its roles to the local model, so the saved
+// settings never point at a connection that no longer exists. Its API key is
+// deleted by the backend when this draft is saved.
+export function removeConnection(settings: LLMSettings, id: string): Partial<LLMSettings> {
+  const planner = settings.motion_planner;
+  const change: Partial<LLMSettings> = { connections: (settings.connections ?? []).filter(connection => connection.id !== id) };
+  if ((settings.conversation_connection_id || "local") === id) change.conversation_connection_id = "local";
+  if (planner?.provider === "connection" && planner.connection_id === id) change.motion_planner = { ...planner, provider: "local", connection_id: "", context_policy: "conversation" };
+  return change;
+}

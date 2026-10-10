@@ -281,3 +281,36 @@ func TestHostedLanesRemainIndependentAndInvalidateTogether(t *testing.T) {
 		t.Fatal("provider change did not cancel both lanes")
 	}
 }
+
+func TestSavingWithoutAConnectionRemovesOnlyItsKey(t *testing.T) {
+	s, _, connection := hostedFixture(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(500) })
+	connection.NoAuthentication = false
+	draft := config.ModelConnection{ID: "draft", Name: "Draft", Provider: config.LLMProviderOpenRouter, Model: "model"}.Normalize()
+	for _, item := range []config.ModelConnection{connection, draft} {
+		if err := s.cloudPlanning.auth.SetConnectionKey(t.Context(), item, "key-"+item.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	remove := func(settings config.Settings) (config.Settings, error) {
+		settings.LLM.Connections = nil
+		settings.LLM.ConversationConnectionID = "local"
+		return settings, nil
+	}
+	// A save that fails leaves every credential in place.
+	if _, _, err, _ := s.updateSettingsAndRuntime(t.Context(), func(config.Settings) (config.Settings, error) { return config.Settings{}, errors.New("rejected") }); err == nil {
+		t.Fatal("expected the failing save to fail")
+	}
+	if !s.cloudPlanning.auth.ConnectionKeySet(t.Context(), connection) {
+		t.Fatal("a failed save removed a key")
+	}
+	if _, _, err, _ := s.updateSettingsAndRuntime(t.Context(), remove); err != nil {
+		t.Fatal(err)
+	}
+	if s.cloudPlanning.auth.ConnectionKeySet(t.Context(), connection) {
+		t.Fatal("the removed connection kept its key")
+	}
+	// A key for a connection that was never saved is not this save's to remove.
+	if !s.cloudPlanning.auth.ConnectionKeySet(t.Context(), draft) {
+		t.Fatal("an unsaved draft lost its key")
+	}
+}

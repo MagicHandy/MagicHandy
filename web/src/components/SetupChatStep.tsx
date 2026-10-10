@@ -78,7 +78,7 @@ export function SetupChatStep(props: SetupChatStepProps) {
         <SetupChoice selected={choice === "managed"} title={props.localOnly ? t("Install a local model") : t("Managed llama.cpp")} detail={t("App-owned, pinned, and checksum-verified. It avoids requiring Ollama or a compiler toolchain.")} badge={setup.hardware.nvidia ? t("Recommended") : undefined} onSelect={() => select("managed")} />
         <SetupChoice selected={choice === "ollama"} title={props.localOnly ? t("Use my Ollama") : t("Use my existing Ollama")} detail={t("Uses no managed runtime disk. MagicHandy uses your existing Ollama service and model library.")} onSelect={() => select("ollama")} />
         <SetupChoice selected={choice === "external"} title={props.localOnly ? t("Use my own server") : t("External llama.cpp server")} detail={t("Use a compatible server you manage. MagicHandy will not install or own that process.")} onSelect={() => select("external")} />
-        {!props.localOnly && <SetupChoice selected={choice === "hosted"} title={t("Hosted model")} detail={t("Connect ChatGPT or an API provider. No local model is required.")} onSelect={() => select("hosted")} />}
+        {!props.localOnly && <SetupChoice selected={choice === "hosted"} title={t("Hosted model")} badge={t("Experimental")} detail={t("Connect ChatGPT or an API provider. No local model is required.")} onSelect={() => select("hosted")} />}
         {!props.localOnly && <SetupChoice selected={choice === "skip"} title={t("Skip chat model setup")} detail={t("The app remains usable for manual, pattern, and video control.")} onSelect={() => select("skip")} />}
       </SetupChoiceGroup>
     </SetupSection>
