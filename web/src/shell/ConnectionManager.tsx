@@ -93,11 +93,15 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
   const deviceName = owner === "browser_bluetooth"
     ? bluetooth.deviceName || "The Handy"
     : selectedIntifaceDevice?.device_name || "The Handy";
-  const connecting = cloudAction === "check" || cloudAction === "connect" || (owner === "browser_bluetooth" && bluetooth.connecting) || (owner === "intiface" && (intifaceActivity === "connecting" || intifaceActivity === "scanning" || intiface.status.scanning));
+  const intifaceReady = Boolean(intiface.status.connected && intiface.status.selected_device_index !== undefined);
+  // An Intiface scan runs until it is stopped, so a scan only means "still
+  // finding a device" while no actuator has been chosen.
+  const intifaceSearching = !intifaceReady && (intifaceActivity === "scanning" || intiface.status.scanning);
+  const connecting = cloudAction === "check" || cloudAction === "connect" || (owner === "browser_bluetooth" && bluetooth.connecting) || (owner === "intiface" && (intifaceActivity === "connecting" || intifaceSearching));
   const connected = owner === "cloud_rest"
     ? Boolean(state?.cloud_transport?.connected)
     : owner === "browser_bluetooth" ? bluetooth.connected : owner === "intiface"
-      ? Boolean(intiface.status.connected && intiface.status.selected_device_index !== undefined)
+      ? intifaceReady
       : false;
   const hasError = (owner === "browser_bluetooth" && ["error", "unsupported"].includes(bluetooth.status))
     || (owner === "cloud_rest" && cloudAttemptFailed)
