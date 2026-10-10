@@ -2003,16 +2003,14 @@ and stroke limits moved from Chat into this
 manager and still use the semantic immediate-apply API. Reverse direction and
 motion style remain in Chat as motion behavior.
 
-The connecting state uses a reference-guided transparent isolation of the
-reviewed conductor hand. It renders directly at a fixed square source ratio,
-without the approximate SVG clip and luminance mask that distorted its shape.
-The scaled composition keeps the hand, three intense-blue vector arcs, and the
-poster's tall capsule, shorter domed body, LED, and square marker inside one
-frame. The arcs occupy the lower half and stagger toward the device while
-connecting; connected shows the complete signal. Disconnected shows no signal
-and a red square; only a failed connection attempt adds a briefly shaking red X.
-The square turns green when connected. `docs/connection-artwork.md` preserves
-the generation, construction, state, and refactor details.
+The connection state is a flat vector status strip: three signal arcs above
+the Handy-inspired capsule, shorter domed body, LED, and square marker. The arcs
+stagger in the accent hue while connecting and turn green when connected.
+Disconnected shows no signal and a red square; only a failed connection attempt
+adds a briefly shaking red X. The 2026-10-09 Graphite refactor removed the
+earlier generated conductor-hand bitmap (about 444 KB) from the shipped UI.
+`docs/connection-artwork.md` preserves the construction, state, and refactor
+details.
 Reduced-motion users get static state feedback. The non-modal disclosure
 restores focus on close, leaves Escape to Stop, and clears the reserved mobile
 Stop/footer region.

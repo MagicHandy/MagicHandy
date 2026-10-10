@@ -21,7 +21,7 @@ describe("SetpointControls", () => {
     const slider = screen.getByRole("slider", { name: "Style" });
     expect(slider).toHaveValue("1");
     expect(slider).toHaveAttribute("aria-valuetext", "Balanced");
-    expect(slider.style.getPropertyValue("--setpoint-progress")).toBe("50%");
+    expect(slider.style.getPropertyValue("--range-fill")).toBe("0.5");
     expect(Array.from(result.container.querySelectorAll<HTMLElement>(".setpoint-stop"), (stop) =>
       stop.style.getPropertyValue("--setpoint-position"),
     )).toEqual(["0%", "50%", "100%"]);

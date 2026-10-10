@@ -8,6 +8,7 @@ import { ArrowLeftIcon, ArrowRightIcon, PauseIcon, PlayIcon, VolumeIcon, VolumeM
 import { formatClock } from "../videos/format";
 import { motionSourceNote, motionSourceOptions } from "../videos/motionSource";
 import type { RemoteSend } from "./useRemoteCommands";
+import { RangeInput } from "../components/RangeInput";
 
 // The same speeds as the desktop player's own control.
 const RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -51,9 +52,8 @@ export function RemoteVideoControls({ video, position, send }: Props) {
 
       <div className="remote-scrubber">
         <label className="visually-hidden" htmlFor="remote-position">{t("Position")}</label>
-        <input
+        <RangeInput
           id="remote-position"
-          type="range"
           min={0}
           max={Math.max(duration, 1)}
           step={1000}
@@ -113,9 +113,8 @@ export function RemoteVideoControls({ video, position, send }: Props) {
           {video.muted ? <VolumeMutedIcon /> : <VolumeIcon />}
         </button>
         <label className="visually-hidden" htmlFor="remote-volume">{t("Video volume")}</label>
-        <input
+        <RangeInput
           id="remote-volume"
-          type="range"
           min={0}
           max={100}
           step={5}

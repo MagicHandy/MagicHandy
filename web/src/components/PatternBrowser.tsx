@@ -56,9 +56,9 @@ export function PatternBrowser({ patterns, locked, hostLocked = locked, offline,
         </label>
       </div>
 
-      {patterns.some(pattern => pattern.deprecated) && <label className="field">
-        <span><input type="checkbox" checked={showLegacy} onChange={event => {setShowLegacy(event.target.checked);setActiveTags(new Set());}} />{t("Show legacy patterns")}</span>
-        <span className="hint">{t("Legacy patterns remain available for manual playback and saved content. LLM selection uses the new library.")}</span>
+      {patterns.some(pattern => pattern.deprecated) && <label className="toggle-line pattern-legacy-toggle">
+        <span className="toggle"><input type="checkbox" checked={showLegacy} onChange={event => {setShowLegacy(event.target.checked);setActiveTags(new Set());}} /><span className="track" aria-hidden="true" /></span>
+        <span>{t("Show legacy patterns")}<small>{t("Legacy patterns remain available for manual playback and saved content. LLM selection uses the new library.")}</small></span>
       </label>}
 
       {availableTags.length > 0 && (

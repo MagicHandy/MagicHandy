@@ -76,8 +76,8 @@ export function ObservationsPage({useInChat}:{useInChat:(text:string)=>void}) {
         <pre>{JSON.stringify({spec:row.spec,limits:row.settings,trial:row.trial},null,2)}</pre>
       </details>
       <div className="row-actions"><button className="btn btn-secondary" disabled={readOnly} onClick={()=>useInChat(observationDraft(row))}>{t("Use in chat")}</button>
-        {confirmDelete===row.id?<><span>{t("Delete this observation?")}</span><button className="btn btn-secondary" disabled={Boolean(removing)||readOnly||!backendOnline} onClick={()=>void remove(row.id)}>{t("Confirm delete")}</button><button className="btn btn-secondary" disabled={Boolean(removing)} onClick={()=>setConfirmDelete("")}>{t("Cancel")}</button></>
-          :<button className="btn btn-secondary" disabled={Boolean(removing)||readOnly||!backendOnline} onClick={()=>setConfirmDelete(row.id)}>{t("Delete")}</button>}
+        {confirmDelete===row.id?<><span>{t("Delete this observation?")}</span><button className="btn btn-danger-outline" disabled={Boolean(removing)||readOnly||!backendOnline} onClick={()=>void remove(row.id)}>{t("Confirm delete")}</button><button className="btn btn-secondary" disabled={Boolean(removing)} onClick={()=>setConfirmDelete("")}>{t("Cancel")}</button></>
+          :<button className="btn btn-danger-outline" disabled={Boolean(removing)||readOnly||!backendOnline} onClick={()=>setConfirmDelete(row.id)}>{t("Delete")}</button>}
       </div>
     </article>)}</div>
     {data&&data.observations.length>0&&<p className="hint">{t("{count} of {capacity} saved observations",{count:data.observations.length,capacity:data.capacity})}</p>}

@@ -1807,7 +1807,6 @@
   "View saved observations": "保存した観察を見る",
   "Your observation": "観察内容",
   "{count} of {capacity} saved observations": "保存した観察 {count}件 / 上限{capacity}件",
-  "{seconds}s": "{seconds}秒",
   "Creative baseline fixes the anchor at the center. Choose Anchored range to control it.": "Creative基準ではアンカーは中央固定です。調整するにはアンカー付き範囲を選択してください。",
   "Historical reference: shares pace, outer band, shortest span and seed. Continuous layers, sections and gradual variation do not apply.": "過去の方式との比較用です。ペース、外側の範囲、最短ストローク、シードを共有します。連続スコアのレイヤー、セクション、緩やかな変化は適用されません。",
   "Historical settings: wander profile, 30% variation, minimum span 20.": "過去の方式の固定設定：wanderプロファイル、変化量30%、最短ストローク20。",

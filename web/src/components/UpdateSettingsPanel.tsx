@@ -63,7 +63,7 @@ export function UpdateSettingsPanel({ currentVersion, automatic, preferenceDisab
       </div>
         </div>
       </div>
-      <label className="toggle-line hint-block">
+      <label className="toggle-line">
         <span className="toggle">
           <input
             type="checkbox"

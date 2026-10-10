@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ConfirmHost } from "../components/ConfirmHost";
 import { t, translateKnown } from "../i18n";
 import { useAuth } from "../state/auth";
 import { LoginRoute } from "../routes/LoginRoute";
@@ -53,7 +54,7 @@ export function RemoteApplication() {
       {logoutError && <p className="form-status" role="alert">{logoutError}</p>}
       {!auth.status ? <section className="remote-empty" role="status"><p>{auth.error || t("Checking access…")}</p><button className="btn btn-secondary" type="button" onClick={() => void auth.refresh()}>{t("Retry core connection")}</button></section>
         : !signedIn ? <LoginRoute />
-        : accountOpen ? <section className="remote-account" aria-label={t("Your account")}>
+        : accountOpen ? <section className="remote-account settings-panel" aria-label={t("Your account")}>
           <div className="remote-section-heading"><h2>{t("Your account")}</h2><button className="btn btn-secondary small" type="button" onClick={() => setAccountOpen(false)}>{t("Back to remote")}</button></div>
           <AccountPasswordPanel disabled={false} onChanged={auth.refresh} />
           <RecoveryCodesPanel backendOnline />
@@ -62,6 +63,7 @@ export function RemoteApplication() {
         </section>
         : <RemoteRoute remote={remote} canControl={canControl} onRefresh={() => { void auth.refresh(); remote.refresh(); }} />}
     </main>
+    <ConfirmHost />
     <footer className="remote-safety">
       <span>{remote.state?.connected && !remote.stale ? t("Desktop connected") : t("No desktop connected")}</span>
       <StopButton className="remote-stop" onStopped={remote.refresh} />

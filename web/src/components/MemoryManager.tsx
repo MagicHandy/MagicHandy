@@ -88,7 +88,7 @@ export function MemoryManager({ locked = false }: { locked?: boolean }) {
           <button type="button" className="btn btn-secondary" disabled={busy || loading} onClick={() => void reload()}>{t("Retry")}</button>
         </div>
       )}
-      <label className="toggle-line hint-block">
+      <label className="toggle-line">
         <span className="toggle">
           <input
             type="checkbox"

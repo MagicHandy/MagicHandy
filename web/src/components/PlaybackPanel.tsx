@@ -1,13 +1,16 @@
 import { t } from "../i18n";
-// Floating playback panel for the video currently open in the player. It
-// overlays the workspace rather than reflowing it, because its whole purpose is
-// to be adjusted while watching: calibration you cannot see the effect of is
-// just a settings form in a worse place.
+// Playback panel for the video currently open in the player. Its whole purpose
+// is to be adjusted while watching: calibration you cannot see the effect of is
+// just a settings form in a worse place. So wider screens dock it as a rail
+// beside the picture (or over the chat column) and never over the picture, its
+// transport, the script plot or the motion-source switch; phones float it as a
+// sheet above the Stop footer (media.css).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { MediaPlaybackSettings, MediaSyncStatus, MediaVideo, MediaVideoUpdate } from "../api/types";
 import { CloseIcon } from "../shell/icons";
 import { PlaybackFilterEffect } from "./PlaybackFilterEffect";
+import { RangeInput } from "./RangeInput";
 
 // Mirror config.MaxScriptOffsetMillis / MaxScriptSmoothingPercent / MaxPeakRoundingMillis.
 const MAX_OFFSET_MILLIS = 2000;
@@ -22,6 +25,8 @@ export interface MediaPlaybackPatch {
 }
 
 interface Props {
+  /** The id its trigger names in aria-controls. */
+  id?: string;
   video: MediaVideo;
   sync: MediaSyncStatus;
   locked: boolean;
@@ -37,6 +42,7 @@ interface Props {
 }
 
 export function PlaybackPanel({
+  id,
   video,
   sync,
   locked,
@@ -55,6 +61,7 @@ export function PlaybackPanel({
   const [rounding, setRounding] = useState(roundingMillis);
   const [speedLimit, setSpeedLimit] = useState(limitSpeed);
   const [error, setError] = useState("");
+  const layerRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const offsetTimer = useRef<number>();
   const filterTimer = useRef<number>();
@@ -84,15 +91,22 @@ export function PlaybackPanel({
   }, []);
 
   useEffect(() => {
-    panelRef.current?.querySelector<HTMLElement>("input, button")?.focus();
+    panelRef.current?.querySelector<HTMLElement>("input:not(:disabled), button:not(:disabled)")?.focus();
   }, []);
 
   useEffect(() => {
+    // Escape is also Emergency Stop's shortcut; closing never consumes it.
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
     }
+    // Only the floating sheet closes on a press elsewhere. The docked rail stays
+    // open while the picture, its transport and the script plot are used, and
+    // the trigger toggles it either way.
     function onPointer(event: MouseEvent) {
-      if (!panelRef.current?.contains(event.target as Node)) onClose();
+      const target = event.target as Element | null;
+      if (panelRef.current?.contains(target) || (id && target?.closest?.(`[aria-controls="${id}"]`))) return;
+      if (layerRef.current && getComputedStyle(layerRef.current).position !== "fixed") return;
+      onClose();
     }
     window.addEventListener("keydown", onKey);
     // Deferred so the click that opened the panel does not immediately close it.
@@ -102,7 +116,7 @@ export function PlaybackPanel({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mousedown", onPointer);
     };
-  }, [onClose]);
+  }, [id, onClose]);
 
   // The offset writes on a short debounce: dragging is one gesture, not thirty
   // requests, and the backend applies each one to the live run without stopping.
@@ -172,8 +186,8 @@ export function PlaybackPanel({
   const effective = clamp(setupOffsetMillis + offset, -MAX_OFFSET_MILLIS, MAX_OFFSET_MILLIS);
 
   return (
-    <div className="playback-panel-layer">
-      <section className="playback-panel" ref={panelRef} aria-label={t("Playback settings for {display_name}", { display_name: video.display_name })}>
+    <div className="playback-panel-layer" ref={layerRef}>
+      <section className="playback-panel" id={id} ref={panelRef} aria-label={t("Playback settings for {display_name}", { display_name: video.display_name })}>
         <header className="playback-panel-head">
           <h2>{t("Playback")}</h2>
           <span title={video.display_name}>{video.display_name}</span>
@@ -188,8 +202,7 @@ export function PlaybackPanel({
             <span className="playback-panel-label">{t("Offset")}</span>
             <output className="playback-panel-value">{formatMillis(effective)}</output>
           </div>
-          <input
-            type="range"
+          <RangeInput
             aria-label={t("Sync offset for this video")}
             min={-MAX_OFFSET_MILLIS}
             max={MAX_OFFSET_MILLIS}
@@ -207,22 +220,24 @@ export function PlaybackPanel({
           </legend>
 
           <label className="playback-panel-toggle">
-            <input
-              type="checkbox"
-              checked={smoothing > 0}
-              disabled={locked}
-              onChange={(event) => {
-                const next = event.target.checked ? 3 : 0;
-                setSmoothing(next);
-                writeFilters({ script_smoothing_percent: next });
-              }}
-            />
             <span>{t("Smoothing")}</span>
+            <span className="toggle">
+              <input
+                type="checkbox"
+                checked={smoothing > 0}
+                disabled={locked}
+                onChange={(event) => {
+                  const next = event.target.checked ? 3 : 0;
+                  setSmoothing(next);
+                  writeFilters({ script_smoothing_percent: next });
+                }}
+              />
+              <span className="track" aria-hidden="true" />
+            </span>
             <output>{smoothing > 0 ? <>{smoothing}%</> : t("off")}</output>
           </label>
           {smoothing > 0 && (
-            <input
-              type="range"
+            <RangeInput
               aria-label={t("Smoothing threshold")}
               min={1}
               max={MAX_SMOOTHING_PERCENT}
@@ -238,22 +253,24 @@ export function PlaybackPanel({
           )}
 
           <label className="playback-panel-toggle">
-            <input
-              type="checkbox"
-              checked={rounding > 0}
-              disabled={locked}
-              onChange={(event) => {
-                const next = event.target.checked ? 60 : 0;
-                setRounding(next);
-                writeFilters({ peak_rounding_ms: next });
-              }}
-            />
             <span>{t("Round peaks")}</span>
+            <span className="toggle">
+              <input
+                type="checkbox"
+                checked={rounding > 0}
+                disabled={locked}
+                onChange={(event) => {
+                  const next = event.target.checked ? 60 : 0;
+                  setRounding(next);
+                  writeFilters({ peak_rounding_ms: next });
+                }}
+              />
+              <span className="track" aria-hidden="true" />
+            </span>
             <output>{rounding > 0 ? t("{rounding} ms", { rounding: rounding }) : t("off")}</output>
           </label>
           {rounding > 0 && (
-            <input
-              type="range"
+            <RangeInput
               aria-label={t("Peak rounding window")}
               min={10}
               max={MAX_ROUNDING_MILLIS}
@@ -269,16 +286,19 @@ export function PlaybackPanel({
           )}
 
           <label className="playback-panel-toggle">
-            <input
-              type="checkbox"
-              checked={speedLimit}
-              disabled={locked}
-              onChange={(event) => {
-                setSpeedLimit(event.target.checked);
-                writeFilters({ apply_video_speed_limit: event.target.checked });
-              }}
-            />
             <span>{t("Limit speed")}</span>
+            <span className="toggle">
+              <input
+                type="checkbox"
+                checked={speedLimit}
+                disabled={locked}
+                onChange={(event) => {
+                  setSpeedLimit(event.target.checked);
+                  writeFilters({ apply_video_speed_limit: event.target.checked });
+                }}
+              />
+              <span className="track" aria-hidden="true" />
+            </span>
             <output>{speedLimit ? t("{percent}% max", { percent: speedLimitPercent }) : t("off")}</output>
           </label>
         </fieldset>

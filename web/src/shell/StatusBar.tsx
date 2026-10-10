@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { confirmThen } from "../util/confirm";
 import { t, translateKnown } from "../i18n";
 // Compact status readouts, run timer, mini visualizer, and the shell-level
 // disclosures. Motion controls remain in their routed workspaces.
@@ -91,12 +92,16 @@ export function StatusBar({
   const coreState = awaitingState && backendOnline ? "pending" : backendOnline ? "ok" : "error";
   const coreLabel = awaitingState && backendOnline ? "core starting" : backendOnline ? "core ok" : "core offline";
 
-  async function takeControl() {
+  function takeControl() {
     if (takingControl || handoffInProgress || !backendOnline) return;
-    if (!window.confirm(t("Take control of MagicHandy? Active motion, Autopilot, video synchronization, speech playback, and queued voice work will stop before this tab becomes the controller."))) {
-      return;
-    }
+    confirmThen(
+      t("Take control of MagicHandy? Active motion, Autopilot, video synchronization, speech playback, and queued voice work will stop before this tab becomes the controller."),
+      { confirmLabel: t("Take control") },
+      () => void transferControl(),
+    );
+  }
 
+  async function transferControl() {
     setTakingControl(true);
     stopAllAudioPlayback();
     window.dispatchEvent(new Event("magichandy:emergency-stop"));
@@ -156,7 +161,7 @@ export function StatusBar({
           aria-label={handoffInProgress || takingControl ? t("Controller handoff in progress") : t("Take control")}
           aria-busy={takingControl}
           disabled={!backendOnline || handoffInProgress || takingControl}
-          onClick={() => void takeControl()}
+          onClick={takeControl}
         >
           <span className="status-dot" data-state={handoffInProgress || takingControl ? "pending" : "warn"} />
           <TakeControlIcon size={16} className="icon" />
@@ -169,7 +174,10 @@ export function StatusBar({
           aria-label={t("This tab is the controller")}
         >
           <span className="status-dot" data-state="ok" />
-          <span className="status-text">{t("controller: you")}</span>
+          {/* Phones show the compact form: Take control's glyph and "You". */}
+          <TakeControlIcon size={16} className="icon status-controller-glyph" />
+          <span className="status-text status-controller-label">{t("controller: you")}</span>
+          <span className="status-text status-controller-short" aria-hidden="true">{t("You")}</span>
         </span>
       ))}
       <MotionVisualizer motion={motion} mini />

@@ -1807,7 +1807,6 @@
   "View saved observations": "Ver observações salvas",
   "Your observation": "Sua observação",
   "{count} of {capacity} saved observations": "{count} de {capacity} observações salvas",
-  "{seconds}s": "{seconds} s",
   "Creative baseline fixes the anchor at the center. Choose Anchored range to control it.": "A referência criativa fixa a âncora no centro. Escolha Alcance ancorado para controlá-la.",
   "Historical reference: shares pace, outer band, shortest span and seed. Continuous layers, sections and gradual variation do not apply.": "Referência histórica: compartilha ritmo, faixa externa, extensão mínima e semente. Camadas, seções e variação gradual da partitura contínua não se aplicam.",
   "Historical settings: wander profile, 30% variation, minimum span 20.": "Configurações históricas: perfil errante, variação de 30%, extensão mínima 20.",

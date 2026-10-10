@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { MediaJobState, MediaSettingsPayload, MediaToolStatus } from "../api/types";
 import { HostPathField } from "./HostPathField";
+import { RangeInput } from "./RangeInput";
 
 // Mirrors internal/config bounds so the form cannot ask for a value the server
 // would silently clamp.
@@ -169,8 +170,7 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
 
       <label className="field">
         <span className="label">{t("Quality")}<span className="hint-inline">{t("CRF {value}", { value: formatNumber(crfValue) })}</span></span>
-        <input
-          type="range"
+        <RangeInput
           min={MIN_CRF}
           max={MAX_CRF}
           step={1}
@@ -195,8 +195,7 @@ export function MediaToolsSettings({ media, locked, onChange }: Props) {
 
       <label className="field">
         <span className="label">{t("Audio bitrate")}<span className="hint-inline">{t("{rate} kbps", { rate: formatNumber(media.reencode_audio_kbps ?? 192) })}</span></span>
-        <input
-          type="range"
+        <RangeInput
           min={MIN_AUDIO_KBPS}
           max={MAX_AUDIO_KBPS}
           step={AUDIO_KBPS_STEP}

@@ -137,6 +137,23 @@ describe("pattern library components", () => {
     expect(path?.getAttribute("d")).toBe("M120.00 5.00 L235.00 67.00");
   });
 
+  it("draws an expanded curve edge to edge with its position and time scales", () => {
+    const result = render(<PatternCurve
+      label="Training curve"
+      axes
+      points={[
+        { time_ms: 0, position_percent: 0 },
+        { time_ms: 4500, position_percent: 100 },
+        { time_ms: 9000, position_percent: 50 },
+      ]}
+    />);
+
+    expect(result.container.querySelector("path")?.getAttribute("d")).toBe("M0.00 72.00 L120.00 0.00 L240.00 36.00");
+    expect(result.container.querySelector(".pattern-plot-y")).toHaveTextContent("Tip 10050Base 0");
+    expect(result.container.querySelector(".pattern-plot-x")).toHaveTextContent("0 s4.5 s9 s");
+    expect(screen.getByRole("img", { name: "Training curve" })).toBeInTheDocument();
+  });
+
   it("inserts saved knots into sparse backend samples for long-cycle preview fidelity", () => {
     const result = render(<PatternCurve
       label="Long curve"

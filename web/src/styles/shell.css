@@ -1,6 +1,6 @@
-/* shell.css — the permanent-sidebar shell: nav rail + compact top bar +
-   routed workspace, with Stop pinned to the rail footer. See
-   docs/ui-navigation-redesign.md and docs/ui-design-guidelines.md. */
+/* shell.css — the Graphite shell: a quiet nav rail with Stop pinned to its foot,
+   a session header of compact readouts, and one page frame for every route.
+   See docs/ui-design-guidelines.md. */
 
 .app-shell {
   display: grid;
@@ -16,78 +16,72 @@
   grid-row: 1 / 3;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 16px 12px;
-  background: var(--surface);
-  border-right: 1px solid var(--line);
+  gap: 2px;
   min-height: 0;
+  padding: 14px 12px 12px;
+  background: var(--rail);
+  border-right: 1px solid var(--line);
 }
-
-/* The rule matters: without it the product identity reads as the first item in
-   the link list rather than as the header above it. It lives on the brand
-   rather than on a separate divider element, so the separator cannot drift
-   away from the thing it separates. */
 .nav-brand {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 48px;
-  padding: 4px 2px 12px;
-  border-bottom: 1px solid var(--line);
+  min-height: 40px;
+  padding: 2px 6px 14px;
   color: var(--text);
   user-select: none;
 }
 .nav-brand-mark {
-  flex: 0 0 36px;
-  height: 36px;
+  flex: 0 0 26px;
+  height: 26px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 1rem;
-  line-height: 1;
-  color: var(--accent);
-  background: var(--accent-tint);
   border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--accent);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  line-height: 1;
 }
 .nav-brand-copy {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 .nav-brand-name {
-  font-size: 1rem;
-  font-weight: 600;
-  line-height: 1.15;
+  font-size: var(--fs-heading);
+  font-weight: 650;
+  line-height: 1.2;
 }
 .nav-brand-context {
-  font-size: 0.72rem;
-  line-height: 1.25;
-  color: var(--muted);
-  white-space: nowrap;
   overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-hint);
+  line-height: 1.3;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nav-links {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  margin-top: 4px;
 }
 .nav-link {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 40px;
-  padding: 0 12px;
+  height: 36px;
+  padding: 0 10px;
   border-radius: var(--radius-sm);
   color: var(--muted);
+  font-size: var(--fs-body);
   text-decoration: none;
-  font-size: 0.9rem;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 .nav-link .icon {
   flex: 0 0 18px;
@@ -97,12 +91,10 @@
   background: var(--surface-2);
   color: var(--text);
 }
-/* Selection is a soft azure fill on the whole rounded link — no edge bar,
-   which the corner radius would clip into a hook shape. Hover stays neutral
-   graphite so the two states read differently. */
 .nav-link[aria-current="page"] {
   background: var(--accent-tint);
   color: var(--text);
+  font-weight: 600;
 }
 .nav-link[aria-current="page"] .icon {
   color: var(--accent);
@@ -125,34 +117,45 @@
   z-index: var(--layer-emergency-stop);
 }
 
-/* ---- Status bar (top of workspace column) ---- */
+/* ---- Session header: what is happening now, then the shell actions ---- */
+/* Readouts on the left; on the right one row of 36px chips (controller,
+   motion glyph, notifications, connection) sharing border, radius and hover. */
 .status-bar {
   grid-column: 2;
   grid-row: 1;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 clamp(12px, 2.4vw, 22px);
+  gap: 8px;
+  padding: 0 clamp(12px, 2vw, 20px);
   border-bottom: 1px solid var(--line);
-  background: rgba(11, 13, 17, 0.6);
+  background: var(--bg);
   overflow: hidden;
+}
+.status-bar > .status-readouts {
+  margin-right: 8px;
+}
+.status-bar > .status-readout-controller:not(.status-controller-action) {
+  margin-right: 6px;
 }
 .status-readout {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 0.82rem;
   color: var(--muted);
+  font-size: var(--fs-label);
   white-space: nowrap;
 }
-/* Readouts may shrink or wrap; connection/profile actions always keep their
-   own space instead of being pushed past the header's clipped edge. */
+/* The first readout is the motion phase: the one fact that matters most. */
+.status-readouts > .status-readout:first-child {
+  color: var(--text);
+  font-weight: 600;
+}
 .status-readouts {
   display: flex;
   min-width: 0;
   flex: 1 1 auto;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   overflow: hidden;
 }
 .status-readouts .status-readout {
@@ -169,35 +172,39 @@
   appearance: none;
   flex: 0 0 auto;
   min-width: 0;
-  margin: -4px -6px;
-  padding: 4px 6px;
-  border: 0;
+  height: 36px;
+  margin: 0;
+  padding: 0 12px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   background: transparent;
+  color: var(--text);
   font: inherit;
+  font-size: var(--fs-label);
+  font-weight: 600;
   cursor: pointer;
 }
 .status-controller-action:hover:not(:disabled) {
   background: var(--surface-2);
-  color: var(--text);
-}
-.status-controller-action:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
 }
 .status-controller-action:disabled {
   cursor: wait;
-  opacity: 0.72;
+  opacity: 0.7;
 }
 .status-controller-action .icon {
   flex: 0 0 16px;
 }
+/* The compact controller form is for phones only (see the 860px rules). */
+.status-controller-glyph,
+.status-controller-short {
+  display: none;
+}
 .status-dot {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
-  background: var(--muted);
   flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--faint);
 }
 .status-dot[data-state="ok"],
 .status-dot[data-state="running"] {
@@ -217,48 +224,62 @@
 .status-divider {
   width: 1px;
   height: 16px;
-  background: var(--line);
   flex: 0 0 auto;
+  background: var(--line);
 }
 .status-timer {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: var(--fs-label);
 }
 .status-timer .value {
-  color: var(--text);
+  color: var(--text-soft);
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 .status-spacer {
   margin-left: auto;
 }
 
-/* ---- Top-bar notifications ---- */
+/* ---- Notifications ---- */
 .notification-center {
   position: relative;
   z-index: 24;
   flex: 0 0 auto;
 }
-.notification-trigger {
+.status-bar .notification-trigger {
   position: relative;
-  width: 38px;
-  height: 38px;
-  border-color: transparent;
+  width: 36px;
+  height: 36px;
+  border-color: var(--line);
   background: transparent;
   color: var(--muted);
 }
+/* The compact motion glyph sits in the same chip as the bell. */
+.status-bar .visualizer.mini {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.status-bar .visualizer.mini .viz-device {
+  width: 20px;
+  height: 28px;
+}
 .notification-trigger:hover,
 .notification-trigger[aria-expanded="true"] {
-  border-color: var(--line);
   background: var(--surface-2);
   color: var(--text);
 }
 .notification-badge {
   position: absolute;
-  top: 2px;
-  right: 1px;
+  top: -5px;
+  right: -5px;
   display: inline-flex;
   min-width: 16px;
   height: 16px;
@@ -269,29 +290,29 @@
   border-radius: 999px;
   background: var(--accent);
   color: var(--accent-ink);
-  font-size: 0.58rem;
-  font-weight: 700;
+  font-size: var(--fs-micro);
+  font-weight: 600;
   line-height: 1;
 }
 .notification-activity-dot {
   position: absolute;
   top: 5px;
-  right: 4px;
-  width: 8px;
-  height: 8px;
-  border: 2px solid var(--bg);
-  border-radius: 999px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
   background: var(--accent);
 }
-.notification-center-panel {
+.notification-center-panel,
+.connection-manager-panel {
   position: fixed;
   top: calc(var(--status-h) + 8px);
-  right: clamp(8px, 2.4vw, 22px);
+  right: clamp(8px, 2vw, 20px);
   width: min(360px, calc(100vw - 16px));
   max-height: calc(100vh - var(--status-h) - 16px);
   overflow: auto;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -300,20 +321,21 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 10px 12px;
 }
 .notification-center-head > div:first-child {
   min-width: 0;
 }
-.notification-center-head h2 {
+.notification-center-head h2,
+.connection-manager-head h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--fs-heading);
   font-weight: 600;
 }
 .notification-center-head p {
   margin: 2px 0 0;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .notification-head-actions {
   display: flex;
@@ -322,7 +344,7 @@
 }
 .notification-management-actions {
   display: flex;
-  gap: 1px;
+  gap: 2px;
   padding-right: 6px;
   border-right: 1px solid var(--line);
 }
@@ -331,22 +353,17 @@
   height: 30px;
   flex: 0 0 30px;
   border-color: transparent;
-  background: transparent;
-}
-.notification-head-actions .icon-button:hover:not(:disabled) {
-  border-color: var(--line);
-  background: var(--surface-2);
 }
 .notification-section {
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-top: 1px solid var(--line);
 }
 .notification-section h3 {
   margin: 0 0 6px;
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-micro);
   font-weight: 600;
-  letter-spacing: 0;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .notification-activity-row,
@@ -354,9 +371,9 @@
   display: grid;
   grid-template-columns: 8px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   width: 100%;
-  padding: 6px 0;
+  padding: 7px 0;
   color: var(--text);
   text-decoration: none;
 }
@@ -373,14 +390,14 @@
 .notification-activity-row strong,
 .notification-live-row strong {
   overflow-wrap: anywhere;
-  font-size: 0.82rem;
+  font-size: var(--fs-label);
   font-weight: 600;
 }
 .notification-activity-row small,
 .notification-live-row small {
   overflow: hidden;
   color: var(--muted);
-  font-size: 0.7rem;
+  font-size: var(--fs-hint);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -389,27 +406,28 @@
   width: 100%;
   height: 4px;
   margin-top: 3px;
+  accent-color: var(--accent);
 }
 .notification-history {
   padding-inline: 0;
   padding-bottom: 0;
 }
 .notification-history h3 {
-  padding-inline: 10px;
+  padding-inline: 12px;
 }
 .notification-empty {
-  margin: 3px 10px 12px;
+  margin: 3px 12px 12px;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-label);
 }
 .notification-item {
   display: grid;
   grid-template-columns: 3px minmax(0, 1fr) 8px;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
   min-height: 52px;
   align-items: stretch;
-  padding: 7px 10px 7px 0;
+  padding: 8px 12px 8px 0;
   border: 0;
   border-top: 1px solid var(--line);
   border-radius: 0;
@@ -435,9 +453,7 @@
 .notification-item-marker[data-tone="success"] {
   background: var(--accent);
 }
-.notification-item-marker[data-tone="warning"] {
-  background: var(--warn);
-}
+.notification-item-marker[data-tone="warning"],
 .notification-item-marker[data-tone="error"] {
   background: var(--warn);
 }
@@ -452,46 +468,34 @@
   overflow-wrap: anywhere;
 }
 .notification-item-copy strong {
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
   font-weight: 600;
 }
 .notification-item-copy small,
 .notification-item-copy time {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: var(--fs-hint);
 }
 .notification-unread-dot {
   width: 7px;
   height: 7px;
   align-self: center;
-  border-radius: 999px;
+  border-radius: 50%;
   background: var(--accent);
 }
 
-/* ---- Top-bar connection manager ---- */
+/* ---- Device panel (connection manager) ---- */
 .connection-manager {
   position: relative;
   z-index: 24;
   flex: 0 0 auto;
-}
-.connection-manager-panel {
-  position: fixed;
-  top: calc(var(--status-h) + 8px);
-  right: clamp(8px, 2.4vw, 22px);
-  width: min(360px, calc(100vw - 16px));
-  max-height: calc(100vh - var(--status-h) - 16px);
-  overflow: auto;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: var(--shadow);
 }
 .connection-manager-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 9px 12px 8px;
+  padding: 10px 12px;
 }
 .connection-manager-title {
   display: flex;
@@ -499,37 +503,38 @@
   align-items: baseline;
   gap: 8px;
 }
-.connection-manager-head h2 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
 .connection-manager-title p {
   margin: 0;
   overflow: hidden;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--fs-hint);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .connection-manager-head .icon-button {
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
+  border-color: transparent;
 }
+.connection-manager-panel > .hint-block {
+  margin: 0 12px 6px;
+}
+/* A flat status strip: the device glyph with its signal, no illustration. */
 .connection-artwork {
   display: block;
   width: 100%;
-  height: 260px;
-  background: #343b46;
+  height: 96px;
+  padding: 8px 0;
+  background: var(--bg-inset);
   border-block: 1px solid var(--line);
 }
 .connection-signal path {
   fill: none;
   stroke-linecap: round;
-  stroke: #168bff;
-  stroke-width: 5;
+  stroke: var(--accent);
+  stroke-width: 4;
   opacity: 1;
+}
+.connection-artwork[data-phase="connected"] .connection-signal path {
+  stroke: var(--ok);
 }
 .connection-signal,
 .connection-error-mark {
@@ -550,12 +555,12 @@
 .connection-error-mark path {
   fill: none;
   stroke: var(--danger);
-  stroke-width: 5;
+  stroke-width: 4;
   stroke-linecap: round;
 }
 .connection-handy-body {
-  fill: #111317;
-  stroke: rgba(255, 255, 255, 0.18);
+  fill: var(--surface-2);
+  stroke: var(--line-strong);
   stroke-width: 1;
 }
 .connection-handy-led {
@@ -565,7 +570,7 @@
   fill: var(--danger);
 }
 .connection-handy-marker[data-state="connecting"] {
-  fill: #168bff;
+  fill: var(--accent);
 }
 .connection-handy-marker[data-state="connected"] {
   fill: var(--ok);
@@ -577,41 +582,33 @@
   fill: var(--ok);
 }
 .connection-artwork[data-phase="connecting"] .connection-handy-led {
-  fill: #168bff;
+  fill: var(--accent);
 }
 .connection-artwork[data-phase="connecting"] .connection-signal path {
   animation: connection-signal-wave 1.35s ease-in-out infinite;
   animation-delay: calc(var(--signal-index) * 0.18s);
 }
 @keyframes connection-signal-wave {
-  0%, 12%, 100% { opacity: 0.12; }
+  0%, 12%, 100% { opacity: 0.15; }
   35%, 62% { opacity: 1; }
-  82% { opacity: 0.12; }
+  82% { opacity: 0.15; }
 }
 @keyframes connection-error-shake {
   0%, 100% { transform: translateX(0) rotate(0); }
-  20% { transform: translateX(-5px) rotate(-5deg); }
-  40% { transform: translateX(4px) rotate(4deg); }
-  60% { transform: translateX(-3px) rotate(-3deg); }
-  80% { transform: translateX(2px) rotate(2deg); }
+  20% { transform: translateX(-4px) rotate(-4deg); }
+  40% { transform: translateX(3px) rotate(3deg); }
+  60% { transform: translateX(-2px) rotate(-2deg); }
+  80% { transform: translateX(1px) rotate(1deg); }
 }
 .connection-current {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
+  min-height: 48px;
   padding: 6px 12px;
 }
 .connection-current .connection-current-check {
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
   border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-}
-.connection-current .connection-current-check:hover:not(:disabled) {
-  background: var(--surface-2);
 }
 .connection-current-copy {
   min-width: 0;
@@ -621,34 +618,32 @@
 }
 .connection-current strong,
 .connection-trigger-copy strong {
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--text);
-  white-space: nowrap;
   overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-label);
+  font-weight: 600;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .connection-current small,
 .connection-trigger-copy small {
-  color: var(--muted);
-  font-size: 0.74rem;
-  white-space: nowrap;
   overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-hint);
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .connection-provider-actions {
-  padding: 0 12px 9px;
+  padding: 0 12px 10px;
 }
 .connection-provider-actions > .btn {
   width: 100%;
-  min-height: 36px;
-  padding-block: 7px;
 }
 .connection-provider-actions .bluetooth-panel,
 .connection-provider-actions .transport-panel {
   margin: 0;
   padding: 0;
-  border-top: 0;
+  border: 0;
 }
 .connection-provider-actions .bluetooth-panel .row-actions,
 .connection-provider-actions .transport-panel .row-actions {
@@ -659,8 +654,8 @@
 }
 .connection-key-form {
   display: grid;
-  gap: 5px;
-  margin-bottom: 7px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 .connection-key-label {
   display: flex;
@@ -668,46 +663,41 @@
   justify-content: space-between;
   gap: 8px;
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: var(--fs-hint);
 }
 .connection-key-label label {
   color: var(--text);
+  font-size: var(--fs-label);
   font-weight: 500;
 }
 .connection-key-entry {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 7px;
+  gap: 6px;
 }
 .connection-key-entry input {
   min-width: 0;
-  padding: 7px 9px;
-}
-.connection-key-entry .btn {
-  min-height: 34px;
-  padding-inline: 10px;
-  white-space: nowrap;
 }
 .connection-provider-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 8px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .connection-configure {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   margin-left: auto;
-  color: var(--muted);
-  font-size: 0.8rem;
+  color: var(--accent);
+  font-size: var(--fs-label);
   text-decoration: none;
 }
 .connection-configure:hover {
-  color: var(--accent);
+  text-decoration: underline;
 }
 .connection-divider {
   height: 1px;
@@ -719,49 +709,47 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  padding: 8px 12px 0;
+  padding: 10px 12px 0;
 }
 .connection-limits-head h3 {
   margin: 0;
-  font-size: 0.9rem;
+  color: var(--muted);
+  font-size: var(--fs-micro);
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 .connection-limits-head span {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .connection-manager .quick-fields-connection {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 6px 12px 9px;
+  gap: 8px;
+  padding: 8px 12px 12px;
 }
 .connection-manager .quick-handy-model {
   margin-bottom: 0;
 }
 .connection-manager .quick-handy-model legend {
-  margin-bottom: 4px;
-  font-size: 0.72rem;
+  margin-bottom: 6px;
 }
 .connection-manager .quick-handy-model .segmented-choice {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.connection-manager .quick-handy-model .segmented-option span {
-  min-height: 30px;
-  padding-inline: 4px;
-  font-size: 0.7rem;
-}
 .connection-manager .quick-handy-spec {
-  margin-top: -3px;
+  margin-top: -2px;
   color: var(--muted);
-  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  font-size: var(--fs-hint);
   text-align: right;
 }
 .connection-manager .quick-fields-connection .range-slider {
   display: grid;
   min-height: 28px;
-  grid-template-columns: 48px minmax(0, 1fr) 58px;
-  gap: 8px;
+  grid-template-columns: 52px minmax(0, 1fr) 60px;
+  gap: 10px;
   align-items: center;
 }
 .connection-manager .quick-fields-connection .range-slider-head {
@@ -770,7 +758,7 @@
 .connection-manager .quick-fields-connection .range-slider-head .label {
   grid-column: 1;
   grid-row: 1;
-  font-size: 0.78rem;
+  font-size: var(--fs-label);
 }
 .connection-manager .quick-fields-connection .range-slider-track {
   min-width: 0;
@@ -780,55 +768,46 @@
 .connection-manager .quick-fields-connection .range-slider-value {
   grid-column: 3;
   grid-row: 1;
-  font-size: 0.75rem;
   text-align: right;
 }
 .connection-manager .quick-direction-toggle {
-  min-height: 24px;
-  align-self: flex-end;
-  gap: 7px;
-  font-size: 0.78rem;
+  min-height: 30px;
+  font-size: var(--fs-label);
 }
-.connection-manager .quick-direction-toggle .toggle {
-  width: 34px;
-  height: 20px;
-}
-.connection-manager .quick-direction-toggle .toggle .track::before {
-  width: 16px;
-  height: 16px;
-}
-.connection-manager .quick-direction-toggle .toggle input:checked + .track::before {
-  transform: translateX(14px);
-}
+/* The device chip: the connection's one trigger, in the session header. */
 .connection-manager-trigger {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) 18px;
+  grid-template-columns: 26px minmax(0, 1fr) 16px;
   grid-template-rows: minmax(0, 1fr);
   align-items: center;
   gap: 8px;
-  width: 220px;
-  height: 38px;
-  padding: 3px 8px;
-  border: 1px solid var(--line-strong);
+  width: 216px;
+  height: 36px;
+  padding: 0 8px 0 4px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: transparent;
   color: var(--text);
-  cursor: pointer;
+  font: inherit;
   text-align: left;
+  cursor: pointer;
 }
 .connection-manager-trigger:hover {
-  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.connection-manager[data-open="true"] .connection-manager-trigger {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
 }
 .connection-trigger-icon {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
+  background: var(--bg-inset);
   color: var(--muted);
-  background: var(--surface-2);
 }
 .connection-manager[data-phase="connected"] .connection-trigger-icon {
   color: var(--ok);
@@ -847,17 +826,18 @@
   align-self: stretch;
   justify-content: center;
   gap: 1px;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 .connection-trigger-chevron {
   color: var(--muted);
+  transform: rotate(180deg);
   transition: transform 0.18s ease;
 }
 .connection-manager[data-open="true"] .connection-trigger-chevron {
-  transform: rotate(180deg);
+  transform: rotate(0deg);
 }
 
-/* ---- Workspace (routed) ---- */
+/* ---- Workspace: one page frame for every route ---- */
 .workspace {
   position: relative;
   grid-column: 2;
@@ -867,7 +847,10 @@
   min-height: 0;
   overflow: auto;
   scrollbar-gutter: stable;
-  padding: clamp(16px, 2.4vw, 26px);
+  /* Sticky footers (Save settings) offset by the end padding to sit flush. */
+  --workspace-pad-end: clamp(16px, 2.4vw, 28px);
+  padding: clamp(16px, 2.4vw, 28px);
+  padding-bottom: var(--workspace-pad-end);
 }
 /* Viewport backdrops are not routed content: capping their width leaves the
    page edges uncovered even when they use position: fixed and inset: 0. */
@@ -881,8 +864,8 @@
   min-height: 0;
 }
 
-/* Startup remains inside the persistent shell so Emergency Stop is mounted
-   while backend snapshots are delayed. */
+/* Startup stays inside the shell so Emergency Stop is mounted while backend
+   snapshots are delayed. */
 .startup-screen {
   flex: 1 1 auto;
   min-height: 280px;
@@ -894,20 +877,21 @@
   text-align: center;
 }
 .startup-mark {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   display: grid;
   place-items: center;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
+  background: var(--surface-2);
   color: var(--accent);
-  background: var(--surface);
   font-weight: 700;
 }
 .startup-screen h1,
 .fatal-screen h1 {
   margin: 0;
-  font-size: 1.55rem;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
   font-weight: 650;
 }
 .startup-screen p,
@@ -918,8 +902,8 @@
 }
 .startup-progress {
   position: relative;
-  width: min(220px, 55vw);
-  height: 3px;
+  width: min(200px, 55vw);
+  height: 2px;
   margin-top: 4px;
   overflow: hidden;
   background: var(--line);
@@ -954,22 +938,18 @@
 @media (prefers-reduced-motion: reduce) {
   .startup-progress::after { width: 55%; animation: none; }
 }
-/* Wide-route headers share the .split content width so the title left-aligns
-   with the two-column content instead of the narrower default column. */
 .workspace-head[data-wide] {
   width: min(100%, var(--content-wide-max));
 }
-/* Once the split stacks into one column (components.css, 900px), it must
-   size to its content and let the workspace scroll; keeping the viewport
-   height here squeezes the stacked rows until the chat log paints over the
-   composer (docs/ui-ux-review.md H1). */
+/* Once the split stacks into one column it sizes to its content and lets the
+   workspace scroll, so the chat log never paints over the composer. */
 @media (max-width: 900px) {
   .workspace > .split {
     flex: 0 0 auto;
   }
 }
 .workspace-head {
-  margin: 0 0 18px;
+  margin: 0 0 20px;
 }
 /* A heading kept only for focus and screen readers must not size the page. */
 .workspace > .workspace-head.visually-hidden {
@@ -977,19 +957,22 @@
 }
 .workspace-head h1 {
   margin: 0;
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 650;
+  line-height: 1.2;
 }
 .workspace-head .lede {
+  max-width: 72ch;
   margin: 6px 0 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-body);
 }
 .workspace-head h1:focus {
   outline: none;
 }
 
-/* ---- Backend-loss banner (spans workspace, above everything) ---- */
+/* ---- Backend-loss banner (spans the workspace, above everything) ---- */
 .backend-banner {
   position: sticky;
   top: 0;
@@ -997,23 +980,18 @@
   width: min(100%, var(--content-max));
   margin: 0 auto 16px;
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
   align-items: baseline;
-  padding: 8px 12px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
   border-radius: var(--radius-sm);
-  background: rgba(229, 72, 77, 0.16);
-  border: 1px solid rgba(229, 72, 77, 0.55);
-  color: #fff;
-  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  color: var(--text);
+  font-size: var(--fs-label);
 }
 .backend-banner strong {
   white-space: nowrap;
-}
-
-@media (max-width: 1280px) {
-  .status-readout-controller .status-text {
-    display: none;
-  }
 }
 
 @media (max-width: 980px) {
@@ -1022,7 +1000,7 @@
   }
 }
 
-/* ---- Mobile: Stop and tabs share a reserved footer, never overlay content. ---- */
+/* ---- Mobile: Stop and tabs share a reserved footer, never overlay content ---- */
 @media (max-width: 860px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
@@ -1043,14 +1021,36 @@
   .status-readouts .status-readout {
     max-width: 100%;
     gap: 5px;
-    font-size: 0.72rem;
+    font-size: var(--fs-hint);
     line-height: 1.3;
   }
   .status-readouts .status-divider {
     display: none;
   }
+  /* Ownership stays visible in the Take control slot's compact form: the same
+     glyph and "You", borderless; the full label remains for assistive tech. */
   .status-readout-controller:not(.status-controller-action) {
+    gap: 5px;
+    color: var(--text-soft);
+    font-size: var(--fs-hint);
+  }
+  .status-readout-controller:not(.status-controller-action) > .status-dot {
     display: none;
+  }
+  .status-controller-glyph {
+    display: block;
+    flex: 0 0 16px;
+  }
+  .status-controller-short {
+    display: inline;
+  }
+  .status-controller-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .status-controller-action {
     display: inline-flex;
@@ -1061,11 +1061,14 @@
   .workspace {
     grid-column: 1;
     grid-row: 2;
-    padding-bottom: 18px;
+    --workspace-pad-end: 18px;
   }
   .workspace:has(> .chat-route) {
     padding: 8px;
     scrollbar-gutter: auto;
+  }
+  :root {
+    --footer-h: 116px;
   }
   .nav-rail {
     grid-column: 1;
@@ -1074,7 +1077,7 @@
     flex-direction: row;
     align-items: center;
     gap: 4px;
-    padding: 52px 8px 6px;
+    padding: 64px 8px 6px;
     border-right: 0;
     border-top: 1px solid var(--line);
     overflow-x: hidden;
@@ -1093,9 +1096,6 @@
     height: 44px;
     justify-content: center;
   }
-  .nav-link[aria-current="page"] {
-    background: var(--accent-tint);
-  }
   .nav-link .label {
     display: none;
   }
@@ -1107,7 +1107,7 @@
     left: 8px;
     right: 8px;
     width: auto;
-    top: 6px;
+    top: 8px;
     bottom: auto;
     z-index: var(--layer-emergency-stop);
   }
@@ -1115,12 +1115,12 @@
   .notification-center-panel {
     top: calc(var(--status-h) + 8px);
     right: 8px;
-    max-height: calc(100dvh - var(--status-h) - 124px);
+    max-height: calc(100dvh - var(--status-h) - 136px);
   }
   .connection-manager-trigger {
     grid-template-columns: 1fr;
     place-items: center;
-    width: 38px;
+    width: 40px;
     padding: 0;
   }
   .connection-trigger-copy,
@@ -1138,9 +1138,10 @@
 @media (prefers-reduced-motion: reduce) {
   .connection-artwork[data-phase="connecting"] .connection-signal path {
     animation: none;
-    opacity: 0.72;
+    opacity: 0.75;
   }
-  .connection-trigger-chevron {
+  .connection-trigger-chevron,
+  .nav-link {
     transition: none;
   }
   .connection-artwork[data-phase="error"] .connection-error-mark {

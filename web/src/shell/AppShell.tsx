@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useAppState } from "../state/app-state";
 import { VoicePlaybackProvider } from "../state/voice-playback";
 import { NavRail } from "./NavRail";
+import { ConfirmHost } from "../components/ConfirmHost";
 import { StatusBar } from "./StatusBar";
 import type { AuthenticationStatus } from "../api/types";
 
@@ -46,13 +47,14 @@ export function AppShell({
             <div className="backend-banner" role="alert">
               <strong>{t("Language resources could not be loaded.")}</strong>
               <span>{requestedLanguage}</span>
-              <button className="secondary small" type="button" onClick={retry}>
+              <button className="btn btn-secondary btn-sm" type="button" onClick={retry}>
                 {t("Retry")}
               </button>
             </div>
           )}
           {children}
         </main>
+        <ConfirmHost />
       </div>
     </VoicePlaybackProvider>
   );

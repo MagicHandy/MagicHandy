@@ -213,15 +213,19 @@ compiled filtered curve remains a separate follow-up, not an implied feature.
   The controls stay together on narrow screens while the title and metadata wrap.
   It carries the active offset as its label (`Sync −150 ms`) so the value is
   visible without opening anything.
-- **Panel** anchored to the trigger, same visual treatment as
-  `.connection-manager-panel`: `position: fixed`, `min(360px, 100vw − 16px)`,
-  `--surface` on `--line-strong`, `--radius-sm`, `--shadow`, scrollable at
-  `max-height`. Anchoring to the player rather than the viewport corner keeps it
-  from covering the picture on short windows; on mobile it should become a
-  bottom sheet, as the connection manager already does at its breakpoint.
-- **Dismissal and focus** copy the connection manager exactly: Escape closes,
-  outside click closes, focus moves into the panel on open and returns to the
-  trigger on close, `aria-expanded` / `aria-controls` on the trigger.
+- **Panel** (revised 2026-10-09): wider than 720px it is a flat 288px rail
+  docked inside the player, beside the picture and the script plot, so the
+  picture, its transport, the plot and the motion-source switch below stay
+  uncovered while it is adjusted; the transport adapts to the narrower frame.
+  With the chat open beside the video it docks over the top of the chat column
+  instead, so the picture keeps its size. Phones float it as a sheet above the
+  Stop/navigation footer (`--footer-h`). The earlier fixed bottom-right corner
+  covered the transport, plot and source switch.
+- **Dismissal and focus**: the trigger toggles it, Close and Escape close it
+  (Escape still reaches Emergency Stop), and a press elsewhere closes only the
+  floating phone sheet, never the docked rail. Focus moves into the panel on
+  open and returns to the trigger when it closes from inside;
+  `aria-expanded` / `aria-controls` on the trigger.
 - **Read-only tabs** see the panel with controls disabled and the existing
   visualization-only labeling. It must not become a second way for a
   non-controller tab to reach the device.

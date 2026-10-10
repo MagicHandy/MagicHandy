@@ -5,6 +5,7 @@ import { DownloadIcon, PauseIcon, PlayIcon, StopIcon, TrashIcon } from "../shell
 import { formatClock } from "../util/format";
 import { libraryActionKey, type LibraryBusyKeys } from "./library-actions";
 import { PatternCurve } from "./PatternCurve";
+import { RangeInput } from "./RangeInput";
 
 interface Props {
   programs: LibraryProgram[];
@@ -46,7 +47,7 @@ export function ProgramLibrary({ programs, engine, locked, hostLocked = locked, 
       <div className="program-toolbar">
         <label className="inline-slider">
           <span>{t("Speed")}<strong>{speed}%</strong></span>
-          <input type="range" min={1} max={speedCap} value={speed} disabled={locked} onChange={(event) => setSpeed(Number(event.target.value))} />
+          <RangeInput min={1} max={speedCap} value={speed} disabled={locked} onChange={(event) => setSpeed(Number(event.target.value))} />
         </label>
       </div>
 
@@ -74,7 +75,7 @@ export function ProgramLibrary({ programs, engine, locked, hostLocked = locked, 
               <div className="pattern-meta"><span>{formatClock(program.duration_ms)}</span><span>{t("{count} knots", { count: program.points.length })}</span><span>{program.origin}</span></div>
             </div>
             <div className="pattern-actions">
-              <button type="button" className="btn btn-primary compact-command" disabled={locked || mutating || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(program.id, speed)}><PlayIcon />{t("Play")}</button>
+              <button type="button" className="btn btn-start compact-command" disabled={locked || mutating || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(program.id, speed)}><PlayIcon />{t("Play")}</button>
               <button type="button" className="icon-button" title={t("Export program")} aria-label={t("Export {name}", { name: program.name })} disabled={offline || busyKeys.has(libraryActionKey.exportProgram(program.id))} onClick={() => void onExport(program.id)}><DownloadIcon /></button>
               <button type="button" className="icon-button" title={t("Delete program")} aria-label={t("Delete {name}", { name: program.name })} disabled={hostLocked || mutating} onClick={() => void onDelete(program.id)}><TrashIcon /></button>
             </div>

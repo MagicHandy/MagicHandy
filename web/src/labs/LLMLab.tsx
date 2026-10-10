@@ -1,4 +1,4 @@
-import {useEffect,useRef,useState} from "react";
+import {useEffect,useLayoutEffect,useRef,useState,type RefObject} from "react";
 import {api} from "../api/client";
 import {t,translateKnown} from "../i18n";
 import {useAppState,useToast,useMotionState} from "../state/app-state";
@@ -27,6 +27,29 @@ function modeLabel(method:string):string {
   case "library":return t("Library · opaque handles");
   default:return method;
   }
+}
+
+// True once a no-wrap row is wider than its container (about 700px for the
+// English mode labels; translations run longer). The row's width is measured
+// while it is shown and remembered while it is not, so the wide row returns
+// only when it fits again. Without ResizeObserver the row stays.
+function useRowOverflows(container:RefObject<HTMLElement>,row:RefObject<HTMLElement>):boolean {
+  const [overflows,setOverflows]=useState(false);
+  const needed=useRef(0);
+  useLayoutEffect(()=>{
+    const box=container.current;
+    if(!box||typeof ResizeObserver==="undefined")return;
+    const measure=()=>{
+      if(row.current)needed.current=row.current.scrollWidth;
+      if(box.clientWidth>0)setOverflows(needed.current>box.clientWidth);
+    };
+    const observer=new ResizeObserver(measure);
+    observer.observe(box);
+    if(row.current)observer.observe(row.current);
+    measure();
+    return()=>observer.disconnect();
+  },[container,row,overflows]);
+  return overflows;
 }
 
 const quickRequests=()=>[t("Deeper"),t("Not so deep"),t("Just the tip"),t("Whole length"),t("Faster"),t("Slower"),t("Keep it like this"),t("Surprise me")];
@@ -80,6 +103,9 @@ export function LLMLab({initialDraft="",draftUsed=()=>{}}:{initialDraft?:string;
   const [observed,setObserved]=useState<{target:ObservationTarget;label:string;index:number}|null>(null);
   const log=useRef<HTMLDivElement>(null);
   const composer=useRef<HTMLTextAreaElement>(null);
+  const bar=useRef<HTMLDivElement>(null);
+  const modeRow=useRef<HTMLDivElement>(null);
+  const compactModes=useRowOverflows(bar,modeRow);
   const {state,preview,comparison}=lab;
   const session=state?.session;
   const testing=Boolean(session?.active);
@@ -96,20 +122,25 @@ export function LLMLab({initialDraft="",draftUsed=()=>{}}:{initialDraft?:string;
   async function stop() {try{await api.stopMotion();}catch(reason){show(String(reason),"error");}finally{refresh();}}
   const candidate=preview?.candidates.find(item=>item.flow);
   return <div className="llm-lab-workspace lab-quick">
-    <div className="lab-quick-bar">
-      <div className="lab-modes" role="group" aria-label={t("Test mode")}>
-        {mainLabModes.map(mode=><button key={mode} type="button" aria-pressed={lab.method===mode} disabled={lab.locked} onClick={()=>void lab.chooseMethod(mode)}>{modeLabel(mode)}</button>)}
+    <div className="lab-quick-bar" ref={bar}>
+      {/* One mechanism per width: the segmented main modes beside the rarer
+          ones, or a single select once that row would wrap. */}
+      {compactModes?<select className="lab-mode-select" aria-label={t("Test mode")} value={lab.method} disabled={lab.locked} onChange={event=>void lab.chooseMethod(event.target.value)}>
+        {mainLabModes.map(mode=><option key={mode} value={mode}>{modeLabel(mode)}</option>)}
+        <optgroup label={t("More modes")}>{moreModes.map(mode=><option key={mode} value={mode}>{modeLabel(mode)}</option>)}</optgroup>
+      </select>:<div className="lab-modes" ref={modeRow} role="group" aria-label={t("Test mode")}>
+        <div className="segmented">{mainLabModes.map(mode=><button key={mode} type="button" aria-pressed={lab.method===mode} disabled={lab.locked} onClick={()=>void lab.chooseMethod(mode)}>{modeLabel(mode)}</button>)}</div>
         <select aria-label={t("More modes")} value={moreModes.includes(lab.method)?lab.method:""} disabled={lab.locked} onChange={event=>void lab.chooseMethod(event.target.value)}>
           <option value="" disabled>{t("More modes")}</option>
           {moreModes.map(mode=><option key={mode} value={mode}>{modeLabel(mode)}</option>)}
         </select>
-      </div>
+      </div>}
       <div className="lab-session-controls">
         <label className="lab-switch"><input type="checkbox" role="switch" checked={live} disabled={lab.locked||(!live&&motion?.available===false)} onChange={event=>void lab.setSession(event.target.checked,autopilot)}/>{t("Live motion")}</label>
         <label className="lab-switch"><input type="checkbox" role="switch" checked={autopilot} disabled={lab.locked} onChange={event=>void lab.setSession(live,event.target.checked)}/>{t("Autopilot")}</label>
         <button type="button" className="btn btn-secondary" onClick={()=>void stop()}>{t("Stop")}</button>
-        <button type="button" className="lab-text-button" disabled={configLocked||!state?.turns.length} onClick={()=>{setObserved(null);setDetails(null);void lab.reset();}}>{t("New chat")}</button>
-        <button type="button" className="lab-text-button" aria-expanded={configure} onClick={()=>setConfigure(value=>!value)}>{t("Configure")}</button>
+        <button type="button" className="btn btn-secondary" disabled={configLocked||!state?.turns.length} onClick={()=>{setObserved(null);setDetails(null);void lab.reset();}}>{t("New chat")}</button>
+        <button type="button" className="btn btn-secondary" aria-expanded={configure} onClick={()=>setConfigure(value=>!value)}>{t("Configure")}</button>
         <LabHelpLink section="modes"/>
       </div>
     </div>
@@ -121,8 +152,8 @@ export function LLMLab({initialDraft="",draftUsed=()=>{}}:{initialDraft?:string;
     {configure&&<div className="lab-chat-config">
       <label className="field"><span className="label">{t("Model")}</span><input value={lab.model} disabled={configLocked} onChange={event=>lab.setModel(event.target.value)}/></label>
       <label className="field"><span className="label">{t("Autopilot interval (seconds)")}</span><input type="number" min={5} max={120} value={lab.interval} disabled={configLocked} onChange={event=>lab.setInterval(Number(event.target.value))}/></label>
-      <label><input type="checkbox" checked={lab.schemaGuided} disabled={configLocked} onChange={event=>lab.setSchemaGuided(event.target.checked)}/>{t("Constrain output schema")}</label>
-      <div className="lab-config-links"><button type="button" className="lab-text-button" disabled={!state?.turns.length} onClick={()=>exportLabReport("llm-lab-trials.json",{...state,motion_simulated:app?.motion_simulated})}>{t("Export conversation")}</button><LabHelpLink section="conversation"/><LabHelpLink section="autopilot"/></div>
+      <label className="lab-switch"><input type="checkbox" role="switch" checked={lab.schemaGuided} disabled={configLocked} onChange={event=>lab.setSchemaGuided(event.target.checked)}/>{t("Constrain output schema")}</label>
+      <div className="lab-config-links"><button type="button" className="lab-text-button" disabled={!state?.turns.length} onClick={()=>exportLabReport("llm-lab-trials.json",{...state,motion_simulated:app?.motion_simulated})}>{t("Export conversation")}</button><LabHelpLink section="conversation" label={t("Live conversation")}/><LabHelpLink section="autopilot" label={t("Autopilot")}/></div>
       <details className="lab-score"><summary>{t("Experimental prompt")}</summary><textarea aria-label={t("Experimental prompt")} rows={9} maxLength={16000} spellCheck={false} value={lab.prompt} disabled={configLocked} onChange={event=>lab.setPrompt(event.target.value)}/></details>
     </div>}
     <div className="lab-quick-main">

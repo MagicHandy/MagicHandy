@@ -1,4 +1,4 @@
-import {fireEvent,render,screen,waitFor} from "@testing-library/react";
+import {fireEvent,render,screen,waitFor,within} from "@testing-library/react";
 import {beforeEach,describe,expect,it,vi} from "vitest";
 import {api} from "../api/client";
 import {labApi,type LabCompareResult,type LabTrial} from "./api";
@@ -113,6 +113,31 @@ describe("streamlined LLM Lab",()=>{
     expect((await screen.findAllByText("Reach 0–70")).length).toBe(5);
     expect(labApi.chat).not.toHaveBeenCalled();expect(labApi.start).not.toHaveBeenCalled();expect(labApi.session).not.toHaveBeenCalled();
   });
+  it("offers every mode in one select once the mode row would wrap",async()=>{
+    // jsdom has no layout: report a 390px bar and a 680px mode row.
+    const widths={"lab-quick-bar":390,"lab-modes":680};
+    const width=(property:"clientWidth"|"scrollWidth")=>Object.defineProperty(HTMLElement.prototype,property,{configurable:true,get(this:HTMLElement){
+      for(const [name,value] of Object.entries(widths))if(this.classList.contains(name))return value;
+      return 0;
+    }});
+    width("clientWidth");width("scrollWidth");
+    try {
+      vi.mocked(labApi.reset).mockResolvedValue({...labState(),revision:1});
+      await ready();
+      const select=screen.getByRole("combobox",{name:"Test mode"});
+      expect(screen.queryByRole("combobox",{name:"More modes"})).not.toBeInTheDocument();
+      expect(screen.queryByRole("button",{name:"Creative v2"})).not.toBeInTheDocument();
+      expect(within(select).getAllByRole("option").map(option=>option.getAttribute("value"))).toEqual(
+        ["creative_v2","layered","stroke_ends","groove","plain_words","edits","controls","sequence","layers","library_actions","library_descriptive","library"]);
+      expect(select).toHaveValue("layered");
+      fireEvent.change(select,{target:{value:"plain_words"}});
+      await waitFor(()=>expect(labApi.reset).toHaveBeenCalledWith(undefined,"plain_words"));
+      await waitFor(()=>expect(select).toHaveValue("plain_words"));
+    } finally {
+      delete (HTMLElement.prototype as {clientWidth?:number}).clientWidth;
+      delete (HTMLElement.prototype as {scrollWidth?:number}).scrollWidth;
+    }
+  });
   it("loads the relative edit prompt and matching schema while keeping the result in preview",async()=>{
     vi.mocked(labApi.chat).mockResolvedValue(labState());
     await ready();
@@ -144,6 +169,6 @@ describe("streamlined LLM Lab",()=>{
     expect(labApi.session).toHaveBeenCalledWith(expect.objectContaining({live:false,autopilot:true,method:"layered",prompt:"layered-prompt"}));
     expect(labApi.start).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button",{name:"Configure"}));
-    expect(screen.getAllByRole("link",{name:"Help"}).some(link=>link.getAttribute("href")==="#/labs/help/autopilot")).toBe(true);
+    expect(screen.getByRole("link",{name:"Autopilot"})).toHaveAttribute("href","#/labs/help/autopilot");
   });
 });

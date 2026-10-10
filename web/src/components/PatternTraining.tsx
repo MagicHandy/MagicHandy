@@ -4,6 +4,7 @@ import type { LibraryPattern, PatternFeedback } from "../api/types";
 import { PlayIcon, ThumbDownIcon, ThumbUpIcon, UndoIcon } from "../shell/icons";
 import { libraryActionKey, type LibraryBusyKeys } from "./library-actions";
 import { PatternCurve } from "./PatternCurve";
+import { RangeInput } from "./RangeInput";
 
 interface Props {
   patterns: LibraryPattern[];
@@ -43,12 +44,12 @@ export function PatternTraining({ patterns, feedback, autoDisable, locked, hostL
           <div><span className="eyebrow">{t("Pattern {current} of {total}", { current: index + 1, total: enabled.length })}</span><h2>{pattern.name}</h2></div>
           <button type="button" className="btn btn-secondary" disabled={enabled.length < 2} onClick={() => setIndex((index + 1) % enabled.length)}>{t("Next pattern")}</button>
         </div>
-        <PatternCurve points={pattern.preview_samples} knots={pattern.points} label={t("Backend-sampled training curve for {name}", { name: pattern.name })} className="training-curve" />
+        <PatternCurve points={pattern.preview_samples} knots={pattern.points} label={t("Backend-sampled training curve for {name}", { name: pattern.name })} className="training-curve" axes />
         <div className="training-stats"><span>{t("Weight")}<strong>{pattern.weight.toFixed(2)}</strong></span><span>{t("{seconds} s cycle", { seconds: (pattern.cycle_ms / 1000).toFixed(1) })}</span><span>{pattern.kind}</span></div>
         <div className="training-controls">
-          <label className="inline-slider"><span>{t("Speed")}<strong>{speed}%</strong></span><input type="range" min={1} max={speedCap} value={speed} disabled={locked} onChange={(event) => setSpeed(Number(event.target.value))} /></label>
+          <label className="inline-slider"><span>{t("Speed")}<strong>{speed}%</strong></span><RangeInput min={1} max={speedCap} value={speed} disabled={locked} onChange={(event) => setSpeed(Number(event.target.value))} /></label>
           <div className="segmented compact-segmented" role="group" aria-label={t("Audition feel")}><button type="button" aria-pressed={feel === "original"} data-active={feel === "original" || undefined} onClick={() => setFeel("original")}>{t("Original")}</button><button type="button" aria-pressed={feel === "smooth"} data-active={feel === "smooth" || undefined} onClick={() => setFeel("smooth")}>{t("Smooth")}</button><button type="button" aria-pressed={feel === "crisp"} data-active={feel === "crisp" || undefined} onClick={() => setFeel("crisp")}>{t("Crisp")}</button></div>
-          <button type="button" className="btn btn-primary" disabled={locked || patternBusy || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(pattern.id, speed, feel)}><PlayIcon />{t("Audition")}</button>
+          <button type="button" className="btn btn-start" disabled={locked || patternBusy || busyKeys.has(libraryActionKey.motionStart)} onClick={() => void onPlay(pattern.id, speed, feel)}><PlayIcon />{t("Audition")}</button>
         </div>
         <div className="rating-controls" role="group" aria-label={t("Rate {name}", { name: pattern.name })}>
           <button type="button" className="btn btn-secondary" disabled={locked || patternBusy} onClick={() => void onFeedback(pattern.id, 1)}><ThumbUpIcon />{t("More like this")}</button>

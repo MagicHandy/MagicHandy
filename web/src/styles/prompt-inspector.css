@@ -9,12 +9,12 @@
 }
 .prompt-inspector-summary dt {
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .prompt-inspector-summary dd {
   overflow: hidden;
   margin: 3px 0 0;
-  font-size: 0.82rem;
+  font-size: var(--fs-label);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -27,17 +27,14 @@
 }
 .prompt-section summary,
 .prompt-exact summary {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  justify-content: space-between;
   padding: 9px 0;
-  cursor: pointer;
+  font-weight: 500;
 }
 .prompt-section summary span:last-child {
   flex: 0 0 auto;
+  margin-left: auto;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 .prompt-section pre {
   max-height: 260px;

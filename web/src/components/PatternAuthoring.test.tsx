@@ -66,6 +66,22 @@ describe("PatternAuthoring", () => {
     expect(onPreviewError).not.toHaveBeenCalled();
   });
 
+  it("labels the plot's scales and names the sampled line only once it exists", async () => {
+    const sampled = deferred<PatternPreview>();
+    const result = render(<PatternAuthoring locked={false} saving={false} onPreview={() => sampled.promise} onSave={vi.fn()} />);
+
+    const axes = result.container.querySelector(".pattern-plot");
+    expect(axes).toContainElement(screen.getByLabelText("Pattern drawing canvas"));
+    expect(axes?.querySelector(".pattern-plot-y")).toHaveTextContent("Tip 10050Base 0");
+    expect(axes?.querySelector(".pattern-plot-x")).toHaveTextContent("0 s3.3 s6.6 s");
+    expect(screen.queryByText("Backend preview")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await act(async () => sampled.resolve(preview(8000, 3)));
+    expect(await screen.findByText("Backend preview")).toBeInTheDocument();
+    expect(axes?.querySelector(".pattern-plot-x")).toHaveTextContent("0 s4 s8 s");
+  });
+
   it("reports only the active preview failure", async () => {
     const error = new Error("preview rejected");
     const onPreviewError = vi.fn();

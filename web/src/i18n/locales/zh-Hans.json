@@ -1807,7 +1807,6 @@
   "View saved observations": "查看已保存的观察记录",
   "Your observation": "你的观察",
   "{count} of {capacity} saved observations": "已保存 {count} 条观察记录，上限 {capacity} 条",
-  "{seconds}s": "{seconds}秒",
   "Creative baseline fixes the anchor at the center. Choose Anchored range to control it.": "创意基线将锚点固定在中央。选择锚定范围可调整锚点。",
   "Historical reference: shares pace, outer band, shortest span and seed. Continuous layers, sections and gradual variation do not apply.": "历史参考：共用节奏、外部范围、最短行程和种子。连续动作谱的叠加层、分段及渐进变化不适用。",
   "Historical settings: wander profile, 30% variation, minimum span 20.": "历史设置：漫游变化类型，变化幅度 30%，最短行程 20。",

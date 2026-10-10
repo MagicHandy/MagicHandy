@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { AutopilotSettings, SessionArc } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
@@ -259,9 +259,10 @@ export function AutopilotControl() {
 
   return (
     <div className="autopilot-control" data-active={active || undefined} aria-busy={Boolean(pending) || undefined}>
+      <h2 className="control-card-title">{t("Autopilot")}</h2>
+      <div className="control-row autopilot-head">
       <span className="autopilot-control-dot" aria-hidden="true" />
       <div className="autopilot-control-copy">
-        <strong>{t("Autopilot")}</strong>
         <span role="status">{status}</span>
         {clockStatus && <span className="autopilot-clock-status">{clockStatus}</span>}
       </div>
@@ -286,6 +287,7 @@ export function AutopilotControl() {
         >
           {pending === "start" ? t("Starting…") : pending === "stop" ? t("Stopping…") : active ? t("Stop Autopilot") : t("Start Autopilot")}
         </button>
+      </div>
       </div>
       {active && modes?.session_arc?.enabled && (
         <SessionBuildup
@@ -319,6 +321,7 @@ function AutopilotPreferences({
 }) {
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
+  const speechLabelId = useId();
   const draftRef = useRef(value);
   const editingRef = useRef(false);
   const savingRef = useRef(false);
@@ -401,6 +404,7 @@ function AutopilotPreferences({
   return (
     <fieldset className="autopilot-preferences" disabled={controlsDisabled} aria-busy={saving || undefined}>
       <legend className="visually-hidden">{t("Autopilot timing")}</legend>
+      <div className="control-row control-row-stack">
       <SetpointSlider
         className="autopilot-setpoints"
         label={t("Motion change rate")}
@@ -413,16 +417,20 @@ function AutopilotPreferences({
           motion_change_level: Number(level),
         })}
       />
-      <SetpointSlider
-        className="autopilot-setpoints"
-        label={t("Spoken check-ins")}
-        value={draft.speech_cadence}
-        options={speechOptions.map(([option, label]) => ({ value: option, label: translateKnown(label) }))}
-        disabled={controlsDisabled}
-        onChange={(speech_cadence) => void save({ ...draftRef.current, speech_cadence })}
-      />
+      </div>
+      <div className="control-row">
+        <span className="control-row-label" id={speechLabelId}>{t("Spoken check-ins")}</span>
+        <select
+          aria-labelledby={speechLabelId}
+          value={draft.speech_cadence}
+          disabled={controlsDisabled}
+          onChange={(event) => void save({ ...draftRef.current, speech_cadence: event.target.value as AutopilotSettings["speech_cadence"] })}
+        >
+          {speechOptions.map(([option, label]) => <option key={option} value={option}>{translateKnown(label)}</option>)}
+        </select>
+      </div>
       {draft.speech_cadence === "custom" && (
-        <div className="autopilot-window autopilot-window-range">
+        <div className="control-row autopilot-window autopilot-window-range">
           <span>{t("Speech range")}</span>
           <input
             type="number"
@@ -446,7 +454,7 @@ function AutopilotPreferences({
           <span>{t("seconds")}</span>
         </div>
       )}
-      <div className="autopilot-buildup-setting">
+      <div className="control-row control-row-stack autopilot-buildup-setting">
         <label className="toggle-line">
           <span className="toggle">
             <input
@@ -480,7 +488,7 @@ function AutopilotPreferences({
           </div>
         )}
       </div>
-      <details className="autopilot-advanced">
+      <details className="control-row control-row-stack autopilot-advanced">
         <summary>{t("Advanced")}</summary>
         <SegmentedChoice
           className="autopilot-authority"

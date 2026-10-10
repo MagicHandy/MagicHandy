@@ -9,7 +9,7 @@
   gap: 12px;
   margin-top: 10px;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
 }
 
 .voice-range-label output {
@@ -28,7 +28,7 @@
   gap: 8px;
   margin-top: 10px;
   color: var(--text);
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
 }
 
 .voice-level {
@@ -50,7 +50,7 @@
   display: block;
   margin-top: 7px;
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: var(--fs-hint);
 }
 
 .reference-voice-control {
@@ -70,13 +70,13 @@
 }
 
 .reference-voice-control strong {
-  font-size: 0.9rem;
+  font-size: var(--fs-body);
 }
 
 .reference-voice-control span,
 .reference-token-count {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--fs-hint);
 }
 
 .modal-scrim {
@@ -97,7 +97,7 @@
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
 
@@ -117,7 +117,7 @@
 
 .reference-dialog-header h2 {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--fs-heading);
   letter-spacing: 0;
 }
 
@@ -135,7 +135,7 @@
   background: transparent;
   color: var(--muted);
   font: inherit;
-  font-size: 1.35rem;
+  font-size: var(--fs-title);
   cursor: pointer;
 }
 
@@ -179,7 +179,7 @@
 .reference-guide {
   padding: 10px 12px;
   color: var(--muted);
-  font-size: 0.84rem;
+  font-size: var(--fs-label);
 }
 
 .reference-guide strong {
@@ -249,7 +249,7 @@
 
 .voice-worker-name {
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: var(--fs-body);
 }
 
 .voice-worker-error {
@@ -267,7 +267,7 @@
   padding: 10px 12px;
   background: var(--surface-2);
   color: var(--muted);
-  font-size: 0.86rem;
+  font-size: var(--fs-body);
 }
 
 .voice-module-readout .status-dot {
@@ -299,7 +299,7 @@
 .voice-module-actions .btn {
   min-height: 34px;
   padding: 6px 10px;
-  font-size: 0.8rem;
+  font-size: var(--fs-label);
 }
 
 .voice-module-setup-link {
@@ -329,12 +329,12 @@
 
 .voice-request-queue-header h3 {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: var(--fs-body);
 }
 
 .voice-request-count {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-label);
   font-variant-numeric: tabular-nums;
 }
 
@@ -360,13 +360,13 @@
   min-width: 0;
   display: grid;
   gap: 2px;
-  font-size: 0.82rem;
+  font-size: var(--fs-label);
 }
 
 .voice-request-description > span {
   overflow: hidden;
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -377,13 +377,13 @@
 
 .voice-request-state {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: var(--fs-hint);
 }
 
 .voice-request-cancel {
   min-height: 32px;
   padding: 5px 10px;
-  font-size: 0.78rem;
+  font-size: var(--fs-hint);
 }
 
 @media (max-width: 640px) {
@@ -404,5 +404,11 @@
 
   .voice-request-state {
     display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-level span {
+    transition: none;
   }
 }

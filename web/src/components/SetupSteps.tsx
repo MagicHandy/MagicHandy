@@ -72,7 +72,7 @@ export function AccessStep({
         <p className="hint-block">{t("You can also set up remote access later in Settings > Access.")}</p>
       </div>}
     {!initialized && scope !== "local" && networkStatus && <NetworkPortChecklist draft={configForScope(scope, networkStatus.saved ?? networkStatus.active, networkStatus)} />}
-    {scope === "local" && !initialized && <label className="network-terms"><input type="checkbox" checked={choice === "protected"} disabled={locked} onChange={(event) => setChoice(event.target.checked ? "protected" : "local")} /><span>{t("Require an account and password")}</span></label>}
+    {scope === "local" && !initialized && <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={choice === "protected"} disabled={locked} onChange={(event) => setChoice(event.target.checked ? "protected" : "local")} /><span className="track" aria-hidden="true" /></span><span>{t("Require an account and password")}</span></label>}
     {initialized ? <DismissibleNotice id="setup-protection" className="setup-notice"><strong>{t("Password protection is active.")}</strong><span>{t("Manage accounts, passwords, and your profile image from Settings > Access.")}</span></DismissibleNotice> : choice === "protected" && <div className="setup-subsection account-setup-fields">
       <label className="field"><span className="label">{t("Administrator username")}</span><input type="text" autoComplete="username" spellCheck={false} value={username} disabled={locked} onChange={(event) => setUsername(event.target.value)} /></label>
       <div className="setup-fields two-columns">
