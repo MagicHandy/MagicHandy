@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 
 $script:InstallStateSchema = 3
 $script:MinimumGoVersion = [Version]'1.26.9'
+# How long a launched app may take to answer before it counts as failed.
+$script:MagicHandyStartupSeconds = 30
 $script:ParakeetRunnerURL = 'https://github.com/mudler/parakeet.cpp/releases/download/v0.4.0/parakeet-v0.4.0-bin-win-cpu-x64.zip'
 $script:ParakeetRunnerSHA256 = '2880150a1bad2944baed46f2e6bb9f1bc55263a9f2bb85573785a7ec4fa35f27'
 $script:ParakeetServerSHA256 = 'a7fb07d20a3319013d01dd797a5b757000e34d862e2bcd84e3cdf007dca67543'
@@ -2359,7 +2361,9 @@ function Start-MagicHandyApp {
 
     $argumentLine = New-MagicHandyAppArgumentLine -Address "127.0.0.1:$Port" -DataDir $DataDir
     $process = Start-Process -FilePath $exe -ArgumentList $argumentLine -PassThru -WindowStyle Hidden
-    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    # The first start of a newly installed or rebuilt executable can wait on an
+    # antivirus scan, so allow it time. A process that exits still fails at once.
+    $deadline = [DateTime]::UtcNow.AddSeconds($script:MagicHandyStartupSeconds)
     do {
         $process.Refresh()
         if ($process.HasExited) {
@@ -2378,7 +2382,7 @@ function Start-MagicHandyApp {
     if (-not $process.HasExited) {
         Stop-MagicHandyProcessTree -TargetProcessId $process.Id
     }
-    throw "MagicHandy did not become ready at $url within 10 seconds. The failed process was stopped."
+    throw "MagicHandy did not become ready at $url within $script:MagicHandyStartupSeconds seconds. The failed process was stopped."
 }
 
 function Update-MagicHandySource {
