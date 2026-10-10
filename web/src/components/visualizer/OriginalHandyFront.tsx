@@ -18,7 +18,9 @@ export function OriginalHandyFront(props: DrawingProps) {
   const carriage = { "--viz-carriage-y": `${y(props.position)}px` } as CSSProperties;
   if (props.mini) {
     return (
-      <svg {...props.svgProps} viewBox="0 0 160 220" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      // The attachment sits left of the body, so the view is shifted to centre
+      // the drawing (x 10–136) rather than the 160-wide frame.
+      <svg {...props.svgProps} viewBox="-7 0 160 220" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <path className="viz-body viz-body-mini" d={BODY} />
         <path className="viz-panel" d={PANEL} />
         <circle className="viz-device-led" cx="104" cy="140" r="11" />

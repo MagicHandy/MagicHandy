@@ -260,6 +260,9 @@
 /* The compact motion glyph sits in the same chip as the bell. */
 .status-bar .visualizer.mini {
   display: grid;
+  /* One centred cell: the detailed form's drawing and telemetry columns
+     would otherwise place the glyph off the chip's centre. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   width: 36px;
   height: 36px;

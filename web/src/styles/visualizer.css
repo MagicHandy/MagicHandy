@@ -101,7 +101,7 @@
 .viz-range-ticks { fill: none; stroke: var(--accent-strong); stroke-width: 1.5; }
 .viz-scan-bar,
 .viz-scan-trail { fill: var(--viz-state); }
-.visualizer.mini[data-kind="scan"] .viz-body { stroke-width: 4; }
+.visualizer.mini[data-kind="scan"] .viz-body { stroke-width: 1; }
 .visualizer[data-state="error"][data-kind="scan"] .viz-body { stroke: var(--danger); stroke-dasharray: 8 6; }
 
 /* Intiface ribbon (not enabled). */
