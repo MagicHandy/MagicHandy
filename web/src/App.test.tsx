@@ -1351,7 +1351,7 @@ describe("app shell safety invariants", () => {
     expect(screen.getByText(/reply preserved across reloads/i)).toBeInTheDocument();
   });
 
-  it("renders a Handy body and sleeve from the commanded engine estimate", async () => {
+  it("renders the selected Handy model from the commanded engine estimate", async () => {
     const state = {
       ...baseState,
       motion: {
@@ -1380,7 +1380,10 @@ describe("app shell safety invariants", () => {
     expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-range-min", "20");
     expect(detailed?.querySelector(".viz-device")).toHaveAttribute("data-range-max", "80");
     expect(within(detailed as HTMLElement).getByText("commanded")).toBeInTheDocument();
-    expect(within(detailed as HTMLElement).getByText("63%")).toBeInTheDocument();
+    // The fixture's original Handy reads millimetres of its 110 mm travel; the percent stays in the title.
+    expect(detailed).toHaveAttribute("data-kind", "handy-original");
+    expect(within(detailed as HTMLElement).getByText("70 mm")).toBeInTheDocument();
+    expect(detailed?.querySelector(".viz-commanded")).toHaveAttribute("title", "63%");
     expect(within(detailed as HTMLElement).getByText("20-80%")).toBeInTheDocument();
     expect(within(detailed as HTMLElement).getByText("35%")).toBeInTheDocument();
     expect(within(detailed as HTMLElement).getByText("Stroke")).toBeInTheDocument();

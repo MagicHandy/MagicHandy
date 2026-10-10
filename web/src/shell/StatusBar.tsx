@@ -180,7 +180,7 @@ export function StatusBar({
           <span className="status-text status-controller-short" aria-hidden="true">{t("You")}</span>
         </span>
       ))}
-      <MotionVisualizer motion={motion} mini />
+      <MotionVisualizer motion={motion} mini device={{ owner: state?.settings?.device?.hsp_dispatch_owner, model: state?.settings?.motion?.handy_model }} />
       {authenticationStatus?.authenticated && authenticationStatus.control_identities?.length && onLogout && onSelectControlIdentity ? (
         <ControlIdentitySelector
           identities={authenticationStatus.control_identities}

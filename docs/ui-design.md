@@ -631,13 +631,14 @@ One component, one source of truth.
 - Distinguishes commanded/estimated position from device-confirmed position, and
   never presents a planned point slope as a measured device speed; when only an
   estimate is available, it is labeled as an estimate.
-- Uses a restrained vertical Handy 2-inspired body and sleeve rather than an
-  abstract progress bar. The configured stroke envelope surrounds the moving
-  sleeve, which follows the backend sample position. Detailed telemetry names
+- Draws the device the backend dispatches to: the Handy 2's dot display (Handy
+  2 Standard and Pro), the original Handy's front view, or a scanning bar for
+  Intiface's generic linear strokers. The stroke window is shown with the
+  position inside it, which follows the backend sample position; Handy models
+  read millimetres of the selected model's travel. Detailed telemetry names
   state, target speed, range, source, and the backend-resolved active pattern
-  without adding controls to the artwork. On Chat, this compact telemetry is a
-  full-width inset footer whose contents align with the control column rather
-  than a floating or partial-width nested panel.
+  without adding controls to the artwork. The Handy 2 front view and the
+  Intiface ribbon timeline ship disabled (see ui-design-guidelines.md).
 - Is never itself a click target: controls are separate, labeled elements
   (limits and direction live in the connection manager; style lives in Chat), not
   artwork turned into a mystery button.
