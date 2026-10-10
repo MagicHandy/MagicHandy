@@ -1197,11 +1197,16 @@ explains that it uses text generation without motion. Manual IDs and longer
 privacy explanations are disclosures. Continue gives a reason when a model check,
 controller permission, backend connection or disk space is missing.
 
-Settings > Chat > Model leads with backend-resolved saved routing, then independent
-Chat and Autopilot choices. Local, ChatGPT, OpenRouter, OpenAI API and compatible
-endpoints are direct selections, each with its own editor. A provider's editable
-name never replaces its identity. Named configurations and Decisions remain
-collapsed. Adding a named connection does not assign a role. Model choices
+Settings > Chat > Model has two cards. Model roles chooses the Chat and Autopilot
+models from connections that already exist, with the backend-resolved saved
+routing as each row's explanation; choosing a role never creates a provider.
+External providers lists every ChatGPT, OpenRouter, OpenAI API, compatible and
+Decisions API entry with its status, the roles that use it, Edit and Remove. The
+open entry's editor (shared with Setup) sits under its row. Remove confirms
+inline, names the roles that move to the local model, and is a draft like any
+other change; the backend deletes the removed connection's stored key only after
+the settings save succeeds. A provider's editable name never replaces its
+identity. Adding a provider does not assign a role. Model choices
 remain drafts until Save; accounts and keys save immediately. Discard restores
 only model drafts and explicitly preserves saved credentials. A different hosted
 Autopilot defaults to motion-only sharing. Missing saved connections display as

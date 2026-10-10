@@ -5,10 +5,14 @@ import { t } from "../i18n";
 import { ChatGPTConnection } from "./ChatGPTConnection";
 import { connectionSignature } from "../util/model-connections";
 import { ModelResponseSettings, modelReadyMessage, selectedModelChange } from "./ModelResponseSettings";
+import { FieldRow } from "./SetupSection";
 
-// Catalog discovery is automatic; generation remains an explicit user action.
-export function HostedSetupConnection({ connection, locked, patch, onReady }: {
-  connection: ModelConnection; locked: boolean; patch: (change: Partial<ModelConnection>) => void; onReady: (ready: boolean) => void;
+// One editor for a provider connection, in Setup and in Settings. Catalog
+// discovery is automatic; generation remains an explicit user action.
+// `full` adds what only Settings shows: the connection's name and its
+// advanced capability and routing options.
+export function ModelConnectionEditor({ connection, locked, patch, onReady = () => {}, full = false }: {
+  connection: ModelConnection; locked: boolean; patch: (change: Partial<ModelConnection>) => void; onReady?: (ready: boolean) => void; full?: boolean;
 }) {
   const [key, setKey] = useState("");
   const [keySaved, setKeySaved] = useState(false);
@@ -120,7 +124,10 @@ export function HostedSetupConnection({ connection, locked, patch, onReady }: {
   });
   // Rows: the credential, the model, then a check. Each has its label and
   // explanation on the left and its control on the right.
-  return <div className="hosted-setup-connection form-rows">
+  return <div className="model-connection-editor form-rows">
+    {full && <FieldRow id={`connection-name-${connection.id}`} label={t("Name")} hint={t("Shown in role choices next to the provider.")}>
+      <input id={`connection-name-${connection.id}`} aria-describedby={`connection-name-${connection.id}-hint`} type="text" value={connection.name} disabled={disabled} onChange={event => patch({ name: event.target.value })} />
+    </FieldRow>}
     {connection.provider === "chatgpt" ? <ChatGPTConnection presentation="setup" locked={disabled} needsAuthorization={needsAuthorization} onChange={accountChanged} /> : <>
       {connection.provider === "compatible" && <label className="form-row form-row-stack"><span className="form-row-label"><strong>{t("API base URL")}</strong></span><input type="text" value={connection.base_url} disabled={disabled} onChange={event => patch({ base_url: event.target.value })} /></label>}
       {!connection.no_authentication && <div className="form-row form-row-stack">
@@ -154,6 +161,33 @@ export function HostedSetupConnection({ connection, locked, patch, onReady }: {
         if (mounted.current) { setKey(""); savedKey.current = false; setKeySaved(false); setModels([]); setTestMessage(""); readyRef.current(false); catalogAttempt.current = ""; }
       })}>{t("Remove API key")}</button></details>}
     </div>}
+    {full && (connection.provider === "openrouter" || connection.provider === "compatible") && <details className="form-row-details">
+      <summary>{t("Provider capabilities and routing")}</summary>
+      <AdvancedRows connection={connection} disabled={disabled} patch={patch} />
+    </details>}
     {error && <p className="form-status form-status-error" role="alert">{error}</p>}
+  </div>;
+}
+
+// Structured output and OpenRouter routing: rarely changed, so folded away.
+function AdvancedRows({ connection, disabled, patch }: { connection: ModelConnection; disabled: boolean; patch: (change: Partial<ModelConnection>) => void }) {
+  const id = connection.id;
+  return <div className="form-rows">
+    <FieldRow id={`connection-output-${id}`} label={t("Structured output")} hint={t("Motion validation always runs. OpenRouter requires compatible parameter support; generic endpoints use only the capabilities you declare.")}>
+      <select id={`connection-output-${id}`} aria-describedby={`connection-output-${id}-hint`} disabled={disabled} value={connection.output_mode} onChange={event => patch({ output_mode: event.target.value as ModelConnection["output_mode"] })}>
+        <option value="auto">{t("Automatic capability discovery")}</option><option value="strict">{t("Strict JSON schema")}</option><option value="json">{t("JSON object")}</option><option value="prompt">{t("Prompt contract and strict parser")}</option>
+      </select>
+    </FieldRow>
+    {connection.provider === "compatible" && <label className="toggle-line form-row"><span className="toggle"><input disabled={disabled} type="checkbox" checked={connection.supported_parameters?.includes("max_tokens") ?? false} onChange={event => patch({ supported_parameters: event.target.checked ? ["max_tokens", "temperature", "top_p"] : [] })} /><span className="track" aria-hidden="true" /></span><span>{t("Endpoint supports standard token and sampling parameters")}</span></label>}
+    {connection.provider === "openrouter" && <>
+      <label className="toggle-line form-row"><span className="toggle"><input disabled={disabled} type="checkbox" checked={connection.allow_fallbacks} onChange={event => patch({ allow_fallbacks: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Allow OpenRouter to fall back between compatible hosts")}</span></label>
+      <FieldRow id={`connection-allowed-${id}`} label={t("Allowed OpenRouter providers")} stack>
+        <input id={`connection-allowed-${id}`} disabled={disabled} type="text" value={connection.allowed_providers?.join(", ") ?? ""} onChange={event => patch({ allowed_providers: event.target.value.split(",").map(value => value.trim()).filter(Boolean) })} />
+      </FieldRow>
+      <FieldRow id={`connection-collection-${id}`} label={t("Provider data collection")}>
+        <select id={`connection-collection-${id}`} disabled={disabled} value={connection.data_collection} onChange={event => patch({ data_collection: event.target.value as ModelConnection["data_collection"] })}><option value="deny">{t("Deny collection")}</option><option value="allow">{t("Allow collection")}</option></select>
+      </FieldRow>
+      <label className="toggle-line form-row"><span className="toggle"><input disabled={disabled} type="checkbox" checked={connection.zero_data_retention} onChange={event => patch({ zero_data_retention: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Require advertised zero data retention")}<small>{t("Routing restrictions can reduce availability. Provider privacy metadata is not a guarantee about accepted content or physical safety.")}</small></span></label>
+    </>}
   </div>;
 }

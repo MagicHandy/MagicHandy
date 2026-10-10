@@ -32,15 +32,15 @@
   white-space: nowrap;
 }
 
-.settings-panel :is(.group, .model-routing-snapshot, .model-role-section),
-.setup-layout :is(.group, .model-routing-snapshot, .model-role-section) {
+.settings-panel .group,
+.setup-layout .group {
   padding: 0 16px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
-.settings-panel :is(.group, .media-tools-settings, .model-routing-snapshot, .model-role-section, .model-routing-draft) + :is(.group, .model-routing-snapshot, .model-role-section, .voice-request-queue, .model-routing-draft),
-.setup-layout :is(.model-routing-snapshot, .model-role-section) + :is(.group, .model-routing-snapshot, .model-role-section) {
+.settings-panel :is(.group, .media-tools-settings, .model-routing-draft) + :is(.group, .voice-request-queue, .model-routing-draft),
+.settings-panel .group + .section-title + .group {
   margin-top: 16px;
   padding-top: 0;
   border-top: 1px solid var(--line);
@@ -56,15 +56,11 @@
   padding-top: 0;
   border-top: 0;
 }
-.settings-panel :is(.model-routing-snapshot, .model-role-section) > * + *,
-.setup-layout :is(.model-routing-snapshot, .model-role-section) > * + * {
-  margin-top: 10px;
-}
 .settings-panel .group.group > * + * {
   margin-top: 12px;
 }
-.settings-panel :is(.group, .model-routing-snapshot, .model-role-section) > .group-title:first-child,
-.setup-layout :is(.group, .model-routing-snapshot, .model-role-section) > .group-title:first-child,
+.settings-panel .group > .group-title:first-child,
+.setup-layout .group > .group-title:first-child,
 .settings-panel summary.group-title {
   margin: 0 -16px 14px;
   padding: 12px 16px;
@@ -75,7 +71,7 @@
   text-transform: none;
 }
 /* A later title inside a card starts a section under a rule, not a header. */
-:is(.settings-panel, .setup-layout) :is(.group, .model-routing-snapshot, .model-role-section) > .group-title:not(:first-child) {
+:is(.settings-panel, .setup-layout) .group > .group-title:not(:first-child) {
   margin: 16px 0 10px;
   padding: 14px 0 0;
   border-top: 1px solid var(--line);
@@ -84,9 +80,7 @@
   font-weight: 600;
   text-transform: none;
 }
-.settings-panel .group.group > .group-title + *,
-.settings-panel :is(.model-routing-snapshot, .model-role-section) > .group-title + *,
-.setup-layout :is(.model-routing-snapshot, .model-role-section) > .group-title + * {
+.settings-panel .group.group > .group-title + * {
   margin-top: 0;
 }
 /* A summary-headed disclosure group keeps its header style when closed. */
@@ -102,34 +96,22 @@
   border-bottom: 1px solid var(--line);
 }
 /* Nested groups read as sections inside their card, not as boxes. */
-:is(.settings-panel, .setup-layout) :is(.group, .model-role-section, .model-routing-snapshot) .group {
+:is(.settings-panel, .setup-layout) .group .group {
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
 }
-:is(.settings-panel, .setup-layout) :is(.group, .model-role-section, .model-routing-snapshot) .group + .group,
-:is(.settings-panel, .setup-layout) .model-role-section > .section-title {
+:is(.settings-panel, .setup-layout) .group .group + .group {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
-:is(.settings-panel, .setup-layout) :is(.group, .model-role-section, .model-routing-snapshot) .group .group-title {
+:is(.settings-panel, .setup-layout) .group .group .group-title {
   margin: 0 0 10px;
   padding: 0;
   border: 0;
   font-size: var(--fs-body);
-}
-:is(.settings-panel, .setup-layout) .model-role-section > .section-title {
-  margin-bottom: 0;
-  color: var(--muted);
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-:is(.settings-panel, .setup-layout) .model-role-section > .section-title + .group {
-  margin-top: 10px;
 }
 .settings-panel details.group:not([open]) {
   padding-bottom: 0;
