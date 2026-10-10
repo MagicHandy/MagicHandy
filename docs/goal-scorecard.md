@@ -1,5 +1,16 @@
 # Goal Scorecard
 
+## 2026-10-10 — Reach guide only where the schema is enforced
+
+An external llama.cpp server's Creative v2 contract omits the 713-byte reach
+guide again; reasoning-off requests to OpenAI-compatible servers add one field.
+No dependency, UI asset, model call or resident state is added. Windows amd64,
+Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+21,789,184 B before and 21,798,400 B after (+9,216 B). Local Gemma 12B warm
+medians: 755 ms through Ollama's OpenAI-compatible endpoint, against about 14 s
+of reasoning before, and 1,037 ms on the managed llama.cpp runtime. See
+[the amendment](creative-v2-reach-guide-review-2026-10-09.md#october-10-amendment-servers-that-drop-the-schema).
+
 ## 2026-10-10 — Go 1.26.9 security toolchain
 
 With Go 1.26.8, the unchanged `govulncheck@v1.8.0 ./...` gate reported 11
@@ -27,6 +38,16 @@ Windows amd64, Go 1.26.8, `CGO_ENABLED=0`, `-trimpath -buildvcs=false
 and this change 23,217,664 B (+3,584 B). The embedded UI is unchanged. The core
 remains below the 30 MB budget; existing RSS and UI-bundle advisories remain in
 effect.
+
+## 2026-10-09 — Creative v2 reach guide
+
+The Creative v2 contract and its Lab prompt gain a 713-byte reach guide. No
+dependency, UI asset, model call or resident state is added. Windows amd64, Go
+1.26.8, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags -w`: a clean
+archive of alpha.57 (`eb7f7c50`) measures 23,214,080 B and this change
+23,215,616 B (+1,536 B). Local Gemma 12B steering-fixture warm median was 1,319
+ms with the guide and 1,158 ms without; the request suite was unchanged at
+742 ms. See [the review](creative-v2-reach-guide-review-2026-10-09.md).
 
 ## 2026-10-07 — Handy Cloud connection-key validation
 

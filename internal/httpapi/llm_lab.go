@@ -60,7 +60,7 @@ func (s *Server) labState() llmLabState {
 	}
 	return llmLabState{Current: *s.lab.current, Turns: append([]chat.LLMLabTrial{}, s.lab.turns...),
 		DirectiveTurns: append([]chat.LLMLabTrial{}, s.lab.directiveTurns...),
-		Revision:       s.lab.revision, Busy: s.lab.busy, Prompts: chat.LLMLabPrompts(), Model: settings.LLM.Model,
+		Revision:       s.lab.revision, Busy: s.lab.busy, Prompts: chat.LLMLabPromptsFor(schemaUnenforced(settings.LLM)), Model: settings.LLM.Model,
 		SettingsKey: motion.LabSettingsKey(settings.Motion), Limits: settings.Motion, Session: s.lab.session}
 }
 

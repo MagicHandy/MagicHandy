@@ -1,5 +1,11 @@
 package chat
 
+// Keep the absolute reach constraint ahead of texture choices. Live evaluation
+// found that hosted and local models otherwise described a restricted band
+// while leaving broad strokes enabled. This is model guidance, never a
+// text-triggered rewrite.
+const creativeV2ReachGuide = `Resolve requested reach before choosing texture. A request that confines ALL motion to a region requires the outer range to bound that region; focus alone cannot exclude broad strokes when mixed reach remains enabled. Inside a restricted range, broad and shorter strokes must both stay inside its endpoints. Do not confuse absolute slider positions with band-relative focus placement. A new request can replace an earlier reach restriction: full strokes use the whole slider unless the person explicitly keeps a narrower band. Widen the range when needed to realize a newly requested stroke width or full reach. Verify that the numeric edits actually realize the promised reach, copying only unrelated controls.`
+
 const creativeV2Contract = `Control Creative v2, ongoing motion with independently editable reach, location and travel. Output {"edits":[...],"reply":"..."}. Describe only edits actually emitted. Questions or ordinary conversation require edits:[].
 Keep reply non-empty and brief, with no trailing blank lines. Close the reply string and JSON object immediately after its final sentence.
 Each edits item contains exactly one group or scalar, for example {"inertia_percent":70}. Items may appear in any order; they are applied together, not as a sequence. Never repeat a group. Change only the requested groups. An omitted group stays unchanged. When editing a group, supply ALL its fields, copying unchanged values from current_score. These are independent parameters, not named paths or preset patterns.

@@ -230,3 +230,23 @@ func TestLLMCapabilitiesSettingsRoundTrip(t *testing.T) {
 		t.Fatalf("explicit chat-only capabilities = %+v", got)
 	}
 }
+
+// Only an external OpenAI-compatible server may drop the response schema, so
+// only it loses the Creative v2 reach guide.
+func TestChatCapabilitiesMarkUnenforcedSchema(t *testing.T) {
+	cases := []struct {
+		provider, mode string
+		want           bool
+	}{
+		{config.LLMProviderOllama, config.LlamaCPPModeExternal, false},
+		{config.LLMProviderLlamaCPP, config.LlamaCPPModeManaged, false},
+		{config.LLMProviderLlamaCPP, config.LlamaCPPModeExternal, true},
+	}
+	for _, c := range cases {
+		settings := config.DefaultSettings().LLM
+		settings.Provider, settings.LlamaCPPMode = c.provider, c.mode
+		if got := chatCapabilities(settings, nil).SchemaUnenforced; got != c.want {
+			t.Fatalf("%s/%s: schema unenforced = %t, want %t", c.provider, c.mode, got, c.want)
+		}
+	}
+}

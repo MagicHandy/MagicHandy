@@ -68,6 +68,11 @@ func (p *LlamaCPPProvider) StreamChat(ctx context.Context, request ChatRequest, 
 	}
 	if request.ReasoningMode == "off" {
 		body.ChatTemplateKwargs = &openAIChatTemplateKwargs{EnableThinking: false}
+		// Ollama's OpenAI-compatible endpoint ignores template kwargs and keeps a
+		// thinking model reasoning until it reads reasoning_effort "none", which
+		// can spend the whole output budget before any reply. llama-server keeps
+		// honoring the template kwarg.
+		body.ReasoningEffort = "none"
 	}
 	if len(request.JSONSchema) > 0 {
 		if !json.Valid(request.JSONSchema) {
@@ -231,6 +236,7 @@ type openAIChatRequest struct {
 	MaxTokens            int                       `json:"max_tokens,omitempty"`
 	ThinkingBudgetTokens int                       `json:"thinking_budget_tokens,omitempty"`
 	ChatTemplateKwargs   *openAIChatTemplateKwargs `json:"chat_template_kwargs,omitempty"`
+	ReasoningEffort      string                    `json:"reasoning_effort,omitempty"`
 	ResponseFormat       *openAIResponseFormat     `json:"response_format,omitempty"`
 }
 

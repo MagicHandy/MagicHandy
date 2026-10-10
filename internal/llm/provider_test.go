@@ -57,6 +57,9 @@ func TestLlamaCPPStreamChatSendsGenerationControls(t *testing.T) {
 	if _, ok := body["chat_template_kwargs"]; ok {
 		t.Fatalf("automatic reasoning unexpectedly disabled: %#v", body["chat_template_kwargs"])
 	}
+	if _, ok := body["reasoning_effort"]; ok {
+		t.Fatalf("automatic reasoning unexpectedly set an effort: %#v", body["reasoning_effort"])
+	}
 	_, err = provider.StreamChat(t.Context(), ChatRequest{
 		Messages:      []Message{{Role: "user", Content: "repair"}},
 		Temperature:   0,
@@ -69,6 +72,9 @@ func TestLlamaCPPStreamChatSendsGenerationControls(t *testing.T) {
 	kwargs, ok := body["chat_template_kwargs"].(map[string]any)
 	if !ok || kwargs["enable_thinking"] != false {
 		t.Fatalf("chat template kwargs = %#v", body["chat_template_kwargs"])
+	}
+	if body["reasoning_effort"] != "none" {
+		t.Fatalf("reasoning effort = %#v", body["reasoning_effort"])
 	}
 	for _, key := range []string{"top_p", "repeat_penalty", "repeat_last_n"} {
 		if _, ok := body[key]; ok {
