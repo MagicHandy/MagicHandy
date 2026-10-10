@@ -1,6 +1,6 @@
 module github.com/mapledaemon/MagicHandy
 
-go 1.26.8
+go 1.26.9
 
 require (
 	github.com/coder/websocket v1.8.15
