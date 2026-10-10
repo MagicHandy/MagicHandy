@@ -353,7 +353,6 @@
   "Disconnect": "Disconnect",
   "Disconnected": "Disconnected",
   "Disconnecting": "Disconnecting",
-  "Dispatch owner": "Dispatch owner",
   "Display name": "Display name",
   "Dominant": "Dominant",
   "Drag to move the visible timeline range": "Drag to move the visible timeline range",
@@ -2966,5 +2965,6 @@
   "You can add up to {max} providers. Remove one to add another.": "You can add up to {max} providers. Remove one to add another.",
   "Your OpenAI API key and billing.": "Your OpenAI API key and billing.",
   "{count} of {max}": "{count} of {max}",
-  "{roles} will switch to the local model. The saved API key is deleted when you save settings.": "{roles} will switch to the local model. The saved API key is deleted when you save settings."
+  "{roles} will switch to the local model. The saved API key is deleted when you save settings.": "{roles} will switch to the local model. The saved API key is deleted when you save settings.",
+  "Protocol": "Protocol"
 }

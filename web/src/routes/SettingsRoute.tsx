@@ -475,7 +475,7 @@ export function SettingsRoute() {
             <h2 className="section-title">{t("Device")}</h2>
             <div className="group">
               <h3 className="group-title">{t("Connection")}</h3>
-              <label className="field"><span className="label">{t("Dispatch owner")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
+              <label className="field"><span className="label">{t("Protocol")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
               {owner === "cloud_rest" && <>
                 <DismissibleNotice id="device-firmware" className="device-requirement">
                   <span id="device-firmware-requirement" className="label">{t("Firmware / API requirement")}</span>
