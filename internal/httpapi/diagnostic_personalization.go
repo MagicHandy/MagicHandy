@@ -59,6 +59,9 @@ func (s *Server) addDiagnosticFailures(ctx context.Context, archive *diagnosticA
 	for _, item := range items {
 		content := item.Details
 		item.Details = nil
+		if !options.Personas {
+			item.Diagnostics.PersonaID, item.Diagnostics.PersonaName = "", ""
+		}
 		report := map[string]any{"session_id": item.SessionID, "failure": item.RequestFailure}
 		if content != nil {
 			selected := map[string]any{"truncated": content.Truncated}

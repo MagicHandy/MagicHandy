@@ -90,7 +90,8 @@ func seedDiagnosticReport(t *testing.T, server *Server) (string, string) {
 		t.Fatal(err)
 	}
 	_, err = server.chatLog.SaveFailure(t.Context(), sessionID, chat.RequestFailure{Error: "missing action " + deviceSecret,
-		Details: &chat.FailureContent{Raw: "FAILED_MODEL_TEXT " + cloudSecret, RepairRaw: "FAILED_REPAIR_TEXT", Prompt: "CAPTURED_SYSTEM_PROMPT", Schema: "CAPTURED_SCHEMA"}})
+		Diagnostics: chat.MessageDiagnostics{PersonaName: name, PersonaID: "FAILURE_PERSONA_ID"},
+		Details:     &chat.FailureContent{Raw: "FAILED_MODEL_TEXT " + cloudSecret, RepairRaw: "FAILED_REPAIR_TEXT", Prompt: "CAPTURED_SYSTEM_PROMPT", Schema: "CAPTURED_SCHEMA"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +115,7 @@ func TestDiagnosticReportSelectionsAndSecretRedaction(t *testing.T) {
 			t.Errorf("default report omitted %s", file)
 		}
 	}
-	assertDiagnosticExcludes(t, defaults, deviceSecret, cloudSecret, "SUCCESSFUL_CHAT_TEXT", "FAILED_MODEL_TEXT", "CAPTURED_SYSTEM_PROMPT", "PERSONA_DESCRIPTION", "PERSONA_LORE", "DEFAULT_PERSONA_CONTENT", "CUSTOM_ANATOMY_CONTENT", "VOICE_REFERENCE_CONTENT", "VOICE_PROMPT_CONTENT", "CUSTOM_PROMPT_TEXT", "SAVED_MEMORY_TEXT", "private-browser-id")
+	assertDiagnosticExcludes(t, defaults, deviceSecret, cloudSecret, "SUCCESSFUL_CHAT_TEXT", "FAILED_MODEL_TEXT", "CAPTURED_SYSTEM_PROMPT", "PERSONA_NAME", "FAILURE_PERSONA_ID", "PERSONA_DESCRIPTION", "PERSONA_LORE", "DEFAULT_PERSONA_CONTENT", "CUSTOM_ANATOMY_CONTENT", "VOICE_REFERENCE_CONTENT", "VOICE_PROMPT_CONTENT", "CUSTOM_PROMPT_TEXT", "SAVED_MEMORY_TEXT", "private-browser-id")
 	if !strings.Contains(defaults["chat/failures.json"], "missing action [redacted]") {
 		t.Fatal("failure evidence was not retained safely")
 	}
@@ -129,6 +130,9 @@ func TestDiagnosticReportSelectionsAndSecretRedaction(t *testing.T) {
 		t.Fatal("independent captured content missing")
 	}
 	assertDiagnosticExcludes(t, full, deviceSecret, cloudSecret, url.QueryEscape(cloudSecret), "private-browser-id")
+	if !strings.Contains(full["chat/failures.json"], "PERSONA_NAME") || !strings.Contains(full["chat/failures.json"], "FAILURE_PERSONA_ID") {
+		t.Fatal("selected persona metadata missing from failures")
+	}
 	for _, query := range []string{"?model_output=true", "?prompts=true"} {
 		files := diagnosticFiles(t, server, query)
 		if strings.Contains(files["chat/failures.json"], "FAILED_MODEL_TEXT") != (query == "?model_output=true") || strings.Contains(files["chat/failures.json"], "CAPTURED_SYSTEM_PROMPT") != (query == "?prompts=true") {

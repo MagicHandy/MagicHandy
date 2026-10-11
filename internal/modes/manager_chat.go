@@ -15,6 +15,7 @@ func (m *Manager) PrepareChatTarget() uint64 {
 	defer m.mu.Unlock()
 	m.chat.pending = true
 	m.loop.generation++
+	m.chat.pendingOwner = m.loop.generation
 	m.cancelOperationLocked()
 	m.motion.swayPoints = nil
 	return m.loop.generation
@@ -81,7 +82,7 @@ func (m *Manager) ReconsiderAfterChat() {
 // resume planning on its next tick.
 func (m *Manager) CancelChatTarget(generation uint64) {
 	m.mu.Lock()
-	if m.chat.pending && m.loop.generation == generation {
+	if m.chat.pending && m.chat.pendingOwner == generation {
 		m.chat.pending = false
 	}
 	m.mu.Unlock()

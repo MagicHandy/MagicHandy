@@ -1,5 +1,19 @@
 # Goal Scorecard
 
+## 2026-10-11 — Alpha.61 release-review corrections
+
+Independent review found a superseded handoff retaining Autopilot's pending
+flag and a display window skipping retained catch-up revisions. Ownership-based
+cleanup and complete bounded delta paging fix those cases. Continuous speech
+instructions now match their non-empty contract; default report failure metadata
+also excludes persona identifiers. See the [release review](alpha61-release-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,345,728 -> 22,348,288 B (+2,560 B). No UI assets, dependency, worker or model
+call are added. The default independent speech prompt and local context budgets
+are unchanged. Catch-up may need more bounded pages after a long hidden-tab
+backlog; it no longer acknowledges messages it did not deliver.
+
 ## 2026-10-11 — Selectable diagnostic report download
 
 No dependency, model request, motion change or background worker. Export is

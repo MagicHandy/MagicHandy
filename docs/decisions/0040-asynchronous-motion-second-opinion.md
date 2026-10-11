@@ -2,7 +2,7 @@
 
 Date: 2026-10-11
 
-Status: Implemented on `codex/asynchronous-motion-review`; separate from the release line.
+Status: Accepted; included in the alpha.61 release candidate.
 
 ## Context
 
@@ -45,6 +45,11 @@ plan. The mode handoff cancels superseded planning, while the engine's existing
 `ApplyTargetIfCurrent` performs the atomic plan check. Stop does not wait for the
 reviewer's network call. Shutdown cancels and joins the worker before closing
 credentials/storage. There is no second motion engine, sampler, or transport path.
+
+Each pending handoff records its owning generation independently of the live
+mode generation. A review always releases its own pending state on return,
+including after intervening chat activity; it cannot release a newer handoff.
+This prevents a superseded correction from leaving Autopilot waiting forever.
 
 Accepted corrections update keepalive and Autopilot's authoritative segment.
 Autopilot records `second_opinion` as its decision source and retains its cadence,

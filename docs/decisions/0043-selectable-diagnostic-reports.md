@@ -1,6 +1,6 @@
 # ADR 0043: Selectable diagnostic reports
 
-Status: Accepted on the separate review branch, 2026-10-11.
+Status: Accepted, 2026-10-11; included in the alpha.61 release candidate.
 
 ## Context
 
@@ -27,6 +27,7 @@ and redaction decisions and could inherit the display page's message limit.
   exported only through its corresponding personalization option. Closing the
   menu preserves its temporary choices and visible summary; choices do not
   change application settings.
+  Failure metadata also omits persona names and IDs unless Personas is selected.
 - Every decoded string crosses a final redaction boundary for stored cloud
   credentials, common token forms, URLs and local paths. Decoding first catches
   JSON-escaped secrets and keeps replacements from damaging JSON syntax.

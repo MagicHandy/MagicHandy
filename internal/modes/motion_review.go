@@ -45,6 +45,7 @@ func (m *Manager) ApplyMotionReview(ctx context.Context, ticket ReviewTicket, ta
 	m.chat.pending = true
 	m.loop.generation++
 	generation := m.loop.generation
+	m.chat.pendingOwner = generation
 	m.cancelOperationLocked()
 	m.motion.pending = nil
 	m.motion.swayPoints = nil
@@ -53,6 +54,10 @@ func (m *Manager) ApplyMotionReview(ctx context.Context, ticket ReviewTicket, ta
 	id := m.loop.operationID
 	m.loop.operationMode, m.loop.operationCancel = m.loop.mode, cancel
 	m.mu.Unlock()
+	// A newer chat activity can invalidate the generation without replacing
+	// this handoff. Always release our own pending state, including when an
+	// already committed send returns after its generation was superseded.
+	defer m.CancelChatTarget(generation)
 	defer func() {
 		cancel()
 		m.mu.Lock()
@@ -62,7 +67,6 @@ func (m *Manager) ApplyMotionReview(ctx context.Context, ticket ReviewTicket, ta
 		m.mu.Unlock()
 	}()
 	if _, err := apply(operation); err != nil {
-		m.CancelChatTarget(generation)
 		return err
 	}
 	if !m.notifyTarget(generation, target, true) {

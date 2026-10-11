@@ -86,3 +86,32 @@ func TestRecentDisplayRetainsLateCommittedReplyInsideWindow(t *testing.T) {
 		t.Fatal("late reply lost below display head", page, err)
 	}
 }
+
+func TestRecentDisplayCatchupDoesNotSkipRetainedBacklog(t *testing.T) {
+	l, id := recoveryLog(t)
+	appendRecoveryMessage(t, l, "already displayed")
+	after := int64(1)
+	for range 250 {
+		appendRecoveryMessage(t, l, "added while hidden")
+	}
+	count := 0
+	for {
+		page, err := l.ReadMessagePageContext(t.Context(), MessagePageRequest{SessionID: id, AfterRevision: &after, RecentOnly: true, Limit: 50})
+		if err != nil || page.Reset || page.HistoryGap || len(page.Messages) == 0 {
+			t.Fatal("retained backlog could not be recovered", page, err)
+		}
+		for _, message := range page.Messages {
+			count++
+			if message.Seq != int64(count+1) {
+				t.Fatalf("catch-up skipped a retained message: seq=%d, want=%d", message.Seq, count+1)
+			}
+		}
+		after = page.NextRevision
+		if !page.HasMore {
+			break
+		}
+	}
+	if count != 250 || after != 251 {
+		t.Fatal("incomplete catch-up", count, after)
+	}
+}

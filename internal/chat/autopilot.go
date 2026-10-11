@@ -276,7 +276,9 @@ func autopilotAreaSuggestion(context AutopilotContext, alternatives []string) st
 const autopilotSpeechTimingInstruction = "Set next to soon, normal, or later for when another spoken check-in would feel natural. Do not provide seconds."
 
 // AutopilotSpeechMessage renders the independent autonomous speech turn.
-func AutopilotSpeechMessage(context AutopilotContext) string {
+func AutopilotSpeechMessage(context AutopilotContext, authority ...Capabilities) string {
+	quiet := len(authority) == 0 || !authority[0].Motion ||
+		(authority[0].MotionMode != MotionModeCreativeV2 && authority[0].MotionMode != MotionModeLayered)
 	var builder strings.Builder
 	builder.WriteString("Scheduled opportunity to speak. This is not a new message from the person. Read the actual conversation before deciding what another line would add.\n")
 	if say := strings.TrimSpace(context.LastSay); say != "" {
@@ -286,7 +288,16 @@ func AutopilotSpeechMessage(context AutopilotContext) string {
 	if context.SessionTracking && context.SessionSeconds > 0 {
 		fmt.Fprintf(&builder, "This Autopilot session has been running for %s.\n", formatSessionSpan(context.SessionSeconds))
 	}
-	builder.WriteString("If you speak, write one short line in the selected voice that fits the ongoing conversation (under 150 characters and no question that demands an answer). Do not invent a scene when no scene has been established. Ground any motion description in one specific current fact, without claiming sensed feedback or force. The facts above are background, not a list to narrate. Compare them and the human topic with what you have already said: a paraphrase of the same status or reassurance adds nothing. Let an already answered exchange rest.\n")
+	if quiet {
+		builder.WriteString("If you speak, write ")
+	} else {
+		builder.WriteString("This motion-capable speech contract requires a non-empty reply. Write ")
+	}
+	builder.WriteString("one short line in the selected voice that fits the ongoing conversation (under 150 characters and no question that demands an answer). Do not invent a scene when no scene has been established. Ground any motion description in one specific current fact, without claiming sensed feedback or force. The facts above are background, not a list to narrate. Compare them and the human topic with what you have already said: a paraphrase of the same status or reassurance adds nothing.")
+	if quiet {
+		builder.WriteString(" Let an already answered exchange rest.")
+	}
+	builder.WriteString("\n")
 	builder.WriteString(autopilotSpeechTimingInstruction)
 	return builder.String()
 }

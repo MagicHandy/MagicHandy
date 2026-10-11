@@ -1,6 +1,6 @@
 # ADR 0042: Bounded conversation windows per external connection
 
-Status: accepted on `codex/asynchronous-motion-review`; release integration pending.
+Status: Accepted; included in the alpha.61 release candidate.
 Date: 2026-10-11.
 
 ## Context
@@ -32,12 +32,16 @@ rewritten, keyword-filtered or partially clipped.
 
 Stored conversations retain 1,000 committed messages independently of the
 200-message display window and bounded history-page responses. Browser reads
-request only the newest 200 rows, anchored to the page snapshot, rather than
+request only the newest 200 rows on first load or reset, anchored to the page
+snapshot, rather than
 downloading all retained context and discarding it in the UI. The default API
 still permits bounded pagination through the full retained history. A dedicated
 hosted prompt reader materializes at most the chosen history budget plus one
 bounded look-ahead message. Counts, contents and omissions share one SQLite
-statement snapshot. Pending replies remain invisible. Pruning finds an indexed
+statement snapshot. Incremental recovery delivers every retained revision in
+bounded pages, even after a hidden tab accumulates over 200 messages; the display
+window must not silently skip unseen changes. Pending replies remain invisible.
+Pruning finds an indexed
 sequence cutoff and updates the existing revision marker atomically with deletion;
 this preserves late-commit and recovery behavior without repeated exclusion sets.
 Already deleted history cannot be restored.

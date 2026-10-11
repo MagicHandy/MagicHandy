@@ -32,7 +32,7 @@ limitations. See [ADR 0041](docs/decisions/0041-inspectable-chat-failures-and-mo
 The October 11 [asynchronous motion review](docs/motion-second-opinion-review-2026-10-11.md)
 adds an optional second opinion for local Chat and Autopilot. Local choices apply
 immediately; a named hosted model may correct a confident material mismatch while
-the exact intent and plan remain current. This remains on a separate review branch.
+the exact intent and plan remain current. Alpha.61 integrates this review work.
 See [ADR 0040](docs/decisions/0040-asynchronous-motion-second-opinion.md).
 
 The October 8 hosted-model review adds named ChatGPT/API connections alongside

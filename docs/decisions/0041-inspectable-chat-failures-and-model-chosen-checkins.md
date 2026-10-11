@@ -1,6 +1,6 @@
 # ADR 0041: Inspectable chat failures and model-chosen check-ins
 
-Status: Accepted on the separate review branch, 2026-10-11.
+Status: Accepted, 2026-10-11; included in the alpha.61 release candidate.
 
 ## Context
 
@@ -37,6 +37,7 @@ No duplicate-word filter, phrase blacklist, similarity threshold, canned wording
 or language-triggered retry is added. Structural validation remains mandatory.
 The existing single repair for malformed local output is unchanged. The separate
 continuous-motion speech-authority contract retains its edits/reply envelope;
+its prompt requires the non-empty reply that this contract accepts, while
 the new quiet result is supported by the independent speech contract, including
 the default speech-without-motion configuration.
 

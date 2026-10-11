@@ -199,7 +199,7 @@ func (s *Server) autopilotModelTurn(
 	}
 	message := chat.AutopilotMotionMessage(modelContext)
 	if kind == chat.AutopilotKindSpeech {
-		message = chat.AutopilotSpeechMessage(modelContext)
+		message = chat.AutopilotSpeechMessage(modelContext, capabilities)
 	}
 	providerCtx, _, releaseLLM, err := s.acquireProviderRequest(ctx, llmRequestAutonomous, settings.LLM)
 	if err != nil {
