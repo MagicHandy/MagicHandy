@@ -1,5 +1,28 @@
 # Goal Scorecard
 
+## 2026-10-11 — Selectable diagnostic report download
+
+No dependency, model request, motion change or background worker. Export is
+on demand: one admitted download, 30-second generation deadline, 64 MiB
+uncompressed ceiling and 25-message history pages. The completed ZIP uses a
+temporary file removed after serving; the browser receives a Blob without
+constructing the report's JSON object graph. See the
+[review](diagnostic-report-review-2026-10-11.md) and ADR 0043.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,280,704 -> 22,345,728 B (+65,024 B). Main UI JS: 1,156,298 -> 1,161,966 B raw
+(+5,668 B), 312,816 -> 314,190 B gzip (+1,374 B). CSS: 196,834 -> 197,713 B raw,
+34,572 -> 34,699 B gzip (+127 B). Both builds use the same Python gzip method;
+existing Vite bundle advisories remain unchanged. Translations use the existing
+locale chunks; there is one canonical dist.
+
+Three loopback samples after readiness: default ZIP 16.00–33.80 ms; all options
+with three committed chat messages 31.74–32.65 ms. These are small fixtures, not
+a maximum-history latency guarantee. After browser downloads, the process
+measured 80,437,248 B working set / 67,543,040 B private. This is one observational
+Windows sample, not a controlled RSS comparison; the existing idle-RSS waiver
+remains open. Default failure export never queries successful chat messages.
+
 ## 2026-10-11 — Creative v2 speed fitting
 
 No new dependency, model request, motion loop or browser asset. The bounded

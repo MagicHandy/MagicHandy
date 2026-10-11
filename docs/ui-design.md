@@ -2,6 +2,14 @@
 
 ## Setup and settings
 
+Diagnostics has one report group with Download diagnostic report and a
+Customize report disclosure button. Inset rows use dividers and existing switches;
+chat content uses a select that stacks on narrow screens. A visible summary
+reflects the inclusions even with the menu closed. Private content is opt-in,
+and captured prompt dependencies are explained beside their switch. The copyable
+status summary is folded by default. Download choices do not change application
+settings or require device-control ownership.
+
 Settings and setup use the Graphite card treatment: one card per group with a
 header row, label-left/control-right field rows that stack in narrow columns, a
 switch row for every on/off setting, and short help at the relevant decision.

@@ -410,6 +410,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.personalizationRoutes(mux)
 	s.personaRoutes(mux)
 	mux.HandleFunc("GET /api/diagnostics/prompt-composition", s.handlePromptComposition)
+	mux.HandleFunc("GET /api/diagnostics/report", s.handleDiagnosticReport)
 	mux.HandleFunc("GET /api/diagnostics/chat-failures", s.handleChatFailures)
 	mux.HandleFunc("GET /api/diagnostics/chat-failures/{id}", s.handleChatFailures)
 	mux.HandleFunc("POST /api/diagnostics/chat-test", s.handleProductionChatTest)

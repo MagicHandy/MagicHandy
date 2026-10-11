@@ -2,6 +2,12 @@
 
 ## Core Direction
 
+The October 11 [diagnostic download review](docs/diagnostic-report-review-2026-10-11.md)
+replaces the trace-export card with one backend-built report and a compact
+inclusion menu. History, failed output and personalization are explicit choices;
+the archive boundary redacts credentials and enforces bounded, administrator-only
+export. See [ADR 0043](docs/decisions/0043-selectable-diagnostic-reports.md).
+
 The October 11 [Creative v2 speed review](docs/creative-v2-speed-review-2026-10-11.md)
 corrects premature speed saturation with bounded whole-phrase cruise fitting
 and fixes high-speed wire rounding at unsent batch boundaries. Existing device

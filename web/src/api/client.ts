@@ -4,6 +4,7 @@
 // payloads — only the semantic endpoints below.
 import type { LLMCatalog } from "./catalog-types";
 import type { ChatRequestFailure } from "./chat-diagnostic-types";
+import type { DiagnosticReportOptions } from "./diagnostic-report-types";
 import type { CloudPlanningStatus, ModelConnection, HostedModel } from "./cloud-types";
 import { checkedCloudStatus } from "./cloud-status";
 import type { ModelCheckReport } from "./model-check-types";
@@ -959,6 +960,8 @@ export const api = {
 
   exportTrace: () => request("GET", "/api/traces"),
   exportLastMotionTrace: () => request("GET", "/api/traces/last-motion"),
+  exportDiagnosticReport: (options: DiagnosticReportOptions, signal?: AbortSignal) =>
+    download(`/api/diagnostics/report?${new URLSearchParams(Object.entries(options).map(([key, value]) => [key, String(value)]))}`, "magichandy-diagnostics.zip", signal),
 };
 
 async function importMotionContent(file: File, asKind: "pattern" | "program"): Promise<{ import: MotionImportResult }> {
@@ -984,9 +987,12 @@ async function importMotionContent(file: File, asKind: "pattern" | "program"): P
   return parsed as { import: MotionImportResult };
 }
 
-async function download(path: string, fallbackFilename = "motion-content.json"): Promise<{ blob: Blob; filename: string }> {
-  const res = await fetch(path, { headers: { ...controllerRequestHeaders() } });
-  if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status, null);
+async function download(path: string, fallbackFilename = "motion-content.json", signal?: AbortSignal): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(path, { headers: { ...controllerRequestHeaders() }, signal });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiError(body?.error || `Export failed (${res.status})`, res.status, body);
+  }
   const disposition = res.headers.get("Content-Disposition") ?? "";
   const match = disposition.match(/filename="?([^";]+)"?/i);
   return { blob: await res.blob(), filename: match?.[1] ?? fallbackFilename };

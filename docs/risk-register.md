@@ -1,5 +1,19 @@
 # MagicHandy Risk Register
 
+## 2026-10-11 Diagnostic report inclusion boundaries
+
+Combining diagnostic evidence risks disclosing unselected content, leaking
+credentials embedded in text, or adding resource pressure during motion.
+Defaults include technical status/settings/traces and failure metadata only;
+history, raw output and personalization are explicit choices. Decoded values
+cross stored-credential and common-secret/location redaction before serialization.
+One admitted export, paged history, a 64 MiB ceiling, cancellation and a 30-second
+generation deadline bound work independently of Stop/status admission. Tests
+verify exclusions, escaped credentials, full retained history, failed archive
+rejection and access boundaries. Captured prompts can contain other personal
+text; the UI and manifest explain this. Reports describe retained evidence,
+not atomic backups. See [ADR 0043](decisions/0043-selectable-diagnostic-reports.md).
+
 ## R32: Failed-response privacy and check-in quality
 
 Level: Medium

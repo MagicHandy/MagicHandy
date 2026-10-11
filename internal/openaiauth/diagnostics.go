@@ -10,11 +10,25 @@ import (
 // RedactDiagnostics replaces stored credentials without returning them to a
 // caller. Local-only failures leave absent cloud storage dormant.
 func (m *Manager) RedactDiagnostics(ctx context.Context, values []string) ([]string, error) {
+	replace, err := m.DiagnosticRedactor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, len(values))
+	for index, value := range values {
+		result[index] = replace(value)
+	}
+	return result, nil
+}
+
+// DiagnosticRedactor snapshots credential replacements once for a streamed
+// export. It exposes neither the values nor the credential file to the caller.
+func (m *Manager) DiagnosticRedactor(ctx context.Context) (func(string) string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if !m.storageReady {
 		if _, err := os.Stat(m.path); os.IsNotExist(err) {
-			return values, nil
+			return func(value string) string { return value }, nil
 		}
 	}
 	var replacements []string
@@ -41,10 +55,5 @@ func (m *Manager) RedactDiagnostics(ctx context.Context, values []string) ([]str
 	if err != nil {
 		return nil, err
 	}
-	replacer := strings.NewReplacer(replacements...)
-	result := make([]string, len(values))
-	for index, value := range values {
-		result[index] = replacer.Replace(value)
-	}
-	return result, nil
+	return strings.NewReplacer(replacements...).Replace, nil
 }

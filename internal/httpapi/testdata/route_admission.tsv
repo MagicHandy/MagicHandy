@@ -44,6 +44,7 @@ shared	GET /api/chat/sessions
 shared	GET /api/controller
 self	GET /api/controller/commands/{id}
 host	GET /api/diagnostics/prompt-composition
+host	GET /api/diagnostics/report
 host	GET /api/diagnostics/chat-failures
 host	GET /api/diagnostics/chat-failures/{id}
 host	POST /api/diagnostics/chat-test
