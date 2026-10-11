@@ -3013,5 +3013,18 @@
   "Generating": "Generating",
   "Response accepted. Motion was not applied.": "Response accepted. Motion was not applied.",
   "Copy test report": "Copy test report",
-  "The model exhausted its output budget before finishing. Try reasoning Off for faster structured replies, or increase Maximum output in Model settings.": "The model exhausted its output budget before finishing. Try reasoning Off for faster structured replies, or increase Maximum output in Model settings."
+  "The model exhausted its output budget before finishing. Try reasoning Off for faster structured replies, or increase Maximum output in Model settings.": "The model exhausted its output budget before finishing. Try reasoning Off for faster structured replies, or increase Maximum output in Model settings.",
+  "Conversation history": "Conversation history",
+  "More history helps keep stories and motion plans consistent across turns.": "More history helps keep stories and motion plans consistent across turns.",
+  "Recent — lighter requests": "Recent — lighter requests",
+  "Long — recommended for ChatGPT": "Long — recommended for ChatGPT",
+  "Extended — longest conversations": "Extended — longest conversations",
+  "History limits and usage": "History limits and usage",
+  "Recent includes up to 64 messages / 24 KB; Long 256 messages / 96 KB; Extended 512 messages / 192 KB. The newest complete messages that fit are sent. Larger histories can increase response time and plan usage or API charges.": "Recent includes up to 64 messages / 24 KB; Long 256 messages / 96 KB; Extended 512 messages / 192 KB. The newest complete messages that fit are sent. Larger histories can increase response time and plan usage or API charges.",
+  "Long needs a model with at least 128K context; Extended needs 256K. This setting cannot increase the model's own capacity. For an unlisted or self-hosted model, check its configured context first.": "Long needs a model with at least 128K context; Extended needs 256K. This setting cannot increase the model's own capacity. For an unlisted or self-hosted model, check its configured context first.",
+  "Applies to chat and conversation-aware Autopilot using this provider. Motion-only planning and the optional second opinion keep their limited context. Local model prompts keep their existing limits.": "Applies to chat and conversation-aware Autopilot using this provider. Motion-only planning and the optional second opinion keep their limited context. Local model prompts keep their existing limits.",
+  "Each chat keeps up to 1,000 messages. The chat view shows the latest 200; the model can use earlier retained messages within its history limit. Previously deleted history cannot be recovered.": "Each chat keeps up to 1,000 messages. The chat view shows the latest 200; the model can use earlier retained messages within its history limit. Previously deleted history cannot be recovered.",
+  "Cached input tokens": "Cached input tokens",
+  "This request exceeds the model's context capacity. Choose a smaller Conversation history setting for this provider or a model with more context.": "This request exceeds the model's context capacity. Choose a smaller Conversation history setting for this provider or a model with more context.",
+  "Long — more continuity": "Long — more continuity"
 }

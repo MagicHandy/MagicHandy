@@ -14,8 +14,13 @@ import (
 	dbstore "github.com/mapledaemon/MagicHandy/internal/store"
 )
 
-// MessageLogCap bounds each chat session independently.
+// MessageLogCap bounds a display page; retaining longer conversations must not
+// enlarge browser pages or the local model's prompt.
 const MessageLogCap = 200
+
+// MessageRetentionCap bounds persisted messages per session, independently of
+// display pages and the selected model's input window.
+const MessageRetentionCap = 1000
 
 // Message roles accepted by the visible chat log.
 const (
@@ -57,6 +62,7 @@ type MessageDiagnostics struct {
 	ModelLoadMillis        int64  `json:"model_load_ms,omitempty"`
 	PromptEvalMillis       int64  `json:"prompt_eval_ms,omitempty"`
 	PromptTokens           int    `json:"prompt_tokens,omitempty"`
+	CachedPromptTokens     int    `json:"cached_prompt_tokens,omitempty"`
 	GeneratedTokens        int    `json:"generated_tokens,omitempty"`
 	GenerationMillis       int64  `json:"generation_ms,omitempty"`
 	RepairMillis           int64  `json:"repair_ms,omitempty"`
@@ -656,20 +662,27 @@ func (l *MessageLog) CommitPendingContext(ctx context.Context, seq int64) error 
 }
 
 func pruneCommittedMessages(ctx context.Context, tx *sql.Tx, sessionID string) error {
-	if _, err := tx.ExecContext(ctx, `UPDATE chat_sessions SET pruned_revision = MAX(pruned_revision,
-		COALESCE((SELECT MAX(revision) FROM messages WHERE session_id = ? AND committed = 1 AND seq NOT IN (
-			SELECT seq FROM messages WHERE session_id = ? AND committed = 1 ORDER BY seq DESC LIMIT ?
-		)), 0)) WHERE id = ?`, sessionID, sessionID, MessageLogCap, sessionID); err != nil {
+	// Find the newest row outside the retained tail. Below the cap this is a
+	// read only; do not rebuild a NOT IN set and update every session on each
+	// ordinary append. Pending replies are excluded until their atomic commit.
+	var cutoff int64
+	err := tx.QueryRowContext(ctx, `SELECT seq FROM messages
+		WHERE session_id = ? AND committed = 1 ORDER BY seq DESC LIMIT 1 OFFSET ?`, sessionID, MessageRetentionCap).Scan(&cutoff)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	_, err := tx.ExecContext(ctx, `
+	if _, err := tx.ExecContext(ctx, `UPDATE chat_sessions SET pruned_revision = MAX(pruned_revision,
+		COALESCE((SELECT MAX(revision) FROM messages WHERE session_id = ? AND committed = 1 AND seq <= ?), 0))
+		WHERE id = ?`, sessionID, cutoff, sessionID); err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `
 		DELETE FROM messages
-		WHERE session_id = ? AND committed = 1 AND seq NOT IN (
-			SELECT seq FROM messages
-			WHERE session_id = ? AND committed = 1
-			ORDER BY seq DESC LIMIT ?
-		)
-	`, sessionID, sessionID, MessageLogCap)
+		WHERE session_id = ? AND committed = 1 AND seq <= ?
+	`, sessionID, cutoff)
 	return err
 }
 

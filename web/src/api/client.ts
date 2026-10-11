@@ -892,7 +892,7 @@ export const api = {
   deleteChatSession: (sessionId: string) =>
     request<ChatSessionsResponse>("DELETE", `/api/chat/sessions/${encodeURIComponent(sessionId)}`),
   getChatMessages: (sessionId: string, after = 0, recovery?: { revision?: number; snapshot?: ChatMessagesResponse["snapshot"]; signal?: AbortSignal }) => {
-    const query = new URLSearchParams({ session_id: sessionId });
+    const query = new URLSearchParams({ session_id: sessionId, recent: "true" });
     if (recovery?.revision !== undefined) query.set("after_revision", String(recovery.revision));
     else if (after > 0) query.set("after", String(after));
     if (recovery?.snapshot) {

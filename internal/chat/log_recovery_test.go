@@ -114,12 +114,19 @@ func TestRecoveryPagesAdvanceOnlyThroughDeliveredChanges(t *testing.T) {
 
 func TestRecoveryReportsRetainedWindowGap(t *testing.T) {
 	l, id := recoveryLog(t)
-	for index := 0; index < MessageLogCap+3; index++ {
+	for index := 0; index < MessageRetentionCap+3; index++ {
 		appendRecoveryMessage(t, l, fmt.Sprintf("retained message %d", index))
 	}
 	page := recoveryPage(t, l, id, 1, 0)
-	if !page.Reset || !page.HistoryGap || page.HasMore || len(page.Messages) != MessageLogCap || page.FirstSeq != 4 || page.NextRevision != MessageLogCap+3 {
+	if !page.Reset || !page.HistoryGap || !page.HasMore || len(page.Messages) != MessageLogCap || page.FirstSeq != 4 || page.NextRevision != MessageLogCap+3 {
 		t.Fatalf("retention loss was hidden: %+v", page)
+	}
+	for page.HasMore {
+		var err error
+		page, err = l.ReadMessagePageContext(t.Context(), MessagePageRequest{SessionID: id, AfterRevision: &page.NextRevision, Snapshot: page.Snapshot})
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	current := recoveryPage(t, l, id, page.NextRevision, 0)
 	if current.Reset || current.HistoryGap || len(current.Messages) != 0 {

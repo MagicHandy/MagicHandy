@@ -13,6 +13,7 @@ export interface ModelConnection {
   model: string;
   output_mode: "auto" | "strict" | "json" | "prompt";
   reasoning_effort?: string;
+  context_window?: number;
   supported_parameters?: string[];
   allow_fallbacks: boolean;
   allowed_providers?: string[];
@@ -21,7 +22,7 @@ export interface ModelConnection {
   no_authentication?: boolean;
 }
 
-export interface HostedModel { id: string; name: string; supported_parameters?: string[]; reasoning_efforts?: string[]; default_reasoning_effort?: string }
+export interface HostedModel { id: string; name: string; supported_parameters?: string[]; reasoning_efforts?: string[]; default_reasoning_effort?: string; context_length?: number }
 
 export interface CloudPlanningStatus {
   connection: {

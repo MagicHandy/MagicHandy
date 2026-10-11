@@ -208,8 +208,9 @@ func (s *Server) autopilotModelTurn(
 	defer releaseLLM()
 	history := autopilotHistory(kind, settings, promptContext)
 	response, err := service.Complete(providerCtx, kind, chat.Request{
-		Message: message,
-		History: history,
+		Message:                message,
+		History:                history,
+		HistoryMessagesDropped: promptContext.HistoryOmitted,
 	})
 	if err == nil && settings.LLM.IsHosted() {
 		err = s.validateCloudAdmission(providerCtx, admission)

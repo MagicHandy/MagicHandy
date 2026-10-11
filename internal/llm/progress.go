@@ -3,11 +3,12 @@ package llm
 // ProviderProgress carries timing and counters only. Hidden reasoning and
 // prompt contents are deliberately excluded from diagnostics and callbacks.
 type ProviderProgress struct {
-	Activity         bool
-	LoadMillis       int64
-	PromptEvalMillis int64
-	PromptTokens     int
-	GeneratedTokens  int
+	Activity           bool
+	LoadMillis         int64
+	PromptEvalMillis   int64
+	PromptTokens       int
+	GeneratedTokens    int
+	CachedPromptTokens int
 	// ReasoningChars counts hidden reasoning characters in this update. The
 	// text itself never leaves the provider; the count lets the model check
 	// notice a model that reasons silently while thinking is off.

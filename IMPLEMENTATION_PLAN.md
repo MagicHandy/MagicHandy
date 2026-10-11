@@ -2,6 +2,12 @@
 
 ## Core Direction
 
+The October 11 [long-context review](docs/long-context-review-2026-10-11.md)
+adds per-provider Recent/Long/Extended conversation windows for chat and
+conversation-aware Autopilot. Storage, bounded database reads, composition and
+provider admission now agree. Local prompt limits and motion authority are
+unchanged. See [ADR 0042](docs/decisions/0042-provider-conversation-windows.md).
+
 The October 11 [user-report follow-up](docs/user-report-review-2026-10-11.md)
 aligns live prompt examples with explicit action admission, adds bounded private
 failure evidence and a production-context preview, and clarifies prompt editing

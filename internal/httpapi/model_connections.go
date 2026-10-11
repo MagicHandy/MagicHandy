@@ -89,7 +89,7 @@ func (s *Server) handleModelConnectionModels(w http.ResponseWriter, r *http.Requ
 					efforts = append(efforts, level.Effort)
 				}
 			}
-			models = append(models, llm.HostedModel{ID: model.Slug, Name: model.DisplayName, ReasoningEfforts: efforts, DefaultReasoningEffort: model.DefaultReasoningLevel})
+			models = append(models, llm.HostedModel{ID: model.Slug, Name: model.DisplayName, ReasoningEfforts: efforts, DefaultReasoningEffort: model.DefaultReasoningLevel, ContextLength: model.ContextWindow})
 		}
 	}
 	if err != nil {

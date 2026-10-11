@@ -13,6 +13,7 @@ import (
 func parseChatHistoryRequest(r *http.Request) (chat.MessagePageRequest, error) {
 	query := r.URL.Query()
 	request := chat.MessagePageRequest{SessionID: strings.TrimSpace(query.Get("session_id")), ClientID: chatCursorClientID(r)}
+	request.RecentOnly = query.Get("recent") == "true"
 	for key, target := range map[string]*int64{"after": &request.AfterSequence, "after_revision": nil} {
 		if value := query.Get(key); value != "" {
 			parsed, err := strconv.ParseInt(value, 10, 64)

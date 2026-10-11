@@ -6,6 +6,7 @@ import { ChatGPTConnection } from "./ChatGPTConnection";
 import { connectionSignature } from "../util/model-connections";
 import { ModelResponseSettings, modelReadyMessage, selectedModelChange } from "./ModelResponseSettings";
 import { FieldRow } from "./SetupSection";
+import { ModelContextSettings } from "./ModelContextSettings";
 
 // One editor for a provider connection, in Setup and in Settings. Catalog
 // discovery is automatic; generation remains an explicit user action.
@@ -112,7 +113,7 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
   const disabled = locked || Boolean(operation);
   const connected = connection.provider === "chatgpt" ? accountReady : keySaved || Boolean(connection.no_authentication);
   const filtered = models.filter(model => `${model.name} ${model.id}`.toLowerCase().includes(search.toLowerCase())).slice(0, 50);
-  const manualModel = <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={connection.model} disabled={disabled} onChange={event => patch({ model: event.target.value, reasoning_effort: "" })} /></label>;
+  const manualModel = <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={connection.model} disabled={disabled} onChange={event => patch({ model: event.target.value, reasoning_effort: "", context_window: 32768 })} /></label>;
   const checkModel = () => void run("check", async () => {
     const current = connectionRef.current;
     const snapshot = connectionSignature(current);
@@ -147,6 +148,7 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
       {filtered.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
     </select></label>}
     {connected && <div className="form-row form-row-plain"><ModelResponseSettings connection={connection} models={models} disabled={disabled} patch={patch} compact /></div>}
+    {connection.model.trim() && <ModelContextSettings connection={connection} models={models} disabled={disabled} patch={patch} />}
     {connected && <div className="form-row">
       <span className="form-row-label"><small role="status">{testMessage || t("Check model uses a text-only request. Nothing moves.")}</small></span>
       <button type="button" className="btn btn-secondary" disabled={disabled || !connection.model.trim()} onClick={checkModel}>{operation === "check" ? t("Checking model...") : t("Check model")}</button>

@@ -181,6 +181,7 @@ func (p *timedLLMProvider) StreamChat(
 		call.progress.LoadMillis = max(call.progress.LoadMillis, progress.LoadMillis)
 		call.progress.PromptEvalMillis = max(call.progress.PromptEvalMillis, progress.PromptEvalMillis)
 		call.progress.PromptTokens = max(call.progress.PromptTokens, progress.PromptTokens)
+		call.progress.CachedPromptTokens = max(call.progress.CachedPromptTokens, progress.CachedPromptTokens)
 		call.progress.GeneratedTokens = max(call.progress.GeneratedTokens, progress.GeneratedTokens)
 		if previousProgress != nil {
 			previousProgress(progress)
@@ -251,6 +252,7 @@ func (p *timedLLMProvider) applyDiagnostics(
 	diagnostics.ModelLoadMillis = calls[0].progress.LoadMillis
 	diagnostics.PromptEvalMillis = calls[0].progress.PromptEvalMillis
 	diagnostics.PromptTokens = calls[0].progress.PromptTokens
+	diagnostics.CachedPromptTokens = calls[0].progress.CachedPromptTokens
 	diagnostics.GeneratedTokens = calls[0].progress.GeneratedTokens
 	diagnostics.PromptBytes = calls[0].budget.InputBytes
 	diagnostics.PromptLimitBytes = calls[0].budget.LimitBytes

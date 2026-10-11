@@ -447,6 +447,7 @@ function diagnosticRows(diagnostics: ChatMessageDiagnostics): Array<[string, str
   if ((diagnostics.prompt_bytes ?? 0) > 0) rows.push([t("Input bytes / budget"), `${diagnostics.prompt_bytes} / ${diagnostics.prompt_limit_bytes}`]);
   if ((diagnostics.history_messages_dropped ?? 0) > 0) rows.push([t("History messages omitted"), String(diagnostics.history_messages_dropped)]);
   if ((diagnostics.prompt_tokens ?? 0) > 0) rows.push([t("Tokens (input / output)"), `${diagnostics.prompt_tokens} / ${diagnostics.generated_tokens ?? 0}`]);
+  if ((diagnostics.cached_prompt_tokens ?? 0) > 0) rows.push([t("Cached input tokens"), String(diagnostics.cached_prompt_tokens)]);
   if (Number.isFinite(diagnostics.preparation_ms)) rows.push([t("Preparation"), `${Math.max(0, Math.round(diagnostics.preparation_ms ?? 0))} ms`]);
   if (Number.isFinite(diagnostics.scheduler_wait_ms)) rows.push([t("Model queue"), `${Math.max(0, Math.round(diagnostics.scheduler_wait_ms ?? 0))} ms`]);
   if (Number.isFinite(diagnostics.generation_ms)) rows.push([t("Generation"), `${Math.max(0, Math.round(diagnostics.generation_ms ?? 0))} ms`]);

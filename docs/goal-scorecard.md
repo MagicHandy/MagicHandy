@@ -1,5 +1,30 @@
 # Goal Scorecard
 
+## 2026-10-11 — External conversation windows
+
+No dependency, extra model call, motion loop or tokenizer is added. Local prompt
+limits remain 64 messages / 24 KB. External windows are 24/96/192 KB with
+64/256/512-message caps; database materialization is byte-bounded, while session
+storage retains 1,000 messages and browser reads fetch only the newest 200.
+See [live evaluation](long-context-review-2026-10-11.md) and ADR 0042.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,240,256 -> 22,270,464 B (+30,208 B). Main UI chunk: 1,151,474 -> 1,156,298 B
+raw (+4,824 B), 311,544 -> 312,816 B gzip (+1,272 B, same gzip method). Main CSS:
+196,596 -> 196,834 B raw, 34,528 -> 34,572 B gzip (+44 B). Localized
+help remains in the existing locale chunks; there is still one canonical dist.
+
+Local composition with 200 versus 1,000 input rows allocates the same 6,048 B in
+four allocations after applying the existing 64-row cap before unwrapping.
+Three samples per size: 1.549–1.615 versus 1.745–1.814 microseconds. Normal local
+app requests still fetch only 64 rows. This does not measure model inference;
+the added retained storage is not presented as zero disk cost.
+
+77 synthetic live hosted calls include all failures and the rejected cache
+prototype. The final full HTTP chat path retained 222 messages and completed in
+3.360 s without repair/fallback or motion. Review builds use separate data and
+an available local model; account credentials are not copied.
+
 ## 2026-10-11 — User-report diagnostics, prompt assignment and check-ins
 
 No dependency, motion loop, hidden cloud request, or extra interactive generation

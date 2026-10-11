@@ -41,7 +41,9 @@ Deleting a committed row advances the conversation and requests a full reset;
 ordinary pruning records the highest removed revision so a reader can detect
 that unseen history left the retained window.
 
-The existing per-conversation limit of **200 committed messages** remains.
+As of ADR 0042, each conversation retains **1,000 committed messages**. Display
+pages and the rendered chat window remain bounded to 200 messages; external
+models can read a larger byte-bounded tail. The original migration used 200.
 Migration seeds existing committed revisions from their display sequences,
 leaves pending revisions at zero, and preserves later revisions if a migration
 is reapplied to an already-upgraded schema. Existing read markers survive within
@@ -76,6 +78,13 @@ deletion and a missed retention window can require a reset. Only the first page
 of a reset replaces the cache. If `snapshot` is present, the next request sends
 `after_revision=next_revision`, `snapshot_revision`, `snapshot_pruned_revision`
 and `snapshot_first_seq` from that response. These are read offsets, not grants.
+
+The shipped browser also sends `recent=true`, restricting materialized rows to
+the newest 200 committed display sequences at the anchored head. Retaining more
+model context therefore does not download all 1,000 rows on a browser reload.
+This cutoff remains stable through the snapshot's pages and still delivers late
+commits inside the visible window. Omitting `recent` allows API clients to page
+through the full retained history within the same response byte/row bounds.
 
 A continuation reads only rows at or below its anchored head. Completing it
 advances to that head, then subsequent delta pages recover newer commits,

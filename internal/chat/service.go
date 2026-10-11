@@ -29,8 +29,9 @@ type StreamEvent struct {
 
 // Request is one local chat turn.
 type Request struct {
-	Message string
-	History []llm.Message
+	Message                string
+	History                []llm.Message
+	HistoryMessagesDropped int
 }
 
 // Result is the validated chat turn outcome.
@@ -185,16 +186,17 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 
 	messages := capabilityMessages(systemPrompt, request.History, userMessage, capabilities)
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
-		Messages:              messages,
-		Model:                 s.Model,
-		Temperature:           chatTemperature,
-		TopP:                  chatTopP,
-		RepeatPenalty:         chatRepeatPenalty,
-		RepeatLastN:           chatRepeatLastN,
-		MaxTokens:             s.MaxTokens,
-		ReasoningMode:         s.ReasoningMode,
-		ReasoningBudgetTokens: s.ReasoningBudgetTokens,
-		JSONSchema:            PatternResponseSchema(s.Patterns, capabilities, s.MotionContext),
+		Messages:               messages,
+		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
+		Model:                  s.Model,
+		Temperature:            chatTemperature,
+		TopP:                   chatTopP,
+		RepeatPenalty:          chatRepeatPenalty,
+		RepeatLastN:            chatRepeatLastN,
+		MaxTokens:              s.MaxTokens,
+		ReasoningMode:          s.ReasoningMode,
+		ReasoningBudgetTokens:  s.ReasoningBudgetTokens,
+		JSONSchema:             PatternResponseSchema(s.Patterns, capabilities, s.MotionContext),
 	}, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: text})
 	})

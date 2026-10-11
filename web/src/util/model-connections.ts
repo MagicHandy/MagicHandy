@@ -19,6 +19,7 @@ export function connectionSignature(connection: ModelConnection): string {
     Boolean(connection.allow_fallbacks), connection.allowed_providers ?? [], connection.data_collection || "deny",
     Boolean(connection.zero_data_retention), Boolean(connection.no_authentication),
     connection.reasoning_effort ?? "",
+    connection.context_window || 32768,
   ]);
 }
 

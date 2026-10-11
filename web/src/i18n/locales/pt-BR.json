@@ -3013,5 +3013,18 @@
   "Generating": "Gerando",
   "Response accepted. Motion was not applied.": "Resposta aceita. Nenhum movimento foi aplicado.",
   "Copy test report": "Copiar relatório de teste",
-  "The model exhausted its output budget before finishing. Try reasoning Off for faster structured replies, or increase Maximum output in Model settings.": "O modelo esgotou o limite de saída antes de terminar. Desative o raciocínio para respostas estruturadas mais rápidas ou aumente a saída máxima nas configurações do modelo."
+  "The model exhausted its output budget before finishing. Try reasoning Off for faster structured replies, or increase Maximum output in Model settings.": "O modelo esgotou o limite de saída antes de terminar. Desative o raciocínio para respostas estruturadas mais rápidas ou aumente a saída máxima nas configurações do modelo.",
+  "Conversation history": "Histórico da conversa",
+  "More history helps keep stories and motion plans consistent across turns.": "Mais histórico ajuda a manter a continuidade das histórias e dos planos de movimento.",
+  "Recent — lighter requests": "Recente — solicitações mais leves",
+  "Long — recommended for ChatGPT": "Longo — recomendado para ChatGPT",
+  "Extended — longest conversations": "Estendido — conversas mais longas",
+  "History limits and usage": "Limites e uso do histórico",
+  "Recent includes up to 64 messages / 24 KB; Long 256 messages / 96 KB; Extended 512 messages / 192 KB. The newest complete messages that fit are sent. Larger histories can increase response time and plan usage or API charges.": "Recente inclui até 64 mensagens / 24 KB; Longo, 256 mensagens / 96 KB; Estendido, 512 mensagens / 192 KB. São enviadas as mensagens completas mais recentes que couberem. Históricos maiores podem aumentar o tempo de resposta, o consumo do plano ou os custos da API.",
+  "Long needs a model with at least 128K context; Extended needs 256K. This setting cannot increase the model's own capacity. For an unlisted or self-hosted model, check its configured context first.": "Longo requer um modelo com pelo menos 128K de contexto; Estendido requer 256K. Esta configuração não aumenta a capacidade do modelo. Para modelos fora da lista ou hospedados por você, confira primeiro o contexto configurado.",
+  "Applies to chat and conversation-aware Autopilot using this provider. Motion-only planning and the optional second opinion keep their limited context. Local model prompts keep their existing limits.": "Aplica-se ao chat e ao Autopilot que usa a conversa neste provedor. O planejamento apenas de movimento e a segunda opinião opcional mantêm seu contexto limitado. Os prompts dos modelos locais mantêm os limites atuais.",
+  "Each chat keeps up to 1,000 messages. The chat view shows the latest 200; the model can use earlier retained messages within its history limit. Previously deleted history cannot be recovered.": "Cada chat mantém até 1.000 mensagens. A tela mostra as 200 mais recentes; o modelo pode usar mensagens anteriores retidas dentro do limite do histórico. O histórico já excluído não pode ser recuperado.",
+  "Cached input tokens": "Tokens de entrada em cache",
+  "This request exceeds the model's context capacity. Choose a smaller Conversation history setting for this provider or a model with more context.": "Esta solicitação excede a capacidade de contexto do modelo. Reduza o Histórico da conversa deste provedor ou escolha um modelo com mais contexto.",
+  "Long — more continuity": "Longo — mais continuidade"
 }

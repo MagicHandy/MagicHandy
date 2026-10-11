@@ -93,9 +93,10 @@ func (l *MessageLog) AfterSessionContext(ctx context.Context, sessionID string, 
 
 // RecentSessionContext is the request-cancellable form of RecentSession.
 func (l *MessageLog) RecentSessionContext(ctx context.Context, sessionID string, limit int) ([]LogMessage, error) {
-	if limit <= 0 || limit > MessageLogCap {
+	if limit <= 0 {
 		limit = MessageLogCap
 	}
+	limit = min(limit, MessageRetentionCap)
 	rows, err := l.db.SQL().QueryContext(ctx, `
 		SELECT seq, role, content, client_id, diagnostics_json, created_at
 		FROM (

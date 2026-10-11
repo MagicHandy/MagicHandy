@@ -119,16 +119,17 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		temperature = 1.2
 	}
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
-		Messages:              messages,
-		Model:                 s.Model,
-		Temperature:           temperature,
-		TopP:                  chatTopP,
-		RepeatPenalty:         chatRepeatPenalty,
-		RepeatLastN:           chatRepeatLastN,
-		MaxTokens:             s.MaxTokens,
-		ReasoningMode:         s.ReasoningMode,
-		ReasoningBudgetTokens: s.ReasoningBudgetTokens,
-		JSONSchema:            autopilotPatternSchema(s.Patterns, s.Capabilities, s.MotionContext, kind),
+		Messages:               messages,
+		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, s.Capabilities),
+		Model:                  s.Model,
+		Temperature:            temperature,
+		TopP:                   chatTopP,
+		RepeatPenalty:          chatRepeatPenalty,
+		RepeatLastN:            chatRepeatLastN,
+		MaxTokens:              s.MaxTokens,
+		ReasoningMode:          s.ReasoningMode,
+		ReasoningBudgetTokens:  s.ReasoningBudgetTokens,
+		JSONSchema:             autopilotPatternSchema(s.Patterns, s.Capabilities, s.MotionContext, kind),
 	}, nil)
 	truncated := errors.Is(err, llm.ErrOutputTruncated)
 	if err != nil && !truncated {

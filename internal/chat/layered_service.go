@@ -141,12 +141,15 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if s.TrustedMotionInput && s.AutonomousTemperature > 0 {
 		temperature = min(s.AutonomousTemperature, 1.2)
 	}
-	messages := spokenMessages(system, request.History, request.Message)
+	var messages []llm.Message
 	if capabilities.PreserveConversationText {
-		messages = verbatimMessages(system, request.History, request.Message)
+		messages = verbatimMessages(system, request.History, request.Message, capabilities)
+	} else {
+		messages = spokenMessages(system, request.History, request.Message)
 	}
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Messages: messages,
-		Model: s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
+		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
+		Model:                  s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
 		MaxTokens: maxTokens, ReasoningMode: s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens, JSONSchema: schema}, func(delta string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: delta})

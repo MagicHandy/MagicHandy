@@ -217,12 +217,16 @@ type Capabilities struct {
 	// PreserveConversationText keeps included canonical messages verbatim for
 	// an explicitly selected hosted full-conversation role.
 	PreserveConversationText bool
-	Motion                   bool
-	MotionMode               MotionMode
-	Patterns                 bool
-	AreaFocus                bool
-	ExperimentalPatterns     bool
-	Voice                    VoiceLevel
+	// Hosted history budgets are resolved per connection. Local composition
+	// ignores these fields and retains its existing prompt and runtime cost.
+	HistoryMessages      int
+	HistoryBytes         int
+	Motion               bool
+	MotionMode           MotionMode
+	Patterns             bool
+	AreaFocus            bool
+	ExperimentalPatterns bool
+	Voice                VoiceLevel
 	// Style is the active persona's reaction style, or StyleNeutral. It sits
 	// beside Voice because it is the same kind of thing: a reply-shaping axis
 	// with no motion authority.

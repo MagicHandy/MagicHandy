@@ -300,6 +300,7 @@ export interface ChatMessageDiagnostics {
   model_load_ms?: number;
   prompt_eval_ms?: number;
   prompt_tokens?: number;
+  cached_prompt_tokens?: number;
   generated_tokens?: number;
   prompt_bytes?: number;
   prompt_limit_bytes?: number;

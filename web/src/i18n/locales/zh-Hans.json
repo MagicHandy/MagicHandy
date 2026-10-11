@@ -3013,5 +3013,18 @@
   "Generating": "正在生成",
   "Response accepted. Motion was not applied.": "响应已接受。未应用运动。",
   "Copy test report": "复制测试报告",
-  "The model exhausted its output budget before finishing. Try reasoning Off for faster structured replies, or increase Maximum output in Model settings.": "模型在完成前耗尽了输出预算。可关闭推理以加快结构化回复，或在模型设置中增加最大输出。"
+  "The model exhausted its output budget before finishing. Try reasoning Off for faster structured replies, or increase Maximum output in Model settings.": "模型在完成前耗尽了输出预算。可关闭推理以加快结构化回复，或在模型设置中增加最大输出。",
+  "Conversation history": "对话历史",
+  "More history helps keep stories and motion plans consistent across turns.": "更多历史有助于保持故事和运动计划在多轮对话中的连贯性。",
+  "Recent — lighter requests": "近期 — 请求更轻量",
+  "Long — recommended for ChatGPT": "长 — 推荐用于 ChatGPT",
+  "Extended — longest conversations": "扩展 — 适合更长的对话",
+  "History limits and usage": "历史上限与用量",
+  "Recent includes up to 64 messages / 24 KB; Long 256 messages / 96 KB; Extended 512 messages / 192 KB. The newest complete messages that fit are sent. Larger histories can increase response time and plan usage or API charges.": "近期最多包含 64 条消息 / 24 KB；长历史为 256 条 / 96 KB；扩展历史为 512 条 / 192 KB。发送上限内最新的完整消息。更多历史可能增加响应时间、套餐用量或 API 费用。",
+  "Long needs a model with at least 128K context; Extended needs 256K. This setting cannot increase the model's own capacity. For an unlisted or self-hosted model, check its configured context first.": "长历史需要模型至少支持 128K 上下文；扩展历史需要 256K。此设置无法提高模型本身的容量。对于未列出或自行托管的模型，请先检查其上下文配置。",
+  "Applies to chat and conversation-aware Autopilot using this provider. Motion-only planning and the optional second opinion keep their limited context. Local model prompts keep their existing limits.": "适用于使用此提供商的聊天和可读取对话的 Autopilot。仅运动规划和可选的第二意见仍使用有限上下文。本地模型提示词的上限保持不变。",
+  "Each chat keeps up to 1,000 messages. The chat view shows the latest 200; the model can use earlier retained messages within its history limit. Previously deleted history cannot be recovered.": "每个聊天最多保留 1,000 条消息。聊天界面显示最新的 200 条；模型可以在其历史上限内使用更早保留的消息。已删除的历史无法恢复。",
+  "Cached input tokens": "已缓存的输入 token",
+  "This request exceeds the model's context capacity. Choose a smaller Conversation history setting for this provider or a model with more context.": "此请求超出模型的上下文容量。请调低此提供商的对话历史设置，或选择支持更大上下文的模型。",
+  "Long — more continuity": "长 — 更连贯的对话"
 }

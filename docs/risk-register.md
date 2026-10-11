@@ -2204,3 +2204,16 @@ preflight/response/Stop checks have regression coverage. See the
 [reference review and evidence](bluetooth-intiface-review-2026-09-20.md).
 Matched physical acceptance remains open: simulator output establishes command
 correctness, not perceived comfort or radio performance.
+
+## October 11, 2026 longer conversation windows
+
+ADR 0042 makes chat and conversation-aware Autopilot history explicitly bounded
+per external connection. Retention grows to 1,000 messages; models still receive
+only complete recent messages within the chosen row/byte and request budgets.
+Omission counts are visible in response details. Longer inputs can increase usage
+and latency and may still forget or misinterpret old agreements. The 77-call
+synthetic review is evidence for continuity, not universal recall or physical feel.
+Context-capacity errors hold motion and suggest a smaller window; they do not
+silently rewrite dialogue. Local prompt limits, technical-only privacy, optional
+reviewer scope, current-state validation and Stop remain unchanged. See the
+[evaluation and limitations](long-context-review-2026-10-11.md).

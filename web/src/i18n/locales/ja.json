@@ -3013,5 +3013,18 @@
   "Generating": "生成中",
   "Response accepted. Motion was not applied.": "応答を受理しました。動作は適用していません。",
   "Copy test report": "テストレポートをコピー",
-  "The model exhausted its output budget before finishing. Try reasoning Off for faster structured replies, or increase Maximum output in Model settings.": "モデルが完了前に出力上限に達しました。構造化応答を速くするには推論をオフにするか、モデル設定の最大出力を増やしてください。"
+  "The model exhausted its output budget before finishing. Try reasoning Off for faster structured replies, or increase Maximum output in Model settings.": "モデルが完了前に出力上限に達しました。構造化応答を速くするには推論をオフにするか、モデル設定の最大出力を増やしてください。",
+  "Conversation history": "会話履歴",
+  "More history helps keep stories and motion plans consistent across turns.": "履歴を増やすと、物語や動作計画の一貫性を保ちやすくなります。",
+  "Recent — lighter requests": "最近 — リクエストを軽量に",
+  "Long — recommended for ChatGPT": "長い — ChatGPT に推奨",
+  "Extended — longest conversations": "拡張 — より長い会話向け",
+  "History limits and usage": "履歴の上限と使用量",
+  "Recent includes up to 64 messages / 24 KB; Long 256 messages / 96 KB; Extended 512 messages / 192 KB. The newest complete messages that fit are sent. Larger histories can increase response time and plan usage or API charges.": "最近は最大64件 / 24 KB、長い履歴は256件 / 96 KB、拡張は512件 / 192 KBです。上限に収まる最新のメッセージを全文で送信します。履歴を増やすと、応答時間、プラン使用量、API料金が増える場合があります。",
+  "Long needs a model with at least 128K context; Extended needs 256K. This setting cannot increase the model's own capacity. For an unlisted or self-hosted model, check its configured context first.": "長い履歴には128K以上、拡張には256Kのコンテキストに対応するモデルが必要です。この設定でモデル自体の容量は増えません。一覧にないモデルや自分でホストするモデルは、先にコンテキスト設定を確認してください。",
+  "Applies to chat and conversation-aware Autopilot using this provider. Motion-only planning and the optional second opinion keep their limited context. Local model prompts keep their existing limits.": "このプロバイダーを使うチャットと、会話を参照するAutopilotに適用されます。動作のみの計画と任意のセカンドオピニオンは、限定されたコンテキストを維持します。ローカルモデルのプロンプト上限は変わりません。",
+  "Each chat keeps up to 1,000 messages. The chat view shows the latest 200; the model can use earlier retained messages within its history limit. Previously deleted history cannot be recovered.": "各チャットには最大1,000件を保存します。画面には最新200件を表示し、モデルは履歴の上限内でそれ以前の保存済みメッセージも参照できます。削除済みの履歴は復元できません。",
+  "Cached input tokens": "キャッシュ済み入力トークン",
+  "This request exceeds the model's context capacity. Choose a smaller Conversation history setting for this provider or a model with more context.": "このリクエストはモデルのコンテキスト容量を超えています。このプロバイダーの会話履歴を短くするか、より大きなコンテキストに対応するモデルを選んでください。",
+  "Long — more continuity": "長い — 会話の連続性を高める"
 }
