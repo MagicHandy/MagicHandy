@@ -155,6 +155,12 @@ The isolated review app uses available local Gemma with motion Off, and its real
 generation plus text-only chat path are checked. The external model tests above
 use the existing signed-in profile without copying its credentials.
 
+Final review at `http://127.0.0.1:50225/#/settings/chat/model`: the readiness
+script passed; a subsequent text-only HTTP chat completed in 321 ms with one
+provider call, a nonempty reply, no repair/fallback and no motion. The expanded
+provider layout was visually inspected in the running production build with
+Stop visible. The working tree's application source matches the published build.
+
 ## Reproduction
 
 From the review worktree, use an explicitly authorized existing ChatGPT profile

@@ -20,6 +20,11 @@ Three samples per size: 1.549–1.615 versus 1.745–1.814 microseconds. Normal 
 app requests still fetch only 64 rows. This does not measure model inference;
 the added retained storage is not presented as zero disk cost.
 
+After readiness generation and displaying expanded provider settings, the final
+review process measured 77,541,376 B working set / 63,598,592 B private. This is
+an observational Windows sample, not a controlled attribution against earlier
+process lifetimes; the existing idle-RSS waiver remains open.
+
 77 synthetic live hosted calls include all failures and the rejected cache
 prototype. The final full HTTP chat path retained 222 messages and completed in
 3.360 s without repair/fallback or motion. Review builds use separate data and
