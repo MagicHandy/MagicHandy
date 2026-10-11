@@ -2,6 +2,13 @@
 
 ## Core Direction
 
+The October 11 [Creative v2 speed review](docs/creative-v2-speed-review-2026-10-11.md)
+corrects premature speed saturation with bounded whole-phrase cruise fitting
+and fixes high-speed wire rounding at unsent batch boundaries. Existing device
+velocity, acceleration, jerk, reversal and wire-fidelity limits remain in force.
+Cloud timestamps already preserved the planned timing. Regression, visual and
+simulated-latency tests pass; matched physical feel remains an R1 acceptance item.
+
 The October 11 [long-context review](docs/long-context-review-2026-10-11.md)
 adds per-provider Recent/Long/Extended conversation windows for chat and
 conversation-aware Autopilot. Storage, bounded database reads, composition and

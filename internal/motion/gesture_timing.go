@@ -69,8 +69,8 @@ func gestureTurnAccelerations(legs []gestureLeg, durations []int64) []float64 {
 	turns := make([]float64, len(legs))
 	for i, leg := range legs {
 		previous := (i + len(legs) - 1) % len(legs)
-		_, _, before := legProgress(1, legs[previous].inertia, legs[previous].softness)
-		_, _, after := legProgress(0, leg.inertia, leg.softness)
+		_, _, before := strokeProgress(legs[previous], 1)
+		_, _, after := strokeProgress(leg, 0)
 		a := before * (legs[previous].to - legs[previous].from) / float64(durations[previous]*durations[previous])
 		b := after * (leg.to - leg.from) / float64(durations[i]*durations[i])
 		turns[i] = math.Copysign(math.Min(math.Abs(a), math.Abs(b)), b)

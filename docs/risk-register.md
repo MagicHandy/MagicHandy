@@ -305,6 +305,17 @@ This register tracks rewrite risks that should survive between phases. A risk st
 
 Level: High
 
+Status 2026-10-11: a renewed Cloud / Creative v2 report reproduces premature
+velocity-crest saturation in the shared compiler (full-range requested 75%
+delivered 56.72% effective pace). Bounded whole-phrase cruise fitting reaches
+74.82% while preserving geometry and existing physical budgets. An independent
+whole-percent sampling failure at unsent partition anchors is also corrected;
+the strict 0.8% wire-fidelity bound remains intact. All 72 final atlas cases,
+visual inspection, normal/race gates and a simulated 350 ms Cloud-latency
+start/retarget/Stop capture pass. The user's Handy generation and physical trace
+were not supplied. No actual hardware was commanded; matched feel/telemetry
+acceptance remains open. See the [review](creative-v2-speed-review-2026-10-11.md).
+
 Description:
 Simulated transport tests cannot fully reproduce Handy cloud REST latency, firmware buffering, HSP playback state, or physical feel. Source-only reasoning produced incorrect motion fixes in the old app.
 

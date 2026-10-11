@@ -1,5 +1,30 @@
 # Goal Scorecard
 
+## 2026-10-11 — Creative v2 speed fitting
+
+No new dependency, model request, motion loop or browser asset. The bounded
+compiler search applies only when the initial Creative v2 phrase is physically
+slower than requested. Shared sampling preserves the same physical ceilings
+and tightens the between-probe error allowance. See the
+[speed and Cloud review](creative-v2-speed-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,270,464 -> 22,280,704 B (+10,240 B). Rebuilding the canonical frontend makes
+no asset changes. There is no tokenizer or change to local inference context.
+
+On this host's Ryzen 9950X3D, three compilation benchmark samples at 25% are
+0.886–0.913 ms before and 1.000–1.006 ms after, with the same 672,210 B / 14,903
+allocations. The constrained full-range 75% case is 1.318–1.517 ms before versus
+13.819–15.311 ms after, with cumulative allocation 871,892 -> about 6,772,000 B
+and 20,792 -> 150,095 allocations. This is an explicit phrase-preparation cost,
+not per-sample overhead or an inference benchmark. The runtime test sustains
+playback and retargeting with simulated 350 ms Cloud append latency.
+
+After readiness generation, the review process measured 71,806,976 B working
+set / 57,757,696 B private. This is one observational process sample, not a
+controlled comparison across lifetimes; the existing idle-RSS waiver remains
+open. Logs, traces, binaries and atlas images are ignored, not embedded.
+
 ## 2026-10-11 — External conversation windows
 
 No dependency, extra model call, motion loop or tokenizer is added. Local prompt

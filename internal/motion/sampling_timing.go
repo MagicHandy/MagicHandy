@@ -169,12 +169,13 @@ func wireSegmentFits(left, right MotionSample, probes []MotionSample, resolution
 		return false
 	}
 	l, r := quantizedMotionPosition(left.PositionPercent, resolution), quantizedMotionPosition(right.PositionPercent, resolution)
+	tolerance := quantizedProbeTolerance(probes, resolution)
 	for _, probe := range probes {
 		if probe.TimeMillis < left.TimeMillis || probe.TimeMillis > right.TimeMillis {
 			continue
 		}
 		fraction := float64(probe.TimeMillis-left.TimeMillis) / float64(right.TimeMillis-left.TimeMillis)
-		if math.Abs(l+(r-l)*fraction-probe.PositionPercent) > wireApproximationTolerance+resolution/2 {
+		if math.Abs(l+(r-l)*fraction-probe.PositionPercent) > tolerance {
 			return false
 		}
 	}
