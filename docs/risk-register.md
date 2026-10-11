@@ -1,5 +1,28 @@
 # MagicHandy Risk Register
 
+## R31: Unnecessary or obsolete motion-review corrections
+
+Level: High
+
+An optional reviewer can misjudge a reasonable local choice or return after the
+user has moved on. Review is off by default, applies only to local Chat/Autopilot,
+and requires a high-confidence material defect. Cosmetic reseeds are blocked in
+code. One bounded worker, a ten-second deadline, controller/command/Stop/mode/
+session/settings checks, and the shared engine's atomic plan check reject obsolete
+work. Stop cancels without waiting for the network. Errors/refusals leave the local
+choice intact. The reviewer cannot start, resume, change limits, or insert chat.
+
+Enabling review shares up to eight recent user messages and motion state with its
+selected provider, even when primary chat is local. The settings explain this
+before save; personas, memories, assistant replies and autonomous speech are not
+sent. Removal/disabling invalidates outstanding reviews. An in-app notice reports
+kept/corrected/skipped/unavailable outcomes from backend state and can be dismissed.
+
+Remaining: broader independent judgments, live OpenRouter/provider comparisons,
+long sessions and physical comfort feedback. The small tested Creative v2 set
+establishes intent examples, not universal motion quality or calibrated confidence.
+See [evidence](motion-second-opinion-review-2026-10-11.md) and [ADR 0040](decisions/0040-asynchronous-motion-second-opinion.md).
+
 ## R30: Hosted model privacy, authorization and late-result risk
 
 Level: High

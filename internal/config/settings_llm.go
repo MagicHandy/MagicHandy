@@ -2,24 +2,25 @@ package config
 
 // LLMSettings contains local defaults, named providers, and model role settings.
 type LLMSettings struct {
-	RequestRole              string                `json:"-"`
-	Connections              []ModelConnection     `json:"connections,omitempty"`
-	ConversationConnectionID string                `json:"conversation_connection_id,omitempty"`
-	RetryRefusalLocally      bool                  `json:"retry_refusal_locally,omitempty"`
-	ActiveConnection         *ModelConnection      `json:"-"`
-	MotionPlanner            MotionPlannerSettings `json:"motion_planner"`
-	Provider                 string                `json:"provider"`
-	LlamaCPPMode             string                `json:"llama_cpp_mode"`
-	ManagedLoadPolicy        string                `json:"managed_load_policy"`
-	LlamaCPPBaseURL          string                `json:"llama_cpp_base_url"`
-	LlamaCPPContextSize      int                   `json:"llama_cpp_context_size"`
-	OllamaBaseURL            string                `json:"ollama_base_url"`
-	OllamaModelsPath         string                `json:"ollama_models_path,omitempty"`
-	Model                    string                `json:"model"`
-	PromptSet                string                `json:"prompt_set"`
-	RequestTimeoutMillis     int                   `json:"request_timeout_ms"`
-	MaxOutputTokens          int                   `json:"max_output_tokens"`
-	ReasoningMode            string                `json:"reasoning_mode"`
+	RequestRole              string                 `json:"-"`
+	Connections              []ModelConnection      `json:"connections,omitempty"`
+	ConversationConnectionID string                 `json:"conversation_connection_id,omitempty"`
+	RetryRefusalLocally      bool                   `json:"retry_refusal_locally,omitempty"`
+	ActiveConnection         *ModelConnection       `json:"-"`
+	MotionPlanner            MotionPlannerSettings  `json:"motion_planner"`
+	MotionReviewer           MotionReviewerSettings `json:"motion_reviewer"`
+	Provider                 string                 `json:"provider"`
+	LlamaCPPMode             string                 `json:"llama_cpp_mode"`
+	ManagedLoadPolicy        string                 `json:"managed_load_policy"`
+	LlamaCPPBaseURL          string                 `json:"llama_cpp_base_url"`
+	LlamaCPPContextSize      int                    `json:"llama_cpp_context_size"`
+	OllamaBaseURL            string                 `json:"ollama_base_url"`
+	OllamaModelsPath         string                 `json:"ollama_models_path,omitempty"`
+	Model                    string                 `json:"model"`
+	PromptSet                string                 `json:"prompt_set"`
+	RequestTimeoutMillis     int                    `json:"request_timeout_ms"`
+	MaxOutputTokens          int                    `json:"max_output_tokens"`
+	ReasoningMode            string                 `json:"reasoning_mode"`
 	// ChatVoice selects how sexual the model's reply register may be. It only
 	// shapes prompt composition; the motion contract and every motion safety
 	// gate are identical at every level.

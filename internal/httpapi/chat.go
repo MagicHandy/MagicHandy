@@ -135,10 +135,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	if settings.LLM.IsHosted() {
 		chatCtx = s.guardHostedChat(chatCtx)
 	}
-	activityID := s.modes.NotifyChatActivity()
+	activityID, started := s.beginChatActivity(settings.Voice)
 	defer s.modes.NotifyChatActivityComplete(activityID)
-	started := time.Now()
-	s.interruptChatSpeech(settings.Voice)
 
 	promptContext, err := s.loadInteractiveChatPromptContext(chatCtx, sessionID, settings.LLM, body.Message)
 	if err != nil {
@@ -165,6 +163,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	motionContext := s.chatTurnMotion(settings, promptContext.UserRequests, sessionID)
+	reviewBefore := s.beforeChatReview(settings.LLM, capabilities)
 	service := chat.Service{
 		Provider:              provider,
 		Prompt:                prompt,
@@ -200,9 +199,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	applyPersonaStartingArea(&result, capabilities, promptContext.Persona)
-	s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, completionErr, sessionID,
+	completed := s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, completionErr, sessionID,
 		diagnostics,
 		promptContext.CurrentMood, started)
+	s.reviewCompletedChat(chatCtx, completed, reviewBefore, stopSequence, activityID, body.Message)
 }
 
 func (s *Server) beginInteractiveChatStream(
@@ -237,6 +237,14 @@ func (s *Server) interruptChatSpeech(settings config.VoiceSettings) {
 	if len(canceled) > 0 {
 		s.logger.Debug("chat interrupted pending speech", "request_count", len(canceled))
 	}
+}
+
+func (s *Server) beginChatActivity(settings config.VoiceSettings) (uint64, time.Time) {
+	s.motionReview.invalidate()
+	activity := s.modes.NotifyChatActivity()
+	started := time.Now()
+	s.interruptChatSpeech(settings)
+	return activity, started
 }
 
 func (s *Server) completeInteractiveChat(
@@ -484,7 +492,7 @@ func managedLlamaReasoningBudget(settings config.LLMSettings, runtimeCurrent boo
 	return settings.MaxOutputTokens / 2
 }
 
-func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint64, emit sseEmitter, result chat.Result, err error, sessionID string, diagnostics chat.MessageDiagnostics, currentMood chat.Mood, started time.Time) {
+func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint64, emit sseEmitter, result chat.Result, err error, sessionID string, diagnostics chat.MessageDiagnostics, currentMood chat.Mood, started time.Time) (completed bool) {
 	if err != nil {
 		s.logger.Warn("chat stream failed", "provider", diagnostics.Provider, "error", err)
 		_ = emit("error", map[string]string{"message": err.Error()})
@@ -589,6 +597,7 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		"repaired":          result.Repaired,
 		"semantic_fallback": result.SemanticFallback,
 	})
+	return motionErr == nil
 }
 
 func emitChatCancellation(emit sseEmitter) {

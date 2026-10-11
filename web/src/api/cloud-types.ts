@@ -44,6 +44,6 @@ export interface CloudPlanningStatus {
 export interface ModelRoute {
   kind: "local" | "hosted" | "decisions" | "unavailable";
   provider: string; connection_id?: string; model: string; endpoint_host?: string;
-  context_policy: "conversation" | "technical"; state: "configured" | "incomplete" | "unavailable";
+  context_policy: "conversation" | "technical" | "motion_and_user_requests"; state: "configured" | "incomplete" | "unavailable";
 }
-export interface ModelRoutingSnapshot { chat: ModelRoute; autopilot: ModelRoute; local_retry?: ModelRoute }
+export interface ModelRoutingSnapshot { chat: ModelRoute; autopilot: ModelRoute; local_retry?: ModelRoute; reviewer?: ModelRoute }

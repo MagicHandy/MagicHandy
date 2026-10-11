@@ -2966,5 +2966,21 @@
   "Your OpenAI API key and billing.": "Sua chave de API e cobrança da OpenAI.",
   "{count} of {max}": "{count} de {max}",
   "{roles} will switch to the local model. The saved API key is deleted when you save settings.": "{roles} passará para o modelo local. A chave de API salva é excluída quando você salvar as configurações.",
-  "Protocol": "Protocolo"
+  "Protocol": "Protocolo",
+  "Motion second opinion": "Segunda opinião sobre o movimento",
+  "Review local motion choices": "Revisar as escolhas de movimento locais",
+  "Local chat and Autopilot act immediately. A second model can correct a clear mismatch afterward.": "O chat local e o Autopilot agem imediatamente. Um segundo modelo pode corrigir uma divergência clara depois.",
+  "Add a provider and choose its model below to enable review.": "Adicione um provedor e escolha seu modelo abaixo para ativar a revisão.",
+  "Reviewer model": "Modelo revisor",
+  "Choose a fast model with Low reasoning where available. Reviews expire after 10 seconds.": "Escolha um modelo rápido com raciocínio baixo, quando disponível. As revisões expiram após 10 segundos.",
+  "Shares motion details and up to eight recent user messages with the reviewer. Personas, memories and assistant replies are excluded.": "Compartilha detalhes do movimento e até oito mensagens recentes do usuário com o revisor. Perfis de personagem, memórias e respostas do assistente são excluídos.",
+  "Waiting for a local Chat or Autopilot model. Hosted choices are not reviewed.": "Aguardando um modelo local para Chat ou Autopilot. Escolhas de modelos hospedados não são revisadas.",
+  "How corrections work": "Como funcionam as correções",
+  "Only confident, material corrections are applied within your limits. A new request or motion change makes an older review obsolete. Reviews never start or resume motion; an unavailable reviewer leaves the local choice running.": "Somente correções relevantes e confiáveis são aplicadas dentro dos seus limites. Um novo pedido ou mudança de movimento invalida a revisão anterior. As revisões nunca iniciam nem retomam o movimento; se o revisor estiver indisponível, a escolha local continua.",
+  "Reviewing motion in the background; local motion continues.": "Revisando o movimento em segundo plano; o movimento local continua.",
+  "Second opinion: kept the local choice.": "Segunda opinião: escolha local mantida.",
+  "Second opinion: corrected the motion choice.": "Segunda opinião: escolha de movimento corrigida.",
+  "Second opinion: an older review was discarded.": "Segunda opinião: uma revisão anterior foi descartada.",
+  "Second opinion unavailable; local motion continues.": "Segunda opinião indisponível; o movimento local continua.",
+  "Motion second opinion will be switched off.": "A segunda opinião sobre o movimento será desativada."
 }

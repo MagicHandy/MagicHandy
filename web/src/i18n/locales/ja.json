@@ -2966,5 +2966,21 @@
   "Your OpenAI API key and billing.": "ご自身の OpenAI API キーと請求。",
   "{count} of {max}": "{count} / {max}",
   "{roles} will switch to the local model. The saved API key is deleted when you save settings.": "{roles} はローカルモデルに切り替わります。保存済みの API キーは設定を保存したときに削除されます。",
-  "Protocol": "プロトコル"
+  "Protocol": "プロトコル",
+  "Motion second opinion": "動きのセカンドオピニオン",
+  "Review local motion choices": "ローカルモデルの動きの選択を確認",
+  "Local chat and Autopilot act immediately. A second model can correct a clear mismatch afterward.": "ローカルチャットとAutopilotは即座に動作します。別のモデルが後から明確な不一致を修正できます。",
+  "Add a provider and choose its model below to enable review.": "下でプロバイダーを追加し、モデルを選択すると確認を有効にできます。",
+  "Reviewer model": "確認用モデル",
+  "Choose a fast model with Low reasoning where available. Reviews expire after 10 seconds.": "可能であれば推論レベルを低にした高速モデルを選んでください。確認は10秒で期限切れになります。",
+  "Shares motion details and up to eight recent user messages with the reviewer. Personas, memories and assistant replies are excluded.": "動きの詳細と直近のユーザーメッセージ最大8件を確認用モデルに共有します。ペルソナ、メモリ、アシスタントの返信は含みません。",
+  "Waiting for a local Chat or Autopilot model. Hosted choices are not reviewed.": "チャットまたはAutopilotのローカルモデルを待機中です。ホスト型モデルの選択は確認しません。",
+  "How corrections work": "修正の仕組み",
+  "Only confident, material corrections are applied within your limits. A new request or motion change makes an older review obsolete. Reviews never start or resume motion; an unavailable reviewer leaves the local choice running.": "設定した制限内で、確信度が高く実質的な修正のみを適用します。新しいリクエストや動きの変更があれば以前の確認は無効になります。確認によって動きを開始・再開することはありません。確認用モデルが利用できなくてもローカルの選択は継続します。",
+  "Reviewing motion in the background; local motion continues.": "バックグラウンドで動きを確認中です。ローカルの動きは継続します。",
+  "Second opinion: kept the local choice.": "セカンドオピニオン：ローカルの選択を維持しました。",
+  "Second opinion: corrected the motion choice.": "セカンドオピニオン：動きの選択を修正しました。",
+  "Second opinion: an older review was discarded.": "セカンドオピニオン：古い確認結果を破棄しました。",
+  "Second opinion unavailable; local motion continues.": "セカンドオピニオンを利用できません。ローカルの動きは継続します。",
+  "Motion second opinion will be switched off.": "動きのセカンドオピニオンは無効になります。"
 }

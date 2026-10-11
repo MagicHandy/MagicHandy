@@ -1,5 +1,21 @@
 # Goal Scorecard
 
+## 2026-10-11 — Optional asynchronous motion review
+
+No new dependency, local prompt suffix, extra local generation, or motion loop.
+Disabled review creates no worker or cloud request; enabled review has one worker
+and one replaceable pending choice. The blocked-provider tests verify the local
+reply and motion finish first. The live app kept immediate local generation and
+completed cloud review in the background; see [the experiment](motion-second-opinion-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+an archive of `03062e8a` builds to 22,061,056 B; the review branch builds to
+22,155,264 B (+94,208 B). The main UI chunk increases from 1,132,798 to
+1,138,935 B raw and 306,738 to 308,358 B gzip (+1,620 B gzip). Existing bundle
+size advisories remain; no threshold was changed. An idle simulator review app
+after local readiness/text chat and opening settings measured 33,120,256 B
+working set. This is one host observation, not an isolated causal RSS comparison.
+
 ## 2026-10-10 — Reach guide only where the schema is enforced
 
 An external llama.cpp server's Creative v2 contract omits the 713-byte reach

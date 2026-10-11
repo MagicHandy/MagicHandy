@@ -74,6 +74,10 @@ type Options struct {
 	CanAnnounce func() bool
 	// Announce publishes an Autopilot line and optionally queues browser audio.
 	Announce func(ctx context.Context, say string) Announcement
+	// ObserveChoice is a nonblocking observer of accepted local model choices.
+	// It must not do network work on the mode loop.
+	ObserveChoice func(DecisionInput, motion.ActiveMotionState)
+	ReviewEnabled func() bool
 }
 
 // Status is the UI-facing mode state.
@@ -383,6 +387,7 @@ func (m *Manager) finishSegmentChoice(_ context.Context, mode string, reason str
 	}
 	m.rememberChoice(mode, choice)
 	m.tracePlanned(mode, reason, choice)
+	m.observeChoice(mode, choice)
 }
 
 func (m *Manager) nextPlannedSegment() (Segment, []diagnostics.PlannerScore) {

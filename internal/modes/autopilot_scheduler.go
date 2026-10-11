@@ -153,6 +153,7 @@ func (m *Manager) applyAutopilotChoice(
 		}
 		m.rememberChoice(ModeAutopilot, choice)
 		m.tracePlanned(ModeAutopilot, "autopilot_hold", choice)
+		m.observeChoice(ModeAutopilot, choice)
 		return
 	}
 	state, err := engine.ApplyTarget(ctx, m.choiceTarget(ModeAutopilot, choice), reason)
@@ -175,6 +176,7 @@ func (m *Manager) applyAutopilotChoice(
 	}
 	m.rememberChoice(ModeAutopilot, choice)
 	m.tracePlanned(ModeAutopilot, reason, choice)
+	m.observeChoice(ModeAutopilot, choice)
 	if state.RecentCommandLatencyMillis > 0 {
 		m.mu.Lock()
 		if m.loop.mode == ModeAutopilot && m.loop.generation == generation {

@@ -6,6 +6,7 @@ import { t, translateKnown } from "../i18n";
 import { connectionRoles, connectionSignature, modelConnectionLabel, modelProviderNames, modelSettingsPatch, modelSettingsSignature, newModelConnection, removeConnection, type ModelRole } from "../util/model-connections";
 import { DecisionsConnection } from "./DecisionsConnection";
 import { ModelConnectionEditor } from "./ModelConnectionEditor";
+import { MotionReviewerSettings } from "./MotionReviewerSettings";
 import { FieldRow } from "./SetupSection";
 
 const defaultPlanner: MotionPlannerSettings = { provider: "conversation", model: "", context_policy: "conversation" };
@@ -63,7 +64,7 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
   useEffect(() => { if (hostedInUse) refreshStatus(); }, [hostedInUse, connections.length, refreshStatus]);
   const decisionsReady = Boolean(status?.connection.decisions_key_set);
 
-  function chooseConnection(id: string, role: ModelRole) {
+  function chooseConnection(id: string, role: "chat" | "autopilot") {
     const nextChat = role === "chat" ? id : conversationID;
     const special = ["conversation", "local", "decisions"].includes(id);
     const nextPlanner = role === "autopilot" ? { ...planner, provider: special ? id : "connection", connection_id: special ? "" : id } as MotionPlannerSettings : planner;
@@ -104,6 +105,7 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
         {conversation && !setup && settings.retry_refusal_locally && localEditor && !usesLocal && <details className="form-row-details" onToggle={event => setEditRetryModel(event.currentTarget.open)}><summary>{t("Configure local retry model")}</summary>{editRetryModel && localEditor}</details>}
       </div>
     </section>
+    <MotionReviewerSettings settings={settings} locked={locked} local={usesLocal} patch={patch} />
     <ExternalProviders settings={settings} status={status} locked={locked} setup={setup} patch={patch} refreshStatus={refreshStatus} />
     {usesLocal && localEditor}
   </>;
@@ -149,7 +151,7 @@ function ExternalProviders({ settings, status, locked, setup, patch, refreshStat
       if (openID === "decisions") setOpenID("");
     } finally { setDecisionsBusy(false); refreshStatus(); }
   }
-  const roleNames = (roles: ModelRole[]) => roles.map(role => role === "chat" ? t("Chat") : t("Autopilot"));
+  const roleNames = (roles: ModelRole[]) => roles.map(role => role === "chat" ? t("Chat") : role === "reviewer" ? t("Reviewer model") : t("Autopilot"));
 
   return <section className="group cloud-motion-settings external-providers" aria-label={t("External providers")}>
     <h3 className="group-title">{t("External providers")}<span className="hint-inline">{t("{count} of {max}", { count: connections.length, max: MAX_CONNECTIONS })}</span></h3>
@@ -166,7 +168,7 @@ function ExternalProviders({ settings, status, locked, setup, patch, refreshStat
           onToggle={() => toggle(connection.id)}
           onRemove={() => { setOpenID(""); setConfirmID(connection.id); }}
           confirm={confirmID === connection.id && <RemoveConfirm
-            text={roles.length ? t("{roles} will switch to the local model. The saved API key is deleted when you save settings.", { roles: roleNames(roles).join(" · ") }) : t("Its saved API key is deleted when you save settings.")}
+            text={[roles.includes("reviewer") ? t("Motion second opinion will be switched off.") : "", roles.some(role => role !== "reviewer") ? t("{roles} will switch to the local model. The saved API key is deleted when you save settings.", { roles: roleNames(roles.filter(role => role !== "reviewer")).join(" · ") }) : t("Its saved API key is deleted when you save settings.")].filter(Boolean).join(" ")}
             name={connection.name.trim() || translateKnown(modelProviderNames[connection.provider])}
             onCancel={() => setConfirmID("")} onConfirm={() => remove(connection.id)} />}>
           {open && <ModelConnectionEditor key={connection.id} full={!setup} connection={connection} locked={locked} patch={change => patch({ connections: connections.map(item => item.id === connection.id ? { ...item, ...change } : item) })} />}

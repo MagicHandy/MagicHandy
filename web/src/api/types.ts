@@ -1451,6 +1451,7 @@ export interface AppState {
   motion_simulated?: boolean;
   labs_enabled?: boolean;
   modes?: ModesStatus;
+  motion_review?: { state: string; source?: string; model?: string; reason?: string; elapsed_ms?: number; revision: number };
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
   voice?: VoiceState;

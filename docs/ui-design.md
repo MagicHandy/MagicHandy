@@ -12,6 +12,13 @@ errors, routing/privacy consequences and incomplete requirements are not hidden
 to make the screen look cleaner. The shared rules and responsive behavior are
 documented in [UI design guidelines](ui-design-guidelines.md#cards-sections-fields).
 
+When Chat or Autopilot uses the local model, the model settings include an
+off-by-default Motion second opinion switch. Enabling it reveals an existing
+provider/model selector, a recommendation for fast/Low reasoning, and explicit
+sharing of recent user messages. This is distinct from the primary model roles.
+Correction mechanics stay in a disclosure; backend outcomes use the standard
+dismissible notice in Chat. Removing its provider disables the review role.
+
 ## Launch console
 
 On Windows, the Start menu and desktop shortcuts start `magichandy.exe` in a

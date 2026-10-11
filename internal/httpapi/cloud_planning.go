@@ -49,6 +49,7 @@ func (s *Server) initCloudPlanning(runtime Runtime) {
 }
 
 func (s *Server) invalidateCloudPlanning() {
+	s.motionReview.invalidate()
 	s.cloudRequests.invalidate()
 	s.hostedRequests.invalidate()
 	s.cloudPlanning.mu.Lock()

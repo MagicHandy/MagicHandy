@@ -111,6 +111,7 @@ type Server struct {
 	cloudRequests     llmRequestCoordinator
 	hostedRequests    hostedRequestLanes
 	cloudPlanning     cloudPlanningRuntime
+	motionReview      motionReviewRuntime
 	llmAutoloadMu     sync.Mutex
 	llmAutoloadCancel context.CancelFunc
 	llmAutoloadWG     sync.WaitGroup
@@ -642,6 +643,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"capabilities":        s.capabilities(r),
 		"memory":              s.memoryState(r.Context()),
 		"modes":               s.modes.Status(),
+		"motion_review":       s.motionReview.snapshot(),
 		"voice":               s.clientVoiceState(r),
 		"chat":                s.chatState(r.Context()),
 		"library":             s.libraryState(),

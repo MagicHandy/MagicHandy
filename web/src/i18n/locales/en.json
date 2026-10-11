@@ -2966,5 +2966,21 @@
   "Your OpenAI API key and billing.": "Your OpenAI API key and billing.",
   "{count} of {max}": "{count} of {max}",
   "{roles} will switch to the local model. The saved API key is deleted when you save settings.": "{roles} will switch to the local model. The saved API key is deleted when you save settings.",
-  "Protocol": "Protocol"
+  "Protocol": "Protocol",
+  "Motion second opinion": "Motion second opinion",
+  "Review local motion choices": "Review local motion choices",
+  "Local chat and Autopilot act immediately. A second model can correct a clear mismatch afterward.": "Local chat and Autopilot act immediately. A second model can correct a clear mismatch afterward.",
+  "Add a provider and choose its model below to enable review.": "Add a provider and choose its model below to enable review.",
+  "Reviewer model": "Reviewer model",
+  "Choose a fast model with Low reasoning where available. Reviews expire after 10 seconds.": "Choose a fast model with Low reasoning where available. Reviews expire after 10 seconds.",
+  "Shares motion details and up to eight recent user messages with the reviewer. Personas, memories and assistant replies are excluded.": "Shares motion details and up to eight recent user messages with the reviewer. Personas, memories and assistant replies are excluded.",
+  "Waiting for a local Chat or Autopilot model. Hosted choices are not reviewed.": "Waiting for a local Chat or Autopilot model. Hosted choices are not reviewed.",
+  "How corrections work": "How corrections work",
+  "Only confident, material corrections are applied within your limits. A new request or motion change makes an older review obsolete. Reviews never start or resume motion; an unavailable reviewer leaves the local choice running.": "Only confident, material corrections are applied within your limits. A new request or motion change makes an older review obsolete. Reviews never start or resume motion; an unavailable reviewer leaves the local choice running.",
+  "Reviewing motion in the background; local motion continues.": "Reviewing motion in the background; local motion continues.",
+  "Second opinion: kept the local choice.": "Second opinion: kept the local choice.",
+  "Second opinion: corrected the motion choice.": "Second opinion: corrected the motion choice.",
+  "Second opinion: an older review was discarded.": "Second opinion: an older review was discarded.",
+  "Second opinion unavailable; local motion continues.": "Second opinion unavailable; local motion continues.",
+  "Motion second opinion will be switched off.": "Motion second opinion will be switched off."
 }

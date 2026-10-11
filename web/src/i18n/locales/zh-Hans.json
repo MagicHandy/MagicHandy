@@ -2966,5 +2966,21 @@
   "Your OpenAI API key and billing.": "使用你自己的 OpenAI API 密钥和计费。",
   "{count} of {max}": "{count} / {max}",
   "{roles} will switch to the local model. The saved API key is deleted when you save settings.": "{roles} 将切换到本地模型。保存设置时会删除已保存的 API 密钥。",
-  "Protocol": "协议"
+  "Protocol": "协议",
+  "Motion second opinion": "运动复核",
+  "Review local motion choices": "复核本地模型的运动选择",
+  "Local chat and Autopilot act immediately. A second model can correct a clear mismatch afterward.": "本地聊天和自动驾驶立即执行。另一个模型随后可纠正明显不符的选择。",
+  "Add a provider and choose its model below to enable review.": "在下方添加提供商并选择模型以启用复核。",
+  "Reviewer model": "复核模型",
+  "Choose a fast model with Low reasoning where available. Reviews expire after 10 seconds.": "建议选择支持低推理强度的快速模型。复核在10秒后过期。",
+  "Shares motion details and up to eight recent user messages with the reviewer. Personas, memories and assistant replies are excluded.": "向复核模型共享运动详情和最多八条最近的用户消息，不包含角色设定、记忆和助手回复。",
+  "Waiting for a local Chat or Autopilot model. Hosted choices are not reviewed.": "等待聊天或自动驾驶使用本地模型。云端模型的选择不会被复核。",
+  "How corrections work": "修正的工作方式",
+  "Only confident, material corrections are applied within your limits. A new request or motion change makes an older review obsolete. Reviews never start or resume motion; an unavailable reviewer leaves the local choice running.": "仅在设定范围内应用高置信度且有实质意义的修正。新的请求或运动变化会使旧复核失效。复核不会启动或恢复运动；复核模型不可用时继续执行本地选择。",
+  "Reviewing motion in the background; local motion continues.": "正在后台复核运动；本地运动继续执行。",
+  "Second opinion: kept the local choice.": "复核结果：保留本地选择。",
+  "Second opinion: corrected the motion choice.": "复核结果：已修正运动选择。",
+  "Second opinion: an older review was discarded.": "复核结果：已丢弃过期复核。",
+  "Second opinion unavailable; local motion continues.": "复核模型不可用；本地运动继续执行。",
+  "Motion second opinion will be switched off.": "运动复核将被关闭。"
 }
