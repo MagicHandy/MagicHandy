@@ -157,9 +157,10 @@ type llmCallTiming struct {
 // timedLLMProvider records provider phases without changing the request,
 // callback, output, or retry/repair behavior owned by the chat services.
 type timedLLMProvider struct {
-	provider llm.Provider
-	mu       sync.Mutex
-	calls    []llmCallTiming
+	provider       llm.Provider
+	mu             sync.Mutex
+	calls          []llmCallTiming
+	initialRequest *llm.ChatRequest
 }
 
 func newTimedLLMProvider(provider llm.Provider) *timedLLMProvider {
@@ -206,6 +207,10 @@ func (p *timedLLMProvider) StreamChat(
 		call.firstToken = call.finished
 	}
 	p.mu.Lock()
+	if p.initialRequest == nil {
+		request.OnProgress, request.OnBudget = nil, nil
+		p.initialRequest = &request
+	}
 	p.calls = append(p.calls, call)
 	p.mu.Unlock()
 	return raw, err

@@ -234,6 +234,9 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 	}
 	timing := normalizeTiming(decision.Next)
 	variability := normalizeVariability(decision.Variability)
+	if !fallback && decision.Abstain && decision.Say == "" {
+		return segmentChoice{source: "speech_skipped", timing: timing, decisionLatency: latency}
+	}
 	if decision.Hold {
 		if segment, pattern, ok := m.heldSegment(); ok {
 			return segmentChoice{

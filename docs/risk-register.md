@@ -1,5 +1,23 @@
 # MagicHandy Risk Register
 
+## R32: Failed-response privacy and check-in quality
+
+Level: Medium
+
+Inspecting rejected model output is useful but may reveal private conversation
+or personalization. Schema 31 retains only the latest 24 interactive failures,
+with bounded content, credential redaction before persistence and after reads,
+host-only access, and explicit inclusion of prompt/output on copy. Clearing or
+deleting the chat removes its records. Failures never enter model history or TTS.
+
+A model-chosen quiet response reduces timer-driven repetition without a language
+filter. The ordinary bounded cadence still applies, and quiet output cannot carry
+motion. Quality remains model-dependent: Gemma's measured improvement does not
+generalize to Vanessa, and stronger silence prompts were rejected for missing
+useful contributions. No hidden cloud scorer or extra language retry is added.
+See [the evaluation](user-report-review-2026-10-11.md) and
+[ADR 0041](decisions/0041-inspectable-chat-failures-and-model-chosen-checkins.md).
+
 ## R31: Unnecessary or obsolete motion-review corrections
 
 Level: High

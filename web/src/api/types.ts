@@ -462,6 +462,12 @@ export interface PromptSection {
 }
 
 export interface PromptCompositionPayload {
+	response_schema?: unknown;
+	reasoning_mode?: string;
+	max_tokens?: number;
+	prompt_set_name?: string;
+	prompt_set_source?: "global" | "persona";
+	global_prompt_set?: string;
   session_id: string;
   provider: string;
   model: string;

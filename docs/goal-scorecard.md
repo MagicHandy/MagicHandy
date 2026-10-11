@@ -1,5 +1,33 @@
 # Goal Scorecard
 
+## 2026-10-11 — User-report diagnostics, prompt assignment and check-ins
+
+No dependency, motion loop, hidden cloud request, or extra interactive generation
+is added. Failure storage is separate from dialogue, capped at 24 records across
+chats, and written only on failure. The new views fetch on demand. See the
+[evaluation and limitations](user-report-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+the prior review binary is 22,155,264 B; this build is 22,240,256 B (+84,992 B).
+The main UI chunk changes from 1,138,935 to 1,151,474 B raw and from 308,358 to
+311,544 B gzip (+3,186 B). One canonical dist is rebuilt; bundle advisories and
+all safety gates remain in force.
+
+Small live Gemma 12B samples retain 16/16 valid, 15/16 intent-correct interactive
+results with reasoning Off. Idle check-in mean falls from 664 to 499 ms; invited
+conversation is 677 versus 679 ms. All 108 final speech opportunities across Gemma
+and Vanessa use one request without repair. Vanessa does not show a repetition
+benefit and its idle scenario rises from 321 to 437 ms; do not generalize the
+default-model result to every local model.
+
+After local text generation and rendering prompt settings, an isolated previous
+build measured 40,591,360 B working set / 60,911,616 B private; the current review
+app measured 76,447,744 B / 63,463,424 B. These are single-process observations
+with different lifetimes and UI interaction, not a controlled attribution of the
+35.9 MB residency difference. Private allocation differs by 2.55 MB and remains
+below the existing active budget. The existing Windows idle-RSS waiver remains
+open; this change does not claim it resolved or claim zero resident-memory cost.
+
 ## 2026-10-11 — Optional asynchronous motion review
 
 No new dependency, local prompt suffix, extra local generation, or motion loop.

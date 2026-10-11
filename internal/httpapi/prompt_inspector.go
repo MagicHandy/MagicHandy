@@ -16,6 +16,7 @@ func (s *Server) handlePromptComposition(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	settings, _ := s.store.Snapshot()
+	settings.LLM = settings.LLM.ConversationSettings()
 	promptContext, err := s.loadInteractiveChatPromptContext(r.Context(), sessionID, settings.LLM)
 	if err != nil {
 		s.writeChatStorageError(w, err)
@@ -33,7 +34,7 @@ func (s *Server) handlePromptComposition(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	motionContext := s.chatTurnMotion(settings, promptContext.UserRequests, sessionID)
-	composition := chat.ComposePrompt(
+	composition := chat.ComposeInteractivePrompt(
 		prompt,
 		memories,
 		patterns,
@@ -43,14 +44,23 @@ func (s *Server) handlePromptComposition(w http.ResponseWriter, r *http.Request)
 		chatPromptBudget(settings.LLM),
 	)
 	payload := map[string]any{
-		"session_id":  sessionID,
-		"provider":    settings.LLM.Provider,
-		"model":       settings.LLM.Model,
-		"prompt_set":  prompt.ID,
-		"composition": composition,
-		"lore":        promptContext.Lore,
+		"session_id":        sessionID,
+		"provider":          settings.LLM.Provider,
+		"model":             settings.LLM.Model,
+		"prompt_set":        prompt.ID,
+		"prompt_set_name":   prompt.Name,
+		"global_prompt_set": settings.LLM.PromptSet,
+		"prompt_set_source": "global",
+		"composition":       composition,
+		"response_schema":   chat.InteractiveResponseSchema(patterns, promptContext.Capabilities, &motionContext),
+		"reasoning_mode":    settings.LLM.ReasoningMode,
+		"max_tokens":        settings.LLM.ChatMaxOutputTokens(effectiveReplyLength(settings.LLM, promptContext.Persona)),
+		"lore":              promptContext.Lore,
 	}
 	if promptContext.Persona != nil {
+		if promptContext.Persona.PromptSetID != "" {
+			payload["prompt_set_source"] = "persona"
+		}
 		payload["persona_id"] = promptContext.Persona.ID
 		payload["persona_name"] = promptContext.Persona.Name
 		payload["lore_mode"] = promptContext.Persona.LoreMode

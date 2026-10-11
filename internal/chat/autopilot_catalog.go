@@ -16,6 +16,7 @@ func autopilotCatalog(patterns []PatternChoice, kind AutopilotKind) string {
 	if kind == AutopilotKindMotion {
 		response["intent"] = "A different movement shape at the current pace."
 	} else {
+		response["intent"] = "Describe the new movement shape"
 		response["reply"] = "Changing the movement shape."
 	}
 	encoded, _ := json.Marshal(response)
@@ -40,7 +41,8 @@ func autopilotPatternSchema(patterns []PatternChoice, capabilities Capabilities,
 		fields["intent"] = map[string]any{"type": "string"}
 		schema["required"] = []string{"intent", "next", "variability"}
 	} else {
-		schema["required"] = []string{"reply", "next"}
+		fields["intent"] = map[string]any{"type": "string"}
+		schema["required"] = []string{"intent", "reply", "next"}
 	}
 	if capabilities.Motion {
 		motionProperties := fields["motion"].(map[string]any)["properties"].(map[string]any)

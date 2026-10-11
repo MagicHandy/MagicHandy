@@ -115,8 +115,8 @@ func TestAutopilotSpeechRepairPreservesSelectedLanguage(t *testing.T) {
 		var schema struct {
 			Properties map[string]json.RawMessage `json:"properties"`
 		}
-		if err := json.Unmarshal(request.JSONSchema, &schema); err != nil || len(schema.Properties) != 2 ||
-			schema.Properties["reply"] == nil || schema.Properties["next"] == nil {
+		if err := json.Unmarshal(request.JSONSchema, &schema); err != nil || len(schema.Properties) != 3 ||
+			schema.Properties["intent"] == nil || schema.Properties["reply"] == nil || schema.Properties["next"] == nil {
 			t.Fatalf("speech repair schema does not match the chat-only contract: %s, err=%v", request.JSONSchema, err)
 		}
 		repair := request.Messages[len(request.Messages)-1].Content

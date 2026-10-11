@@ -6,14 +6,17 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { PromptSet } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
+import { PromptAssignment } from "./PromptAssignment";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 
-export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
+export function PromptSetEditor({ locked = false, defaultID = "", chooseDefault, onSetsChange }: { locked?: boolean; defaultID?: string; chooseDefault?: (id: string) => void; onSetsChange?: (sets: PromptSet[]) => void }) {
   const { backendOnline } = useAppState();
   const { show } = useToast();
   const [sets, setSets] = useState<PromptSet[] | null>(null);
-  const [selId, setSelId] = useState<string>("");
+  const [selId, setSelId] = useState<string>(() => {
+    try { return sessionStorage.getItem("magichandy.prompt-editor.selection") || ""; } catch { return ""; }
+  });
   const [name, setName] = useState("");
   const [system, setSystem] = useState("");
   const [loading, setLoading] = useState(true);
@@ -22,6 +25,9 @@ export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
   const mounted = useRef(false);
   const loadGeneration = useRef(0);
   const busyRef = useRef(false);
+  useEffect(() => {
+    try { sessionStorage.setItem("magichandy.prompt-editor.selection", selId); } catch { /* Selection is navigation state only. */ }
+  }, [selId]);
 
   async function reload(keep?: string) {
     if (!mounted.current) return false;
@@ -33,6 +39,7 @@ export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
       if (!mounted.current || generation !== loadGeneration.current) return false;
       const list = Array.isArray(res.sets) ? res.sets : [];
       setSets(list);
+      onSetsChange?.(list);
       const pick = list.find((s) => s.id === (keep ?? selId)) ?? list[0];
       if (pick) {
         setSelId(pick.id);
@@ -116,6 +123,7 @@ export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
   if (!sets) return (
     <div className="group">
       <h4 className="group-title">{t("Prompt set editor")}</h4>
+      <p className="hint-block">{t("Saving edits changes this set. Assign it below to choose where it is used.")}</p>
       {loadError ? (
         <div className="empty-state compact-empty" role="alert">
           <strong>{t("Prompt sets unavailable")}</strong>
@@ -129,6 +137,7 @@ export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
   return (
     <div className="group" aria-busy={busy || loading || undefined}>
       <h4 className="group-title">{t("Prompt set editor")}</h4>
+      <p className="hint-block">{t("Saving edits changes this set. Assign it below to choose where it is used.")}</p>
       {loadError && (
         <div className="empty-state compact-empty" role="alert">
           <strong>{t("Prompt set refresh failed")}</strong>
@@ -160,6 +169,8 @@ export function PromptSetEditor({ locked = false }: { locked?: boolean }) {
         <button type="button" className="btn btn-primary" disabled={interactionLocked || builtin || !selected} onClick={() => void save()}>{t("Save set")}</button>
         <button type="button" className="btn btn-danger-outline" disabled={interactionLocked || builtin || !selected} onClick={() => void remove()}>{t("Delete set")}</button>
       </div>
+      {chooseDefault && selected && <PromptAssignment selectedID={selected.id} defaultID={defaultID} chooseDefault={chooseDefault}
+        locked={interactionLocked || !backendOnline} unsaved={name.trim() !== selected.name || system.trim() !== selected.system} />}
       {busyAction && <p className="form-status" role="status">{busyAction}...</p>}
       {locked && <p className="form-status">{backendOnline ? t("Read-only client.") : t("Core offline.")}</p>}
     </div>

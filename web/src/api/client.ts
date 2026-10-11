@@ -3,6 +3,7 @@
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
 import type { LLMCatalog } from "./catalog-types";
+import type { ChatRequestFailure } from "./chat-diagnostic-types";
 import type { CloudPlanningStatus, ModelConnection, HostedModel } from "./cloud-types";
 import { checkedCloudStatus } from "./cloud-status";
 import type { ModelCheckReport } from "./model-check-types";
@@ -737,6 +738,13 @@ export const api = {
       undefined,
       signal,
     ),
+
+  chatFailures: (sessionID: string, signal?: AbortSignal) =>
+    request<{ failures: ChatRequestFailure[] }>("GET", `/api/diagnostics/chat-failures?session_id=${encodeURIComponent(sessionID)}`, undefined, signal),
+  productionChatTest: (message: string, signal?: AbortSignal) =>
+    request<{ valid: boolean; report: ChatRequestFailure }>("POST", "/api/diagnostics/chat-test", { message }, signal),
+  chatFailure: (sessionID: string, id: number, includeContent: boolean, signal?: AbortSignal) =>
+    request<ChatRequestFailure>("GET", `/api/diagnostics/chat-failures/${id}?session_id=${encodeURIComponent(sessionID)}&include_content=${includeContent}`, undefined, signal),
 
   // Prompt sets.
   getPromptSets: () => request<PromptSetsPayload>("GET", "/api/prompt-sets"),

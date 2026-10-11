@@ -810,6 +810,7 @@ func (l *MessageLog) Clear() error {
 			`DELETE FROM chat_session_cursors`,
 			`DELETE FROM client_cursors`,
 			`DELETE FROM messages`,
+			`DELETE FROM chat_failures`,
 			`DELETE FROM chat_workspace`,
 			`DELETE FROM chat_sessions`,
 		} {

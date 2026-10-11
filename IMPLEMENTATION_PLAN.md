@@ -2,6 +2,14 @@
 
 ## Core Direction
 
+The October 11 [user-report follow-up](docs/user-report-review-2026-10-11.md)
+aligns live prompt examples with explicit action admission, adds bounded private
+failure evidence and a production-context preview, and clarifies prompt editing
+versus assignment. Independent speech can choose a quiet check-in itself; no
+wording filter is used. Gemma repetition improves in the measured fixture;
+Vanessa and the unavailable reporter-specific Qwen configuration remain qualified
+limitations. See [ADR 0041](docs/decisions/0041-inspectable-chat-failures-and-model-chosen-checkins.md).
+
 The October 11 [asynchronous motion review](docs/motion-second-opinion-review-2026-10-11.md)
 adds an optional second opinion for local Chat and Autopilot. Local choices apply
 immediately; a named hosted model may correct a confident material mismatch while

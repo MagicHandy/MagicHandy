@@ -35,6 +35,7 @@ type Request struct {
 
 // Result is the validated chat turn outcome.
 type Result struct {
+	Input            *llm.ChatRequest `json:"-"`
 	Response         AssistantResponse
 	Raw              string
 	RepairRaw        string
@@ -199,7 +200,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	})
 	truncated := errors.Is(err, llm.ErrOutputTruncated)
 	if err != nil && !truncated {
-		return Result{}, err
+		return Result{Raw: raw}, err
 	}
 
 	response, parseErr := s.parseAndValidateResponse(raw, capabilities, validationMessage)

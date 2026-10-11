@@ -274,6 +274,9 @@ func (s *Server) completeInteractiveChat(
 	}
 	releaseLLM()
 	timedProvider.applyDiagnostics(diagnostics, started, preparation, schedulerWait)
+	if completionErr != nil || result.Malformed {
+		result.Input = timedProvider.initialRequest
+	}
 	return result, true, completionErr
 }
 
@@ -493,6 +496,7 @@ func managedLlamaReasoningBudget(settings config.LLMSettings, runtimeCurrent boo
 }
 
 func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint64, emit sseEmitter, result chat.Result, err error, sessionID string, diagnostics chat.MessageDiagnostics, currentMood chat.Mood, started time.Time) (completed bool) {
+	result, err = s.retainChatFailure(ctx, stopSequence, sessionID, result, err, diagnostics)
 	if err != nil {
 		s.logger.Warn("chat stream failed", "provider", diagnostics.Provider, "error", err)
 		_ = emit("error", map[string]string{"message": err.Error()})

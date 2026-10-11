@@ -510,6 +510,13 @@ func (m *Manager) tickAutopilotSpeech(ctx context.Context, engine Engine, genera
 		return
 	}
 	if choice.source == "speech_error" || choice.say == "" {
+		if choice.source == "speech_skipped" {
+			m.mu.Lock()
+			delay := m.sampleSpeechDelayLocked(TimingLater)
+			m.mu.Unlock()
+			m.retryAutopilotSpeech(generation, delay, "speech_skipped", "model chose a quiet check-in")
+			return
+		}
 		m.retryAutopilotSpeech(generation, speechDecisionRetry, "speech_failed", choice.note)
 		return
 	}
