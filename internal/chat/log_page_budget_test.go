@@ -127,7 +127,7 @@ func TestSnapshotRestartsAfterRemovalBetweenPages(t *testing.T) {
 	for _, removal := range []string{"delete", "prune"} {
 		t.Run(removal, func(t *testing.T) {
 			l, id := recoveryLog(t)
-			for index := 0; index < MessageLogCap; index++ {
+			for index := 0; index < MessageRetentionCap; index++ {
 				appendRecoveryMessage(t, l, fmt.Sprintf("row %d", index))
 			}
 			page := recoveryPage(t, l, id, 0, 1)
@@ -139,7 +139,7 @@ func TestSnapshotRestartsAfterRemovalBetweenPages(t *testing.T) {
 				appendRecoveryMessage(t, l, "prunes first row")
 			}
 			next, err := l.ReadMessagePageContext(t.Context(), MessagePageRequest{SessionID: id, AfterRevision: &page.NextRevision, Snapshot: page.Snapshot, Limit: 1})
-			if err != nil || !next.Reset || next.Snapshot == nil || next.Snapshot.Revision != 201 {
+			if err != nil || !next.Reset || next.Snapshot == nil || next.Snapshot.Revision != MessageRetentionCap+1 {
 				t.Fatalf("removed snapshot stayed valid: %+v, %v", next, err)
 			}
 		})
@@ -152,14 +152,14 @@ func TestSnapshotDetectsPruningBelowAnEarlierHighPrunedRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for index := 0; index < MessageLogCap; index++ {
+	for index := 0; index < MessageRetentionCap; index++ {
 		appendRecoveryMessage(t, l, fmt.Sprint(index))
 	}
 	if err := l.CommitPending(pending); err != nil {
 		t.Fatal(err)
 	}
 	page := recoveryPage(t, l, id, 0, 1)
-	if page.Snapshot == nil || page.Snapshot.PrunedRevision != MessageLogCap+1 {
+	if page.Snapshot == nil || page.Snapshot.PrunedRevision != MessageRetentionCap+1 {
 		t.Fatal("missing high pruning marker fixture")
 	}
 	appendRecoveryMessage(t, l, "prunes a much older revision")

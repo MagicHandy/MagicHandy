@@ -2,6 +2,14 @@
 
 ## Setup and settings
 
+Diagnostics has one report group with Download diagnostic report and a
+Customize report disclosure button. Inset rows use dividers and existing switches;
+chat content uses a select that stacks on narrow screens. A visible summary
+reflects the inclusions even with the menu closed. Private content is opt-in,
+and captured prompt dependencies are explained beside their switch. The copyable
+status summary is folded by default. Download choices do not change application
+settings or require device-control ownership.
+
 Settings and setup use the Graphite card treatment: one card per group with a
 header row, label-left/control-right field rows that stack in narrow columns, a
 switch row for every on/off setting, and short help at the relevant decision.
@@ -11,6 +19,13 @@ indicator. Advanced details remain available through labeled disclosures;
 errors, routing/privacy consequences and incomplete requirements are not hidden
 to make the screen look cleaner. The shared rules and responsive behavior are
 documented in [UI design guidelines](ui-design-guidelines.md#cards-sections-fields).
+
+When Chat or Autopilot uses the local model, the model settings include an
+off-by-default Motion second opinion switch. Enabling it reveals an existing
+provider/model selector, a recommendation for fast/Low reasoning, and explicit
+sharing of recent user messages. This is distinct from the primary model roles.
+Correction mechanics stay in a disclosure; backend outcomes use the standard
+dismissible notice in Chat. Removing its provider disables the review role.
 
 ## Launch console
 

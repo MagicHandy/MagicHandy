@@ -95,6 +95,7 @@ func (s *Server) hostedProvider(ctx context.Context, settings config.LLMSettings
 
 func (s *Server) newHostedProvider(ctx context.Context, connection config.ModelConnection, timeout time.Duration) (llm.Provider, error) {
 	connection = connection.Normalize()
+	contextSize, _, _ := connection.ConversationWindow()
 	var token llm.TokenSource
 	var err error
 	if connection.Provider == config.LLMProviderChatGPT {
@@ -111,9 +112,9 @@ func (s *Server) newHostedProvider(ctx context.Context, connection config.ModelC
 		if s.cloudPlanning.baseURL != "" {
 			baseURL = s.cloudPlanning.baseURL
 		}
-		return llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: connection.Model, ReasoningEffort: connection.ReasoningEffort, Token: token, PlanUsage: connection.Provider == config.LLMProviderChatGPT, Client: s.cloudPlanning.client, Timeout: timeout, BaseURL: baseURL})
+		return llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: connection.Model, ReasoningEffort: connection.ReasoningEffort, ContextSize: contextSize, Token: token, PlanUsage: connection.Provider == config.LLMProviderChatGPT, Client: s.cloudPlanning.client, Timeout: timeout, BaseURL: baseURL})
 	case config.LLMProviderOpenRouter, config.LLMProviderCompatible:
-		return llm.NewCompatibleProvider(llm.CompatibleOptions{HTTPProviderOptions: llm.HTTPProviderOptions{BaseURL: connection.BaseURL, Model: connection.Model, Client: s.cloudPlanning.client, Timeout: timeout}, Provider: connection.Provider, Token: token, OutputMode: connection.OutputMode, SupportedParameters: connection.SupportedParameters, AllowFallbacks: connection.AllowFallbacks, AllowedProviders: connection.AllowedProviders, DataCollection: connection.DataCollection, ZeroDataRetention: connection.ZeroDataRetention})
+		return llm.NewCompatibleProvider(llm.CompatibleOptions{HTTPProviderOptions: llm.HTTPProviderOptions{BaseURL: connection.BaseURL, Model: connection.Model, Client: s.cloudPlanning.client, Timeout: timeout, ContextSize: contextSize}, Provider: connection.Provider, Token: token, OutputMode: connection.OutputMode, SupportedParameters: connection.SupportedParameters, AllowFallbacks: connection.AllowFallbacks, AllowedProviders: connection.AllowedProviders, DataCollection: connection.DataCollection, ZeroDataRetention: connection.ZeroDataRetention})
 	default:
 		return nil, errors.New("unsupported hosted model protocol")
 	}

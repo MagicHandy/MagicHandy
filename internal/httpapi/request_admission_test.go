@@ -52,6 +52,30 @@ func TestRequestAdmissionBoundsPeersAndReleasesAllEntries(t *testing.T) {
 	}
 }
 
+func TestDiagnosticExportAdmissionIsBoundedWithoutBlockingStatusOrStop(t *testing.T) {
+	s := newTestServer(t)
+	leave, ok := s.requestAdmission.enter(diagnosticExportLane, "first-download")
+	if !ok {
+		t.Fatal("could not occupy export capacity")
+	}
+	defer leave()
+	handler := s.admitHTTPRequests(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	for _, test := range []struct {
+		method, path string
+		status       int
+	}{
+		{http.MethodGet, "/api/diagnostics/report?chat=full", http.StatusTooManyRequests},
+		{http.MethodGet, "/api/state", http.StatusNoContent},
+		{http.MethodPost, "/api/motion/stop", http.StatusNoContent},
+	} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(test.method, test.path, nil))
+		if w.Code != test.status {
+			t.Fatalf("export admission affected %s: got %d want %d", test.path, w.Code, test.status)
+		}
+	}
+}
+
 func TestRequestPressurePreservesOwnerHeartbeatControlAndPublicStop(t *testing.T) {
 	s, store, admin, cookie := newControllerSessionFixture(t)
 	claimAuthenticatedController(t, s, cookie)

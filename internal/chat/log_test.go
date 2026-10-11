@@ -75,18 +75,18 @@ func TestMessageLogRejectsEmptyAndBadRoles(t *testing.T) {
 func TestMessageLogPrunesToCap(t *testing.T) {
 	log := openTestLog(t)
 
-	total := MessageLogCap + 25
+	total := MessageRetentionCap + 25
 	for i := 0; i < total; i++ {
 		if _, err := log.Append(MessageRoleUser, fmt.Sprintf("m%d", i), "c"); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
 	}
-	all, err := log.After(0, 0)
+	all, err := log.Recent(MessageRetentionCap)
 	if err != nil {
 		t.Fatalf("After: %v", err)
 	}
-	if len(all) != MessageLogCap {
-		t.Fatalf("log length = %d, want cap %d", len(all), MessageLogCap)
+	if len(all) != MessageRetentionCap {
+		t.Fatalf("log length = %d, want cap %d", len(all), MessageRetentionCap)
 	}
 	if !strings.HasSuffix(all[len(all)-1].Content, fmt.Sprint(total-1)) {
 		t.Fatalf("newest message must survive pruning, got %q", all[len(all)-1].Content)
@@ -100,7 +100,7 @@ func cappedTestSession(t *testing.T) (*MessageLog, string) {
 	if err != nil {
 		t.Fatalf("active session: %v", err)
 	}
-	for index := 0; index < MessageLogCap; index++ {
+	for index := 0; index < MessageRetentionCap; index++ {
 		if _, err := log.AppendTo(sessionID, MessageRoleUser, fmt.Sprintf("visible %d", index), "client", nil); err != nil {
 			t.Fatalf("seed visible message %d: %v", index, err)
 		}
@@ -116,11 +116,11 @@ func TestPendingAssistantReplyDoesNotEvictOrAffectSessionContext(t *testing.T) {
 		t.Fatalf("append pending reply: %v", err)
 	}
 
-	visible, err := log.AfterSession(sessionID, 0, 0)
+	visible, err := log.RecentSession(sessionID, MessageRetentionCap)
 	if err != nil {
 		t.Fatalf("read while pending: %v", err)
 	}
-	if len(visible) != MessageLogCap || visible[0].Content != "visible 0" || visible[len(visible)-1].Content != fmt.Sprintf("visible %d", MessageLogCap-1) {
+	if len(visible) != MessageRetentionCap || visible[0].Content != "visible 0" || visible[len(visible)-1].Content != fmt.Sprintf("visible %d", MessageRetentionCap-1) {
 		t.Fatalf("pending reply changed visible capped history: len=%d first=%q last=%q", len(visible), visible[0].Content, visible[len(visible)-1].Content)
 	}
 	context, err := log.PromptContext(sessionID)
@@ -134,8 +134,8 @@ func TestPendingAssistantReplyDoesNotEvictOrAffectSessionContext(t *testing.T) {
 	if err := log.Delete(pending); err != nil {
 		t.Fatalf("roll back pending reply: %v", err)
 	}
-	visible, err = log.AfterSession(sessionID, 0, 0)
-	if err != nil || len(visible) != MessageLogCap || visible[0].Content != "visible 0" {
+	visible, err = log.RecentSession(sessionID, MessageRetentionCap)
+	if err != nil || len(visible) != MessageRetentionCap || visible[0].Content != "visible 0" {
 		t.Fatalf("pending rollback did not preserve history: len=%d first=%q err=%v", len(visible), visible[0].Content, err)
 	}
 	context, err = log.PromptContext(sessionID)
@@ -153,11 +153,11 @@ func TestPendingAssistantCommitAppliesCapAndMoodAtomically(t *testing.T) {
 	if err := log.CommitPending(pending); err != nil {
 		t.Fatalf("commit pending reply: %v", err)
 	}
-	visible, err := log.AfterSession(sessionID, 0, 0)
+	visible, err := log.RecentSession(sessionID, MessageRetentionCap)
 	if err != nil {
 		t.Fatalf("read committed reply: %v", err)
 	}
-	if len(visible) != MessageLogCap || visible[0].Content != "visible 1" || visible[len(visible)-1].Content != "committed reply" {
+	if len(visible) != MessageRetentionCap || visible[0].Content != "visible 1" || visible[len(visible)-1].Content != "committed reply" {
 		t.Fatalf("committed reply did not apply cap atomically: len=%d first=%q last=%q", len(visible), visible[0].Content, visible[len(visible)-1].Content)
 	}
 	context, err := log.PromptContext(sessionID)

@@ -37,6 +37,8 @@ func (e *CloudError) Error() string {
 		return "Decisions selects complete library patterns. Choose Library motion to use it."
 	case "capability":
 		return "This model or provider does not support the selected structured output policy. Choose another output mode for this connection."
+	case "context":
+		return "This request exceeds the model's context capacity. Choose a smaller Conversation history setting for this provider or a model with more context."
 	default:
 		return "The cloud provider is unavailable. Motion was held."
 	}
@@ -59,6 +61,8 @@ func cloudResponseError(status int, code string) error {
 		kind = "permission"
 	case code == "model_not_found":
 		kind = "model"
+	case code == "context_length_exceeded" || code == "context_window_exceeded" || code == "input_too_long":
+		kind = "context"
 	}
 	return &CloudError{Kind: kind}
 }

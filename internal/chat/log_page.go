@@ -14,6 +14,7 @@ type MessagePageRequest struct {
 	AfterRevision *int64
 	Snapshot      *MessageSnapshot
 	Limit         int
+	RecentOnly    bool
 }
 
 // MessageSnapshot is a stateless continuation, not an access credential. Its
@@ -47,7 +48,7 @@ type MessagePage struct {
 // without taking the application's write gate. Bounds, rows and cursor share a
 // read transaction, which ends before any HTTP response write.
 func (l *MessageLog) ReadMessagePageContext(ctx context.Context, request MessagePageRequest) (MessagePage, error) {
-	page := MessagePage{SessionID: request.SessionID, Messages: []LogMessage{}, HistoryLimit: MessageLogCap}
+	page := MessagePage{SessionID: request.SessionID, Messages: []LogMessage{}, HistoryLimit: MessageRetentionCap}
 	tx, err := l.db.SQL().BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return page, fmt.Errorf("open chat snapshot: %w", err)
@@ -71,6 +72,20 @@ func (l *MessageLog) ReadMessagePageContext(ctx context.Context, request Message
 	}
 	page.Cursor, page.CursorRevision = min(cursor.Sequence, page.LatestSeq), min(cursor.Revision, page.Revision)
 	after, head := messagePageRange(&page, request, resetRevision, prunedRevision)
+	var displayStart int64
+	if request.RecentOnly && (after == 0 || page.Reset || page.Snapshot != nil) {
+		// The browser renders only the newest display window. Do not fetch all
+		// retained model context on reload, or let later pages shift their
+		// window while an anchored snapshot is being delivered. Incremental
+		// recovery must deliver every retained revision, even after a hidden
+		// tab accumulates more than one display window of new messages.
+		err := tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT seq FROM messages
+			WHERE session_id = ? AND committed = 1 AND revision <= ?
+			ORDER BY seq DESC LIMIT 1 OFFSET ?), 0)`, request.SessionID, head, MessageLogCap-1).Scan(&displayStart)
+		if err != nil {
+			return page, fmt.Errorf("read display window: %w", err)
+		}
+	}
 	limit := request.Limit
 	if limit <= 0 || limit > MessageLogCap {
 		limit = MessageLogCap
@@ -81,7 +96,7 @@ func (l *MessageLog) ReadMessagePageContext(ctx context.Context, request Message
 	if request.AfterRevision != nil {
 		query = messagePageRevisionQuery
 	}
-	rows, err := tx.QueryContext(ctx, query, request.SessionID, after, head, limit+1)
+	rows, err := tx.QueryContext(ctx, query, request.SessionID, displayStart, after, head, limit+1)
 	if err != nil {
 		return page, fmt.Errorf("read chat snapshot messages: %w", err)
 	}

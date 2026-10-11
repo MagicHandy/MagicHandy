@@ -33,12 +33,15 @@ type userControlState struct {
 }
 
 type chatRecoveryState struct {
-	target     *motion.MotionTarget
-	keepalive  bool
-	pending    bool
-	activity   bool
-	activityID uint64
-	version    uint64
+	target    *motion.MotionTarget
+	keepalive bool
+	pending   bool
+	// pendingOwner is the generation that began the handoff. Chat activity can
+	// advance the live generation while that same handoff is still unwinding.
+	pendingOwner uint64
+	activity     bool
+	activityID   uint64
+	version      uint64
 }
 
 func (s *chatRecoveryState) beginActivity() uint64 {

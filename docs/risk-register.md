@@ -1,5 +1,60 @@
 # MagicHandy Risk Register
 
+## 2026-10-11 Diagnostic report inclusion boundaries
+
+Combining diagnostic evidence risks disclosing unselected content, leaking
+credentials embedded in text, or adding resource pressure during motion.
+Defaults include technical status/settings/traces and failure metadata only;
+history, raw output and personalization are explicit choices. Decoded values
+cross stored-credential and common-secret/location redaction before serialization.
+One admitted export, paged history, a 64 MiB ceiling, cancellation and a 30-second
+generation deadline bound work independently of Stop/status admission. Tests
+verify exclusions, escaped credentials, full retained history, failed archive
+rejection and access boundaries. Captured prompts can contain other personal
+text; the UI and manifest explain this. Reports describe retained evidence,
+not atomic backups. See [ADR 0043](decisions/0043-selectable-diagnostic-reports.md).
+
+## R32: Failed-response privacy and check-in quality
+
+Level: Medium
+
+Inspecting rejected model output is useful but may reveal private conversation
+or personalization. Schema 31 retains only the latest 24 interactive failures,
+with bounded content, credential redaction before persistence and after reads,
+host-only access, and explicit inclusion of prompt/output on copy. Clearing or
+deleting the chat removes its records. Failures never enter model history or TTS.
+
+A model-chosen quiet response reduces timer-driven repetition without a language
+filter. The ordinary bounded cadence still applies, and quiet output cannot carry
+motion. Quality remains model-dependent: Gemma's measured improvement does not
+generalize to Vanessa, and stronger silence prompts were rejected for missing
+useful contributions. No hidden cloud scorer or extra language retry is added.
+See [the evaluation](user-report-review-2026-10-11.md) and
+[ADR 0041](decisions/0041-inspectable-chat-failures-and-model-chosen-checkins.md).
+
+## R31: Unnecessary or obsolete motion-review corrections
+
+Level: High
+
+An optional reviewer can misjudge a reasonable local choice or return after the
+user has moved on. Review is off by default, applies only to local Chat/Autopilot,
+and requires a high-confidence material defect. Cosmetic reseeds are blocked in
+code. One bounded worker, a ten-second deadline, controller/command/Stop/mode/
+session/settings checks, and the shared engine's atomic plan check reject obsolete
+work. Stop cancels without waiting for the network. Errors/refusals leave the local
+choice intact. The reviewer cannot start, resume, change limits, or insert chat.
+
+Enabling review shares up to eight recent user messages and motion state with its
+selected provider, even when primary chat is local. The settings explain this
+before save; personas, memories, assistant replies and autonomous speech are not
+sent. Removal/disabling invalidates outstanding reviews. An in-app notice reports
+kept/corrected/skipped/unavailable outcomes from backend state and can be dismissed.
+
+Remaining: broader independent judgments, live OpenRouter/provider comparisons,
+long sessions and physical comfort feedback. The small tested Creative v2 set
+establishes intent examples, not universal motion quality or calibrated confidence.
+See [evidence](motion-second-opinion-review-2026-10-11.md) and [ADR 0040](decisions/0040-asynchronous-motion-second-opinion.md).
+
 ## R30: Hosted model privacy, authorization and late-result risk
 
 Level: High
@@ -263,6 +318,17 @@ This register tracks rewrite risks that should survive between phases. A risk st
 ## R1: Real-Device Motion Validation Risk
 
 Level: High
+
+Status 2026-10-11: a renewed Cloud / Creative v2 report reproduces premature
+velocity-crest saturation in the shared compiler (full-range requested 75%
+delivered 56.72% effective pace). Bounded whole-phrase cruise fitting reaches
+74.82% while preserving geometry and existing physical budgets. An independent
+whole-percent sampling failure at unsent partition anchors is also corrected;
+the strict 0.8% wire-fidelity bound remains intact. All 72 final atlas cases,
+visual inspection, normal/race gates and a simulated 350 ms Cloud-latency
+start/retarget/Stop capture pass. The user's Handy generation and physical trace
+were not supplied. No actual hardware was commanded; matched feel/telemetry
+acceptance remains open. See the [review](creative-v2-speed-review-2026-10-11.md).
 
 Description:
 Simulated transport tests cannot fully reproduce Handy cloud REST latency, firmware buffering, HSP playback state, or physical feel. Source-only reasoning produced incorrect motion fixes in the old app.
@@ -2163,3 +2229,16 @@ preflight/response/Stop checks have regression coverage. See the
 [reference review and evidence](bluetooth-intiface-review-2026-09-20.md).
 Matched physical acceptance remains open: simulator output establishes command
 correctness, not perceived comfort or radio performance.
+
+## October 11, 2026 longer conversation windows
+
+ADR 0042 makes chat and conversation-aware Autopilot history explicitly bounded
+per external connection. Retention grows to 1,000 messages; models still receive
+only complete recent messages within the chosen row/byte and request budgets.
+Omission counts are visible in response details. Longer inputs can increase usage
+and latency and may still forget or misinterpret old agreements. The 77-call
+synthetic review is evidence for continuity, not universal recall or physical feel.
+Context-capacity errors hold motion and suggest a smaller window; they do not
+silently rewrite dialogue. Local prompt limits, technical-only privacy, optional
+reviewer scope, current-state validation and Stop remain unchanged. See the
+[evaluation and limitations](long-context-review-2026-10-11.md).

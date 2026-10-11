@@ -24,6 +24,10 @@ const (
 const autopilotMotionAuthority = `AUTOPILOT MOTION AUTHORITY:
 The user's active Autopilot mode and saved controls are an ongoing request for autonomous motion choices inside those bounds. Do not treat the absence of a new chat message as a request to maintain motion or approach a destination through tiny steps. Recent conversation, explicit directions, and boundaries still win, and any individual hold may be appropriate.`
 
+const autopilotSpeechDecisionContract = `Choose an "intent" first: briefly name what your next line contributes to this conversation, such as answering the person's topic, advancing an invited exchange, or explaining a change they want to hear about. Then write the matching "reply" and choose "next":"soon"|"normal"|"later". When another line would repeat an already covered point, choose {"intent":"quiet","reply":"","next":"later"}, with no motion. A new wording of the same reassurance is still the same point. Your intent is private planning context, never spoken to the person.`
+
+const autopilotSpeechDecisionInstruction = "Name the contribution you want to make in intent before writing the reply. Follow an invitation to converse, answer a new topic, or explain a useful change; choose intent=quiet if the useful point has already been made. The timer and motion facts are context, not a request to recite status."
+
 // AutopilotTiming is a semantic timing preference. Deterministic scheduler code
 // maps it into the user's bounded cadence window; the model never emits seconds.
 type AutopilotTiming string
@@ -89,6 +93,9 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	if s.Capabilities.Motion && (s.Capabilities.MotionMode == MotionModeLayered || s.Capabilities.MotionMode == MotionModeCreativeV2) {
 		return s.completeLayeredAutopilot(ctx, kind, request)
 	}
+	if kind == AutopilotKindSpeech {
+		message += "\n" + autopilotSpeechDecisionInstruction
+	}
 	prompt := s.Prompt
 	if strings.TrimSpace(prompt.ID) == "" {
 		prompt, _ = BuiltinPromptSetByID(DefaultPromptSetID)
@@ -112,16 +119,17 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		temperature = 1.2
 	}
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
-		Messages:              messages,
-		Model:                 s.Model,
-		Temperature:           temperature,
-		TopP:                  chatTopP,
-		RepeatPenalty:         chatRepeatPenalty,
-		RepeatLastN:           chatRepeatLastN,
-		MaxTokens:             s.MaxTokens,
-		ReasoningMode:         s.ReasoningMode,
-		ReasoningBudgetTokens: s.ReasoningBudgetTokens,
-		JSONSchema:            autopilotPatternSchema(s.Patterns, s.Capabilities, s.MotionContext, kind),
+		Messages:               messages,
+		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, s.Capabilities),
+		Model:                  s.Model,
+		Temperature:            temperature,
+		TopP:                   chatTopP,
+		RepeatPenalty:          chatRepeatPenalty,
+		RepeatLastN:            chatRepeatLastN,
+		MaxTokens:              s.MaxTokens,
+		ReasoningMode:          s.ReasoningMode,
+		ReasoningBudgetTokens:  s.ReasoningBudgetTokens,
+		JSONSchema:             autopilotPatternSchema(s.Patterns, s.Capabilities, s.MotionContext, kind),
 	}, nil)
 	truncated := errors.Is(err, llm.ErrOutputTruncated)
 	if err != nil && !truncated {
@@ -275,26 +283,35 @@ func decodeAutopilotResponse(raw string, kind AutopilotKind) (AutopilotResponse,
 		}
 		return response, nil
 	case AutopilotKindSpeech:
-		var wire struct {
-			Reply       string          `json:"reply"`
-			Motion      *MotionCommand  `json:"motion,omitempty"`
-			Next        AutopilotTiming `json:"next"`
-			Variability string          `json:"variability,omitempty"`
-		}
-		if err := decodeAutopilotJSON(raw, &wire); err != nil {
-			return AutopilotResponse{}, err
-		}
-		response := AutopilotResponse{
-			Reply: strings.TrimSpace(wire.Reply), Motion: wire.Motion, Next: wire.Next,
-			Variability: strings.TrimSpace(wire.Variability),
-		}
-		if response.Reply == "" {
-			return AutopilotResponse{}, errors.New("autopilot speech reply is required")
-		}
-		return response, nil
+		return decodeAutopilotSpeech(raw)
 	default:
 		return AutopilotResponse{}, fmt.Errorf("unknown Autopilot kind %q", kind)
 	}
+}
+
+func decodeAutopilotSpeech(raw string) (AutopilotResponse, error) {
+	var wire struct {
+		Intent      string          `json:"intent,omitempty"`
+		Reply       *string         `json:"reply"`
+		Motion      *MotionCommand  `json:"motion,omitempty"`
+		Next        AutopilotTiming `json:"next"`
+		Variability string          `json:"variability,omitempty"`
+	}
+	if err := decodeAutopilotJSON(raw, &wire); err != nil {
+		return AutopilotResponse{}, err
+	}
+	if wire.Reply == nil {
+		return AutopilotResponse{}, errors.New("autopilot speech reply is required")
+	}
+	response := AutopilotResponse{Reply: strings.TrimSpace(*wire.Reply), Motion: wire.Motion, Next: wire.Next, Variability: strings.TrimSpace(wire.Variability)}
+	if response.Reply == "" {
+		// The explicit empty reply is the model's choice to stay quiet. Intent is
+		// free-form planning text, not language the backend classifies or matches.
+		if strings.TrimSpace(wire.Intent) == "" || *wire.Reply != "" || response.Motion != nil || response.Next != AutopilotTimingLater {
+			return AutopilotResponse{}, errors.New("a quiet check-in requires empty reply, later timing and no motion")
+		}
+	}
+	return response, nil
 }
 
 func normalizeAutopilotSpeechVariability(response *AutopilotResponse, kind AutopilotKind) error {
@@ -366,7 +383,11 @@ func composeAutopilotSystem(
 			// start/target instructions contradict Autopilot's update-only
 			// authority and must not enter this prompt.
 			continue
-		case "voice_identity", "reaction_style", "voice_check", "language_reminder":
+		case "voice_check", "reply_length":
+			if kind == AutopilotKindSpeech {
+				sections = append(sections, "The following style guidance applies only if you choose to speak; it does not require a reply.\n"+section.Text)
+			}
+		case "voice_identity", "reaction_style", "language_reminder":
 			if kind == AutopilotKindSpeech {
 				sections = append(sections, section.Text)
 			}
@@ -381,7 +402,7 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 	var builder strings.Builder
 	builder.WriteString("Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.\n")
 	if kind == AutopilotKindSpeech {
-		builder.WriteString(`The object requires a non-empty "reply" string and "next":"soon"|"normal"|"later".`)
+		builder.WriteString(autopilotSpeechDecisionContract)
 	} else {
 		builder.WriteString(`The object requires "intent":"<one brief motion concept>", "next":"soon"|"normal"|"later", and "variability":"settled"|"normal"|"restless". Choose the intent before encoding motion fields. Do not include a "reply" field.`)
 	}
@@ -424,9 +445,9 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 func autopilotOutputGuard(kind AutopilotKind, capabilities Capabilities) string {
 	if kind == AutopilotKindSpeech {
 		if capabilities.Motion {
-			return `FINAL OUTPUT: return only {"reply":"<one short in-character line>","next":"soon|normal|later"} plus optional allowed target "motion" with matching "variability".`
+			return `FINAL OUTPUT: return only {"intent":"<what this line adds>","reply":"<one short in-character line>","next":"soon|normal|later"} plus optional allowed target "motion" with matching "variability", or {"intent":"quiet","reply":"","next":"later"} with no motion.`
 		}
-		return `FINAL OUTPUT: return only {"reply":"<one short in-character line>","next":"soon|normal|later"}. No motion.`
+		return `FINAL OUTPUT: return only {"intent":"<what this line adds>","reply":"<one short in-character line>","next":"soon|normal|later"}, or {"intent":"quiet","reply":"","next":"later"} when there is nothing useful to add. No motion.`
 	}
 	return `FINAL OUTPUT: return only {"intent":"<brief motion concept>","next":"soon|normal|later","variability":"settled|normal|restless"} plus optional allowed "motion". No reply text.`
 }

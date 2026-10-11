@@ -92,6 +92,9 @@ func (s *Server) autopilotDecideSpeech(ctx context.Context, input modes.Decision
 	if err != nil {
 		return modes.Decision{}, err
 	}
+	if response.Reply == "" && response.Next == chat.AutopilotTimingLater {
+		return modes.Decision{Hold: true, Abstain: true, Next: modes.TimingLater}, nil
+	}
 	decision, err := s.mapAutopilotResponse(response, input)
 	if err != nil {
 		return modes.Decision{}, err
@@ -196,16 +199,18 @@ func (s *Server) autopilotModelTurn(
 	}
 	message := chat.AutopilotMotionMessage(modelContext)
 	if kind == chat.AutopilotKindSpeech {
-		message = chat.AutopilotSpeechMessage(modelContext)
+		message = chat.AutopilotSpeechMessage(modelContext, capabilities)
 	}
 	providerCtx, _, releaseLLM, err := s.acquireProviderRequest(ctx, llmRequestAutonomous, settings.LLM)
 	if err != nil {
 		return chat.AutopilotResponse{}, err
 	}
 	defer releaseLLM()
+	history := autopilotHistory(kind, settings, promptContext)
 	response, err := service.Complete(providerCtx, kind, chat.Request{
-		Message: message,
-		History: autopilotHistory(kind, settings, promptContext),
+		Message:                message,
+		History:                history,
+		HistoryMessagesDropped: promptContext.HistoryOmitted,
 	})
 	if err == nil && settings.LLM.IsHosted() {
 		err = s.validateCloudAdmission(providerCtx, admission)

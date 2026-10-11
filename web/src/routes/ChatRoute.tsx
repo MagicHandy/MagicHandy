@@ -4,6 +4,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { ChatSession, ChatSessionsResponse } from "../api/types";
 import { AutopilotControl } from "../components/AutopilotControl";
+import { MotionReviewNotice } from "../components/MotionReviewNotice";
 import { ChatPanel } from "../components/ChatPanel";
 import { ChatSessionDialog } from "../components/ChatSessionDialog";
 import { ChatTabs } from "../components/ChatTabs";
@@ -207,6 +208,7 @@ export function ChatRoute() {
           </div>
           <div className="control-card chat-autopilot-card">
             <AutopilotControl />
+            {state?.settings?.llm.motion_reviewer?.enabled && <MotionReviewNotice status={state.motion_review} />}
           </div>
           <div className="control-card chat-motion-card">
             <h2 className="control-card-title">{t("Motion")}</h2>

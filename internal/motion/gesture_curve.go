@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 )
 
 // gestureProgress warps a rounded oscillator half-cycle toward a later velocity
@@ -37,33 +38,55 @@ func legProgress(u, inertia, softness float64) (position, velocity, acceleration
 }
 
 func gestureLegCurve(leg gestureLeg, duration int64) Curve {
-	_, _, start := legProgress(0, leg.inertia, leg.softness)
-	_, _, end := legProgress(1, leg.inertia, leg.softness)
+	_, _, start := strokeProgress(leg, 0)
+	_, _, end := strokeProgress(leg, 1)
 	gain := (leg.to - leg.from) / float64(duration*duration)
 	return gestureTurnCurve(leg, duration, start*gain, end*gain)
 }
 
 func gestureTurnCurve(leg gestureLeg, duration int64, startAcceleration, endAcceleration float64) Curve {
 	const intervals = 8
-	points := make([]CurvePoint, intervals+1)
-	velocities, accelerations := make([]float64, intervals+1), make([]float64, intervals+1)
+	times := make([]int64, intervals+1)
+	for index := range times {
+		times[index] = int64(math.Round(float64(index) * float64(duration) / intervals))
+	}
+	rise, fall := cruiseRamps(leg)
+	if leg.cruise > 0 {
+		// Include the ramp/body joins so interpolation preserves the cruise.
+		riseAt, fallAt := int64(math.Round(rise*float64(duration))), int64(math.Round((1-fall)*float64(duration)))
+		times = append(times, riseAt, fallAt)
+		slices.Sort(times)
+		times = slices.Compact(times)
+		rise, fall = float64(riseAt)/float64(duration), 1-float64(fallAt)/float64(duration)
+	}
+	points := make([]CurvePoint, len(times))
+	velocities, accelerations := make([]float64, len(times)), make([]float64, len(times))
 	distance := leg.to - leg.from
 	_, _, nativeStart := legProgress(0, leg.inertia, leg.softness)
 	_, _, nativeEnd := legProgress(1, leg.inertia, leg.softness)
 	deltaStart := startAcceleration*float64(duration*duration) - distance*nativeStart
 	deltaEnd := endAcceleration*float64(duration*duration) - distance*nativeEnd
 	for index := range points {
-		at := int64(math.Round(float64(index) * float64(duration) / intervals))
+		at := times[index]
 		u := float64(at) / float64(duration)
 		x, v, a := legProgress(u, leg.inertia, leg.softness)
 		cx, cv, ca := gestureAccelerationBlend(u, deltaStart, deltaEnd)
-		points[index] = CurvePoint{at, leg.from + distance*x + cx}
-		velocities[index] = (distance*v + cv) / float64(duration)
-		accelerations[index] = (distance*a + ca) / float64(duration*duration)
+		x, v, a = distance*x+cx, distance*v+cv, distance*a+ca
+		if leg.cruise > 0 && distance != 0 {
+			gain := float64(duration*duration) / distance
+			qx, qv, qa := jointCruiseProgress(u, rise, fall, startAcceleration*gain, endAcceleration*gain)
+			x += leg.cruise * (distance*qx - x)
+			v += leg.cruise * (distance*qv - v)
+			a += leg.cruise * (distance*qa - a)
+		}
+		points[index] = CurvePoint{at, leg.from + x}
+		velocities[index] = v / float64(duration)
+		accelerations[index] = a / float64(duration*duration)
 	}
-	points[0].PositionPercent, points[intervals].PositionPercent = leg.from, leg.to
-	velocities[0], velocities[intervals] = 0, 0
-	accelerations[0], accelerations[intervals] = startAcceleration, endAcceleration
+	last := len(points) - 1
+	points[0].PositionPercent, points[last].PositionPercent = leg.from, leg.to
+	velocities[0], velocities[last] = 0, 0
+	accelerations[0], accelerations[last] = startAcceleration, endAcceleration
 	return Curve{points: points, slopes: velocities, accelerations: accelerations,
 		quintics: buildQuinticSegments(points, velocities, accelerations), duration: duration}
 }
@@ -88,7 +111,45 @@ func compileGestureCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	if err != nil {
 		return Curve{}, err
 	}
-	return assembleLegCurve(legs, curves, "creative v2")
+	best, err := assembleLegCurve(legs, curves, "creative v2")
+	if err != nil {
+		return Curve{}, err
+	}
+	// Use the established rounded profile unless its physical fit has added
+	// time. Breathing, contrast and deliberate rests are requested rhythm,
+	// not unwanted slowdowns to optimize away.
+	rate := referenceTravelRateForSpeed(spec.SpeedPercent, handyModel)
+	requested := 0.0
+	for _, leg := range legs {
+		if leg.rest > 0 {
+			requested += leg.rest * 1000
+		} else {
+			requested += math.Ceil(math.Abs(leg.to-leg.from) / rate * leg.weight * 1000 * 1.002)
+		}
+	}
+	if float64(best.duration) <= requested*1.005 {
+		return best, nil
+	}
+	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel),
+		acceleration: runtimeMaxAccelerationPercentPerSecond2, jerk: runtimeMaxJerkPercentPerSecond3}
+	for _, amount := range []float64{0.25, 0.5, 0.75, 1} {
+		candidateLegs := slices.Clone(legs)
+		if !fitGestureCruise(candidateLegs, amount, budget) {
+			continue
+		}
+		candidateCurves, fitErr := fitGestureCurves(spec, candidateLegs, handyModel)
+		if fitErr != nil {
+			continue
+		}
+		candidate, fitErr := assembleLegCurve(candidateLegs, candidateCurves, "creative v2")
+		if fitErr == nil && float64(candidate.duration) < float64(best.duration)*0.995 {
+			best = candidate
+		}
+		if float64(best.duration) <= requested*1.005 {
+			break
+		}
+	}
+	return best, nil
 }
 
 // assembleLegCurve joins fitted strokes into one looping curve and verifies the

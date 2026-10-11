@@ -300,6 +300,7 @@ export interface ChatMessageDiagnostics {
   model_load_ms?: number;
   prompt_eval_ms?: number;
   prompt_tokens?: number;
+  cached_prompt_tokens?: number;
   generated_tokens?: number;
   prompt_bytes?: number;
   prompt_limit_bytes?: number;
@@ -462,6 +463,12 @@ export interface PromptSection {
 }
 
 export interface PromptCompositionPayload {
+	response_schema?: unknown;
+	reasoning_mode?: string;
+	max_tokens?: number;
+	prompt_set_name?: string;
+	prompt_set_source?: "global" | "persona";
+	global_prompt_set?: string;
   session_id: string;
   provider: string;
   model: string;
@@ -1451,6 +1458,7 @@ export interface AppState {
   motion_simulated?: boolean;
   labs_enabled?: boolean;
   modes?: ModesStatus;
+  motion_review?: { state: string; source?: string; model?: string; reason?: string; elapsed_ms?: number; revision: number };
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
   voice?: VoiceState;

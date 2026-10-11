@@ -155,7 +155,8 @@ type segmentChoice struct {
 	variability     VariabilityPreference
 	decisionLatency time.Duration
 	// requested marks a hold the human asked for; its source stays "hold".
-	requested bool
+	requested   bool
+	reviewInput *DecisionInput
 	// Backend facts visible to the decision are retained with its trace so a
 	// hold or update can be audited against the exact accumulated context.
 	sessionTracking          bool
@@ -187,6 +188,7 @@ func (m *Manager) nextSegmentChoice(ctx context.Context, mode string) segmentCho
 func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback bool) (choice segmentChoice) {
 	input := m.decisionInput()
 	defer func() {
+		choice.reviewInput = m.inputForReview(input, choice)
 		choice.sessionTracking = input.SessionTracking
 		choice.sessionSeconds = input.SessionSeconds
 		choice.secondsAtCurrentSpeed = input.SecondsAtCurrentSpeed
@@ -232,6 +234,9 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 	}
 	timing := normalizeTiming(decision.Next)
 	variability := normalizeVariability(decision.Variability)
+	if !fallback && decision.Abstain && decision.Say == "" {
+		return segmentChoice{source: "speech_skipped", timing: timing, decisionLatency: latency}
+	}
 	if decision.Hold {
 		if segment, pattern, ok := m.heldSegment(); ok {
 			return segmentChoice{

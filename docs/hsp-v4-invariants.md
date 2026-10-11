@@ -75,6 +75,11 @@ Test expectation:
 - HSP point timestamps follow the sampled plan timing
 - buffered frames include authored knots and a bounded adaptive approximation,
   rather than relying on an unrelated fixed tick to happen near each reversal
+- unsent batching boundaries are preferred partitions, not immutable motion
+  knots; quantized fitting may move them while preserving submitted tails,
+  true reversals and the existing velocity/error bounds
+- wire-error fitting reserves between-probe interpolation error as well as
+  whole-percent rounding, retaining the combined 0.8% bound
 - clock-locked media keeps a transport-declared deeper accepted buffer than
   interactive patterns, while append batching remains under the owner's point
   cap; interactive retargets must not inherit the media-sized horizon

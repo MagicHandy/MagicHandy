@@ -663,3 +663,19 @@ five named stops. The grid fits narrow panes and tick labels wrap within their
 allocated width. Keep actual values and active shape status backend-owned,
 serialize pending edits, and preserve the shared global Stop outside the route.
 See [ADR 0038](decisions/0038-freestyle-stroke-stream.md).
+
+### External conversation history (2026-10-11)
+
+Setup and Settings share one per-provider Conversation history select. Recent,
+Long and Extended describe continuity versus request size; do not mix these
+choices into local runtime context settings. Keep usage, exact message/byte
+bounds, supported capacity and retention details in a closed disclosure.
+Recommend Long for a newly selected ChatGPT/OpenAI/OpenRouter catalog model only
+when its advertised capacity supports it. Generic compatible endpoints stay
+Recent by default, including local servers. Preserve saved choices and keep routing backend-owned.
+See [ADR 0042](decisions/0042-provider-conversation-windows.md).
+
+Expanded external providers keep one outer border. Use the inset surface for
+the connection header, a muted accent-tinted form body, and stronger horizontal
+row dividers so account, model and history settings remain distinct. Keep nested
+history help inside its row group without doubling rules or adding another card.

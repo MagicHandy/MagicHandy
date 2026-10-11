@@ -537,7 +537,7 @@ export function SettingsRoute() {
             <div className="group">
               <h3 className="group-title">{t("Logging")}</h3>
               <label className="field"><span className="label">{t("Diagnostics verbosity")}</span>{sel(s.diagnostics.verbosity, (v) => setS((cur) => (cur ? { ...cur, diagnostics: { verbosity: v } } : cur)), opt.diagnostics_verbosities)}</label>
-              <p className="hint-block">{t("Higher levels record more detail in the trace export. They do not change what the report below shows.")}</p>
+              <p className="hint-block">{t("Higher levels record more runtime detail for the diagnostic report.")}</p>
             </div>
             <DiagnosticsPanel locked={locked} onReset={applyReset} />
           </>

@@ -4,6 +4,24 @@ Status: implemented effective-pace calibration, C2 Creative compiler, and
 retained stopped-run diagnostics; awaiting matched real-device confirmation
 (2026-08-23)
 
+## Creative v2 follow-up — 2026-10-11
+
+The newer Creative v2 gesture compiler could exhaust the device velocity
+ceiling at the crest of a rounded stroke while delivering much lower mean
+travel. At requested 75%, a full-range Original Handy fixture produced 56.72%
+effective pace. Bounded cruise-profile fitting now reaches 74.82%, preserving
+turning positions, rests, shared acceleration continuity and all existing
+physical limits. Unconstrained and narrow-stroke fixtures retain their profile.
+The original Creative calibration described below is unchanged.
+
+The shared buffered sampler also stops treating unsent partition points as
+immutable motion knots when whole-percent rounding makes a valid fast curve
+infeasible. Submitted tails and true reversals remain fixed, and the 0.8% wire
+error bound now reserves between-probe interpolation error. Cloud still sends
+the sampled timestamps at playback rate 1. See the
+[complete review, limitations and reproduction](creative-v2-speed-review-2026-10-11.md).
+Physical feel on the reporter's Cloud setup remains to be confirmed.
+
 ## Why this changed
 
 The first shape-independent speed model fixed an important defect: pattern

@@ -1,5 +1,141 @@
 # Goal Scorecard
 
+## 2026-10-11 — Alpha.61 release-review corrections
+
+Independent review found a superseded handoff retaining Autopilot's pending
+flag and a display window skipping retained catch-up revisions. Ownership-based
+cleanup and complete bounded delta paging fix those cases. Continuous speech
+instructions now match their non-empty contract; default report failure metadata
+also excludes persona identifiers. See the [release review](alpha61-release-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,345,728 -> 22,348,288 B (+2,560 B). No UI assets, dependency, worker or model
+call are added. The default independent speech prompt and local context budgets
+are unchanged. Catch-up may need more bounded pages after a long hidden-tab
+backlog; it no longer acknowledges messages it did not deliver.
+
+## 2026-10-11 — Selectable diagnostic report download
+
+No dependency, model request, motion change or background worker. Export is
+on demand: one admitted download, 30-second generation deadline, 64 MiB
+uncompressed ceiling and 25-message history pages. The completed ZIP uses a
+temporary file removed after serving; the browser receives a Blob without
+constructing the report's JSON object graph. See the
+[review](diagnostic-report-review-2026-10-11.md) and ADR 0043.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,280,704 -> 22,345,728 B (+65,024 B). Main UI JS: 1,156,298 -> 1,161,966 B raw
+(+5,668 B), 312,816 -> 314,190 B gzip (+1,374 B). CSS: 196,834 -> 197,713 B raw,
+34,572 -> 34,699 B gzip (+127 B). Both builds use the same Python gzip method;
+existing Vite bundle advisories remain unchanged. Translations use the existing
+locale chunks; there is one canonical dist.
+
+Three loopback samples after readiness: default ZIP 16.00–33.80 ms; all options
+with three committed chat messages 31.74–32.65 ms. These are small fixtures, not
+a maximum-history latency guarantee. After browser downloads, the process
+measured 80,437,248 B working set / 67,543,040 B private. This is one observational
+Windows sample, not a controlled RSS comparison; the existing idle-RSS waiver
+remains open. Default failure export never queries successful chat messages.
+
+## 2026-10-11 — Creative v2 speed fitting
+
+No new dependency, model request, motion loop or browser asset. The bounded
+compiler search applies only when the initial Creative v2 phrase is physically
+slower than requested. Shared sampling preserves the same physical ceilings
+and tightens the between-probe error allowance. See the
+[speed and Cloud review](creative-v2-speed-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,270,464 -> 22,280,704 B (+10,240 B). Rebuilding the canonical frontend makes
+no asset changes. There is no tokenizer or change to local inference context.
+
+On this host's Ryzen 9950X3D, three compilation benchmark samples at 25% are
+0.886–0.913 ms before and 1.000–1.006 ms after, with the same 672,210 B / 14,903
+allocations. The constrained full-range 75% case is 1.318–1.517 ms before versus
+13.819–15.311 ms after, with cumulative allocation 871,892 -> about 6,772,000 B
+and 20,792 -> 150,095 allocations. This is an explicit phrase-preparation cost,
+not per-sample overhead or an inference benchmark. The runtime test sustains
+playback and retargeting with simulated 350 ms Cloud append latency.
+
+After readiness generation, the review process measured 71,806,976 B working
+set / 57,757,696 B private. This is one observational process sample, not a
+controlled comparison across lifetimes; the existing idle-RSS waiver remains
+open. Logs, traces, binaries and atlas images are ignored, not embedded.
+
+## 2026-10-11 — External conversation windows
+
+No dependency, extra model call, motion loop or tokenizer is added. Local prompt
+limits remain 64 messages / 24 KB. External windows are 24/96/192 KB with
+64/256/512-message caps; database materialization is byte-bounded, while session
+storage retains 1,000 messages and browser reads fetch only the newest 200.
+See [live evaluation](long-context-review-2026-10-11.md) and ADR 0042.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,240,256 -> 22,270,464 B (+30,208 B). Main UI chunk: 1,151,474 -> 1,156,298 B
+raw (+4,824 B), 311,544 -> 312,816 B gzip (+1,272 B, same gzip method). Main CSS:
+196,596 -> 196,834 B raw, 34,528 -> 34,572 B gzip (+44 B). Localized
+help remains in the existing locale chunks; there is still one canonical dist.
+
+Local composition with 200 versus 1,000 input rows allocates the same 6,048 B in
+four allocations after applying the existing 64-row cap before unwrapping.
+Three samples per size: 1.549–1.615 versus 1.745–1.814 microseconds. Normal local
+app requests still fetch only 64 rows. This does not measure model inference;
+the added retained storage is not presented as zero disk cost.
+
+After readiness generation and displaying expanded provider settings, the final
+review process measured 77,541,376 B working set / 63,598,592 B private. This is
+an observational Windows sample, not a controlled attribution against earlier
+process lifetimes; the existing idle-RSS waiver remains open.
+
+77 synthetic live hosted calls include all failures and the rejected cache
+prototype. The final full HTTP chat path retained 222 messages and completed in
+3.360 s without repair/fallback or motion. Review builds use separate data and
+an available local model; account credentials are not copied.
+
+## 2026-10-11 — User-report diagnostics, prompt assignment and check-ins
+
+No dependency, motion loop, hidden cloud request, or extra interactive generation
+is added. Failure storage is separate from dialogue, capped at 24 records across
+chats, and written only on failure. The new views fetch on demand. See the
+[evaluation and limitations](user-report-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+the prior review binary is 22,155,264 B; this build is 22,240,256 B (+84,992 B).
+The main UI chunk changes from 1,138,935 to 1,151,474 B raw and from 308,358 to
+311,544 B gzip (+3,186 B). One canonical dist is rebuilt; bundle advisories and
+all safety gates remain in force.
+
+Small live Gemma 12B samples retain 16/16 valid, 15/16 intent-correct interactive
+results with reasoning Off. Idle check-in mean falls from 664 to 499 ms; invited
+conversation is 677 versus 679 ms. All 108 final speech opportunities across Gemma
+and Vanessa use one request without repair. Vanessa does not show a repetition
+benefit and its idle scenario rises from 321 to 437 ms; do not generalize the
+default-model result to every local model.
+
+After local text generation and rendering prompt settings, an isolated previous
+build measured 40,591,360 B working set / 60,911,616 B private; the current review
+app measured 76,447,744 B / 63,463,424 B. These are single-process observations
+with different lifetimes and UI interaction, not a controlled attribution of the
+35.9 MB residency difference. Private allocation differs by 2.55 MB and remains
+below the existing active budget. The existing Windows idle-RSS waiver remains
+open; this change does not claim it resolved or claim zero resident-memory cost.
+
+## 2026-10-11 — Optional asynchronous motion review
+
+No new dependency, local prompt suffix, extra local generation, or motion loop.
+Disabled review creates no worker or cloud request; enabled review has one worker
+and one replaceable pending choice. The blocked-provider tests verify the local
+reply and motion finish first. The live app kept immediate local generation and
+completed cloud review in the background; see [the experiment](motion-second-opinion-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+an archive of `03062e8a` builds to 22,061,056 B; the review branch builds to
+22,155,264 B (+94,208 B). The main UI chunk increases from 1,132,798 to
+1,138,935 B raw and 306,738 to 308,358 B gzip (+1,620 B gzip). Existing bundle
+size advisories remain; no threshold was changed. An idle simulator review app
+after local readiness/text chat and opening settings measured 33,120,256 B
+working set. This is one host observation, not an isolated causal RSS comparison.
+
 ## 2026-10-10 — Reach guide only where the schema is enforced
 
 An external llama.cpp server's Creative v2 contract omits the 713-byte reach

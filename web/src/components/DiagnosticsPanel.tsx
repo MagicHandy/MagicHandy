@@ -1,27 +1,15 @@
 import { t, translateKnown } from "../i18n";
-// Diagnostics: one copyable plain-text report, a trace export, and a
-// double-confirm settings reset. Each is a separate group because they are
-// separate things — reading state, exporting a file, and destroying settings.
+// The backend owns the downloadable report; the visible status summary remains
+// independently copyable. Export selections are temporary presentation state.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 import type { MediaToolStatus, PublicSettings } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 import { buildDiagnosticsReport } from "./diagnostics-report";
 import { PromptCompositionInspector } from "./PromptCompositionInspector";
+import { DiagnosticReportDownload } from "./DiagnosticReportDownload";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
-
-function download(name: string, content: string) {
-  const blob = new Blob([content], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
 
 function resetSettingsFromError(error: unknown): PublicSettings | null {
   if (!error || typeof error !== "object" || !("body" in error)) return null;
@@ -79,24 +67,6 @@ export function DiagnosticsPanel({
     setGeneratedAt(new Date());
   }
 
-  async function exportTrace() {
-    try {
-      const data = await api.exportTrace();
-      download("magichandy-trace.json", JSON.stringify(data, null, 2));
-    } catch (e) {
-      show(msg(e), "error");
-    }
-  }
-
-  async function exportLastMotionTrace() {
-    try {
-      const data = await api.exportLastMotionTrace();
-      download("magichandy-last-motion-trace.json", JSON.stringify(data, null, 2));
-    } catch (e) {
-      show(msg(e), "error");
-    }
-  }
-
   async function reset() {
     if (resetting) return;
     if (!confirmReset) {
@@ -125,22 +95,17 @@ export function DiagnosticsPanel({
   return (
     <>
       <div className="group">
-        <h3 className="group-title">{t("Status report")}</h3>
+        <h3 className="group-title">{t("Diagnostic report")}</h3>
+        <DiagnosticReportDownload online={backendOnline} />
+        <details className="diagnostic-summary">
+        <summary>{t("View status summary")}</summary>
         <p className="hint-block">{t("Everything below is what gets copied. No keys or credentials are included.")}</p>
         <div className="row-actions">
-          <button type="button" className="btn btn-primary" onClick={() => void copy()}>{t("Copy report")}</button>
+          <button type="button" className="btn btn-secondary" onClick={() => void copy()}>{t("Copy report")}</button>
           <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void regenerate()}>{t("Refresh")}</button>
         </div>
         <pre className="diagnostics-report" aria-label={t("Diagnostics report")}>{report}</pre>
-      </div>
-
-      <div className="group">
-        <h3 className="group-title">{t("Trace export")}</h3>
-        <p className="hint-block">{t("A detailed machine-readable capture of recent runtime activity, for attaching to a bug report.")}</p>
-        <div className="row-actions">
-          <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void exportTrace()}>{t("Export live trace")}</button>
-          <button type="button" className="btn btn-secondary" disabled={!backendOnline} onClick={() => void exportLastMotionTrace()}>{t("Export last stopped trace")}</button>
-        </div>
+        </details>
       </div>
 
       <PromptCompositionInspector collapsible />

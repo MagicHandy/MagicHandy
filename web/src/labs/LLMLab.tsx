@@ -8,6 +8,7 @@ import {ObservationEditor} from "./Observations";
 import {mainLabModes,useLLMLab,type ModeComparison} from "./useLLMLab";
 import {CreateTestSequence} from "./CreateTestSequence";
 import {LabHelpLink} from "./LabHelp";
+import {ProductionChatTest} from "../components/ProductionChatTest";
 
 const moreModes=["edits","controls","sequence","layers","library_actions","library_descriptive","library"];
 
@@ -150,6 +151,7 @@ export function LLMLab({initialDraft="",draftUsed=()=>{}}:{initialDraft?:string;
       {session?.error&&<span role="alert" className="form-status">{translateKnown(session.error)}</span>}
     </div>}
     {configure&&<div className="lab-chat-config">
+      <ProductionChatTest />
       <label className="field"><span className="label">{t("Model")}</span><input value={lab.model} disabled={configLocked} onChange={event=>lab.setModel(event.target.value)}/></label>
       <label className="field"><span className="label">{t("Autopilot interval (seconds)")}</span><input type="number" min={5} max={120} value={lab.interval} disabled={configLocked} onChange={event=>lab.setInterval(Number(event.target.value))}/></label>
       <label className="lab-switch"><input type="checkbox" role="switch" checked={lab.schemaGuided} disabled={configLocked} onChange={event=>lab.setSchemaGuided(event.target.checked)}/>{t("Constrain output schema")}</label>

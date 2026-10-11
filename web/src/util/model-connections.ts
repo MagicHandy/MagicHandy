@@ -19,6 +19,7 @@ export function connectionSignature(connection: ModelConnection): string {
     Boolean(connection.allow_fallbacks), connection.allowed_providers ?? [], connection.data_collection || "deny",
     Boolean(connection.zero_data_retention), Boolean(connection.no_authentication),
     connection.reasoning_effort ?? "",
+    connection.context_window || 32768,
   ]);
 }
 
@@ -35,11 +36,11 @@ export function newModelConnection(provider: ModelConnection["provider"], connec
 
 // Restore only this module's fields; other settings pages may have their own drafts.
 export function modelSettingsPatch(settings: LLMSettings): Partial<LLMSettings> {
-  const { connections, conversation_connection_id, retry_refusal_locally, motion_planner, provider, model,
+  const { connections, conversation_connection_id, retry_refusal_locally, motion_planner, motion_reviewer, provider, model,
     llama_cpp_mode, llama_cpp_base_url, llama_cpp_context_size, ollama_base_url, ollama_models_path,
     request_timeout_ms, max_output_tokens, managed_load_policy, reasoning_mode, reply_length,
     motion_generation_mode, motion_capabilities } = settings;
-  return { connections, conversation_connection_id, retry_refusal_locally, motion_planner, provider, model,
+  return { connections, conversation_connection_id, retry_refusal_locally, motion_planner, motion_reviewer, provider, model,
     llama_cpp_mode, llama_cpp_base_url, llama_cpp_context_size, ollama_base_url, ollama_models_path,
     request_timeout_ms, max_output_tokens, managed_load_policy, reasoning_mode, reply_length,
     motion_generation_mode, motion_capabilities };
@@ -50,6 +51,7 @@ export function modelSettingsSignature(settings: LLMSettings): string {
   const planner = settings.motion_planner;
   const capabilities = settings.motion_capabilities ?? { motion: true, patterns: true, area_focus: true, experimental_patterns: false };
   return JSON.stringify([
+    Boolean(settings.motion_reviewer?.enabled), settings.motion_reviewer?.connection_id || "",
     settings.conversation_connection_id || "local", Boolean(settings.retry_refusal_locally), planner?.provider || "conversation",
     planner?.provider === "connection" ? planner.connection_id || "" : "", planner?.model || "",
     planner?.context_policy || "conversation", settings.provider, settings.model,
@@ -62,7 +64,7 @@ export function modelSettingsSignature(settings: LLMSettings): string {
   ]);
 }
 
-export type ModelRole = "chat" | "autopilot";
+export type ModelRole = "chat" | "autopilot" | "reviewer";
 
 // The roles that would stop working if this connection went away. Autopilot
 // set to "Same as conversation" follows chat.
@@ -70,7 +72,8 @@ export function connectionRoles(settings: LLMSettings, id: string): ModelRole[] 
   const chat = (settings.conversation_connection_id || "local") === id;
   const planner = settings.motion_planner;
   const autopilot = planner?.provider === "connection" ? planner.connection_id === id : (planner?.provider ?? "conversation") === "conversation" && chat;
-  return [...(chat ? ["chat" as const] : []), ...(autopilot ? ["autopilot" as const] : [])];
+  const reviewer = settings.motion_reviewer?.enabled && settings.motion_reviewer.connection_id === id;
+  return [...(chat ? ["chat" as const] : []), ...(autopilot ? ["autopilot" as const] : []), ...(reviewer ? ["reviewer" as const] : [])];
 }
 
 // Removing a connection hands its roles to the local model, so the saved
@@ -80,6 +83,7 @@ export function removeConnection(settings: LLMSettings, id: string): Partial<LLM
   const planner = settings.motion_planner;
   const change: Partial<LLMSettings> = { connections: (settings.connections ?? []).filter(connection => connection.id !== id) };
   if ((settings.conversation_connection_id || "local") === id) change.conversation_connection_id = "local";
+  if (settings.motion_reviewer?.connection_id === id) change.motion_reviewer = { enabled: false, connection_id: "" };
   if (planner?.provider === "connection" && planner.connection_id === id) change.motion_planner = { ...planner, provider: "local", connection_id: "", context_policy: "conversation" };
   return change;
 }

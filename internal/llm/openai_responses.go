@@ -26,6 +26,9 @@ type OpenAIOptions struct {
 	Token           TokenSource
 	Client          *http.Client
 	Timeout         time.Duration
+	// ContextSize is the app's conservative input admission window, not a
+	// request to enlarge the provider model. Zero preserves the 32K default.
+	ContextSize int
 	// BaseURL is injectable for protocol tests; the app uses the public API.
 	BaseURL string
 }
@@ -61,6 +64,7 @@ type CloudModel struct {
 	Visibility               string           `json:"visibility"`
 	DefaultReasoningLevel    string           `json:"default_reasoning_level,omitempty"`
 	SupportedReasoningLevels []ReasoningLevel `json:"supported_reasoning_levels,omitempty"`
+	ContextWindow            int              `json:"context_window,omitempty"`
 }
 
 // ReasoningLevel is account-specific catalog metadata, separate from local
@@ -126,7 +130,7 @@ func (p *OpenAIResponsesProvider) Status(ctx context.Context) ProviderStatus {
 func (p *OpenAIResponsesProvider) StreamChat(ctx context.Context, request ChatRequest, onDelta func(string) error) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.options.Timeout)
 	defer cancel()
-	bounded, budget, err := BudgetChatRequest(request, 0)
+	bounded, budget, err := BudgetChatRequest(request, p.options.ContextSize)
 	if request.OnBudget != nil {
 		request.OnBudget(budget)
 	}
@@ -134,12 +138,11 @@ func (p *OpenAIResponsesProvider) StreamChat(ctx context.Context, request ChatRe
 		return "", err
 	}
 	request = bounded
-	input := make([]Message, 0, len(request.Messages))
-	for _, message := range request.Messages {
-		if message.Role == "system" {
-			message.Role = "developer"
+	input := append([]Message(nil), request.Messages...)
+	for i := range input {
+		if input[i].Role == "system" {
+			input[i].Role = "developer"
 		}
-		input = append(input, message)
 	}
 	body := map[string]any{"model": p.options.Model, "input": input, "store": false, "stream": true}
 	if p.options.ReasoningEffort != "" {
@@ -221,7 +224,14 @@ type responsesEvent struct {
 	Code     string `json:"code"`
 	Response struct {
 		Status string `json:"status"`
-		Error  struct {
+		Usage  struct {
+			InputTokens        int `json:"input_tokens"`
+			OutputTokens       int `json:"output_tokens"`
+			InputTokensDetails struct {
+				CachedTokens int `json:"cached_tokens"`
+			} `json:"input_tokens_details"`
+		} `json:"usage"`
+		Error struct {
 			Code string `json:"code"`
 		} `json:"error"`
 		Output []struct {
@@ -268,6 +278,9 @@ func consumeResponsesStream(reader io.Reader, progress func(ProviderProgress)) (
 		case "response.incomplete":
 			return "", &CloudError{Kind: "incomplete"}
 		case "response.completed":
+			if progress != nil {
+				progress(ProviderProgress{PromptTokens: event.Response.Usage.InputTokens, GeneratedTokens: event.Response.Usage.OutputTokens, CachedPromptTokens: event.Response.Usage.InputTokensDetails.CachedTokens})
+			}
 			for _, item := range event.Response.Output {
 				for _, content := range item.Content {
 					if content.Type == "refusal" {

@@ -47,22 +47,29 @@
 }
 .chatgpt-welcome p { margin: 0; color: var(--text-soft); font-size: var(--fs-label); }
 
-/* External providers: one bordered list. The open provider's editor sits
-   under its row, tinted with it, inside the same border. */
+/* The dark connection header and stronger row rules divide the open editor
+   without turning each setting into a separate card. */
 .provider-list { display: grid; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .provider-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 16px; min-height: 52px; padding: 10px 12px; }
 .provider-list > * + * { border-top: 1px solid var(--line); }
-.provider-row[data-open] { background: var(--accent-tint); }
+.provider-row[data-open] { background: var(--bg-inset); }
 .provider-id { display: grid; gap: 3px; min-width: 0; }
 .provider-id strong { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-weight: 600; overflow-wrap: anywhere; }
 .provider-kind { color: var(--muted); font-size: var(--fs-label); font-weight: 400; }
 .provider-id small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; color: var(--muted); font-size: var(--fs-hint); }
 .provider-state, .provider-roles { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
 .provider-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
-.provider-editor { padding: 0 12px 10px; background: var(--accent-tint); }
-.provider-list > .provider-editor { border-top: 0; }
+.provider-editor {
+  --line: var(--line-strong);
+  padding: 0 12px 10px;
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+.provider-list > .provider-editor { border-top: 1px solid var(--line-strong); }
 .provider-editor > .form-rows > .form-row:first-child,
-.provider-editor > .form-rows > .chatgpt-connection > .form-row:first-child { border-top: 1px solid var(--line); }
+.provider-editor > .form-rows > .chatgpt-connection:first-child > .form-row:first-child { border-top: 0; }
+.model-context-settings { gap: 4px; }
+.model-context-settings > .form-row { min-height: 34px; margin-top: 0; padding: 0; border-top: 0; }
+.model-context-settings > details { margin-top: 0; }
 .provider-confirm { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 16px; padding: 12px; background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
 .provider-confirm p { margin: 0; font-size: var(--fs-label); }
 .provider-add { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }

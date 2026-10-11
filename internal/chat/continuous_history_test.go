@@ -154,12 +154,12 @@ func TestContinuousSpeechWithMotionAuthorityUsesItsOwnContract(t *testing.T) {
 	score := FreshCreativeV2Score(25)
 	provider := &layeredTestProvider{raw: `{"edits":[],"reply":"The broad strokes continue."}`}
 	service := AutopilotService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeCreativeV2}, MotionContext: &MotionContext{Running: true, Layered: &score}}
-	_, err := service.Complete(t.Context(), AutopilotKindSpeech, Request{Message: AutopilotSpeechMessage(AutopilotContext{MotionMode: MotionModeCreativeV2, CurrentFlow: &score, CurrentSpeed: 25})})
+	_, err := service.Complete(t.Context(), AutopilotKindSpeech, Request{Message: AutopilotSpeechMessage(AutopilotContext{MotionMode: MotionModeCreativeV2, CurrentFlow: &score, CurrentSpeed: 25}, service.Capabilities)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	message := provider.request.Messages[len(provider.request.Messages)-1].Content
-	if strings.Contains(message, "Set next") || !strings.Contains(message, "edits/reply contract") {
+	if strings.Contains(message, "Set next") || strings.Contains(message, "If you speak") || strings.Contains(message, "exchange rest") || !strings.Contains(message, "edits/reply contract") || !strings.Contains(message, "non-empty reply") {
 		t.Fatal("mixed speech contracts", message)
 	}
 }

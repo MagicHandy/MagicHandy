@@ -26,9 +26,9 @@ var messagePageColumns = fmt.Sprintf(`SELECT seq, role, substr(CAST(content AS B
 
 var (
 	messagePageSequenceQuery = messagePageColumns + ` FROM messages WHERE session_id = ? AND committed = 1
-		AND seq > ? AND revision <= ? ORDER BY seq ASC LIMIT ?`
+		AND seq >= ? AND seq > ? AND revision <= ? ORDER BY seq ASC LIMIT ?`
 	messagePageRevisionQuery = messagePageColumns + ` FROM messages WHERE session_id = ? AND committed = 1
-		AND revision > ? AND revision <= ? ORDER BY revision ASC, seq ASC LIMIT ?`
+		AND seq >= ? AND revision > ? AND revision <= ? ORDER BY revision ASC, seq ASC LIMIT ?`
 )
 
 func scanBoundedMessagePage(rows *sql.Rows, limit int) ([]LogMessage, bool, error) {

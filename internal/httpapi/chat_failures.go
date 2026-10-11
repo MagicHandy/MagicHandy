@@ -1,0 +1,168 @@
+package httpapi
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"net/http"
+	"strconv"
+	"time"
+	"unicode/utf8"
+
+	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/llm"
+)
+
+func (s *Server) retainChatFailure(ctx context.Context, sequence uint64, sessionID string, result chat.Result, failure error, diagnostics chat.MessageDiagnostics) (chat.Result, error) {
+	if (failure == nil && !result.Malformed) || s.chatCanceled(ctx, sequence) {
+		return result, failure
+	}
+	message := s.recordChatFailure(ctx, sessionID, result, failure, diagnostics)
+	result.MalformedError = message
+	if failure != nil {
+		failure = errors.New(message)
+	}
+	return result, failure
+}
+
+func (s *Server) chatFailureEvidence(result chat.Result, failure error, diagnostics chat.MessageDiagnostics, settings config.LLMSettings) chat.RequestFailure {
+	message := result.MalformedError
+	if failure != nil {
+		message = failure.Error()
+	}
+	item := chat.RequestFailure{CreatedAt: time.Now().UTC().Format(time.RFC3339), Error: message, Diagnostics: diagnostics, MotionMode: settings.MotionGenerationMode,
+		ReasoningMode: settings.ReasoningMode, Version: s.version.Version, Commit: s.version.Commit,
+		Details: &chat.FailureContent{Raw: result.Raw, RepairRaw: result.RepairRaw}}
+	if errors.Is(failure, llm.ErrOutputTruncated) {
+		item.Kind = "output_limit"
+	}
+	if result.Input != nil {
+		item.MaxTokens, item.ReasoningMode = result.Input.MaxTokens, result.Input.ReasoningMode
+		item.Details.Schema = string(result.Input.JSONSchema)
+		for _, message := range result.Input.Messages {
+			if message.Role == "system" || message.Role == "developer" {
+				if item.Details.Prompt != "" {
+					item.Details.Prompt += "\n\n"
+				}
+				item.Details.Prompt += message.Content
+			}
+		}
+	}
+	return item
+}
+
+func (s *Server) recordChatFailure(ctx context.Context, sessionID string, result chat.Result, failure error, diagnostics chat.MessageDiagnostics) string {
+	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	settings, _ := s.store.Snapshot()
+	item := s.chatFailureEvidence(result, failure, diagnostics, settings.LLM.ConversationSettings())
+	if err := s.prepareChatFailure(ctx, &item); err != nil {
+		s.logger.Warn("chat failure diagnostics unavailable")
+		return "Model request failed; diagnostics are unavailable."
+	}
+	if _, err := s.chatLog.SaveFailure(ctx, sessionID, item); err != nil {
+		s.logger.Warn("chat failure diagnostics could not be saved")
+	}
+	return item.Error
+}
+
+// Redact complete values before truncation so a credential crossing the size
+// boundary can never leave a retained prefix behind.
+func (s *Server) prepareChatFailure(ctx context.Context, item *chat.RequestFailure) error {
+	if err := s.redactChatFailure(ctx, item); err != nil {
+		return err
+	}
+	item.Error = boundedFailureText(item.Error, 2048, nil)
+	if item.Details != nil {
+		item.Details.Raw = boundedFailureText(item.Details.Raw, 16384, &item.Details.Truncated)
+		item.Details.RepairRaw = boundedFailureText(item.Details.RepairRaw, 16384, &item.Details.Truncated)
+		item.Details.Prompt = boundedFailureText(item.Details.Prompt, 32768, &item.Details.Truncated)
+		item.Details.Schema = boundedFailureText(item.Details.Schema, 65536, &item.Details.Truncated)
+	}
+	return nil
+}
+
+func boundedFailureText(value string, limit int, truncated *bool) string {
+	if len(value) <= limit {
+		return value
+	}
+	if truncated != nil {
+		*truncated = true
+	}
+	value = value[:limit]
+	for !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value
+}
+
+func (s *Server) redactChatFailure(ctx context.Context, item *chat.RequestFailure) error {
+	d := &item.Diagnostics
+	fields := []*string{&item.Error, &item.Version, &item.Commit, &item.MotionMode, &item.ReasoningMode,
+		&d.Provider, &d.Model, &d.PromptSet, &d.PersonaID, &d.PersonaName, &d.RefusalFallbackFrom, &d.RefusalFallbackModel}
+	if item.Details != nil {
+		fields = append(fields, &item.Details.Raw, &item.Details.RepairRaw, &item.Details.Prompt, &item.Details.Schema)
+	}
+	values := make([]string, len(fields))
+	for index, field := range fields {
+		values[index] = *field
+	}
+	if s.cloudPlanning.auth != nil {
+		var err error
+		values, err = s.cloudPlanning.auth.RedactDiagnostics(ctx, values)
+		if err != nil {
+			return err
+		}
+	}
+	redactor := s.setup.setupReportRedactor()
+	for index, value := range values {
+		*fields[index] = redactor(value)
+	}
+	return nil
+}
+
+func (s *Server) handleChatFailures(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	sessionID := r.URL.Query().Get("session_id")
+	if sessionID == "" {
+		writeError(w, http.StatusBadRequest, errors.New("a chat session is required"))
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	if r.PathValue("id") == "" {
+		items, err := s.chatLog.Failures(ctx, sessionID)
+		if err != nil {
+			s.writeChatStorageError(w, err)
+			return
+		}
+		for index := range items {
+			if err := s.redactChatFailure(ctx, &items[index]); err != nil {
+				s.writeChatStorageError(w, err)
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"failures": items})
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, errors.New("invalid failed request"))
+		return
+	}
+	item, err := s.chatLog.Failure(ctx, sessionID, id, r.URL.Query().Get("include_content") == "true")
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, errors.New("this failed request is no longer retained"))
+		return
+	}
+	if err != nil {
+		s.writeChatStorageError(w, err)
+		return
+	}
+	if err := s.redactChatFailure(ctx, &item); err != nil {
+		s.writeChatStorageError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}

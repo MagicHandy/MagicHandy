@@ -111,6 +111,7 @@ type Server struct {
 	cloudRequests     llmRequestCoordinator
 	hostedRequests    hostedRequestLanes
 	cloudPlanning     cloudPlanningRuntime
+	motionReview      motionReviewRuntime
 	llmAutoloadMu     sync.Mutex
 	llmAutoloadCancel context.CancelFunc
 	llmAutoloadWG     sync.WaitGroup
@@ -409,6 +410,10 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.personalizationRoutes(mux)
 	s.personaRoutes(mux)
 	mux.HandleFunc("GET /api/diagnostics/prompt-composition", s.handlePromptComposition)
+	mux.HandleFunc("GET /api/diagnostics/report", s.handleDiagnosticReport)
+	mux.HandleFunc("GET /api/diagnostics/chat-failures", s.handleChatFailures)
+	mux.HandleFunc("GET /api/diagnostics/chat-failures/{id}", s.handleChatFailures)
+	mux.HandleFunc("POST /api/diagnostics/chat-test", s.handleProductionChatTest)
 	s.llmRoutes(mux)
 	s.chatRoutes(mux)
 	mux.HandleFunc("GET /api/transport/diagnostics", s.handleTransportDiagnostics)
@@ -642,6 +647,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"capabilities":        s.capabilities(r),
 		"memory":              s.memoryState(r.Context()),
 		"modes":               s.modes.Status(),
+		"motion_review":       s.motionReview.snapshot(),
 		"voice":               s.clientVoiceState(r),
 		"chat":                s.chatState(r.Context()),
 		"library":             s.libraryState(),

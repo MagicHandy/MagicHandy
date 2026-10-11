@@ -57,6 +57,9 @@ type gestureLeg struct {
 	// softness blends the stroke toward rest-to-rest turns (Layered's soft
 	// turns); Creative v2 strokes keep their shared turn acceleration.
 	softness float64
+	// cruise flattens the velocity crest of a roomy, velocity-limited stroke.
+	// The turn endpoints and shared acceleration still belong to the joint fit.
+	cruise float64
 }
 
 // gestureLegs follows one evolving reach envelope. Each destination is the

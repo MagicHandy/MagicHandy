@@ -32,6 +32,31 @@ describe("model roles and external providers", () => {
     vi.spyOn(api, "modelConnectionKeyStatus").mockResolvedValue({ key_set: false });
   };
 
+  it("keeps second opinion opt-in, discloses message sharing, and does not reroute chat", async () => {
+    quietCatalog();
+    render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: "local", provider: "ollama", model: "local-model" } as PublicSettings["llm"]} />);
+    const toggle = screen.getByRole("checkbox", { name: /^Review local motion choices/ });
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+    expect(screen.getByRole("combobox", { name: "Reviewer model" })).toHaveValue(chatgpt.id);
+    expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue("local");
+    expect(screen.getByText(/Shares motion details and up to eight recent user messages/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Discard model changes" }));
+    expect(toggle).not.toBeChecked();
+    expect(screen.queryByRole("combobox", { name: "Reviewer model" })).not.toBeInTheDocument();
+  });
+
+  it("turns review off when its provider is removed instead of assigning the local model as its own reviewer", async () => {
+    quietCatalog();
+    render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: "local", motion_reviewer: { enabled: true, connection_id: chatgpt.id } } as PublicSettings["llm"]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Remove · ChatGPT" }));
+    const confirm = screen.getByRole("alertdialog", { name: "Remove ChatGPT?" });
+    expect(confirm).toHaveTextContent("Motion second opinion will be switched off.");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Remove" }));
+    expect(screen.getByRole("checkbox", { name: /^Review local motion choices/ })).not.toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue("local");
+  });
+
   it("keeps local retry opt-in and includes the toggle in model draft discard", async () => {
     quietCatalog();
     render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id, provider: "ollama", model: "local-model" } as PublicSettings["llm"]} />);

@@ -3,6 +3,8 @@
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
 import type { LLMCatalog } from "./catalog-types";
+import type { ChatRequestFailure } from "./chat-diagnostic-types";
+import type { DiagnosticReportOptions } from "./diagnostic-report-types";
 import type { CloudPlanningStatus, ModelConnection, HostedModel } from "./cloud-types";
 import { checkedCloudStatus } from "./cloud-status";
 import type { ModelCheckReport } from "./model-check-types";
@@ -738,6 +740,13 @@ export const api = {
       signal,
     ),
 
+  chatFailures: (sessionID: string, signal?: AbortSignal) =>
+    request<{ failures: ChatRequestFailure[] }>("GET", `/api/diagnostics/chat-failures?session_id=${encodeURIComponent(sessionID)}`, undefined, signal),
+  productionChatTest: (message: string, signal?: AbortSignal) =>
+    request<{ valid: boolean; report: ChatRequestFailure }>("POST", "/api/diagnostics/chat-test", { message }, signal),
+  chatFailure: (sessionID: string, id: number, includeContent: boolean, signal?: AbortSignal) =>
+    request<ChatRequestFailure>("GET", `/api/diagnostics/chat-failures/${id}?session_id=${encodeURIComponent(sessionID)}&include_content=${includeContent}`, undefined, signal),
+
   // Prompt sets.
   getPromptSets: () => request<PromptSetsPayload>("GET", "/api/prompt-sets"),
   createPromptSet: (name: string, system: string) =>
@@ -884,7 +893,7 @@ export const api = {
   deleteChatSession: (sessionId: string) =>
     request<ChatSessionsResponse>("DELETE", `/api/chat/sessions/${encodeURIComponent(sessionId)}`),
   getChatMessages: (sessionId: string, after = 0, recovery?: { revision?: number; snapshot?: ChatMessagesResponse["snapshot"]; signal?: AbortSignal }) => {
-    const query = new URLSearchParams({ session_id: sessionId });
+    const query = new URLSearchParams({ session_id: sessionId, recent: "true" });
     if (recovery?.revision !== undefined) query.set("after_revision", String(recovery.revision));
     else if (after > 0) query.set("after", String(after));
     if (recovery?.snapshot) {
@@ -951,6 +960,8 @@ export const api = {
 
   exportTrace: () => request("GET", "/api/traces"),
   exportLastMotionTrace: () => request("GET", "/api/traces/last-motion"),
+  exportDiagnosticReport: (options: DiagnosticReportOptions, signal?: AbortSignal) =>
+    download(`/api/diagnostics/report?${new URLSearchParams(Object.entries(options).map(([key, value]) => [key, String(value)]))}`, "magichandy-diagnostics.zip", signal),
 };
 
 async function importMotionContent(file: File, asKind: "pattern" | "program"): Promise<{ import: MotionImportResult }> {
@@ -976,9 +987,12 @@ async function importMotionContent(file: File, asKind: "pattern" | "program"): P
   return parsed as { import: MotionImportResult };
 }
 
-async function download(path: string, fallbackFilename = "motion-content.json"): Promise<{ blob: Blob; filename: string }> {
-  const res = await fetch(path, { headers: { ...controllerRequestHeaders() } });
-  if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status, null);
+async function download(path: string, fallbackFilename = "motion-content.json", signal?: AbortSignal): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(path, { headers: { ...controllerRequestHeaders() }, signal });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiError(body?.error || `Export failed (${res.status})`, res.status, body);
+  }
   const disposition = res.headers.get("Content-Disposition") ?? "";
   const match = disposition.match(/filename="?([^";]+)"?/i);
   return { blob: await res.blob(), filename: match?.[1] ?? fallbackFilename };

@@ -3,6 +3,7 @@ import { api } from "../api/client";
 import type { PromptCompositionPayload } from "../api/types";
 import { t, translateKnown } from "../i18n";
 import { useAppState, useToast } from "../state/app-state";
+import { ProductionChatTest } from "./ProductionChatTest";
 
 const message = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Request failed");
 
@@ -61,7 +62,8 @@ export function PromptCompositionInspector({ collapsible = false }: { collapsibl
         <>
           <dl className="prompt-inspector-summary">
             <div><dt>{t("Model")}</dt><dd>{payload.model || t("Not selected")}</dd></div>
-            <div><dt>{t("Prompt set")}</dt><dd>{payload.prompt_set}</dd></div>
+            <div><dt>{t("Prompt set")}</dt><dd>{payload.prompt_set_name || payload.prompt_set}</dd></div>
+            {payload.prompt_set_source && <div><dt>{t("Selected by")}</dt><dd>{payload.prompt_set_source === "persona" ? payload.persona_name : t("Default prompt set")}</dd></div>}
             <div><dt>{t("Persona")}</dt><dd>{payload.persona_name || t("No persona")}</dd></div>
             {payload.composition.memory_candidates !== undefined && <div>
               <dt>{t("Memories used")}</dt>
@@ -93,6 +95,11 @@ export function PromptCompositionInspector({ collapsible = false }: { collapsibl
             <summary>{t("View exact prompt")}</summary>
             <pre className="diagnostics-report">{payload.composition.prompt}</pre>
           </details>
+          {payload.response_schema && <details className="prompt-exact">
+            <summary>{t("Response schema")}</summary>
+            <pre className="diagnostics-report">{JSON.stringify(payload.response_schema, null, 2)}</pre>
+          </details>}
+          <ProductionChatTest />
         </>
       )}
     </>;

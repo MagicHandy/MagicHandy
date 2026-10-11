@@ -505,6 +505,7 @@ func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context
 	// scheduler lane too, including installations without account sessions.
 	s.llmRequests.invalidate()
 	s.cloudRequests.invalidate()
+	s.motionReview.invalidate()
 	s.hostedRequests.invalidate()
 	finishLab := s.cancelLabSession()
 	if s.mediaSync != nil {
@@ -863,6 +864,7 @@ func (s *Server) Quiesce() {
 func (s *Server) Close() {
 	s.closeOnce.Do(func() {
 		s.Quiesce()
+		s.motionReview.close()
 		if s.cloudPlanning.auth != nil {
 			s.cloudPlanning.auth.Close()
 		}

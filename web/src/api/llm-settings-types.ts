@@ -3,6 +3,7 @@ import type { LLMMotionCapabilities, LLMUserAnatomy } from './types';
 // Mirrors the backend model settings; private credentials have no API field.
 export interface LLMSettings {
 	  motion_planner?: import("./cloud-types").MotionPlannerSettings;
+	  motion_reviewer?: { enabled: boolean; connection_id?: string };
 	  connections?: import("./cloud-types").ModelConnection[];
 	  conversation_connection_id?: string;
 	  retry_refusal_locally?: boolean;

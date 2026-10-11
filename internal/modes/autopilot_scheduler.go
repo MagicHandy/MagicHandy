@@ -153,6 +153,7 @@ func (m *Manager) applyAutopilotChoice(
 		}
 		m.rememberChoice(ModeAutopilot, choice)
 		m.tracePlanned(ModeAutopilot, "autopilot_hold", choice)
+		m.observeChoice(ModeAutopilot, choice)
 		return
 	}
 	state, err := engine.ApplyTarget(ctx, m.choiceTarget(ModeAutopilot, choice), reason)
@@ -175,6 +176,7 @@ func (m *Manager) applyAutopilotChoice(
 	}
 	m.rememberChoice(ModeAutopilot, choice)
 	m.tracePlanned(ModeAutopilot, reason, choice)
+	m.observeChoice(ModeAutopilot, choice)
 	if state.RecentCommandLatencyMillis > 0 {
 		m.mu.Lock()
 		if m.loop.mode == ModeAutopilot && m.loop.generation == generation {
@@ -508,6 +510,13 @@ func (m *Manager) tickAutopilotSpeech(ctx context.Context, engine Engine, genera
 		return
 	}
 	if choice.source == "speech_error" || choice.say == "" {
+		if choice.source == "speech_skipped" {
+			m.mu.Lock()
+			delay := m.sampleSpeechDelayLocked(TimingLater)
+			m.mu.Unlock()
+			m.retryAutopilotSpeech(generation, delay, "speech_skipped", "model chose a quiet check-in")
+			return
+		}
 		m.retryAutopilotSpeech(generation, speechDecisionRetry, "speech_failed", choice.note)
 		return
 	}

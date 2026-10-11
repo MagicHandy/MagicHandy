@@ -2,6 +2,39 @@
 
 ## Core Direction
 
+The October 11 [diagnostic download review](docs/diagnostic-report-review-2026-10-11.md)
+replaces the trace-export card with one backend-built report and a compact
+inclusion menu. History, failed output and personalization are explicit choices;
+the archive boundary redacts credentials and enforces bounded, administrator-only
+export. See [ADR 0043](docs/decisions/0043-selectable-diagnostic-reports.md).
+
+The October 11 [Creative v2 speed review](docs/creative-v2-speed-review-2026-10-11.md)
+corrects premature speed saturation with bounded whole-phrase cruise fitting
+and fixes high-speed wire rounding at unsent batch boundaries. Existing device
+velocity, acceleration, jerk, reversal and wire-fidelity limits remain in force.
+Cloud timestamps already preserved the planned timing. Regression, visual and
+simulated-latency tests pass; matched physical feel remains an R1 acceptance item.
+
+The October 11 [long-context review](docs/long-context-review-2026-10-11.md)
+adds per-provider Recent/Long/Extended conversation windows for chat and
+conversation-aware Autopilot. Storage, bounded database reads, composition and
+provider admission now agree. Local prompt limits and motion authority are
+unchanged. See [ADR 0042](docs/decisions/0042-provider-conversation-windows.md).
+
+The October 11 [user-report follow-up](docs/user-report-review-2026-10-11.md)
+aligns live prompt examples with explicit action admission, adds bounded private
+failure evidence and a production-context preview, and clarifies prompt editing
+versus assignment. Independent speech can choose a quiet check-in itself; no
+wording filter is used. Gemma repetition improves in the measured fixture;
+Vanessa and the unavailable reporter-specific Qwen configuration remain qualified
+limitations. See [ADR 0041](docs/decisions/0041-inspectable-chat-failures-and-model-chosen-checkins.md).
+
+The October 11 [asynchronous motion review](docs/motion-second-opinion-review-2026-10-11.md)
+adds an optional second opinion for local Chat and Autopilot. Local choices apply
+immediately; a named hosted model may correct a confident material mismatch while
+the exact intent and plan remain current. Alpha.61 integrates this review work.
+See [ADR 0040](docs/decisions/0040-asynchronous-motion-second-opinion.md).
+
 The October 8 hosted-model review adds named ChatGPT/API connections alongside
 the existing local models, with independent Chat and Autopilot assignments and
 explicit conversation or technical context sharing. Easy setup keeps advanced

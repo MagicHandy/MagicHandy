@@ -9,6 +9,7 @@ import { ownsActiveMotion } from "../util/motion";
 
 const decisionSourceCopy: Partial<Record<string, MessageKey>> = {
   model: "Assistant selected",
+  second_opinion: "Second opinion: corrected the motion choice.",
   fallback: "Planner fallback",
   hold: "Continuing current pattern",
   requested_hold: "Keeping the motion as you asked",
