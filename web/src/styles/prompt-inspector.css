@@ -53,9 +53,6 @@
 }
 .prompt-assignment { margin-top: var(--gap); padding-top: var(--gap); border-top: 1px solid var(--line); }
 .prompt-assignment p { margin: 0 0 8px; }
-.chat-failures { flex: 0 0 auto; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 0.85rem; }
-.chat-failures > summary { color: var(--muted); cursor: pointer; }
-.chat-failures > div { max-height: 40vh; overflow: auto; }
 .chat-failures .prompt-section { margin-top: 8px; }
 .chat-failures time { color: var(--muted); font-size: 0.75rem; }
 .chat-failures pre { white-space: pre-wrap; overflow-wrap: anywhere; }

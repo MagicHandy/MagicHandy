@@ -15,7 +15,6 @@ import { useRemoteChatSurface } from "../remote/RemoteExecutorProvider";
 import { useVoicePlayback } from "../state/voice-playback";
 import { VoiceComposerControls } from "./VoiceComposerControls";
 import { useChatHistory, type ChatDisplayMessage } from "./useChatHistory";
-import { ChatFailures } from "./ChatFailures";
 
 type Msg = ChatDisplayMessage;
 
@@ -378,7 +377,6 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
         </div>
         <span className="visually-hidden" role="status">{busy ? t("Streaming") : voiceActive ? t("Voice input active") : historyError ? t("Conversation history unavailable") : historyLoading ? t("Loading conversation history") : locked ? (readOnly ? t("Read-only") : t("Core offline")) : t("Idle")}</span>
       </form>
-      {state?.capabilities?.configure_host !== false && <ChatFailures sessionID={sessionId} busy={busy} />}
     </div>
   );
 }

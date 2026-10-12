@@ -8,6 +8,7 @@ import { useAppState, useToast } from "../state/app-state";
 import { buildDiagnosticsReport } from "./diagnostics-report";
 import { PromptCompositionInspector } from "./PromptCompositionInspector";
 import { DiagnosticReportDownload } from "./DiagnosticReportDownload";
+import { ChatFailures } from "./ChatFailures";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 
@@ -107,6 +108,10 @@ export function DiagnosticsPanel({
         <pre className="diagnostics-report" aria-label={t("Diagnostics report")}>{report}</pre>
         </details>
       </div>
+
+      {state?.capabilities?.configure_host !== false && state?.chat?.active_session_id && (
+        <ChatFailures key={state.chat.active_session_id} sessionID={state.chat.active_session_id} busy={!backendOnline} />
+      )}
 
       <PromptCompositionInspector collapsible />
 
