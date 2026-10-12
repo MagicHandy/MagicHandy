@@ -10,6 +10,12 @@ and captured prompt dependencies are explained beside their switch. The copyable
 status summary is folded by default. Download choices do not change application
 settings or require device-control ownership.
 
+Recent request failures belongs only in Settings > Diagnostics, in a collapsed
+section for the backend's active chat. Opening it loads retained failure metadata;
+prompt and model output still require explicit inclusion. It is absent from the
+main chat and video chat composer. Diagnostic report downloads continue to cover
+failures across retained chats.
+
 Settings and setup use the Graphite card treatment: one card per group with a
 header row, label-left/control-right field rows that stack in narrow columns, a
 switch row for every on/off setting, and short help at the relevant decision.

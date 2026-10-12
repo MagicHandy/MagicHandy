@@ -24,8 +24,8 @@ export function ChatFailures({ sessionID, busy }: { sessionID: string; busy: boo
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [open, busy, sessionID]);
-  return <details className="chat-failures" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
-    <summary>{t("Recent request failures")}</summary>
+  return <details className="group chat-failures" open={open} onToggle={event => setOpen(event.currentTarget.open)}>
+    <summary className="group-title">{t("Recent request failures")}</summary>
     {open && <div>
       <p className="hint-block">{t("The latest 24 failures are kept across chats. These records are never sent as conversation history.")}</p>
       {error && <p className="form-status" role="alert">{error}</p>}
