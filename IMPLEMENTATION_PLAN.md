@@ -2720,3 +2720,41 @@ control changes, all shapes and final Stop. Physical feel and real-transport
 acceptance remain open. See [ADR 0038](docs/decisions/0038-freestyle-stroke-stream.md),
 [review evidence](docs/freestyle-stream-review-2026-10-01.md), and
 [budgets](docs/goal-scorecard.md#2026-10-01--freestyle-stroke-stream).
+
+
+## October 14 DG-LAB Coyote 3.0 output
+
+Implemented for PR review: a Coyote 3.0 as a second output, alone or alongside
+the Handy, through the existing shared engine. A per-connection Bluetooth
+worker (`cmd/estim-ble-worker`, no cgo) owns the radio while the core composes
+every packet (`internal/estim`). `transport.Coyote` converts the neutral frame
+with a user-chosen profile, and `transport.FanOut` drives both devices from one
+engine transport. Strength stays user-owned with device-enforced ceilings; the
+global Stop zeroes both channels. The model receives no new control. Simulated
+end-to-end tests pass; physical acceptance on a Coyote 3.0 is open. Native
+stimulation patterns and model composition remain follow-ups. See
+[ADR 0044](docs/decisions/0044-coyote-estim-output.md) and [estim.md](docs/estim.md).
+
+The pre-hardware review's five reproduced safety issues are corrected with
+permanent regressions: non-supersedable emergency zero and shared Stop failure
+reporting; failed-ceiling disconnection/reapplication; dropped queued increases
+after missing confirmation; evidence-ordered zero state; and explicit host-only
+reference testing instead of automatic pulses on strength changes. Worker
+protocol v2 bounds outstanding native writes and terminates timed-out work.
+Physical COYOTE connection and output acceptance remain explicitly deferred.
+
+The connection manager now uses an additive device list, per-device protocol
+titles, stronger section dividers, and an outlined Coyote prerequisite notice.
+Handy protocol selection stays beside its title; simulation is identified once
+in the top bar. Full automated checks and an isolated working-LLM review build
+are recorded in [the implementation review](docs/coyote-review-2026-10-14.md).
+
+
+### Device inventory and linked sessions (2026-10-14)
+
+ADR 0045 separates saved connections from playback inclusion and live transport
+state. The title-row + adds without connecting or starting. Empty inventory is
+valid. Linked failures stop all by default, with an explicit continue-healthy
+setting; both policies prevent hot-join after reconnect. Session-bound Coyote
+and browser BLE dispatch preserve the single engine. Hardware validation remains
+pending; simulated integration and full gates are recorded in the review report.

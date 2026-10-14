@@ -117,6 +117,7 @@ export function DeviceStep({ settings, handyModel, connectionKey, connectionResu
   return <div className="setup-copy">
     <SetupSection id="setup-connection-title" title={t("Device connection")}>
       <p className="hint-block">{t("Choose one connection owner. You can switch later from the connection manager in the top bar.")}</p>
+      {settings.device.configured_devices && !settings.device.configured_devices.includes("handy") && <button type="button" className="btn btn-secondary" onClick={() => window.dispatchEvent(new Event("magichandy:open-connections"))}>{t("Manage connections")}</button>}
       <SetupChoiceGroup labelledBy="setup-connection-title" panel={owner === "cloud_rest" ? <>
         <div className="form-row form-row-stack">
           <span className="form-row-label"><label htmlFor="setup-device-key"><strong>{t("Handy connection key")}</strong></label><small id={keyHelp}>{t("Connect your Handy in the official Handy Onboarding app; the key appears in the middle of its screen, under the picture of the device.")}</small></span>

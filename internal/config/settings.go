@@ -244,6 +244,7 @@ type Settings struct {
 	Labs        LabsSettings        `json:"labs"`
 	Media       MediaSettings       `json:"media"`
 	Device      DeviceSettings      `json:"device"`
+	Estim       EstimSettings       `json:"estim"`
 	Motion      MotionSettings      `json:"motion"`
 	Freestyle   FreestyleSettings   `json:"freestyle"`
 	Autopilot   AutopilotSettings   `json:"autopilot"`
@@ -256,16 +257,6 @@ type Settings struct {
 // ServerSettings contains local HTTP server settings.
 type ServerSettings struct {
 	Port int `json:"port"`
-}
-
-// DeviceSettings contains device transport configuration.
-type DeviceSettings struct {
-	HSPDispatchOwner         string `json:"hsp_dispatch_owner"`
-	IntifaceServerAddress    string `json:"intiface_server_address"`
-	FirmwareAPIRequirement   string `json:"firmware_api_requirement"`
-	APIApplicationIDSource   string `json:"api_application_id_source"`
-	APIApplicationIDOverride string `json:"api_application_id_override,omitempty"`
-	HandyConnectionKey       string `json:"handy_connection_key,omitempty"`
 }
 
 // Handy model profiles calibrate the semantic speed control against published
@@ -474,6 +465,7 @@ type PublicSettings struct {
 	Labs         LabsSettings              `json:"labs"`
 	Media        MediaSettings             `json:"media"`
 	Device       PublicDeviceSettings      `json:"device"`
+	Estim        PublicEstimSettings       `json:"estim"`
 	Motion       MotionSettings            `json:"motion"`
 	Freestyle    FreestyleSettings         `json:"freestyle"`
 	Autopilot    AutopilotSettings         `json:"autopilot"`
@@ -485,18 +477,10 @@ type PublicSettings struct {
 	Options      PublicSettingsOptionHints `json:"options"`
 }
 
-// PublicDeviceSettings is the API-safe device settings view.
-type PublicDeviceSettings struct {
-	HSPDispatchOwner         string `json:"hsp_dispatch_owner"`
-	IntifaceServerAddress    string `json:"intiface_server_address"`
-	FirmwareAPIRequirement   string `json:"firmware_api_requirement"`
-	APIApplicationIDSource   string `json:"api_application_id_source"`
-	APIApplicationIDOverride string `json:"api_application_id_override,omitempty"`
-	ConnectionKeySet         bool   `json:"connection_key_set"`
-}
-
 // PublicSettingsOptionHints lists valid option values for settings clients.
 type PublicSettingsOptionHints struct {
+	DeviceOutputs           []string `json:"device_outputs"`
+	EstimFollowModes        []string `json:"estim_follow_modes"`
 	HSPDispatchOwners       []string `json:"hsp_dispatch_owners"`
 	APIApplicationIDSources []string `json:"api_application_id_sources"`
 	DiagnosticsVerbosities  []string `json:"diagnostics_verbosities"`
@@ -606,6 +590,7 @@ type SettingsUpdate struct {
 	Labs               *LabsSettings       `json:"labs,omitempty"`
 	Media              *MediaUpdate        `json:"media,omitempty"`
 	Device             DeviceUpdate        `json:"device"`
+	Estim              *EstimUpdate        `json:"estim,omitempty"`
 	Motion             MotionSettings      `json:"motion"`
 	Freestyle          *FreestyleSettings  `json:"freestyle,omitempty"`
 	Autopilot          *AutopilotSettings  `json:"autopilot,omitempty"`
@@ -614,16 +599,6 @@ type SettingsUpdate struct {
 	Chat               *ChatSettings       `json:"chat,omitempty"`
 	Diagnostics        DiagnosticsSettings `json:"diagnostics"`
 	ClearConnectionKey bool                `json:"clear_connection_key"`
-}
-
-// DeviceUpdate is the API write payload for device settings.
-type DeviceUpdate struct {
-	HSPDispatchOwner         string  `json:"hsp_dispatch_owner"`
-	IntifaceServerAddress    string  `json:"intiface_server_address"`
-	FirmwareAPIRequirement   string  `json:"firmware_api_requirement"`
-	APIApplicationIDSource   string  `json:"api_application_id_source"`
-	APIApplicationIDOverride string  `json:"api_application_id_override"`
-	HandyConnectionKey       *string `json:"handy_connection_key,omitempty"`
 }
 
 // DefaultSettings returns the current built-in settings.
@@ -650,11 +625,13 @@ func DefaultSettings() Settings {
 			ReencodeAudioKbps:   DefaultReencodeAudioKbps,
 		},
 		Device: DeviceSettings{
+			LinkedFailurePolicy: LinkedFailureStopAll, Output: DeviceOutputHandy,
 			HSPDispatchOwner:       DispatchOwnerCloudREST,
 			IntifaceServerAddress:  DefaultIntifaceServerAddress,
 			FirmwareAPIRequirement: FirmwareAPIRequirementRequired,
 			APIApplicationIDSource: ApplicationIDSourceBundled,
 		},
+		Estim: DefaultEstimSettings(),
 		Motion: MotionSettings{
 			SpeedMinPercent:  20,
 			SpeedMaxPercent:  80,
@@ -748,6 +725,9 @@ func (s Settings) Public() PublicSettings {
 			ShowSupersededOriginals:     s.Media.ShowSupersededOriginals,
 		},
 		Device: PublicDeviceSettings{
+			ConfiguredDevices:        s.Device.configuredSnapshot(),
+			LinkedFailurePolicy:      s.Device.LinkedFailurePolicy,
+			Output:                   s.Device.Output,
 			HSPDispatchOwner:         s.Device.HSPDispatchOwner,
 			IntifaceServerAddress:    s.Device.IntifaceServerAddress,
 			FirmwareAPIRequirement:   s.Device.FirmwareAPIRequirement,
@@ -755,6 +735,7 @@ func (s Settings) Public() PublicSettings {
 			APIApplicationIDOverride: s.Device.APIApplicationIDOverride,
 			ConnectionKeySet:         s.Device.HandyConnectionKey != "",
 		},
+		Estim:        s.Estim.Public(),
 		Motion:       s.Motion,
 		Freestyle:    s.Freestyle,
 		Autopilot:    s.Autopilot,
@@ -844,11 +825,7 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	if update.Media != nil {
 		next.Media = normalizeMediaSettings(mergeMediaUpdate(next.Media, *update.Media))
 	}
-	next.Device.HSPDispatchOwner = update.Device.HSPDispatchOwner
-	next.Device.IntifaceServerAddress = strings.TrimSpace(update.Device.IntifaceServerAddress)
-	next.Device.FirmwareAPIRequirement = update.Device.FirmwareAPIRequirement
-	next.Device.APIApplicationIDSource = update.Device.APIApplicationIDSource
-	next.Device.APIApplicationIDOverride = strings.TrimSpace(update.Device.APIApplicationIDOverride)
+	next = applyDeviceUpdate(next, update)
 	next.Motion = update.Motion
 	if update.Freestyle != nil {
 		next.Freestyle = *update.Freestyle
@@ -876,16 +853,6 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 		next.Voice.OpenAITTSAPIKey = ""
 	} else if update.Voice.OpenAITTSAPIKey != nil {
 		next.Voice.OpenAITTSAPIKey = strings.TrimSpace(*update.Voice.OpenAITTSAPIKey)
-	}
-
-	if update.ClearConnectionKey {
-		next.Device.HandyConnectionKey = ""
-	} else if update.Device.HandyConnectionKey != nil {
-		next.Device.HandyConnectionKey = strings.TrimSpace(*update.Device.HandyConnectionKey)
-	}
-
-	if next.Device.APIApplicationIDSource == ApplicationIDSourceBundled {
-		next.Device.APIApplicationIDOverride = ""
 	}
 
 	return NormalizeSettings(next)
@@ -1099,8 +1066,17 @@ func validateSettings(settings Settings) error {
 	if err := validateUISettings(settings.UI); err != nil {
 		return err
 	}
+	if err := validateDeviceConnections(settings.Device); err != nil {
+		return err
+	}
+	if err := validateDeviceOutput(settings.Device.Output); err != nil {
+		return err
+	}
 	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth, DispatchOwnerIntiface) {
 		return fmt.Errorf("unknown dispatch owner %q", settings.Device.HSPDispatchOwner)
+	}
+	if err := validateEstimSettings(settings.Estim); err != nil {
+		return err
 	}
 	if err := validateIntifaceServerAddress(settings.Device.IntifaceServerAddress); err != nil {
 		return err
@@ -1188,6 +1164,17 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.UI.NotificationCategories == nil {
 		settings.UI.NotificationCategories = append([]string(nil), defaults.UI.NotificationCategories...)
 	}
+	if settings.Device.LinkedFailurePolicy == "" {
+		settings.Device.LinkedFailurePolicy = LinkedFailureStopAll
+	}
+	settings.Device.Output = strings.TrimSpace(settings.Device.Output)
+	if settings.Device.Output == "" {
+		settings.Device.Output = defaults.Device.Output
+	}
+	if settings.Device.ConfiguredDevices == nil {
+		settings.Device.ConfiguredDevices = configuredFromOutput(settings.Device.Output)
+	}
+	settings.Estim = applyMissingEstimDefaults(settings.Estim)
 	if settings.Device.HSPDispatchOwner == "" {
 		settings.Device.HSPDispatchOwner = defaults.Device.HSPDispatchOwner
 	}
@@ -1339,6 +1326,9 @@ func validateIntifaceServerAddress(address string) error {
 }
 
 func cloneSettings(settings Settings) Settings {
+	if settings.Device.ConfiguredDevices != nil {
+		settings.Device.ConfiguredDevices = append([]string{}, settings.Device.ConfiguredDevices...)
+	}
 	settings.LLM.Connections = append([]ModelConnection(nil), settings.LLM.Connections...)
 	for index := range settings.LLM.Connections {
 		settings.LLM.Connections[index].SupportedParameters = cloneStrings(settings.LLM.Connections[index].SupportedParameters)

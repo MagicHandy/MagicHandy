@@ -114,6 +114,9 @@ func (s *Server) handleBluetoothStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleBluetoothConnect(w http.ResponseWriter, r *http.Request) {
+	if !s.requireHandyConnection(w) {
+		return
+	}
 	var status transport.BrowserBluetoothClientStatus
 	if err := decodeJSON(r, &status); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -143,10 +146,8 @@ func (s *Server) handleBluetoothDisconnect(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	defer finishGateway()
-	finishStop, _ := s.beginGlobalStop("bluetooth_disconnected", r.Context())
-	defer finishStop()
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
-	stopErr := s.stopAndClearMotionEngine(stopCtx, "bluetooth_disconnected")
+	stopErr := s.stopForHandyDisconnect(stopCtx, "bluetooth_disconnected")
 	cancel()
 	finishGateway()
 	response := s.bluetoothStatus(r)

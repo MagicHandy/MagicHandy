@@ -113,10 +113,13 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
 
   if (!vals) return <p className="form-status">{t("Loading…")}</p>;
 
+  // With the Coyote alone, only Speed still matters: it sets the pace the
+  // Coyote follows. The model, stroke window and direction are Handy-only.
+  const handyShown = state?.settings?.device?.output !== "coyote" && state?.settings?.device?.output !== "none";
   const showLimits = section === "all" || section === "limits" || section === "connection";
-  const showDirection = section === "all" || section === "connection";
+  const showDirection = handyShown && (section === "all" || section === "connection");
   const showStyle = section === "all" || section === "style";
-  const showHandyModel = section === "connection";
+  const showHandyModel = handyShown && section === "connection";
   const legend = section === "limits"
     ? t("Speed and stroke ranges")
     : section === "style"
@@ -156,7 +159,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           }}
         />
       )}
-      {showLimits && (
+      {showLimits && handyShown && (
         <RangeSlider
           label={t("Stroke")}
           floor={0}

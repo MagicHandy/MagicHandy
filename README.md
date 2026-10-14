@@ -18,7 +18,8 @@ cloud services available only when you enable them.
 
 - Local LLM chat through managed llama.cpp or an existing Ollama installation.
 - Immediate speed, stroke, and direction controls with safe `Esc` Stop.
-- Handy Cloud, browser Bluetooth, and Intiface support.
+- Handy Cloud, browser Bluetooth, and Intiface support, plus a DG-LAB Coyote 3.0
+  alone or alongside the Handy ([details](docs/estim.md)).
 - Optional local speech input and output modules.
 - Guided Local only, LAN + local, and Public access, with automatic HTTPS
   certificates and explicit port instructions. Remote access requires accounts;

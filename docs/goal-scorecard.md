@@ -1,5 +1,74 @@
 # Goal Scorecard
 
+## 2026-10-14 — Device inventory and linked-session failure policy
+
+[ADR 0045](decisions/0045-device-inventory-and-linked-sessions.md) separates
+saved connections, live links and playback participation. Linked failure
+handling uses the existing engine health loop; it adds no polling loop,
+dependency, model call or prompt text. Settings keeps the stop-all default and
+offers an explicit continue-on-healthy-device policy. Full validation and the
+simulation-only limits are in the [review](device-state-review-2026-10-14.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, compared with the review corrections
+below: core 22,666,240 -> **22,764,544 B** (+98,304 B); native worker remains
+**2,999,808 B**. The core still lists **14 modules**. Main UI JS:
+1,192,079 -> **1,198,340 B raw** (+6,261 B), 320,921 -> **322,354 B gzip**
+(+1,433 B). CSS: 203,699 -> **204,037 B raw** (+338 B), 35,539 ->
+**35,599 B gzip** (+60 B). Measurements use Python gzip with `mtime=0`;
+there is one canonical embedded dist. The existing bundle advisory remains.
+
+After the final browser checks and real text-only generation, the isolated
+simulation process measured **77,860,864 B working set / 64,090,112 B private**.
+This is one Windows process sample, not a controlled RSS comparison; the
+existing idle-RSS waiver remains open. The warmed local model replied in
+304 ms, first token 126 ms, with one provider call and no repair/fallback or
+motion. Physical transport latency and active hardware RSS were not measured.
+
+## 2026-10-14 — Coyote review corrections and compact connection manager
+
+The five safety reproductions and their corrections are recorded in the
+[implementation review](coyote-review-2026-10-14.md). No dependency, model call,
+motion prompt, or additional dispatch ticker is introduced. Native writes now
+wait for a worker completion receipt; a timed-out write retires that worker.
+The connection manager adds a compact protocol menu and an additive device list
+using existing APIs. Simulation remains visible in the top-bar readout without
+a repeated panel banner.
+
+Compared with the initial Coyote implementation below, Windows amd64, Go 1.26.9,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+core 22,631,936 -> 22,666,240 B (+34,304 B); native worker remains 2,999,808 B.
+Main UI JS: 1,184,042 -> 1,192,079 B raw (+8,037 B), 319,061 -> 320,921 B gzip
+(+1,860 B). CSS: 199,012 -> 203,699 B raw (+4,687 B), 34,898 -> 35,539 B gzip
+(+641 B). Both asset measurements use Python gzip with `mtime=0`; there is one
+canonical embedded dist. The existing Vite main-chunk advisory remains.
+
+After a real text-only review chat, the isolated simulation process measured
+73,707,520 B working set / 59,604,992 B private. This is one Windows process
+sample, not a controlled RSS comparison; the existing idle-RSS waiver remains
+open. The local Gemma response took 397 ms with first token at 159 ms, one
+provider call, no repair/fallback, and no motion. No real radio latency or
+physical output was measured.
+
+## 2026-10-14 — DG-LAB Coyote 3.0 output
+
+Adds a Coyote 3.0 as a second output ([ADR 0044](decisions/0044-coyote-estim-output.md)).
+The core binary links no radio stack: `go version -m` lists the same 14 modules
+as `main`. A connected Coyote runs one 100 ms ticker that sends nothing while
+idle; nothing runs while it is disconnected. No model request or prompt text is
+added.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,348,288 -> 22,631,936 B (+283,648 B), of which about 55 KB is the
+larger embedded UI. The new `estim-ble-worker.exe` is 2,999,808 B with the same
+flags (3,303,424 B with the release build's `-w`); it carries
+`tinygo.org/x/bluetooth`, `saltosystems/winrt-go` and `go-ole` on Windows.
+
+Main UI JS: 1,162,110 -> 1,184,042 B raw (+21,932 B), 313,858 -> 319,061 B gzip
+(+5,203 B). CSS: 197,511 -> 199,012 B raw, 34,668 -> 34,898 B gzip (+230 B).
+Locale chunks grow 7.0–9.0 KB raw (2.6–2.8 KB gzip) each for 84 new strings.
+Both builds use the same Python gzip method; there is one canonical dist.
+
 ## 2026-10-11 — Alpha.61 release-review corrections
 
 Independent review found a superseded handoff retaining Autopilot's pending
@@ -1644,6 +1713,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Full app path — Cloud REST | **Met** | A 2026-07-12 isolated Phase 14B app build at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation. The latest installed-session trace added 439 points/85 legs, ordinary 330–341 ms append acknowledgements, one network error, and a successful 330 ms user Stop; it exposed a long 31–35% Creative span plateau and abrupt endpoint shape. That trace predates alpha.27's correction, so matched post-change feel remains open (`docs/motion-calibration.md`). |
 | Full app path — Browser Bluetooth | **At Risk** | The 2026-07-02 visible Edge Web Bluetooth run moved and stopped the real device, but it predates the reverse-direction fix and was a short session. Revalidate reverse, unconditional Stop, and endurance on hardware. |
 | Full app path — Intiface | **At Risk** | The 2026-07-12 Handy workflow passed safety and lifecycle checks, but it predates the deadline-driven asynchronous-ACK pacer and measured queue admission rather than wire timing. Repeat the matched run with `motion_trace.v3` and record subjective feel (`docs/intiface.md`). |
+| Full app path — Coyote 3.0 | **At Risk** | Simulated end to end: DG-LAB's example packets, the worker as a real process in `-simulate`, the owner, the Handy + Coyote fan-out and the HTTP routes. Physical acceptance on a Coyote 3.0 is open: pairing and remembered reconnection, ceilings against the device's switches, Stop to silence and to zero, silence on link loss and the feel of each profile (`docs/estim.md`). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE, and explicit stop-first takeover with a globally locked handoff (`docs/controller-dispatch-semantics.md`) |
 
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)

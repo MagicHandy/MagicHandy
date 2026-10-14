@@ -106,7 +106,7 @@ func (s *Server) motionReviewCurrent(ctx context.Context, job motionReviewJob) b
 		return false
 	}
 	settings, _ := s.store.Snapshot()
-	if !reflect.DeepEqual(settings.LLM, job.settings.LLM) || settings.Motion != job.settings.Motion || settings.Autopilot != job.settings.Autopilot || settings.Device != job.settings.Device {
+	if !reflect.DeepEqual(settings.LLM, job.settings.LLM) || settings.Motion != job.settings.Motion || settings.Autopilot != job.settings.Autopilot || !reflect.DeepEqual(settings.Device, job.settings.Device) {
 		return false
 	}
 	s.commands.mu.Lock()

@@ -83,6 +83,8 @@ import type {
   InternetDiscovery,
   CertificatePreparation,
   CommandReceipt,
+  CoyoteTransportSnapshot,
+  DeviceOutput,
 } from "./types";
 
 
@@ -851,6 +853,22 @@ export const api = {
 
   // Intiface Central session. Device indices are scoped to this discovery
   // session, so selection deliberately remains runtime state rather than a setting.
+  coyoteStatus: () => request<CoyoteTransportSnapshot>("GET", "/api/transport/coyote/status"),
+  coyoteConnect: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/connect", {}),
+  coyoteDisconnect: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/disconnect", {}),
+  coyoteStrength: (channel: "a" | "b", delta: number, stopSequence?: number) =>
+    request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/strength", { channel, delta }, undefined,
+      stopSequence === undefined ? undefined : { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  coyoteTest: (channel: "a" | "b", stopSequence: number) =>
+    request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/test", { channel }, undefined,
+      { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  coyoteZero: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/zero", {}),
+  changeDeviceConnection: (device: "handy" | "coyote", action: "add" | "remove" | "include" | "exclude") =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connections", { device, action }),
+  setDeviceOutput: (output: DeviceOutput) =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/device/output", { output }),
+  setEstimSafety: (acknowledged: boolean) =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/estim/safety", { acknowledged }),
   intifaceStatus: () => request<IntifaceTransportSnapshot>("GET", "/api/transport/intiface/status"),
   intifaceConnect: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/connect", {}),
   intifaceDisconnect: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/disconnect", {}),

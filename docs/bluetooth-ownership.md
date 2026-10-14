@@ -121,3 +121,12 @@ mandatory firmware response wait is added to streaming commands. A correlated
 late rejection, including a code-only error, ends the channel.
 
 See [the review, references and simulation limits](bluetooth-intiface-review-2026-09-20.md).
+
+## October 2026: the Coyote uses a worker
+
+The DG-LAB Coyote 3.0 does not follow the browser-owned model. It has no
+device-side buffer: the host must write a packet every 100 ms, and a hidden
+tab both throttles timers and ends this bridge. AGENTS.md section 3 also allows
+native Bluetooth in a worker process, so `estim-ble-worker` owns the Coyote's
+radio while the core composes every packet. The Handy's Bluetooth path is
+unchanged. See [ADR 0044](decisions/0044-coyote-estim-output.md).

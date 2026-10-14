@@ -10,6 +10,7 @@ import { SettingsRoute } from "./SettingsRoute";
 const app = vi.hoisted(() => ({
   hostAdministration: true,
   hasState: true,
+  device: undefined as PublicSettings["device"] | undefined,
   hash: "#/settings/diagnostics",
   refresh: vi.fn(),
   show: vi.fn(),
@@ -67,7 +68,7 @@ vi.mock("../state/app-state", () => ({
     readOnly: false,
     refresh: app.refresh,
     motion: { engine: { running: true, target: { source: "autopilot" } } },
-    state: app.hasState ? { capabilities: { configure_host: app.hostAdministration }, version: "test", commit: "abc", uptime_seconds: 10, motion: { available: true } } : null,
+    state: app.hasState ? { capabilities: { configure_host: app.hostAdministration }, settings: app.device ? { device: app.device } : undefined, version: "test", commit: "abc", uptime_seconds: 10, motion: { available: true } } : null,
   }),
   useHashRoute: () => app.hash,
   useToast: () => ({ show: app.show }),
@@ -184,9 +185,48 @@ function settings(verbosity: string): PublicSettings {
 }
 
 describe("SettingsRoute", () => {
+  it("saves the linked failure policy and offers only configured playback devices", async () => {
+    app.hash = "#/settings/device";
+    const initial = settings("normal");
+    initial.device.output = "none";
+    initial.device.configured_devices = ["coyote"];
+    getSettings.mockResolvedValue({ settings: initial });
+    render(<SettingsRoute />);
+    const policy = await screen.findByRole("combobox", { name: "On device failure" });
+    expect(policy).toHaveValue("stop_all");
+    const devices = screen.getByRole("combobox", { name: "Playback devices" });
+    expect(devices).toHaveValue("none");
+    expect(within(devices).queryByRole("option", { name: "The Handy" })).toBeNull();
+    fireEvent.change(policy, { target: { value: "continue_healthy" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ output: "none", linked_failure_policy: "continue_healthy" }) })));
+  });
+
+  it("follows manager changes without discarding an unsaved failure policy", async () => {
+    app.hash = "#/settings/device";
+    const initial = settings("normal");
+    initial.device.output = "handy";
+    initial.device.configured_devices = ["handy"];
+    initial.device.linked_failure_policy = "stop_all";
+    app.device = initial.device;
+    getSettings.mockResolvedValue({ settings: initial });
+    const view = render(<SettingsRoute />);
+    fireEvent.change(await screen.findByRole("combobox", { name: "On device failure" }), { target: { value: "continue_healthy" } });
+    app.device = { ...initial.device, configured_devices: ["coyote"], output: "none" };
+    view.rerender(<SettingsRoute />);
+    const devices = screen.getByRole("combobox", { name: "Playback devices" });
+    expect(devices).toHaveValue("none");
+    expect(within(devices).queryByRole("option", { name: "The Handy" })).toBeNull();
+    expect(within(devices).getByRole("option", { name: "Coyote" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "On device failure" })).toHaveValue("continue_healthy");
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ output: "none", linked_failure_policy: "continue_healthy" }) })));
+  });
+
   beforeEach(() => {
     app.hostAdministration = true;
     app.hasState = true;
+    app.device = undefined;
     vi.clearAllMocks();
     setLocaleForTest("en", english);
     app.hash = "#/settings/diagnostics";

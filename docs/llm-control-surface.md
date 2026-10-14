@@ -34,6 +34,12 @@ to the user's speed/stroke/limit envelope. Speed and stroke limits stay
 engine/transport caps, never prompt-only behavior. Emergency Stop stays
 independent of every generation, upload, and playback latency.
 
+A DG-LAB Coyote follows the same frame through its conversion profile
+([ADR 0044](decisions/0044-coyote-estim-output.md)). The model has no Coyote
+control and no Coyote prompt text: channel strength and ceilings belong to the
+user alone. A stimulation vocabulary (rhythm, texture, envelope, channel
+relationship) is a recorded follow-up that needs its own ADR.
+
 ## What the LLM can emit today
 
 `internal/chat/contract.go` accepts exactly one `AssistantResponse`: required

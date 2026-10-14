@@ -2,6 +2,8 @@ package config
 
 func publicSettingsOptionHints() PublicSettingsOptionHints {
 	return withFreestyleOptionHints(PublicSettingsOptionHints{
+		DeviceOutputs:    []string{DeviceOutputNone, DeviceOutputHandy, DeviceOutputCoyote, DeviceOutputHandyCoyote},
+		EstimFollowModes: []string{EstimFollowStroke, EstimFollowSpeed, EstimFollowPosition},
 		HSPDispatchOwners: []string{
 			DispatchOwnerCloudREST,
 			DispatchOwnerBrowserBluetooth,

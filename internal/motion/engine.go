@@ -101,24 +101,25 @@ type Engine struct {
 // CurrentSample follows the playback clock; LastSample is the accepted
 // transport-buffer tail and may be ahead of playback.
 type ActiveMotionState struct {
-	Running                    bool                     `json:"running"`
-	Starting                   bool                     `json:"starting"`
-	Completing                 bool                     `json:"completing"`
-	Paused                     bool                     `json:"paused"`
-	RunningMillis              int64                    `json:"running_ms"`
-	Generation                 uint64                   `json:"generation"`
-	StreamID                   string                   `json:"stream_id,omitempty"`
-	PlanID                     string                   `json:"plan_id,omitempty"`
-	Target                     MotionTarget             `json:"target"`
-	Settings                   config.MotionSettings    `json:"settings"`
-	StartedAt                  string                   `json:"started_at,omitempty"`
-	Phase                      float64                  `json:"phase"`
-	NextSampleMillis           int64                    `json:"next_sample_ms"`
-	RecentCommandLatencyMillis int64                    `json:"recent_command_latency_ms"`
-	CurrentSample              *MotionSample            `json:"current_sample,omitempty"`
-	LastSample                 *MotionSample            `json:"last_sample,omitempty"`
-	LastResult                 *transport.CommandResult `json:"last_result,omitempty"`
-	LastError                  string                   `json:"last_error,omitempty"`
+	LinkedSession              *transport.LinkedSessionStatus `json:"linked_session,omitempty"`
+	Running                    bool                           `json:"running"`
+	Starting                   bool                           `json:"starting"`
+	Completing                 bool                           `json:"completing"`
+	Paused                     bool                           `json:"paused"`
+	RunningMillis              int64                          `json:"running_ms"`
+	Generation                 uint64                         `json:"generation"`
+	StreamID                   string                         `json:"stream_id,omitempty"`
+	PlanID                     string                         `json:"plan_id,omitempty"`
+	Target                     MotionTarget                   `json:"target"`
+	Settings                   config.MotionSettings          `json:"settings"`
+	StartedAt                  string                         `json:"started_at,omitempty"`
+	Phase                      float64                        `json:"phase"`
+	NextSampleMillis           int64                          `json:"next_sample_ms"`
+	RecentCommandLatencyMillis int64                          `json:"recent_command_latency_ms"`
+	CurrentSample              *MotionSample                  `json:"current_sample,omitempty"`
+	LastSample                 *MotionSample                  `json:"last_sample,omitempty"`
+	LastResult                 *transport.CommandResult       `json:"last_result,omitempty"`
+	LastError                  string                         `json:"last_error,omitempty"`
 	// Pace is the compact backend-authoritative Creative output readout. It is
 	// safe for the motion SSE because it contains no curve points or payloads.
 	Pace *PaceSummary `json:"pace,omitempty"`
@@ -837,6 +838,9 @@ func (e *Engine) ensurePlaybackHealthy(ctx context.Context, runEpoch uint64, rea
 		return nil
 	}
 	message := fmt.Sprintf("motion recovery stopped active stream after playback state %q during %s", diagnostics.PlaybackState, reason)
+	if diagnostics.LastError != "" && diagnostics.LastError != "redacted" {
+		message += ": " + diagnostics.LastError
+	}
 	return e.stopForRecovery(ctx, runEpoch, "recovery_"+reason, message)
 }
 
@@ -891,7 +895,7 @@ func (e *Engine) finishRecovery(ctx context.Context, reason string, message stri
 	// stop on the real Cloud/Bluetooth transports).
 	stopCtx, stopCancel := detachedStopContext(ctx)
 	e.commandMu.Lock()
-	stopCommand := transport.StopCommand{Reason: reason}
+	stopCommand := transport.StopCommand{Reason: reason, Fault: true}
 	result, err := e.transport.Stop(stopCtx, stopCommand)
 	stopCancel()
 	e.recordTransportResultWithAnnotation(reason, nil, transport.Command{

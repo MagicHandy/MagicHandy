@@ -487,38 +487,282 @@
   background: var(--accent);
 }
 
-/* ---- Device panel (connection manager) ---- */
+/* ---- Device panel (connection manager) ----
+   One overlay surface: a sticky title row, an additive connection list and
+   per-device method titles, with full-width sections separated by strong rules. No
+   section is boxed again; wells (artwork, fields, tracks) use the inset tone. */
 .connection-manager {
   position: relative;
   z-index: 24;
   flex: 0 0 auto;
 }
 .connection-manager-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 7px 8px 7px 12px;
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--surface);
 }
 .connection-manager-title {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
 }
-.connection-manager-title p {
-  margin: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: var(--fs-hint);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.connection-manager-title h2 {
+  flex: 0 0 auto;
+}
+.connection-manager-head-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
 }
 .connection-manager-head .icon-button {
   border-color: transparent;
 }
-.connection-manager-panel > .hint-block {
-  margin: 0 12px 6px;
+
+/* The title's method list: a menu button that reads like the select it
+   replaces. Only an explicit choice applies, so arrow keys cannot switch the
+   transport while browsing. */
+.connection-method {
+  display: flex;
+  min-width: 0;
+}
+.connection-method-trigger {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--control-h-sm);
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.connection-method-trigger:hover,
+.connection-method-trigger[aria-expanded="true"] {
+  background: var(--surface-2);
+}
+.connection-method-trigger[aria-busy="true"] {
+  color: var(--muted);
+  cursor: progress;
+}
+.connection-method-name,
+.connection-method-static {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.connection-method-static {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+.connection-method-chevron {
+  flex: 0 0 auto;
+  color: var(--muted);
+  transform: rotate(180deg);
+  transition: transform 0.15s ease;
+}
+.connection-method-trigger[aria-expanded="true"] .connection-method-chevron {
+  color: var(--accent);
+  transform: rotate(0deg);
+}
+.connection-method-menu {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 4px);
+  right: 8px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+  box-shadow: var(--shadow);
+}
+.connection-method-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.connection-method-option:hover,
+.connection-method-option:focus-visible {
+  background: var(--surface-2);
+}
+.connection-method-option:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.connection-method-option[aria-checked="true"] {
+  background: var(--accent-tint);
+}
+.connection-method-option-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.connection-method-option-copy strong {
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+.connection-method-option-copy small {
+  color: var(--muted);
+  font-size: var(--fs-hint);
+  line-height: 1.4;
+}
+.connection-method-check {
+  color: var(--accent);
+}
+.connection-method-hint {
+  margin: 2px 0 0;
+  padding: 7px 10px 5px;
+  border-top: 1px solid var(--line-strong);
+  color: var(--muted);
+  font-size: var(--fs-hint);
+}
+
+/* Sections run edge to edge; the rule, not a card, marks each one. */
+.connection-section {
+  padding: 12px;
+  border-top: 1px solid var(--line-strong);
+}
+.connection-manager-head + .connection-section {
+  border-top: 0;
+}
+.connection-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 8px;
+}
+.connection-section-head h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.connection-section-head span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--fs-hint);
+  text-align: right;
+}
+.connection-device[aria-busy="true"] {
+  cursor: progress;
+}
+.connection-device {
+  background: var(--bg-inset);
+}
+.connection-add {
+  position: relative;
+}
+.connection-add-trigger {
+  width: 30px;
+  height: 30px;
+}
+.connection-add-trigger[aria-disabled="true"] {
+  color: var(--muted);
+  opacity: 0.65;
+  cursor: default;
+}
+.connection-add .connection-method-menu {
+  right: 0;
+  left: auto;
+  min-width: 240px;
+  max-width: calc(100vw - 32px);
+}
+.connection-participation {
+  padding: 8px 12px;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-inset);
+}
+.connection-playback-note, .connection-lock-reason {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: var(--fs-hint);
+}
+.connection-coyote > .connection-participation {
+  margin: -12px -12px 12px;
+}
+.connection-device-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -12px -12px 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.connection-device-title {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.connection-device-title h3 {
+  flex: 0 0 auto;
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+.connection-device-title .connection-method-static {
+  color: var(--muted);
+  font-size: var(--fs-hint);
+  font-weight: 400;
+}
+.connection-remove {
+  flex: 0 0 auto;
+}
+.connection-remove[aria-busy="true"] {
+  cursor: progress;
+}
+.connection-device > .connection-lock-reason {
+  margin: 8px 0 0;
+  font-size: var(--fs-hint);
+}
+.connection-handy {
+  padding: 0;
+}
+.connection-handy > .connection-device-head {
+  margin: 0;
 }
 /* A flat status strip: the device glyph with its signal, no illustration. */
 .connection-artwork {
@@ -527,7 +771,7 @@
   height: 96px;
   padding: 8px 0;
   background: var(--bg-inset);
-  border-block: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 .connection-signal path {
   fill: none;
@@ -637,7 +881,7 @@
   white-space: nowrap;
 }
 .connection-provider-actions {
-  padding: 0 12px 10px;
+  padding: 0 12px 12px;
 }
 .connection-provider-actions > .btn {
   width: 100%;
@@ -648,17 +892,45 @@
   padding: 0;
   border: 0;
 }
-.connection-provider-actions .bluetooth-panel .row-actions,
-.connection-provider-actions .transport-panel .row-actions {
-  margin-top: 8px;
+/* The status row above already carries the dot and the state. The Bluetooth
+   bridge keeps its message as detail; Intiface's summary repeats the row. */
+.connection-provider-actions .bluetooth-summary {
+  margin: 0 0 8px;
+  color: var(--text-soft);
+  font-size: var(--fs-label);
+}
+.connection-provider-actions .bluetooth-indicator,
+.connection-provider-actions .transport-panel > .transport-summary {
+  display: none;
+}
+.connection-provider-actions .row-actions > .btn {
+  flex: 1 1 0;
 }
 .connection-provider-actions .meta-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.connection-provider-actions .meta-grid dd {
+  font-size: var(--fs-label);
+}
+.connection-provider-actions .transport-selection {
   margin-top: 8px;
+}
+.connection-provider-actions .transport-selection .field {
+  margin-bottom: 0;
+}
+.connection-provider-actions .bluetooth-panel > .form-status,
+.connection-provider-actions .transport-panel > .form-status {
+  margin: 8px 0 0;
+  font-size: var(--fs-hint);
 }
 .connection-key-form {
   display: grid;
   gap: 6px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .connection-key-label {
   display: flex;
@@ -682,47 +954,7 @@
   min-width: 0;
 }
 .connection-provider-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: var(--fs-hint);
-}
-.connection-configure {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  color: var(--accent);
-  font-size: var(--fs-label);
-  text-decoration: none;
-}
-.connection-configure:hover {
-  text-decoration: underline;
-}
-.connection-divider {
-  height: 1px;
-  margin: 0 12px;
-  background: var(--line);
-}
-.connection-limits-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px 0;
-}
-.connection-limits-head h3 {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.connection-limits-head span {
+  margin: 8px 0 0;
   color: var(--muted);
   font-size: var(--fs-hint);
 }
@@ -730,7 +962,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 8px 12px 12px;
+  padding: 0;
+}
+.connection-manager .quick-fields-connection > .form-status {
+  margin: 0;
+  font-size: var(--fs-hint);
 }
 .connection-manager .quick-handy-model {
   margin-bottom: 0;
@@ -1144,6 +1380,8 @@
     opacity: 0.75;
   }
   .connection-trigger-chevron,
+  .connection-method-trigger,
+  .connection-method-chevron,
   .nav-link {
     transition: none;
   }

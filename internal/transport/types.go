@@ -124,6 +124,8 @@ type TimedPoint struct {
 
 // StopCommand requests transport stop.
 type StopCommand struct {
+	// Fault marks recovery/failed startup: electrical outputs also zero strength.
+	Fault  bool   `json:"fault,omitempty"`
 	Reason string `json:"reason"`
 }
 

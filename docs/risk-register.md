@@ -1,5 +1,50 @@
 # MagicHandy Risk Register
 
+## R33: Electrical stimulation output (DG-LAB Coyote)
+
+Level: High
+
+A Coyote applies current through electrodes on the body. Wrong placement, a
+strength the user did not choose, output that continues after Stop or after
+MagicHandy loses control, or a ceiling that silently disappears could hurt
+someone. Unlike a stroker, the effect of a level depends on electrode type and
+placement, so MagicHandy cannot pick a safe level for the user.
+
+Mitigation:
+
+- the user alone raises channel strength (an app step or the device's own
+  switches); automation, modes, scripts and the model only shape pulse width
+  and rate beneath it, and no conversion profile maps position to strength
+- ceilings (default 30 of 200 per channel) are written on every connection;
+  requested and applied limits are tracked separately, and a failed update
+  zeroes and retires the connection until an explicit reconnect reapplies them
+- each connection sends zero; successful GATT delivery is labeled as a
+  commanded baseline rather than a device report. Timeouts never invent a
+  value or overwrite newer physical-switch reports; lost relative-change
+  confirmation discards queued increases
+- idle strength changes never play. A separate bounded Test action requires
+  the controlling host, current Stop sequence, idle output, applied limits and
+  a known baseline; lowering and zeroing cannot initiate this waveform
+- the global Stop invalidates queued output and keeps admission closed until
+  both devices finish. Its zero cannot be canceled by ordinary Stop, and failure
+  is propagated to every overlapping Stop response instead of claiming success
+- each worker write waits for native-call completion; a timed-out write kills
+  the worker before returning, preventing a hidden queue of stale frames
+- a lost link, a stalled pacer, a missing frame or a crashed core all end
+  output by sending nothing; the worker writes a zero last will when stdin
+  closes and dies with the core through a job object
+- connecting requires the host to accept the safety notes (electrodes below
+  the waist, no pacemaker, heart condition, epilepsy or pregnancy)
+- simulation covers the full protocol without a device; automated tests never
+  reach hardware
+
+Residual risk: physical feel, Stop latency (including decay after the last
+packet), Windows Bluetooth behavior and the
+ceilings' interaction with the device's switches need the user's own
+acceptance on a Coyote 3.0. Ceilings persist on the device after disconnecting,
+which is safe but limits other apps until changed. See
+[ADR 0044](decisions/0044-coyote-estim-output.md) and [estim.md](estim.md).
+
 ## 2026-10-11 Diagnostic report inclusion boundaries
 
 Combining diagnostic evidence risks disclosing unselected content, leaking
@@ -2242,3 +2287,14 @@ Context-capacity errors hold motion and suggest a smaller window; they do not
 silently rewrite dialogue. Local prompt limits, technical-only privacy, optional
 reviewer scope, current-state validation and Stop remain unchanged. See the
 [evaluation and limitations](long-context-review-2026-10-11.md).
+
+
+### Linked session state and reconnect (2026-10-14)
+
+A saved device is not proof of readiness or participation. ADR 0045 separates
+these states and defaults faults to Stop all. Continue-healthy is explicit,
+retires the failed participant for the rest of the run, and reports degraded
+state. Session binding prevents delayed commands from using a replacement
+Coyote or browser BLE connection. Test/calibration and playback cannot overlap.
+Physical radio-loss decay, Stop latency and actual dual-device timing remain
+hardware acceptance items; simulation does not establish these measurements.

@@ -5,6 +5,8 @@
 
 import type { SetupAssessment } from "./setup-assessment-types";
 import type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
+import type { CoyoteTransportSnapshot, EstimSettings } from "./coyote-types";
+export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceOutput, EstimSettings } from "./coyote-types";
 export type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { AccountCapabilities } from "./access-types";
 export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus, InternetDiscovery, CertificatePreparation } from "./access-types";
@@ -72,6 +74,7 @@ export interface MotionPaceSummary {
 }
 
 export interface EngineSnapshot {
+  linked_session?: { status: "ready" | "degraded" | "failed"; continue_healthy: boolean; retired_devices: string[] };
   running: boolean;
   starting?: boolean;
   completing?: boolean;
@@ -1073,14 +1076,8 @@ export interface PublicSettings {
     show_remote_navigation?: boolean;
   };
   media?: MediaSettingsPayload;
-  device: {
-    hsp_dispatch_owner: string;
-    intiface_server_address: string;
-    firmware_api_requirement: string;
-    api_application_id_source: string;
-    api_application_id_override?: string;
-    connection_key_set: boolean;
-  };
+  device: import("./coyote-types").PublicDeviceSettings;
+  estim?: EstimSettings & { remembered_device?: boolean };
   motion: MotionSettings;
   freestyle?: FreestyleSettings;
   autopilot: AutopilotSettings;
@@ -1325,14 +1322,8 @@ export interface SettingsUpdate {
     show_remote_navigation?: boolean;
   };
   media: MediaSettingsPayload;
-  device: {
-    hsp_dispatch_owner: string;
-    intiface_server_address: string;
-    firmware_api_requirement: string;
-    api_application_id_source: string;
-    api_application_id_override: string;
-    handy_connection_key?: string;
-  };
+  device: import("./coyote-types").DeviceSettingsUpdate;
+  estim?: EstimSettings & { forget_device?: boolean };
   motion: MotionSettings;
   autopilot?: AutopilotSettings;
   llm: PublicSettings["llm"];
@@ -1470,6 +1461,7 @@ export interface AppState {
   bluetooth_transport?: TransportDiagnostics;
   bluetooth_bridge?: BluetoothBridgeSnapshot;
   intiface_transport?: IntifaceTransportSnapshot;
+  coyote_transport?: CoyoteTransportSnapshot;
   trace?: Record<string, unknown>;
 }
 

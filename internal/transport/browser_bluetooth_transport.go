@@ -16,8 +16,9 @@ type BrowserBluetoothOptions struct {
 
 // BrowserBluetoothTransport dispatches HSP commands through a browser BLE bridge.
 type BrowserBluetoothTransport struct {
-	bridge  *BrowserBluetoothBridge
-	options BrowserBluetoothOptions
+	bridge    *BrowserBluetoothBridge
+	options   BrowserBluetoothOptions
+	sessionID uint64
 
 	mu sync.Mutex
 
@@ -61,8 +62,9 @@ func NewBrowserBluetoothTransport(bridge *BrowserBluetoothBridge, options Browse
 		return nil, errors.New("browser Bluetooth bridge is required")
 	}
 	return &BrowserBluetoothTransport{
-		bridge:  bridge,
-		options: options,
+		bridge:    bridge,
+		sessionID: bridge.SessionID(),
+		options:   options,
 		diagnosis: TransportDiagnostics{
 			Name:          BrowserBluetoothName,
 			PlaybackState: "unknown",
@@ -72,6 +74,9 @@ func NewBrowserBluetoothTransport(bridge *BrowserBluetoothBridge, options Browse
 
 // Stop sends an HSP stop command through the browser bridge.
 func (t *BrowserBluetoothTransport) Stop(ctx context.Context, command StopCommand) (CommandResult, error) {
+	if t.sessionID != 0 && t.sessionID != t.bridge.SessionID() {
+		return CommandResult{OK: true, Status: "connection_retired"}, nil
+	}
 	recorded := Command{
 		Kind: CommandKindStop,
 		Stop: &StopCommand{Reason: command.Reason},
@@ -267,7 +272,11 @@ func (t *BrowserBluetoothTransport) Diagnostics() TransportDiagnostics {
 	diagnostics := t.diagnosis
 	bridge := t.bridge.Snapshot()
 	diagnostics.Connected = bridge.Ready
-	if bridge.Ready && bridge.HSPState != nil {
+	if t.sessionID != 0 && t.sessionID != t.bridge.SessionID() {
+		diagnostics.Connected = false
+		diagnostics.PlaybackState = "stale"
+	}
+	if diagnostics.Connected && bridge.HSPState != nil {
 		diagnostics.PlaybackState = bridge.HSPState.PlayState
 	}
 	if diagnostics.LastCommand != nil {
@@ -291,6 +300,9 @@ func (t *BrowserBluetoothTransport) dispatch(ctx context.Context, command Comman
 
 func (t *BrowserBluetoothTransport) dispatchWithAck(ctx context.Context, command Command, path string, body map[string]any) (CommandResult, BrowserBluetoothBridgeAck, error) {
 	start := time.Now()
+	if t.sessionID != 0 {
+		ctx = context.WithValue(ctx, bluetoothSessionKey{}, t.sessionID)
+	}
 	ack := t.bridge.SendCommand(ctx, command.Kind, path, body)
 	result := CommandResult{
 		CommandID: ack.ID,

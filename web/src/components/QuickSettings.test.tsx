@@ -7,6 +7,7 @@ import { ApplicationAudience } from "../state/application-audience";
 
 const app = vi.hoisted(() => ({
   hostAdministration: true,
+  output: "handy",
   motion: null as MotionSettings | null,
   refresh: vi.fn(),
   show: vi.fn(),
@@ -18,7 +19,7 @@ vi.mock("../api/client", () => ({
 
 vi.mock("../state/app-state", () => ({
   useAppState: () => ({
-    state: { capabilities: { configure_host: app.hostAdministration }, settings: { motion: app.motion, options: { handy_models: ["handy_original", "handy_2_standard", "handy_2_pro"] } } },
+    state: { capabilities: { configure_host: app.hostAdministration }, settings: { device: { output: app.output }, motion: app.motion, options: { handy_models: ["handy_original", "handy_2_standard", "handy_2_pro"] } } },
     backendOnline: true,
     readOnly: false,
     refresh: app.refresh,
@@ -41,6 +42,7 @@ const initialMotion: MotionSettings = {
 describe("QuickSettings", () => {
   beforeEach(() => {
     app.hostAdministration = true;
+    app.output = "handy";
     vi.useFakeTimers();
     app.motion = { ...initialMotion };
     app.refresh.mockReset();
@@ -67,6 +69,15 @@ describe("QuickSettings", () => {
     fireEvent.change(minimum, { target: { value: "20" } });
     await act(async () => vi.advanceTimersByTimeAsync(180));
     expect(applyQuick).toHaveBeenCalledWith({ speed_min_percent: 20 });
+  });
+
+  it("keeps only Speed when the Coyote is the only device", () => {
+    app.output = "coyote";
+    render(<QuickSettings section="connection" />);
+    expect(screen.queryByRole("radiogroup", { name: "Handy model" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Stroke")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reverse direction")).not.toBeInTheDocument();
+    expect(screen.getByText("Speed")).toBeInTheDocument();
   });
 
   it("does not let stale polls overwrite an unconfirmed local edit", async () => {

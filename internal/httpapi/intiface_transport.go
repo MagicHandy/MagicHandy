@@ -60,6 +60,9 @@ func (s *Server) handleIntifaceDiagnostics(w http.ResponseWriter, _ *http.Reques
 }
 
 func (s *Server) handleIntifaceConnect(w http.ResponseWriter, r *http.Request) {
+	if !s.requireHandyConnection(w) {
+		return
+	}
 	if !s.requireController(w, r) {
 		return
 	}
@@ -118,11 +121,9 @@ func (s *Server) handleIntifaceDisconnect(w http.ResponseWriter, r *http.Request
 	}
 	s.intiface.opMu.Lock()
 	defer s.intiface.opMu.Unlock()
-	finishStop, _ := s.beginGlobalStop("intiface_disconnected", r.Context())
-	defer finishStop()
 
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
-	stopErr := s.stopAndClearMotionEngine(stopCtx, "intiface_disconnected")
+	stopErr := s.stopForHandyDisconnect(stopCtx, "intiface_disconnected")
 	cancel()
 	s.closeIntifaceSession()
 	s.writeIntifaceResult(w, stopErr)

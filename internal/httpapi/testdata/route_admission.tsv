@@ -116,6 +116,7 @@ host	GET /api/transport/cloud/state
 shared	GET /api/transport/diagnostics
 host	GET /api/transport/intiface/diagnostics
 shared	GET /api/transport/intiface/status
+shared	GET /api/transport/coyote/status
 shared	GET /api/update
 shared	GET /api/voice/requests/{id}
 shared	GET /api/voice/requests/{id}/audio
@@ -225,6 +226,11 @@ host	POST /api/transport/intiface/connect
 host	POST /api/transport/intiface/disconnect
 host	POST /api/transport/intiface/scan
 host	POST /api/transport/intiface/select
+host	POST /api/transport/coyote/connect
+host	POST /api/transport/coyote/disconnect
+control	POST /api/transport/coyote/strength
+control	POST /api/transport/coyote/test
+control	POST /api/transport/coyote/zero
 host	POST /api/voice/module/update
 control	POST /api/voice/requests/{id}/cancel
 control	POST /api/voice/requests/{id}/played
@@ -251,6 +257,8 @@ host	PUT /api/network
 host	PUT /api/prompt-sets/{id}
 host	PUT /api/settings
 host	PUT /api/settings/device/connection-key
+host	PUT /api/settings/device/output
+host	PUT /api/settings/estim/safety
 host	PUT /api/settings/labs
 control	PUT /api/settings/llm-motion-mode
 host	PUT /api/setup/preferences
@@ -263,3 +271,4 @@ public	DELETE /api/notice-preferences
 host	PUT /api/accounts/{id}/interface-access
 shared	GET /api/remote/videos
 shared	GET /api/remote/chat/messages
+host	PUT /api/settings/device/connections

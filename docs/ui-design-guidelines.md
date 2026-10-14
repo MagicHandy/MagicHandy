@@ -310,6 +310,28 @@ or glows.
   coordinate, state, or panel-sizing change.
 - Open moves focus to Close; Close restores the trigger. Escape remains the
   global Stop shortcut and is never consumed by this disclosure.
+- The manager uses a **+ Add connection** menu instead of an output segmented
+  choice. It offers only the missing supported device, with removal available
+  only when both devices are selected. The list follows backend confirmation;
+  it never implies support for multiple Handys or multiple Coyotes. A sticky
+  manager header, inset Add row, contrasting device headers and full-width
+  separators distinguish the sections without nesting cards. The Handy's
+  protocol title sits beside the device name in a keyboard-accessible menu;
+  browsing its choices does not
+  change the protocol. Coyote's single Bluetooth method stays plain text.
+  A Coyote adds one section below the Handy's (or replaces it when alone):
+  a compact outlined safety notice until accepted, then a status line with battery, two
+  `control-row` channel rows with neutral 44px `−`/`+` buttons around a tabular
+  strength value, a separate green **Test** action, and a secondary **Set both
+  to zero**. Strength steps are never red or green and never begin output:
+  red stays Stop and green stays go. Commanded zero has an explicit source
+  hint; an expired handshake cannot turn unknown strength into confirmed zero.
+  The trigger reads
+  `A 12 · B 8` beside the Coyote status. With the Coyote alone, the panel's
+  Motion section keeps only Speed; the Handy model, stroke and direction rows
+  hide.
+- Simulation is identified once in the persistent top-bar status. Do not repeat
+  it as a banner inside the connection manager or a hint beneath every device.
 
 ### Cards, sections, fields
 
@@ -679,3 +701,16 @@ Expanded external providers keep one outer border. Use the inset surface for
 the connection header, a muted accent-tinted form body, and stronger horizontal
 row dividers so account, model and history settings remain distinct. Keep nested
 history help inside its row group without doubling rules or adding another card.
+
+
+### Saved connections and playback
+
+The connection manager uses a compact icon-only + on its title row. Adding
+creates a saved row, and does not connect or include it in playback. Each row
+has a separate **Use in playback** switch; transport status remains visible
+when excluded. Removing the last connection is valid and leaves chat-only use.
+Settings lists configured playback devices and **On device failure** (stop all
+by default, or continue on the healthy device). Degraded linked sessions show
+which participant was retired; reconnecting never silently rejoins a run.
+Emergency Stop remains unconditional and reaches all outputs. Protocol menus
+stay inline with their device title, with flat section separators and contrast.

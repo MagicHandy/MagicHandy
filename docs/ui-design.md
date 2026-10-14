@@ -835,8 +835,28 @@ hoc per-widget colors) are not.
   it does not reacquire a released session. The full-width Cloud action
   explicitly connects or releases backend command admission. Cloud REST also
   exposes a compact write-only connection-key field and the active API v3 ID
-  source; owner choice, key clearing, developer ID override, and server addresses
+  source. The Handy's protocol title opens the same supported method choices as
+  Setup; only an explicit choice applies, and the backend stops motion before
+  changing methods. Key clearing, developer ID override, and server addresses
   remain in Settings.
+- **+ Add connection** offers the other supported device beside the current
+  one. The manager supports one Handy and one Coyote, disables Add at that
+  maximum, and allows removal only when another device remains. Add/remove
+  uses the backend output setting, stops motion, and never starts playback.
+  The list and protocol labels change only after backend confirmation. Each
+  device has its own header, protocol, status, and actions; Coyote has one
+  supported method and therefore shows its Bluetooth title as text.
+  With a Coyote, the manager
+  shows its safety notes until the host accepts them, then Connect/Disconnect,
+  battery and one row per channel: the device-reported strength, its ceiling
+  and neutral `−`/`+` steps with 44px targets. Strength steps never begin output.
+  A separate green **Test** action plays a bounded pulse while motion is paused.
+  Raising and Test need the controlling host, applied limits, and an eligible
+  strength baseline. A delivered zero command is labeled distinctly from a
+  device-reported strength. Unknown or pending strength blocks raising and
+  testing; Stop remains available regardless of controller ownership.
+  The panel keeps no strength state of its own. Commanded pulse widths are
+  labeled as commanded, never as measured output (ADR 0044).
 - The connection artwork is a flat vector status strip (no bitmap): three
   signal arcs above the Handy-inspired capsule, domed body, LED, and square
   marker. The arcs pulse in the accent hue while connecting and turn green when
@@ -1282,3 +1302,16 @@ never the hosted Chat route, conversation history or motion dispatch. Stop and
 controller takeover cancel the request. Descriptive refusal guidance remains
 dismissible; backup selection and check errors remain visible. Step navigation
 resets the inner setup scroller so the next question appears at the top.
+
+
+### Saved connections and playback
+
+The connection manager uses a compact icon-only + on its title row. Adding
+creates a saved row, and does not connect or include it in playback. Each row
+has a separate **Use in playback** switch; transport status remains visible
+when excluded. Removing the last connection is valid and leaves chat-only use.
+Settings lists configured playback devices and **On device failure** (stop all
+by default, or continue on the healthy device). Degraded linked sessions show
+which participant was retired; reconnecting never silently rejoins a run.
+Emergency Stop remains unconditional and reaches all outputs. Protocol menus
+stay inline with their device title, with flat section separators and contrast.

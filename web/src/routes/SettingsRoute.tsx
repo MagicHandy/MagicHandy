@@ -23,6 +23,8 @@ import { ChatSettingsPanel, resolveChatSettingsSection } from "../components/Cha
 import { SettingsNavigation, SettingsNavigationLabel } from "../components/SettingsNavigation";
 import { LabsSettings } from "../components/LabsSettings";
 import { DismissibleNotice } from "../components/DismissibleNotice";
+import { CoyoteSettings, DEFAULT_ESTIM_SETTINGS } from "../components/CoyoteSettings";
+import type { DeviceOutput, EstimSettings } from "../api/types";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
@@ -39,6 +41,14 @@ const SETTING_OPTION_LABELS: Partial<Record<string, MessageKey>> = {
   debug: "Debug",
   trace: "Trace",
 };
+
+// The settings payload marks a remembered device with a flag; the write shape
+// carries only forget_device, and the server keeps the address.
+function stripRemembered(estim: PublicSettings["estim"]): Partial<EstimSettings> {
+  if (!estim) return {};
+  const { remembered_device: _remembered, ...rest } = estim;
+  return rest;
+}
 
 const optionLabel = (labels: Partial<Record<string, MessageKey>>, value: string) => {
   const label = labels[value];
@@ -92,6 +102,7 @@ export function SettingsRoute() {
   const [clearElevenLabsKey, setClearElevenLabsKey] = useState(false);
   const [newOpenAITTSKey, setNewOpenAITTSKey] = useState("");
   const [clearOpenAITTSKey, setClearOpenAITTSKey] = useState(false);
+  const [forgetCoyote, setForgetCoyote] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -101,6 +112,29 @@ export function SettingsRoute() {
   const savedRef = useRef(saved);
   savedRef.current = saved;
   const locked = !backendOnline || readOnly || loading || state?.capabilities?.configure_host === false;
+  const liveDevice = state?.settings?.device;
+  const liveDeviceKey = JSON.stringify(liveDevice);
+  const previousDeviceKey = useRef(liveDeviceKey);
+
+  useEffect(() => {
+    if (previousDeviceKey.current === liveDeviceKey) return;
+    previousDeviceKey.current = liveDeviceKey;
+    const baseline = savedRef.current;
+    if (!liveDevice || !baseline) return;
+    // The manager applies these fields immediately. Follow its confirmed
+    // changes while retaining unrelated edits, including the failure policy.
+    const next = { ...baseline, device: liveDevice };
+    setS(draft => draft ? {
+      ...rebaseSettingsDraft(baseline, draft, next),
+      device: {
+        ...rebaseSettingsDraft(baseline.device, draft.device, liveDevice),
+        configured_devices: liveDevice.configured_devices,
+        output: liveDevice.output,
+        hsp_dispatch_owner: liveDevice.hsp_dispatch_owner,
+      },
+    } : draft);
+    setSaved(next);
+  }, [liveDeviceKey]);
 
   async function load(preserveDraft = false) {
     if (!mounted.current) return;
@@ -156,6 +190,9 @@ export function SettingsRoute() {
   }
   function patchDevice(p: Partial<PublicSettings["device"]>) {
     setS((cur) => (cur ? { ...cur, device: { ...cur.device, ...p } } : cur));
+  }
+  function patchEstim(p: Partial<EstimSettings>) {
+    setS((cur) => (cur ? { ...cur, estim: { ...DEFAULT_ESTIM_SETTINGS, ...cur.estim, ...p } } : cur));
   }
   function patchLLM(p: Partial<PublicSettings["llm"]>) {
     setS((cur) => (cur ? { ...cur, llm: { ...cur.llm, ...p } } : cur));
@@ -223,6 +260,8 @@ export function SettingsRoute() {
         show_superseded_originals: s.media?.show_superseded_originals ?? false,
       },
       device: {
+        output: s.device.output ?? "handy",
+        linked_failure_policy: s.device.linked_failure_policy ?? "stop_all",
         hsp_dispatch_owner: s.device.hsp_dispatch_owner,
         intiface_server_address: s.device.intiface_server_address,
         firmware_api_requirement: s.device.firmware_api_requirement,
@@ -230,6 +269,7 @@ export function SettingsRoute() {
         api_application_id_override: s.device.api_application_id_override ?? "",
         ...(connectionKey ? { handy_connection_key: connectionKey } : {}),
       },
+      estim: { ...DEFAULT_ESTIM_SETTINGS, ...stripRemembered(s.estim), forget_device: forgetCoyote },
       motion: s.motion,
       autopilot: s.autopilot,
       llm: s.llm,
@@ -296,6 +336,7 @@ export function SettingsRoute() {
         setClearElevenLabsKey(false);
         setNewOpenAITTSKey("");
         setClearOpenAITTSKey(false);
+        setForgetCoyote(false);
         await load();
       }
     } catch (e) {
@@ -374,6 +415,8 @@ export function SettingsRoute() {
     </select>
   );
   const owner = s.device.hsp_dispatch_owner;
+  const output: DeviceOutput = s.device.output === "none" || s.device.output === "coyote" || s.device.output === "handy_coyote" ? s.device.output : "handy";
+  const configuredDevices = s.device.configured_devices ?? (output === "none" ? [] : output === "handy_coyote" ? ["handy", "coyote"] : [output]);
   const incompleteModel = s?.llm.connections?.some(connection => !connection.model.trim() && (connection.id === s.llm.conversation_connection_id || (s.llm.motion_planner?.provider === "connection" && connection.id === s.llm.motion_planner.connection_id))) ?? false;
   const saveActions = <div className="row-actions settings-actions">
     <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving || incompleteModel}>{saving ? t("Saving settings") : t("Save settings")}</button>
@@ -474,6 +517,35 @@ export function SettingsRoute() {
           <>
             <h2 className="section-title">{t("Device")}</h2>
             <div className="group">
+              <h3 className="group-title">{t("Connections")}</h3>
+              <button type="button" className="btn btn-secondary" onClick={() => window.dispatchEvent(new Event("magichandy:open-connections"))}>{t("Manage connections")}</button>
+              <p className="hint-block">{t("Add and connect devices in the connection manager. Saved connections can stay connected without joining playback.")}</p>
+              <label className="field"><span className="label">{t("Playback devices")}</span>
+                <select value={output} disabled={locked} onChange={(e) => patchDevice({ output: e.target.value as DeviceOutput })}>
+                  <option value="none">{t("None (chat only)")}</option>
+                  {configuredDevices.includes("handy") && <option value="handy">{t("The Handy")}</option>}
+                  {configuredDevices.includes("coyote") && <option value="coyote">{t("Coyote")}</option>}
+                  {configuredDevices.includes("handy") && configuredDevices.includes("coyote") && <option value="handy_coyote">{t("The Handy and a Coyote together")}</option>}
+                </select>
+              </label>
+              <label className="field"><span className="label">{t("On device failure")}</span>
+                <select value={s.device.linked_failure_policy ?? "stop_all"} disabled={locked} onChange={(event) => patchDevice({ linked_failure_policy: event.target.value as "stop_all" | "continue_healthy" })}>
+                  <option value="stop_all">{t("Stop all devices (recommended)")}</option>
+                  <option value="continue_healthy">{t("Continue on the healthy device")}</option>
+                </select>
+              </label>
+              <p className="hint-block">{t("Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop always stops every device.")}</p>
+              <p className="hint-block">{t("Changing playback devices or the failure policy stops the current run.")}</p>
+            </div>
+            {configuredDevices.includes("coyote") && <CoyoteSettings
+              estim={{ ...DEFAULT_ESTIM_SETTINGS, ...s.estim }}
+              rememberedDevice={Boolean(s.estim?.remembered_device)}
+              forgetDevice={forgetCoyote}
+              locked={locked}
+              patch={patchEstim}
+              setForgetDevice={setForgetCoyote}
+            />}
+            {configuredDevices.includes("handy") && <div className="group">
               <h3 className="group-title">{t("Connection")}</h3>
               <label className="field"><span className="label">{t("Protocol")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
               {owner === "cloud_rest" && <>
@@ -487,7 +559,7 @@ export function SettingsRoute() {
               {owner === "intiface" && <>
                 <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
               </>}
-            </div>
+            </div>}
             <details className="group" open={s.device.api_application_id_source === "developer_override" ? true : undefined}>
               <summary className="group-title">{t("Advanced")}</summary>
               {owner === "cloud_rest" && <>
@@ -497,7 +569,7 @@ export function SettingsRoute() {
               <h3 className="group-title">{t("Local server")}</h3>
               <label className="field"><span className="label">{t("Server port")}</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
             </details>
-            <ManualMotionTest />
+            {configuredDevices.includes("handy") && <ManualMotionTest />}
           </>
         )}
 

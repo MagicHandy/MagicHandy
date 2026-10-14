@@ -1418,7 +1418,8 @@ function Build-MagicHandyBinaries {
         @{ Output = 'magichandy.exe'; Package = './cmd/magichandy' },
         @{ Output = 'voice-parakeet-worker.exe'; Package = './cmd/voice-parakeet-worker' },
         @{ Output = 'voice-openai-tts-worker.exe'; Package = './cmd/voice-openai-tts-worker' },
-        @{ Output = 'voice-elevenlabs-worker.exe'; Package = './cmd/voice-elevenlabs-worker' }
+        @{ Output = 'voice-elevenlabs-worker.exe'; Package = './cmd/voice-elevenlabs-worker' },
+        @{ Output = 'estim-ble-worker.exe'; Package = './cmd/estim-ble-worker' }
     )
     $token = [Guid]::NewGuid().ToString('N')
     $stageRoot = Join-Path $RepositoryPath ".installer-build-$token"
@@ -1764,7 +1765,7 @@ function Set-MagicHandyAppLanguages {
 function Remove-MagicHandyBuildBackups {
     param([Parameter(Mandatory = $true)][string]$RepositoryPath)
 
-    foreach ($name in @('magichandy.exe~', 'voice-parakeet-worker.exe~', 'voice-openai-tts-worker.exe~', 'voice-elevenlabs-worker.exe~')) {
+    foreach ($name in @('magichandy.exe~', 'voice-parakeet-worker.exe~', 'voice-openai-tts-worker.exe~', 'voice-elevenlabs-worker.exe~', 'estim-ble-worker.exe~')) {
         $path = Join-Path $RepositoryPath $name
         if (Test-Path -LiteralPath $path) {
             Assert-MagicHandyChildPath -Root $RepositoryPath -Candidate $path
