@@ -3172,5 +3172,12 @@
   "Continue on the healthy device": "Continuar con el dispositivo que funciona",
   "Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop always stops every device.": "Se aplica a desconexiones inesperadas y errores durante la reproducción conjunta. Reconectar nunca reincorpora el dispositivo automáticamente. La parada de emergencia siempre detiene todos los dispositivos.",
   "Changing playback devices or the failure policy stops the current run.": "Cambiar los dispositivos de reproducción o la política de fallos detiene la sesión actual.",
-  "None (chat only)": "Ninguno (solo chat)"
+  "None (chat only)": "Ninguno (solo chat)",
+  "Native Bluetooth": "Bluetooth nativo",
+  "Connect through the computer running MagicHandy. No browser pairing or cloud key required.": "Conecta mediante el Bluetooth del equipo que ejecuta MagicHandy. No requiere vinculación del navegador ni clave de la nube.",
+  "Native Bluetooth is available on Windows and Linux.": "El Bluetooth nativo está disponible en Windows y Linux.",
+  "The native Bluetooth helper is missing. Update MagicHandy to install it.": "Falta el componente de Bluetooth nativo. Actualiza MagicHandy para instalarlo.",
+  "Uses Bluetooth on the computer running MagicHandy. Put the Handy in firmware 4 Bluetooth mode before connecting.": "Usa el Bluetooth del equipo que ejecuta MagicHandy. Antes de conectar, activa el modo Bluetooth del firmware 4 en el Handy.",
+  "Connect Handy": "Conectar Handy",
+  "Forget device": "Olvidar dispositivo"
 }

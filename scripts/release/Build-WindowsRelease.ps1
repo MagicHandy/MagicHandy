@@ -229,7 +229,7 @@ try {
             @{ Output = 'voice-parakeet-worker.exe'; Package = './cmd/voice-parakeet-worker' },
             @{ Output = 'voice-openai-tts-worker.exe'; Package = './cmd/voice-openai-tts-worker' },
             @{ Output = 'voice-elevenlabs-worker.exe'; Package = './cmd/voice-elevenlabs-worker' },
-            @{ Output = 'estim-ble-worker.exe'; Package = './cmd/estim-ble-worker' }
+            @{ Output = 'bluetooth-worker.exe'; Package = './cmd/bluetooth-worker' }
         )
         foreach ($target in $targets) {
             $destination = Join-Path $payloadRoot $target.Output

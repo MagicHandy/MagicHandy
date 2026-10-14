@@ -5,6 +5,11 @@
 Accepted on 2026-10-14. The implementation drives a simulated Coyote end to
 end; physical acceptance on a Coyote 3.0 is open (see Validation).
 
+The worker packaging and IPC ownership below are extended by
+[ADR 0046](0046-shared-native-bluetooth-worker.md): the helper is now named
+`bluetooth-worker`, version-3 IPC is device-neutral, and each Handy/COYOTE link
+still gets its own process. The pulse/strength decisions in this ADR remain.
+
 ## Context
 
 The DG-LAB Coyote 3.0 is a two-channel electrical stimulation box. Each

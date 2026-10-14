@@ -5,7 +5,7 @@ import { ConnectionManager } from "./ConnectionManager";
 
 const appState = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 const toast = vi.hoisted(() => vi.fn());
-const api = vi.hoisted(() => ({ saveSetupPreferences: vi.fn(), changeDeviceConnection: vi.fn() }));
+const api = vi.hoisted(() => ({ saveSetupPreferences: vi.fn(), changeDeviceConnection: vi.fn(), nativeBluetoothConnect: vi.fn() }));
 const lifecycle = vi.hoisted(() => ({ bluetoothUnmounts: 0, coyoteUnmounts: 0, coyoteProps: {} as Record<string, unknown> }));
 
 vi.mock("../state/app-state", () => ({
@@ -41,6 +41,7 @@ beforeEach(() => {
   toast.mockReset();
   api.saveSetupPreferences.mockReset().mockResolvedValue({ settings: {} });
   api.changeDeviceConnection.mockReset().mockResolvedValue({ settings: {} });
+  api.nativeBluetoothConnect.mockReset();
   lifecycle.bluetoothUnmounts = 0;
   lifecycle.coyoteUnmounts = 0;
   lifecycle.coyoteProps = {};
@@ -333,4 +334,13 @@ describe("playback participation", () => {
     expect(screen.getByTestId("coyote-panel")).toBeInTheDocument();
     expect(lifecycle.coyoteUnmounts).toBe(0);
   });
+});
+
+it("offers Native Bluetooth alongside browser Bluetooth and only saves the selection", async () => {
+  renderManager({ methods: ["cloud_rest", "browser_bluetooth", "native_bluetooth", "intiface"] });
+  fireEvent.click(screen.getByRole("button", { name: "The Handy Handy Cloud REST" }));
+  expect(screen.getByRole("menuitemradio", { name: "Browser Bluetooth" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("menuitemradio", { name: "Native Bluetooth" }));
+  await waitFor(() => expect(api.saveSetupPreferences).toHaveBeenCalledWith({ device_owner: "native_bluetooth" }));
+  expect(api.nativeBluetoothConnect).not.toHaveBeenCalled();
 });

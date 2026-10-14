@@ -162,6 +162,22 @@ func assertDiagnosticExcludes(t *testing.T, files map[string]string, markers ...
 	}
 }
 
+func TestDiagnosticReportRedactsNativeHardwareIdentifiersInErrors(t *testing.T) {
+	server := newTestServer(t)
+	const handyAddress, coyoteAddress = "FA:CE:00:00:00:11", "FA:CE:00:00:00:22"
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Device.NativeBluetoothAddress = handyAddress
+		settings.Estim.RememberedAddress = coyoteAddress
+		return settings
+	})
+	server.traces.Add(diagnostics.MotionTraceRow{Source: "native_bluetooth_hsp", Annotation: "driver write failed for " + handyAddress + "; other device " + coyoteAddress})
+	files := diagnosticFiles(t, server, "")
+	assertDiagnosticExcludes(t, files, handyAddress, coyoteAddress)
+	if !strings.Contains(files["motion/live-trace.json"], "driver write failed for [redacted]") {
+		t.Fatal("hardware redaction lost useful driver failure context")
+	}
+}
+
 func TestDiagnosticFullHistoryIncludesEveryRetainedSessionBeyondDisplayPage(t *testing.T) {
 	server := newTestServer(t)
 	session, err := server.chatLog.ActiveSessionID()

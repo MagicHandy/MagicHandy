@@ -2,13 +2,9 @@ package config
 
 func publicSettingsOptionHints() PublicSettingsOptionHints {
 	return withFreestyleOptionHints(PublicSettingsOptionHints{
-		DeviceOutputs:    []string{DeviceOutputNone, DeviceOutputHandy, DeviceOutputCoyote, DeviceOutputHandyCoyote},
-		EstimFollowModes: []string{EstimFollowStroke, EstimFollowSpeed, EstimFollowPosition},
-		HSPDispatchOwners: []string{
-			DispatchOwnerCloudREST,
-			DispatchOwnerBrowserBluetooth,
-			DispatchOwnerIntiface,
-		},
+		DeviceOutputs:     []string{DeviceOutputNone, DeviceOutputHandy, DeviceOutputCoyote, DeviceOutputHandyCoyote},
+		EstimFollowModes:  []string{EstimFollowStroke, EstimFollowSpeed, EstimFollowPosition},
+		HSPDispatchOwners: handyDispatchOwners(),
 		APIApplicationIDSources: []string{
 			ApplicationIDSourceBundled,
 			ApplicationIDSourceDeveloperOverride,
@@ -123,4 +119,8 @@ func voiceTTSProviderOptions() []string {
 
 func voiceTTSDeviceOptions() []string {
 	return []string{TTSDeviceAuto, TTSDeviceCUDA, TTSDeviceCPU}
+}
+
+func handyDispatchOwners() []string {
+	return []string{DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth, DispatchOwnerNativeBluetooth, DispatchOwnerIntiface}
 }

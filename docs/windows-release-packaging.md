@@ -86,7 +86,7 @@ The staged `MagicHandy` directory contains:
 - `voice-parakeet-worker.exe`;
 - `voice-openai-tts-worker.exe`;
 - `voice-elevenlabs-worker.exe`;
-- `estim-ble-worker.exe`, the Coyote Bluetooth helper;
+- `bluetooth-worker.exe`, the shared Handy and Coyote Bluetooth helper;
 - setup and TTS PowerShell/Python helpers under `scripts\`;
 - the managed llama.cpp installer plus its pinned upstream MIT license under
   `scripts\`;

@@ -46,15 +46,7 @@ type BrowserBluetoothBridgeCommand struct {
 }
 
 // BrowserBluetoothBridgeAck is the browser command result shape.
-type BrowserBluetoothBridgeAck struct {
-	ID            string         `json:"id,omitempty"`
-	OK            bool           `json:"ok"`
-	Status        string         `json:"status,omitempty"`
-	Transport     string         `json:"transport"`
-	ElapsedMillis float64        `json:"elapsed_ms,omitempty"`
-	Error         string         `json:"error,omitempty"`
-	Response      map[string]any `json:"response,omitempty"`
-}
+type BrowserBluetoothBridgeAck = HandyBluetoothAck
 
 // BrowserBluetoothBridgeSnapshot is a safe bridge status view.
 type BrowserBluetoothBridgeSnapshot struct {

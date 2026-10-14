@@ -19,6 +19,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/estim"
+	"github.com/mapledaemon/MagicHandy/internal/handyble"
 	"github.com/mapledaemon/MagicHandy/internal/httpapi"
 	"github.com/mapledaemon/MagicHandy/internal/logging"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
@@ -232,6 +233,7 @@ func applicationRuntime(simulateMotion bool) httpapi.Runtime {
 		runtime.MotionSimulated = true
 		// The Coyote is simulated too: connected devices produce no output.
 		runtime.CoyoteConnector = estim.NewSimulatedConnector()
+		runtime.NativeBluetoothConnector = handyble.NewSimulatedConnector()
 	}
 	return runtime
 }

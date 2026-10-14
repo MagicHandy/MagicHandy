@@ -748,6 +748,7 @@ func normalizeSetupPreferences(request *setupPreferencesRequest) (int, error) {
 	if request.DeviceOwner != "" && !stringInSlice(request.DeviceOwner, []string{
 		config.DispatchOwnerCloudREST,
 		config.DispatchOwnerBrowserBluetooth,
+		config.DispatchOwnerNativeBluetooth,
 		config.DispatchOwnerIntiface,
 	}) {
 		return http.StatusBadRequest, errors.New("setup device transport is unsupported")

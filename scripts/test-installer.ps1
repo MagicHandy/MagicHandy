@@ -1641,7 +1641,7 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     }
 
     Write-Host 'Checking coherent staged binary replacement and verified relaunch...'
-    $binaryNames = @('magichandy.exe', 'voice-parakeet-worker.exe', 'voice-openai-tts-worker.exe', 'voice-elevenlabs-worker.exe', 'estim-ble-worker.exe')
+    $binaryNames = @('magichandy.exe', 'voice-parakeet-worker.exe', 'voice-openai-tts-worker.exe', 'voice-elevenlabs-worker.exe', 'bluetooth-worker.exe')
     $staleHashes = @{}
     foreach ($name in $binaryNames) {
         $path = Join-Path $runtimeRepo $name

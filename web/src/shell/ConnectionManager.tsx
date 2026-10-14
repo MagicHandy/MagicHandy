@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type { BluetoothBridgeSnapshot, DeviceOutput, IntifaceTransportSnapshot } from "../api/types";
 import { BluetoothBridge, type BluetoothBridgeState } from "../components/BluetoothBridge";
 import { CoyotePanel, coyoteStatusText, coyoteStrengthText } from "../components/CoyotePanel";
+import { NativeBluetoothPanel } from "../components/NativeBluetoothPanel";
 import { IntifacePanel, type IntifaceActivity } from "../components/IntifacePanel";
 import { useMenu } from "../components/useMenu";
 import { QuickSettings } from "../components/QuickSettings";
@@ -78,6 +79,7 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
   const handyIncluded = output === "handy" || output === "handy_coyote";
   const coyoteIncluded = output === "coyote" || output === "handy_coyote";
   const coyote = state?.coyote_transport;
+  const native = state?.native_bluetooth_transport;
   const linkedSession = state?.motion?.engine?.linked_session;
   const canConfigureHost = state?.capabilities?.configure_host !== false;
   // Device and method changes keep their controls focusable while a request
@@ -141,19 +143,19 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
   const coyoteSafetyAcknowledged = Boolean(state?.settings?.estim?.safety_acknowledged);
   const handyName = owner === "browser_bluetooth"
     ? bluetooth.deviceName || "The Handy"
-    : selectedIntifaceDevice?.device_name || "The Handy";
+    : owner === "native_bluetooth" ? native?.status.device_name || "The Handy" : selectedIntifaceDevice?.device_name || "The Handy";
   const deviceName = !usesHandy && !usesCoyote ? t("Connections") : !usesHandy ? t("Coyote") : usesCoyote ? t("{device} + Coyote", { device: handyName }) : handyName;
   const intifaceReady = Boolean(intiface.status.connected && intiface.status.selected_device_index !== undefined);
   // An Intiface scan runs until it is stopped, so a scan only means "still
   // finding a device" while no actuator has been chosen.
   const intifaceSearching = !intifaceReady && (intifaceActivity === "scanning" || intiface.status.scanning);
-  const connecting = cloudAction === "check" || cloudAction === "connect" || (owner === "browser_bluetooth" && bluetooth.connecting) || (owner === "intiface" && (intifaceActivity === "connecting" || intifaceSearching));
+  const connecting = (owner === "native_bluetooth" && Boolean(native?.status.connecting)) || cloudAction === "check" || cloudAction === "connect" || (owner === "browser_bluetooth" && bluetooth.connecting) || (owner === "intiface" && (intifaceActivity === "connecting" || intifaceSearching));
   const connected = owner === "cloud_rest"
     ? Boolean(state?.cloud_transport?.connected)
-    : owner === "browser_bluetooth" ? bluetooth.connected : owner === "intiface"
+    : owner === "native_bluetooth" ? Boolean(native?.status.connected) : owner === "browser_bluetooth" ? bluetooth.connected : owner === "intiface"
       ? intifaceReady
       : false;
-  const hasError = (owner === "browser_bluetooth" && ["error", "unsupported"].includes(bluetooth.status))
+  const hasError = (owner === "native_bluetooth" && Boolean(native?.status.message)) || (owner === "browser_bluetooth" && ["error", "unsupported"].includes(bluetooth.status))
     || (owner === "cloud_rest" && cloudAttemptFailed)
     || (owner === "intiface" && intifaceAttemptFailed);
   const handyPhase: ConnectionPhase = !backendOnline
@@ -163,7 +165,9 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
     ? "disconnected"
     : initializing ? "initializing" : coyote?.status.connecting ? "connecting" : coyote?.status.connected ? "connected" : "disconnected";
   const phase = !usesHandy ? coyotePhase : handyPhase;
-  const handyStatus = connectionStatusText({
+  const handyStatus = owner === "native_bluetooth" && backendOnline
+    ? native?.status.connecting ? "Connecting" : native?.status.connected ? "Bluetooth connected" : "Bluetooth disconnected"
+    : connectionStatusText({
     backendOnline,
     bluetooth,
     cloudVerified: connected,
@@ -409,6 +413,7 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
               initial={state?.bluetooth_bridge as BluetoothBridgeSnapshot | undefined}
               onStateChange={onBluetoothState}
             />
+            {usesHandy && owner === "native_bluetooth" && <NativeBluetoothPanel snapshot={native} locked={locked} canConfigureHost={canConfigureHost} onChanged={refresh} />}
             <IntifacePanel
               visible={usesHandy && owner === "intiface"}
               locked={locked}
@@ -484,6 +489,7 @@ function normalizeOutput(value: string | undefined): DeviceOutput {
 function connectionProviderName(owner: string, initializing: boolean) {
   if (initializing) return "Loading provider";
   if (owner === "browser_bluetooth") return "Browser Bluetooth";
+  if (owner === "native_bluetooth") return "Native Bluetooth";
   if (owner === "intiface") return "Intiface Central";
   if (owner === "cloud_rest") return "Cloud REST";
   return "Not configured";

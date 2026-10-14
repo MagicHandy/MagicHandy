@@ -2298,3 +2298,19 @@ state. Session binding prevents delayed commands from using a replacement
 Coyote or browser BLE connection. Test/calibration and playback cannot overlap.
 Physical radio-loss decay, Stop latency and actual dual-device timing remain
 hardware acceptance items; simulation does not establish these measurements.
+
+### Native Handy Bluetooth process and buffer lifetime (2026-10-14)
+
+ADR 0046 extends Handy HSP to a host-owned worker without a new motion path.
+Native and browser owners share point validation, units, stream indices and
+Stop admission. Worker instances are isolated per device; simulated process
+termination confirms one instance can fail without killing the other. Remembered
+Handy discovery never silently chooses another address, and ambiguous scans fail.
+
+An OS write completion is not physical position feedback. The native worker's
+last-will Stop is best effort: kill-on-parent-exit, a hung native API or radio
+loss can prevent delivery. The driver sends no infinite loops and pauses on
+starvation, but previously buffered Handy points can remain after controller
+loss. Physical Stop delay, failure decay, negotiated MTU/write properties and
+simultaneous Handy/COYOTE radio performance remain explicit acceptance items.
+See [software evidence and hardware checklist](native-handy-bluetooth-review-2026-10-14.md).

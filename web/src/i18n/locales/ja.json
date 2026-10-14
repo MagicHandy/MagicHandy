@@ -3172,5 +3172,12 @@
   "Continue on the healthy device": "正常なデバイスで続行",
   "Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop always stops every device.": "連動再生中の予期しない切断や再生エラーに適用されます。再接続しても自動的に再生には復帰しません。緊急停止は常にすべてのデバイスを停止します。",
   "Changing playback devices or the failure policy stops the current run.": "再生デバイスや障害時の動作を変更すると、現在の再生が停止します。",
-  "None (chat only)": "なし（チャットのみ）"
+  "None (chat only)": "なし（チャットのみ）",
+  "Native Bluetooth": "ネイティブBluetooth",
+  "Connect through the computer running MagicHandy. No browser pairing or cloud key required.": "MagicHandyを実行しているパソコンのBluetoothで接続します。ブラウザーでのペアリングやクラウドキーは不要です。",
+  "Native Bluetooth is available on Windows and Linux.": "ネイティブBluetoothはWindowsとLinuxで利用できます。",
+  "The native Bluetooth helper is missing. Update MagicHandy to install it.": "ネイティブBluetoothの補助プログラムがありません。MagicHandyを更新してインストールしてください。",
+  "Uses Bluetooth on the computer running MagicHandy. Put the Handy in firmware 4 Bluetooth mode before connecting.": "MagicHandyを実行しているパソコンのBluetoothを使います。接続前にHandyをファームウェア4のBluetoothモードにしてください。",
+  "Connect Handy": "Handyに接続",
+  "Forget device": "デバイスの登録を解除"
 }

@@ -22,6 +22,8 @@ const (
 	DispatchOwnerCloudREST = "cloud_rest"
 	// DispatchOwnerBrowserBluetooth selects browser-owned Bluetooth dispatch.
 	DispatchOwnerBrowserBluetooth = "browser_bluetooth"
+	// DispatchOwnerNativeBluetooth selects the host-owned BLE worker.
+	DispatchOwnerNativeBluetooth = "native_bluetooth"
 	// DispatchOwnerIntiface selects backend-owned Intiface dispatch.
 	DispatchOwnerIntiface = "intiface"
 
@@ -1072,7 +1074,7 @@ func validateSettings(settings Settings) error {
 	if err := validateDeviceOutput(settings.Device.Output); err != nil {
 		return err
 	}
-	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth, DispatchOwnerIntiface) {
+	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth, DispatchOwnerNativeBluetooth, DispatchOwnerIntiface) {
 		return fmt.Errorf("unknown dispatch owner %q", settings.Device.HSPDispatchOwner)
 	}
 	if err := validateEstimSettings(settings.Estim); err != nil {

@@ -14,6 +14,7 @@ export function handyConnectionMethods(): ConnectionMethod[] {
   return [
     { value: "cloud_rest", label: t("Handy Cloud REST"), detail: t("Recommended for firmware v4. Requires your private connection key and internet access.") },
     { value: "browser_bluetooth", label: t("Browser Bluetooth"), detail: t("Connect directly from a compatible browser. No cloud connection key is stored.") },
+    { value: "native_bluetooth", label: t("Native Bluetooth"), detail: t("Connect through the computer running MagicHandy. No browser pairing or cloud key required.") },
     { value: "intiface", label: t("Intiface Central"), detail: t("Use an existing Intiface Central session for local device control.") },
   ];
 }

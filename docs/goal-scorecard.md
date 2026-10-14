@@ -1,5 +1,35 @@
 # Goal Scorecard
 
+## 2026-10-14 — Native Handy Bluetooth
+
+[ADR 0046](decisions/0046-shared-native-bluetooth-worker.md) extracts the shared
+native byte-link infrastructure and adds Handy firmware-4 RPC/HSP. No dependency,
+motion sampler, LLM prompt, model call or idle polling loop is added. A worker
+starts only for an explicit connection. A process is isolated per device rather
+than keeping a shared radio process alive at idle.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, relative to the device-inventory
+baseline below: core **22,764,544 -> 22,881,792 B** (+117,248 B); worker
+**2,999,808 -> 3,031,040 B** (+31,232 B). The core has **14 external modules**
+(15 including the application), unchanged, and no native radio dependency.
+Both core and worker also build for Linux amd64 with CGO disabled.
+
+Main UI JS: **1,198,340 -> 1,201,447 B raw** (+3,107 B), **322,354 ->
+323,133 B gzip** (+779 B). Main CSS remains **204,037 B raw / 35,599 B gzip**.
+Compression uses Python gzip with `mtime=0`. The canonical embedded dist is
+rebuilt with stale hashes removed; the existing large-chunk advisory remains.
+
+Two isolated Windows startups reached `/healthz` in **984 ms** and **1,043 ms**.
+These were warm filesystem-cache samples after building, not a controlled
+cold-start comparison.
+After a real local-model generation and browser review, the disconnected app
+sampled **29,962,240 B working set / 57,860,096 B private memory**. Windows working
+set can be trimmed; this does not close the existing RSS waiver. Active native
+radio/dual-worker RSS and physical transport latency await hardware validation.
+The [review](native-handy-bluetooth-review-2026-10-14.md) records software evidence
+and the remaining physical checks.
+
 ## 2026-10-14 — Device inventory and linked-session failure policy
 
 [ADR 0045](decisions/0045-device-inventory-and-linked-sessions.md) separates

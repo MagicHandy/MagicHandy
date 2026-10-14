@@ -45,6 +45,9 @@ func (s *Server) stopHandyOutsideEngine(ctx context.Context, engineOwner, reason
 	outside := strings.HasPrefix(engineOwner, config.DeviceOutputCoyote+"/")
 	connected := false
 	switch settings.Device.HSPDispatchOwner {
+	case config.DispatchOwnerNativeBluetooth:
+		connected = s.nativeBluetooth.owner.Status().Connected
+		outside = outside || !strings.HasSuffix(engineOwner, fmt.Sprintf("/native-ble-%d", s.nativeBluetooth.owner.SessionID()))
 	case config.DispatchOwnerBrowserBluetooth:
 		connected = s.bluetooth.bridge.Snapshot().Ready
 		outside = outside || !strings.HasSuffix(engineOwner, fmt.Sprintf("/ble-%d", s.bluetooth.bridge.SessionID()))
@@ -71,6 +74,8 @@ func (s *Server) stopHandyOutsideEngine(ctx context.Context, engineOwner, reason
 func (s *Server) removeHandyConnection(ctx context.Context, previous config.Settings) error {
 	var stopErr error
 	switch previous.Device.HSPDispatchOwner {
+	case config.DispatchOwnerNativeBluetooth:
+		return s.nativeBluetooth.owner.Disconnect(ctx)
 	case config.DispatchOwnerCloudREST:
 		if s.cloudDiagnostics().Connected && !s.motion.simulated {
 			owner, err := s.newCloudTransportForControl()

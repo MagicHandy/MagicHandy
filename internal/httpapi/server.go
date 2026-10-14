@@ -20,6 +20,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
 	"github.com/mapledaemon/MagicHandy/internal/audit"
+	"github.com/mapledaemon/MagicHandy/internal/ble"
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/chatapp"
 	"github.com/mapledaemon/MagicHandy/internal/config"
@@ -64,7 +65,8 @@ type Runtime struct {
 	IntifaceHTTPClient     *http.Client
 	BrowserBluetoothBridge *transport.BrowserBluetoothBridge
 	// CoyoteConnector replaces the Bluetooth worker, for simulation and tests.
-	CoyoteConnector estim.Connector
+	CoyoteConnector          estim.Connector
+	NativeBluetoothConnector ble.Connector
 	// ExecutablePath makes first-party worker discovery deterministic and
 	// injectable in tests. Empty falls back to os.Executable.
 	ExecutablePath      string
@@ -106,6 +108,7 @@ type Server struct {
 	bluetooth           bluetoothRuntime
 	intiface            intifaceRuntime
 	coyote              coyoteRuntime
+	nativeBluetooth     nativeBluetoothRuntime
 	motion              motionRuntime
 	lab                 llmLabRuntime
 	// autopilotHold remembers a human's standing wish to keep continuous motion.
@@ -267,7 +270,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		return nil, err
 	}
 
-	server.configureCoyote(runtime, settings, logger)
+	server.configureDeviceWorkers(runtime, settings, logger)
 	server.activate(runtime, settings)
 	server.networkAutomation.StartRenewal()
 	return server, nil
@@ -442,6 +445,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/transport/bluetooth/stop", s.handleBluetoothStop)
 	s.intifaceRoutes(mux)
 	s.coyoteRoutes(mux)
+	s.nativeBluetoothRoutes(mux)
 	mux.HandleFunc("GET /api/motion/state", s.handleMotionState)
 	mux.HandleFunc("GET /api/motion/events", s.handleMotionEvents)
 	s.motionLabRoutes(mux)
@@ -648,26 +652,27 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			"transport": "cloud_rest_browser_bluetooth_intiface_manual",
 			"voice":     "optional_worker_protocol_v1",
 		},
-		"llm":                 s.clientLLMState(r),
-		"controller":          s.controllerState(r),
-		"capabilities":        s.capabilities(r),
-		"memory":              s.memoryState(r.Context()),
-		"modes":               s.modes.Status(),
-		"motion_review":       s.motionReview.snapshot(),
-		"voice":               s.clientVoiceState(r),
-		"chat":                s.chatState(r.Context()),
-		"library":             s.libraryState(),
-		"media":               s.clientMediaState(r),
-		"motion":              s.clientMotionState(r),
-		"motion_simulated":    s.motion.simulated,
-		"labs_enabled":        settings.Labs.Enabled,
-		"transport":           transportDiagnostics,
-		"cloud_transport":     s.clientTransportDiagnostics(r, s.cloudDiagnostics()),
-		"bluetooth_transport": s.clientTransportDiagnostics(r, s.bluetoothDiagnostics()),
-		"bluetooth_bridge":    s.clientBluetoothSnapshot(r),
-		"intiface_transport":  s.clientIntifaceSnapshot(r),
-		"coyote_transport":    s.clientCoyoteSnapshot(r),
-		"trace":               s.traces.Summary(),
+		"llm":                        s.clientLLMState(r),
+		"controller":                 s.controllerState(r),
+		"capabilities":               s.capabilities(r),
+		"memory":                     s.memoryState(r.Context()),
+		"modes":                      s.modes.Status(),
+		"motion_review":              s.motionReview.snapshot(),
+		"voice":                      s.clientVoiceState(r),
+		"chat":                       s.chatState(r.Context()),
+		"library":                    s.libraryState(),
+		"media":                      s.clientMediaState(r),
+		"motion":                     s.clientMotionState(r),
+		"motion_simulated":           s.motion.simulated,
+		"labs_enabled":               settings.Labs.Enabled,
+		"transport":                  transportDiagnostics,
+		"cloud_transport":            s.clientTransportDiagnostics(r, s.cloudDiagnostics()),
+		"bluetooth_transport":        s.clientTransportDiagnostics(r, s.bluetoothDiagnostics()),
+		"bluetooth_bridge":           s.clientBluetoothSnapshot(r),
+		"intiface_transport":         s.clientIntifaceSnapshot(r),
+		"coyote_transport":           s.clientCoyoteSnapshot(r),
+		"native_bluetooth_transport": s.nativeBluetoothSnapshot(),
+		"trace":                      s.traces.Summary(),
 	})
 }
 

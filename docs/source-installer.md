@@ -98,7 +98,7 @@ The source installer builds these binaries with `CGO_ENABLED=0`:
 - `voice-parakeet-worker.exe`
 - `voice-openai-tts-worker.exe`
 - `voice-elevenlabs-worker.exe`
-- `estim-ble-worker.exe` (the Coyote Bluetooth helper; see [estim.md](estim.md))
+- `bluetooth-worker.exe` (the shared Handy and Coyote Bluetooth helper; see [estim.md](estim.md))
 
 Frontend production assets are built first and embedded in `magichandy.exe`.
 Managed llama.cpp remains a separate native process and is never linked into

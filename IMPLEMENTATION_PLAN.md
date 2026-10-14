@@ -2726,7 +2726,7 @@ acceptance remain open. See [ADR 0038](docs/decisions/0038-freestyle-stroke-stre
 
 Implemented for PR review: a Coyote 3.0 as a second output, alone or alongside
 the Handy, through the existing shared engine. A per-connection Bluetooth
-worker (`cmd/estim-ble-worker`, no cgo) owns the radio while the core composes
+worker (`cmd/bluetooth-worker`, no cgo) owns the radio while the core composes
 every packet (`internal/estim`). `transport.Coyote` converts the neutral frame
 with a user-chosen profile, and `transport.FanOut` drives both devices from one
 engine transport. Strength stays user-owned with device-enforced ceilings; the
@@ -2758,3 +2758,22 @@ valid. Linked failures stop all by default, with an explicit continue-healthy
 setting; both policies prevent hot-join after reconnect. Session-bound Coyote
 and browser BLE dispatch preserve the single engine. Hardware validation remains
 pending; simulated integration and full gates are recorded in the review report.
+
+### Native Handy Bluetooth (2026-10-14)
+
+Implemented on a follow-up branch to the COYOTE/device-session work. The shared
+`bluetooth-worker` now serves allowlisted Handy firmware-4 and COYOTE 3.0 profiles
+over version-3 IPC, with one process per device connection. `internal/ble` owns
+the reusable byte link; `internal/handyble` handles bounded RPC framing and
+correlation. Browser and native Handy connections share the existing HSP
+transport mapping and engine. Native selection appears in Setup, Settings and
+the title-row protocol menu; choosing it never connects. The UI distinguishes
+the host radio from the browser's Bluetooth.
+
+All current sampling, motion planning, prompts, model routing and conservative
+HSP buffer budgets remain in place. Software validation includes process
+isolation, small-MTU chunking, stale-session fencing, linked failure policies,
+normal/race/leak checks and Windows/Linux pure-Go builds. No real Bluetooth
+scan or connection has been attempted. See the [plan](docs/native-handy-bluetooth-plan-2026-10-14.md),
+[ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and
+[review](docs/native-handy-bluetooth-review-2026-10-14.md).

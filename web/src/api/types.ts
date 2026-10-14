@@ -1462,6 +1462,7 @@ export interface AppState {
   bluetooth_bridge?: BluetoothBridgeSnapshot;
   intiface_transport?: IntifaceTransportSnapshot;
   coyote_transport?: CoyoteTransportSnapshot;
+  native_bluetooth_transport?: import("./native-bluetooth-types").NativeBluetoothSnapshot;
   trace?: Record<string, unknown>;
 }
 

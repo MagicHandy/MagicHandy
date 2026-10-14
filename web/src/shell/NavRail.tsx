@@ -32,6 +32,7 @@ export function NavRail({ authenticationLocked = false, remoteURL }: { authentic
   const ownerLabel = {
     cloud_rest: "Cloud REST",
     browser_bluetooth: "Browser Bluetooth",
+  native_bluetooth: "Native Bluetooth",
     intiface: "Intiface Central",
   }[owner] ?? owner.replace(/_/g, " ");
   return (

@@ -2,6 +2,7 @@
 // client ID so the backend controller lease can pick one active controller;
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
+import type { NativeBluetoothSnapshot } from "./native-bluetooth-types";
 import type { LLMCatalog } from "./catalog-types";
 import type { ChatRequestFailure } from "./chat-diagnostic-types";
 import type { DiagnosticReportOptions } from "./diagnostic-report-types";
@@ -853,6 +854,10 @@ export const api = {
 
   // Intiface Central session. Device indices are scoped to this discovery
   // session, so selection deliberately remains runtime state rather than a setting.
+  nativeBluetoothStatus: () => request<NativeBluetoothSnapshot>("GET", "/api/transport/native-bluetooth/status"),
+  nativeBluetoothConnect: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/connect", {}),
+  nativeBluetoothDisconnect: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/disconnect", {}),
+  nativeBluetoothForget: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/forget", {}),
   coyoteStatus: () => request<CoyoteTransportSnapshot>("GET", "/api/transport/coyote/status"),
   coyoteConnect: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/connect", {}),
   coyoteDisconnect: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/disconnect", {}),

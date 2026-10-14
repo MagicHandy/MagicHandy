@@ -272,3 +272,7 @@ host	PUT /api/accounts/{id}/interface-access
 shared	GET /api/remote/videos
 shared	GET /api/remote/chat/messages
 host	PUT /api/settings/device/connections
+shared	GET /api/transport/native-bluetooth/status
+host	POST /api/transport/native-bluetooth/connect
+host	POST /api/transport/native-bluetooth/disconnect
+host	POST /api/transport/native-bluetooth/forget

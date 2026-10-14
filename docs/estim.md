@@ -38,7 +38,7 @@ host accepts them. Turning the acceptance off in Settings shows them again.
    the strongest sensation every pattern or electrode arrangement can produce.
 
 The Coyote must not be connected to another app at the same time. The Bluetooth
-helper (`estim-ble-worker.exe`) ships beside `magichandy.exe`; Linux builds use
+helper (`bluetooth-worker.exe`) ships beside `magichandy.exe`; Linux builds use
 BlueZ. macOS is not supported.
 
 ## Settings
@@ -144,13 +144,19 @@ Source: DG-LAB's
   reply, and DG-LAB requires rewriting it after every reconnection.
 
 The core composes every byte (`internal/estim`); the worker only writes them
-(`internal/estim/bleworker`, `cmd/estim-ble-worker`). The core-to-worker
-protocol is NDJSON version 2 with `hello`, `connect`, `write`,
+(`internal/ble/bleworker`, `cmd/bluetooth-worker`). The core-to-worker
+protocol is NDJSON version 3 with an explicit GATT profile, negotiated write
+limit, and `hello`, `connect`, `write`,
 `battery`, `last_will`, `disconnect` and `shutdown`. The worker sends `notify`,
 `battery`, `disconnected` and `error` back. Every write waits for the worker's
 native-call completion, including GATT Write Without Response. This bounds
 outstanding waveform work to one packet instead of buffering stale frames in
 the pipe. A timed-out write retires and terminates the worker before returning.
+
+The shared worker also serves native Handy links in separate processes; COYOTE
+packet composition and strength control are unchanged. See
+[ADR 0046](decisions/0046-shared-native-bluetooth-worker.md). Old version-2 helpers
+are rejected rather than silently reused for the new protocol.
 
 ## Validation status
 

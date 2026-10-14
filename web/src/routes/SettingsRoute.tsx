@@ -33,6 +33,7 @@ const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v
 const SETTING_OPTION_LABELS: Partial<Record<string, MessageKey>> = {
   cloud_rest: "Cloud REST",
   browser_bluetooth: "Browser Bluetooth",
+  native_bluetooth: "Native Bluetooth",
   intiface: "Intiface Central",
   bundled: "Bundled application ID",
   bundled_app_id: "Bundled application ID",
@@ -556,6 +557,7 @@ export function SettingsRoute() {
                 <label className="field"><span className="label">{t("Handy connection key")}{s.device.connection_key_set && <span className="badge">{t("set")}</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? t("set (leave blank to keep)") : t("Paste key")} value={newKey} disabled={locked} onChange={(e) => { setNewKey(e.target.value); if (e.target.value.trim()) setClearKey(false); }} /></label>
                 <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(e) => { setClearKey(e.target.checked); if (e.target.checked) setNewKey(""); }} /><span className="track" aria-hidden="true" /></span><span>{t("Clear connection key on save")}</span></label>
               </>}
+              {owner === "native_bluetooth" && <p className="hint-block">{t("Uses Bluetooth on the computer running MagicHandy. Put the Handy in firmware 4 Bluetooth mode before connecting.")}</p>}
               {owner === "intiface" && <>
                 <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
               </>}

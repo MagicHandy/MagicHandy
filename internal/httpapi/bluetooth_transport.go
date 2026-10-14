@@ -391,8 +391,12 @@ func (s *Server) traceBluetoothResult(
 		command = &safeCommand
 	}
 	safeResult := transport.SafeCommandResult(result)
+	source := bluetoothTraceSource
+	if result.Transport == transport.NativeBluetoothName {
+		source = "manual_native_bluetooth"
+	}
 	s.traces.Add(diagnosticspkg.MotionTraceRow{
-		Source:           bluetoothTraceSource,
+		Source:           source,
 		Reason:           reason,
 		TransportCommand: command,
 		TransportResult:  &safeResult,

@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/ble"
+	"github.com/mapledaemon/MagicHandy/internal/ble/workerclient"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/estim"
-	"github.com/mapledaemon/MagicHandy/internal/estim/workerclient"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
 const (
-	coyoteWorkerName     = "estim-ble-worker"
 	coyoteConnectTimeout = 45 * time.Second
 	maxCoyoteStep        = 10
 )
@@ -49,8 +49,8 @@ type coyoteStrengthRequest struct {
 func (s *Server) configureCoyote(runtime Runtime, settings config.Settings, logger *slog.Logger) {
 	connector := runtime.CoyoteConnector
 	if connector == nil {
-		s.coyote.helperPath = resolveWorkerBinary("", runtime.ExecutablePath, s.store.DataDir(), coyoteWorkerName)
-		connector = workerclient.NewConnector(workerclient.Options{Path: s.coyote.helperPath, Logger: logger})
+		s.coyote.helperPath = resolveWorkerBinary("", runtime.ExecutablePath, s.store.DataDir(), bluetoothWorkerName)
+		connector = workerclient.NewConnector(workerclient.Options{Profile: ble.ProfileCoyote, Path: s.coyote.helperPath, Logger: logger})
 	}
 	s.coyote.owner = transport.NewCoyote(transport.CoyoteOptions{Connector: connector})
 	_ = s.coyote.owner.Configure(coyoteConfig(settings.Estim))

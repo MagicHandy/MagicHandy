@@ -464,6 +464,7 @@ func (s *Server) beginGlobalStop(reason string, origins ...context.Context) (fun
 	// Publish every emergency-stop activation, including repeated idle stops,
 	// so browser-owned capture can discard pending speech in every client.
 	finishInvalidation, sequence := s.invalidateWorkForStop(reason, origins...)
+	s.nativeBluetooth.owner.Interrupt()
 	// Mark autonomous modes stopped before touching the engine, but drain their
 	// goroutine only after Engine.Stop has canceled any blocked mode startup.
 	finishModeStop := func() {}
@@ -493,7 +494,10 @@ func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (tran
 		diagnostics := s.saveCloudDiagnostics(selected.Diagnostics())
 		s.traceCloudResult(reason, diagnostics, result)
 	case *transport.BrowserBluetoothTransport:
-		diagnostics := s.saveBluetoothDiagnostics(selected.Diagnostics())
+		diagnostics := selected.Diagnostics()
+		if diagnostics.Name == transport.BrowserBluetoothName {
+			diagnostics = s.saveBluetoothDiagnostics(diagnostics)
+		}
 		s.traceBluetoothResult(reason, diagnostics, result)
 	}
 	return result, stopErr
@@ -736,8 +740,11 @@ func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, ne
 		s.closeIntiface()
 	}
 	var removeErr error
+	if dispatchOwnerChanged && previous.Device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
+		removeErr = s.nativeBluetooth.owner.Disconnect(ctx)
+	}
 	if handyRemoved {
-		removeErr = s.removeHandyConnection(ctx, previous)
+		removeErr = errors.Join(removeErr, s.removeHandyConnection(ctx, previous))
 	}
 	return true, errors.Join(stopErr, removeErr, s.applyCoyoteSettingsTransition(previous, next))
 }
@@ -900,6 +907,7 @@ func (s *Server) Quiesce() {
 		}
 		s.closeIntiface()
 		s.closeCoyote()
+		_ = s.nativeBluetooth.owner.Close()
 	})
 }
 
@@ -982,6 +990,9 @@ func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
 	}
 	if config.UsesHandy(settings.Device.Output) && settings.Device.HSPDispatchOwner == config.DispatchOwnerBrowserBluetooth {
 		owner += fmt.Sprintf("/ble-%d", s.bluetooth.bridge.SessionID())
+	}
+	if config.UsesHandy(settings.Device.Output) && settings.Device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
+		owner += fmt.Sprintf("/native-ble-%d", s.nativeBluetooth.owner.SessionID())
 	}
 	engine, engineOwner := s.currentMotionEngineWithOwner()
 	failed := false
@@ -1074,6 +1085,12 @@ func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
 func (s *Server) newHandyMotionTransport(settings config.Settings) (transport.Transport, error) {
 	if s.motion.transport != nil {
 		return s.motion.transport, nil
+	}
+	if settings.Device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
+		if !s.nativeBluetooth.owner.Status().Connected {
+			return nil, errors.New("native Bluetooth is not connected")
+		}
+		return s.nativeBluetooth.owner.NewTransport(transport.HandyBluetoothOptions{ReverseDirection: settings.Motion.ReverseDirection}), nil
 	}
 	switch settings.Device.HSPDispatchOwner {
 	case config.DispatchOwnerCloudREST:

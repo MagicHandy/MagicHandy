@@ -4,8 +4,10 @@ import "strings"
 
 // DeviceSettings contains device transport configuration.
 type DeviceSettings struct {
-	ConfiguredDevices   []string `json:"configured_devices"`
-	LinkedFailurePolicy string   `json:"linked_failure_policy"`
+	// NativeBluetoothAddress is a private hardware identifier, never a public setting.
+	NativeBluetoothAddress string   `json:"native_bluetooth_address,omitempty"`
+	ConfiguredDevices      []string `json:"configured_devices"`
+	LinkedFailurePolicy    string   `json:"linked_failure_policy"`
 	// Output selects playback participants; ConfiguredDevices is the saved inventory.
 	Output                   string `json:"output"`
 	HSPDispatchOwner         string `json:"hsp_dispatch_owner"`

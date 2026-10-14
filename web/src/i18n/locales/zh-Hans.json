@@ -3172,5 +3172,12 @@
   "Continue on the healthy device": "继续使用正常的设备",
   "Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop always stops every device.": "适用于联动播放期间的意外断开和播放错误。重新连接不会自动加入当前播放。紧急停止始终停止所有设备。",
   "Changing playback devices or the failure policy stops the current run.": "更改播放设备或故障策略会停止当前播放。",
-  "None (chat only)": "无（仅聊天）"
+  "None (chat only)": "无（仅聊天）",
+  "Native Bluetooth": "原生蓝牙",
+  "Connect through the computer running MagicHandy. No browser pairing or cloud key required.": "通过运行 MagicHandy 的电脑上的蓝牙连接。无需浏览器配对或云端密钥。",
+  "Native Bluetooth is available on Windows and Linux.": "原生蓝牙支持 Windows 和 Linux。",
+  "The native Bluetooth helper is missing. Update MagicHandy to install it.": "缺少原生蓝牙辅助程序。请更新 MagicHandy 以安装它。",
+  "Uses Bluetooth on the computer running MagicHandy. Put the Handy in firmware 4 Bluetooth mode before connecting.": "使用运行 MagicHandy 的电脑上的蓝牙。连接前，请将 Handy 设为固件 4 的蓝牙模式。",
+  "Connect Handy": "连接 Handy",
+  "Forget device": "忘记设备"
 }
