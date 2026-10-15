@@ -97,7 +97,8 @@ Behavior and safety:
 - **One connection.** The Handy (with the Intiface method) and the vibrator
   share one Intiface connection; each row holds its own lease. The connection
   closes when the last row disconnects. One device cannot be both the linear
-  actuator and the vibrator.
+  actuator and the vibrator. Its address is under **Settings > Device >
+  Intiface Central** whenever either device uses it.
 - **Profiles.** In **Settings > Device > Vibrator**, the level follows stroke
   speed (default), stroke depth toward the base or tip, or stays steady while
   motion plays. The minimum, the ceiling (default 40%) and a ±300 ms timing

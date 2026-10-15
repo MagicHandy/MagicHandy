@@ -576,9 +576,12 @@ export function SettingsRoute() {
                 <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(e) => { setClearKey(e.target.checked); if (e.target.checked) setNewKey(""); }} /><span className="track" aria-hidden="true" /></span><span>{t("Clear connection key on save")}</span></label>
               </>}
               {owner === "native_bluetooth" && <p className="hint-block">{t("Uses Bluetooth on the computer running MagicHandy. Put the Handy in firmware 4 Bluetooth mode before connecting.")}</p>}
-              {owner === "intiface" && <>
-                <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
-              </>}
+            </div>}
+            {/* One Intiface Central connection serves the Handy and the vibrator,
+                so its address shows whenever either uses it. */}
+            {((configured.includes("handy") && owner === "intiface") || configured.includes("vibrator")) && <div className="group">
+              <h3 className="group-title">{t("Intiface Central")}</h3>
+              <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
             </div>}
             <details className="group" open={s.device.api_application_id_source === "developer_override" ? true : undefined}>
               <summary className="group-title">{t("Advanced")}</summary>

@@ -697,11 +697,14 @@
   opacity: 0.65;
   cursor: default;
 }
+/* Placed in viewport coordinates across the panel's width (ConnectionManager),
+   so the scrolling panel cannot clip it however short the panel is. */
 .connection-add .connection-method-menu {
-  right: 0;
+  position: fixed;
+  right: auto;
   left: auto;
-  min-width: 240px;
-  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - var(--status-h) - 24px);
+  overflow: auto;
 }
 .connection-participation {
   padding: 8px 12px;

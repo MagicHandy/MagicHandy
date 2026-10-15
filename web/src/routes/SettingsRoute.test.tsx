@@ -237,6 +237,29 @@ describe("SettingsRoute", () => {
     expect(saveSettings.mock.calls[0][0].device.playback_devices).toEqual(["handy", "vibrator"]);
   });
 
+  it("offers the Intiface address whenever a device uses Intiface", async () => {
+    app.hash = "#/settings/device";
+    const initial = settings("normal");
+    initial.device.output = "none";
+    initial.device.configured_devices = ["vibrator"];
+    getSettings.mockResolvedValue({ settings: initial });
+    const view = render(<SettingsRoute />);
+    const address = await screen.findByRole("textbox", { name: "Intiface Central server" });
+    fireEvent.change(address, { target: { value: "ws://127.0.0.1:12346" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].device.intiface_server_address).toBe("ws://127.0.0.1:12346");
+    view.unmount();
+
+    const cloudOnly = settings("normal");
+    cloudOnly.device.output = "handy";
+    cloudOnly.device.configured_devices = ["handy"];
+    getSettings.mockResolvedValue({ settings: cloudOnly });
+    render(<SettingsRoute />);
+    await screen.findByRole("group", { name: "Playback devices" });
+    expect(screen.queryByRole("textbox", { name: "Intiface Central server" })).toBeNull();
+  });
+
   it("leaves the vibrator profile out until a vibrator is added", async () => {
     app.hash = "#/settings/device";
     const initial = settings("normal");

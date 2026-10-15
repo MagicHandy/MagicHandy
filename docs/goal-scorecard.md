@@ -11,14 +11,14 @@ starts only in `-simulate-motion` builds.
 
 Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
 `-trimpath -buildvcs=false -ldflags '-s -w'`, against base `5938a0cb`: core
-**22,928,384 -> 23,186,432 B** (+258,048 B), still **14 modules**. The worker is
+**22,928,384 -> 23,187,456 B** (+259,072 B), still **14 modules**. The worker is
 unchanged.
 
-Main UI JS: **1,204,409 -> 1,220,774 B raw** (+16,365 B), **323,892 ->
-327,088 B gzip** (+3,196 B). CSS: **204,247 -> 205,071 B raw** (+824 B),
-**35,639 -> 35,750 B gzip** (+111 B). Each locale chunk grows 4.7–6.1 KB raw
+Main UI JS: **1,204,409 -> 1,221,482 B raw** (+17,073 B), **323,892 ->
+327,284 B gzip** (+3,392 B). CSS: **204,247 -> 205,124 B raw** (+877 B),
+**35,639 -> 35,753 B gzip** (+114 B). Each locale chunk grows 4.7–6.1 KB raw
 (1.3–1.5 KB gzip) for 52 new strings. The complete embedded UI grows
-2,611,231 -> 2,649,550 B (+38,319 B). Measurements use Python gzip with
+2,611,231 -> 2,650,311 B (+39,080 B). Measurements use Python gzip with
 `mtime=0`. The canonical dist is rebuilt with stale hashes removed; the
 existing large-chunk advisory remains.
 

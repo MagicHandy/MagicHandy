@@ -1,5 +1,5 @@
 import { t, translateKnown } from "../i18n";
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { api } from "../api/client";
 import type { BluetoothBridgeSnapshot, IntifaceTransportSnapshot } from "../api/types";
 import { configuredDevices, playbackDevices } from "../api/devices";
@@ -144,6 +144,7 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
   const selectionBusy = outputBusy || methodBusy;
   const canAdd = canChooseDevice && !allAdded;
   const addMenu = useMenu({ disabled: !open || !canAdd || selectionBusy });
+  const [addMenuPlace, setAddMenuPlace] = useState<CSSProperties>();
   const lockReason = !backendOnline
     ? t("Core offline.")
     : readOnly ? t("Read-only client.") : canConfigureHost ? "" : t("Host settings and diagnostics are managed by an administrator.");
@@ -198,6 +199,27 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
   const statusText = !backendOnline
     ? translateKnown("Core offline")
     : deviceLines.length ? deviceLines.join(" · ") : t("Chat only");
+
+  // The panel scrolls, so a menu positioned inside it is clipped when the
+  // panel is short (no devices yet). Place it in viewport coordinates instead:
+  // under the trigger, across the panel's width, free to extend below it.
+  useLayoutEffect(() => {
+    if (!addMenu.open) return;
+    const place = () => {
+      const trigger = addRef.current?.getBoundingClientRect();
+      const panel = addRef.current?.closest(".connection-manager-panel")?.getBoundingClientRect();
+      if (!trigger || !panel) return;
+      const width = window.innerWidth || document.documentElement.clientWidth;
+      setAddMenuPlace({
+        top: Math.round(trigger.bottom + 4),
+        left: Math.round(panel.left + 8),
+        right: Math.max(8, Math.round(width - panel.right + 8)),
+      });
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [addMenu.open]);
 
   useEffect(() => {
     if (focusAfterRemoval.current && !allAdded) {
@@ -313,7 +335,7 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
                 onKeyDown={(event) => { if (canAdd && !selectionBusy) addMenu.onTriggerKeyDown(event, undefined); }}>
                 <PlusIcon size={16} />
               </button>
-              {addMenu.open && <div {...addMenu.menuProps} className="connection-method-menu" aria-label={t("Add connection")}>
+              {addMenu.open && <div {...addMenu.menuProps} className="connection-method-menu" style={addMenuPlace} aria-label={t("Add connection")}>
                 {(["handy", "coyote", "vibrator"] as const).filter((device) => !configured.includes(device)).map((device) => (
                   <button key={device} type="button" role="menuitem" className="connection-method-option" onClick={() => { addMenu.close(); void changeConnection(device, "add"); }}>
                     <span className="connection-method-option-copy">

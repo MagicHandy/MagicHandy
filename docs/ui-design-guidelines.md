@@ -312,7 +312,9 @@ or glows.
   global Stop shortcut and is never consumed by this disclosure.
 - The manager uses a **+ Add connection** menu instead of an output segmented
   choice. It offers only the supported devices that are not added yet (The
-  Handy, Coyote, vibrator). The list follows backend confirmation;
+  Handy, Coyote, vibrator). The menu is placed in viewport coordinates across
+  the panel's width, so the scrolling panel never clips it, even when no
+  device is added and the panel is short. The list follows backend confirmation;
   it never implies support for more than one of each device. A sticky
   manager header, inset Add row, contrasting device headers and full-width
   separators distinguish the sections without nesting cards. The Handy's
@@ -388,7 +390,8 @@ or glows.
   the named set-point scale and the dual-thumb range: a 4px `--line-strong`
   track filled with `--accent` up to the value and a 16px `--text` thumb with no
   border, shadow or glow, inside a 20px hit area (32px on coarse pointers);
-  focus rings the thumb. Inputs stay native. Chromium cannot paint a native
+  focus rings the thumb. The track isolates its stacking context, so the
+  thumbs' own ordering never paints them over a menu or popover. Inputs stay native. Chromium cannot paint a native
   range's fill, so components publish the value's position as `--range-fill`
   (0–1) and the fill ends under the thumb's centre, which travels half a thumb
   in from either end. The recipe lives in `setpoint-controls.css` with no
