@@ -12,9 +12,8 @@ import (
 // with its own pre-roll.
 type clockedOwner struct {
 	*failingLinkedOwner
-	start   time.Time
-	aligned []time.Time
-	plays   int
+	start time.Time
+	plays int
 }
 
 func (o *clockedOwner) Play(ctx context.Context, c PlayCommand) (CommandResult, error) {

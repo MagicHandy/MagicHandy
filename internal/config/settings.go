@@ -1173,20 +1173,7 @@ func applyMissingDefaults(settings Settings) Settings {
 	if settings.Device.LinkedFailurePolicy == "" {
 		settings.Device.LinkedFailurePolicy = LinkedFailureStopAll
 	}
-	settings.Device.Output = strings.TrimSpace(settings.Device.Output)
-	if settings.Device.Output == "" {
-		settings.Device.Output = defaults.Device.Output
-	}
-	if settings.Device.ConfiguredDevices == nil {
-		settings.Device.ConfiguredDevices = configuredFromOutput(settings.Device.Output)
-	}
-	// A missing playback set migrates from the legacy output. A stored set is
-	// only reordered; validation rejects one that disagrees with the output.
-	if settings.Device.PlaybackDevices == nil {
-		settings.Device.PlaybackDevices = playbackFromOutput(settings.Device.Output)
-	} else {
-		settings.Device.PlaybackDevices = canonicalDevices(settings.Device.PlaybackDevices)
-	}
+	settings.Device = normalizeDeviceParticipation(settings.Device, defaults.Device.Output)
 	settings.Estim = applyMissingEstimDefaults(settings.Estim)
 	if settings.Device.HSPDispatchOwner == "" {
 		settings.Device.HSPDispatchOwner = defaults.Device.HSPDispatchOwner

@@ -11,7 +11,7 @@ func TestIntifaceSamplingBudgetCoversUnadvertisedAndAdvertisedGaps(t *testing.T)
 		{20 * time.Millisecond, 50 * time.Millisecond},
 		{300 * time.Millisecond, 330 * time.Millisecond},
 	} {
-		owner := &Intiface{selected: true, selection: intifaceSelection{timingGap: test.gap}}
+		owner := &Intiface{intifaceSession: &intifaceSession{}, selected: true, selection: intifaceSelection{timingGap: test.gap}}
 		if got := owner.MotionTimingCapabilities().MinimumPointInterval; got != test.want {
 			t.Fatalf("gap %v: sampling interval %v, want %v", test.gap, got, test.want)
 		}

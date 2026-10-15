@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // DeviceOutputNone leaves the shared engine idle for chat-only use.
@@ -166,6 +167,25 @@ func (d DeviceSettings) ChangeConnection(device, action string) (DeviceSettings,
 		return d, fmt.Errorf("unknown connection action %q", action)
 	}
 	return d.WithPlaybackDevices(playback), nil
+}
+
+// normalizeDeviceParticipation migrates the inventory and the playback set
+// from the legacy output when they are missing. A stored set is only
+// reordered; validation rejects one that disagrees with the output.
+func normalizeDeviceParticipation(d DeviceSettings, defaultOutput string) DeviceSettings {
+	d.Output = strings.TrimSpace(d.Output)
+	if d.Output == "" {
+		d.Output = defaultOutput
+	}
+	if d.ConfiguredDevices == nil {
+		d.ConfiguredDevices = configuredFromOutput(d.Output)
+	}
+	if d.PlaybackDevices == nil {
+		d.PlaybackDevices = playbackFromOutput(d.Output)
+	} else {
+		d.PlaybackDevices = canonicalDevices(d.PlaybackDevices)
+	}
+	return d
 }
 
 func validateDeviceConnections(d DeviceSettings) error {
