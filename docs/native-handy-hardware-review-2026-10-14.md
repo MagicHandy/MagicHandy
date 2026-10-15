@@ -1,5 +1,9 @@
 # Native Handy Bluetooth hardware connection check — 2026-10-14
 
+Follow-up: [Windows reconnect and COYOTE playback](native-ble-reconnect-review.md)
+records the subsequent disposal fix, successful repeated COYOTE connections and
+playback with no output leads. Failures below describe the earlier investigation.
+
 The user authorized testing an original Handy (model 0), running firmware
 **4.3.0+dcee7e58**, on Windows with a Qualcomm FastConnect 7800 Bluetooth adapter.
 Connection keys, serial numbers, network details and hardware addresses are

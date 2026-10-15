@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/ble"
 	"github.com/mapledaemon/MagicHandy/internal/estim"
 )
 
@@ -14,7 +15,7 @@ const (
 	coyoteTransportName          = "coyote_ble"
 	coyoteSimulatedTransportName = "coyote_simulated"
 	coyotePacketInterval         = estim.PacketMillis * time.Millisecond
-	coyoteConnectTimeout         = 6 * time.Second
+	coyoteConnectTimeout         = ble.DefaultConnectTimeout
 	coyoteScanTimeout            = 12 * time.Second
 	coyoteWriteTimeout           = 500 * time.Millisecond
 	coyoteBatteryTimeout         = 2 * time.Second

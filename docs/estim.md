@@ -190,13 +190,16 @@ characteristics were verified. After adding Windows advertisement refresh and
 connection-readiness checks, real connections read 100% battery and received
 device reports of A=0/B=0. Five global Stops while already at zero received fresh
 zero reports in 152–232 ms, including polling delay. This does not measure the
-physical interruption of active electrical output. An immediate reconnect still
-failed at GATT discovery. See the
-[hardware report](native-handy-hardware-review-2026-10-14.md).
+physical interruption of active electrical output. The subsequent Windows
+service-disposal fix passed repeated immediate disconnect/reconnect cycles and
+playback with no output leads: each channel's bounded reference test, two shared
+engine patterns with retargeting, and fresh A=0/B=0 reports after Stop from
+strength 5. There were no write failures or packet starvation. See the
+[reconnect and playback review](native-ble-reconnect-review.md).
 
 Still open:
 
-- pairing and remembered reconnection;
+- first-time pairing on other units and reconnection on other radio/OS combinations;
 - the ceilings against the device's switches;
 - time from Stop to silence and to zero;
 - silence on link loss;

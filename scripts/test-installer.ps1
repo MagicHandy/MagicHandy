@@ -78,6 +78,7 @@ try {
         'scripts\update-tts-module.ps1',
         'scripts\release\Build-WindowsRelease.ps1',
         'scripts\release\Test-WindowsRelease.ps1',
+        'scripts\release\Test-ReleaseStartup.ps1',
         'scripts\installer\InstallerSupport.psm1',
         'internal\llm\runtimeassets\build-managed-llama.ps1'
     )
@@ -1581,6 +1582,7 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     } finally {
         $env:CGO_ENABLED = $previousCGO
     }
+    & (Join-Path $Repo 'scripts\release\Test-ReleaseStartup.ps1') -Executable $runtimeExe -TestRoot (Join-Path $tempRoot 'release startup')
     Set-MagicHandyAppLanguages `
         -RepositoryPath $runtimeRepo `
         -DataDir ($runtimeData + '\') `

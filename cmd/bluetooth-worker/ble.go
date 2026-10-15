@@ -119,33 +119,36 @@ func (a *radioAdapter) ConnectAddress(ctx context.Context, address string, profi
 			_ = closeNativeDevice(result.device)
 			return nil, fmt.Errorf("%w: %v", ble.ErrDiscoveryFailed, err)
 		}
-		return &radioPeripheral{adapter: a, device: result.device, address: normalizeAddress(address), profile: profile}, nil
+		return &radioPeripheral{adapter: a, device: result.device, disconnect: func() error { return closeNativeDevice(result.device) }, address: normalizeAddress(address), profile: profile}, nil
 	case <-ctx.Done():
-		// The platform call cannot be canceled; retire a late success. On
-		// Windows the one-connection worker's exit owns final handle release.
+		// The platform call cannot be canceled; retire a late success. The
+		// core also bounds shutdown of a worker stuck inside that call.
 		go func() {
 			if result := <-results; result.err == nil {
 				_ = closeNativeDevice(result.device)
 			}
 		}()
-		return nil, bleworker.ErrNotFound
+		return nil, fmt.Errorf("%w: native connection deadline: %v", ble.ErrDiscoveryFailed, ctx.Err())
 	}
 }
 
 type radioPeripheral struct {
 	adapter             *radioAdapter
 	device              bluetooth.Device
+	disconnect          func() error
 	address             string
 	profile             ble.Profile
 	writeLimit          int
 	withoutResponseOnly bool
 
-	mu      sync.Mutex
-	write   bluetooth.DeviceCharacteristic
-	notify  *bluetooth.DeviceCharacteristic
-	battery *bluetooth.DeviceCharacteristic
-	lost    bool
-	closed  bool
+	mu        sync.Mutex
+	write     bluetooth.DeviceCharacteristic
+	notify    *bluetooth.DeviceCharacteristic
+	battery   *bluetooth.DeviceCharacteristic
+	lost      bool
+	closed    bool
+	closeOnce sync.Once
+	closeErr  error
 }
 
 func (p *radioPeripheral) Open(handlers bleworker.Handlers) error {
@@ -221,8 +224,7 @@ func (p *radioPeripheral) discoverService() (bluetooth.DeviceCharacteristic, blu
 		return none, none, fmt.Errorf("%w: characteristics: %v", ble.ErrDiscoveryFailed, err)
 	}
 	if len(characteristics) == 0 {
-		// WinRT can return AccessDenied with an empty vector. The pinned
-		// library does not expose that status; do not label it incompatible.
+		// An empty discovery is not evidence of firmware incompatibility.
 		return none, none, ble.ErrDiscoveryFailed
 	}
 	var write, notify *bluetooth.DeviceCharacteristic
@@ -301,24 +303,24 @@ func (p *radioPeripheral) MaxWriteBytes() int { return p.writeLimit }
 
 func (p *radioPeripheral) UnacknowledgedWrites() bool { return p.withoutResponseOnly }
 
-// Close fences the connection once. Linux disconnects here; Windows releases
-// remaining native handles when this one-connection worker exits.
+// Close fences the connection once and releases native ownership even when a
+// link-loss callback arrived first. Disconnected does not mean disposed.
 func (p *radioPeripheral) Close() error {
-	p.adapter.mu.Lock()
-	delete(p.adapter.lost, p.address)
-	p.adapter.mu.Unlock()
-	p.mu.Lock()
-	alreadyGone := p.lost || p.closed
-	p.closed = true
-	p.mu.Unlock()
-	if alreadyGone {
-		return nil
-	}
-	var notifyErr error
-	if p.notify != nil {
-		notifyErr = p.notify.EnableNotifications(nil)
-	}
-	return errors.Join(notifyErr, closeNativeDevice(p.device))
+	p.closeOnce.Do(func() {
+		p.adapter.mu.Lock()
+		delete(p.adapter.lost, p.address)
+		p.adapter.mu.Unlock()
+		p.mu.Lock()
+		linkLost := p.lost
+		p.closed = true
+		p.mu.Unlock()
+		var notifyErr error
+		if !linkLost && p.notify != nil {
+			notifyErr = p.notify.EnableNotifications(nil)
+		}
+		p.closeErr = errors.Join(notifyErr, p.disconnect())
+	})
+	return p.closeErr
 }
 
 func normalizeAddress(address string) string {

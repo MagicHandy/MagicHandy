@@ -140,26 +140,68 @@ function Assert-AuthenticodeStatus {
 }
 
 function Wait-MagicHandyReady {
-    param([Parameter(Mandatory = $true)][int]$Port)
+    param([Parameter(Mandatory = $true)][int]$Port, [Parameter(Mandatory = $true)][Diagnostics.Process]$Process)
     for ($attempt = 0; $attempt -lt 100; $attempt++) {
+        $Process.Refresh()
+        if ($Process.HasExited) {
+            $Process.WaitForExit()
+            break
+        }
         try {
-            Invoke-RestMethod -Uri "http://127.0.0.1:$Port/healthz" -TimeoutSec 1 | Out-Null
-            return
+            $main = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/healthz" -TimeoutSec 1
+            $remote = Invoke-RestMethod -Uri "http://127.0.0.1:$($Port + 1)/healthz" -TimeoutSec 1
+            if ($main.status -eq 'ok' -and $remote.status -eq 'ok') { return }
         } catch {
             Start-Sleep -Milliseconds 125
         }
     }
-    throw "MagicHandy did not become ready on port $Port."
+    $reason = if ($Process.HasExited) { "exited with code $($Process.ExitCode)" } else { 'did not become ready' }
+    $details = @()
+    foreach ($path in @($Process.StartupStdout, $Process.StartupStderr)) {
+        if (Test-Path -LiteralPath $path) { $details += @(Get-Content -LiteralPath $path -Tail 60) }
+    }
+    throw "MagicHandy $reason on ports $Port/$($Port + 1). Startup logs: $($Process.StartupStderr)`n$($details -join "`n")"
 }
 
 function Get-AvailableLoopbackPort {
-    $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
-    try {
-        $listener.Start()
-        return ([Net.IPEndPoint]$listener.LocalEndpoint).Port
-    } finally {
-        $listener.Stop()
+    # The app binds both its main and adjacent remote socket before healthz.
+    # A free main port alone does not establish that the app can start.
+    for ($attempt = 0; $attempt -lt 32; $attempt++) {
+        $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+        $remote = $null
+        try {
+            $listener.Start()
+            $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port
+            if ($port -eq 65535) { continue }
+            $remote = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port + 1)
+            try { $remote.Start() } catch [Net.Sockets.SocketException] { continue }
+            return $port
+        } finally {
+            if ($null -ne $remote) { $remote.Stop() }
+            $listener.Stop()
+        }
     }
+    throw 'Could not find available main and remote ports for release acceptance.'
+}
+
+function Start-ReleaseTestApp {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [Parameter(Mandatory = $true)][int]$Port,
+        [Parameter(Mandatory = $true)][string]$LogDirectory,
+        [Parameter(Mandatory = $true)][string]$Stage,
+        [string]$DataDirectory = ''
+    )
+    New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
+    $stdoutPath = Join-Path $LogDirectory "$Stage.stdout.log"
+    $stderrPath = Join-Path $LogDirectory "$Stage.stderr.log"
+    $arguments = @('-addr', "127.0.0.1:$Port", '-console', 'plain')
+    if ($DataDirectory) { $arguments += @('-data-dir', ('"{0}"' -f $DataDirectory)) }
+    $process = Start-Process -FilePath $Executable -ArgumentList $arguments -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+    $process | Add-Member -NotePropertyName StartupStdout -NotePropertyValue $stdoutPath
+    $process | Add-Member -NotePropertyName StartupStderr -NotePropertyValue $stderrPath
+    return $process
 }
 
 function Get-Uninstaller {
@@ -286,6 +328,7 @@ $customInstall = ''
 $defaultInstall = ''
 $ownsCustomInstall = $false
 $ownsDefaultInstall = $false
+$startupLogs = Join-Path $ArtifactsRoot 'lifecycle-logs'
 New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
 try {
     Write-Host 'Verifying portable payload and provenance...'
@@ -360,6 +403,7 @@ try {
         return
     }
 
+    & (Join-Path $PSScriptRoot 'Test-ReleaseStartup.ps1') -Executable $executables[0].FullName -TestRoot (Join-Path $testRoot 'startup regression')
     Write-Host 'Exercising custom install path, shortcuts, upgrade, and retained-data uninstall...'
     $customInstall = Join-Path $testRoot 'custom install'
     $customData = Join-Path $testRoot 'upgrade data'
@@ -385,16 +429,16 @@ try {
         throw 'Could not seed upgrade-persistence settings.'
     }
     $port = Get-AvailableLoopbackPort
-    $quotedCustomData = '"{0}"' -f $customData
-    $app = Start-Process -FilePath $customExecutable -ArgumentList @('-addr', "127.0.0.1:$port", '-data-dir', $quotedCustomData) -PassThru -WindowStyle Hidden
+    $app = Start-ReleaseTestApp -Executable $customExecutable -Port $port -DataDirectory $customData -LogDirectory $startupLogs -Stage 'custom-install'
     try {
-        Wait-MagicHandyReady -Port $port
+        Wait-MagicHandyReady -Port $port -Process $app
         Invoke-ReleaseProcess -FilePath $setupPath -Description 'Active-process over-install' -ArgumentList @(
             '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', '/CLOSEAPPLICATIONS', '/TASKS="desktopicon"', ('/DIR="{0}"' -f $customInstall)
         )
         Assert-Release -Condition ($app.WaitForExit(15000)) -Message 'over-install should close the running app'
-        $app = Start-Process -FilePath $customExecutable -ArgumentList @('-addr', "127.0.0.1:$port", '-data-dir', $quotedCustomData) -PassThru -WindowStyle Hidden
-        Wait-MagicHandyReady -Port $port
+        $port = Get-AvailableLoopbackPort
+        $app = Start-ReleaseTestApp -Executable $customExecutable -Port $port -DataDirectory $customData -LogDirectory $startupLogs -Stage 'custom-upgrade'
+        Wait-MagicHandyReady -Port $port -Process $app
         $state = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 5
         Assert-Release -Condition ([string]$state.settings.ui.locale -eq 'ja' -and [bool]$state.settings.ui.setup_completed) -Message 'over-install should preserve app-owned settings'
         $customUninstaller = Get-Uninstaller -InstallDirectory $customInstall
@@ -451,8 +495,8 @@ try {
     $port = Get-AvailableLoopbackPort
     $app = $null
     try {
-        $app = Start-Process -FilePath $defaultExecutable -ArgumentList @('-addr', "127.0.0.1:$port") -PassThru -WindowStyle Hidden
-        Wait-MagicHandyReady -Port $port
+        $app = Start-ReleaseTestApp -Executable $defaultExecutable -Port $port -LogDirectory $startupLogs -Stage 'default-install'
+        Wait-MagicHandyReady -Port $port -Process $app
         $defaultUninstaller = Get-Uninstaller -InstallDirectory $defaultInstall
         Invoke-ReleaseProcess -FilePath $defaultUninstaller -Description 'Clean uninstall' -ArgumentList @(
             '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/PURGEUSERDATA'
@@ -475,9 +519,9 @@ try {
         '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS', '/NOICONS'
     )
     $port = Get-AvailableLoopbackPort
-    $app = Start-Process -FilePath $defaultExecutable -ArgumentList @('-addr', "127.0.0.1:$port") -PassThru -WindowStyle Hidden
+    $app = Start-ReleaseTestApp -Executable $defaultExecutable -Port $port -LogDirectory $startupLogs -Stage 'clean-reinstall'
     try {
-        Wait-MagicHandyReady -Port $port
+        Wait-MagicHandyReady -Port $port -Process $app
         $state = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 5
         Assert-Release -Condition (-not [bool]$state.settings.ui.setup_completed) -Message 'reinstall after purge should start with guided setup incomplete'
         Assert-Release -Condition ([string]$state.settings.ui.locale -eq 'en') -Message 'reinstall after purge should use default settings'

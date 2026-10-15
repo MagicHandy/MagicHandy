@@ -29,7 +29,7 @@ var (
 )
 
 const (
-	defaultConnectTimeout = 6 * time.Second
+	defaultConnectTimeout = ble.DefaultConnectTimeout
 	defaultScanTimeout    = 12 * time.Second
 )
 
@@ -105,6 +105,7 @@ type server struct {
 	connecting bool
 	attempted  bool
 	peripheral Peripheral
+	retired    Peripheral // Lost links still own native GATT resources until teardown.
 	lastWill   []byte
 	profile    ble.Profile
 	tasks      sync.WaitGroup
@@ -228,6 +229,7 @@ func (s *server) handlers(peripheral Peripheral) Handlers {
 			current := s.peripheral == peripheral
 			if current {
 				s.peripheral = nil
+				s.retired = peripheral
 			}
 			s.mu.Unlock()
 			if current {
@@ -318,6 +320,7 @@ func (s *server) setLastWill(message workerproto.Message) {
 }
 
 func (s *server) disconnect() {
+	defer s.closeRetired()
 	// One connection attempt per process. Retire an unfinished discovery too.
 	s.cancel()
 	s.mu.Lock()
@@ -336,6 +339,7 @@ func (s *server) disconnect() {
 // shutdown ends any connect attempt and disconnects. writeLastWill is true
 // only when the core vanished without asking for a shutdown.
 func (s *server) shutdown(writeLastWill bool) {
+	defer s.closeRetired()
 	s.cancel()
 	s.mu.Lock()
 	peripheral, lastWill := s.peripheral, s.lastWill
@@ -351,6 +355,7 @@ func (s *server) shutdown(writeLastWill bool) {
 }
 
 func (s *server) wait() {
+	defer s.closeRetired()
 	s.tasks.Wait()
 	// A connect that finished after shutdown has already closed itself.
 	s.mu.Lock()
@@ -359,6 +364,18 @@ func (s *server) wait() {
 	s.mu.Unlock()
 	if peripheral != nil {
 		_ = peripheral.Close()
+	}
+}
+
+// Dispose after leaving the native disconnect callback. A lost link cannot
+// write a last will, but dropping its handle prevents deterministic reconnect.
+func (s *server) closeRetired() {
+	s.mu.Lock()
+	retired := s.retired
+	s.retired = nil
+	s.mu.Unlock()
+	if retired != nil {
+		_ = retired.Close()
 	}
 }
 

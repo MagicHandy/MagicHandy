@@ -1,5 +1,27 @@
 # Goal Scorecard
 
+## Native BLE reconnect follow-up
+
+Windows now explicitly disposes native GATT services using pinned upstream
+Bluetooth commit `9df563b9dd49`, with once-only close ownership and retained
+lost-link cleanup. The default connection deadline is twelve seconds; this adds
+no delay on success, idle polling, model calls or motion-path changes. No new
+module dependency is introduced; the existing Bluetooth dependency and its
+indirect macOS/embedded version requirements are updated. Native code stays in
+the worker, and the core does not import the Bluetooth/WinRT/COM packages.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`: core remains **22,927,360 B**;
+worker is **3,093,504 B**, up **15,360 B** from the readiness fix. UI assets are
+unchanged. Repeated hardware connections and unloaded playback evidence,
+including the limited meaning of Stop/report timings, is in the
+[reconnect review](native-ble-reconnect-review.md). The existing uncontrolled
+idle-RSS/cold-start waiver remains; this is not a new controlled memory benchmark.
+
+Packaging validation still checks both native executables and all voice workers.
+The lifecycle harness now checks both listener ports and retains startup logs;
+the regression and full installer suites pass in PowerShell 5.1 and 7.
+
 ## 2026-10-14 — Native Handy Bluetooth
 
 Hardware follow-up: connection/Stop was measured on an original Handy with

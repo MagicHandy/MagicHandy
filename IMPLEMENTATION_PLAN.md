@@ -2782,8 +2782,13 @@ Handy firmware-4.3 check verified connection, clock sync and mode-independent
 Stop. Windows connection workers now refresh only the selected advertisement
 and wait for connected state before GATT discovery. COYOTE testing verified
 battery and actual zero reports, including global Stop while already at zero;
-no positive strength or pulse output was tested. Windows rapid reconnect remains
-a blocker. See the
+that initial run used no positive strength or pulse output. The follow-up pins
+the upstream Windows service-disposal fix, retains lost links for teardown and
+uses a twelve-second connection budget. Repeated COYOTE reconnect, bounded
+channel tests and shared-engine playback at strength 5 passed with no output
+leads connected. Packaging acceptance now checks both listeners and retains
+startup failures. Repeated Handy reconnect and loaded electrical behavior remain
+separate acceptance items. See the [follow-up](docs/native-ble-reconnect-review.md),
 [hardware findings](docs/native-handy-hardware-review-2026-10-14.md),
 [plan](docs/native-handy-bluetooth-plan-2026-10-14.md),
 [ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and

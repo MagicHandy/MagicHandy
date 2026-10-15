@@ -108,7 +108,7 @@ func (l *workerLink) open(ctx context.Context, request ble.ConnectRequest, profi
 		return ble.DeviceInfo{}, err
 	}
 	if request.ConnectTimeout <= 0 {
-		request.ConnectTimeout = 6 * time.Second
+		request.ConnectTimeout = ble.DefaultConnectTimeout
 	}
 	if request.ScanTimeout <= 0 {
 		request.ScanTimeout = 12 * time.Second

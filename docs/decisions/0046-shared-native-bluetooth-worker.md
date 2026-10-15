@@ -2,10 +2,12 @@
 
 Date: 2026-10-14
 Status: Accepted for software implementation; original Handy connection/Stop and
-COYOTE connection/battery/zero reports verified. Windows rapid reconnect remains
-a hardware-validation blocker; active electrical output is untested.
+COYOTE repeated reconnect and playback with no output leads verified. Loaded
+electrical behavior and repeated Handy reconnect/playback remain acceptance items.
 
 See the [authorized hardware findings](../native-handy-hardware-review-2026-10-14.md).
+The [reconnect follow-up](../native-ble-reconnect-review.md) records the upstream
+dependency pin, disposal correction and actual COYOTE playback tests.
 
 ## Context
 
@@ -58,9 +60,12 @@ simulator accepts injected connectors and has no device-specific protocol logic.
   worker and waits for connected state before GATT discovery. A native device
   object alone is not a ready link. Preparation and readiness share the existing
   connection deadline, and process supervision bounds native calls that cannot
-  be canceled. No other advertiser can satisfy readiness. Linux retains BlueZ's
-  existing discovery/readiness behavior. This fixes observed first-connection
-  failures; immediate Windows reconnect still needs hardware validation.
+  be canceled. No other advertiser can satisfy readiness. The default connection
+  budget is twelve seconds; caller deadlines can shorten it. Linux retains
+  BlueZ's connection behavior. The worker explicitly disposes discovered GATT
+  services before releasing its session, including after link loss. The pinned
+  upstream service-disposal fix replaces the old process-exit-only workaround;
+  process exit is still the fallback for a hung native call.
 - Explicit COYOTE discovery uses a separate, short-lived scan-only worker.
   Unnamed advertisements with the official app's candidate shape are listed
   without claiming device identity. Host-only responses contain expiring opaque
@@ -107,5 +112,6 @@ The [integration plan](../native-handy-bluetooth-plan-2026-10-14.md) records the
 implementation order and acceptance checks. Browser/native golden wire fixtures,
 small-MTU chunk tests, process isolation, linked failure tests and leak/race
 checks provide software evidence. The hardware follow-up records original Handy
-connection and Stop, COYOTE battery and device-confirmed zeros (including global
-Stop while already at zero), plus the remaining Windows reconnect failure.
+connection and Stop, plus COYOTE repeated reconnect, battery, per-channel test
+pulses, shared-engine playback, retargeting and reported zeros after Stop. No
+electrode/output leads were connected during the authorized playback test.

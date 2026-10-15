@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// DefaultConnectTimeout includes fresh advertisement discovery and native link
+// readiness. Windows can spend about seven seconds on one uncached GATT attempt;
+// the previous six-second budget could expire while a visible device connected.
+// This is a deadline, not a delay, and caller cancellation still wins.
+const DefaultConnectTimeout = 12 * time.Second
+
 // Actionable connection failures. Device-specific UI supplies pairing guidance.
 var (
 	// ErrDiscoveryFailed is a transient failure before any device command was

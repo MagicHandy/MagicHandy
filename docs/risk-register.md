@@ -2310,16 +2310,19 @@ workers never write, and selected/remembered devices cannot silently fall back
 to a different address. Windows now refreshes the selected advertisement and
 waits for connected state before GATT discovery. Real zero-only tests verified
 connection, battery and device-reported zeros, including five global Stops while
-already at zero. An immediate reconnect still failed at GATT discovery. Active
-output interruption, physical decay and concurrent-device behavior remain open;
-zero-only command timings cannot establish those safety properties.
+already at zero. The later upstream service-disposal fix passed repeated immediate
+COYOTE reconnects and unloaded playback at strength 5, with per-channel routing,
+retargeting and fresh zero reports after Stop. Physical output decay under load
+and concurrent-device behavior remain open. See the
+[reconnect/playback review](native-ble-reconnect-review.md).
 
 Hardware follow-up: original Handy firmware 4.3 connection and Stop succeeded,
 but immediate Windows reconnect sometimes yields GATT AccessDenied and an empty
-characteristic list. This blocks integration until native service/handle cleanup
-is deterministic. Native Stop now uses the firmware's mode-independent command
-(4.0.13+), and Windows worker exit owns final handle release to avoid the pinned
-library's double-release crash. No physical playback/failure-decay claim follows
+characteristic list. The disposal correction is validated on COYOTE; repeated
+Handy reconnect still needs its hardware check. Native Stop uses the firmware's
+mode-independent command (4.0.13+). The pinned upstream library removes recursive
+disconnect and closes GATT services synchronously; worker exit is the fallback
+for hung native cleanup. No physical playback/failure-decay claim follows
 from these connection-only checks; see the [hardware report](native-handy-hardware-review-2026-10-14.md).
 
 ADR 0046 extends Handy HSP to a host-owned worker without a new motion path.
