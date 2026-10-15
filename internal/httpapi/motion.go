@@ -435,8 +435,10 @@ func (s *Server) emergencyStopWithAdmission(ctx context.Context, reason string, 
 func (s *Server) dispatchEmergencyStop(ctx context.Context, reason string, request *stopAdmission) (outcome emergencyStopResult, err error) {
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
-	// The Coyote's zero runs beside the engine Stop rather than after it.
+	// The Coyote's zero and the Intiface StopAllDevices run beside the engine
+	// Stop rather than after it.
 	waitCoyote := s.startCoyoteZero()
+	waitIntiface := s.startIntifaceEmergencyStop()
 
 	// The engine and the selected fallback transport are mutually exclusive.
 	// Holding lifecycleMu prevents a replacement engine from appearing between
@@ -448,7 +450,7 @@ func (s *Server) dispatchEmergencyStop(ctx context.Context, reason string, reque
 	}
 	// Complete shared Stop replies only after both outputs have finished, and
 	// include a failed zero in confirmation rather than only logging it.
-	defer func() { err = errors.Join(err, waitCoyote()) }()
+	defer func() { err = errors.Join(err, waitCoyote(), waitIntiface()) }()
 	engine, engineOwner := s.currentMotionEngineWithOwner()
 	if engine != nil {
 		state, err := engine.Stop(stopCtx, reason)
@@ -719,11 +721,16 @@ func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, ne
 		s.modes.Stop(reason)
 	}
 	stopErr := s.stopAndClearMotionEngine(ctx, reason)
-	// Changing only the output keeps a connected Intiface session.
-	if dispatchOwnerChanged || next.Device.HSPDispatchOwner == config.DispatchOwnerIntiface && (intifaceAddressChanged || cloudConfigChanged) {
-		s.closeIntiface()
-	}
+	// The Intiface session is shared by every device that reaches it. A new
+	// address ends it for all of them; the Handy leaving Intiface releases
+	// only its own lease. Changing playback alone keeps the session.
 	var removeErr error
+	switch {
+	case intifaceAddressChanged:
+		s.closeIntiface()
+	case dispatchOwnerChanged && previous.Device.HSPDispatchOwner == config.DispatchOwnerIntiface:
+		removeErr = s.releaseIntifaceLease(ctx, config.DeviceOutputHandy)
+	}
 	if dispatchOwnerChanged && previous.Device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
 		removeErr = s.nativeBluetooth.owner.Disconnect(ctx)
 	}

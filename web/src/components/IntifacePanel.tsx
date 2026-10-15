@@ -55,7 +55,7 @@ export function IntifacePanel({ visible, locked, dirty, initial, onActivityChang
   }, [visible]);
 
   const choices = useMemo(() => (snapshot.status.devices ?? []).flatMap((device) =>
-    device.linear_actuators.map((actuator) => ({
+    (device.linear_actuators ?? []).map((actuator) => ({
       value: `${device.device_index}:${actuator.index}`,
       label: `${device.device_name} - ${actuator.feature_descriptor || actuator.actuator_type || t("Linear {index}", { index: actuator.index + 1 })}`,
     }))), [snapshot.status.devices]);

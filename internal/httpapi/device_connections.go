@@ -86,7 +86,7 @@ func (s *Server) removeHandyConnection(ctx context.Context, previous config.Sett
 		}
 		s.setCloudControlReleased(true)
 	case config.DispatchOwnerIntiface:
-		s.closeIntiface()
+		stopErr = s.releaseIntifaceLease(ctx, config.DeviceOutputHandy)
 	case config.DispatchOwnerBrowserBluetooth:
 		if s.bluetooth.bridge.Snapshot().Ready {
 			owner, err := s.newBluetoothTransport()

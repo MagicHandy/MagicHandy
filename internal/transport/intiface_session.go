@@ -23,11 +23,39 @@ type intifaceSessionOwner interface {
 	admitWrite(kind string, fields map[string]any, generation uint64, paced *intifacePacedRequest) (intifaceWriteAdmission, error)
 	releaseWrite(reserved bool)
 	sessionConnectedLocked()
+	sessionReady(sessionCtx context.Context)
 	sessionFailedLocked(err error) func()
 	deviceRemovedLocked(deviceIndex uint32) func()
+	invalidateForEmergency()
 	invalidateForClose()
 	stopForClose(connected bool) error
 	closedLocked()
+}
+
+// Session-wide request capacity. Stop and Ping keep a reserve beyond the
+// ordinary limit, so a backlog of output writes can never block them.
+const (
+	maxIntifaceWaiters      = 32
+	intifaceReservedWaiters = 8
+)
+
+var (
+	errIntifaceRequestCapacity = errors.New("Intiface request capacity reached")
+	errIntifaceDeviceClaimed   = errors.New("this Intiface device is already used by another output")
+	errIntifaceStopping        = errors.New("an Intiface emergency Stop is in progress")
+	errIntifaceOwnerClosed     = errors.New("Intiface owner is closed")
+)
+
+// intifaceStopKind passes a closed session and the emergency barrier.
+func intifaceStopKind(kind string) bool {
+	return kind == "StopDeviceCmd" || kind == "StopAllDevices"
+}
+
+// intifaceReservedKind may use the reserved request capacity and passes the
+// emergency barrier: Stop must always be deliverable, and the keepalive
+// keeps the server's own watchdog satisfied while a Stop is in flight.
+func intifaceReservedKind(kind string) bool {
+	return intifaceStopKind(kind) || kind == "Ping"
 }
 
 // intifaceSession owns one Buttplug v3 websocket connection: handshake,
@@ -37,22 +65,30 @@ type intifaceSessionOwner interface {
 type intifaceSession struct {
 	options IntifaceOptions
 
-	lifecycleMu     sync.Mutex
-	workerMu        sync.Mutex
-	workersClosed   bool
-	mu              sync.Mutex
-	writeMu         sync.Mutex
-	conn            *websocket.Conn
-	sessionCtx      context.Context
-	sessionStop     context.CancelFunc
-	started         bool
-	closed          bool
-	connected       bool
-	scanning        bool
-	maxPingTime     time.Duration
-	nextID          uint32
-	waiters         map[uint32]*intifaceWaiter
-	devices         map[uint32]IntifaceDevice
+	lifecycleMu   sync.Mutex
+	workerMu      sync.Mutex
+	workersClosed bool
+	mu            sync.Mutex
+	writeMu       sync.Mutex
+	conn          *websocket.Conn
+	sessionCtx    context.Context
+	sessionStop   context.CancelFunc
+	started       bool
+	closed        bool
+	connected     bool
+	scanning      bool
+	maxPingTime   time.Duration
+	nextID        uint32
+	waiters       map[uint32]*intifaceWaiter
+	devices       map[uint32]IntifaceDevice
+	// incarnations distinguish a device index that disappears and returns:
+	// an owner bound to the old incarnation cannot command the new device.
+	incarnations    map[uint32]uint64
+	lastIncarnation uint64
+	// claims give each device at most one owner, because a device-level Stop
+	// from one owner would also stop another owner's output.
+	claims          map[uint32]intifaceSessionOwner
+	barrier         int
 	owners          []intifaceSessionOwner
 	wg              sync.WaitGroup
 	responseTimeout time.Duration
@@ -82,6 +118,8 @@ func newIntifaceSession(options IntifaceOptions) (*intifaceSession, error) {
 		options:         options,
 		waiters:         make(map[uint32]*intifaceWaiter),
 		devices:         make(map[uint32]IntifaceDevice),
+		incarnations:    make(map[uint32]uint64),
+		claims:          make(map[uint32]intifaceSessionOwner),
 		responseTimeout: defaultIntifaceResponseTime,
 	}, nil
 }
@@ -93,10 +131,10 @@ func (s *intifaceSession) bind(owner intifaceSessionOwner) {
 }
 
 // Connect opens the websocket and completes the Buttplug v3 handshake and
-// device list request. started runs once the session is ready, while the
-// connection lifecycle is still held, so an owner's workers start before any
-// caller can close the session.
-func (s *intifaceSession) Connect(ctx context.Context, started func(context.Context)) error {
+// device list request. Owners start their workers once the session is ready,
+// while the connection lifecycle is still held, so no caller can close the
+// session first.
+func (s *intifaceSession) Connect(ctx context.Context) error {
 	s.lifecycleMu.Lock()
 	defer s.lifecycleMu.Unlock()
 
@@ -147,8 +185,11 @@ func (s *intifaceSession) Connect(ctx context.Context, started func(context.Cont
 		s.abortConnect(err)
 		return err
 	}
-	if started != nil {
-		started(sessionCtx)
+	s.mu.Lock()
+	owners := append([]intifaceSessionOwner(nil), s.owners...)
+	s.mu.Unlock()
+	for _, owner := range owners {
+		owner.sessionReady(sessionCtx)
 	}
 	return nil
 }
@@ -282,7 +323,39 @@ func (s *intifaceSession) handleDeviceAdded(payload json.RawMessage) {
 	}
 	s.mu.Lock()
 	s.devices[device.DeviceIndex] = intifaceDeviceFromProtocol(device)
+	s.incarnations[device.DeviceIndex] = s.nextIncarnationLocked()
 	s.mu.Unlock()
+}
+
+func (s *intifaceSession) nextIncarnationLocked() uint64 {
+	s.lastIncarnation++
+	return s.lastIncarnation
+}
+
+// incarnationLocked reports the current incarnation of a present device.
+func (s *intifaceSession) incarnationLocked(deviceIndex uint32) (uint64, bool) {
+	if _, ok := s.devices[deviceIndex]; !ok {
+		return 0, false
+	}
+	incarnation, ok := s.incarnations[deviceIndex]
+	return incarnation, ok
+}
+
+// claimLocked gives owner a device. A device claimed by another owner is
+// refused; an owner's own earlier claims stay until it releases them.
+func (s *intifaceSession) claimLocked(owner intifaceSessionOwner, deviceIndex uint32) error {
+	if holder, ok := s.claims[deviceIndex]; ok && holder != owner {
+		return errIntifaceDeviceClaimed
+	}
+	s.claims[deviceIndex] = owner
+	return nil
+}
+
+// releaseClaimLocked returns a device owner holds; other claims are kept.
+func (s *intifaceSession) releaseClaimLocked(owner intifaceSessionOwner, deviceIndex uint32) {
+	if s.claims[deviceIndex] == owner {
+		delete(s.claims, deviceIndex)
+	}
 }
 
 func (s *intifaceSession) handleDeviceRemoved(payload json.RawMessage) {
@@ -292,6 +365,8 @@ func (s *intifaceSession) handleDeviceRemoved(payload json.RawMessage) {
 	}
 	s.mu.Lock()
 	delete(s.devices, removed.DeviceIndex)
+	delete(s.incarnations, removed.DeviceIndex)
+	delete(s.claims, removed.DeviceIndex)
 	var followUps []func()
 	for _, owner := range s.owners {
 		if followUp := owner.deviceRemovedLocked(removed.DeviceIndex); followUp != nil {
@@ -405,9 +480,17 @@ func (s *intifaceSession) requestOK(ctx context.Context, kind string, fields map
 // generation can never reach the wire.
 func (s *intifaceSession) startRequestFor(ctx context.Context, owner intifaceSessionOwner, kind string, fields map[string]any, generation uint64, paced *intifacePacedRequest) (intifaceRequest, error) {
 	s.mu.Lock()
-	if !s.connected || s.conn == nil || (s.closed && kind != "StopDeviceCmd") {
+	if !s.connected || s.conn == nil || (s.closed && !intifaceStopKind(kind)) {
 		s.mu.Unlock()
 		return intifaceRequest{}, errors.New("Intiface connection is stale")
+	}
+	limit := maxIntifaceWaiters
+	if intifaceReservedKind(kind) {
+		limit += intifaceReservedWaiters
+	}
+	if len(s.waiters) >= limit {
+		s.mu.Unlock()
+		return intifaceRequest{}, errIntifaceRequestCapacity
 	}
 	s.nextID++
 	if s.nextID == 0 {
@@ -421,10 +504,10 @@ func (s *intifaceSession) startRequestFor(ctx context.Context, owner intifaceSes
 	s.mu.Unlock()
 
 	s.writeMu.Lock()
-	if s.requestClosed(kind) {
+	if err := s.admissionError(kind); err != nil {
 		s.writeMu.Unlock()
 		s.removeWaiter(id, waiter)
-		return intifaceRequest{}, errors.New("Intiface owner is closed")
+		return intifaceRequest{}, err
 	}
 	var admission intifaceWriteAdmission
 	if owner != nil && generation != 0 {
@@ -485,10 +568,51 @@ func releaseIntifaceWrite(owner intifaceSessionOwner, reserved bool) {
 	}
 }
 
-func (s *intifaceSession) requestClosed(kind string) bool {
+// admissionError is checked under the writer lock, so a write admitted
+// before the emergency barrier either reaches the wire before StopAllDevices
+// or is refused.
+func (s *intifaceSession) admissionError(kind string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.closed && kind != "StopDeviceCmd"
+	switch {
+	case intifaceStopKind(kind):
+		return nil
+	case s.closed:
+		return errIntifaceOwnerClosed
+	case s.barrier > 0 && !intifaceReservedKind(kind):
+		return errIntifaceStopping
+	default:
+		return nil
+	}
+}
+
+// EmergencyStop closes admission, invalidates every owner's playback and sends
+// StopAllDevices, which stops every device the server has, including ones no
+// owner selected. Admission stays closed until the Stop completes, so no
+// owner write can follow it. A Stop that cannot be confirmed closes the
+// session: the server then stops its devices because the client is gone.
+func (s *intifaceSession) EmergencyStop(ctx context.Context) error {
+	s.mu.Lock()
+	if !s.connected {
+		s.mu.Unlock()
+		return errors.New("Intiface connection is stale")
+	}
+	s.barrier++
+	owners := append([]intifaceSessionOwner(nil), s.owners...)
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.barrier--
+		s.mu.Unlock()
+	}()
+	for _, owner := range owners {
+		owner.invalidateForEmergency()
+	}
+	if err := s.requestOK(ctx, "StopAllDevices", nil); err != nil {
+		s.setSessionFailure(fmt.Errorf("Intiface StopAllDevices could not be confirmed: %w", err))
+		return err
+	}
+	return nil
 }
 
 func (s *intifaceSession) rejectRequestWrite(owner intifaceSessionOwner, id uint32, waiter *intifaceWaiter, reserved bool, err error) (intifaceRequest, error) {
@@ -602,8 +726,15 @@ func (s *intifaceSession) applyResponseLocked(requestKind string, message buttpl
 		var list buttplugDeviceList
 		if json.Unmarshal(message.payload, &list) == nil {
 			s.devices = make(map[uint32]IntifaceDevice, len(list.Devices))
+			s.incarnations = make(map[uint32]uint64, len(list.Devices))
 			for _, device := range list.Devices {
 				s.devices[device.DeviceIndex] = intifaceDeviceFromProtocol(device)
+				s.incarnations[device.DeviceIndex] = s.nextIncarnationLocked()
+			}
+			for deviceIndex := range s.claims {
+				if _, ok := s.devices[deviceIndex]; !ok {
+					delete(s.claims, deviceIndex)
+				}
 			}
 		}
 	}
@@ -667,7 +798,8 @@ func cloneIntifaceDevicesLocked(devices map[uint32]IntifaceDevice) []IntifaceDev
 	clones := make([]IntifaceDevice, 0, len(devices))
 	for _, device := range devices {
 		clone := device
-		clone.LinearActuators = append([]IntifaceLinearActuator(nil), device.LinearActuators...)
+		clone.LinearActuators = append([]IntifaceLinearActuator{}, device.LinearActuators...)
+		clone.ScalarActuators = append([]IntifaceScalarActuator{}, device.ScalarActuators...)
 		clones = append(clones, clone)
 	}
 	sort.Slice(clones, func(a, b int) bool { return clones[a].DeviceIndex < clones[b].DeviceIndex })

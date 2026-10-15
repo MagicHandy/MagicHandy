@@ -1002,6 +1002,9 @@ type fakeButtplugServer struct {
 	linearACKPlans []fakeLinearACK
 	linearCount    int
 	stopACKHold    <-chan struct{}
+	stopAllHold    <-chan struct{}
+	rejectStop     bool
+	extraDevices   []map[string]any
 	done           chan struct{}
 	doneOnce       sync.Once
 	wg             sync.WaitGroup
@@ -1117,6 +1120,8 @@ func (f *fakeButtplugServer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 				f.respondLinear(id)
 			case "StopDeviceCmd":
 				f.respondStop(id)
+			case "StopAllDevices":
+				f.respondHeld(id, f.stopAllHold)
 			default:
 				f.write("Ok", map[string]any{"Id": id})
 			}
@@ -1125,14 +1130,39 @@ func (f *fakeButtplugServer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *fakeButtplugServer) respondDeviceList(id uint32) {
-	messages := []map[string]any{{"DeviceList": map[string]any{"Id": id, "Devices": []any{fakeLinearDeviceWithCapabilities(7, "Test Linear", f.timingGap, f.stepCount)}}}}
+	devices := []any{fakeLinearDeviceWithCapabilities(7, "Test Linear", f.timingGap, f.stepCount)}
+	for _, device := range f.extraDevices {
+		devices = append(devices, device)
+	}
+	messages := []map[string]any{{"DeviceList": map[string]any{"Id": id, "Devices": devices}}}
 	f.writeBatch(append(messages, f.initialEvents...))
+}
+
+// respondHeld answers Ok once hold closes, or at once without a hold.
+func (f *fakeButtplugServer) respondHeld(id uint32, hold <-chan struct{}) {
+	if hold == nil {
+		f.write("Ok", map[string]any{"Id": id})
+		return
+	}
+	f.wg.Add(1)
+	go func() {
+		defer f.wg.Done()
+		select {
+		case <-hold:
+			f.write("Ok", map[string]any{"Id": id})
+		case <-f.done:
+		}
+	}()
 }
 
 func (f *fakeButtplugServer) respondStop(id uint32) {
 	f.mu.Lock()
-	hold := f.stopACKHold
+	hold, reject := f.stopACKHold, f.rejectStop
 	f.mu.Unlock()
+	if reject {
+		f.write("Error", map[string]any{"Id": id, "ErrorCode": 4, "ErrorMessage": "device busy"})
+		return
+	}
 	if hold == nil {
 		f.write("Ok", map[string]any{"Id": id})
 		return
