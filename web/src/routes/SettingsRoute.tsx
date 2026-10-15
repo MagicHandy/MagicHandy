@@ -24,7 +24,8 @@ import { SettingsNavigation, SettingsNavigationLabel } from "../components/Setti
 import { LabsSettings } from "../components/LabsSettings";
 import { DismissibleNotice } from "../components/DismissibleNotice";
 import { CoyoteSettings, DEFAULT_ESTIM_SETTINGS } from "../components/CoyoteSettings";
-import type { DeviceId, EstimSettings } from "../api/types";
+import type { DeviceId, EstimSettings, VibrationSettings } from "../api/types";
+import { DEFAULT_VIBRATION_SETTINGS, VibratorSettings } from "../components/VibratorSettings";
 import { DEVICE_ORDER, configuredDevices, playbackDevices } from "../api/devices";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
@@ -197,6 +198,9 @@ export function SettingsRoute() {
   function patchEstim(p: Partial<EstimSettings>) {
     setS((cur) => (cur ? { ...cur, estim: { ...DEFAULT_ESTIM_SETTINGS, ...cur.estim, ...p } } : cur));
   }
+  function patchVibration(p: Partial<VibrationSettings>) {
+    setS((cur) => (cur ? { ...cur, vibration: { ...DEFAULT_VIBRATION_SETTINGS, ...cur.vibration, ...p } } : cur));
+  }
   function patchLLM(p: Partial<PublicSettings["llm"]>) {
     setS((cur) => (cur ? { ...cur, llm: { ...cur.llm, ...p } } : cur));
   }
@@ -273,6 +277,7 @@ export function SettingsRoute() {
         ...(connectionKey ? { handy_connection_key: connectionKey } : {}),
       },
       estim: { ...DEFAULT_ESTIM_SETTINGS, ...stripRemembered(s.estim), forget_device: forgetCoyote },
+      vibration: { ...DEFAULT_VIBRATION_SETTINGS, ...s.vibration },
       motion: s.motion,
       autopilot: s.autopilot,
       llm: s.llm,
@@ -554,6 +559,11 @@ export function SettingsRoute() {
               patch={patchEstim}
               setForgetDevice={setForgetCoyote}
             />}
+            {configured.includes("vibrator") && <VibratorSettings
+              vibration={{ ...DEFAULT_VIBRATION_SETTINGS, ...s.vibration }}
+              locked={locked}
+              patch={patchVibration}
+            />}
             {configured.includes("handy") && <div className="group">
               <h3 className="group-title">{t("Connection")}</h3>
               <label className="field"><span className="label">{t("Protocol")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
@@ -639,5 +649,5 @@ function withPlayback(playing: DeviceId[], device: DeviceId, included: boolean):
 }
 
 function playbackDeviceName(device: DeviceId): string {
-  return device === "coyote" ? t("Coyote") : t("The Handy");
+  return device === "coyote" ? t("Coyote") : device === "vibrator" ? t("Vibrator") : t("The Handy");
 }

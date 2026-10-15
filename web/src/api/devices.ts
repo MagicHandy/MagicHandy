@@ -4,7 +4,7 @@
 import type { DeviceId, DeviceOutput } from "./coyote-types";
 
 /** Saved devices in run-clock order: the first playing device is the clock. */
-export const DEVICE_ORDER: DeviceId[] = ["handy", "coyote"];
+export const DEVICE_ORDER: DeviceId[] = ["handy", "coyote", "vibrator"];
 
 interface DeviceSnapshot {
   playback_devices?: DeviceId[];

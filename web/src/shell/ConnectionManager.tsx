@@ -3,6 +3,8 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSPrope
 import { api } from "../api/client";
 import type { BluetoothBridgeSnapshot, IntifaceTransportSnapshot } from "../api/types";
 import { configuredDevices, playbackDevices } from "../api/devices";
+import type { DeviceId } from "../api/types";
+import { VibratorPanel, vibratorStatusText } from "../components/VibratorPanel";
 import { BluetoothBridge, type BluetoothBridgeState } from "../components/BluetoothBridge";
 import { CoyotePanel, coyoteStatusText, coyoteStrengthText } from "../components/CoyotePanel";
 import { NativeBluetoothPanel } from "../components/NativeBluetoothPanel";
@@ -69,6 +71,7 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
   const titleId = useId();
   const handyTitleId = useId();
   const coyoteTitleId = useId();
+  const vibratorTitleId = useId();
   const addRef = useRef<HTMLButtonElement>(null);
   const focusAfterRemoval = useRef(false);
 
@@ -77,8 +80,11 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
   const playing = playbackDevices(state?.settings?.device);
   const usesHandy = configured.includes("handy");
   const usesCoyote = configured.includes("coyote");
+  const usesVibrator = configured.includes("vibrator");
+  const allAdded = usesHandy && usesCoyote && usesVibrator;
   const handyIncluded = playing.includes("handy");
   const coyoteIncluded = playing.includes("coyote");
+  const vibratorIncluded = playing.includes("vibrator");
   const coyote = state?.coyote_transport;
   const native = state?.native_bluetooth_transport;
   const linkedSession = state?.motion?.engine?.linked_session;
@@ -136,7 +142,7 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
     : methods.find((method) => method.value === owner)?.label ?? translateKnown(connectionProviderName(owner, initializing));
   const canChooseDevice = !locked && canConfigureHost && !initializing;
   const selectionBusy = outputBusy || methodBusy;
-  const canAdd = canChooseDevice && !(usesHandy && usesCoyote);
+  const canAdd = canChooseDevice && !allAdded;
   const addMenu = useMenu({ disabled: !open || !canAdd || selectionBusy });
   const lockReason = !backendOnline
     ? t("Core offline.")
@@ -145,8 +151,13 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
   const handyName = owner === "browser_bluetooth"
     ? bluetooth.deviceName || "The Handy"
     : owner === "native_bluetooth" ? native?.status.device_name || "The Handy" : selectedIntifaceDevice?.device_name || "The Handy";
-  const deviceName = !usesHandy && !usesCoyote ? t("Connections") : !usesHandy ? t("Coyote") : usesCoyote ? t("{device} + Coyote", { device: handyName }) : handyName;
-  const intifaceReady = Boolean(intiface.status.connected && intiface.status.selected_device_index !== undefined);
+  const vibratorName = intiface.vibrator?.selected && intiface.vibrator.device_name ? intiface.vibrator.device_name : t("Vibrator");
+  const deviceNames = [usesHandy && handyName, usesCoyote && t("Coyote"), usesVibrator && vibratorName].filter(Boolean);
+  const deviceName = deviceNames.length ? deviceNames.join(" + ") : t("Connections");
+  // The shared Intiface session can be open for the vibrator alone: the Handy
+  // counts as connected only while it holds its own lease.
+  const intifaceHandyLeased = Boolean(intiface.status.connected && (intiface.leases?.includes("handy") ?? true));
+  const intifaceReady = intifaceHandyLeased && intiface.status.selected_device_index !== undefined;
   // An Intiface scan runs until it is stopped, so a scan only means "still
   // finding a device" while no actuator has been chosen.
   const intifaceSearching = !intifaceReady && (intifaceActivity === "scanning" || intiface.status.scanning);
@@ -165,7 +176,11 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
   const coyotePhase: ConnectionPhase = !backendOnline
     ? "disconnected"
     : initializing ? "initializing" : coyote?.status.connecting ? "connecting" : coyote?.status.connected ? "connected" : "disconnected";
-  const phase = !usesHandy ? coyotePhase : handyPhase;
+  const vibratorLeased = Boolean(intiface.status.connected && intiface.leases?.includes("vibrator"));
+  const vibratorPhase: ConnectionPhase = !backendOnline
+    ? "disconnected"
+    : initializing ? "initializing" : vibratorLeased && intiface.vibrator?.selected ? "connected" : "disconnected";
+  const phase = usesHandy ? handyPhase : usesCoyote ? coyotePhase : vibratorPhase;
   const handyStatus = owner === "native_bluetooth" && backendOnline
     ? native?.status.connecting ? "Connecting" : native?.status.connected ? "Bluetooth connected" : "Bluetooth disconnected"
     : connectionStatusText({
@@ -178,21 +193,20 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
     phase: handyPhase,
   });
   const coyoteLine = [translateKnown(coyoteStatusText(coyote?.status)), coyoteStrengthText(coyote?.status)].filter(Boolean).join(" · ");
+  const vibratorLine = [translateKnown(vibratorStatusText(intiface)), intiface.vibrator?.selected && vibratorLeased ? `${intiface.vibrator.intensity_percent}%` : ""].filter(Boolean).join(" · ");
+  const deviceLines = [usesHandy && translateKnown(handyStatus), usesCoyote && coyoteLine, usesVibrator && vibratorLine].filter(Boolean);
   const statusText = !backendOnline
     ? translateKnown("Core offline")
-    : !usesHandy && !usesCoyote ? t("Chat only")
-    : !usesHandy
-      ? coyoteLine
-      : usesCoyote ? `${translateKnown(handyStatus)} · ${coyoteLine}` : translateKnown(handyStatus);
+    : deviceLines.length ? deviceLines.join(" · ") : t("Chat only");
 
   useEffect(() => {
-    if (focusAfterRemoval.current && !(usesHandy && usesCoyote)) {
+    if (focusAfterRemoval.current && !allAdded) {
       focusAfterRemoval.current = false;
       addRef.current?.focus();
     }
-  }, [usesHandy, usesCoyote]);
+  }, [allAdded, usesHandy, usesCoyote, usesVibrator]);
 
-  async function changeConnection(device: "handy" | "coyote", action: "add" | "remove" | "include" | "exclude") {
+  async function changeConnection(device: DeviceId, action: "add" | "remove" | "include" | "exclude") {
     if (!canChooseDevice || outputPending.current || methodPending.current) return;
     outputPending.current = true;
     setOutputBusy(true);
@@ -294,17 +308,17 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
               <button ref={addRef} type="button" className="icon-button connection-add-trigger"
                 aria-label={t("Add connection")} aria-haspopup="menu" aria-expanded={addMenu.open} aria-controls={addMenu.open ? addMenu.id : undefined}
                 aria-disabled={!canAdd || selectionBusy} aria-busy={selectionBusy || undefined}
-                title={usesHandy && usesCoyote ? t("The Handy and Coyote are already added.") : t("Add connection")}
+                title={allAdded ? t("Every device is already added.") : t("Add connection")}
                 onClick={(event) => { if (addMenu.open) addMenu.close(); else if (canAdd && !selectionBusy) addMenu.show(event.currentTarget, undefined); }}
                 onKeyDown={(event) => { if (canAdd && !selectionBusy) addMenu.onTriggerKeyDown(event, undefined); }}>
                 <PlusIcon size={16} />
               </button>
               {addMenu.open && <div {...addMenu.menuProps} className="connection-method-menu" aria-label={t("Add connection")}>
-                {(["handy", "coyote"] as const).filter((device) => device === "handy" ? !usesHandy : !usesCoyote).map((device) => (
+                {(["handy", "coyote", "vibrator"] as const).filter((device) => !configured.includes(device)).map((device) => (
                   <button key={device} type="button" role="menuitem" className="connection-method-option" onClick={() => { addMenu.close(); void changeConnection(device, "add"); }}>
                     <span className="connection-method-option-copy">
-                      <strong>{device === "coyote" ? t("Coyote") : t("The Handy")}</strong>
-                      <small>{device === "coyote" ? t("Coyote Bluetooth") : methods.find((method) => method.value === owner)?.label ?? t("Not configured")}</small>
+                      <strong>{device === "coyote" ? t("Coyote") : device === "vibrator" ? t("Vibrator") : t("The Handy")}</strong>
+                      <small>{device === "coyote" ? t("Coyote Bluetooth") : device === "vibrator" ? t("Intiface Central") : methods.find((method) => method.value === owner)?.label ?? t("Not configured")}</small>
                     </span><PlusIcon size={16} />
                   </button>
                 ))}
@@ -328,11 +342,11 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
         </header>
 
         {lockReason && <p className="form-status connection-lock-reason">{lockReason}</p>}
-        {!usesHandy && !usesCoyote && <div className="connection-section connection-empty"><strong>{t("Chat only")}</strong><p className="hint-block">{t("Add a connection with + when you want device playback.")}</p></div>}
+        {configured.length === 0 && <div className="connection-section connection-empty"><strong>{t("Chat only")}</strong><p className="hint-block">{t("Add a connection with + when you want device playback.")}</p></div>}
         {playing.length === 0 && configured.length > 0 && <p className="connection-playback-note">{t("No devices selected for playback.")}</p>}
 
         {linkedSession?.status === "failed" && <p className="connection-playback-note" role="status">{t("Playback stopped after a device failure.")}</p>}
-        {linkedSession?.status === "degraded" && <p className="connection-playback-note" role="status">{t("Continuing without {devices}. Stop and start again to rejoin.", { devices: linkedSession.retired_devices.map((device) => device === "handy" ? t("The Handy") : t("Coyote")).join(", ") })}</p>}
+        {linkedSession?.status === "degraded" && <p className="connection-playback-note" role="status">{t("Continuing without {devices}. Stop and start again to rejoin.", { devices: linkedSession.retired_devices.map((device) => device === "handy" ? t("The Handy") : device === "vibrator" ? t("Vibrator") : t("Coyote")).join(", ") })}</p>}
         {/* Each device section stays mounted while hidden: the Bluetooth bridge
             and the Intiface and Coyote panels own live sessions. */}
         <div className="connection-section connection-handy" hidden={!usesHandy}>
@@ -452,6 +466,29 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
           {usesCoyote && coyoteSafetyAcknowledged && !coyote?.status.connected && (
             <p className="hint-block connection-coyote-route">{t("The Coyote uses the Bluetooth of the computer running MagicHandy, not this browser.")}</p>
           )}
+        </div>
+
+        <div className="connection-section connection-vibrator" hidden={!usesVibrator}>
+          <div className="connection-device-head">
+            <div className="connection-device-title">
+              <h3 id={vibratorTitleId}>{t("Vibrator")}</h3>
+              <p className="connection-method-static">{t("Intiface Central")}</p>
+            </div>
+            {<button type="button" className="icon-button connection-remove"
+              aria-label={t("Remove {device}", { device: t("Vibrator") })} title={t("Removing a connection stops motion.")}
+              disabled={!canChooseDevice} aria-busy={selectionBusy || undefined}
+              onClick={() => { focusAfterRemoval.current = true; void changeConnection("vibrator", "remove"); }}><CloseIcon size={16} /></button>}
+          </div>
+          <label className="connection-participation toggle-line"><span className="toggle"><input type="checkbox" aria-label={t("Use {device} in playback", { device: t("Vibrator") })} checked={vibratorIncluded} disabled={!canChooseDevice || selectionBusy} onChange={(event) => void changeConnection("vibrator", event.target.checked ? "include" : "exclude")} /><span className="track" aria-hidden="true" /></span><span>{t("Use in playback")}</span></label>
+          <VibratorPanel
+            visible={usesVibrator}
+            locked={locked}
+            canConfigureHost={canConfigureHost}
+            initial={state?.intiface_transport}
+            stopSequence={state?.stop_sequence}
+            playbackActive={Boolean(state?.motion?.engine?.running || state?.motion?.engine?.starting || state?.motion?.engine?.completing)}
+            onChanged={refresh}
+          />
         </div>
 
         <div className="connection-section connection-limits">

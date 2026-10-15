@@ -1067,6 +1067,12 @@ func (s *Server) newHandyMotionTransport(settings config.Settings) (transport.Tr
 		if err != nil {
 			return nil, err
 		}
+		s.intiface.mu.Lock()
+		leased := s.intiface.leases[config.DeviceOutputHandy]
+		s.intiface.mu.Unlock()
+		if !leased {
+			return nil, errors.New("connect the Handy through Intiface first")
+		}
 		status := intiface.Status()
 		if status.SelectedDeviceIndex == nil || status.SelectedActuatorIndex == nil {
 			return nil, errors.New("an Intiface linear actuator must be selected")

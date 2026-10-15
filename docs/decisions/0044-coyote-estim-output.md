@@ -10,6 +10,11 @@ The worker packaging and IPC ownership below are extended by
 `bluetooth-worker`, version-3 IPC is device-neutral, and each Handy/COYOTE link
 still gets its own process. The pulse/strength decisions in this ADR remain.
 
+[ADR 0047](0047-intiface-vibrator-output.md) moves the Coyote's frame
+timeline, clock and coverage helpers to `internal/companion`, shared with the
+vibrator. The Coyote's packet pacing, strength handshake and renderer are
+unchanged.
+
 ## Context
 
 The DG-LAB Coyote 3.0 is a two-channel electrical stimulation box. Each

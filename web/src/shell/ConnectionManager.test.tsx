@@ -14,6 +14,10 @@ vi.mock("../state/app-state", () => ({
 }));
 vi.mock("../api/client", () => ({ api }));
 vi.mock("../components/IntifacePanel", () => ({ IntifacePanel: () => null }));
+vi.mock("../components/VibratorPanel", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../components/VibratorPanel")>();
+  return { ...actual, VibratorPanel: (props: { visible: boolean }) => props.visible ? <div data-testid="vibrator-panel" /> : null };
+});
 vi.mock("../components/QuickSettings", () => ({ QuickSettings: () => null }));
 vi.mock("../components/BluetoothBridge", async () => {
   const { useEffect } = await import("react");
@@ -77,7 +81,8 @@ function renderWith(snapshot: IntifaceTransportSnapshot) {
 interface ManagerOptions {
   owner?: string;
   output?: DeviceOutput;
-  configured?: Array<"handy" | "coyote">;
+  configured?: Array<"handy" | "coyote" | "vibrator">;
+  playback?: Array<"handy" | "coyote" | "vibrator">;
   readOnly?: boolean;
   configureHost?: boolean;
   safetyAcknowledged?: boolean;
@@ -90,7 +95,7 @@ function managerState(options: ManagerOptions = {}) {
     stop_sequence: 7,
     capabilities: { configure_host: options.configureHost ?? true },
     settings: {
-      device: { hsp_dispatch_owner: options.owner ?? "cloud_rest", output: options.output ?? "handy", configured_devices: options.configured, connection_key_set: true },
+      device: { hsp_dispatch_owner: options.owner ?? "cloud_rest", output: options.output ?? "handy", configured_devices: options.configured, playback_devices: options.playback, connection_key_set: true },
       estim: { safety_acknowledged: options.safetyAcknowledged ?? true },
       options: { hsp_dispatch_owners: options.methods ?? ["cloud_rest", "browser_bluetooth", "intiface"] },
     },
@@ -252,7 +257,7 @@ describe("additive connections", () => {
     expect(screen.queryByRole("radio")).toBeNull();
     expect(screen.getAllByRole("button", { name: /^Remove / })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Add connection" }));
-    expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["CoyoteCoyote Bluetooth", "VibratorIntiface Central"]);
     fireEvent.click(screen.getByRole("menuitem", { name: "Coyote Coyote Bluetooth" }));
     // Repeated clicks and a protocol change cannot race the pending save.
     fireEvent.click(screen.getByRole("button", { name: "Add connection" }));
@@ -268,6 +273,9 @@ describe("additive connections", () => {
     rerenderWith({ output: "handy", configured: ["handy", "coyote"] });
     expect(screen.getByRole("checkbox", { name: "Use Coyote in playback" })).not.toBeChecked();
     expect(screen.getByTestId("coyote-panel")).toBeInTheDocument();
+    // The vibrator is still missing, so adding stays available.
+    expect(screen.getByRole("button", { name: "Add connection" })).not.toHaveAttribute("aria-disabled", "true");
+    rerenderWith({ output: "handy", configured: ["handy", "coyote", "vibrator"] });
     expect(screen.getByRole("button", { name: "Add connection" })).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(screen.getByRole("button", { name: "Add connection" }));
     expect(screen.queryByRole("menu")).toBeNull();
@@ -312,7 +320,7 @@ describe("playback participation", () => {
     expect(add.textContent).toBe("");
     expect(screen.queryByRole("button", { name: /^Remove / })).toBeNull();
     fireEvent.click(add);
-    expect(screen.getAllByRole("menuitem")).toHaveLength(2);
+    expect(screen.getAllByRole("menuitem")).toHaveLength(3);
   });
 
   it("allows removing the last connection", async () => {
@@ -343,4 +351,25 @@ it("offers Native Bluetooth alongside browser Bluetooth and only saves the selec
   fireEvent.click(screen.getByRole("menuitemradio", { name: "Native Bluetooth" }));
   await waitFor(() => expect(api.saveSetupPreferences).toHaveBeenCalledWith({ device_owner: "native_bluetooth" }));
   expect(api.nativeBluetoothConnect).not.toHaveBeenCalled();
+});
+
+describe("vibrator connection", () => {
+  it("adds the vibrator as its own row with a separate playback switch", async () => {
+    renderManager({ configured: ["handy", "vibrator"], playback: ["handy"] });
+    expect(screen.getByTestId("vibrator-panel")).toBeInTheDocument();
+    const playback = screen.getByRole("checkbox", { name: "Use Vibrator in playback" });
+    expect(playback).not.toBeChecked();
+    fireEvent.click(playback);
+    await waitFor(() => expect(api.changeDeviceConnection).toHaveBeenCalledWith("vibrator", "include"));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Vibrator" }));
+    await waitFor(() => expect(api.changeDeviceConnection).toHaveBeenCalledWith("vibrator", "remove"));
+  });
+
+  it("names every saved device on the trigger and supports the vibrator alone", () => {
+    const { rerenderWith } = renderManager({ configured: ["handy", "coyote", "vibrator"], playback: ["handy", "coyote", "vibrator"] });
+    expect(screen.getByRole("button", { name: /^The Handy \+ Coyote \+ Vibrator / })).toBeInTheDocument();
+    rerenderWith({ output: "none", configured: ["vibrator"], playback: ["vibrator"] });
+    expect(screen.getByRole("button", { name: /^Vibrator Vibrator disconnected/ })).toBeInTheDocument();
+    expect(screen.queryByText("No devices selected for playback.")).toBeNull();
+  });
 });

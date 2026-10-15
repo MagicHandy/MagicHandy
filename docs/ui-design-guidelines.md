@@ -311,9 +311,9 @@ or glows.
 - Open moves focus to Close; Close restores the trigger. Escape remains the
   global Stop shortcut and is never consumed by this disclosure.
 - The manager uses a **+ Add connection** menu instead of an output segmented
-  choice. It offers only the missing supported device, with removal available
-  only when both devices are selected. The list follows backend confirmation;
-  it never implies support for multiple Handys or multiple Coyotes. A sticky
+  choice. It offers only the supported devices that are not added yet (The
+  Handy, Coyote, vibrator). The list follows backend confirmation;
+  it never implies support for more than one of each device. A sticky
   manager header, inset Add row, contrasting device headers and full-width
   separators distinguish the sections without nesting cards. The Handy's
   protocol title sits beside the device name in a keyboard-accessible menu;
@@ -330,6 +330,11 @@ or glows.
   `A 12 · B 8` beside the Coyote status. With the Coyote alone, the panel's
   Motion section keeps only Speed; the Handy model, stroke and direction rows
   hide.
+  A vibrator adds its own section with the same structure: "Intiface Central"
+  as plain text, a playback switch, a device picker, an intensity `control-row`
+  with neutral `−`/`+` steps and a green **Test**. The trigger names every
+  added device (`The Handy + Coyote + Vibrator`) and adds the vibrator's
+  intensity to its status.
 - Simulation is identified once in the persistent top-bar status. Do not repeat
   it as a banner inside the connection manager or a hint beneath every device.
 

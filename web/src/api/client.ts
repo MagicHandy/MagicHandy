@@ -85,6 +85,7 @@ import type {
   CertificatePreparation,
   CommandReceipt,
   CoyoteTransportSnapshot,
+  DeviceId,
   DeviceOutput,
 } from "./types";
 
@@ -869,19 +870,33 @@ export const api = {
     request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/test", { channel }, undefined,
       { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
   coyoteZero: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/zero", {}),
-  changeDeviceConnection: (device: "handy" | "coyote", action: "add" | "remove" | "include" | "exclude") =>
+  changeDeviceConnection: (device: DeviceId, action: "add" | "remove" | "include" | "exclude") =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connections", { device, action }),
   setDeviceOutput: (output: DeviceOutput) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/output", { output }),
   setEstimSafety: (acknowledged: boolean) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/estim/safety", { acknowledged }),
   intifaceStatus: () => request<IntifaceTransportSnapshot>("GET", "/api/transport/intiface/status"),
-  intifaceConnect: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/connect", {}),
-  intifaceDisconnect: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/disconnect", {}),
+  // Each device that reaches Intiface holds a lease on the one shared
+  // connection; no device means the Handy, as older builds sent.
+  intifaceConnect: (device?: "handy" | "vibrator") =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/connect", device ? { device } : {}),
+  intifaceDisconnect: (device?: "handy" | "vibrator") =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/disconnect", device ? { device } : {}),
   intifaceStartScan: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/scan", {}),
   intifaceStopScan: () => request<IntifaceTransportSnapshot>("DELETE", "/api/transport/intiface/scan"),
   intifaceSelect: (device_index: number, actuator_index: number) =>
     request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/select", { device_index, actuator_index }),
+  vibratorSelect: (device_index: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/select", { device_index }),
+  // Raising sends the Stop sequence so a raise prepared before a Stop is
+  // refused; lowering needs no control and never does.
+  vibratorIntensity: (intensity_percent: number, stopSequence?: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/intensity", { intensity_percent }, undefined,
+      stopSequence === undefined ? undefined : { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  vibratorTest: (stopSequence: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/test", {}, undefined,
+      { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
 
   // Browser Bluetooth bridge. React owns only the browser/device session; all
   // motion commands still come from backend bridge commands.

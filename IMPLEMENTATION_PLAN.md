@@ -2799,18 +2799,23 @@ See the [linked review](docs/native-linked-hardware-review-2026-10-15.md),
 [ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and
 [review](docs/native-handy-bluetooth-review-2026-10-14.md).
 
-### Planned: Intiface vibrator output and device-aware replies (2026-10-15)
+### Intiface vibrator output (2026-10-15)
 
-Planned, not implemented. A Buttplug vibrator through Intiface Central joins
-playback with the stroker, the Coyote, both, or alone. It follows the shared
-frame through a conversion profile, with a user-armed intensity that the model
-never controls. Work order:
+Implemented and tested in simulation; physical acceptance is open. A Buttplug
+vibrator through Intiface Central plays with the stroker, the Coyote, both, or
+alone ([ADR 0047](docs/decisions/0047-intiface-vibrator-output.md)):
 
-1. the playback-device set and linked sessions for any set of devices
-2. companion timeline utilities
-3. Intiface session extraction, then its lifecycle, shared by the linear and
-   vibration owners
-4. the vibrator owner
+- Participation is the `device.playback_devices` set. Linked sessions take any
+  set of devices, with the run clock on the first included one.
+- The Coyote's frame timeline, clock and coverage helpers moved to
+  `internal/companion`.
+- One Intiface session is shared by the linear owner and the vibrator owner,
+  with a lease per connected device.
+- The vibrator follows the shared frame through a speed, depth or steady
+  profile (`internal/vibration`). Its live intensity starts at 0, and the
+  model never controls it.
+- `-simulate-motion` builds include an in-process Intiface server with a
+  simulated stroker and vibrator (`internal/buttplugsim`).
 
 Model replies still assume a linear stroker. Device-aware prompts and their
 per-configuration test matrix are later work. See the

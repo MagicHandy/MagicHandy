@@ -3,12 +3,12 @@
 // authoritative, so unknown fields are ignored and read sites use optional
 // chaining. See docs/decisions/0009-react-frontend.md (State Model Rules).
 
-import type { IntifaceTransportSnapshot } from "./intiface-types";
+import type { IntifaceTransportSnapshot, VibrationSettings } from "./intiface-types";
 import type { SetupAssessment } from "./setup-assessment-types";
 import type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { CoyoteTransportSnapshot, EstimSettings } from "./coyote-types";
 export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceId, DeviceOutput, EstimSettings } from "./coyote-types";
-export type { IntifaceLinearActuator, IntifaceScalarActuator, IntifaceDevice, IntifaceDispatchStatus, IntifaceTransportSnapshot } from "./intiface-types";
+export type { IntifaceLinearActuator, IntifaceScalarActuator, IntifaceDevice, IntifaceDispatchStatus, IntifaceTransportSnapshot, IntifaceVibratorMotor, IntifaceVibratorStatus, VibrationSettings } from "./intiface-types";
 export type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { AccountCapabilities } from "./access-types";
 export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus, InternetDiscovery, CertificatePreparation } from "./access-types";
@@ -1080,6 +1080,7 @@ export interface PublicSettings {
   media?: MediaSettingsPayload;
   device: import("./coyote-types").PublicDeviceSettings;
   estim?: EstimSettings & { remembered_device?: boolean };
+  vibration?: VibrationSettings;
   motion: MotionSettings;
   freestyle?: FreestyleSettings;
   autopilot: AutopilotSettings;
@@ -1326,6 +1327,7 @@ export interface SettingsUpdate {
   media: MediaSettingsPayload;
   device: import("./coyote-types").DeviceSettingsUpdate;
   estim?: EstimSettings & { forget_device?: boolean };
+  vibration?: VibrationSettings;
   motion: MotionSettings;
   autopilot?: AutopilotSettings;
   llm: PublicSettings["llm"];

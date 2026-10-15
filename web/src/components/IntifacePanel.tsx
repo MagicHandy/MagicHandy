@@ -67,6 +67,10 @@ export function IntifacePanel({ visible, locked, dirty, initial, onActivityChang
     else if (choices.length === 1) setChoice(choices[0].value);
   }, [choices, snapshot.status.selected_actuator_index, snapshot.status.selected_device_index]);
 
+  // The shared session may be open for the vibrator alone; the Handy counts
+  // as connected only while it holds its own lease.
+  const connected = Boolean(snapshot.status.connected && (snapshot.leases?.includes("handy") ?? true));
+
   if (!visible) return null;
 
   async function run(action: () => Promise<IntifaceTransportSnapshot>, success: MessageKey, nextActivity: IntifaceActivity) {
@@ -93,28 +97,28 @@ export function IntifacePanel({ visible, locked, dirty, initial, onActivityChang
     void run(() => api.intifaceSelect(deviceIndex, actuatorIndex), "Intiface actuator selected.", "selecting");
   }
 
-  const statusText = snapshot.status.connected
+  const statusText = connected
     ? snapshot.status.selected_device_index === undefined ? "Connected - select a linear actuator" : "Connected - ready"
     : "Disconnected";
 
   return (
     <div className="transport-panel" aria-live="polite">
       <div className="transport-summary">
-        <span className="status-dot" data-state={snapshot.status.connected ? "connected" : "disconnected"} aria-hidden="true" />
+        <span className="status-dot" data-state={connected ? "connected" : "disconnected"} aria-hidden="true" />
         <span>{statusText}</span>
       </div>
       {dirty && <p className="form-status">{t("Save the dispatch owner and server address before connecting.")}</p>}
       <div className="row-actions">
-        {snapshot.status.connected ? (
-          <button type="button" className="btn btn-secondary" disabled={locked || busy} onClick={() => void run(api.intifaceDisconnect, "Intiface disconnected.", "disconnecting")}>{t("Disconnect")}</button>
+        {connected ? (
+          <button type="button" className="btn btn-secondary" disabled={locked || busy} onClick={() => void run(() => api.intifaceDisconnect(), "Intiface disconnected.", "disconnecting")}>{t("Disconnect")}</button>
         ) : (
-          <button type="button" className="btn btn-secondary" disabled={locked || dirty || busy} onClick={() => void run(api.intifaceConnect, "Intiface connected.", "connecting")}>{t("Connect")}</button>
+          <button type="button" className="btn btn-secondary" disabled={locked || dirty || busy} onClick={() => void run(() => api.intifaceConnect(), "Intiface connected.", "connecting")}>{t("Connect")}</button>
         )}
-        {snapshot.status.connected && (
+        {connected && (
           <button type="button" className="btn btn-secondary" disabled={locked || busy} onClick={() => void run(snapshot.status.scanning ? api.intifaceStopScan : api.intifaceStartScan, snapshot.status.scanning ? "Intiface scan stopped." : "Intiface scan started.", "scanning")}>{snapshot.status.scanning ? t("Stop scan") : t("Scan devices")}</button>
         )}
       </div>
-      {snapshot.status.connected && choices.length > 0 && (
+      {connected && choices.length > 0 && (
         <div className="transport-selection">
           <label className="field">
             <span className="label">{t("Linear actuator")}</span>
@@ -126,7 +130,7 @@ export function IntifacePanel({ visible, locked, dirty, initial, onActivityChang
           <button type="button" className="btn btn-secondary" disabled={locked || busy || !choice} onClick={selectActuator}>{t("Use actuator")}</button>
         </div>
       )}
-      {snapshot.status.connected && choices.length === 0 && !snapshot.status.scanning && (
+      {connected && choices.length === 0 && !snapshot.status.scanning && (
         <p className="form-status">{t("No linear actuators discovered. Start a scan after the device is available to Intiface Central.")}</p>
       )}
     </div>

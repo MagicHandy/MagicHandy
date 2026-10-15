@@ -216,6 +216,39 @@ describe("SettingsRoute", () => {
     await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ playback_devices: ["handy", "coyote"] }) })));
   });
 
+  it("shows the vibrator profile for a configured vibrator and saves it", async () => {
+    app.hash = "#/settings/device";
+    const initial = settings("normal");
+    initial.device.output = "handy";
+    initial.device.configured_devices = ["handy", "vibrator"];
+    initial.device.playback_devices = ["handy", "vibrator"];
+    getSettings.mockResolvedValue({ settings: initial });
+    render(<SettingsRoute />);
+    const devices = await screen.findByRole("group", { name: "Playback devices" });
+    expect(within(devices).getByRole("checkbox", { name: "Vibrator" })).toBeChecked();
+    expect(screen.getByRole("heading", { name: "Vibrator" })).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Strongest at" })).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "Follows" }), { target: { value: "depth" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Strongest at" }), { target: { value: "tip" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Intensity ceiling (%)" }), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    expect(saveSettings.mock.calls[0][0].vibration).toEqual({ follow: "depth", depth_end: "tip", minimum_percent: 0, ceiling_percent: 30, timing_offset_ms: 0 });
+    expect(saveSettings.mock.calls[0][0].device.playback_devices).toEqual(["handy", "vibrator"]);
+  });
+
+  it("leaves the vibrator profile out until a vibrator is added", async () => {
+    app.hash = "#/settings/device";
+    const initial = settings("normal");
+    initial.device.output = "handy";
+    initial.device.configured_devices = ["handy"];
+    getSettings.mockResolvedValue({ settings: initial });
+    render(<SettingsRoute />);
+    const devices = await screen.findByRole("group", { name: "Playback devices" });
+    expect(within(devices).queryByRole("checkbox", { name: "Vibrator" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Vibrator" })).toBeNull();
+  });
+
   it("follows manager changes without discarding an unsaved failure policy", async () => {
     app.hash = "#/settings/device";
     const initial = settings("normal");

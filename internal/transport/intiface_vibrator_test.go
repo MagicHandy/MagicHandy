@@ -69,6 +69,9 @@ func (f *vibratorFixture) selectAndArm(intensity float64, follow string) Transpo
 // any, to be acknowledged or dropped.
 func (f *vibratorFixture) pace(advance time.Duration) {
 	f.t.Helper()
+	// Mark the pacer alive at the new time first, so the watchdog never sees
+	// the jump as a stall.
+	f.vibrator.lastPace.Store(f.clock.Now().Add(advance).UnixNano())
 	f.clock.Advance(advance)
 	f.vibrator.paceOnce(f.hub.session.sessionCtx)
 	waitForTest(f.t, time.Second, func() bool {
@@ -169,6 +172,45 @@ func TestVibratorFollowsTheFrameAndSendsOnlyStepChanges(t *testing.T) {
 	}
 }
 
+func TestVibratorSpacesLevelsByTheDeviceTimingGapButNotZeros(t *testing.T) {
+	f := newVibratorFixture(t, func(server *fakeButtplugServer) {
+		server.extraDevices[0]["DeviceMessageTimingGap"] = 300
+	})
+	run := f.selectAndArm(0.4, vibration.FollowSteady)
+	ctx := context.Background()
+	if _, err := run.AppendPoints(ctx, strokeCommand("s", 10_000)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run.Play(ctx, PlayCommand{StreamID: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	// The fade-in changes the level on every 100 ms tick, but a 300 ms gap
+	// allows one nonzero command per 330 ms.
+	var sentAt []time.Time
+	sent := countKind(f.server, "ScalarCmd")
+	for range 15 {
+		f.pace(100 * time.Millisecond)
+		if count := countKind(f.server, "ScalarCmd"); count != sent {
+			sent = count
+			sentAt = append(sentAt, f.clock.Now())
+		}
+	}
+	if len(sentAt) < 3 {
+		t.Fatalf("only %d levels were sent during the fade-in", len(sentAt))
+	}
+	for index := 1; index < len(sentAt); index++ {
+		if gap := sentAt[index].Sub(sentAt[index-1]); gap < 330*time.Millisecond {
+			t.Fatalf("levels %v apart, inside the device's timing gap", gap)
+		}
+	}
+	// A zero is never held back.
+	f.vibrator.SetIntensity(0)
+	f.pace(0)
+	if countKind(f.server, "ScalarCmd") != sent+1 || lastScalars(t, f.server)[0] != 0 {
+		t.Fatalf("the zero waited for the timing gap: %v", lastScalars(t, f.server))
+	}
+}
+
 func TestVibratorStopSilencesAndFencesTheOldGeneration(t *testing.T) {
 	f := newVibratorFixture(t, nil)
 	run := f.selectAndArm(0.4, vibration.FollowSteady)
@@ -256,12 +298,43 @@ func TestVibratorTestStaysBelowTheTestCeilingAndEnds(t *testing.T) {
 	}
 }
 
+func TestVibratorTestLevelComposedBeforeAStopNeverReachesTheWire(t *testing.T) {
+	f := newVibratorFixture(t, nil)
+	f.selectAndArm(0.4, vibration.FollowSteady)
+	if err := f.vibrator.Test(); err != nil {
+		t.Fatal(err)
+	}
+	f.vibrator.mu.Lock()
+	send, ok := f.vibrator.composeLocked(f.clock.Now())
+	f.vibrator.mu.Unlock()
+	if !ok {
+		t.Fatal("the test composed no level")
+	}
+	// Emergency Stop lands between composing and writing the level.
+	f.vibrator.invalidateForEmergency()
+	sent := countKind(f.server, "ScalarCmd")
+	f.vibrator.send(f.hub.session.sessionCtx, send)
+	// A written level clears inFlight only once it is acknowledged.
+	waitForTest(t, time.Second, func() bool {
+		f.vibrator.mu.Lock()
+		defer f.vibrator.mu.Unlock()
+		return !f.vibrator.inFlight
+	})
+	if got := countKind(f.server, "ScalarCmd"); got != sent {
+		t.Fatalf("a test level composed before the Stop was written: %v", lastScalars(t, f.server))
+	}
+}
+
 func TestVibratorStalledPacerStopsTheDeviceAndThePing(t *testing.T) {
 	f := newVibratorFixture(t, nil)
 	run := f.selectAndArm(0.3, vibration.FollowSteady)
 	ctx := context.Background()
 	_, _ = run.AppendPoints(ctx, strokeCommand("s", 10_000))
 	_, _ = run.Play(ctx, PlayCommand{StreamID: "s"})
+	f.pace(2200 * time.Millisecond)
+	if scalars := lastScalars(t, f.server); scalars[0] == 0 {
+		t.Fatalf("no level before the stall: %v", scalars)
+	}
 	stops := countKind(f.server, "StopDeviceCmd")
 	// The pacer never runs while the clock moves on.
 	f.clock.Advance(2 * time.Second)
@@ -271,6 +344,22 @@ func TestVibratorStalledPacerStopsTheDeviceAndThePing(t *testing.T) {
 	waitForTest(t, 2*time.Second, func() bool { return countKind(f.server, "StopDeviceCmd") > stops })
 	if state := run.Diagnostics().PlaybackState; state != "stale" {
 		t.Fatalf("state after a stall = %q", state)
+	}
+	// A pacer that wakes up after the watchdog's Stop sends only silence.
+	f.pace(100 * time.Millisecond)
+	if scalars := lastScalars(t, f.server); scalars[0] != 0 || scalars[2] != 0 {
+		t.Fatalf("a resumed pacer sent %v after the watchdog's Stop", scalars)
+	}
+	// Once the engine stops the run, a test plays again.
+	if _, err := run.Stop(ctx, StopCommand{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.vibrator.Test(); err != nil {
+		t.Fatal(err)
+	}
+	f.pace(0)
+	if scalars := lastScalars(t, f.server); scalars[0] != 0.25 {
+		t.Fatalf("a test after the stalled run sent %v", scalars)
 	}
 }
 

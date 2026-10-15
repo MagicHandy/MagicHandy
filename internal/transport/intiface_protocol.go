@@ -46,6 +46,26 @@ type buttplugScalarFeature struct {
 	StepCount         uint32 `json:"StepCount"`
 }
 
+// buttplugScalarCmd is the spec v3 level command. Spec v4 replaces it with
+// OutputCmd; encodeScalarCmd is the one place that encoding would change.
+const buttplugScalarCmd = "ScalarCmd"
+
+// scalarLevel is one actuator's level: its index in the device's full
+// ScalarCmd list and a fraction already quantized to its steps.
+type scalarLevel struct {
+	index uint32
+	level float64
+}
+
+// encodeScalarCmd encodes one ScalarCmd for actuators of one type.
+func encodeScalarCmd(deviceIndex uint32, actuatorType string, levels []scalarLevel) map[string]any {
+	scalars := make([]map[string]any, 0, len(levels))
+	for _, level := range levels {
+		scalars = append(scalars, map[string]any{"Index": level.index, "Scalar": level.level, "ActuatorType": actuatorType})
+	}
+	return map[string]any{"DeviceIndex": deviceIndex, "Scalars": scalars}
+}
+
 type buttplugDeviceRemoved struct {
 	DeviceIndex uint32 `json:"DeviceIndex"`
 }

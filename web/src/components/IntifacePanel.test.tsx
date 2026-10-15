@@ -8,12 +8,13 @@ vi.mock("../api/client", () => ({
 }));
 vi.mock("../state/app-state", () => ({ useToast: () => ({ show: vi.fn() }) }));
 
-function snapshot(devices: IntifaceTransportSnapshot["status"]["devices"]): IntifaceTransportSnapshot {
+function snapshot(devices: IntifaceTransportSnapshot["status"]["devices"], leases?: string[]): IntifaceTransportSnapshot {
   return {
     dispatch_owner: "intiface",
     address: "ws://127.0.0.1:12345",
     status: { connected: true, scanning: false, playback_state: "idle", max_ping_time_ms: 0, queue_depth: 0, devices },
     diagnostics: {},
+    leases,
   } as IntifaceTransportSnapshot;
 }
 
@@ -26,5 +27,14 @@ describe("IntifacePanel", () => {
     const options = screen.getAllByRole("option").map((option) => option.textContent);
     expect(options).toContain("Test Linear - Position");
     expect(options.some((label) => label?.includes("Test Vibrator"))).toBe(false);
+  });
+
+  it("shows the Handy disconnected while only the vibrator holds the session", () => {
+    render(<IntifacePanel visible locked={false} dirty={false} initial={snapshot([
+      { device_index: 7, device_name: "Test Linear", linear_actuators: [{ index: 0, feature_descriptor: "Position" }], scalar_actuators: [] },
+    ], ["vibrator"])} />);
+    expect(screen.getByText("Disconnected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Connect" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Test Linear - Position" })).toBeNull();
   });
 });

@@ -8,6 +8,12 @@ adds native Handy/COYOTE playback and worker-loss testing in both policy
 directions. Loaded output, physical radio loss and seamless recovery with a live
 companion remain pending.
 
+[ADR 0047](0047-intiface-vibrator-output.md) adds a vibrator. Participation
+becomes the `device.playback_devices` set, with `output` kept as a projection
+of the Handy and Coyote members. Linked sessions take any set of devices, with
+the run clock on the first included one, and `continue_healthy` counts
+survivors.
+
 ## Decision
 
 The saved inventory, live transport connections and playback participation are

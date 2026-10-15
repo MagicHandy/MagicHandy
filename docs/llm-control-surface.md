@@ -40,6 +40,10 @@ control and no Coyote prompt text: channel strength and ceilings belong to the
 user alone. A stimulation vocabulary (rhythm, texture, envelope, channel
 relationship) is a recorded follow-up that needs its own ADR.
 
+An Intiface vibrator ([ADR 0047](decisions/0047-intiface-vibrator-output.md))
+is the same: the model has no vibrator control and no vibrator prompt text, and
+the live intensity belongs to the user.
+
 Replies and motion descriptions still assume a linear stroker, which is
 untrue when only the Coyote or a vibrator plays. The
 [device-aware model responses plan](device-aware-prompts-plan-2026-10-15.md)

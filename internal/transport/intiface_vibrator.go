@@ -104,13 +104,18 @@ type IntifaceVibrator struct {
 	epoch     uint64
 	// control changes with every Stop, selection and session change: a raise
 	// or test prepared before one of them is refused.
-	control   uint64
-	stream    vibratorStream
-	inFlight  bool
+	control  uint64
+	stream   vibratorStream
+	inFlight bool
+	// lastSent spaces nonzero levels by the device's advisory timing gap.
+	lastSent  time.Time
 	testUntil time.Time
-	level     float64
-	stats     vibratorStats
-	diag      TransportDiagnostics
+	// testGeneration fences a test's levels like a run's: a Stop ends it
+	// before any composed level can be written.
+	testGeneration uint64
+	level          float64
+	stats          vibratorStats
+	diag           TransportDiagnostics
 
 	// Read without the lock by the watchdog and the session's ping loop.
 	lastPace     atomic.Int64
@@ -218,15 +223,15 @@ func (v *IntifaceVibrator) SetIntensityAt(generation uint64, fraction float64) (
 	return target, nil
 }
 
-// TestAt starts a test for a request prepared at generation.
+// TestAt starts a test for a request prepared at generation. The check and
+// the start share one lock, so a Stop between them cannot be missed.
 func (v *IntifaceVibrator) TestAt(generation uint64) error {
 	v.mu.Lock()
-	stale := generation != v.control
-	v.mu.Unlock()
-	if stale {
+	defer v.mu.Unlock()
+	if generation != v.control {
 		return errVibratorControlStale
 	}
-	return v.Test()
+	return v.testLocked()
 }
 
 // Intensity reports the live intensity.
@@ -241,6 +246,10 @@ func (v *IntifaceVibrator) Intensity() float64 {
 func (v *IntifaceVibrator) Test() error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
+	return v.testLocked()
+}
+
+func (v *IntifaceVibrator) testLocked() error {
 	switch {
 	case !v.selection.selected:
 		return errVibratorNotSelected
@@ -249,6 +258,8 @@ func (v *IntifaceVibrator) Test() error {
 	case v.intensity <= 0:
 		return errVibratorSilent
 	}
+	v.stream.generation++
+	v.testGeneration = v.stream.generation
 	v.testUntil = v.clock().Add(vibratorTestDuration)
 	v.signalLocked()
 	return nil
@@ -294,6 +305,8 @@ func (v *IntifaceVibrator) Select(ctx context.Context, deviceIndex uint32) error
 	}
 	v.mu.Lock()
 	v.selection = selection
+	v.lastSent = time.Time{}
+	v.testUntil = time.Time{}
 	v.epoch++
 	v.control++
 	v.intensity = 0
@@ -428,6 +441,8 @@ func (v *IntifaceVibrator) invalidateLocked(state string) {
 	v.testUntil = time.Time{}
 	v.level = 0
 	v.playingFlag.Store(false)
+	// The stalled run is over; a later test or run starts clean.
+	v.stalled.Store(false)
 }
 
 func (v *IntifaceVibrator) signal() {
@@ -449,7 +464,9 @@ func (v *IntifaceVibrator) signalLocked() {
 func (v *IntifaceVibrator) admitWrite(_ string, _ map[string]any, generation uint64, _ *intifacePacedRequest) (intifaceWriteAdmission, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if !v.stream.playing || v.stream.generation != generation {
+	playing := v.stream.playing && v.stream.generation == generation
+	testing := !v.testUntil.IsZero() && v.testGeneration == generation
+	if !playing && !testing {
 		return intifaceWriteAdmission{}, errPacerSuperseded
 	}
 	return intifaceWriteAdmission{}, nil

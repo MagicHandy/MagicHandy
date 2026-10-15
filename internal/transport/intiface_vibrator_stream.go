@@ -193,11 +193,13 @@ func (v *IntifaceVibrator) record(command Command, err error) (CommandResult, er
 	return result, err
 }
 
-// paceLoop renders and sends one level per tick, or sooner when a lowered
-// intensity or a test needs it.
+// paceLoop renders one level per tick, or sooner when a lowered intensity or
+// a test needs it. It ticks at the base cadence whatever the device: a slower
+// device spaces its sends instead, so the watchdog and the ping always see a
+// live pacer.
 func (v *IntifaceVibrator) paceLoop(ctx context.Context) {
 	defer v.session.wg.Done()
-	ticker := time.NewTicker(v.tickInterval())
+	ticker := time.NewTicker(v.tick)
 	defer ticker.Stop()
 	for {
 		select {
@@ -210,17 +212,10 @@ func (v *IntifaceVibrator) paceLoop(ctx context.Context) {
 	}
 }
 
-// tickInterval never sends faster than the device's advisory timing gap
-// plus a margin.
-func (v *IntifaceVibrator) tickInterval() time.Duration {
-	v.mu.Lock()
-	gap := v.selection.timingGap
-	v.mu.Unlock()
-	interval := v.tick
-	if gap > 0 {
-		interval = max(interval, intifaceSelection{timingGap: gap}.minimumPointInterval())
-	}
-	return interval
+// sendSpacingLocked is the shortest time between two nonzero levels: the
+// selected device's advisory timing gap plus a margin, or none.
+func (v *IntifaceVibrator) sendSpacingLocked() time.Duration {
+	return intifaceSelection{timingGap: v.selection.timingGap}.minimumPointInterval()
 }
 
 func (v *IntifaceVibrator) paceOnce(ctx context.Context) {
@@ -235,26 +230,30 @@ func (v *IntifaceVibrator) paceOnce(ctx context.Context) {
 }
 
 // composeLocked picks this tick's level and returns a command only when a
-// motor's step changes. A silent level is always sent at once, bypassing the
-// minimum and any command still in flight.
+// motor's step changes. A nonzero level waits for the command in flight and
+// for the device's timing gap; a silent level is always sent at once.
 func (v *IntifaceVibrator) composeLocked(now time.Time) (vibratorSend, bool) {
 	if !v.selection.selected {
 		return vibratorSend{}, false
 	}
 	level, generation := v.targetLocked(now)
+	if v.stalled.Load() {
+		// The watchdog stopped this run: only silence until the next Play.
+		level, generation = 0, 0
+	}
 	v.level = level
 	silent := level <= 0
-	if v.inFlight && !silent {
+	if !silent && (v.inFlight || (!v.lastSent.IsZero() && now.Sub(v.lastSent) < v.sendSpacingLocked())) {
 		return vibratorSend{}, false
 	}
 	send := vibratorSend{deviceIndex: v.selection.deviceIndex, generation: generation, steps: make([]int, len(v.selection.motors))}
 	changed := false
-	scalars := make([]map[string]any, 0, len(v.selection.motors))
+	levels := make([]scalarLevel, 0, len(v.selection.motors))
 	for index, motor := range v.selection.motors {
 		step := vibration.Quantize(level, motor.StepCount, motor.last, v.config.Ceiling)
 		send.steps[index] = step
 		changed = changed || step != motor.last
-		scalars = append(scalars, map[string]any{"Index": motor.Index, "Scalar": float64(step) / float64(motor.StepCount), "ActuatorType": vibratorActuatorType})
+		levels = append(levels, scalarLevel{index: motor.Index, level: float64(step) / float64(motor.StepCount)})
 	}
 	if !changed {
 		return vibratorSend{}, false
@@ -262,11 +261,12 @@ func (v *IntifaceVibrator) composeLocked(now time.Time) (vibratorSend, bool) {
 	if silent {
 		send.generation = 0
 	}
-	send.fields = map[string]any{"DeviceIndex": send.deviceIndex, "Scalars": scalars}
+	send.fields = encodeScalarCmd(send.deviceIndex, vibratorActuatorType, levels)
 	for index := range v.selection.motors {
 		v.selection.motors[index].last = send.steps[index]
 	}
 	v.inFlight = true
+	v.lastSent = now
 	v.stats.commanded++
 	return send, true
 }
@@ -277,7 +277,7 @@ func (v *IntifaceVibrator) composeLocked(now time.Time) (vibratorSend, bool) {
 func (v *IntifaceVibrator) targetLocked(now time.Time) (float64, uint64) {
 	if !v.testUntil.IsZero() {
 		if now.Before(v.testUntil) {
-			return min(v.intensity, vibratorTestCeiling), 0
+			return min(v.intensity, vibratorTestCeiling), v.testGeneration
 		}
 		v.testUntil = time.Time{}
 		return 0, 0
@@ -302,7 +302,7 @@ func (v *IntifaceVibrator) targetLocked(now time.Time) (float64, uint64) {
 // blocking the pacer. A missing or rejected acknowledgement makes the
 // vibrator unhealthy and stops the device.
 func (v *IntifaceVibrator) send(ctx context.Context, send vibratorSend) {
-	request, err := v.session.startRequestFor(ctx, v, "ScalarCmd", send.fields, send.generation, nil)
+	request, err := v.session.startRequestFor(ctx, v, buttplugScalarCmd, send.fields, send.generation, nil)
 	if err != nil {
 		// Nothing reached the wire: a superseded generation, the emergency
 		// barrier, a full request window or a lost session. The next tick
@@ -380,12 +380,12 @@ func (v *IntifaceVibrator) silence(ctx context.Context, selection vibratorSelect
 }
 
 func (v *IntifaceVibrator) silenceWithoutFailure(ctx context.Context, selection vibratorSelection) error {
-	scalars := make([]map[string]any, 0, len(selection.motors))
+	levels := make([]scalarLevel, 0, len(selection.motors))
 	for _, motor := range selection.motors {
-		scalars = append(scalars, map[string]any{"Index": motor.Index, "Scalar": 0.0, "ActuatorType": vibratorActuatorType})
+		levels = append(levels, scalarLevel{index: motor.Index})
 	}
 	zeroCtx, cancel := context.WithTimeout(ctx, vibratorStopTimeout)
-	if v.session.requestOK(zeroCtx, "ScalarCmd", map[string]any{"DeviceIndex": selection.deviceIndex, "Scalars": scalars}) == nil {
+	if v.session.requestOK(zeroCtx, buttplugScalarCmd, encodeScalarCmd(selection.deviceIndex, vibratorActuatorType, levels)) == nil {
 		v.markSilent(selection.deviceIndex)
 	}
 	cancel()

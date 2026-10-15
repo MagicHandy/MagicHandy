@@ -18,6 +18,41 @@ export interface IntifaceScalarActuator {
   step_count?: number;
 }
 
+/** Vibrator conversion settings (internal/config/vibration.go). */
+export interface VibrationSettings {
+  follow: "speed" | "depth" | "steady";
+  depth_end: "base" | "tip";
+  minimum_percent: number;
+  ceiling_percent: number;
+  timing_offset_ms: number;
+}
+
+/** One vibration motor the vibrator drives. */
+export interface IntifaceVibratorMotor {
+  index: number;
+  feature_descriptor?: string;
+  step_count: number;
+}
+
+/** The vibrator's backend snapshot. Percentages are whole numbers. */
+export interface IntifaceVibratorStatus {
+  selected: boolean;
+  device_index?: number;
+  device_name?: string;
+  motors: IntifaceVibratorMotor[];
+  intensity_percent: number;
+  ceiling_percent: number;
+  effective_ceiling_percent: number;
+  level_percent: number;
+  playback_state: string;
+  testing: boolean;
+  commanded_count: number;
+  acknowledged_count: number;
+  rejected_count: number;
+  timeout_count: number;
+  last_error?: string;
+}
+
 export interface IntifaceDevice {
   device_index: number;
   device_name: string;
@@ -72,5 +107,8 @@ export interface IntifaceTransportSnapshot {
   leases?: string[];
   /** Whether Intiface stops its devices when this app stops answering. */
   ping_watchdog?: boolean;
+  vibrator?: IntifaceVibratorStatus;
+  /** A simulated Intiface server: nothing reaches a real device. */
+  simulated?: boolean;
   diagnostics: Record<string, unknown>;
 }

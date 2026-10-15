@@ -1,6 +1,16 @@
 # Intiface vibrator integration plan
 
-Status: implementation plan, written before runtime changes (2026-10-15).
+Status: implemented as [ADR 0047](decisions/0047-intiface-vibrator-output.md)
+on 2026-10-15 and tested in simulation only. This plan was written before the
+runtime changes and is kept as the design and review record. The
+implementation differs in three places:
+
+- Each row connects and disconnects its own lease on the shared session
+  instead of sharing one Connect control.
+- Scalar dispatches are counted in the vibrator status but are not yet traced.
+- As for the Coyote, lowering is open to every client with control; a
+  read-only client cannot lower.
+
 Base: the device stack in PRs #319 (COYOTE output and linked device sessions,
 [ADR 0045](decisions/0045-device-inventory-and-linked-sessions.md)) and #321
 (native Handy Bluetooth, [ADR 0046](decisions/0046-shared-native-bluetooth-worker.md)).

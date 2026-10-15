@@ -6,7 +6,7 @@
 export type DeviceOutput = "none" | "handy" | "coyote" | "handy_coyote";
 
 /** A saved device, in run-clock order: the first playing device sets the clock. */
-export type DeviceId = "handy" | "coyote";
+export type DeviceId = "handy" | "coyote" | "vibrator";
 
 /** Coyote settings. Ceilings are written to the device on every connection. */
 export interface EstimSettings {

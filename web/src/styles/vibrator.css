@@ -1,0 +1,44 @@
+/* ---- Vibrator: the Intiface vibrator row in the connection manager and its
+   fields in Settings > Device. The stepper shares the Coyote's neutral
+   buttons: red stays reserved for Stop, green for go. ---- */
+.vibrator-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 14px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+}
+.vibrator-panel > .row-actions {
+  margin: 0;
+}
+.vibrator-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.vibrator-device {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-body);
+}
+.vibrator-device small {
+  color: var(--muted);
+  font-size: var(--fs-hint);
+}
+.vibrator-intensity.control-row:first-child {
+  border-top-color: transparent;
+}
+.vibrator-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+@media (max-width: 560px) {
+  .vibrator-fields {
+    grid-template-columns: 1fr;
+  }
+}

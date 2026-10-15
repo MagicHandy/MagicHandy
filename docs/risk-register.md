@@ -1,5 +1,48 @@
 # MagicHandy Risk Register
 
+## R34: Vibrator output through a shared Intiface connection
+
+Level: High
+
+A vibrator keeps its last level until it is told otherwise; the Coyote, by
+contrast, stops within 0.1 s of its last packet. A level the user did not
+choose, or output that continues after Stop or after MagicHandy stops
+responding, could cause an unwanted sensation. The vibrator also shares one
+Intiface connection with a linear actuator, so a fault in one path could
+reach the other.
+
+Mitigation:
+
+- the user alone raises the live intensity, which starts at 0 on every
+  connection and selection. Motion only shapes the level beneath it, never
+  above the saved ceiling (default 40%), and the model has no vibrator control
+- Pause, Stop, coverage loss, the end of Test, exclusion and removal send an
+  explicit zero; Stop adds `StopDeviceCmd`, and generation fencing keeps any
+  older `ScalarCmd` from following a Stop
+- Emergency Stop closes write admission and sends `StopAllDevices` on a live
+  session whatever the engine and selections are. It also zeroes the
+  intensity, and an unconfirmed stop fails the session
+- a watchdog stops a stalled pacer and allows only silence until the run
+  stops, and a stalled pacer stops the keepalive so Intiface's own watchdog
+  stops the devices too
+- a rejected or missing response faults only the owner that sent it, socket
+  loss faults both, and one device cannot hold both roles
+- raises and Test need the controlling host and the current Stop sequence,
+  and are refused after any Stop, selection or session change
+- simulation covers the protocol; automated tests never reach hardware
+
+Residual risk: physical acceptance is still needed for each of these:
+
+- Stop-to-silence time
+- whether Intiface stops the toy on a core crash, a missed ping or radio loss
+- playback when Intiface Central reports no ping timeout: the row says so,
+  but playback is still allowed
+- radio contention beside the native Bluetooth worker
+- the feel of each profile
+
+See [ADR 0047](decisions/0047-intiface-vibrator-output.md) and
+[intiface.md](intiface.md#vibrator).
+
 ## R33: Electrical stimulation output (DG-LAB Coyote)
 
 Level: High

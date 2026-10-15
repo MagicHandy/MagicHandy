@@ -839,9 +839,9 @@ hoc per-widget colors) are not.
   Setup; only an explicit choice applies, and the backend stops motion before
   changing methods. Key clearing, developer ID override, and server addresses
   remain in Settings.
-- **+ Add connection** offers the other supported device beside the current
-  one. The manager supports one Handy and one Coyote, disables Add at that
-  maximum, and allows removal only when another device remains. Add/remove
+- **+ Add connection** offers the supported devices that are not added
+  yet. The manager supports one Handy, one Coyote and one vibrator, disables
+  Add at that maximum, and allows removal only when another device remains. Add/remove
   uses the backend output setting, stops motion, and never starts playback.
   The list and protocol labels change only after backend confirmation. Each
   device has its own header, protocol, status, and actions; Coyote has one
@@ -857,6 +857,15 @@ hoc per-widget colors) are not.
   testing; Stop remains available regardless of controller ownership.
   The panel keeps no strength state of its own. Commanded pulse widths are
   labeled as commanded, never as measured output (ADR 0044).
+  A vibrator row (ADR 0047) names Intiface Central as its connection, its own
+  **Use in playback** switch, Connect/Disconnect for its lease and, once
+  connected, a picker that lists only devices with vibration motors. After
+  **Use vibrator** it shows the device and motor count, an **Intensity**
+  stepper reading "N% of ceiling" with neutral `−`/`+` steps, and a green
+  **Test** that plays while motion is paused. The intensity starts at 0, and
+  intensity steps never begin output. Notes say when the connection is shared
+  with The Handy, when Intiface has no keepalive timeout, and when the motors'
+  steps lower the effective ceiling.
 - The connection artwork is a flat vector status strip (no bitmap): three
   signal arcs above the Handy-inspired capsule, domed body, LED, and square
   marker. The arcs pulse in the accent hue while connecting and turn green when

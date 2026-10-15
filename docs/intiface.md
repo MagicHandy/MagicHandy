@@ -1,8 +1,10 @@
 # Intiface / Buttplug Setup
 
-MagicHandy can use a user-run Intiface Central server as a dispatch owner. The
-Go core speaks Buttplug message spec v3 directly over WebSocket; Intiface
-Central continues to own Bluetooth/radio access and device drivers.
+MagicHandy can use a user-run Intiface Central server as a dispatch owner for
+The Handy or another linear actuator, and as the connection for a vibrator
+(see [Vibrator](#vibrator)). The Go core speaks Buttplug message spec v3
+directly over WebSocket; Intiface Central continues to own Bluetooth/radio
+access and device drivers.
 
 ## Prerequisites
 
@@ -31,9 +33,9 @@ dispatch owner are persisted normally.
 
 ## Behavior And Safety
 
-- Only `LinearCmd` actuators are supported in this phase. Scalar vibration,
-  rotation, and simultaneous multi-device output are not mapped. Vibration is
-  planned: see the [Intiface vibrator plan](intiface-vibrator-plan-2026-10-15.md).
+- The linear owner drives one `LinearCmd` actuator. Vibration has its own
+  owner (see [Vibrator](#vibrator)); rotation, oscillation and other actuator
+  types are not mapped.
 - Consecutive neutral timed points become one absolute-deadline `LinearCmd`
   each. The first point is established through a generation-guarded startup
   anchor of at least 250 ms (raised to the device timing gap when necessary)
@@ -57,11 +59,17 @@ dispatch owner are persisted normally.
   stroke window before bounded reduction, avoiding commands that collapse onto
   the same physical step. Positions remain floats until `LinearCmd`; the owner
   does not apply a deadband or reshape the curve.
-- **Emergency Stop**, owner changes, disconnect, server shutdown, pacer
-  underrun, and rejected linear commands clear queued work and issue
-  `StopDeviceCmd` where the session is still reachable.
+- **Emergency Stop** closes write admission, invalidates every owner and
+  sends `StopAllDevices` on a live session, whatever the engine and the
+  selections are. That stops every device the server has.
+- Owner changes, disconnect, server shutdown, pacer underrun and rejected
+  linear commands clear queued work and issue `StopDeviceCmd` where the
+  session is still reachable. Selecting an actuator stops both the previous
+  and the new device first.
 - Buttplug ping keepalive remains enabled. A failed ping marks the connection
-  stale; MagicHandy does not silently fall back to another owner.
+  stale; MagicHandy does not silently fall back to another owner. While the
+  vibrator plays, a stalled vibrator pacer stops the pings, so Intiface's own
+  watchdog stops the devices too.
 
 Connection state, selected actuator/resolution, queue depth and coverage,
 playback state, pending ACKs, sent/acknowledged/rejected/timeout counts, send
@@ -69,6 +77,51 @@ lateness, ACK latency, coalesced segments, recent wire dispatches, and redacted
 errors are available in **Settings > Diagnostics** and `GET /api/state` under
 `intiface_transport`. Trace exports use `motion_trace.v3` and include the most
 recent 32 paced wire records plus explicit sent/dropped counts.
+
+## Vibrator
+
+A Buttplug device with `Vibrate` actuators can play with the stroker, the
+Coyote, both, or alone ([ADR 0047](decisions/0047-intiface-vibrator-output.md)).
+It has not been tested on hardware yet.
+
+1. In the connection manager, choose **+**, then **Vibrator**.
+2. Select **Connect vibrator**, then **Scan devices** if the device is not
+   listed.
+3. Choose the device and select **Use vibrator**. Every vibration motor on it
+   runs together.
+4. Raise **Intensity** when you want output. It starts at 0 on every
+   connection and selection, and only you change it.
+
+Behavior and safety:
+
+- **One connection.** The Handy (with the Intiface method) and the vibrator
+  share one Intiface connection; each row holds its own lease. The connection
+  closes when the last row disconnects. One device cannot be both the linear
+  actuator and the vibrator.
+- **Profiles.** In **Settings > Device > Vibrator**, the level follows stroke
+  speed (default), stroke depth toward the base or tip, or stays steady while
+  motion plays. The minimum, the ceiling (default 40%) and a ±300 ms timing
+  offset are saved there. The level maps between the minimum and the live
+  intensity, so at an intensity of 0 the vibrator is silent.
+- **Pacing.** Levels are whole steps of each motor's `StepCount`, sent through
+  `ScalarCmd` on a 100 ms tick, only when the step changes and never faster
+  than the device's advisory timing gap. A 2 s fade-in starts every Play and
+  Resume.
+- **Stopping.** Pause, Stop, loss of coverage, the end of Test, Exclude and
+  removal send an explicit zero, because a vibrator keeps its last level.
+  Stop also sends `StopDeviceCmd`. A rejected or missing response stops the
+  vibrator and applies the linked failure policy. Emergency Stop also sets
+  the intensity back to 0.
+- **Test** runs one second at the lower of the intensity and 25%, only while
+  motion is paused.
+- **Keepalive.** When Intiface Central reports no ping timeout, the vibrator
+  row says that only a closed connection stops the vibrator if MagicHandy
+  stops responding.
+
+The vibrator's status is under `intiface_transport.vibrator` in
+`GET /api/state`: the device and motors, the intensity, the ceiling and the
+effective ceiling, the current level, the playback state and the command
+counts.
 
 ## Validation Status
 

@@ -1,5 +1,34 @@
 # Goal Scorecard
 
+## 2026-10-15 — Intiface vibrator output
+
+[ADR 0047](decisions/0047-intiface-vibrator-output.md) adds a Buttplug vibrator
+through Intiface Central. No dependency, model call or prompt text is added.
+While an Intiface session is open, the vibrator owner runs a 100 ms pacer tick
+and a 250 ms watchdog tick; they write nothing unless a level changes, and
+nothing runs without a session. The in-process simulated Intiface server
+starts only in `-simulate-motion` builds.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, against base `5938a0cb`: core
+**22,928,384 -> 23,186,432 B** (+258,048 B), still **14 modules**. The worker is
+unchanged.
+
+Main UI JS: **1,204,409 -> 1,220,774 B raw** (+16,365 B), **323,892 ->
+327,088 B gzip** (+3,196 B). CSS: **204,247 -> 205,071 B raw** (+824 B),
+**35,639 -> 35,750 B gzip** (+111 B). Each locale chunk grows 4.7–6.1 KB raw
+(1.3–1.5 KB gzip) for 52 new strings. The complete embedded UI grows
+2,611,231 -> 2,649,550 B (+38,319 B). Measurements use Python gzip with
+`mtime=0`. The canonical dist is rebuilt with stale hashes removed; the
+existing large-chunk advisory remains.
+
+After a real text-only generation (Ollama, Gemma 12B) and a simulated vibrator
+connection, the isolated review process sampled **29,155,328 B working set /
+61,288,448 B private**. The build before the final pacer fixes sampled
+74,162,176 B working set / 60,493,824 B private. Windows working sets can
+be trimmed, so these are not a controlled RSS comparison; the existing waiver
+remains. No cold-start, active-hardware RSS or radio latency is claimed.
+
 ## 2026-10-15 — Native linked-device hardware checks
 
 Ten consecutive Handy disconnect/reconnect cycles pass with the shared
