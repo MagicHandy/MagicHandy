@@ -7,8 +7,9 @@ import "context"
 // stroker) and any other output reached through the same server bind to this
 // one session. The hub never paces motion itself.
 type IntifaceHub struct {
-	session *intifaceSession
-	linear  *Intiface
+	session  *intifaceSession
+	linear   *Intiface
+	vibrator *IntifaceVibrator
 }
 
 // IntifaceHubStatus is the shared connection's safe snapshot.
@@ -24,13 +25,18 @@ type IntifaceHubStatus struct {
 }
 
 // NewIntifaceHub validates options and returns a disconnected hub with its
-// linear owner bound.
+// linear and vibrator outputs bound.
 func NewIntifaceHub(options IntifaceOptions) (*IntifaceHub, error) {
 	session, err := newIntifaceSession(options)
 	if err != nil {
 		return nil, err
 	}
-	return &IntifaceHub{session: session, linear: newIntifaceLinear(session)}, nil
+	return &IntifaceHub{session: session, linear: newIntifaceLinear(session), vibrator: newIntifaceVibrator(session)}, nil
+}
+
+// Vibrator returns the vibrator output bound to this session.
+func (h *IntifaceHub) Vibrator() *IntifaceVibrator {
+	return h.vibrator
 }
 
 // Connect opens the shared session; bound outputs start once it is ready.

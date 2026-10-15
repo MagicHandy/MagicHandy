@@ -19,6 +19,8 @@ func deviceLabel(device string) string {
 		return "Handy"
 	case config.DeviceOutputCoyote:
 		return "Coyote"
+	case config.DeviceVibrator:
+		return "Vibrator"
 	default:
 		return device
 	}
@@ -36,6 +38,26 @@ func motionOwnerKey(device config.DeviceSettings) string {
 		key += "/" + device.HSPDispatchOwner
 	}
 	return key
+}
+
+// engineOwnerKey extends motionOwnerKey with each playing device's
+// connection binding, so a reconnected or reselected device always builds a
+// new engine.
+func (s *Server) engineOwnerKey(device config.DeviceSettings) string {
+	owner := motionOwnerKey(device)
+	if device.Plays(config.DeviceOutputCoyote) {
+		owner += fmt.Sprintf("/coyote-%d", s.coyote.owner.SessionID())
+	}
+	if device.Plays(config.DeviceOutputHandy) && device.HSPDispatchOwner == config.DispatchOwnerBrowserBluetooth {
+		owner += fmt.Sprintf("/ble-%d", s.bluetooth.bridge.SessionID())
+	}
+	if device.Plays(config.DeviceOutputHandy) && device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
+		owner += fmt.Sprintf("/native-ble-%d", s.nativeBluetooth.owner.SessionID())
+	}
+	if device.Plays(config.DeviceVibrator) {
+		owner += s.vibratorEngineSuffix()
+	}
+	return owner
 }
 
 // engineOwnerPlays reports whether the engine built for owner drives device.
@@ -74,6 +96,8 @@ func (s *Server) playbackDeviceTransport(settings config.Settings, device string
 		return s.newHandyMotionTransport(settings)
 	case config.DeviceOutputCoyote:
 		return s.coyoteMotionTransport()
+	case config.DeviceVibrator:
+		return s.vibratorMotionTransport()
 	default:
 		return nil, fmt.Errorf("unknown playback device %q", device)
 	}
@@ -93,6 +117,9 @@ func (s *Server) newSelectedStopTransport() (transport.Transport, error) {
 	}
 	if settings.Device.HasDevice(config.DeviceOutputCoyote) {
 		participants = append(participants, transport.LinkedParticipant{ID: config.DeviceOutputCoyote, Label: deviceLabel(config.DeviceOutputCoyote), Transport: s.coyote.owner})
+	}
+	if vibrator, err := s.currentVibrator(); err == nil && settings.Device.HasDevice(config.DeviceVibrator) {
+		participants = append(participants, transport.LinkedParticipant{ID: config.DeviceVibrator, Label: deviceLabel(config.DeviceVibrator), Transport: vibrator})
 	}
 	switch len(participants) {
 	case 0:

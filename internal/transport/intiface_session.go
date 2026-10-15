@@ -27,6 +27,7 @@ type intifaceSessionOwner interface {
 	sessionFailedLocked(err error) func()
 	deviceRemovedLocked(deviceIndex uint32) func()
 	invalidateForEmergency()
+	paceAlive(now time.Time) bool
 	invalidateForClose()
 	stopForClose(connected bool) error
 	closedLocked()
@@ -432,6 +433,11 @@ func (s *intifaceSession) pingLoop(ctx context.Context, maxPingTime time.Duratio
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if !s.ownersAlive(time.Now()) {
+				// A stalled output pacer stops the keepalive, so the server's
+				// own watchdog stops the devices as well.
+				continue
+			}
 			timeout := maxPingTime / 3
 			if timeout <= 0 {
 				timeout = time.Millisecond
@@ -445,6 +451,18 @@ func (s *intifaceSession) pingLoop(ctx context.Context, maxPingTime time.Duratio
 			}
 		}
 	}
+}
+
+func (s *intifaceSession) ownersAlive(now time.Time) bool {
+	s.mu.Lock()
+	owners := append([]intifaceSessionOwner(nil), s.owners...)
+	s.mu.Unlock()
+	for _, owner := range owners {
+		if !owner.paceAlive(now) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *intifaceSession) request(ctx context.Context, kind string, fields map[string]any) (buttplugMessage, error) {

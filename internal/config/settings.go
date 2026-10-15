@@ -247,6 +247,7 @@ type Settings struct {
 	Media       MediaSettings       `json:"media"`
 	Device      DeviceSettings      `json:"device"`
 	Estim       EstimSettings       `json:"estim"`
+	Vibration   VibrationSettings   `json:"vibration"`
 	Motion      MotionSettings      `json:"motion"`
 	Freestyle   FreestyleSettings   `json:"freestyle"`
 	Autopilot   AutopilotSettings   `json:"autopilot"`
@@ -468,6 +469,7 @@ type PublicSettings struct {
 	Media        MediaSettings             `json:"media"`
 	Device       PublicDeviceSettings      `json:"device"`
 	Estim        PublicEstimSettings       `json:"estim"`
+	Vibration    VibrationSettings         `json:"vibration"`
 	Motion       MotionSettings            `json:"motion"`
 	Freestyle    FreestyleSettings         `json:"freestyle"`
 	Autopilot    AutopilotSettings         `json:"autopilot"`
@@ -483,6 +485,7 @@ type PublicSettings struct {
 type PublicSettingsOptionHints struct {
 	DeviceOutputs           []string `json:"device_outputs"`
 	EstimFollowModes        []string `json:"estim_follow_modes"`
+	VibrationFollowModes    []string `json:"vibration_follow_modes"`
 	HSPDispatchOwners       []string `json:"hsp_dispatch_owners"`
 	APIApplicationIDSources []string `json:"api_application_id_sources"`
 	DiagnosticsVerbosities  []string `json:"diagnostics_verbosities"`
@@ -593,6 +596,7 @@ type SettingsUpdate struct {
 	Media              *MediaUpdate        `json:"media,omitempty"`
 	Device             DeviceUpdate        `json:"device"`
 	Estim              *EstimUpdate        `json:"estim,omitempty"`
+	Vibration          *VibrationSettings  `json:"vibration,omitempty"`
 	Motion             MotionSettings      `json:"motion"`
 	Freestyle          *FreestyleSettings  `json:"freestyle,omitempty"`
 	Autopilot          *AutopilotSettings  `json:"autopilot,omitempty"`
@@ -633,7 +637,8 @@ func DefaultSettings() Settings {
 			FirmwareAPIRequirement: FirmwareAPIRequirementRequired,
 			APIApplicationIDSource: ApplicationIDSourceBundled,
 		},
-		Estim: DefaultEstimSettings(),
+		Estim:     DefaultEstimSettings(),
+		Vibration: DefaultVibrationSettings(),
 		Motion: MotionSettings{
 			SpeedMinPercent:  20,
 			SpeedMaxPercent:  80,
@@ -739,6 +744,7 @@ func (s Settings) Public() PublicSettings {
 			ConnectionKeySet:         s.Device.HandyConnectionKey != "",
 		},
 		Estim:        s.Estim.Public(),
+		Vibration:    s.Vibration,
 		Motion:       s.Motion,
 		Freestyle:    s.Freestyle,
 		Autopilot:    s.Autopilot,
@@ -1081,7 +1087,7 @@ func validateSettings(settings Settings) error {
 	if !oneOf(settings.Device.HSPDispatchOwner, DispatchOwnerCloudREST, DispatchOwnerBrowserBluetooth, DispatchOwnerNativeBluetooth, DispatchOwnerIntiface) {
 		return fmt.Errorf("unknown dispatch owner %q", settings.Device.HSPDispatchOwner)
 	}
-	if err := validateEstimSettings(settings.Estim); err != nil {
+	if err := validateCompanionSettings(settings); err != nil {
 		return err
 	}
 	if err := validateIntifaceServerAddress(settings.Device.IntifaceServerAddress); err != nil {
@@ -1175,6 +1181,7 @@ func applyMissingDefaults(settings Settings) Settings {
 	}
 	settings.Device = normalizeDeviceParticipation(settings.Device, defaults.Device.Output)
 	settings.Estim = applyMissingEstimDefaults(settings.Estim)
+	settings.Vibration = applyMissingVibrationDefaults(settings.Vibration)
 	if settings.Device.HSPDispatchOwner == "" {
 		settings.Device.HSPDispatchOwner = defaults.Device.HSPDispatchOwner
 	}

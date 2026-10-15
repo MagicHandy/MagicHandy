@@ -1004,6 +1004,7 @@ type fakeButtplugServer struct {
 	stopACKHold    <-chan struct{}
 	stopAllHold    <-chan struct{}
 	rejectStop     bool
+	dropScalar     bool
 	extraDevices   []map[string]any
 	done           chan struct{}
 	doneOnce       sync.Once
@@ -1091,41 +1092,53 @@ func (f *fakeButtplugServer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			switch message.kind {
-			case "RequestServerInfo":
-				f.write("ServerInfo", map[string]any{
-					"Id": id, "ServerName": "test", "MessageVersion": 3, "MaxPingTime": f.maxPing,
-				})
-			case "RequestDeviceList":
-				if f.listAfterPing {
-					f.listRequestID = id
-				} else {
-					f.respondDeviceList(id)
-				}
-			case "Ping":
-				if f.ackPing {
-					f.write("Ok", map[string]any{"Id": id})
-				}
-				if f.listRequestID != 0 {
-					f.respondDeviceList(f.listRequestID)
-					f.listRequestID = 0
-				}
-			case "StartScanning":
-				messages := []map[string]any{{"Ok": map[string]any{"Id": id}}}
-				if f.scanFinishes {
-					messages = append(messages, map[string]any{"ScanningFinished": map[string]any{"Id": 0}})
-				}
-				f.writeBatch(messages)
-			case "LinearCmd":
-				f.respondLinear(id)
-			case "StopDeviceCmd":
-				f.respondStop(id)
-			case "StopAllDevices":
-				f.respondHeld(id, f.stopAllHold)
-			default:
-				f.write("Ok", map[string]any{"Id": id})
-			}
+			f.respond(message.kind, id)
 		}
+	}
+}
+
+// respond answers one client request the way Intiface Central would.
+func (f *fakeButtplugServer) respond(kind string, id uint32) {
+	switch kind {
+	case "RequestServerInfo":
+		f.write("ServerInfo", map[string]any{
+			"Id": id, "ServerName": "test", "MessageVersion": 3, "MaxPingTime": f.maxPing,
+		})
+	case "RequestDeviceList":
+		if f.listAfterPing {
+			f.listRequestID = id
+		} else {
+			f.respondDeviceList(id)
+		}
+	case "Ping":
+		if f.ackPing {
+			f.write("Ok", map[string]any{"Id": id})
+		}
+		if f.listRequestID != 0 {
+			f.respondDeviceList(f.listRequestID)
+			f.listRequestID = 0
+		}
+	case "StartScanning":
+		messages := []map[string]any{{"Ok": map[string]any{"Id": id}}}
+		if f.scanFinishes {
+			messages = append(messages, map[string]any{"ScanningFinished": map[string]any{"Id": 0}})
+		}
+		f.writeBatch(messages)
+	case "LinearCmd":
+		f.respondLinear(id)
+	case "StopDeviceCmd":
+		f.respondStop(id)
+	case "StopAllDevices":
+		f.respondHeld(id, f.stopAllHold)
+	case "ScalarCmd":
+		f.mu.Lock()
+		drop := f.dropScalar
+		f.mu.Unlock()
+		if !drop {
+			f.write("Ok", map[string]any{"Id": id})
+		}
+	default:
+		f.write("Ok", map[string]any{"Id": id})
 	}
 }
 

@@ -268,6 +268,12 @@ func (i *Intiface) sessionReady(sessionCtx context.Context) {
 	go i.paceLoop(sessionCtx)
 }
 
+// paceAlive is always true: the linear pacer is deadline-driven and reports
+// its own starvation.
+func (i *Intiface) paceAlive(time.Time) bool {
+	return true
+}
+
 // invalidateForEmergency ends playback before the session's StopAllDevices,
 // so no paced LinearCmd from this generation can follow it.
 func (i *Intiface) invalidateForEmergency() {

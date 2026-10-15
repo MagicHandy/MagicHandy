@@ -711,7 +711,7 @@ func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, ne
 		previous.Device.APIApplicationIDOverride != next.Device.APIApplicationIDOverride ||
 		previous.Device.HandyConnectionKey != next.Device.HandyConnectionKey
 	if !ownerChanged && !intifaceAddressChanged && !cloudConfigChanged {
-		return false, s.applyCoyoteSettingsTransition(previous, next)
+		return false, errors.Join(s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next))
 	}
 	reason := "transport_config_changed"
 	if ownerChanged {
@@ -737,7 +737,7 @@ func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, ne
 	if handyRemoved {
 		removeErr = errors.Join(removeErr, s.removeHandyConnection(ctx, previous))
 	}
-	return true, errors.Join(stopErr, removeErr, s.applyCoyoteSettingsTransition(previous, next))
+	return true, errors.Join(stopErr, removeErr, s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next))
 }
 
 func (s *Server) applyPlanningSettingsTransition(previous, next config.Settings) {
@@ -975,16 +975,7 @@ func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
 		return nil, 0, errors.New("wait for the Coyote channel test to finish before starting playback")
 	}
 	settings, _ := s.store.Snapshot()
-	owner := motionOwnerKey(settings.Device)
-	if settings.Device.Plays(config.DeviceOutputCoyote) {
-		owner += fmt.Sprintf("/coyote-%d", s.coyote.owner.SessionID())
-	}
-	if settings.Device.Plays(config.DeviceOutputHandy) && settings.Device.HSPDispatchOwner == config.DispatchOwnerBrowserBluetooth {
-		owner += fmt.Sprintf("/ble-%d", s.bluetooth.bridge.SessionID())
-	}
-	if settings.Device.Plays(config.DeviceOutputHandy) && settings.Device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
-		owner += fmt.Sprintf("/native-ble-%d", s.nativeBluetooth.owner.SessionID())
-	}
+	owner := s.engineOwnerKey(settings.Device)
 	engine, engineOwner := s.currentMotionEngineWithOwner()
 	failed := false
 	if engine != nil {

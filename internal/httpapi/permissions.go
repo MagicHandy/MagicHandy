@@ -128,7 +128,8 @@ func controlRoute(r *http.Request) bool {
 		"/api/transport/bluetooth/status", "/api/transport/bluetooth/ack", "/api/settings/llm-motion-mode",
 		"/api/media/videos/tags", "/api/media/tags/rename", "/api/media/tags/delete",
 		"/api/remote/presence", "/api/remote/commands",
-		"/api/transport/coyote/strength", "/api/transport/coyote/test", "/api/transport/coyote/zero":
+		"/api/transport/coyote/strength", "/api/transport/coyote/test", "/api/transport/coyote/zero",
+		"/api/transport/intiface/vibrator/intensity", "/api/transport/intiface/vibrator/test":
 		return true
 	default:
 		return false

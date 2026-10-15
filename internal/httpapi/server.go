@@ -51,19 +51,22 @@ type VersionInfo struct {
 // Runtime contains app runtime collaborators exposed through HTTP diagnostics.
 type Runtime struct {
 	// OpenAI endpoints are injectable only for isolated protocol tests.
-	OpenAIHTTPClient       *http.Client
-	OpenAIIssuer           string
-	OpenAIBaseURL          string
-	Traces                 *diagnostics.TraceRing
-	Transport              transport.DiagnosticsProvider
-	MotionTransport        transport.Transport
-	MotionSimulated        bool
-	LLMProvider            llm.Provider
-	LLMHTTPClient          *http.Client
-	CloudBaseURL           string
-	CloudHTTPClient        *http.Client
-	IntifaceHTTPClient     *http.Client
-	BrowserBluetoothBridge *transport.BrowserBluetoothBridge
+	OpenAIHTTPClient   *http.Client
+	OpenAIIssuer       string
+	OpenAIBaseURL      string
+	Traces             *diagnostics.TraceRing
+	Transport          transport.DiagnosticsProvider
+	MotionTransport    transport.Transport
+	MotionSimulated    bool
+	LLMProvider        llm.Provider
+	LLMHTTPClient      *http.Client
+	CloudBaseURL       string
+	CloudHTTPClient    *http.Client
+	IntifaceHTTPClient *http.Client
+	// IntifaceSimulatorAddress replaces the saved Intiface address in
+	// -simulate-motion builds, so no real device is ever reached.
+	IntifaceSimulatorAddress string
+	BrowserBluetoothBridge   *transport.BrowserBluetoothBridge
 	// CoyoteConnector replaces the Bluetooth worker, for simulation and tests.
 	CoyoteConnector          estim.Connector
 	NativeBluetoothConnector ble.Connector

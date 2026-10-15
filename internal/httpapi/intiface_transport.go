@@ -17,13 +17,16 @@ import (
 // connected device holds a lease; the hub closes when the last lease ends,
 // or when its address changes or the server shuts down.
 type intifaceRuntime struct {
-	opMu        sync.Mutex
-	mu          sync.Mutex
-	hub         *transport.IntifaceHub
-	leases      map[string]bool
-	httpClient  *http.Client
-	status      transport.IntifaceStatus
-	diagnostics transport.TransportDiagnostics
+	opMu       sync.Mutex
+	mu         sync.Mutex
+	hub        *transport.IntifaceHub
+	leases     map[string]bool
+	generation uint64
+	httpClient *http.Client
+	// simulatorAddress replaces the saved address in -simulate-motion builds.
+	simulatorAddress string
+	status           transport.IntifaceStatus
+	diagnostics      transport.TransportDiagnostics
 }
 
 type intifaceSnapshot struct {
@@ -35,13 +38,16 @@ type intifaceSnapshot struct {
 	Leases []string `json:"leases"`
 	// PingWatchdog reports whether Intiface stops its devices when this app
 	// stops answering its keepalive.
-	PingWatchdog bool `json:"ping_watchdog"`
+	PingWatchdog bool                             `json:"ping_watchdog"`
+	Vibrator     transport.IntifaceVibratorStatus `json:"vibrator"`
+	Simulated    bool                             `json:"simulated"`
 }
 
 func newIntifaceRuntime(runtime Runtime) intifaceRuntime {
 	return intifaceRuntime{
-		httpClient: runtime.IntifaceHTTPClient,
-		leases:     map[string]bool{},
+		httpClient:       runtime.IntifaceHTTPClient,
+		simulatorAddress: runtime.IntifaceSimulatorAddress,
+		leases:           map[string]bool{},
 		status: transport.IntifaceStatus{
 			PlaybackState: "idle",
 			Devices:       []transport.IntifaceDevice{},
@@ -61,6 +67,7 @@ func (s *Server) intifaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/transport/intiface/scan", s.handleIntifaceStopScan)
 	mux.HandleFunc("POST /api/transport/intiface/select", s.handleIntifaceSelect)
 	mux.HandleFunc("GET /api/transport/intiface/diagnostics", s.handleIntifaceDiagnostics)
+	s.vibratorRoutes(mux)
 }
 
 func (s *Server) handleIntifaceStatus(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +101,7 @@ func decodeIntifaceLease(r *http.Request) (string, error) {
 }
 
 // intifaceLeaseDevices are the devices that can reach Intiface Central.
-var intifaceLeaseDevices = []string{config.DeviceOutputHandy}
+var intifaceLeaseDevices = []string{config.DeviceOutputHandy, config.DeviceVibrator}
 
 func (s *Server) handleIntifaceConnect(w http.ResponseWriter, r *http.Request) {
 	device, err := decodeIntifaceLease(r)
@@ -135,14 +142,23 @@ func (s *Server) handleIntifaceConnect(w http.ResponseWriter, r *http.Request) {
 
 // requireIntifaceInventory checks that device is saved before it connects.
 func (s *Server) requireIntifaceInventory(w http.ResponseWriter, device string) bool {
-	_ = device
-	return s.requireHandyConnection(w)
+	if device == config.DeviceOutputHandy {
+		return s.requireHandyConnection(w)
+	}
+	if settings, _ := s.store.Snapshot(); !settings.Device.HasDevice(device) {
+		writeError(w, http.StatusConflict, errVibratorNotSaved)
+		return false
+	}
+	return true
 }
 
 // openIntifaceHub replaces a stale hub with a newly connected one. The
 // caller holds opMu.
 func (s *Server) openIntifaceHub(ctx context.Context, address string) error {
 	s.closeIntifaceSession()
+	if s.intiface.simulatorAddress != "" {
+		address = s.intiface.simulatorAddress
+	}
 	hub, err := transport.NewIntifaceHub(transport.IntifaceOptions{
 		Address:    address,
 		HTTPClient: s.intiface.httpClient,
@@ -158,9 +174,12 @@ func (s *Server) openIntifaceHub(ctx context.Context, address string) error {
 		s.logger.Warn("Intiface connection failed", "error", err)
 		return errors.New("intiface Central is not reachable; confirm it is running and the saved server address is correct")
 	}
+	settings, _ := s.store.Snapshot()
+	hub.Vibrator().Configure(vibratorConfig(settings.Vibration))
 	s.intiface.mu.Lock()
 	s.intiface.hub = hub
 	s.intiface.leases = map[string]bool{}
+	s.intiface.generation++
 	s.intiface.mu.Unlock()
 	return nil
 }
@@ -180,8 +199,11 @@ func (s *Server) handleIntifaceDisconnect(w http.ResponseWriter, r *http.Request
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
 	defer cancel()
 	var stopErr error
-	if device == config.DeviceOutputHandy {
+	switch device {
+	case config.DeviceOutputHandy:
 		stopErr = s.stopForHandyDisconnect(stopCtx, "intiface_disconnected")
+	case config.DeviceVibrator:
+		stopErr = s.stopForVibratorDisconnect(stopCtx)
 	}
 	s.writeIntifaceResult(w, errors.Join(stopErr, s.releaseIntifaceLeaseLocked(stopCtx, device)))
 }
@@ -208,10 +230,14 @@ func (s *Server) releaseIntifaceLeaseLocked(ctx context.Context, device string) 
 		s.closeIntifaceSession()
 		return nil
 	}
-	if device == config.DeviceOutputHandy {
+	switch device {
+	case config.DeviceOutputHandy:
 		return hub.Linear().Release(ctx)
+	case config.DeviceVibrator:
+		return hub.Vibrator().Release(ctx)
+	default:
+		return nil
 	}
-	return nil
 }
 
 func (s *Server) handleIntifaceStartScan(w http.ResponseWriter, r *http.Request) {
@@ -317,8 +343,11 @@ func (s *Server) intifaceSnapshot() intifaceSnapshot {
 		Status:        s.intiface.status,
 		Diagnostics:   s.intiface.diagnostics,
 		Leases:        []string{},
+		Vibrator:      transport.IntifaceVibratorStatus{Motors: []transport.IntifaceVibratorMotor{}, PlaybackState: "disconnected"},
+		Simulated:     s.intiface.simulatorAddress != "",
 	}
 	if hub := s.intiface.hub; hub != nil {
+		snapshot.Vibrator = hub.Vibrator().Status()
 		snapshot.Status = hub.Linear().Status()
 		snapshot.Diagnostics = hub.Linear().Diagnostics()
 		snapshot.PingWatchdog = hub.Status().PingWatchdog

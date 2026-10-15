@@ -17,7 +17,7 @@ const (
 
 // knownDevices lists the device IDs in run-clock order: the first playing
 // device anchors a linked session's timeline.
-var knownDevices = []string{DeviceOutputHandy, DeviceOutputCoyote}
+var knownDevices = []string{DeviceOutputHandy, DeviceOutputCoyote, DeviceVibrator}
 
 // HasDevice checks the saved inventory, independent of connection state and
 // playback participation. Nil migrates the old output-only configuration; an

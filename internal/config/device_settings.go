@@ -83,6 +83,9 @@ func applyDeviceUpdate(next Settings, update SettingsUpdate) (Settings, error) {
 	if update.Estim != nil {
 		next.Estim = mergeEstimUpdate(next.Estim, *update.Estim)
 	}
+	if update.Vibration != nil {
+		next.Vibration = *update.Vibration
+	}
 	next.Device.HSPDispatchOwner = update.Device.HSPDispatchOwner
 	next.Device.IntifaceServerAddress = strings.TrimSpace(update.Device.IntifaceServerAddress)
 	next.Device.FirmwareAPIRequirement = update.Device.FirmwareAPIRequirement
