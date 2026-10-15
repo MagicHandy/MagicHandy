@@ -1,7 +1,8 @@
 import { t, translateKnown } from "../i18n";
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { api } from "../api/client";
-import type { BluetoothBridgeSnapshot, DeviceOutput, IntifaceTransportSnapshot } from "../api/types";
+import type { BluetoothBridgeSnapshot, IntifaceTransportSnapshot } from "../api/types";
+import { configuredDevices, playbackDevices } from "../api/devices";
 import { BluetoothBridge, type BluetoothBridgeState } from "../components/BluetoothBridge";
 import { CoyotePanel, coyoteStatusText, coyoteStrengthText } from "../components/CoyotePanel";
 import { NativeBluetoothPanel } from "../components/NativeBluetoothPanel";
@@ -72,12 +73,12 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
   const focusAfterRemoval = useRef(false);
 
   const owner = state?.settings?.device?.hsp_dispatch_owner ?? "";
-  const output: DeviceOutput = normalizeOutput(state?.settings?.device?.output);
-  const configured = state?.settings?.device?.configured_devices;
-  const usesHandy = configured ? configured.includes("handy") : output === "handy" || output === "handy_coyote";
-  const usesCoyote = configured ? configured.includes("coyote") : output === "coyote" || output === "handy_coyote";
-  const handyIncluded = output === "handy" || output === "handy_coyote";
-  const coyoteIncluded = output === "coyote" || output === "handy_coyote";
+  const configured = configuredDevices(state?.settings?.device);
+  const playing = playbackDevices(state?.settings?.device);
+  const usesHandy = configured.includes("handy");
+  const usesCoyote = configured.includes("coyote");
+  const handyIncluded = playing.includes("handy");
+  const coyoteIncluded = playing.includes("coyote");
   const coyote = state?.coyote_transport;
   const native = state?.native_bluetooth_transport;
   const linkedSession = state?.motion?.engine?.linked_session;
@@ -328,7 +329,7 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
 
         {lockReason && <p className="form-status connection-lock-reason">{lockReason}</p>}
         {!usesHandy && !usesCoyote && <div className="connection-section connection-empty"><strong>{t("Chat only")}</strong><p className="hint-block">{t("Add a connection with + when you want device playback.")}</p></div>}
-        {output === "none" && (usesHandy || usesCoyote) && <p className="connection-playback-note">{t("No devices selected for playback.")}</p>}
+        {playing.length === 0 && configured.length > 0 && <p className="connection-playback-note">{t("No devices selected for playback.")}</p>}
 
         {linkedSession?.status === "failed" && <p className="connection-playback-note" role="status">{t("Playback stopped after a device failure.")}</p>}
         {linkedSession?.status === "degraded" && <p className="connection-playback-note" role="status">{t("Continuing without {devices}. Stop and start again to rejoin.", { devices: linkedSession.retired_devices.map((device) => device === "handy" ? t("The Handy") : t("Coyote")).join(", ") })}</p>}
@@ -480,10 +481,6 @@ export function ConnectionManager({ open, onOpenChange, restoreFocusOnClose = tr
       </button>
     </div>
   );
-}
-
-function normalizeOutput(value: string | undefined): DeviceOutput {
-  return value === "none" || value === "coyote" || value === "handy_coyote" ? value : "handy";
 }
 
 function connectionProviderName(owner: string, initializing: boolean) {

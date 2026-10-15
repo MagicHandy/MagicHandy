@@ -96,7 +96,7 @@ func TestGlobalStopReachesPreparedNativeHandyOutsideCoyoteEngine(t *testing.T) {
 	s, c := nativeTestServer(t)
 	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
 		settings.Device = settings.Device.WithPlaybackOutput(config.DeviceOutputHandyCoyote)
-		settings.Device.Output = config.DeviceOutputCoyote
+		settings.Device = settings.Device.WithPlaybackDevices([]string{config.DeviceOutputCoyote})
 		settings.Estim.SafetyAcknowledged = true
 		return settings
 	})

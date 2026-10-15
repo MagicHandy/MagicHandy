@@ -20,11 +20,7 @@ func (f *FanOut) LinkedSessionStatus() LinkedSessionStatus {
 	status := LinkedSessionStatus{Status: "ready", ContinueHealthy: f.continueHealthy, RetiredDevices: []string{}}
 	for index, retired := range f.retired {
 		if retired {
-			name := "handy"
-			if index == 1 {
-				name = "coyote"
-			}
-			status.RetiredDevices = append(status.RetiredDevices, name)
+			status.RetiredDevices = append(status.RetiredDevices, f.participants[index].ID)
 			status.Status = "degraded"
 		}
 	}

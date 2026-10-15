@@ -92,6 +92,16 @@ func (c *Coyote) AppendPoints(ctx context.Context, command AppendPointsCommand) 
 
 // Play starts the prepared stream. Output fades in from its first frame.
 func (c *Coyote) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
+	return c.play(ctx, command, time.Time{})
+}
+
+// PlayAligned starts playback on a linked session's clock: stream millisecond
+// 0 is start, so no packet renders against a provisional anchor first.
+func (c *Coyote) PlayAligned(ctx context.Context, command PlayCommand, start time.Time) (CommandResult, error) {
+	return c.play(ctx, command, start)
+}
+
+func (c *Coyote) play(ctx context.Context, command PlayCommand, start time.Time) (CommandResult, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	recorded := Command{Kind: CommandKindPointsPlay, PointsPlay: &command}
@@ -110,7 +120,10 @@ func (c *Coyote) Play(ctx context.Context, command PlayCommand) (CommandResult, 
 	if command.StreamID != c.stream.id {
 		return c.recordLocked(recorded, fmt.Errorf("the Coyote stream %q has no points", command.StreamID))
 	}
-	c.stream.anchor = c.clock().Add(coyotePreroll - time.Duration(command.StartTimeMillis)*time.Millisecond)
+	c.stream.anchor = start
+	if start.IsZero() {
+		c.stream.anchor = c.clock().Add(coyotePreroll - time.Duration(command.StartTimeMillis)*time.Millisecond)
+	}
 	c.stream.started = false
 	c.stream.uncoveredSince = time.Time{}
 	c.stream.renderer.Restart(float64(command.StartTimeMillis))

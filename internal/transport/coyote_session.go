@@ -65,6 +65,10 @@ func (s *coyoteSession) Play(ctx context.Context, command PlayCommand) (CommandR
 	return s.owner.Play(s.context(ctx), command)
 }
 
+func (s *coyoteSession) PlayAligned(ctx context.Context, command PlayCommand, start time.Time) (CommandResult, error) {
+	return s.owner.PlayAligned(s.context(ctx), command, start)
+}
+
 func (s *coyoteSession) Stop(ctx context.Context, command StopCommand) (CommandResult, error) {
 	s.owner.mu.Lock()
 	current := s.owner.link == s.link

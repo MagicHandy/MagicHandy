@@ -2798,3 +2798,21 @@ See the [linked review](docs/native-linked-hardware-review-2026-10-15.md),
 [plan](docs/native-handy-bluetooth-plan-2026-10-14.md),
 [ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and
 [review](docs/native-handy-bluetooth-review-2026-10-14.md).
+
+### Planned: Intiface vibrator output and device-aware replies (2026-10-15)
+
+Planned, not implemented. A Buttplug vibrator through Intiface Central joins
+playback with the stroker, the Coyote, both, or alone. It follows the shared
+frame through a conversion profile, with a user-armed intensity that the model
+never controls. Work order:
+
+1. the playback-device set and linked sessions for any set of devices
+2. companion timeline utilities
+3. Intiface session extraction, then its lifecycle, shared by the linear and
+   vibration owners
+4. the vibrator owner
+
+Model replies still assume a linear stroker. Device-aware prompts and their
+per-configuration test matrix are later work. See the
+[vibrator plan](docs/intiface-vibrator-plan-2026-10-15.md) and the
+[device-aware model responses plan](docs/device-aware-prompts-plan-2026-10-15.md).

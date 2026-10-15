@@ -236,7 +236,7 @@ func (s *Server) finishLostBluetoothGateway(l *bluetoothGatewayLease) {
 		}
 	}
 	settings, _ := s.store.Snapshot()
-	if settings.Device.HSPDispatchOwner != config.DispatchOwnerBrowserBluetooth || !config.UsesHandy(settings.Device.Output) {
+	if settings.Device.HSPDispatchOwner != config.DispatchOwnerBrowserBluetooth || !settings.Device.Plays(config.DeviceOutputHandy) {
 		finish()
 		return
 	}

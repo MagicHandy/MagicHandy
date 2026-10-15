@@ -434,3 +434,19 @@
     padding-inline-end: 40px;
   }
 }
+
+/* Playback devices: one switch per saved device. The fieldset carries the
+   group name for assistive technology, without browser chrome. */
+.field.playback-devices {
+  min-width: 0;
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+}
+.field.playback-devices > legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+.field.playback-devices .toggle-line {
+  color: var(--text);
+}

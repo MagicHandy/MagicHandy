@@ -32,7 +32,8 @@ dispatch owner are persisted normally.
 ## Behavior And Safety
 
 - Only `LinearCmd` actuators are supported in this phase. Scalar vibration,
-  rotation, and simultaneous multi-device output are not mapped.
+  rotation, and simultaneous multi-device output are not mapped. Vibration is
+  planned: see the [Intiface vibrator plan](intiface-vibrator-plan-2026-10-15.md).
 - Consecutive neutral timed points become one absolute-deadline `LinearCmd`
   each. The first point is established through a generation-guarded startup
   anchor of at least 250 ms (raised to the device timing gap when necessary)

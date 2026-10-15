@@ -2,8 +2,11 @@
 // internal/transport/coyote.go). Split from types.ts to keep it within the
 // source line budget; types.ts re-exports them.
 
-/** What the shared motion frame drives: the Handy, a Coyote, or both. */
+/** Legacy participation: older backends report only the Handy and a Coyote. */
 export type DeviceOutput = "none" | "handy" | "coyote" | "handy_coyote";
+
+/** A saved device, in run-clock order: the first playing device sets the clock. */
+export type DeviceId = "handy" | "coyote";
 
 /** Coyote settings. Ceilings are written to the device on every connection. */
 export interface EstimSettings {
@@ -57,8 +60,10 @@ export interface CoyoteTransportSnapshot {
 
 
 export interface PublicDeviceSettings {
+    /** The playback set; absent from older backends, which report only output. */
+    playback_devices?: DeviceId[];
     output?: DeviceOutput;
-    configured_devices?: Array<"handy" | "coyote">;
+    configured_devices?: DeviceId[];
     linked_failure_policy?: "stop_all" | "continue_healthy";
     hsp_dispatch_owner: string;
     intiface_server_address: string;
@@ -69,8 +74,9 @@ export interface PublicDeviceSettings {
   }
 
 export interface DeviceSettingsUpdate {
+    playback_devices?: DeviceId[];
     output?: DeviceOutput;
-    configured_devices?: Array<"handy" | "coyote">;
+    configured_devices?: DeviceId[];
     linked_failure_policy?: "stop_all" | "continue_healthy";
     hsp_dispatch_owner: string;
     intiface_server_address: string;

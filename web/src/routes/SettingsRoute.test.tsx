@@ -194,12 +194,26 @@ describe("SettingsRoute", () => {
     render(<SettingsRoute />);
     const policy = await screen.findByRole("combobox", { name: "On device failure" });
     expect(policy).toHaveValue("stop_all");
-    const devices = screen.getByRole("combobox", { name: "Playback devices" });
-    expect(devices).toHaveValue("none");
-    expect(within(devices).queryByRole("option", { name: "The Handy" })).toBeNull();
+    const devices = screen.getByRole("group", { name: "Playback devices" });
+    expect(within(devices).getByRole("checkbox", { name: "Coyote" })).not.toBeChecked();
+    expect(within(devices).queryByRole("checkbox", { name: "The Handy" })).toBeNull();
     fireEvent.change(policy, { target: { value: "continue_healthy" } });
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ output: "none", linked_failure_policy: "continue_healthy" }) })));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ playback_devices: [], linked_failure_policy: "continue_healthy" }) })));
+  });
+
+  it("saves the playback set in run-clock order", async () => {
+    app.hash = "#/settings/device";
+    const initial = settings("normal");
+    initial.device.output = "coyote";
+    initial.device.configured_devices = ["handy", "coyote"];
+    getSettings.mockResolvedValue({ settings: initial });
+    render(<SettingsRoute />);
+    const devices = await screen.findByRole("group", { name: "Playback devices" });
+    expect(within(devices).getByRole("checkbox", { name: "Coyote" })).toBeChecked();
+    fireEvent.click(within(devices).getByRole("checkbox", { name: "The Handy" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ playback_devices: ["handy", "coyote"] }) })));
   });
 
   it("follows manager changes without discarding an unsaved failure policy", async () => {
@@ -214,13 +228,12 @@ describe("SettingsRoute", () => {
     fireEvent.change(await screen.findByRole("combobox", { name: "On device failure" }), { target: { value: "continue_healthy" } });
     app.device = { ...initial.device, configured_devices: ["coyote"], output: "none" };
     view.rerender(<SettingsRoute />);
-    const devices = screen.getByRole("combobox", { name: "Playback devices" });
-    expect(devices).toHaveValue("none");
-    expect(within(devices).queryByRole("option", { name: "The Handy" })).toBeNull();
-    expect(within(devices).getByRole("option", { name: "Coyote" })).toBeInTheDocument();
+    const devices = screen.getByRole("group", { name: "Playback devices" });
+    expect(within(devices).queryByRole("checkbox", { name: "The Handy" })).toBeNull();
+    expect(within(devices).getByRole("checkbox", { name: "Coyote" })).not.toBeChecked();
     expect(screen.getByRole("combobox", { name: "On device failure" })).toHaveValue("continue_healthy");
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ output: "none", linked_failure_policy: "continue_healthy" }) })));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ playback_devices: [], linked_failure_policy: "continue_healthy" }) })));
   });
 
   beforeEach(() => {

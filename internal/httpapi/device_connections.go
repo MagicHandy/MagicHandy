@@ -42,7 +42,7 @@ func (s *Server) stopHandyOutsideEngine(ctx context.Context, engineOwner, reason
 	if !settings.Device.HasDevice(config.DeviceOutputHandy) {
 		return nil
 	}
-	outside := strings.HasPrefix(engineOwner, config.DeviceOutputCoyote+"/")
+	outside := !engineOwnerPlays(engineOwner, config.DeviceOutputHandy)
 	connected := false
 	switch settings.Device.HSPDispatchOwner {
 	case config.DispatchOwnerNativeBluetooth:
@@ -110,12 +110,12 @@ func (s *Server) removeHandyConnection(ctx context.Context, previous config.Sett
 // excluded connection must not interrupt Coyote-only playback.
 func (s *Server) stopForHandyDisconnect(ctx context.Context, reason string) (err error) {
 	settings, _ := s.store.Snapshot()
-	if !config.UsesHandy(settings.Device.Output) {
+	if !settings.Device.Plays(config.DeviceOutputHandy) {
 		return nil
 	}
 	finish, _ := s.beginGlobalStop(reason, ctx)
 	defer finish()
-	if config.UsesCoyote(settings.Device.Output) {
+	if settings.Device.Plays(config.DeviceOutputCoyote) {
 		wait := s.startCoyoteZero()
 		defer func() { err = errors.Join(err, wait()) }()
 	}

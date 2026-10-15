@@ -198,7 +198,7 @@ func (s *Server) handleCloudDisconnect(w http.ResponseWriter, r *http.Request) {
 	// Stop confirmation may be unavailable in that case.
 	s.setCloudControlReleased(true)
 
-	hadEngine := config.UsesHandy(settings.Device.Output) && s.currentMotionEngine() != nil
+	hadEngine := settings.Device.Plays(config.DeviceOutputHandy) && s.currentMotionEngine() != nil
 	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
 	stopErr := s.stopForHandyDisconnect(stopCtx, "cloud_disconnected")
 	stopCancel()

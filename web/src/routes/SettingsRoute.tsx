@@ -24,7 +24,8 @@ import { SettingsNavigation, SettingsNavigationLabel } from "../components/Setti
 import { LabsSettings } from "../components/LabsSettings";
 import { DismissibleNotice } from "../components/DismissibleNotice";
 import { CoyoteSettings, DEFAULT_ESTIM_SETTINGS } from "../components/CoyoteSettings";
-import type { DeviceOutput, EstimSettings } from "../api/types";
+import type { DeviceId, EstimSettings } from "../api/types";
+import { DEVICE_ORDER, configuredDevices, playbackDevices } from "../api/devices";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
@@ -130,6 +131,7 @@ export function SettingsRoute() {
       device: {
         ...rebaseSettingsDraft(baseline.device, draft.device, liveDevice),
         configured_devices: liveDevice.configured_devices,
+        playback_devices: liveDevice.playback_devices,
         output: liveDevice.output,
         hsp_dispatch_owner: liveDevice.hsp_dispatch_owner,
       },
@@ -261,7 +263,7 @@ export function SettingsRoute() {
         show_superseded_originals: s.media?.show_superseded_originals ?? false,
       },
       device: {
-        output: s.device.output ?? "handy",
+        playback_devices: playbackDevices(s.device),
         linked_failure_policy: s.device.linked_failure_policy ?? "stop_all",
         hsp_dispatch_owner: s.device.hsp_dispatch_owner,
         intiface_server_address: s.device.intiface_server_address,
@@ -416,8 +418,8 @@ export function SettingsRoute() {
     </select>
   );
   const owner = s.device.hsp_dispatch_owner;
-  const output: DeviceOutput = s.device.output === "none" || s.device.output === "coyote" || s.device.output === "handy_coyote" ? s.device.output : "handy";
-  const configuredDevices = s.device.configured_devices ?? (output === "none" ? [] : output === "handy_coyote" ? ["handy", "coyote"] : [output]);
+  const playing = playbackDevices(s.device);
+  const configured = configuredDevices(s.device);
   const incompleteModel = s?.llm.connections?.some(connection => !connection.model.trim() && (connection.id === s.llm.conversation_connection_id || (s.llm.motion_planner?.provider === "connection" && connection.id === s.llm.motion_planner.connection_id))) ?? false;
   const saveActions = <div className="row-actions settings-actions">
     <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving || incompleteModel}>{saving ? t("Saving settings") : t("Save settings")}</button>
@@ -521,14 +523,20 @@ export function SettingsRoute() {
               <h3 className="group-title">{t("Connections")}</h3>
               <button type="button" className="btn btn-secondary" onClick={() => window.dispatchEvent(new Event("magichandy:open-connections"))}>{t("Manage connections")}</button>
               <p className="hint-block">{t("Add and connect devices in the connection manager. Saved connections can stay connected without joining playback.")}</p>
-              <label className="field"><span className="label">{t("Playback devices")}</span>
-                <select value={output} disabled={locked} onChange={(e) => patchDevice({ output: e.target.value as DeviceOutput })}>
-                  <option value="none">{t("None (chat only)")}</option>
-                  {configuredDevices.includes("handy") && <option value="handy">{t("The Handy")}</option>}
-                  {configuredDevices.includes("coyote") && <option value="coyote">{t("Coyote")}</option>}
-                  {configuredDevices.includes("handy") && configuredDevices.includes("coyote") && <option value="handy_coyote">{t("The Handy and a Coyote together")}</option>}
-                </select>
-              </label>
+              <fieldset className="field playback-devices">
+                <legend className="label">{t("Playback devices")}</legend>
+                {configured.length === 0 && <p className="form-status">{t("None (chat only)")}</p>}
+                {configured.map((device) => (
+                  <label key={device} className="toggle-line">
+                    <span className="toggle">
+                      <input type="checkbox" checked={playing.includes(device)} disabled={locked}
+                        onChange={(event) => patchDevice({ playback_devices: withPlayback(playing, device, event.target.checked) })} />
+                      <span className="track" aria-hidden="true" />
+                    </span>
+                    <span>{playbackDeviceName(device)}</span>
+                  </label>
+                ))}
+              </fieldset>
               <label className="field"><span className="label">{t("On device failure")}</span>
                 <select value={s.device.linked_failure_policy ?? "stop_all"} disabled={locked} onChange={(event) => patchDevice({ linked_failure_policy: event.target.value as "stop_all" | "continue_healthy" })}>
                   <option value="stop_all">{t("Stop all devices (recommended)")}</option>
@@ -538,7 +546,7 @@ export function SettingsRoute() {
               <p className="hint-block">{t("Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop always stops every device.")}</p>
               <p className="hint-block">{t("Changing playback devices or the failure policy stops the current run.")}</p>
             </div>
-            {configuredDevices.includes("coyote") && <CoyoteSettings
+            {configured.includes("coyote") && <CoyoteSettings
               estim={{ ...DEFAULT_ESTIM_SETTINGS, ...s.estim }}
               rememberedDevice={Boolean(s.estim?.remembered_device)}
               forgetDevice={forgetCoyote}
@@ -546,7 +554,7 @@ export function SettingsRoute() {
               patch={patchEstim}
               setForgetDevice={setForgetCoyote}
             />}
-            {configuredDevices.includes("handy") && <div className="group">
+            {configured.includes("handy") && <div className="group">
               <h3 className="group-title">{t("Connection")}</h3>
               <label className="field"><span className="label">{t("Protocol")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
               {owner === "cloud_rest" && <>
@@ -571,7 +579,7 @@ export function SettingsRoute() {
               <h3 className="group-title">{t("Local server")}</h3>
               <label className="field"><span className="label">{t("Server port")}</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
             </details>
-            {configuredDevices.includes("handy") && <ManualMotionTest />}
+            {configured.includes("handy") && <ManualMotionTest />}
           </>
         )}
 
@@ -624,4 +632,12 @@ export function SettingsRoute() {
       </div>
     </>
   );
+}
+
+function withPlayback(playing: DeviceId[], device: DeviceId, included: boolean): DeviceId[] {
+  return DEVICE_ORDER.filter((id) => id === device ? included : playing.includes(id));
+}
+
+function playbackDeviceName(device: DeviceId): string {
+  return device === "coyote" ? t("Coyote") : t("The Handy");
 }

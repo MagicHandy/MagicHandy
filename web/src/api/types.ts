@@ -6,7 +6,7 @@
 import type { SetupAssessment } from "./setup-assessment-types";
 import type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { CoyoteTransportSnapshot, EstimSettings } from "./coyote-types";
-export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceOutput, EstimSettings } from "./coyote-types";
+export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceId, DeviceOutput, EstimSettings } from "./coyote-types";
 export type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { AccountCapabilities } from "./access-types";
 export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus, InternetDiscovery, CertificatePreparation } from "./access-types";

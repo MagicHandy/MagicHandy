@@ -174,7 +174,7 @@ func TestCoyoteExclusionKeepsTheConnectionSilent(t *testing.T) {
 	connectCoyote(t, server)
 	previous, _ := server.store.Snapshot()
 	next := previous
-	next.Device.Output = config.DeviceOutputHandy
+	next.Device = next.Device.WithPlaybackDevices([]string{config.DeviceOutputHandy})
 	if err := server.applySettingsRuntimeTransition(context.Background(), previous, next); err != nil {
 		t.Fatal(err)
 	}

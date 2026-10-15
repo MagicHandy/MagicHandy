@@ -4,6 +4,7 @@ import { t, translateKnown } from "../i18n";
 // Disabled for read-only or backend-offline clients with a visible reason.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
+import { playbackDevices } from "../api/devices";
 import type { HandyModel, MotionSettings } from "../api/types";
 import { RangeSlider } from "./RangeSlider";
 import { SegmentedChoice } from "./SetpointControls";
@@ -113,9 +114,9 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
 
   if (!vals) return <p className="form-status">{t("Loading…")}</p>;
 
-  // With the Coyote alone, only Speed still matters: it sets the pace the
-  // Coyote follows. The model, stroke window and direction are Handy-only.
-  const handyShown = state?.settings?.device?.output !== "coyote" && state?.settings?.device?.output !== "none";
+  // Without the Handy in playback, only Speed still matters: it sets the pace
+  // the other devices follow. The model, stroke window and direction are Handy-only.
+  const handyShown = playbackDevices(state?.settings?.device).includes("handy");
   const showLimits = section === "all" || section === "limits" || section === "connection";
   const showDirection = handyShown && (section === "all" || section === "connection");
   const showStyle = section === "all" || section === "style";

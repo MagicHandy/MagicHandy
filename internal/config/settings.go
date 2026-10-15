@@ -728,6 +728,7 @@ func (s Settings) Public() PublicSettings {
 		},
 		Device: PublicDeviceSettings{
 			ConfiguredDevices:        s.Device.configuredSnapshot(),
+			PlaybackDevices:          s.Device.playbackSnapshot(),
 			LinkedFailurePolicy:      s.Device.LinkedFailurePolicy,
 			Output:                   s.Device.Output,
 			HSPDispatchOwner:         s.Device.HSPDispatchOwner,
@@ -827,7 +828,10 @@ func (s Settings) ApplyUpdate(update SettingsUpdate) (Settings, error) {
 	if update.Media != nil {
 		next.Media = normalizeMediaSettings(mergeMediaUpdate(next.Media, *update.Media))
 	}
-	next = applyDeviceUpdate(next, update)
+	next, err := applyDeviceUpdate(next, update)
+	if err != nil {
+		return s, err
+	}
 	next.Motion = update.Motion
 	if update.Freestyle != nil {
 		next.Freestyle = *update.Freestyle
@@ -1175,6 +1179,13 @@ func applyMissingDefaults(settings Settings) Settings {
 	}
 	if settings.Device.ConfiguredDevices == nil {
 		settings.Device.ConfiguredDevices = configuredFromOutput(settings.Device.Output)
+	}
+	// A missing playback set migrates from the legacy output. A stored set is
+	// only reordered; validation rejects one that disagrees with the output.
+	if settings.Device.PlaybackDevices == nil {
+		settings.Device.PlaybackDevices = playbackFromOutput(settings.Device.Output)
+	} else {
+		settings.Device.PlaybackDevices = canonicalDevices(settings.Device.PlaybackDevices)
 	}
 	settings.Estim = applyMissingEstimDefaults(settings.Estim)
 	if settings.Device.HSPDispatchOwner == "" {

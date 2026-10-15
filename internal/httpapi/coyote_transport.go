@@ -234,7 +234,7 @@ func (s *Server) handleCoyoteDisconnect(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	if config.UsesCoyote(settings.Device.Output) {
+	if settings.Device.Plays(config.DeviceOutputCoyote) {
 		// Explicitly disconnecting a participant ends this run, including a linked run.
 		if s.modes != nil {
 			s.modes.Stop("coyote_disconnected")
@@ -392,7 +392,7 @@ func (s *Server) applyCoyoteSettingsTransition(previous, next config.Settings) e
 		return err
 	}
 	var zeroErr error
-	if config.UsesCoyote(previous.Device.Output) && !config.UsesCoyote(next.Device.Output) {
+	if previous.Device.Plays(config.DeviceOutputCoyote) && !next.Device.Plays(config.DeviceOutputCoyote) {
 		zeroErr = s.coyote.owner.EmergencyZero()
 	}
 	if previous.Estim != next.Estim {

@@ -545,24 +545,6 @@ func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context
 	}, sequence
 }
 
-func (s *Server) newSelectedStopTransport() (transport.Transport, error) {
-	settings, _ := s.store.Snapshot()
-	if !settings.Device.HasDevice(config.DeviceOutputHandy) {
-		if settings.Device.HasDevice(config.DeviceOutputCoyote) {
-			return s.coyote.owner, nil
-		}
-		return nil, nil
-	}
-	handy, err := s.newHandyStopTransport(settings)
-	if err != nil {
-		return nil, err
-	}
-	if settings.Device.HasDevice(config.DeviceOutputCoyote) {
-		return transport.NewFanOut(handy, s.coyote.owner), nil
-	}
-	return handy, nil
-}
-
 func (s *Server) newHandyStopTransport(settings config.Settings) (transport.Transport, error) {
 	if s.motion.transport != nil {
 		return s.motion.transport, nil
@@ -720,7 +702,7 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, next config.Settings) (bool, error) {
 	dispatchOwnerChanged := previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner
 	handyRemoved := previous.Device.HasDevice(config.DeviceOutputHandy) && !next.Device.HasDevice(config.DeviceOutputHandy)
-	ownerChanged := dispatchOwnerChanged || previous.Device.Output != next.Device.Output || previous.Device.LinkedFailurePolicy != next.Device.LinkedFailurePolicy || handyRemoved
+	ownerChanged := dispatchOwnerChanged || !slices.Equal(previous.Device.PlaybackSet(), next.Device.PlaybackSet()) || previous.Device.LinkedFailurePolicy != next.Device.LinkedFailurePolicy || handyRemoved
 	intifaceAddressChanged := previous.Device.IntifaceServerAddress != next.Device.IntifaceServerAddress
 	cloudConfigChanged := previous.Device.FirmwareAPIRequirement != next.Device.FirmwareAPIRequirement ||
 		previous.Device.APIApplicationIDSource != next.Device.APIApplicationIDSource ||
@@ -987,20 +969,20 @@ func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
 	}
 	settings, _ := s.store.Snapshot()
 	owner := motionOwnerKey(settings.Device)
-	if config.UsesCoyote(settings.Device.Output) {
+	if settings.Device.Plays(config.DeviceOutputCoyote) {
 		owner += fmt.Sprintf("/coyote-%d", s.coyote.owner.SessionID())
 	}
-	if config.UsesHandy(settings.Device.Output) && settings.Device.HSPDispatchOwner == config.DispatchOwnerBrowserBluetooth {
+	if settings.Device.Plays(config.DeviceOutputHandy) && settings.Device.HSPDispatchOwner == config.DispatchOwnerBrowserBluetooth {
 		owner += fmt.Sprintf("/ble-%d", s.bluetooth.bridge.SessionID())
 	}
-	if config.UsesHandy(settings.Device.Output) && settings.Device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
+	if settings.Device.Plays(config.DeviceOutputHandy) && settings.Device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
 		owner += fmt.Sprintf("/native-ble-%d", s.nativeBluetooth.owner.SessionID())
 	}
 	engine, engineOwner := s.currentMotionEngineWithOwner()
 	failed := false
 	if engine != nil {
 		state := engine.Snapshot()
-		failed = !state.Running && !state.Starting && !state.Paused && (state.LastError != "" || config.UsesCoyote(settings.Device.Output))
+		failed = !state.Running && !state.Starting && !state.Paused && (state.LastError != "" || settings.Device.Plays(config.DeviceOutputCoyote))
 	}
 	if engine != nil && (engineOwner != owner || failed) {
 		if err := s.stopAndClearMotionEngineLocked(context.Background(), "dispatch_owner_changed"); err != nil {
@@ -1049,39 +1031,6 @@ func (s *Server) stopActiveMotionForReplacement(ctx context.Context, reason stri
 		return state, nil
 	}
 	return engine.Stop(ctx, reason)
-}
-
-// motionOwnerKey names what an engine was built for. A change to either the
-// output or the Handy's dispatch owner replaces the engine.
-func motionOwnerKey(device config.DeviceSettings) string {
-	if device.Output == config.DeviceOutputCoyote {
-		return device.Output
-	}
-	return device.Output + "/" + device.HSPDispatchOwner
-}
-
-// newSelectedMotionTransport builds what the selected output drives: the
-// Handy, the Coyote, or both through one fan-out.
-func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
-	settings, _ := s.store.Snapshot()
-	switch settings.Device.Output {
-	case config.DeviceOutputNone:
-		return nil, errors.New("include a device in playback before starting motion")
-	case config.DeviceOutputCoyote:
-		return s.coyoteMotionTransport()
-	case config.DeviceOutputHandyCoyote:
-		coyote, err := s.coyoteMotionTransport()
-		if err != nil {
-			return nil, err
-		}
-		handy, err := s.newHandyMotionTransport(settings)
-		if err != nil {
-			return nil, err
-		}
-		return transport.NewFanOutWithPolicy(handy, coyote, settings.Device.LinkedFailurePolicy == config.LinkedFailureContinueHealthy), nil
-	default:
-		return s.newHandyMotionTransport(settings)
-	}
 }
 
 func (s *Server) newHandyMotionTransport(settings config.Settings) (transport.Transport, error) {
