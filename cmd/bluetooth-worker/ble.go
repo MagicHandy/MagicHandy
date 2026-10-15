@@ -98,6 +98,9 @@ func (a *radioAdapter) ConnectAddress(ctx context.Context, address string, profi
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", bleworker.ErrNotFound, err)
 	}
+	if err := prepareNativeConnection(ctx, a.adapter, address); err != nil {
+		return nil, err
+	}
 	type outcome struct {
 		device bluetooth.Device
 		err    error
@@ -111,6 +114,10 @@ func (a *radioAdapter) ConnectAddress(ctx context.Context, address string, profi
 	case result := <-results:
 		if result.err != nil {
 			return nil, fmt.Errorf("%w: %v", bleworker.ErrNotFound, result.err)
+		}
+		if err := awaitNativeConnection(ctx, result.device); err != nil {
+			_ = closeNativeDevice(result.device)
+			return nil, fmt.Errorf("%w: %v", ble.ErrDiscoveryFailed, err)
 		}
 		return &radioPeripheral{adapter: a, device: result.device, address: normalizeAddress(address), profile: profile}, nil
 	case <-ctx.Done():

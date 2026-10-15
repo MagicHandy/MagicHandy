@@ -183,7 +183,7 @@ export function CoyotePanel({ locked, canConfigureHost, safetyAcknowledged, init
           {busy === "discover" ? t("Finding devices…") : t("Find nearby devices")}
         </button>}
       </div>
-      {!connected && !busy && <p className="hint-block">{t("Turn the Coyote on and disconnect the phone app. If Connect cannot find it, briefly press a wheel to wake its Bluetooth, then find nearby devices.")}</p>}
+      {!connected && !busy && <p className="hint-block">{t("Turn the Coyote on and disconnect the phone app. If the logo eyes are already flashing, leave the controls alone and connect.")}</p>}
     </div>
   );
 }

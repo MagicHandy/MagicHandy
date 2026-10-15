@@ -128,7 +128,7 @@ describe("CoyotePanel", () => {
   it("connects through the backend", async () => {
     vi.mocked(api.coyoteConnect).mockResolvedValue(snapshot());
     const { onChanged } = renderPanel({ initial: snapshot({ connected: false, strength_known: false }) });
-    expect(screen.getByText(/briefly press a wheel/)).toBeInTheDocument();
+    expect(screen.getByText(/eyes are already flashing/)).toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: /Connect Coyote/ })));
     expect(api.coyoteConnect).toHaveBeenCalled();
     expect(onChanged).toHaveBeenCalled();

@@ -25,9 +25,10 @@ host accepts them. Turning the acceptance off in Settings shows them again.
    Turn on **Use in playback** when ready. Excluding a device keeps its
    connection; Disconnect keeps its saved row; Remove closes it and removes the
    row. Removing every row leaves chat available with motion idle.
-2. Turn the Coyote on and disconnect the phone app. Select **Connect Coyote**.
-   If it cannot be found, briefly press a wheel to wake Bluetooth, then select
-   **Find nearby devices**. Holding both switches can turn this model off.
+2. Turn the Coyote on and disconnect the phone app. If the logo eyes are already
+   flashing, leave the controls alone. Select **Connect Coyote**.
+   If it cannot be found, select **Find nearby devices**. Holding both switches
+   can turn this model off.
    The list ranks signal strength and distinguishes **Remembered COYOTE**,
    **Likely COYOTE 3.0** (advertised name) and **Possible COYOTE** (unnamed private
    advertisement). An unnamed match is only a candidate; select it explicitly.
@@ -184,13 +185,16 @@ Automated tests cover the following on a simulated Coyote:
   reordered strength reports, read-only lowering without output, explicit test
   permissions and Stop fencing, and a deliberately hung worker process.
 
-Open, on the user's Coyote 3.0:
+On the user's Coyote 3.0, the unnamed device's GAP name and required service and
+characteristics were verified. After adding Windows advertisement refresh and
+connection-readiness checks, real connections read 100% battery and received
+device reports of A=0/B=0. Five global Stops while already at zero received fresh
+zero reports in 152–232 ms, including polling delay. This does not measure the
+physical interruption of active electrical output. An immediate reconnect still
+failed at GATT discovery. See the
+[hardware report](native-handy-hardware-review-2026-10-14.md).
 
-Read-only discovery verified the unnamed device's GAP name and required service
-and characteristics. The subsequent native zero-output attempt stopped at
-Windows GATT discovery, before application writes; a later read-only attempt
-reported unreachable. Battery, zero confirmation and real Stop remain unverified.
-See the [hardware report](native-handy-hardware-review-2026-10-14.md).
+Still open:
 
 - pairing and remembered reconnection;
 - the ceilings against the device's switches;

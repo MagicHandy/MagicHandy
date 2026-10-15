@@ -51,8 +51,8 @@ Do not claim this is a firmware incompatibility or a solved timing problem.
 Deterministic Windows GATT service/handle cleanup and repeated immediate reconnect
 tests remain required before the draft PR is ready for integration.
 
-The review instance has a verified working local Gemma model. Both devices were
-disconnected during the APK-informed follow-up below. The older simulator remains at
+The review instance has a verified working local Gemma model. Both devices are
+disconnected after the latest zero-only tests below. The older simulator remains at
 port 50234. Ignored evidence under `.scratch/native-handy-hardware/` includes
 `final-stop-samples.json`, `final-stop-trace.json`, and `final-diagnostics.zip`.
 The export contains no user chat or copied credentials. The later browser-control
@@ -104,8 +104,8 @@ A subsequent test using the previously verified private address and the normal
 worker/core COYOTE owner failed at characteristic discovery after **7,877 ms**;
 no limits, zero, pulse or strength command was sent. A separate read-only
 recheck returned GATT status 1 (Unreachable). The device's current readiness was
-requested from the user. **Real battery, zero confirmation and Stop tests remain
-blocked; no electrical output has been tested.**
+requested from the user. These initial failures were superseded by the zero-only
+connection results below; no electrical output has been tested.
 
 Regression coverage includes private-address redaction, candidate identification
 and ranking, explicit selection, expiry, no fallback to another device, scan-only
@@ -121,7 +121,74 @@ browser remains at Settings > Device, but browser automation repeatedly times
 out before DOM/screenshot inspection; visual validation of the new picker remains
 open. No third-party APK contents or runtime evidence are committed.
 
+## COYOTE connection readiness and zero-only testing
+
+The user returned the logo eyes to flashing. A prior brief wheel press had
+changed them to solid, so the setup hint now says to leave already-flashing eyes
+alone. Further testing used the same GATT-verified device, with phone Bluetooth
+off and both strengths at zero. MagicHandy did not change its private binding.
+
+Read-only WinRT inspection saw a connectable, scannable advertisement with a
+random address type. Refreshing that exact advertisement in the connection
+process, then waiting for `Device.Connected()`, allowed complete GATT discovery.
+Both explicit-random and the original address lookup succeeded with that
+sequence. This does **not** establish address type as the cause. Creating a
+WinRT device object alone was not a reliable indication of link readiness.
+
+The shipping Windows worker now performs a short-lived scan for only the
+selected address, then waits for connected state before GATT discovery. Both
+steps share the existing connection deadline; the core still terminates a hung
+worker. It never substitutes a nearby device, relaxes profile validation or
+retries an uncertain write. Linux keeps its existing BlueZ connection behavior.
+
+Two separate normal-worker/core-driver runs connected in **4,016 ms** and
+**6,582 ms**, read **100% battery**, and received actual B1 reports of **A=0,
+B=0**. The characteristic used Write Without Response with a 20-byte write
+budget. Strength correctly remained unknown until the first report. Each run
+sent three additional zero commands and disconnected successfully.
+
+The isolated review database then remembered that hardware-verified address
+while the app was stopped; no user settings or credentials were copied. The
+full app path scanned, returned three candidates, selected the unique
+**Remembered COYOTE** using its opaque selection ID, connected, and exercised
+global Stop. COYOTE remained excluded from playback throughout.
+
+| Observation | Result |
+| --- | --- |
+| Explicit scan | 8,054 ms; selected remembered candidate at −53 dBm |
+| App connection | 4,275 ms; first reported zero by 4,413 ms |
+| Battery / reported strength | 100%; A=0 and B=0 |
+| Five global Stop HTTP round trips | 22–28 ms; median 23 ms |
+| Fresh zero report after each Stop | 152–232 ms; median 213 ms |
+| End of successful sample | Idle; no reference pulse; seven packets; zero write failures |
+
+Report timing was observed with 50 ms HTTP polling and includes host and polling
+delay. **Stop was exercised while the device was already at zero.** These results
+verify command routing and fresh device reports, not physical interruption from
+active output, electrical decay, ceiling enforcement against the switches or
+concurrent-device behavior. No positive strength or pulse packet was requested.
+
+An immediate app disconnect/reconnect subsequently failed at GATT discovery.
+First connection, battery and zero confirmation are now verified, but rapid
+reconnect remains a hardware-validation blocker for the draft PR. The final
+rebuilt app is running with both devices disconnected and completes real local
+Gemma generation. Browser automation still times out before inspecting the page,
+so current picker visuals remain unverified.
+
+Ignored local evidence includes `coyote-app-result.json`,
+`coyote-readiness-zero.log`, `coyote-readiness-repeat.log`,
+`coyote-readiness-app.stderr.log`, `coyote-readiness-diagnostics.zip` and
+`coyote-readiness-trace.json` under `.scratch/native-handy-hardware/`. The trace
+export has no motion rows because playback was never started; the separately
+recorded status/Stop samples contain the relevant timing evidence. Tests cover
+readiness, cancellation, native state errors and refusal to connect an unrelated
+advertiser. The full Go/race/lint and frontend suites pass after the fix, as do
+CGO-disabled Windows and Linux core/worker builds.
+
 ## Protocol and platform sources
+
+- [WinRT device lookup and connection behavior](https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.bluetoothledevice.frombluetoothaddressasync): advertisement discovery populates the address cache; creating the object alone does not initiate a connection.
+- [TinyGo Windows connection-readiness issue](https://github.com/tinygo-org/bluetooth/issues/448): upstream evidence of the readiness limitation, not proof of the remaining reconnect failure's cause.
 
 - [Manufacturer RPC schema](https://gitlab.com/sweettechas/platform/handy-public-rpc):
   RequestStopCurrentMode field 715 and ERROR_WRONG_MODE 100004.

@@ -1,8 +1,9 @@
 # ADR 0046: Shared native Bluetooth infrastructure with per-device workers
 
 Date: 2026-10-14
-Status: Accepted for software implementation; original Handy connection/Stop
-verified, Windows rapid reconnect remains a hardware-validation blocker.
+Status: Accepted for software implementation; original Handy connection/Stop and
+COYOTE connection/battery/zero reports verified. Windows rapid reconnect remains
+a hardware-validation blocker; active electrical output is untested.
 
 See the [authorized hardware findings](../native-handy-hardware-review-2026-10-14.md).
 
@@ -53,6 +54,13 @@ simulator accepts injected connectors and has no device-specific protocol logic.
   An insufficient/unknown Handy MTU fails before playback instead of assuming
   the firmware's 512-byte maximum. WinRT write properties choose an available
   write mode before submission; uncertain writes are never retried.
+- Windows refreshes the selected address's advertisement in the connection
+  worker and waits for connected state before GATT discovery. A native device
+  object alone is not a ready link. Preparation and readiness share the existing
+  connection deadline, and process supervision bounds native calls that cannot
+  be canceled. No other advertiser can satisfy readiness. Linux retains BlueZ's
+  existing discovery/readiness behavior. This fixes observed first-connection
+  failures; immediate Windows reconnect still needs hardware validation.
 - Explicit COYOTE discovery uses a separate, short-lived scan-only worker.
   Unnamed advertisements with the official app's candidate shape are listed
   without claiming device identity. Host-only responses contain expiring opaque
@@ -99,4 +107,5 @@ The [integration plan](../native-handy-bluetooth-plan-2026-10-14.md) records the
 implementation order and acceptance checks. Browser/native golden wire fixtures,
 small-MTU chunk tests, process isolation, linked failure tests and leak/race
 checks provide software evidence. The hardware follow-up records original Handy
-connection and Stop, plus the remaining Windows reconnect failure.
+connection and Stop, COYOTE battery and device-confirmed zeros (including global
+Stop while already at zero), plus the remaining Windows reconnect failure.

@@ -7,12 +7,18 @@ firmware 4.3. The final five Stop writes completed in 79–155 ms (median 102 ms
 this is dispatch completion, not physical braking. Windows rapid reconnect is
 still unreliable. See [hardware findings](native-handy-hardware-review-2026-10-14.md).
 After APK-informed COYOTE discovery and acknowledgment corrections, follow-up
-binaries measure **22,925,824 B core / 3,070,464 B worker**. No dependency or
+binaries measured **22,925,824 B core / 3,070,464 B worker**. The subsequent
+Windows readiness fix and revised setup hint measure **22,927,360 B core /
+3,078,144 B worker** (+1,536 / +7,680 B). No dependency or
 background model call was added. A separate scan worker exists only during an
-explicit scan, bounded to 15 seconds and 64 candidate records.
+explicit scan, bounded to 15 seconds and 64 candidate records. Windows also
+refreshes the selected advertisement in its connection worker and checks
+connected state every 25 ms only during the bounded connection attempt; it adds
+no idle poller. COYOTE connection, battery and device-reported zero/Stop-at-zero
+now pass on hardware; immediate reconnect remains open.
 
-Relative to the initial native-Handy build below, main JS is **1,204,174 B raw /
-323,368 B gzip** (+2,727 / +235 B), and CSS **204,247 B raw / 35,602 B gzip**
+Relative to the initial native-Handy build below, main JS is **1,204,409 B raw /
+323,413 B gzip** (+2,962 / +280 B), and CSS **204,247 B raw / 35,602 B gzip**
 (+210 / +3 B). Compression uses gzip level 9. One disconnected Windows sample
 after real local-model generation was **36,823,040 B working set / 55,128,064 B
 private memory**. This is not a controlled RSS or cold-start comparison; the

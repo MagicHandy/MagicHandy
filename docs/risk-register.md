@@ -2307,8 +2307,12 @@ with full GATT validation before writes. No company ID or RSSI alone establishes
 identity. Native COYOTE uses Write Without Response; v4 IPC exposes that fact,
 and a queued zero leaves strength unknown until a device report. Discovery-only
 workers never write, and selected/remembered devices cannot silently fall back
-to a different address. The real zero-output attempt was blocked by GATT
-discovery and later unreachable status; connection/zero/Stop remains unverified.
+to a different address. Windows now refreshes the selected advertisement and
+waits for connected state before GATT discovery. Real zero-only tests verified
+connection, battery and device-reported zeros, including five global Stops while
+already at zero. An immediate reconnect still failed at GATT discovery. Active
+output interruption, physical decay and concurrent-device behavior remain open;
+zero-only command timings cannot establish those safety properties.
 
 Hardware follow-up: original Handy firmware 4.3 connection and Stop succeeded,
 but immediate Windows reconnect sometimes yields GATT AccessDenied and an empty

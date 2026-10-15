@@ -2779,7 +2779,11 @@ HSP buffer budgets remain in place. Software validation includes process
 isolation, small-MTU chunking, stale-session fencing, linked failure policies,
 normal/race/leak checks and Windows/Linux pure-Go builds. The authorized original
 Handy firmware-4.3 check verified connection, clock sync and mode-independent
-Stop; Windows rapid reconnect remains a blocker. See the
+Stop. Windows connection workers now refresh only the selected advertisement
+and wait for connected state before GATT discovery. COYOTE testing verified
+battery and actual zero reports, including global Stop while already at zero;
+no positive strength or pulse output was tested. Windows rapid reconnect remains
+a blocker. See the
 [hardware findings](docs/native-handy-hardware-review-2026-10-14.md),
 [plan](docs/native-handy-bluetooth-plan-2026-10-14.md),
 [ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and
