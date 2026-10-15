@@ -27,7 +27,9 @@ interface CoyotePanelProps {
 export function CoyotePanel({ locked, canConfigureHost, safetyAcknowledged, initial, visible, stopSequence, playbackActive = false, onChanged }: CoyotePanelProps) {
   const { show } = useToast();
   const [snapshot, setSnapshot] = useState(initial);
-  const [busy, setBusy] = useState<"connect" | "disconnect" | "safety" | null>(null);
+  const [busy, setBusy] = useState<"connect" | "disconnect" | "safety" | "discover" | null>(null);
+  const [candidates, setCandidates] = useState<Awaited<ReturnType<typeof api.coyoteDiscover>>["candidates"] | null>(null);
+  const [candidateID, setCandidateID] = useState("");
   const [testing, setTesting] = useState(false);
   const status = snapshot?.status;
   const connected = Boolean(status?.connected);
@@ -49,14 +51,29 @@ export function CoyotePanel({ locked, canConfigureHost, safetyAcknowledged, init
   async function run(action: "connect" | "disconnect") {
     setBusy(action);
     try {
-      const next = action === "connect" ? await api.coyoteConnect() : await api.coyoteDisconnect();
+      const next = action === "connect" ? await api.coyoteConnect(candidateID || undefined) : await api.coyoteDisconnect();
       setSnapshot(next);
-      show(action === "connect" ? t("Coyote connected. Zero command accepted.") : t("Coyote disconnected. Both channels were set to zero."));
+      setCandidates(null);
+      setCandidateID("");
+      show(action === "connect" ? t("Coyote connected. Check the strength readout before starting.") : t("Coyote disconnected. A zero command was sent before closing."));
     } catch (error) {
       show(error instanceof Error ? translateKnown(error.message) : t("Coyote request failed."), "error");
     } finally {
       setBusy(null);
       onChanged();
+    }
+  }
+
+  async function discover() {
+    setBusy("discover");
+    setCandidates(null);
+    setCandidateID("");
+    try {
+      setCandidates((await api.coyoteDiscover()).candidates);
+    } catch (error) {
+      show(error instanceof Error ? translateKnown(error.message) : t("Coyote request failed."), "error");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -136,18 +153,37 @@ export function CoyotePanel({ locked, canConfigureHost, safetyAcknowledged, init
           <button type="button" className="btn btn-secondary" disabled={locked} onClick={() => void zero()}>{t("Set both to zero")}</button>
         </div>
       )}
+      {!connected && candidates !== null && (
+        <div className="coyote-discovery">
+          <label>
+            <span>{t("Nearby devices")}</span>
+            <select value={candidateID} disabled={locked || !canConfigureHost || busy !== null} onChange={(event) => setCandidateID(event.target.value)}>
+              <option value="">{t("Choose a device")}</option>
+              {candidates.map((candidate, index) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {candidate.identification === "remembered" ? t("Remembered COYOTE") : candidate.identification === "name_match" ? t("Likely COYOTE 3.0") : t("Possible COYOTE {number}", { number: index + 1 })} · {t("{signal} dBm", { signal: candidate.rssi })}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="hint-block">{candidates.length === 0 ? t("No nearby candidates found. Wake the Coyote and try again.") : t("Strongest signal first. An unnamed device is not yet verified as a Coyote; Connect checks it before sending commands.")}</p>
+        </div>
+      )}
       <div className="row-actions">
         {connected ? (
           <button type="button" className="btn btn-secondary" disabled={locked || busy !== null} onClick={() => void run("disconnect")}>
             <WirelessIcon />{busy === "disconnect" ? t("Disconnecting") : t("Disconnect")}
           </button>
         ) : (
-          <button type="button" className="btn btn-primary" disabled={locked || !canConfigureHost || busy !== null} onClick={() => void run("connect")}>
+          <button type="button" className="btn btn-primary" disabled={locked || !canConfigureHost || busy !== null || (candidates !== null && !candidateID)} onClick={() => void run("connect")}>
             <WirelessIcon />{busy === "connect" ? t("Connecting") : t("Connect Coyote")}
           </button>
         )}
+        {!connected && !status?.simulated && <button type="button" className="btn btn-secondary" disabled={locked || !canConfigureHost || busy !== null} onClick={() => void discover()}>
+          {busy === "discover" ? t("Finding devices…") : t("Find nearby devices")}
+        </button>}
       </div>
-      {!connected && !busy && <p className="hint-block">{t("Turn the Coyote on. The first connection needs pairing mode: pull both switches down.")}</p>}
+      {!connected && !busy && <p className="hint-block">{t("Turn the Coyote on and disconnect the phone app. If Connect cannot find it, briefly press a wheel to wake its Bluetooth, then find nearby devices.")}</p>}
     </div>
   );
 }

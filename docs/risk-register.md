@@ -2301,6 +2301,23 @@ hardware acceptance items; simulation does not establish these measurements.
 
 ### Native Handy Bluetooth process and buffer lifetime (2026-10-14)
 
+COYOTE follow-up: an already-bound unit can omit its name and advertise a private
+identifier. Discovery now labels candidates and requires explicit selection,
+with full GATT validation before writes. No company ID or RSSI alone establishes
+identity. Native COYOTE uses Write Without Response; v4 IPC exposes that fact,
+and a queued zero leaves strength unknown until a device report. Discovery-only
+workers never write, and selected/remembered devices cannot silently fall back
+to a different address. The real zero-output attempt was blocked by GATT
+discovery and later unreachable status; connection/zero/Stop remains unverified.
+
+Hardware follow-up: original Handy firmware 4.3 connection and Stop succeeded,
+but immediate Windows reconnect sometimes yields GATT AccessDenied and an empty
+characteristic list. This blocks integration until native service/handle cleanup
+is deterministic. Native Stop now uses the firmware's mode-independent command
+(4.0.13+), and Windows worker exit owns final handle release to avoid the pinned
+library's double-release crash. No physical playback/failure-decay claim follows
+from these connection-only checks; see the [hardware report](native-handy-hardware-review-2026-10-14.md).
+
 ADR 0046 extends Handy HSP to a host-owned worker without a new motion path.
 Native and browser owners share point validation, units, stream indices and
 Stop admission. Worker instances are isolated per device; simulated process

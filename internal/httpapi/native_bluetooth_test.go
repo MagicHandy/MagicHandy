@@ -117,7 +117,7 @@ func TestGlobalStopReachesPreparedNativeHandyOutsideCoyoteEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 	writes := c.LastLink().Writes()
-	if len(writes) <= before || !bytes.Contains(writes[len(writes)-1], []byte{0x82, 0x36, 0x00}) {
+	if len(writes) <= before || !bytes.Contains(writes[len(writes)-1], []byte{0xda, 0x2c, 0x00}) {
 		t.Fatal("global Stop did not reach prepared native Handy")
 	}
 	if !s.nativeBluetooth.owner.Status().Connected {

@@ -114,10 +114,11 @@ func (a *radioAdapter) ConnectAddress(ctx context.Context, address string, profi
 		}
 		return &radioPeripheral{adapter: a, device: result.device, address: normalizeAddress(address), profile: profile}, nil
 	case <-ctx.Done():
-		// The platform call cannot be canceled; release a late success.
+		// The platform call cannot be canceled; retire a late success. On
+		// Windows the one-connection worker's exit owns final handle release.
 		go func() {
 			if result := <-results; result.err == nil {
-				_ = result.device.Disconnect()
+				_ = closeNativeDevice(result.device)
 			}
 		}()
 		return nil, bleworker.ErrNotFound
@@ -134,6 +135,7 @@ type radioPeripheral struct {
 
 	mu      sync.Mutex
 	write   bluetooth.DeviceCharacteristic
+	notify  *bluetooth.DeviceCharacteristic
 	battery *bluetooth.DeviceCharacteristic
 	lost    bool
 	closed  bool
@@ -145,13 +147,17 @@ func (p *radioPeripheral) Open(handlers bleworker.Handlers) error {
 		return err
 	}
 	p.write = write
+	p.withoutResponseOnly = p.profile.WriteWithoutResponseOnly
 	// WinRT exposes characteristic properties. Choose the supported mode before
 	// writing; never retry an uncertain motion packet in a different write mode.
-	if properties, ok := any(write).(interface{ Properties() uint32 }); ok && p.profile.WriteWithoutResponseFallback {
+	if properties, ok := any(write).(interface{ Properties() uint32 }); ok && (p.profile.WriteWithoutResponseFallback || p.profile.WriteWithoutResponseOnly) {
 		flags := properties.Properties()
+		if p.profile.WriteWithoutResponseOnly && flags&0x04 == 0 {
+			return fmt.Errorf("%w: required write mode is absent", bleworker.ErrUnsupported)
+		}
 		if flags&0x08 == 0 {
 			if flags&0x04 == 0 {
-				return bleworker.ErrUnsupported
+				return fmt.Errorf("%w: write characteristic has no supported write mode", bleworker.ErrUnsupported)
 			}
 			p.withoutResponseOnly = true
 		}
@@ -173,6 +179,7 @@ func (p *radioPeripheral) Open(handlers bleworker.Handlers) error {
 	}); err != nil {
 		return err
 	}
+	p.notify = &notify
 	// Query after notification setup has exercised GATT. Reserve the ATT header;
 	// never assume that the firmware's 512-byte maximum was negotiated.
 	p.writeLimit = 20
@@ -188,13 +195,28 @@ func (p *radioPeripheral) discoverService() (bluetooth.DeviceCharacteristic, blu
 	service, _ := bluetooth.ParseUUID(p.profile.ServiceUUID)
 	writeUUID, _ := bluetooth.ParseUUID(p.profile.WriteUUID)
 	notifyUUID, _ := bluetooth.ParseUUID(p.profile.NotifyUUID)
-	services, err := p.device.DiscoverServices([]bluetooth.UUID{service})
-	if err != nil || len(services) == 0 {
-		return none, none, fmt.Errorf("%w: %v", bleworker.ErrUnsupported, err)
-	}
-	characteristics, err := services[0].DiscoverCharacteristics([]bluetooth.UUID{writeUUID, notifyUUID})
+	services, err := p.device.DiscoverServices(nil)
 	if err != nil {
-		return none, none, fmt.Errorf("%w: %v", bleworker.ErrUnsupported, err)
+		return none, none, fmt.Errorf("%w: services: %v", ble.ErrDiscoveryFailed, err)
+	}
+	var selected *bluetooth.DeviceService
+	for index := range services {
+		if services[index].UUID() == service {
+			selected = &services[index]
+			break
+		}
+	}
+	if selected == nil {
+		return none, none, fmt.Errorf("%w: required service absent from %d discovered services", bleworker.ErrUnsupported, len(services))
+	}
+	characteristics, err := selected.DiscoverCharacteristics(nil)
+	if err != nil {
+		return none, none, fmt.Errorf("%w: characteristics: %v", ble.ErrDiscoveryFailed, err)
+	}
+	if len(characteristics) == 0 {
+		// WinRT can return AccessDenied with an empty vector. The pinned
+		// library does not expose that status; do not label it incompatible.
+		return none, none, ble.ErrDiscoveryFailed
 	}
 	var write, notify *bluetooth.DeviceCharacteristic
 	for index := range characteristics {
@@ -206,7 +228,7 @@ func (p *radioPeripheral) discoverService() (bluetooth.DeviceCharacteristic, blu
 		}
 	}
 	if write == nil || notify == nil {
-		return none, none, bleworker.ErrUnsupported
+		return none, none, fmt.Errorf("%w: write=%t notify=%t in %d characteristics", bleworker.ErrUnsupported, write != nil, notify != nil, len(characteristics))
 	}
 	return *write, *notify, nil
 }
@@ -270,8 +292,10 @@ func (p *radioPeripheral) Name() string { return p.profile.Name }
 
 func (p *radioPeripheral) MaxWriteBytes() int { return p.writeLimit }
 
-// Close disconnects once. On Windows the library already released a device
-// whose link was lost, so a second release is skipped.
+func (p *radioPeripheral) UnacknowledgedWrites() bool { return p.withoutResponseOnly }
+
+// Close fences the connection once. Linux disconnects here; Windows releases
+// remaining native handles when this one-connection worker exits.
 func (p *radioPeripheral) Close() error {
 	p.adapter.mu.Lock()
 	delete(p.adapter.lost, p.address)
@@ -283,7 +307,11 @@ func (p *radioPeripheral) Close() error {
 	if alreadyGone {
 		return nil
 	}
-	return p.device.Disconnect()
+	var notifyErr error
+	if p.notify != nil {
+		notifyErr = p.notify.EnableNotifications(nil)
+	}
+	return errors.Join(notifyErr, closeNativeDevice(p.device))
 }
 
 func normalizeAddress(address string) string {

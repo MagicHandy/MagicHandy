@@ -1,7 +1,10 @@
 # ADR 0046: Shared native Bluetooth infrastructure with per-device workers
 
 Date: 2026-10-14
-Status: Accepted for software implementation; real Handy radio validation pending.
+Status: Accepted for software implementation; original Handy connection/Stop
+verified, Windows rapid reconnect remains a hardware-validation blocker.
+
+See the [authorized hardware findings](../native-handy-hardware-review-2026-10-14.md).
 
 ## Context
 
@@ -18,7 +21,9 @@ Ship one `bluetooth-worker` executable and start one instance per connection.
 `workerproto`, `workerclient` and `bleworker` own IPC, bounded writes, lifetime and
 discovery. Only `cmd/bluetooth-worker` imports the radio library. There is no new
 dependency and no CGo in the shipping core. The helper and core require IPC
-version 3 and agree on the profile and maximum write size before using the link.
+version 4 and agree on the profile, maximum write size and whether native writes
+lack a GATT acknowledgment before using the link. Version 3 helpers are rejected
+because they cannot distinguish queued writes from acknowledged delivery.
 
 Device semantics remain in core drivers: `internal/estim` for COYOTE pulse
 packets and user-owned strength, `internal/handyble` for Handy RPC. The existing
@@ -48,11 +53,25 @@ simulator accepts injected connectors and has no device-specific protocol logic.
   An insufficient/unknown Handy MTU fails before playback instead of assuming
   the firmware's 512-byte maximum. WinRT write properties choose an available
   write mode before submission; uncertain writes are never retried.
+- Explicit COYOTE discovery uses a separate, short-lived scan-only worker.
+  Unnamed advertisements with the official app's candidate shape are listed
+  without claiming device identity. Host-only responses contain expiring opaque
+  selection IDs and RSSI, never hardware addresses or private binding data.
+  Remembered devices, advertised name matches and possible unnamed matches are
+  distinguished. Selection is explicit and full GATT validation precedes writes.
+  Neither an explicit selection nor a remembered address falls back to another
+  device. MagicHandy does not overwrite the official app's private binding.
+- COYOTE uses Write Without Response on Windows and Linux. The core receives
+  that capability and cannot use a queued zero as a known strength baseline.
+  An actual device report is required before increases or playback are admitted.
 - Every write receives a worker completion receipt. It means the native API
   accepted the write, not a measured position or physical Stop confirmation.
   Firmware responses are separately correlated. Missing optional clock replies
   disable time compensation; they do not disable otherwise working write-only
   firmware. Late correlated rejections retire the session.
+- Native initialization, emergency Stop, disconnect and last will use RPC 715
+  (StopCurrentMode, firmware 4.0.13+). HSP-specific Stop rejects a device left
+  in Idle or another mode. Stopping must not require starting an HSP stream.
 - Stop fences unsent chunks and queued work. An already-submitted Handy write
   can finish within its fixed one-second deadline, leaving a healthy connection
   available for Stop; a write that exceeds that deadline kills its worker before
@@ -79,4 +98,5 @@ unsupported host or missing helper rather than falling back to another protocol.
 The [integration plan](../native-handy-bluetooth-plan-2026-10-14.md) records the
 implementation order and acceptance checks. Browser/native golden wire fixtures,
 small-MTU chunk tests, process isolation, linked failure tests and leak/race
-checks provide software evidence. Physical connection has not been attempted.
+checks provide software evidence. The hardware follow-up records original Handy
+connection and Stop, plus the remaining Windows reconnect failure.

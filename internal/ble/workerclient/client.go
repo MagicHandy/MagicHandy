@@ -87,18 +87,25 @@ type workerLink struct {
 	once    sync.Once
 }
 
-func (l *workerLink) open(ctx context.Context, request ble.ConnectRequest, profile string) (ble.DeviceInfo, error) {
+func (l *workerLink) hello(ctx context.Context, profile string) error {
 	hello, cancel := context.WithTimeout(ctx, helloTimeout)
 	reply, err := l.session.request(hello, workerproto.Message{Type: workerproto.TypeHello, Protocol: workerproto.Version})
 	cancel()
 	if err != nil {
-		return ble.DeviceInfo{}, fmt.Errorf("%w: %v", ble.ErrHelperMissing, err)
+		return fmt.Errorf("%w: %v", ble.ErrHelperMissing, err)
 	}
 	if reply.Protocol != workerproto.Version {
-		return ble.DeviceInfo{}, fmt.Errorf("%w: protocol %d, want %d", ble.ErrHelperMissing, reply.Protocol, workerproto.Version)
+		return fmt.Errorf("%w: protocol %d, want %d", ble.ErrHelperMissing, reply.Protocol, workerproto.Version)
 	}
 	if !slices.Contains(reply.Profiles, profile) {
-		return ble.DeviceInfo{}, fmt.Errorf("%w: profile %s is unavailable", ble.ErrHelperMissing, profile)
+		return fmt.Errorf("%w: profile %s is unavailable", ble.ErrHelperMissing, profile)
+	}
+	return nil
+}
+
+func (l *workerLink) open(ctx context.Context, request ble.ConnectRequest, profile string) (ble.DeviceInfo, error) {
+	if err := l.hello(ctx, profile); err != nil {
+		return ble.DeviceInfo{}, err
 	}
 	if request.ConnectTimeout <= 0 {
 		request.ConnectTimeout = 6 * time.Second
@@ -112,12 +119,13 @@ func (l *workerLink) open(ctx context.Context, request ble.ConnectRequest, profi
 	}
 	connect, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	reply, err = l.session.request(connect, workerproto.Message{
-		Type:           workerproto.TypeConnect,
-		Address:        request.RememberedAddress,
-		Profile:        profile,
-		ConnectTimeout: int(request.ConnectTimeout / time.Millisecond),
-		ScanTimeout:    int(request.ScanTimeout / time.Millisecond),
+	reply, err := l.session.request(connect, workerproto.Message{
+		Type:            workerproto.TypeConnect,
+		Address:         request.RememberedAddress,
+		SelectedAddress: request.SelectedAddress,
+		Profile:         profile,
+		ConnectTimeout:  int(request.ConnectTimeout / time.Millisecond),
+		ScanTimeout:     int(request.ScanTimeout / time.Millisecond),
 	})
 	if err != nil {
 		return ble.DeviceInfo{}, err
@@ -125,7 +133,7 @@ func (l *workerLink) open(ctx context.Context, request ble.ConnectRequest, profi
 	if reply.Type != workerproto.TypeConnected || reply.Profile != profile || reply.MaxWriteBytes <= 0 || reply.MaxWriteBytes > 512 {
 		return ble.DeviceInfo{}, fmt.Errorf("%w: invalid Bluetooth connection capabilities", ble.ErrHelperMissing)
 	}
-	return ble.DeviceInfo{Name: reply.Name, Address: reply.Address, MaxWriteBytes: reply.MaxWriteBytes}, nil
+	return ble.DeviceInfo{Name: reply.Name, Address: reply.Address, MaxWriteBytes: reply.MaxWriteBytes, UnacknowledgedWrites: reply.UnacknowledgedWrites}, nil
 }
 
 func (l *workerLink) Write(ctx context.Context, payload []byte, acknowledged bool) error {

@@ -178,7 +178,7 @@ func (o *NativeBluetoothOwner) Disconnect(ctx context.Context) error {
 		return waitErr
 	}
 	session.Interrupt()
-	_, err := session.Execute(ctx, handyble.Request{Method: handyble.Stop})
+	_, err := session.Execute(ctx, handyble.Request{Method: handyble.StopCurrentMode})
 	return errors.Join(waitErr, err, session.Close())
 }
 

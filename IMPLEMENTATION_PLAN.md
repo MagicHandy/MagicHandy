@@ -2763,17 +2763,24 @@ pending; simulated integration and full gates are recorded in the review report.
 
 Implemented on a follow-up branch to the COYOTE/device-session work. The shared
 `bluetooth-worker` now serves allowlisted Handy firmware-4 and COYOTE 3.0 profiles
-over version-3 IPC, with one process per device connection. `internal/ble` owns
+over version-4 IPC, with one process per device connection. `internal/ble` owns
 the reusable byte link; `internal/handyble` handles bounded RPC framing and
 correlation. Browser and native Handy connections share the existing HSP
 transport mapping and engine. Native selection appears in Setup, Settings and
 the title-row protocol menu; choosing it never connects. The UI distinguishes
-the host radio from the browser's Bluetooth.
+the host radio from the browser's Bluetooth. APK-informed COYOTE discovery now
+offers an explicit RSSI-ranked picker for private/unnamed advertisements, with
+remembered, advertised-name and possible-match labels. Scan workers do not
+connect. Host-only opaque selections expire, and GATT verification precedes
+commands. Write Without Response cannot establish a confirmed strength baseline.
 
 All current sampling, motion planning, prompts, model routing and conservative
 HSP buffer budgets remain in place. Software validation includes process
 isolation, small-MTU chunking, stale-session fencing, linked failure policies,
-normal/race/leak checks and Windows/Linux pure-Go builds. No real Bluetooth
-scan or connection has been attempted. See the [plan](docs/native-handy-bluetooth-plan-2026-10-14.md),
+normal/race/leak checks and Windows/Linux pure-Go builds. The authorized original
+Handy firmware-4.3 check verified connection, clock sync and mode-independent
+Stop; Windows rapid reconnect remains a blocker. See the
+[hardware findings](docs/native-handy-hardware-review-2026-10-14.md),
+[plan](docs/native-handy-bluetooth-plan-2026-10-14.md),
 [ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and
 [review](docs/native-handy-bluetooth-review-2026-10-14.md).

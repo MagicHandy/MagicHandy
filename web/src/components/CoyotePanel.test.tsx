@@ -9,6 +9,7 @@ const toast = vi.hoisted(() => ({ show: vi.fn() }));
 vi.mock("../api/client", () => ({
   api: {
     coyoteConnect: vi.fn(),
+    coyoteDiscover: vi.fn(),
     coyoteDisconnect: vi.fn(),
     coyoteStatus: vi.fn(),
     coyoteStrength: vi.fn(),
@@ -127,11 +128,29 @@ describe("CoyotePanel", () => {
   it("connects through the backend", async () => {
     vi.mocked(api.coyoteConnect).mockResolvedValue(snapshot());
     const { onChanged } = renderPanel({ initial: snapshot({ connected: false, strength_known: false }) });
-    expect(screen.getByText(/pairing mode/)).toBeInTheDocument();
+    expect(screen.getByText(/briefly press a wheel/)).toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: /Connect Coyote/ })));
     expect(api.coyoteConnect).toHaveBeenCalled();
     expect(onChanged).toHaveBeenCalled();
-    expect(toast.show).toHaveBeenCalledWith("Coyote connected. Zero command accepted.");
+    expect(toast.show).toHaveBeenCalledWith("Coyote connected. Check the strength readout before starting.");
+  });
+
+  it("requires an explicit choice from nearby devices and connects by opaque ID", async () => {
+    vi.mocked(api.coyoteDiscover).mockResolvedValue({ candidates: [
+      { id: "chosen", name: "", rssi: -24, identification: "possible" }, { id: "other", name: "47L121000", rssi: -61, identification: "name_match" },
+    ] });
+    vi.mocked(api.coyoteConnect).mockResolvedValue(snapshot({ strength_known: false }));
+    renderPanel({ initial: snapshot({ connected: false, strength_known: false }) });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Find nearby devices" })));
+    expect(api.coyoteConnect).not.toHaveBeenCalled();
+    expect(screen.getByRole("combobox")).toHaveValue("");
+    expect(screen.getByRole("option", { name: "Possible COYOTE 1 · -24 dBm" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Likely COYOTE 3.0 · -61 dBm" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Connect Coyote/ })).toBeDisabled();
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "chosen" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: /Connect Coyote/ })));
+    expect(api.coyoteConnect).toHaveBeenCalledWith("chosen");
+    expect(screen.getByRole("button", { name: "Raise Channel A" })).toBeDisabled();
   });
 
   it("formats a compact readout only while connected", () => {

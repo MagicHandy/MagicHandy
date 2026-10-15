@@ -116,6 +116,8 @@ func (s *server) handle(ctx context.Context, message workerproto.Message) bool {
 		s.out.send(workerproto.Message{Type: workerproto.TypeHello, ID: message.ID, Protocol: workerproto.Version, Worker: s.info.Worker, Platform: s.info.Platform, Profiles: []string{ble.ProfileCoyote, ble.ProfileHandy}})
 	case workerproto.TypeConnect:
 		s.startConnect(ctx, message)
+	case workerproto.TypeDiscover:
+		s.startDiscover(ctx, message)
 	case workerproto.TypeWrite:
 		s.write(message)
 	case workerproto.TypeBattery:
@@ -169,7 +171,11 @@ func (s *server) startConnect(ctx context.Context, message workerproto.Message) 
 			s.out.fail(message.ID, errorCode(err), err.Error())
 			return
 		}
-		s.out.send(workerproto.Message{Type: workerproto.TypeConnected, ID: message.ID, Address: peripheral.Address(), Name: peripheral.Name(), Profile: message.Profile, MaxWriteBytes: peripheral.MaxWriteBytes()})
+		unacknowledged := false
+		if capability, ok := peripheral.(interface{ UnacknowledgedWrites() bool }); ok {
+			unacknowledged = capability.UnacknowledgedWrites()
+		}
+		s.out.send(workerproto.Message{Type: workerproto.TypeConnected, ID: message.ID, Address: peripheral.Address(), Name: peripheral.Name(), Profile: message.Profile, MaxWriteBytes: peripheral.MaxWriteBytes(), UnacknowledgedWrites: unacknowledged})
 	}()
 }
 
@@ -179,7 +185,7 @@ func (s *server) connect(ctx context.Context, message workerproto.Message) (Peri
 	}
 	connectTimeout := durationOr(message.ConnectTimeout, defaultConnectTimeout)
 	if address := strings.TrimSpace(message.Address); address != "" {
-		if peripheral, err := s.open(ctx, address, connectTimeout); s.profile.RememberedOnly || err == nil || errors.Is(err, ErrUnavailable) || errors.Is(err, ErrUnsupported) {
+		if peripheral, err := s.open(ctx, address, connectTimeout); message.SelectedAddress || s.profile.RememberedOnly || err == nil || errors.Is(err, ErrUnavailable) || errors.Is(err, ErrUnsupported) {
 			return peripheral, err
 		}
 	}
@@ -358,6 +364,8 @@ func (s *server) wait() {
 
 func errorCode(err error) string {
 	switch {
+	case errors.Is(err, ble.ErrDiscoveryFailed):
+		return workerproto.CodeDiscovery
 	case errors.Is(err, ErrNotFound):
 		return workerproto.CodeNotFound
 	case errors.Is(err, ErrUnavailable):

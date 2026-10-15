@@ -69,10 +69,10 @@ func NewSession(link ble.Link) (*Session, error) {
 
 // Initialize sends only Stop and optional clock commands. It never starts motion.
 func (s *Session) Initialize(ctx context.Context) error {
-	if _, err := s.Execute(ctx, Request{Method: Stop}); err != nil {
+	if _, err := s.Execute(ctx, Request{Method: StopCurrentMode}); err != nil {
 		return err
 	}
-	lastWill, _ := Encode(Request{Method: Stop, ID: math.MaxUint32})
+	lastWill, _ := Encode(Request{Method: StopCurrentMode, ID: math.MaxUint32})
 	if err := s.link.SetLastWill(lastWill); err != nil {
 		s.fail(err)
 		return err
@@ -156,7 +156,7 @@ func (s *Session) Execute(ctx context.Context, request Request) (Message, error)
 		}
 	}
 	response, err := s.rpc(ctx, generation, request, request.Method == State || request.Method == ClockGet)
-	if err == nil && request.Method == Stop {
+	if err == nil && (request.Method == Stop || request.Method == StopCurrentMode) {
 		s.mu.Lock()
 		s.streamSet = false
 		s.playbackState = "stop_requested"

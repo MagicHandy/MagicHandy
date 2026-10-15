@@ -1,5 +1,9 @@
 # Native Handy Bluetooth implementation review — 2026-10-14
 
+This records the initial software review. The subsequent authorized
+[hardware connection check](native-handy-hardware-review-2026-10-14.md) verifies
+connection and Stop on an original Handy and records a Windows reconnect blocker.
+
 The [integration plan](native-handy-bluetooth-plan-2026-10-14.md) was recorded
 before runtime changes. [ADR 0046](decisions/0046-shared-native-bluetooth-worker.md)
 records the resulting boundaries. This is a follow-up to the COYOTE/device-session

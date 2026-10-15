@@ -20,13 +20,14 @@ type Profile struct {
 	RememberedOnly                     bool
 	StopOnDisconnect                   bool
 	WriteWithoutResponseFallback       bool
+	WriteWithoutResponseOnly           bool
 }
 
 // LookupProfile returns a fresh descriptor so callers cannot mutate a registry.
 func LookupProfile(id string) (Profile, bool) {
 	switch id {
 	case ProfileCoyote:
-		return Profile{ID: id, Name: "47L121000", ExactName: true, MaxWriteBytes: 64,
+		return Profile{ID: id, Name: "47L121000", ExactName: true, MaxWriteBytes: 64, WriteWithoutResponseOnly: true, RememberedOnly: true,
 			ServiceUUID:        "0000180c-0000-1000-8000-00805f9b34fb",
 			WriteUUID:          "0000150a-0000-1000-8000-00805f9b34fb",
 			NotifyUUID:         "0000150b-0000-1000-8000-00805f9b34fb",

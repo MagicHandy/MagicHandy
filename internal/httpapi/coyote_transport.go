@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/ble"
@@ -28,8 +29,12 @@ var (
 )
 
 type coyoteRuntime struct {
-	owner      *transport.Coyote
-	helperPath string
+	owner       *transport.Coyote
+	helperPath  string
+	discoverer  ble.Discoverer
+	discoveryMu sync.Mutex
+	discovering bool
+	candidates  map[string]coyoteCandidate
 }
 
 type coyoteSnapshot struct {
@@ -53,6 +58,7 @@ func (s *Server) configureCoyote(runtime Runtime, settings config.Settings, logg
 		connector = workerclient.NewConnector(workerclient.Options{Profile: ble.ProfileCoyote, Path: s.coyote.helperPath, Logger: logger})
 	}
 	s.coyote.owner = transport.NewCoyote(transport.CoyoteOptions{Connector: connector})
+	s.coyote.discoverer, _ = connector.(ble.Discoverer)
 	_ = s.coyote.owner.Configure(coyoteConfig(settings.Estim))
 }
 
@@ -81,6 +87,7 @@ func coyoteConfig(settings config.EstimSettings) transport.CoyoteConfig {
 func (s *Server) coyoteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/transport/coyote/status", s.handleCoyoteStatus)
 	mux.HandleFunc("POST /api/transport/coyote/connect", s.handleCoyoteConnect)
+	mux.HandleFunc("POST /api/transport/coyote/discover", s.handleCoyoteDiscover)
 	mux.HandleFunc("POST /api/transport/coyote/disconnect", s.handleCoyoteDisconnect)
 	mux.HandleFunc("POST /api/transport/coyote/strength", s.handleCoyoteStrength)
 	mux.HandleFunc("POST /api/transport/coyote/test", s.handleCoyoteTest)
@@ -161,6 +168,20 @@ func (s *Server) handleCoyoteConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, errCoyoteHostOnly)
 		return
 	}
+	var request struct {
+		CandidateID string `json:"candidate_id"`
+	}
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	s.coyote.discoveryMu.Lock()
+	defer s.coyote.discoveryMu.Unlock()
+	address, err := s.coyote.takeCandidate(request.CandidateID)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
 	s.settingsLifecycleMu.Lock()
 	defer s.settingsLifecycleMu.Unlock()
 	settings, _ := s.store.Snapshot()
@@ -178,7 +199,12 @@ func (s *Server) handleCoyoteConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), coyoteConnectTimeout)
 	defer cancel()
-	status, err := s.coyote.owner.Connect(ctx)
+	var status transport.CoyoteStatus
+	if address != "" {
+		status, err = s.coyote.owner.ConnectAddress(ctx, address)
+	} else {
+		status, err = s.coyote.owner.Connect(ctx)
+	}
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
 		return

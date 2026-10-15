@@ -25,12 +25,18 @@ host accepts them. Turning the acceptance off in Settings shows them again.
    Turn on **Use in playback** when ready. Excluding a device keeps its
    connection; Disconnect keeps its saved row; Remove closes it and removes the
    row. Removing every row leaves chat available with motion idle.
-2. Turn the Coyote on. The first connection needs pairing mode: pull both
-   switches down. Select **Connect Coyote**.
+2. Turn the Coyote on and disconnect the phone app. Select **Connect Coyote**.
+   If it cannot be found, briefly press a wheel to wake Bluetooth, then select
+   **Find nearby devices**. Holding both switches can turn this model off.
+   The list ranks signal strength and distinguishes **Remembered COYOTE**,
+   **Likely COYOTE 3.0** (advertised name) and **Possible COYOTE** (unnamed private
+   advertisement). An unnamed match is only a candidate; select it explicitly.
+   MagicHandy verifies the required service and characteristics before commands.
 3. MagicHandy writes your ceilings to the device, sets both channels to zero
    and remembers the device. Later connections go straight to the remembered
-   address, which recent firmware accepts without pairing mode; if that fails,
-   MagicHandy scans again.
+   address, which recent firmware accepts without pairing mode. A failed
+   remembered connection never switches devices automatically; use the picker
+   to choose a different device. The official app's binding is left unchanged.
 4. Raise each channel with its **+** button. Strength changes alone never start
    playback. With all playback paused, select that channel's **Test** button for a
    bounded 1.6 s reference pulse at its current strength. The reference uses the
@@ -94,7 +100,10 @@ everyone. Test requires the controlling host and current Stop sequence, idle
 output, an applied ceiling and a known strength baseline without a pending
 change. A zero command accepted by the Bluetooth write is labeled separately
 from an actual device strength report. Increases and tests wait for the zero
-handshake window to end; a timeout never creates a strength value.
+handshake window to end; a timeout never creates a strength value. Native COYOTE
+uses Write Without Response, whose completion means queued rather than delivered.
+Only a device strength report establishes its baseline; absent reports leave
+strength unknown and block increases and playback.
 
 A failed ceiling update zeroes and retires the connection. The saved setting
 is retried on the next explicit connection before playback can be enabled.
@@ -121,7 +130,10 @@ Source: DG-LAB's
 [dglab-bluetooth-protocol](https://github.com/dungeonlab-open/dglab-bluetooth-protocol)
 (`coyote/v3/README.md`, `coyote/README.md`).
 
-- **Device identity.** The device advertises `47L121000`. Service `0x180C` has
+- **Device identity.** Normal advertisements can name `47L121000`; an already
+  bound unit can instead advertise an unnamed private identifier. The official
+  4.2.6 APK resolves that identifier against its saved bindings. No fixed
+  manufacturer/company ID proves identity. Service `0x180C` has
   write characteristic `0x150A` and notify characteristic `0x150B`. The battery
   is service `0x180A`, characteristic `0x1500`.
 - **`B0` packets** are 20 bytes, written every 100 ms.
@@ -136,8 +148,9 @@ Source: DG-LAB's
 - **`B1` reports** carry the sequence and the actual strengths. One arrives for
   every sequenced change and for every change made on the device, with
   sequence 0. MagicHandy keeps one change in flight until its report arrives.
-  An unchanged zero may produce no report. A successful GATT zero write may
-  establish a labeled commanded baseline, but cannot overwrite a newer device
+  An unchanged zero may produce no report. Only a GATT-acknowledged zero write
+  may establish a labeled commanded baseline; a native Write Without Response
+  cannot. Neither can overwrite a newer device
   report. The 1 s timer only ends the wait; it never confirms a value. A relative
   change without B1 becomes unknown after 1.5 s and discards queued increases.
 - **`BF`** (7 bytes) sets both ceilings and both balance pairs. It has no
@@ -145,8 +158,8 @@ Source: DG-LAB's
 
 The core composes every byte (`internal/estim`); the worker only writes them
 (`internal/ble/bleworker`, `cmd/bluetooth-worker`). The core-to-worker
-protocol is NDJSON version 3 with an explicit GATT profile, negotiated write
-limit, and `hello`, `connect`, `write`,
+protocol is NDJSON version 4 with an explicit GATT profile, negotiated write
+limit, unacknowledged-write capability, and `hello`, `discover`, `connect`, `write`,
 `battery`, `last_will`, `disconnect` and `shutdown`. The worker sends `notify`,
 `battery`, `disconnected` and `error` back. Every write waits for the worker's
 native-call completion, including GATT Write Without Response. This bounds
@@ -155,7 +168,7 @@ the pipe. A timed-out write retires and terminates the worker before returning.
 
 The shared worker also serves native Handy links in separate processes; COYOTE
 packet composition and strength control are unchanged. See
-[ADR 0046](decisions/0046-shared-native-bluetooth-worker.md). Old version-2 helpers
+[ADR 0046](decisions/0046-shared-native-bluetooth-worker.md). Old version-2/3 helpers
 are rejected rather than silently reused for the new protocol.
 
 ## Validation status
@@ -172,6 +185,12 @@ Automated tests cover the following on a simulated Coyote:
   permissions and Stop fencing, and a deliberately hung worker process.
 
 Open, on the user's Coyote 3.0:
+
+Read-only discovery verified the unnamed device's GAP name and required service
+and characteristics. The subsequent native zero-output attempt stopped at
+Windows GATT discovery, before application writes; a later read-only attempt
+reported unreachable. Battery, zero confirmation and real Stop remain unverified.
+See the [hardware report](native-handy-hardware-review-2026-10-14.md).
 
 - pairing and remembered reconnection;
 - the ceilings against the device's switches;

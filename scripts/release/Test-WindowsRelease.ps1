@@ -296,7 +296,17 @@ try {
     $portableRoot = $executables[0].Directory.FullName
     Assert-Version -Executable $executables[0].FullName
     $payloadExecutables = @(Get-ChildItem -LiteralPath $portableRoot -Filter '*.exe' -File -Recurse)
-    Assert-Release -Condition ($payloadExecutables.Count -eq 4) -Message 'portable archive should contain the core and three first-party voice executables'
+    $expectedExecutables = @(
+        'magichandy.exe',
+        'voice-parakeet-worker.exe',
+        'voice-openai-tts-worker.exe',
+        'voice-elevenlabs-worker.exe',
+        'bluetooth-worker.exe'
+    )
+    Assert-Release -Condition ($payloadExecutables.Count -eq $expectedExecutables.Count) -Message 'portable archive should contain exactly the core, three voice workers, and the Bluetooth worker'
+    foreach ($name in $expectedExecutables) {
+        Assert-Release -Condition (Test-Path -LiteralPath (Join-Path $portableRoot $name) -PathType Leaf) -Message "portable payload should contain $name beside the core"
+    }
     $expectedPayloadSignature = if ($ArtifactPolicy -eq 'SignedPublic') {
         [System.Management.Automation.SignatureStatus]::Valid
     } else {
@@ -306,7 +316,7 @@ try {
         $payloadMachine = Get-PEMachine -Path $executable.FullName
         Assert-Release -Condition ($payloadMachine -eq 0x8664) -Message ("payload executable '$($executable.Name)' should be x64 (machine 0x8664), got 0x{0:x4}" -f $payloadMachine)
         Assert-AuthenticodeStatus -Path $executable.FullName -ExpectedStatus $expectedPayloadSignature -Description "payload executable '$($executable.Name)'" -SignerThumbprint $normalizedSignerThumbprint
-        # Scan the exact packaged bytes, including the three worker binaries.
+        # Scan the exact packaged bytes, including every worker binary.
         # A patched developer toolchain does not prove the artifact is patched.
         & (Join-Path $PSScriptRoot 'Test-GoSecurity.ps1') -Executable $executable.FullName
     }

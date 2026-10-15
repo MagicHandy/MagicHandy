@@ -859,7 +859,8 @@ export const api = {
   nativeBluetoothDisconnect: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/disconnect", {}),
   nativeBluetoothForget: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/forget", {}),
   coyoteStatus: () => request<CoyoteTransportSnapshot>("GET", "/api/transport/coyote/status"),
-  coyoteConnect: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/connect", {}),
+  coyoteConnect: (candidateID?: string) => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/connect", { candidate_id: candidateID }),
+  coyoteDiscover: () => request<{ candidates: { id: string; name: string; rssi: number; identification: "remembered" | "name_match" | "possible" }[] }>("POST", "/api/transport/coyote/discover", {}),
   coyoteDisconnect: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/disconnect", {}),
   coyoteStrength: (channel: "a" | "b", delta: number, stopSequence?: number) =>
     request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/strength", { channel, delta }, undefined,

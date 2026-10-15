@@ -181,6 +181,19 @@ func (c *Coyote) Configure(config CoyoteConfig) error {
 // confirm BF, so every connection writes it) and sets both channels to zero:
 // a new connection always starts disarmed.
 func (c *Coyote) Connect(ctx context.Context) (CoyoteStatus, error) {
+	return c.connect(ctx, "")
+}
+
+// ConnectAddress connects only the explicitly selected discovery candidate.
+// Service verification occurs before arm can write limits or zero commands.
+func (c *Coyote) ConnectAddress(ctx context.Context, address string) (CoyoteStatus, error) {
+	if address == "" {
+		return c.Status(), estim.ErrNotFound
+	}
+	return c.connect(ctx, address)
+}
+
+func (c *Coyote) connect(ctx context.Context, selected string) (CoyoteStatus, error) {
 	c.opMu.Lock()
 	defer c.opMu.Unlock()
 	c.mu.Lock()
@@ -197,9 +210,12 @@ func (c *Coyote) Connect(ctx context.Context) (CoyoteStatus, error) {
 	}
 	c.connecting = true
 	remembered := c.config.RememberedAddress
+	if selected != "" {
+		remembered = selected
+	}
 	c.mu.Unlock()
 
-	link, err := c.connector.Connect(ctx, estim.ConnectRequest{RememberedAddress: remembered, ConnectTimeout: coyoteConnectTimeout, ScanTimeout: coyoteScanTimeout})
+	link, err := c.connector.Connect(ctx, estim.ConnectRequest{RememberedAddress: remembered, SelectedAddress: selected != "", ConnectTimeout: coyoteConnectTimeout, ScanTimeout: coyoteScanTimeout})
 	if err != nil {
 		c.mu.Lock()
 		c.connecting = false
@@ -254,8 +270,8 @@ func (c *Coyote) arm(ctx context.Context, link estim.Link) error {
 	return nil
 }
 
-// Disconnect zeroes strength and closes the link. The zero is acknowledged,
-// so it reaches the device before the link closes.
+// Disconnect queues a zero before closing the link. Write Without Response
+// cannot establish delivery; a device report is the only confirmed strength.
 func (c *Coyote) Disconnect() (CoyoteStatus, error) {
 	c.opMu.Lock()
 	defer c.opMu.Unlock()
@@ -370,9 +386,9 @@ func (c *Coyote) zero(link estim.Link) error {
 	c.mu.Lock()
 	c.zeroWrites--
 	if c.link == link {
-		if err == nil {
+		if err == nil && !link.Device().UnacknowledgedWrites {
 			c.strength.ZeroWritten(sequence)
-		} else {
+		} else if err != nil {
 			c.strength.Reset()
 		}
 	}

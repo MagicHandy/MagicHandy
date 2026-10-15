@@ -13,7 +13,9 @@ func nativeHandyRequest(path string, body map[string]any) (handyble.Request, err
 	var request handyble.Request
 	switch path {
 	case "hsp/stop":
-		request.Method = handyble.Stop
+		// A connected Handy may still be in a mode selected by its buttons or
+		// another client. HSP Stop rejects that state with ERROR_WRONG_MODE.
+		request.Method = handyble.StopCurrentMode
 	case "hsp/state":
 		request.Method = handyble.State
 	case "slider/stroke":

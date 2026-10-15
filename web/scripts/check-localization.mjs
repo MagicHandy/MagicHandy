@@ -19,6 +19,8 @@ const sameValueAllowed = {
 // Product names in the session client hints retain their official spelling.
 // Only these exact labels may pass unchanged; surrounding UI copy is localized.
 for (const allowed of Object.values(sameValueAllowed)) {
+  // Radio signal strength uses the same international unit in every locale.
+  allowed.add("{signal} dBm");
   for (const brand of ["Chrome", "Microsoft Edge", "Firefox", "Safari", "Windows", "macOS", "Linux", "Android", "iOS", "ChatGPT", "OpenRouter", "OpenAI API", "Decisions API", "The Handy", "Coyote"]) allowed.add(brand);
 }
 

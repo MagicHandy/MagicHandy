@@ -93,8 +93,11 @@ start the ceilings lower than other apps do.
      source and keeps them after disconnecting. Requested and applied limits
      are distinct. A failed live write zeroes and retires the connection;
      reconnect reapplies the saved limits before enabling output.
-   - **Disarmed start.** Each connection begins with an acknowledged zero.
-     `zero_command` is an accepted write, not a device measurement. A timer
+   - **Disarmed start.** Each connection begins with a zero command.
+     Native COYOTE exposes Write Without Response, so native completion cannot
+     establish a known baseline. It requires a device report before increases
+     or playback. For acknowledged links, `zero_command` is an accepted write,
+     not a device measurement. A timer
      never invents confirmed zero, and a newer report always takes precedence.
    - **One change at a time.** Steps travel one at a time and wait for the
      device's `B1` report. Missing confirmation drops queued increases and

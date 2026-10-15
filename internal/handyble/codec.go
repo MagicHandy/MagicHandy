@@ -13,14 +13,15 @@ type Method uint32
 
 // Supported RPC methods use the same wire contract as Browser Bluetooth.
 const (
-	ClockSet Method = 709
-	ClockGet Method = 712
-	Stroke   Method = 841
-	Setup    Method = 860
-	Add      Method = 861
-	Play     Method = 863
-	Stop     Method = 864
-	State    Method = 867
+	StopCurrentMode Method = 715 // firmware 4.0.13+: Stop regardless of the active mode
+	ClockSet        Method = 709
+	ClockGet        Method = 712
+	Stroke          Method = 841
+	Setup           Method = 860
+	Add             Method = 861
+	Play            Method = 863
+	Stop            Method = 864
+	State           Method = 867
 )
 
 // Point carries an integer percentage and an absolute stream time in milliseconds.
@@ -84,7 +85,7 @@ func Encode(r Request) ([]byte, error) {
 	case ClockSet:
 		body = appendUint(body, 1, uint64(r.ClockOffset<<1)^uint64(r.ClockOffset>>63)) // #nosec G115 -- protobuf sint64 zigzag deliberately reinterprets signed bits.
 		body = appendUint(body, 2, uint64(int64(r.RoundTrip)))                         // #nosec G115 -- protobuf int32 requires two's-complement sign extension.
-	case Stop, State, ClockGet:
+	case Stop, StopCurrentMode, State, ClockGet:
 	default:
 		return nil, fmt.Errorf("unsupported Handy RPC method %d", r.Method)
 	}

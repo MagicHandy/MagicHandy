@@ -39,6 +39,21 @@
 .coyote-panel > .row-actions > .btn {
   flex: 1 1 0;
 }
+.coyote-discovery {
+  border-block: 1px solid var(--line);
+  padding-block: 10px;
+}
+.coyote-discovery label {
+  display: grid;
+  gap: 6px;
+}
+.coyote-discovery select {
+  width: 100%;
+  min-width: 0;
+}
+.coyote-discovery .hint-block {
+  margin: 6px 0 0;
+}
 .coyote-channels {
   display: flex;
   flex-direction: column;

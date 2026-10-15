@@ -26,6 +26,14 @@ func (a *SimulatedAdapter) Enable() error {
 	return nil
 }
 
+// Discover returns only the configured simulation without opening a link.
+func (a *SimulatedAdapter) Discover(_ context.Context, profile ble.Profile) ([]ble.Candidate, error) {
+	if a.Connectors[profile.ID] == nil {
+		return nil, nil
+	}
+	return []ble.Candidate{{Address: simulatedAddress, Name: profile.Name, RSSI: -40}}, nil
+}
+
 // ScanName finds only profiles supplied by the test host.
 func (a *SimulatedAdapter) ScanName(ctx context.Context, profile ble.Profile) (string, error) {
 	if a.Connectors[profile.ID] == nil {
@@ -97,6 +105,10 @@ func (p *simulatedPeripheral) Address() string { return simulatedAddress }
 func (p *simulatedPeripheral) Name() string { return p.name }
 
 func (p *simulatedPeripheral) MaxWriteBytes() int { return p.limit }
+
+func (p *simulatedPeripheral) UnacknowledgedWrites() bool {
+	return p.link.Device().UnacknowledgedWrites
+}
 
 func (p *simulatedPeripheral) Close() error {
 	p.once.Do(func() { close(p.done) })

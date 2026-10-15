@@ -2,6 +2,22 @@
 
 ## 2026-10-14 — Native Handy Bluetooth
 
+Hardware follow-up: connection/Stop was measured on an original Handy with
+firmware 4.3. The final five Stop writes completed in 79–155 ms (median 102 ms);
+this is dispatch completion, not physical braking. Windows rapid reconnect is
+still unreliable. See [hardware findings](native-handy-hardware-review-2026-10-14.md).
+After APK-informed COYOTE discovery and acknowledgment corrections, follow-up
+binaries measure **22,925,824 B core / 3,070,464 B worker**. No dependency or
+background model call was added. A separate scan worker exists only during an
+explicit scan, bounded to 15 seconds and 64 candidate records.
+
+Relative to the initial native-Handy build below, main JS is **1,204,174 B raw /
+323,368 B gzip** (+2,727 / +235 B), and CSS **204,247 B raw / 35,602 B gzip**
+(+210 / +3 B). Compression uses gzip level 9. One disconnected Windows sample
+after real local-model generation was **36,823,040 B working set / 55,128,064 B
+private memory**. This is not a controlled RSS or cold-start comparison; the
+existing waiver remains. Full frontend tests pass (901 in 117 files).
+
 [ADR 0046](decisions/0046-shared-native-bluetooth-worker.md) extracts the shared
 native byte-link infrastructure and adds Handy firmware-4 RPC/HSP. No dependency,
 motion sampler, LLM prompt, model call or idle polling loop is added. A worker

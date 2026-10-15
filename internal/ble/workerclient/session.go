@@ -188,6 +188,8 @@ func linkEvent(message workerproto.Message) (ble.LinkEvent, bool) {
 
 func replyError(reply workerproto.Message) error {
 	switch reply.Code {
+	case workerproto.CodeDiscovery:
+		return ble.ErrDiscoveryFailed
 	case workerproto.CodeNotFound:
 		return ble.ErrNotFound
 	case workerproto.CodeUnavailable:
