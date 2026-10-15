@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/companion"
 	"github.com/mapledaemon/MagicHandy/internal/estim"
 )
 
@@ -29,21 +30,21 @@ const (
 )
 
 // coyoteStream is the playing stream's copy of the neutral frame and the
-// renderer state. Stream milliseconds map to local time through anchor.
+// renderer state. Stream milliseconds map to local time through origin.
 type coyoteStream struct {
-	renderer       *estim.Renderer
-	timeline       estim.Timeline
-	offsetMillis   float64
-	id             string
-	anchor         time.Time
-	next           float64
-	started        bool
-	lastTick       time.Time
-	uncoveredSince time.Time
+	renderer     *estim.Renderer
+	timeline     companion.Timeline
+	offsetMillis float64
+	id           string
+	origin       companion.Clock
+	coverage     companion.Coverage
+	next         float64
+	started      bool
+	lastTick     time.Time
 }
 
 func newCoyoteStream(profile estim.Profile) coyoteStream {
-	return coyoteStream{renderer: estim.NewRenderer(profile)}
+	return coyoteStream{renderer: estim.NewRenderer(profile), coverage: companion.NewCoverage(coyoteStarveAfter)}
 }
 
 func (s *coyoteStream) configure(profile estim.Profile, offsetMillis int) {
@@ -54,14 +55,14 @@ func (s *coyoteStream) configure(profile estim.Profile, offsetMillis int) {
 func (s *coyoteStream) stop() {
 	s.timeline.Reset()
 	s.id = ""
-	s.anchor = time.Time{}
+	s.origin.Stop()
 	s.started = false
 	s.lastTick = time.Time{}
-	s.uncoveredSince = time.Time{}
+	s.coverage.Reset()
 }
 
 func (s *coyoteStream) playing() bool {
-	return !s.anchor.IsZero()
+	return s.origin.Playing()
 }
 
 // AppendPoints stores the stream's neutral points. The owner only samples
@@ -120,12 +121,13 @@ func (c *Coyote) play(ctx context.Context, command PlayCommand, start time.Time)
 	if command.StreamID != c.stream.id {
 		return c.recordLocked(recorded, fmt.Errorf("the Coyote stream %q has no points", command.StreamID))
 	}
-	c.stream.anchor = start
 	if start.IsZero() {
-		c.stream.anchor = c.clock().Add(coyotePreroll - time.Duration(command.StartTimeMillis)*time.Millisecond)
+		c.stream.origin.Start(c.clock(), command.StartTimeMillis, coyotePreroll)
+	} else {
+		c.stream.origin.StartAt(start)
 	}
 	c.stream.started = false
-	c.stream.uncoveredSince = time.Time{}
+	c.stream.coverage.Reset()
 	c.stream.renderer.Restart(float64(command.StartTimeMillis))
 	c.reference = coyoteReference{}
 	c.state = "playing"
@@ -199,7 +201,7 @@ func (c *Coyote) MotionTimingCapabilities() MotionTimingCapabilities {
 func (c *Coyote) PlaybackStartTime() time.Time {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.stream.anchor
+	return c.stream.origin.Anchor()
 }
 
 // AlignPlaybackStart re-anchors a playing stream to another owner's start,
@@ -208,7 +210,7 @@ func (c *Coyote) AlignPlaybackStart(start time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.stream.playing() && !start.IsZero() {
-		c.stream.anchor = start
+		c.stream.origin.StartAt(start)
 		c.stream.started = false
 	}
 }
@@ -317,7 +319,7 @@ func (c *Coyote) renderStreamLocked(now time.Time) [estim.FramesPerPacket]estim.
 		}
 	}
 	c.stream.lastTick = now
-	ideal := float64(now.Add(coyoteSendLead).Sub(c.stream.anchor)) / float64(time.Millisecond)
+	ideal := c.stream.origin.StreamMillis(now.Add(coyoteSendLead))
 	ideal -= c.stream.offsetMillis
 	start := c.stream.next
 	if !c.stream.started || math.Abs(ideal-start) > coyoteResyncMillis {
@@ -334,20 +336,13 @@ func (c *Coyote) renderStreamLocked(now time.Time) [estim.FramesPerPacket]estim.
 func (c *Coyote) trackCoverageLocked(now time.Time, start float64, covered int) {
 	end, ok := c.stream.timeline.End()
 	ranOut := covered < estim.FramesPerPacket && start >= 0 && (!ok || float64(end) < start+estim.PacketMillis)
-	if !ranOut {
-		c.stream.uncoveredSince = time.Time{}
-		c.state = "playing"
-		return
+	if ranOut {
+		c.stats.starved++
 	}
-	c.stats.starved++
-	if c.stream.uncoveredSince.IsZero() {
-		c.stream.uncoveredSince = now
-	}
-	c.state = "starving"
-	if now.Sub(c.stream.uncoveredSince) >= coyoteStarveAfter {
+	c.state = c.stream.coverage.Observe(now, !ranOut)
+	if c.state == companion.StateStarved {
 		// Stop and report, like the Intiface pacer: the engine reads the
 		// state and recovers; nothing further is sent meanwhile.
-		c.state = "starved"
 		c.stream.stop()
 	}
 }

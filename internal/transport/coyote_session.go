@@ -115,14 +115,14 @@ func (s *coyoteSession) PlaybackStartTime() time.Time {
 	if s.owner.link != s.link {
 		return time.Time{}
 	}
-	return s.owner.stream.anchor
+	return s.owner.stream.origin.Anchor()
 }
 
 func (s *coyoteSession) AlignPlaybackStart(start time.Time) {
 	s.owner.mu.Lock()
 	defer s.owner.mu.Unlock()
 	if s.owner.link == s.link && s.owner.stream.playing() && !start.IsZero() {
-		s.owner.stream.anchor = start
+		s.owner.stream.origin.StartAt(start)
 		s.owner.stream.started = false
 	}
 }

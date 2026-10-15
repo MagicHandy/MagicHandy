@@ -175,25 +175,3 @@ func TestReferencePacketPulsesOnlyTheAdjustedChannel(t *testing.T) {
 	}
 	assertValidPacket(t, first)
 }
-
-func TestTimelineReplacesTheReplannedTail(t *testing.T) {
-	timeline := &Timeline{}
-	_ = timeline.Append([]Point{{0, 0}, {100, 50}, {200, 100}})
-	_ = timeline.Append([]Point{{150, 20}, {300, 40}})
-	if position, _ := timeline.At(200); position >= 50 {
-		t.Fatalf("At(200) = %.1f; the old tail should be replaced", position)
-	}
-	timeline.Prune(160)
-	if timeline.Len() != 2 {
-		t.Fatalf("Prune kept %d points, want only the segment spanning the cut", timeline.Len())
-	}
-	if _, ok := timeline.At(160); !ok {
-		t.Fatal("pruning must keep the segment that spans the cut")
-	}
-	if _, ok := timeline.At(140); ok {
-		t.Fatal("pruned time must no longer be covered")
-	}
-	if err := timeline.Append([]Point{{400, 101}}); err == nil {
-		t.Fatal("a position outside 0..100 must be rejected")
-	}
-}
