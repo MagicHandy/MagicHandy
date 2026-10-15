@@ -115,3 +115,11 @@ checks provide software evidence. The hardware follow-up records original Handy
 connection and Stop, plus COYOTE repeated reconnect, battery, per-channel test
 pulses, shared-engine playback, retargeting and reported zeros after Stop. No
 electrode/output leads were connected during the authorized playback test.
+
+The [linked-device review](../native-linked-hardware-review-2026-10-15.md) adds
+ten consecutive Handy reconnects, user-observed playback, simultaneous output,
+observer Stop and both linked-failure policies under actual worker termination.
+Handy's HTTP route now uses the shared twelve-second connection budget. A killed
+worker can still prevent reconnection while the companion stays connected on
+this Windows host; recovery required releasing both links and sometimes a second
+explicit Connect. No automatic interruption of the healthy device was added.

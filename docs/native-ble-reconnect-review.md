@@ -108,5 +108,8 @@ it is not a synthetic simulation. No runtime evidence is committed.
 Software checks include native close/lost-link disposal, overlapping closes,
 deadline cancellation, write fencing, worker isolation, full Go/race/lint,
 architecture/goleak, and CGO-disabled Windows/Linux builds. The frontend was
-unchanged. Review generation uses the available local Gemma endpoint. Repeated
-Handy reconnect and physical Handy playback still need their own hardware check.
+unchanged. Review generation uses the available local Gemma endpoint. The
+[October 15 linked-device review](native-linked-hardware-review-2026-10-15.md)
+adds ten immediate Handy reconnects, observed Handy playback, simultaneous
+playback, and both failure policies. Recovery after a forcibly killed worker
+while a companion remains connected is still an open Windows limitation.

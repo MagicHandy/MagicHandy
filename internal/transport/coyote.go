@@ -23,6 +23,7 @@ const (
 
 var (
 	errCoyoteNotConnected     = errors.New("connect the Coyote first")
+	errCoyoteStopUnconfirmed  = errors.New("the Coyote connection was lost; Stop could not be confirmed")
 	errCoyoteAlreadyConnected = errors.New("the Coyote is already connected")
 	errCoyoteClosed           = errors.New("the Coyote owner is closed")
 	errCoyoteSuperseded       = errors.New("the Coyote packet was superseded by Stop")
@@ -345,8 +346,12 @@ func (c *Coyote) AdjustStrength(channel estim.Channel, delta int) (CoyoteStatus,
 func (c *Coyote) EmergencyZero() error {
 	c.mu.Lock()
 	link := c.link
+	lost := c.state == "stale"
 	c.mu.Unlock()
 	if link == nil {
+		if lost {
+			return errCoyoteStopUnconfirmed
+		}
 		return nil
 	}
 	err := c.zero(link)

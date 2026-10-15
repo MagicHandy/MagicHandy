@@ -68,8 +68,12 @@ func (s *coyoteSession) Play(ctx context.Context, command PlayCommand) (CommandR
 func (s *coyoteSession) Stop(ctx context.Context, command StopCommand) (CommandResult, error) {
 	s.owner.mu.Lock()
 	current := s.owner.link == s.link
+	lost := s.owner.link == nil && s.owner.state == "stale"
 	s.owner.mu.Unlock()
 	if !current {
+		if lost {
+			return CommandResult{Kind: CommandKindStop, Status: "unconfirmed", Error: errCoyoteStopUnconfirmed.Error()}, errCoyoteStopUnconfirmed
+		}
 		return CommandResult{OK: true, Status: "connection_retired"}, nil
 	}
 	return s.owner.Stop(s.context(ctx), command)

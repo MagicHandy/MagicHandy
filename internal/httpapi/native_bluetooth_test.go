@@ -163,10 +163,31 @@ func TestNativeHandyLinkedFailurePolicies(t *testing.T) {
 			if policy == config.LinkedFailureStopAll && state.Running {
 				t.Fatal("linked motion survived stop-all failure")
 			}
+			if policy == config.LinkedFailureStopAll {
+				assertStoppedLinkedFailurePublished(t, s)
+			}
 			if policy == config.LinkedFailureContinueHealthy && (!state.Running || state.LinkedSession == nil || len(state.LinkedSession.RetiredDevices) == 0) {
 				t.Fatal("healthy Coyote was stopped")
 			}
 			_, _ = engine.Stop(context.Background(), "test_cleanup")
 		})
+	}
+}
+
+func assertStoppedLinkedFailurePublished(t *testing.T, s *Server) {
+	t.Helper()
+	// Retain the stopped session's fault marker even when its selected
+	// transport is no longer available for another run.
+	view := httptest.NewRecorder()
+	s.Handler().ServeHTTP(view, httptest.NewRequest(http.MethodGet, "/api/motion/state", nil))
+	var published struct {
+		Available bool                      `json:"available"`
+		Engine    *motion.ActiveMotionState `json:"engine"`
+	}
+	if err := json.Unmarshal(view.Body.Bytes(), &published); err != nil {
+		t.Fatal(err)
+	}
+	if published.Available || published.Engine == nil || published.Engine.Running || published.Engine.LinkedSession == nil || published.Engine.LinkedSession.Status != "failed" {
+		t.Fatalf("stopped linked failure hidden from clients: %s", view.Body.String())
 	}
 }

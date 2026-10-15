@@ -3,8 +3,10 @@
 ## Status
 
 Accepted 2026-10-14. Supersedes the output-selection and companion-failure
-behavior in ADR 0044. Hardware acceptance remains pending; this change is
-validated with simulated devices only.
+behavior in ADR 0044. The [October 15 hardware review](../native-linked-hardware-review-2026-10-15.md)
+adds native Handy/COYOTE playback and worker-loss testing in both policy
+directions. Loaded output, physical radio loss and seamless recovery with a live
+companion remain pending.
 
 ## Decision
 
@@ -44,6 +46,10 @@ stops the run. The backend publishes a degraded-session status and the retired
 device names. Reconnecting cannot rejoin this run; the user must Stop and start
 a new one. Changing playback participation or policy stops the current run.
 Emergency Stop always stops all outputs, independently of this setting.
+
+Stopped failures remain in backend snapshots with a failed-session marker;
+connection availability is reported separately. Unexpected COYOTE loss cannot
+confirm Stop or zero, while the healthy participant still receives Stop.
 
 Coyote engine handles bind to one link; browser Bluetooth commands bind to a
 connection generation, including same-tab reconnects. Old append/Play/alignment

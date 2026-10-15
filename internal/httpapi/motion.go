@@ -97,6 +97,7 @@ func (s *Server) motionState() any {
 }
 
 func (s *Server) motionStateValue() map[string]any {
+	state := map[string]any{"available": true}
 	if engine := s.currentMotionEngine(); engine != nil {
 		snapshot := engine.Snapshot()
 		if snapshot.Running || snapshot.Paused || snapshot.Completing {
@@ -105,16 +106,17 @@ func (s *Server) motionStateValue() map[string]any {
 				"engine":    snapshot,
 			}
 		}
-	}
-	if _, err := s.newSelectedMotionTransport(); err != nil {
-		return map[string]any{
-			"available": false,
-			"error":     err.Error(),
+		if snapshot.LinkedSession != nil && snapshot.LinkedSession.Status == "failed" {
+			// Keep the failure visible after Stop, independently of whether
+			// the selected connections are ready for another run.
+			state["engine"] = snapshot
 		}
 	}
-	return map[string]any{
-		"available": true,
+	if _, err := s.newSelectedMotionTransport(); err != nil {
+		state["available"] = false
+		state["error"] = err.Error()
 	}
+	return state
 }
 
 func (s *Server) handleMotionState(w http.ResponseWriter, r *http.Request) {

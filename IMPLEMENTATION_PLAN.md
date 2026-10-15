@@ -2787,8 +2787,13 @@ the upstream Windows service-disposal fix, retains lost links for teardown and
 uses a twelve-second connection budget. Repeated COYOTE reconnect, bounded
 channel tests and shared-engine playback at strength 5 passed with no output
 leads connected. Packaging acceptance now checks both listeners and retains
-startup failures. Repeated Handy reconnect and loaded electrical behavior remain
-separate acceptance items. See the [follow-up](docs/native-ble-reconnect-review.md),
+startup failures. The October 15 hardware follow-up adds ten immediate Handy
+reconnects, user-observed playback, concurrent output and both linked-failure
+policies. It fixes Handy's stale connection deadline, retained failure snapshots,
+and false COYOTE Stop confirmation after link loss. Recovery of a crashed worker
+with a live companion and loaded electrical behavior remain acceptance items.
+See the [linked review](docs/native-linked-hardware-review-2026-10-15.md),
+[follow-up](docs/native-ble-reconnect-review.md),
 [hardware findings](docs/native-handy-hardware-review-2026-10-14.md),
 [plan](docs/native-handy-bluetooth-plan-2026-10-14.md),
 [ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and

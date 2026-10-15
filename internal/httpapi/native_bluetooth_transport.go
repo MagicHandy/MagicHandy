@@ -80,9 +80,9 @@ func (s *Server) handleNativeBluetoothConnect(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusServiceUnavailable, ble.ErrHelperMissing)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
 	defer cancel()
-	device, err := s.nativeBluetooth.owner.Connect(ctx, ble.ConnectRequest{RememberedAddress: settings.Device.NativeBluetoothAddress, ConnectTimeout: 6 * time.Second, ScanTimeout: 8 * time.Second})
+	device, err := s.nativeBluetooth.owner.Connect(ctx, ble.ConnectRequest{RememberedAddress: settings.Device.NativeBluetoothAddress, ConnectTimeout: ble.DefaultConnectTimeout, ScanTimeout: 8 * time.Second})
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
 		return

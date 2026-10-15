@@ -2291,6 +2291,16 @@ reviewer scope, current-state validation and Stop remain unchanged. See the
 
 ### Linked session state and reconnect (2026-10-14)
 
+October 15 hardware follow-up: normal Handy reconnect, user-observed playback,
+concurrent Handy/COYOTE output and both failure policies have now been exercised.
+An unexpected COYOTE loss no longer reports confirmed Stop/zero. Failure markers
+remain visible after the engine stops. Forced worker termination can still block
+reconnection while a companion remains connected on this Windows host; releasing
+both links and sometimes repeating explicit Connect was required. This remains
+open and must not be described as seamless crash recovery. Physical radio-loss
+decay, loaded electrical output and quantitative alignment are still unmeasured.
+See the [linked hardware review](native-linked-hardware-review-2026-10-15.md).
+
 A saved device is not proof of readiness or participation. ADR 0045 separates
 these states and defaults faults to Stop all. Continue-healthy is explicit,
 retires the failed participant for the rest of the run, and reports degraded
@@ -2318,8 +2328,8 @@ and concurrent-device behavior remain open. See the
 
 Hardware follow-up: original Handy firmware 4.3 connection and Stop succeeded,
 but immediate Windows reconnect sometimes yields GATT AccessDenied and an empty
-characteristic list. The disposal correction is validated on COYOTE; repeated
-Handy reconnect still needs its hardware check. Native Stop uses the firmware's
+characteristic list. The disposal correction is validated on COYOTE and ten
+immediate normal Handy reconnects. Native Stop uses the firmware's
 mode-independent command (4.0.13+). The pinned upstream library removes recursive
 disconnect and closes GATT services synchronously; worker exit is the fallback
 for hung native cleanup. No physical playback/failure-decay claim follows

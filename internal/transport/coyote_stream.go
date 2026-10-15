@@ -141,6 +141,9 @@ func (c *Coyote) Stop(ctx context.Context, command StopCommand) (CommandResult, 
 	if link == nil {
 		c.mu.Lock()
 		defer c.mu.Unlock()
+		if c.state == "stale" {
+			return c.recordLocked(recorded, errCoyoteStopUnconfirmed)
+		}
 		return c.recordLocked(recorded, nil)
 	}
 	if command.Fault {

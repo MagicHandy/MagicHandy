@@ -1,5 +1,20 @@
 # Goal Scorecard
 
+## 2026-10-15 — Native linked-device hardware checks
+
+Ten consecutive Handy disconnect/reconnect cycles pass with the shared
+twelve-second deadline. Original Handy playback and Stop were observed by the
+user; simultaneous Handy/COYOTE playback and both linked-failure policies were
+exercised through the actual native workers. Stopped failures stay visible and
+lost COYOTE links cannot falsely confirm Stop. Reconnection after worker
+termination with a live companion remains an open limitation; see the
+[hardware report](native-linked-hardware-review-2026-10-15.md).
+
+The same Windows amd64 CGO-disabled stripped build measures **22,928,384 B core**
+(+1,024 B) and **3,093,504 B worker** (unchanged). No dependency, frontend asset,
+model work, motion algorithm or idle process changes. The existing uncontrolled
+RSS/cold-start waiver remains; no new memory benchmark is claimed.
+
 ## Native BLE reconnect follow-up
 
 Windows now explicitly disposes native GATT services using pinned upstream
