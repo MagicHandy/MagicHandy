@@ -257,6 +257,18 @@ Main UI JS: 1,162,110 -> 1,184,042 B raw (+21,932 B), 313,858 -> 319,061 B gzip
 (+5,203 B). CSS: 197,511 -> 199,012 B raw, 34,668 -> 34,898 B gzip (+230 B).
 Locale chunks grow 7.0–9.0 KB raw (2.6–2.8 KB gzip) each for 84 new strings.
 Both builds use the same Python gzip method; there is one canonical dist.
+## 2026-10-14 — golang.org/x network and crypto updates
+
+`govulncheck@v1.8.0 -show verbose ./...` listed eight advisories in required
+modules that MagicHandy never calls: five in `golang.org/x/net` v0.57.0 and three
+in `golang.org/x/crypto` v0.55.0. Updating to x/net v0.61.0 and x/crypto v0.58.0
+also brings x/sys v0.49.0 and x/text v0.43.0 through their requirements. Only
+GO-2026-5932 remains; `x/crypto/openpgp` has no fixed version, and MagicHandy
+does not import it. Release-flag executables pass `Test-GoSecurity.ps1` with
+the same single module finding. No code, UI asset or gate changes.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,348,288 -> 22,349,312 B (+1,024 B). No runtime memory or latency claim is made.
 
 ## 2026-10-11 — Alpha.61 release-review corrections
 

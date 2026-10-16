@@ -6,9 +6,9 @@ require (
 	github.com/coder/websocket v1.8.15
 	github.com/mholt/acmez/v3 v3.1.6
 	go.uber.org/goleak v1.3.0
-	golang.org/x/crypto v0.55.0
-	golang.org/x/net v0.57.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/crypto v0.58.0
+	golang.org/x/net v0.61.0
+	golang.org/x/sys v0.49.0
 	modernc.org/sqlite v1.53.0
 	tinygo.org/x/bluetooth v0.16.1-0.20261012180541-9df563b9dd49
 )
@@ -29,7 +29,7 @@ require (
 	github.com/tinygo-org/cbgo v0.1.0 // indirect
 	github.com/tinygo-org/pio v0.3.0 // indirect
 	golang.org/x/exp v0.0.0-20260727155853-b88d891fe743 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	modernc.org/libc v1.73.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
