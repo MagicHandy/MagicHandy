@@ -59,9 +59,8 @@ reproductions fail against the unmodified implementation. These tests use
 recording hardware, not a Bluetooth device.
 
 The upstream contribution policy requires issue discussion and maintainer
-approval before a PR. The issue asks for that review. The user's permission to
-submit upstream is recorded; no additional user approval is needed for this
-submission. The installed Intiface is unchanged. The prototype is not bundled
+approval before a PR. The issue asks for that review. The installed Intiface
+is unchanged. The prototype is not bundled
 with MagicHandy and does not yet solve deferred-command ordering or aggregate
 Stop error propagation. It does not establish physical stopping or improved
 motion feel.
