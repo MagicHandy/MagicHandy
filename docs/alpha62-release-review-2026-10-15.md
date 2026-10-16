@@ -27,6 +27,12 @@ tidy` regenerated checksums. The original contributor worktrees are preserved.
   the small + flow, immediate settings, stopped state and simulator output
   passed. Follow-up review fixed the manual test's retired pattern IDs and
   made its visible/submitted speed follow backend limits.
+  The full new glyph set was reviewed after the maintainer flagged small,
+  off-center symbols. Grid-centered SVG tiles now render at 20/24/28px;
+  Coyote uses a lightning bolt and asymmetric drawings were rebalanced.
+  Desktop and 390px phone screenshots show readable tiles and reachable Stop,
+  with no horizontal overflow. Visible Settings tile/SVG centers match exactly.
+  The Intiface notice was saved as hidden and restored through notice settings.
 - The current simulator review app at `http://127.0.0.1:50254` started all three
   manual choices from the UI and stopped through the permanent Stop button.
   A text-only app chat returned `13` in 225 ms (first token 128 ms), with LLM
@@ -70,7 +76,7 @@ required. Only the standard setup, portable ZIP and checksum file are public.
 ## Budget
 
 With Go 1.26.9, Windows amd64, `CGO_ENABLED=0`, `-trimpath -buildvcs=false`,
-`-ldflags '-s -w'`: core **23,236,096 B**, Bluetooth worker **3,093,504 B** and
-embedded UI **2,678,757 B**. These include the final notice and dependency
+`-ldflags '-s -w'`: core **23,236,608 B**, Bluetooth worker **3,093,504 B** and
+embedded UI **2,679,035 B**. These include the final glyphs, notice and dependency
 update. Public releases retain symbol tables for scanning and are larger than
 these stripped budget builds. No new RSS or cold-start claim is made.

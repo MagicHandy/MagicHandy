@@ -43,7 +43,7 @@ function YourDevices({ ctx, devices, addable, adding }: { ctx: DeviceContext; de
           {devices.map(({ descriptor, model }) => (
             <li key={descriptor.id}>
               <a className="device-list-row" href={deviceRoute(descriptor.id)}>
-                <span className="device-glyph-tile" aria-hidden="true"><descriptor.Glyph size={18} /></span>
+                <span className="device-glyph-tile" aria-hidden="true"><descriptor.Glyph /></span>
                 <span className="device-list-copy"><strong>{model.name}</strong><small>{model.summary}</small></span>
                 <span className="device-list-status"><span className="device-dot" data-status={model.status} aria-hidden="true" />{statusWord(model.status)}</span>
                 <ArrowRightIcon size={12} className="device-list-chevron" />
@@ -119,7 +119,7 @@ function Playback({ ctx, devices }: { ctx: DeviceContext; devices: DeviceEntry[]
     <section className="group" aria-labelledby={titleId}>
       <h3 className="group-title" id={titleId}>{t("Playback")}</h3>
       <div className="form-rows device-rows">
-        <OptionRow label={t("On device failure")} labelId={policyId} hint={t("Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop always stops every device.")}>
+        <OptionRow label={t("On device failure")} labelId={policyId} hint={t("Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop requests Stop for every device.")}>
           <select aria-labelledby={policyId} value={policy} disabled={locked} onChange={(event) => setPolicy(event.target.value as "stop_all" | "continue_healthy")}>
             <option value="stop_all">{t("Stop every device (recommended)")}</option>
             <option value="continue_healthy">{t("Keep going on healthy devices")}</option>
@@ -205,7 +205,7 @@ function IntifaceConnection({ ctx, devices }: { ctx: DeviceContext; devices: Dev
     <>
       <div className="form-row device-connection-row">
         <span className="device-connection-name">
-          <span className="device-glyph-tile" aria-hidden="true"><IntifaceGlyph size={18} /></span>
+          <span className="device-glyph-tile" aria-hidden="true"><IntifaceGlyph /></span>
           <span className="form-row-label">
             <strong>{t("Intiface Central")}</strong>
             <small>{t("Shared by every device that uses it")}</small>
@@ -242,7 +242,7 @@ function HostBluetoothConnection({ ctx, devices }: { ctx: DeviceContext; devices
   return (
     <div className="form-row device-connection-row">
       <span className="device-connection-name">
-        <span className="device-glyph-tile" aria-hidden="true"><HostBluetoothGlyph size={18} /></span>
+        <span className="device-glyph-tile" aria-hidden="true"><HostBluetoothGlyph /></span>
         <span className="form-row-label">
           <strong>{t("Bluetooth on this computer")}</strong>
           <small>{t("MagicHandy's Bluetooth helper")}</small>

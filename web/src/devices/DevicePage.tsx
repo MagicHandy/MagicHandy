@@ -48,7 +48,7 @@ export function DevicePage({ descriptor, ctx, model }: { descriptor: DeviceDescr
     <div className="device-page">
       {breadcrumb}
       <div className="device-page-head">
-        <span className="device-glyph-tile device-glyph-tile-page" aria-hidden="true"><descriptor.Glyph size={22} /></span>
+        <span className="device-glyph-tile device-glyph-tile-page" aria-hidden="true"><descriptor.Glyph /></span>
         <div className="device-page-title">
           <h2>{name}</h2>
           <DeviceStatusLine model={model} />

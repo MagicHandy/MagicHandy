@@ -3091,7 +3091,7 @@
   "The Coyote uses the Bluetooth of the computer running MagicHandy, not this browser.": "O Coyote usa o Bluetooth do computador que executa o MagicHandy, não o deste navegador.",
   "Use {device} in playback": "Usar {device} na reprodução",
   "On device failure": "Em caso de falha do dispositivo",
-  "Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop always stops every device.": "Aplica-se a desconexões inesperadas e erros durante a reprodução conjunta. Reconectar nunca reintegra o dispositivo automaticamente. A parada de emergência sempre para todos os dispositivos.",
+  "Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop requests Stop for every device.": "Aplica-se a desconexões inesperadas e erros durante a reprodução conjunta. Reconectar nunca reintegra o dispositivo automaticamente. A parada de emergência solicita a parada de todos os dispositivos.",
   "Changing playback devices or the failure policy stops the current run.": "Alterar os dispositivos de reprodução ou a política de falhas para a sessão atual.",
   "Native Bluetooth is available on Windows and Linux.": "O Bluetooth nativo está disponível no Windows e no Linux.",
   "The native Bluetooth helper is missing. Update MagicHandy to install it.": "O componente de Bluetooth nativo está ausente. Atualize o MagicHandy para instalá-lo.",

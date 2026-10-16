@@ -27,21 +27,35 @@
   background: var(--danger);
 }
 
-/* Glyph tiles: 32px on rows, 44px on a device page. */
+/* Match visible glyph scale to its tile, independent of SVG inline baselines. */
+.device-glyph {
+  display: block;
+  flex: none;
+}
+/* 20px glyphs in 32px rows, 24px in 36px lists, 28px in 44px headings. */
 .device-glyph-tile {
+  --device-glyph-size: 20px;
   width: 32px;
   height: 32px;
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-grid;
+  place-items: center;
+  line-height: 0;
   box-sizing: border-box;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: var(--surface-2);
   color: var(--text);
 }
+.device-glyph-tile > svg {
+  display: block;
+  flex: none;
+  width: var(--device-glyph-size);
+  height: var(--device-glyph-size);
+  margin: 0;
+}
 .device-glyph-tile-page {
+  --device-glyph-size: 28px;
   width: 44px;
   height: 44px;
   border-radius: var(--radius);
@@ -490,6 +504,7 @@
 .device-list-row .device-glyph-tile,
 .device-add-choice .device-glyph-tile,
 .device-add-toggle .device-glyph-tile {
+  --device-glyph-size: 24px;
   width: 36px;
   height: 36px;
 }
@@ -553,6 +568,7 @@
   font-size: var(--fs-label);
 }
 .device-add-full .device-glyph-tile {
+  --device-glyph-size: 24px;
   width: 36px;
   height: 36px;
 }
@@ -686,6 +702,7 @@
   min-width: 0;
 }
 .device-connection-name .device-glyph-tile {
+  --device-glyph-size: 24px;
   width: 36px;
   height: 36px;
 }

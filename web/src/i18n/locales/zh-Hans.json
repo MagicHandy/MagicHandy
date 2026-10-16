@@ -3091,7 +3091,7 @@
   "The Coyote uses the Bluetooth of the computer running MagicHandy, not this browser.": "Coyote 使用运行 MagicHandy 的电脑的蓝牙，而不是此浏览器的蓝牙。",
   "Use {device} in playback": "将 {device} 用于播放",
   "On device failure": "设备故障时",
-  "Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop always stops every device.": "适用于联动播放期间的意外断开和播放错误。重新连接不会自动加入当前播放。紧急停止始终停止所有设备。",
+  "Applies to unexpected disconnections and playback errors during a linked run. Reconnecting never rejoins a run automatically. Emergency Stop requests Stop for every device.": "适用于联动播放期间的意外断开和播放错误。重新连接不会自动加入当前播放。紧急停止会请求停止所有设备。",
   "Changing playback devices or the failure policy stops the current run.": "更改播放设备或故障策略会停止当前播放。",
   "Native Bluetooth is available on Windows and Linux.": "原生蓝牙支持 Windows 和 Linux。",
   "The native Bluetooth helper is missing. Update MagicHandy to install it.": "缺少原生蓝牙辅助程序。请更新 MagicHandy 以安装它。",

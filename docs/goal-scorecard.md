@@ -5,9 +5,9 @@
 The [release record](alpha62-release-review-2026-10-15.md) combines the reviewed
 device/UI/motion stack and network/crypto update. Final Windows amd64 budgets
 with Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
-core **23,236,096 B**, native Bluetooth worker **3,093,504 B**, embedded UI
-**2,678,757 B**. Relative to the `79a95898` combined UI baseline, core +5,632 B
-and UI +3,055 B; worker unchanged. No new RSS/cold-start claim. Public release
+core **23,236,608 B**, native Bluetooth worker **3,093,504 B**, embedded UI
+**2,679,035 B**. Relative to the `79a95898` combined UI baseline, core +6,144 B
+and UI +3,333 B; worker unchanged. No new RSS/cold-start claim. Public release
 binaries retain symbols for exact-binary vulnerability scans.
 
 ## 2026-10-15 — Observed Handy Intiface smoothing
