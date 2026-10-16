@@ -24,6 +24,10 @@ const (
 	minIntifaceTimingGapMargin     = 10 * time.Millisecond
 	maxIntifaceTimingGapMargin     = 50 * time.Millisecond
 	minimumIntifaceSegmentInterval = 50 * time.Millisecond
+	// Matched original-Handy FW4 trials favored fewer HDSP updates at 35%:
+	// full sweeps, pace changes and Creative v2. This does not raise the hard
+	// timing floor or change speed; the shared engine keeps faster reversals.
+	handyIntifacePreferredInterval = 180 * time.Millisecond
 )
 
 var (
@@ -40,6 +44,7 @@ type intifaceSelection struct {
 	actuatorIndex     uint32
 	timingGap         time.Duration
 	resolutionPercent float64
+	preferredInterval time.Duration
 }
 
 func (s intifaceSelection) minimumPointInterval() time.Duration {
@@ -489,12 +494,19 @@ func (i *Intiface) prepareSelectionLocked(deviceIndex, actuatorIndex uint32) (in
 		if timingGap > maxIntifaceDeviceTimingGap {
 			return intifaceSelection{}, fmt.Errorf("Intiface device %d timing gap %dms exceeds the supported %dms limit", deviceIndex, device.DeviceMessageTimingGapMillis, maxIntifaceDeviceTimingGap.Milliseconds())
 		}
+		var preferredInterval time.Duration
+		// Buttplug's protocol name, independent of its user display-name field.
+		// Other linear devices keep their existing sampling behavior.
+		if device.DeviceName == "The Handy (FW4+)" {
+			preferredInterval = handyIntifacePreferredInterval
+		}
 		return intifaceSelection{
 			deviceIndex:       deviceIndex,
 			incarnation:       incarnation,
 			actuatorIndex:     actuatorIndex,
 			timingGap:         timingGap,
 			resolutionPercent: 100 / float64(actuator.StepCount),
+			preferredInterval: preferredInterval,
 		}, nil
 	}
 	return intifaceSelection{}, fmt.Errorf("Intiface device %d has no linear actuator %d", deviceIndex, actuatorIndex)
@@ -548,6 +560,7 @@ func (i *Intiface) MotionSamplingCapabilities() MotionSamplingCapabilities {
 	return MotionSamplingCapabilities{
 		PositionResolutionPercent:   i.selection.resolutionPercent,
 		ResolutionAfterStrokeWindow: true,
+		PreferredPointInterval:      i.selection.preferredInterval,
 	}
 }
 

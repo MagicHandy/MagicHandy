@@ -1772,6 +1772,17 @@ host sends were recorded, leaving downstream timing and HDSP dynamics open.
 The sampler experiments are parked because modest fit improvements do not
 resolve that distinction. See the [release review](release-motion-review-2026-10-15.md).
 
+Physical follow-up: the operator found the denser sampler worse, but wider
+spacing smoother on full sweeps and pace waves, fairly close to Cloud, and
+natural in a repeated Creative v2 comparison. The integrated 180 ms preference
+preserves the server's hard limit and exact reversal times; it does not reject
+otherwise representable fast turns. The 144-case review preserves Cloud and
+generic linear-device output and records increased intermediate curve error,
+especially at higher speeds. Physical evidence is limited to the original
+Handy at 35%; restricted-window and higher-speed feel remain open. See the
+[sampling report](intiface-smoothness-review-2026-10-15.md). R23 remains a
+separate upstream Stop-delivery issue.
+
 Relates to R1 (real-device validation), R14 (one motion path), R16 (device
 coverage), and R20 (LSO merge integration).
 

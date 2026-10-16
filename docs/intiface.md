@@ -181,6 +181,15 @@ Cloud and generic 50 ms Intiface. A speculative denser sampler produced only
 modest gains on the failing run and was parked; no runtime speed multiplier,
 lower timing floor, or change to the user's Intiface configuration was shipped.
 
+The [subsequent physical sampling comparison](intiface-smoothness-review-2026-10-15.md)
+revisited that denser fit; the operator found it worse. Wider spacing improved
+full sweeps and pace waves, and a 180 ms **preference** with the original hard
+floor was smoother and natural in the repeated Creative v2 trial. That
+preference now applies to generated curves for `The Handy (FW4+)`. Fast turns
+still use the advertised hard limit; buffered output, imported media and other
+linear devices retain their fit. The report records the coarser intermediate
+curves and the limits of the 35% physical evidence.
+
 ### Known Handy Stop limitation in Central 3.2.2+46
 
 The release's buttplug_server 12.0.2 generates no Stop hardware command for its

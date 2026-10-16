@@ -68,7 +68,8 @@ func TestTransportParityReview(t *testing.T) {
 						// Central 3.2.2 reports 100ms for the real Handy. The
 						// transport honors that value plus its 10ms margin.
 						engine.minimumPointIntervalMillis = 110
-						entry.Description = "Handy on Intiface Central 3.2.2: advertised 100ms, effective 110ms floor."
+						engine.preferredPointIntervalMillis = 180
+						entry.Description = "Handy on Intiface Central 3.2.2: advertised 100ms, hard 110ms floor, preferred 180ms spacing on generated curves."
 					}
 				}
 				for engine.nextSampleMillis < 12000 {

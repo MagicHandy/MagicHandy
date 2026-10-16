@@ -1,5 +1,14 @@
 # Goal Scorecard
 
+## 2026-10-15 — Observed Handy Intiface smoothing
+
+The [sampling preference](intiface-smoothness-review-2026-10-15.md) adds no
+dependency, prompt text, model call, background task or UI payload. Matching
+Windows amd64 builds on Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false
+-ldflags '-s -w'`: **23,230,464 -> 23,231,488 B** (+1,024 B). The embedded UI
+remains **2,675,702 B**. Local-model behavior and buffered output are unchanged;
+this is not a new controlled RSS or cold-start measurement.
+
 ## 2026-10-15 — Combined device UI and motion review
 
 The [release integration](release-device-integration-2026-10-15.md) preserves

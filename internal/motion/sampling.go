@@ -231,7 +231,11 @@ func (e *Engine) fitMotionWindowLocked(
 }
 
 func (e *Engine) fitImmediateMotionSamples(reference []MotionSample, resolution float64, hasPrevious bool) ([]MotionSample, map[int64]struct{}, error) {
-	samples, mandatory, err := fitSpacedMotionSamples(reference, e.minimumPointIntervalMillis)
+	preferred := e.minimumPointIntervalMillis
+	if e.plan.Target.Media == nil && e.plan.Target.continuousCurve() {
+		preferred = max(preferred, e.preferredPointIntervalMillis)
+	}
+	samples, mandatory, err := fitSpacedMotionSamplesPreferred(reference, e.minimumPointIntervalMillis, preferred)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -85,6 +85,7 @@ type Engine struct {
 	transition                     *planTransition
 	preservePlanKnots              bool
 	minimumPointIntervalMillis     int64
+	preferredPointIntervalMillis   int64
 	minimumBufferedLeadMillis      int64
 	minimumMediaBufferedLeadMillis int64
 	positionResolutionPercent      float64
@@ -172,6 +173,9 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 	}
 	if provider, ok := options.Transport.(transport.MotionSamplingCapabilitiesProvider); ok {
 		capabilities := provider.MotionSamplingCapabilities()
+		if capabilities.PreferredPointInterval > 0 {
+			engine.preferredPointIntervalMillis = int64((capabilities.PreferredPointInterval + time.Millisecond - 1) / time.Millisecond)
+		}
 		if capabilities.PositionResolutionPercent > 0 && capabilities.PositionResolutionPercent <= 100 {
 			engine.positionResolutionPercent = capabilities.PositionResolutionPercent
 			engine.resolutionAfterStrokeWindow = capabilities.ResolutionAfterStrokeWindow

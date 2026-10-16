@@ -2856,3 +2856,14 @@ device kit and its shared-Intiface/vibrator dependencies are combined with the
 motion/model review. The final release must retain these UI changes, including
 the small title-row + shortcut. See the [combined validation and remaining
 acceptance work](docs/release-device-integration-2026-10-15.md).
+
+### Handy Intiface smoothness (2026-10-15)
+
+Observed A/B tests favored fewer position updates. An optional sampling
+preference now lets the shared engine fit generated Handy-over-Intiface curves
+with wider interior spacing while retaining the advertised hard limit, exact
+reversal timing and the shared velocity ceiling. The tested denser and guarded
+alternatives are rejected. Cloud/native buffered output, imported media and
+other linear devices are unchanged. See the
+[physical feedback, 144-case matrix and precision trade-off](docs/intiface-smoothness-review-2026-10-15.md).
+The independent upstream Stop issue remains with Buttplug.
