@@ -1,4 +1,6 @@
 {
+  "Intiface Stop limitation": "Intiface 停止功能限制",
+  "Intiface Central 3.2.2 may report Stop without stopping The Handy. Native Bluetooth or Handy Cloud sends the device's Stop command directly.": "Intiface Central 3.2.2 可能报告已停止，但未停止 The Handy。原生蓝牙或 Handy Cloud 会直接向设备发送停止命令。",
   "Full sweeps": "全程往复",
   "Base-anchored variety": "固定底端变化",
   "Pace wave": "节奏起伏",

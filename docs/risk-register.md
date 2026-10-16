@@ -1810,6 +1810,12 @@ regressions. It is not installed or bundled. Deferred-command ordering,
 aggregate Stop results and physical validation remain open, so R23 stays
 Critical. See the [integration record](release-device-integration-2026-10-15.md).
 
+Release-scope follow-up: the maintainer directed continued publication work
+after the observed smoothness comparison, leaving the Stop fix upstream.
+[ADR 0049](decisions/0049-alpha62-external-stop-limitation.md) records this
+disclosed alpha limitation. It does not close the above physical Stop exit
+criteria or weaken app-side cancellation, dispatch or CI requirements.
+
 Description:
 The permanent Stop control is mounted outside routes. Active, paused,
 repeated-idle, and no-engine requests cancel local work and attempt the selected

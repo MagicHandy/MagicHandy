@@ -10,8 +10,8 @@ The setup EXE is a thin Inno Setup shell with a native x64 loader and non-solid
 ultra-LZMA stream used by the withdrawn alpha.6 package. Microsoft completed its
 review of that exact alpha.6 file as `Not malware` and removed the detection.
 ADR 0014 therefore permits alpha.8 through alpha.11 and alpha.13 through
-alpha.61 setup publication through a dedicated policy bound to those versions
-and case. Alpha.9 through alpha.11 and alpha.13 through alpha.61 also add a
+alpha.62 setup publication through a dedicated policy bound to those versions
+and case. Alpha.9 through alpha.11 and alpha.13 through alpha.62 also add a
 Defender scan of the exact public artifact directory. Alpha.12's portable-only
 GitHub Release was withdrawn; its source tag remains immutable. A later unsigned
 setup fails closed until another explicit review decision. The exception does
@@ -146,10 +146,10 @@ $commit = (git rev-parse HEAD).Trim()
 ```
 
 `ReviewedUnsignedPublic` accepts only alpha.8 through alpha.11 and alpha.13
-through alpha.61 with the recorded Microsoft case ID and checks the x64 unsigned
-setup, four x64 payload executables, manifests, and both outer hashes.
+through alpha.62 with the recorded Microsoft case ID and checks the x64 unsigned
+setup, five x64 payload executables, manifests, and both outer hashes.
 `SignedPublic` is the fail-closed long-term policy. It requires valid,
-timestamped Authenticode on the setup executable and all four payload
+timestamped Authenticode on the setup executable and all five payload
 executables, rejects self-signed certificates, and requires the approved
 certificate's 40-character thumbprint through `-ExpectedSignerThumbprint`. The
 current workflow does not select this policy because no protected signing

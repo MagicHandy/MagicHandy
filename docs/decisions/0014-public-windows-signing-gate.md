@@ -2,15 +2,35 @@
 
 ## Status
 
-Accepted; amended 2026-10-11 after Microsoft completed the false-positive
+Accepted; amended 2026-10-15 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.61 package-preserving releases.
+reviewed alpha.14 through alpha.62 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.62 amendment
+
+The maintainer requested publication after the device and motion review. This
+amendment adds only `0.1.0-alpha.62` to the reviewed-unsigned Windows policy;
+later versions still require their own review. It carries COYOTE 3.0 and native
+Handy Bluetooth, linked sessions and vibrator output, Claude's device UI,
+reviewed local/hosted motion corrections, observed Intiface smoothing and the
+network/crypto dependency update. ADRs 0044–0049 and their review records state
+the scope and known hardware limits. The upstream Intiface Stop defect remains
+open and is disclosed in the app and release notes (ADR 0049).
+
+The core remains pure Go. The native Bluetooth worker joins the four existing
+payload executables; all five use the same exact-binary scans and manifest
+checks. The native x64 loader, non-solid ZIP, three public assets and
+data-preserving over-install contract remain. Main-tip provenance, review,
+quality gates, adapter tests, source and binary vulnerability scans, Defender,
+checksums and exact-installer lifecycle tests remain mandatory. Microsoft's
+original case does not pre-clear the new hashes; trusted Authenticode is still
+the long-term policy.
 
 ### Alpha.61 amendment
 
@@ -576,7 +596,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.61 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.62 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -690,11 +710,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.61 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.62 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.61 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.62 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,

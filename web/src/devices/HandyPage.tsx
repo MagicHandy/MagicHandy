@@ -26,6 +26,10 @@ export function HandyConnectionSection({ ctx }: DeviceSectionProps) {
       {owner === "native_bluetooth" && <NativeBluetoothRows ctx={ctx} />}
       {owner === "browser_bluetooth" && <BrowserBluetoothRow />}
       {owner === "intiface" && <>
+        <DismissibleNotice id="intiface-handy-stop-322" className="device-requirement">
+          <span className="label">{t("Intiface Stop limitation")}</span>
+          <p>{t("Intiface Central 3.2.2 may report Stop without stopping The Handy. Native Bluetooth or Handy Cloud sends the device's Stop command directly.")}</p>
+        </DismissibleNotice>
         <IntifaceConnectionRow ctx={ctx} />
         <div className="form-row form-row-plain"><IntifaceDeviceChoice ctx={ctx} device="handy" /></div>
       </>}

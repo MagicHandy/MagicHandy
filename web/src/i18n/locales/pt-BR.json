@@ -1,4 +1,6 @@
 {
+  "Intiface Stop limitation": "Limitação do Stop no Intiface",
+  "Intiface Central 3.2.2 may report Stop without stopping The Handy. Native Bluetooth or Handy Cloud sends the device's Stop command directly.": "O Intiface Central 3.2.2 pode informar Stop sem parar o The Handy. O Bluetooth nativo ou o Handy Cloud envia o comando de parada diretamente ao dispositivo.",
   "Full sweeps": "Movimentos completos",
   "Base-anchored variety": "Variação a partir da base",
   "Pace wave": "Ritmo ondulante",

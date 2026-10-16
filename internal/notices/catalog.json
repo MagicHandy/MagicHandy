@@ -6,6 +6,7 @@
   {"id": "setup-before-motion", "label": "Before commanding motion", "browser_only": false},
   {"id": "model-generation", "label": "Generation guidance", "browser_only": false},
   {"id": "device-firmware", "label": "Firmware / API requirement", "browser_only": false},
+  {"id": "intiface-handy-stop-322", "label": "Intiface Stop limitation", "browser_only": false},
   {"id": "control-profile", "label": "Control profile", "browser_only": false},
   {"id": "model-routing-context", "label": "Saved model routing", "browser_only": false},
   {"id": "model-chat-role", "label": "Chat model", "browser_only": false},

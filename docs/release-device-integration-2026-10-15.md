@@ -83,7 +83,10 @@ with MagicHandy and does not yet solve deferred-command ordering or aggregate
 Stop error propagation. It does not establish physical stopping or improved
 motion feel.
 
-Before publication, recheck Claude's source for subsequent changes, finish
-review/CI for the combined branch and dependency update, and resolve the
-Intiface Stop/timing acceptance findings with an observed unloaded comparison.
-The final release is not complete merely because the UI integration is green.
+The subsequent observed comparisons accepted the
+[Intiface smoothing change](intiface-smoothness-review-2026-10-15.md), including
+the final production build. Claude's snapshot was rechecked. Review/CI for the
+complete release and dependency update still apply.
+[ADR 0049](decisions/0049-alpha62-external-stop-limitation.md) records the
+maintainer's direction to proceed with the known upstream Stop limitation
+disclosed; the physical Stop exit criteria remain open.

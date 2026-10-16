@@ -2,6 +2,13 @@
 
 ## Core Direction
 
+The [alpha.62 release candidate](docs/alpha62-release-review-2026-10-15.md)
+combines the reviewed device, UI, motion and dependency branches. The final
+Intiface full-sweep and Creative v2 hardware comparisons were accepted.
+Manual test choices now use current continuous patterns and saved speed limits.
+The upstream Stop limitation stays open and visible under ADR 0049; release
+quality, packaging and publication verification remain mandatory.
+
 The October 15 [release motion review](docs/release-motion-review-2026-10-15.md)
 fixes floating-point endpoint rejection, adds explicit Layered full-slider and
 full-band edits, and aligns live examples with decoder order and Autopilot hold
