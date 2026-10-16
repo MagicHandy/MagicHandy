@@ -1,7 +1,8 @@
 import { t, translateKnown } from "../i18n";
 // Browser Bluetooth bridge. The browser owns the BLE session and executes only
 // backend-issued bridge commands; React never creates motion commands itself.
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../api/client";
 import type { BluetoothBridgeSnapshot, BluetoothCommand, BluetoothGatewaySnapshot } from "../api/types";
 import { HandyBleSession, type BluetoothCharacteristicLike } from "../bluetooth/handy-ble-session";
@@ -22,6 +23,14 @@ export interface BluetoothBridgeState {
   connecting: boolean;
   status: string;
   deviceName: string;
+  /** This browser can open a Bluetooth device chooser. */
+  supported: boolean;
+}
+
+/** The device row's Connect and Disconnect, for a bridge rendered elsewhere. */
+export interface BluetoothBridgeHandle {
+  connect: () => void;
+  disconnect: () => void;
 }
 
 interface BluetoothBridgeProps {
@@ -31,6 +40,11 @@ interface BluetoothBridgeProps {
   canConfigureHost?: boolean;
   initial?: BluetoothBridgeSnapshot;
   onStateChange?: (state: BluetoothBridgeState) => void;
+  /** Where the details render: undefined in place, null nowhere, or an
+   * element (the Handy's page) the session survives leaving. */
+  detailsTarget?: HTMLElement | null;
+  /** Its own Connect and Disconnect buttons; the device row has them in the app. */
+  showActions?: boolean;
 }
 
 interface BluetoothServiceLike {
@@ -53,7 +67,7 @@ interface BluetoothNavigator {
   };
 }
 
-export function BluetoothBridge({ visible, locked, backendOnline, canConfigureHost = true, initial, onStateChange }: BluetoothBridgeProps) {
+export const BluetoothBridge = forwardRef<BluetoothBridgeHandle, BluetoothBridgeProps>(function BluetoothBridge({ visible, locked, backendOnline, canConfigureHost = true, initial, onStateChange, detailsTarget, showActions = true }, ref) {
   const { show } = useToast();
   const [bridge, setBridge] = useState<BluetoothBridgeSnapshot>(initial ?? {});
   const [connecting, setConnecting] = useState(false);
@@ -107,6 +121,7 @@ export function BluetoothBridge({ visible, locked, backendOnline, canConfigureHo
       connecting,
       status: bridge.status || (connected ? "connected" : "disconnected"),
       deviceName: bridge.device_name || device.current?.name || (connected ? "The Handy" : ""),
+      supported: bluetoothSupported(),
     });
   }, [bridge, connecting, onStateChange]);
 
@@ -514,25 +529,38 @@ export function BluetoothBridge({ visible, locked, backendOnline, canConfigureHo
     }
   }
 
-  if (!visible) return null;
+  // The same guards as the buttons: a row elsewhere cannot bypass them.
+  useImperativeHandle(ref, () => ({
+    connect: () => {
+      if (!visible || locked || !canConfigureHost || connecting || bridge.connected || bluetoothConnected()) return;
+      void connectBluetooth();
+    },
+    disconnect: () => {
+      const connectedHere = bluetoothConnected();
+      if (!visible || !(bridge.connected || connectedHere) || (!connectedHere && (locked || !backendOnline || !canConfigureHost))) return;
+      void disconnectBluetooth();
+    },
+  }));
+
+  if (!visible || detailsTarget === null) return null;
 
   const connected = Boolean(bridge.connected || bluetoothConnected());
   const status = bridge.status || (connected ? "connected" : "disconnected");
   const browser = bluetoothSupported() ? "Available" : "Unavailable";
   const deviceName = bridge.device_name || device.current?.name || (connected ? "Handy" : "None");
 
-  return (
+  const details = (
     <div className="bluetooth-panel">
       <div className="bluetooth-summary">
         <span className="bluetooth-indicator" data-state={connected ? "connected" : status} aria-hidden="true" />
         <span>{bridge.message ? translateKnown(bridge.message) : connected ? t("Bluetooth connected") : t("Bluetooth disconnected")}</span>
       </div>
-      <div className="row-actions">
+      {showActions && <div className="row-actions">
         <button type="button" className="btn btn-secondary" disabled={locked || !canConfigureHost || connecting || connected} onClick={() => void connectBluetooth()}>
           {connecting ? t("Connecting") : t("Connect Bluetooth")}
         </button>
         <button type="button" className="btn btn-secondary" disabled={!connected || (!bluetoothConnected() && (locked || !backendOnline || !canConfigureHost))} onClick={() => void disconnectBluetooth()}>{t("Disconnect")}</button>
-      </div>
+      </div>}
       <dl className="meta-grid">
         <div><dt>{t("Browser")}</dt><dd>{translateKnown(browser)}</dd></div>
         <div><dt>{t("Device")}</dt><dd>{deviceName}</dd></div>
@@ -542,7 +570,8 @@ export function BluetoothBridge({ visible, locked, backendOnline, canConfigureHo
       {locked && <p className="form-status">{backendOnline ? t("Read-only client.") : t("Core offline.")}</p>}
     </div>
   );
-}
+  return detailsTarget ? createPortal(details, detailsTarget) : details;
+});
 
 function handyBluetoothRequestOptions(): Record<string, unknown> {
   return {

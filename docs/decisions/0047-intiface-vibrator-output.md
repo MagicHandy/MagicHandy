@@ -9,7 +9,9 @@ Model replies still assume a linear stroker; the
 covers that later work. Extends [ADR 0010](0010-transport-neutral-frames-intiface.md)
 (Intiface), [ADR 0044](0044-coyote-estim-output.md) (companion helpers) and
 [ADR 0045](0045-device-inventory-and-linked-sessions.md) (participation and
-linked sessions).
+linked sessions). [ADR 0048](0048-device-kit-and-settings-devices.md) moves the
+vibrator's row into the device panel and its settings onto its own page in
+Settings > Devices.
 
 ## Context
 

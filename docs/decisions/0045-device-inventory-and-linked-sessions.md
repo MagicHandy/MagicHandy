@@ -14,6 +14,10 @@ of the Handy and Coyote members. Linked sessions take any set of devices, with
 the run clock on the first included one, and `continue_healthy` counts
 survivors.
 
+[ADR 0048](0048-device-kit-and-settings-devices.md) replaces the connection
+manager with the device panel and Settings > Devices. The decisions below are
+unchanged; the UI paragraph describes the earlier manager.
+
 ## Decision
 
 The saved inventory, live transport connections and playback participation are

@@ -129,6 +129,7 @@ control	PATCH /api/media/videos/{id}/metadata
 host	PATCH /api/memory/{id}
 host	PATCH /api/personas/{id}
 host	PATCH /api/personas/{id}/lore/{lore_id}
+host	PATCH /api/settings/device
 host	POST /api/accounts
 public	POST /api/auth/bootstrap
 public	POST /api/auth/login
@@ -265,6 +266,7 @@ host	PUT /api/settings/device/output
 host	PUT /api/settings/estim/safety
 host	PUT /api/settings/labs
 control	PUT /api/settings/llm-motion-mode
+host	PUT /api/settings/server
 host	PUT /api/setup/preferences
 control	PUT /api/voice/input-preferences
 control	PUT /api/voice/preferences

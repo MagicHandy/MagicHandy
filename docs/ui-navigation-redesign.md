@@ -136,7 +136,7 @@ sub-sections as today.
 - `#/modes` → Preset Modes
 - `#/library` → Pattern Library
 - `#/videos` → Videos
-- `#/settings`, `#/settings/device|model|prompts|diagnostics` → Settings
+- `#/settings`, `#/settings/devices|model|prompts|diagnostics` → Settings
 
 One workspace is mounted at a time; the others are unmounted (never occluding
 the active page or leaving hidden media running). On navigation, move focus to
@@ -383,7 +383,7 @@ Every ui-design.md safety property maps to a home in the new shell:
 | --- | --- |
 | Stop always visible/reachable | Pinned bottom of the permanent sidebar; mobile fixed bar |
 | One authoritative visualizer | Compact in status bar, detailed on Chat page — one component |
-| Immediate-apply quick controls | Speed/stroke in the connection manager; behavior on Chat; no Save step |
+| Immediate-apply quick controls | Speed/stroke in the device panel; behavior on Chat; no Save step |
 | One feedback channel, never occluded | Toast + backend banner above all pages |
 | Single active controller | Unchanged; extra clients read-only with Stop |
 | Backend-loss lock | Banner at workspace top below status bar; required controls lock |
@@ -424,7 +424,7 @@ semantics. The migration deliberately replaced those checks. Current
 in the embedded bundle, including Stop, routes, backend-authoritative labels,
 voice controls, and the Phase 14 library; it also rejects the retired
 `status-pill` class. `web/src/App.test.tsx` owns behavioral coverage of the four
-routes, pinned Stop, status-only top bar, routed Settings, connection manager,
+routes, pinned Stop, status-only top bar, routed Settings, device panel,
 Chat controls, and library workspace.
 
 ## Relationship To Other Docs

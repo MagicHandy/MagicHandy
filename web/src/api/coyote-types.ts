@@ -85,3 +85,16 @@ export interface DeviceSettingsUpdate {
     api_application_id_override: string;
     handy_connection_key?: string;
   }
+
+/** One device option change from Settings > Devices (PATCH /api/settings/device).
+ * Absent fields keep their value; the connection key keeps its own Save. */
+export interface DeviceOptionsPatch {
+  linked_failure_policy?: "stop_all" | "continue_healthy";
+  intiface_server_address?: string;
+  api_application_id_source?: string;
+  api_application_id_override?: string;
+  /** Forgets the saved Handy connection key. */
+  clear_connection_key?: boolean;
+  estim?: Partial<Omit<EstimSettings, "safety_acknowledged">> & { forget_device?: boolean };
+  vibration?: Partial<import("./intiface-types").VibrationSettings>;
+}

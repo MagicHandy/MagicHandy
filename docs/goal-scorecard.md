@@ -1,5 +1,33 @@
 # Goal Scorecard
 
+## 2026-10-15 — Device panel and Settings > Devices
+
+[ADR 0048](decisions/0048-device-kit-and-settings-devices.md) replaces the
+connection manager with a live device panel and Settings > Devices. No
+dependency, model call or prompt text is added; the backend adds two settings
+routes.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, against base `654c37a5`: core
+**23,187,456 -> 23,225,856 B** (+38,400 B), still **14 modules**. The worker is
+unchanged.
+
+Main UI JS: **1,221,482 -> 1,234,880 B raw** (+13,398 B), **327,284 ->
+333,011 B gzip** (+5,727 B). CSS: **205,124 -> 204,115 B raw** (−1,009 B),
+**35,753 -> 35,679 B gzip** (−74 B): the device kit's styles replace the
+connection manager's, the Coyote and vibrator style sheets and the connection
+artwork. Each locale chunk grows 2.9–3.9 KB raw (1.1–1.3 KB gzip), with 157
+strings added and 125 removed. The complete embedded UI grows 2,650,311 ->
+2,675,494 B (+25,183 B). Measurements use Python gzip with `mtime=0`. The
+canonical dist is rebuilt with stale hashes removed; the existing large-chunk
+advisory remains.
+
+After a real text-only generation (Ollama, Gemma 12B) and simulated Coyote and
+vibrator connections, the isolated review process sampled **30,121,984 B
+working set / 61,968,384 B private**. Windows working sets can be trimmed, so
+this is not a controlled RSS comparison; the existing waiver remains. No
+cold-start, active-hardware RSS or radio latency is claimed.
+
 ## 2026-10-15 — Intiface vibrator output
 
 [ADR 0047](decisions/0047-intiface-vibrator-output.md) adds a Buttplug vibrator

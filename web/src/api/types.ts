@@ -7,7 +7,7 @@ import type { IntifaceTransportSnapshot, VibrationSettings } from "./intiface-ty
 import type { SetupAssessment } from "./setup-assessment-types";
 import type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { CoyoteTransportSnapshot, EstimSettings } from "./coyote-types";
-export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceId, DeviceOutput, EstimSettings } from "./coyote-types";
+export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceId, DeviceOptionsPatch, DeviceOutput, EstimSettings } from "./coyote-types";
 export type { IntifaceLinearActuator, IntifaceScalarActuator, IntifaceDevice, IntifaceDispatchStatus, IntifaceTransportSnapshot, IntifaceVibratorMotor, IntifaceVibratorStatus, VibrationSettings } from "./intiface-types";
 export type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { AccountCapabilities } from "./access-types";

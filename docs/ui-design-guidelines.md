@@ -145,9 +145,9 @@ Nothing button-sized or status-sized is a pill.
 - Width `--rail-width` `212px`, full height, `--rail` with a `--line` right
   border.
 - **Product lockup** (top): 26px `--radius-sm` monogram, `MagicHandy` in
-  `--text` `600`, and `local / {dispatch owner}` in `--muted` `--fs-hint`. It
-  is static identity; use spacing, not a divider, to separate it from
-  navigation.
+  `--text` `600`, and `local` in `--muted` `--fs-hint`. It is static identity:
+  the device chip, not the rail, names the devices. Use spacing, not a
+  divider, to separate it from navigation.
 - **Nav row**: 36px tall, `0 10px`, 18px icon + `--fs-body` label,
   `--radius-sm`. Default is a `--muted` label; hover uses `--surface-2`. Active
   uses the quiet `--accent-tint` fill, `--text` `600` label and `--accent` icon,
@@ -175,7 +175,7 @@ return:
 - the run timer is a clock icon + `--font-mono` tabular value.
 - On the right, one row of 36px chips with the same border, radius and hover:
   Take control (when read-only), the compact motion glyph, the bell, the
-  control profile and the connection chip.
+  control profile and the device chip.
 
 The one authoritative visualizer is engine-driven and draws the device the
 backend dispatches to, in its compact status-bar form (30 × 40) and its detailed
@@ -275,70 +275,133 @@ or glows.
   session storage even when their category is hidden, so a stale completion
   cannot reappear after a refresh.
 - Only one shell popover is open at a time. Opening control profile,
-  notifications, or connection closes either of the others; selecting a linked
-  item closes the panel. The trigger and close button preserve keyboard focus.
+  notifications, or the device panel closes either of the others; selecting a
+  linked item closes the panel. The trigger and close button preserve keyboard
+  focus.
 
-### Top-bar connection manager
+### Device chip and device panel
 
-- Shell-owned and route-independent. The compact 216 x 36 trigger sits at the
-  far right of the top bar and opens the panel immediately below it. Desktop
-  shows provider/device text and a state icon; narrow screens keep the labeled
-  button accessible while rendering only its state icon.
-- The expanded non-modal panel is at most 360px wide, one overlay surface with
-  dividers rather than nested cards. It contains the current provider's live
-  actions, a Settings link, and compact immediate controls for the documented
-  Handy model calibration, speed, stroke, and reverse direction. The model is
-  a three-part merged native radio group (`Original`, `2 Standard`, `2 Pro`),
-  with the selected travel and normal maximum shown directly beneath it;
-  direction is right-aligned below the two range rows. Cloud REST includes one
-  compact write-only connection-key row and identifies whether the bundled or
-  developer API v3 application ID is active.
-- Cloud REST keeps three actions distinct: the quiet refresh icon performs a
-  non-motion Check, the full-width Connect reacquires control only after a
-  successful HSP probe, and Disconnect closes backend motion admission before
-  stopping active media, chat, modes, and device motion. Check never silently
-  reacquires a released device. A failed physical Stop is reported, but the
-  local release gate remains closed so another app can take control.
-- Artwork is a flat 96px vector status strip on `--bg-inset`: the Handy-inspired
-  capsule and domed body with LED and square marker, and three signal arcs. Arcs
-  are `--accent` while connecting (a staggered opacity wave) and `--ok` when
-  connected; disconnected hides them and shows the red square marker. Only a
-  failed connection attempt adds the compact shaking `--danger` X; it is a
-  semantic status mark, not a red action competing with Stop. There is no
-  bitmap. `prefers-reduced-motion` disables the wave and shake. Keep
-  [connection-artwork.md](connection-artwork.md) aligned with any SVG
-  coordinate, state, or panel-sizing change.
-- Open moves focus to Close; Close restores the trigger. Escape remains the
-  global Stop shortcut and is never consumed by this disclosure.
-- The manager uses a **+ Add connection** menu instead of an output segmented
-  choice. It offers only the supported devices that are not added yet (The
-  Handy, Coyote, vibrator). The menu is placed in viewport coordinates across
-  the panel's width, so the scrolling panel never clips it, even when no
-  device is added and the panel is short. The list follows backend confirmation;
-  it never implies support for more than one of each device. A sticky
-  manager header, inset Add row, contrasting device headers and full-width
-  separators distinguish the sections without nesting cards. The Handy's
-  protocol title sits beside the device name in a keyboard-accessible menu;
-  browsing its choices does not
-  change the protocol. Coyote's single Bluetooth method stays plain text.
-  A Coyote adds one section below the Handy's (or replaces it when alone):
-  a compact outlined safety notice until accepted, then a status line with battery, two
-  `control-row` channel rows with neutral 44px `−`/`+` buttons around a tabular
-  strength value, a separate green **Test** action, and a secondary **Set both
-  to zero**. Strength steps are never red or green and never begin output:
-  red stays Stop and green stays go. Commanded zero has an explicit source
-  hint; an expired handshake cannot turn unknown strength into confirmed zero.
-  The trigger reads
-  `A 12 · B 8` beside the Coyote status. With the Coyote alone, the panel's
-  Motion section keeps only Speed; the Handy model, stroke and direction rows
-  hide.
-  A vibrator adds its own section with the same structure: "Intiface Central"
-  as plain text, a playback switch, a device picker, an intensity `control-row`
-  with neutral `−`/`+` steps and a green **Test**. The trigger names every
-  added device (`The Handy + Coyote + Vibrator`) and adds the vibrator's
-  intensity to its status.
+Option A of the 2026-10-15 device-management review: a live device panel,
+with setup and configuration in Settings > Devices. Every device option has
+exactly one home, named below; actions such as Connect may appear wherever
+they are needed.
+
+- Shell-owned and route-independent. The **device chip** is the far-right
+  252 × 36 trigger: one 16px glyph per saved device with a 7px status dot on
+  its corner, then two lines, what plays (`The Handy + Coyote`) and the one
+  current problem (`Vibrator needs setup`, `Coyote connection lost`). A single
+  device shows its own status (`Connected · Cloud`); none reads `Devices` /
+  `Chat only`, and before the first backend snapshot `Devices` / `Checking…`.
+  Problems rank lost, then setup, then a playing device that is not connected.
+  At ≤860px only the glyphs and dots remain; every device's status, then Open
+  or Close the device panel, stays its accessible name.
+- The **device panel** is one floating surface at most 360px wide: a sticky
+  title row (Devices, Close), any notice, the `DEVICE` / `IN PLAYBACK` caption,
+  one row per saved device in run-clock order, the Limits section, and a
+  full-width labeled **Device settings** button that opens Settings > Devices.
+  It holds live jobs only: no forms, keys, method menus, pickers, discovery,
+  safety notes or artwork, and nothing floats over it.
+- **Notices** take one line at the top, only when needed: a linked run that
+  continues without a device (a quiet `--warn` tint: "Continuing without
+  Coyote", "Stop and start again to rejoin."), a run that stopped after a
+  device failure, a tab that watches ("Another tab controls MagicHandy. You can
+  watch here." with **Take control**; levels become a readout and the rows lose
+  their actions), Core offline, or host settings managed by an administrator.
+- **Empty:** "No devices yet", one sentence, and one primary **Add a device**
+  that opens Settings > Devices with the Add list open.
+- **Phones (≤860px):** the panel is a sheet between the status bar and the
+  Stop footer over a dim scrim, and **Device settings** is a labeled button in
+  the sheet header instead of the foot.
+- Open moves focus to Close; Close restores the chip; a link that leaves for
+  Settings hands focus to the routed page. Escape remains the global Stop
+  shortcut and is never consumed by this disclosure.
 - Simulation is identified once in the persistent top-bar status. Do not repeat
-  it as a banner inside the connection manager or a hint beneath every device.
+  it as a banner inside the panel or a hint beneath every device.
+
+### Device kit
+
+Every device renders from one descriptor in `web/src/devices/`: its name and
+glyph, the Add list detail, a live model (status word, details, the one action,
+levels, a read-only readout and the Settings summary), its page sections, its
+Remove note, an optional timing offset and the shared connection it uses. The
+panel row, the chip, Settings > Devices and the device pages draw from it, so a
+new device adds a descriptor and its transport, never a section with its own
+idioms. The backend owns every value: the models only read its snapshots.
+
+- **Row:** a 32px glyph tile, the name (`600`) and the In playback switch on
+  the first line; the status dot, the word in `--text` and its details in
+  `--muted`, then exactly one action on the second: **Connect** (accent fill,
+  the only filled action in a row), **Disconnect** (quiet), **Set up ›** (opens
+  the device page) or **Reconnect** (outlined). Connect shows busy while a
+  connection is in progress. Changing In playback waits for the backend's
+  confirmation.
+- **Status words**, one dot each: **Playing** (connected and part of the
+  current run) and **Connected** (`--ok`), **Connecting…** (`--warn`), **Not
+  connected** (`--faint`), **Needs setup** (a `--muted` ring: something only
+  the device page can supply, such as a key, a device choice or the safety
+  notes) and **Connection lost** (`--danger`: it dropped, or a degraded run
+  left it). A failed attempt adds "last attempt failed" to Not connected.
+- **Level:** the label, `N of ceiling` in `--font-mono`, neutral 32px `−`/`+`
+  steps (44px on coarse pointers) and the one green **Test**. Steps are never
+  red or green and never start output. Test needs the current Stop sequence and
+  plays only while motion is paused. Coyote strength A and B share a caption
+  row with a quiet **Zero both**; the vibrator has one Intensity level. The
+  ceiling comes from the device page.
+- **Glyphs:** 16px strokes in `currentColor` (The Handy, Coyote, Vibrator,
+  Intiface Central, Bluetooth on this computer) in 32px tiles on rows, 36px in
+  Settings lists and 44px on device pages. They are never decorative art: the
+  status lives in the dot.
+- **Limits:** Speed always, and Stroke while the Handy plays, with "Apply
+  immediately", as in Quick Controls. A watching tab reads them as text.
+
+### Settings > Devices and device pages
+
+- `#/settings/devices` replaces Settings > Device; `#/settings/device` still
+  opens it. The section has no Save: each option saves as it changes through
+  `PATCH /api/settings/device` (switches and choices at once, sliders after the
+  drag settles, typed values on Enter or blur), shows its own edit until the
+  backend snapshot confirms it, and returns to the saved value with a toast if
+  the save fails. "Changes save as you make them" says so at the top. The one
+  exception is the Handy connection key, which keeps an explicit Save.
+- **Your devices:** one row per device (glyph, name, how it connects and how
+  it is set, status, chevron) that opens its page, then **Add device**, which
+  expands an inline list of the devices not added yet (`#/settings/devices/add`
+  opens it). Adding saves the device ready to set up and opens its page; it
+  never connects it or adds it to playback. With every device added, a dashed
+  row says so.
+- **Playback:** On device failure, then **Timing**, with each device's offset
+  side by side.
+- **Connections:** Intiface Central (status, the devices using it, one
+  Disconnect for the shared session, and the server address with its keepalive
+  note) and Bluetooth on this computer (the helper's status and its users).
+  Changing the address while connected asks first, because it ends the session
+  for every device.
+- **Device pages** (`#/settings/devices/handy`, `/coyote`, `/vibrator`): a
+  breadcrumb, a 44px glyph tile, the name as the page heading, the status line
+  and the device's one action (never Set up: the page is the setup), then its
+  sections as cards, then a danger-outline **Remove** with its consequence,
+  which asks first. A device that is not added offers Add instead.
+  - **The Handy:** Connection (the method choice list, applied only by **Use
+    this method** because switching stops motion; the key with Save and Forget
+    key; Check connection, which never moves or reacquires the device; the
+    firmware notice; the browser Bluetooth details, the remembered native
+    device or the Intiface device choice; Advanced: the API application ID),
+    Calibration (model, reverse direction) and Test (the manual motion test).
+  - **Coyote:** Safety (the notes and **I have read these notes** before the
+    first connection; afterwards **Show before next connection**), Connection
+    (the remembered device and Forget; Find nearby devices with a choice list
+    and Connect), Output (Follows as a segmented choice, ceilings, the
+    pulse-rate range, channel balance, swap and the balance parameters) and
+    Test (Test A and Test B).
+  - **Vibrator:** Connection (the Intiface status with a link to Connections,
+    and the device choice, which lists only devices with vibration motors, with
+    **Use this vibrator** and **Scan for devices**), Output (Follows, Strongest
+    at for Depth, and the level range) and Test.
+- Choice lists reuse the Setup choice rows. A device can be the Handy or the
+  vibrator, not both, so a device the other role uses is disabled with the
+  reason.
+- Settings > Access holds the server port, with its own Save because it
+  applies at the next start.
 
 ### Cards, sections, fields
 
@@ -351,7 +414,8 @@ or glows.
   a card whose title is a header row (`12px 16px`, `--fs-heading` `600`,
   `--line` bottom rule). Model routing, model roles and media tools follow the
   same single level. Save settings sticks to the foot of the column on `--bg`
-  with a top rule, flush with the workspace edge on every breakpoint.
+  with a top rule, flush with the workspace edge on every breakpoint. Devices
+  has no Save: it saves each option as it changes.
 - **Field rows.** A field with one short control (select, text, number, range)
   is a row when the field itself is at least 560px wide: label and inline hint
   on the left, the control in a 300px column on the right, help text under the
@@ -629,11 +693,11 @@ only label for a control.
   visualizer position between 125ms backend samples). No bouncing, pulsing
   glows, or moving gradients.
 - `prefers-reduced-motion: reduce` disables the visualizer/toast/toggle
-  transitions, the chat entry animation and the connection wave/shake.
+  transitions, the chat entry animation and the device chip's chevron turn.
 - Focus is a `2px --focus` outline at `2px` offset on every interactive element
   (inset where a scroller would clip it); routed views focus their heading on
-  entry. The connection disclosure is non-modal: opening moves focus to Close
-  and closing restores the trigger; it does not trap focus.
+  entry. The device panel is non-modal: opening moves focus to Close and
+  closing restores the chip; it does not trap focus.
 - Status is text + icon + color, never color alone. One polite live region for
   status; the visualizer is not a chatty live region.
 - Text and controls meet WCAG AA contrast on the dark surfaces.
@@ -711,14 +775,13 @@ row dividers so account, model and history settings remain distinct. Keep nested
 history help inside its row group without doubling rules or adding another card.
 
 
-### Saved connections and playback
+### Saved devices and playback
 
-The connection manager uses a compact icon-only + on its title row. Adding
-creates a saved row, and does not connect or include it in playback. Each row
-has a separate **Use in playback** switch; transport status remains visible
-when excluded. Removing the last connection is valid and leaves chat-only use.
-Settings lists configured playback devices and **On device failure** (stop all
-by default, or continue on the healthy device). Degraded linked sessions show
-which participant was retired; reconnecting never silently rejoins a run.
-Emergency Stop remains unconditional and reaches all outputs. Protocol menus
-stay inline with their device title, with flat section separators and contrast.
+Devices are added in Settings > Devices; adding saves one, ready to set up,
+and does not connect it or include it in playback. Each device row has its own
+**In playback** switch, and its status stays visible while it is excluded.
+Removing the last device is valid and leaves chat-only use. Settings > Devices
+> Playback holds **On device failure** (stop every device by default, or keep
+going on healthy devices). A degraded linked run shows one notice and marks the
+device it left as Connection lost; reconnecting never silently rejoins a run.
+Emergency Stop remains unconditional and reaches every output.

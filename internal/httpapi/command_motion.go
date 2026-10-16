@@ -19,7 +19,7 @@ func motionCommandRoute(route string) bool {
 	case "/api/chat/stream", "/api/labs/llm/chat", "/api/labs/llm/session",
 		"/api/motion/start", "/api/motion/target", "/api/motion/quick", "/api/motion/pause", "/api/motion/resume",
 		"/api/settings", "/api/settings/reset", "/api/settings/labs", "/api/settings/llm-motion-mode", "/api/settings/device/connection-key",
-		"/api/settings/device/output", "/api/settings/device/connections",
+		"/api/settings/device", "/api/settings/device/output", "/api/settings/device/connections",
 		"/api/transport/coyote/strength", "/api/transport/coyote/test",
 		"/api/media/sync", "/api/media/script-offset", "/api/media/playback":
 		return true

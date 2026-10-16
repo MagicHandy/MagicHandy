@@ -1,0 +1,907 @@
+/* ---- Device kit: the top-bar chip, the device panel, Settings > Devices
+   and the device pages (docs/ui-design-guidelines.md, Device kit). Every
+   device renders from the same row, level, status and page parts. Steps are
+   neutral, Test is the one green control, Connect the one filled action. */
+
+/* Status dots: one word, one dot. Needs setup is a ring. */
+.device-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: var(--faint);
+}
+.device-dot[data-status="playing"],
+.device-dot[data-status="connected"] {
+  background: var(--ok);
+}
+.device-dot[data-status="connecting"] {
+  background: var(--warn);
+}
+.device-dot[data-status="needs_setup"] {
+  border: 1.5px solid var(--muted);
+  background: transparent;
+}
+.device-dot[data-status="lost"] {
+  background: var(--danger);
+}
+
+/* Glyph tiles: 32px on rows, 44px on a device page. */
+.device-glyph-tile {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.device-glyph-tile-page {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius);
+}
+.device-glyph-tile-add {
+  border-style: dashed;
+  background: transparent;
+  color: var(--muted);
+}
+:is(.device-row, .device-list-row)[data-status="needs_setup"] .device-glyph-tile,
+.device-row[data-status="not_connected"] .device-glyph-tile {
+  color: var(--muted);
+}
+
+.device-status-line {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.device-status-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.device-status-text strong {
+  color: var(--text);
+  font-weight: inherit;
+}
+
+/* ---- The chip: a glyph and dot per device, what plays, then the one
+   problem. Narrow windows keep the glyphs and dots. ---- */
+.device-panel-anchor {
+  position: relative;
+  z-index: 24;
+  flex: 0 0 auto;
+}
+.device-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 252px;
+  height: 36px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.device-chip:hover,
+.device-panel-anchor[data-open="true"] .device-chip {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+.device-chip-glyphs {
+  display: flex;
+  flex: none;
+  gap: 3px;
+}
+.device-chip-glyph {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+.device-chip-glyph:is([data-status="needs_setup"], [data-status="not_connected"]),
+.device-chip-glyph:not([data-status]) {
+  color: var(--muted);
+}
+.device-chip-dot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 7px;
+  height: 7px;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.device-chip-dot[data-status="needs_setup"] {
+  background: var(--bg);
+}
+:is(.device-chip:hover, .device-panel-anchor[data-open="true"] .device-chip) .device-chip-dot {
+  box-shadow: 0 0 0 2px var(--surface-2);
+}
+.device-chip-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+.device-chip-copy strong,
+.device-chip-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.device-chip-copy strong {
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+.device-chip-copy small {
+  color: var(--muted);
+  font-size: var(--fs-hint);
+}
+.device-chip-chevron {
+  flex: none;
+  color: var(--muted);
+  transform: rotate(180deg);
+  transition: transform 0.18s ease;
+}
+.device-panel-anchor[data-open="true"] .device-chip-chevron {
+  transform: rotate(0deg);
+}
+
+/* ---- The panel: one floating surface, no forms. Rows are ruled apart. ---- */
+.device-panel {
+  position: fixed;
+  top: calc(var(--status-h) + 8px);
+  right: clamp(8px, 2vw, 20px);
+  width: min(360px, calc(100vw - 16px));
+  max-height: calc(100vh - var(--status-h) - 16px);
+  overflow: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.device-sheet-scrim {
+  display: none;
+}
+.device-panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 52px;
+  padding: 0 8px 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.device-panel-head h2 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--fs-heading);
+  font-weight: 600;
+}
+.device-panel-head .icon-button {
+  border-color: transparent;
+}
+/* The phone sheet carries Device settings in its header instead. */
+.device-panel-settings-head {
+  display: none;
+}
+.device-panel-reason {
+  margin: 10px 16px 0;
+  font-size: var(--fs-hint);
+}
+.device-panel-watch,
+.device-panel-notice {
+  margin: 12px 12px 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+.device-panel-watch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.device-panel-watch p {
+  flex: 1 1 auto;
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-hint);
+  line-height: 1.45;
+}
+.device-panel-notice {
+  display: grid;
+  gap: 2px;
+  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+}
+.device-panel-notice strong {
+  font-size: var(--fs-label);
+  font-weight: 600;
+}
+.device-panel-notice span {
+  color: var(--muted);
+  font-size: var(--fs-hint);
+}
+.device-panel-columns,
+.device-panel-section-head h3,
+.device-levels-head {
+  color: var(--muted);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.device-panel-columns {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 16px 6px;
+}
+.device-panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 16px;
+}
+.device-panel-empty strong {
+  font-weight: 600;
+}
+.device-panel-empty p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  line-height: 1.45;
+}
+
+/* A row: glyph, name and the In playback switch, then the status line
+   with its one action, then any live levels. */
+.device-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 36px;
+  column-gap: 12px;
+  row-gap: 4px;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.device-row > .device-glyph-tile {
+  grid-row: span 2;
+}
+.device-row-name {
+  align-self: center;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.device-row-switch {
+  align-self: center;
+}
+.device-row-status {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: var(--fs-hint);
+}
+.device-action {
+  flex: none;
+  gap: 4px;
+}
+.device-levels {
+  grid-column: 2 / 4;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.device-levels-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.device-levels-head .btn {
+  letter-spacing: 0;
+  text-transform: none;
+}
+.device-levels-note {
+  margin: 0;
+}
+
+/* Level: "N of ceiling", neutral steps, then Test. */
+.device-level {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.device-level-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--fs-label);
+  font-weight: 500;
+}
+.device-level-value {
+  min-width: 64px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.device-step {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.device-step:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.device-step:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.device-level-test {
+  min-height: 32px;
+}
+
+/* The limits keep the panel's compact slider rows. */
+.device-panel-limits {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 16px 16px;
+}
+.device-panel-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.device-panel-section-head h3 {
+  margin: 0;
+}
+.device-panel-section-head span {
+  color: var(--muted);
+  font-size: var(--fs-hint);
+}
+.device-panel .quick-fields-limits {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.device-panel .quick-fields-limits > .form-status {
+  margin: 0;
+  font-size: var(--fs-hint);
+}
+.device-limits-readout {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.device-limits-readout > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-label);
+}
+.device-limits-readout dt {
+  font-weight: 500;
+}
+.device-limits-readout dd {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+.device-panel-foot {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--line);
+}
+.device-panel-settings {
+  width: 100%;
+}
+.device-panel-settings-chevron {
+  color: var(--muted);
+}
+
+/* ---- Settings > Devices ---- */
+.devices-saves-note {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: var(--fs-hint);
+}
+.devices-saves-note svg {
+  color: var(--ok);
+}
+.settings-panel .device-list-group {
+  padding-bottom: 0;
+}
+.device-list {
+  margin: 0 -16px;
+  padding: 0;
+  list-style: none;
+}
+.settings-panel .group.group > .device-list {
+  margin-top: -14px;
+}
+.device-list-row,
+.device-add-toggle,
+.device-add-choice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 60px;
+  box-sizing: border-box;
+  padding: 8px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.settings-panel .group a.device-list-row {
+  color: var(--text);
+}
+.device-list-row:hover,
+.device-add-toggle:hover:not(:disabled),
+.device-add-choice:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.device-list-row .device-glyph-tile,
+.device-add-choice .device-glyph-tile,
+.device-add-toggle .device-glyph-tile {
+  width: 36px;
+  height: 36px;
+}
+.device-list-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.device-list-copy strong {
+  font-weight: 600;
+}
+.device-list-copy small {
+  color: var(--muted);
+  font-size: var(--fs-hint);
+}
+.device-list-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-label);
+}
+.device-list-chevron {
+  flex: none;
+  color: var(--muted);
+}
+.settings-panel .group.group > .device-add {
+  margin: 0 -16px;
+}
+.device-add-toggle {
+  min-height: 52px;
+  border-bottom: 0;
+  color: var(--accent);
+  font-weight: 600;
+}
+.device-add-toggle[aria-expanded="true"] {
+  border-bottom: 1px solid var(--line);
+}
+.device-add-toggle:disabled,
+.device-add-choice:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.device-add-list {
+  display: grid;
+}
+.device-add-list > .hint {
+  margin: 0;
+  padding: 10px 16px 14px;
+}
+.settings-panel .group.group > .device-add-full {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 52px;
+  margin: 0 -16px;
+  padding: 8px 16px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.device-add-full .device-glyph-tile {
+  width: 36px;
+  height: 36px;
+}
+
+/* Device page rows share the settings form rows. */
+.settings-panel .group > .device-rows {
+  margin-top: -14px;
+}
+.device-rows > :first-child,
+.device-rows > .form-row:first-child,
+.device-rows > legend:first-child + * {
+  border-top: 0;
+}
+/* The control column is 300px, as in every settings row; a stacked row
+   (phones, narrow cards) gives it the full width. */
+.device-option-control {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 300px;
+  max-width: 100%;
+  justify-self: end;
+  min-width: 0;
+}
+@media (max-width: 560px) {
+  .device-option-control {
+    width: 100%;
+  }
+}
+.device-option-row .device-option-control > .btn,
+.device-option-row .device-option-control > .row-actions {
+  align-self: flex-end;
+}
+.device-option-row .device-option-control:has(> .device-option-value) {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+}
+.device-option-value {
+  font-size: var(--fs-label);
+}
+.form-row-stack .device-option-control {
+  width: 100%;
+}
+/* The row names a segmented choice; its legend stays for assistive tech. */
+.device-segmented > legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+/* Segments share the track, each as wide as its label when it fits. */
+.device-segmented .segmented-choice {
+  grid-auto-columns: minmax(0, auto);
+  grid-auto-flow: column;
+  grid-template-columns: none;
+}
+.device-value-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.device-value-slider[data-disabled] {
+  opacity: 0.55;
+}
+.device-value-slider input[type="range"] {
+  width: 100%;
+}
+.device-value-slider[data-centered] .range-slider-head {
+  justify-content: center;
+}
+.device-slider-ends {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: var(--fs-hint);
+}
+.device-switch-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.device-switch-row > .toggle {
+  grid-column: 2;
+}
+.device-balance-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+.device-method {
+  gap: 10px;
+}
+.device-method .row-actions,
+.device-choice .row-actions {
+  align-items: center;
+}
+.device-choice {
+  display: grid;
+  gap: 10px;
+}
+.device-choice-label {
+  font-weight: 500;
+}
+.device-key-row .form-input-action {
+  width: 300px;
+  max-width: 100%;
+}
+.device-key-row .device-key-forget {
+  grid-column: 2;
+  justify-self: end;
+}
+@media (max-width: 560px) {
+  .device-key-row .form-input-action {
+    width: 100%;
+  }
+  .device-key-row .device-key-forget {
+    grid-column: 1;
+  }
+}
+.device-advanced > summary {
+  font-weight: 600;
+}
+.device-connection-row {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+.device-connection-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.device-connection-name .device-glyph-tile {
+  width: 36px;
+  height: 36px;
+}
+.device-connection-glyph {
+  flex: none;
+  color: var(--muted);
+}
+.device-connection-state,
+.device-inline-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.device-connection-state {
+  font-size: var(--fs-label);
+}
+.device-address-input {
+  font-family: var(--font-mono);
+}
+.device-timing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 10px 24px;
+}
+.device-timing-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.device-timing-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+}
+.device-timing-glyph {
+  color: var(--muted);
+}
+.device-timing-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.device-timing-input input {
+  width: 110px;
+  font-family: var(--font-mono);
+}
+
+/* ---- A device page ---- */
+.device-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.settings-panel .device-page > .group + .group {
+  margin-top: 0;
+}
+.device-breadcrumb {
+  display: flex;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+.settings-panel .device-breadcrumb a {
+  color: var(--muted);
+}
+.device-breadcrumb {
+  align-items: center;
+}
+.device-breadcrumb-separator {
+  flex: none;
+}
+.device-breadcrumb [aria-current="page"] {
+  color: var(--text);
+}
+.device-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+.device-page-title {
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.device-page-title h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-title);
+  font-weight: 600;
+}
+.device-page-title .device-status-line {
+  font-size: var(--fs-label);
+}
+.device-safety-notes {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+}
+.device-safety-notes ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-soft);
+  font-size: var(--fs-label);
+  line-height: 1.5;
+}
+.device-safety-notes > .btn {
+  justify-self: start;
+}
+.device-not-added {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 16px;
+}
+.device-not-added p {
+  margin: 0;
+}
+.device-remove {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding-top: 4px;
+}
+.device-remove .hint {
+  margin: 0;
+}
+
+@media (pointer: coarse) {
+  .device-step {
+    width: 44px;
+    height: 44px;
+  }
+  .device-level-test {
+    min-height: 44px;
+  }
+}
+
+@container settings-form (max-width: 560px) {
+  .device-connection-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .device-balance-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- Phones: the panel is a sheet between the header and the Stop
+   footer; the chip keeps only its glyphs and dots. ---- */
+@media (max-width: 860px) {
+  .device-chip {
+    width: auto;
+    height: 44px;
+    gap: 3px;
+    padding: 0 8px;
+  }
+  .device-chip-copy,
+  .device-chip-chevron {
+    display: none;
+  }
+  .device-sheet-scrim {
+    display: block;
+    position: fixed;
+    inset: var(--status-h) 0 var(--footer-h) 0;
+    background: rgba(0, 0, 0, 0.45);
+  }
+  .device-panel {
+    top: calc(var(--status-h) + 56px);
+    right: 0;
+    bottom: var(--footer-h);
+    left: 0;
+    width: auto;
+    max-height: none;
+    border-bottom: 0;
+    border-radius: 12px 12px 0 0;
+  }
+  .device-panel-head {
+    padding: 6px 6px 6px 16px;
+  }
+  .device-panel-settings-head {
+    display: inline-flex;
+  }
+  .device-panel-head .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+  .device-panel-foot {
+    display: none;
+  }
+  .device-row {
+    grid-template-columns: 36px minmax(0, 1fr) 44px;
+    padding: 12px 16px;
+  }
+  .device-row > .device-glyph-tile {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-chip-chevron,
+  .device-step {
+    transition: none;
+  }
+}

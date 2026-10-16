@@ -3,7 +3,7 @@
 ## Status
 
 **Built.** A floating settings panel scoped to the video currently open in the
-player, styled after the connection manager, holding a per-video sync offset and
+player, styled after the top-bar device panel, holding a per-video sync offset and
 a small set of funscript filters. This document stays the design record; the
 "What shipped" section reports what each part actually does.
 
@@ -29,7 +29,7 @@ once and never think about it again.
 **In:** sync offset, script filters, filter effect readout, reset.
 
 **Out:** library locations, transport/connection, speed and stroke limits (the
-connection manager already owns those and is reachable on this route), anything
+device panel already owns those and is reachable on this route), anything
 that is not observable while a video plays.
 
 The offset is **per-video**, because that is how it is actually used. Filters

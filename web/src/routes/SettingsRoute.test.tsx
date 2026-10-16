@@ -11,6 +11,7 @@ const app = vi.hoisted(() => ({
   hostAdministration: true,
   hasState: true,
   device: undefined as PublicSettings["device"] | undefined,
+  settings: undefined as PublicSettings | undefined,
   hash: "#/settings/diagnostics",
   refresh: vi.fn(),
   show: vi.fn(),
@@ -68,7 +69,7 @@ vi.mock("../state/app-state", () => ({
     readOnly: false,
     refresh: app.refresh,
     motion: { engine: { running: true, target: { source: "autopilot" } } },
-    state: app.hasState ? { capabilities: { configure_host: app.hostAdministration }, settings: app.device ? { device: app.device } : undefined, version: "test", commit: "abc", uptime_seconds: 10, motion: { available: true } } : null,
+    state: app.hasState ? { capabilities: { configure_host: app.hostAdministration }, settings: app.settings ?? (app.device ? { device: app.device } : undefined), version: "test", commit: "abc", uptime_seconds: 10, motion: { available: true } } : null,
   }),
   useHashRoute: () => app.hash,
   useToast: () => ({ show: app.show }),
@@ -185,117 +186,49 @@ function settings(verbosity: string): PublicSettings {
 }
 
 describe("SettingsRoute", () => {
-  it("saves the linked failure policy and offers only configured playback devices", async () => {
+  it("opens Devices for the former Device bookmark without loading the host draft", async () => {
     app.hash = "#/settings/device";
-    const initial = settings("normal");
-    initial.device.output = "none";
-    initial.device.configured_devices = ["coyote"];
-    getSettings.mockResolvedValue({ settings: initial });
+    app.settings = settings("normal");
     render(<SettingsRoute />);
-    const policy = await screen.findByRole("combobox", { name: "On device failure" });
-    expect(policy).toHaveValue("stop_all");
-    const devices = screen.getByRole("group", { name: "Playback devices" });
-    expect(within(devices).getByRole("checkbox", { name: "Coyote" })).not.toBeChecked();
-    expect(within(devices).queryByRole("checkbox", { name: "The Handy" })).toBeNull();
-    fireEvent.change(policy, { target: { value: "continue_healthy" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ playback_devices: [], linked_failure_policy: "continue_healthy" }) })));
+    expect(await screen.findByRole("heading", { name: "Your devices" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Devices" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Changes save as you make them")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save settings" })).toBeNull();
+    expect(getSettings).not.toHaveBeenCalled();
   });
 
-  it("saves the playback set in run-clock order", async () => {
-    app.hash = "#/settings/device";
+  it("follows device and motion changes saved elsewhere and leaves the device blocks out of Save", async () => {
+    app.hash = "#/settings/general";
     const initial = settings("normal");
-    initial.device.output = "coyote";
-    initial.device.configured_devices = ["handy", "coyote"];
-    getSettings.mockResolvedValue({ settings: initial });
-    render(<SettingsRoute />);
-    const devices = await screen.findByRole("group", { name: "Playback devices" });
-    expect(within(devices).getByRole("checkbox", { name: "Coyote" })).toBeChecked();
-    fireEvent.click(within(devices).getByRole("checkbox", { name: "The Handy" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ playback_devices: ["handy", "coyote"] }) })));
-  });
-
-  it("shows the vibrator profile for a configured vibrator and saves it", async () => {
-    app.hash = "#/settings/device";
-    const initial = settings("normal");
-    initial.device.output = "handy";
-    initial.device.configured_devices = ["handy", "vibrator"];
-    initial.device.playback_devices = ["handy", "vibrator"];
-    getSettings.mockResolvedValue({ settings: initial });
-    render(<SettingsRoute />);
-    const devices = await screen.findByRole("group", { name: "Playback devices" });
-    expect(within(devices).getByRole("checkbox", { name: "Vibrator" })).toBeChecked();
-    expect(screen.getByRole("heading", { name: "Vibrator" })).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Strongest at" })).toBeNull();
-    fireEvent.change(screen.getByRole("combobox", { name: "Follows" }), { target: { value: "depth" } });
-    fireEvent.change(screen.getByRole("combobox", { name: "Strongest at" }), { target: { value: "tip" } });
-    fireEvent.change(screen.getByRole("spinbutton", { name: "Intensity ceiling (%)" }), { target: { value: "30" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].vibration).toEqual({ follow: "depth", depth_end: "tip", minimum_percent: 0, ceiling_percent: 30, timing_offset_ms: 0 });
-    expect(saveSettings.mock.calls[0][0].device.playback_devices).toEqual(["handy", "vibrator"]);
-  });
-
-  it("offers the Intiface address whenever a device uses Intiface", async () => {
-    app.hash = "#/settings/device";
-    const initial = settings("normal");
-    initial.device.output = "none";
-    initial.device.configured_devices = ["vibrator"];
-    getSettings.mockResolvedValue({ settings: initial });
-    const view = render(<SettingsRoute />);
-    const address = await screen.findByRole("textbox", { name: "Intiface Central server" });
-    fireEvent.change(address, { target: { value: "ws://127.0.0.1:12346" } });
-    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
-    expect(saveSettings.mock.calls[0][0].device.intiface_server_address).toBe("ws://127.0.0.1:12346");
-    view.unmount();
-
-    const cloudOnly = settings("normal");
-    cloudOnly.device.output = "handy";
-    cloudOnly.device.configured_devices = ["handy"];
-    getSettings.mockResolvedValue({ settings: cloudOnly });
-    render(<SettingsRoute />);
-    await screen.findByRole("group", { name: "Playback devices" });
-    expect(screen.queryByRole("textbox", { name: "Intiface Central server" })).toBeNull();
-  });
-
-  it("leaves the vibrator profile out until a vibrator is added", async () => {
-    app.hash = "#/settings/device";
-    const initial = settings("normal");
-    initial.device.output = "handy";
-    initial.device.configured_devices = ["handy"];
-    getSettings.mockResolvedValue({ settings: initial });
-    render(<SettingsRoute />);
-    const devices = await screen.findByRole("group", { name: "Playback devices" });
-    expect(within(devices).queryByRole("checkbox", { name: "Vibrator" })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Vibrator" })).toBeNull();
-  });
-
-  it("follows manager changes without discarding an unsaved failure policy", async () => {
-    app.hash = "#/settings/device";
-    const initial = settings("normal");
-    initial.device.output = "handy";
-    initial.device.configured_devices = ["handy"];
     initial.device.linked_failure_policy = "stop_all";
-    app.device = initial.device;
+    app.settings = initial;
     getSettings.mockResolvedValue({ settings: initial });
     const view = render(<SettingsRoute />);
-    fireEvent.change(await screen.findByRole("combobox", { name: "On device failure" }), { target: { value: "continue_healthy" } });
-    app.device = { ...initial.device, configured_devices: ["coyote"], output: "none" };
+    await screen.findByRole("button", { name: "Save settings" });
+    app.settings = {
+      ...initial,
+      server: { port: 49718 },
+      device: { ...initial.device, linked_failure_policy: "continue_healthy", intiface_server_address: "ws://127.0.0.1:23456" },
+      motion: { ...initial.motion, reverse_direction: true },
+    };
     view.rerender(<SettingsRoute />);
-    const devices = screen.getByRole("group", { name: "Playback devices" });
-    expect(within(devices).queryByRole("checkbox", { name: "The Handy" })).toBeNull();
-    expect(within(devices).getByRole("checkbox", { name: "Coyote" })).not.toBeChecked();
-    expect(screen.getByRole("combobox", { name: "On device failure" })).toHaveValue("continue_healthy");
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    await waitFor(() => expect(saveSettings).toHaveBeenCalledWith(expect.objectContaining({ device: expect.objectContaining({ playback_devices: [], linked_failure_policy: "continue_healthy" }) })));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    const update = saveSettings.mock.calls[0][0];
+    expect(update.device).toEqual(expect.objectContaining({ linked_failure_policy: "continue_healthy", intiface_server_address: "ws://127.0.0.1:23456" }));
+    expect(update.device).not.toHaveProperty("handy_connection_key");
+    expect(update.clear_connection_key).toBe(false);
+    expect(update.motion.reverse_direction).toBe(true);
+    expect(update.server.port).toBe(49718);
+    expect(update).not.toHaveProperty("estim");
+    expect(update).not.toHaveProperty("vibration");
   });
 
   beforeEach(() => {
     app.hostAdministration = true;
     app.hasState = true;
     app.device = undefined;
+    app.settings = undefined;
     vi.clearAllMocks();
     setLocaleForTest("en", english);
     app.hash = "#/settings/diagnostics";
@@ -466,20 +399,18 @@ describe("SettingsRoute", () => {
     expect(media.script_offset_ms).toBe(125);
   });
 
-  it("localizes settings navigation, firmware guidance, and chat option labels", async () => {
+  it("localizes settings navigation and chat option labels", async () => {
     setLocaleForTest("ja", japanese);
     getSettings.mockResolvedValue({ settings: settings("normal") });
 
-    app.hash = "#/settings/device";
-    const deviceView = render(<SettingsRoute />);
+    app.hash = "#/settings/general";
+    const generalView = render(<SettingsRoute />);
     expect(await screen.findByRole("link", { name: "一般" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "デバイス" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: japanese.Devices })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "メディアライブラリ" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: japanese.Chat })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "診断" })).toBeInTheDocument();
-    expect(screen.getByText("Cloud REST には、API v3 アクセスが有効な Handy ファームウェア v4 が必要です。")).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "\u540c\u68b1\u30a2\u30d7\u30ea\u30b1\u30fc\u30b7\u30e7\u30f3 ID" })).toBeInTheDocument();
-    deviceView.unmount();
+    generalView.unmount();
 
     app.hash = "#/settings/prompts";
     render(<SettingsRoute />);
@@ -488,27 +419,15 @@ describe("SettingsRoute", () => {
     expect(screen.getByRole("option", { name: "ペニス" })).toBeInTheDocument();
   });
 
-  // Driving the device by hand is a device tool, not a diagnostic, so it sits
-  // with the connection that carries it.
-  it("offers the manual motion test from the device section", async () => {
-    app.hash = "#/settings/device";
-    getSettings.mockResolvedValue({ settings: settings("normal") });
-    render(<SettingsRoute />);
-
-    expect(await screen.findByRole("heading", { name: /Manual motion/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start test" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Stop test" })).toBeDisabled();
-  });
-
-  it("keeps device settings to one card layer", async () => {
-    app.hash = "#/settings/device";
-    getSettings.mockResolvedValue({ settings: settings("normal") });
+  it("keeps Settings > Devices to one card layer", async () => {
+    app.hash = "#/settings/devices";
+    app.settings = settings("normal");
     const view = render(<SettingsRoute />);
 
-    await screen.findByRole("heading", { level: 2, name: "Device" });
+    await screen.findByRole("heading", { level: 2, name: "Devices" });
     const panel = view.container.querySelector(".panel");
     expect(panel).not.toBeNull();
-    expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Device");
+    expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Devices");
     expect(panel?.querySelectorAll(".group .group")).toHaveLength(0);
     expect(panel?.querySelectorAll(":scope > label.field, :scope > label.toggle-line")).toHaveLength(0);
   });

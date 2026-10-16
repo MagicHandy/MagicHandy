@@ -12,11 +12,13 @@ interface RangeSliderProps {
   floor: number;
   ceil?: number;
   minGap?: number;
+  /** The readout's unit: a percentage unless named. */
+  unit?: "%" | "Hz";
   disabled?: boolean;
   onChange: (next: { min: number; max: number }, changed: RangeBound) => void;
 }
 
-export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minGap = 0, disabled, onChange }: RangeSliderProps) {
+export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minGap = 0, unit = "%", disabled, onChange }: RangeSliderProps) {
   const id = useId();
   const valueId = useId();
   const lowRef = useRef<HTMLInputElement>(null);
@@ -76,7 +78,7 @@ export function RangeSlider({ label, minValue, maxValue, floor, ceil = 100, minG
     <div className="range-slider" role="group" aria-labelledby={id} data-disabled={disabled || undefined}>
       <div className="range-slider-head">
         <span className="label" id={id}>{label}</span>
-        <output id={valueId} className="range-slider-value">{minValue}–{maxValue}%</output>
+        <output id={valueId} className="range-slider-value">{unit === "Hz" ? t("{a}–{b} Hz", { a: minValue, b: maxValue }) : <>{minValue}–{maxValue}%</>}</output>
       </div>
       <div
         className="range-slider-track"

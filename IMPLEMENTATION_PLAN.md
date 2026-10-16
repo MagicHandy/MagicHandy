@@ -2821,3 +2821,22 @@ Model replies still assume a linear stroker. Device-aware prompts and their
 per-configuration test matrix are later work. See the
 [vibrator plan](docs/intiface-vibrator-plan-2026-10-15.md) and the
 [device-aware model responses plan](docs/device-aware-prompts-plan-2026-10-15.md).
+
+### Device panel and Settings > Devices (2026-10-15)
+
+Implemented and tested in simulation
+([ADR 0048](docs/decisions/0048-device-kit-and-settings-devices.md)). The
+connection manager is replaced by a live device panel (status, one action, In
+playback, levels and limits) and Settings > Devices, with a page per device for
+setup:
+
+- Each device is a descriptor in `web/src/devices/`; the panel row, the
+  top-bar chip, the Settings list and the device pages render from it.
+- Device options save as they change through `PATCH /api/settings/device`;
+  the Handy key keeps its explicit Save. The server port moved to Settings >
+  Access (`PUT /api/settings/server`).
+- The manual motion test, model and direction moved to the Handy's page. The
+  connection artwork is retired.
+
+See [UI design](docs/ui-design.md#devices-2026-10-15) and the
+[guidelines](docs/ui-design-guidelines.md#device-chip-and-device-panel).

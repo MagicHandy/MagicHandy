@@ -15,20 +15,24 @@ alongside The Handy. The decision record is
   shape the pulses beneath the strength you set.
 - Stop and `Esc` set both channels to zero. Pause only silences the output.
 
-The connection manager shows these notes once; connecting is refused until the
-host accepts them. Turning the acceptance off in Settings shows them again.
+The Coyote's page in Settings > Devices shows these notes before the first
+connection; connecting is refused until the host accepts them with **I have
+read these notes**. **Show before next connection**, on the same page, shows
+them again.
 
 ## Setup
 
-1. Open the connection manager and use the small **+** in its title row to add
-   **Coyote**. This saves a connection without connecting or joining playback.
-   Turn on **Use in playback** when ready. Excluding a device keeps its
-   connection; Disconnect keeps its saved row; Remove closes it and removes the
-   row. Removing every row leaves chat available with motion idle.
+1. Open **Settings > Devices**, select **Add device**, then **Coyote**. This
+   saves the device without connecting it or adding it to playback, and opens
+   its page. Read the safety notes there and select **I have read these notes**.
+   Turn on **In playback** in the device panel (the device chip at the top
+   right) when ready. Excluding a device keeps its connection; Disconnect keeps
+   it saved; **Remove**, at the foot of its page, disconnects and removes it.
+   Removing every device leaves chat available with motion idle.
 2. Turn the Coyote on and disconnect the phone app. If the logo eyes are already
-   flashing, leave the controls alone. Select **Connect Coyote**.
-   If it cannot be found, select **Find nearby devices**. Holding both switches
-   can turn this model off.
+   flashing, leave the controls alone. Select **Connect** on its row in the
+   device panel or on its page. If it cannot be found, select **Find nearby
+   devices** on its page. Holding both switches can turn this model off.
    The list ranks signal strength and distinguishes **Remembered COYOTE**,
    **Likely COYOTE 3.0** (advertised name) and **Possible COYOTE** (unnamed private
    advertisement). An unnamed match is only a candidate; select it explicitly.
@@ -36,11 +40,12 @@ host accepts them. Turning the acceptance off in Settings shows them again.
 3. MagicHandy writes your ceilings to the device, sets both channels to zero
    and remembers the device. Later connections go straight to the remembered
    address, which recent firmware accepts without pairing mode. A failed
-   remembered connection never switches devices automatically; use the picker
-   to choose a different device. The official app's binding is left unchanged.
-4. Raise each channel with its **+** button. Strength changes alone never start
-   playback. With all playback paused, select that channel's **Test** button for a
-   bounded 1.6 s reference pulse at its current strength. The reference uses the
+   remembered connection never switches devices automatically; use **Find
+   nearby devices** to choose a different device. The official app's binding is left unchanged.
+4. Raise each channel with its **+** step in the device panel. Strength
+   changes alone never start playback. With all playback paused, select that
+   channel's **Test** button for a bounded 1.6 s reference pulse at its current
+   strength. The reference uses the
    profile's widest pulse and its low and high rates; it is not a guarantee of
    the strongest sensation every pattern or electrode arrangement can produce.
 
@@ -50,25 +55,28 @@ BlueZ. macOS is not supported.
 
 ## Settings
 
-Settings › Device › Coyote:
+The Coyote's page in Settings › Devices saves each of these as you change it:
 
 - **Channel A and B ceilings** (0–200, default 30): written to the device on
   every connection. The device enforces them against every source, including
   its own switches, and keeps them after you disconnect, so they also limit
   other apps.
 - **Follows**:
-  - *Stroke and speed* (default): the stroke position moves the sensation
+  - *Stroke + speed* (default): the stroke position moves the sensation
     between channel A (base) and channel B (tip), and faster movement widens
     the pulses.
-  - *Speed only*: faster movement widens the pulses on both channels equally.
-  - *Position only*: a steady pulse width moves between the channels.
-- **Pulse rate band** (default 40–100 Hz): the rate follows the pace within the
-  band, in 5 Hz steps held for at least 500 ms.
-- **Channel balance**, **Swap channels** and **Timing offset** (−300 to 300 ms;
-  positive delays the Coyote relative to motion and video).
-- **Coyote balance parameters** (advanced): DG-LAB's frequency and intensity
-  balance, written with the ceilings. Defaults are 160 and 0.
-- **Forget the remembered Coyote** on the next save.
+  - *Speed*: faster movement widens the pulses on both channels equally.
+  - *Position*: a steady pulse width moves between the channels.
+- **Pulse rate** (default 40–100 Hz): the rate follows the pace within the
+  range, in 5 Hz steps held for at least 500 ms.
+- **Channel balance** and **Swap channels**.
+- **Balance parameters** (advanced): DG-LAB's frequency and intensity balance,
+  written with the ceilings. Defaults are 160 and 0.
+- **Forget** the remembered Coyote, under Connection.
+
+The **Timing offset** (−300 to 300 ms; positive delays the Coyote relative to
+motion and video) is under Settings › Devices › Playback, beside the
+vibrator's.
 
 ## Behavior
 
@@ -85,17 +93,18 @@ Settings › Device › Coyote:
 | Motion frame runs out | silent frames, then `starved` | unchanged |
 
 With both devices included, the Handy remains authoritative for timing and
-both participants contribute to playback health. **Settings > Device > On
-device failure** defaults to **Stop all devices**. An unexpected disconnection
-or playback failure stops the linked run and attempts to zero Coyote strength.
-**Continue on the healthy device** instead retires the failed participant from
-an established run and lets the other continue. Both are required at startup.
-The connection manager shows when a run continues without a device. Reconnect,
+both participants contribute to playback health. **Settings > Devices >
+Playback > On device failure** defaults to **Stop every device**. An unexpected
+disconnection or playback failure stops the linked run and attempts to zero
+Coyote strength. **Keep going on healthy devices** instead retires the failed
+participant from an established run and lets the other continue. Both are
+required at startup. The device panel shows when a run continues without a
+device. Reconnect,
 then Stop and start a fresh run to rejoin; old work cannot use a new connection.
 Emergency Stop always stops every device. Changing participation or the failure
 policy stops the run. See [ADR 0045](decisions/0045-device-inventory-and-linked-sessions.md).
 
-Raising strength needs the controlling host. Lowering and **Set both to zero**
+Raising strength needs the controlling host. Lowering and **Zero both**
 are available to every client with control, and the global Stop zeroes for
 everyone. Test requires the controlling host and current Stop sequence, idle
 output, an applied ceiling and a known strength baseline without a pending

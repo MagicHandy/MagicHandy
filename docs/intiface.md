@@ -20,11 +20,15 @@ safest setup.
 
 ## Connect
 
-1. Open **Settings > Device** and choose `intiface` as **Dispatch owner**.
-2. Set the Intiface Central server address and save settings.
-3. Select **Connect**, then **Scan devices** if the target is not already in
-   the returned device list.
-4. Choose one linear actuator and select **Use actuator**.
+1. Open **Settings > Devices**, then The Handy's page (select **Add device**
+   first if it is not listed). Under Connection, choose **Intiface Central**
+   and select **Use this method**.
+2. Check the server address under **Settings > Devices > Connections** (by
+   default `ws://127.0.0.1:12345`). A new address saves when you press Enter or
+   leave the field.
+3. Select **Connect**, then **Scan for devices** if the target is not already
+   in the device list.
+4. Choose one linear actuator and select **Use this device**.
 
 The selected device and actuator are session state, not durable settings.
 Buttplug device indices can change between discovery sessions, so persisting an
@@ -84,25 +88,28 @@ A Buttplug device with `Vibrate` actuators can play with the stroker, the
 Coyote, both, or alone ([ADR 0047](decisions/0047-intiface-vibrator-output.md)).
 It has not been tested on hardware yet.
 
-1. In the connection manager, choose **+**, then **Vibrator**.
-2. Select **Connect vibrator**, then **Scan devices** if the device is not
-   listed.
-3. Choose the device and select **Use vibrator**. Every vibration motor on it
-   runs together.
-4. Raise **Intensity** when you want output. It starts at 0 on every
-   connection and selection, and only you change it.
+1. Open **Settings > Devices**, select **Add device**, then **Vibrator**. Its
+   page opens.
+2. Select **Connect**, then **Scan for devices** if the device is not listed.
+3. Choose the device and select **Use this vibrator**. Every vibration motor on
+   it runs together.
+4. In the device panel (the device chip at the top right), turn on **In
+   playback** and raise **Intensity** when you want output. It starts at 0 on
+   every connection and selection, and only you change it.
 
 Behavior and safety:
 
 - **One connection.** The Handy (with the Intiface method) and the vibrator
-  share one Intiface connection; each row holds its own lease. The connection
-  closes when the last row disconnects. One device cannot be both the linear
-  actuator and the vibrator. Its address is under **Settings > Device >
-  Intiface Central** whenever either device uses it.
-- **Profiles.** In **Settings > Device > Vibrator**, the level follows stroke
-  speed (default), stroke depth toward the base or tip, or stays steady while
-  motion plays. The minimum, the ceiling (default 40%) and a ±300 ms timing
-  offset are saved there. The level maps between the minimum and the live
+  share one Intiface connection; each device holds its own lease. The
+  connection closes when the last device disconnects, and **Disconnect** under
+  **Settings > Devices > Connections** closes it for both. One device cannot be
+  both the linear actuator and the vibrator. Its address is under the same
+  Connections section.
+- **Profiles.** On the vibrator's page in **Settings > Devices**, the level
+  follows stroke speed (default), stroke depth (strongest at the base or tip),
+  or stays steady while motion plays. Its **Level range** (the minimum and the
+  ceiling, default 40%) is saved there, and a ±300 ms timing offset under
+  **Settings > Devices > Playback**. The level maps between the minimum and the live
   intensity, so at an intensity of 0 the vibrator is silent.
 - **Pacing.** Levels are whole steps of each motor's `StepCount`, sent through
   `ScalarCmd` on a 100 ms tick, only when the step changes and never faster

@@ -7,8 +7,6 @@ import "./styles/tokens.css";
 import "./styles/themes.css";
 import "./styles/shell.css";
 import "./styles/components.css";
-import "./styles/coyote.css";
-import "./styles/vibrator.css";
 import "./styles/visualizer.css";
 import "./styles/setpoint-controls.css";
 import "./styles/autopilot.css";
@@ -30,6 +28,7 @@ import "./styles/cloud-motion.css";
 import "./styles/form-rows.css";
 import "./styles/notices.css";
 import "./styles/settings-form.css";
+import "./styles/devices.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

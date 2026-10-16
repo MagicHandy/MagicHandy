@@ -697,6 +697,9 @@ export function SetupRoute() {
             setConnectionKey={setConnectionKey}
             patchOwner={(owner) => setSettings({ ...settings, device: { ...settings.device, hsp_dispatch_owner: owner } })}
             verifyCloud={verifyCloud}
+            addHandy={() => void api.changeDeviceConnection("handy", "add").then(({ settings: saved }) => {
+              if (mounted.current) setSettings((current) => current && { ...current, device: { ...current.device, configured_devices: saved.device.configured_devices, playback_devices: saved.device.playback_devices } });
+            }).catch((error: unknown) => show(error instanceof Error ? translateKnown(error.message) : t("The device could not be changed."), "error"))}
           />}
           {(currentStep === "chat" || currentStep === "backup") && <SetupBackupOrChat
             backup={currentStep === "backup"}

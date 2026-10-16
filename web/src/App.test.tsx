@@ -261,7 +261,8 @@ function installFetch(opts: InstallFetchOptions = {}) {
     if (u.includes("/api/prompt-sets")) return jsonRes({ sets: [] });
     if (u.includes("/api/state")) {
       await opts.stateGate;
-      return jsonRes(state);
+      // The state snapshot carries the live Intiface session, as the core's does.
+      return jsonRes(state.intiface_transport || intiface.status.connected ? { ...state, intiface_transport: intiface } : state);
     }
     return jsonRes({});
   });
@@ -380,7 +381,7 @@ describe("app shell safety invariants", () => {
     expect(within(status).queryByRole("slider")).toBeNull();
     expect(within(status).getAllByRole("button")).toHaveLength(2);
     expect(within(status).getByRole("button", { name: /^notifications/i })).toBeInTheDocument();
-    expect(within(status).getByRole("button", { name: /open connection manager/i })).toBeInTheDocument();
+    expect(within(status).getByRole("button", { name: /open the device panel/i })).toBeInTheDocument();
   });
 
   it("shows a running startup scan as live activity without duplicating it in history", async () => {
@@ -415,48 +416,49 @@ describe("app shell safety invariants", () => {
     expect(clearHistory.querySelector('path[d="M5 7h14"]')).toBeInTheDocument();
   });
 
-  it("keeps connection and live limits in one floating manager on every route", async () => {
+  it("keeps device status and the live limits in one floating panel on every route", async () => {
     installFetch();
     renderApp();
-    const trigger = await screen.findByRole("button", { name: /the handy connection key required/i });
+    const trigger = await screen.findByRole("button", { name: /devices\. the handy needs setup/i });
     for (const hash of ["#/modes", "#/library", "#/videos", "#/settings", "#/chat"]) {
       go(hash);
-      expect(screen.getByRole("button", { name: /the handy connection key required/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /devices\. the handy needs setup/i })).toBeInTheDocument();
     }
     fireEvent.click(trigger);
-    const close = screen.getByRole("button", { name: /^close connection manager$/i });
+    const close = screen.getByRole("button", { name: /^close the device panel$/i });
     await waitFor(() => expect(close).toHaveFocus());
     fireEvent.click(close);
     await waitFor(() => expect(trigger).toHaveFocus());
     fireEvent.click(trigger);
-    const manager = screen.getByRole("region", { name: /connection manager/i });
+    const panel = screen.getByRole("region", { name: "Devices" });
     for (const name of [/speed min/i, /speed max/i, /stroke min/i, /stroke max/i]) {
-      expect(within(manager).getByRole("slider", { name })).toBeInTheDocument();
+      expect(within(panel).getByRole("slider", { name })).toBeInTheDocument();
     }
-    expect(within(manager).getByRole("switch", { name: /reverse direction/i })).toBeInTheDocument();
-    const handyModel = within(manager).getByRole("radiogroup", { name: /handy model/i });
-    expect(within(handyModel).getByRole("radio", { name: "Original" })).toBeChecked();
+    // Forms and calibration live on the Handy's page; the panel links there.
+    expect(within(panel).queryByRole("switch", { name: /reverse direction/i })).toBeNull();
+    expect(within(panel).queryByRole("radiogroup", { name: /handy model/i })).toBeNull();
+    expect(within(panel).queryByLabelText(/connection key/i)).toBeNull();
+    expect(within(panel).getByRole("link", { name: "Set up The Handy" })).toHaveAttribute("href", "#/settings/devices/handy");
+    for (const link of within(panel).getAllByRole("link", { name: "Device settings" })) expect(link).toHaveAttribute("href", "#/settings/devices");
     const motionControls = screen.getByRole("complementary", { name: /motion controls/i });
     expect(within(motionControls).queryByRole("slider", { name: /speed min/i })).toBeNull();
     expect(within(motionControls).queryByRole("switch", { name: /reverse direction/i })).toBeNull();
     expect(within(within(motionControls).getByRole("radiogroup", { name: "Style" })).getByRole("radio", { name: "Balanced" })).toBeChecked();
   });
 
-  it("shows a neutral connection state until the first backend snapshot arrives", async () => {
+  it("lists no device until the first backend snapshot arrives", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     installFetch({ stateGate: gate });
     renderApp();
 
-    fireEvent.click(await screen.findByRole("button", { name: /the handy checking/i }));
-    const manager = screen.getByRole("region", { name: /connection manager/i });
-    expect(within(manager).getByText(/loading provider/i)).toBeInTheDocument();
-    const artwork = within(manager).getByRole("img", { name: /connection status loading/i });
-    expect(artwork).toHaveAttribute("data-phase", "initializing");
-    expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "initializing");
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. checking/i }));
+    const panel = screen.getByRole("region", { name: "Devices" });
+    expect(within(panel).getByText(/checking devices/i)).toBeInTheDocument();
+    expect(within(panel).queryByRole("switch")).toBeNull();
 
     await act(async () => release());
-    await screen.findByRole("button", { name: /the handy connection key required/i });
+    await screen.findByRole("button", { name: /devices\. the handy needs setup/i });
   });
 
   it("never overlaps slow backend-state polls", async () => {
@@ -481,26 +483,7 @@ describe("app shell safety invariants", () => {
     }
   });
 
-  it("draws three signals and the Handy target as flat vector art without a bitmap or mask", async () => {
-    installFetch();
-    renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
-    const artwork = screen.getByRole("img", { name: /the handy wireless connection/i });
-    expect(artwork.querySelector("image")).toBeNull();
-    expect(artwork.querySelector("mask")).toBeNull();
-    expect(artwork.querySelector("clipPath")).toBeNull();
-    expect(artwork.querySelectorAll(".connection-signal path")).toHaveLength(3);
-    expect(artwork.querySelectorAll(".connection-handy-body")).toHaveLength(2);
-    expect(artwork.querySelector(".connection-handy-led")).toBeInTheDocument();
-    expect(artwork.querySelector(".connection-handy-marker")).toBeInTheDocument();
-    expect(artwork.querySelectorAll(".connection-error-mark path")).toHaveLength(2);
-    expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "false");
-    expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "disconnected");
-    expect(artwork).toHaveAttribute("viewBox", "0 0 360 120");
-    expect(artwork).toHaveAttribute("data-phase", "disconnected");
-  });
-
-  it("shows the failure mark only for an errored connection attempt", async () => {
+  it("reads a failed browser Bluetooth link as lost and offers Reconnect", async () => {
     installFetch({
       state: {
         ...baseState,
@@ -509,35 +492,34 @@ describe("app shell safety invariants", () => {
       },
     });
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy bluetooth error/i }));
-    const artwork = screen.getByRole("img", { name: /the handy wireless connection/i });
-    expect(artwork).toHaveAttribute("data-phase", "error");
-    expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "true");
-    expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "disconnected");
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. the handy connection lost/i }));
+    const panel = screen.getByRole("region", { name: "Devices" });
+    expect(within(panel).getByText("Connection lost")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Reconnect The Handy" })).toBeInTheDocument();
   });
 
-  it("saves the Cloud connection key through the scoped redacted endpoint", async () => {
+  it("saves the Cloud connection key on the Handy's page through the scoped redacted endpoint", async () => {
     const fetchMock = installFetch();
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
-    const manager = screen.getByRole("region", { name: /connection manager/i });
-    expect(within(manager).getByText(/built-in handy api v3 id/i)).toBeInTheDocument();
-
-    fireEvent.change(within(manager).getByLabelText(/handy connection key/i), { target: { value: "test-connection-key" } });
-    fireEvent.click(within(manager).getByRole("button", { name: /save key/i }));
+    await screen.findByRole("button", { name: /emergency stop/i });
+    go("#/settings/devices/handy");
+    const key = await screen.findByLabelText(/^connection key$/i);
+    expect(key).toHaveAttribute("type", "password");
+    fireEvent.change(key, { target: { value: "test-connection-key" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
 
     await waitFor(() => {
       const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/api/settings/device/connection-key"));
       expect(call).toBeDefined();
       expect(JSON.parse(String(call?.[1]?.body))).toEqual({ connection_key: "test-connection-key" });
     });
-    await waitFor(() => expect(within(manager).getByLabelText(/handy connection key/i)).toHaveValue(""));
+    await waitFor(() => expect(screen.getByLabelText(/^connection key$/i)).toHaveValue(""));
   });
 
   it("applies a floating limit change through the semantic quick API", async () => {
     const fetchMock = installFetch();
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. the handy needs setup/i }));
     fireEvent.change(screen.getByRole("slider", { name: /speed maximum/i }), { target: { value: "40" } });
     await waitFor(() => {
       const call = fetchMock.mock.calls.find(([input]) => String(input).includes("/api/motion/quick"));
@@ -549,7 +531,7 @@ describe("app shell safety invariants", () => {
   it("keeps the stroke bounds distinct and sends only the changed bound", async () => {
     const fetchMock = installFetch();
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. the handy needs setup/i }));
     const minimum = screen.getByRole("slider", { name: /stroke minimum/i });
     expect(minimum).toHaveAttribute("aria-valuemax", "99");
 
@@ -564,7 +546,7 @@ describe("app shell safety invariants", () => {
   it("lets pointer users drag either bound from the shared range track", async () => {
     const fetchMock = installFetch();
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. the handy needs setup/i }));
     const speed = screen.getByRole("group", { name: /^speed$/i });
     const track = speed.querySelector(".range-slider-track") as HTMLDivElement;
     vi.spyOn(track, "getBoundingClientRect").mockReturnValue({ left: 0, width: 100 } as DOMRect);
@@ -584,7 +566,7 @@ describe("app shell safety invariants", () => {
   it("merges rapid quick changes without adding untouched sibling bounds", async () => {
     const fetchMock = installFetch();
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy connection key required/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. the handy needs setup/i }));
     fireEvent.change(screen.getByRole("slider", { name: /speed minimum/i }), { target: { value: "30" } });
     fireEvent.change(screen.getByRole("slider", { name: /stroke maximum/i }), { target: { value: "90" } });
 
@@ -604,25 +586,21 @@ describe("app shell safety invariants", () => {
       },
     });
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy cloud connection ready/i }));
-    const manager = screen.getByRole("region", { name: /connection manager/i });
-    const checkButton = within(manager).getByRole("button", { name: /check cloud connection/i });
-    const current = manager.querySelector<HTMLElement>(".connection-current");
-    const copy = manager.querySelector<HTMLElement>(".connection-current-copy");
-    expect(current).not.toBeNull();
-    expect(copy).not.toBeNull();
-    expect(current).toContainElement(checkButton);
-    expect(copy).not.toContainElement(checkButton);
-    fireEvent.click(checkButton);
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. the handy connected/i }));
+    const panel = screen.getByRole("region", { name: "Devices" });
+    expect(within(panel).getByText("Connected")).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: "Disconnect The Handy" })).toBeInTheDocument();
+    // Check is a diagnostic on the Handy's page: it never reconnects or releases.
+    go("#/settings/devices/handy");
+    fireEvent.click(await screen.findByRole("button", { name: /^check$/i }));
     await waitFor(() => {
       const call = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/api/transport/cloud/check"));
       expect(call).toBeDefined();
     });
     expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/transport/cloud/disconnect"))).toBe(false);
-    expect(within(manager).getByRole("button", { name: /^disconnect$/i })).toBeInTheDocument();
   });
 
-  it("releases Cloud control and changes the primary action back to Connect", async () => {
+  it("releases Cloud control and changes the row's action back to Connect", async () => {
     const fetchMock = installFetch({
       state: {
         ...baseState,
@@ -631,18 +609,18 @@ describe("app shell safety invariants", () => {
       },
     });
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy cloud connection ready/i }));
-    const manager = screen.getByRole("region", { name: /connection manager/i });
-    fireEvent.click(within(manager).getByRole("button", { name: /^disconnect$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. the handy connected/i }));
+    const panel = screen.getByRole("region", { name: "Devices" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Disconnect The Handy" }));
 
     await waitFor(() => expect(fetchMock.mock.calls.some(
       ([input]) => String(input).endsWith("/api/transport/cloud/disconnect"),
     )).toBe(true));
-    await waitFor(() => expect(within(manager).getByRole("button", { name: /^connect$/i })).toBeInTheDocument());
-    expect(within(manager).getByText("Cloud disconnected")).toBeInTheDocument();
+    await waitFor(() => expect(within(panel).getByRole("button", { name: "Connect The Handy" })).toBeInTheDocument());
+    expect(within(panel).getByText("Not connected")).toBeInTheDocument();
   });
 
-  it("shows the wireless wave state while checking The Handy", async () => {
+  it("shows Connecting while The Handy connects", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     installFetch({
@@ -653,14 +631,13 @@ describe("app shell safety invariants", () => {
       },
     });
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy cloud disconnected/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
-    expect(screen.getByRole("img", { name: /in progress/i })).toHaveAttribute("data-phase", "connecting");
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. the handy not connected/i }));
+    const panel = screen.getByRole("region", { name: "Devices" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Connect The Handy" }));
+    await waitFor(() => expect(within(panel).getByRole("button", { name: "Connect The Handy" })).toHaveAttribute("aria-busy", "true"));
+    expect(within(panel).getAllByText("Connecting…").length).toBeGreaterThan(0);
     await act(async () => release());
-    await waitFor(() => expect(screen.getByRole("img", { name: /the handy wireless connection$/i })).toHaveAttribute("data-phase", "connected"));
-    const artwork = screen.getByRole("img", { name: /the handy wireless connection$/i });
-    expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "false");
-    expect(artwork.querySelector(".connection-handy-marker")).toHaveAttribute("data-state", "connected");
+    await waitFor(() => expect(within(panel).getByRole("button", { name: "Disconnect The Handy" })).toBeInTheDocument());
   });
 
   it("shows the backend explanation when Cloud responds without HSP", async () => {
@@ -679,9 +656,11 @@ describe("app shell safety invariants", () => {
       },
     });
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy cloud disconnected/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. the handy not connected/i }));
+    const panel = screen.getByRole("region", { name: "Devices" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Connect The Handy" }));
     expect(await screen.findByText("HSP is unavailable for this device/API state")).toBeInTheDocument();
+    await waitFor(() => expect(within(panel).getByText(/last attempt failed/i)).toBeInTheDocument());
   });
 
   it("shows startup recovery without exposing controls backed by missing state", async () => {
@@ -823,7 +802,7 @@ describe("app shell safety invariants", () => {
     installFetch();
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    go("#/settings/device");
+    go("#/settings/devices/handy");
 
     const notice = await screen.findByRole("note", { name: /firmware \/ api requirement/i });
     expect(notice).toHaveTextContent(/firmware v4 with API v3 access/i);
@@ -1145,7 +1124,7 @@ describe("app shell safety invariants", () => {
     const status = screen.getByRole("region", { name: /status/i });
     expect(within(status).getAllByRole("button")).toHaveLength(2);
     expect(within(status).getByRole("button", { name: /^notifications/i })).toBeInTheDocument();
-    expect(within(status).getByRole("button", { name: /open connection manager/i })).toBeInTheDocument();
+    expect(within(status).getByRole("button", { name: /open the device panel/i })).toBeInTheDocument();
   });
 
   it("locks worker controls behind unsaved voice edits", async () => {
@@ -1202,20 +1181,24 @@ describe("app shell safety invariants", () => {
     } });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    go("#/settings/device");
+    go("#/settings/general");
     expect(await screen.findByRole("button", { name: /save settings/i })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: /the handy cloud disconnected/i }));
-    const manager = screen.getByRole("region", { name: /connection manager/i });
-    expect(within(manager).getByLabelText(/handy connection key/i)).toBeDisabled();
-    expect(within(manager).getByRole("button", { name: /save key/i })).toBeDisabled();
-    expect(within(manager).getByRole("button", { name: /check cloud connection/i })).toBeDisabled();
-    expect(within(manager).getByRole("button", { name: /^connect$/i })).toBeDisabled();
+    go("#/settings/devices/handy");
+    expect(await screen.findByLabelText(/^connection key$/i)).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^save$/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^check$/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /devices\. the handy not connected/i }));
+    const panel = screen.getByRole("region", { name: "Devices" });
+    expect(within(panel).getByText(/another tab controls magichandy/i)).toBeInTheDocument();
+    expect(within(panel).getByRole("button", { name: /take control/i })).toBeInTheDocument();
+    expect(within(panel).queryByRole("button", { name: "Connect The Handy" })).toBeNull();
+    expect(within(panel).getByRole("switch", { name: /use the handy in playback/i })).toBeDisabled();
     go("#/settings/prompts");
     expect(await screen.findByRole("button", { name: /duplicate as new/i })).toBeDisabled();
     expect(await screen.findByRole("button", { name: /add memory/i })).toBeDisabled();
   });
 
-  it("shows browser Bluetooth bridge controls when that dispatch owner is selected", async () => {
+  it("shows the browser Bluetooth details on the Handy's page", async () => {
     installFetch({
       state: {
         ...baseState,
@@ -1225,11 +1208,12 @@ describe("app shell safety invariants", () => {
     });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    fireEvent.click(screen.getByRole("button", { name: /the handy bluetooth disconnected/i }));
-    const manager = screen.getByRole("region", { name: /connection manager/i });
-    expect(within(manager).getAllByText(/bluetooth disconnected/i).length).toBeGreaterThan(0);
-    expect(within(manager).getByRole("button", { name: /connect bluetooth/i })).toBeInTheDocument();
-    expect(within(manager).queryByLabelText(/handy connection key/i)).toBeNull();
+    go("#/settings/devices/handy");
+    expect(await screen.findByText("Device connection")).toBeInTheDocument();
+    expect(screen.getAllByText(/bluetooth disconnected/i).length).toBeGreaterThan(0);
+    // Connect and Disconnect are the device row's; the page shows the details.
+    expect(screen.queryByRole("button", { name: /connect bluetooth/i })).toBeNull();
+    expect(screen.queryByLabelText(/^connection key$/i)).toBeNull();
   });
 
   it("reports an unreachable transport after preserving local Stop state", async () => {
@@ -1249,7 +1233,7 @@ describe("app shell safety invariants", () => {
   });
 
   it("connects and selects a discovered Intiface linear actuator", async () => {
-    installFetch({
+    const fetchMock = installFetch({
       state: {
         ...baseState,
         settings: { ...baseState.settings, device: { ...baseState.settings.device, hsp_dispatch_owner: "intiface" } },
@@ -1263,15 +1247,19 @@ describe("app shell safety invariants", () => {
     });
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
-    fireEvent.click(screen.getByRole("button", { name: /the handy intiface disconnected/i }));
-    fireEvent.click(await screen.findByRole("button", { name: /^connect$/i }));
-    expect(await screen.findByText(/connected - select a linear actuator/i)).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("combobox", { name: /linear actuator/i }), { target: { value: "7:0" } });
-    fireEvent.click(screen.getByRole("button", { name: /use actuator/i }));
-    expect(await screen.findByText(/connected - ready/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /devices\. the handy not connected/i }));
+    const panel = screen.getByRole("region", { name: "Devices" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Connect The Handy" }));
+    // Connected to Intiface with no actuator chosen: the row sends you to the page.
+    expect(await within(panel).findByRole("link", { name: "Set up The Handy" })).toHaveAttribute("href", "#/settings/devices/handy");
+    go("#/settings/devices/handy");
+    expect(await screen.findByRole("radio", { name: /test linear/i })).toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Use this device" }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([input]) => String(input).endsWith("/api/transport/intiface/select"))).toBe(true));
+    await waitFor(() => expect(within(panel).getByRole("button", { name: "Disconnect The Handy" })).toBeInTheDocument());
   });
 
-  it("shows the error artwork only after an Intiface connection attempt fails", async () => {
+  it("keeps a failed Intiface connection attempt on the Handy's row", async () => {
     installFetch({
       intifaceConnectError: "Intiface Central is not reachable",
       state: {
@@ -1286,13 +1274,12 @@ describe("app shell safety invariants", () => {
       },
     });
     renderApp();
-    fireEvent.click(await screen.findByRole("button", { name: /the handy intiface disconnected/i }));
-    const artwork = screen.getByRole("img", { name: /the handy wireless connection/i });
-    expect(artwork).toHaveAttribute("data-phase", "disconnected");
-    fireEvent.click(screen.getByRole("button", { name: /^connect$/i }));
-    await waitFor(() => expect(artwork).toHaveAttribute("data-phase", "error"));
-    expect(artwork.querySelector(".connection-error-mark")).toHaveAttribute("data-visible", "true");
-    expect(screen.getByRole("button", { name: /the handy intiface connection failed/i })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /devices\. the handy not connected/i }));
+    const panel = screen.getByRole("region", { name: "Devices" });
+    expect(within(panel).queryByText(/last attempt failed/i)).toBeNull();
+    fireEvent.click(within(panel).getByRole("button", { name: "Connect The Handy" }));
+    await waitFor(() => expect(within(panel).getByText(/last attempt failed/i)).toBeInTheDocument());
+    expect(within(panel).getByRole("button", { name: "Connect The Handy" })).toBeEnabled();
   });
 
   it("shows and copies paced Intiface diagnostics", async () => {

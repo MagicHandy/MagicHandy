@@ -478,6 +478,8 @@ func (s *Server) settingsAndUpdateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/settings/llm-motion-mode", s.handlePutLLMMotionMode)
 	mux.HandleFunc("GET /api/update", s.handleUpdateStatus)
 	mux.HandleFunc("PUT /api/settings/device/connection-key", s.handlePutConnectionKey)
+	mux.HandleFunc("PATCH /api/settings/device", s.handlePatchDeviceOptions)
+	mux.HandleFunc("PUT /api/settings/server", s.handlePutServerPort)
 	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
 }
 

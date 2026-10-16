@@ -86,6 +86,7 @@ import type {
   CommandReceipt,
   CoyoteTransportSnapshot,
   DeviceId,
+  DeviceOptionsPatch,
   DeviceOutput,
 } from "./types";
 
@@ -813,6 +814,10 @@ export const api = {
     request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),
   saveConnectionKey: (connection_key: string) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connection-key", { connection_key }),
+  // Settings > Devices saves each device option as it changes.
+  saveDeviceOptions: (patch: DeviceOptionsPatch) =>
+    request<{ settings: PublicSettings }>("PATCH", "/api/settings/device", patch),
+  saveServerPort: (port: number) => request<{ settings: PublicSettings }>("PUT", "/api/settings/server", { port }),
   resetSettings: () => request<{ settings: PublicSettings }>("POST", "/api/settings/reset", {}),
   updateStatus: (refresh = false) => request<UpdateStatus>("GET", `/api/update${refresh ? "?refresh=1" : ""}`),
 
