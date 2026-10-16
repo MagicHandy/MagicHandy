@@ -2,6 +2,7 @@ package chat
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"unicode/utf8"
 )
@@ -47,7 +48,29 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 func continuousInteractiveContract(contract string, state MotionContext) string {
 	contract = continuousInteractiveExamples(contract, state)
 	if state.Autopilot {
-		contract = strings.ReplaceAll(contract, `,"reply":`, `,"stay_unchanged":false,"reply":`)
+		// The constrained decoder emits required top-level fields in schema
+		// order: action, edits, reply, stay_unchanged. Do not demonstrate a hold
+		// field before reply. Preserve nested edit order and skip prose/templates.
+		lines := strings.Split(contract, "\n")
+		for i, line := range lines {
+			start := strings.Index(line, `{"action":`)
+			if start < 0 {
+				continue
+			}
+			var fields map[string]json.RawMessage
+			if json.Unmarshal([]byte(line[start:]), &fields) != nil || fields["reply"] == nil {
+				continue
+			}
+			fields["stay_unchanged"] = json.RawMessage(`false`)
+			// This code-owned example explicitly asks for a lasting hold.
+			// It must not teach the opposite decision; no user text is matched.
+			if (state.StandingHold && string(fields["action"]) == `"none"`) || line[start:] == strings.Replace(layeredHoldExample, `{"edits":`, `{"action":"none","edits":`, 1) {
+				fields["stay_unchanged"] = json.RawMessage(`true`)
+			}
+			encoded, _ := json.Marshal(fields)
+			lines[i] = line[:start] + string(encoded)
+		}
+		contract = strings.Join(lines, "\n")
 	}
 	return contract
 }
@@ -60,6 +83,8 @@ func continuousInteractiveExamples(contract string, state MotionContext) string 
 		contract = strings.ReplaceAll(contract, `{"edits":{}`, `{"action":"none","edits":{}`)
 		return strings.ReplaceAll(contract, `{"edits":`, `{"action":"update","edits":`)
 	}
+	_, limits := layeredContextScore(&state)
+	speed := min(max(20, limits.SpeedMinPercent), limits.SpeedMaxPercent)
 	if state.MotionMode == MotionModeLayered {
 		if begin := strings.Index(contract, "\nExamples:"); begin >= 0 {
 			if end := strings.Index(contract[begin:], "Independent refinements"); end >= 0 {
@@ -67,8 +92,6 @@ func continuousInteractiveExamples(contract string, state MotionContext) string 
 			}
 		}
 		contract = strings.ReplaceAll(contract, `Output {"edits":{...},"reply":"..."}.`, `Output {"action":"none|start|update","edits":{...},"reply":"..."}; choose one action permitted by the current state.`)
-		const relativeExample = `Example: increase the pace period BY 4 cycles -> {"edits":{"layers":[{"axis":"pace","period_change_cycles":4}]},"reply":"Pace variation unfolds four cycles more gradually."} `
-		contract = strings.ReplaceAll(contract, relativeExample, "For example, increasing the pace period BY 4 cycles uses period_change_cycles:4. ")
 	}
 	if begin := strings.Index(contract, "These examples illustrate edit mechanics"); begin >= 0 {
 		if end := strings.Index(contract[begin:], "Emit every requested group"); end >= 0 {
@@ -95,6 +118,16 @@ func continuousInteractiveExamples(contract string, state MotionContext) string 
 		}
 		return contract + `
 For a requested pace change to 25, only if 25 is inside saved limits: {"action":"update","edits":` + edit + `,"reply":"The requested pace is applied."}`
+	}
+	if state.MotionMode == MotionModeLayered {
+		// Keep a state-valid geometry example when stopped. The generic empty
+		// start example alone taught smaller models to keep the default band
+		// even when the human explicitly supplied different endpoints.
+		contract += fmt.Sprintf(`
+For "Start full strokes from 0 to 100 at speed %d" (current band 5..95): {"action":"start","edits":{"controls":{"speed_percent":%d},"geometry":"full_slider"},"reply":"Starting full strokes between 0 and 100 at %d percent."}`, speed, speed, speed)
+	} else {
+		contract += fmt.Sprintf(`
+For "Start full strokes from 0 to 100 at speed %d" (current band 5..95): {"action":"start","edits":[{"range":{"max_percent":100,"min_percent":0}},{"focus":{"mix_percent":0,"position_percent":50,"roam_percent":100,"width_percent":25}},{"speed_percent":%d}],"reply":"Starting full strokes between 0 and 100."}`, speed, speed)
 	}
 	return contract + `
 Only an explicit request to begin movement permits: {"action":"start","edits":` + empty + `,"reply":"Starting with the current settings."}

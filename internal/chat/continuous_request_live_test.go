@@ -30,7 +30,16 @@ func TestContinuousRequestLive(t *testing.T) {
 	if err != nil || u.Scheme != "http" || (u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost" && u.Hostname() != "::1") {
 		t.Fatal("live evaluation requires a loopback HTTP worker")
 	}
-	provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{BaseURL: endpoint, Model: model, Timeout: 90 * time.Second})
+	options := llm.HTTPProviderOptions{BaseURL: endpoint, Model: model, Timeout: 90 * time.Second}
+	var provider llm.Provider
+	switch os.Getenv("MAGICHANDY_EVAL_PROVIDER") {
+	case "", "llama_cpp":
+		provider, err = llm.NewLlamaCPPProvider(options)
+	case "ollama":
+		provider, err = llm.NewOllamaProvider(options)
+	default:
+		t.Fatal("evaluation provider must be llama_cpp or ollama")
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

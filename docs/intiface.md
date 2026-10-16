@@ -110,6 +110,14 @@ Remaining acceptance checks:
 
 Keep automated or unattended real-device runs at or below 40% speed.
 
+The [October 15 software comparison](release-motion-review-2026-10-15.md) covers
+32 Cloud/Intiface pairs with a full stroke window. Mean quantized travel differs
+by at most 0.0782%; fast turns have larger position approximation error at the
+Intiface 50 ms interval. These results do not measure live dispatch or physical
+speed. The reported speed-mapping difference remains pending a matched run on
+Intiface Central 3.2.2, including restricted windows and paced-wire diagnostics.
+No transport-specific speed multiplier or reduced timing floor was introduced.
+
 ## September 2026 connection review
 
 Session I/O and handshake live in `intiface_session.go`, separate from motion

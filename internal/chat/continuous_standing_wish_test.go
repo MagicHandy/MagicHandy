@@ -31,7 +31,7 @@ func TestLiveContinuousChatDeclaresStandingWishes(t *testing.T) {
 
 // The wish is offered only while continuous Autopilot composes the motion, the
 // one time it has an effect. There it is required, so the grammar asks for it
-// before the reply instead of as a trailing field the model tended to skip.
+// after the reply; making it required prevents silently skipping the decision.
 func TestStandingWishIsOfferedOnlyWhileAutopilotComposes(t *testing.T) {
 	creative := FreshCreativeV2Score(25)
 	cases := []struct {

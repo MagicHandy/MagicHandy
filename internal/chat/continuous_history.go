@@ -108,7 +108,7 @@ func continuousOutputGuard(capabilities Capabilities) string {
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		empty = "[]"
 	}
-	guard := `FINAL OUTPUT RULE: Return one JSON object with "edits" and "reply", using this mode's contract. Ordinary conversation and questions require "edits":` + empty + `. Do not evolve during ordinary conversation. Use the selected voice for reply; technical examples illustrate edits, not a required speaking style. Never output a "motion" field. Close JSON immediately after the final sentence, with no trailing blank lines.`
+	guard := `FINAL OUTPUT RULE: Return one JSON object using this mode's contract. Conversation requires "edits":` + empty + `; no evolution. Reply in the selected voice, not the technical examples' style. Never output a "motion" field. Close JSON after the final sentence; no trailing blank lines.`
 	if capabilities.MoodTracking {
 		guard += ` Optional "new_mood" may use a listed mood.`
 	}

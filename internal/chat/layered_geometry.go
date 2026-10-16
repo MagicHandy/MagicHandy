@@ -7,7 +7,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
 
-var layeredGeometries = []string{"alternate_ends", "full_and_tip", "full_and_base", "tip_anchor", "base_anchor", "centered", "wander"}
+var layeredGeometries = []string{"full_slider", "full_band", "alternate_ends", "full_and_tip", "full_and_base", "tip_anchor", "base_anchor", "centered", "wander"}
 
 // Geometry operations are explicit model-selected edits of coupled controls,
 // not text inference or a fallback catalog. Independent pace layers survive.
@@ -22,8 +22,15 @@ func applyLayeredGeometry(s *motion.FlowSpec, geometry string) error {
 		s.Layers = slices.DeleteFunc(s.Layers, func(l motion.FlowLayer) bool { return l.Axis == axis })
 	}
 	set := func(layer motion.FlowLayer) { remove(layer.Axis); s.Layers = append(s.Layers, layer) }
+	if geometry == "full_slider" {
+		s.MinPercent, s.MaxPercent = 0, 100
+	}
 	width := s.MaxPercent - s.MinPercent
 	switch geometry {
+	case "full_slider", "full_band":
+		s.RangeFloorPercent, s.RangeCeilingPercent = width, width
+		remove("range")
+		remove("center")
 	case "alternate_ends":
 		if width < 20 {
 			return errors.New("alternating ends needs an outer band at least 20 wide")
@@ -64,6 +71,20 @@ func applyLayeredGeometry(s *motion.FlowSpec, geometry string) error {
 }
 
 func validateLayeredGeometry(s motion.FlowSpec, geometry string) error {
+	if geometry == "full_band" || geometry == "full_slider" {
+		valid := layeredFullGeometry(s)
+		if geometry == "full_slider" {
+			valid = valid && s.MinPercent == 0 && s.MaxPercent == 100
+		}
+		if !valid {
+			return errors.New("edits conflict with the selected geometry")
+		}
+		return nil
+	}
+	return validateLayeredVariationGeometry(s, geometry)
+}
+
+func validateLayeredVariationGeometry(s motion.FlowSpec, geometry string) error {
 	axis := func(name string) motion.FlowLayer {
 		for _, l := range s.Layers {
 			if l.Axis == name {
@@ -102,14 +123,38 @@ func validateLayeredGeometry(s motion.FlowSpec, geometry string) error {
 	return nil
 }
 
+func layeredFullGeometry(s motion.FlowSpec) bool {
+	width := s.MaxPercent - s.MinPercent
+	if s.RangeFloorPercent != width || s.RangeCeilingPercent != width {
+		return false
+	}
+	for _, layer := range s.Layers {
+		if layer.Axis != "pace" && layer.AmountPercent != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func applyLayeredGeometryEdit(next *motion.FlowSpec, edit LayeredEdit) error {
 	anchor, variation := next.AnchorPercent, next.VariationMode
+	minimum, maximum := next.MinPercent, next.MaxPercent
 	if err := applyLayeredGeometry(next, edit.Geometry); err != nil {
 		return err
 	}
 	if ((edit.Controls["anchor_percent"] != nil || edit.ChangeBy["anchor_percent"] != nil) && anchor != next.AnchorPercent) || (edit.Controls["variation_mode"] != nil && variation != next.VariationMode) {
 		return errors.New("controls conflict with the selected geometry")
 	}
+	if layeredControlSpecified(edit, "min_percent") && minimum != next.MinPercent {
+		return errors.New("outer range conflicts with the selected geometry")
+	}
+	if layeredControlSpecified(edit, "max_percent") && maximum != next.MaxPercent {
+		return errors.New("outer range conflicts with the selected geometry")
+	}
 
 	return nil
+}
+
+func layeredControlSpecified(edit LayeredEdit, name string) bool {
+	return edit.Controls[name] != nil || edit.ChangeBy[name] != nil
 }

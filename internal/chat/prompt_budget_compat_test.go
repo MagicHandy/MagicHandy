@@ -30,3 +30,21 @@ func TestBuiltinMotionPromptsFitMinimumManagedContext(t *testing.T) {
 		})
 	}
 }
+
+func TestInteractiveMotionPromptsFitMinimumManagedContext(t *testing.T) {
+	set, _ := BuiltinPromptSetByID(DefaultPromptSetID)
+	for _, mode := range []MotionMode{MotionModeLayered, MotionModeCreativeV2} {
+		for _, running := range []bool{false, true} {
+			caps := FullCapabilities()
+			caps.MotionMode, caps.Voice = mode, VoiceExplicit
+			state := &MotionContext{MotionMode: mode, Running: running}
+			prompt := ComposeInteractivePrompt(set, nil, nil, caps, state, nil)
+			schema := InteractiveResponseSchema(nil, caps, state)
+			_, budget, err := llm.BudgetChatRequest(llm.ChatRequest{MaxTokens: 256, JSONSchema: schema, Messages: []llm.Message{{Role: "system", Content: prompt.Prompt}, {Role: "user", Content: "Start smooth full-range strokes from 0 to 100 at speed 20 percent, with even timing in both directions."}}}, 16384)
+			if err != nil {
+				t.Errorf("live %s running=%t prompt exceeds the minimum context: %v", mode, running, err)
+			}
+			t.Logf("%s running=%t request=%d bytes; limit=%d bytes", mode, running, budget.InputBytes, budget.LimitBytes)
+		}
+	}
+}

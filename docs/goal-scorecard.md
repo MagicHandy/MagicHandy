@@ -1,5 +1,22 @@
 # Goal Scorecard
 
+## 2026-10-15 — Release motion and model review
+
+The [model/transport review](release-motion-review-2026-10-15.md) adds a bounded
+floating-point endpoint correction and explicit Layered full-travel operations.
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags
+'-s -w'`: core **22,933,504 B**, **+5,120 B** from `5938a0cb`.
+The worker, dependencies and canonical UI bundle are unchanged. There is no new
+process, poller, model call or runtime plotting dependency.
+
+The all-capabilities base prompt fixture shrinks from 10,819 to **10,495 B** for
+Layered and 10,749 to **10,573 B** for Creative v2. The new live-envelope fixture
+also fits a 16,384 context with its explicit 256 output reserve. Richer personas,
+larger output reserves and Autopilot context still consume the existing budget;
+this is not an unlimited-context claim. Five-mode generation medians were
+**977 ms local / 2,878.5 ms hosted** in a small host-specific sample. No controlled
+RSS/cold-start comparison is claimed; the existing waiver remains.
+
 ## 2026-10-15 — Native linked-device hardware checks
 
 Ten consecutive Handy disconnect/reconnect cycles pass with the shared

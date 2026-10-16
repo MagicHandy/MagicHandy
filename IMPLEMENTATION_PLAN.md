@@ -2,6 +2,13 @@
 
 ## Core Direction
 
+The October 15 [release motion review](docs/release-motion-review-2026-10-15.md)
+fixes floating-point endpoint rejection, adds explicit Layered full-slider and
+full-band edits, and aligns live examples with decoder order and Autopilot hold
+state. Local/hosted production fixtures and minimum-context checks cover the
+changes. The Cloud/Intiface software comparison preserves average travel rate;
+the reported physical speed difference still needs a matched hardware run.
+
 The October 11 [diagnostic download review](docs/diagnostic-report-review-2026-10-11.md)
 replaces the trace-export card with one backend-built report and a compact
 inclusion menu. History, failed output and personalization are explicit choices;
