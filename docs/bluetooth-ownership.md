@@ -4,6 +4,9 @@
 
 Initial decision: browser-owned Bluetooth bridge for early MagicHandy implementation.
 
+Update 2026-10-14: [ADR 0046](decisions/0046-shared-native-bluetooth-worker.md)
+adds an independent host-owned Handy option. Browser Bluetooth remains supported.
+
 ## Context
 
 StrokeGPT-ReVibed added experimental Web Bluetooth support where the browser owns the BLE connection and the server bridges motion commands to the active browser. This was chosen because browser Web Bluetooth is practical for a local web app, while native server-side Bluetooth on Windows can be difficult and inconsistent.
@@ -121,3 +124,31 @@ mandatory firmware response wait is added to streaming commands. A correlated
 late rejection, including a code-only error, ends the channel.
 
 See [the review, references and simulation limits](bluetooth-intiface-review-2026-09-20.md).
+
+## October 2026: the Coyote uses a worker
+
+The DG-LAB Coyote 3.0 does not follow the browser-owned model. It has no
+device-side buffer: the host must write a packet every 100 ms, and a hidden
+tab both throttles timers and ends this bridge. AGENTS.md section 3 also allows
+native Bluetooth in a worker process, so `bluetooth-worker` owns the Coyote's
+radio while the core composes every packet. The Handy's Bluetooth path is
+unchanged. See [ADR 0044](decisions/0044-coyote-estim-output.md).
+
+## October 14, 2026: Handy can also use the shared worker
+
+Native Bluetooth is a fourth Handy protocol selection alongside Cloud REST,
+Browser Bluetooth and Intiface. It uses the computer running the Go application,
+not the computer or phone displaying the UI. Selecting a protocol never opens
+a radio connection. The backend owns discovery, readiness and connection lifetime.
+
+`internal/ble` provides device-neutral links and version-3 IPC. One instance of
+`bluetooth-worker` serves one profile and connection; a hung write cannot take
+down another device's process. `internal/handyble` supplies the RPC driver while
+`HandyBluetoothTransport` preserves the same HSP point mapping as the browser.
+No frontend heartbeat or browser BLE lease is fabricated for a native connection.
+Normal controller ownership and Emergency Stop rules still apply.
+
+Native support uses firmware-4 RPC. Point chunks respect the negotiated ATT MTU,
+and late replies cannot revive a retired stream or connection. A missing optional
+clock reply leaves uncompensated, explicitly estimated playback timing. See the
+[software review and remaining hardware checks](native-handy-bluetooth-review-2026-10-14.md).

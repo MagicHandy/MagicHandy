@@ -168,7 +168,7 @@ certificate/proxy fields in a disclosure. Save only backend-validated results;
 report preparation errors inline while retaining the active local connection.
 See [ADR 0030](decisions/0030-guided-https-certificates.md).
 
-The primary settings destinations are **General**, **Access**, **Device**,
+The primary settings destinations are **General**, **Access**, **Devices**,
 **Media library**, **Chat**, **Voice** and **Diagnostics**. Chat combines the
 former Chat, Model and Prompts pages behind a shared sidebar: **Conversation**,
 **Model** and **Prompts & memory**. The canonical routes are
@@ -179,9 +179,13 @@ Conversation. The parent owns the settings draft and Save action, so moving
 between these sections does not discard edits or fetch another host snapshot.
 Prompt-set and memory operations keep their existing immediate-save behavior.
 
-Only Chat and Access use secondary navigation. General, Device, Media library,
-Voice and Diagnostics remain single pages with flat sections, sentence-case
-headings and restrained horizontal dividers. General displays the current
+Only Chat and Access use secondary navigation. Devices lists the saved devices
+and opens a page per device (`#/settings/devices/handy`, `/coyote`,
+`/vibrator`) with a breadcrumb back; it has no draft and no Save, because each
+option saves as it changes (the Handy connection key keeps an explicit Save).
+`#/settings/device` bookmarks open Devices. General, Media library, Voice and
+Diagnostics remain single pages with flat sections, sentence-case headings and
+restrained horizontal dividers. General displays the current
 theme in a disclosure; expanding it reveals the existing full theme chooser.
 Narrow settings layouts use compact 32px action buttons. Model import actions
 wrap as complete buttons rather than squeezing into equal-width columns. Model
@@ -435,14 +439,16 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > (Chat / Preset Modes / Pattern Library / Videos / Settings) with **Stop pinned to
 > the rail footer on every page**, a compact status-led top bar (dot+text
 > readouts, stopwatch, mini visualizer, account control context, notifications,
-> and the connection disclosure), and
-> workspaces as routed pages under a hash router. The shell-owned connection
-> manager stays available on every route and owns live provider actions plus
-> Handy model calibration, speed/stroke limits, and direction. Chat keeps Autopilot, motion style, and the
-> visualizer; the manual device test lives under Settings > Device, beside the
-> connection it exercises.
+> and the device chip), and
+> workspaces as routed pages under a hash router. The shell-owned device panel
+> (2026-10-15) stays available on every route and holds the live jobs: each
+> device's status, its one connection action and In playback switch, the Coyote
+> and vibrator levels, and the speed/stroke limits. Chat keeps Autopilot, motion
+> style, and the visualizer. Setup and configuration live in Settings > Devices,
+> which gives each device its own page; the Handy's page holds its model and
+> direction (Calibration) and the manual motion test.
 > Settings is a routed page with sibling sections
-> (`#/settings/device|model|voice|prompts|diagnostics` — provider-scoped
+> (`#/settings/devices|model|voice|prompts|diagnostics` — provider-scoped
 > compaction implemented in Slice 13.5; see
 > [settings-compaction.md](settings-compaction.md)). Token and component
 > specifics live in [ui-design-guidelines.md](ui-design-guidelines.md).
@@ -451,7 +457,8 @@ Each principle maps to a concrete flaw; see "Flaws Explicitly Avoided".
 > (status bar + single control sidebar + settings window). They are kept
 > because their rationale shaped the current shell — especially the compact
 > control column and immediate-apply grouping — but they no longer describe
-> the build. The testing-badged manual motion group now lives under Device.
+> the build. The manual motion test now lives on the Handy's page in Settings >
+> Devices.
 
 ### Historical: persistent control bar (pre-React shell)
 
@@ -555,17 +562,17 @@ than the history preview limit shows **Long message preview.** with a nearby
 directly; it does not add a full-message Blob or permanent expanded text to the
 conversation cache. The preview is explicit, and storage/retention are unchanged.
 
-The testing-badged Manual motion group lives in `#/settings/device` — it drives
-the device, so it belongs with the connection that carries it rather than among
-read-only diagnostics — and it
+The manual motion test is the **Test** section of the Handy's page
+(`#/settings/devices/handy`) — it drives the device, so it belongs with the
+connection that carries it rather than among read-only diagnostics — and it
 identifies an active test from the backend motion target's `manual_ui` source,
 never from the generic engine-running flag. Starting a manual test stops any
 active run and drains its autonomous owner before the diagnostic claims the
 shared engine. The manual-target API also rejects retargeting unless that
 `manual_ui` session is still active, so an idle or autonomous target cannot be
-relabeled by a stale diagnostic control. The shell-level connection manager owns the
-saved dispatch owner's connect/check/discover actions and immediate Handy model,
-speed/stroke limits on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
+relabeled by a stale diagnostic control. The shell-level device panel owns each
+saved device's connection action and In playback switch, and the immediate
+speed/stroke limits, on every route. `#/modes` hosts deterministic Preset Modes (Freestyle and
 future saved arrangements), `#/library` hosts the
 Browse / Programs / Import / Author / Training workspace, `#/videos` hosts
 the local media catalog and player, and `#/settings` hosts configuration.
@@ -628,14 +635,14 @@ revokes automatic resume. Persisting decoder duration metadata updates the
 controls without resetting a live session. See the
 [September 6 playback review](video-playback-review-2026-09-06.md).
 
-`#/settings/device|media|model|chat|voice|prompts|diagnostics` are sibling sections
+`#/settings/devices|media|model|chat|voice|prompts|diagnostics` are sibling sections
 of the routed Settings page — deep-linkable, no window, no stacked overlays.
 Stop lives in the nav-rail footer on every route (plus Escape), outside the
 route tree so no navigation state can unmount it; backend loss shows the
 persistent banner and locks backend-required controls while Stop stays
 enabled. Nothing renders as a dashboard; new surfaces join an existing
 workspace or become a nav destination. Only compact safety and status tools,
-including Stop and the connection manager, remain route-independent.
+including Stop and the device panel, remain route-independent.
 
 ## The Device Visualizer
 
@@ -661,8 +668,8 @@ One component, one source of truth.
   without adding controls to the artwork. The Handy 2 front view and the
   Intiface ribbon timeline ship disabled (see ui-design-guidelines.md).
 - Is never itself a click target: controls are separate, labeled elements
-  (limits and direction live in the connection manager; style lives in Chat), not
-  artwork turned into a mystery button.
+  (limits live in the device panel, direction on the Handy's page; style lives
+  in Chat), not artwork turned into a mystery button.
 
 ## Quick Controls
 
@@ -670,9 +677,11 @@ Handy model calibration, speed limits, stroke range, reverse direction, and
 motion style.
 
 - Apply immediately to active motion (ADR 0002, invariant 9). No save step.
-- Speed, stroke, and reverse direction live in the persistent floating
-  connection manager; style stays in Chat's motion-style group. The collapsed manager
-  remains visible on every route and clears the reserved mobile Stop footer.
+- Speed and stroke live in the device panel's Limits (Stroke while the Handy
+  plays); the Handy's model and reverse direction live in the Calibration
+  section of its page in Settings > Devices; style stays in Chat's motion-style
+  group. The device chip remains visible on every route, and the phone sheet
+  clears the reserved mobile Stop footer.
 - Each uses one dual-thumb control. Thumb changes send only the changed backend
   field; Stroke always keeps at least one percentage point between its minimum
   and maximum to match backend validation.
@@ -692,7 +701,7 @@ motion style.
 > with sibling sections under `#/settings/*` — the window-over-chat decision
 > below (2026-07-03) is historical. The value the window protected — never
 > leaving the current task for a quick change — is kept by the floating
-> connection manager. The immediate-apply, single-layer, and
+> device panel. The immediate-apply, single-layer, and
 > confirmed-destructive rules below are unchanged and still enforced.
 >
 > **As built:** provider-scoped disclosure is implemented for Model and Voice.
@@ -788,7 +797,7 @@ hoc per-widget colors) are not.
   <https://code.visualstudio.com/docs/editing/userinterface#_configure-notification-behavior>,
   <https://support.microsoft.com/en-us/windows/experience/notifications-and-do-not-disturb-in-windows>,
   and <https://slack.com/help/articles/201355156-Configure-your-Slack-notifications>.
-- The account-context, notification, and connection disclosures occupy the top
+- The account-context, notification, and device disclosures occupy the top
   bar and are mutually exclusive: opening one closes the others. Their panels
   link to the owning Settings route and close after navigation.
 - Errors state what failed and what to do, surfacing safe backend/transport
@@ -828,23 +837,54 @@ hoc per-widget colors) are not.
   non-modal disclosure is the explicit shell-context exception to the general
   rule that motion controls do not belong in the top bar. See
   [account-gui-design.md](account-gui-design.md).
-- Connection/transport state is always visible in the floating manager trigger.
-  Expanding it exposes actions for only the saved dispatch owner: Cloud REST
-  Check plus Connect/Disconnect, browser-owned Bluetooth session, or Intiface
-  connect/discovery/select. Cloud Check is a compact icon beside device status;
-  it does not reacquire a released session. The full-width Cloud action
-  explicitly connects or releases backend command admission. Cloud REST also
-  exposes a compact write-only connection-key field and the active API v3 ID
-  source; owner choice, key clearing, developer ID override, and server addresses
-  remain in Settings.
-- The connection artwork is a flat vector status strip (no bitmap): three
-  signal arcs above the Handy-inspired capsule, domed body, LED, and square
-  marker. The arcs pulse in the accent hue while connecting and turn green when
-  connected. Disconnected has no signal and keeps the square red; only a failed
-  connection attempt adds a briefly shaking red X. Reduced-motion renders
-  connection feedback statically.
-  [Connection artwork](connection-artwork.md) records the construction, SVG
-  coordinates, state table, and refactor checklist.
+- Device state is always visible in the top-bar device chip: one glyph and
+  status dot per saved device, what plays, and the one current problem.
+  Opening it shows the device panel (the 2026-10-15 device-management review,
+  option A), which holds live jobs only: per device, its status word and
+  details, exactly one action (Connect, Disconnect, Set up or Reconnect) and
+  its own **In playback** switch; then the speed/stroke limits and a
+  **Device settings** button. Setup and configuration live in Settings >
+  Devices and each device's page, so no option has two homes: the Handy's
+  connection method, key, API ID source and calibration; the Coyote's safety
+  notes, discovery and output; the vibrator's device choice and output; and
+  the Intiface Central address. See
+  [the guidelines](ui-design-guidelines.md#device-chip-and-device-panel).
+- The Handy's Connect follows its saved method: Cloud REST explicitly connects
+  or releases backend command admission, browser Bluetooth uses the
+  browser-owned session, native Bluetooth uses the helper, and Intiface Central
+  opens The Handy's lease on the shared connection. **Check connection** on its
+  page asks The Handy for its state and does not reacquire a released session.
+  A method applies only through an explicit **Use this method**, and the
+  backend stops motion before changing methods. The connection key is
+  write-only, with an explicit Save and a confirmed **Forget key**.
+- **Add device** in Settings > Devices offers the supported devices that are
+  not added yet: one Handy, one Coyote and one vibrator. Adding uses the
+  backend output setting, stops motion, and saves the device ready to set up;
+  it never connects it or starts playback. **Remove**, at the foot of each
+  device page, asks first. Lists and status change only after backend
+  confirmation.
+- The Coyote (ADR 0044) needs its safety notes accepted on its page before the
+  first connection. Connected, its row shows battery and one level per
+  channel: the device-reported strength, its ceiling, neutral `−`/`+` steps
+  (44px targets on coarse pointers), a green **Test** that plays a bounded
+  pulse while motion is paused, and a quiet **Zero both** for the pair.
+  Strength steps never begin output. Raising and Test need the controlling
+  host, applied limits, and an eligible strength baseline. A delivered zero
+  command is labeled distinctly from a device-reported strength. Unknown or
+  pending strength blocks raising and testing; Stop remains available
+  regardless of controller ownership. The panel keeps no strength state of its
+  own. Commanded pulse widths are labeled as commanded, never as measured
+  output.
+- The vibrator (ADR 0047) connects its own lease on Intiface Central, and its
+  page chooses the device from those with vibration motors (**Use this
+  vibrator**). Its **Intensity** level reads "N% of ceiling" with neutral
+  `−`/`+` steps and a green **Test** that plays while motion is paused. The
+  intensity starts at 0, and intensity steps never begin output. A note says
+  when the motors' steps lower the effective ceiling; Settings > Devices >
+  Connections says which devices share the Intiface session and whether it has
+  a keepalive timeout.
+- Status is the dot and word on each row; the panel has no connection artwork.
+  [Connection artwork](connection-artwork.md) records the retired strip.
 - Exactly one client may command the device. Additional clients open read-only:
   they can watch state and trigger Stop, but cannot send motion, rather than
   racing and showing a warning banner after the fact.
@@ -864,9 +904,9 @@ hoc per-widget colors) are not.
 - Interactive elements are real semantic controls. Decorative artwork stays
   `aria-hidden`; the visualizer's controls are separate, labeled elements, not a
   role bolted onto live-updating text.
-- Full keyboard operability, visible focus, logical order. The connection
-  manager is a non-modal disclosure: opening focuses its Close button and
-  closing restores the trigger; it does not capture Escape, which remains Stop.
+- Full keyboard operability, visible focus, logical order. The device panel is
+  a non-modal disclosure: opening focuses its Close button and closing restores
+  the device chip; it does not capture Escape, which remains Stop.
 - Focused media/reference dialogs keep the shell-level Emergency Stop in their
   keyboard focus cycle and below no overlay layer; they do not claim that the
   rest of the app is inert while this safety control remains operable.
@@ -1282,3 +1322,24 @@ never the hosted Chat route, conversation history or motion dispatch. Stop and
 controller takeover cancel the request. Descriptive refusal guidance remains
 dismissible; backup selection and check errors remain visible. Step navigation
 resets the inner setup scroller so the next question appears at the top.
+
+
+## Devices (2026-10-15)
+
+The top-bar device panel holds live jobs and Settings > Devices holds setup,
+replacing the connection manager's mix of both (option A of the 2026-10-15
+device-management review). Every device renders from one descriptor in
+`web/src/devices/`, so the panel row, the chip, the Settings list and the
+device page cannot drift apart, and a new device adds a descriptor rather than
+a panel of its own. Device options save as they change through
+`PATCH /api/settings/device`, which accepts only the fields it names; the
+server port moved to Settings > Access.
+
+Adding a device saves one, ready to set up; it does not connect it or include
+it in playback. Each row has its own **In playback** switch, and its status
+stays visible while excluded. Removing the last device is valid and leaves
+chat-only use. Settings > Devices > Playback holds **On device failure** (stop
+every device by default, or keep going on healthy devices) and each device's
+timing offset. A degraded linked run shows one notice naming the devices it
+continues without, and marks them Connection lost; reconnecting never silently
+rejoins a run. Emergency Stop remains unconditional and reaches all outputs.

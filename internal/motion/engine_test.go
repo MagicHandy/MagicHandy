@@ -1178,6 +1178,7 @@ type completionBlockingTransport struct {
 type timingCapabilityTransport struct {
 	*transport.Fake
 	minimumInterval          time.Duration
+	preferredInterval        time.Duration
 	minimumBufferedLead      time.Duration
 	minimumMediaBufferedLead time.Duration
 	maximumPoints            int
@@ -1192,7 +1193,7 @@ func (t *timingCapabilityTransport) MotionTimingCapabilities() transport.MotionT
 }
 
 func (t *timingCapabilityTransport) MotionSamplingCapabilities() transport.MotionSamplingCapabilities {
-	return transport.MotionSamplingCapabilities{MaximumPointsPerAppend: t.maximumPoints}
+	return transport.MotionSamplingCapabilities{MaximumPointsPerAppend: t.maximumPoints, PreferredPointInterval: t.preferredInterval}
 }
 
 func (t *completionBlockingTransport) Stop(ctx context.Context, command transport.StopCommand) (transport.CommandResult, error) {

@@ -76,6 +76,15 @@ jobs:
           -ExerciseInstaller
           -ExerciseDefaultInstall
 
+      - name: Retain installer startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-lifecycle-logs-${{ github.run_number }}
+          path: artifacts/lifecycle-logs/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:

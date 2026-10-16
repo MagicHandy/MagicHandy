@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -11,13 +12,21 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
+// intifaceRuntime holds the one Intiface Central connection. Intiface serves
+// a single client, so every device reached through it shares this hub. Each
+// connected device holds a lease; the hub closes when the last lease ends,
+// or when its address changes or the server shuts down.
 type intifaceRuntime struct {
-	opMu        sync.Mutex
-	mu          sync.Mutex
-	owner       *transport.Intiface
-	httpClient  *http.Client
-	status      transport.IntifaceStatus
-	diagnostics transport.TransportDiagnostics
+	opMu       sync.Mutex
+	mu         sync.Mutex
+	hub        *transport.IntifaceHub
+	leases     map[string]bool
+	generation uint64
+	httpClient *http.Client
+	// simulatorAddress replaces the saved address in -simulate-motion builds.
+	simulatorAddress string
+	status           transport.IntifaceStatus
+	diagnostics      transport.TransportDiagnostics
 }
 
 type intifaceSnapshot struct {
@@ -25,11 +34,20 @@ type intifaceSnapshot struct {
 	Address       string                         `json:"address"`
 	Status        transport.IntifaceStatus       `json:"status"`
 	Diagnostics   transport.TransportDiagnostics `json:"diagnostics"`
+	// Leases names the devices holding the shared connection.
+	Leases []string `json:"leases"`
+	// PingWatchdog reports whether Intiface stops its devices when this app
+	// stops answering its keepalive.
+	PingWatchdog bool                             `json:"ping_watchdog"`
+	Vibrator     transport.IntifaceVibratorStatus `json:"vibrator"`
+	Simulated    bool                             `json:"simulated"`
 }
 
 func newIntifaceRuntime(runtime Runtime) intifaceRuntime {
 	return intifaceRuntime{
-		httpClient: runtime.IntifaceHTTPClient,
+		httpClient:       runtime.IntifaceHTTPClient,
+		simulatorAddress: runtime.IntifaceSimulatorAddress,
+		leases:           map[string]bool{},
 		status: transport.IntifaceStatus{
 			PlaybackState: "idle",
 			Devices:       []transport.IntifaceDevice{},
@@ -49,6 +67,7 @@ func (s *Server) intifaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/transport/intiface/scan", s.handleIntifaceStopScan)
 	mux.HandleFunc("POST /api/transport/intiface/select", s.handleIntifaceSelect)
 	mux.HandleFunc("GET /api/transport/intiface/diagnostics", s.handleIntifaceDiagnostics)
+	s.vibratorRoutes(mux)
 }
 
 func (s *Server) handleIntifaceStatus(w http.ResponseWriter, r *http.Request) {
@@ -59,73 +78,166 @@ func (s *Server) handleIntifaceDiagnostics(w http.ResponseWriter, _ *http.Reques
 	writeJSON(w, http.StatusOK, s.intifaceSnapshot().Diagnostics)
 }
 
+// intifaceLeaseRequest names the device a connect or disconnect is for. An
+// empty body means the Handy, as older clients send.
+type intifaceLeaseRequest struct {
+	Device string `json:"device"`
+}
+
+func decodeIntifaceLease(r *http.Request) (string, error) {
+	var body intifaceLeaseRequest
+	if r.ContentLength != 0 {
+		if err := decodeJSON(r, &body); err != nil {
+			return "", err
+		}
+	}
+	if body.Device == "" {
+		body.Device = config.DeviceOutputHandy
+	}
+	if !slices.Contains(intifaceLeaseDevices, body.Device) {
+		return "", errors.New("this device does not connect through Intiface")
+	}
+	return body.Device, nil
+}
+
+// intifaceLeaseDevices are the devices that can reach Intiface Central.
+var intifaceLeaseDevices = []string{config.DeviceOutputHandy, config.DeviceVibrator}
+
 func (s *Server) handleIntifaceConnect(w http.ResponseWriter, r *http.Request) {
-	if !s.requireController(w, r) {
+	device, err := decodeIntifaceLease(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if !s.requireIntifaceInventory(w, device) || !s.requireController(w, r) {
 		return
 	}
 	s.intiface.opMu.Lock()
 	defer s.intiface.opMu.Unlock()
 	settings, _ := s.store.Snapshot()
-	if settings.Device.HSPDispatchOwner != config.DispatchOwnerIntiface {
+	if device == config.DeviceOutputHandy && settings.Device.HSPDispatchOwner != config.DispatchOwnerIntiface {
 		writeError(w, http.StatusConflict, errors.New("select and save the Intiface dispatch owner before connecting"))
 		return
 	}
 	s.intiface.mu.Lock()
-	existing := s.intiface.owner
-	alreadyConnected := existing != nil && existing.Status().Connected
+	existing := s.intiface.hub
+	connected := existing != nil && existing.Status().Connected
+	held := s.intiface.leases[device]
 	s.intiface.mu.Unlock()
-	if alreadyConnected {
+	if connected && held {
 		writeError(w, http.StatusConflict, errors.New("intiface is already connected"))
 		return
 	}
-	if existing != nil {
-		s.closeIntifaceSession()
+	if !connected {
+		if err := s.openIntifaceHub(r.Context(), settings.Device.IntifaceServerAddress); err != nil {
+			writeError(w, http.StatusBadGateway, err)
+			return
+		}
 	}
+	s.intiface.mu.Lock()
+	s.intiface.leases[device] = true
+	s.intiface.mu.Unlock()
+	writeJSON(w, http.StatusOK, s.intifaceSnapshot())
+}
 
-	owner, err := transport.NewIntiface(transport.IntifaceOptions{
-		Address:    settings.Device.IntifaceServerAddress,
+// requireIntifaceInventory checks that device is saved before it connects.
+func (s *Server) requireIntifaceInventory(w http.ResponseWriter, device string) bool {
+	if device == config.DeviceOutputHandy {
+		return s.requireHandyConnection(w)
+	}
+	if settings, _ := s.store.Snapshot(); !settings.Device.HasDevice(device) {
+		writeError(w, http.StatusConflict, errVibratorNotSaved)
+		return false
+	}
+	return true
+}
+
+// openIntifaceHub replaces a stale hub with a newly connected one. The
+// caller holds opMu.
+func (s *Server) openIntifaceHub(ctx context.Context, address string) error {
+	s.closeIntifaceSession()
+	if s.intiface.simulatorAddress != "" {
+		address = s.intiface.simulatorAddress
+	}
+	hub, err := transport.NewIntifaceHub(transport.IntifaceOptions{
+		Address:    address,
 		HTTPClient: s.intiface.httpClient,
 	})
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
+		return err
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	err = owner.Connect(ctx)
+	connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	err = hub.Connect(connectCtx)
 	cancel()
 	if err != nil {
-		_ = owner.Close()
+		_ = hub.Close()
 		s.logger.Warn("Intiface connection failed", "error", err)
-		writeError(w, http.StatusBadGateway, errors.New("intiface Central is not reachable; confirm it is running and the saved server address is correct"))
-		return
+		return errors.New("intiface Central is not reachable; confirm it is running and the saved server address is correct")
 	}
-
+	settings, _ := s.store.Snapshot()
+	hub.Vibrator().Configure(vibratorConfig(settings.Vibration))
 	s.intiface.mu.Lock()
-	previous := s.intiface.owner
-	s.intiface.owner = owner
-	s.intiface.status = owner.Status()
-	s.intiface.diagnostics = owner.Diagnostics()
+	s.intiface.hub = hub
+	s.intiface.leases = map[string]bool{}
+	s.intiface.generation++
 	s.intiface.mu.Unlock()
-	if previous != nil {
-		_ = previous.Close()
-	}
-	writeJSON(w, http.StatusOK, s.intifaceSnapshot())
+	return nil
 }
 
 func (s *Server) handleIntifaceDisconnect(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
+	device, err := decodeIntifaceLease(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	s.intiface.opMu.Lock()
 	defer s.intiface.opMu.Unlock()
-	finishStop, _ := s.beginGlobalStop("intiface_disconnected", r.Context())
-	defer finishStop()
 
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
-	stopErr := s.stopAndClearMotionEngine(stopCtx, "intiface_disconnected")
-	cancel()
-	s.closeIntifaceSession()
-	s.writeIntifaceResult(w, stopErr)
+	defer cancel()
+	var stopErr error
+	switch device {
+	case config.DeviceOutputHandy:
+		stopErr = s.stopForHandyDisconnect(stopCtx, "intiface_disconnected")
+	case config.DeviceVibrator:
+		stopErr = s.stopForVibratorDisconnect(stopCtx)
+	}
+	s.writeIntifaceResult(w, errors.Join(stopErr, s.releaseIntifaceLeaseLocked(stopCtx, device)))
+}
+
+// releaseIntifaceLease ends one device's use of the shared connection.
+func (s *Server) releaseIntifaceLease(ctx context.Context, device string) error {
+	s.intiface.opMu.Lock()
+	defer s.intiface.opMu.Unlock()
+	return s.releaseIntifaceLeaseLocked(ctx, device)
+}
+
+// releaseIntifaceLeaseLocked stops and forgets the device's selection, and
+// closes the hub when no device holds it any more. The caller holds opMu.
+func (s *Server) releaseIntifaceLeaseLocked(ctx context.Context, device string) error {
+	s.intiface.mu.Lock()
+	hub := s.intiface.hub
+	delete(s.intiface.leases, device)
+	remaining := len(s.intiface.leases)
+	s.intiface.mu.Unlock()
+	if hub == nil {
+		return nil
+	}
+	if remaining == 0 {
+		s.closeIntifaceSession()
+		return nil
+	}
+	switch device {
+	case config.DeviceOutputHandy:
+		return hub.Linear().Release(ctx)
+	case config.DeviceVibrator:
+		return hub.Vibrator().Release(ctx)
+	default:
+		return nil
+	}
 }
 
 func (s *Server) handleIntifaceStartScan(w http.ResponseWriter, r *http.Request) {
@@ -134,9 +246,9 @@ func (s *Server) handleIntifaceStartScan(w http.ResponseWriter, r *http.Request)
 	}
 	s.intiface.opMu.Lock()
 	defer s.intiface.opMu.Unlock()
-	owner, err := s.currentIntiface()
+	hub, err := s.currentIntifaceHub()
 	if err == nil {
-		err = owner.StartScanning(r.Context())
+		err = hub.StartScanning(r.Context())
 	}
 	s.writeIntifaceResult(w, err)
 }
@@ -147,9 +259,9 @@ func (s *Server) handleIntifaceStopScan(w http.ResponseWriter, r *http.Request) 
 	}
 	s.intiface.opMu.Lock()
 	defer s.intiface.opMu.Unlock()
-	owner, err := s.currentIntiface()
+	hub, err := s.currentIntifaceHub()
 	if err == nil {
-		err = owner.StopScanning(r.Context())
+		err = hub.StopScanning(r.Context())
 	}
 	s.writeIntifaceResult(w, err)
 }
@@ -172,21 +284,22 @@ func (s *Server) handleIntifaceSelect(w http.ResponseWriter, r *http.Request) {
 	defer finishStop()
 
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
+	defer cancel()
 	err := s.stopAndClearMotionEngine(stopCtx, "intiface_selection_changed")
-	cancel()
-	owner, ownerErr := s.currentIntiface()
+	hub, hubErr := s.currentIntifaceHub()
 	if err == nil {
-		err = ownerErr
+		err = hubErr
 	}
 	if err == nil {
-		err = owner.SelectDevice(body.DeviceIndex, body.ActuatorIndex)
+		// Select stops both the previous and the new device before it is ready.
+		err = hub.Linear().Select(stopCtx, body.DeviceIndex, body.ActuatorIndex)
 	}
-	if err == nil && owner.Status().Scanning {
+	if err == nil && hub.Status().Scanning {
 		// The search is done once an actuator is chosen, and a scan left
 		// running keeps the Bluetooth radio busy beside the live connection.
 		// Best effort: the selection already succeeded either way.
 		scanCtx, cancelScan := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
-		if scanErr := owner.StopScanning(scanCtx); scanErr != nil {
+		if scanErr := hub.StopScanning(scanCtx); scanErr != nil {
 			s.logger.Warn("stop Intiface scan after device selection", "error", scanErr)
 		}
 		cancelScan()
@@ -202,13 +315,22 @@ func (s *Server) writeIntifaceResult(w http.ResponseWriter, err error) {
 	writeJSON(w, http.StatusOK, s.intifaceSnapshot())
 }
 
-func (s *Server) currentIntiface() (*transport.Intiface, error) {
+func (s *Server) currentIntifaceHub() (*transport.IntifaceHub, error) {
 	s.intiface.mu.Lock()
 	defer s.intiface.mu.Unlock()
-	if s.intiface.owner == nil || !s.intiface.owner.Status().Connected {
+	if s.intiface.hub == nil || !s.intiface.hub.Status().Connected {
 		return nil, errors.New("intiface is not connected")
 	}
-	return s.intiface.owner, nil
+	return s.intiface.hub, nil
+}
+
+// currentIntiface returns the stroker output of a connected hub.
+func (s *Server) currentIntiface() (*transport.Intiface, error) {
+	hub, err := s.currentIntifaceHub()
+	if err != nil {
+		return nil, err
+	}
+	return hub.Linear(), nil
 }
 
 func (s *Server) intifaceSnapshot() intifaceSnapshot {
@@ -220,15 +342,45 @@ func (s *Server) intifaceSnapshot() intifaceSnapshot {
 		Address:       settings.Device.IntifaceServerAddress,
 		Status:        s.intiface.status,
 		Diagnostics:   s.intiface.diagnostics,
+		Leases:        []string{},
+		Vibrator:      transport.IntifaceVibratorStatus{Motors: []transport.IntifaceVibratorMotor{}, PlaybackState: "disconnected"},
+		Simulated:     s.intiface.simulatorAddress != "",
 	}
-	if s.intiface.owner != nil {
-		snapshot.Status = s.intiface.owner.Status()
-		snapshot.Diagnostics = s.intiface.owner.Diagnostics()
+	if hub := s.intiface.hub; hub != nil {
+		snapshot.Vibrator = hub.Vibrator().Status()
+		snapshot.Status = hub.Linear().Status()
+		snapshot.Diagnostics = hub.Linear().Diagnostics()
+		snapshot.PingWatchdog = hub.Status().PingWatchdog
+		for _, device := range intifaceLeaseDevices {
+			if s.intiface.leases[device] {
+				snapshot.Leases = append(snapshot.Leases, device)
+			}
+		}
 	}
 	if snapshot.Status.Devices == nil {
 		snapshot.Status.Devices = []transport.IntifaceDevice{}
 	}
 	return snapshot
+}
+
+// startIntifaceEmergencyStop runs the Intiface half of a global Stop beside
+// the engine Stop: StopAllDevices on a live session, behind the hub's write
+// barrier, whatever the engine or the device selections are. It returns a
+// wait function.
+func (s *Server) startIntifaceEmergencyStop() func() error {
+	s.intiface.mu.Lock()
+	hub := s.intiface.hub
+	s.intiface.mu.Unlock()
+	if hub == nil || !hub.Status().Connected {
+		return func() error { return nil }
+	}
+	done := make(chan error, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		done <- hub.EmergencyStop(ctx)
+	}()
+	return func() error { return <-done }
 }
 
 func (s *Server) closeIntiface() {
@@ -237,16 +389,19 @@ func (s *Server) closeIntiface() {
 	s.closeIntifaceSession()
 }
 
+// closeIntifaceSession closes the hub and every device's use of it. The
+// caller holds opMu.
 func (s *Server) closeIntifaceSession() {
 	s.intiface.mu.Lock()
-	owner := s.intiface.owner
-	s.intiface.owner = nil
+	hub := s.intiface.hub
+	s.intiface.hub = nil
+	s.intiface.leases = map[string]bool{}
 	s.intiface.mu.Unlock()
-	if owner != nil {
-		_ = owner.Close()
+	if hub != nil {
+		_ = hub.Close()
 		s.intiface.mu.Lock()
-		s.intiface.status = owner.Status()
-		s.intiface.diagnostics = owner.Diagnostics()
+		s.intiface.status = hub.Linear().Status()
+		s.intiface.diagnostics = hub.Linear().Diagnostics()
 		s.intiface.mu.Unlock()
 	}
 }

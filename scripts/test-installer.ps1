@@ -78,6 +78,7 @@ try {
         'scripts\update-tts-module.ps1',
         'scripts\release\Build-WindowsRelease.ps1',
         'scripts\release\Test-WindowsRelease.ps1',
+        'scripts\release\Test-ReleaseStartup.ps1',
         'scripts\installer\InstallerSupport.psm1',
         'internal\llm\runtimeassets\build-managed-llama.ps1'
     )
@@ -799,7 +800,7 @@ func main() {
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseVerifierSource.Contains("'ReviewedUnsignedPublic'")) -Message 'release verifier should expose the reviewed unsigned public policy'
     Assert-True -Condition ($releaseVerifierSource.Contains('ReviewedUnsignedPublic requires Microsoft false-positive case')) -Message 'reviewed unsigned publication should fail closed without the recorded Microsoft case'
-    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39', '0.1.0-alpha.40', '0.1.0-alpha.41', '0.1.0-alpha.42', '0.1.0-alpha.43', '0.1.0-alpha.44', '0.1.0-alpha.45', '0.1.0-alpha.46', '0.1.0-alpha.47', '0.1.0-alpha.48', '0.1.0-alpha.49', '0.1.0-alpha.50', '0.1.0-alpha.51', '0.1.0-alpha.52', '0.1.0-alpha.53', '0.1.0-alpha.54', '0.1.0-alpha.55', '0.1.0-alpha.56', '0.1.0-alpha.57', '0.1.0-alpha.58', '0.1.0-alpha.59', '0.1.0-alpha.60', '0.1.0-alpha.61')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
+    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39', '0.1.0-alpha.40', '0.1.0-alpha.41', '0.1.0-alpha.42', '0.1.0-alpha.43', '0.1.0-alpha.44', '0.1.0-alpha.45', '0.1.0-alpha.46', '0.1.0-alpha.47', '0.1.0-alpha.48', '0.1.0-alpha.49', '0.1.0-alpha.50', '0.1.0-alpha.51', '0.1.0-alpha.52', '0.1.0-alpha.53', '0.1.0-alpha.54', '0.1.0-alpha.55', '0.1.0-alpha.56', '0.1.0-alpha.57', '0.1.0-alpha.58', '0.1.0-alpha.59', '0.1.0-alpha.60', '0.1.0-alpha.61', '0.1.0-alpha.62')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
             -Version '0.0.0-local' `
@@ -817,12 +818,12 @@ func main() {
     } -Pattern 'approved only for versions 0.1.0-alpha.8, 0.1.0-alpha.9, 0.1.0-alpha.10, 0.1.0-alpha.11, 0.1.0-alpha.13' -Message 'non-allowlisted version rejected by ReviewedUnsignedPublic'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
-            -Version '0.1.0-alpha.62' `
+            -Version '0.1.0-alpha.63' `
             -Commit ('0' * 40) `
             -ArtifactsRoot $tempRoot `
             -ArtifactPolicy ReviewedUnsignedPublic `
             -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
-    } -Pattern 'approved only for versions' -Message 'alpha.61 review grants no permission to later versions'
+    } -Pattern 'approved only for versions' -Message 'alpha.62 review grants no permission to later versions'
     $portablePolicyFixture = Join-Path $tempRoot 'portable-policy-fixture'
     New-Item -ItemType Directory -Force -Path $portablePolicyFixture | Out-Null
     $portableFixtureName = 'MagicHandy-0.1.0-alpha.12-windows-amd64-portable.zip'
@@ -1558,7 +1559,6 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     Write-Host 'Checking running app Stop and process-tree teardown before rebuild...'
     $runtimeRepo = Join-Path $tempRoot 'running-app-repo'
     $runtimeData = Join-Path $tempRoot 'running app data with spaces'
-    $runtimePort = Get-AvailableLoopbackPort -WithRemote
     New-Item -ItemType Directory -Force -Path $runtimeRepo | Out-Null
     foreach ($file in @('go.mod', 'go.sum')) {
         Copy-Item -LiteralPath (Join-Path $Repo $file) -Destination $runtimeRepo
@@ -1581,20 +1581,30 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     } finally {
         $env:CGO_ENABLED = $previousCGO
     }
+    & (Join-Path $Repo 'scripts\release\Test-ReleaseStartup.ps1') -Executable $runtimeExe -TestRoot (Join-Path $tempRoot 'release startup')
     Set-MagicHandyAppLanguages `
         -RepositoryPath $runtimeRepo `
         -DataDir ($runtimeData + '\') `
         -UILocale 'JA' `
         -ChatLocale 'ES'
+    # Pick both ports immediately before launch, after the build and startup
+    # regressions. This fixture needs HTTP, not an interactive console host.
+    $runtimePort = Get-AvailableLoopbackPort -WithRemote
     $runtimeArguments = & $supportModule {
         param($Address, $DataDir)
         New-MagicHandyAppArgumentLine -Address $Address -DataDir $DataDir
     } "127.0.0.1:$runtimePort" $runtimeData
-    $runtimeProcess = Start-Process -FilePath $runtimeExe -ArgumentList $runtimeArguments -PassThru -WindowStyle Hidden
+    $runtimeArguments += ' -console plain'
+    $runtimeStdout = Join-Path $tempRoot 'runtime.stdout.log'
+    $runtimeStderr = Join-Path $tempRoot 'runtime.stderr.log'
+    $runtimeProcess = Start-Process -FilePath $runtimeExe -ArgumentList $runtimeArguments -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $runtimeStdout -RedirectStandardError $runtimeStderr
     try {
         $ready = $false
         $readyDeadline = [DateTime]::UtcNow.AddSeconds(30)
         do {
+            $runtimeProcess.Refresh()
+            if ($runtimeProcess.HasExited) { break }
             try {
                 Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$runtimePort/api/state" -TimeoutSec 1 | Out-Null
                 $ready = $true
@@ -1603,7 +1613,19 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
                 Start-Sleep -Milliseconds 100
             }
         } while ([DateTime]::UtcNow -lt $readyDeadline)
-        Assert-True -Condition $ready -Message 'test app should become ready'
+        if (-not $ready) {
+            $runtimeProcess.Refresh()
+            $reason = 'did not become ready within 30 seconds'
+            if ($runtimeProcess.HasExited) {
+                $runtimeProcess.WaitForExit()
+                $reason = "exited with code $($runtimeProcess.ExitCode)"
+            }
+            $startupDetails = @()
+            foreach ($path in @($runtimeStdout, $runtimeStderr)) {
+                if (Test-Path -LiteralPath $path) { $startupDetails += @(Get-Content -LiteralPath $path -Tail 60) }
+            }
+            throw "Installer test app $reason on ports $runtimePort/$($runtimePort + 1). Startup logs:`n$($startupDetails -join "`n")"
+        }
         Assert-True -Condition (Test-Path -LiteralPath (Join-Path $runtimeData 'magichandy.db')) -Message 'quoted startup should keep the database under the intended spaced data path'
         $runtimeSettings = Invoke-RestMethod -Uri "http://127.0.0.1:$runtimePort/api/settings" -TimeoutSec 5
         Assert-Equal -Expected 'ja' -Actual ([string]$runtimeSettings.settings.ui.locale) -Message 'language helper should canonicalize UI locale'
@@ -1641,7 +1663,7 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     }
 
     Write-Host 'Checking coherent staged binary replacement and verified relaunch...'
-    $binaryNames = @('magichandy.exe', 'voice-parakeet-worker.exe', 'voice-openai-tts-worker.exe', 'voice-elevenlabs-worker.exe')
+    $binaryNames = @('magichandy.exe', 'voice-parakeet-worker.exe', 'voice-openai-tts-worker.exe', 'voice-elevenlabs-worker.exe', 'bluetooth-worker.exe')
     $staleHashes = @{}
     foreach ($name in $binaryNames) {
         $path = Join-Path $runtimeRepo $name

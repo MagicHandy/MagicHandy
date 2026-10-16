@@ -66,11 +66,17 @@ func (s *Server) handleCloudDiagnostics(w http.ResponseWriter, _ *http.Request) 
 }
 
 func (s *Server) handleCloudConnectionCheck(w http.ResponseWriter, r *http.Request) {
+	if !s.requireHandyConnection(w) {
+		return
+	}
 	s.handleCloudConnectionProbe(w, r, false)
 }
 
 func (s *Server) handleCloudConnect(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
+		return
+	}
+	if !s.requireHandyConnection(w) {
 		return
 	}
 	s.cloud.opMu.Lock()
@@ -191,12 +197,10 @@ func (s *Server) handleCloudDisconnect(w http.ResponseWriter, r *http.Request) {
 	// must still succeed when credentials have become invalid; only the physical
 	// Stop confirmation may be unavailable in that case.
 	s.setCloudControlReleased(true)
-	finishStop, _ := s.beginGlobalStop("cloud_disconnected", r.Context())
-	defer finishStop()
 
-	hadEngine := s.currentMotionEngine() != nil
+	hadEngine := settings.Device.Plays(config.DeviceOutputHandy) && s.currentMotionEngine() != nil
 	stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 15*time.Second)
-	stopErr := s.stopAndClearMotionEngine(stopCtx, "cloud_disconnected")
+	stopErr := s.stopForHandyDisconnect(stopCtx, "cloud_disconnected")
 	stopCancel()
 
 	stopped := hadEngine && stopErr == nil

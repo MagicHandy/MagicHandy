@@ -1,5 +1,93 @@
 # MagicHandy Risk Register
 
+## R34: Vibrator output through a shared Intiface connection
+
+Level: High
+
+A vibrator keeps its last level until it is told otherwise; the Coyote, by
+contrast, stops within 0.1 s of its last packet. A level the user did not
+choose, or output that continues after Stop or after MagicHandy stops
+responding, could cause an unwanted sensation. The vibrator also shares one
+Intiface connection with a linear actuator, so a fault in one path could
+reach the other.
+
+Mitigation:
+
+- the user alone raises the live intensity, which starts at 0 on every
+  connection and selection. Motion only shapes the level beneath it, never
+  above the saved ceiling (default 40%), and the model has no vibrator control
+- Pause, Stop, coverage loss, the end of Test, exclusion and removal send an
+  explicit zero; Stop adds `StopDeviceCmd`, and generation fencing keeps any
+  older `ScalarCmd` from following a Stop
+- Emergency Stop closes write admission and sends `StopAllDevices` on a live
+  session whatever the engine and selections are. It also zeroes the
+  intensity, and an unconfirmed stop fails the session
+- a watchdog stops a stalled pacer and allows only silence until the run
+  stops, and a stalled pacer stops the keepalive so Intiface's own watchdog
+  stops the devices too
+- a rejected or missing response faults only the owner that sent it, socket
+  loss faults both, and one device cannot hold both roles
+- raises and Test need the controlling host and the current Stop sequence,
+  and are refused after any Stop, selection or session change
+- simulation covers the protocol; automated tests never reach hardware
+
+Residual risk: physical acceptance is still needed for each of these:
+
+- Stop-to-silence time
+- whether Intiface stops the toy on a core crash, a missed ping or radio loss
+- playback when Intiface Central reports no ping timeout: the row says so,
+  but playback is still allowed
+- radio contention beside the native Bluetooth worker
+- the feel of each profile
+
+See [ADR 0047](decisions/0047-intiface-vibrator-output.md) and
+[intiface.md](intiface.md#vibrator).
+
+## R33: Electrical stimulation output (DG-LAB Coyote)
+
+Level: High
+
+A Coyote applies current through electrodes on the body. Wrong placement, a
+strength the user did not choose, output that continues after Stop or after
+MagicHandy loses control, or a ceiling that silently disappears could hurt
+someone. Unlike a stroker, the effect of a level depends on electrode type and
+placement, so MagicHandy cannot pick a safe level for the user.
+
+Mitigation:
+
+- the user alone raises channel strength (an app step or the device's own
+  switches); automation, modes, scripts and the model only shape pulse width
+  and rate beneath it, and no conversion profile maps position to strength
+- ceilings (default 30 of 200 per channel) are written on every connection;
+  requested and applied limits are tracked separately, and a failed update
+  zeroes and retires the connection until an explicit reconnect reapplies them
+- each connection sends zero; successful GATT delivery is labeled as a
+  commanded baseline rather than a device report. Timeouts never invent a
+  value or overwrite newer physical-switch reports; lost relative-change
+  confirmation discards queued increases
+- idle strength changes never play. A separate bounded Test action requires
+  the controlling host, current Stop sequence, idle output, applied limits and
+  a known baseline; lowering and zeroing cannot initiate this waveform
+- the global Stop invalidates queued output and keeps admission closed until
+  both devices finish. Its zero cannot be canceled by ordinary Stop, and failure
+  is propagated to every overlapping Stop response instead of claiming success
+- each worker write waits for native-call completion; a timed-out write kills
+  the worker before returning, preventing a hidden queue of stale frames
+- a lost link, a stalled pacer, a missing frame or a crashed core all end
+  output by sending nothing; the worker writes a zero last will when stdin
+  closes and dies with the core through a job object
+- connecting requires the host to accept the safety notes (electrodes below
+  the waist, no pacemaker, heart condition, epilepsy or pregnancy)
+- simulation covers the full protocol without a device; automated tests never
+  reach hardware
+
+Residual risk: physical feel, Stop latency (including decay after the last
+packet), Windows Bluetooth behavior and the
+ceilings' interaction with the device's switches need the user's own
+acceptance on a Coyote 3.0. Ceilings persist on the device after disconnecting,
+which is safe but limits other apps until changed. See
+[ADR 0044](decisions/0044-coyote-estim-output.md) and [estim.md](estim.md).
+
 ## 2026-10-11 Diagnostic report inclusion boundaries
 
 Combining diagnostic evidence risks disclosing unselected content, leaking
@@ -1635,8 +1723,8 @@ Mitigation:
   retains the cross-owner immediate-update contract
 - selected `DeviceMessageTimingGap` raises the shared sampler cadence and
   selected `StepCount` is exposed as an honest physical resolution limit
-- Buttplug ping keepalive stays enabled so Intiface stops devices if
-  MagicHandy dies
+- Buttplug ping keepalive stays enabled so Intiface attempts device Stop if
+  MagicHandy dies; the installed driver must actually implement that Stop
 - live validation drives the same Handy through all three owners as a direct
   like-for-like consistency measurement before the owner is recommended
 
@@ -1675,12 +1763,58 @@ clocking reduced the run from 13 add batches / 125 points to 10 / 90. The risk
 remains Medium pending the matched subjective Intiface run and a non-Handy
 linear-device check.
 
+Review update 2026-10-15: matched Original Handy firmware 4.3.0 runs at 20%/35%
+reproduced hesitation and catch-up on Intiface Central 3.2.2+46, while Cloud was
+smoother. Equivalent planned mean travel does not establish equivalent physical
+motion. The real device advertises a 100 ms command gap (110 ms with margin);
+normal server ACKs precede the 50 ms device-task batch and GATT write. No late
+host sends were recorded, leaving downstream timing and HDSP dynamics open.
+The sampler experiments are parked because modest fit improvements do not
+resolve that distinction. See the [release review](release-motion-review-2026-10-15.md).
+
+Physical follow-up: the operator found the denser sampler worse, but wider
+spacing smoother on full sweeps and pace waves, fairly close to Cloud, and
+natural in a repeated Creative v2 comparison. The integrated 180 ms preference
+preserves the server's hard limit and exact reversal times; it does not reject
+otherwise representable fast turns. The 144-case review preserves Cloud and
+generic linear-device output and records increased intermediate curve error,
+especially at higher speeds. Physical evidence is limited to the original
+Handy at 35%; restricted-window and higher-speed feel remain open. See the
+[sampling report](intiface-smoothness-review-2026-10-15.md). R23 remains a
+separate upstream Stop-delivery issue.
+
 Relates to R1 (real-device validation), R14 (one motion path), R16 (device
 coverage), and R20 (LSO merge integration).
 
 ## R23: Emergency Stop Delivery Gaps
 
 Level: Critical
+
+Review update 2026-10-15: a verified-source audit of Central 3.2.2+46's pinned
+buttplug_server 12.0.2 found that generic Stop generation skips position
+features. For the tested Handy's sole position feature, an empty Stop returns
+`Ok` without a hardware command or device-task barrier. Pre-Stop commands can
+remain queued downstream after this ACK. App-side generation fencing cannot
+cancel that server queue, and neither a v4 migration nor a guessed position
+hold fixes it. The previously recorded Intiface Stop receipts must not be
+described as physical-stop proof. Release acceptance requires the device Stop
+and queue ordering to be fixed/verified, followed by an observed unloaded test;
+firmware final-target/coast behavior and motor-stop latency remain unmeasured.
+Native Handy HSP/Cloud retain their actual Stop paths, with command receipt
+still distinguished from physical feedback. See the
+[October 15 evidence and next checks](release-motion-review-2026-10-15.md).
+
+Upstream follow-up: [Buttplug issue 971](https://github.com/buttplugio/buttplug/issues/971)
+includes a public HDSP Stop/write-result candidate with eight passing focused
+regressions. It is not installed or bundled. Deferred-command ordering,
+aggregate Stop results and physical validation remain open, so R23 stays
+Critical. See the [integration record](release-device-integration-2026-10-15.md).
+
+Release-scope follow-up: the maintainer directed continued publication work
+after the observed smoothness comparison, leaving the Stop fix upstream.
+[ADR 0049](decisions/0049-alpha62-external-stop-limitation.md) records this
+disclosed alpha limitation. It does not close the above physical Stop exit
+criteria or weaken app-side cancellation, dispatch or CI requirements.
 
 Description:
 The permanent Stop control is mounted outside routes. Active, paused,
@@ -2242,3 +2376,64 @@ Context-capacity errors hold motion and suggest a smaller window; they do not
 silently rewrite dialogue. Local prompt limits, technical-only privacy, optional
 reviewer scope, current-state validation and Stop remain unchanged. See the
 [evaluation and limitations](long-context-review-2026-10-11.md).
+
+
+### Linked session state and reconnect (2026-10-14)
+
+October 15 hardware follow-up: normal Handy reconnect, user-observed playback,
+concurrent Handy/COYOTE output and both failure policies have now been exercised.
+An unexpected COYOTE loss no longer reports confirmed Stop/zero. Failure markers
+remain visible after the engine stops. Forced worker termination can still block
+reconnection while a companion remains connected on this Windows host; releasing
+both links and sometimes repeating explicit Connect was required. This remains
+open and must not be described as seamless crash recovery. Physical radio-loss
+decay, loaded electrical output and quantitative alignment are still unmeasured.
+See the [linked hardware review](native-linked-hardware-review-2026-10-15.md).
+
+A saved device is not proof of readiness or participation. ADR 0045 separates
+these states and defaults faults to Stop all. Continue-healthy is explicit,
+retires the failed participant for the rest of the run, and reports degraded
+state. Session binding prevents delayed commands from using a replacement
+Coyote or browser BLE connection. Test/calibration and playback cannot overlap.
+Physical radio-loss decay, Stop latency and actual dual-device timing remain
+hardware acceptance items; simulation does not establish these measurements.
+
+### Native Handy Bluetooth process and buffer lifetime (2026-10-14)
+
+COYOTE follow-up: an already-bound unit can omit its name and advertise a private
+identifier. Discovery now labels candidates and requires explicit selection,
+with full GATT validation before writes. No company ID or RSSI alone establishes
+identity. Native COYOTE uses Write Without Response; v4 IPC exposes that fact,
+and a queued zero leaves strength unknown until a device report. Discovery-only
+workers never write, and selected/remembered devices cannot silently fall back
+to a different address. Windows now refreshes the selected advertisement and
+waits for connected state before GATT discovery. Real zero-only tests verified
+connection, battery and device-reported zeros, including five global Stops while
+already at zero. The later upstream service-disposal fix passed repeated immediate
+COYOTE reconnects and unloaded playback at strength 5, with per-channel routing,
+retargeting and fresh zero reports after Stop. Physical output decay under load
+and concurrent-device behavior remain open. See the
+[reconnect/playback review](native-ble-reconnect-review.md).
+
+Hardware follow-up: original Handy firmware 4.3 connection and Stop succeeded,
+but immediate Windows reconnect sometimes yields GATT AccessDenied and an empty
+characteristic list. The disposal correction is validated on COYOTE and ten
+immediate normal Handy reconnects. Native Stop uses the firmware's
+mode-independent command (4.0.13+). The pinned upstream library removes recursive
+disconnect and closes GATT services synchronously; worker exit is the fallback
+for hung native cleanup. No physical playback/failure-decay claim follows
+from these connection-only checks; see the [hardware report](native-handy-hardware-review-2026-10-14.md).
+
+ADR 0046 extends Handy HSP to a host-owned worker without a new motion path.
+Native and browser owners share point validation, units, stream indices and
+Stop admission. Worker instances are isolated per device; simulated process
+termination confirms one instance can fail without killing the other. Remembered
+Handy discovery never silently chooses another address, and ambiguous scans fail.
+
+An OS write completion is not physical position feedback. The native worker's
+last-will Stop is best effort: kill-on-parent-exit, a hung native API or radio
+loss can prevent delivery. The driver sends no infinite loops and pauses on
+starvation, but previously buffered Handy points can remain after controller
+loss. Physical Stop delay, failure decay, negotiated MTU/write properties and
+simultaneous Handy/COYOTE radio performance remain explicit acceptance items.
+See [software evidence and hardware checklist](native-handy-bluetooth-review-2026-10-14.md).

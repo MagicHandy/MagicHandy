@@ -11,6 +11,7 @@ import { PROFILE_IMAGE_MAX_EDGE, resizeImageToJPEG } from "../util/profile-image
 import { AccountAvatar } from "./AccountAvatar";
 import { PasswordConfirmationField, newPasswordError } from "./PasswordConfirmationField";
 import { NetworkSettingsPanel } from "./NetworkSettingsPanel";
+import { ServerPortSettings } from "./ServerPortSettings";
 import { ControlGrantPanel } from "./ControlGrantPanel";
 import { SessionSettingsPanel } from "./SessionSettingsPanel";
 import { AuditSettingsPanel } from "./AuditSettingsPanel";
@@ -37,6 +38,7 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
           <BootstrapAccountForm disabled={!backendOnline} onCreated={auth.bootstrap} />
         </section>
         <NetworkSettingsPanel backendOnline={backendOnline} administrator />
+        <ServerPortSettings />
         <NoticePreferencesPanel />
       </>
     );
@@ -52,7 +54,7 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
           {section === "profile" && <><ProfileGroup account={account} disabled={!backendOnline} onChanged={auth.refresh} /><NoticePreferencesPanel /><LinkedProfilesGroup /></>}
           {section === "security" && <><AccountPasswordPanel disabled={!backendOnline} onChanged={auth.refresh} /><RecoveryCodesPanel backendOnline={backendOnline} /></>}
           {section === "sessions" && <SessionSettingsPanel backendOnline={backendOnline} onSignedOut={auth.refresh} />}
-          {section === "network" && administrator && <NetworkSettingsPanel backendOnline={backendOnline} administrator />}
+          {section === "network" && administrator && <><NetworkSettingsPanel backendOnline={backendOnline} administrator /><ServerPortSettings /></>}
           {(section === "accounts" || section === "history") && administrator && <AccountDirectory current={account} backendOnline={backendOnline} history={section === "history"} />}
         </div>
       </div>

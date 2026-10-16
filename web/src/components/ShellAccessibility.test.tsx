@@ -23,6 +23,7 @@ vi.mock("../state/app-state", () => ({
       settings: {
         ui: { show_remote_navigation: app.showRemoteNavigation },
         device: { hsp_dispatch_owner: "cloud_rest" },
+        motion: { speed_min_percent: 1, speed_max_percent: 100 },
         llm: { motion_generation_mode: "pattern", motion_capabilities: { motion: true } },
       },
     },
@@ -53,7 +54,7 @@ describe("shell accessibility", () => {
 
   it("names the manual speed slider explicitly", () => {
     render(<ManualMotionTest />);
-    expect(screen.getByRole("slider", { name: "Speed" })).toHaveValue("50");
+    expect(screen.getByRole("slider", { name: "Speed" })).toHaveValue("25");
   });
 
   it("honors saved remote shortcut visibility without hiding Stop", () => {

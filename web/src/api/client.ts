@@ -2,6 +2,7 @@
 // client ID so the backend controller lease can pick one active controller;
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
+import type { NativeBluetoothSnapshot } from "./native-bluetooth-types";
 import type { LLMCatalog } from "./catalog-types";
 import type { ChatRequestFailure } from "./chat-diagnostic-types";
 import type { DiagnosticReportOptions } from "./diagnostic-report-types";
@@ -83,6 +84,10 @@ import type {
   InternetDiscovery,
   CertificatePreparation,
   CommandReceipt,
+  CoyoteTransportSnapshot,
+  DeviceId,
+  DeviceOptionsPatch,
+  DeviceOutput,
 } from "./types";
 
 
@@ -809,6 +814,10 @@ export const api = {
     request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),
   saveConnectionKey: (connection_key: string) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connection-key", { connection_key }),
+  // Settings > Devices saves each device option as it changes.
+  saveDeviceOptions: (patch: DeviceOptionsPatch) =>
+    request<{ settings: PublicSettings }>("PATCH", "/api/settings/device", patch),
+  saveServerPort: (port: number) => request<{ settings: PublicSettings }>("PUT", "/api/settings/server", { port }),
   resetSettings: () => request<{ settings: PublicSettings }>("POST", "/api/settings/reset", {}),
   updateStatus: (refresh = false) => request<UpdateStatus>("GET", `/api/update${refresh ? "?refresh=1" : ""}`),
 
@@ -851,13 +860,48 @@ export const api = {
 
   // Intiface Central session. Device indices are scoped to this discovery
   // session, so selection deliberately remains runtime state rather than a setting.
+  nativeBluetoothStatus: () => request<NativeBluetoothSnapshot>("GET", "/api/transport/native-bluetooth/status"),
+  nativeBluetoothConnect: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/connect", {}),
+  nativeBluetoothDisconnect: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/disconnect", {}),
+  nativeBluetoothForget: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/forget", {}),
+  coyoteStatus: () => request<CoyoteTransportSnapshot>("GET", "/api/transport/coyote/status"),
+  coyoteConnect: (candidateID?: string) => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/connect", { candidate_id: candidateID }),
+  coyoteDiscover: () => request<{ candidates: { id: string; name: string; rssi: number; identification: "remembered" | "name_match" | "possible" }[] }>("POST", "/api/transport/coyote/discover", {}),
+  coyoteDisconnect: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/disconnect", {}),
+  coyoteStrength: (channel: "a" | "b", delta: number, stopSequence?: number) =>
+    request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/strength", { channel, delta }, undefined,
+      stopSequence === undefined ? undefined : { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  coyoteTest: (channel: "a" | "b", stopSequence: number) =>
+    request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/test", { channel }, undefined,
+      { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  coyoteZero: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/zero", {}),
+  changeDeviceConnection: (device: DeviceId, action: "add" | "remove" | "include" | "exclude") =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connections", { device, action }),
+  setDeviceOutput: (output: DeviceOutput) =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/device/output", { output }),
+  setEstimSafety: (acknowledged: boolean) =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/estim/safety", { acknowledged }),
   intifaceStatus: () => request<IntifaceTransportSnapshot>("GET", "/api/transport/intiface/status"),
-  intifaceConnect: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/connect", {}),
-  intifaceDisconnect: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/disconnect", {}),
+  // Each device that reaches Intiface holds a lease on the one shared
+  // connection; no device means the Handy, as older builds sent.
+  intifaceConnect: (device?: "handy" | "vibrator") =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/connect", device ? { device } : {}),
+  intifaceDisconnect: (device?: "handy" | "vibrator") =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/disconnect", device ? { device } : {}),
   intifaceStartScan: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/scan", {}),
   intifaceStopScan: () => request<IntifaceTransportSnapshot>("DELETE", "/api/transport/intiface/scan"),
   intifaceSelect: (device_index: number, actuator_index: number) =>
     request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/select", { device_index, actuator_index }),
+  vibratorSelect: (device_index: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/select", { device_index }),
+  // Raising sends the Stop sequence so a raise prepared before a Stop is
+  // refused; lowering needs no control and never does.
+  vibratorIntensity: (intensity_percent: number, stopSequence?: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/intensity", { intensity_percent }, undefined,
+      stopSequence === undefined ? undefined : { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  vibratorTest: (stopSequence: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/test", {}, undefined,
+      { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
 
   // Browser Bluetooth bridge. React owns only the browser/device session; all
   // motion commands still come from backend bridge commands.

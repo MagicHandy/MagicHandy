@@ -10,6 +10,8 @@ import { SettingsRoute } from "./SettingsRoute";
 const app = vi.hoisted(() => ({
   hostAdministration: true,
   hasState: true,
+  device: undefined as PublicSettings["device"] | undefined,
+  settings: undefined as PublicSettings | undefined,
   hash: "#/settings/diagnostics",
   refresh: vi.fn(),
   show: vi.fn(),
@@ -67,7 +69,7 @@ vi.mock("../state/app-state", () => ({
     readOnly: false,
     refresh: app.refresh,
     motion: { engine: { running: true, target: { source: "autopilot" } } },
-    state: app.hasState ? { capabilities: { configure_host: app.hostAdministration }, version: "test", commit: "abc", uptime_seconds: 10, motion: { available: true } } : null,
+    state: app.hasState ? { capabilities: { configure_host: app.hostAdministration }, settings: app.settings ?? (app.device ? { device: app.device } : undefined), version: "test", commit: "abc", uptime_seconds: 10, motion: { available: true } } : null,
   }),
   useHashRoute: () => app.hash,
   useToast: () => ({ show: app.show }),
@@ -184,9 +186,49 @@ function settings(verbosity: string): PublicSettings {
 }
 
 describe("SettingsRoute", () => {
+  it("opens Devices for the former Device bookmark without loading the host draft", async () => {
+    app.hash = "#/settings/device";
+    app.settings = settings("normal");
+    render(<SettingsRoute />);
+    expect(await screen.findByRole("heading", { name: "Your devices" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Devices" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByText("Changes save as you make them")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save settings" })).toBeNull();
+    expect(getSettings).not.toHaveBeenCalled();
+  });
+
+  it("follows device and motion changes saved elsewhere and leaves the device blocks out of Save", async () => {
+    app.hash = "#/settings/general";
+    const initial = settings("normal");
+    initial.device.linked_failure_policy = "stop_all";
+    app.settings = initial;
+    getSettings.mockResolvedValue({ settings: initial });
+    const view = render(<SettingsRoute />);
+    await screen.findByRole("button", { name: "Save settings" });
+    app.settings = {
+      ...initial,
+      server: { port: 49718 },
+      device: { ...initial.device, linked_failure_policy: "continue_healthy", intiface_server_address: "ws://127.0.0.1:23456" },
+      motion: { ...initial.motion, reverse_direction: true },
+    };
+    view.rerender(<SettingsRoute />);
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    await waitFor(() => expect(saveSettings).toHaveBeenCalledOnce());
+    const update = saveSettings.mock.calls[0][0];
+    expect(update.device).toEqual(expect.objectContaining({ linked_failure_policy: "continue_healthy", intiface_server_address: "ws://127.0.0.1:23456" }));
+    expect(update.device).not.toHaveProperty("handy_connection_key");
+    expect(update.clear_connection_key).toBe(false);
+    expect(update.motion.reverse_direction).toBe(true);
+    expect(update.server.port).toBe(49718);
+    expect(update).not.toHaveProperty("estim");
+    expect(update).not.toHaveProperty("vibration");
+  });
+
   beforeEach(() => {
     app.hostAdministration = true;
     app.hasState = true;
+    app.device = undefined;
+    app.settings = undefined;
     vi.clearAllMocks();
     setLocaleForTest("en", english);
     app.hash = "#/settings/diagnostics";
@@ -357,20 +399,18 @@ describe("SettingsRoute", () => {
     expect(media.script_offset_ms).toBe(125);
   });
 
-  it("localizes settings navigation, firmware guidance, and chat option labels", async () => {
+  it("localizes settings navigation and chat option labels", async () => {
     setLocaleForTest("ja", japanese);
     getSettings.mockResolvedValue({ settings: settings("normal") });
 
-    app.hash = "#/settings/device";
-    const deviceView = render(<SettingsRoute />);
+    app.hash = "#/settings/general";
+    const generalView = render(<SettingsRoute />);
     expect(await screen.findByRole("link", { name: "一般" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "デバイス" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: japanese.Devices })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "メディアライブラリ" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: japanese.Chat })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "診断" })).toBeInTheDocument();
-    expect(screen.getByText("Cloud REST には、API v3 アクセスが有効な Handy ファームウェア v4 が必要です。")).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "\u540c\u68b1\u30a2\u30d7\u30ea\u30b1\u30fc\u30b7\u30e7\u30f3 ID" })).toBeInTheDocument();
-    deviceView.unmount();
+    generalView.unmount();
 
     app.hash = "#/settings/prompts";
     render(<SettingsRoute />);
@@ -379,27 +419,15 @@ describe("SettingsRoute", () => {
     expect(screen.getByRole("option", { name: "ペニス" })).toBeInTheDocument();
   });
 
-  // Driving the device by hand is a device tool, not a diagnostic, so it sits
-  // with the connection that carries it.
-  it("offers the manual motion test from the device section", async () => {
-    app.hash = "#/settings/device";
-    getSettings.mockResolvedValue({ settings: settings("normal") });
-    render(<SettingsRoute />);
-
-    expect(await screen.findByRole("heading", { name: /Manual motion/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start test" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Stop test" })).toBeDisabled();
-  });
-
-  it("keeps device settings to one card layer", async () => {
-    app.hash = "#/settings/device";
-    getSettings.mockResolvedValue({ settings: settings("normal") });
+  it("keeps Settings > Devices to one card layer", async () => {
+    app.hash = "#/settings/devices";
+    app.settings = settings("normal");
     const view = render(<SettingsRoute />);
 
-    await screen.findByRole("heading", { level: 2, name: "Device" });
+    await screen.findByRole("heading", { level: 2, name: "Devices" });
     const panel = view.container.querySelector(".panel");
     expect(panel).not.toBeNull();
-    expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Device");
+    expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Devices");
     expect(panel?.querySelectorAll(".group .group")).toHaveLength(0);
     expect(panel?.querySelectorAll(":scope > label.field, :scope > label.toggle-line")).toHaveLength(0);
   });

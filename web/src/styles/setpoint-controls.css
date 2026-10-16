@@ -184,6 +184,9 @@
 }
 .range-slider-track {
   position: relative;
+  /* The two thumb inputs order themselves with z-index; keep that ordering
+     inside the track so a thumb never paints over a menu or popover. */
+  isolation: isolate;
   height: var(--range-hit);
   display: flex;
   align-items: center;

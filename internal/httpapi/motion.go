@@ -97,6 +97,7 @@ func (s *Server) motionState() any {
 }
 
 func (s *Server) motionStateValue() map[string]any {
+	state := map[string]any{"available": true}
 	if engine := s.currentMotionEngine(); engine != nil {
 		snapshot := engine.Snapshot()
 		if snapshot.Running || snapshot.Paused || snapshot.Completing {
@@ -105,16 +106,17 @@ func (s *Server) motionStateValue() map[string]any {
 				"engine":    snapshot,
 			}
 		}
-	}
-	if _, err := s.newSelectedMotionTransport(); err != nil {
-		return map[string]any{
-			"available": false,
-			"error":     err.Error(),
+		if snapshot.LinkedSession != nil && snapshot.LinkedSession.Status == "failed" {
+			// Keep the failure visible after Stop, independently of whether
+			// the selected connections are ready for another run.
+			state["engine"] = snapshot
 		}
 	}
-	return map[string]any{
-		"available": true,
+	if _, err := s.newSelectedMotionTransport(); err != nil {
+		state["available"] = false
+		state["error"] = err.Error()
 	}
+	return state
 }
 
 func (s *Server) handleMotionState(w http.ResponseWriter, r *http.Request) {
@@ -433,6 +435,10 @@ func (s *Server) emergencyStopWithAdmission(ctx context.Context, reason string, 
 func (s *Server) dispatchEmergencyStop(ctx context.Context, reason string, request *stopAdmission) (outcome emergencyStopResult, err error) {
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 	defer cancel()
+	// The Coyote's zero and the Intiface StopAllDevices run beside the engine
+	// Stop rather than after it.
+	waitCoyote := s.startCoyoteZero()
+	waitIntiface := s.startIntifaceEmergencyStop()
 
 	// The engine and the selected fallback transport are mutually exclusive.
 	// Holding lifecycleMu prevents a replacement engine from appearing between
@@ -442,10 +448,13 @@ func (s *Server) dispatchEmergencyStop(ctx context.Context, reason string, reque
 	if request != nil {
 		defer func() { request.complete(outcome, err) }()
 	}
-	engine := s.currentMotionEngine()
+	// Complete shared Stop replies only after both outputs have finished, and
+	// include a failed zero in confirmation rather than only logging it.
+	defer func() { err = errors.Join(err, waitCoyote(), waitIntiface()) }()
+	engine, engineOwner := s.currentMotionEngineWithOwner()
 	if engine != nil {
 		state, err := engine.Stop(stopCtx, reason)
-		return emergencyStopResult{state: state, engineAvailable: true}, err
+		return emergencyStopResult{state: state, engineAvailable: true}, errors.Join(err, s.stopHandyOutsideEngine(stopCtx, engineOwner, reason))
 	}
 
 	result, err := s.stopSelectedTransport(stopCtx, reason+"_no_engine")
@@ -459,6 +468,7 @@ func (s *Server) beginGlobalStop(reason string, origins ...context.Context) (fun
 	// Publish every emergency-stop activation, including repeated idle stops,
 	// so browser-owned capture can discard pending speech in every client.
 	finishInvalidation, sequence := s.invalidateWorkForStop(reason, origins...)
+	s.nativeBluetooth.owner.Interrupt()
 	// Mark autonomous modes stopped before touching the engine, but drain their
 	// goroutine only after Engine.Stop has canceled any blocked mode startup.
 	finishModeStop := func() {}
@@ -479,13 +489,19 @@ func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (tran
 	if err != nil {
 		return transport.CommandResult{}, err
 	}
+	if commandTransport == nil {
+		return transport.CommandResult{OK: true, Status: "no_devices"}, nil
+	}
 	result, stopErr := commandTransport.Stop(ctx, transport.StopCommand{Reason: reason})
 	switch selected := commandTransport.(type) {
 	case *transport.CloudRESTTransport:
 		diagnostics := s.saveCloudDiagnostics(selected.Diagnostics())
 		s.traceCloudResult(reason, diagnostics, result)
 	case *transport.BrowserBluetoothTransport:
-		diagnostics := s.saveBluetoothDiagnostics(selected.Diagnostics())
+		diagnostics := selected.Diagnostics()
+		if diagnostics.Name == transport.BrowserBluetoothName {
+			diagnostics = s.saveBluetoothDiagnostics(diagnostics)
+		}
 		s.traceBluetoothResult(reason, diagnostics, result)
 	}
 	return result, stopErr
@@ -531,15 +547,14 @@ func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context
 	}, sequence
 }
 
-func (s *Server) newSelectedStopTransport() (transport.Transport, error) {
+func (s *Server) newHandyStopTransport(settings config.Settings) (transport.Transport, error) {
 	if s.motion.transport != nil {
 		return s.motion.transport, nil
 	}
-	settings, _ := s.store.Snapshot()
 	if settings.Device.HSPDispatchOwner == config.DispatchOwnerCloudREST {
 		return s.newCloudTransportForControl()
 	}
-	return s.newSelectedMotionTransport()
+	return s.newHandyMotionTransport(settings)
 }
 
 // handleMotionPause freezes active motion (phase retained for resume). Unlike
@@ -667,26 +682,10 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 		}
 	}
 	runtimeErr = errors.Join(runtimeErr, s.applyLLMSettingsTransition(previous.LLM, next.LLM))
-	ownerChanged := previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner
-	intifaceAddressChanged := previous.Device.IntifaceServerAddress != next.Device.IntifaceServerAddress
-	cloudConfigChanged := previous.Device.FirmwareAPIRequirement != next.Device.FirmwareAPIRequirement ||
-		previous.Device.APIApplicationIDSource != next.Device.APIApplicationIDSource ||
-		previous.Device.APIApplicationIDOverride != next.Device.APIApplicationIDOverride ||
-		previous.Device.HandyConnectionKey != next.Device.HandyConnectionKey
-	if ownerChanged || intifaceAddressChanged || cloudConfigChanged {
-		// Transport changes stop active motion, including any autonomous mode.
-		reason := "transport_config_changed"
-		if ownerChanged {
-			reason = "dispatch_owner_changed"
-		}
-		if s.modes != nil {
-			s.modes.Stop(reason)
-		}
-		stopErr := s.stopAndClearMotionEngine(ctx, reason)
-		if ownerChanged || next.Device.HSPDispatchOwner == config.DispatchOwnerIntiface {
-			s.closeIntiface()
-		}
-		return errors.Join(runtimeErr, stopErr)
+	stoppedForDevice, deviceErr := s.applyDeviceSettingsTransition(ctx, previous, next)
+	runtimeErr = errors.Join(runtimeErr, deviceErr)
+	if stoppedForDevice {
+		return runtimeErr
 	}
 	if stopped, stopErr := s.stopMediaForPolicyChange(ctx, previous, next); stopped {
 		return errors.Join(runtimeErr, stopErr)
@@ -697,6 +696,48 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 		return runtimeErr
 	}
 	return errors.Join(runtimeErr, s.refreshActiveMotion(ctx, next.Motion))
+}
+
+// applyDeviceSettingsTransition stops active motion, including any autonomous
+// mode, when what it drives or how it reaches the Handy changed, and applies
+// Coyote settings. It reports whether motion was stopped.
+func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, next config.Settings) (bool, error) {
+	dispatchOwnerChanged := previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner
+	handyRemoved := previous.Device.HasDevice(config.DeviceOutputHandy) && !next.Device.HasDevice(config.DeviceOutputHandy)
+	ownerChanged := dispatchOwnerChanged || !slices.Equal(previous.Device.PlaybackSet(), next.Device.PlaybackSet()) || previous.Device.LinkedFailurePolicy != next.Device.LinkedFailurePolicy || handyRemoved
+	intifaceAddressChanged := previous.Device.IntifaceServerAddress != next.Device.IntifaceServerAddress
+	cloudConfigChanged := previous.Device.FirmwareAPIRequirement != next.Device.FirmwareAPIRequirement ||
+		previous.Device.APIApplicationIDSource != next.Device.APIApplicationIDSource ||
+		previous.Device.APIApplicationIDOverride != next.Device.APIApplicationIDOverride ||
+		previous.Device.HandyConnectionKey != next.Device.HandyConnectionKey
+	if !ownerChanged && !intifaceAddressChanged && !cloudConfigChanged {
+		return false, errors.Join(s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next))
+	}
+	reason := "transport_config_changed"
+	if ownerChanged {
+		reason = "dispatch_owner_changed"
+	}
+	if s.modes != nil {
+		s.modes.Stop(reason)
+	}
+	stopErr := s.stopAndClearMotionEngine(ctx, reason)
+	// The Intiface session is shared by every device that reaches it. A new
+	// address ends it for all of them; the Handy leaving Intiface releases
+	// only its own lease. Changing playback alone keeps the session.
+	var removeErr error
+	switch {
+	case intifaceAddressChanged:
+		s.closeIntiface()
+	case dispatchOwnerChanged && previous.Device.HSPDispatchOwner == config.DispatchOwnerIntiface:
+		removeErr = s.releaseIntifaceLease(ctx, config.DeviceOutputHandy)
+	}
+	if dispatchOwnerChanged && previous.Device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
+		removeErr = s.nativeBluetooth.owner.Disconnect(ctx)
+	}
+	if handyRemoved {
+		removeErr = errors.Join(removeErr, s.removeHandyConnection(ctx, previous))
+	}
+	return true, errors.Join(stopErr, removeErr, s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next))
 }
 
 func (s *Server) applyPlanningSettingsTransition(previous, next config.Settings) {
@@ -856,6 +897,8 @@ func (s *Server) Quiesce() {
 			s.modes.Shutdown()
 		}
 		s.closeIntiface()
+		s.closeCoyote()
+		_ = s.nativeBluetooth.owner.Close()
 	})
 }
 
@@ -928,10 +971,18 @@ func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
 		return nil, 0, errServerQuiescing
 	}
 
+	if s.coyote.owner.Status().ReferencePulse {
+		return nil, 0, errors.New("wait for the Coyote channel test to finish before starting playback")
+	}
 	settings, _ := s.store.Snapshot()
-	owner := settings.Device.HSPDispatchOwner
+	owner := s.engineOwnerKey(settings.Device)
 	engine, engineOwner := s.currentMotionEngineWithOwner()
-	if engine != nil && engineOwner != owner {
+	failed := false
+	if engine != nil {
+		state := engine.Snapshot()
+		failed = !state.Running && !state.Starting && !state.Paused && (state.LastError != "" || settings.Device.Plays(config.DeviceOutputCoyote))
+	}
+	if engine != nil && (engineOwner != owner || failed) {
 		if err := s.stopAndClearMotionEngineLocked(context.Background(), "dispatch_owner_changed"); err != nil {
 			return nil, 0, fmt.Errorf("previous motion owner could not be stopped: %w", err)
 		}
@@ -980,12 +1031,16 @@ func (s *Server) stopActiveMotionForReplacement(ctx context.Context, reason stri
 	return engine.Stop(ctx, reason)
 }
 
-func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
+func (s *Server) newHandyMotionTransport(settings config.Settings) (transport.Transport, error) {
 	if s.motion.transport != nil {
 		return s.motion.transport, nil
 	}
-
-	settings, _ := s.store.Snapshot()
+	if settings.Device.HSPDispatchOwner == config.DispatchOwnerNativeBluetooth {
+		if !s.nativeBluetooth.owner.Status().Connected {
+			return nil, errors.New("native Bluetooth is not connected")
+		}
+		return s.nativeBluetooth.owner.NewTransport(transport.HandyBluetoothOptions{ReverseDirection: settings.Motion.ReverseDirection}), nil
+	}
 	switch settings.Device.HSPDispatchOwner {
 	case config.DispatchOwnerCloudREST:
 		cloud, err := s.newCloudTransport()
@@ -1011,6 +1066,12 @@ func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
 		intiface, err := s.currentIntiface()
 		if err != nil {
 			return nil, err
+		}
+		s.intiface.mu.Lock()
+		leased := s.intiface.leases[config.DeviceOutputHandy]
+		s.intiface.mu.Unlock()
+		if !leased {
+			return nil, errors.New("connect the Handy through Intiface first")
 		}
 		status := intiface.Status()
 		if status.SelectedDeviceIndex == nil || status.SelectedActuatorIndex == nil {

@@ -80,7 +80,7 @@ succeed.
 ### Top-bar control-profile selector
 
 The selector is a shell-owned, non-modal disclosure beside notifications and
-the connection manager. Only one of those three disclosures may be open. Its
+the device panel. Only one of those three disclosures may be open. Its
 compact trigger contains a profile image or generated monogram, the label
 **Control profile**, and the current selection.
 

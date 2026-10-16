@@ -34,6 +34,21 @@ to the user's speed/stroke/limit envelope. Speed and stroke limits stay
 engine/transport caps, never prompt-only behavior. Emergency Stop stays
 independent of every generation, upload, and playback latency.
 
+A DG-LAB Coyote follows the same frame through its conversion profile
+([ADR 0044](decisions/0044-coyote-estim-output.md)). The model has no Coyote
+control and no Coyote prompt text: channel strength and ceilings belong to the
+user alone. A stimulation vocabulary (rhythm, texture, envelope, channel
+relationship) is a recorded follow-up that needs its own ADR.
+
+An Intiface vibrator ([ADR 0047](decisions/0047-intiface-vibrator-output.md))
+is the same: the model has no vibrator control and no vibrator prompt text, and
+the live intensity belongs to the user.
+
+Replies and motion descriptions still assume a linear stroker, which is
+untrue when only the Coyote or a vibrator plays. The
+[device-aware model responses plan](device-aware-prompts-plan-2026-10-15.md)
+sets out per-configuration prompt changes and their tests as later work.
+
 ## What the LLM can emit today
 
 `internal/chat/contract.go` accepts exactly one `AssistantResponse`: required
@@ -542,6 +557,16 @@ engine transport results as `fake_handy`; a Cloud or hardware transport result
 means the review is not isolated and must be stopped immediately.
 
 ## Cross-references
+
+Layered's explicit `full_slider` geometry sets semantic 0–100 and a constant
+full stroke width. `full_band` preserves the current outer endpoints and fills
+that band. Both remove center/range layers while preserving independent pace
+variation, speed and seed. Conflicting accompanying edits reject the complete
+proposal. The shared engine and saved device envelope still bound dispatch.
+Live examples put controls before geometry for constrained decoders; Autopilot
+examples place the required standing-wish decision after reply and describe the
+backend's current hold state. See the
+[October 15 review](release-motion-review-2026-10-15.md).
 
 - Current contract: `internal/chat/contract.go`; engine intent:
   `internal/motion/target.go`; system-prompt assembly: `internal/chat/prompts.go`.

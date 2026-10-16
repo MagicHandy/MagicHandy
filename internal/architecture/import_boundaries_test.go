@@ -51,7 +51,7 @@ type importRule struct {
 }
 
 func internalBoundaryRules(internal string) []importRule {
-	return []importRule{
+	rules := []importRule{
 		{
 			name: "conversation application stays above core domains",
 			appliesTo: func(importPath string) bool {
@@ -145,6 +145,24 @@ func internalBoundaryRules(internal string) []importRule {
 				internal + "modes",
 				internal + "motion",
 			},
+		},
+	}
+	return append(rules, nativeBluetoothBoundaryRules(internal)...)
+}
+
+func nativeBluetoothBoundaryRules(internal string) []importRule {
+	return []importRule{
+		{
+			name: "native Bluetooth drivers stay below motion and transport owners (ADR 0046)",
+			appliesTo: func(importPath string) bool {
+				return hasAnyPrefix(importPath, internal+"ble", internal+"handyble")
+			},
+			forbidden: []string{internal + "transport", internal + "motion", internal + "llm", internal + "modes", internal + "chat"},
+		},
+		{
+			name:      "native radio dependencies live only in the worker executable",
+			appliesTo: func(importPath string) bool { return strings.HasPrefix(importPath, internal) },
+			forbidden: []string{"tinygo.org/x/bluetooth"},
 		},
 	}
 }

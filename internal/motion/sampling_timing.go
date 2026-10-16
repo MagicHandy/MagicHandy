@@ -10,10 +10,19 @@ import (
 // not the resolution at which we inspect the curve. Aliasing an unrepresentable
 // reversal would change direction/rhythm, so reject it instead.
 func fitSpacedMotionSamples(probes []MotionSample, floor int64) ([]MotionSample, map[int64]struct{}, error) {
+	return fitSpacedMotionSamplesPreferred(probes, floor, floor)
+}
+
+// A wider preference reduces optional commands without turning a short but
+// representable stroke into an error. Reversals and holds retain their exact
+// times; only the hard floor can reject them. The transport still dispatches
+// the resulting shared-engine points without another resampler.
+func fitSpacedMotionSamplesPreferred(probes []MotionSample, floor, preferred int64) ([]MotionSample, map[int64]struct{}, error) {
+	preferred = max(floor, preferred)
 	anchors := motionSampleReversalAnchors(probes)
 	// A lookahead window can end just after a turn. End at that turn rather
 	// than forcing a short artificial tail; the next window will fit its leg.
-	if len(anchors) > 2 && probes[anchors[len(anchors)-1]].TimeMillis-probes[anchors[len(anchors)-2]].TimeMillis < floor {
+	if len(anchors) > 2 && probes[anchors[len(anchors)-1]].TimeMillis-probes[anchors[len(anchors)-2]].TimeMillis < preferred {
 		anchors = anchors[:len(anchors)-1]
 	}
 	mandatory := make(map[int64]struct{}, len(anchors))
@@ -23,7 +32,7 @@ func fitSpacedMotionSamples(probes []MotionSample, floor int64) ([]MotionSample,
 	fit = func(left, right int) {
 		worst, split := wireApproximationTolerance, -1
 		for index := left + 1; index < right; index++ {
-			if probes[index].TimeMillis-probes[left].TimeMillis < floor || probes[right].TimeMillis-probes[index].TimeMillis < floor {
+			if probes[index].TimeMillis-probes[left].TimeMillis < preferred || probes[right].TimeMillis-probes[index].TimeMillis < preferred {
 				continue
 			}
 			if deviation := motionSampleError(probes[left], probes[right], probes[index]); deviation > worst {

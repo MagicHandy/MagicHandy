@@ -36,6 +36,10 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 		LastError:                  redactedError(e.lastError),
 		Perceptual:                 e.plan.Perceptual,
 	}
+	if provider, ok := e.transport.(transport.LinkedSessionStatusProvider); ok {
+		status := provider.LinkedSessionStatus()
+		state.LinkedSession = &status
+	}
 	if e.plan.Target.continuousCurve() && e.plan.ID != "" {
 		pace := e.plan.Perceptual.Pace
 		pace.Limiters = append([]string(nil), pace.Limiters...)

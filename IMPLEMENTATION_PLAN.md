@@ -2,6 +2,23 @@
 
 ## Core Direction
 
+The [alpha.62 release candidate](docs/alpha62-release-review-2026-10-15.md)
+combines the reviewed device, UI, motion and dependency branches. The final
+Intiface full-sweep and Creative v2 hardware comparisons were accepted.
+Manual test choices now use current continuous patterns and saved speed limits.
+The upstream Stop limitation stays open and visible under ADR 0049; release
+quality, packaging and publication verification remain mandatory.
+
+The October 15 [release motion review](docs/release-motion-review-2026-10-15.md)
+fixes floating-point endpoint rejection, adds explicit Layered full-slider and
+full-band edits, and aligns live examples with decoder order and Autopilot hold
+state. Local/hosted production fixtures and minimum-context checks cover the
+changes. Matched 20%/35% hardware runs now confirm that Intiface is less smooth
+than Cloud despite equivalent planned travel. The source audit also found that
+the installed Intiface release's linear Stop path can acknowledge without a
+hardware write or queue barrier. Release acceptance remains open for downstream
+timing and physical Stop; the speculative sampler change is parked.
+
 The October 11 [diagnostic download review](docs/diagnostic-report-review-2026-10-11.md)
 replaces the trace-export card with one backend-built report and a compact
 inclusion menu. History, failed output and personalization are explicit choices;
@@ -2720,3 +2737,140 @@ control changes, all shapes and final Stop. Physical feel and real-transport
 acceptance remain open. See [ADR 0038](docs/decisions/0038-freestyle-stroke-stream.md),
 [review evidence](docs/freestyle-stream-review-2026-10-01.md), and
 [budgets](docs/goal-scorecard.md#2026-10-01--freestyle-stroke-stream).
+
+
+## October 14 DG-LAB Coyote 3.0 output
+
+Implemented for PR review: a Coyote 3.0 as a second output, alone or alongside
+the Handy, through the existing shared engine. A per-connection Bluetooth
+worker (`cmd/bluetooth-worker`, no cgo) owns the radio while the core composes
+every packet (`internal/estim`). `transport.Coyote` converts the neutral frame
+with a user-chosen profile, and `transport.FanOut` drives both devices from one
+engine transport. Strength stays user-owned with device-enforced ceilings; the
+global Stop zeroes both channels. The model receives no new control. Simulated
+end-to-end tests pass; physical acceptance on a Coyote 3.0 is open. Native
+stimulation patterns and model composition remain follow-ups. See
+[ADR 0044](docs/decisions/0044-coyote-estim-output.md) and [estim.md](docs/estim.md).
+
+The pre-hardware review's five reproduced safety issues are corrected with
+permanent regressions: non-supersedable emergency zero and shared Stop failure
+reporting; failed-ceiling disconnection/reapplication; dropped queued increases
+after missing confirmation; evidence-ordered zero state; and explicit host-only
+reference testing instead of automatic pulses on strength changes. Worker
+protocol v2 bounds outstanding native writes and terminates timed-out work.
+Physical COYOTE connection and output acceptance remain explicitly deferred.
+
+The connection manager now uses an additive device list, per-device protocol
+titles, stronger section dividers, and an outlined Coyote prerequisite notice.
+Handy protocol selection stays beside its title; simulation is identified once
+in the top bar. Full automated checks and an isolated working-LLM review build
+are recorded in [the implementation review](docs/coyote-review-2026-10-14.md).
+
+
+### Device inventory and linked sessions (2026-10-14)
+
+ADR 0045 separates saved connections from playback inclusion and live transport
+state. The title-row + adds without connecting or starting. Empty inventory is
+valid. Linked failures stop all by default, with an explicit continue-healthy
+setting; both policies prevent hot-join after reconnect. Session-bound Coyote
+and browser BLE dispatch preserve the single engine. Hardware validation remains
+pending; simulated integration and full gates are recorded in the review report.
+
+### Native Handy Bluetooth (2026-10-14)
+
+Implemented on a follow-up branch to the COYOTE/device-session work. The shared
+`bluetooth-worker` now serves allowlisted Handy firmware-4 and COYOTE 3.0 profiles
+over version-4 IPC, with one process per device connection. `internal/ble` owns
+the reusable byte link; `internal/handyble` handles bounded RPC framing and
+correlation. Browser and native Handy connections share the existing HSP
+transport mapping and engine. Native selection appears in Setup, Settings and
+the title-row protocol menu; choosing it never connects. The UI distinguishes
+the host radio from the browser's Bluetooth. APK-informed COYOTE discovery now
+offers an explicit RSSI-ranked picker for private/unnamed advertisements, with
+remembered, advertised-name and possible-match labels. Scan workers do not
+connect. Host-only opaque selections expire, and GATT verification precedes
+commands. Write Without Response cannot establish a confirmed strength baseline.
+
+All current sampling, motion planning, prompts, model routing and conservative
+HSP buffer budgets remain in place. Software validation includes process
+isolation, small-MTU chunking, stale-session fencing, linked failure policies,
+normal/race/leak checks and Windows/Linux pure-Go builds. The authorized original
+Handy firmware-4.3 check verified connection, clock sync and mode-independent
+Stop. Windows connection workers now refresh only the selected advertisement
+and wait for connected state before GATT discovery. COYOTE testing verified
+battery and actual zero reports, including global Stop while already at zero;
+that initial run used no positive strength or pulse output. The follow-up pins
+the upstream Windows service-disposal fix, retains lost links for teardown and
+uses a twelve-second connection budget. Repeated COYOTE reconnect, bounded
+channel tests and shared-engine playback at strength 5 passed with no output
+leads connected. Packaging acceptance now checks both listeners and retains
+startup failures. The October 15 hardware follow-up adds ten immediate Handy
+reconnects, user-observed playback, concurrent output and both linked-failure
+policies. It fixes Handy's stale connection deadline, retained failure snapshots,
+and false COYOTE Stop confirmation after link loss. Recovery of a crashed worker
+with a live companion and loaded electrical behavior remain acceptance items.
+See the [linked review](docs/native-linked-hardware-review-2026-10-15.md),
+[follow-up](docs/native-ble-reconnect-review.md),
+[hardware findings](docs/native-handy-hardware-review-2026-10-14.md),
+[plan](docs/native-handy-bluetooth-plan-2026-10-14.md),
+[ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and
+[review](docs/native-handy-bluetooth-review-2026-10-14.md).
+
+### Intiface vibrator output (2026-10-15)
+
+Implemented and tested in simulation; physical acceptance is open. A Buttplug
+vibrator through Intiface Central plays with the stroker, the Coyote, both, or
+alone ([ADR 0047](docs/decisions/0047-intiface-vibrator-output.md)):
+
+- Participation is the `device.playback_devices` set. Linked sessions take any
+  set of devices, with the run clock on the first included one.
+- The Coyote's frame timeline, clock and coverage helpers moved to
+  `internal/companion`.
+- One Intiface session is shared by the linear owner and the vibrator owner,
+  with a lease per connected device.
+- The vibrator follows the shared frame through a speed, depth or steady
+  profile (`internal/vibration`). Its live intensity starts at 0, and the
+  model never controls it.
+- `-simulate-motion` builds include an in-process Intiface server with a
+  simulated stroker and vibrator (`internal/buttplugsim`).
+
+Model replies still assume a linear stroker. Device-aware prompts and their
+per-configuration test matrix are later work. See the
+[vibrator plan](docs/intiface-vibrator-plan-2026-10-15.md) and the
+[device-aware model responses plan](docs/device-aware-prompts-plan-2026-10-15.md).
+
+### Device panel and Settings > Devices (2026-10-15)
+
+Implemented and tested in simulation
+([ADR 0048](docs/decisions/0048-device-kit-and-settings-devices.md)). The
+connection manager is replaced by a live device panel (status, one action, In
+playback, levels and limits) and Settings > Devices, with a page per device for
+setup:
+
+- Each device is a descriptor in `web/src/devices/`; the panel row, the
+  top-bar chip, the Settings list and the device pages render from it.
+- Device options save as they change through `PATCH /api/settings/device`;
+  the Handy key keeps its explicit Save. The server port moved to Settings >
+  Access (`PUT /api/settings/server`).
+- The manual motion test, model and direction moved to the Handy's page. The
+  connection artwork is retired.
+
+See [UI design](docs/ui-design.md#devices-2026-10-15) and the
+[guidelines](docs/ui-design-guidelines.md#device-chip-and-device-panel).
+
+Release integration is tracked on `codex/release-device-ui`: Claude's current
+device kit and its shared-Intiface/vibrator dependencies are combined with the
+motion/model review. The final release must retain these UI changes, including
+the small title-row + shortcut. See the [combined validation and remaining
+acceptance work](docs/release-device-integration-2026-10-15.md).
+
+### Handy Intiface smoothness (2026-10-15)
+
+Observed A/B tests favored fewer position updates. An optional sampling
+preference now lets the shared engine fit generated Handy-over-Intiface curves
+with wider interior spacing while retaining the advertised hard limit, exact
+reversal timing and the shared velocity ceiling. The tested denser and guarded
+alternatives are rejected. Cloud/native buffered output, imported media and
+other linear devices are unchanged. See the
+[physical feedback, 144-case matrix and precision trade-off](docs/intiface-smoothness-review-2026-10-15.md).
+The independent upstream Stop issue remains with Buttplug.

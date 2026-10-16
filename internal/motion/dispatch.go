@@ -333,7 +333,7 @@ func (e *Engine) abortStartup(ctx context.Context, runEpoch uint64, reason strin
 
 	e.commandMu.Lock()
 	stopCtx, stopCancel := detachedStopContext(ctx)
-	stopCommand := transport.StopCommand{Reason: reason}
+	stopCommand := transport.StopCommand{Reason: reason, Fault: true}
 	result, stopErr := e.transport.Stop(stopCtx, stopCommand)
 	stopCancel()
 	annotation := "startup_failure=true"

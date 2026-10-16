@@ -53,7 +53,7 @@ func (s *Server) validateCloudAdmission(ctx context.Context, admission cloudPlan
 		return &llm.CloudError{Kind: "stale"}
 	}
 	current, _ := s.store.Snapshot()
-	if !reflect.DeepEqual(current.LLM, admission.settings.LLM) || current.Motion != admission.settings.Motion || current.Autopilot != admission.settings.Autopilot || current.Device != admission.settings.Device {
+	if !reflect.DeepEqual(current.LLM, admission.settings.LLM) || current.Motion != admission.settings.Motion || current.Autopilot != admission.settings.Autopilot || !reflect.DeepEqual(current.Device, admission.settings.Device) {
 		return &llm.CloudError{Kind: "stale"}
 	}
 	session, err := s.chatLog.ActiveSessionIDContext(ctx)

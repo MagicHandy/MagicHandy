@@ -20,10 +20,12 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/accounts"
 	"github.com/mapledaemon/MagicHandy/internal/audit"
+	"github.com/mapledaemon/MagicHandy/internal/ble"
 	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/chatapp"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
+	"github.com/mapledaemon/MagicHandy/internal/estim"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/media"
 	"github.com/mapledaemon/MagicHandy/internal/modes"
@@ -49,19 +51,25 @@ type VersionInfo struct {
 // Runtime contains app runtime collaborators exposed through HTTP diagnostics.
 type Runtime struct {
 	// OpenAI endpoints are injectable only for isolated protocol tests.
-	OpenAIHTTPClient       *http.Client
-	OpenAIIssuer           string
-	OpenAIBaseURL          string
-	Traces                 *diagnostics.TraceRing
-	Transport              transport.DiagnosticsProvider
-	MotionTransport        transport.Transport
-	MotionSimulated        bool
-	LLMProvider            llm.Provider
-	LLMHTTPClient          *http.Client
-	CloudBaseURL           string
-	CloudHTTPClient        *http.Client
-	IntifaceHTTPClient     *http.Client
-	BrowserBluetoothBridge *transport.BrowserBluetoothBridge
+	OpenAIHTTPClient   *http.Client
+	OpenAIIssuer       string
+	OpenAIBaseURL      string
+	Traces             *diagnostics.TraceRing
+	Transport          transport.DiagnosticsProvider
+	MotionTransport    transport.Transport
+	MotionSimulated    bool
+	LLMProvider        llm.Provider
+	LLMHTTPClient      *http.Client
+	CloudBaseURL       string
+	CloudHTTPClient    *http.Client
+	IntifaceHTTPClient *http.Client
+	// IntifaceSimulatorAddress replaces the saved Intiface address in
+	// -simulate-motion builds, so no real device is ever reached.
+	IntifaceSimulatorAddress string
+	BrowserBluetoothBridge   *transport.BrowserBluetoothBridge
+	// CoyoteConnector replaces the Bluetooth worker, for simulation and tests.
+	CoyoteConnector          estim.Connector
+	NativeBluetoothConnector ble.Connector
 	// ExecutablePath makes first-party worker discovery deterministic and
 	// injectable in tests. Empty falls back to os.Executable.
 	ExecutablePath      string
@@ -102,6 +110,8 @@ type Server struct {
 	cloud               cloudRuntime
 	bluetooth           bluetoothRuntime
 	intiface            intifaceRuntime
+	coyote              coyoteRuntime
+	nativeBluetooth     nativeBluetoothRuntime
 	motion              motionRuntime
 	lab                 llmLabRuntime
 	// autopilotHold remembers a human's standing wish to keep continuous motion.
@@ -263,6 +273,7 @@ func New(static fs.FS, logger *slog.Logger, store *config.Store, runtime Runtime
 		return nil, err
 	}
 
+	server.configureDeviceWorkers(runtime, settings, logger)
 	server.activate(runtime, settings)
 	server.networkAutomation.StartRenewal()
 	return server, nil
@@ -436,6 +447,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/transport/bluetooth/events", s.handleBluetoothEvents)
 	mux.HandleFunc("POST /api/transport/bluetooth/stop", s.handleBluetoothStop)
 	s.intifaceRoutes(mux)
+	s.coyoteRoutes(mux)
+	s.nativeBluetoothRoutes(mux)
 	mux.HandleFunc("GET /api/motion/state", s.handleMotionState)
 	mux.HandleFunc("GET /api/motion/events", s.handleMotionEvents)
 	s.motionLabRoutes(mux)
@@ -465,6 +478,8 @@ func (s *Server) settingsAndUpdateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/settings/llm-motion-mode", s.handlePutLLMMotionMode)
 	mux.HandleFunc("GET /api/update", s.handleUpdateStatus)
 	mux.HandleFunc("PUT /api/settings/device/connection-key", s.handlePutConnectionKey)
+	mux.HandleFunc("PATCH /api/settings/device", s.handlePatchDeviceOptions)
+	mux.HandleFunc("PUT /api/settings/server", s.handlePutServerPort)
 	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
 }
 
@@ -598,7 +613,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, _ *http.Request) {
 			"chat":      "local_llm_streaming",
 			"library":   "patterns_programs_authoring_media",
 			"motion":    "manual",
-			"transport": "cloud_rest_browser_bluetooth_intiface_manual",
+			"transport": "cloud_rest_browser_bluetooth_intiface_coyote_manual",
 			"voice":     "optional_worker_protocol_v1",
 		},
 	})
@@ -642,25 +657,27 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 			"transport": "cloud_rest_browser_bluetooth_intiface_manual",
 			"voice":     "optional_worker_protocol_v1",
 		},
-		"llm":                 s.clientLLMState(r),
-		"controller":          s.controllerState(r),
-		"capabilities":        s.capabilities(r),
-		"memory":              s.memoryState(r.Context()),
-		"modes":               s.modes.Status(),
-		"motion_review":       s.motionReview.snapshot(),
-		"voice":               s.clientVoiceState(r),
-		"chat":                s.chatState(r.Context()),
-		"library":             s.libraryState(),
-		"media":               s.clientMediaState(r),
-		"motion":              s.clientMotionState(r),
-		"motion_simulated":    s.motion.simulated,
-		"labs_enabled":        settings.Labs.Enabled,
-		"transport":           transportDiagnostics,
-		"cloud_transport":     s.clientTransportDiagnostics(r, s.cloudDiagnostics()),
-		"bluetooth_transport": s.clientTransportDiagnostics(r, s.bluetoothDiagnostics()),
-		"bluetooth_bridge":    s.clientBluetoothSnapshot(r),
-		"intiface_transport":  s.clientIntifaceSnapshot(r),
-		"trace":               s.traces.Summary(),
+		"llm":                        s.clientLLMState(r),
+		"controller":                 s.controllerState(r),
+		"capabilities":               s.capabilities(r),
+		"memory":                     s.memoryState(r.Context()),
+		"modes":                      s.modes.Status(),
+		"motion_review":              s.motionReview.snapshot(),
+		"voice":                      s.clientVoiceState(r),
+		"chat":                       s.chatState(r.Context()),
+		"library":                    s.libraryState(),
+		"media":                      s.clientMediaState(r),
+		"motion":                     s.clientMotionState(r),
+		"motion_simulated":           s.motion.simulated,
+		"labs_enabled":               settings.Labs.Enabled,
+		"transport":                  transportDiagnostics,
+		"cloud_transport":            s.clientTransportDiagnostics(r, s.cloudDiagnostics()),
+		"bluetooth_transport":        s.clientTransportDiagnostics(r, s.bluetoothDiagnostics()),
+		"bluetooth_bridge":           s.clientBluetoothSnapshot(r),
+		"intiface_transport":         s.clientIntifaceSnapshot(r),
+		"coyote_transport":           s.clientCoyoteSnapshot(r),
+		"native_bluetooth_transport": s.nativeBluetoothSnapshot(),
+		"trace":                      s.traces.Summary(),
 	})
 }
 

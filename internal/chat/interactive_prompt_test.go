@@ -9,7 +9,7 @@ import (
 
 func TestInteractiveInspectorMatchesContinuousProviderRequest(t *testing.T) {
 	for _, mode := range []MotionMode{MotionModeCreativeV2, MotionModeLayered} {
-		for _, state := range []MotionContext{{}, {Running: true}, {Running: true, Paused: true}, {Running: true, Autopilot: true}} {
+		for _, state := range []MotionContext{{}, {Running: true}, {Running: true, Paused: true}, {Running: true, Autopilot: true}, {Running: true, Autopilot: true, StandingHold: true}} {
 			state.MotionMode, state.SpeedMinPercent, state.SpeedMaxPercent = mode, 10, 50
 			score := FreshCreativeV2Score(25)
 			empty := "[]"
@@ -70,8 +70,14 @@ func checkLiveExamples(t *testing.T, contract string, service Service, state Mot
 		if _, err := service.Complete(t.Context(), Request{Message: "Example only."}, nil); err != nil {
 			t.Fatalf("example cannot satisfy live validation: %s: %v", raw, err)
 		}
-		if state.Autopilot && !strings.Contains(raw, `"stay_unchanged":false`) {
+		if state.Autopilot && !strings.Contains(raw, `"stay_unchanged":`) {
 			t.Fatal("example omits the required Autopilot wish")
+		}
+		if state.Autopilot && strings.Contains(raw, `"reply":"Keeping this exact score."`) && !strings.Contains(raw, `"stay_unchanged":true`) {
+			t.Fatal("exact-repeat example teaches Autopilot to keep changing the score")
+		}
+		if state.Autopilot && strings.Index(raw, `"stay_unchanged"`) < strings.Index(raw, `"reply"`) {
+			t.Fatal("example puts the Autopilot wish before reply, contrary to the decoder schema order")
 		}
 	}
 }

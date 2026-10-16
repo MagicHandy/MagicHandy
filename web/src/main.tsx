@@ -28,6 +28,7 @@ import "./styles/cloud-motion.css";
 import "./styles/form-rows.css";
 import "./styles/notices.css";
 import "./styles/settings-form.css";
+import "./styles/devices.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("missing #root");

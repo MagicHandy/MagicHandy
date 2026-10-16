@@ -98,6 +98,7 @@ The source installer builds these binaries with `CGO_ENABLED=0`:
 - `voice-parakeet-worker.exe`
 - `voice-openai-tts-worker.exe`
 - `voice-elevenlabs-worker.exe`
+- `bluetooth-worker.exe` (the shared Handy and Coyote Bluetooth helper; see [estim.md](estim.md))
 
 Frontend production assets are built first and embedded in `magichandy.exe`.
 Managed llama.cpp remains a separate native process and is never linked into
@@ -366,6 +367,11 @@ PowerShell 7. It covers:
 - complete Go binary output and staged replacement;
 - process ownership, controller takeover, Stop, and relaunch behavior; and
 - unsafe dirty-tree/update-state failures.
+
+The runtime teardown fixture selects free main and remote ports immediately
+before launch and uses `-console plain` with captured output. A failed start
+reports the exit code and bounded startup logs instead of only a readiness
+timeout. Interactive launch-console behavior has its own console tests.
 
 Parakeet source and packaged repairs share `setup-last-install.json`, a bounded
 sanitized terminal-result record in the selected app data directory. This lets a

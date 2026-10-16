@@ -28,19 +28,13 @@ export function routeBase(hash: string): string {
 export function NavRail({ authenticationLocked = false, remoteURL }: { authenticationLocked?: boolean; remoteURL?: string }) {
   const active = routeBase(useHashRoute());
   const { state } = useAppState();
-  const owner = state?.settings?.device?.hsp_dispatch_owner ?? "cloud";
-  const ownerLabel = {
-    cloud_rest: "Cloud REST",
-    browser_bluetooth: "Browser Bluetooth",
-    intiface: "Intiface Central",
-  }[owner] ?? owner.replace(/_/g, " ");
   return (
     <nav className="nav-rail" aria-label={t("Primary navigation")}>
       <div className="nav-brand">
         <span className="nav-brand-mark" aria-hidden="true">M</span>
         <span className="nav-brand-copy">
           <span className="nav-brand-name">{t("MagicHandy")}</span>
-          <span className="nav-brand-context">{authenticationLocked ? t("sign-in required") : t("local / {owner}", { owner: translateKnown(ownerLabel) })}</span>
+          <span className="nav-brand-context">{authenticationLocked ? t("sign-in required") : t("local")}</span>
         </span>
       </div>
       {!authenticationLocked && <div className="nav-links">

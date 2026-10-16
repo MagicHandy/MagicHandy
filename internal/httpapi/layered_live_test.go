@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -77,7 +78,9 @@ func TestLayeredLiveProductionConversationAndAutopilot(t *testing.T) {
 	state := server.currentMotionEngine().Snapshot()
 	beforeCalls := provider.calls
 	decision, err := server.autopilotDecide(t.Context(), modes.DecisionInput{CurrentFlow: state.Target.Flow, CurrentSpeed: state.Target.SpeedPercent, SpeedMinPercent: 20, SpeedMaxPercent: 80})
-	if err != nil || decision.Hold || decision.Segment.Flow == nil || decision.Segment.Flow.Seed == state.Target.Flow.Seed || provider.calls-beforeCalls != 1 {
+	// A new authored score may retain its seed: changing a layer is genuine
+	// continuation, just as reseeding the existing character is.
+	if err != nil || decision.Hold || decision.Segment.Flow == nil || reflect.DeepEqual(decision.Segment.Flow, state.Target.Flow) || provider.calls-beforeCalls != 1 {
 		t.Fatalf("live Autopilot failed: %+v %v", decision, err)
 	}
 	settings, _ := server.store.Snapshot()

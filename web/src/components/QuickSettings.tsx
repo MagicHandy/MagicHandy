@@ -1,9 +1,11 @@
 import { t, translateKnown } from "../i18n";
-// Immediate-apply quick controls: speed/stroke/reverse/style. No save step —
-// each change patches the engine live (docs/ui-design.md, Quick Controls).
-// Disabled for read-only or backend-offline clients with a visible reason.
+// Immediate-apply quick controls: speed/stroke/reverse/style and the Handy's
+// calibration. No save step — each change patches the engine live
+// (docs/ui-design.md, Quick Controls). Disabled for read-only or
+// backend-offline clients with a visible reason.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
+import { playbackDevices } from "../api/devices";
 import type { HandyModel, MotionSettings } from "../api/types";
 import { RangeSlider } from "./RangeSlider";
 import { SegmentedChoice } from "./SetpointControls";
@@ -16,7 +18,8 @@ type QuickPatch = Parameters<typeof api.applyQuick>[0];
 type QuickKey = keyof QuickPatch;
 
 interface QuickSettingsProps {
-  section?: "all" | "limits" | "style" | "connection";
+  /** limits: the device panel; calibration: the Handy's page; style: Chat. */
+  section?: "all" | "limits" | "style" | "calibration";
 }
 
 export function QuickSettings({ section = "all" }: QuickSettingsProps) {
@@ -113,35 +116,43 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
 
   if (!vals) return <p className="form-status">{t("Loading…")}</p>;
 
-  const showLimits = section === "all" || section === "limits" || section === "connection";
-  const showDirection = section === "all" || section === "connection";
+  // Without the Handy in playback, only Speed still matters: it sets the pace
+  // the other devices follow. The stroke window is Handy-only. Calibration
+  // lives on the Handy's own page, so it shows whether or not it plays.
+  const handyShown = playbackDevices(state?.settings?.device).includes("handy");
+  const calibration = section === "calibration";
+  const showLimits = section === "all" || section === "limits";
+  const showDirection = calibration || (handyShown && section === "all");
   const showStyle = section === "all" || section === "style";
-  const showHandyModel = section === "connection";
+  const showHandyModel = calibration;
   const legend = section === "limits"
     ? t("Speed and stroke ranges")
     : section === "style"
       ? t("Motion style")
-      : section === "connection"
-        ? t("Motion controls")
+      : calibration
+        ? t("Calibration")
         : t("Speed, stroke, direction, and style");
 
   return (
-    <fieldset className={`quick-fields quick-fields-${section}`} disabled={locked}>
+    <fieldset className={`quick-fields quick-fields-${section}${calibration ? " form-rows device-rows" : ""}`} disabled={locked}>
       <legend className="visually-hidden">{legend}</legend>
-      {showHandyModel && <>
-        <SegmentedChoice
-          className="quick-handy-model"
-          label={t("Handy model")}
-          disabled={state?.capabilities?.configure_host === false}
-          value={vals.handy_model}
-          options={handyModels.map((model) => ({ value: model, label: handyModelLabel(model) }))}
-          onChange={(handy_model) => {
-            setVals((current) => (current ? { ...current, handy_model } : current));
-            push({ handy_model });
-          }}
-        />
-        <small className="quick-handy-spec">{handyModelDetail(vals.handy_model)}</small>
-      </>}
+      {showHandyModel && <div className="form-row device-option-row quick-handy-model-row">
+        <span className="form-row-label"><strong>{t("Model")}</strong><small>{t("Sets the travel for millimetres and speed limits.")}</small></span>
+        <div className="device-option-control">
+          <SegmentedChoice
+            className="quick-handy-model device-segmented"
+            label={t("Handy model")}
+            disabled={state?.capabilities?.configure_host === false}
+            value={vals.handy_model}
+            options={handyModels.map((model) => ({ value: model, label: handyModelLabel(model) }))}
+            onChange={(handy_model) => {
+              setVals((current) => (current ? { ...current, handy_model } : current));
+              push({ handy_model });
+            }}
+          />
+          <small className="quick-handy-spec">{handyModelDetail(vals.handy_model)}</small>
+        </div>
+      </div>}
       {showLimits && (
         <RangeSlider
           label={t("Speed")}
@@ -156,7 +167,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           }}
         />
       )}
-      {showLimits && (
+      {showLimits && handyShown && (
         <RangeSlider
           label={t("Stroke")}
           floor={0}
@@ -170,11 +181,13 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           }}
         />
       )}
-      {showDirection && <label className="toggle-line quick-direction-toggle">
+      {showDirection && <label className={calibration ? "form-row toggle-line device-switch-row quick-direction-toggle" : "toggle-line quick-direction-toggle"}>
+        {calibration && <span className="form-row-label"><strong>{t("Reverse direction")}</strong><small>{t("For a Handy mounted the other way up.")}</small></span>}
         <span className="toggle">
           <input
             type="checkbox"
             role="switch"
+            aria-label={calibration ? t("Reverse direction") : undefined}
             checked={vals.reverse_direction}
             onChange={(e) => {
               const v = e.target.checked;
@@ -184,7 +197,7 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
           />
           <span className="track" aria-hidden="true" />
         </span>
-        <span>{t("Reverse direction")}</span>
+        {!calibration && <span>{t("Reverse direction")}</span>}
       </label>}
       {showStyle && <SegmentedChoice
         className="quick-style-choice"
