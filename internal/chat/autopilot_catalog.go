@@ -7,12 +7,17 @@ import (
 // Catalog labels remain shared data; complete examples belong to the caller's
 // response contract. Interactive reply/start examples cannot enter a motion-
 // only Autopilot prompt that requires intent and permits only target/none.
-func autopilotCatalog(patterns []PatternChoice, kind AutopilotKind) string {
+func autopilotCatalog(patterns []PatternChoice, kind AutopilotKind, autoTiming bool) string {
 	if len(patterns) == 0 {
 		return "No enabled catalog entries. Hold motion or change only the current pace; omit pattern_id."
 	}
 	text := curationCatalog(patterns, false)
 	response := map[string]any{"motion": map[string]any{"action": MotionActionTarget, "pattern_id": modelPatternID(patterns[0].ID), "speed_percent": 25}, "next": "normal", "variability": "normal"}
+	if autoTiming && kind == AutopilotKindMotion {
+		// A number here would become the model's default horizon; the contract
+		// and the strict schema already require next_check_seconds.
+		delete(response, "next")
+	}
 	if kind == AutopilotKindMotion {
 		response["intent"] = "A different movement shape at the current pace."
 	} else {
@@ -36,7 +41,13 @@ func autopilotPatternSchema(patterns []PatternChoice, capabilities Capabilities,
 	if capabilities.Motion || kind == AutopilotKindMotion {
 		fields["variability"] = map[string]any{"type": "string", "enum": []string{"settled", "normal", "restless"}}
 	}
-	if kind == AutopilotKindMotion {
+	if kind == AutopilotKindMotion && capabilities.AutoTiming {
+		delete(fields, "reply")
+		delete(fields, "next")
+		fields["intent"] = map[string]any{"type": "string"}
+		fields[nextCheckField] = nextCheckSchema()
+		schema["required"] = []string{"intent", nextCheckField, "variability"}
+	} else if kind == AutopilotKindMotion {
 		delete(fields, "reply")
 		fields["intent"] = map[string]any{"type": "string"}
 		schema["required"] = []string{"intent", "next", "variability"}

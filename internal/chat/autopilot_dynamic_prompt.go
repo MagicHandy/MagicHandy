@@ -46,11 +46,21 @@ func dynamicAutopilotMotionMessage(context AutopilotContext, builder *strings.Bu
 	writeDynamicSpanGuidance(builder, context)
 	builder.WriteString("- variation_percent adds smooth correlated center/rhythm texture: 20-40 is subtle, 45-70 clearly organic, and 70-100 deliberately wild; zero is mechanically even, never jitter.\n")
 	builder.WriteString("- Use 2-4 sections only for several distinct or evolving movement ideas; give each complete geometry, texture, and 2-12 cycles. Otherwise keep one coherent geometry.\n")
-	fmt.Fprintf(builder, "- segment_seconds must be %d-%d and says when to reconsider, not when to stop. Vary it naturally rather than choosing one constant.\n",
-		minimumSeconds, maximumSeconds)
+	if context.AutoTiming {
+		builder.WriteString("- segment_seconds (4-120) only sets how long one pass of a sections phrase takes; next_check_seconds decides when you reconsider.\n- ")
+		writeAutoTiming(builder, context, false)
+	} else {
+		fmt.Fprintf(builder, "- segment_seconds must be %d-%d and says when to reconsider, not when to stop. Vary it naturally rather than choosing one constant.\n",
+			minimumSeconds, maximumSeconds)
+	}
 	fmt.Fprintf(builder, "- Explore %d-%d%% speed across the session and rotate contrast among pace, outer travel band, stroke-length envelope, texture, and sections; pace alone does not change range.\n",
 		context.SpeedMinPercent, context.SpeedMaxPercent)
-	builder.WriteString("- Name one brief destination intent before encoding fields, so the geometry follows a motion idea instead of incrementing toward it. Never use start or stop: the scheduler owns start and only the user stops motion. Set next for fallback timing and variability for speed drift independent of geometry.")
+	builder.WriteString("- Name one brief destination intent before encoding fields, so the geometry follows a motion idea instead of incrementing toward it. Never use start or stop: the scheduler owns start and only the user stops motion. ")
+	if context.AutoTiming {
+		builder.WriteString("Set variability for speed drift independent of geometry.")
+	} else {
+		builder.WriteString("Set next for fallback timing and variability for speed drift independent of geometry.")
+	}
 	if feedback := strings.TrimSpace(context.MotionFeedback); feedback != "" {
 		fmt.Fprintf(builder, "\nQuality feedback: %s", feedback)
 	}

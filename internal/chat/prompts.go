@@ -239,6 +239,10 @@ type Capabilities struct {
 	MotionHolder MotionHolder
 	// ReplyLength steers the reply's length; the zero value composes nothing.
 	ReplyLength ReplyLength
+	// AutoTiming asks an Autopilot motion turn for next_check_seconds, its own
+	// reconsideration horizon. Only hosted planning routes set it: small local
+	// models settle on one value, so their cadence stays backend-sampled.
+	AutoTiming bool
 }
 
 // MotionHolder names what owns the device during a chat-only turn.

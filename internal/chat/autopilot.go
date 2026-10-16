@@ -61,6 +61,11 @@ type AutopilotContext struct {
 	MotionMinSeconds     int
 	MotionMaxSeconds     int
 	MotionChangeLevel    int
+	// AutoTiming asks a hosted planner for next_check_seconds in place of the
+	// soon/normal/later category. RecentCheckSeconds lists its recent choices,
+	// oldest first, as observations.
+	AutoTiming         bool
+	RecentCheckSeconds []int
 	// SessionTracking gates the session facts below. When false they are
 	// omitted from the prompt entirely rather than rendered as zeros, so the model
 	// cannot reason from a number that means "unknown".
@@ -175,7 +180,12 @@ func AutopilotMotionMessage(context AutopilotContext) string {
 	// inside a narrow band for ten minutes.
 	fmt.Fprintf(&builder, "- Use the width of %d-%d%% across the session rather than settling into one comfortable band. Easing down is what makes the next climb land, and several decisions in a row at nearly the same speed is the main thing to avoid.\n",
 		context.SpeedMinPercent, context.SpeedMaxPercent)
-	builder.WriteString("- Set next to soon, normal, or later for when motion should next be reconsidered. Do not provide seconds. Vary it: back-to-back short stretches read as flat as one long one.\n")
+	if context.AutoTiming {
+		builder.WriteString("- ")
+		writeAutoTiming(&builder, context, false)
+	} else {
+		builder.WriteString("- Set next to soon, normal, or later for when motion should next be reconsidered. Do not provide seconds. Vary it: back-to-back short stretches read as flat as one long one.\n")
+	}
 	builder.WriteString("- Set variability to settled, normal, or restless for how much the speed should wander before then. This is separate from next: a long stretch can still breathe, and a short one can stay flat.")
 	return builder.String()
 }

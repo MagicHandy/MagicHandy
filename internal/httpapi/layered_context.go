@@ -11,8 +11,14 @@ import (
 )
 
 func (s *Server) contextualChatMotion(settings config.Settings, requests []chat.RecentUserRequest) chat.MotionContext {
+	return s.contextualChatMotionAt(settings, requests, time.Now())
+}
+
+// contextualChatMotionAt measures the human lines' ages at asOf. A prepared
+// Autopilot decision takes effect at its stretch's end, so it reads them there.
+func (s *Server) contextualChatMotionAt(settings config.Settings, requests []chat.RecentUserRequest, asOf time.Time) chat.MotionContext {
 	state := s.chatMotionContext(settings.Motion, settings.LLM)
-	state.UserRequests, state.UserRequestSecondsAgo = chat.UserRequestTimeline(requests, time.Now())
+	state.UserRequests, state.UserRequestSecondsAgo = chat.UserRequestTimeline(requests, asOf)
 	return state
 }
 func mapLayeredAutopilotCommand(command *chat.MotionCommand, settings config.MotionSettings, say string, next modes.TimingPreference) (modes.Decision, error) {

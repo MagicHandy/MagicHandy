@@ -20,7 +20,7 @@ func TestAutopilotCatalogExampleMatchesItsOwnParserAndSchema(t *testing.T) {
 	choices := continuousTestChoices()
 	state := &MotionContext{Running: true, PatternID: string(motion.PatternFullSweeps), SpeedPercent: 25, SpeedMinPercent: 10, SpeedMaxPercent: 43}
 	for _, kind := range []AutopilotKind{AutopilotKindMotion, AutopilotKindSpeech} {
-		catalog := autopilotCatalog(choices, kind)
+		catalog := autopilotCatalog(choices, kind, false)
 		parts := strings.Split(catalog, "Complete response example for this autonomous contract: ")
 		if len(parts) != 2 {
 			t.Fatal("missing complete autonomous example")

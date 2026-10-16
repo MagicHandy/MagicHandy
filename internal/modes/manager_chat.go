@@ -134,7 +134,7 @@ func (m *Manager) notifyTarget(generation uint64, target motion.MotionTarget, re
 		m.motion.pattern = pattern
 		m.motion.segmentIdx++
 		m.motion.deadline = now.Add(duration)
-		m.motion.planAt = m.motion.deadline.Add(-m.planningLeadLocked(duration))
+		m.motion.planAt = m.planAtLocked(now, duration)
 		m.motion.pending = nil
 		m.motion.swayPoints = nil
 		m.motion.nextRetry = time.Time{}

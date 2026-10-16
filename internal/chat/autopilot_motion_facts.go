@@ -80,8 +80,12 @@ func writeContinuousAutopilotContext(builder *strings.Builder, context Autopilot
 	writeAutopilotMotionFacts(builder, context, true)
 	writeSessionProgress(builder, context)
 	writeRecentCreativeBands(builder, context.RecentPositionBands)
-	level := normalizedMotionChangeLevel(context.MotionChangeLevel)
-	fmt.Fprintf(builder, "Motion change preference: %d/8 (%s). This is a preference for session development, not a mandatory change schedule.\n", level, motionChangeBias(level))
+	if context.AutoTiming {
+		writeAutoTiming(builder, context, true)
+	} else {
+		level := normalizedMotionChangeLevel(context.MotionChangeLevel)
+		fmt.Fprintf(builder, "Motion change preference: %d/8 (%s). This is a preference for session development, not a mandatory change schedule.\n", level, motionChangeBias(level))
+	}
 	writeRecentSpeeds(builder, context)
 	if context.Technical {
 		// Without the conversation, a pace the person chose in chat is the only

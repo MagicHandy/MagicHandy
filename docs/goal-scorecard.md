@@ -1,5 +1,27 @@
 # Goal Scorecard
 
+## 2026-10-16 — Auto timing and prepared decisions for external planners
+
+[ADR 0050](decisions/0050-hosted-autopilot-auto-timing.md) adds two Autopilot
+settings, prompt text for hosted auto-timing turns and the Autopilot card's two
+switches. No dependency, background task or local-model request is added.
+Prepared decisions move an external planner's existing call earlier and add
+none unless chat discards one; Auto timing lets the model set the request rate
+inside an 8-second floor (measured 0.25–1.7 calls per minute, fixed level 4
+about 1.5).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, against alpha.62 `0e3187e5`: core
+**23,236,608 -> 23,264,768 B** (+28,160 B), still **14 modules**.
+
+Main UI JS: **1,236,149 -> 1,238,130 B raw** (+1,981 B), **333,368 ->
+333,863 B gzip** (+495 B). CSS: **204,393 -> 204,527 B raw** (+134 B),
+**35,740 -> 35,768 B gzip** (+28 B). Each locale chunk grows 547–685 B raw
+(221–285 B gzip) for five strings. The complete embedded UI grows
+**2,679,035 -> 2,683,548 B** (+4,513 B). Measurements use Python gzip with
+`mtime=0`; the canonical dist is rebuilt with stale hashes removed. No new
+RSS or cold-start claim.
+
 ## 2026-10-15 — Alpha.62 combined release candidate
 
 The [release record](alpha62-release-review-2026-10-15.md) combines the reviewed

@@ -3,6 +3,7 @@ package modes
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 
@@ -19,6 +20,11 @@ const (
 	speechPlaybackAckFallback = 2 * time.Minute
 	motionCadenceSeedSalt     = int64(0x5deece66d)
 	speechCadenceSeedSalt     = int64(0x6a09e667f3bcc909)
+	// autoTimingJitter varies a planner's own horizon by up to this share either
+	// way, so a favourite round number cannot become a metronome.
+	autoTimingJitter = 0.12
+	// recentCheckLimit is how many auto-timing horizons the planner is shown.
+	recentCheckLimit = 6
 )
 
 // tickAutopilot advances independent motion and speech clocks. Motion work is
@@ -113,8 +119,8 @@ func (m *Manager) planAutopilotMotion(ctx context.Context, engine Engine, genera
 		m.motion.pending = &copied
 		m.mu.Unlock()
 		m.trace(ModeAutopilot, "motion_planned", nil,
-			fmt.Sprintf("%s next=%s variability=%s latency=%s%s",
-				choice.source, choice.timing, normalizeVariability(choice.variability), choice.decisionLatency,
+			fmt.Sprintf("%s %s variability=%s latency=%s%s",
+				choice.source, choice.timingNote(), normalizeVariability(choice.variability), choice.decisionLatency,
 				choice.sessionTraceNote()))
 		return
 	}
@@ -202,20 +208,26 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	}
 	m.observeAutopilotPhraseLocked(now, *choice)
 	m.rememberPositionBandLocked(choice.appliedPerceptual)
-	duration := m.sampleMotionDelayLocked(choice.timing)
-	if choice.segment.Dynamic != nil && choice.segment.Dynamic.SegmentSeconds > 0 {
-		requested := time.Duration(choice.segment.Dynamic.SegmentSeconds) * time.Second
-		settings := m.options.AutopilotSettings()
-		minimumSeconds, maximumSeconds := settings.MotionWindow()
-		minimum := time.Duration(minimumSeconds) * time.Second
-		maximum := time.Duration(maximumSeconds) * time.Second
-		if minimum > 0 && requested < minimum {
-			requested = minimum
+	var duration time.Duration
+	if choice.nextCheck > 0 {
+		duration = m.modelHorizonLocked(choice.nextCheck)
+		m.rememberCheckLocked(choice.nextCheck)
+	} else {
+		duration = m.sampleMotionDelayLocked(choice.timing)
+		if choice.segment.Dynamic != nil && choice.segment.Dynamic.SegmentSeconds > 0 {
+			requested := time.Duration(choice.segment.Dynamic.SegmentSeconds) * time.Second
+			settings := m.options.AutopilotSettings()
+			minimumSeconds, maximumSeconds := settings.MotionWindow()
+			minimum := time.Duration(minimumSeconds) * time.Second
+			maximum := time.Duration(maximumSeconds) * time.Second
+			if minimum > 0 && requested < minimum {
+				requested = minimum
+			}
+			if maximum >= minimum && requested > maximum {
+				requested = maximum
+			}
+			duration = requested
 		}
-		if maximum >= minimum && requested > maximum {
-			requested = maximum
-		}
-		duration = requested
 	}
 	if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
 		duration = m.options.MaxSegmentDuration
@@ -225,7 +237,7 @@ func (m *Manager) armAutopilotChoice(mode string, choice *segmentChoice, generat
 	m.motion.pattern = choice.pattern
 	m.motion.segmentIdx++
 	m.motion.deadline = now.Add(duration)
-	m.motion.planAt = m.motion.deadline.Add(-m.planningLeadLocked(duration))
+	m.motion.planAt = m.planAtLocked(now, duration)
 	m.motion.pending = nil
 	if choice.segment.SpeedPercent != previousSpeed {
 		m.history.previousSpeed = previousSpeed
@@ -640,7 +652,7 @@ func (m *Manager) NotifyAutopilotSettingsChanged() {
 	m.motion.pending = nil
 	m.motion.swayPoints = nil
 	m.motion.deadline = now.Add(m.sampleMotionDelayLocked(TimingNormal))
-	m.motion.planAt = m.motion.deadline.Add(-m.planningLeadLocked(m.motion.deadline.Sub(now)))
+	m.motion.planAt = m.planAtLocked(now, m.motion.deadline.Sub(now))
 	m.speech.waitingID = ""
 	m.speech.fallbackAt = time.Time{}
 	m.scheduleSpeechLocked(now, TimingNormal)
@@ -685,6 +697,28 @@ func (m *Manager) sampleSpeechDelayLocked(timing TimingPreference) time.Duration
 		settings.AdaptiveSpeechTiming,
 		m.speech.cadenceRNG,
 	)
+}
+
+// modelHorizonLocked turns a planner's own horizon into a segment duration.
+// The model chose the length; seeded variation keeps a repeated round number
+// from playing as a metronome, and the auto-timing bounds always hold.
+func (m *Manager) modelHorizonLocked(requested time.Duration) time.Duration {
+	m.ensureCadenceRNGsLocked()
+	seconds := requested.Seconds() * (1 + autoTimingJitter*(2*m.motion.cadenceRNG.Float64()-1))
+	seconds = min(max(math.Round(seconds), float64(config.AutopilotAutoTimingMinSeconds)),
+		float64(config.AutopilotAutoTimingMaxSeconds))
+	return time.Duration(seconds) * time.Second
+}
+
+// rememberCheckLocked keeps the planner's latest horizons, as it asked for
+// them within the bounds, so the next turn can see whether it has settled on
+// one length. Callers hold m.mu.
+func (m *Manager) rememberCheckLocked(requested time.Duration) {
+	seconds := min(max(int(requested/time.Second), config.AutopilotAutoTimingMinSeconds), config.AutopilotAutoTimingMaxSeconds)
+	m.history.recentChecks = append(m.history.recentChecks, seconds)
+	if len(m.history.recentChecks) > recentCheckLimit {
+		m.history.recentChecks = m.history.recentChecks[len(m.history.recentChecks)-recentCheckLimit:]
+	}
 }
 
 func (m *Manager) sampleCadenceLocked(
@@ -739,6 +773,18 @@ func (m *Manager) ensureCadenceRNGsLocked() {
 func newCadenceRNG(seed int64, salt int64) *rand.Rand {
 	//nolint:gosec // Reproducible cadence variation, never security material.
 	return rand.New(rand.NewSource(seed ^ salt))
+}
+
+// planAtLocked chooses when to plan the decision that follows a stretch armed
+// now. Prepared decisions are planned at once and wait for the boundary, so an
+// external model's latency never delays it; otherwise planning starts one
+// measured decision latency before the boundary. Callers hold m.mu.
+func (m *Manager) planAtLocked(now time.Time, duration time.Duration) time.Time {
+	m.motion.preparing = m.options.PrepareNextDecision != nil && m.options.PrepareNextDecision()
+	if m.motion.preparing {
+		return now
+	}
+	return now.Add(duration).Add(-m.planningLeadLocked(duration))
 }
 
 func (m *Manager) planningLeadLocked(duration time.Duration) time.Duration {

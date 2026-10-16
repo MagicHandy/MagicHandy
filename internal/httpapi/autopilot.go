@@ -68,7 +68,7 @@ func (s *Server) localAutopilotDecide(ctx context.Context, input modes.DecisionI
 	settings, _ := s.store.Snapshot()
 	admitted, cosmetic := curateAutopilotPerceptualChange(decision, input, settings.Motion)
 	if !cosmetic || input.MotionChangeLevel < 6 {
-		return admitted, nil
+		return withNextCheck(admitted, response), nil
 	}
 	retryInput := input
 	retryInput.MotionFeedback = autopilotCosmeticFeedback(input)
@@ -78,10 +78,19 @@ func (s *Server) localAutopilotDecide(ctx context.Context, input modes.DecisionI
 	}
 	retryDecision, retryErr := s.mapAutopilotResponse(retryResponse, retryInput)
 	if retryErr != nil {
-		return admitted, nil
+		return withNextCheck(admitted, response), nil
 	}
 	retryAdmitted, _ := curateAutopilotPerceptualChange(retryDecision, retryInput, settings.Motion)
-	return retryAdmitted, nil
+	return withNextCheck(retryAdmitted, retryResponse), nil
+}
+
+// withNextCheck carries an auto-timing planner's own horizon onto the decision
+// that was finally admitted, including a cosmetic update turned into a hold.
+func withNextCheck(decision modes.Decision, response chat.AutopilotResponse) modes.Decision {
+	if response.NextCheckSeconds > 0 {
+		decision.NextCheck = time.Duration(response.NextCheckSeconds) * time.Second
+	}
+	return decision
 }
 
 // autopilotDecideSpeech runs the independent spoken-check-in contract. Its
@@ -154,6 +163,7 @@ func (s *Server) autopilotModelTurn(
 	if kind == chat.AutopilotKindSpeech {
 		capabilities = autopilotSpeechCapabilities(capabilities, settings.Autopilot.SpeechMotionAuthority)
 	}
+	capabilities.AutoTiming = autoMotionTiming(kind, settings)
 	patternChoices, err := s.chatPatternChoicesFor(capabilities)
 	if err != nil {
 		return chat.AutopilotResponse{}, fmt.Errorf("resolve pattern catalog: %w", err)
@@ -165,7 +175,10 @@ func (s *Server) autopilotModelTurn(
 	if err != nil {
 		return chat.AutopilotResponse{}, err
 	}
-	motionContext := s.contextualChatMotion(settings, promptContext.UserRequests)
+	// A prepared decision applies when its stretch ends, so every age it reads
+	// is measured there; the scheduler already projected its own facts.
+	asOf := time.Now().Add(input.Lookahead)
+	motionContext := s.contextualChatMotionAt(settings, promptContext.UserRequests, asOf)
 	// During engine recovery the scheduler can still own a valid current
 	// segment while the transport-facing snapshot is temporarily idle. Keep the
 	// autonomous validator aligned with that semantic state: a hold can restart
@@ -206,7 +219,7 @@ func (s *Server) autopilotModelTurn(
 		return chat.AutopilotResponse{}, err
 	}
 	defer releaseLLM()
-	history := autopilotHistory(kind, settings, promptContext)
+	history := autopilotHistory(kind, settings, promptContext, asOf)
 	response, err := service.Complete(providerCtx, kind, chat.Request{
 		Message:                message,
 		History:                history,
@@ -273,14 +286,14 @@ func (s *Server) autopilotRoleSettings(ctx context.Context, kind chat.AutopilotK
 }
 
 // autopilotHistory is the conversation an Autopilot turn sees. Continuous
-// planning marks when each human line was said, so an old line is not read as
-// a reaction to the pace chosen since.
-func autopilotHistory(kind chat.AutopilotKind, settings config.Settings, promptContext interactiveChatPromptContext) []llm.Message {
+// planning marks when each human line was said, as of the moment the decision
+// applies, so an old line is not read as a reaction to the pace chosen since.
+func autopilotHistory(kind chat.AutopilotKind, settings config.Settings, promptContext interactiveChatPromptContext, asOf time.Time) []llm.Message {
 	if settings.LLM.IsHosted() {
 		return promptContext.History
 	}
 	if kind == chat.AutopilotKindMotion && continuousChatMode(settings.LLM.MotionGenerationMode) {
-		return chat.PlanningHistory(promptContext.History, promptContext.HistoryAt, time.Now())
+		return chat.PlanningHistory(promptContext.History, promptContext.HistoryAt, asOf)
 	}
 	return promptContext.History
 }
@@ -320,6 +333,7 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 		MotionMinSeconds:  input.MotionMinSeconds,
 		MotionMaxSeconds:  input.MotionMaxSeconds,
 		MotionChangeLevel: input.MotionChangeLevel,
+		AutoTiming:        capabilities.AutoTiming,
 		// The manager already applied the tracking and arc switches when it built
 		// the input, so a disabled switch arrives as false here and the prompt
 		// omits the section entirely.
@@ -346,6 +360,7 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 	for _, step := range input.RecentSpeeds {
 		modelContext.RecentSpeeds = append(modelContext.RecentSpeeds, chat.SpeedStep{SpeedPercent: step.SpeedPercent, SecondsAgo: step.SecondsAgo, Interactive: step.Interactive})
 	}
+	modelContext.RecentCheckSeconds = append([]int(nil), input.RecentCheckSeconds...)
 	for _, band := range input.RecentPositionBands {
 		modelContext.RecentPositionBands = append(modelContext.RecentPositionBands, chat.PositionBand{
 			Minimum: int(math.Round(band.MinimumPercent)),
@@ -366,6 +381,29 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 		}
 	}
 	return modelContext
+}
+
+// prepareAutopilotDecisions reports whether Autopilot plans each motion
+// decision as its stretch begins. Only external planners qualify: they answer
+// over their own request lanes, while a local model would hold its single slot
+// for a decision that chat may still discard.
+func prepareAutopilotDecisions(settings config.Settings) bool {
+	if !settings.Autopilot.PrepareNextDecision || settings.LLM.MotionGenerationMode == config.LLMMotionModeOff {
+		return false
+	}
+	if settings.LLM.MotionPlanner.Provider == config.MotionPlannerDecisions {
+		return true
+	}
+	planning, err := settings.LLM.PlanningSettings()
+	return err == nil && planning.IsHosted()
+}
+
+// autoMotionTiming reports whether a motion turn chooses its own horizon: the
+// person enabled Auto timing and the planning route, already resolved into
+// settings.LLM, is hosted. Local planners keep the sampled window because
+// small models settle on one value.
+func autoMotionTiming(kind chat.AutopilotKind, settings config.Settings) bool {
+	return kind == chat.AutopilotKindMotion && settings.Autopilot.AutoMotionTiming && settings.LLM.IsHosted()
 }
 
 func autopilotSpeechCapabilities(capabilities chat.Capabilities, authority string) chat.Capabilities {
