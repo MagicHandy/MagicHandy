@@ -1559,7 +1559,6 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     Write-Host 'Checking running app Stop and process-tree teardown before rebuild...'
     $runtimeRepo = Join-Path $tempRoot 'running-app-repo'
     $runtimeData = Join-Path $tempRoot 'running app data with spaces'
-    $runtimePort = Get-AvailableLoopbackPort -WithRemote
     New-Item -ItemType Directory -Force -Path $runtimeRepo | Out-Null
     foreach ($file in @('go.mod', 'go.sum')) {
         Copy-Item -LiteralPath (Join-Path $Repo $file) -Destination $runtimeRepo
@@ -1588,15 +1587,24 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
         -DataDir ($runtimeData + '\') `
         -UILocale 'JA' `
         -ChatLocale 'ES'
+    # Pick both ports immediately before launch, after the build and startup
+    # regressions. This fixture needs HTTP, not an interactive console host.
+    $runtimePort = Get-AvailableLoopbackPort -WithRemote
     $runtimeArguments = & $supportModule {
         param($Address, $DataDir)
         New-MagicHandyAppArgumentLine -Address $Address -DataDir $DataDir
     } "127.0.0.1:$runtimePort" $runtimeData
-    $runtimeProcess = Start-Process -FilePath $runtimeExe -ArgumentList $runtimeArguments -PassThru -WindowStyle Hidden
+    $runtimeArguments += ' -console plain'
+    $runtimeStdout = Join-Path $tempRoot 'runtime.stdout.log'
+    $runtimeStderr = Join-Path $tempRoot 'runtime.stderr.log'
+    $runtimeProcess = Start-Process -FilePath $runtimeExe -ArgumentList $runtimeArguments -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $runtimeStdout -RedirectStandardError $runtimeStderr
     try {
         $ready = $false
         $readyDeadline = [DateTime]::UtcNow.AddSeconds(30)
         do {
+            $runtimeProcess.Refresh()
+            if ($runtimeProcess.HasExited) { break }
             try {
                 Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$runtimePort/api/state" -TimeoutSec 1 | Out-Null
                 $ready = $true
@@ -1605,7 +1613,19 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
                 Start-Sleep -Milliseconds 100
             }
         } while ([DateTime]::UtcNow -lt $readyDeadline)
-        Assert-True -Condition $ready -Message 'test app should become ready'
+        if (-not $ready) {
+            $runtimeProcess.Refresh()
+            $reason = 'did not become ready within 30 seconds'
+            if ($runtimeProcess.HasExited) {
+                $runtimeProcess.WaitForExit()
+                $reason = "exited with code $($runtimeProcess.ExitCode)"
+            }
+            $startupDetails = @()
+            foreach ($path in @($runtimeStdout, $runtimeStderr)) {
+                if (Test-Path -LiteralPath $path) { $startupDetails += @(Get-Content -LiteralPath $path -Tail 60) }
+            }
+            throw "Installer test app $reason on ports $runtimePort/$($runtimePort + 1). Startup logs:`n$($startupDetails -join "`n")"
+        }
         Assert-True -Condition (Test-Path -LiteralPath (Join-Path $runtimeData 'magichandy.db')) -Message 'quoted startup should keep the database under the intended spaced data path'
         $runtimeSettings = Invoke-RestMethod -Uri "http://127.0.0.1:$runtimePort/api/settings" -TimeoutSec 5
         Assert-Equal -Expected 'ja' -Actual ([string]$runtimeSettings.settings.ui.locale) -Message 'language helper should canonicalize UI locale'
