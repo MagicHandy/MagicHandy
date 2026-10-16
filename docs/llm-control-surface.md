@@ -558,6 +558,16 @@ means the review is not isolated and must be stopped immediately.
 
 ## Cross-references
 
+Layered's explicit `full_slider` geometry sets semantic 0–100 and a constant
+full stroke width. `full_band` preserves the current outer endpoints and fills
+that band. Both remove center/range layers while preserving independent pace
+variation, speed and seed. Conflicting accompanying edits reject the complete
+proposal. The shared engine and saved device envelope still bound dispatch.
+Live examples put controls before geometry for constrained decoders; Autopilot
+examples place the required standing-wish decision after reply and describe the
+backend's current hold state. See the
+[October 15 review](release-motion-review-2026-10-15.md).
+
 - Current contract: `internal/chat/contract.go`; engine intent:
   `internal/motion/target.go`; system-prompt assembly: `internal/chat/prompts.go`.
 - [ADR 0015](decisions/0015-selectable-llm-motion-modes.md) — the persisted

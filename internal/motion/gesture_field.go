@@ -64,6 +64,11 @@ func gestureBands(s FlowSpec) []gestureBand {
 		}
 		held := g.FocusRoamPercent == 0 && mix > 0
 		low, high := s.landing(i, low, low+span, variation, held && anchors[i] <= 1e-9, held && anchors[i] >= 1-1e-9)
+		// Reconstructing the upper endpoint as low+span can exceed the
+		// validated band by one floating-point ULP. Keep authored endpoints
+		// exactly inside that band; downstream curve validation stays strict.
+		low = clampFloat(low, float64(s.MinPercent), float64(s.MaxPercent))
+		high = clampFloat(high, float64(s.MinPercent), float64(s.MaxPercent))
 		bands[i] = gestureBand{low: low, high: high, pace: phrase.timeScale,
 			contrast: math.Min(0.8, float64(g.ContrastPercent)/100*phrase.accent), inertia: phrase.inertia,
 			lingerTop: phrase.lingerTop, lingerBottom: phrase.lingerBottom}
