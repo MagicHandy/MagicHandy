@@ -21,7 +21,7 @@ interface Props {
 }
 
 export function DevicePanel({ open, onOpenChange, restoreFocusOnClose = true }: Props) {
-  const { ctx, devices, initializing } = useDevices();
+  const { ctx, devices, addable, initializing } = useDevices();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const wasOpen = useRef(false);
@@ -59,6 +59,11 @@ export function DevicePanel({ open, onOpenChange, restoreFocusOnClose = true }: 
       <section id="device-panel" className="device-panel" aria-labelledby={titleId} hidden={!open}>
         <header className="device-panel-head">
           <h2 id={titleId}>{t("Devices")}</h2>
+          {devices.length > 0 && addable.length > 0 && ctx.canConfigureHost && (
+            <a className="icon-button device-panel-add" href="#/settings/devices/add" aria-label={t("Add a device")} onClick={navigate}>
+              <PlusIcon size={16} />
+            </a>
+          )}
           {devices.length > 0 && (
             <a className="btn btn-secondary device-panel-settings-head" href="#/settings/devices" onClick={navigate}>
               <SettingsIcon size={16} />{t("Device settings")}

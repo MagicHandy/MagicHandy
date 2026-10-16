@@ -2850,3 +2850,9 @@ setup:
 
 See [UI design](docs/ui-design.md#devices-2026-10-15) and the
 [guidelines](docs/ui-design-guidelines.md#device-chip-and-device-panel).
+
+Release integration is tracked on `codex/release-device-ui`: Claude's current
+device kit and its shared-Intiface/vibrator dependencies are combined with the
+motion/model review. The final release must retain these UI changes, including
+the small title-row + shortcut. See the [combined validation and remaining
+acceptance work](docs/release-device-integration-2026-10-15.md).

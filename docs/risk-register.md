@@ -1793,6 +1793,12 @@ Native Handy HSP/Cloud retain their actual Stop paths, with command receipt
 still distinguished from physical feedback. See the
 [October 15 evidence and next checks](release-motion-review-2026-10-15.md).
 
+Upstream follow-up: [Buttplug issue 971](https://github.com/buttplugio/buttplug/issues/971)
+includes a public HDSP Stop/write-result candidate with eight passing focused
+regressions. It is not installed or bundled. Deferred-command ordering,
+aggregate Stop results and physical validation remain open, so R23 stays
+Critical. See the [integration record](release-device-integration-2026-10-15.md).
+
 Description:
 The permanent Stop control is mounted outside routes. Active, paused,
 repeated-idle, and no-engine requests cancel local work and attempt the selected

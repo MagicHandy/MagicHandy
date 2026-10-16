@@ -1,5 +1,16 @@
 # Goal Scorecard
 
+## 2026-10-15 — Combined device UI and motion review
+
+The [release integration](release-device-integration-2026-10-15.md) preserves
+Claude's device UI and shared Intiface/vibrator work with the motion/model fixes.
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags
+'-s -w'`: core **23,230,464 B**; complete rebuilt embedded UI **2,675,702 B**.
+Relative to the separately recorded UI snapshot this is +4,608 B in the core
+and +208 B in the embedded UI. The title-row shortcut adds no dependency,
+request, timer or model call. No new RSS/cold-start or hardware-latency claim
+is made; the existing budget caveats remain.
+
 ## 2026-10-15 — Device panel and Settings > Devices
 
 [ADR 0048](decisions/0048-device-kit-and-settings-devices.md) replaces the

@@ -6,6 +6,12 @@ remains pending the Intiface timing/Stop findings and release integration. The
 matched physical comparison reproduced hesitation and catch-up on Intiface;
 equivalent planned travel does not establish equal physical speed.
 
+The later [device UI integration](release-device-integration-2026-10-15.md)
+combines this work with Claude's device-panel/settings rewrite and its
+shared-Intiface/vibrator dependencies. That record also links the upstream
+Buttplug Stop submission. The measurements below remain evidence for this
+motion-review revision, not a claim that the combined release is accepted.
+
 ## Defects and corrections
 
 1. **A valid Creative v2 target could fail strict compilation.** A tip-anchored

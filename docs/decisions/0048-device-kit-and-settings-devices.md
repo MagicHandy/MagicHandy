@@ -24,7 +24,9 @@ with its own idioms.
 1. **Live jobs in the panel, setup in Settings.** The device panel holds each
    device's status, its one action (Connect, Disconnect, Set up or Reconnect),
    its In playback switch and its levels, then the speed/stroke limits and a
-   Device settings button. Settings > Devices lists the devices, the playback
+   Device settings button. A compact + shortcut in the title row opens Add
+   device in Settings while another device type can be added; it never
+   connects hardware or duplicates the setup form. Settings > Devices lists the devices, the playback
    failure policy and timing offsets, and the shared connections (Intiface
    Central and the Bluetooth helper). Each device has a page
    (`#/settings/devices/handy`, `/coyote`, `/vibrator`) with its setup
