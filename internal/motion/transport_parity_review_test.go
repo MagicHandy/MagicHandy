@@ -24,7 +24,7 @@ func TestTransportParityReview(t *testing.T) {
 	settings.SpeedMinPercent, settings.SpeedMaxPercent = 1, 100
 	var entries []Review
 	var metrics []map[string]any
-	for _, speed := range []int{10, 25, 43, 75} {
+	for _, speed := range []int{10, 20, 25, 35, 43, 75} {
 		for _, name := range []string{"full-sweeps", "soft-turns", "pace-wave", "creative", "layered", "v2-full", "v2-varied", "v2-directional"} {
 			spec := DefaultFlowSpec()
 			spec.MinPercent, spec.MaxPercent, spec.SpeedPercent = 0, 100, speed
@@ -55,15 +55,21 @@ func TestTransportParityReview(t *testing.T) {
 			if err := plan.compilationError(); err != nil {
 				t.Fatal(err)
 			}
-			for _, owner := range []string{"cloud", "intiface"} {
+			for _, owner := range []string{"cloud", "intiface", "intiface-handy-100ms"} {
 				entry := ReviewMotionOutput(target, settings)
 				entry.ID, entry.Name, entry.Group = fmt.Sprintf("%s-%s-%d", owner, name, speed), name, owner
 				entry.Wire = nil
 				engine := &Engine{plan: plan, settings: settings, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
 					preservePlanKnots: true, positionResolutionPercent: 1, maximumChunkPoints: maximumAdaptiveChunkPoints}
-				if owner == "intiface" {
+				if owner != "cloud" {
 					engine.minimumPointIntervalMillis = 50
 					engine.resolutionAfterStrokeWindow = true
+					if owner == "intiface-handy-100ms" {
+						// Central 3.2.2 reports 100ms for the real Handy. The
+						// transport honors that value plus its 10ms margin.
+						engine.minimumPointIntervalMillis = 110
+						entry.Description = "Handy on Intiface Central 3.2.2: advertised 100ms, effective 110ms floor."
+					}
 				}
 				for engine.nextSampleMillis < 12000 {
 					points, err := engine.nextMotionSamplesLocked()

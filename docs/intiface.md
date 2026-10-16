@@ -58,7 +58,9 @@ dispatch owner are persisted normally.
   does not apply a deadband or reshape the curve.
 - **Emergency Stop**, owner changes, disconnect, server shutdown, pacer
   underrun, and rejected linear commands clear queued work and issue
-  `StopDeviceCmd` where the session is still reachable.
+  `StopDeviceCmd` where the session is still reachable. This establishes local
+  cancellation and a server request, not a physical stop: the October 15 audit
+  below found a missing hardware Stop for the Handy driver in Central 3.2.2.
 - Buttplug ping keepalive remains enabled. A failed ping marks the connection
   stale; MagicHandy does not silently fall back to another owner.
 
@@ -86,9 +88,10 @@ Live evidence from 2026-07-12:
   `starved` state, and queue depth zero after Stop. Local WebSocket command
   queue-admission latency rounded below the diagnostics' one-millisecond
   resolution. That old metric did not measure paced `LinearCmd` writes or ACKs.
-- A final one-second 20% run proved unconditional Stop: active Stop commands
+- A final one-second 20% run recorded unconditional Stop requests: active commands
   `intiface-000005` and repeated idle Stop `intiface-000006` were distinct and
-  successful. Disconnect then recorded a third successful close-time Stop.
+  acknowledged. Disconnect then recorded a third close-time acknowledgment.
+  Those receipts did not independently establish a physical motor stop.
 - Trace exports and process logs remained temporary runtime artifacts and were
   not committed. No connection key or API credential was used by Intiface.
 - A same-Handy Cloud REST comparison then repeated the 20% pattern,
@@ -100,23 +103,40 @@ Live evidence from 2026-07-12:
   profile into the temporary datastore. It was not printed, logged, exported,
   or added to the repository.
 
-Remaining acceptance checks:
-
-- record the operator's subjective matched-feel judgment for the completed
-  Cloud REST and Intiface runs
-- run a capped pattern and Stop on one non-Handy linear device if available
-- repeat the matched Handy run on this deadline-driven pacer and retain the
-  `motion_trace.v3` send-lateness/ACK distributions
-
 Keep automated or unattended real-device runs at or below 40% speed.
 
-The [October 15 software comparison](release-motion-review-2026-10-15.md) covers
-32 Cloud/Intiface pairs with a full stroke window. Mean quantized travel differs
-by at most 0.0782%; fast turns have larger position approximation error at the
-Intiface 50 ms interval. These results do not measure live dispatch or physical
-speed. The reported speed-mapping difference remains pending a matched run on
-Intiface Central 3.2.2, including restricted windows and paced-wire diagnostics.
-No transport-specific speed multiplier or reduced timing floor was introduced.
+The [October 15 follow-up](release-motion-review-2026-10-15.md) includes matched
+full-stroke 20%/35% runs on Original Handy firmware 4.3.0 and Central 3.2.2+46.
+The operator found Cloud smoother, with clearer speed separation; Intiface
+repeatedly hesitated and caught up. Resetting the firmware stroke window through
+Cloud did not remove this behavior. Local writes showed no late/coalesced or
+failed commands, but those measurements end at the server, before Bluetooth.
+
+The actual server advertises 100 ms for this device, so MagicHandy uses 110 ms
+including margin. The expanded offline matrix includes that floor alongside
+Cloud and generic 50 ms Intiface. A speculative denser sampler produced only
+modest gains on the failing run and was parked; no runtime speed multiplier,
+lower timing floor, or change to the user's Intiface configuration was shipped.
+
+### Known Handy Stop limitation in Central 3.2.2+46
+
+The release's buttplug_server 12.0.2 generates no Stop hardware command for its
+position-only Handy feature. An empty Stop returns `Ok` without going through
+the device task, so previously accepted motion can still be waiting for a GATT
+write. App queue depth zero and a 2–3 ms Stop ACK do not prove that the device
+stopped or that all downstream writes were canceled. Buttplug v4 reaches the
+same server path and does not remedy the omission.
+
+Do not rely on that acknowledgment as a verified emergency motor stop. Native
+Handy Bluetooth and Cloud use the separate buffered HSP path with actual Stop
+commands. Their physical stopping delay must still be distinguished from a
+command receipt. The Intiface release acceptance check remains open until
+downstream Stop ordering and physical behavior are established. A guessed
+position target, automatic transport switch, or connection close is not a
+substitute for a verified hardware Stop.
+
+Remaining checks are downstream batch/GATT timing correlated with carriage
+motion, restricted stroke windows, and a non-Handy linear device if available.
 
 ## September 2026 connection review
 
@@ -131,6 +151,13 @@ Buttplug fixed a Handy 2 HDSP direction-timing problem in upstream commit
 [`5a60f54`](https://github.com/buttplugio/buttplug/commit/5a60f5492800dbe9bcb5e9443c4db0a04b7239e6).
 That device driver belongs to the installed Intiface engine. MagicHandy keeps
 using the standard v3 LinearCmd contract and does not bypass it with raw BLE
-commands. Record the Intiface/engine version during physical acceptance; this
-review does not establish which distributed releases include that upstream fix.
+commands. The October 15 follow-up checked the official Intiface Central
+3.2.2+46 release's [Cargo lockfile](https://github.com/intiface/intiface-central/blob/5413bf0/rust/Cargo.lock):
+it pins intiface-engine 5.0.5 and buttplug_server 12.0.2. The published server
+crate was downloaded and its SHA-256 matched the lockfile. Its Handy driver
+already sets `stop_on_target:false`, passes milliseconds unchanged, and maps
+integer position to 0–1 once. Therefore that release includes the upstream
+stop-on-target correction; an assumed missing fix is not a reason to alter
+MagicHandy's pacing. This establishes the official release source, not measured
+firmware dynamics or Bluetooth arrival timing.
 See [the full review](bluetooth-intiface-review-2026-09-20.md).

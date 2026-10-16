@@ -1680,8 +1680,8 @@ Mitigation:
   retains the cross-owner immediate-update contract
 - selected `DeviceMessageTimingGap` raises the shared sampler cadence and
   selected `StepCount` is exposed as an honest physical resolution limit
-- Buttplug ping keepalive stays enabled so Intiface stops devices if
-  MagicHandy dies
+- Buttplug ping keepalive stays enabled so Intiface attempts device Stop if
+  MagicHandy dies; the installed driver must actually implement that Stop
 - live validation drives the same Handy through all three owners as a direct
   like-for-like consistency measurement before the owner is recommended
 
@@ -1720,12 +1720,35 @@ clocking reduced the run from 13 add batches / 125 points to 10 / 90. The risk
 remains Medium pending the matched subjective Intiface run and a non-Handy
 linear-device check.
 
+Review update 2026-10-15: matched Original Handy firmware 4.3.0 runs at 20%/35%
+reproduced hesitation and catch-up on Intiface Central 3.2.2+46, while Cloud was
+smoother. Equivalent planned mean travel does not establish equivalent physical
+motion. The real device advertises a 100 ms command gap (110 ms with margin);
+normal server ACKs precede the 50 ms device-task batch and GATT write. No late
+host sends were recorded, leaving downstream timing and HDSP dynamics open.
+The sampler experiments are parked because modest fit improvements do not
+resolve that distinction. See the [release review](release-motion-review-2026-10-15.md).
+
 Relates to R1 (real-device validation), R14 (one motion path), R16 (device
 coverage), and R20 (LSO merge integration).
 
 ## R23: Emergency Stop Delivery Gaps
 
 Level: Critical
+
+Review update 2026-10-15: a verified-source audit of Central 3.2.2+46's pinned
+buttplug_server 12.0.2 found that generic Stop generation skips position
+features. For the tested Handy's sole position feature, an empty Stop returns
+`Ok` without a hardware command or device-task barrier. Pre-Stop commands can
+remain queued downstream after this ACK. App-side generation fencing cannot
+cancel that server queue, and neither a v4 migration nor a guessed position
+hold fixes it. The previously recorded Intiface Stop receipts must not be
+described as physical-stop proof. Release acceptance requires the device Stop
+and queue ordering to be fixed/verified, followed by an observed unloaded test;
+firmware final-target/coast behavior and motor-stop latency remain unmeasured.
+Native Handy HSP/Cloud retain their actual Stop paths, with command receipt
+still distinguished from physical feedback. See the
+[October 15 evidence and next checks](release-motion-review-2026-10-15.md).
 
 Description:
 The permanent Stop control is mounted outside routes. Active, paused,

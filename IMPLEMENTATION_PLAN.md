@@ -6,8 +6,11 @@ The October 15 [release motion review](docs/release-motion-review-2026-10-15.md)
 fixes floating-point endpoint rejection, adds explicit Layered full-slider and
 full-band edits, and aligns live examples with decoder order and Autopilot hold
 state. Local/hosted production fixtures and minimum-context checks cover the
-changes. The Cloud/Intiface software comparison preserves average travel rate;
-the reported physical speed difference still needs a matched hardware run.
+changes. Matched 20%/35% hardware runs now confirm that Intiface is less smooth
+than Cloud despite equivalent planned travel. The source audit also found that
+the installed Intiface release's linear Stop path can acknowledge without a
+hardware write or queue barrier. Release acceptance remains open for downstream
+timing and physical Stop; the speculative sampler change is parked.
 
 The October 11 [diagnostic download review](docs/diagnostic-report-review-2026-10-11.md)
 replaces the trace-export card with one backend-built report and a compact

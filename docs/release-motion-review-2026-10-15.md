@@ -2,8 +2,9 @@
 
 This review starts at `5938a0cb` on the native Handy/COYOTE integration stack.
 The software fixes are isolated on `codex/release-motion-review`. Publication
-remains pending the physical Cloud/Intiface comparison and release integration;
-the software comparison below does not establish equal physical speed.
+remains pending the Intiface timing/Stop findings and release integration. The
+matched physical comparison reproduced hesitation and catch-up on Intiface;
+equivalent planned travel does not establish equal physical speed.
 
 ## Defects and corrections
 
@@ -56,9 +57,9 @@ the software comparison below does not establish equal physical speed.
 
 ## Real model evidence
 
-All motion tests use the production service/compiler with an in-memory
-transport, or compile proposals without constructing a transport. No real
-device was commanded in this review. Local generation uses the installed
+The model evaluations use the production service/compiler with an in-memory
+transport, or compile proposals without constructing a transport. They command
+no real device; the separate physical runs below do. Local generation uses the installed
 Gemma 4 12B Q4_0 model through Ollama. Hosted generation uses a signed-in
 ChatGPT profile, GPT-6.1 Sol with Low reasoning, without copying credentials.
 
@@ -90,28 +91,114 @@ review; they do not justify replacing the device clock with cloud inference.
 
 ## Intiface comparison and remaining physical work
 
-`TestTransportParityReview` captures 64 shared-engine cases: eight authored or
-generated shapes, speeds 10/25/43/75, and Cloud/Intiface sampling constraints.
-It uses Original Handy limits, a full stroke window and the same 12-second
-measurement interval. Across the 32 pairs, the greatest average travel-rate
-difference is **0.0782%**. This is planned/quantized travel, not measured carriage
-speed and not a live WebSocket or Bluetooth dispatch measurement.
+The first software matrix had 64 cases using a generic 50 ms Intiface floor;
+its 32 Cloud/Intiface pairs differed in average quantized travel by at most
+0.0782%. Discovery of the actual Handy exposed a 100 ms advertised limit, so
+the review now covers 144 cases: eight shapes, speeds 10/20/25/35/43/75, and
+Cloud, generic 50 ms Intiface, and the actual 110 ms interval including the
+scheduler margin. Each uses Original Handy limits, full stroke and the same
+12-second measurement interval. These are commands, not carriage telemetry.
 
-The 50 ms Intiface interval approximates rapid turns more coarsely. At 75%,
-maximum position error is 3.249 percentage points for Creative and 3.059 for
-varied Creative v2; corresponding RMS errors are 1.341 and 1.032 points.
-This is a plausible contributor to different feel, but it does not establish
-the reported speed-mapping cause. The production pacer, sampler interval,
-speed curve and safety limits were deliberately not altered on this evidence.
+### Physical comparison
 
-Intiface Central 3.2.2 is installed, and the operator started its WebSocket
-server on port 12345 for the pending hardware comparison. The test must use the same
-Handy, pattern, speed and stroke window, record the active firmware/driver,
-capture paced-send lateness and acknowledgements, and obtain the operator's
-speed judgment. Repeat both full and restricted windows to distinguish wire
-scheduling from a retained firmware stroke envelope. A retained envelope is a
-hypothesis, not an established defect. Follow the <=40% hardware-test ceiling
-in [the Intiface guide](intiface.md).
+Original Handy firmware 4.3.0 ran `flow-full-sweeps` at 20% and 35%, full stroke,
+through Intiface Central 3.2.2+46 and Cloud. Runs lasted 10 seconds after startup
+with a stopped pause; the device was unloaded and the test ceiling stayed 40%.
+COYOTE stayed disconnected. The operator reported a slight speed difference
+on Intiface, a clearer difference and smoother motion on Cloud, and repeated
+Intiface slowdowns followed by brief catch-up. Repeating after Cloud reset the
+firmware stroke window did not remove the problem. Restricted-window tests
+remain open; the reset alone does not establish all projection semantics.
+
+| Observation | Intiface | Cloud |
+| --- | --- | --- |
+| Start completion | 251–255 ms | 5.3–10.0 s including preparation |
+| Stop acknowledgment | 2–3 ms | 306–447 ms |
+| Shared-engine commanded mean at 20% / 35% | 93.20 / 143.06 percent-travel/s | Same shared plan |
+| Local paced send lateness | Rounded maximum 0 ms | Buffered upload path |
+| Rejected/timed-out/coalesced live commands or pacer failures | None recorded | No playback starvation recorded |
+
+Intiface's mean command interval was approximately 137–153 ms. Sampled last ACKs
+rounded to 0 ms; the final repeats retained a cumulative 1 ms maximum. These
+establish server acceptance only. They do not measure Bluetooth
+arrival, physical execution or motor Stop. The 35% half-cycle has only about
+five commands, compared with roughly twenty buffered Cloud points. Large
+encoded velocity steps and downstream timing variation are separate plausible
+causes; neither has yet been isolated by synchronized device/video evidence.
+
+### Source audit and Stop limitation
+
+The official [3.2.2+46 lockfile](https://github.com/intiface/intiface-central/blob/5413bf0/rust/Cargo.lock)
+pins intiface-engine 5.0.5 and buttplug_server 12.0.2. The published server crate
+was checked against its lockfile SHA-256. `thehandy_v3` already sends
+`stop_on_target:false`, preserves duration in milliseconds and maps integer
+position to 0–1 once. A missing September stop-on-target fix is ruled out in
+that release's source, without claiming the installed executable was rebuilt
+or instrumented.
+
+`device_handle.rs::as_device_message_info` advertises a hardcoded 100 ms; the
+installed Handy driver configuration has a 50 ms message gap. `device_task.rs`
+starts a batch deadline when a pending queue first becomes nonempty, merges
+overlapping commands, and then performs GATT writes with responses. Normal
+command ACKs precede these writes. This is not a periodic 50 ms clock; a
+constant delay alone does not establish jitter or a beat-frequency problem.
+
+The same server generates Stop output for scalar features but explicitly skips
+position features. For this Handy's position-only feature, the Stop handler
+returns `Ok` with an empty hardware-command list. It does not send a device-task
+barrier or hardware Stop. Already accepted motion may therefore be dispatched
+after the Stop ACK. MagicHandy's generation fence cancels its own producers but
+cannot recall another process's queue. The shared v4 server path has this
+behavior too; changing message-spec versions is not a fix. The firmware's
+behavior after the final HDSP target has not been measured. No end-of-segment
+or immediate physical Stop guarantee is established by these runs.
+
+Release acceptance needs a real Stop command plus ordering that retires pending
+motion for the selected feature and prevents pre-Stop writes after that command.
+The upstream implementation must account for an already admitted GATT write and
+propagate failure honestly. A guessed position hold in MagicHandy would command
+new movement and is not an acceptable substitute. Cloud/native buffered HSP
+remain separate paths with actual Stop commands, but their ACKs also do not
+measure physical halt latency.
+
+### Sampler experiments and independent consultation
+
+Four sampler variants redistributed interior points while preserving the
+shared plan, timing floor and velocity ceiling. The early versions improved
+the 35% case but regressed other shapes at append boundaries. The final guarded
+variant fixed both sides of each append partition and admitted only locally
+non-worsening fits. It passed motion/transport/architecture tests and the 144
+case comparison: Cloud output was identical; 78 cases had lower RMS error;
+mean-travel changes were at most 0.128%. The regression screen checked maximum
+position error (+0.05 pp tolerance), RMS (+0.02 pp) and strict worst velocity step.
+
+On the failing 35% full sweep, however, worst velocity step stayed 172.20
+percent/s and maximum error stayed 3.92 pp; RMS changed only 1.751 to 1.614 pp.
+At 20%, RMS changed 0.563 to 0.548 pp. These are modest command-fit gains, not
+evidence of improved physical feel. More commands can also add downstream load.
+The prototype is **parked outside shipping source**, with source, tests and all
+failed reports retained under the ignored `sampler-experiment-guarded/` folder.
+The real 110 ms spacing regression test and expanded review fixture remain.
+
+At the user's request, Gemini web was consulted with the visible **Argon High**
+selection in the existing architecture conversation. Its recommendation was to
+hold the sampler and inspect downstream timing/Stop first. Its initial claims
+about a periodic batching beat, a one-command post-Stop horizon, imperceptible
+error and instant Cloud/native Stop were challenged; they are not accepted
+findings. Its follow-up corrected those claims and agreed that the server's
+empty Stop bypasses the downstream queue. Even then, its proposed
+end-of-segment UI guarantee and assertions of causation from timing correlation
+remain unproven and are not adopted. The independent review informs the
+investigation but is not a source of hardware measurements. The two exchanges
+and screenshots are retained in the ignored evidence directory.
+
+Next evidence should align the existing host trace with server batch/merge
+events, actual GATT write timing and observed carriage motion. A simpler
+endpoint-only pattern or wider cadence can help distinguish mechanisms, but
+also changes velocity demands and does not prove congestion by itself. Preserve
+the failing baseline and establish Stop ordering before another acceptance run;
+do not change Intiface configuration, ignore its advertised limit, or add a
+speed multiplier based on subjective speed alone.
 
 Earlier native Handy/COYOTE tests are documented in the
 [linked hardware review](native-linked-hardware-review-2026-10-15.md); its Windows
@@ -127,6 +214,12 @@ turns; `transport-parity-atlas/` contains the 64 transport cases. Additional
 final acceptance captures contain 46 records, 17 distinct plots and two overview
 sheets, including the failed Creative v2 start and the three successful repeats.
 Both acceptance overviews and the final start's detailed plot were inspected.
+The 144-case follow-up retains all five states (baseline plus four experiments)
+in `cadence-comparison-atlas/`: all six overview sheets and six detailed
+position/velocity comparisons were inspected. They show unchanged Cloud curves,
+coarser fast Intiface turns and remaining velocity jumps despite lower average
+fit error. Physical captures and corresponding `*-traces.json` include both
+matched pairs and `intiface-*-observed-repeat-2`, the last operator-observed run.
 The atlas renderer consumes
 actual shared-engine output, not reply text.
 
