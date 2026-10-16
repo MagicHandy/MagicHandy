@@ -48,6 +48,24 @@ real generation. A separate text-only app chat request returns `13` in 234 ms,
 with one provider call, no repair/fallback, and no active motion engine. Evidence
 and screenshots remain under ignored `.scratch/release-integration/`.
 
+## Follow-up review corrections
+
+The Handy manual test still offered retired `stroke`/`pulse`/`tease` IDs, which
+the current API correctly rejected. It now offers Full sweeps, Base-anchored
+variety and Pace wave through the same semantic start endpoint. Its initial
+speed is 25%, constrained by the current backend minimum and maximum; displayed
+and submitted values follow subsequent limit changes. No safety clamp moved
+out of the engine. All five UI locales include the new labels.
+
+The installer teardown fixture now selects its two ports immediately before
+launch, uses plain console output and includes process-exit/startup diagnostics
+on failure. The earlier CI timeout did not reproduce locally, so this records
+fixture hardening rather than claiming a proven application startup defect.
+Full installer tests pass under Windows PowerShell 5.1 and PowerShell 7.
+Frontend typecheck, localization checks, build and 910 tests in 117 files pass.
+Claude's 103-path source snapshot was rechecked; no subsequent source changes
+were found in the original worktree.
+
 ## Upstream Stop review and release acceptance
 
 The Handy Stop defect is reported in

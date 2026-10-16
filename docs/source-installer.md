@@ -368,6 +368,11 @@ PowerShell 7. It covers:
 - process ownership, controller takeover, Stop, and relaunch behavior; and
 - unsafe dirty-tree/update-state failures.
 
+The runtime teardown fixture selects free main and remote ports immediately
+before launch and uses `-console plain` with captured output. A failed start
+reports the exit code and bounded startup logs instead of only a readiness
+timeout. Interactive launch-console behavior has its own console tests.
+
 Parakeet source and packaged repairs share `setup-last-install.json`, a bounded
 sanitized terminal-result record in the selected app data directory. This lets a
 packaged installation display the original source-install failure without

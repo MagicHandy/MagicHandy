@@ -11,6 +11,12 @@ and +208 B in the embedded UI. The title-row shortcut adds no dependency,
 request, timer or model call. No new RSS/cold-start or hardware-latency claim
 is made; the existing budget caveats remain.
 
+Manual-test follow-up: supported pattern labels and backend-bounded speed add
+**822 B** to the complete embedded UI (**2,676,524 B**). With the same toolchain
+and flags, the core is **23,231,488 B** (+1,024 B). No dependency, polling loop,
+model call or new runtime service was added. Installer changes affect only the
+test harness. These measurements precede the separate Intiface sampling change.
+
 ## 2026-10-15 — Device panel and Settings > Devices
 
 [ADR 0048](decisions/0048-device-kit-and-settings-devices.md) replaces the
