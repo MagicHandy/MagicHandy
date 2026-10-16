@@ -66,6 +66,7 @@ type motionScheduleState struct {
 	planAt           time.Time
 	pending          *segmentChoice
 	lastDecisionTime time.Duration
+	preparing        bool // the next decision is planned at once, for this stretch's deadline
 	cadenceRNG       *rand.Rand
 	swayRNG          *rand.Rand
 	// swayPoints is the remaining intra-segment speed schedule, in time order.
@@ -85,6 +86,7 @@ type motionHistoryState struct {
 	recentPatternIDs    []string
 	recentPositionBands []PositionBand
 	recentSpeeds        []speedMark
+	recentChecks        []int // the planner's latest auto-timing horizons, seconds
 	earlierPhrases      []phraseMark
 	// currentPhraseHeard is set when the person speaks while the current
 	// phrase plays; such phrases stay recallable longer.

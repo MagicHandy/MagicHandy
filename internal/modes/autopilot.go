@@ -106,6 +106,13 @@ type DecisionInput struct {
 	// MotionFeedback is populated only for one semantic quality retry after a
 	// model-elected update compiled as continuity.
 	MotionFeedback string
+	// RecentCheckSeconds lists the planner's recent auto-timing horizons, oldest
+	// first. They are observations, so a model can notice it keeps one length.
+	RecentCheckSeconds []int
+	// Lookahead is how long before its stretch ends a prepared decision is
+	// planned. The ages above are already projected to that boundary; callers
+	// that measure their own ages, such as chat history, add it to now.
+	Lookahead time.Duration
 }
 
 // PositionBand describes the compiled position envelope of one recent target.
@@ -130,6 +137,9 @@ type Decision struct {
 	Next      TimingPreference
 	// Variability is how much the target should wander before the next boundary.
 	Variability VariabilityPreference
+	// NextCheck is a hosted planner's own horizon under auto timing. Zero means
+	// the scheduler samples the Motion change rate window as before.
+	NextCheck time.Duration
 }
 
 // Announcement reports whether a line entered canonical chat and whether the
@@ -154,6 +164,8 @@ type segmentChoice struct {
 	timing          TimingPreference
 	variability     VariabilityPreference
 	decisionLatency time.Duration
+	nextCheck       time.Duration // the model's auto-timing horizon; zero samples the window
+	lookahead       time.Duration // how far ahead of its boundary a prepared decision was planned
 	// requested marks a hold the human asked for; its source stays "hold".
 	requested   bool
 	reviewInput *DecisionInput
@@ -186,8 +198,10 @@ func (m *Manager) nextSegmentChoice(ctx context.Context, mode string) segmentCho
 // segment would violate the selected control mode. Speech decisions return
 // their error so they can be postponed without disturbing motion.
 func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback bool) (choice segmentChoice) {
-	input := m.decisionInput()
+	// Only motion planning is prepared ahead; a spoken check-in happens now.
+	input := m.decisionInput(fallback)
 	defer func() {
+		choice.lookahead = input.Lookahead
 		choice.reviewInput = m.inputForReview(input, choice)
 		choice.sessionTracking = input.SessionTracking
 		choice.sessionSeconds = input.SessionSeconds
@@ -242,13 +256,13 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 			return segmentChoice{
 				segment: segment, pattern: pattern, source: "hold", requested: decision.Requested,
 				say: decision.Say, timing: timing, variability: variability,
-				decisionLatency: latency,
+				nextCheck: decision.NextCheck, decisionLatency: latency,
 			}
 		}
 		if !fallback || dynamicMode || decision.Abstain {
 			return segmentChoice{
 				source: "hold", requested: decision.Requested, say: decision.Say, timing: timing,
-				variability: variability, decisionLatency: latency,
+				variability: variability, nextCheck: decision.NextCheck, decisionLatency: latency,
 			}
 		}
 		segment, scores := m.nextPlannedSegment()
@@ -262,8 +276,22 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 	return segmentChoice{
 		segment: NormalizeSegment(decision.Segment), pattern: decision.Pattern,
 		source: "model", say: decision.Say, timing: timing,
-		variability: variability, decisionLatency: latency,
+		variability: variability, nextCheck: decision.NextCheck, decisionLatency: latency,
 	}
+}
+
+// timingNote names what set a decision's horizon for traces: the model's own
+// seconds under auto timing, or the category the scheduler samples from. A
+// prepared decision also records how far ahead of its boundary it was planned.
+func (choice segmentChoice) timingNote() string {
+	note := fmt.Sprintf("next=%s", normalizeTiming(choice.timing))
+	if choice.nextCheck > 0 {
+		note = fmt.Sprintf("check=%ds", int(choice.nextCheck/time.Second))
+	}
+	if choice.lookahead > 0 {
+		note += fmt.Sprintf(" prepared=%ds", int(choice.lookahead/time.Second))
+	}
+	return note
 }
 
 func (choice segmentChoice) sessionTraceNote() string {
@@ -311,8 +339,10 @@ func normalizeVariability(variability VariabilityPreference) VariabilityPreferen
 	}
 }
 
-// decisionInput snapshots the bounded model-visible context.
-func (m *Manager) decisionInput() DecisionInput {
+// decisionInput snapshots the bounded model-visible context. A prepared motion
+// decision is planned for its stretch's end, so its ages are projected there:
+// without an interruption they are exactly what will be true when it applies.
+func (m *Manager) decisionInput(motionPlanning bool) DecisionInput {
 	settings := m.options.Settings()
 	var current *motion.MotionTarget
 	var currentPerceptual *motion.PerceptualSummary
@@ -340,16 +370,21 @@ func (m *Manager) decisionInput() DecisionInput {
 
 	now := m.options.Now()
 	m.mu.Lock()
+	lookahead := m.preparedLookaheadLocked(now, motionPlanning)
+	now = now.Add(lookahead)
+	sessionSeconds += int(lookahead / time.Second)
 	input := DecisionInput{
 		Style:               settings.Style,
 		SegmentIndex:        m.motion.segmentIdx,
 		RecentPatternIDs:    append([]string(nil), m.history.recentPatternIDs...),
 		RecentPositionBands: append([]PositionBand(nil), m.history.recentPositionBands...),
 		RecentSpeeds:        m.recentSpeedStepsLocked(now),
+		RecentCheckSeconds:  append([]int(nil), m.history.recentChecks...),
 		SpeedMinPercent:     settings.SpeedMinPercent,
 		SpeedMaxPercent:     settings.SpeedMaxPercent,
 		LastSay:             m.speech.lastSay,
 		SessionTracking:     autopilot.SessionTracking,
+		Lookahead:           lookahead,
 	}
 	if autopilot.SessionTracking {
 		input.SessionSeconds = sessionSeconds
@@ -393,6 +428,16 @@ func (m *Manager) decisionInput() DecisionInput {
 	input.MotionMinSeconds, input.MotionMaxSeconds = autopilot.MotionWindow()
 	input.MotionChangeLevel = autopilot.MotionChangeLevel
 	return input
+}
+
+// preparedLookaheadLocked reports how far ahead of now a prepared motion
+// decision takes effect: the rest of its stretch. A decision that applies now,
+// or a spoken check-in, has none. Callers hold m.mu.
+func (m *Manager) preparedLookaheadLocked(now time.Time, motionPlanning bool) time.Duration {
+	if !motionPlanning || !m.motion.preparing || !m.motion.deadline.After(now) {
+		return 0
+	}
+	return m.motion.deadline.Sub(now)
 }
 
 // sameMotionPhrase compares semantic shape and texture while deliberately

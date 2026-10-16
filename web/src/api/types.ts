@@ -40,6 +40,13 @@ export interface AutopilotSettings {
   adaptive_speech_timing: boolean;
   adaptive_motion_timing: boolean;
   speech_motion_authority: "chat_only" | "style_only" | "full_motion" | string;
+  // A hosted planner chooses how long each stretch plays, within 8 s to 5 min.
+  // The backend ignores it on a local route, and the control is shown only for
+  // a hosted Autopilot route.
+  auto_motion_timing?: boolean;
+  // An external planner's next decision is planned as each stretch begins and
+  // applied at its end. Chat replaces it. Absent means on.
+  prepare_next_decision?: boolean;
   // Inert read-only context: elapsed time, speed history, and backend-measured
   // phrase sameness. Off omits the facts from the prompt rather than sending
   // zeros.

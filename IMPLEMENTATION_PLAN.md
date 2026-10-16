@@ -225,6 +225,21 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-10-16 Auto timing and prepared decisions for external planners
+
+Creative v2 and Layered Autopilot ignored the planner's timing: every stretch
+was a uniform draw from the Motion change rate window. An Auto timing switch,
+off by default and honored only for a hosted planning route, lets the model
+return `next_check_seconds` (8–300), which the scheduler varies by ±12% and
+bounds. The prompt offers the change-rate window as the reference for an
+ordinary stretch; GPT-6 Sol then varied 29–47 seconds in open sessions and held
+180–300 seconds when asked to keep the motion, while local Gemma 12B settled on
+one value, so local planning stays sampled. Prepared decisions, on by default
+for any external planner, plan each decision as its stretch begins with facts
+projected to its end, so call latency no longer delays the change; chat
+discards them. See [ADR 0050](docs/decisions/0050-hosted-autopilot-auto-timing.md)
+and [the review](docs/autopilot-auto-timing-review-2026-10-16.md).
+
 ### 2026-10-09 Creative v2 edits written without the response schema
 
 External OpenAI-compatible servers dropped the response schema that the

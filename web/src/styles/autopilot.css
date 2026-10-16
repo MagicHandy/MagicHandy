@@ -88,10 +88,12 @@
   padding: 3px 6px;
   text-align: center;
 }
-.autopilot-buildup-setting {
+.autopilot-buildup-setting,
+.autopilot-auto-timing {
   gap: 8px;
 }
-.autopilot-buildup-setting .toggle-line {
+.autopilot-buildup-setting .toggle-line,
+.autopilot-auto-timing .toggle-line {
   min-height: 28px;
   font-size: var(--fs-body);
 }
@@ -102,7 +104,8 @@
   border-top: 1px solid var(--line);
   font-size: var(--fs-body);
 }
-.autopilot-buildup-setting .toggle-line > span:last-child {
+.autopilot-buildup-setting .toggle-line > span:last-child,
+.autopilot-auto-timing .toggle-line > span:last-child {
   font-weight: 600;
 }
 
@@ -118,7 +121,8 @@
 .autopilot-authority {
   margin-top: 4px;
 }
-.autopilot-session-hint {
+.autopilot-session-hint,
+.autopilot-timing-hint {
   margin: 2px 0 0;
   color: var(--muted);
   font-size: var(--fs-hint);

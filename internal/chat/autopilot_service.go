@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
@@ -54,6 +55,9 @@ type AutopilotResponse struct {
 	// Motion turns require the model to choose it explicitly so a scheduler hold
 	// cannot acquire backend-invented movement after the model answered.
 	Variability string
+	// NextCheckSeconds is an auto-timing planner's own horizon; zero means the
+	// scheduler samples its window. The scheduler varies and bounds it.
+	NextCheckSeconds int
 }
 
 // AutopilotService runs the dedicated autonomous contracts through the same
@@ -135,8 +139,13 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	if err != nil && !truncated {
 		return AutopilotResponse{}, err
 	}
+	nextCheck := 0
+	if s.autoTiming(kind) {
+		raw, nextCheck = takeNextCheck(raw)
+	}
 	response, parseErr := s.parse(raw, kind)
 	if parseErr == nil {
+		response.NextCheckSeconds = nextCheck
 		return response, nil
 	}
 	if s.Capabilities.PreserveConversationText {
@@ -179,11 +188,22 @@ func (s AutopilotService) repairPatternResponse(ctx context.Context, kind Autopi
 	if repairErr != nil && !errors.Is(repairErr, llm.ErrOutputTruncated) {
 		return AutopilotResponse{}, fmt.Errorf("repair Autopilot response: %w", repairErr)
 	}
+	nextCheck := 0
+	if s.autoTiming(kind) {
+		repairedRaw, nextCheck = takeNextCheck(repairedRaw)
+	}
 	repaired, repairParseErr := s.parse(repairedRaw, kind)
 	if repairParseErr != nil {
 		return AutopilotResponse{}, fmt.Errorf("autopilot response stayed malformed after repair: %w", repairParseErr)
 	}
+	repaired.NextCheckSeconds = nextCheck
 	return repaired, nil
+}
+
+// autoTiming reports whether this turn asks for next_check_seconds. Speech
+// keeps its own cadence.
+func (s AutopilotService) autoTiming(kind AutopilotKind) bool {
+	return kind == AutopilotKindMotion && s.Capabilities.AutoTiming
 }
 
 func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotResponse, error) {
@@ -194,6 +214,11 @@ func (s AutopilotService) parse(raw string, kind AutopilotKind) (AutopilotRespon
 	response, err := decodeAutopilotResponse(raw, kind)
 	if err != nil {
 		return AutopilotResponse{}, err
+	}
+	if s.autoTiming(kind) && response.Next == "" {
+		// next_check_seconds replaces the category in this contract. The
+		// category remains the scheduler's fallback when no horizon arrives.
+		response.Next = AutopilotTimingNormal
 	}
 	if !validAutopilotTiming(response.Next) {
 		return AutopilotResponse{}, fmt.Errorf("unknown Autopilot timing %q", response.Next)
@@ -374,7 +399,7 @@ func composeAutopilotSystem(
 		case "response_contract":
 			sections = append(sections, autopilotContract(kind, capabilities))
 		case "pattern_catalog":
-			sections = append(sections, autopilotCatalog(patterns, kind))
+			sections = append(sections, autopilotCatalog(patterns, kind, capabilities.AutoTiming))
 		case "output_guard":
 			sections = append(sections, autopilotOutputGuard(kind, capabilities))
 		case "motion_context":
@@ -403,10 +428,15 @@ func autopilotContract(kind AutopilotKind, capabilities Capabilities) string {
 	builder.WriteString("Return exactly one JSON object and no markdown, code fences, prose outside JSON, or extra keys.\n")
 	if kind == AutopilotKindSpeech {
 		builder.WriteString(autopilotSpeechDecisionContract)
+	} else if capabilities.AutoTiming {
+		fmt.Fprintf(&builder, `The object requires "intent":"<one brief motion concept>", "next_check_seconds":<whole number %d-%d>, and "variability":"settled"|"normal"|"restless". Choose the intent before encoding motion fields. Do not include a "reply" field.`,
+			config.AutopilotAutoTimingMinSeconds, config.AutopilotAutoTimingMaxSeconds)
 	} else {
 		builder.WriteString(`The object requires "intent":"<one brief motion concept>", "next":"soon"|"normal"|"later", and "variability":"settled"|"normal"|"restless". Choose the intent before encoding motion fields. Do not include a "reply" field.`)
 	}
-	if capabilities.MotionMode == MotionModeDynamic && kind == AutopilotKindMotion {
+	if capabilities.AutoTiming && kind == AutopilotKindMotion {
+		builder.WriteString("\nnext_check_seconds is how long this stretch plays before motion is reconsidered. The scheduler applies it within those bounds and varies it slightly.\n")
+	} else if capabilities.MotionMode == MotionModeDynamic && kind == AutopilotKindMotion {
 		builder.WriteString("\nThe timing value is a relative fallback preference. segment_seconds is allowed only inside dynamic motion and stays inside the supplied user bounds.\n")
 	} else {
 		builder.WriteString("\nThe timing value is a relative preference only. Never emit seconds, a duration, or a deadline.\n")
@@ -448,6 +478,9 @@ func autopilotOutputGuard(kind AutopilotKind, capabilities Capabilities) string 
 			return `FINAL OUTPUT: return only {"intent":"<what this line adds>","reply":"<one short in-character line>","next":"soon|normal|later"} plus optional allowed target "motion" with matching "variability", or {"intent":"quiet","reply":"","next":"later"} with no motion.`
 		}
 		return `FINAL OUTPUT: return only {"intent":"<what this line adds>","reply":"<one short in-character line>","next":"soon|normal|later"}, or {"intent":"quiet","reply":"","next":"later"} when there is nothing useful to add. No motion.`
+	}
+	if capabilities.AutoTiming {
+		return `FINAL OUTPUT: return only {"intent":"<brief motion concept>","next_check_seconds":<seconds>,"variability":"settled|normal|restless"} plus optional allowed "motion". No reply text.`
 	}
 	return `FINAL OUTPUT: return only {"intent":"<brief motion concept>","next":"soon|normal|later","variability":"settled|normal|restless"} plus optional allowed "motion". No reply text.`
 }

@@ -55,6 +55,12 @@ const (
 	AutopilotDefaultMotionMinSeconds = 20
 	// AutopilotDefaultMotionMaxSeconds is the upper natural motion bound.
 	AutopilotDefaultMotionMaxSeconds = 60
+	// AutopilotAutoTimingMinSeconds is the shortest horizon a hosted planner
+	// may choose under auto timing: the shared interval floor.
+	AutopilotAutoTimingMinSeconds = AutopilotMinimumIntervalSeconds
+	// AutopilotAutoTimingMaxSeconds is the longest horizon a hosted planner may
+	// choose under auto timing: the longest custom motion window.
+	AutopilotAutoTimingMaxSeconds = AutopilotMaximumMotionSeconds
 
 	// AutopilotMinimumArcMinutes accepts any positive whole-minute buildup.
 	// The model cadence remains independently bounded, so a short buildup does
@@ -81,6 +87,15 @@ type AutopilotSettings struct {
 	AdaptiveSpeechTiming  bool   `json:"adaptive_speech_timing"`
 	AdaptiveMotionTiming  bool   `json:"adaptive_motion_timing"`
 	SpeechMotionAuthority string `json:"speech_motion_authority"`
+	// AutoMotionTiming lets a hosted Autopilot planner choose how long each
+	// stretch plays before it is reconsidered, inside the auto-timing bounds.
+	// Local planning ignores it and keeps the Motion change rate window.
+	AutoMotionTiming bool `json:"auto_motion_timing"`
+	// PrepareNextDecision plans an external planner's next motion decision as
+	// soon as a stretch begins, for that stretch's end, so the change is ready
+	// at the boundary. Chat, settings changes and Stop discard it. Local
+	// planning ignores it and keeps planning just before the boundary.
+	PrepareNextDecision bool `json:"prepare_next_decision"`
 	// SessionTracking lets the model see elapsed session time, speed history,
 	// and backend-measured phrase sameness (age, reconsiderations, and holds).
 	// Inert input: it informs decisions and authorizes nothing. Off removes the
@@ -116,6 +131,9 @@ func DefaultAutopilotSettings() AutopilotSettings {
 		SessionTracking:   true,
 		SessionArc:        false,
 		SessionArcMinutes: AutopilotDefaultArcMinutes,
+		// Preparing changes when an external planner is asked, not what it
+		// decides, and costs no request unless chat discards one.
+		PrepareNextDecision: true,
 	}
 }
 

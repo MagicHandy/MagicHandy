@@ -1,5 +1,40 @@
 # MagicHandy Risk Register
 
+## R35: External Autopilot planners choosing and preparing their timing
+
+Level: Medium
+
+With Auto timing on, a hosted planner sets how long each stretch plays. A model
+could keep one pattern far longer than the person wants, settle on one length,
+or choose short horizons that raise request volume and plan usage. It could also
+read an old remark as a reason for a long or short stretch. A prepared decision
+is planned up to a whole stretch before it applies, so anything that changes
+during the stretch without an interruption is not in its context, and each
+interruption discards one prepared call.
+
+Mitigation:
+
+- Auto timing is off by default, honored only on a hosted planning route, and
+  offered only there; local planners keep the sampled window because Gemma 12B
+  settled on one value in measured sessions
+- the backend keeps the deadline: it varies the model's value by up to ±12% and
+  clamps it to 8–300 seconds, so the worst case is the fastest fixed level's
+  floor of 7.5 calls per minute
+- the prompt gives the Motion change rate window as the reference for an
+  ordinary stretch and lists the planner's recent horizons as observations;
+  nothing text-matched decides a length
+- a prepared decision's facts and chat ages are projected to its deadline; chat
+  activity, settings changes and Stop discard it, and the generation fence
+  rejects a late result. Local planners never prepare, so chat keeps their
+  single model slot
+- a chat turn still brings the next decision forward, and a missing or invalid
+  horizon falls back to the sampled window; hosted failures still hold without
+  repair or local fallback
+
+Residual risk: simulated sessions are small, neutral and transport-free. Plan
+usage under long sessions, other hosted models and physical feel are not
+established. See [ADR 0050](decisions/0050-hosted-autopilot-auto-timing.md).
+
 ## R34: Vibrator output through a shared Intiface connection
 
 Level: High

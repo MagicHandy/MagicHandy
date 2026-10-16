@@ -18,6 +18,7 @@ func (m *Manager) resetForModeStartLocked(mode string) {
 	m.history.previousSpeed = 0
 	m.history.speedChangedAt = time.Time{}
 	m.history.recentSpeeds = nil
+	m.history.recentChecks = nil
 	m.history.earlierPhrases = nil
 	m.history.currentPhraseHeard = false
 	m.history.currentPhrase = Segment{}
@@ -49,6 +50,7 @@ func (m *Manager) resetForModeStartLocked(mode string) {
 		m.speech.fallbackAt = time.Time{}
 		m.speech.nextTiming = TimingNormal
 		m.motion.lastDecisionTime = 0
+		m.motion.preparing = false
 		m.motion.cadenceRNG = nil
 		m.speech.cadenceRNG = nil
 	}

@@ -124,6 +124,10 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 		schema, parser = CreativeV2ResponseSchema(limits, capabilities.MoodTracking), ParseCreativeV2Reply
 	}
 	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(state)))
+	autoTiming := s.TrustedMotionInput && capabilities.AutoTiming
+	if autoTiming {
+		schema = withNextCheckSchema(schema)
+	}
 	if !s.TrustedMotionInput {
 		system = ComposeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget).Prompt
 		schema = InteractiveResponseSchema(nil, capabilities, &state)
@@ -158,6 +162,10 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if err != nil {
 		return result, err
 	}
+	nextCheck := 0
+	if autoTiming {
+		raw, nextCheck = takeNextCheck(raw)
+	}
 	response, next, changed, err := parseContinuousReply(raw, current, state, limits, parser)
 	if err == nil {
 		err = s.authorizeLayeredReply(&response, next, changed, state)
@@ -174,14 +182,17 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 		// A standing wish counts only where live chat was asked for it.
 		response.StayUnchanged = nil
 	}
+	response.nextCheckSeconds = nextCheck
 	result.Response = response
 	return result, nil
 }
 
 func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind AutopilotKind, request Request) (AutopilotResponse, error) {
+	capabilities := s.Capabilities
+	capabilities.AutoTiming = s.autoTiming(kind)
 	service := Service{Provider: s.Provider, Prompt: s.Prompt, Model: s.Model, MaxTokens: s.MaxTokens,
 		ReasoningMode: s.ReasoningMode, ReasoningBudgetTokens: s.ReasoningBudgetTokens, Memories: s.Memories,
-		MotionContext: s.MotionContext, ConversationContext: s.ConversationContext, Capabilities: &s.Capabilities, TrustedMotionInput: true,
+		MotionContext: s.MotionContext, ConversationContext: s.ConversationContext, Capabilities: &capabilities, TrustedMotionInput: true,
 		AutonomousTemperature: s.Temperature, PromptBudget: s.PromptBudget}
 	if kind == AutopilotKindMotion {
 		continuation := LayeredContinuationMessage()
@@ -207,5 +218,6 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 	if command != nil {
 		command.Action = MotionActionUpdate
 	}
-	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled"}, nil
+	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled",
+		NextCheckSeconds: result.Response.nextCheckSeconds}, nil
 }
