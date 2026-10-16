@@ -2,15 +2,34 @@
 
 ## Status
 
-Accepted; amended 2026-10-15 after Microsoft completed the false-positive
+Accepted; amended 2026-10-16 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.62 package-preserving releases.
+reviewed alpha.14 through alpha.63 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.63 amendment
+
+On 2026-10-16 the maintainer requested merging PR #326 and publishing an update.
+This amendment adds only `0.1.0-alpha.63` to the reviewed unsigned Windows
+policy; alpha.64 and later still require their own review. It packages the
+external Autopilot timing and prepared-decision changes described in ADR 0050.
+Auto timing is opt-in; prepared decisions retain the existing shared-engine,
+controller, pause and Stop boundaries. Local planning remains unchanged.
+The release record is [alpha63-release-review-2026-10-16.md](../alpha63-release-review-2026-10-16.md).
+
+No payload executable, dependency, native loader, compression format, artifact
+set or installation contract is added or changed by this release preparation.
+The five payload executables, source and exact-binary vulnerability scans,
+Defender scan of the exact public files, checksums, manifests, installer
+lifecycle and current-main provenance gates remain mandatory. The prior
+Microsoft case does not approve the new hashes, and trusted Authenticode
+remains the long-term requirement. ADR 0049's Intiface Stop limitation and
+other physical acceptance limits remain disclosed.
 
 ### Alpha.62 amendment
 
@@ -596,7 +615,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.62 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.63 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -710,11 +729,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.62 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.63 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.62 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.63 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,

@@ -2,6 +2,11 @@
 
 ## Core Direction
 
+The alpha.63 release integrates PR #326's external Autopilot auto timing and
+prepared decisions. The packaging amendment admits only that exact alpha
+version, preserves all release gates and carries forward the device limitations
+from alpha.62. See [the release review](docs/alpha63-release-review-2026-10-16.md).
+
 The [alpha.62 release candidate](docs/alpha62-release-review-2026-10-15.md)
 combines the reviewed device, UI, motion and dependency branches. The final
 Intiface full-sweep and Creative v2 hardware comparisons were accepted.
