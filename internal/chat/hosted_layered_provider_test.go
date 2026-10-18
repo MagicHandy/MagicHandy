@@ -21,7 +21,7 @@ func TestHostedLayeredResponsesRoundTrip(t *testing.T) {
 	for _, plan := range []bool{false, true} {
 		t.Run(fmt.Sprintf("plan_%t", plan), func(t *testing.T) {
 			calls := 0
-			wire := `{"proposal":{"action":"update","stay_unchanged":false,"reply":"Slower, with gradual changes.","edits":{"controls":{"anchor_percent":{"op":"set","value":0},"speed_percent":{"op":"adjust","value":-5},"min_percent":null,"max_percent":null,"memory_cycles":null,"pace_variation_percent":null,"variation_mode":null},"layers":[{"axis":"pace","period_cycles":{"op":"adjust","value":4},"amount_percent":null,"phase_percent":null,"shape":null}],"geometry":null,"stroke_width":null,"evolve":null,"remove_layers":null}}}`
+			wire := `{"proposal":{"action":"update","stay_unchanged":false,"reply":"Slower, with gradual changes.","edits":{"composition":"manual","controls":{"anchor_percent":{"op":"set","value":0},"speed_percent":{"op":"adjust","value":-5},"min_percent":null,"max_percent":null,"memory_cycles":null,"pace_variation_percent":null,"variation_mode":null},"layers":{"range":null,"center":null,"pace":{"op":"edit","value":{"period_cycles":{"op":"adjust","value":4},"amount_percent":null,"phase_percent":null,"shape":null}}},"stroke_width":null,"evolve":null}}}`
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls++
 				var request struct {
@@ -50,7 +50,7 @@ func TestHostedLayeredResponsesRoundTrip(t *testing.T) {
 			}
 			current := DefaultLayeredScore(25)
 			state := MotionContext{Running: true, Autopilot: true, Layered: &current, MotionMode: MotionModeLayered}
-			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, LayeredControlOperations: true}
+			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true}
 			service := Service{Provider: provider, Capabilities: &caps, MotionContext: &state}
 			got, err := service.Complete(t.Context(), Request{Message: "Lower the pace by five, move the anchor to zero, and lengthen the pace cycle by four."}, nil)
 			_, want, _, domainErr := ParseLayeredReply(`{"edits":{"controls":{"anchor_percent":0},"change_by":{"speed_percent":-5},"layers":[{"axis":"pace","period_change_cycles":4}]},"reply":"Test."}`, current, config.DefaultSettings().Motion)
@@ -67,7 +67,7 @@ func TestHostedLayeredResponsesRoundTrip(t *testing.T) {
 func TestHostedLayeredReviewerUsesSameOperations(t *testing.T) {
 	current := DefaultLayeredScore(25)
 	provider := &layeredTestProvider{raw: `{"verdict":"correct","confidence":"high","reason":"wrong_pace","feedback":"Requested lower pace.","correction":{"edits":{"controls":{"speed_percent":{"op":"adjust","value":-5}}},"reply":"Pace corrected."}}`}
-	service := MotionReviewService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeLayered, LayeredControlOperations: true}}
+	service := MotionReviewService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true}}
 	for _, source := range []string{"chat", "autopilot"} {
 		result, err := service.Complete(t.Context(), MotionReviewInput{Source: source, Request: "Slower.", Limits: config.DefaultSettings().Motion, Before: motion.MotionTarget{Flow: &current}, After: motion.MotionTarget{Flow: &current}})
 		if err != nil || result.Motion == nil || result.Motion.Action != MotionActionUpdate || result.Motion.Layered.SpeedPercent != 20 {

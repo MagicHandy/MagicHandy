@@ -23,7 +23,7 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 	for _, section := range composition.Sections {
 		if section.ID == "response_contract" {
 			section.Text = continuousInteractiveContract(section.Text, current)
-			if capabilities.MotionMode == MotionModeLayered && capabilities.LayeredControlOperations {
+			if capabilities.MotionMode == MotionModeLayered && capabilities.HostedMotion {
 				// Include the state-specific examples generated above. Only this
 				// code-owned contract is translated, never conversation text.
 				section.Text = hostedLayeredContract(section.Text)
@@ -149,7 +149,7 @@ func InteractiveResponseSchema(patterns []PatternChoice, capabilities Capabiliti
 		current = *state
 	}
 	_, limits := layeredContextScore(&current)
-	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.LayeredControlOperations)
+	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.HostedMotion)
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		schema = CreativeV2ResponseSchema(limits, capabilities.MoodTracking)
 	}

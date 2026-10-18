@@ -47,6 +47,11 @@ func layeredResponseSchema(limits config.MotionSettings, mood, operations bool) 
 	edits["stroke_width"] = object(map[string]any{"min_percent": integer(10, 100), "max_percent": integer(10, 100)}, []string{"min_percent", "max_percent"})
 	edits["geometry"] = map[string]any{"type": "string", "enum": layeredGeometries}
 	properties := map[string]any{"edits": object(edits, []string{}), "reply": map[string]any{"type": "string"}}
+	if operations {
+		edits["layers"] = hostedLayeredLayersSchema(layer)
+		delete(edits, "remove_layers")
+		properties["edits"] = hostedLayeredEditSchema(edits)
+	}
 	if mood {
 		properties["new_mood"] = map[string]any{"type": "string", "enum": Moods()}
 	}

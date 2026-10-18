@@ -566,6 +566,14 @@ set and adjust itself. Layer timing uses the same choice in `period_cycles`;
 `variation_mode` only supports `set`. Unchanged fields are omitted, or nullable
 on strict provider wires and restored to omission by the existing adapter.
 
+Hosted composition is explicit: `manual` permits all custom controls and
+layers; `geometry` supplies a named shape with independent pace and outer-band
+edits; `full_slider` replaces the band with 0–100. Named composition excludes
+competing width, anchor, variation-mode and range/center-layer fields. Each
+layer axis chooses `{"op":"edit","value":{...}}` or `{"op":"remove"}`.
+The model chooses the operation before any optional patch values, preventing
+strict decoding from committing to an operation through unrelated fields.
+
 The backend translates these explicit choices into the existing domain edit
 before recall, semantic validation and lifecycle authorization. It preserves
 zero values, rejects duplicate fields and competing legacy groups, and never
@@ -577,9 +585,13 @@ Local Ollama/llama.cpp and Labs retain their compact `controls`/`change_by`
 contract. Provider selection, including a local retry, selects the matching
 contract. A hosted second opinion uses the reviewer's contract while the
 immediate local choice retains its own. Persona text and conversation history
-are not rewritten. Creative v2 is unchanged. See the
+are not rewritten. Creative v2's edit grammar is unchanged. Hosted continuous
+Autopilot guidance asks the model to resolve active human constraints before
+developing open dimensions. Time, repetition and change preference do not
+cancel lasting directions; later human directions can replace them. There is
+no language classifier or inferred motion lock in code. See the
 [October 18 review](hosted-layered-operations-review-2026-10-18.md) for the
-captured failure, live results and remaining Autopilot limitations.
+captured failures, final 44/44 live ChatGPT checks and evaluation limits.
 
 ## Cross-references
 
@@ -588,7 +600,8 @@ full stroke width. `full_band` preserves the current outer endpoints and fills
 that band. Both remove center/range layers while preserving independent pace
 variation, speed and seed. Conflicting accompanying edits reject the complete
 proposal. The shared engine and saved device envelope still bound dispatch.
-Live examples put controls before geometry for constrained decoders; Autopilot
+Local examples put controls before geometry; hosted examples choose composition
+before its independent controls. Autopilot
 examples place the required standing-wish decision after reply and describe the
 backend's current hold state. See the
 [October 15 review](release-motion-review-2026-10-15.md).

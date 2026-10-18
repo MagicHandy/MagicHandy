@@ -19,6 +19,17 @@ import (
 // credentials, and has no transport or playback engine. Retain every response,
 // including rejected or semantically wrong choices, for motion-atlas review.
 func TestHostedLayeredLiveOperations(t *testing.T) {
+	provider, model := hostedLayeredLiveProvider(t)
+	limits := config.DefaultSettings().Motion
+	limits.SpeedMinPercent, limits.SpeedMaxPercent = 10, 50
+	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
+	rows := []map[string]any{}
+	t.Cleanup(func() { saveHostedLayeredRows(t, rows) })
+	runHostedLayeredOperationCases(t, provider, model, limits, caps, &rows)
+}
+
+func hostedLayeredLiveProvider(t *testing.T) (*hostedLayeredCapture, string) {
+	t.Helper()
 	directory, model := os.Getenv("MAGICHANDY_HOSTED_DATA_DIR"), os.Getenv("MAGICHANDY_LIVE_MODEL")
 	if directory == "" || model == "" {
 		t.Skip("set MAGICHANDY_HOSTED_DATA_DIR and MAGICHANDY_LIVE_MODEL for an existing ChatGPT sign-in")
@@ -36,23 +47,24 @@ func TestHostedLayeredLiveOperations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider := &hostedLayeredCapture{Provider: responses}
-	limits := config.DefaultSettings().Motion
-	limits.SpeedMinPercent, limits.SpeedMaxPercent = 10, 50
-	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, LayeredControlOperations: true, PreserveConversationText: true}
-	rows := []map[string]any{}
-	t.Cleanup(func() {
-		if path := os.Getenv("MAGICHANDY_EXPERIMENT_CAPTURE"); path != "" {
-			encoded, marshalErr := json.MarshalIndent(map[string]any{"turns": rows}, "", "  ")
-			if marshalErr != nil {
-				t.Error(marshalErr)
-				return
-			}
-			if writeErr := os.WriteFile(path, encoded, 0600); writeErr != nil {
-				t.Error(writeErr)
-			}
+	return &hostedLayeredCapture{Provider: responses}, model
+}
+
+func saveHostedLayeredRows(t *testing.T, rows []map[string]any) {
+	t.Helper()
+	if path := os.Getenv("MAGICHANDY_EXPERIMENT_CAPTURE"); path != "" {
+		encoded, err := json.MarshalIndent(map[string]any{"turns": rows}, "", "  ")
+		if err != nil {
+			t.Error(err)
+			return
 		}
-	})
+		if err := os.WriteFile(path, encoded, 0600); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func runHostedLayeredOperationCases(t *testing.T, provider *hostedLayeredCapture, model string, limits config.MotionSettings, caps Capabilities, rows *[]map[string]any) {
 	for _, tc := range []struct {
 		name, message string
 		check         func(*MotionCommand) bool
@@ -81,7 +93,7 @@ func TestHostedLayeredLiveOperations(t *testing.T) {
 			result, callErr := service.Complete(t.Context(), Request{Message: tc.message}, nil)
 			pass := callErr == nil && tc.check(result.Response.Motion) && result.Response.Reply != "" && !result.Repaired && !result.SemanticFallback
 			row := hostedLayeredLiveRow(tc.name, model, tc.message, result.Raw, before, result.Response.Motion, limits, started, callErr, pass)
-			rows = append(rows, row)
+			*rows = append(*rows, row)
 			t.Logf("%s pass=%t elapsed_ms=%v error=%v", tc.name, pass, row["elapsed_ms"], callErr)
 			if !pass {
 				t.Errorf("intent check failed; see retained evaluation record")
@@ -99,10 +111,10 @@ func TestHostedLayeredLiveOperations(t *testing.T) {
 		started := time.Now()
 		decision, err := planner.Complete(t.Context(), AutopilotKindMotion, Request{
 			History: []llm.Message{{Role: "user", Content: wish}, {Role: "assistant", Content: "Keeping the base speed at 25 percent."}},
-			Message: AutopilotMotionMessage(AutopilotContext{MotionMode: MotionModeLayered, CurrentFlow: &before, CurrentSpeed: 25, SpeedMinPercent: 10, SpeedMaxPercent: 50, MotionChangeLevel: 3, AutoTiming: true, LastHumanSecondsAgo: &ago}),
+			Message: AutopilotMotionMessage(AutopilotContext{Hosted: true, MotionMode: MotionModeLayered, CurrentFlow: &before, CurrentSpeed: 25, SpeedMinPercent: 10, SpeedMaxPercent: 50, MotionChangeLevel: 3, AutoTiming: true, LastHumanSecondsAgo: &ago}),
 		})
-		pass := err == nil && (decision.Motion == nil || decision.Motion.Layered.SpeedPercent == 25) && decision.NextCheckSeconds >= 8 && decision.NextCheckSeconds <= 120
-		rows = append(rows, hostedLayeredLiveRow("autopilot", model, wish, provider.raw, before, decision.Motion, limits, started, err, pass))
+		pass := err == nil && (decision.Motion == nil || decision.Motion.Layered.SpeedPercent == 25) && decision.NextCheckSeconds >= config.AutopilotAutoTimingMinSeconds && decision.NextCheckSeconds <= config.AutopilotAutoTimingMaxSeconds
+		*rows = append(*rows, hostedLayeredLiveRow("autopilot", model, wish, provider.raw, before, decision.Motion, limits, started, err, pass))
 		if !pass {
 			t.Errorf("autopilot intent/timing failed: %+v %v", decision, err)
 		}
@@ -114,7 +126,7 @@ func TestHostedLayeredLiveOperations(t *testing.T) {
 		started := time.Now()
 		review, err := reviewer.Complete(t.Context(), MotionReviewInput{Source: "chat", Request: "Reduce the speed by ten percentage points.", Limits: limits, Before: motion.MotionTarget{Flow: &prior, SpeedPercent: 30}, After: motion.MotionTarget{Flow: &before, SpeedPercent: 25}})
 		pass := err == nil && review.Motion != nil && review.Motion.Layered.SpeedPercent == 20
-		rows = append(rows, hostedLayeredLiveRow("reviewer", model, "Reduce speed by ten from 30; local picked 25.", provider.raw, before, review.Motion, limits, started, err, pass))
+		*rows = append(*rows, hostedLayeredLiveRow("reviewer", model, "Reduce speed by ten from 30; local picked 25.", provider.raw, before, review.Motion, limits, started, err, pass))
 		if !pass {
 			t.Errorf("reviewer intent failed: %+v %v", review, err)
 		}
@@ -123,10 +135,14 @@ func TestHostedLayeredLiveOperations(t *testing.T) {
 
 type hostedLayeredCapture struct {
 	llm.Provider
-	raw string
+	raw     string
+	request llm.ChatRequest
+	calls   int
 }
 
 func (p *hostedLayeredCapture) StreamChat(ctx context.Context, request llm.ChatRequest, emit func(string) error) (string, error) {
+	p.request = request
+	p.calls++
 	raw, err := p.Provider.StreamChat(ctx, request, emit)
 	p.raw = raw
 	return raw, err

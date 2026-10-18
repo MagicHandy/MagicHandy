@@ -2,13 +2,15 @@
 
 ## Core Direction
 
-The October 18 Layered fix gives hosted models one explicit set-or-adjust
-operation per control and layer period. Chat, Autopilot and hosted second
-opinions translate that representation into the existing atomic validator;
-local contracts and the motion engine are unchanged. The reported overlapping
-control groups can no longer satisfy the hosted schema. The
-[review](docs/hosted-layered-operations-review-2026-10-18.md) records live
-ChatGPT checks and the separate, unresolved Autopilot intent failures.
+The October 18 Layered fix gives hosted models exclusive set/adjust controls,
+named-versus-manual composition and per-axis edit/removal operations. Chat,
+Autopilot and hosted second opinions translate these into the existing atomic
+validator. Hosted continuous Autopilot resolves active human constraints before
+choosing variation; no language classifier or inferred motion lock is added.
+Local contracts and the motion engine are unchanged. The
+[review](docs/hosted-layered-operations-review-2026-10-18.md) records the final
+44/44 live ChatGPT checks, failed intermediate proposals, visual review and
+the limits of that evaluation.
 
 The alpha.63 release integrates PR #326's external Autopilot auto timing and
 prepared decisions. The packaging amendment admits only that exact alpha

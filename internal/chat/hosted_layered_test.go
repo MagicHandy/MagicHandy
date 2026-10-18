@@ -77,7 +77,7 @@ func TestHostedLayeredRejectsAmbiguousAndInvalidOperationsAtomically(t *testing.
 func TestHostedLayeredServiceKeepsRecallTimingAndAuthority(t *testing.T) {
 	score := DefaultLayeredScore(25)
 	prior := DefaultLayeredScore(20)
-	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, LayeredControlOperations: true, PreserveConversationText: true}
+	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
 	state := MotionContext{Running: true, MotionMode: MotionModeLayered, Layered: &score, SpeedMinPercent: 10, SpeedMaxPercent: 50, EarlierScores: []EarlierScore{{Flow: prior}}}
 	provider := &layeredTestProvider{raw: `{"action":"update","edits":{"recall":1,"controls":{"speed_percent":{"op":"adjust","value":-5}}},"reply":"Earlier score, slower."}`}
 	service := Service{Provider: provider, Capabilities: &caps, MotionContext: &state}
@@ -122,7 +122,7 @@ func TestHostedLayeredPromptInspectionAndExamplesAgree(t *testing.T) {
 		state.MotionMode = MotionModeLayered
 		state.SpeedMinPercent = 10
 		state.SpeedMaxPercent = 50
-		caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, LayeredControlOperations: true}
+		caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true}
 		provider := &layeredTestProvider{raw: `{"action":"none","edits":{},"reply":"Test.","stay_unchanged":false}`}
 		service := Service{Provider: provider, Prompt: set, Capabilities: &caps, MotionContext: &state}
 		if _, err := service.Complete(t.Context(), Request{Message: "Question."}, nil); err != nil {
@@ -158,8 +158,13 @@ func TestHostedLayeredSchemaMakesOperationsExclusive(t *testing.T) {
 	}
 	var edits struct {
 		Properties map[string]json.RawMessage `json:"properties"`
+		OneOf      []json.RawMessage          `json:"oneOf"`
 	}
 	_ = json.Unmarshal(schema.Properties["edits"], &edits)
+	if len(edits.OneOf) != 4 {
+		t.Fatal("expected hold, manual and disjoint geometry branches")
+	}
+	_ = json.Unmarshal(edits.OneOf[1], &edits)
 	if _, found := edits.Properties["change_by"]; found {
 		t.Fatal("conflicting legacy group is still offered")
 	}

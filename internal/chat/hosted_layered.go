@@ -38,6 +38,13 @@ func normalizeLayeredOperations(raw string) (string, error) {
 	if _, legacy := edits["change_by"]; legacy {
 		return "", errors.New("hosted Layered edits require one set or adjust operation per control; change_by is not allowed")
 	}
+	if err := normalizeHostedLayerOperations(edits); err != nil {
+		return "", err
+	}
+	if err := normalizeHostedLayeredComposition(edits); err != nil {
+		return "", err
+	}
+	delete(edits, "composition")
 	if rawControls, present := edits["controls"]; present {
 		controls, err := uniqueLayeredObject(rawControls)
 		if err != nil {

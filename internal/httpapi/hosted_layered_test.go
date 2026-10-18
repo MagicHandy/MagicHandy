@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/modes"
 )
 
 func TestLayeredOperationsFollowResolvedProvider(t *testing.T) {
@@ -19,8 +20,12 @@ func TestLayeredOperationsFollowResolvedProvider(t *testing.T) {
 		settings.Provider = tc.provider
 		settings.LlamaCPPMode = config.LlamaCPPModeExternal
 		settings.MotionGenerationMode = "layered"
-		if got := chatCapabilities(settings, nil).LayeredControlOperations; got != tc.hosted {
+		caps := chatCapabilities(settings, nil)
+		if got := caps.HostedMotion; got != tc.hosted {
 			t.Errorf("provider %s operations=%v want=%v", tc.provider, got, tc.hosted)
+		}
+		if got := autopilotPromptContext(modes.DecisionInput{}, caps).Hosted; got != tc.hosted {
+			t.Errorf("provider %s planner contract=%v", tc.provider, got)
 		}
 	}
 }

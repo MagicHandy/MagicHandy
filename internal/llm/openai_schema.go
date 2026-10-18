@@ -197,7 +197,8 @@ func domainBranchMatches(value any, schema map[string]any) bool {
 	if !ok {
 		return false
 	}
-	for _, key := range schemaRequired(schema) {
+	required := schemaRequired(schema)
+	for _, key := range required {
 		if _, exists := object[key]; !exists {
 			return false
 		}
@@ -209,6 +210,12 @@ func domainBranchMatches(value any, schema map[string]any) bool {
 		}
 		actual, exists := object[key]
 		if !exists {
+			continue
+		}
+		// Strict providers represent omitted optional fields as null. Such an
+		// enum is not a branch discriminator; restore omission after selecting
+		// the branch by its required op/action fields. Required nulls still fail.
+		if actual == nil && !slices.Contains(required, key) && !schemaAllowsNull(child) {
 			continue
 		}
 		if constant, hasConstant := child["const"]; hasConstant && !reflect.DeepEqual(actual, constant) {

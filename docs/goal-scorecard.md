@@ -2,25 +2,28 @@
 
 ## 2026-10-18 — Exclusive hosted Layered operations
 
-Hosted Layered replies choose one set/adjust operation per control or layer
-period. This changes the provider contract and its translation into existing
-domain edits; no dependency, background task, retry or motion path is added.
+Hosted Layered replies choose exclusive set/adjust, composition and per-axis
+edit/removal operations. Hosted continuous Autopilot resolves active human
+directions before developing open dimensions. This changes provider contracts
+and translation into existing domain edits; no dependency, background task,
+retry or motion path is added.
 Local Layered and Creative v2 interactive/autonomous prompts and response
 schemas have identical SHA-256 hashes across ten before/after state fixtures.
 The canonical UI bundle and dependency files are unchanged.
 
 Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, identical `-trimpath
 -buildvcs=false -ldflags '-s -w'` and version metadata against alpha.63
-`5e02daa0`: **23,264,768 -> 23,292,928 B** (+28,160 B, 0.12%). No new RSS or
+`5e02daa0`: **23,264,768 -> 23,321,600 B** (+56,832 B, 0.24%). No new RSS or
 cold-start claim. The isolated review app completed a local text-only chat in
-3,800 ms including 2,781 ms model loading, one provider call and no repair or
+1,048 ms including 3 ms model loading, one provider call and no repair or
 fallback; that is a readiness check, not a latency comparison.
 
-The retained live `gpt-6-sol` interactive cases took 2,789–6,240 ms (median
-3,727.5 ms, n=12), with all twelve intent checks passing. All seventeen retained
-hosted replies parsed; two broader Autopilot cases violated a requested fixed
-pace, so this is not a claim of general Autopilot intent reliability. See the
-[review and limitations](hosted-layered-operations-review-2026-10-18.md).
+The final live `gpt-6-sol` checks took 2,698–6,581 ms (median 4,279 ms, n=44),
+with all 44 parsing and satisfying their intent checks. They cover interactive,
+Autopilot and reviewer paths, retained/released pace, named/custom shapes and
+recall. All failed iterations are retained in a 233-record shared-engine atlas.
+This is a small evaluation, not a general intent guarantee or latency benchmark.
+See the [review and limitations](hosted-layered-operations-review-2026-10-18.md).
 
 ## 2026-10-16 — Auto timing and prepared decisions for external planners
 

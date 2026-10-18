@@ -118,7 +118,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	// The prompt and parser must share the same freshly seeded starting score.
 	state.Layered = &current
 	var system string
-	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.LayeredControlOperations)
+	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.HostedMotion)
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		schema = CreativeV2ResponseSchema(limits, capabilities.MoodTracking)
 	}
@@ -180,7 +180,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 
 func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
 	capabilities := s.capabilities()
-	if capabilities.MotionMode == MotionModeLayered && capabilities.LayeredControlOperations {
+	if capabilities.MotionMode == MotionModeLayered && capabilities.HostedMotion {
 		// Validate the original object before metadata/recall extraction can
 		// re-encode it and conceal duplicate fields from an unconstrained model.
 		var err error

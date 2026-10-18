@@ -110,9 +110,20 @@ func writeContinuousAutopilotContext(builder *strings.Builder, context Autopilot
 	}
 	// Every axis collapses to one value unless the spread is asked for; the
 	// continuous modes never received the pace line the catalog modes use.
-	fmt.Fprintf(builder, "Pace: use the width of the saved %d-%d%% speed range across the session rather than settling into one comfortable band. Easing down is what makes the next climb land; several stretches in a row at nearly the same speed_percent read as flat. When they say it is too much, or say they are close and you choose to hold them off, set speed_percent within a few points of %d%% at once, not partway, and keep it there while that was less than about a minute ago. Once the pace has stayed in the lower third for a minute or two and they have said nothing new since, rebuild: raise speed_percent by about 5 points each stretch and keep rising over the following stretches until it suits the moment again. A wish for a slow pace, such as going slow to make it last, is lasting: keep pace in the lower third and vary it there until they say otherwise.\n",
-		context.SpeedMinPercent, context.SpeedMaxPercent, context.SpeedMinPercent)
+	if context.Hosted {
+		builder.WriteString(hostedContinuousPlanningGuide)
+	} else {
+		fmt.Fprintf(builder, "Pace: use the width of the saved %d-%d%% speed range across the session rather than settling into one comfortable band. Easing down is what makes the next climb land; several stretches in a row at nearly the same speed_percent read as flat. When they say it is too much, or say they are close and you choose to hold them off, set speed_percent within a few points of %d%% at once, not partway, and keep it there while that was less than about a minute ago. Once the pace has stayed in the lower third for a minute or two and they have said nothing new since, rebuild: raise speed_percent by about 5 points each stretch and keep rising over the following stretches until it suits the moment again. A wish for a slow pace, such as going slow to make it last, is lasting: keep pace in the lower third and vary it there until they say otherwise.\n",
+			context.SpeedMinPercent, context.SpeedMaxPercent, context.SpeedMinPercent)
+	}
 	if context.MotionFeedback != "" {
 		fmt.Fprintf(builder, "Quality feedback: %s\n", context.MotionFeedback)
 	}
 }
+
+// The local guidance above deliberately has a stronger pace-development bias.
+// API models instead resolve active user constraints before choosing variation.
+// No phrase is classified by code and no constraint is inferred or enforced here.
+const hostedContinuousPlanningGuide = `Planning priority: first resolve the person's still-active directions from their conversation, including which dimensions they have left open. A direction to retain a pace or travel band constrains that dimension, not every dimension. Develop the open dimensions and omit edits to the protected ones. A later direction can replace an earlier one; a condition can end when the conversation establishes that it has ended. Mere silence, elapsed session time, a high change preference or repeated recent speeds do not cancel a lasting direction.
+Pace development is optional within that permission. When pace is open, choose a coherent hold, easing or build inside saved_limits; use contrasts where appropriate. When the person has retained the current rate, its repeated appearance in the history is success, not stagnation. A temporary easing request and a lasting pace preference need different continuation; judge that distinction from the person's meaning and context. Before returning, check the resulting score against those active directions, including a geometry's coupled effects: full_slider itself replaces the outer band with 0..100, whereas full_band fills and preserves the chosen band. Omitting endpoint edits does not preserve a band if the selected geometry changes it. The brief reply must describe only the changes actually emitted.
+`

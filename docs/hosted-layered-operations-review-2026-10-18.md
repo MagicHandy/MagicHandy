@@ -1,114 +1,164 @@
 # Hosted Layered operation review — October 18, 2026
 
-## Failure and change
+## Failure and final behavior
 
-The supplied October 16 diagnostic report came from alpha.63, `5e02daa0`, with
+The supplied October 16 diagnostic came from alpha.63, `5e02daa0`, using
 ChatGPT `gpt-6-sol` and Layered motion. A completed, single-call response
-supplied both absolute `controls` and relative `change_by` for six of the same
-fields. The domain validator correctly rejected it with `cannot set and adjust
-the same control: min_percent`. The schema had independently allowed both
-groups. Zero deltas were not the whole problem: `anchor_percent` also contained
-an absolute zero and a relative -10. Dropping selected fields would guess intent.
+supplied absolute `controls` and relative `change_by` for six of the same
+fields. The validator correctly rejected it with `cannot set and adjust the
+same control: min_percent`. Zero deltas were not the whole problem:
+`anchor_percent` also contained an absolute zero and a relative -10.
 
-Hosted models now choose one operation per control, for example
-`"speed_percent":{"op":"adjust","value":-5}`. Each operation's schema has
-disjoint `set`/`adjust` branches with the existing bounds. Layer periods use the
-same representation to avoid a second absolute/relative conflict. The existing
-OpenAI strict-schema adapter makes optional fields nullable and restores them
-to omission, then the chat layer translates explicit operations into the
-unchanged domain edit. Zero values remain real values. Ambiguity, duplicate
-fields, unknown operations, malformed values and out-of-range edits reject
-atomically. No keyword matching, response repair or additional provider call
-was added.
+Follow-up live tests exposed three related problems: named geometries were
+combined with contradictory shape fields, one layer was both edited and
+removed, and Autopilot's generic pace-development instruction competed with
+lasting user requests to retain a pace. The final hosted contract addresses
+those causes while keeping interpretation with the model:
 
-The provider capability applies consistently to interactive chat, Autopilot
-and hosted second-opinion corrections. The latter uses the reviewer's provider
-contract while the immediate local path retains its original contract. Local
-Ollama/llama.cpp, Labs and Creative v2 keep their original contracts. Only
-code-owned contract instructions/examples are translated; user messages,
-personas and conversation history are not rewritten. Saved limits, recall,
-lifecycle authority, the shared compiler, transport dispatch and Stop remain
-the existing authorities.
+- Every numeric control and layer period has one explicit `set` or `adjust`
+  operation. Zero remains a real value, not an omission marker.
+- `composition: "geometry"` selects a named shape and exposes independent pace
+  and outer-band controls, without competing width, anchor, variation-mode or
+  range/center-layer edits. `composition: "full_slider"` is a separate choice
+  because it replaces the outer band. `composition: "manual"` retains all
+  controls and layers for custom shapes. Empty edits preserve the score.
+- Layers are keyed by axis. Each chooses `{"op":"edit","value":{...}}`
+  or `{"op":"remove"}`. The choice comes before its optional patch fields,
+  so a constrained decoder cannot enter removal merely by emitting `op` first.
+- Hosted conversational Autopilot resolves active human directions before
+  choosing development. Silence, repeated speeds, elapsed time and change
+  preference do not cancel a lasting direction. A later request can replace it.
+  This guidance applies to hosted Layered and Creative v2; the technical-only
+  planner retains its existing state-only guidance.
+- Code-owned examples are translated fully on their first rendering. The
+  strict-schema adapter also restores omitted optional enum fields inside
+  operation unions without treating their nullable placeholders as selectors.
 
-## Validation
+The backend translates only explicit structured operations into the existing
+domain edit. No keyword detection, language classification, inferred motion
+locks, conflict guessing, corrective retry or extra provider call was added.
+Saved limits, recall, lifecycle authority, the shared compiler, dispatch and
+Stop remain the authorities. Invalid or ambiguous proposals still reject
+atomically. Raw responses remain available in diagnostics.
 
-- Regression cases compare complete resulting scores with equivalent legacy
-  domain edits, including absolute zero, relative changes, layer periods,
-  geometry, hold and empty arrays. Rejections leave the original score intact.
-- Tests cover recall, stopped/paused/running authority, Autopilot timing,
-  prompt-inspector parity, state-specific examples and reviewer corrections.
-- Real Responses adapter tests cover both ChatGPT plan usage and OpenAI API
-  mode, including wrapped action unions and strict nullable fields. They
-  produce the expected domain score in one call without repair/fallback.
-- Independent JSON Schema validation accepts four valid set/adjust examples
-  and rejects the archived overlap, competing operations and unknown operation
-  names in both the domain and strict wire schemas.
+Runtime provider selection enables the hosted contract for chat, Autopilot
+and hosted second opinions, including when the immediate model is local.
+Local Ollama/llama.cpp and Labs keep their compact contract; the Creative v2
+edit grammar is unchanged. Persona text and conversation history are not
+rewritten. No dependency, UI bundle or background task was added.
+
+## Regression and integration validation
+
+- Complete-score equivalence with original domain edits covers every named
+  geometry, custom shapes, absolute zero, relative controls and periods,
+  edit/removal operations, recall, hold and empty edits.
+- Atomic rejection tests cover duplicate fields, unknown operations, competing
+  legacy groups, conflicting geometry fields, edit/removal collisions, malformed
+  values and bounds. Lifecycle, auto timing, reviewer and inspector tests pass.
+- Real Responses-adapter tests exercise both ChatGPT plan usage and API mode,
+  including wrapped action unions and strict nullable output, in one call.
+- Independent JSON Schema validation accepts eight valid examples and rejects
+  six invalid examples in both domain and strict wire schemas. The archived
+  overlap, geometry/anchor conflict and edit/removal conflict are included.
 - `go test ./...`, `go test -race -timeout 20m ./...`, `go vet ./...`,
-  `golangci-lint run ./...` and the `CGO_ENABLED=0` build passed. Frontend
-  typecheck, all 913 tests and build passed; committed dist was unchanged.
-- Ten captured local Layered/Creative v2 state fixtures have identical prompt
-  and schema hashes before and after. There is no new call on the local path.
+  `golangci-lint run ./...` and the `CGO_ENABLED=0` build pass. Frontend
+  typecheck, all 913 tests and build pass; canonical dist is unchanged.
+- Ten local Layered/Creative v2 state fixtures retain identical interactive,
+  autonomous and schema hashes. No additional local inference work is added.
 
-## Live ChatGPT and remaining limitations
+## Real ChatGPT evaluation
 
-The opt-in `TestHostedLayeredLiveOperations` uses the existing protected host
-sign-in with `gpt-6-sol`, reasoning off, synthetic technical requests, and no
-engine or transport. Credentials are never copied into a review profile.
+The opt-in live tests use the existing protected host sign-in with `gpt-6-sol`,
+reasoning off, synthetic requests and production chat/planner/reviewer services.
+They create no engine or transport and copy no credentials into review data.
+All intermediate responses, including wrong choices, remain in ignored reports.
 
-Three retained reports contain seventeen generations: twelve interactive
-cases, two reviewer corrections and three Autopilot probes. All seventeen
-parsed with the new operations. All twelve interactive intent checks and both
-reviewer corrections passed. Cases cover absolute zero, relative pace,
-relative timing, alternating ends, explanation without motion, recall plus an
-adjustment, and correcting a missed speed reduction. Interactive latency was
-2.789–6.240 s, median 3.728 s; this small sample is not a provider benchmark.
+The original operation-only evaluation retained seventeen generations: all
+parsed, but two of three Autopilot probes raised a requested fixed 25% pace to
+30%/28%. The expanded baseline reproduced four geometry conflicts in fifteen
+calls. The following iterations explain why prompt guidance alone was not used
+as the final fix:
 
-Only one of the three retained Autopilot intent checks passed. Two valid
-proposals raised a requested fixed 25% pace to 30% and 28%. One failure used
-minimal history; the other included the recent human message, acknowledgement
-and age. The isolated history-inclusive probe passed, so adding history is not
-established as a fix. These failures remain in the reports, visual atlas and
-opt-in test result. A preliminary smoke run also rejected an unrelated geometry
-conflict; its console log survives, but a relative output-path mistake lost its
-raw report, so it is not included in the seventeen fully captured generations.
+| Retained report | Parsed | Intent checks | Finding |
+| --- | ---: | ---: | --- |
+| Expanded baseline | 11/15 | 10/15* | Conflicting geometry fields; missed drift request |
+| Prompt guidance only | 26/30 | 26/30 | Four geometry contradictions remained |
+| Exclusive composition | 29/30 | 29/30 | One layer edited and removed together |
+| Per-axis operations | 30/30 | 26/30 | Shared composition selector could steer decoding into full-slider travel |
+| Separate full-slider selector | 30/30 | 29/30 | One reply changed unrequested pace/band |
+| First-pass examples and planning check | 36/36 | 34/36 | Custom-layer edits exposed late edit/remove selection |
+| Final expanded planning | **36/36** | **36/36** | All eighteen cases passed twice |
+| Final operation/reviewer suite | **8/8** | **8/8** | Recall, relative edits, explanation, Autopilot and correction passed |
 
-This change fixes the structural set/adjust contradiction. It does not claim
-that every schema-valid edit follows the user's intent, or that geometry
-conflicts and autonomous pace drift are solved. Those require a separate
-evaluation of planning instructions and constraint representation. Existing
-semantic checks remain intact; they are not relaxed to make the probes pass.
-No real device connection, physical motion or stop test was needed for this
-contract change. The charts describe commanded estimates, not carriage feedback.
+*The baseline JSON retains its original 9/15 flag count. The hold-all case
+returned the exact unchanged score and a valid 180-second next check; the test
+incorrectly imposed a 120-second ceiling. The evaluator now uses the production
+8–300 second limits. That fixture error is not an application failure and the
+original evidence is not rewritten.
+
+The final 44 calls all parsed and met their intent checks, with no repair or
+fallback. Latency was 2,698–6,581 ms, median 4,279 ms. This is a small host/session
+sample, not a provider benchmark or a guarantee of arbitrary intent accuracy.
+The eighteen planning cases cover numeric, paraphrased and Spanish pace
+retention; a ten-minute-old lasting constraint; a fixed travel band with pace
+free to develop; exact hold; a later release from 25% to 35%; custom widths and
+anchor; and all nine named geometries. Checks compare actual scores with the
+requested dimensions, including unchanged outer bands, rather than trusting
+reply text. The eight additional cases exercise zero, relative speed, relative
+period, alternating ends, explanation without motion, recall plus adjustment,
+Autopilot continuation and a hosted correction of a missed local reduction.
+
+These results address the observed failures. Other models, longer conversations
+and ambiguous requests can still produce semantically wrong but valid choices;
+the existing validators and optional reviewer remain relevant. No real device
+was connected or moved, and no physical smoothness or Stop claim is made here.
 
 ## Shared-engine visual review
 
-All seventeen retained generations plus a neutral reproduction of the archived
-rejection are in an eighteen-entry atlas. Identical outputs share images; ten
-distinct plots and the overview were generated with the shared compiler. The
-overview and detailed alternating-end and failed-Autopilot plots were inspected.
-There are no added seam discontinuities in those detailed outputs; their
-whole-percent samples follow the planned trajectories. The alternating-end
-selection retains its two end regions and variable short strokes. The failed
-Autopilot selections compile smoothly, but their 30%/28% pace remains an intent
-failure, not a visual success. Explanation-only turns plot the unchanged
-already-running score and issue no command.
+The combined atlas retains **233 records**, comprising every baseline,
+intermediate and final generation plus the neutral archived-rejection fixture.
+The shared compiler rendered 97 distinct outputs and seven overview sheets;
+identical outputs share plots. Invalid proposals retain explicit failure cards.
+All seven overviews and detailed outliers were inspected.
 
-Review artifacts are ignored under `.scratch/layered-contract-review/`:
-`live-chatgpt-final.json`, `live-chatgpt-autopilot-history.json`,
-`live-chatgpt-complete.json`, `reported-rejection.json`, `atlas-all.json`,
-`atlas-all/index.html`, `schema-check.json`, test logs and local hash captures.
-The original diagnostic archive and user conversation are not committed.
+Detailed comparisons include the wrong full-slider selection for a 20–70 band,
+the unrequested 50% pace, lost center alternation in custom widths, and the
+unrequested 30% custom-anchor pace. Their smooth curves do not turn them into
+intent passes. Final details for fixed-band planning, custom alternation,
+custom anchor, full-and-tip and irregular wandering retain their requested
+travel relationships. The whole-percent output follows the planned trajectories
+without new flattened turns or obvious quantization chatter in those excerpts.
+Across the 44 final entries the largest reported knot jumps are approximately
+0.0000035 percentage points/s in velocity and 0.0000475 percentage points/s² in
+acceleration. These are steady commanded estimates, not carriage telemetry or
+startup/retarget tests. The shared engine itself is unchanged.
 
-To repeat the hosted evaluation, set `MAGICHANDY_HOSTED_DATA_DIR` to an existing
-signed-in profile, `MAGICHANDY_LIVE_MODEL=gpt-6-sol`, and
-`MAGICHANDY_EXPERIMENT_CAPTURE` to an **absolute**, ignored output path. Run
-`go test -tags liveeval ./internal/chat -run '^TestHostedLayeredLiveOperations$'
--count=1 -v`. It consumes plan usage and intentionally fails if intent does not
-match; do not hide failed cases. Export the retained reports with the documented
+Artifacts are ignored under `.scratch/layered-planning-followup/`: `baseline.json`,
+`candidate-1.json` through `candidate-5.json`, `final-planning.json`,
+`final-operations.json`, `atlas-all.json`, `atlas-all/index.html`, schema checks,
+local hash captures, readiness/chat evidence and test logs. Earlier reports and
+the neutral rejection remain under `.scratch/layered-contract-review/`. The
+original diagnostic archive and user conversation are not committed.
+
+To repeat, set `MAGICHANDY_HOSTED_DATA_DIR` to an existing signed-in profile,
+`MAGICHANDY_LIVE_MODEL=gpt-6-sol`, and `MAGICHANDY_EXPERIMENT_CAPTURE` to an
+absolute ignored path. Run each `TestHostedLayeredLivePlanning` and
+`TestHostedLayeredLiveOperations` separately with `go test -tags liveeval
+./internal/chat -run '^TestName$' -count=1 -v`, choosing separate capture files.
+`MAGICHANDY_EVAL_REPEATS=2` repeats the planning cases. These consume plan usage
+and fail on rejected or wrong choices. Export all reports with the documented
 `motion-atlas -catalog=false -llm ...` workflow.
 
-The current review app runs in a fresh isolated simulator profile with Layered
-selected and an available local Gemma model. `scripts/check-review-llm.ps1` and
-one text-only app chat both completed; the chat made one provider call without
-repair, fallback or motion. This readiness check is separate from the real
-ChatGPT contract evaluation above.
+## Review app and cost
+
+The current build runs in an isolated simulator profile at
+`http://127.0.0.1:50257/#/chat`, with Layered selected and an available local
+Gemma model. `scripts/check-review-llm.ps1` completed real generation. A
+text-only app chat returned a non-empty explanation in 1,048 ms, one provider
+call, no repair/fallback and no motion; this is separate from the live ChatGPT
+evaluation. Existing user-launched sessions and credentials were preserved.
+
+With identical Go 1.26.9 Windows amd64, `CGO_ENABLED=0`, trimpath, stripped and
+version-metadata flags, the core grows from alpha.63's 23,264,768 B to
+23,321,600 B (+56,832 B, 0.24%). That includes the earlier operation fix and
+this follow-up. No new RSS or cold-start measurement is claimed.
