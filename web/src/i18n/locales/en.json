@@ -3288,5 +3288,11 @@
   "local": "local",
   "Checking devices…": "Checking devices…",
   "{a}–{b} Hz": "{a}–{b} Hz",
-  "{a}–{b}%": "{a}–{b}%"
+  "{a}–{b}%": "{a}–{b}%",
+  "Cloud credential recovery": "Cloud credential recovery",
+  "Saved cloud credentials cannot be opened": "Saved cloud credentials cannot be opened",
+  "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.": "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.",
+  "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.": "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.",
+  "Reset all saved cloud credentials": "Reset all saved cloud credentials",
+  "Reset saved credentials…": "Reset saved credentials…"
 }

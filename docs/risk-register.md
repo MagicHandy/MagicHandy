@@ -198,6 +198,12 @@ passes shared semantic validation and the existing engine and transport boundary
 ChatGPT credentials live in a private host-only store, outside settings, logs,
 exports and browser storage. PKCE, state, nonce, verified identity claims,
 per-account registrations and serialized rotating refresh protect authorization.
+The October 18 amendment encrypts this store with current-user DPAPI on Windows
+and adds explicit recovery for unreadable/moved stores. macOS/Linux still use
+owner-only files; same-user malware remains outside this protection. OAuth
+network waits no longer hold local state/storage locks, and persisted revisions
+reject late refresh results after account changes in another process. See the
+[authentication review](cloud-auth-hardening-review-2026-10-18.md).
 Loss of inference scope invalidates readiness and old token sources. Connection
 tests require real text generation and bind their result to exact connection
 metadata and credentials. Admission tests require controller/administrator and

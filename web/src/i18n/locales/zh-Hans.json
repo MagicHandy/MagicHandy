@@ -3288,5 +3288,11 @@
   "local": "本地",
   "Checking devices…": "正在检查设备…",
   "{a}–{b} Hz": "{a}–{b} 赫兹",
-  "{a}–{b}%": "{a}–{b}%"
+  "{a}–{b}%": "{a}–{b}%",
+  "Cloud credential recovery": "云端凭据恢复",
+  "Saved cloud credentials cannot be opened": "无法打开已保存的云端凭据",
+  "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.": "将应用数据移至其他 Windows 账户或电脑后，可能会出现此情况。请重置已保存的凭据，然后重新登录或输入 API 密钥。",
+  "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.": "这会移除本应用主机上保存的所有 ChatGPT 登录和云端 API 密钥，保留服务商及模型设置。远程访问权限不会被撤销；如有需要，请在各服务商处管理。",
+  "Reset all saved cloud credentials": "重置所有已保存的云端凭据",
+  "Reset saved credentials…": "重置已保存的凭据…"
 }

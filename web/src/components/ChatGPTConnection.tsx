@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { CloudPlanningStatus } from "../api/cloud-types";
 import { t } from "../i18n";
+import { CloudCredentialRecovery } from "./CloudCredentialRecovery";
 
 export function ChatGPTConnection({ onChange, presentation = "settings", locked = false, needsAuthorization = false }: { onChange?: (status: CloudPlanningStatus) => void; presentation?: "setup" | "settings"; locked?: boolean; needsAuthorization?: boolean }) {
   const [status, setStatus] = useState<CloudPlanningStatus | null>(null);
@@ -60,6 +61,7 @@ export function ChatGPTConnection({ onChange, presentation = "settings", locked 
       : active && !active.plan_authorized ? t("Authorize ChatGPT plan use to enable inference.")
         : t("Use your ChatGPT plan. Account limits and provider content rules apply.");
   // One account row: what is connected on the left, the next action on the right.
+  if (status?.connection.recovery_required) return <CloudCredentialRecovery locked={disabled} onReset={next => { setStatus(next); onChangeRef.current?.(next); }} />;
   return <div className="chatgpt-connection form-rows" data-presentation={presentation}>
     <div className="form-row">
       <span className="form-row-label">

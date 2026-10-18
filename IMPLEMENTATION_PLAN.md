@@ -2,6 +2,15 @@
 
 ## Core Direction
 
+The October 18 [cloud authentication follow-up](docs/cloud-auth-hardening-review-2026-10-18.md)
+addresses stalled status during OAuth I/O and Windows credential encryption.
+Network operations release local state locks; account revisions reject stale
+refresh results while per-registration locks preserve cross-process rotation.
+Windows DPAPI migrates legacy credentials and explicit Settings/setup recovery
+handles unreadable stores. Other platforms retain owner-only files. No new
+dependency, local prompt, model request or motion path is introduced; ADR 0039
+remains proposed pending independent review.
+
 The alpha.63 release integrates PR #326's external Autopilot auto timing and
 prepared decisions. The packaging amendment admits only that exact alpha
 version, preserves all release gates and carries forward the device limitations

@@ -66,6 +66,7 @@ host	POST /api/llm/cloud/disconnect
 host	PUT /api/llm/cloud/decisions-key
 host	POST /api/llm/cloud/test
 host	POST /api/llm/cloud/welcome
+host	POST /api/llm/cloud/reset-credentials
 host	POST /api/llm/connections/key
 host	POST /api/llm/connections/models
 host	POST /api/llm/connections/test

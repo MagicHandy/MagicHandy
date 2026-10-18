@@ -1,5 +1,19 @@
 # Goal Scorecard
 
+## 2026-10-18 — Cloud authentication locking and Windows encryption
+
+[Evidence](cloud-auth-hardening-review-2026-10-18.md). Against alpha.63 `5e02daa0`,
+Windows amd64 Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`: core **23,264,768 -> 23,309,312 B**
+(+44,544 B). No module/dependency added. Local-only absent credential stores
+remain lazy; no new model request, motion loop or idle polling is introduced.
+
+Main UI JS **1,238,130 -> 1,241,223 B raw** (+3,093 B), **333,863 -> 334,612 B
+gzip** (+749 B, Python gzip `mtime=0`). CSS stays **204,527 B**. Complete embedded
+UI **2,683,548 -> 2,691,045 B** (+7,497 B), including localized recovery text.
+The one canonical dist was rebuilt with stale hashes removed. No new RSS or
+cold-start claim; the recovery UI mounts only for a backend-reported failure.
+
 ## 2026-10-16 — Auto timing and prepared decisions for external planners
 
 [ADR 0050](decisions/0050-hosted-autopilot-auto-timing.md) adds two Autopilot

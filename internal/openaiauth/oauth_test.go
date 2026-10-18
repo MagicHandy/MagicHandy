@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -259,8 +258,15 @@ func TestRefreshIsSerializedAcrossManagersAndRotatesTogether(t *testing.T) {
 	if f.refreshes.Load() != 1 {
 		t.Fatalf("rotating refresh raced: %d calls", f.refreshes.Load())
 	}
-	private, err := os.ReadFile(m.path)
-	if err != nil || !strings.Contains(string(private), "rotated-refresh") || strings.Contains(string(private), "private-refresh") {
+	m.mu.Lock()
+	err = m.transaction(t.Context(), func(data *credentialFile) error {
+		if data.Profiles[0].RefreshToken != "rotated-refresh" || data.Profiles[0].AccessToken != "renewed-access" {
+			t.Error("refresh pair not replaced atomically")
+		}
+		return nil
+	})
+	m.mu.Unlock()
+	if err != nil {
 		t.Fatal("refresh pair not replaced atomically")
 	}
 }

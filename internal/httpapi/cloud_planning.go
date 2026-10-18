@@ -73,6 +73,26 @@ func (s *Server) cloudPlanningRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/llm/cloud/decisions-key", s.handleDecisionsKey)
 	mux.HandleFunc("POST /api/llm/cloud/test", s.handleCloudTest)
 	mux.HandleFunc("POST /api/llm/cloud/welcome", s.handleCloudWelcome)
+	mux.HandleFunc("POST /api/llm/cloud/reset-credentials", s.handleCloudCredentialReset)
+}
+
+func (s *Server) handleCloudCredentialReset(w http.ResponseWriter, r *http.Request) {
+	manager, ok := s.cloudManager(w, r, true)
+	if !ok {
+		return
+	}
+	var body struct {
+		Confirm bool `json:"confirm"`
+	}
+	if err := decodeJSON(r, &body); err != nil || !body.Confirm {
+		writeError(w, http.StatusBadRequest, errors.New("confirm resetting all unreadable cloud credentials"))
+		return
+	}
+	if err := manager.ResetUnreadableCredentials(r.Context()); err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.cloudStatus(r.Context()))
 }
 
 func (s *Server) handleCloudWelcome(w http.ResponseWriter, r *http.Request) {
