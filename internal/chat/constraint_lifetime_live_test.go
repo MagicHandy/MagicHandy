@@ -168,7 +168,7 @@ func runConstraintEpisode(t *testing.T, provider *hostedLayeredCapture, model st
 			if err != nil {
 				t.Fatal(err)
 			}
-			message = strings.Replace(message, hostedContinuousPlanningGuide, string(guide), 1)
+			message = strings.Replace(message, hostedContinuousPlanningGuide, strings.ReplaceAll(string(guide), "\r\n", "\n"), 1)
 		}
 		request := Request{History: PlanningHistory(s.history, s.historyAt, time.Unix(int64(at), 0)), Message: message}
 		started, calls := time.Now(), provider.calls
