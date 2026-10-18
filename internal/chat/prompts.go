@@ -169,6 +169,9 @@ func contractInstructions(capabilities Capabilities) string {
 	}
 	if capabilities.MotionMode == MotionModeLayered {
 		text := layeredContract
+		if capabilities.LayeredControlOperations {
+			text = hostedLayeredContract(text)
+		}
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()
 		}
@@ -209,6 +212,10 @@ func contractInstructions(capabilities Capabilities) string {
 // value is chat-only in the utility voice; callers resolve defaults from
 // settings.
 type Capabilities struct {
+	// LayeredControlOperations gives hosted models an exclusive set/adjust
+	// choice per control. It changes representation, never motion authority.
+	// Local runtimes keep their compact controls/change_by contract.
+	LayeredControlOperations bool
 	// SchemaUnenforced marks a provider that may ignore the response schema,
 	// such as an external OpenAI-compatible server. Its Creative v2 contract
 	// omits the reach guide: without the schema, local Gemma 12B wrote

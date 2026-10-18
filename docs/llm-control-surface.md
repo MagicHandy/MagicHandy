@@ -556,6 +556,31 @@ report no saved connection key. During the run, `/api/state` must identify the
 engine transport results as `fake_handy`; a Cloud or hardware transport result
 means the review is not isolated and must be stopped immediately.
 
+## Hosted Layered operations
+
+Hosted Layered chat, Autopilot and second-opinion corrections use one operation
+per control: `{"op":"set","value":20}` supplies an absolute value and
+`{"op":"adjust","value":-5}` supplies a relative change. The schema has
+disjoint operation branches, so an individual control cannot simultaneously
+set and adjust itself. Layer timing uses the same choice in `period_cycles`;
+`variation_mode` only supports `set`. Unchanged fields are omitted, or nullable
+on strict provider wires and restored to omission by the existing adapter.
+
+The backend translates these explicit choices into the existing domain edit
+before recall, semantic validation and lifecycle authorization. It preserves
+zero values, rejects duplicate fields and competing legacy groups, and never
+guesses which conflicting instruction to keep. Rejected proposals remain
+atomic and visible in diagnostics; no extra model call or repair is added.
+The raw diagnostic response keeps the model's operation form.
+
+Local Ollama/llama.cpp and Labs retain their compact `controls`/`change_by`
+contract. Provider selection, including a local retry, selects the matching
+contract. A hosted second opinion uses the reviewer's contract while the
+immediate local choice retains its own. Persona text and conversation history
+are not rewritten. Creative v2 is unchanged. See the
+[October 18 review](hosted-layered-operations-review-2026-10-18.md) for the
+captured failure, live results and remaining Autopilot limitations.
+
 ## Cross-references
 
 Layered's explicit `full_slider` geometry sets semantic 0–100 and a constant

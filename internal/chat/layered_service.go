@@ -118,10 +118,9 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	// The prompt and parser must share the same freshly seeded starting score.
 	state.Layered = &current
 	var system string
-	schema := LayeredResponseSchema(limits, capabilities.MoodTracking)
-	parser := ParseLayeredReply
+	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.LayeredControlOperations)
 	if capabilities.MotionMode == MotionModeCreativeV2 {
-		schema, parser = CreativeV2ResponseSchema(limits, capabilities.MoodTracking), ParseCreativeV2Reply
+		schema = CreativeV2ResponseSchema(limits, capabilities.MoodTracking)
 	}
 	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(state)))
 	autoTiming := s.TrustedMotionInput && capabilities.AutoTiming
@@ -162,14 +161,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if err != nil {
 		return result, err
 	}
-	nextCheck := 0
-	if autoTiming {
-		raw, nextCheck = takeNextCheck(raw)
-	}
-	response, next, changed, err := parseContinuousReply(raw, current, state, limits, parser)
-	if err == nil {
-		err = s.authorizeLayeredReply(&response, next, changed, state)
-	}
+	response, err := s.parseLayeredResponse(raw, current, state, limits, autoTiming)
 	if err != nil {
 		result.Malformed, result.InitialMalformed, result.MalformedError = true, true, err.Error()
 		_ = emitEvent(emit, StreamEvent{Type: "malformed", Phase: "initial", Error: err.Error()})
@@ -182,9 +174,35 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 		// A standing wish counts only where live chat was asked for it.
 		response.StayUnchanged = nil
 	}
-	response.nextCheckSeconds = nextCheck
 	result.Response = response
 	return result, nil
+}
+
+func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
+	capabilities := s.capabilities()
+	if capabilities.MotionMode == MotionModeLayered && capabilities.LayeredControlOperations {
+		// Validate the original object before metadata/recall extraction can
+		// re-encode it and conceal duplicate fields from an unconstrained model.
+		var err error
+		raw, err = normalizeLayeredOperations(raw)
+		if err != nil {
+			return AssistantResponse{}, err
+		}
+	}
+	nextCheck := 0
+	if autoTiming {
+		raw, nextCheck = takeNextCheck(raw)
+	}
+	parser := ParseLayeredReply
+	if capabilities.MotionMode == MotionModeCreativeV2 {
+		parser = ParseCreativeV2Reply
+	}
+	response, next, changed, err := parseContinuousReply(raw, current, state, limits, parser)
+	if err == nil {
+		err = s.authorizeLayeredReply(&response, next, changed, state)
+	}
+	response.nextCheckSeconds = nextCheck
+	return response, err
 }
 
 func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind AutopilotKind, request Request) (AutopilotResponse, error) {

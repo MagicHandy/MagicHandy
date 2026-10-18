@@ -151,6 +151,9 @@ func (s *Server) runMotionReview(ctx context.Context, job motionReviewJob, cance
 	job.input.RecentRequests, _ = chat.UserRequestTimeline(requests, time.Now())
 	job.input.Context = s.chatMotionContext(job.settings.Motion, job.settings.LLM)
 	capabilities := chatCapabilities(job.settings.LLM, nil)
+	// The reviewed choice is local, but its correction uses the reviewer's
+	// provider contract. Do not change the local model's prompt or history.
+	capabilities.LayeredControlOperations = job.reviewer.IsHosted()
 	patterns, err := s.chatPatternChoicesFor(capabilities)
 	if err != nil {
 		return status
