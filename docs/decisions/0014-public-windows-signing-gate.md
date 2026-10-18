@@ -2,15 +2,37 @@
 
 ## Status
 
-Accepted; amended 2026-10-16 after Microsoft completed the false-positive
+Accepted; amended 2026-10-18 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.63 package-preserving releases.
+reviewed alpha.14 through alpha.64 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.64 amendment
+
+On 2026-10-18 the maintainer requested releasing the completed hosted Layered
+and external-context fixes from PR #328. This amendment adds only
+`0.1.0-alpha.64` to the reviewed unsigned Windows policy; alpha.65 and later
+still require their own review. The release fixes ambiguous structured motion
+operations, distinguishes temporary from lasting hosted Autopilot directions,
+and exposes separate external request and history budgets. Local prompts and
+inference budgets remain unchanged. The shared geometry validator fits retained
+stroke widths to explicitly narrowed bands; the engine, transports and Stop
+path retain their existing boundaries.
+
+The release record is
+[alpha64-release-review-2026-10-18.md](../alpha64-release-review-2026-10-18.md).
+No dependency, payload executable, native loader, compression format, artifact
+set or installation contract is added or changed. Source and exact-binary
+vulnerability scans, the exact-artifact Defender scan, manifest/checksum
+verification, installer lifecycle, review and current-main provenance remain
+mandatory. Microsoft's earlier case does not approve these new hashes; trusted
+Authenticode remains the long-term requirement. Existing hardware acceptance
+limits and the Intiface Stop issue remain disclosed.
 
 ### Alpha.63 amendment
 
@@ -615,7 +637,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.63 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.64 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -729,11 +751,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.63 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.64 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.63 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.64 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
