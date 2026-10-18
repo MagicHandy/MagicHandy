@@ -14,6 +14,7 @@ export interface ModelConnection {
   output_mode: "auto" | "strict" | "json" | "prompt";
   reasoning_effort?: string;
   context_window?: number;
+  history_size?: "" | "recent" | "long" | "extended";
   supported_parameters?: string[];
   allow_fallbacks: boolean;
   allowed_providers?: string[];

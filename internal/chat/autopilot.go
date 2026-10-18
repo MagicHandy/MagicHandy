@@ -19,6 +19,9 @@ type SpeedStep struct {
 // AutopilotContext is bounded semantic context for an autonomous model turn.
 // It contains no transport or engine details.
 type AutopilotContext struct {
+	// Hosted selects guidance for API models. It is resolved from the provider,
+	// never from the person's words; local prompt bytes stay unchanged.
+	Hosted bool
 	// Technical marks a planning turn that is shown motion state only: no
 	// conversation, persona or memory. It replaces guidance that depends on the
 	// person's words with what the motion history alone can say.

@@ -1157,6 +1157,7 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 	resolved := settings.Capabilities()
 	mode := chatMotionMode(settings.MotionGenerationMode)
 	capabilities := chat.Capabilities{
+		HostedMotion:             settings.IsHosted(),
 		SchemaUnenforced:         schemaUnenforced(settings),
 		PreserveConversationText: settings.IsHosted(),
 		Motion:                   resolved.Motion && mode != chat.MotionModeOff,

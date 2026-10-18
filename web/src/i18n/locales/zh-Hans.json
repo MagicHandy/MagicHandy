@@ -3288,5 +3288,16 @@
   "local": "本地",
   "Checking devices…": "正在检查设备…",
   "{a}–{b} Hz": "{a}–{b} 赫兹",
-  "{a}–{b}%": "{a}–{b}%"
+  "{a}–{b}%": "{a}–{b}%",
+  "External context budget": "外部模型上下文预算",
+  "Room for instructions, motion state and conversation. Your local model keeps its own context setting.": "为指令、运动状态和对话预留空间。本地模型保留独立的上下文设置。",
+  "32K — compact": "32K — 精简",
+  "128K — recommended when supported": "128K — 模型支持时推荐",
+  "256K — extended": "256K — 扩展",
+  "Conversation history and usage": "对话历史与用量",
+  "History sent": "发送的历史",
+  "Use a shorter history for lighter requests without reducing room for motion planning.": "缩短历史可减小请求，同时保留运动规划所需的空间。",
+  "Match context budget": "匹配上下文预算",
+  "The budget is a ceiling, not a fixed request size. Choose 128K for richer motion planning when your model supports it; sending more history can increase latency and usage. History is always capped by the selected budget.": "预算是上限，并非固定的请求大小。模型支持时可选择 128K，以容纳更丰富的运动规划；发送更多历史可能增加延迟和用量。历史始终受所选预算限制。",
+  "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first.": "请勿选择超过模型实际上下文容量的预算。对于未列出或自行托管的模型，请先确认其上下文配置。"
 }

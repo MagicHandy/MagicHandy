@@ -3288,5 +3288,16 @@
   "local": "local",
   "Checking devices…": "Verificando dispositivos…",
   "{a}–{b} Hz": "{a}–{b} Hz",
-  "{a}–{b}%": "{a}–{b}%"
+  "{a}–{b}%": "{a}–{b}%",
+  "External context budget": "Orçamento de contexto externo",
+  "Room for instructions, motion state and conversation. Your local model keeps its own context setting.": "Espaço para instruções, estado do movimento e conversa. O modelo local mantém sua própria configuração de contexto.",
+  "32K — compact": "32K — compacto",
+  "128K — recommended when supported": "128K — recomendado quando compatível",
+  "256K — extended": "256K — ampliado",
+  "Conversation history and usage": "Histórico da conversa e uso",
+  "History sent": "Histórico enviado",
+  "Use a shorter history for lighter requests without reducing room for motion planning.": "Use um histórico mais curto para solicitações menores sem reduzir o espaço para planejar movimentos.",
+  "Match context budget": "Seguir o orçamento de contexto",
+  "The budget is a ceiling, not a fixed request size. Choose 128K for richer motion planning when your model supports it; sending more history can increase latency and usage. History is always capped by the selected budget.": "O orçamento é um limite, não um tamanho fixo de solicitação. Escolha 128K para um planejamento mais completo se o modelo suportar; enviar mais histórico pode aumentar a latência e o uso. O histórico sempre respeita o orçamento escolhido.",
+  "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first.": "Escolha um orçamento dentro da capacidade real de contexto do modelo. Para um modelo não listado ou hospedado por você, verifique primeiro o contexto configurado."
 }

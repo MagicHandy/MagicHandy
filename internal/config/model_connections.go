@@ -31,6 +31,7 @@ type ModelConnection struct {
 	Model               string   `json:"model"`
 	ReasoningEffort     string   `json:"reasoning_effort,omitempty"`
 	ContextWindow       int      `json:"context_window,omitempty"`
+	HistorySize         string   `json:"history_size,omitempty"`
 	OutputMode          string   `json:"output_mode"`
 	SupportedParameters []string `json:"supported_parameters,omitempty"`
 	AllowFallbacks      bool     `json:"allow_fallbacks"`
@@ -69,6 +70,9 @@ func (c ModelConnection) Normalize() ModelConnection {
 func (c ModelConnection) Validate() error {
 	if !slices.Contains([]int{0, 32768, 131072, 262144}, c.ContextWindow) {
 		return errors.New("conversation context must be 32768, 131072 or 262144")
+	}
+	if !oneOf(c.HistorySize, "", "recent", "long", "extended") {
+		return errors.New("conversation history must match the budget, or be recent, long or extended")
 	}
 	if !ValidConnectionID(c.ID) || len(c.Name) == 0 || len(c.Name) > 100 || len(c.Model) > 160 {
 		return errors.New("connection needs a stable ID, bounded name and model")

@@ -55,6 +55,27 @@ func TestLongConversationReachesHostedChatBeyondOldStorageAndPromptLimits(t *tes
 		t.Fatal("text-only request moved a device")
 	}
 	assertLongContextRouting(t, s, first)
+	// Keep the 128K request budget for instructions and motion state, while
+	// reducing only this connection's conversation history.
+	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+		settings.LLM.Connections[0].HistorySize = "recent"
+		return settings
+	})
+	response = postChatStream(t, s, `{"message":"Continue the story, with motion still off."}`)
+	if !strings.Contains(response, `"reply":"The story continues."`) {
+		t.Fatal(response)
+	}
+	messages = <-captured
+	if slices.Contains(messages, first) || len(messages) != 66 {
+		t.Fatal("shorter hosted history did not reach the request", len(messages))
+	}
+	settings, _ := s.store.Snapshot()
+	if chatPromptBudget(settings.LLM.ConversationSettings()).ContextSize != 131072 {
+		t.Fatal("shorter history also reduced the external input budget")
+	}
+	if len(fake.Commands()) != 0 {
+		t.Fatal("shorter-history text request moved a device")
+	}
 }
 
 func assertLongContextRouting(t *testing.T, s *Server, first llm.Message) {

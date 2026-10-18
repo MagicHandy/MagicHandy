@@ -318,6 +318,7 @@ func autopilotTemperature(kind chat.AutopilotKind, level int) float64 {
 // exercise the exact context the app sends rather than reconstructing it.
 func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabilities) chat.AutopilotContext {
 	modelContext := chat.AutopilotContext{
+		Hosted:            capabilities.HostedMotion,
 		Style:             input.Style,
 		SegmentIndex:      input.SegmentIndex,
 		RecentPatternIDs:  input.RecentPatternIDs,
