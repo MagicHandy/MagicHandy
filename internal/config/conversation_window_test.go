@@ -30,3 +30,26 @@ func TestConversationWindowIsPerConnectionAndBounded(t *testing.T) {
 		}
 	}
 }
+
+func TestExternalHistoryCanBeShorterThanRequestBudget(t *testing.T) {
+	for _, tc := range []struct {
+		budget, messages, bytes int
+		history                 string
+	}{
+		{131072, 64, 24000, "recent"},
+		{262144, 256, 96000, "long"},
+		{262144, 512, 192000, "extended"},
+		{32768, 64, 24000, "extended"},
+		{131072, 256, 96000, "extended"},
+	} {
+		connection := ModelConnection{ContextWindow: tc.budget, HistorySize: tc.history}
+		budget, messages, bytes := connection.ConversationWindow()
+		if budget != tc.budget || messages != tc.messages || bytes != tc.bytes {
+			t.Errorf("%+v: got budget=%d messages=%d bytes=%d", tc, budget, messages, bytes)
+		}
+	}
+	connection := ModelConnection{ID: "test", Name: "Test", Provider: LLMProviderChatGPT, HistorySize: "unbounded"}.Normalize()
+	if connection.Validate() == nil {
+		t.Fatal("unbounded external history admitted")
+	}
+}

@@ -2,6 +2,7 @@ package chat
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,6 +11,39 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
+
+func TestHostedAnchoredGeometryFitsNewBandWithoutChangingPace(t *testing.T) {
+	pace := func(score motion.FlowSpec) motion.FlowLayer {
+		for _, layer := range score.Layers {
+			if layer.Axis == "pace" {
+				return layer
+			}
+		}
+		return motion.FlowLayer{}
+	}
+	for _, geometry := range []string{"centered", "tip_anchor", "base_anchor"} {
+		for _, ceiling := range []int{0, 30, 100} {
+			t.Run(fmt.Sprintf("%s/%d", geometry, ceiling), func(t *testing.T) {
+				before := DefaultLayeredScore(25)
+				before.RangeFloorPercent, before.RangeCeilingPercent = 20, ceiling
+				if ceiling == 100 {
+					before.RangeFloorPercent = 100
+				}
+				raw := fmt.Sprintf(`{"edits":{"composition":"geometry","geometry":%q,"controls":{"min_percent":{"op":"set","value":18},"max_percent":{"op":"set","value":82}}},"reply":"Narrower anchored travel."}`, geometry)
+				_, after, _, err := parseHostedLayeredReply(raw, before, config.DefaultSettings().Motion)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if after.MinPercent != 18 || after.MaxPercent != 82 || after.RangeFloorPercent != min(before.RangeFloorPercent, 64) || after.RangeCeilingPercent != min(ceiling, 64) {
+					t.Fatalf("geometry failed to fit only the requested band: %+v", after)
+				}
+				if after.SpeedPercent != 25 || after.PaceVariationPercent != before.PaceVariationPercent || pace(after) != pace(before) {
+					t.Fatal("band edit changed pace")
+				}
+			})
+		}
+	}
+}
 
 func TestHostedLayeredCompositionDiscriminatorsAndFirstPassExamples(t *testing.T) {
 	var schema struct {

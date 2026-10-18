@@ -52,6 +52,13 @@ func applyLayeredGeometry(s *motion.FlowSpec, geometry string) error {
 		remove("center")
 		set(motion.FlowLayer{Axis: "range", AmountPercent: 100, PeriodCycles: 8, Shape: "alternate"})
 	case "tip_anchor", "base_anchor", "centered":
+		// This named operation retains the stroke-width envelope as far as the
+		// explicitly selected outer band permits. A narrower band cannot retain
+		// an old full-width stroke; zero ceiling still means the whole band.
+		s.RangeFloorPercent = min(s.RangeFloorPercent, width)
+		if s.RangeCeilingPercent != 0 {
+			s.RangeCeilingPercent = min(s.RangeCeilingPercent, width)
+		}
 		s.AnchorPercent = 50
 		if geometry == "tip_anchor" {
 			s.AnchorPercent = 100

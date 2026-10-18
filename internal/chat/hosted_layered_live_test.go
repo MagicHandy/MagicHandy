@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -43,7 +44,14 @@ func hostedLayeredLiveProvider(t *testing.T) (*hostedLayeredCapture, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	responses, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: model, PlanUsage: true, ReasoningEffort: "none", Token: token, Timeout: 60 * time.Second})
+	contextSize := 32768
+	if value := os.Getenv("MAGICHANDY_LIVE_CONTEXT"); value != "" {
+		contextSize, err = strconv.Atoi(value)
+		if err != nil || (contextSize != 32768 && contextSize != 131072 && contextSize != 262144) {
+			t.Fatal("MAGICHANDY_LIVE_CONTEXT must be a supported conversation window: 32768, 131072 or 262144")
+		}
+	}
+	responses, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: model, PlanUsage: true, ReasoningEffort: "none", ContextSize: contextSize, Token: token, Timeout: 60 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

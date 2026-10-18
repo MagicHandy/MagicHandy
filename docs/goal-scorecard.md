@@ -1,5 +1,29 @@
 # Goal Scorecard
 
+## 2026-10-18 — Constraint lifetimes and independent external history
+
+Hosted planning distinguishes temporary settings from lasting directions.
+External connections can use shorter history inside a larger request budget;
+local limits and prompt branches are unchanged. The structured centered/anchor
+operation fits inherited widths into an explicitly narrowed band. No dependency,
+background task or additional inference call is added.
+
+Matching Go 1.26.9 Windows amd64 builds, `CGO_ENABLED=0`, `-trimpath
+-buildvcs=false -ldflags '-s -w'`, against parent `7f1f0752`: core
+**23,321,600 -> 23,332,352 B** (+10,752 B, 0.046%). The parent was rebuilt from
+an isolated source archive with the same flags. Main UI JS is
+**1,238,130 -> 1,240,414 B raw** (+2,284 B), **333,863 -> 334,294 B gzip**
+(+431 B). Complete canonical embedded UI: **2,683,548 -> 2,692,105 B**
+(+8,557 B), including five locale catalogs. No new RSS/cold-start claim.
+
+The final isolated app passed real local generation and a text-only app chat
+in 1,082 ms (one call, no repair/fallback/motion). This is readiness evidence,
+not a controlled local-performance comparison. Final matched ChatGPT evaluation
+has 54 valid checked responses, plus seven standing-hold checks and eighteen
+final regressions. The full 389-record atlas retains failed and preliminary
+runs; 311 distinct plots and 20 overview sheets were reviewed. See the
+[review and limitations](constraint-lifetime-review-2026-10-18.md).
+
 ## 2026-10-18 — Exclusive hosted Layered operations
 
 Hosted Layered replies choose exclusive set/adjust, composition and per-axis

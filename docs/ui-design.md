@@ -1306,6 +1306,18 @@ See [ADR 0039](decisions/0039-hosted-model-connections.md) and the
 [review evidence](cloud-model-review-2026-10-08.md).
 
 
+### External context budget and history (2026-10-18)
+
+External provider editors in Setup and Settings expose **External context
+budget** independently of local-model context settings. **Conversation history
+and usage** contains a **History sent** choice, so a larger external request
+budget can retain a shorter conversation. Omitted history preferences preserve
+existing behavior. Advertised model capacity bounds selectable budgets; unknown
+endpoints require checking their actual configured capacity. The backend caps
+history to the chosen budget. Both controls respect read-only clients and take
+effect through the existing saved-settings flow. See the
+[October 18 review](constraint-lifetime-review-2026-10-18.md).
+
 ### Optional local backup after hosted setup (2026-10-09)
 
 When Chat uses ChatGPT or an API connection, Easy and Custom setup both show a

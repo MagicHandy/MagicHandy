@@ -3288,5 +3288,16 @@
   "local": "ローカル",
   "Checking devices…": "デバイスを確認中…",
   "{a}–{b} Hz": "{a}–{b} Hz",
-  "{a}–{b}%": "{a}–{b}%"
+  "{a}–{b}%": "{a}–{b}%",
+  "External context budget": "外部モデルのコンテキスト予算",
+  "Room for instructions, motion state and conversation. Your local model keeps its own context setting.": "指示、動作状態、会話に使える容量です。ローカルモデルのコンテキスト設定は変わりません。",
+  "32K — compact": "32K — コンパクト",
+  "128K — recommended when supported": "128K — 対応モデルで推奨",
+  "256K — extended": "256K — 拡張",
+  "Conversation history and usage": "会話履歴と使用量",
+  "History sent": "送信する履歴",
+  "Use a shorter history for lighter requests without reducing room for motion planning.": "履歴を短くすると、動作計画に使える容量を保ったままリクエストを軽くできます。",
+  "Match context budget": "コンテキスト予算に合わせる",
+  "The budget is a ceiling, not a fixed request size. Choose 128K for richer motion planning when your model supports it; sending more history can increase latency and usage. History is always capped by the selected budget.": "予算は上限であり、毎回その量を送るわけではありません。対応モデルでは128Kを選ぶと、より詳しい動作計画を扱えます。履歴を増やすと遅延や使用量が増える場合があります。履歴は常に選択した予算内に収まります。",
+  "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first.": "モデルの実際のコンテキスト容量内で予算を選んでください。一覧にないモデルや自分でホストするモデルでは、先に設定済みの容量を確認してください。"
 }

@@ -1,5 +1,11 @@
 # Hosted Layered operation review — October 18, 2026
 
+The subsequent [constraint-lifetime review](constraint-lifetime-review-2026-10-18.md)
+tests whether active-direction priority became too persistent, refines temporary
+versus lasting scope, fixes narrowed-band geometry, and separates external
+request budget from history length. The measurements below record the earlier
+operation-contract milestone; the follow-up records the current build.
+
 ## Failure and final behavior
 
 The supplied October 16 diagnostic came from alpha.63, `5e02daa0`, using

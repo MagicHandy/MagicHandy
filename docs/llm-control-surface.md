@@ -589,9 +589,30 @@ are not rewritten. Creative v2's edit grammar is unchanged. Hosted continuous
 Autopilot guidance asks the model to resolve active human constraints before
 developing open dimensions. Time, repetition and change preference do not
 cancel lasting directions; later human directions can replace them. There is
-no language classifier or inferred motion lock in code. See the
+no language classifier or inferred motion lock in code. One-time settings and
+temporary intervals are distinguished from lasting restrictions; an expired
+interval can return to already granted autonomy without a fresh human message.
+Praise does not create a restriction. See the
 [October 18 review](hosted-layered-operations-review-2026-10-18.md) for the
 captured failures, final 44/44 live ChatGPT checks and evaluation limits.
+The [lifetime follow-up](constraint-lifetime-review-2026-10-18.md) tests the
+opposite failure: retaining a one-time setting for too long while autonomy is
+active. It includes matched multi-turn results and retained failed trials.
+
+Named centered/base/tip operations retain their existing stroke-width envelope
+only as far as an explicitly narrowed outer band permits. Smaller widths and
+independent pace stay unchanged; a zero ceiling continues to mean the whole
+band. The structured operation remains subject to atomic validation.
+
+### External request budget and history
+
+Each external connection owns its `context_window` admission budget. Optional
+`history_size` (`recent`, `long`, `extended`) can reduce the history included in
+that budget without reducing room for instructions and motion state. Omission
+matches the historical window-based policy. The request window caps history
+even when a saved history preference is larger. Chat and conversation-aware
+Autopilot use the same resolved limits; technical-only planning and second
+opinions retain their limited input policy. Local-model limits are unchanged.
 
 ## Cross-references
 

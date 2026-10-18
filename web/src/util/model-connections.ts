@@ -20,6 +20,7 @@ export function connectionSignature(connection: ModelConnection): string {
     Boolean(connection.zero_data_retention), Boolean(connection.no_authentication),
     connection.reasoning_effort ?? "",
     connection.context_window || 32768,
+    connection.history_size || "",
   ]);
 }
 
