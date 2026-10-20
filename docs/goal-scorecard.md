@@ -1,5 +1,66 @@
 # Goal Scorecard
 
+## 2026-10-20 — Local startup recovery
+
+Bounded local port fallback, per-profile OS ownership, verified endpoint
+discovery and retained startup reports are implemented in
+[ADR 0040](decisions/0040-local-startup-recovery.md). No dependency is added.
+The single canonical embedded UI was rebuilt; stale hashed assets were removed.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -ldflags '-s -w'`, built
+from `./cmd/magichandy`. Baseline is the pre-change `6dd502e9` source; candidate
+is this branch's application source with its rebuilt embedded assets.
+
+| Measure | Baseline | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Stripped binary | 22,046,720 B | 22,123,008 B | +76,288 B |
+| All embedded assets | 2,421,836 B | 2,429,413 B | +7,577 B |
+| Main JavaScript, gzip level 9 | 305,817 B | 306,469 B | +652 B |
+| Idle working set, median of 3 | 24,408,064 B | 25,403,392 B | +995,328 B |
+| Idle private bytes, median of 3 | 58,335,232 B | 57,978,880 B | within sample noise |
+| Process launch to HTTP health, median of 3 | 516 ms | 523 ms | within sample noise |
+
+Startup/idle samples use equivalent initialized isolated profiles, external
+Ollama, voice disabled, `-simulate-motion`, a fixed loopback address and
+`-remote-port -1`. Working set is sampled two seconds after readiness with no
+browser connected. Process launches include PowerShell/Windows launch and HTTP
+polling overhead and use a warm filesystem; these are not OS-cold-start or
+active-motion measurements. Startup ranges were 510–576 ms baseline and
+516–922 ms candidate. The 922 ms outlier precludes a speed-improvement claim.
+The post-review sample reused initialized isolated profiles while background
+checks ran; it does not establish a performance improvement.
+The external model process and browser RSS are excluded. The first exploratory
+baseline also showed a 72 MB transient working-set sample; the small final
+sample should not be interpreted as a new steady-state guarantee. The core
+remains below the 30 MB binary budget; existing frontend bundle-size advisories
+remain in effect.
+
+Acceptance includes real occupied app/remote ports, injected native Windows
+10013 denial, strict fixed-port refusal, duplicate executable/launcher reuse,
+stale/foreign endpoint rejection, held sockets and failure cleanup, report
+retention/redaction/temporary storage, role admission, Windows PowerShell 5.1
+and PowerShell 7 installer suites, full Go/race/vet/lint/architecture/lifecycle
+checks, and 836 frontend tests plus localization/typecheck/build.
+
+The isolated simulator review deliberately failed a fixed bind on 48717
+(native 10048), retained that failure, and recovered automatically to app 6059
+and remote 6060 at the initial implementation checkpoint. The post-review
+current-source build repeats this scenario at app 11293 and remote 11294.
+Diagnostics displays both retained records and the report-download
+control. A direct duplicate printed the existing URL without creating another
+runtime. The exact review app passed `check-review-llm.ps1` with a real text
+generation from the configured Ollama model. No hardware was connected and no
+motion or system network reset was requested. Original-user HNS state was not
+reproduced; the 10013 regression uses an injected native error.
+
+[The Opus 5.5 review and dispositions](startup-recovery-review-2026-10-20.md)
+cover saved hosted-policy compatibility, explicit simulation, recovered-profile
+installer consumers, bounded Windows replacement retries, fixed remote-port
+reuse and startup messages. Review fixes add 4,096 B over the initial candidate;
+frontend assets are unchanged. A high-effort review and medium-effort follow-up
+found no remaining high/medium issues after these fixes; the follow-up's low
+finding about duplicate recovery restarts has a dedicated installer regression.
+
 ## 2026-10-10 — Reach guide only where the schema is enforced
 
 An external llama.cpp server's Creative v2 contract omits the 713-byte reach

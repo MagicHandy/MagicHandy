@@ -15,6 +15,8 @@ import (
 )
 
 func (s *Server) networkRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/startup", s.handleStartupReport)
+	mux.HandleFunc("GET /api/startup/report", s.handleStartupReport)
 	mux.HandleFunc("GET /api/network", s.handleNetworkStatus)
 	mux.HandleFunc("POST /api/network/validate", s.handleNetworkValidate)
 	mux.HandleFunc("PUT /api/network", s.handleNetworkSave)

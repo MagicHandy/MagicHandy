@@ -8,6 +8,7 @@ import type { MediaToolStatus, PublicSettings } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 import { buildDiagnosticsReport } from "./diagnostics-report";
 import { PromptCompositionInspector } from "./PromptCompositionInspector";
+import { StartupReportsPanel } from "./StartupReportsPanel";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 
@@ -144,6 +145,8 @@ export function DiagnosticsPanel({
       </div>
 
       <PromptCompositionInspector collapsible />
+
+      <StartupReportsPanel />
 
       <div className="group">
         <h3 className="group-title">{t("Reset")}</h3>

@@ -258,8 +258,26 @@ Requires [Go](https://go.dev/dl/) 1.26.9 or newer.
 go run ./cmd/magichandy
 ```
 
-- The app serves its UI at <http://127.0.0.1:49717>; pass
-  `-addr 127.0.0.1:PORT` to change the port.
+- The app prefers <http://127.0.0.1:49717>. Ordinary local launches automatically
+  recover from an occupied or denied port; use the URL opened by the app or
+  printed in its console. A second launch with the same data directory opens
+  the verified existing instance when `-open-browser` is used.
+- `-addr 127.0.0.1:PORT` pins an exact address. `-port-policy fixed` also pins the
+  default port. To allow recovery from an explicit local HTTP preference, add
+  `-port-policy auto`. Saved custom ports, saved network policies, HTTPS, LAN and
+  proxy deployments remain fixed by default. An explicit remote port is fixed
+  too; the default adjacent remote port may recover during automatic local
+  startup. No system network services or reservations are reset.
+- Startup failures name a local report even if the UI cannot open. Settings >
+  Diagnostics > Startup recovery downloads the current report and retained last
+  failure/recovery after a successful launch. Files live in the data directory's
+  `startup` folder, with private temporary storage used if that folder cannot be
+  written. Reports exclude credentials, addresses, paths and chat. Share the
+  report JSON, not the private `instance.json` identity record.
+- For launch integrations, `-running-instance -data-dir PATH` prints verified
+  local instance JSON containing the actual URLs and PID, or `null`, without
+  starting workers or opening the database. See
+  [ADR 0040](decisions/0040-local-startup-recovery.md).
 - Opt-in LAN use requires an exact private IP, a matching trusted certificate,
   and a previously created account. Setup and Settings > Access can create the
   first local administrator and enable password protection. Follow

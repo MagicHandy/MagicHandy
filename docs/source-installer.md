@@ -260,7 +260,7 @@ Other important flags:
 
 | Flag | Meaning |
 | --- | --- |
-| `-Port 49717` | Local loopback HTTP port |
+| `-Port 49717` | Preferred local HTTP port; the default port permits automatic recovery, custom ports stay fixed |
 | `-DataDir PATH` | SQLite, model, trace, and runtime data root |
 | `-UILanguage LOCALE` | `en`, `es`, `pt-BR`, `zh-Hans`, or `ja` |
 | `-ChatLanguage LOCALE` | Built-in response language |
@@ -272,6 +272,26 @@ Other important flags:
 | `-StatePath PATH` | Override install state for testing/managed use |
 
 ## Persisted Choices
+
+The shared `Start-MagicHandyApp` launcher follows the app's verified actual URL
+after recovery, including for readiness and browser opening. Its optional
+`-PortPolicy auto|fixed|default` can explicitly choose a local policy; `default`
+uses automatic selection for 49717 and fixed selection for custom ports. Direct
+executable `-addr` launches remain fixed unless `-port-policy auto` is added.
+Saved HTTPS/proxy policies stay fixed even when the default source launcher
+requests local automatic selection. Their readiness cannot be verified through
+local HTTP discovery; the launcher leaves a still-running process alive and
+directs the operator to its configured public URL. Language and TTS changes,
+including rebuild Stop, discover a recovered local URL using the running data
+profile. Changing the install data directory stops the previous profile first.
+The launcher's `-Setup` explicitly opens `#/setup/reconfigure`, matching the
+executable's `-setup` flag and allowing intentional setup after first run.
+Rebuild preparation uses the verified endpoint for the selected data directory
+before applying the existing Emergency Stop and ownership checks. If startup
+cannot be verified within 30 seconds, the launcher reports the process and leaves
+it running; it does not terminate a possibly healthy app. Startup reports are
+retained under the selected data directory's `startup` folder. See
+[ADR 0040](decisions/0040-local-startup-recovery.md).
 
 By default, non-secret install state is stored at:
 

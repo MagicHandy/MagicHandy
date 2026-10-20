@@ -1321,7 +1321,7 @@ if (Test-Path -LiteralPath $statePath -PathType Leaf) {
     $appPort = [int]$appState.port
 }
 if ($wasRunning) {
-    InstallerSupport\Stop-MagicHandyAppForRebuild -RepositoryPath $repository -Port $appPort -AllowPhysicalStopConfirmation
+    InstallerSupport\Stop-MagicHandyAppForRebuild -RepositoryPath $repository -Port $appPort -DataDir $DataDir -AllowPhysicalStopConfirmation
 }
 
 try {
@@ -1352,7 +1352,12 @@ try {
     Write-TTSModuleState -Path (Join-Path $moduleHome 'module-state.json') -State $moduleIndex
 } finally {
     if ($wasRunning) {
-        InstallerSupport\Start-MagicHandyApp -RepositoryPath $repository -DataDir $DataDir -Port $appPort
+        try {
+            InstallerSupport\Start-MagicHandyApp -RepositoryPath $repository -DataDir $DataDir -Port $appPort
+        } catch {
+            if ($_.FullyQualifiedErrorId -notlike 'MagicHandy.StartedUnverified*') { throw }
+            Write-Warning $_.Exception.Message
+        }
     }
 }
 

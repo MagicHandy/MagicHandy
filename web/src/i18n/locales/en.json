@@ -1,4 +1,13 @@
 {
+  "Startup recovery": "Startup recovery",
+  "Startup reports retain the latest failure and automatic port recovery. They exclude credentials, addresses, paths and chat. Review before sharing.": "Startup reports retain the latest failure and automatic port recovery. They exclude credentials, addresses, paths and chat. Review before sharing.",
+  "Startup reports are unavailable. Check the startup folder in the app data directory.": "Startup reports are unavailable. Check the startup folder in the app data directory.",
+  "MagicHandy selected an available local port automatically.": "MagicHandy selected an available local port automatically.",
+  "The latest startup completed without port recovery.": "The latest startup completed without port recovery.",
+  "No completed startup report is available.": "No completed startup report is available.",
+  "A previous startup failure was retained.": "A previous startup failure was retained.",
+  "An automatic port recovery was retained.": "An automatic port recovery was retained.",
+  "Download startup report": "Download startup report",
   "Some older messages are no longer retained. Showing the available conversation history.": "Some older messages are no longer retained. Showing the available conversation history.",
   "Showing the latest {count} retained messages.": "Showing the latest {count} retained messages.",
   "Conversation history request timed out.": "Conversation history request timed out.",

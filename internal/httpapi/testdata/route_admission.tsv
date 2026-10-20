@@ -87,6 +87,8 @@ host	GET /api/network
 host	GET /api/network/certificate
 host	GET /api/network/local-trust
 host	GET /api/network/report
+host	GET /api/startup
+host	GET /api/startup/report
 shared	GET /api/personas
 shared	GET /api/personas/{id}/export
 shared	GET /api/personas/{id}/lore

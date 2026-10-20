@@ -2,6 +2,13 @@
 
 ## Core Direction
 
+The October 20 startup recovery pass adds bounded local port fallback, a
+profile lock and verified existing-instance discovery before datastore/worker
+startup, actual-URL source launcher readiness, and retained startup diagnostics.
+Explicit fixed addresses and hosted network deployments remain strict. HNS and
+system port reservations are untouched. See
+[ADR 0040](docs/decisions/0040-local-startup-recovery.md).
+
 The October 8 hosted-model review adds named ChatGPT/API connections alongside
 the existing local models, with independent Chat and Autopilot assignments and
 explicit conversation or technical context sharing. Easy setup keeps advanced

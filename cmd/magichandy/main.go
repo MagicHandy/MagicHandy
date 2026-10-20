@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -42,6 +41,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) (err error) {
 	flags.SetOutput(stderr)
 
 	addr := flags.String("addr", "", "HTTP listen address override")
+	portPolicy := flags.String("port-policy", "default", "port selection: default (automatic only for the default local launch), auto (loopback HTTP only), or fixed")
+	runningInstance := flags.Bool("running-instance", false, "print verified local running-instance JSON, or null, without starting the app")
 	securityFlags := addServerSecurityFlags(flags)
 	remoteFlags := addRemoteFlags(flags)
 	dataDir := flags.String("data-dir", "", "app data directory for settings and diagnostics")
@@ -64,6 +65,12 @@ func run(args []string, stdout io.Writer, stderr io.Writer) (err error) {
 	if *prepareUninstall {
 		return prepareForUninstall(stdout)
 	}
+	if *runningInstance {
+		return printRunningInstance(*dataDir, stdout)
+	}
+	if *portPolicy != "default" && *portPolicy != "auto" && *portPolicy != "fixed" {
+		return errors.New("port-policy must be default, auto or fixed")
+	}
 
 	level, err := logging.ParseLevel(*logLevel)
 	if err != nil {
@@ -79,6 +86,16 @@ func run(args []string, stdout io.Writer, stderr io.Writer) (err error) {
 		}
 	}()
 	logger := consoleUI.logger(stderr, level)
+	var launch *launchSession
+	if !configurationOnly(languageFlags, ttsFlags) {
+		var reused bool
+		launch, reused, err = beginLaunch(*dataDir, *addr, *portPolicy, securityFlags, remoteFlags, browserFlags, *simulateMotion, logger, stdout)
+		if err != nil || reused {
+			return err
+		}
+		defer func() { err = launch.finish(err) }()
+		launch.recorder.Report.Stage = "settings"
+	}
 	installerShutdown, closeInstallerShutdown := installerShutdownListener(logger)
 	defer closeInstallerShutdown()
 
@@ -94,29 +111,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) (err error) {
 		return err
 	}
 	logSettingsLoadStatus(logger, loadStatus)
-
-	runtime := applicationRuntime(*simulateMotion)
-	if *simulateMotion {
-		logger.Info("motion simulation enabled", "transport", runtime.MotionTransport.Diagnostics().Name)
-	}
-
-	runtime, security, address, err := prepareServerRuntime(store, settings, *addr, securityFlags, runtime)
-	if err != nil {
-		_ = store.Close()
-		return err
-	}
-	api, remoteSecurity, remoteAddress, err := createApplicationAPI(store, runtime, security, address, remoteFlags, logger)
-	if err != nil {
-		return err
-	}
-	defer api.Close()
-	consoleUI.serverPrepared(security, *simulateMotion)
-	consoleUI.remotePrepared(remoteSecurity.BaseURL)
-	consoleUI.connect(api, security.BaseURL, remoteSecurity.BaseURL)
-
-	server := newHTTPServer(address, api.Handler(), security.TLSConfig)
-	remoteServer := makeRemoteHTTPServer(api, remoteAddress, remoteSecurity)
-	return serveUntilStopped(server, remoteServer, api, security, remoteSecurity, logger, consoleUI, installerShutdown, browserFlags)
+	options := serverLaunchOptions{address: *addr, portPolicy: *portPolicy, security: securityFlags, remote: remoteFlags, simulate: *simulateMotion, browser: browserFlags}
+	return startApplication(store, settings, options, logger, consoleUI, installerShutdown, launch)
 }
 
 // serveUntilStopped serves until an interrupt, the Windows uninstaller or the
@@ -131,37 +127,21 @@ func serveUntilStopped(
 	consoleUI *launchConsole,
 	installerShutdown <-chan struct{},
 	browserFlags browserLaunchFlags,
+	listeners startupListeners,
+	launch *launchSession,
 ) error {
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 
-	// Bind both sockets before announcing readiness. A remote bind failure must
-	// not leave a half-started main app or a stray serving goroutine.
-	mainListener, err := net.Listen("tcp", server.Addr)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = mainListener.Close() }()
-	var remoteListener net.Listener
-	if remoteServer != nil {
-		remoteListener, err = net.Listen("tcp", remoteServer.Addr)
-		if err != nil {
-			return fmt.Errorf("remote listener %s: %w; choose -remote-port or use -remote-port -1", remoteServer.Addr, err)
-		}
-		defer func() { _ = remoteListener.Close() }()
-	}
 	errCh := make(chan error, 2)
 	go func() {
 		logger.Info("server starting", "url", security.BaseURL, "authentication_required", security.AuthenticationRequired)
-		if ready := consoleUI.ready(); ready != nil {
-			ready()
-		}
-		errCh <- serveBoundListener(server, mainListener)
+		errCh <- serveBoundListener(server, listeners.main)
 	}()
 	if remoteServer != nil {
 		go func() {
 			logger.Info("remote interface starting", "url", remoteSecurity.BaseURL, "listen", remoteServer.Addr, "authentication_required", remoteSecurity.AuthenticationRequired)
-			errCh <- serveBoundListener(remoteServer, remoteListener)
+			errCh <- serveBoundListener(remoteServer, listeners.remote)
 		}()
 	} else {
 		logger.Info("remote interface disabled")
@@ -172,6 +152,12 @@ func serveUntilStopped(
 		}
 		_ = server.Close()
 	}()
+	if err := launch.announce(security.BaseURL, remoteSecurity.BaseURL); err != nil {
+		return err
+	}
+	if ready := consoleUI.ready(); ready != nil {
+		ready()
+	}
 	launchBrowserWhenReady(*browserFlags.open, *browserFlags.setup, security.BaseURL, logger)
 
 	select {

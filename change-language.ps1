@@ -130,9 +130,14 @@ function Test-SameMagicHandyPath {
 }
 
 $wasRunning = Test-MagicHandyAppRunning -RepositoryPath $Repo
+$activePort = $resolvedPort
+if ($wasRunning -and $Port -eq 0) {
+    $instance = Get-MagicHandyRunningInstance -RepositoryPath $Repo -DataDir $resolvedDataDir
+    if ($null -ne $instance) { $activePort = ([Uri]$instance.url).Port }
+}
 $activeState = $null
 try {
-    $candidateState = Invoke-RestMethod -Uri "http://127.0.0.1:$resolvedPort/api/state" -TimeoutSec 1
+    $candidateState = Invoke-RestMethod -Uri "http://127.0.0.1:$activePort/api/state" -TimeoutSec 1
     if ([string]$candidateState.service -eq 'magichandy') {
         $activeState = $candidateState
     }
@@ -164,6 +169,7 @@ try {
         Stop-MagicHandyAppForRebuild `
             -RepositoryPath $Repo `
             -Port $resolvedPort `
+            -DataDir $resolvedDataDir `
             -AllowPhysicalStopConfirmation:(-not $Yes)
         $stoppedRunningApp = $true
     }
@@ -194,9 +200,14 @@ try {
     }
 
     if ($wasRunning -and -not $NoLaunch) {
-        Start-MagicHandyApp -RepositoryPath $Repo -DataDir $resolvedDataDir -Port $resolvedPort -NoBrowser
+        try {
+            Start-MagicHandyApp -RepositoryPath $Repo -DataDir $resolvedDataDir -Port $resolvedPort -NoBrowser
+            Write-Host (Get-MagicHandyText -Key 'change_restarted') -ForegroundColor Green
+        } catch {
+            if ($_.FullyQualifiedErrorId -notlike 'MagicHandy.StartedUnverified*') { throw }
+            Write-Warning $_.Exception.Message
+        }
         $stoppedRunningApp = $false
-        Write-Host (Get-MagicHandyText -Key 'change_restarted') -ForegroundColor Green
     } elseif ($wasRunning) {
         Write-Host (Get-MagicHandyText -Key 'change_restart_manual') -ForegroundColor Yellow
     }
@@ -207,12 +218,16 @@ try {
     } else {
         ''
     }
-    if ($stoppedRunningApp -and -not $NoLaunch) {
+    if ($stoppedRunningApp -and -not $NoLaunch -and -not (Test-MagicHandyAppRunning -RepositoryPath $Repo)) {
         try {
             Start-MagicHandyApp -RepositoryPath $Repo -DataDir $resolvedDataDir -Port $resolvedPort -NoBrowser
             $stoppedRunningApp = $false
             Write-Warning (Get-MagicHandyText -Key 'change_recovery_restarted')
         } catch {
+            if ($_.FullyQualifiedErrorId -like 'MagicHandy.StartedUnverified*') {
+                Write-Warning $_.Exception.Message
+                throw ($failure + $partial)
+            }
             throw (Get-MagicHandyText -Key 'change_restart_failed' -Values @(
                 ($failure + $partial),
                 $_.Exception.Message

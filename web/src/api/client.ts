@@ -3,6 +3,7 @@
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
 import type { LLMCatalog } from "./catalog-types";
+import type { StartupReports } from "./startup-types";
 import type { CloudPlanningStatus, ModelConnection, HostedModel } from "./cloud-types";
 import { checkedCloudStatus } from "./cloud-status";
 import type { ModelCheckReport } from "./model-check-types";
@@ -534,6 +535,7 @@ export const api = {
   validateNetwork: (config: NetworkConfig) => request<{ valid: boolean; config: NetworkConfig; message: string }>("POST", "/api/network/validate", { config }),
   saveNetwork: (config: NetworkConfig, password: string) => request<{ restart_required: boolean }>("PUT", "/api/network", { config, password }),
   networkReport: () => request<Record<string, unknown>>("GET", "/api/network/report"),
+  startupReports: (signal?: AbortSignal) => request<StartupReports>("GET", "/api/startup", undefined, signal),
   createAccount: (username: string, password: string, role: AccountRole, interface_access: "full" | "remote" = "full") =>
     request<{ account: UserAccount }>("POST", "/api/accounts", { username, password, role, interface_access }),
   resetAccountPassword: (id: string, password: string) =>

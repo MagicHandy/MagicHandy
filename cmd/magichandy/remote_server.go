@@ -26,6 +26,11 @@ func addRemoteFlags(flags *flag.FlagSet) remoteFlags {
 }
 
 func prepareRemoteServer(address string, security serverSecurity, flags remoteFlags) (serverSecurity, string, error) {
+	port, publicURL := configuredRemote(security, flags)
+	return prepareRemoteEndpoint(address, security, port, publicURL)
+}
+
+func configuredRemote(security serverSecurity, flags remoteFlags) (int, string) {
 	port, publicURL := *flags.port, strings.TrimSpace(*flags.publicURL)
 	portSet, urlSet := false, false
 	flags.set.Visit(func(value *flag.Flag) {
@@ -40,6 +45,10 @@ func prepareRemoteServer(address string, security serverSecurity, flags remoteFl
 			publicURL = policy.Config.RemotePublicURL
 		}
 	}
+	return port, publicURL
+}
+
+func prepareRemoteEndpoint(address string, security serverSecurity, port int, publicURL string) (serverSecurity, string, error) {
 	remoteAddress, remoteURL, err := netaccess.RemoteEndpoint(address, security.BaseURL, port, publicURL)
 	if err != nil || remoteAddress == "" {
 		return serverSecurity{}, "", err

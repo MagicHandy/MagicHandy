@@ -1,4 +1,13 @@
 {
+  "Startup recovery": "Recuperación del inicio",
+  "Startup reports retain the latest failure and automatic port recovery. They exclude credentials, addresses, paths and chat. Review before sharing.": "Los informes de inicio conservan el último fallo y la recuperación automática de puertos. Excluyen credenciales, direcciones, rutas y conversaciones. Revísalos antes de compartirlos.",
+  "Startup reports are unavailable. Check the startup folder in the app data directory.": "Los informes de inicio no están disponibles. Revisa la carpeta startup en el directorio de datos de la aplicación.",
+  "MagicHandy selected an available local port automatically.": "MagicHandy seleccionó un puerto local disponible automáticamente.",
+  "The latest startup completed without port recovery.": "El último inicio se completó sin recuperar el puerto.",
+  "No completed startup report is available.": "No hay ningún informe de inicio completado disponible.",
+  "A previous startup failure was retained.": "Se conservó un fallo de inicio anterior.",
+  "An automatic port recovery was retained.": "Se conservó una recuperación automática de puerto.",
+  "Download startup report": "Descargar informe de inicio",
   "Some older messages are no longer retained. Showing the available conversation history.": "Algunos mensajes antiguos ya no se conservan. Se muestra el historial disponible de la conversación.",
   "Showing the latest {count} retained messages.": "Se muestran los últimos {count} mensajes conservados.",
   "Conversation history request timed out.": "La solicitud del historial de la conversación agotó el tiempo de espera.",

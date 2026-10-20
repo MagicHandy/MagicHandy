@@ -497,10 +497,12 @@ if (-not $CoreOnly) {
     Show-MagicHandyInstallState -State $state
 }
 $runningPort = if ($null -ne $existing) { [int]$existing.port } else { [int]$state.port }
+$runningDataDir = if ($null -ne $existing) { [string]$existing.data_dir } else { [string]$state.data_dir }
 Invoke-MagicHandyProvision `
     -State $state `
     -RepositoryPath $Repo `
     -RunningPort $runningPort `
+    -RunningDataDir $runningDataDir `
     -AssumeYes:$Yes `
     -PlanOnly:$PlanOnly `
     -PreserveAppLanguages:$UseSavedChoices `

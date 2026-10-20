@@ -1,5 +1,31 @@
 # MagicHandy Risk Register
 
+## R31: Local port denial and ambiguous startup ownership
+
+Level: Medium
+
+An occupied or Windows-reserved local port can prevent the control UI from
+starting. Blind port scanning, reusing an unrelated service, or launching two
+backends for one data directory would make recovery unsafe or misleading.
+
+The October 20 first pass binds bounded local alternatives and holds the winning
+sockets before constructing application services. Explicit fixed addresses,
+custom saved ports and hosted network deployments stay strict. A per-profile
+OS lock and fresh identity proof prevent duplicate runtime creation and stale
+or unrelated endpoint reuse. Private Windows ACLs/Unix permissions protect the
+identity record; diagnostics never export its token. Launchers use the verified
+actual URL and preserve a process when readiness cannot be confirmed. Reports
+retain native error codes without raw errors, keys, settings, paths or chat;
+unwritable profile storage falls back to a private temporary report. HNS and
+system reservations are never reset automatically. See
+[ADR 0040](decisions/0040-local-startup-recovery.md).
+
+Remaining limits: hosted-instance browser rediscovery and legacy builds without
+the identity protocol are not automatically reused; Windows reservation/service
+inspection and a degraded optional-remote mode are deferred. Error 10013 alone
+does not identify HNS as the cause. Simulator and local socket tests do not
+establish behavior under every endpoint-security policy.
+
 ## R30: Hosted model privacy, authorization and late-result risk
 
 Level: High

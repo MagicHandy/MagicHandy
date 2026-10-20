@@ -1709,6 +1709,102 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
         & $supportModule { param($RepositoryPath, $Port) Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port -AllowPhysicalStopConfirmation -PhysicalStopConfirmation { 'STOPPED' } } $runtimeRepo $relaunchPort
     }
 
+    Write-Host 'Checking automatic local startup and actual-URL discovery...'
+    $fallbackData = Join-Path $tempRoot 'fallback launch data with spaces'
+    $occupiedListener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    $occupiedListener.Start()
+    $occupiedPort = $occupiedListener.LocalEndpoint.Port
+    $fallbackInstance = $null
+    try {
+        Start-MagicHandyApp -RepositoryPath $runtimeRepo -DataDir $fallbackData -Port $occupiedPort -PortPolicy auto -NoBrowser
+        $fallbackInstance = & $supportModule { param($RepositoryPath, $DataDir) Get-MagicHandyRunningInstance -RepositoryPath $RepositoryPath -DataDir $DataDir } $runtimeRepo $fallbackData
+        Assert-True -Condition ($null -ne $fallbackInstance) -Message 'launcher should discover the verified recovered endpoint'
+        $actualPort = ([Uri]$fallbackInstance.url).Port
+        Assert-True -Condition ($actualPort -ne $occupiedPort) -Message 'automatic local startup should move away from an occupied port'
+        $beforePID = [int]$fallbackInstance.pid
+        Start-MagicHandyApp -RepositoryPath $runtimeRepo -DataDir $fallbackData -Port $occupiedPort -PortPolicy auto -NoBrowser
+        $reusedInstance = & $supportModule { param($RepositoryPath, $DataDir) Get-MagicHandyRunningInstance -RepositoryPath $RepositoryPath -DataDir $DataDir } $runtimeRepo $fallbackData
+        Assert-Equal -Expected $beforePID -Actual ([int]$reusedInstance.pid) -Message 'second launcher should reuse the same backend'
+        $duplicateOutput = @(& $runtimeExe -addr "127.0.0.1:$occupiedPort" -port-policy auto -data-dir $fallbackData -console plain)
+        Assert-Equal -Expected 0 -Actual $LASTEXITCODE -Message 'direct executable duplicate should reuse the locked profile'
+        Assert-True -Condition (($duplicateOutput -join ' ') -match [regex]::Escape([string]$fallbackInstance.url)) -Message 'duplicate executable should report the actual running URL'
+        $retained = Get-Content -LiteralPath (Join-Path $fallbackData 'startup\last-recovery.json') -Raw | ConvertFrom-Json
+        Assert-Equal -Expected 'recovered' -Actual ([string]$retained.outcome) -Message 'recovery report should survive startup'
+        $fixedRefused = $false
+        try { Start-MagicHandyApp -RepositoryPath $runtimeRepo -DataDir $fallbackData -Port $occupiedPort -PortPolicy fixed -NoBrowser }
+        catch { $fixedRefused = $_.Exception.Message -match 'fixed port' }
+        Assert-True -Condition $fixedRefused -Message 'a fixed launcher must not accept the recovered port'
+        $recoveredRemote = [pscustomobject]@{ url = 'http://127.0.0.1:49717'; remote_url = 'http://127.0.0.1:6059'; preferred_remote_url = 'http://127.0.0.1:49718' }
+        $fixedRemoteAccepted = & $supportModule { param($Instance) Test-MagicHandyFixedInstance -Instance $Instance -URL 'http://127.0.0.1:49717' } $recoveredRemote
+        Assert-True -Condition (-not $fixedRemoteAccepted) -Message 'fixed launcher must reject a recovered remote even if the app port stayed preferred'
+
+        Write-Host 'Checking language changes discover the recovered profile before querying or stopping it...'
+        & $runtimeExe -prepare-uninstall | Out-Null
+        Assert-Equal -Expected 0 -Actual $LASTEXITCODE -Message 'test-owned backend should stop before switching to the simulator'
+        $simulationArguments = (& $supportModule { param($Address, $DataDir) New-MagicHandyAppArgumentLine -Address $Address -DataDir $DataDir -PortPolicy auto } "127.0.0.1:$occupiedPort" $fallbackData) + ' -simulate-motion -console plain'
+        $simulationProcess = Start-Process -FilePath $runtimeExe -ArgumentList $simulationArguments -PassThru -WindowStyle Hidden
+        $simulationDeadline = [DateTime]::UtcNow.AddSeconds(30)
+        do {
+            $fallbackInstance = Get-MagicHandyRunningInstance -RepositoryPath $runtimeRepo -DataDir $fallbackData
+            if ($null -eq $fallbackInstance) { Start-Sleep -Milliseconds 100 }
+        } while ($null -eq $fallbackInstance -and [DateTime]::UtcNow -lt $simulationDeadline)
+        Assert-True -Condition ($null -ne $fallbackInstance) -Message 'simulator should publish readiness before launcher reuse is tested'
+        Start-MagicHandyApp -RepositoryPath $runtimeRepo -DataDir $fallbackData -Port $occupiedPort -PortPolicy auto -NoBrowser
+        $fallbackInstance = Get-MagicHandyRunningInstance -RepositoryPath $runtimeRepo -DataDir $fallbackData
+        Assert-Equal -Expected $simulationProcess.Id -Actual ([int]$fallbackInstance.pid) -Message 'language test should use the explicit simulator'
+        $languageSupport = Join-Path $runtimeRepo 'scripts\installer'
+        New-Item -ItemType Directory -Path $languageSupport -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $Repo 'scripts\installer\InstallerSupport.psm1') -Destination $languageSupport
+        Copy-Item -LiteralPath (Join-Path $Repo 'scripts\installer\locales') -Destination $languageSupport -Recurse
+        Copy-Item -LiteralPath (Join-Path $Repo 'change-language.ps1') -Destination $runtimeRepo
+        $languageStatePath = Join-Path $tempRoot 'fallback-language-state.json'
+        $languageState = New-MagicHandyInstallState -RepositoryPath $runtimeRepo -DataDir $fallbackData -Port $occupiedPort -SetupLLM $false -BuildManagedLlama $false -LlamaBackend cpu -EnsureOllama $false -InstallParakeet $false -CreateLauncher $false
+        Write-MagicHandyInstallState -State $languageState -Path $languageStatePath
+        & (Join-Path $runtimeRepo 'change-language.ps1') -UILanguage es -ChatLanguage ja -StatePath $languageStatePath -Yes -NoLaunch
+        Set-MagicHandyInstallerLocale -Locale en
+        $languageState = Read-MagicHandyInstallState -Path $languageStatePath
+        Assert-Equal -Expected 'es' -Actual $languageState.ui_locale -Message 'language change should succeed after recovery'
+        Assert-Equal -Expected $occupiedPort -Actual ([int]$languageState.port) -Message 'language change must preserve the preferred port'
+        Assert-True -Condition (-not (Test-MagicHandyAppRunning -RepositoryPath $runtimeRepo)) -Message 'language change NoLaunch should stop only the verified recovered instance'
+
+        Write-Host 'Checking an unverified running restart is reported once without a second launch...'
+        $simulationProcess = Start-Process -FilePath $runtimeExe -ArgumentList $simulationArguments -PassThru -WindowStyle Hidden
+        $simulationDeadline = [DateTime]::UtcNow.AddSeconds(30)
+        do {
+            $fallbackInstance = Get-MagicHandyRunningInstance -RepositoryPath $runtimeRepo -DataDir $fallbackData
+            if ($null -eq $fallbackInstance) { Start-Sleep -Milliseconds 100 }
+        } while ($null -eq $fallbackInstance -and [DateTime]::UtcNow -lt $simulationDeadline)
+        Assert-True -Condition ($null -ne $fallbackInstance) -Message 'restart regression requires a ready simulator'
+        $unverifiedScript = Join-Path $runtimeRepo 'test-change-language-unverified.ps1'
+        $unverifiedSource = [IO.File]::ReadAllText((Join-Path $runtimeRepo 'change-language.ps1')).Replace('Import-Module $support -Force -DisableNameChecking', '# Test host supplies the module and the startup boundary.')
+        [IO.File]::WriteAllText($unverifiedScript, $unverifiedSource)
+        $originalStartFunction = (Get-Item Function:\Start-MagicHandyApp).ScriptBlock
+        $global:magicHandyUnverifiedStartCalls = 0
+        try {
+            function Start-MagicHandyApp {
+                [CmdletBinding()]
+                param([string]$RepositoryPath, [string]$DataDir, [int]$Port, [switch]$NoBrowser)
+                $global:magicHandyUnverifiedStartCalls++
+                $errorRecord = [System.Management.Automation.ErrorRecord]::new([TimeoutException]::new('Test app was left running without local verification.'), 'MagicHandy.StartedUnverified', [System.Management.Automation.ErrorCategory]::OperationTimeout, 4242)
+                $PSCmdlet.ThrowTerminatingError($errorRecord)
+            }
+            $unverifiedWarnings = @()
+            & $unverifiedScript -UILanguage en -ChatLanguage en -StatePath $languageStatePath -Yes -WarningVariable unverifiedWarnings
+            Assert-Equal -Expected 1 -Actual $global:magicHandyUnverifiedStartCalls -Message 'an unverified startup must not trigger a second launch'
+            Assert-True -Condition ([bool]($unverifiedWarnings | Where-Object { $_.Message -match 'left running' })) -Message 'unverified startup should be explained as a warning'
+        } finally {
+            Set-Item Function:\Start-MagicHandyApp -Value $originalStartFunction
+            Remove-Variable -Name magicHandyUnverifiedStartCalls -Scope Global
+            Set-MagicHandyInstallerLocale -Locale en
+        }
+        $fallbackInstance = $null
+    } finally {
+        $occupiedListener.Stop()
+        if ($null -ne $fallbackInstance) {
+            & $supportModule { param($RepositoryPath, $Port, $DataDir) Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port -DataDir $DataDir -AllowPhysicalStopConfirmation -PhysicalStopConfirmation { 'STOPPED' } } $runtimeRepo $occupiedPort $fallbackData
+        }
+    }
+
     Write-Host 'Checking rebuild Stop response classification...'
     $stopErrorJSON = '{"available":true,"engine":{"running":false,"paused":false,"completing":false},"error":"Intiface connection is stale"}'
     $stopErrorRecord = [System.Management.Automation.ErrorRecord]::new(

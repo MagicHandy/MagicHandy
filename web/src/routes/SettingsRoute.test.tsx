@@ -35,6 +35,7 @@ vi.mock("../api/client", () => ({
     resetSettings: vi.fn(),
     updateStatus: vi.fn(),
     exportTrace: vi.fn(),
+    startupReports: vi.fn(() => Promise.resolve({ current: null, last_failure: null, last_recovery: null })),
     startManualTest: vi.fn(),
     stopMotion: vi.fn(),
     mediaVideos: vi.fn(() => Promise.resolve({ videos: [] })),

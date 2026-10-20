@@ -1,4 +1,13 @@
 {
+  "Startup recovery": "启动恢复",
+  "Startup reports retain the latest failure and automatic port recovery. They exclude credentials, addresses, paths and chat. Review before sharing.": "启动报告会保留最近一次失败和自动端口恢复记录，不包含凭据、地址、路径或聊天内容。分享前请检查。",
+  "Startup reports are unavailable. Check the startup folder in the app data directory.": "启动报告不可用。请检查应用数据目录中的 startup 文件夹。",
+  "MagicHandy selected an available local port automatically.": "MagicHandy 已自动选择可用的本地端口。",
+  "The latest startup completed without port recovery.": "最近一次启动已完成，无需端口恢复。",
+  "No completed startup report is available.": "没有可用的已完成启动报告。",
+  "A previous startup failure was retained.": "已保留之前的启动失败记录。",
+  "An automatic port recovery was retained.": "已保留自动端口恢复记录。",
+  "Download startup report": "下载启动报告",
   "Some older messages are no longer retained. Showing the available conversation history.": "较早的一些消息已不再保留。正在显示可用的对话历史。",
   "Showing the latest {count} retained messages.": "正在显示最近保留的 {count} 条消息。",
   "Conversation history request timed out.": "对话历史请求超时。",

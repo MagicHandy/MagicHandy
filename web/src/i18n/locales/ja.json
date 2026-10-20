@@ -1,4 +1,13 @@
 {
+  "Startup recovery": "起動の復旧",
+  "Startup reports retain the latest failure and automatic port recovery. They exclude credentials, addresses, paths and chat. Review before sharing.": "起動レポートには直近の失敗と自動ポート復旧が保存されます。認証情報、アドレス、パス、チャットは含まれません。共有前に確認してください。",
+  "Startup reports are unavailable. Check the startup folder in the app data directory.": "起動レポートを取得できません。アプリのデータディレクトリにある startup フォルダーを確認してください。",
+  "MagicHandy selected an available local port automatically.": "MagicHandy は使用可能なローカルポートを自動的に選択しました。",
+  "The latest startup completed without port recovery.": "直近の起動はポートの復旧なしで完了しました。",
+  "No completed startup report is available.": "完了した起動レポートはありません。",
+  "A previous startup failure was retained.": "以前の起動失敗が保存されています。",
+  "An automatic port recovery was retained.": "自動ポート復旧が保存されています。",
+  "Download startup report": "起動レポートをダウンロード",
   "Some older messages are no longer retained. Showing the available conversation history.": "以前の一部のメッセージは保存されていません。利用可能な会話履歴を表示しています。",
   "Showing the latest {count} retained messages.": "最後の {count} 件の保存済みメッセージを表示しています。",
   "Conversation history request timed out.": "会話履歴のリクエストがタイムアウトしました。",
