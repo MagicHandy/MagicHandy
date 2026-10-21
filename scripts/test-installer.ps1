@@ -73,14 +73,22 @@ function Stop-InstallerTestApplications {
         throw "Refusing to stop applications outside an installer test root: $root"
     }
     $rootPrefix = $root + '\'
-    $applications = @(Get-CimInstance Win32_Process -Filter "Name = 'magichandy.exe'" | Where-Object {
+    $applications = @(Get-CimInstance Win32_Process | Where-Object {
         $_.ExecutablePath -and ([IO.Path]::GetFullPath($_.ExecutablePath)).StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)
     })
     foreach ($application in $applications) {
         $process = Get-Process -Id $application.ProcessId -ErrorAction SilentlyContinue
         if ($null -eq $process) { continue }
         Write-Host "Cleaning up installer test application $($process.Id)..."
-        $killOutput = @(& "$env:SystemRoot\System32\taskkill.exe" /PID $process.Id /T /F 2>&1)
+        $previousPreference = $ErrorActionPreference
+        try {
+            # PS 5.1 turns native stderr into an error record. A process may
+            # exit before taskkill reaches it; WaitForExit is authoritative.
+            $ErrorActionPreference = 'Continue'
+            $killOutput = @(& "$env:SystemRoot\System32\taskkill.exe" /PID $process.Id /T /F 2>&1)
+        } finally {
+            $ErrorActionPreference = $previousPreference
+        }
         if (-not $process.WaitForExit(5000)) {
             throw "Installer test process $($process.Id) did not exit: $($killOutput -join ' ')"
         }
@@ -1792,8 +1800,17 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     Assert-True -Condition (-not $unverifiedProcess.HasExited) -Message 'launcher must leave an unverified app alive for the user'
     Stop-InstallerTestApplications -TestRoot $tempRoot
     Assert-True -Condition $unverifiedProcess.WaitForExit(5000) -Message 'test teardown should stop its own unverified app'
-    $unlockedExecutable = [IO.File]::Open($runtimeExe, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
-    $unlockedExecutable.Dispose()
+    $unlockDeadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        try {
+            $unlockedExecutable = [IO.File]::Open($runtimeExe, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            $unlockedExecutable.Dispose()
+            break
+        } catch [IO.IOException], [UnauthorizedAccessException] {
+            if ([DateTime]::UtcNow -ge $unlockDeadline) { throw }
+            Start-Sleep -Milliseconds 100
+        }
+    } while ($true)
 
     Write-Host 'Checking automatic local startup and actual-URL discovery...'
     $fallbackData = Join-Path $tempRoot 'fallback launch data with spaces'

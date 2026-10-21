@@ -85,7 +85,7 @@ masked the original error. The runner retained no underlying startup report,
 so those logs alone do not establish why verification failed. PowerShell 5.1
 passed in the same job, and both shells passed on the candidate.
 
-Test teardown now finds and stops only MagicHandy executables beneath its
+Test teardown now finds and stops only executables beneath its
 validated, unique temporary fixture directory before removing it. A secondary
 cleanup error cannot replace the original test failure. Failure logging prints
 the stack and bounded, credential-free startup reports; it excludes private
@@ -102,3 +102,15 @@ guard. Architecture checks pass. An additional concurrent local run exposed a
 separate ephemeral-port collision during release startup acceptance; the new
 logging retained its actual bind error and reports. CI runs the two shells
 sequentially, as do the final local acceptance runs.
+
+Claude Opus 5.5 reviewed the harness fix via the CLI at medium effort. Its
+PowerShell 5.1 native-stderr finding was adopted: cleanup temporarily allows
+`taskkill` stderr and checks actual process exit, so an already-exited process
+does not abort teardown. Its suggestions to include orphaned fixture workers
+and briefly retry the file-unlock assertion were also adopted. The report
+schema was inspected directly: it retains only bounded version, platform,
+timestamp, stage, policy and bind-result facts, without instance tokens,
+paths, raw errors or settings. The forced regression covers timeout and
+teardown; secondary-error preservation is also supported by code review and
+the separately observed startup-failure logging, not a forced cleanup-error
+test.
