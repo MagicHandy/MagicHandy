@@ -58,11 +58,17 @@ release-note tests pass. Its comparable stripped core is 23,446,016 B, up
 scorecard retains the measurement flags and separates this toolchain change
 from the original feature costs. Full CI remains required before merge/tag.
 
-Claude Opus 5.5 reviewed this follow-up through Claude Code CLI at medium
+Claude Opus 5.5 reviewed the alpha.66 update through Claude Code CLI at medium
 effort and reported no blocking issue. Its Low finding about accepting older
-1.27 patches was adopted with boundary tests and installer-plan wording in all
-five locales. Active manual setup/security docs were updated; historical
+1.27 patches was adopted in a follow-up with boundary tests and installer-plan
+wording in all five locales. The focused medium-effort re-review confirmed the
+correction with no remaining blocking finding. Active manual setup/security docs were updated; historical
 measurements retain their actual compiler versions. All workflows already read
 `go.mod`, and source updates follow the branch/main ref rather than choosing
 the failed alpha.65 tag. The README's pre-publication release link follows the
 existing reviewed-PR/tag workflow.
+
+The new installer test binds the exact source module returned at import time;
+fixture modules may share its name later in the full suite. An initial
+name-only lookup was ambiguous and failed under PowerShell 5.1. This test
+scope correction retains every version-boundary assertion.

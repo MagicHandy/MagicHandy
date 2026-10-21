@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 
 $Repo = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $support = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
-Import-Module $support -Force -DisableNameChecking
+$installerSupportModule = Import-Module $support -Force -DisableNameChecking -PassThru
 $supportModule = Get-Module InstallerSupport
 
 function Assert-True([bool]$Condition, [string]$Message) {
@@ -2081,7 +2081,7 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
         @{ Version = '1.27.4'; Supported = $true },
         @{ Version = '1.28.0'; Supported = $true }
     )) {
-        $supported = & (Get-Module InstallerSupport) {
+        $supported = & $installerSupportModule {
             param($version)
             Test-MagicHandySupportedGoVersion -Version $version
         } $goCase.Version
