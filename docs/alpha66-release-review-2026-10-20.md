@@ -72,3 +72,33 @@ The new installer test binds the exact source module returned at import time;
 fixture modules may share its name later in the full suite. An initial
 name-only lookup was ambiguous and failed under PowerShell 5.1. This test
 scope correction retains every version-boundary assertion.
+
+## Merged-main installer failure
+
+The PowerShell 7 installer job in
+[run 39528808037](https://github.com/MagicHandy/MagicHandy/actions/runs/39528808037/job/118989670777)
+failed during verified relaunch after rebuilding the fixture. The final error
+was access denied while deleting its still-running `magichandy.exe`; runner
+cleanup subsequently killed that process. The roughly 30-second gap matches
+the launcher's verification timeout, but the fixture's final folder deletion
+masked the original error. The runner retained no underlying startup report,
+so those logs alone do not establish why verification failed. PowerShell 5.1
+passed in the same job, and both shells passed on the candidate.
+
+Test teardown now finds and stops only MagicHandy executables beneath its
+validated, unique temporary fixture directory before removing it. A secondary
+cleanup error cannot replace the original test failure. Failure logging prints
+the stack and bounded, credential-free startup reports; it excludes private
+instance records, settings and general runtime logs. A forced verification
+timeout regression checks the original error/process ID, the launcher's
+intentional decision to leave an unverified app running, test-owned teardown,
+and release of the executable file. Readiness assertions, production startup
+timeouts, fixed-port behavior and motion Stop gates remain required. No HNS
+reset or application behavior change is part of this harness correction.
+
+Both complete local installer suites pass sequentially under Windows
+PowerShell 5.1 and PowerShell 7, including the forced timeout and invalid-root
+guard. Architecture checks pass. An additional concurrent local run exposed a
+separate ephemeral-port collision during release startup acceptance; the new
+logging retained its actual bind error and reports. CI runs the two shells
+sequentially, as do the final local acceptance runs.
