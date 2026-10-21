@@ -72,3 +72,45 @@ The new installer test binds the exact source module returned at import time;
 fixture modules may share its name later in the full suite. An initial
 name-only lookup was ambiguous and failed under PowerShell 5.1. This test
 scope correction retains every version-boundary assertion.
+
+## Merged-main installer failure
+
+The PowerShell 7 installer job in
+[run 39528808037](https://github.com/MagicHandy/MagicHandy/actions/runs/39528808037/job/118989670777)
+failed during verified relaunch after rebuilding the fixture. The final error
+was access denied while deleting its still-running `magichandy.exe`; runner
+cleanup subsequently killed that process. The roughly 30-second gap matches
+the launcher's verification timeout, but the fixture's final folder deletion
+masked the original error. The runner retained no underlying startup report,
+so those logs alone do not establish why verification failed. PowerShell 5.1
+passed in the same job, and both shells passed on the candidate.
+
+Test teardown now finds and stops only executables beneath its
+validated, unique temporary fixture directory before removing it. A secondary
+cleanup error cannot replace the original test failure. Failure logging prints
+the stack and bounded, credential-free startup reports; it excludes private
+instance records, settings and general runtime logs. A forced verification
+timeout regression checks the original error/process ID, the launcher's
+intentional decision to leave an unverified app running, test-owned teardown,
+and release of the executable file. Readiness assertions, production startup
+timeouts, fixed-port behavior and motion Stop gates remain required. No HNS
+reset or application behavior change is part of this harness correction.
+
+Both complete local installer suites pass sequentially under Windows
+PowerShell 5.1 and PowerShell 7, including the forced timeout and invalid-root
+guard. Architecture checks pass. An additional concurrent local run exposed a
+separate ephemeral-port collision during release startup acceptance; the new
+logging retained its actual bind error and reports. CI runs the two shells
+sequentially, as do the final local acceptance runs.
+
+Claude Opus 5.5 reviewed the harness fix via the CLI at medium effort. Its
+PowerShell 5.1 native-stderr finding was adopted: cleanup temporarily allows
+`taskkill` stderr and checks actual process exit, so an already-exited process
+does not abort teardown. Its suggestions to include orphaned fixture workers
+and briefly retry the file-unlock assertion were also adopted. The report
+schema was inspected directly: it retains only bounded version, platform,
+timestamp, stage, policy and bind-result facts, without instance tokens,
+paths, raw errors or settings. The forced regression covers timeout and
+teardown; secondary-error preservation is also supported by code review and
+the separately observed startup-failure logging, not a forced cleanup-error
+test.

@@ -63,8 +63,41 @@ function Get-AvailableLoopbackPort {
     throw 'Could not find available loopback ports for the installer fixture.'
 }
 
+function Stop-InstallerTestApplications {
+    param([Parameter(Mandatory = $true)][string]$TestRoot)
+
+    $tempPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+    $root = [IO.Path]::GetFullPath($TestRoot).TrimEnd('\')
+    if (-not $root.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+        [IO.Path]::GetFileName($root) -notmatch '^magichandy-installer-test-[a-f0-9]{32}$') {
+        throw "Refusing to stop applications outside an installer test root: $root"
+    }
+    $rootPrefix = $root + '\'
+    $applications = @(Get-CimInstance Win32_Process | Where-Object {
+        $_.ExecutablePath -and ([IO.Path]::GetFullPath($_.ExecutablePath)).StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)
+    })
+    foreach ($application in $applications) {
+        $process = Get-Process -Id $application.ProcessId -ErrorAction SilentlyContinue
+        if ($null -eq $process) { continue }
+        Write-Host "Cleaning up installer test application $($process.Id)..."
+        $previousPreference = $ErrorActionPreference
+        try {
+            # PS 5.1 turns native stderr into an error record. A process may
+            # exit before taskkill reaches it; WaitForExit is authoritative.
+            $ErrorActionPreference = 'Continue'
+            $killOutput = @(& "$env:SystemRoot\System32\taskkill.exe" /PID $process.Id /T /F 2>&1)
+        } finally {
+            $ErrorActionPreference = $previousPreference
+        }
+        if (-not $process.WaitForExit(5000)) {
+            throw "Installer test process $($process.Id) did not exit: $($killOutput -join ' ')"
+        }
+    }
+}
+
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("magichandy-installer-test-" + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
+$installerTestFailure = $null
 try {
     Write-Host 'Checking PowerShell 5.1 syntax...'
     $files = @(
@@ -1739,6 +1772,46 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
         & $supportModule { param($RepositoryPath, $Port) Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $Port -AllowPhysicalStopConfirmation -PhysicalStopConfirmation { 'STOPPED' } } $runtimeRepo $relaunchPort
     }
 
+    Write-Host 'Checking cleanup after launcher verification times out...'
+    Assert-Throws -Action { Stop-InstallerTestApplications -TestRoot ([IO.Path]::GetTempPath()) } -Pattern 'outside an installer test root' -Message 'test cleanup must reject a shared temporary directory'
+    $unverifiedData = Join-Path $tempRoot 'unverified launch data'
+    $unverifiedPort = Get-AvailableLoopbackPort -WithRemote
+    $unverifiedFailure = $null
+    try {
+        & $installerSupportModule {
+            param($RepositoryPath, $DataDir, $Port)
+            $originalDiscovery = (Get-Item Function:\Get-MagicHandyRunningInstance).ScriptBlock
+            $originalStartupSeconds = $script:MagicHandyStartupSeconds
+            try {
+                # Exercise the real launch/timeout path while verification is unavailable.
+                function script:Get-MagicHandyRunningInstance { return $null }
+                $script:MagicHandyStartupSeconds = 1
+                Start-MagicHandyApp -RepositoryPath $RepositoryPath -DataDir $DataDir -Port $Port -NoBrowser
+            } finally {
+                Set-Item Function:\script:Get-MagicHandyRunningInstance -Value $originalDiscovery
+                $script:MagicHandyStartupSeconds = $originalStartupSeconds
+            }
+        } $runtimeRepo $unverifiedData $unverifiedPort
+    } catch {
+        $unverifiedFailure = $_
+    }
+    Assert-True -Condition ($null -ne $unverifiedFailure -and $unverifiedFailure.FullyQualifiedErrorId -match '^MagicHandy\.StartedUnverified') -Message 'launcher timeout should retain its original error and process ID'
+    $unverifiedProcess = Get-Process -Id ([int]$unverifiedFailure.TargetObject)
+    Assert-True -Condition (-not $unverifiedProcess.HasExited) -Message 'launcher must leave an unverified app alive for the user'
+    Stop-InstallerTestApplications -TestRoot $tempRoot
+    Assert-True -Condition $unverifiedProcess.WaitForExit(5000) -Message 'test teardown should stop its own unverified app'
+    $unlockDeadline = [DateTime]::UtcNow.AddSeconds(5)
+    do {
+        try {
+            $unlockedExecutable = [IO.File]::Open($runtimeExe, [IO.FileMode]::Open, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+            $unlockedExecutable.Dispose()
+            break
+        } catch [IO.IOException], [UnauthorizedAccessException] {
+            if ([DateTime]::UtcNow -ge $unlockDeadline) { throw }
+            Start-Sleep -Milliseconds 100
+        }
+    } while ($true)
+
     Write-Host 'Checking automatic local startup and actual-URL discovery...'
     $fallbackData = Join-Path $tempRoot 'fallback launch data with spaces'
     $occupiedListener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
@@ -2319,10 +2392,35 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
     Assert-Equal -Expected 0 -Actual $remainingResponses -Message 'all expected prompts should be consumed'
 
     Write-Host 'Installer tests passed.' -ForegroundColor Green
+} catch {
+    $installerTestFailure = $_
+    Write-Host "Installer test failure: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host $_.ScriptStackTrace
+    # Only the credential-free report allowlist belongs in CI logs, never the
+    # private instance record, settings, datastore or general runtime output.
+    try {
+        Get-ChildItem -LiteralPath $tempRoot -Filter '*.json' -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+            $_.Directory.Name -eq 'startup' -and $_.Name -in @('current.json', 'last-failure.json', 'last-recovery.json') -and $_.Length -le 65536
+        } | ForEach-Object {
+            Write-Host "Startup report $($_.FullName):"
+            Write-Host ([IO.File]::ReadAllText($_.FullName))
+        }
+    } catch {
+        Write-Warning "Could not read all test startup reports: $($_.Exception.Message)"
+    }
+    throw
 } finally {
     $resolvedTemp = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
     $resolvedRoot = [System.IO.Path]::GetFullPath($tempRoot)
     if ($resolvedRoot.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase) -and (Test-Path -LiteralPath $resolvedRoot)) {
-        Remove-Item -LiteralPath $resolvedRoot -Recurse -Force
+        try {
+            # Startup can throw before an individual fixture enters its own
+            # teardown block. Stop only executables under this unique test root.
+            Stop-InstallerTestApplications -TestRoot $resolvedRoot
+            Remove-Item -LiteralPath $resolvedRoot -Recurse -Force
+        } catch {
+            if ($null -eq $installerTestFailure) { throw }
+            Write-Warning "Installer test cleanup also failed; retaining the original failure: $($_.Exception.Message)"
+        }
     }
 }
