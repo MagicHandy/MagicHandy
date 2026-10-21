@@ -1,3 +1,4 @@
+import { handyConnectionMethods } from "../devices/handy-methods";
 import { useState } from "react";
 import type {
   ConnectionCheckResult,
@@ -108,15 +109,17 @@ export function WelcomeStep({ settings, patch, locked = false }: { settings: Pub
   </div>;
 }
 
-export function DeviceStep({ settings, handyModel, connectionKey, connectionResult, locked, setHandyModel, setConnectionKey, patchOwner, verifyCloud }: {
+export function DeviceStep({ settings, handyModel, connectionKey, connectionResult, locked, setHandyModel, setConnectionKey, patchOwner, verifyCloud, addHandy }: {
   settings: PublicSettings; handyModel: HandyModel; connectionKey: string; connectionResult: ConnectionCheckResult | null; locked: boolean;
   setHandyModel: (model: HandyModel) => void; setConnectionKey: (value: string) => void; patchOwner: (owner: string) => void; verifyCloud: () => void;
+  addHandy: () => void;
 }) {
   const owner = settings.device.hsp_dispatch_owner;
   const keyHelp = "setup-device-key-help";
   return <div className="setup-copy">
     <SetupSection id="setup-connection-title" title={t("Device connection")}>
-      <p className="hint-block">{t("Choose one connection owner. You can switch later from the connection manager in the top bar.")}</p>
+      <p className="hint-block">{t("Choose how The Handy connects. You can change it later on its page in Settings > Devices.")}</p>
+      {settings.device.configured_devices && !settings.device.configured_devices.includes("handy") && <button type="button" className="btn btn-secondary" disabled={locked} onClick={addHandy}>{t("Add The Handy")}</button>}
       <SetupChoiceGroup labelledBy="setup-connection-title" panel={owner === "cloud_rest" ? <>
         <div className="form-row form-row-stack">
           <span className="form-row-label"><label htmlFor="setup-device-key"><strong>{t("Handy connection key")}</strong></label><small id={keyHelp}>{t("Connect your Handy in the official Handy Onboarding app; the key appears in the middle of its screen, under the picture of the device.")}</small></span>
@@ -126,10 +129,8 @@ export function DeviceStep({ settings, handyModel, connectionKey, connectionResu
           </div>
         </div>
         {connectionResult && <p className="form-status form-row-note" data-ok={connectionResult.ok} role="status">{connectionResult.ok ? t("Connection verified") : translateKnown(connectionResult.message || connectionResult.status)}</p>}
-      </> : <p className="hint form-row-note">{t("Finish setup, then use the connection manager in the top bar to authorize and select the device.")}</p>}>
-        <Choice selected={owner === "cloud_rest"} title={t("Handy Cloud REST")} detail={t("Recommended for firmware v4. Requires your private connection key and internet access.")} onSelect={() => patchOwner("cloud_rest")} />
-        <Choice selected={owner === "browser_bluetooth"} title={t("Browser Bluetooth")} detail={t("Connect directly from a compatible browser. No cloud connection key is stored.")} onSelect={() => patchOwner("browser_bluetooth")} />
-        <Choice selected={owner === "intiface"} title={t("Intiface Central")} detail={t("Use an existing Intiface Central session for local device control.")} onSelect={() => patchOwner("intiface")} />
+      </> : <p className="hint form-row-note">{t("Finish setup, then connect The Handy from the device panel in the top bar.")}</p>}>
+        {handyConnectionMethods().map(method => <Choice key={method.value} selected={owner === method.value} title={method.label} detail={method.detail} onSelect={() => patchOwner(method.value)} />)}
       </SetupChoiceGroup>
     </SetupSection>
     <SetupSection id="setup-handy-model-title" title={t("Which Handy do you have?")}>

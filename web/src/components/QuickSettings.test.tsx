@@ -7,6 +7,7 @@ import { ApplicationAudience } from "../state/application-audience";
 
 const app = vi.hoisted(() => ({
   hostAdministration: true,
+  output: "handy",
   motion: null as MotionSettings | null,
   refresh: vi.fn(),
   show: vi.fn(),
@@ -18,7 +19,7 @@ vi.mock("../api/client", () => ({
 
 vi.mock("../state/app-state", () => ({
   useAppState: () => ({
-    state: { capabilities: { configure_host: app.hostAdministration }, settings: { motion: app.motion, options: { handy_models: ["handy_original", "handy_2_standard", "handy_2_pro"] } } },
+    state: { capabilities: { configure_host: app.hostAdministration }, settings: { device: { output: app.output }, motion: app.motion, options: { handy_models: ["handy_original", "handy_2_standard", "handy_2_pro"] } } },
     backendOnline: true,
     readOnly: false,
     refresh: app.refresh,
@@ -41,6 +42,7 @@ const initialMotion: MotionSettings = {
 describe("QuickSettings", () => {
   beforeEach(() => {
     app.hostAdministration = true;
+    app.output = "handy";
     vi.useFakeTimers();
     app.motion = { ...initialMotion };
     app.refresh.mockReset();
@@ -55,7 +57,7 @@ describe("QuickSettings", () => {
   it("lets a granted operator adjust speed while locking physical device calibration", async () => {
     app.hostAdministration = false;
     applyQuick.mockResolvedValue(undefined);
-    const view = render(<QuickSettings section="connection" />);
+    const view = render(<QuickSettings section="calibration" />);
     const model = screen.getByRole("radiogroup", { name: "Handy model" });
     for (const radio of within(model).getAllByRole("radio")) expect(radio).toBeDisabled();
     fireEvent.click(within(model).getByRole("radio", { name: "2 Pro" }));
@@ -67,6 +69,23 @@ describe("QuickSettings", () => {
     fireEvent.change(minimum, { target: { value: "20" } });
     await act(async () => vi.advanceTimersByTimeAsync(180));
     expect(applyQuick).toHaveBeenCalledWith({ speed_min_percent: 20 });
+  });
+
+  it("keeps only Speed when the Coyote is the only device", () => {
+    app.output = "coyote";
+    render(<QuickSettings section="limits" />);
+    expect(screen.queryByRole("radiogroup", { name: "Handy model" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Stroke")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reverse direction")).not.toBeInTheDocument();
+    expect(screen.getByText("Speed")).toBeInTheDocument();
+  });
+
+  it("keeps the Handy's calibration on its page whether or not it plays", () => {
+    app.output = "coyote";
+    render(<QuickSettings section="calibration" />);
+    expect(screen.getByRole("radiogroup", { name: "Handy model" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Reverse direction" })).toBeInTheDocument();
+    expect(screen.queryByRole("slider", { name: "Speed minimum" })).not.toBeInTheDocument();
   });
 
   it("does not let stale polls overwrite an unconfirmed local edit", async () => {
@@ -115,9 +134,9 @@ describe("QuickSettings", () => {
     expect(screen.queryByRole("radiogroup", { name: "Handy model" })).not.toBeInTheDocument();
   });
 
-  it("persists the documented Handy model calibration from the connection menu", async () => {
+  it("persists the documented Handy model calibration from the Handy's page", async () => {
     applyQuick.mockResolvedValue(undefined);
-    render(<QuickSettings section="connection" />);
+    render(<QuickSettings section="calibration" />);
 
     const model = screen.getByRole("radiogroup", { name: "Handy model" });
     expect(within(model).getByRole("radio", { name: "Original" })).toBeChecked();
@@ -138,12 +157,11 @@ describe("QuickSettings", () => {
     expect(screen.getByText("110 mm · 32–400 mm/s")).toBeInTheDocument();
   });
 
-  it("places direction with connection limits and keeps style separate", async () => {
+  it("places direction with the calibration and keeps limits and style separate", async () => {
     applyQuick.mockResolvedValue(undefined);
-    const result = render(<QuickSettings section="connection" />);
+    const result = render(<QuickSettings section="calibration" />);
 
-    expect(screen.getByRole("slider", { name: "Speed minimum" })).toBeInTheDocument();
-    expect(screen.getByRole("slider", { name: "Stroke minimum" })).toBeInTheDocument();
+    expect(screen.queryByRole("slider", { name: "Speed minimum" })).not.toBeInTheDocument();
     expect(within(screen.getByRole("radiogroup", { name: "Handy model" })).getByRole("radio", { name: "Original" })).toBeChecked();
     const reverse = screen.getByRole("switch", { name: "Reverse direction" });
     expect(screen.queryByRole("combobox", { name: /style/i })).not.toBeInTheDocument();

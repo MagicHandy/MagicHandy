@@ -3,8 +3,12 @@
 // authoritative, so unknown fields are ignored and read sites use optional
 // chaining. See docs/decisions/0009-react-frontend.md (State Model Rules).
 
+import type { IntifaceTransportSnapshot, VibrationSettings } from "./intiface-types";
 import type { SetupAssessment } from "./setup-assessment-types";
 import type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
+import type { CoyoteTransportSnapshot, EstimSettings } from "./coyote-types";
+export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceId, DeviceOptionsPatch, DeviceOutput, EstimSettings } from "./coyote-types";
+export type { IntifaceLinearActuator, IntifaceScalarActuator, IntifaceDevice, IntifaceDispatchStatus, IntifaceTransportSnapshot, IntifaceVibratorMotor, IntifaceVibratorStatus, VibrationSettings } from "./intiface-types";
 export type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { AccountCapabilities } from "./access-types";
 export type { AccountRole, ManagedSession, ManagedSessionsResponse, UserAccount, ControlIdentity, AuthenticationStatus, AccountCapabilities, ControlGrant, NetworkConfig, NetworkStatus, InternetDiscovery, CertificatePreparation } from "./access-types";
@@ -36,6 +40,13 @@ export interface AutopilotSettings {
   adaptive_speech_timing: boolean;
   adaptive_motion_timing: boolean;
   speech_motion_authority: "chat_only" | "style_only" | "full_motion" | string;
+  // A hosted planner chooses how long each stretch plays, within 8 s to 5 min.
+  // The backend ignores it on a local route, and the control is shown only for
+  // a hosted Autopilot route.
+  auto_motion_timing?: boolean;
+  // An external planner's next decision is planned as each stretch begins and
+  // applied at its end. Chat replaces it. Absent means on.
+  prepare_next_decision?: boolean;
   // Inert read-only context: elapsed time, speed history, and backend-measured
   // phrase sameness. Off omits the facts from the prompt rather than sending
   // zeros.
@@ -72,6 +83,7 @@ export interface MotionPaceSummary {
 }
 
 export interface EngineSnapshot {
+  linked_session?: { status: "ready" | "degraded" | "failed"; continue_healthy: boolean; retired_devices: string[] };
   running: boolean;
   starting?: boolean;
   completing?: boolean;
@@ -300,6 +312,7 @@ export interface ChatMessageDiagnostics {
   model_load_ms?: number;
   prompt_eval_ms?: number;
   prompt_tokens?: number;
+  cached_prompt_tokens?: number;
   generated_tokens?: number;
   prompt_bytes?: number;
   prompt_limit_bytes?: number;
@@ -462,6 +475,12 @@ export interface PromptSection {
 }
 
 export interface PromptCompositionPayload {
+	response_schema?: unknown;
+	reasoning_mode?: string;
+	max_tokens?: number;
+	prompt_set_name?: string;
+	prompt_set_source?: "global" | "persona";
+	global_prompt_set?: string;
   session_id: string;
   provider: string;
   model: string;
@@ -1066,14 +1085,9 @@ export interface PublicSettings {
     show_remote_navigation?: boolean;
   };
   media?: MediaSettingsPayload;
-  device: {
-    hsp_dispatch_owner: string;
-    intiface_server_address: string;
-    firmware_api_requirement: string;
-    api_application_id_source: string;
-    api_application_id_override?: string;
-    connection_key_set: boolean;
-  };
+  device: import("./coyote-types").PublicDeviceSettings;
+  estim?: EstimSettings & { remembered_device?: boolean };
+  vibration?: VibrationSettings;
   motion: MotionSettings;
   freestyle?: FreestyleSettings;
   autopilot: AutopilotSettings;
@@ -1318,14 +1332,9 @@ export interface SettingsUpdate {
     show_remote_navigation?: boolean;
   };
   media: MediaSettingsPayload;
-  device: {
-    hsp_dispatch_owner: string;
-    intiface_server_address: string;
-    firmware_api_requirement: string;
-    api_application_id_source: string;
-    api_application_id_override: string;
-    handy_connection_key?: string;
-  };
+  device: import("./coyote-types").DeviceSettingsUpdate;
+  estim?: EstimSettings & { forget_device?: boolean };
+  vibration?: VibrationSettings;
   motion: MotionSettings;
   autopilot?: AutopilotSettings;
   llm: PublicSettings["llm"];
@@ -1377,64 +1386,6 @@ export interface TransportDiagnostics {
   last_error?: string;
 }
 
-export interface IntifaceLinearActuator {
-  index: number;
-  feature_descriptor?: string;
-  actuator_type?: string;
-  step_count?: number;
-}
-
-export interface IntifaceDevice {
-  device_index: number;
-  device_name: string;
-  device_message_timing_gap_ms?: number;
-  linear_actuators: IntifaceLinearActuator[];
-}
-
-export interface IntifaceDispatchStatus {
-  device_index: number;
-  actuator_index: number;
-  startup_anchor?: boolean;
-  relative_scheduled_time_ms: number;
-  actual_send_time: string;
-  lateness_ms: number;
-  effective_duration_ms: number;
-  ack_latency_ms?: number;
-  status: string;
-}
-
-export interface IntifaceTransportSnapshot {
-  dispatch_owner: string;
-  address: string;
-  status: {
-    connected: boolean;
-    scanning: boolean;
-    playback_state: string;
-    max_ping_time_ms: number;
-    queue_depth: number;
-    queue_coverage_ms?: number;
-    pending_acks?: number;
-    linear_sent_count?: number;
-    linear_acked_count?: number;
-    linear_rejected_count?: number;
-    linear_timeout_count?: number;
-    last_ack_latency_ms?: number;
-    max_ack_latency_ms?: number;
-    last_send_lateness_ms?: number;
-    max_send_lateness_ms?: number;
-    coalesced_segments?: number;
-    recent_dispatches_dropped?: number;
-    last_wire_duration_ms?: number;
-    selected_resolution_percent?: number;
-    last_pacer_failure?: string;
-    recent_dispatches?: IntifaceDispatchStatus[];
-    selected_device_index?: number;
-    selected_actuator_index?: number;
-    devices: IntifaceDevice[];
-  };
-  diagnostics: Record<string, unknown>;
-}
-
 export interface AppState {
   observation?: BackendObservation;
   capabilities?: AccountCapabilities;
@@ -1451,6 +1402,7 @@ export interface AppState {
   motion_simulated?: boolean;
   labs_enabled?: boolean;
   modes?: ModesStatus;
+  motion_review?: { state: string; source?: string; model?: string; reason?: string; elapsed_ms?: number; revision: number };
   memory?: MemoryState | Record<string, unknown>;
   llm?: Record<string, unknown>;
   voice?: VoiceState;
@@ -1462,6 +1414,8 @@ export interface AppState {
   bluetooth_transport?: TransportDiagnostics;
   bluetooth_bridge?: BluetoothBridgeSnapshot;
   intiface_transport?: IntifaceTransportSnapshot;
+  coyote_transport?: CoyoteTransportSnapshot;
+  native_bluetooth_transport?: import("./native-bluetooth-types").NativeBluetoothSnapshot;
   trace?: Record<string, unknown>;
 }
 

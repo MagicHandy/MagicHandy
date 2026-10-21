@@ -7,7 +7,72 @@ profile lock and verified existing-instance discovery before datastore/worker
 startup, actual-URL source launcher readiness, and retained startup diagnostics.
 Explicit fixed addresses and hosted network deployments remain strict. HNS and
 system port reservations are untouched. See
-[ADR 0040](docs/decisions/0040-local-startup-recovery.md).
+[ADR 0051](docs/decisions/0051-local-startup-recovery.md).
+
+The October 18 Layered fix gives hosted models exclusive set/adjust controls,
+named-versus-manual composition and per-axis edit/removal operations. Chat,
+Autopilot and hosted second opinions translate these into the existing atomic
+validator. Hosted continuous Autopilot resolves active human constraints before
+choosing variation; no language classifier or inferred motion lock is added.
+Local contracts and the motion engine are unchanged. The
+[review](docs/hosted-layered-operations-review-2026-10-18.md) records the final
+44/44 live ChatGPT checks, failed intermediate proposals, visual review and
+the limits of that evaluation.
+
+The alpha.63 release integrates PR #326's external Autopilot auto timing and
+prepared decisions. The packaging amendment admits only that exact alpha
+version, preserves all release gates and carries forward the device limitations
+from alpha.62. See [the release review](docs/alpha63-release-review-2026-10-16.md).
+
+The [alpha.62 release candidate](docs/alpha62-release-review-2026-10-15.md)
+combines the reviewed device, UI, motion and dependency branches. The final
+Intiface full-sweep and Creative v2 hardware comparisons were accepted.
+Manual test choices now use current continuous patterns and saved speed limits.
+The upstream Stop limitation stays open and visible under ADR 0049; release
+quality, packaging and publication verification remain mandatory.
+
+The October 15 [release motion review](docs/release-motion-review-2026-10-15.md)
+fixes floating-point endpoint rejection, adds explicit Layered full-slider and
+full-band edits, and aligns live examples with decoder order and Autopilot hold
+state. Local/hosted production fixtures and minimum-context checks cover the
+changes. Matched 20%/35% hardware runs now confirm that Intiface is less smooth
+than Cloud despite equivalent planned travel. The source audit also found that
+the installed Intiface release's linear Stop path can acknowledge without a
+hardware write or queue barrier. Release acceptance remains open for downstream
+timing and physical Stop; the speculative sampler change is parked.
+
+The October 11 [diagnostic download review](docs/diagnostic-report-review-2026-10-11.md)
+replaces the trace-export card with one backend-built report and a compact
+inclusion menu. History, failed output and personalization are explicit choices;
+the archive boundary redacts credentials and enforces bounded, administrator-only
+export. See [ADR 0043](docs/decisions/0043-selectable-diagnostic-reports.md).
+
+The October 11 [Creative v2 speed review](docs/creative-v2-speed-review-2026-10-11.md)
+corrects premature speed saturation with bounded whole-phrase cruise fitting
+and fixes high-speed wire rounding at unsent batch boundaries. Existing device
+velocity, acceleration, jerk, reversal and wire-fidelity limits remain in force.
+Cloud timestamps already preserved the planned timing. Regression, visual and
+simulated-latency tests pass; matched physical feel remains an R1 acceptance item.
+
+The October 11 [long-context review](docs/long-context-review-2026-10-11.md)
+adds per-provider Recent/Long/Extended conversation windows for chat and
+conversation-aware Autopilot. Storage, bounded database reads, composition and
+provider admission now agree. Local prompt limits and motion authority are
+unchanged. See [ADR 0042](docs/decisions/0042-provider-conversation-windows.md).
+
+The October 11 [user-report follow-up](docs/user-report-review-2026-10-11.md)
+aligns live prompt examples with explicit action admission, adds bounded private
+failure evidence and a production-context preview, and clarifies prompt editing
+versus assignment. Independent speech can choose a quiet check-in itself; no
+wording filter is used. Gemma repetition improves in the measured fixture;
+Vanessa and the unavailable reporter-specific Qwen configuration remain qualified
+limitations. See [ADR 0041](docs/decisions/0041-inspectable-chat-failures-and-model-chosen-checkins.md).
+
+The October 11 [asynchronous motion review](docs/motion-second-opinion-review-2026-10-11.md)
+adds an optional second opinion for local Chat and Autopilot. Local choices apply
+immediately; a named hosted model may correct a confident material mismatch while
+the exact intent and plan remain current. Alpha.61 integrates this review work.
+See [ADR 0040](docs/decisions/0040-asynchronous-motion-second-opinion.md).
 
 The October 8 hosted-model review adds named ChatGPT/API connections alongside
 the existing local models, with independent Chat and Autopilot assignments and
@@ -181,6 +246,21 @@ the normal install path. See ADRs 0003, 0007, and 0012.
 Local LLM support is quality-first. The primary MagicHandy LLM path is a managed llama.cpp runtime for Windows/NVIDIA systems, using curated GGUF models and explicit model management. Ollama remains supported as the secondary pathway. See `docs/decisions/0005-local-llm-runtime.md` and `docs/model-management.md`.
 
 ## Status
+
+### 2026-10-16 Auto timing and prepared decisions for external planners
+
+Creative v2 and Layered Autopilot ignored the planner's timing: every stretch
+was a uniform draw from the Motion change rate window. An Auto timing switch,
+off by default and honored only for a hosted planning route, lets the model
+return `next_check_seconds` (8–300), which the scheduler varies by ±12% and
+bounds. The prompt offers the change-rate window as the reference for an
+ordinary stretch; GPT-6 Sol then varied 29–47 seconds in open sessions and held
+180–300 seconds when asked to keep the motion, while local Gemma 12B settled on
+one value, so local planning stays sampled. Prepared decisions, on by default
+for any external planner, plan each decision as its stretch begins with facts
+projected to its end, so call latency no longer delays the change; chat
+discards them. See [ADR 0050](docs/decisions/0050-hosted-autopilot-auto-timing.md)
+and [the review](docs/autopilot-auto-timing-review-2026-10-16.md).
 
 ### 2026-10-09 Creative v2 edits written without the response schema
 
@@ -2694,3 +2774,140 @@ control changes, all shapes and final Stop. Physical feel and real-transport
 acceptance remain open. See [ADR 0038](docs/decisions/0038-freestyle-stroke-stream.md),
 [review evidence](docs/freestyle-stream-review-2026-10-01.md), and
 [budgets](docs/goal-scorecard.md#2026-10-01--freestyle-stroke-stream).
+
+
+## October 14 DG-LAB Coyote 3.0 output
+
+Implemented for PR review: a Coyote 3.0 as a second output, alone or alongside
+the Handy, through the existing shared engine. A per-connection Bluetooth
+worker (`cmd/bluetooth-worker`, no cgo) owns the radio while the core composes
+every packet (`internal/estim`). `transport.Coyote` converts the neutral frame
+with a user-chosen profile, and `transport.FanOut` drives both devices from one
+engine transport. Strength stays user-owned with device-enforced ceilings; the
+global Stop zeroes both channels. The model receives no new control. Simulated
+end-to-end tests pass; physical acceptance on a Coyote 3.0 is open. Native
+stimulation patterns and model composition remain follow-ups. See
+[ADR 0044](docs/decisions/0044-coyote-estim-output.md) and [estim.md](docs/estim.md).
+
+The pre-hardware review's five reproduced safety issues are corrected with
+permanent regressions: non-supersedable emergency zero and shared Stop failure
+reporting; failed-ceiling disconnection/reapplication; dropped queued increases
+after missing confirmation; evidence-ordered zero state; and explicit host-only
+reference testing instead of automatic pulses on strength changes. Worker
+protocol v2 bounds outstanding native writes and terminates timed-out work.
+Physical COYOTE connection and output acceptance remain explicitly deferred.
+
+The connection manager now uses an additive device list, per-device protocol
+titles, stronger section dividers, and an outlined Coyote prerequisite notice.
+Handy protocol selection stays beside its title; simulation is identified once
+in the top bar. Full automated checks and an isolated working-LLM review build
+are recorded in [the implementation review](docs/coyote-review-2026-10-14.md).
+
+
+### Device inventory and linked sessions (2026-10-14)
+
+ADR 0045 separates saved connections from playback inclusion and live transport
+state. The title-row + adds without connecting or starting. Empty inventory is
+valid. Linked failures stop all by default, with an explicit continue-healthy
+setting; both policies prevent hot-join after reconnect. Session-bound Coyote
+and browser BLE dispatch preserve the single engine. Hardware validation remains
+pending; simulated integration and full gates are recorded in the review report.
+
+### Native Handy Bluetooth (2026-10-14)
+
+Implemented on a follow-up branch to the COYOTE/device-session work. The shared
+`bluetooth-worker` now serves allowlisted Handy firmware-4 and COYOTE 3.0 profiles
+over version-4 IPC, with one process per device connection. `internal/ble` owns
+the reusable byte link; `internal/handyble` handles bounded RPC framing and
+correlation. Browser and native Handy connections share the existing HSP
+transport mapping and engine. Native selection appears in Setup, Settings and
+the title-row protocol menu; choosing it never connects. The UI distinguishes
+the host radio from the browser's Bluetooth. APK-informed COYOTE discovery now
+offers an explicit RSSI-ranked picker for private/unnamed advertisements, with
+remembered, advertised-name and possible-match labels. Scan workers do not
+connect. Host-only opaque selections expire, and GATT verification precedes
+commands. Write Without Response cannot establish a confirmed strength baseline.
+
+All current sampling, motion planning, prompts, model routing and conservative
+HSP buffer budgets remain in place. Software validation includes process
+isolation, small-MTU chunking, stale-session fencing, linked failure policies,
+normal/race/leak checks and Windows/Linux pure-Go builds. The authorized original
+Handy firmware-4.3 check verified connection, clock sync and mode-independent
+Stop. Windows connection workers now refresh only the selected advertisement
+and wait for connected state before GATT discovery. COYOTE testing verified
+battery and actual zero reports, including global Stop while already at zero;
+that initial run used no positive strength or pulse output. The follow-up pins
+the upstream Windows service-disposal fix, retains lost links for teardown and
+uses a twelve-second connection budget. Repeated COYOTE reconnect, bounded
+channel tests and shared-engine playback at strength 5 passed with no output
+leads connected. Packaging acceptance now checks both listeners and retains
+startup failures. The October 15 hardware follow-up adds ten immediate Handy
+reconnects, user-observed playback, concurrent output and both linked-failure
+policies. It fixes Handy's stale connection deadline, retained failure snapshots,
+and false COYOTE Stop confirmation after link loss. Recovery of a crashed worker
+with a live companion and loaded electrical behavior remain acceptance items.
+See the [linked review](docs/native-linked-hardware-review-2026-10-15.md),
+[follow-up](docs/native-ble-reconnect-review.md),
+[hardware findings](docs/native-handy-hardware-review-2026-10-14.md),
+[plan](docs/native-handy-bluetooth-plan-2026-10-14.md),
+[ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and
+[review](docs/native-handy-bluetooth-review-2026-10-14.md).
+
+### Intiface vibrator output (2026-10-15)
+
+Implemented and tested in simulation; physical acceptance is open. A Buttplug
+vibrator through Intiface Central plays with the stroker, the Coyote, both, or
+alone ([ADR 0047](docs/decisions/0047-intiface-vibrator-output.md)):
+
+- Participation is the `device.playback_devices` set. Linked sessions take any
+  set of devices, with the run clock on the first included one.
+- The Coyote's frame timeline, clock and coverage helpers moved to
+  `internal/companion`.
+- One Intiface session is shared by the linear owner and the vibrator owner,
+  with a lease per connected device.
+- The vibrator follows the shared frame through a speed, depth or steady
+  profile (`internal/vibration`). Its live intensity starts at 0, and the
+  model never controls it.
+- `-simulate-motion` builds include an in-process Intiface server with a
+  simulated stroker and vibrator (`internal/buttplugsim`).
+
+Model replies still assume a linear stroker. Device-aware prompts and their
+per-configuration test matrix are later work. See the
+[vibrator plan](docs/intiface-vibrator-plan-2026-10-15.md) and the
+[device-aware model responses plan](docs/device-aware-prompts-plan-2026-10-15.md).
+
+### Device panel and Settings > Devices (2026-10-15)
+
+Implemented and tested in simulation
+([ADR 0048](docs/decisions/0048-device-kit-and-settings-devices.md)). The
+connection manager is replaced by a live device panel (status, one action, In
+playback, levels and limits) and Settings > Devices, with a page per device for
+setup:
+
+- Each device is a descriptor in `web/src/devices/`; the panel row, the
+  top-bar chip, the Settings list and the device pages render from it.
+- Device options save as they change through `PATCH /api/settings/device`;
+  the Handy key keeps its explicit Save. The server port moved to Settings >
+  Access (`PUT /api/settings/server`).
+- The manual motion test, model and direction moved to the Handy's page. The
+  connection artwork is retired.
+
+See [UI design](docs/ui-design.md#devices-2026-10-15) and the
+[guidelines](docs/ui-design-guidelines.md#device-chip-and-device-panel).
+
+Release integration is tracked on `codex/release-device-ui`: Claude's current
+device kit and its shared-Intiface/vibrator dependencies are combined with the
+motion/model review. The final release must retain these UI changes, including
+the small title-row + shortcut. See the [combined validation and remaining
+acceptance work](docs/release-device-integration-2026-10-15.md).
+
+### Handy Intiface smoothness (2026-10-15)
+
+Observed A/B tests favored fewer position updates. An optional sampling
+preference now lets the shared engine fit generated Handy-over-Intiface curves
+with wider interior spacing while retaining the advertised hard limit, exact
+reversal timing and the shared velocity ceiling. The tested denser and guarded
+alternatives are rejected. Cloud/native buffered output, imported media and
+other linear devices are unchanged. See the
+[physical feedback, 144-case matrix and precision trade-off](docs/intiface-smoothness-review-2026-10-15.md).
+The independent upstream Stop issue remains with Buttplug.

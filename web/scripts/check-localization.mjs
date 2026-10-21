@@ -10,16 +10,18 @@ const localeNames = ["en", "es", "pt-BR", "zh-Hans", "ja"];
 const visibleAttributes = new Set(["alt", "aria-label", "aria-valuetext", "placeholder", "title", "label", "hint", "accessibleLabel", "unavailableTitle"]);
 const iconText = /^(?:M|Y|MH|MagicHandy|[\s+\-−–—×%/#:;,.…•·]+|\d+(?:\.\d+)?%?)$/u;
 const sameValueAllowed = {
-  es: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{count} tokens", "{count} videos", "{rounding} ms", "{millis} ms", "{n} mm", "{seconds} s", "{size} / {location}", "{state}: {message}", "1 video", "Autopilot", "Base", "Chat", "Commit", "Error", "Esc", "Funscript", "General", "Intiface Central", "local / {owner}", "MagicHandy", "Normal", "Original", "script", "Vagina / vulva", "Video", "Videos", "Vulnerable", "Script", "{tag} ({count})"]),
-  "pt-BR": new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{count} tokens", "{rounding} ms", "{millis} ms", "{n} mm", "{seconds} s", "{size} / {location}", "{state}: {message}", "Autopilot", "Base", "Chat", "Commit", "Esc", "Funscript", "Interface", "Intiface Central", "local / {owner}", "MagicHandy", "Normal", "Original", "script", "Status", "Tags", "Vagina / vulva", "Script", "Tag", "Volume", "{tag} ({count})"]),
+  es: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{count} tokens", "{count} videos", "{rounding} ms", "{millis} ms", "{n} mm", "{seconds} s", "{size} / {location}", "{state}: {message}", "1 video", "Autopilot", "Base", "Chat", "Commit", "Error", "Esc", "Experimental", "Funscript", "General", "Intiface Central", "Handy Cloud", "local", "MagicHandy", "ms", "Normal", "Original", "script", "Vagina / vulva", "Video", "Videos", "Vulnerable", "Script", "{tag} ({count})", "{a}–{b} Hz"]),
+  "pt-BR": new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{count} tokens", "{rounding} ms", "{millis} ms", "{n} mm", "{seconds} s", "{size} / {location}", "{state}: {message}", "Autopilot", "Base", "Chat", "Commit", "Esc", "Experimental", "Funscript", "Interface", "Intiface Central", "Handy Cloud", "local", "MagicHandy", "ms", "Normal", "Original", "script", "Status", "Tags", "Vagina / vulva", "Script", "Tag", "Volume", "{tag} ({count})", "{a}–{b} Hz"]),
   "zh-Hans": new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{rounding} ms", "{n} mm", "{size} / {location}", "{state}: {message}", "Esc", "Funscript", "Intiface Central", "MagicHandy"]),
-  ja: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{rounding} ms", "{n} mm", "{size} / {location}", "{state}: {message}", "Autopilot", "Esc", "Funscript", "Intiface Central", "MagicHandy"]),
+  ja: new Set(["FFmpeg", "CRF {value}", "{rate} kbps", "{rounding} ms", "{n} mm", "{size} / {location}", "{state}: {message}", "Autopilot", "Esc", "Funscript", "Handy Cloud", "Intiface Central", "MagicHandy", "{a}–{b} Hz"]),
 };
 
 // Product names in the session client hints retain their official spelling.
 // Only these exact labels may pass unchanged; surrounding UI copy is localized.
 for (const allowed of Object.values(sameValueAllowed)) {
-  for (const brand of ["Chrome", "Microsoft Edge", "Firefox", "Safari", "Windows", "macOS", "Linux", "Android", "iOS", "ChatGPT", "OpenRouter", "OpenAI API"]) allowed.add(brand);
+  // Radio signal strength uses the same international unit in every locale.
+  allowed.add("{signal} dBm");
+  for (const brand of ["Chrome", "Microsoft Edge", "Firefox", "Safari", "Windows", "macOS", "Linux", "Android", "iOS", "ChatGPT", "OpenRouter", "OpenAI API", "Decisions API", "The Handy", "Coyote"]) allowed.add(brand);
 }
 
 function walk(directory) {

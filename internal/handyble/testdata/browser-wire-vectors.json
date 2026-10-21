@@ -1,0 +1,82 @@
+[
+  {
+    "path": "hsp/stop",
+    "body": {},
+    "id": 1,
+    "hex": "080112058236001001"
+  },
+  {
+    "path": "hsp/setup",
+    "body": {
+      "stream_id": 4294967295
+    },
+    "id": 7,
+    "hex": "0801120be2350608ffffffff0f1007"
+  },
+  {
+    "path": "slider/stroke",
+    "body": {
+      "min": 12.5,
+      "max": 87.5
+    },
+    "id": 3,
+    "hex": "0801120fca340a0d0000003e150000603f1003"
+  },
+  {
+    "path": "hsp/add",
+    "body": {
+      "points": [
+        {
+          "t": 0,
+          "x": 0
+        },
+        {
+          "t": 100,
+          "x": 100
+        },
+        {
+          "t": 4294967295,
+          "x": 51
+        }
+      ],
+      "tail_point_stream_index": 2,
+      "flush": false
+    },
+    "id": 4,
+    "hex": "0801121fea351a0a04080010000a04086410640a0808ffffffff0f1033100018021004"
+  },
+  {
+    "path": "hsp/play",
+    "body": {
+      "start_time": -123,
+      "pause_on_starving": true
+    },
+    "id": 5,
+    "hex": "08011219fa35140885ffffffffffffffff011d0000803f200028011005"
+  },
+  {
+    "path": "hsp/play",
+    "body": {
+      "start_time": 25,
+      "server_time": 1800000000000,
+      "pause_on_starving": true
+    },
+    "id": 6,
+    "hex": "08011217fa351208191080a0f1c2b1341d0000803f200028011006"
+  },
+  {
+    "path": "clock/offset/set",
+    "body": {
+      "clock_offset": -1234567890,
+      "rtd": 3
+    },
+    "id": 8,
+    "hex": "0801120daa2c0808a38bb0990910031008"
+  },
+  {
+    "path": "clock/offset/get",
+    "body": {},
+    "id": 9,
+    "hex": "08011205c22c001009"
+  }
+]

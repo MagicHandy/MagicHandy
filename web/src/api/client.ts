@@ -2,8 +2,10 @@
 // client ID so the backend controller lease can pick one active controller;
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
+import type { NativeBluetoothSnapshot } from "./native-bluetooth-types";
 import type { LLMCatalog } from "./catalog-types";
-import type { StartupReports } from "./startup-types";
+import type { ChatRequestFailure } from "./chat-diagnostic-types";
+import type { DiagnosticReportOptions } from "./diagnostic-report-types";
 import type { CloudPlanningStatus, ModelConnection, HostedModel } from "./cloud-types";
 import { checkedCloudStatus } from "./cloud-status";
 import type { ModelCheckReport } from "./model-check-types";
@@ -82,6 +84,10 @@ import type {
   InternetDiscovery,
   CertificatePreparation,
   CommandReceipt,
+  CoyoteTransportSnapshot,
+  DeviceId,
+  DeviceOptionsPatch,
+  DeviceOutput,
 } from "./types";
 
 
@@ -535,7 +541,6 @@ export const api = {
   validateNetwork: (config: NetworkConfig) => request<{ valid: boolean; config: NetworkConfig; message: string }>("POST", "/api/network/validate", { config }),
   saveNetwork: (config: NetworkConfig, password: string) => request<{ restart_required: boolean }>("PUT", "/api/network", { config, password }),
   networkReport: () => request<Record<string, unknown>>("GET", "/api/network/report"),
-  startupReports: (signal?: AbortSignal) => request<StartupReports>("GET", "/api/startup", undefined, signal),
   createAccount: (username: string, password: string, role: AccountRole, interface_access: "full" | "remote" = "full") =>
     request<{ account: UserAccount }>("POST", "/api/accounts", { username, password, role, interface_access }),
   resetAccountPassword: (id: string, password: string) =>
@@ -740,6 +745,13 @@ export const api = {
       signal,
     ),
 
+  chatFailures: (sessionID: string, signal?: AbortSignal) =>
+    request<{ failures: ChatRequestFailure[] }>("GET", `/api/diagnostics/chat-failures?session_id=${encodeURIComponent(sessionID)}`, undefined, signal),
+  productionChatTest: (message: string, signal?: AbortSignal) =>
+    request<{ valid: boolean; report: ChatRequestFailure }>("POST", "/api/diagnostics/chat-test", { message }, signal),
+  chatFailure: (sessionID: string, id: number, includeContent: boolean, signal?: AbortSignal) =>
+    request<ChatRequestFailure>("GET", `/api/diagnostics/chat-failures/${id}?session_id=${encodeURIComponent(sessionID)}&include_content=${includeContent}`, undefined, signal),
+
   // Prompt sets.
   getPromptSets: () => request<PromptSetsPayload>("GET", "/api/prompt-sets"),
   createPromptSet: (name: string, system: string) =>
@@ -802,6 +814,10 @@ export const api = {
     request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),
   saveConnectionKey: (connection_key: string) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connection-key", { connection_key }),
+  // Settings > Devices saves each device option as it changes.
+  saveDeviceOptions: (patch: DeviceOptionsPatch) =>
+    request<{ settings: PublicSettings }>("PATCH", "/api/settings/device", patch),
+  saveServerPort: (port: number) => request<{ settings: PublicSettings }>("PUT", "/api/settings/server", { port }),
   resetSettings: () => request<{ settings: PublicSettings }>("POST", "/api/settings/reset", {}),
   updateStatus: (refresh = false) => request<UpdateStatus>("GET", `/api/update${refresh ? "?refresh=1" : ""}`),
 
@@ -844,13 +860,48 @@ export const api = {
 
   // Intiface Central session. Device indices are scoped to this discovery
   // session, so selection deliberately remains runtime state rather than a setting.
+  nativeBluetoothStatus: () => request<NativeBluetoothSnapshot>("GET", "/api/transport/native-bluetooth/status"),
+  nativeBluetoothConnect: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/connect", {}),
+  nativeBluetoothDisconnect: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/disconnect", {}),
+  nativeBluetoothForget: () => request<NativeBluetoothSnapshot>("POST", "/api/transport/native-bluetooth/forget", {}),
+  coyoteStatus: () => request<CoyoteTransportSnapshot>("GET", "/api/transport/coyote/status"),
+  coyoteConnect: (candidateID?: string) => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/connect", { candidate_id: candidateID }),
+  coyoteDiscover: () => request<{ candidates: { id: string; name: string; rssi: number; identification: "remembered" | "name_match" | "possible" }[] }>("POST", "/api/transport/coyote/discover", {}),
+  coyoteDisconnect: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/disconnect", {}),
+  coyoteStrength: (channel: "a" | "b", delta: number, stopSequence?: number) =>
+    request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/strength", { channel, delta }, undefined,
+      stopSequence === undefined ? undefined : { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  coyoteTest: (channel: "a" | "b", stopSequence: number) =>
+    request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/test", { channel }, undefined,
+      { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  coyoteZero: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/zero", {}),
+  changeDeviceConnection: (device: DeviceId, action: "add" | "remove" | "include" | "exclude") =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connections", { device, action }),
+  setDeviceOutput: (output: DeviceOutput) =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/device/output", { output }),
+  setEstimSafety: (acknowledged: boolean) =>
+    request<{ settings: PublicSettings }>("PUT", "/api/settings/estim/safety", { acknowledged }),
   intifaceStatus: () => request<IntifaceTransportSnapshot>("GET", "/api/transport/intiface/status"),
-  intifaceConnect: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/connect", {}),
-  intifaceDisconnect: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/disconnect", {}),
+  // Each device that reaches Intiface holds a lease on the one shared
+  // connection; no device means the Handy, as older builds sent.
+  intifaceConnect: (device?: "handy" | "vibrator") =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/connect", device ? { device } : {}),
+  intifaceDisconnect: (device?: "handy" | "vibrator") =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/disconnect", device ? { device } : {}),
   intifaceStartScan: () => request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/scan", {}),
   intifaceStopScan: () => request<IntifaceTransportSnapshot>("DELETE", "/api/transport/intiface/scan"),
   intifaceSelect: (device_index: number, actuator_index: number) =>
     request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/select", { device_index, actuator_index }),
+  vibratorSelect: (device_index: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/select", { device_index }),
+  // Raising sends the Stop sequence so a raise prepared before a Stop is
+  // refused; lowering needs no control and never does.
+  vibratorIntensity: (intensity_percent: number, stopSequence?: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/intensity", { intensity_percent }, undefined,
+      stopSequence === undefined ? undefined : { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  vibratorTest: (stopSequence: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/test", {}, undefined,
+      { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
 
   // Browser Bluetooth bridge. React owns only the browser/device session; all
   // motion commands still come from backend bridge commands.
@@ -886,7 +937,7 @@ export const api = {
   deleteChatSession: (sessionId: string) =>
     request<ChatSessionsResponse>("DELETE", `/api/chat/sessions/${encodeURIComponent(sessionId)}`),
   getChatMessages: (sessionId: string, after = 0, recovery?: { revision?: number; snapshot?: ChatMessagesResponse["snapshot"]; signal?: AbortSignal }) => {
-    const query = new URLSearchParams({ session_id: sessionId });
+    const query = new URLSearchParams({ session_id: sessionId, recent: "true" });
     if (recovery?.revision !== undefined) query.set("after_revision", String(recovery.revision));
     else if (after > 0) query.set("after", String(after));
     if (recovery?.snapshot) {
@@ -953,6 +1004,8 @@ export const api = {
 
   exportTrace: () => request("GET", "/api/traces"),
   exportLastMotionTrace: () => request("GET", "/api/traces/last-motion"),
+  exportDiagnosticReport: (options: DiagnosticReportOptions, signal?: AbortSignal) =>
+    download(`/api/diagnostics/report?${new URLSearchParams(Object.entries(options).map(([key, value]) => [key, String(value)]))}`, "magichandy-diagnostics.zip", signal),
 };
 
 async function importMotionContent(file: File, asKind: "pattern" | "program"): Promise<{ import: MotionImportResult }> {
@@ -978,9 +1031,12 @@ async function importMotionContent(file: File, asKind: "pattern" | "program"): P
   return parsed as { import: MotionImportResult };
 }
 
-async function download(path: string, fallbackFilename = "motion-content.json"): Promise<{ blob: Blob; filename: string }> {
-  const res = await fetch(path, { headers: { ...controllerRequestHeaders() } });
-  if (!res.ok) throw new ApiError(`Export failed (${res.status})`, res.status, null);
+async function download(path: string, fallbackFilename = "motion-content.json", signal?: AbortSignal): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(path, { headers: { ...controllerRequestHeaders() }, signal });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null;
+    throw new ApiError(body?.error || `Export failed (${res.status})`, res.status, body);
+  }
   const disposition = res.headers.get("Content-Disposition") ?? "";
   const match = disposition.match(/filename="?([^";]+)"?/i);
   return { blob: await res.blob(), filename: match?.[1] ?? fallbackFilename };

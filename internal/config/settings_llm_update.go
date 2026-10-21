@@ -15,6 +15,10 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		conversation = *update.ConversationConnectionID
 	}
 	planner := current.MotionPlanner
+	reviewer := current.MotionReviewer
+	if update.MotionReviewer != nil {
+		reviewer = *update.MotionReviewer
+	}
 	if update.MotionPlanner != nil {
 		planner = *update.MotionPlanner
 	}
@@ -71,6 +75,7 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		ConversationConnectionID: conversation,
 		RetryRefusalLocally:      retryRefusalLocally,
 		MotionPlanner:            planner,
+		MotionReviewer:           reviewer,
 		Provider:                 update.Provider,
 		LlamaCPPMode:             update.LlamaCPPMode,
 		ManagedLoadPolicy:        managedLoadPolicy,

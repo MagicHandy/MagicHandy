@@ -48,7 +48,7 @@ if ($ArtifactPolicy -eq 'PortablePublic' -and ($ExerciseInstaller -or $ExerciseD
     throw 'PortablePublic artifacts intentionally contain no setup executable and cannot exercise installer lifecycle tests.'
 }
 $reviewedCaseID = '15c1e36d-fb35-4c5d-85de-83707169818a'
-$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39', '0.1.0-alpha.40', '0.1.0-alpha.41', '0.1.0-alpha.42', '0.1.0-alpha.43', '0.1.0-alpha.44', '0.1.0-alpha.45', '0.1.0-alpha.46', '0.1.0-alpha.47', '0.1.0-alpha.48', '0.1.0-alpha.49', '0.1.0-alpha.50', '0.1.0-alpha.51', '0.1.0-alpha.52', '0.1.0-alpha.53', '0.1.0-alpha.54', '0.1.0-alpha.55', '0.1.0-alpha.56', '0.1.0-alpha.57')
+$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39', '0.1.0-alpha.40', '0.1.0-alpha.41', '0.1.0-alpha.42', '0.1.0-alpha.43', '0.1.0-alpha.44', '0.1.0-alpha.45', '0.1.0-alpha.46', '0.1.0-alpha.47', '0.1.0-alpha.48', '0.1.0-alpha.49', '0.1.0-alpha.50', '0.1.0-alpha.51', '0.1.0-alpha.52', '0.1.0-alpha.53', '0.1.0-alpha.54', '0.1.0-alpha.55', '0.1.0-alpha.56', '0.1.0-alpha.57', '0.1.0-alpha.58', '0.1.0-alpha.59', '0.1.0-alpha.60', '0.1.0-alpha.61', '0.1.0-alpha.62', '0.1.0-alpha.63', '0.1.0-alpha.64')
 if ($ArtifactPolicy -eq 'ReviewedUnsignedPublic') {
     if ($ReviewedFalsePositiveCaseID.Trim().ToLowerInvariant() -ne $reviewedCaseID) {
         throw "ReviewedUnsignedPublic requires Microsoft false-positive case $reviewedCaseID."
@@ -140,26 +140,68 @@ function Assert-AuthenticodeStatus {
 }
 
 function Wait-MagicHandyReady {
-    param([Parameter(Mandatory = $true)][int]$Port)
+    param([Parameter(Mandatory = $true)][int]$Port, [Parameter(Mandatory = $true)][Diagnostics.Process]$Process)
     for ($attempt = 0; $attempt -lt 100; $attempt++) {
+        $Process.Refresh()
+        if ($Process.HasExited) {
+            $Process.WaitForExit()
+            break
+        }
         try {
-            Invoke-RestMethod -Uri "http://127.0.0.1:$Port/healthz" -TimeoutSec 1 | Out-Null
-            return
+            $main = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/healthz" -TimeoutSec 1
+            $remote = Invoke-RestMethod -Uri "http://127.0.0.1:$($Port + 1)/healthz" -TimeoutSec 1
+            if ($main.status -eq 'ok' -and $remote.status -eq 'ok') { return }
         } catch {
             Start-Sleep -Milliseconds 125
         }
     }
-    throw "MagicHandy did not become ready on port $Port."
+    $reason = if ($Process.HasExited) { "exited with code $($Process.ExitCode)" } else { 'did not become ready' }
+    $details = @()
+    foreach ($path in @($Process.StartupStdout, $Process.StartupStderr)) {
+        if (Test-Path -LiteralPath $path) { $details += @(Get-Content -LiteralPath $path -Tail 60) }
+    }
+    throw "MagicHandy $reason on ports $Port/$($Port + 1). Startup logs: $($Process.StartupStderr)`n$($details -join "`n")"
 }
 
 function Get-AvailableLoopbackPort {
-    $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
-    try {
-        $listener.Start()
-        return ([Net.IPEndPoint]$listener.LocalEndpoint).Port
-    } finally {
-        $listener.Stop()
+    # The app binds both its main and adjacent remote socket before healthz.
+    # A free main port alone does not establish that the app can start.
+    for ($attempt = 0; $attempt -lt 32; $attempt++) {
+        $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+        $remote = $null
+        try {
+            $listener.Start()
+            $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port
+            if ($port -eq 65535) { continue }
+            $remote = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port + 1)
+            try { $remote.Start() } catch [Net.Sockets.SocketException] { continue }
+            return $port
+        } finally {
+            if ($null -ne $remote) { $remote.Stop() }
+            $listener.Stop()
+        }
     }
+    throw 'Could not find available main and remote ports for release acceptance.'
+}
+
+function Start-ReleaseTestApp {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [Parameter(Mandatory = $true)][int]$Port,
+        [Parameter(Mandatory = $true)][string]$LogDirectory,
+        [Parameter(Mandatory = $true)][string]$Stage,
+        [string]$DataDirectory = ''
+    )
+    New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
+    $stdoutPath = Join-Path $LogDirectory "$Stage.stdout.log"
+    $stderrPath = Join-Path $LogDirectory "$Stage.stderr.log"
+    $arguments = @('-addr', "127.0.0.1:$Port", '-console', 'plain')
+    if ($DataDirectory) { $arguments += @('-data-dir', ('"{0}"' -f $DataDirectory)) }
+    $process = Start-Process -FilePath $Executable -ArgumentList $arguments -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+    $process | Add-Member -NotePropertyName StartupStdout -NotePropertyValue $stdoutPath
+    $process | Add-Member -NotePropertyName StartupStderr -NotePropertyValue $stderrPath
+    return $process
 }
 
 function Get-Uninstaller {
@@ -286,6 +328,7 @@ $customInstall = ''
 $defaultInstall = ''
 $ownsCustomInstall = $false
 $ownsDefaultInstall = $false
+$startupLogs = Join-Path $ArtifactsRoot 'lifecycle-logs'
 New-Item -ItemType Directory -Force -Path $testRoot | Out-Null
 try {
     Write-Host 'Verifying portable payload and provenance...'
@@ -296,7 +339,17 @@ try {
     $portableRoot = $executables[0].Directory.FullName
     Assert-Version -Executable $executables[0].FullName
     $payloadExecutables = @(Get-ChildItem -LiteralPath $portableRoot -Filter '*.exe' -File -Recurse)
-    Assert-Release -Condition ($payloadExecutables.Count -eq 4) -Message 'portable archive should contain the core and three first-party voice executables'
+    $expectedExecutables = @(
+        'magichandy.exe',
+        'voice-parakeet-worker.exe',
+        'voice-openai-tts-worker.exe',
+        'voice-elevenlabs-worker.exe',
+        'bluetooth-worker.exe'
+    )
+    Assert-Release -Condition ($payloadExecutables.Count -eq $expectedExecutables.Count) -Message 'portable archive should contain exactly the core, three voice workers, and the Bluetooth worker'
+    foreach ($name in $expectedExecutables) {
+        Assert-Release -Condition (Test-Path -LiteralPath (Join-Path $portableRoot $name) -PathType Leaf) -Message "portable payload should contain $name beside the core"
+    }
     $expectedPayloadSignature = if ($ArtifactPolicy -eq 'SignedPublic') {
         [System.Management.Automation.SignatureStatus]::Valid
     } else {
@@ -306,7 +359,7 @@ try {
         $payloadMachine = Get-PEMachine -Path $executable.FullName
         Assert-Release -Condition ($payloadMachine -eq 0x8664) -Message ("payload executable '$($executable.Name)' should be x64 (machine 0x8664), got 0x{0:x4}" -f $payloadMachine)
         Assert-AuthenticodeStatus -Path $executable.FullName -ExpectedStatus $expectedPayloadSignature -Description "payload executable '$($executable.Name)'" -SignerThumbprint $normalizedSignerThumbprint
-        # Scan the exact packaged bytes, including the three worker binaries.
+        # Scan the exact packaged bytes, including every worker binary.
         # A patched developer toolchain does not prove the artifact is patched.
         & (Join-Path $PSScriptRoot 'Test-GoSecurity.ps1') -Executable $executable.FullName
     }
@@ -350,6 +403,7 @@ try {
         return
     }
 
+    & (Join-Path $PSScriptRoot 'Test-ReleaseStartup.ps1') -Executable $executables[0].FullName -TestRoot (Join-Path $testRoot 'startup regression')
     Write-Host 'Exercising custom install path, shortcuts, upgrade, and retained-data uninstall...'
     $customInstall = Join-Path $testRoot 'custom install'
     $customData = Join-Path $testRoot 'upgrade data'
@@ -375,16 +429,16 @@ try {
         throw 'Could not seed upgrade-persistence settings.'
     }
     $port = Get-AvailableLoopbackPort
-    $quotedCustomData = '"{0}"' -f $customData
-    $app = Start-Process -FilePath $customExecutable -ArgumentList @('-addr', "127.0.0.1:$port", '-data-dir', $quotedCustomData) -PassThru -WindowStyle Hidden
+    $app = Start-ReleaseTestApp -Executable $customExecutable -Port $port -DataDirectory $customData -LogDirectory $startupLogs -Stage 'custom-install'
     try {
-        Wait-MagicHandyReady -Port $port
+        Wait-MagicHandyReady -Port $port -Process $app
         Invoke-ReleaseProcess -FilePath $setupPath -Description 'Active-process over-install' -ArgumentList @(
             '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER', '/CLOSEAPPLICATIONS', '/TASKS="desktopicon"', ('/DIR="{0}"' -f $customInstall)
         )
         Assert-Release -Condition ($app.WaitForExit(15000)) -Message 'over-install should close the running app'
-        $app = Start-Process -FilePath $customExecutable -ArgumentList @('-addr', "127.0.0.1:$port", '-data-dir', $quotedCustomData) -PassThru -WindowStyle Hidden
-        Wait-MagicHandyReady -Port $port
+        $port = Get-AvailableLoopbackPort
+        $app = Start-ReleaseTestApp -Executable $customExecutable -Port $port -DataDirectory $customData -LogDirectory $startupLogs -Stage 'custom-upgrade'
+        Wait-MagicHandyReady -Port $port -Process $app
         $state = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 5
         Assert-Release -Condition ([string]$state.settings.ui.locale -eq 'ja' -and [bool]$state.settings.ui.setup_completed) -Message 'over-install should preserve app-owned settings'
         $customUninstaller = Get-Uninstaller -InstallDirectory $customInstall
@@ -441,8 +495,8 @@ try {
     $port = Get-AvailableLoopbackPort
     $app = $null
     try {
-        $app = Start-Process -FilePath $defaultExecutable -ArgumentList @('-addr', "127.0.0.1:$port") -PassThru -WindowStyle Hidden
-        Wait-MagicHandyReady -Port $port
+        $app = Start-ReleaseTestApp -Executable $defaultExecutable -Port $port -LogDirectory $startupLogs -Stage 'default-install'
+        Wait-MagicHandyReady -Port $port -Process $app
         $defaultUninstaller = Get-Uninstaller -InstallDirectory $defaultInstall
         Invoke-ReleaseProcess -FilePath $defaultUninstaller -Description 'Clean uninstall' -ArgumentList @(
             '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/PURGEUSERDATA'
@@ -465,9 +519,9 @@ try {
         '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/ALLUSERS', '/NOICONS'
     )
     $port = Get-AvailableLoopbackPort
-    $app = Start-Process -FilePath $defaultExecutable -ArgumentList @('-addr', "127.0.0.1:$port") -PassThru -WindowStyle Hidden
+    $app = Start-ReleaseTestApp -Executable $defaultExecutable -Port $port -LogDirectory $startupLogs -Stage 'clean-reinstall'
     try {
-        Wait-MagicHandyReady -Port $port
+        Wait-MagicHandyReady -Port $port -Process $app
         $state = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/state" -TimeoutSec 5
         Assert-Release -Condition (-not [bool]$state.settings.ui.setup_completed) -Message 'reinstall after purge should start with guided setup incomplete'
         Assert-Release -Condition ([string]$state.settings.ui.locale -eq 'en') -Message 'reinstall after purge should use default settings'

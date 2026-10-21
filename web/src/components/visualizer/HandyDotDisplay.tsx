@@ -1,6 +1,8 @@
 // Handy 2 Standard and Pro: the device's own dot display, enlarged. A dot
-// column shows full travel with the stroke window lit, the commanded position
-// in large dots, millimetres beneath, and the status LED in the corner.
+// column shows full travel with the stroke window lit and a gliding lit row at
+// the commanded position, the position in large dots, millimetres beneath,
+// and the status LED in the corner.
+import type { CSSProperties } from "react";
 import { dotText } from "./dotFont";
 import type { DrawingProps } from "./types";
 
@@ -10,27 +12,45 @@ const MINI_ROWS = 10;
 interface ColumnDot {
   x: number;
   y: number;
-  kind: "off" | "range" | "on";
+  kind: "off" | "range";
 }
 
-function column(props: DrawingProps, rows: number, left: number, top: number, pitch: number, columns: number): ColumnDot[] {
+interface Column {
+  rows: number;
+  left: number;
+  top: number;
+  pitch: number;
+  columns: number;
+}
+
+// The static column: full travel, with the stroke window lit. It changes only
+// when the window does, never with the position.
+function columnDots(props: DrawingProps, { rows, left, top, pitch, columns }: Column): ColumnDot[] {
   const step = 100 / (rows - 1);
   const dots: ColumnDot[] = [];
   for (let row = 0; row < rows; row += 1) {
     const percent = 100 - row * step;
-    const kind = !props.active ? "off"
-      : Math.abs(percent - props.position) < step ? "on"
-        : percent >= props.min - 0.01 && percent <= props.max + 0.01 ? "range" : "off";
+    const kind = props.active && percent >= props.min - 0.01 && percent <= props.max + 0.01 ? "range" : "off";
     for (let col = 0; col < columns; col += 1) dots.push({ x: left + col * pitch, y: top + row * pitch, kind });
   }
   return dots;
 }
 
-function ColumnDots({ dots, radius }: { dots: ColumnDot[]; radius: number }) {
+// The position is one lit row that glides over the column on a CSS transform,
+// like the original Handy's carriage, so it moves smoothly between engine
+// samples instead of jumping a whole row at a time. It lines up with the
+// column's dots at each row.
+function DotColumn({ props, column, radius }: { props: DrawingProps; column: Column; radius: number }) {
+  const { rows, left, top, pitch, columns } = column;
+  const y = top + ((100 - props.position) / 100) * (rows - 1) * pitch;
+  const carriage = { "--viz-carriage-y": `${y}px` } as CSSProperties;
+  const dots = columnDots(props, column);
   return <>
-    <g className="viz-track">{dots.filter((d) => d.kind === "off").map((d) => <circle key={`${d.x},${d.y}`} cx={d.x} cy={d.y} r={radius} />)}</g>
-    <g className="viz-stroke-range">{dots.filter((d) => d.kind === "range").map((d) => <circle key={`${d.x},${d.y}`} cx={d.x} cy={d.y} r={radius} />)}</g>
-    <g className="viz-carriage">{dots.filter((d) => d.kind === "on").map((d) => <circle key={`${d.x},${d.y}`} cx={d.x} cy={d.y} r={radius} />)}</g>
+    <g className="viz-track">{dots.map((d) => d.kind === "off" && <circle key={`${d.x},${d.y}`} cx={d.x} cy={d.y} r={radius} />)}</g>
+    <g className="viz-stroke-range">{dots.map((d) => d.kind === "range" && <circle key={`${d.x},${d.y}`} cx={d.x} cy={d.y} r={radius} />)}</g>
+    <g className="viz-carriage" style={carriage}>
+      {props.active && Array.from({ length: columns }, (_, col) => <circle key={col} cx={left + col * pitch} cy={0} r={radius} />)}
+    </g>
   </>;
 }
 
@@ -39,7 +59,7 @@ export function HandyDotDisplay(props: DrawingProps) {
     return (
       <svg {...props.svgProps} viewBox="0 0 30 40" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
         <rect className="viz-body" x="0.5" y="0.5" width="29" height="39" rx="5" />
-        <ColumnDots dots={column(props, MINI_ROWS, 9.6, 5.4, 3.3, 3)} radius={1.2} />
+        <DotColumn props={props} column={{ rows: MINI_ROWS, left: 9.6, top: 5.4, pitch: 3.3, columns: 3 }} radius={1.2} />
         <circle className="viz-device-led" cx="24" cy="6" r="2" />
       </svg>
     );
@@ -52,7 +72,7 @@ export function HandyDotDisplay(props: DrawingProps) {
   return (
     <svg {...props.svgProps} viewBox="0 0 160 70" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
       <rect className="viz-body" x="0.5" y="0.5" width="159" height="69" rx="8" />
-      <ColumnDots dots={column(props, ROWS, 10, 7, 3.3, 3)} radius={1.15} />
+      <DotColumn props={props} column={{ rows: ROWS, left: 10, top: 7, pitch: 3.3, columns: 3 }} radius={1.15} />
       <g className="viz-digits">
         {big.map((d) => <circle key={`${d.x},${d.y}`} className={d.lit ? "viz-digit-on" : "viz-digit-off"} cx={d.x} cy={d.y} r={bigRadius} />)}
       </g>

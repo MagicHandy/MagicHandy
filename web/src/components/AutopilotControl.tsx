@@ -9,6 +9,7 @@ import { ownsActiveMotion } from "../util/motion";
 
 const decisionSourceCopy: Partial<Record<string, MessageKey>> = {
   model: "Assistant selected",
+  second_opinion: "Second opinion: corrected the motion choice.",
   fallback: "Planner fallback",
   hold: "Continuing current pattern",
   requested_hold: "Keeping the motion as you asked",
@@ -168,7 +169,9 @@ export function AutopilotControl() {
     modes?.motion_change_due_at,
     modes?.status_at,
     modes?.motion_change_in_ms,
-    active && !autopilotPaused && !modes?.motion_planned,
+    // A prepared decision waits for the same deadline, so the clock keeps
+    // counting while it is ready.
+    active && !autopilotPaused,
   );
   const speechClock = useDeadlineClock(
     modes?.speech_due_at,
@@ -236,6 +239,12 @@ export function AutopilotControl() {
   }
 
   const preferences = state?.settings?.autopilot;
+  // Auto timing is honored only when the backend routes Autopilot planning to a
+  // hosted model, and prepared decisions only for an external planner, so the
+  // switches are offered only there.
+  const plannerRoute = state?.settings?.model_routing?.autopilot?.kind;
+  const hostedPlanner = plannerRoute === "hosted";
+  const externalPlanner = hostedPlanner || plannerRoute === "decisions";
   const resetBuildup = async () => {
     try {
       await api.resetAutopilotArc();
@@ -251,9 +260,11 @@ export function AutopilotControl() {
       : modes?.speech_waiting_playback
         ? t("after audio")
         : formatClock(speechClock);
-    const motionDue = modes?.motion_planned
-      ? t("planned")
-      : formatClock(motionClock);
+    const motionDue = !modes?.motion_planned
+      ? formatClock(motionClock)
+      : motionClock > 0
+        ? t("{time}, ready", { time: formatClock(motionClock) })
+        : t("planned");
     clockStatus = t("Motion {motion} · Speech {speech}", { motion: motionDue, speech });
   }
 
@@ -299,6 +310,8 @@ export function AutopilotControl() {
       {preferences && (
         <AutopilotPreferences
           value={preferences}
+          hostedPlanner={hostedPlanner}
+          externalPlanner={externalPlanner}
           disabled={locked}
           onSaved={() => refresh()}
           onError={(error) => show(errorMessage(error), "error")}
@@ -310,11 +323,15 @@ export function AutopilotControl() {
 
 function AutopilotPreferences({
   value,
+  hostedPlanner,
+  externalPlanner,
   disabled,
   onSaved,
   onError,
 }: {
   value: AutopilotSettings;
+  hostedPlanner: boolean;
+  externalPlanner: boolean;
   disabled: boolean;
   onSaved: () => void;
   onError: (error: unknown) => void;
@@ -418,6 +435,42 @@ function AutopilotPreferences({
         })}
       />
       </div>
+      {hostedPlanner && (
+        <div className="control-row control-row-stack autopilot-auto-timing">
+          <label className="toggle-line">
+            <span className="toggle">
+              <input
+                type="checkbox"
+                checked={draft.auto_motion_timing === true}
+                onChange={(event) => void save({ ...draftRef.current, auto_motion_timing: event.target.checked })}
+              />
+              <span className="track" aria-hidden="true" />
+            </span>
+            <span>{t("Auto timing")}</span>
+          </label>
+          <p className="autopilot-timing-hint">
+            {t("The model decides when motion changes, from 8 seconds to 5 minutes. This can use more requests.")}
+          </p>
+        </div>
+      )}
+      {externalPlanner && (
+        <div className="control-row control-row-stack autopilot-auto-timing">
+          <label className="toggle-line">
+            <span className="toggle">
+              <input
+                type="checkbox"
+                checked={draft.prepare_next_decision !== false}
+                onChange={(event) => void save({ ...draftRef.current, prepare_next_decision: event.target.checked })}
+              />
+              <span className="track" aria-hidden="true" />
+            </span>
+            <span>{t("Prepare decisions early")}</span>
+          </label>
+          <p className="autopilot-timing-hint">
+            {t("Prepares the next decision while the current stretch plays, so changes land on time. Anything you say replaces it.")}
+          </p>
+        </div>
+      )}
       <div className="control-row">
         <span className="control-row-label" id={speechLabelId}>{t("Spoken check-ins")}</span>
         <select

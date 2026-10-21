@@ -2,18 +2,11 @@ package transport
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
-	"net/http"
-	"net/url"
-	"sort"
-	"strings"
 	"sync"
 	"time"
-
-	"github.com/coder/websocket"
 )
 
 const (
@@ -31,6 +24,10 @@ const (
 	minIntifaceTimingGapMargin     = 10 * time.Millisecond
 	maxIntifaceTimingGapMargin     = 50 * time.Millisecond
 	minimumIntifaceSegmentInterval = 50 * time.Millisecond
+	// Matched original-Handy FW4 trials favored fewer HDSP updates at 35%:
+	// full sweeps, pace changes and Creative v2. This does not raise the hard
+	// timing floor or change speed; the shared engine keeps faster reversals.
+	handyIntifacePreferredInterval = 180 * time.Millisecond
 )
 
 var (
@@ -41,76 +38,13 @@ var (
 
 var _ Transport = (*Intiface)(nil)
 
-// IntifaceOptions configures the connection to a user-owned Intiface server.
-type IntifaceOptions struct {
-	Address       string
-	ClientName    string
-	QueueCapacity int
-	HTTPClient    *http.Client
-}
-
-// IntifaceLinearActuator describes one selectable Buttplug LinearCmd feature.
-type IntifaceLinearActuator struct {
-	Index             uint32 `json:"index"`
-	FeatureDescriptor string `json:"feature_descriptor,omitempty"`
-	ActuatorType      string `json:"actuator_type,omitempty"`
-	StepCount         uint32 `json:"step_count,omitempty"`
-}
-
-// IntifaceDevice is a safe snapshot of a discovered Buttplug device.
-type IntifaceDevice struct {
-	DeviceIndex                  uint32                   `json:"device_index"`
-	DeviceName                   string                   `json:"device_name"`
-	DeviceMessageTimingGapMillis uint32                   `json:"device_message_timing_gap_ms"`
-	LinearActuators              []IntifaceLinearActuator `json:"linear_actuators"`
-}
-
-// IntifaceDispatchStatus is a bounded, protocol-safe paced-dispatch record.
-type IntifaceDispatchStatus struct {
-	DeviceIndex                 uint32 `json:"device_index"`
-	ActuatorIndex               uint32 `json:"actuator_index"`
-	StartupAnchor               bool   `json:"startup_anchor,omitempty"`
-	RelativeScheduledTimeMillis int64  `json:"relative_scheduled_time_ms"`
-	ActualSendTime              string `json:"actual_send_time"`
-	LatenessMillis              int64  `json:"lateness_ms"`
-	EffectiveDurationMillis     int64  `json:"effective_duration_ms"`
-	ACKLatencyMillis            *int64 `json:"ack_latency_ms,omitempty"`
-	Status                      string `json:"status"`
-}
-
-// IntifaceStatus is a safe connection, selection, and pacer snapshot.
-type IntifaceStatus struct {
-	Connected                 bool                     `json:"connected"`
-	Scanning                  bool                     `json:"scanning"`
-	PlaybackState             string                   `json:"playback_state"`
-	MaxPingTimeMillis         int64                    `json:"max_ping_time_ms"`
-	QueueDepth                int                      `json:"queue_depth"`
-	QueueCoverageMillis       int64                    `json:"queue_coverage_ms"`
-	PendingACKs               int                      `json:"pending_acks"`
-	LinearSentCount           uint64                   `json:"linear_sent_count"`
-	LinearACKedCount          uint64                   `json:"linear_acked_count"`
-	LinearRejectedCount       uint64                   `json:"linear_rejected_count"`
-	LinearTimeoutCount        uint64                   `json:"linear_timeout_count"`
-	LastACKLatencyMillis      int64                    `json:"last_ack_latency_ms"`
-	MaxACKLatencyMillis       int64                    `json:"max_ack_latency_ms"`
-	LastSendLatenessMillis    int64                    `json:"last_send_lateness_ms"`
-	MaxSendLatenessMillis     int64                    `json:"max_send_lateness_ms"`
-	CoalescedSegments         uint64                   `json:"coalesced_segments"`
-	RecentDispatchesDropped   uint64                   `json:"recent_dispatches_dropped"`
-	LastWireDurationMillis    int64                    `json:"last_wire_duration_ms"`
-	SelectedResolutionPercent float64                  `json:"selected_resolution_percent"`
-	LastPacerFailure          string                   `json:"last_pacer_failure,omitempty"`
-	RecentDispatches          []IntifaceDispatchStatus `json:"recent_dispatches"`
-	SelectedDeviceIndex       *uint32                  `json:"selected_device_index,omitempty"`
-	SelectedActuatorIndex     *uint32                  `json:"selected_actuator_index,omitempty"`
-	Devices                   []IntifaceDevice         `json:"devices"`
-}
-
 type intifaceSelection struct {
 	deviceIndex       uint32
+	incarnation       uint64
 	actuatorIndex     uint32
 	timingGap         time.Duration
 	resolutionPercent float64
+	preferredInterval time.Duration
 }
 
 func (s intifaceSelection) minimumPointInterval() time.Duration {
@@ -183,32 +117,16 @@ type intifaceDispatch struct {
 	status    IntifaceDispatchStatus
 }
 
-// Intiface owns one persistent Buttplug v3 websocket session and linear pacer.
+// Intiface is the linear owner: one selected LinearCmd actuator and its
+// pacer, bound to a Buttplug v3 session. Session fields are promoted from the
+// embedded session; selection and diagnostics share its lock.
 type Intiface struct {
-	options IntifaceOptions
+	*intifaceSession
 
-	lifecycleMu     sync.Mutex
-	stopMu          sync.RWMutex
-	workerMu        sync.Mutex
-	workersClosed   bool
-	mu              sync.Mutex
-	writeMu         sync.Mutex
-	conn            *websocket.Conn
-	sessionCtx      context.Context
-	sessionStop     context.CancelFunc
-	started         bool
-	closed          bool
-	connected       bool
-	scanning        bool
-	maxPingTime     time.Duration
-	nextID          uint32
-	waiters         map[uint32]*intifaceWaiter
-	devices         map[uint32]IntifaceDevice
-	selection       intifaceSelection
-	selected        bool
-	diagnosis       TransportDiagnostics
-	wg              sync.WaitGroup
-	responseTimeout time.Duration
+	stopMu    sync.RWMutex
+	selection intifaceSelection
+	selected  bool
+	diagnosis TransportDiagnostics
 
 	paceMu            sync.Mutex
 	paceNotify        chan struct{}
@@ -243,39 +161,167 @@ type Intiface struct {
 	recentDropped     uint64
 }
 
-// NewIntiface validates options and returns a disconnected Intiface owner.
+// NewIntiface validates options and returns a disconnected Intiface owner
+// with its own session.
 func NewIntiface(options IntifaceOptions) (*Intiface, error) {
-	options.Address = strings.TrimSpace(options.Address)
-	if options.Address == "" {
-		options.Address = defaultIntifaceAddress
+	session, err := newIntifaceSession(options)
+	if err != nil {
+		return nil, err
 	}
-	parsed, err := url.Parse(options.Address)
-	if err != nil || (parsed.Scheme != "ws" && parsed.Scheme != "wss") || parsed.Host == "" {
-		return nil, errors.New("Intiface address must be an absolute ws:// or wss:// URL")
-	}
-	options.ClientName = strings.TrimSpace(options.ClientName)
-	if options.ClientName == "" {
-		options.ClientName = defaultIntifaceClientName
-	}
-	if options.QueueCapacity == 0 {
-		options.QueueCapacity = defaultIntifaceQueueCapacity
-	}
-	if options.QueueCapacity < 1 {
-		return nil, errors.New("Intiface queue capacity must be positive")
-	}
+	return newIntifaceLinear(session), nil
+}
 
-	return &Intiface{
-		options:         options,
+func newIntifaceLinear(session *intifaceSession) *Intiface {
+	owner := &Intiface{
+		intifaceSession: session,
 		paceNotify:      make(chan struct{}, 1),
-		waiters:         make(map[uint32]*intifaceWaiter),
-		devices:         make(map[uint32]IntifaceDevice),
-		responseTimeout: defaultIntifaceResponseTime,
 		window:          StrokeWindowCommand{MinPercent: 0, MaxPercent: 100},
 		diagnosis: TransportDiagnostics{
 			Name:          intifaceTransportName,
 			PlaybackState: "idle",
 		},
-	}, nil
+	}
+	session.bind(owner)
+	return owner
+}
+
+// Connect opens the owner's session; the linear pacer starts once it is ready.
+func (i *Intiface) Connect(ctx context.Context) error {
+	return i.intifaceSession.Connect(ctx)
+}
+
+func (i *Intiface) sessionReady(sessionCtx context.Context) {
+	i.wg.Add(1)
+	go i.paceLoop(sessionCtx)
+}
+
+// paceAlive is always true: the linear pacer is deadline-driven and reports
+// its own starvation.
+func (i *Intiface) paceAlive(time.Time) bool {
+	return true
+}
+
+// invalidateForEmergency ends playback before the session's StopAllDevices,
+// so no paced LinearCmd from this generation can follow it.
+func (i *Intiface) invalidateForEmergency() {
+	i.cancelPlayback("idle")
+}
+
+// Close stops pacing, attempts a device stop, and tears down the session.
+func (i *Intiface) Close() error {
+	return i.intifaceSession.Close()
+}
+
+func (i *Intiface) startPacedRequest(ctx context.Context, fields map[string]any, generation uint64, paced intifacePacedRequest) (intifaceRequest, error) {
+	return i.startRequestFor(ctx, i, "LinearCmd", fields, generation, &paced)
+}
+
+func (i *Intiface) admitWrite(kind string, fields map[string]any, generation uint64, paced *intifacePacedRequest) (intifaceWriteAdmission, error) {
+	return i.admitRequest(kind, fields, generation, paced)
+}
+
+func (i *Intiface) releaseWrite(reserved bool) {
+	i.releasePendingACK(reserved)
+}
+
+func (i *Intiface) sessionConnectedLocked() {
+	i.diagnosis.Connected = true
+	i.diagnosis.PlaybackState = "idle"
+}
+
+func (i *Intiface) sessionFailedLocked(err error) func() {
+	i.diagnosis.Connected = false
+	i.diagnosis.PlaybackState = "stale"
+	i.diagnosis.LastError = err.Error()
+	return func() { i.cancelPlayback("stale") }
+}
+
+func (i *Intiface) deviceRemovedLocked(deviceIndex uint32) func() {
+	if !i.selected || i.selection.deviceIndex != deviceIndex {
+		return nil
+	}
+	i.selected = false
+	return func() { i.cancelPlayback("stale") }
+}
+
+func (i *Intiface) invalidateForClose() {
+	i.paceMu.Lock()
+	i.invalidatePlaybackLocked(true)
+	i.paceMu.Unlock()
+	i.signalPacer()
+}
+
+func (i *Intiface) stopForClose(connected bool) error {
+	i.mu.Lock()
+	selected := i.selected
+	i.mu.Unlock()
+	if !connected || !selected {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	_, err := i.Stop(ctx, StopCommand{Reason: "owner_close"})
+	return err
+}
+
+func (i *Intiface) closedLocked() {
+	i.diagnosis.Connected = false
+}
+
+// admitRequest admits one of this owner's writes under the session writer
+// lock: a superseded playback generation never reaches the wire, and paced
+// LinearCmd writes reserve an acknowledgement slot.
+func (i *Intiface) admitRequest(kind string, fields map[string]any, generation uint64, paced *intifacePacedRequest) (intifaceWriteAdmission, error) {
+	admission := intifaceWriteAdmission{}
+	if generation == 0 {
+		return admission, nil
+	}
+	i.paceMu.Lock()
+	defer i.paceMu.Unlock()
+	if !i.playing || i.generation != generation {
+		return admission, errPacerSuperseded
+	}
+	if paced != nil {
+		var err error
+		admission, err = i.preparePacedFieldsLocked(fields, *paced)
+		if err != nil {
+			return admission, err
+		}
+	}
+	if kind != "LinearCmd" {
+		return admission, nil
+	}
+	if i.pendingACKs >= maxIntifacePendingACKs {
+		return admission, errIntifacePendingACKCap
+	}
+	i.pendingACKs++
+	admission.linearReserved = true
+	return admission, nil
+}
+
+func (i *Intiface) preparePacedFieldsLocked(fields map[string]any, paced intifacePacedRequest) (intifaceWriteAdmission, error) {
+	admission := intifaceWriteAdmission{wireDuration: paced.originalDuration}
+	var err error
+	if paced.enforceSchedule {
+		admission.lateness, admission.wireDuration, err = decideIntifaceLiveDuration(
+			time.Now(), paced.scheduledAt, paced.scheduledEnd, paced.originalDuration, paced.minimumDuration,
+		)
+		if err == nil {
+			admission.latestWrite, err = latestIntifaceWriteTime(paced)
+		}
+	}
+	vectors, ok := fields["Vectors"].([]map[string]any)
+	if !ok || len(vectors) != 1 {
+		return admission, &intifacePacerError{category: "invalid_dispatch"}
+	}
+	if err != nil {
+		return admission, err
+	}
+	vectors[0]["Position"] = projectIntifacePosition(paced.position, i.window)
+	if paced.enforceSchedule {
+		vectors[0]["Duration"] = admission.wireDuration.Milliseconds()
+	}
+	return admission, nil
 }
 
 // Status returns a safe device, selection, and playback snapshot.
@@ -324,39 +370,101 @@ func (i *Intiface) Status() IntifaceStatus {
 	return status
 }
 
-// Devices returns the current safe discovered-device snapshot.
-func (i *Intiface) Devices() []IntifaceDevice {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-	return cloneIntifaceDevicesLocked(i.devices)
-}
-
-// StartScanning asks Intiface to begin device discovery.
-func (i *Intiface) StartScanning(ctx context.Context) error {
-	if err := i.requestOK(ctx, "StartScanning", nil); err != nil {
-		return err
-	}
-	i.mu.Lock()
-	if i.closed || !i.connected {
-		i.mu.Unlock()
-		return errors.New("Intiface owner closed while scanning started")
-	}
-	i.mu.Unlock()
-	return nil
-}
-
-// StopScanning asks Intiface to end device discovery.
-func (i *Intiface) StopScanning(ctx context.Context) error {
-	if err := i.requestOK(ctx, "StopScanning", nil); err != nil {
-		return err
-	}
-	return nil
-}
-
-// SelectDevice selects one discovered device and one of its linear actuators.
+// SelectDevice selects one discovered device and one of its linear actuators
+// without commanding it. Production selection uses Select, which also stops
+// the device first.
 func (i *Intiface) SelectDevice(deviceIndex, actuatorIndex uint32) error {
 	i.stopMu.Lock()
 	defer i.stopMu.Unlock()
+	if err := i.checkSelectable(); err != nil {
+		return err
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	selection, err := i.prepareSelectionLocked(deviceIndex, actuatorIndex)
+	if err != nil {
+		return err
+	}
+	if err := i.claimLocked(i, deviceIndex); err != nil {
+		return err
+	}
+	return i.commitSelectionLocked(selection)
+}
+
+// Select chooses a linear actuator for playback. The device is claimed for
+// this owner, and both the previous and the new device are stopped before
+// the selection is ready, so neither keeps moving from an earlier command.
+func (i *Intiface) Select(ctx context.Context, deviceIndex, actuatorIndex uint32) error {
+	i.stopMu.Lock()
+	err := i.checkSelectable()
+	i.mu.Lock()
+	var selection intifaceSelection
+	if err == nil {
+		selection, err = i.prepareSelectionLocked(deviceIndex, actuatorIndex)
+	}
+	if err == nil {
+		err = i.claimLocked(i, deviceIndex)
+	}
+	previous, hadPrevious := i.selection.deviceIndex, i.selected
+	i.mu.Unlock()
+	i.stopMu.Unlock()
+	if err != nil {
+		return err
+	}
+	targets := []uint32{deviceIndex}
+	if hadPrevious && previous != deviceIndex {
+		targets = append(targets, previous)
+	}
+	for _, target := range targets {
+		stopCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		err = errors.Join(err, i.requestOK(stopCtx, "StopDeviceCmd", map[string]any{"DeviceIndex": target}))
+		cancel()
+	}
+
+	i.stopMu.Lock()
+	defer i.stopMu.Unlock()
+	if err == nil {
+		err = i.checkSelectable()
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if err == nil {
+		err = i.commitSelectionLocked(selection)
+	}
+	if err != nil {
+		if !hadPrevious || previous != deviceIndex {
+			i.releaseClaimLocked(i, deviceIndex)
+		}
+		return fmt.Errorf("Intiface device %d could not be prepared: %w", deviceIndex, err)
+	}
+	return nil
+}
+
+// Release stops and forgets the selected actuator while the session stays
+// open for other outputs. A Stop that cannot be confirmed fails the session,
+// because the server then stops its devices.
+func (i *Intiface) Release(ctx context.Context) error {
+	i.cancelPlayback("idle")
+	i.mu.Lock()
+	selection, selected, connected := i.selection, i.selected, i.connected
+	if selected {
+		i.selected = false
+		i.releaseClaimLocked(i, selection.deviceIndex)
+	}
+	i.mu.Unlock()
+	if !selected || !connected {
+		return nil
+	}
+	stopCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	defer cancel()
+	if err := i.requestOK(stopCtx, "StopDeviceCmd", map[string]any{"DeviceIndex": selection.deviceIndex}); err != nil {
+		i.setSessionFailure(fmt.Errorf("Intiface Stop could not be confirmed: %w", err))
+		return err
+	}
+	return nil
+}
+
+func (i *Intiface) checkSelectable() error {
 	if i.motionAdmissionClosed() {
 		return errors.New("Intiface owner is closed")
 	}
@@ -366,33 +474,56 @@ func (i *Intiface) SelectDevice(deviceIndex, actuatorIndex uint32) error {
 	if playing {
 		return errors.New("cannot change Intiface device selection during playback")
 	}
+	return nil
+}
 
-	i.mu.Lock()
-	defer i.mu.Unlock()
+func (i *Intiface) prepareSelectionLocked(deviceIndex, actuatorIndex uint32) (intifaceSelection, error) {
 	device, ok := i.devices[deviceIndex]
 	if !ok {
-		return fmt.Errorf("Intiface device %d is not available", deviceIndex)
+		return intifaceSelection{}, fmt.Errorf("Intiface device %d is not available", deviceIndex)
 	}
+	incarnation, _ := i.incarnationLocked(deviceIndex)
 	for _, actuator := range device.LinearActuators {
-		if actuator.Index == actuatorIndex {
-			if actuator.StepCount == 0 {
-				return fmt.Errorf("Intiface device %d linear actuator %d advertises zero steps", deviceIndex, actuatorIndex)
-			}
-			timingGap := time.Duration(device.DeviceMessageTimingGapMillis) * time.Millisecond
-			if timingGap > maxIntifaceDeviceTimingGap {
-				return fmt.Errorf("Intiface device %d timing gap %dms exceeds the supported %dms limit", deviceIndex, device.DeviceMessageTimingGapMillis, maxIntifaceDeviceTimingGap.Milliseconds())
-			}
-			i.selection = intifaceSelection{
-				deviceIndex:       deviceIndex,
-				actuatorIndex:     actuatorIndex,
-				timingGap:         timingGap,
-				resolutionPercent: 100 / float64(actuator.StepCount),
-			}
-			i.selected = true
-			return nil
+		if actuator.Index != actuatorIndex {
+			continue
 		}
+		if actuator.StepCount == 0 {
+			return intifaceSelection{}, fmt.Errorf("Intiface device %d linear actuator %d advertises zero steps", deviceIndex, actuatorIndex)
+		}
+		timingGap := time.Duration(device.DeviceMessageTimingGapMillis) * time.Millisecond
+		if timingGap > maxIntifaceDeviceTimingGap {
+			return intifaceSelection{}, fmt.Errorf("Intiface device %d timing gap %dms exceeds the supported %dms limit", deviceIndex, device.DeviceMessageTimingGapMillis, maxIntifaceDeviceTimingGap.Milliseconds())
+		}
+		var preferredInterval time.Duration
+		// Buttplug's protocol name, independent of its user display-name field.
+		// Other linear devices keep their existing sampling behavior.
+		if device.DeviceName == "The Handy (FW4+)" {
+			preferredInterval = handyIntifacePreferredInterval
+		}
+		return intifaceSelection{
+			deviceIndex:       deviceIndex,
+			incarnation:       incarnation,
+			actuatorIndex:     actuatorIndex,
+			timingGap:         timingGap,
+			resolutionPercent: 100 / float64(actuator.StepCount),
+			preferredInterval: preferredInterval,
+		}, nil
 	}
-	return fmt.Errorf("Intiface device %d has no linear actuator %d", deviceIndex, actuatorIndex)
+	return intifaceSelection{}, fmt.Errorf("Intiface device %d has no linear actuator %d", deviceIndex, actuatorIndex)
+}
+
+// commitSelectionLocked binds the selection to the device incarnation it was
+// prepared from and returns any other device this owner held.
+func (i *Intiface) commitSelectionLocked(selection intifaceSelection) error {
+	if incarnation, ok := i.incarnationLocked(selection.deviceIndex); !ok || incarnation != selection.incarnation {
+		return errors.New("selected Intiface device is stale")
+	}
+	if i.selected && i.selection.deviceIndex != selection.deviceIndex {
+		i.releaseClaimLocked(i, i.selection.deviceIndex)
+	}
+	i.selection = selection
+	i.selected = true
+	return nil
 }
 
 // PlaybackStartTime reports the post-anchor stream origin for engine clock alignment.
@@ -429,6 +560,7 @@ func (i *Intiface) MotionSamplingCapabilities() MotionSamplingCapabilities {
 	return MotionSamplingCapabilities{
 		PositionResolutionPercent:   i.selection.resolutionPercent,
 		ResolutionAfterStrokeWindow: true,
+		PreferredPointInterval:      i.selection.preferredInterval,
 	}
 }
 
@@ -436,33 +568,6 @@ func (i *Intiface) motionAdmissionClosed() bool {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 	return i.closed || !i.connected
-}
-
-func (i *Intiface) handleDeviceAdded(payload json.RawMessage) {
-	var device buttplugDevice
-	if json.Unmarshal(payload, &device) != nil {
-		return
-	}
-	i.mu.Lock()
-	i.devices[device.DeviceIndex] = intifaceDeviceFromProtocol(device)
-	i.mu.Unlock()
-}
-
-func (i *Intiface) handleDeviceRemoved(payload json.RawMessage) {
-	var removed buttplugDeviceRemoved
-	if json.Unmarshal(payload, &removed) != nil {
-		return
-	}
-	i.mu.Lock()
-	delete(i.devices, removed.DeviceIndex)
-	selected := i.selected && i.selection.deviceIndex == removed.DeviceIndex
-	if selected {
-		i.selected = false
-	}
-	i.mu.Unlock()
-	if selected {
-		i.cancelPlayback("stale")
-	}
 }
 
 func (i *Intiface) selectedDevice() (intifaceSelection, error) {
@@ -474,7 +579,7 @@ func (i *Intiface) selectedDevice() (intifaceSelection, error) {
 	if !i.selected {
 		return intifaceSelection{}, errors.New("an Intiface linear actuator must be selected")
 	}
-	if _, ok := i.devices[i.selection.deviceIndex]; !ok {
+	if incarnation, ok := i.incarnationLocked(i.selection.deviceIndex); !ok || incarnation != i.selection.incarnation {
 		return intifaceSelection{}, errors.New("selected Intiface device is stale")
 	}
 	return i.selection, nil
@@ -667,15 +772,4 @@ func snapshotIntifacePosition(position float64, reverse bool) float64 {
 		return 100 - position
 	}
 	return position
-}
-
-func cloneIntifaceDevicesLocked(devices map[uint32]IntifaceDevice) []IntifaceDevice {
-	clones := make([]IntifaceDevice, 0, len(devices))
-	for _, device := range devices {
-		clone := device
-		clone.LinearActuators = append([]IntifaceLinearActuator(nil), device.LinearActuators...)
-		clones = append(clones, clone)
-	}
-	sort.Slice(clones, func(a, b int) bool { return clones[a].DeviceIndex < clones[b].DeviceIndex })
-	return clones
 }

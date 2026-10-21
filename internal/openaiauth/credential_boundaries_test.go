@@ -133,3 +133,31 @@ func TestRefreshScopeLossPersistsRotatedPairWithoutInference(t *testing.T) {
 		t.Fatalf("old token source survived scope loss: %v", err)
 	}
 }
+
+func TestRemoveConnectionKeysDeletesOnlyNamedConnections(t *testing.T) {
+	m, err := Open(Options{DataDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	removed := config.ModelConnection{ID: "openrouter-1", Name: "OpenRouter", Provider: config.LLMProviderOpenRouter, Model: "model"}.Normalize()
+	kept := config.ModelConnection{ID: "openrouter-2", Name: "OpenRouter", Provider: config.LLMProviderOpenRouter, Model: "model"}.Normalize()
+	for _, connection := range []config.ModelConnection{removed, kept} {
+		if err := m.SetConnectionKey(t.Context(), connection, "key-"+connection.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := m.RemoveConnectionKeys(t.Context(), []string{removed.ID, "never-saved"}); err != nil {
+		t.Fatal(err)
+	}
+	if m.ConnectionKeySet(t.Context(), removed) {
+		t.Fatal("removed connection kept its key")
+	}
+	if !m.ConnectionKeySet(t.Context(), kept) {
+		t.Fatal("unrelated connection lost its key")
+	}
+	// A new connection that reuses the id starts without a credential.
+	if token, err := m.ConnectionKeySource(removed)(t.Context()); err == nil || token != "" {
+		t.Fatal("reused id inherited a removed key")
+	}
+}

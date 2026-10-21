@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import type { PublicSettings } from "../api/types";
+import { useState, type ReactNode } from "react";
+import type { PromptSet, PublicSettings } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { ModelSettingsPanel } from "./ModelSettingsPanel";
 import { ModelConnectionsPanel } from "./ModelConnectionsPanel";
@@ -54,6 +54,9 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
   patchChat: (next: Partial<NonNullable<PublicSettings["chat"]>>) => void;
   actions: ReactNode;
 }) {
+  const [promptSets, setPromptSets] = useState<PromptSet[]>([]);
+  const promptIDs = promptSets.length ? promptSets.map(set => set.id) : opt.prompt_sets ?? [];
+  const promptOptions = [...new Set([...promptIDs, s.llm.prompt_set])];
   return <>
     <h2 className="section-title">{t("Chat")}</h2>
     <div className="settings-split">
@@ -124,10 +127,10 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
             <div className="group">
             <h4 className="group-title">{t("Reply style")}</h4>
             <label className="field">
-              <span className="label">{t("Active prompt set")}<span className="hint-inline">{t("saved with Save settings")}</span></span>
+              <span className="label">{t("Default prompt set")}<span className="hint-inline">{t("saved with Save settings")}</span></span>
               <select value={s.llm.prompt_set} disabled={locked} onChange={(event) => patchLLM({ prompt_set: event.target.value })}>
-                {(opt.prompt_sets?.length ? opt.prompt_sets : [s.llm.prompt_set]).map((promptSet) => (
-                  <option key={promptSet} value={promptSet}>{PROMPT_SET_LABELS[promptSet] ?? promptSet}</option>
+                {promptOptions.map((promptSet) => (
+                  <option key={promptSet} value={promptSet}>{PROMPT_SET_LABELS[promptSet] ?? promptSets.find(set => set.id === promptSet)?.name ?? promptSet}</option>
                 ))}
               </select>
               <span className="hint-block">{t("Built-in prompt sets choose the default language for model replies. Custom prompt sets keep their own instructions.")}</span>
@@ -181,7 +184,7 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
             </label>
             <p className="hint">{t("Anatomy context and persona apply to interactive Warm, Intimate, and Explicit replies. Direct anatomy wording is reserved for Explicit; the other levels keep references indirect. This bounded context cannot change motion permissions or limits.")}</p>
             </div>
-            <PromptSetEditor locked={locked} />
+            <PromptSetEditor locked={locked} defaultID={s.llm.prompt_set} chooseDefault={id => patchLLM({ prompt_set: id })} onSetsChange={setPromptSets} />
             <MemoryManager locked={locked} />
           </>
         )}

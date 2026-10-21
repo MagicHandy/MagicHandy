@@ -2,7 +2,7 @@
 
 Date: 2026-10-08
 
-Status: Proposed; implemented on the review branch, pending final independent review.
+Status: Proposed; implemented on main and released as a preview in alpha.58, pending final independent review.
 
 ## Context
 

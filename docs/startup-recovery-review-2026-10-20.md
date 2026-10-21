@@ -81,5 +81,31 @@ The startup/cmd regressions, full Go and Windows race tests, vet/lint, and
 installer suites under both Windows PowerShell 5.1 and PowerShell 7 pass.
 The current-source simulator/LLM handoff accompanies the budget sample in the
 [goal scorecard](goal-scorecard.md). The original frontend's 836 tests, localization audit,
-typecheck and canonical embedded build passed; the review fixes do not change
+typecheck and canonical embedded build passed; those review fixes did not change
 frontend source or its embedded assets.
+
+## PR integration and report format
+
+The branch was then integrated with `main` at `4a46c0ff`. The launcher retains
+main's shared 30-second startup deadline while preserving an unverified live
+process. The startup ADR is now 0051 and its risk entry is R36, avoiding numbers
+already used by intervening main changes.
+
+At the user's request, startup diagnostics are included only in the existing
+diagnostic report. Its always-included `status.json` has a `startup` field for
+the current launch, last failure and last recovery. The separate panel,
+download, API routes and translations were removed. The final frontend source
+and embedded bundle match `main`; its 915 tests, localization audit, typecheck
+and production build pass. The Opus reviews above describe the earlier
+implementation; this consolidation was validated with archive regressions and
+the current-source app rather than another model-review claim.
+
+Archive tests retain failure/recovery evidence through a clean launch, include
+startup records with all optional report sections off, allow absent history and
+exclude the private instance token, identity, URL, profile path and raw errors.
+The running isolated simulator at `http://127.0.0.1:14395` recovered after a real
+occupied-port failure; its downloaded diagnostic ZIP contains the retained
+native 10048 failure and automatic recovery. Its configured Ollama model passed
+a real generation with `check-review-llm.ps1`. No device connection or motion
+was requested. The final budget comparison against current main is in the
+[goal scorecard](goal-scorecard.md).

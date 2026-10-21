@@ -3,6 +3,7 @@ package motion
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"sort"
 )
@@ -230,7 +231,11 @@ func (e *Engine) fitMotionWindowLocked(
 }
 
 func (e *Engine) fitImmediateMotionSamples(reference []MotionSample, resolution float64, hasPrevious bool) ([]MotionSample, map[int64]struct{}, error) {
-	samples, mandatory, err := fitSpacedMotionSamples(reference, e.minimumPointIntervalMillis)
+	preferred := e.minimumPointIntervalMillis
+	if e.plan.Target.Media == nil && e.plan.Target.continuousCurve() {
+		preferred = max(preferred, e.preferredPointIntervalMillis)
+	}
+	samples, mandatory, err := fitSpacedMotionSamplesPreferred(reference, e.minimumPointIntervalMillis, preferred)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -249,18 +254,19 @@ func (e *Engine) fitImmediateMotionSamples(reference []MotionSample, resolution 
 }
 
 func (e *Engine) retimeBufferedSamples(samples, reference []MotionSample, mandatory map[int64]struct{}, resolution float64, hasPrevious bool, chunkStart int64) ([]MotionSample, error) {
+	partition := maps.Clone(mandatory)
 	if hasPrevious && len(samples) > 0 {
 		// Preserve both sides of the already committed batch boundary.
-		mandatory[samples[0].TimeMillis] = struct{}{}
+		partition[samples[0].TimeMillis] = struct{}{}
 	}
 	// Keep the established append partition stable. A shifted cutoff changes
 	// the next fit's phase and can create a pulse despite local improvements.
 	targetTail := chunkStart + int64(e.chunkSize)*e.sampleInterval.Milliseconds()
 	for index, point := range samples {
 		if point.TimeMillis >= targetTail {
-			mandatory[point.TimeMillis] = struct{}{}
+			partition[point.TimeMillis] = struct{}{}
 			if index > 0 {
-				mandatory[samples[index-1].TimeMillis] = struct{}{}
+				partition[samples[index-1].TimeMillis] = struct{}{}
 			}
 			break
 		}
@@ -268,15 +274,23 @@ func (e *Engine) retimeBufferedSamples(samples, reference []MotionSample, mandat
 	if hasPrevious {
 		samples = append([]MotionSample{*e.lastSample}, samples...)
 	}
-	samples, err := fitQuantizedMotionTiming(samples, reference, mandatory, resolution,
+	fitted, err := fitQuantizedMotionTiming(samples, reference, partition, resolution,
 		referenceTravelRateForSpeed(100, e.settings.HandyModel), 1)
+	if err != nil {
+		// An unsubmitted partition point is not a motion knot. At the velocity
+		// ceiling, whole-percent rounding can make two such fixed points demand
+		// an impossible interval. Refit without those artificial constraints,
+		// keeping the committed tail, real reversals and velocity limit intact.
+		fitted, err = fitQuantizedMotionTiming(samples, reference, mandatory, resolution,
+			referenceTravelRateForSpeed(100, e.settings.HandyModel), 1)
+	}
 	if err != nil {
 		return nil, err
 	}
 	if hasPrevious {
-		samples = samples[1:]
+		fitted = fitted[1:]
 	}
-	return samples, nil
+	return fitted, nil
 }
 
 // naturalMotionChunkCutoff chooses a point that the trajectory fitter retained

@@ -1,5 +1,12 @@
 # Connection Artwork: Composition And Refactoring
 
+> **Retired (2026-10-15).** The top-bar device panel replaced the connection
+> manager and has no artwork: each device row's status dot and word carry the
+> state ([UI design guidelines](ui-design-guidelines.md#device-chip-and-device-panel)).
+> `ConnectionArtwork` and its `.connection-*` rules were removed with the
+> manager. This note stays as the record of the construction; recover the
+> source from the history before the device panel if an artwork returns.
+
 This note documents the status artwork inside the top-bar connection manager.
 It is a maintenance reference for changing the composition without
 rediscovering how the SVG geometry, CSS state, and panel layout fit together.

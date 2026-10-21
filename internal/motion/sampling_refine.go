@@ -32,7 +32,7 @@ func refineQuantizedMotionSamples(samples, probes []MotionSample, resolution flo
 	if len(samples) < 2 || len(probes) < 3 {
 		return samples
 	}
-	tolerance := wireApproximationTolerance + resolution/2
+	tolerance := quantizedProbeTolerance(probes, resolution)
 	result := []MotionSample{samples[0]}
 	var split func(MotionSample, MotionSample)
 	split = func(left, right MotionSample) {
@@ -62,4 +62,16 @@ func refineQuantizedMotionSamples(samples, probes []MotionSample, resolution flo
 		split(samples[index-1], samples[index])
 	}
 	return result
+}
+
+// Probe agreement alone can hide a small error crest between probes. Reserve
+// the linear-interpolation error A*dt²/8 under the existing acceleration bound,
+// so a faster rounded curve still meets the same 0.8% whole-percent wire bound.
+func quantizedProbeTolerance(probes []MotionSample, resolution float64) float64 {
+	var gap int64
+	for i := 1; i < len(probes); i++ {
+		gap = max(gap, probes[i].TimeMillis-probes[i-1].TimeMillis)
+	}
+	reserve := runtimeMaxAccelerationPercentPerSecond2 * float64(gap) * float64(gap) / 8e6
+	return resolution/2 + math.Max(0, wireApproximationTolerance-reserve)
 }

@@ -306,8 +306,7 @@
   border-radius: 50%;
   background: var(--accent);
 }
-.notification-center-panel,
-.connection-manager-panel {
+.notification-center-panel {
   position: fixed;
   top: calc(var(--status-h) + 8px);
   right: clamp(8px, 2vw, 20px);
@@ -329,8 +328,7 @@
 .notification-center-head > div:first-child {
   min-width: 0;
 }
-.notification-center-head h2,
-.connection-manager-head h2 {
+.notification-center-head h2 {
   margin: 0;
   font-size: var(--fs-heading);
   font-weight: 600;
@@ -485,359 +483,6 @@
   align-self: center;
   border-radius: 50%;
   background: var(--accent);
-}
-
-/* ---- Device panel (connection manager) ---- */
-.connection-manager {
-  position: relative;
-  z-index: 24;
-  flex: 0 0 auto;
-}
-.connection-manager-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px;
-}
-.connection-manager-title {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  gap: 8px;
-}
-.connection-manager-title p {
-  margin: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: var(--fs-hint);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.connection-manager-head .icon-button {
-  border-color: transparent;
-}
-.connection-manager-panel > .hint-block {
-  margin: 0 12px 6px;
-}
-/* A flat status strip: the device glyph with its signal, no illustration. */
-.connection-artwork {
-  display: block;
-  width: 100%;
-  height: 96px;
-  padding: 8px 0;
-  background: var(--bg-inset);
-  border-block: 1px solid var(--line);
-}
-.connection-signal path {
-  fill: none;
-  stroke-linecap: round;
-  stroke: var(--accent);
-  stroke-width: 4;
-  opacity: 1;
-}
-.connection-artwork[data-phase="connected"] .connection-signal path {
-  stroke: var(--ok);
-}
-.connection-signal,
-.connection-error-mark {
-  opacity: 0;
-}
-.connection-artwork[data-phase="connected"] .connection-signal,
-.connection-artwork[data-phase="connecting"] .connection-signal,
-.connection-artwork[data-phase="error"] .connection-error-mark {
-  opacity: 1;
-}
-.connection-error-mark {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-.connection-artwork[data-phase="error"] .connection-error-mark {
-  animation: connection-error-shake 0.42s ease-out 1;
-}
-.connection-error-mark path {
-  fill: none;
-  stroke: var(--danger);
-  stroke-width: 4;
-  stroke-linecap: round;
-}
-.connection-handy-body {
-  fill: var(--surface-2);
-  stroke: var(--line-strong);
-  stroke-width: 1;
-}
-.connection-handy-led {
-  fill: var(--muted);
-}
-.connection-handy-marker {
-  fill: var(--danger);
-}
-.connection-handy-marker[data-state="connecting"] {
-  fill: var(--accent);
-}
-.connection-handy-marker[data-state="connected"] {
-  fill: var(--ok);
-}
-.connection-handy-marker[data-state="initializing"] {
-  fill: var(--muted);
-}
-.connection-artwork[data-phase="connected"] .connection-handy-led {
-  fill: var(--ok);
-}
-.connection-artwork[data-phase="connecting"] .connection-handy-led {
-  fill: var(--accent);
-}
-.connection-artwork[data-phase="connecting"] .connection-signal path {
-  animation: connection-signal-wave 1.35s ease-in-out infinite;
-  animation-delay: calc(var(--signal-index) * 0.18s);
-}
-@keyframes connection-signal-wave {
-  0%, 12%, 100% { opacity: 0.15; }
-  35%, 62% { opacity: 1; }
-  82% { opacity: 0.15; }
-}
-@keyframes connection-error-shake {
-  0%, 100% { transform: translateX(0) rotate(0); }
-  20% { transform: translateX(-4px) rotate(-4deg); }
-  40% { transform: translateX(3px) rotate(3deg); }
-  60% { transform: translateX(-2px) rotate(-2deg); }
-  80% { transform: translateX(1px) rotate(1deg); }
-}
-.connection-current {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 6px 12px;
-}
-.connection-current .connection-current-check {
-  border-color: transparent;
-}
-.connection-current-copy {
-  min-width: 0;
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-}
-.connection-current strong,
-.connection-trigger-copy strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: var(--fs-label);
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.connection-current small,
-.connection-trigger-copy small {
-  overflow: hidden;
-  color: var(--muted);
-  font-size: var(--fs-hint);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.connection-provider-actions {
-  padding: 0 12px 10px;
-}
-.connection-provider-actions > .btn {
-  width: 100%;
-}
-.connection-provider-actions .bluetooth-panel,
-.connection-provider-actions .transport-panel {
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-.connection-provider-actions .bluetooth-panel .row-actions,
-.connection-provider-actions .transport-panel .row-actions {
-  margin-top: 8px;
-}
-.connection-provider-actions .meta-grid {
-  margin-top: 8px;
-}
-.connection-key-form {
-  display: grid;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.connection-key-label {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--muted);
-  font-size: var(--fs-hint);
-}
-.connection-key-label label {
-  color: var(--text);
-  font-size: var(--fs-label);
-  font-weight: 500;
-}
-.connection-key-entry {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px;
-}
-.connection-key-entry input {
-  min-width: 0;
-}
-.connection-provider-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: var(--fs-hint);
-}
-.connection-configure {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  color: var(--accent);
-  font-size: var(--fs-label);
-  text-decoration: none;
-}
-.connection-configure:hover {
-  text-decoration: underline;
-}
-.connection-divider {
-  height: 1px;
-  margin: 0 12px;
-  background: var(--line);
-}
-.connection-limits-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px 12px 0;
-}
-.connection-limits-head h3 {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.connection-limits-head span {
-  color: var(--muted);
-  font-size: var(--fs-hint);
-}
-.connection-manager .quick-fields-connection {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px 12px 12px;
-}
-.connection-manager .quick-handy-model {
-  margin-bottom: 0;
-}
-.connection-manager .quick-handy-model legend {
-  margin-bottom: 6px;
-}
-.connection-manager .quick-handy-model .segmented-choice {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.connection-manager .quick-handy-spec {
-  margin-top: -2px;
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: var(--fs-hint);
-  text-align: right;
-}
-.connection-manager .quick-fields-connection .range-slider {
-  display: grid;
-  min-height: 28px;
-  grid-template-columns: 52px minmax(0, 1fr) 60px;
-  gap: 10px;
-  align-items: center;
-}
-.connection-manager .quick-fields-connection .range-slider-head {
-  display: contents;
-}
-.connection-manager .quick-fields-connection .range-slider-head .label {
-  grid-column: 1;
-  grid-row: 1;
-  font-size: var(--fs-label);
-}
-.connection-manager .quick-fields-connection .range-slider-track {
-  min-width: 0;
-  grid-column: 2;
-  grid-row: 1;
-}
-.connection-manager .quick-fields-connection .range-slider-value {
-  grid-column: 3;
-  grid-row: 1;
-  text-align: right;
-}
-.connection-manager .quick-direction-toggle {
-  min-height: 30px;
-  font-size: var(--fs-label);
-}
-/* The device chip: the connection's one trigger, in the session header. */
-.connection-manager-trigger {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) 16px;
-  grid-template-rows: minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  width: 216px;
-  height: 36px;
-  padding: 0 8px 0 4px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.connection-manager-trigger:hover {
-  background: var(--surface-2);
-}
-.connection-manager[data-open="true"] .connection-manager-trigger {
-  border-color: var(--line-strong);
-  background: var(--surface-2);
-}
-.connection-trigger-icon {
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-sm);
-  background: var(--bg-inset);
-  color: var(--muted);
-}
-.connection-manager[data-phase="connected"] .connection-trigger-icon {
-  color: var(--ok);
-}
-.connection-manager[data-phase="connecting"] .connection-trigger-icon {
-  color: var(--accent);
-}
-.connection-manager[data-phase="error"] .connection-trigger-icon {
-  color: var(--danger);
-}
-.connection-trigger-copy {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  align-self: stretch;
-  justify-content: center;
-  gap: 1px;
-  line-height: 1.15;
-}
-.connection-trigger-chevron {
-  color: var(--muted);
-  transform: rotate(180deg);
-  transition: transform 0.18s ease;
-}
-.connection-manager[data-open="true"] .connection-trigger-chevron {
-  transform: rotate(0deg);
 }
 
 /* ---- Workspace: one page frame for every route ---- */
@@ -1114,21 +759,10 @@
     bottom: auto;
     z-index: var(--layer-emergency-stop);
   }
-  .connection-manager-panel,
   .notification-center-panel {
     top: calc(var(--status-h) + 8px);
     right: 8px;
     max-height: calc(100dvh - var(--status-h) - 136px);
-  }
-  .connection-manager-trigger {
-    grid-template-columns: 1fr;
-    place-items: center;
-    width: 40px;
-    padding: 0;
-  }
-  .connection-trigger-copy,
-  .connection-trigger-chevron {
-    display: none;
   }
 }
 
@@ -1139,15 +773,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .connection-artwork[data-phase="connecting"] .connection-signal path {
-    animation: none;
-    opacity: 0.75;
-  }
-  .connection-trigger-chevron,
   .nav-link {
     transition: none;
-  }
-  .connection-artwork[data-phase="error"] .connection-error-mark {
-    animation: none;
   }
 }

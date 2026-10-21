@@ -22,6 +22,9 @@ type preparedLLMProvider struct {
 
 func chatPromptBudget(settings config.LLMSettings) chat.PromptBudgetSettings {
 	budget := chat.PromptBudgetSettings{MaxOutputTokens: settings.MaxOutputTokens}
+	if settings.ActiveConnection != nil {
+		budget.ContextSize, _, _ = settings.ActiveConnection.ConversationWindow()
+	}
 	if settings.Provider == config.LLMProviderLlamaCPP && settings.LlamaCPPMode == config.LlamaCPPModeManaged {
 		budget.ContextSize = settings.LlamaCPPContextSize
 		budget.ReasoningBudgetTokens = managedLlamaReasoningBudget(settings, true)

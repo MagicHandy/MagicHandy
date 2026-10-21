@@ -99,6 +99,20 @@ func TestOpenAISchemaRestoresOmissionAndPreservesClear(t *testing.T) {
 	}
 }
 
+func TestOpenAISchemaRestoresOptionalEnumInsideOperationUnion(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"layer":{"oneOf":[{"type":"object","properties":{"op":{"const":"edit"},"shape":{"type":"string","enum":["drift","wave"]},"amount":{"type":"integer"}},"required":["op"],"additionalProperties":false},{"type":"object","properties":{"op":{"const":"remove"}},"required":["op"],"additionalProperties":false}]}},"required":["layer"],"additionalProperties":false}`)
+	raw, err := DomainOutput(`{"layer":{"op":"edit","shape":null,"amount":null}}`, schema)
+	if err != nil || raw != `{"layer":{"op":"edit"}}` {
+		t.Fatalf("optional enum prevented omission restoration: %s %v", raw, err)
+	}
+	for _, invalid := range []string{`{"layer":{"op":null,"shape":null,"amount":null}}`, `{"layer":{"op":"edit","shape":"unknown","amount":null}}`} {
+		raw, err := DomainOutput(invalid, schema)
+		if err != nil || !strings.Contains(raw, `"amount":null`) {
+			t.Fatalf("malformed branch was inferred: %s %v", raw, err)
+		}
+	}
+}
+
 func TestDecisionsCannotInventChoiceOrExecuteRefusal(t *testing.T) {
 	for _, answer := range []string{`{"type":"choice","name":"motion_candidate","choice":"unknown"}`, `{"type":"refusal","name":"motion_candidate"}`, `{"type":"choice","name":"other","choice":"ready"}`} {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

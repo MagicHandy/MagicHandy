@@ -73,6 +73,11 @@ type MotionSamplingCapabilities struct {
 	PositionResolutionPercent   float64
 	ResolutionAfterStrokeWindow bool
 	MaximumPointsPerAppend      int
+	// PreferredPointInterval reduces optional points on generated curves for
+	// owners that respond poorly to frequent position updates. It is a fitting
+	// preference, not a limit: authored reversals still use MinimumPointInterval.
+	// Zero preserves the ordinary fit. Imported media does not use this preference.
+	PreferredPointInterval time.Duration
 }
 
 // MotionSamplingCapabilitiesProvider exposes optional output-resolution
@@ -124,6 +129,8 @@ type TimedPoint struct {
 
 // StopCommand requests transport stop.
 type StopCommand struct {
+	// Fault marks recovery/failed startup: electrical outputs also zero strength.
+	Fault  bool   `json:"fault,omitempty"`
 	Reason string `json:"reason"`
 }
 

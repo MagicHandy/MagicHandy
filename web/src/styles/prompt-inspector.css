@@ -51,3 +51,9 @@
 .prompt-exact > .diagnostics-report {
   max-height: 420px;
 }
+.prompt-assignment { margin-top: var(--gap); padding-top: var(--gap); border-top: 1px solid var(--line); }
+.prompt-assignment p { margin: 0 0 8px; }
+.chat-failures .prompt-section { margin-top: 8px; }
+.chat-failures time { color: var(--muted); font-size: 0.75rem; }
+.chat-failures pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.production-preview-output { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow: auto; }

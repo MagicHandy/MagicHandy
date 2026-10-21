@@ -6,7 +6,7 @@ Everything you need to install, update, and run MagicHandy from source. The
 ## Windows release package
 
 The current Windows x64 release is
-[v0.1.0-alpha.55](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.55).
+[v0.1.0-alpha.64](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.64).
 Download its setup EXE and `SHA256SUMS` file, verify the setup hash, and run it.
 The portable ZIP remains available when installer integration is not wanted.
 The prebuilt core requires no Go, Node, Python, CMake, or Visual Studio and opens
@@ -14,7 +14,7 @@ the same guided setup described below.
 
 The executables remain unsigned. Microsoft completed false-positive case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`
-and removed the alpha.6 detection. Alpha.55 explicitly extends the reviewed
+and removed the alpha.6 detection. Alpha.63 explicitly extends the reviewed
 unsigned setup policy, retains the hardened x64/non-solid package, receives an
 exact-artifact Defender scan, and passes the full installer lifecycle before
 publication. If
@@ -268,16 +268,17 @@ go run ./cmd/magichandy
   proxy deployments remain fixed by default. An explicit remote port is fixed
   too; the default adjacent remote port may recover during automatic local
   startup. No system network services or reservations are reset.
-- Startup failures name a local report even if the UI cannot open. Settings >
-  Diagnostics > Startup recovery downloads the current report and retained last
-  failure/recovery after a successful launch. Files live in the data directory's
-  `startup` folder, with private temporary storage used if that folder cannot be
-  written. Reports exclude credentials, addresses, paths and chat. Share the
-  report JSON, not the private `instance.json` identity record.
+- Startup failures name a local report even if the UI cannot open. After a
+  successful launch, Settings > Diagnostics > Download diagnostic report includes
+  the current startup and retained last failure/recovery in `status.json`.
+  Startup files live in the data directory's `startup` folder, with private
+  temporary storage used if that folder cannot be written. Startup records
+  exclude credentials, addresses, paths and chat. Share the diagnostic report
+  or the named failure JSON, never the private `instance.json` identity record.
 - For launch integrations, `-running-instance -data-dir PATH` prints verified
   local instance JSON containing the actual URLs and PID, or `null`, without
   starting workers or opening the database. See
-  [ADR 0040](decisions/0040-local-startup-recovery.md).
+  [ADR 0051](decisions/0051-local-startup-recovery.md).
 - Opt-in LAN use requires an exact private IP, a matching trusted certificate,
   and a previously created account. Setup and Settings > Access can create the
   first local administrator and enable password protection. Follow

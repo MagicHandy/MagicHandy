@@ -40,6 +40,7 @@ type HostedModel struct {
 	SupportedParameters    []string `json:"supported_parameters,omitempty"`
 	ReasoningEfforts       []string `json:"reasoning_efforts,omitempty"`
 	DefaultReasoningEffort string   `json:"default_reasoning_effort,omitempty"`
+	ContextLength          int      `json:"context_length,omitempty"`
 }
 
 // CompatibleProvider is an ordinary Chat Completions adapter, not a local
@@ -97,7 +98,20 @@ func (p *CompatibleProvider) request(ctx context.Context, method, path string, b
 		return nil, &CloudError{Kind: "unavailable"}
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		// Only recognize structured error codes; provider prose can contain
+		// private conversation and must never enter diagnostics.
+		var failure struct {
+			Error struct {
+				Code json.RawMessage `json:"code"`
+			} `json:"error"`
+		}
+		_ = json.NewDecoder(io.LimitReader(response.Body, 8192)).Decode(&failure)
+		var code string
+		_ = json.Unmarshal(failure.Error.Code, &code)
 		_ = response.Body.Close()
+		if outcome := cloudResponseError(response.StatusCode, code); outcome.(*CloudError).Kind == "context" {
+			return nil, outcome
+		}
 		if method == http.MethodPost && response.StatusCode == http.StatusBadRequest && p.localDefaults() {
 			// A local server that rejects the default structured request needs
 			// another output mode on its connection, not a retry.

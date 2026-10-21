@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -175,5 +176,49 @@ func TestExplicitTrackingOffIsPreserved(t *testing.T) {
 	resolved := applyMissingAutopilotDefaults(stored, DefaultAutopilotSettings())
 	if resolved.SessionTracking {
 		t.Fatal("an explicit tracking-off choice was overwritten by the default")
+	}
+}
+
+// Auto timing hands the horizon to a hosted planner, so it stays an explicit
+// choice: off by default, kept when saved, and never dropped by backfill.
+func TestAutoMotionTimingIsOptInAndSurvivesNormalization(t *testing.T) {
+	if DefaultAutopilotSettings().AutoMotionTiming {
+		t.Fatal("auto timing must default off")
+	}
+	stored := DefaultAutopilotSettings()
+	stored.AutoMotionTiming = true
+	if resolved := applyMissingAutopilotDefaults(stored, DefaultAutopilotSettings()); !resolved.AutoMotionTiming {
+		t.Fatal("backfill dropped an explicit auto timing choice")
+	}
+	if err := validateAutopilotSettings(stored); err != nil {
+		t.Fatalf("auto timing settings rejected: %v", err)
+	}
+	encoded, err := json.Marshal(stored)
+	if err != nil || !strings.Contains(string(encoded), `"auto_motion_timing":true`) {
+		t.Fatalf("encoded settings = %s, %v", encoded, err)
+	}
+	if AutopilotAutoTimingMinSeconds != AutopilotMinimumIntervalSeconds ||
+		AutopilotAutoTimingMaxSeconds != AutopilotMaximumMotionSeconds {
+		t.Fatalf("auto timing bounds = %d..%d", AutopilotAutoTimingMinSeconds, AutopilotAutoTimingMaxSeconds)
+	}
+}
+
+// Preparing changes only when an external planner is asked, so it is on by
+// default, including for documents saved before the field existed.
+func TestPrepareNextDecisionDefaultsOnForOldDocuments(t *testing.T) {
+	if !DefaultAutopilotSettings().PrepareNextDecision {
+		t.Fatal("prepared decisions must default on")
+	}
+	legacy := []byte(`{"version":2,"autopilot":{"speech_cadence":"natural","motion_cadence":"scaled","motion_change_level":5,"speech_motion_authority":"chat_only","session_arc_minutes":30}}`)
+	settings, _, err := loadSettingsFromBytes(legacy)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !settings.Autopilot.PrepareNextDecision || settings.Autopilot.MotionChangeLevel != 5 {
+		t.Fatalf("legacy autopilot settings = %+v", settings.Autopilot)
+	}
+	explicit := []byte(`{"version":2,"autopilot":{"speech_cadence":"natural","motion_cadence":"scaled","motion_change_level":5,"speech_motion_authority":"chat_only","session_arc_minutes":30,"prepare_next_decision":false}}`)
+	if settings, _, err := loadSettingsFromBytes(explicit); err != nil || settings.Autopilot.PrepareNextDecision {
+		t.Fatalf("explicit off was not kept: %+v, %v", settings.Autopilot, err)
 	}
 }

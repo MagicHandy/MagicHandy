@@ -15,6 +15,7 @@ func (m *Manager) PrepareChatTarget() uint64 {
 	defer m.mu.Unlock()
 	m.chat.pending = true
 	m.loop.generation++
+	m.chat.pendingOwner = m.loop.generation
 	m.cancelOperationLocked()
 	m.motion.swayPoints = nil
 	return m.loop.generation
@@ -81,7 +82,7 @@ func (m *Manager) ReconsiderAfterChat() {
 // resume planning on its next tick.
 func (m *Manager) CancelChatTarget(generation uint64) {
 	m.mu.Lock()
-	if m.chat.pending && m.loop.generation == generation {
+	if m.chat.pending && m.chat.pendingOwner == generation {
 		m.chat.pending = false
 	}
 	m.mu.Unlock()
@@ -90,6 +91,10 @@ func (m *Manager) CancelChatTarget(generation uint64) {
 // NotifyChatTarget adopts a successfully applied chat target for keepalive and
 // as Autopilot's authoritative current segment.
 func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget) bool {
+	return m.notifyTarget(generation, target, false)
+}
+
+func (m *Manager) notifyTarget(generation uint64, target motion.MotionTarget, reviewed bool) bool {
 	copied := cloneTarget(target)
 	// Re-evaluate an interactive target on the independent motion cadence.
 	segment, pattern, adoptable := segmentFromMotionTarget(copied, 0)
@@ -116,6 +121,11 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 	if adopted {
 		previousSpeed := m.motion.segment.SpeedPercent
 		duration := m.sampleMotionDelayLocked(TimingSoon)
+		if reviewed {
+			// Keep the existing cadence when possible, but give a correction time
+			// to be observed before the next local choice supersedes it.
+			duration = max(3*time.Second, m.motion.deadline.Sub(now))
+		}
 		if m.options.MaxSegmentDuration > 0 && duration > m.options.MaxSegmentDuration {
 			duration = m.options.MaxSegmentDuration
 		}
@@ -124,7 +134,7 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 		m.motion.pattern = pattern
 		m.motion.segmentIdx++
 		m.motion.deadline = now.Add(duration)
-		m.motion.planAt = m.motion.deadline.Add(-m.planningLeadLocked(duration))
+		m.motion.planAt = m.planAtLocked(now, duration)
 		m.motion.pending = nil
 		m.motion.swayPoints = nil
 		m.motion.nextRetry = time.Time{}
@@ -132,10 +142,17 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 			m.history.previousSpeed = previousSpeed
 			m.history.speedChangedAt = now
 		}
-		m.rememberSpeedLocked(segment.SpeedPercent, now, true)
-		m.observeInteractivePhraseLocked(now, segment, perceptual)
+		m.rememberSpeedLocked(segment.SpeedPercent, now, !reviewed)
+		if reviewed {
+			m.observeAutopilotPhraseLocked(now, segmentChoice{segment: segment, appliedPerceptual: perceptual, source: "second_opinion"})
+		} else {
+			m.observeInteractivePhraseLocked(now, segment, perceptual)
+		}
 		m.rememberPositionBandLocked(perceptual)
 		m.events.decisionSource = "interactive"
+		if reviewed {
+			m.events.decisionSource = "second_opinion"
+		}
 		if segment.PatternID != "" {
 			m.history.recentPatternIDs = append(m.history.recentPatternIDs, string(segment.PatternID))
 			if len(m.history.recentPatternIDs) > 4 {
@@ -146,9 +163,13 @@ func (m *Manager) NotifyChatTarget(generation uint64, target motion.MotionTarget
 	m.mu.Unlock()
 
 	if adopted {
-		m.trace(ModeAutopilot, "interactive_target_adopted", &diagnostics.MotionTracePlanner{
+		event := "interactive_target_adopted"
+		if reviewed {
+			event = "review_target_adopted"
+		}
+		m.trace(ModeAutopilot, event, &diagnostics.MotionTracePlanner{
 			Mode:              ModeAutopilot,
-			Event:             "interactive_target_adopted",
+			Event:             event,
 			PatternIdentifier: segmentContentIdentifier(segment),
 			SpeedPercent:      segment.SpeedPercent,
 			DurationMillis:    segment.DurationMillis,

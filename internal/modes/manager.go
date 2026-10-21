@@ -62,6 +62,10 @@ type Options struct {
 	Now                  func() time.Time
 	Tick                 time.Duration
 	Seed                 int64
+	// PrepareNextDecision reports whether Autopilot plans each motion decision
+	// as its stretch begins rather than just before the boundary. The server
+	// enables it only for external planners.
+	PrepareNextDecision func() bool
 	// MaxSegmentDuration caps armed segment deadlines. It exists for tests
 	// that need many segment boundaries quickly; production leaves it zero.
 	MaxSegmentDuration time.Duration
@@ -74,6 +78,10 @@ type Options struct {
 	CanAnnounce func() bool
 	// Announce publishes an Autopilot line and optionally queues browser audio.
 	Announce func(ctx context.Context, say string) Announcement
+	// ObserveChoice is a nonblocking observer of accepted local model choices.
+	// It must not do network work on the mode loop.
+	ObserveChoice func(DecisionInput, motion.ActiveMotionState)
+	ReviewEnabled func() bool
 }
 
 // Status is the UI-facing mode state.
@@ -383,6 +391,7 @@ func (m *Manager) finishSegmentChoice(_ context.Context, mode string, reason str
 	}
 	m.rememberChoice(mode, choice)
 	m.tracePlanned(mode, reason, choice)
+	m.observeChoice(mode, choice)
 }
 
 func (m *Manager) nextPlannedSegment() (Segment, []diagnostics.PlannerScore) {
@@ -574,10 +583,10 @@ func (m *Manager) tracePlanned(mode string, reason string, choice segmentChoice)
 		// Preserve source, semantic timing, and inference latency so a sampled
 		// dwell can be explained after either a planned or immediate decision.
 		note = strings.TrimSpace(fmt.Sprintf(
-			"%s %s next=%s latency=%s%s",
+			"%s %s %s latency=%s%s",
 			choice.source,
 			note,
-			normalizeTiming(choice.timing),
+			choice.timingNote(),
 			choice.decisionLatency,
 			choice.sessionTraceNote(),
 		))

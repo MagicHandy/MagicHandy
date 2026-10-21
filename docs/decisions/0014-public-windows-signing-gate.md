@@ -2,15 +2,182 @@
 
 ## Status
 
-Accepted; amended 2026-10-07 after Microsoft completed the false-positive
+Accepted; amended 2026-10-18 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.57 package-preserving releases.
+reviewed alpha.14 through alpha.64 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.64 amendment
+
+On 2026-10-18 the maintainer requested releasing the completed hosted Layered
+and external-context fixes from PR #328. This amendment adds only
+`0.1.0-alpha.64` to the reviewed unsigned Windows policy; alpha.65 and later
+still require their own review. The release fixes ambiguous structured motion
+operations, distinguishes temporary from lasting hosted Autopilot directions,
+and exposes separate external request and history budgets. Local prompts and
+inference budgets remain unchanged. The shared geometry validator fits retained
+stroke widths to explicitly narrowed bands; the engine, transports and Stop
+path retain their existing boundaries.
+
+The release record is
+[alpha64-release-review-2026-10-18.md](../alpha64-release-review-2026-10-18.md).
+No dependency, payload executable, native loader, compression format, artifact
+set or installation contract is added or changed. Source and exact-binary
+vulnerability scans, the exact-artifact Defender scan, manifest/checksum
+verification, installer lifecycle, review and current-main provenance remain
+mandatory. Microsoft's earlier case does not approve these new hashes; trusted
+Authenticode remains the long-term requirement. Existing hardware acceptance
+limits and the Intiface Stop issue remain disclosed.
+
+### Alpha.63 amendment
+
+On 2026-10-16 the maintainer requested merging PR #326 and publishing an update.
+This amendment adds only `0.1.0-alpha.63` to the reviewed unsigned Windows
+policy; alpha.64 and later still require their own review. It packages the
+external Autopilot timing and prepared-decision changes described in ADR 0050.
+Auto timing is opt-in; prepared decisions retain the existing shared-engine,
+controller, pause and Stop boundaries. Local planning remains unchanged.
+The release record is [alpha63-release-review-2026-10-16.md](../alpha63-release-review-2026-10-16.md).
+
+No payload executable, dependency, native loader, compression format, artifact
+set or installation contract is added or changed by this release preparation.
+The five payload executables, source and exact-binary vulnerability scans,
+Defender scan of the exact public files, checksums, manifests, installer
+lifecycle and current-main provenance gates remain mandatory. The prior
+Microsoft case does not approve the new hashes, and trusted Authenticode
+remains the long-term requirement. ADR 0049's Intiface Stop limitation and
+other physical acceptance limits remain disclosed.
+
+### Alpha.62 amendment
+
+The maintainer requested publication after the device and motion review. This
+amendment adds only `0.1.0-alpha.62` to the reviewed-unsigned Windows policy;
+later versions still require their own review. It carries COYOTE 3.0 and native
+Handy Bluetooth, linked sessions and vibrator output, Claude's device UI,
+reviewed local/hosted motion corrections, observed Intiface smoothing and the
+network/crypto dependency update. ADRs 0044–0049 and their review records state
+the scope and known hardware limits. The upstream Intiface Stop defect remains
+open and is disclosed in the app and release notes (ADR 0049).
+
+The core remains pure Go. The native Bluetooth worker joins the four existing
+payload executables; all five use the same exact-binary scans and manifest
+checks. The native x64 loader, non-solid ZIP, three public assets and
+data-preserving over-install contract remain. Main-tip provenance, review,
+quality gates, adapter tests, source and binary vulnerability scans, Defender,
+checksums and exact-installer lifecycle tests remain mandatory. Microsoft's
+original case does not pre-clear the new hashes; trusted Authenticode is still
+the long-term policy.
+
+### Alpha.61 amendment
+
+On 2026-10-11 the user requested an update release of the completed review
+branch. This amendment adds only `0.1.0-alpha.61` to the reviewed-unsigned
+Windows alpha policy; it grants no standing permission to later versions.
+
+The release includes optional asynchronous motion review, inspectable chat
+failures and prompt assignment, model-chosen quiet check-ins, longer external
+conversation windows, Creative v2 pace and sampling corrections, and selectable
+diagnostic reports. ADRs 0040–0043 and the dated review records document their
+evidence and limits. The motion changes preserve the shared engine and existing
+physical limits; hardware feel has not been physically verified. No dependency
+or CGo is added. The goal scorecard records binary, UI and runtime costs.
+Hosted connections remain experimental; follow-ups #306 and #307 remain open.
+
+The native x64 loader, non-solid ZIP compression, three public assets, four
+pure-Go payload executables and data-preserving over-install contract remain.
+Source must reach main through reviewed pull requests and green CI. Main-tip
+provenance, full quality gates, adapter tests, source and exact-binary
+vulnerability scans, exact-artifact Defender scanning, manifests, checksums
+and installer lifecycle verification remain mandatory. The original Microsoft
+case does not pre-clear these new hashes; trusted Authenticode remains the
+long-term policy.
+
+### Alpha.60 amendment
+
+On 2026-10-10 the user requested an update release after four fixes reached
+`main` through reviewed pull requests (#312, #313, #314 and #315). This
+amendment adds only `0.1.0-alpha.60` to the reviewed-unsigned Windows alpha
+policy; it grants no standing permission to later versions.
+
+The release stops a running Intiface scan once an actuator is selected and
+shows that device as connected, renames the device connection choice to
+Protocol, gives the Local LLM and Managed models settings cards their header
+rows, and allows a newly installed app 30 seconds instead of 10 to start
+before the launcher treats it as failed. No dependency, model call, motion path
+or resident state is added, and no CGo is introduced. Follow-ups #306 and #307
+remain open.
+
+The native x64 loader, non-solid ZIP compression, three public assets, four
+pure-Go payload executables and data-preserving over-install contract remain.
+Source must reach main through reviewed pull requests and green CI. Main-tip
+provenance, full quality gates, adapter tests, source and exact-binary
+vulnerability scans, exact-artifact Defender scanning, manifests, checksums
+and installer lifecycle verification remain mandatory. The original Microsoft
+case does not pre-clear these new hashes; trusted Authenticode remains the
+long-term policy.
+
+### Alpha.59 amendment
+
+On 2026-10-10 the user requested an update release after the model settings
+rebuild and the visualizer smoothness fixes reached `main` through reviewed pull
+requests (#309 and #310). This amendment adds only `0.1.0-alpha.59` to the
+reviewed-unsigned Windows alpha policy; it grants no standing permission to
+later versions.
+
+The release rebuilds the hosted-model settings around Model roles and an
+External providers list that can remove providers; the backend deletes a
+removed connection's stored API key only after the settings save succeeds.
+Setup labels the hosted options Experimental, and
+[ADR 0039](0039-hosted-model-connections.md) remains "Proposed; pending final
+independent review". The Handy 2 dot display and the Intiface scanning bar now
+move on CSS transform transitions like the original Handy view. No dependency,
+model call, motion path or resident state is added, and no CGo is introduced.
+Follow-ups #306 and #307 remain open.
+
+The native x64 loader, non-solid ZIP compression, three public assets, four
+pure-Go payload executables and data-preserving over-install contract remain.
+Source must reach main through reviewed pull requests and green CI. Main-tip
+provenance, full quality gates, adapter tests, source and exact-binary
+vulnerability scans, exact-artifact Defender scanning, manifests, checksums
+and installer lifecycle verification remain mandatory. The original Microsoft
+case does not pre-clear these new hashes; trusted Authenticode remains the
+long-term policy.
+
+### Alpha.58 amendment
+
+On 2026-10-10 the user requested an update release after the hosted-model,
+setup and visual-system work reached `main` through reviewed pull requests
+(#299, #300, #301, #303, #304 and #305). This amendment adds only
+`0.1.0-alpha.58` to the reviewed-unsigned Windows alpha policy; it grants no
+standing permission to later versions.
+
+The release adds hosted model connections (ChatGPT sign-in, OpenAI API,
+OpenRouter and compatible endpoints) under
+[ADR 0039](0039-hosted-model-connections.md), which remains "Proposed; pending
+final independent review"; the release notes present hosted connections as a
+preview. It also ships the redesigned setup, the Graphite visual system,
+device-specific visualizers, the Creative v2 schema and reach-guide changes,
+and the Go 1.26.9 toolchain. No CGo dependency is added; the
+[goal scorecard](../goal-scorecard.md) records each change's binary and
+bundle sizes. Local Gemma 12B passed the strict Creative v2 path 28/28 on the
+managed llama.cpp runtime before merge, as recorded in the
+[reach-guide review](../creative-v2-reach-guide-review-2026-10-09.md).
+Follow-ups #306 (a credential lock held across network calls) and #307
+(encrypting stored hosted credentials at rest) remain open.
+
+The native x64 loader, non-solid ZIP compression, three public assets, four
+pure-Go payload executables and data-preserving over-install contract remain.
+Source must reach main through reviewed pull requests and green CI. Main-tip
+provenance, full quality gates, adapter tests, source and exact-binary
+vulnerability scans, exact-artifact Defender scanning, manifests, checksums
+and installer lifecycle verification remain mandatory. The original Microsoft
+case does not pre-clear these new hashes; trusted Authenticode remains the
+long-term policy.
 
 ### Alpha.57 amendment
 
@@ -470,7 +637,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.57 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.64 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -584,11 +751,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.57 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.64 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.57 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.64 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,

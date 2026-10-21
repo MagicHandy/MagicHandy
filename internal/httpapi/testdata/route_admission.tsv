@@ -44,6 +44,10 @@ shared	GET /api/chat/sessions
 shared	GET /api/controller
 self	GET /api/controller/commands/{id}
 host	GET /api/diagnostics/prompt-composition
+host	GET /api/diagnostics/report
+host	GET /api/diagnostics/chat-failures
+host	GET /api/diagnostics/chat-failures/{id}
+host	POST /api/diagnostics/chat-test
 host	GET /api/labs/llm
 host	GET /api/labs/llm/status
 host	GET /api/labs/observations
@@ -87,8 +91,6 @@ host	GET /api/network
 host	GET /api/network/certificate
 host	GET /api/network/local-trust
 host	GET /api/network/report
-host	GET /api/startup
-host	GET /api/startup/report
 shared	GET /api/personas
 shared	GET /api/personas/{id}/export
 shared	GET /api/personas/{id}/lore
@@ -114,6 +116,7 @@ host	GET /api/transport/cloud/state
 shared	GET /api/transport/diagnostics
 host	GET /api/transport/intiface/diagnostics
 shared	GET /api/transport/intiface/status
+shared	GET /api/transport/coyote/status
 shared	GET /api/update
 shared	GET /api/voice/requests/{id}
 shared	GET /api/voice/requests/{id}/audio
@@ -126,6 +129,7 @@ control	PATCH /api/media/videos/{id}/metadata
 host	PATCH /api/memory/{id}
 host	PATCH /api/personas/{id}
 host	PATCH /api/personas/{id}/lore/{lore_id}
+host	PATCH /api/settings/device
 host	POST /api/accounts
 public	POST /api/auth/bootstrap
 public	POST /api/auth/login
@@ -223,6 +227,15 @@ host	POST /api/transport/intiface/connect
 host	POST /api/transport/intiface/disconnect
 host	POST /api/transport/intiface/scan
 host	POST /api/transport/intiface/select
+host	POST /api/transport/intiface/vibrator/select
+control	POST /api/transport/intiface/vibrator/intensity
+control	POST /api/transport/intiface/vibrator/test
+host	POST /api/transport/coyote/connect
+host	POST /api/transport/coyote/discover
+host	POST /api/transport/coyote/disconnect
+control	POST /api/transport/coyote/strength
+control	POST /api/transport/coyote/test
+control	POST /api/transport/coyote/zero
 host	POST /api/voice/module/update
 control	POST /api/voice/requests/{id}/cancel
 control	POST /api/voice/requests/{id}/played
@@ -249,8 +262,11 @@ host	PUT /api/network
 host	PUT /api/prompt-sets/{id}
 host	PUT /api/settings
 host	PUT /api/settings/device/connection-key
+host	PUT /api/settings/device/output
+host	PUT /api/settings/estim/safety
 host	PUT /api/settings/labs
 control	PUT /api/settings/llm-motion-mode
+host	PUT /api/settings/server
 host	PUT /api/setup/preferences
 control	PUT /api/voice/input-preferences
 control	PUT /api/voice/preferences
@@ -261,3 +277,8 @@ public	DELETE /api/notice-preferences
 host	PUT /api/accounts/{id}/interface-access
 shared	GET /api/remote/videos
 shared	GET /api/remote/chat/messages
+host	PUT /api/settings/device/connections
+shared	GET /api/transport/native-bluetooth/status
+host	POST /api/transport/native-bluetooth/connect
+host	POST /api/transport/native-bluetooth/disconnect
+host	POST /api/transport/native-bluetooth/forget

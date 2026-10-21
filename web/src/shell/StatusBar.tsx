@@ -1,20 +1,18 @@
 import { useState } from "react";
-import { confirmThen } from "../util/confirm";
 import { t, translateKnown } from "../i18n";
 // Compact status readouts, run timer, mini visualizer, and the shell-level
 // disclosures. Motion controls remain in their routed workspaces.
-import { api, ApiError } from "../api/client";
 import { MotionVisualizer } from "../components/MotionVisualizer";
-import { useAppState, useToast , useMotionState } from "../state/app-state";
-import { stopAllAudioPlayback } from "../util/audio";
+import { useAppState, useMotionState } from "../state/app-state";
 import { formatClock } from "../util/format";
-import { ConnectionManager } from "./ConnectionManager";
+import { DevicePanel } from "./DevicePanel";
 import { NotificationCenter } from "./NotificationCenter";
+import { useTakeControl } from "./useTakeControl";
 import { ClockIcon, TakeControlIcon } from "./icons";
 import type { AuthenticationStatus } from "../api/types";
 import { ControlIdentitySelector } from "./ControlIdentitySelector";
 
-type ShellMenu = "connection" | "notifications" | "identity" | null;
+type ShellMenu = "devices" | "notifications" | "identity" | null;
 
 export function StatusBar({
   authenticationLocked = false,
@@ -27,14 +25,12 @@ export function StatusBar({
   onLogout?: () => Promise<void>;
   onSelectControlIdentity?: (accountID: string) => Promise<void>;
 }) {
-  const { backendOnline, readOnly, refresh, state } = useAppState();
+  const { backendOnline, readOnly, state } = useAppState();
   const motion = useMotionState();
-  const { show } = useToast();
   const [openMenu, setOpenMenu] = useState<ShellMenu>(null);
-  const [takingControl, setTakingControl] = useState(false);
+  const { takeControl, takingControl, handoffInProgress } = useTakeControl();
   const engine = motion?.engine;
   const awaitingState = state == null;
-  const handoffInProgress = Boolean(state?.controller?.takeover_in_progress);
 
   // Voice earns a readout only when it is enabled and unhealthy: a crashed
   // worker, or speak-replies promised while the TTS worker cannot deliver.
@@ -91,35 +87,6 @@ export function StatusBar({
   }
   const coreState = awaitingState && backendOnline ? "pending" : backendOnline ? "ok" : "error";
   const coreLabel = awaitingState && backendOnline ? "core starting" : backendOnline ? "core ok" : "core offline";
-
-  function takeControl() {
-    if (takingControl || handoffInProgress || !backendOnline) return;
-    confirmThen(
-      t("Take control of MagicHandy? Active motion, Autopilot, video synchronization, speech playback, and queued voice work will stop before this tab becomes the controller."),
-      { confirmLabel: t("Take control") },
-      () => void transferControl(),
-    );
-  }
-
-  async function transferControl() {
-    setTakingControl(true);
-    stopAllAudioPlayback();
-    window.dispatchEvent(new Event("magichandy:emergency-stop"));
-    try {
-      const response = await api.takeControl();
-      await refresh();
-      show(
-        response.warning
-          ? t("Control transferred, but physical Stop could not be confirmed.")
-          : t("This tab now controls MagicHandy."),
-        response.warning ? "warning" : "success",
-      );
-    } catch (error) {
-      show(error instanceof ApiError ? translateKnown(error.message) : t("Control transfer failed."), "error");
-    } finally {
-      setTakingControl(false);
-    }
-  }
 
   return (
     <div className="status-bar" role="region" aria-label={t("Status")}>
@@ -196,10 +163,10 @@ export function StatusBar({
         restoreFocusOnClose={openMenu === null}
         onOpenChange={(open) => setOpenMenu(open ? "notifications" : null)}
       />
-      <ConnectionManager
-        open={openMenu === "connection"}
+      <DevicePanel
+        open={openMenu === "devices"}
         restoreFocusOnClose={openMenu === null}
-        onOpenChange={(open) => setOpenMenu(open ? "connection" : null)}
+        onOpenChange={(open) => setOpenMenu(open ? "devices" : null)}
       />
     </div>
   );

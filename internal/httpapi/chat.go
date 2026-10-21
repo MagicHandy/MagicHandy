@@ -93,6 +93,7 @@ type interactiveChatPromptContext struct {
 	UserRequests        []chat.RecentUserRequest
 	Capabilities        chat.Capabilities
 	History             []llm.Message
+	HistoryOmitted      int
 	ConversationContext *chat.ConversationContext
 	CurrentMood         chat.Mood
 	Lore                persona.LoreSelection
@@ -135,10 +136,8 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	if settings.LLM.IsHosted() {
 		chatCtx = s.guardHostedChat(chatCtx)
 	}
-	activityID := s.modes.NotifyChatActivity()
+	activityID, started := s.beginChatActivity(settings.Voice)
 	defer s.modes.NotifyChatActivityComplete(activityID)
-	started := time.Now()
-	s.interruptChatSpeech(settings.Voice)
 
 	promptContext, err := s.loadInteractiveChatPromptContext(chatCtx, sessionID, settings.LLM, body.Message)
 	if err != nil {
@@ -165,6 +164,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	motionContext := s.chatTurnMotion(settings, promptContext.UserRequests, sessionID)
+	reviewBefore := s.beforeChatReview(settings.LLM, capabilities)
 	service := chat.Service{
 		Provider:              provider,
 		Prompt:                prompt,
@@ -186,8 +186,9 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	preparation := time.Since(started)
 	diagnostics := interactiveDiagnostics(settings.LLM, prompt.ID, promptContext.Persona)
 	request := chat.Request{
-		Message: body.Message,
-		History: promptContext.History,
+		Message:                body.Message,
+		History:                promptContext.History,
+		HistoryMessagesDropped: promptContext.HistoryOmitted,
 	}
 	result, ok, completionErr := s.completeInteractiveChat(chatCtx, settings.LLM, service, request, emit, started, preparation, &diagnostics)
 	if !ok {
@@ -200,9 +201,10 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	applyPersonaStartingArea(&result, capabilities, promptContext.Persona)
-	s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, completionErr, sessionID,
+	completed := s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, completionErr, sessionID,
 		diagnostics,
 		promptContext.CurrentMood, started)
+	s.reviewCompletedChat(chatCtx, completed, reviewBefore, stopSequence, activityID, body.Message)
 }
 
 func (s *Server) beginInteractiveChatStream(
@@ -239,6 +241,14 @@ func (s *Server) interruptChatSpeech(settings config.VoiceSettings) {
 	}
 }
 
+func (s *Server) beginChatActivity(settings config.VoiceSettings) (uint64, time.Time) {
+	s.motionReview.invalidate()
+	activity := s.modes.NotifyChatActivity()
+	started := time.Now()
+	s.interruptChatSpeech(settings)
+	return activity, started
+}
+
 func (s *Server) completeInteractiveChat(
 	ctx context.Context,
 	settings config.LLMSettings,
@@ -266,6 +276,9 @@ func (s *Server) completeInteractiveChat(
 	}
 	releaseLLM()
 	timedProvider.applyDiagnostics(diagnostics, started, preparation, schedulerWait)
+	if completionErr != nil || result.Malformed {
+		result.Input = timedProvider.initialRequest
+	}
 	return result, true, completionErr
 }
 
@@ -324,7 +337,15 @@ func (s *Server) resolveInteractiveChatPersonalization(ctx context.Context, prom
 }
 
 func (s *Server) loadInteractiveChatPromptContext(ctx context.Context, sessionID string, settings config.LLMSettings, currentMessage ...string) (interactiveChatPromptContext, error) {
-	loggedHistory, err := s.chatLog.RecentSessionContext(ctx, sessionID, interactiveChatHistoryLimit)
+	var loggedHistory []chat.LogMessage
+	var err error
+	var historyOmitted int
+	if settings.ActiveConnection != nil {
+		_, historyLimit, historyBytes := settings.ActiveConnection.ConversationWindow()
+		loggedHistory, historyOmitted, err = s.chatLog.RecentPromptHistoryContext(ctx, sessionID, historyLimit, historyBytes)
+	} else {
+		loggedHistory, err = s.chatLog.RecentSessionContext(ctx, sessionID, interactiveChatHistoryLimit)
+	}
 	if err != nil {
 		return interactiveChatPromptContext{}, err
 	}
@@ -333,9 +354,10 @@ func (s *Server) loadInteractiveChatPromptContext(ctx context.Context, sessionID
 		return interactiveChatPromptContext{}, err
 	}
 	result := interactiveChatPromptContext{
-		Capabilities: chatCapabilities(settings, active),
-		History:      make([]llm.Message, 0, len(loggedHistory)),
-		Persona:      active,
+		Capabilities:   chatCapabilities(settings, active),
+		History:        make([]llm.Message, 0, len(loggedHistory)),
+		HistoryOmitted: historyOmitted,
+		Persona:        active,
 	}
 	if result.Capabilities.MotionMode == chat.MotionModeLayered || result.Capabilities.MotionMode == chat.MotionModeCreativeV2 {
 		result.UserRequests, err = s.chatLog.RecentUserRequestTimelineContext(ctx, sessionID)
@@ -484,7 +506,8 @@ func managedLlamaReasoningBudget(settings config.LLMSettings, runtimeCurrent boo
 	return settings.MaxOutputTokens / 2
 }
 
-func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint64, emit sseEmitter, result chat.Result, err error, sessionID string, diagnostics chat.MessageDiagnostics, currentMood chat.Mood, started time.Time) {
+func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint64, emit sseEmitter, result chat.Result, err error, sessionID string, diagnostics chat.MessageDiagnostics, currentMood chat.Mood, started time.Time) (completed bool) {
+	result, err = s.retainChatFailure(ctx, stopSequence, sessionID, result, err, diagnostics)
 	if err != nil {
 		s.logger.Warn("chat stream failed", "provider", diagnostics.Provider, "error", err)
 		_ = emit("error", map[string]string{"message": err.Error()})
@@ -589,6 +612,7 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		"repaired":          result.Repaired,
 		"semantic_fallback": result.SemanticFallback,
 	})
+	return motionErr == nil
 }
 
 func emitChatCancellation(emit sseEmitter) {
@@ -1133,6 +1157,7 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 	resolved := settings.Capabilities()
 	mode := chatMotionMode(settings.MotionGenerationMode)
 	capabilities := chat.Capabilities{
+		HostedMotion:             settings.IsHosted(),
 		SchemaUnenforced:         schemaUnenforced(settings),
 		PreserveConversationText: settings.IsHosted(),
 		Motion:                   resolved.Motion && mode != chat.MotionModeOff,
@@ -1141,6 +1166,9 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 		AreaFocus:                resolved.Motion && mode == chat.MotionModePattern && resolved.AreaFocus,
 		ExperimentalPatterns:     resolved.Motion && mode == chat.MotionModePattern && resolved.ExperimentalPatterns,
 		Voice:                    chatVoiceLevel(settings.ChatVoice),
+	}
+	if settings.ActiveConnection != nil {
+		_, capabilities.HistoryMessages, capabilities.HistoryBytes = settings.ActiveConnection.ConversationWindow()
 	}
 	if active != nil {
 		capabilities.Voice = chatVoiceLevel(active.ChatVoice)

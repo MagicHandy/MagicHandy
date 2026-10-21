@@ -15,8 +15,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/buttplugsim"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
+	"github.com/mapledaemon/MagicHandy/internal/estim"
+	"github.com/mapledaemon/MagicHandy/internal/handyble"
 	"github.com/mapledaemon/MagicHandy/internal/httpapi"
 	"github.com/mapledaemon/MagicHandy/internal/logging"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
@@ -215,6 +218,14 @@ func applicationRuntime(simulateMotion bool) httpapi.Runtime {
 	if simulateMotion {
 		runtime.MotionTransport = fake
 		runtime.MotionSimulated = true
+		// The Coyote is simulated too: connected devices produce no output.
+		runtime.CoyoteConnector = estim.NewSimulatedConnector()
+		runtime.NativeBluetoothConnector = handyble.NewSimulatedConnector()
+		// Intiface is simulated by an in-process server for the life of the
+		// process; it advertises a stroker and a vibrator and drives nothing.
+		if sim, err := buttplugsim.Start(); err == nil {
+			runtime.IntifaceSimulatorAddress = sim.Address()
+		}
 	}
 	return runtime
 }

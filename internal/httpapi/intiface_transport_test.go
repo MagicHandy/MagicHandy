@@ -339,3 +339,30 @@ func (f *httpAPIButtplugServer) waitForKind(t *testing.T, want string) {
 		}
 	}
 }
+
+func TestIntifaceSelectionEndsARunningScan(t *testing.T) {
+	fake := newHTTPAPIButtplugServer(t)
+	server := newTestServerWithRuntime(t, Runtime{})
+	defer func() {
+		server.Close()
+		fake.Close()
+	}()
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Device.HSPDispatchOwner = config.DispatchOwnerIntiface
+		settings.Device.IntifaceServerAddress = fake.URL()
+		return settings
+	})
+	callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/connect", `{}`)
+	scanning := callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/scan", `{}`)
+	if !scanning.Status.Scanning {
+		t.Fatalf("scan snapshot = %+v, want scanning", scanning.Status)
+	}
+	selected := callIntifaceAPI(t, server, http.MethodPost, "/api/transport/intiface/select", `{"device_index":7,"actuator_index":0}`)
+	if selected.Status.SelectedDeviceIndex == nil || *selected.Status.SelectedDeviceIndex != 7 {
+		t.Fatalf("selection = %+v, want device 7", selected.Status)
+	}
+	if selected.Status.Scanning {
+		t.Fatal("the scan kept running after an actuator was selected")
+	}
+	fake.waitForKind(t, "StopScanning")
+}

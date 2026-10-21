@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 
 $script:InstallStateSchema = 3
 $script:MinimumGoVersion = [Version]'1.26.9'
+# How long to wait for a launched app's verified local URL.
+$script:MagicHandyStartupSeconds = 30
 $script:ParakeetRunnerURL = 'https://github.com/mudler/parakeet.cpp/releases/download/v0.4.0/parakeet-v0.4.0-bin-win-cpu-x64.zip'
 $script:ParakeetRunnerSHA256 = '2880150a1bad2944baed46f2e6bb9f1bc55263a9f2bb85573785a7ec4fa35f27'
 $script:ParakeetServerSHA256 = 'a7fb07d20a3319013d01dd797a5b757000e34d862e2bcd84e3cdf007dca67543'
@@ -1416,7 +1418,8 @@ function Build-MagicHandyBinaries {
         @{ Output = 'magichandy.exe'; Package = './cmd/magichandy' },
         @{ Output = 'voice-parakeet-worker.exe'; Package = './cmd/voice-parakeet-worker' },
         @{ Output = 'voice-openai-tts-worker.exe'; Package = './cmd/voice-openai-tts-worker' },
-        @{ Output = 'voice-elevenlabs-worker.exe'; Package = './cmd/voice-elevenlabs-worker' }
+        @{ Output = 'voice-elevenlabs-worker.exe'; Package = './cmd/voice-elevenlabs-worker' },
+        @{ Output = 'bluetooth-worker.exe'; Package = './cmd/bluetooth-worker' }
     )
     $token = [Guid]::NewGuid().ToString('N')
     $stageRoot = Join-Path $RepositoryPath ".installer-build-$token"
@@ -1800,7 +1803,7 @@ function Set-MagicHandyAppLanguages {
 function Remove-MagicHandyBuildBackups {
     param([Parameter(Mandatory = $true)][string]$RepositoryPath)
 
-    foreach ($name in @('magichandy.exe~', 'voice-parakeet-worker.exe~', 'voice-openai-tts-worker.exe~', 'voice-elevenlabs-worker.exe~')) {
+    foreach ($name in @('magichandy.exe~', 'voice-parakeet-worker.exe~', 'voice-openai-tts-worker.exe~', 'voice-elevenlabs-worker.exe~', 'bluetooth-worker.exe~')) {
         $path = Join-Path $RepositoryPath $name
         if (Test-Path -LiteralPath $path) {
             Assert-MagicHandyChildPath -Root $RepositoryPath -Candidate $path
@@ -2407,7 +2410,9 @@ function Start-MagicHandyApp {
     $argumentLine = New-MagicHandyAppArgumentLine -Address "127.0.0.1:$Port" -DataDir $DataDir -PortPolicy $PortPolicy
     $startedAt = [DateTime]::UtcNow
     $process = Start-Process -FilePath $exe -ArgumentList $argumentLine -PassThru -WindowStyle Hidden
-    $deadline = [DateTime]::UtcNow.AddSeconds(30)
+    # The first start of a newly installed or rebuilt executable can wait on an
+    # antivirus scan, so allow it time. A process that exits still fails at once.
+    $deadline = [DateTime]::UtcNow.AddSeconds($script:MagicHandyStartupSeconds)
     do {
         $process.Refresh()
         $instance = Get-MagicHandyRunningInstance -RepositoryPath $RepositoryPath -DataDir $DataDir
@@ -2433,7 +2438,7 @@ function Start-MagicHandyApp {
 
     $process.Refresh()
     if ($process.HasExited) { throw "MagicHandy exited while its startup URL was being verified (exit $($process.ExitCode)). Check '$DataDir\startup' for startup reports." }
-    $timeout = [TimeoutException]::new("MagicHandy did not publish a verified local URL within 30 seconds. Process $($process.Id) was left running. A fixed HTTPS/proxy deployment uses its configured public URL. Otherwise retry the launcher or check '$DataDir\startup' for startup reports.")
+    $timeout = [TimeoutException]::new("MagicHandy did not publish a verified local URL within $script:MagicHandyStartupSeconds seconds. Process $($process.Id) was left running. A fixed HTTPS/proxy deployment uses its configured public URL. Otherwise retry the launcher or check '$DataDir\startup' for startup reports.")
     $PSCmdlet.ThrowTerminatingError([System.Management.Automation.ErrorRecord]::new($timeout, 'MagicHandy.StartedUnverified', [System.Management.Automation.ErrorCategory]::OperationTimeout, $process.Id))
 }
 

@@ -48,6 +48,9 @@ type ChatRequest struct {
 	// PreserveTailMessages protects a repair's original user turn as well as
 	// the malformed response and repair instruction. Ordinary requests use one.
 	PreserveTailMessages int
+	// HistoryMessagesDropped accounts for whole messages removed by the
+	// composer before provider admission (never includes their contents).
+	HistoryMessagesDropped int
 }
 
 // Provider streams text from one local LLM runtime.

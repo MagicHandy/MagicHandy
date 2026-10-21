@@ -29,6 +29,7 @@ func TestOperatorRoutePermissionsMatchControlAndHostBoundaries(t *testing.T) {
 		status       int
 	}{
 		{http.MethodGet, "/api/setup", http.StatusForbidden},
+		{http.MethodGet, "/api/diagnostics/report?chat=full", http.StatusForbidden},
 		{http.MethodGet, "/api/accounts/other/control-grant", http.StatusForbidden},
 		{http.MethodPut, "/api/settings/llm-motion-mode", http.StatusNoContent},
 		{http.MethodPost, "/api/library/feedback/1/undo", http.StatusNoContent},

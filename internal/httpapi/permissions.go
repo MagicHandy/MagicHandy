@@ -62,7 +62,7 @@ func readRequest(r *http.Request) bool {
 }
 
 func hostPrivateRead(route string) bool {
-	return hostDiagnosticsRoute(route) || route == "/api/startup" || strings.HasPrefix(route, "/api/startup/") || route == "/api/audit" || strings.HasPrefix(route, "/api/audit/") || route == "/api/network" || strings.HasPrefix(route, "/api/network/") ||
+	return hostDiagnosticsRoute(route) || route == "/api/audit" || strings.HasPrefix(route, "/api/audit/") || route == "/api/network" || strings.HasPrefix(route, "/api/network/") ||
 		route == "/api/setup" || strings.HasPrefix(route, "/api/setup/") ||
 		(strings.HasPrefix(route, "/api/llm/") && route != "/api/llm/status") ||
 		route == "/api/media/tools" || route == "/api/accounts" ||
@@ -127,7 +127,9 @@ func controlRoute(r *http.Request) bool {
 		"/api/voice/transcriptions", "/api/voice/preferences", "/api/voice/input-preferences", "/api/library/feedback",
 		"/api/transport/bluetooth/status", "/api/transport/bluetooth/ack", "/api/settings/llm-motion-mode",
 		"/api/media/videos/tags", "/api/media/tags/rename", "/api/media/tags/delete",
-		"/api/remote/presence", "/api/remote/commands":
+		"/api/remote/presence", "/api/remote/commands",
+		"/api/transport/coyote/strength", "/api/transport/coyote/test", "/api/transport/coyote/zero",
+		"/api/transport/intiface/vibrator/intensity", "/api/transport/intiface/vibrator/test":
 		return true
 	default:
 		return false

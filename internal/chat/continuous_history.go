@@ -14,7 +14,7 @@ const maxPromptHistoryBytes = 24000
 
 func capabilityMessages(system string, history []llm.Message, message string, capabilities Capabilities) []llm.Message {
 	if capabilities.PreserveConversationText {
-		return verbatimMessages(system, history, message)
+		return verbatimMessages(system, history, message, capabilities)
 	}
 	if !capabilities.Motion {
 		return spokenMessages(system, history, message)
@@ -22,12 +22,21 @@ func capabilityMessages(system string, history []llm.Message, message string, ca
 	return buildMessages(system, history, message)
 }
 
-func verbatimMessages(system string, history []llm.Message, message string) []llm.Message {
-	if len(history) > PromptHistoryLimit {
-		history = history[len(history)-PromptHistoryLimit:]
+func verbatimMessages(system string, history []llm.Message, message string, options ...Capabilities) []llm.Message {
+	messageLimit, byteLimit := PromptHistoryLimit, maxPromptHistoryBytes
+	if len(options) > 0 && options[0].PreserveConversationText {
+		if options[0].HistoryMessages > 0 {
+			messageLimit = min(options[0].HistoryMessages, 512)
+		}
+		if options[0].HistoryBytes > 0 {
+			byteLimit = min(options[0].HistoryBytes, 192000)
+		}
+	}
+	if len(history) > messageLimit {
+		history = history[len(history)-messageLimit:]
 	}
 	bytes, start := 0, len(history)
-	for start > 0 && bytes+len(history[start-1].Content) <= maxPromptHistoryBytes {
+	for start > 0 && bytes+len(history[start-1].Content) <= byteLimit {
 		start--
 		bytes += len(history[start].Content)
 	}
@@ -40,6 +49,13 @@ func verbatimMessages(system string, history []llm.Message, message string) []ll
 	return append(messages, llm.Message{Role: "user", Content: message})
 }
 
+func hostedHistoryDropped(history, messages []llm.Message, capabilities Capabilities) int {
+	if !capabilities.PreserveConversationText {
+		return 0
+	}
+	return max(0, len(history)-(len(messages)-2))
+}
+
 // History carries speech only; the current authoritative score carries motion.
 // Earlier turns used to be replayed as {"edits":[]} envelopes, which put a
 // standing example of changing nothing in front of every planning turn and
@@ -49,6 +65,11 @@ func verbatimMessages(system string, history []llm.Message, message string) []ll
 // Chat-only turns use this same history: a previous mode's command must not
 // become an example of authority that this turn does not have.
 func spokenMessages(system string, history []llm.Message, message string) []llm.Message {
+	// Apply the existing local turn cap before copying/unwrapping. A larger
+	// retained transcript must not add work to this path.
+	if len(history) > PromptHistoryLimit {
+		history = history[len(history)-PromptHistoryLimit:]
+	}
 	messages := buildMessages(system, spokenHistory(history), message)
 	// buildMessages re-serializes assistant speech in the catalog contract;
 	// unwrap it again so only the words remain.
@@ -87,7 +108,7 @@ func continuousOutputGuard(capabilities Capabilities) string {
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		empty = "[]"
 	}
-	guard := `FINAL OUTPUT RULE: Return one JSON object with "edits" and "reply", using this mode's contract. Ordinary conversation and questions require "edits":` + empty + `. Do not evolve during ordinary conversation. Use the selected voice for reply; technical examples illustrate edits, not a required speaking style. Never output a "motion" field. Close JSON immediately after the final sentence, with no trailing blank lines.`
+	guard := `FINAL OUTPUT RULE: Return one JSON object using this mode's contract. Conversation requires "edits":` + empty + `; no evolution. Reply in the selected voice, not the technical examples' style. Never output a "motion" field. Close JSON after the final sentence; no trailing blank lines.`
 	if capabilities.MoodTracking {
 		guard += ` Optional "new_mood" may use a listed mood.`
 	}

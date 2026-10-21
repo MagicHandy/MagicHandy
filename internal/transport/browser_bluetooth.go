@@ -46,15 +46,7 @@ type BrowserBluetoothBridgeCommand struct {
 }
 
 // BrowserBluetoothBridgeAck is the browser command result shape.
-type BrowserBluetoothBridgeAck struct {
-	ID            string         `json:"id,omitempty"`
-	OK            bool           `json:"ok"`
-	Status        string         `json:"status,omitempty"`
-	Transport     string         `json:"transport"`
-	ElapsedMillis float64        `json:"elapsed_ms,omitempty"`
-	Error         string         `json:"error,omitempty"`
-	Response      map[string]any `json:"response,omitempty"`
-}
+type BrowserBluetoothBridgeAck = HandyBluetoothAck
 
 // BrowserBluetoothBridgeSnapshot is a safe bridge status view.
 type BrowserBluetoothBridgeSnapshot struct {
@@ -100,6 +92,8 @@ type BrowserBluetoothBridge struct {
 	batchLimit     int
 	nextCommandID  int
 
+	sessionID         uint64
+	retired           bool
 	activeClientID    string
 	connected         bool
 	supported         bool
@@ -179,6 +173,8 @@ func (b *BrowserBluetoothBridge) ConnectClient(status BrowserBluetoothClientStat
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.sessionID++
+	b.retired = false
 
 	if b.activeClientID != "" && clientID != b.activeClientID {
 		b.failAllLocked("bridge_client_changed", "Bluetooth browser client changed.")
@@ -215,6 +211,9 @@ func (b *BrowserBluetoothBridge) UpdateClient(status BrowserBluetoothClientStatu
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.retired {
+		return b.snapshotLocked()
+	}
 
 	if clientID != "" {
 		if b.activeClientID != "" && clientID != b.activeClientID && b.connected {
@@ -226,6 +225,9 @@ func (b *BrowserBluetoothBridge) UpdateClient(status BrowserBluetoothClientStatu
 		b.supported = *status.Supported
 	}
 	if status.Connected != nil {
+		if b.connected != *status.Connected {
+			b.sessionID++
+		}
 		b.connected = *status.Connected
 	}
 	if strings.TrimSpace(status.DeviceName) != "" {
@@ -237,6 +239,20 @@ func (b *BrowserBluetoothBridge) UpdateClient(status BrowserBluetoothClientStatu
 	if strings.TrimSpace(status.Protocol) != "" {
 		b.protocol = safeShortString(status.Protocol, 80)
 	}
+	b.updateClientDescriptionLocked(status)
+	if b.isCurrentClientLocked(clientID) {
+		b.acceptPlaybackLocked(status.HSPState)
+	}
+	b.lastSeenAt = b.clock()
+	if !b.connected {
+		b.playback, b.feedbackActive = nil, false
+		b.failAllLocked("bridge_disconnected", b.messageOrDefaultLocked())
+	}
+	b.broadcastLocked()
+	return b.snapshotLocked()
+}
+
+func (b *BrowserBluetoothBridge) updateClientDescriptionLocked(status BrowserBluetoothClientStatus) {
 	if strings.TrimSpace(status.Status) != "" {
 		b.status = safeShortString(status.Status, 40)
 	} else if b.connected {
@@ -257,16 +273,6 @@ func (b *BrowserBluetoothBridge) UpdateClient(status BrowserBluetoothClientStatu
 		b.lastError = safeShortString(status.Error, 180)
 		b.message = b.lastError
 	}
-	if b.isCurrentClientLocked(clientID) {
-		b.acceptPlaybackLocked(status.HSPState)
-	}
-	b.lastSeenAt = b.clock()
-	if !b.connected {
-		b.playback, b.feedbackActive = nil, false
-		b.failAllLocked("bridge_disconnected", b.messageOrDefaultLocked())
-	}
-	b.broadcastLocked()
-	return b.snapshotLocked()
 }
 
 // DisconnectClient marks the active browser owner as disconnected.
@@ -278,6 +284,8 @@ func (b *BrowserBluetoothBridge) DisconnectClient(clientID string, message strin
 	if clientID != "" && b.activeClientID != "" && clientID != b.activeClientID {
 		return b.snapshotLocked()
 	}
+	b.sessionID++
+	b.retired = true
 	b.connected = false
 	b.playback, b.feedbackActive = nil, false
 	b.status = "disconnected"
@@ -307,6 +315,9 @@ func (b *BrowserBluetoothBridge) SendCommand(ctx context.Context, kind CommandKi
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
+	if expected, ok := ctx.Value(bluetoothSessionKey{}).(uint64); ok && expected != b.sessionID {
+		return b.failureAck("", "bridge_session_changed", "Bluetooth reconnected; start a new playback session.", 0)
+	}
 	if ack, ok := b.readinessFailureLocked("", start); ok {
 		return ack
 	}
@@ -688,3 +699,12 @@ func cloneAckPtrValue(ack *BrowserBluetoothBridgeAck) *BrowserBluetoothBridgeAck
 	}
 	return cloneAckPtr(*ack)
 }
+
+// SessionID identifies the current browser connection, including same-tab reconnects.
+func (b *BrowserBluetoothBridge) SessionID() uint64 {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.sessionID
+}
+
+type bluetoothSessionKey struct{}

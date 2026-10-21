@@ -1,11 +1,11 @@
 // Settings as a routed workspace (not an overlay). Sub-sections are real hash
-// routes: #/settings/device|media|chat|diagnostics. Routed sections
-// share one Save; prompt sets, memory, reset use their own immediate APIs.
+// routes: #/settings/devices|media|chat|diagnostics. Routed sections share one
+// Save; Devices saves each option as it changes, and prompt sets, memory and
+// reset use their own immediate APIs.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { NotificationCategory, PublicSettings, SettingsUpdate } from "../api/types";
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
-import { ManualMotionTest } from "../components/ManualMotionTest";
 import { MediaSettingsPanel } from "../components/MediaSettingsPanel";
 import { VoiceSettingsPanel } from "../components/VoiceSettingsPanel";
 import { rebaseSettingsDraft } from "../util/settings-draft";
@@ -22,19 +22,11 @@ import { AccountSettingsPanel } from "../components/AccountSettingsPanel";
 import { ChatSettingsPanel, resolveChatSettingsSection } from "../components/ChatSettingsPanel";
 import { SettingsNavigation, SettingsNavigationLabel } from "../components/SettingsNavigation";
 import { LabsSettings } from "../components/LabsSettings";
-import { DismissibleNotice } from "../components/DismissibleNotice";
+import { DevicesSettings } from "../devices/DevicesSettings";
+import { playbackDevices } from "../api/devices";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
-const firmwareRequirementLabel = (value: string) => value === "firmware_v4_api_v3_required"
-  ? t("Cloud REST requires Handy firmware v4 with API v3 access.")
-  : value;
 const SETTING_OPTION_LABELS: Partial<Record<string, MessageKey>> = {
-  cloud_rest: "Cloud REST",
-  browser_bluetooth: "Browser Bluetooth",
-  intiface: "Intiface Central",
-  bundled: "Bundled application ID",
-  bundled_app_id: "Bundled application ID",
-  developer_override: "Developer override",
   normal: "Normal",
   debug: "Debug",
   trace: "Trace",
@@ -56,7 +48,7 @@ function notificationPreferenceOptions(): Array<{ category: NotificationCategory
 const SECTIONS = [
   { id: "general", label: "General" },
   { id: "access", label: "Access" },
-  { id: "device", label: "Device" },
+  { id: "devices", label: "Devices" },
   { id: "media", label: "Media library", compact: "Media" },
   { id: "chat", label: "Chat" },
   { id: "voice", label: "Voice" },
@@ -75,19 +67,20 @@ export function SettingsRoute() {
   const { show } = useToast();
   const hash = useHashRoute();
   const requestedSection = hash.split("/")[2] || "general";
-  // Existing model/prompt bookmarks retain their destination within Chat.
+  // Existing model/prompt bookmarks retain their destination within Chat,
+  // and the former Device section opens Devices.
   const legacyChatSection = requestedSection === "model" || requestedSection === "prompts";
-  const requestedRoot = legacyChatSection ? "chat" : requestedSection;
+  const requestedRoot = legacyChatSection ? "chat" : requestedSection === "device" ? "devices" : requestedSection;
   const section = SECTIONS.some((item) => item.id === requestedRoot) ? requestedRoot : "general";
   const chatSection = resolveChatSettingsSection(legacyChatSection ? requestedSection : hash.split("/")[3] || "conversation");
   const restricted = state?.capabilities?.configure_host === false;
   const onlyAccess = restricted || section === "access";
+  // Devices reads the live snapshot and saves as it goes: no host draft.
+  const ownDraft = !onlyAccess && section !== "devices";
   const [s, setS] = useState<PublicSettings | null>(null);
   // The last-saved snapshot, kept to detect unsaved voice edits: worker
   // controls act on the saved config and lock while the form is dirty.
   const [saved, setSaved] = useState<PublicSettings | null>(null);
-  const [newKey, setNewKey] = useState("");
-  const [clearKey, setClearKey] = useState(false);
   const [newElevenLabsKey, setNewElevenLabsKey] = useState("");
   const [clearElevenLabsKey, setClearElevenLabsKey] = useState(false);
   const [newOpenAITTSKey, setNewOpenAITTSKey] = useState("");
@@ -101,6 +94,23 @@ export function SettingsRoute() {
   const savedRef = useRef(saved);
   savedRef.current = saved;
   const locked = !backendOnline || readOnly || loading || state?.capabilities?.configure_host === false;
+  // These sections save immediately elsewhere (the device panel, Settings >
+  // Devices, Access). Follow their confirmed values so Save never sends a
+  // stale copy back, while unrelated edits in the draft stay.
+  const live = state?.settings;
+  const liveSections = live && { device: live.device, motion: live.motion, server: live.server, estim: live.estim, vibration: live.vibration };
+  const liveKey = JSON.stringify(liveSections);
+  const previousLiveKey = useRef(liveKey);
+
+  useEffect(() => {
+    if (previousLiveKey.current === liveKey) return;
+    previousLiveKey.current = liveKey;
+    const baseline = savedRef.current;
+    if (!liveSections || !baseline) return;
+    const next: PublicSettings = { ...baseline, ...liveSections, server: liveSections.server ?? baseline.server };
+    setS((draft) => draft ? rebaseSettingsDraft(baseline, draft, next) : draft);
+    setSaved(next);
+  }, [liveKey]);
 
   async function load(preserveDraft = false) {
     if (!mounted.current) return;
@@ -125,12 +135,12 @@ export function SettingsRoute() {
     mounted.current = true;
     // Account/security pages use their own bounded endpoints. They should not
     // wait for host settings, and visiting them must preserve an existing draft.
-    if (!onlyAccess && !savedRef.current) void load();
+    if (ownDraft && !savedRef.current) void load();
     return () => {
       mounted.current = false;
       loadGeneration.current += 1;
     };
-  }, [onlyAccess]);
+  }, [ownDraft]);
 
   function patchUI(p: Partial<NonNullable<PublicSettings["ui"]>>) {
     setS((cur) => (cur ? {
@@ -153,9 +163,6 @@ export function SettingsRoute() {
         ? Array.from(new Set([...current, category]))
         : current.filter((item) => item !== category),
     });
-  }
-  function patchDevice(p: Partial<PublicSettings["device"]>) {
-    setS((cur) => (cur ? { ...cur, device: { ...cur.device, ...p } } : cur));
   }
   function patchLLM(p: Partial<PublicSettings["llm"]>) {
     setS((cur) => (cur ? { ...cur, llm: { ...cur.llm, ...p } } : cur));
@@ -189,7 +196,6 @@ export function SettingsRoute() {
     if (!s || savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
-    const connectionKey = newKey.trim();
     const elevenLabsKey = newElevenLabsKey.trim();
     const openAITTSKey = newOpenAITTSKey.trim();
     const update: SettingsUpdate = {
@@ -222,13 +228,17 @@ export function SettingsRoute() {
         convert_incompatible_on_scan: s.media?.convert_incompatible_on_scan ?? false,
         show_superseded_originals: s.media?.show_superseded_originals ?? false,
       },
+      // Device options save in Settings > Devices; the write shape requires
+      // these, so they repeat the followed values. The optional Coyote and
+      // vibrator blocks are left out entirely.
       device: {
+        playback_devices: playbackDevices(s.device),
+        linked_failure_policy: s.device.linked_failure_policy ?? "stop_all",
         hsp_dispatch_owner: s.device.hsp_dispatch_owner,
         intiface_server_address: s.device.intiface_server_address,
         firmware_api_requirement: s.device.firmware_api_requirement,
         api_application_id_source: s.device.api_application_id_source,
         api_application_id_override: s.device.api_application_id_override ?? "",
-        ...(connectionKey ? { handy_connection_key: connectionKey } : {}),
       },
       motion: s.motion,
       autopilot: s.autopilot,
@@ -283,15 +293,13 @@ export function SettingsRoute() {
         keep_unsaved_on_exit: s.chat?.keep_unsaved_on_exit ?? false,
       },
       diagnostics: s.diagnostics,
-      clear_connection_key: connectionKey ? false : clearKey,
+      clear_connection_key: false,
     };
     try {
       await api.saveSettings(update);
       show(t("Settings saved."));
       refresh();
       if (mounted.current) {
-        setNewKey("");
-        setClearKey(false);
         setNewElevenLabsKey("");
         setClearElevenLabsKey(false);
         setNewOpenAITTSKey("");
@@ -310,8 +318,6 @@ export function SettingsRoute() {
     loadGeneration.current += 1;
     setS(settings);
     setSaved(settings);
-    setNewKey("");
-    setClearKey(false);
     setNewElevenLabsKey("");
     setClearElevenLabsKey(false);
     setNewOpenAITTSKey("");
@@ -325,6 +331,18 @@ export function SettingsRoute() {
       <div className="settings-main">
         {restricted && <p className="hint-block">{t("Host settings and diagnostics are managed by an administrator.")}</p>}
         <section className="panel settings-panel access-panel"><AccountSettingsPanel backendOnline={backendOnline} /></section>
+      </div>
+    </div>
+  </>;
+
+  if (section === "devices") return <>
+    <WorkspaceHead title={t("Settings")} />
+    <div className="settings-layout">
+      <SettingsSections section="devices" />
+      <div className="settings-main">
+        <section className="panel settings-panel devices-settings">
+          <DevicesSettings page={hash.split("/")[3] ?? ""} />
+        </section>
       </div>
     </div>
   </>;
@@ -373,7 +391,6 @@ export function SettingsRoute() {
       ))}
     </select>
   );
-  const owner = s.device.hsp_dispatch_owner;
   const incompleteModel = s?.llm.connections?.some(connection => !connection.model.trim() && (connection.id === s.llm.conversation_connection_id || (s.llm.motion_planner?.provider === "connection" && connection.id === s.llm.motion_planner.connection_id))) ?? false;
   const saveActions = <div className="row-actions settings-actions">
     <button type="button" className="btn btn-primary" onClick={() => void save()} disabled={locked || saving || incompleteModel}>{saving ? t("Saving settings") : t("Save settings")}</button>
@@ -470,37 +487,6 @@ export function SettingsRoute() {
           </>
         )}
 
-        {section === "device" && (
-          <>
-            <h2 className="section-title">{t("Device")}</h2>
-            <div className="group">
-              <h3 className="group-title">{t("Connection")}</h3>
-              <label className="field"><span className="label">{t("Dispatch owner")}</span>{sel(owner, (v) => patchDevice({ hsp_dispatch_owner: v }), opt.hsp_dispatch_owners)}</label>
-              {owner === "cloud_rest" && <>
-                <DismissibleNotice id="device-firmware" className="device-requirement">
-                  <span id="device-firmware-requirement" className="label">{t("Firmware / API requirement")}</span>
-                  <p>{firmwareRequirementLabel(s.device.firmware_api_requirement)}</p>
-                </DismissibleNotice>
-                <label className="field"><span className="label">{t("Handy connection key")}{s.device.connection_key_set && <span className="badge">{t("set")}</span>}</span><input type="password" autoComplete="off" placeholder={s.device.connection_key_set ? t("set (leave blank to keep)") : t("Paste key")} value={newKey} disabled={locked} onChange={(e) => { setNewKey(e.target.value); if (e.target.value.trim()) setClearKey(false); }} /></label>
-                <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={clearKey} disabled={locked || Boolean(newKey.trim())} onChange={(e) => { setClearKey(e.target.checked); if (e.target.checked) setNewKey(""); }} /><span className="track" aria-hidden="true" /></span><span>{t("Clear connection key on save")}</span></label>
-              </>}
-              {owner === "intiface" && <>
-                <label className="field"><span className="label">{t("Intiface Central server")}</span><input type="url" value={s.device.intiface_server_address} disabled={locked} spellCheck={false} onChange={(e) => patchDevice({ intiface_server_address: e.target.value })} /></label>
-              </>}
-            </div>
-            <details className="group" open={s.device.api_application_id_source === "developer_override" ? true : undefined}>
-              <summary className="group-title">{t("Advanced")}</summary>
-              {owner === "cloud_rest" && <>
-                <label className="field"><span className="label">{t("API application ID source")}</span>{sel(s.device.api_application_id_source, (v) => patchDevice({ api_application_id_source: v }), opt.api_application_id_sources)}</label>
-                {s.device.api_application_id_source === "developer_override" && <label className="field"><span className="label">{t("Developer application ID")}</span><input type="text" value={s.device.api_application_id_override ?? ""} disabled={locked} onChange={(e) => patchDevice({ api_application_id_override: e.target.value })} /></label>}
-              </>}
-              <h3 className="group-title">{t("Local server")}</h3>
-              <label className="field"><span className="label">{t("Server port")}</span><input type="number" min={1} max={65535} value={s.server.port} disabled={locked} onChange={(e) => setS((cur) => (cur ? { ...cur, server: { port: Number(e.target.value) } } : cur))} /></label>
-            </details>
-            <ManualMotionTest />
-          </>
-        )}
-
         {section === "media" && (
           <>
             <h2 className="section-title">{t("Media library")}</h2>
@@ -537,7 +523,7 @@ export function SettingsRoute() {
             <div className="group">
               <h3 className="group-title">{t("Logging")}</h3>
               <label className="field"><span className="label">{t("Diagnostics verbosity")}</span>{sel(s.diagnostics.verbosity, (v) => setS((cur) => (cur ? { ...cur, diagnostics: { verbosity: v } } : cur)), opt.diagnostics_verbosities)}</label>
-              <p className="hint-block">{t("Higher levels record more detail in the trace export. They do not change what the report below shows.")}</p>
+              <p className="hint-block">{t("Higher levels record more runtime detail for the diagnostic report.")}</p>
             </div>
             <DiagnosticsPanel locked={locked} onReset={applyReset} />
           </>

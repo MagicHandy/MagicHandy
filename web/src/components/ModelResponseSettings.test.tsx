@@ -18,9 +18,9 @@ describe("hosted model speed choices", () => {
   });
 
   it("picks low only when supported and preserves compatible explicit choices", () => {
-    expect(selectedModelChange(model, model.id, connection)).toEqual({ model: model.id, reasoning_effort: "low" });
-    expect(selectedModelChange(model, model.id, { ...connection, reasoning_effort: "medium" })).toEqual({ model: model.id, reasoning_effort: "medium" });
-    expect(selectedModelChange(undefined, "manual", { ...connection, reasoning_effort: "medium" })).toEqual({ model: "manual", reasoning_effort: "" });
+    expect(selectedModelChange(model, model.id, connection)).toEqual({ model: model.id, reasoning_effort: "low", context_window: 32768 });
+    expect(selectedModelChange(model, model.id, { ...connection, reasoning_effort: "medium" })).toEqual({ model: model.id, reasoning_effort: "medium", context_window: 32768 });
+    expect(selectedModelChange(undefined, "manual", { ...connection, reasoning_effort: "medium" })).toEqual({ model: "manual", reasoning_effort: "", context_window: 32768 });
   });
 
   it("does not invent a paid tier or a control for compatible providers", () => {

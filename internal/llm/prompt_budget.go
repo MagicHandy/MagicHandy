@@ -18,7 +18,7 @@ func BudgetChatRequest(request ChatRequest, contextSize int) (ChatRequest, Promp
 	// Reserve output, bounded thinking, template/schema overhead, and room for
 	// one repair exchange. No model-specific tokenizer dependency enters the core.
 	limit := PromptInputByteLimit(contextSize, request.MaxTokens, request.ReasoningBudgetTokens, len(request.JSONSchema))
-	budget := PromptBudget{LimitBytes: max(0, limit)}
+	budget := PromptBudget{LimitBytes: max(0, limit), HistoryMessagesDropped: request.HistoryMessagesDropped}
 	for _, message := range request.Messages {
 		budget.InputBytes += len(message.Content) + 64
 	}

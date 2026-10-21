@@ -39,6 +39,7 @@ const promptSets: PromptSetsPayload = {
 
 describe("persistence panels", () => {
   beforeEach(() => {
+    sessionStorage.clear();
     app.show.mockReset();
     for (const mock of [
       api.getMemory,
@@ -52,6 +53,24 @@ describe("persistence panels", () => {
       api.updatePromptSet,
       api.deletePromptSet,
     ]) vi.mocked(mock).mockReset();
+  });
+
+  it("retains the edited set after save and navigation without activating it", async () => {
+    const custom = { id: "custom", name: "Custom", system: "Original instructions.", builtin: false };
+    getPromptSets.mockResolvedValue({ sets: [...(promptSets.sets ?? []), custom] });
+    vi.mocked(api.updatePromptSet).mockResolvedValue({} as never);
+    const first = render(<PromptSetEditor />);
+    const select = await screen.findByLabelText("Edit set");
+    fireEvent.change(select, { target: { value: "custom" } });
+    fireEvent.change(screen.getByRole("textbox", { name: /Behavior instructions/ }), { target: { value: "Updated instructions." } });
+    getPromptSets.mockResolvedValue({ sets: [...(promptSets.sets ?? []), { ...custom, system: "Updated instructions." }] });
+    fireEvent.click(screen.getByRole("button", { name: "Save set" }));
+    await waitFor(() => expect(api.updatePromptSet).toHaveBeenCalledWith("custom", "Custom", "Updated instructions."));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save set" })).toBeEnabled());
+    first.unmount();
+    render(<PromptSetEditor />);
+    await waitFor(() => expect(screen.getByLabelText("Edit set")).toHaveValue("custom"));
+    expect(screen.getByRole("textbox", { name: /Behavior instructions/ })).toHaveValue("Updated instructions.");
   });
 
   it("keeps a memory load failure distinct from a valid empty memory list", async () => {

@@ -26,6 +26,25 @@
   margin-bottom: 0;
 }
 
+/* A head row that opens a card is that card's header row, as a bare title
+   would be: full-bleed padding and a rule beneath, the title at heading size,
+   its status or actions alongside. */
+:is(.settings-panel, .setup-layout) .group > .model-section-head:first-child {
+  margin: 0 -16px 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+:is(.settings-panel, .setup-layout) .group > .model-section-head:first-child .group-title {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  font-size: var(--fs-heading);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
 .model-health {
   display: inline-flex;
   align-items: center;

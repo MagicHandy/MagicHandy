@@ -117,17 +117,21 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	current, limits := layeredContextScore(&state)
 	// The prompt and parser must share the same freshly seeded starting score.
 	state.Layered = &current
-	system := composeSystem(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget)
-	schema := LayeredResponseSchema(limits, capabilities.MoodTracking)
-	parser := ParseLayeredReply
+	var system string
+	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.HostedMotion)
 	if capabilities.MotionMode == MotionModeCreativeV2 {
-		schema, parser = CreativeV2ResponseSchema(limits, capabilities.MoodTracking), ParseCreativeV2Reply
+		schema = CreativeV2ResponseSchema(limits, capabilities.MoodTracking)
 	}
 	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(state)))
+	autoTiming := s.TrustedMotionInput && capabilities.AutoTiming
+	if autoTiming {
+		schema = withNextCheckSchema(schema)
+	}
 	if !s.TrustedMotionInput {
-		guard := continuousOutputGuard(capabilities)
-		system = strings.TrimSuffix(system, guard) + continuousActionGuideFor(state) + "\n\n" + guard
-		schema = continuousActionSchema(schema, state)
+		system = ComposeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget).Prompt
+		schema = InteractiveResponseSchema(nil, capabilities, &state)
+	} else {
+		system = composeSystem(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget)
 	}
 	if !capabilities.Motion {
 		schema = nil
@@ -140,12 +144,15 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if s.TrustedMotionInput && s.AutonomousTemperature > 0 {
 		temperature = min(s.AutonomousTemperature, 1.2)
 	}
-	messages := spokenMessages(system, request.History, request.Message)
+	var messages []llm.Message
 	if capabilities.PreserveConversationText {
-		messages = verbatimMessages(system, request.History, request.Message)
+		messages = verbatimMessages(system, request.History, request.Message, capabilities)
+	} else {
+		messages = spokenMessages(system, request.History, request.Message)
 	}
 	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Messages: messages,
-		Model: s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
+		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
+		Model:                  s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
 		MaxTokens: maxTokens, ReasoningMode: s.ReasoningMode,
 		ReasoningBudgetTokens: s.ReasoningBudgetTokens, JSONSchema: schema}, func(delta string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: delta})
@@ -154,10 +161,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	if err != nil {
 		return result, err
 	}
-	response, next, changed, err := parseContinuousReply(raw, current, state, limits, parser)
-	if err == nil {
-		err = s.authorizeLayeredReply(&response, next, changed, state)
-	}
+	response, err := s.parseLayeredResponse(raw, current, state, limits, autoTiming)
 	if err != nil {
 		result.Malformed, result.InitialMalformed, result.MalformedError = true, true, err.Error()
 		_ = emitEvent(emit, StreamEvent{Type: "malformed", Phase: "initial", Error: err.Error()})
@@ -174,10 +178,39 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	return result, nil
 }
 
+func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
+	capabilities := s.capabilities()
+	if capabilities.MotionMode == MotionModeLayered && capabilities.HostedMotion {
+		// Validate the original object before metadata/recall extraction can
+		// re-encode it and conceal duplicate fields from an unconstrained model.
+		var err error
+		raw, err = normalizeLayeredOperations(raw)
+		if err != nil {
+			return AssistantResponse{}, err
+		}
+	}
+	nextCheck := 0
+	if autoTiming {
+		raw, nextCheck = takeNextCheck(raw)
+	}
+	parser := ParseLayeredReply
+	if capabilities.MotionMode == MotionModeCreativeV2 {
+		parser = ParseCreativeV2Reply
+	}
+	response, next, changed, err := parseContinuousReply(raw, current, state, limits, parser)
+	if err == nil {
+		err = s.authorizeLayeredReply(&response, next, changed, state)
+	}
+	response.nextCheckSeconds = nextCheck
+	return response, err
+}
+
 func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind AutopilotKind, request Request) (AutopilotResponse, error) {
+	capabilities := s.Capabilities
+	capabilities.AutoTiming = s.autoTiming(kind)
 	service := Service{Provider: s.Provider, Prompt: s.Prompt, Model: s.Model, MaxTokens: s.MaxTokens,
 		ReasoningMode: s.ReasoningMode, ReasoningBudgetTokens: s.ReasoningBudgetTokens, Memories: s.Memories,
-		MotionContext: s.MotionContext, ConversationContext: s.ConversationContext, Capabilities: &s.Capabilities, TrustedMotionInput: true,
+		MotionContext: s.MotionContext, ConversationContext: s.ConversationContext, Capabilities: &capabilities, TrustedMotionInput: true,
 		AutonomousTemperature: s.Temperature, PromptBudget: s.PromptBudget}
 	if kind == AutopilotKindMotion {
 		continuation := LayeredContinuationMessage()
@@ -203,5 +236,6 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 	if command != nil {
 		command.Action = MotionActionUpdate
 	}
-	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled"}, nil
+	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled",
+		NextCheckSeconds: result.Response.nextCheckSeconds}, nil
 }

@@ -30,7 +30,10 @@ func (s *Server) configureSetupManager() {
 	s.setup.reportVersion = s.version
 	s.setup.reportSecrets = func() []string {
 		settings, _ := s.store.Snapshot()
-		return []string{settings.Device.HandyConnectionKey, settings.Voice.ElevenLabsAPIKey, settings.Voice.OpenAITTSAPIKey}
+		return []string{
+			settings.Device.HandyConnectionKey, settings.Device.NativeBluetoothAddress,
+			settings.Estim.RememberedAddress, settings.Voice.ElevenLabsAPIKey, settings.Voice.OpenAITTSAPIKey,
+		}
 	}
 }
 

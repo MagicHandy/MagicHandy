@@ -77,6 +77,9 @@ type AssistantResponse struct {
 	// continuousAction is the model's live-chat decision before state checks.
 	// Only the validated Motion command is exposed to the rest of the app.
 	continuousAction string
+	// nextCheckSeconds is an auto-timing Autopilot turn's horizon, taken out of
+	// the reply before the mode parser runs.
+	nextCheckSeconds int
 }
 
 // MotionCommand is semantic motion intent, not a transport command.

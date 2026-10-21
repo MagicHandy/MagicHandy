@@ -97,17 +97,26 @@ func withRecallSchema(schema json.RawMessage, mode MotionMode, count int) json.R
 		items["oneOf"] = append(choices, map[string]any{"type": "object", "properties": map[string]any{"recall": recall},
 			"required": []string{"recall"}, "additionalProperties": false})
 	} else {
-		fields, _ := edits["properties"].(map[string]any)
-		if fields == nil {
-			return schema
-		}
-		fields["recall"] = recall
+		addLayeredRecallSchema(edits, recall)
 	}
 	encoded, err := json.Marshal(root)
 	if err != nil {
 		return schema
 	}
 	return encoded
+}
+
+func addLayeredRecallSchema(edits, recall map[string]any) {
+	if fields, ok := edits["properties"].(map[string]any); ok {
+		fields["recall"] = recall
+	}
+	if branches, ok := edits["oneOf"].([]any); ok {
+		for _, branch := range branches {
+			if object, ok := branch.(map[string]any); ok {
+				addLayeredRecallSchema(object, recall)
+			}
+		}
+	}
 }
 
 // applyRecall takes a recall edit out of a reply and returns the score it

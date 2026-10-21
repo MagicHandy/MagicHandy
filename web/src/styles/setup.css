@@ -670,7 +670,7 @@
    so setup sections and the shared model cards keep one 16px rhythm. */
 .setup-body > .setup-copy,
 .setup-body > .setup-copy .setup-copy { gap: 16px; }
-.setup-copy > :is(.setup-section, .model-routing-snapshot, .model-role-section, .group, .model-routing-draft, .setup-local-fields) { margin: 0; }
+.setup-copy > :is(.setup-section, .group, .model-routing-draft, .setup-local-fields) { margin: 0; }
 /* Collapsed cards (Named connections, Decisions API) use the Settings header. */
 .setup-layout details.group > summary {
   display: flex;

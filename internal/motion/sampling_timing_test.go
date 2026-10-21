@@ -10,7 +10,7 @@ import (
 )
 
 func TestImmediateSamplingPreservesReversalAndTimingAcrossAppends(t *testing.T) {
-	for _, floor := range []int64{30, 50, 100} {
+	for _, floor := range []int64{30, 50, 100, 110} {
 		settings := config.DefaultSettings().Motion
 		plan := NewMotionPlan("immediate", MotionTarget{PatternID: PatternFullSweeps, SpeedPercent: 43}, settings, 0, 0, time.Unix(0, 0))
 		owner := &timingCapabilityTransport{Fake: transport.NewFake(), minimumInterval: time.Duration(floor) * time.Millisecond}

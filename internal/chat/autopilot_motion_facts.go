@@ -80,8 +80,12 @@ func writeContinuousAutopilotContext(builder *strings.Builder, context Autopilot
 	writeAutopilotMotionFacts(builder, context, true)
 	writeSessionProgress(builder, context)
 	writeRecentCreativeBands(builder, context.RecentPositionBands)
-	level := normalizedMotionChangeLevel(context.MotionChangeLevel)
-	fmt.Fprintf(builder, "Motion change preference: %d/8 (%s). This is a preference for session development, not a mandatory change schedule.\n", level, motionChangeBias(level))
+	if context.AutoTiming {
+		writeAutoTiming(builder, context, true)
+	} else {
+		level := normalizedMotionChangeLevel(context.MotionChangeLevel)
+		fmt.Fprintf(builder, "Motion change preference: %d/8 (%s). This is a preference for session development, not a mandatory change schedule.\n", level, motionChangeBias(level))
+	}
 	writeRecentSpeeds(builder, context)
 	if context.Technical {
 		// Without the conversation, a pace the person chose in chat is the only
@@ -106,9 +110,21 @@ func writeContinuousAutopilotContext(builder *strings.Builder, context Autopilot
 	}
 	// Every axis collapses to one value unless the spread is asked for; the
 	// continuous modes never received the pace line the catalog modes use.
-	fmt.Fprintf(builder, "Pace: use the width of the saved %d-%d%% speed range across the session rather than settling into one comfortable band. Easing down is what makes the next climb land; several stretches in a row at nearly the same speed_percent read as flat. When they say it is too much, or say they are close and you choose to hold them off, set speed_percent within a few points of %d%% at once, not partway, and keep it there while that was less than about a minute ago. Once the pace has stayed in the lower third for a minute or two and they have said nothing new since, rebuild: raise speed_percent by about 5 points each stretch and keep rising over the following stretches until it suits the moment again. A wish for a slow pace, such as going slow to make it last, is lasting: keep pace in the lower third and vary it there until they say otherwise.\n",
-		context.SpeedMinPercent, context.SpeedMaxPercent, context.SpeedMinPercent)
+	if context.Hosted {
+		builder.WriteString(hostedContinuousPlanningGuide)
+	} else {
+		fmt.Fprintf(builder, "Pace: use the width of the saved %d-%d%% speed range across the session rather than settling into one comfortable band. Easing down is what makes the next climb land; several stretches in a row at nearly the same speed_percent read as flat. When they say it is too much, or say they are close and you choose to hold them off, set speed_percent within a few points of %d%% at once, not partway, and keep it there while that was less than about a minute ago. Once the pace has stayed in the lower third for a minute or two and they have said nothing new since, rebuild: raise speed_percent by about 5 points each stretch and keep rising over the following stretches until it suits the moment again. A wish for a slow pace, such as going slow to make it last, is lasting: keep pace in the lower third and vary it there until they say otherwise.\n",
+			context.SpeedMinPercent, context.SpeedMaxPercent, context.SpeedMinPercent)
+	}
 	if context.MotionFeedback != "" {
 		fmt.Fprintf(builder, "Quality feedback: %s\n", context.MotionFeedback)
 	}
 }
+
+// The local guidance above deliberately has a stronger pace-development bias.
+// API models instead resolve active user constraints before choosing variation.
+// No phrase is classified by code and no constraint is inferred or enforced here.
+const hostedContinuousPlanningGuide = `Planning priority: resolve each human direction's scope and lifetime from its meaning, conversation and recorded age. First satisfy a one-time adjustment or brief easing with a real stretch at the requested setting; it does not become an indefinite lock. Once a requested interval has passed, resume the autonomy already granted without requiring another message. Praise is feedback, not a new restriction. A later direction can release or replace an earlier one.
+A lasting pace, band or exact-pattern wish remains active until changed by the person; silence, time or change preference do not cancel it. Protect only its requested dimensions and develop the others. Distinguish that wish from the current score and your own previous choices. When scope is unclear, favor continuity for this stretch without inventing a permanent restriction.
+Within that permission, Autopilot develops coherent holds, easing and builds over time, including pace contrasts when pace is open; no dimension must change every turn. Check the resulting score against active directions: full_slider replaces the outer band with 0..100; full_band preserves the chosen band. The reply describes only emitted edits.
+`

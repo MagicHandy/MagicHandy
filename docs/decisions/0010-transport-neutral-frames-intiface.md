@@ -8,6 +8,12 @@ asynchronous-ACK pacer added in PR #67 still needs a matched `motion_trace.v3`
 hardware run and subjective feel confirmation. Revises the dispatch-owner scope
 of ADR 0006; everything ADR 0006 dropped stays dropped.
 
+[ADR 0047](0047-intiface-vibrator-output.md) moves the connection into a
+session shared with a `ScalarCmd` vibrator owner. Each device has one role,
+selecting a linear actuator stops the previous and the new device first, and
+Emergency Stop sends `StopAllDevices` behind a write barrier. The linear
+delivery policy below is unchanged.
+
 ## Context
 
 Intiface Central (buttplug.io) is the de-facto open device layer: it owns the

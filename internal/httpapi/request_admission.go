@@ -17,6 +17,7 @@ const (
 	shellLane
 	livenessLane
 	controlLane
+	diagnosticExportLane
 	requestLaneCount
 )
 
@@ -31,6 +32,7 @@ var requestLaneLimits = [requestLaneCount]requestLaneLimit{
 	{name: "shell", global: 16, peer: 8},
 	{name: "liveness", global: 16, peer: 8},
 	{name: "control", global: 16, peer: 8},
+	{name: "diagnostic_export", global: 1, peer: 1},
 }
 
 type requestLaneState struct {
@@ -114,6 +116,9 @@ func (s *Server) admitHTTPRequests(next http.Handler) http.Handler {
 }
 
 func (s *Server) requestLane(r *http.Request) requestLane {
+	if readRequest(r) && r.URL.Path == "/api/diagnostics/report" {
+		return diagnosticExportLane
+	}
 	if readRequest(r) && !strings.HasPrefix(r.URL.Path, "/api/") {
 		return shellLane
 	}

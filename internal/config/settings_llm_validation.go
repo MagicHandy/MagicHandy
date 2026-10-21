@@ -65,6 +65,9 @@ func validateLLMSettings(settings LLMSettings) error {
 }
 
 func validateLLMConnections(settings LLMSettings) error {
+	if err := validateMotionReviewer(settings); err != nil {
+		return err
+	}
 	if err := validateModelConnections(settings); err != nil {
 		return err
 	}

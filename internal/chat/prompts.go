@@ -169,6 +169,9 @@ func contractInstructions(capabilities Capabilities) string {
 	}
 	if capabilities.MotionMode == MotionModeLayered {
 		text := layeredContract
+		if capabilities.HostedMotion {
+			text = hostedLayeredContract(text)
+		}
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()
 		}
@@ -209,6 +212,10 @@ func contractInstructions(capabilities Capabilities) string {
 // value is chat-only in the utility voice; callers resolve defaults from
 // settings.
 type Capabilities struct {
+	// HostedMotion selects hosted planning guidance and the exclusive Layered
+	// set/adjust contract. It changes representation, never motion authority.
+	// Local runtimes retain their compact prompts and controls/change_by edits.
+	HostedMotion bool
 	// SchemaUnenforced marks a provider that may ignore the response schema,
 	// such as an external OpenAI-compatible server. Its Creative v2 contract
 	// omits the reach guide: without the schema, local Gemma 12B wrote
@@ -217,12 +224,16 @@ type Capabilities struct {
 	// PreserveConversationText keeps included canonical messages verbatim for
 	// an explicitly selected hosted full-conversation role.
 	PreserveConversationText bool
-	Motion                   bool
-	MotionMode               MotionMode
-	Patterns                 bool
-	AreaFocus                bool
-	ExperimentalPatterns     bool
-	Voice                    VoiceLevel
+	// Hosted history budgets are resolved per connection. Local composition
+	// ignores these fields and retains its existing prompt and runtime cost.
+	HistoryMessages      int
+	HistoryBytes         int
+	Motion               bool
+	MotionMode           MotionMode
+	Patterns             bool
+	AreaFocus            bool
+	ExperimentalPatterns bool
+	Voice                VoiceLevel
 	// Style is the active persona's reaction style, or StyleNeutral. It sits
 	// beside Voice because it is the same kind of thing: a reply-shaping axis
 	// with no motion authority.
@@ -235,6 +246,10 @@ type Capabilities struct {
 	MotionHolder MotionHolder
 	// ReplyLength steers the reply's length; the zero value composes nothing.
 	ReplyLength ReplyLength
+	// AutoTiming asks an Autopilot motion turn for next_check_seconds, its own
+	// reconsideration horizon. Only hosted planning routes set it: small local
+	// models settle on one value, so their cadence stays backend-sampled.
+	AutoTiming bool
 }
 
 // MotionHolder names what owns the device during a chat-only turn.

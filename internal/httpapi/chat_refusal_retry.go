@@ -48,6 +48,7 @@ func (s *Server) retryDeclinedChat(ctx context.Context, stopSequence uint64, loc
 	service.ReasoningMode = local.ReasoningMode
 	service.ReasoningBudgetTokens = managedLlamaReasoningBudget(local, s.managedLLM.Snapshot().Runtime.Current)
 	service.PromptBudget = chatPromptBudget(local)
+	request.HistoryMessagesDropped = 0
 	declined := *diagnostics
 	*diagnostics = interactiveDiagnostics(local, service.Prompt.ID, promptContext.Persona)
 	diagnostics.RefusalFallbackFrom, diagnostics.RefusalFallbackModel = declined.Provider, declined.Model

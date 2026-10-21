@@ -19,6 +19,7 @@ type ModelRoutingSnapshot struct {
 	Chat       ModelRoute  `json:"chat"`
 	Autopilot  ModelRoute  `json:"autopilot"`
 	LocalRetry *ModelRoute `json:"local_retry,omitempty"`
+	Reviewer   *ModelRoute `json:"reviewer,omitempty"`
 }
 
 // ModelRouting reports resolved destinations without exposing credentials.
@@ -35,6 +36,15 @@ func (s LLMSettings) ModelRouting() ModelRoutingSnapshot {
 		motion = ModelRoute{Kind: "decisions", Provider: LLMProviderOpenAI, EndpointHost: "api.openai.com", ContextPolicy: ContextTechnical, State: "configured"}
 	}
 	snapshot := ModelRoutingSnapshot{Chat: chat, Autopilot: motion}
+	if s.MotionReviewer.Enabled {
+		settings, err := s.ReviewerSettings()
+		reviewer := describeModelRoute(settings)
+		reviewer.ContextPolicy = "motion_and_user_requests"
+		if err != nil {
+			reviewer.State = "unavailable"
+		}
+		snapshot.Reviewer = &reviewer
+	}
 	if s.RetryRefusalLocally && s.ConversationSettings().IsHosted() {
 		local := describeModelRoute(s.LocalSettings())
 		local.ContextPolicy = ContextConversation

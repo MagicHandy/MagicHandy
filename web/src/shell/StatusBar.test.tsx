@@ -40,8 +40,8 @@ vi.mock("../state/app-state", () => ({
 vi.mock("../util/audio", () => ({
   stopAllAudioPlayback: mocks.stopAllAudioPlayback,
 }));
-vi.mock("./ConnectionManager", () => ({
-  ConnectionManager: () => <div>Connection manager</div>,
+vi.mock("./DevicePanel", () => ({
+  DevicePanel: () => <div>Device panel</div>,
 }));
 vi.mock("./NotificationCenter", () => ({
   NotificationCenter: () => <div>Notification center</div>,

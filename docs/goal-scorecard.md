@@ -4,62 +4,544 @@
 
 Bounded local port fallback, per-profile OS ownership, verified endpoint
 discovery and retained startup reports are implemented in
-[ADR 0040](decisions/0040-local-startup-recovery.md). No dependency is added.
-The single canonical embedded UI was rebuilt; stale hashed assets were removed.
+[ADR 0051](decisions/0051-local-startup-recovery.md). The standard diagnostic
+report includes current startup, last failure and last recovery under
+`status.json` → `startup`, including exports with all optional sections off.
+No separate startup panel, download, endpoint or frontend asset is shipped.
+No dependency is added; the canonical embedded UI is identical to `main`.
 
-Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -ldflags '-s -w'`, built
-from `./cmd/magichandy`. Baseline is the pre-change `6dd502e9` source; candidate
-is this branch's application source with its rebuilt embedded assets.
+Final comparison after integration with `main` at `4a46c0ff`: Windows amd64,
+Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`,
+built from `./cmd/magichandy`. The baseline is a source archive of that commit;
+the candidate is this branch's integrated application source.
 
 | Measure | Baseline | Candidate | Change |
 | --- | ---: | ---: | ---: |
-| Stripped binary | 22,046,720 B | 22,123,008 B | +76,288 B |
-| All embedded assets | 2,421,836 B | 2,429,413 B | +7,577 B |
-| Main JavaScript, gzip level 9 | 305,817 B | 306,469 B | +652 B |
-| Idle working set, median of 3 | 24,408,064 B | 25,403,392 B | +995,328 B |
-| Idle private bytes, median of 3 | 58,335,232 B | 57,978,880 B | within sample noise |
-| Process launch to HTTP health, median of 3 | 516 ms | 523 ms | within sample noise |
+| Stripped binary | 23,332,352 B | 23,399,424 B | +67,072 B |
+| Complete canonical embedded UI | 2,692,105 B | 2,692,105 B | unchanged |
+| Main JavaScript, gzip level 9 | 334,294 B | 334,294 B | unchanged |
+| Idle working set, median of 3 | 23,908,352 B | 25,690,112 B | +1,781,760 B |
+| Idle private bytes, median of 3 | 57,475,072 B | 58,699,776 B | +1,224,704 B |
+| Process launch to HTTP health, median of 3 | 519 ms | 519 ms | within sample noise |
 
 Startup/idle samples use equivalent initialized isolated profiles, external
 Ollama, voice disabled, `-simulate-motion`, a fixed loopback address and
 `-remote-port -1`. Working set is sampled two seconds after readiness with no
 browser connected. Process launches include PowerShell/Windows launch and HTTP
 polling overhead and use a warm filesystem; these are not OS-cold-start or
-active-motion measurements. Startup ranges were 510–576 ms baseline and
-516–922 ms candidate. The 922 ms outlier precludes a speed-improvement claim.
-The post-review sample reused initialized isolated profiles while background
-checks ran; it does not establish a performance improvement.
-The external model process and browser RSS are excluded. The first exploratory
-baseline also showed a 72 MB transient working-set sample; the small final
-sample should not be interpreted as a new steady-state guarantee. The core
-remains below the 30 MB binary budget; existing frontend bundle-size advisories
-remain in effect.
+active-motion measurements. Startup ranges were 508–520 ms baseline and
+506–520 ms candidate. Three samples do not establish a performance improvement
+or a steady-state RSS guarantee. The external model process and browser RSS
+are excluded. The core remains below the 30 MB binary budget; existing frontend
+bundle-size advisories remain in effect.
 
 Acceptance includes real occupied app/remote ports, injected native Windows
 10013 denial, strict fixed-port refusal, duplicate executable/launcher reuse,
 stale/foreign endpoint rejection, held sockets and failure cleanup, report
-retention/redaction/temporary storage, role admission, Windows PowerShell 5.1
-and PowerShell 7 installer suites, full Go/race/vet/lint/architecture/lifecycle
-checks, and 836 frontend tests plus localization/typecheck/build.
+retention/redaction/temporary storage, standard diagnostic archive inclusion,
+Windows PowerShell 5.1 and PowerShell 7 installer suites, full Go/race/vet/lint/
+architecture/lifecycle checks, and frontend localization/typecheck/tests/build.
 
-The isolated simulator review deliberately failed a fixed bind on 48717
-(native 10048), retained that failure, and recovered automatically to app 6059
-and remote 6060 at the initial implementation checkpoint. The post-review
-current-source build repeats this scenario at app 11293 and remote 11294.
-Diagnostics displays both retained records and the report-download
-control. A direct duplicate printed the existing URL without creating another
-runtime. The exact review app passed `check-review-llm.ps1` with a real text
-generation from the configured Ollama model. No hardware was connected and no
-motion or system network reset was requested. Original-user HNS state was not
-reproduced; the 10013 regression uses an injected native error.
+The integrated isolated simulator deliberately failed a fixed bind on 48717
+(native 10048), retained that failure and recovered automatically to app 14395
+and remote 14396. The ordinary diagnostic ZIP includes both startup records;
+there is no separate startup UI. The exact app passed `check-review-llm.ps1`
+with real text generation from the configured Ollama model. No hardware was
+connected and no motion or system network reset was requested. Original-user
+HNS state was not reproduced; the 10013 regression uses an injected native error.
 
 [The Opus 5.5 review and dispositions](startup-recovery-review-2026-10-20.md)
 cover saved hosted-policy compatibility, explicit simulation, recovered-profile
 installer consumers, bounded Windows replacement retries, fixed remote-port
-reuse and startup messages. Review fixes add 4,096 B over the initial candidate;
-frontend assets are unchanged. A high-effort review and medium-effort follow-up
-found no remaining high/medium issues after these fixes; the follow-up's low
-finding about duplicate recovery restarts has a dedicated installer regression.
+reuse and startup messages. The review records its pre-integration scope and
+the subsequent diagnostic-report consolidation.
+
+## 2026-10-18 — Constraint lifetimes and independent external history
+
+Hosted planning distinguishes temporary settings from lasting directions.
+External connections can use shorter history inside a larger request budget;
+local limits and prompt branches are unchanged. The structured centered/anchor
+operation fits inherited widths into an explicitly narrowed band. No dependency,
+background task or additional inference call is added.
+
+Matching Go 1.26.9 Windows amd64 builds, `CGO_ENABLED=0`, `-trimpath
+-buildvcs=false -ldflags '-s -w'`, against parent `7f1f0752`: core
+**23,321,600 -> 23,332,352 B** (+10,752 B, 0.046%). The parent was rebuilt from
+an isolated source archive with the same flags. Main UI JS is
+**1,238,130 -> 1,240,414 B raw** (+2,284 B), **333,863 -> 334,294 B gzip**
+(+431 B). Complete canonical embedded UI: **2,683,548 -> 2,692,105 B**
+(+8,557 B), including five locale catalogs. No new RSS/cold-start claim.
+
+The final isolated app passed real local generation and a text-only app chat
+in 1,082 ms (one call, no repair/fallback/motion). This is readiness evidence,
+not a controlled local-performance comparison. Final matched ChatGPT evaluation
+has 54 valid checked responses, plus seven standing-hold checks and eighteen
+final regressions. The full 389-record atlas retains failed and preliminary
+runs; 311 distinct plots and 20 overview sheets were reviewed. See the
+[review and limitations](constraint-lifetime-review-2026-10-18.md).
+
+## 2026-10-18 — Exclusive hosted Layered operations
+
+Hosted Layered replies choose exclusive set/adjust, composition and per-axis
+edit/removal operations. Hosted continuous Autopilot resolves active human
+directions before developing open dimensions. This changes provider contracts
+and translation into existing domain edits; no dependency, background task,
+retry or motion path is added.
+Local Layered and Creative v2 interactive/autonomous prompts and response
+schemas have identical SHA-256 hashes across ten before/after state fixtures.
+The canonical UI bundle and dependency files are unchanged.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, identical `-trimpath
+-buildvcs=false -ldflags '-s -w'` and version metadata against alpha.63
+`5e02daa0`: **23,264,768 -> 23,321,600 B** (+56,832 B, 0.24%). No new RSS or
+cold-start claim. The isolated review app completed a local text-only chat in
+1,048 ms including 3 ms model loading, one provider call and no repair or
+fallback; that is a readiness check, not a latency comparison.
+
+The final live `gpt-6-sol` checks took 2,698–6,581 ms (median 4,279 ms, n=44),
+with all 44 parsing and satisfying their intent checks. They cover interactive,
+Autopilot and reviewer paths, retained/released pace, named/custom shapes and
+recall. All failed iterations are retained in a 233-record shared-engine atlas.
+This is a small evaluation, not a general intent guarantee or latency benchmark.
+See the [review and limitations](hosted-layered-operations-review-2026-10-18.md).
+
+## 2026-10-16 — Auto timing and prepared decisions for external planners
+
+[ADR 0050](decisions/0050-hosted-autopilot-auto-timing.md) adds two Autopilot
+settings, prompt text for hosted auto-timing turns and the Autopilot card's two
+switches. No dependency, background task or local-model request is added.
+Prepared decisions move an external planner's existing call earlier and add
+none unless chat discards one; Auto timing lets the model set the request rate
+inside an 8-second floor (measured 0.25–1.7 calls per minute, fixed level 4
+about 1.5).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, against alpha.62 `0e3187e5`: core
+**23,236,608 -> 23,264,768 B** (+28,160 B), still **14 modules**.
+
+Main UI JS: **1,236,149 -> 1,238,130 B raw** (+1,981 B), **333,368 ->
+333,863 B gzip** (+495 B). CSS: **204,393 -> 204,527 B raw** (+134 B),
+**35,740 -> 35,768 B gzip** (+28 B). Each locale chunk grows 547–685 B raw
+(221–285 B gzip) for five strings. The complete embedded UI grows
+**2,679,035 -> 2,683,548 B** (+4,513 B). Measurements use Python gzip with
+`mtime=0`; the canonical dist is rebuilt with stale hashes removed. No new
+RSS or cold-start claim.
+
+## 2026-10-15 — Alpha.62 combined release candidate
+
+The [release record](alpha62-release-review-2026-10-15.md) combines the reviewed
+device/UI/motion stack and network/crypto update. Final Windows amd64 budgets
+with Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+core **23,236,608 B**, native Bluetooth worker **3,093,504 B**, embedded UI
+**2,679,035 B**. Relative to the `79a95898` combined UI baseline, core +6,144 B
+and UI +3,333 B; worker unchanged. No new RSS/cold-start claim. Public release
+binaries retain symbols for exact-binary vulnerability scans.
+
+## 2026-10-15 — Observed Handy Intiface smoothing
+
+The [sampling preference](intiface-smoothness-review-2026-10-15.md) adds no
+dependency, prompt text, model call, background task or UI payload. Matching
+Windows amd64 builds on Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false
+-ldflags '-s -w'`: **23,230,464 -> 23,231,488 B** (+1,024 B). The embedded UI
+remains **2,675,702 B**. Local-model behavior and buffered output are unchanged;
+this is not a new controlled RSS or cold-start measurement.
+
+## 2026-10-15 — Combined device UI and motion review
+
+The [release integration](release-device-integration-2026-10-15.md) preserves
+Claude's device UI and shared Intiface/vibrator work with the motion/model fixes.
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags
+'-s -w'`: core **23,230,464 B**; complete rebuilt embedded UI **2,675,702 B**.
+Relative to the separately recorded UI snapshot this is +4,608 B in the core
+and +208 B in the embedded UI. The title-row shortcut adds no dependency,
+request, timer or model call. No new RSS/cold-start or hardware-latency claim
+is made; the existing budget caveats remain.
+
+Manual-test follow-up: supported pattern labels and backend-bounded speed add
+**822 B** to the complete embedded UI (**2,676,524 B**). With the same toolchain
+and flags, the core is **23,231,488 B** (+1,024 B). No dependency, polling loop,
+model call or new runtime service was added. Installer changes affect only the
+test harness. These measurements precede the separate Intiface sampling change.
+
+## 2026-10-15 — Device panel and Settings > Devices
+
+[ADR 0048](decisions/0048-device-kit-and-settings-devices.md) replaces the
+connection manager with a live device panel and Settings > Devices. No
+dependency, model call or prompt text is added; the backend adds two settings
+routes.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, against base `654c37a5`: core
+**23,187,456 -> 23,225,856 B** (+38,400 B), still **14 modules**. The worker is
+unchanged.
+
+Main UI JS: **1,221,482 -> 1,234,880 B raw** (+13,398 B), **327,284 ->
+333,011 B gzip** (+5,727 B). CSS: **205,124 -> 204,115 B raw** (−1,009 B),
+**35,753 -> 35,679 B gzip** (−74 B): the device kit's styles replace the
+connection manager's, the Coyote and vibrator style sheets and the connection
+artwork. Each locale chunk grows 2.9–3.9 KB raw (1.1–1.3 KB gzip), with 157
+strings added and 125 removed. The complete embedded UI grows 2,650,311 ->
+2,675,494 B (+25,183 B). Measurements use Python gzip with `mtime=0`. The
+canonical dist is rebuilt with stale hashes removed; the existing large-chunk
+advisory remains.
+
+After a real text-only generation (Ollama, Gemma 12B) and simulated Coyote and
+vibrator connections, the isolated review process sampled **30,121,984 B
+working set / 61,968,384 B private**. Windows working sets can be trimmed, so
+this is not a controlled RSS comparison; the existing waiver remains. No
+cold-start, active-hardware RSS or radio latency is claimed.
+
+## 2026-10-15 — Intiface vibrator output
+
+[ADR 0047](decisions/0047-intiface-vibrator-output.md) adds a Buttplug vibrator
+through Intiface Central. No dependency, model call or prompt text is added.
+While an Intiface session is open, the vibrator owner runs a 100 ms pacer tick
+and a 250 ms watchdog tick; they write nothing unless a level changes, and
+nothing runs without a session. The in-process simulated Intiface server
+starts only in `-simulate-motion` builds.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, against base `5938a0cb`: core
+**22,928,384 -> 23,187,456 B** (+259,072 B), still **14 modules**. The worker is
+unchanged.
+
+Main UI JS: **1,204,409 -> 1,221,482 B raw** (+17,073 B), **323,892 ->
+327,284 B gzip** (+3,392 B). CSS: **204,247 -> 205,124 B raw** (+877 B),
+**35,639 -> 35,753 B gzip** (+114 B). Each locale chunk grows 4.7–6.1 KB raw
+(1.3–1.5 KB gzip) for 52 new strings. The complete embedded UI grows
+2,611,231 -> 2,650,311 B (+39,080 B). Measurements use Python gzip with
+`mtime=0`. The canonical dist is rebuilt with stale hashes removed; the
+existing large-chunk advisory remains.
+
+After a real text-only generation (Ollama, Gemma 12B) and a simulated vibrator
+connection, the isolated review process sampled **29,155,328 B working set /
+61,288,448 B private**. The build before the final pacer fixes sampled
+74,162,176 B working set / 60,493,824 B private. Windows working sets can
+be trimmed, so these are not a controlled RSS comparison; the existing waiver
+remains. No cold-start, active-hardware RSS or radio latency is claimed.
+
+## 2026-10-15 — Release motion and model review
+
+The [model/transport review](release-motion-review-2026-10-15.md) adds a bounded
+floating-point endpoint correction and explicit Layered full-travel operations.
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags
+'-s -w'`: core **22,933,504 B**, **+5,120 B** from `5938a0cb`.
+The worker, dependencies and canonical UI bundle are unchanged. There is no new
+process, poller, model call or runtime plotting dependency.
+
+The all-capabilities base prompt fixture shrinks from 10,819 to **10,495 B** for
+Layered and 10,749 to **10,573 B** for Creative v2. The new live-envelope fixture
+also fits a 16,384 context with its explicit 256 output reserve. Richer personas,
+larger output reserves and Autopilot context still consume the existing budget;
+this is not an unlimited-context claim. Five-mode generation medians were
+**977 ms local / 2,878.5 ms hosted** in a small host-specific sample. No controlled
+RSS/cold-start comparison is claimed; the existing waiver remains.
+
+## 2026-10-15 — Native linked-device hardware checks
+
+Ten consecutive Handy disconnect/reconnect cycles pass with the shared
+twelve-second deadline. Original Handy playback and Stop were observed by the
+user; simultaneous Handy/COYOTE playback and both linked-failure policies were
+exercised through the actual native workers. Stopped failures stay visible and
+lost COYOTE links cannot falsely confirm Stop. Reconnection after worker
+termination with a live companion remains an open limitation; see the
+[hardware report](native-linked-hardware-review-2026-10-15.md).
+
+The same Windows amd64 CGO-disabled stripped build measures **22,928,384 B core**
+(+1,024 B) and **3,093,504 B worker** (unchanged). No dependency, frontend asset,
+model work, motion algorithm or idle process changes. The existing uncontrolled
+RSS/cold-start waiver remains; no new memory benchmark is claimed.
+
+## Native BLE reconnect follow-up
+
+Windows now explicitly disposes native GATT services using pinned upstream
+Bluetooth commit `9df563b9dd49`, with once-only close ownership and retained
+lost-link cleanup. The default connection deadline is twelve seconds; this adds
+no delay on success, idle polling, model calls or motion-path changes. No new
+module dependency is introduced; the existing Bluetooth dependency and its
+indirect macOS/embedded version requirements are updated. Native code stays in
+the worker, and the core does not import the Bluetooth/WinRT/COM packages.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`: core remains **22,927,360 B**;
+worker is **3,093,504 B**, up **15,360 B** from the readiness fix. UI assets are
+unchanged. Repeated hardware connections and unloaded playback evidence,
+including the limited meaning of Stop/report timings, is in the
+[reconnect review](native-ble-reconnect-review.md). The existing uncontrolled
+idle-RSS/cold-start waiver remains; this is not a new controlled memory benchmark.
+
+Packaging validation still checks both native executables and all voice workers.
+The lifecycle harness now checks both listener ports and retains startup logs;
+the regression and full installer suites pass in PowerShell 5.1 and 7.
+
+## 2026-10-14 — Native Handy Bluetooth
+
+Hardware follow-up: connection/Stop was measured on an original Handy with
+firmware 4.3. The final five Stop writes completed in 79–155 ms (median 102 ms);
+this is dispatch completion, not physical braking. Windows rapid reconnect is
+still unreliable. See [hardware findings](native-handy-hardware-review-2026-10-14.md).
+After APK-informed COYOTE discovery and acknowledgment corrections, follow-up
+binaries measured **22,925,824 B core / 3,070,464 B worker**. The subsequent
+Windows readiness fix and revised setup hint measure **22,927,360 B core /
+3,078,144 B worker** (+1,536 / +7,680 B). No dependency or
+background model call was added. A separate scan worker exists only during an
+explicit scan, bounded to 15 seconds and 64 candidate records. Windows also
+refreshes the selected advertisement in its connection worker and checks
+connected state every 25 ms only during the bounded connection attempt; it adds
+no idle poller. COYOTE connection, battery and device-reported zero/Stop-at-zero
+now pass on hardware; immediate reconnect remains open.
+
+Relative to the initial native-Handy build below, main JS is **1,204,409 B raw /
+323,413 B gzip** (+2,962 / +280 B), and CSS **204,247 B raw / 35,602 B gzip**
+(+210 / +3 B). Compression uses gzip level 9. One disconnected Windows sample
+after real local-model generation was **36,823,040 B working set / 55,128,064 B
+private memory**. This is not a controlled RSS or cold-start comparison; the
+existing waiver remains. Full frontend tests pass (901 in 117 files).
+
+[ADR 0046](decisions/0046-shared-native-bluetooth-worker.md) extracts the shared
+native byte-link infrastructure and adds Handy firmware-4 RPC/HSP. No dependency,
+motion sampler, LLM prompt, model call or idle polling loop is added. A worker
+starts only for an explicit connection. A process is isolated per device rather
+than keeping a shared radio process alive at idle.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, relative to the device-inventory
+baseline below: core **22,764,544 -> 22,881,792 B** (+117,248 B); worker
+**2,999,808 -> 3,031,040 B** (+31,232 B). The core has **14 external modules**
+(15 including the application), unchanged, and no native radio dependency.
+Both core and worker also build for Linux amd64 with CGO disabled.
+
+Main UI JS: **1,198,340 -> 1,201,447 B raw** (+3,107 B), **322,354 ->
+323,133 B gzip** (+779 B). Main CSS remains **204,037 B raw / 35,599 B gzip**.
+Compression uses Python gzip with `mtime=0`. The canonical embedded dist is
+rebuilt with stale hashes removed; the existing large-chunk advisory remains.
+
+Two isolated Windows startups reached `/healthz` in **984 ms** and **1,043 ms**.
+These were warm filesystem-cache samples after building, not a controlled
+cold-start comparison.
+After a real local-model generation and browser review, the disconnected app
+sampled **29,962,240 B working set / 57,860,096 B private memory**. Windows working
+set can be trimmed; this does not close the existing RSS waiver. Active native
+radio/dual-worker RSS and physical transport latency await hardware validation.
+The [review](native-handy-bluetooth-review-2026-10-14.md) records software evidence
+and the remaining physical checks.
+
+## 2026-10-14 — Device inventory and linked-session failure policy
+
+[ADR 0045](decisions/0045-device-inventory-and-linked-sessions.md) separates
+saved connections, live links and playback participation. Linked failure
+handling uses the existing engine health loop; it adds no polling loop,
+dependency, model call or prompt text. Settings keeps the stop-all default and
+offers an explicit continue-on-healthy-device policy. Full validation and the
+simulation-only limits are in the [review](device-state-review-2026-10-14.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, compared with the review corrections
+below: core 22,666,240 -> **22,764,544 B** (+98,304 B); native worker remains
+**2,999,808 B**. The core still lists **14 modules**. Main UI JS:
+1,192,079 -> **1,198,340 B raw** (+6,261 B), 320,921 -> **322,354 B gzip**
+(+1,433 B). CSS: 203,699 -> **204,037 B raw** (+338 B), 35,539 ->
+**35,599 B gzip** (+60 B). Measurements use Python gzip with `mtime=0`;
+there is one canonical embedded dist. The existing bundle advisory remains.
+
+After the final browser checks and real text-only generation, the isolated
+simulation process measured **77,860,864 B working set / 64,090,112 B private**.
+This is one Windows process sample, not a controlled RSS comparison; the
+existing idle-RSS waiver remains open. The warmed local model replied in
+304 ms, first token 126 ms, with one provider call and no repair/fallback or
+motion. Physical transport latency and active hardware RSS were not measured.
+
+## 2026-10-14 — Coyote review corrections and compact connection manager
+
+The five safety reproductions and their corrections are recorded in the
+[implementation review](coyote-review-2026-10-14.md). No dependency, model call,
+motion prompt, or additional dispatch ticker is introduced. Native writes now
+wait for a worker completion receipt; a timed-out write retires that worker.
+The connection manager adds a compact protocol menu and an additive device list
+using existing APIs. Simulation remains visible in the top-bar readout without
+a repeated panel banner.
+
+Compared with the initial Coyote implementation below, Windows amd64, Go 1.26.9,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+core 22,631,936 -> 22,666,240 B (+34,304 B); native worker remains 2,999,808 B.
+Main UI JS: 1,184,042 -> 1,192,079 B raw (+8,037 B), 319,061 -> 320,921 B gzip
+(+1,860 B). CSS: 199,012 -> 203,699 B raw (+4,687 B), 34,898 -> 35,539 B gzip
+(+641 B). Both asset measurements use Python gzip with `mtime=0`; there is one
+canonical embedded dist. The existing Vite main-chunk advisory remains.
+
+After a real text-only review chat, the isolated simulation process measured
+73,707,520 B working set / 59,604,992 B private. This is one Windows process
+sample, not a controlled RSS comparison; the existing idle-RSS waiver remains
+open. The local Gemma response took 397 ms with first token at 159 ms, one
+provider call, no repair/fallback, and no motion. No real radio latency or
+physical output was measured.
+
+## 2026-10-14 — DG-LAB Coyote 3.0 output
+
+Adds a Coyote 3.0 as a second output ([ADR 0044](decisions/0044-coyote-estim-output.md)).
+The core binary links no radio stack: `go version -m` lists the same 14 modules
+as `main`. A connected Coyote runs one 100 ms ticker that sends nothing while
+idle; nothing runs while it is disconnected. No model request or prompt text is
+added.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,348,288 -> 22,631,936 B (+283,648 B), of which about 55 KB is the
+larger embedded UI. The new `estim-ble-worker.exe` is 2,999,808 B with the same
+flags (3,303,424 B with the release build's `-w`); it carries
+`tinygo.org/x/bluetooth`, `saltosystems/winrt-go` and `go-ole` on Windows.
+
+Main UI JS: 1,162,110 -> 1,184,042 B raw (+21,932 B), 313,858 -> 319,061 B gzip
+(+5,203 B). CSS: 197,511 -> 199,012 B raw, 34,668 -> 34,898 B gzip (+230 B).
+Locale chunks grow 7.0–9.0 KB raw (2.6–2.8 KB gzip) each for 84 new strings.
+Both builds use the same Python gzip method; there is one canonical dist.
+## 2026-10-14 — golang.org/x network and crypto updates
+
+`govulncheck@v1.8.0 -show verbose ./...` listed eight advisories in required
+modules that MagicHandy never calls: five in `golang.org/x/net` v0.57.0 and three
+in `golang.org/x/crypto` v0.55.0. Updating to x/net v0.61.0 and x/crypto v0.58.0
+also brings x/sys v0.49.0 and x/text v0.43.0 through their requirements. Only
+GO-2026-5932 remains; `x/crypto/openpgp` has no fixed version, and MagicHandy
+does not import it. Release-flag executables pass `Test-GoSecurity.ps1` with
+the same single module finding. No code, UI asset or gate changes.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,348,288 -> 22,349,312 B (+1,024 B). No runtime memory or latency claim is made.
+
+## 2026-10-11 — Alpha.61 release-review corrections
+
+Independent review found a superseded handoff retaining Autopilot's pending
+flag and a display window skipping retained catch-up revisions. Ownership-based
+cleanup and complete bounded delta paging fix those cases. Continuous speech
+instructions now match their non-empty contract; default report failure metadata
+also excludes persona identifiers. See the [release review](alpha61-release-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,345,728 -> 22,348,288 B (+2,560 B). No UI assets, dependency, worker or model
+call are added. The default independent speech prompt and local context budgets
+are unchanged. Catch-up may need more bounded pages after a long hidden-tab
+backlog; it no longer acknowledges messages it did not deliver.
+
+## 2026-10-11 — Selectable diagnostic report download
+
+No dependency, model request, motion change or background worker. Export is
+on demand: one admitted download, 30-second generation deadline, 64 MiB
+uncompressed ceiling and 25-message history pages. The completed ZIP uses a
+temporary file removed after serving; the browser receives a Blob without
+constructing the report's JSON object graph. See the
+[review](diagnostic-report-review-2026-10-11.md) and ADR 0043.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,280,704 -> 22,345,728 B (+65,024 B). Main UI JS: 1,156,298 -> 1,161,966 B raw
+(+5,668 B), 312,816 -> 314,190 B gzip (+1,374 B). CSS: 196,834 -> 197,713 B raw,
+34,572 -> 34,699 B gzip (+127 B). Both builds use the same Python gzip method;
+existing Vite bundle advisories remain unchanged. Translations use the existing
+locale chunks; there is one canonical dist.
+
+Three loopback samples after readiness: default ZIP 16.00–33.80 ms; all options
+with three committed chat messages 31.74–32.65 ms. These are small fixtures, not
+a maximum-history latency guarantee. After browser downloads, the process
+measured 80,437,248 B working set / 67,543,040 B private. This is one observational
+Windows sample, not a controlled RSS comparison; the existing idle-RSS waiver
+remains open. Default failure export never queries successful chat messages.
+
+## 2026-10-11 — Creative v2 speed fitting
+
+No new dependency, model request, motion loop or browser asset. The bounded
+compiler search applies only when the initial Creative v2 phrase is physically
+slower than requested. Shared sampling preserves the same physical ceilings
+and tightens the between-probe error allowance. See the
+[speed and Cloud review](creative-v2-speed-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,270,464 -> 22,280,704 B (+10,240 B). Rebuilding the canonical frontend makes
+no asset changes. There is no tokenizer or change to local inference context.
+
+On this host's Ryzen 9950X3D, three compilation benchmark samples at 25% are
+0.886–0.913 ms before and 1.000–1.006 ms after, with the same 672,210 B / 14,903
+allocations. The constrained full-range 75% case is 1.318–1.517 ms before versus
+13.819–15.311 ms after, with cumulative allocation 871,892 -> about 6,772,000 B
+and 20,792 -> 150,095 allocations. This is an explicit phrase-preparation cost,
+not per-sample overhead or an inference benchmark. The runtime test sustains
+playback and retargeting with simulated 350 ms Cloud append latency.
+
+After readiness generation, the review process measured 71,806,976 B working
+set / 57,757,696 B private. This is one observational process sample, not a
+controlled comparison across lifetimes; the existing idle-RSS waiver remains
+open. Logs, traces, binaries and atlas images are ignored, not embedded.
+
+## 2026-10-11 — External conversation windows
+
+No dependency, extra model call, motion loop or tokenizer is added. Local prompt
+limits remain 64 messages / 24 KB. External windows are 24/96/192 KB with
+64/256/512-message caps; database materialization is byte-bounded, while session
+storage retains 1,000 messages and browser reads fetch only the newest 200.
+See [live evaluation](long-context-review-2026-10-11.md) and ADR 0042.
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+22,240,256 -> 22,270,464 B (+30,208 B). Main UI chunk: 1,151,474 -> 1,156,298 B
+raw (+4,824 B), 311,544 -> 312,816 B gzip (+1,272 B, same gzip method). Main CSS:
+196,596 -> 196,834 B raw, 34,528 -> 34,572 B gzip (+44 B). Localized
+help remains in the existing locale chunks; there is still one canonical dist.
+
+Local composition with 200 versus 1,000 input rows allocates the same 6,048 B in
+four allocations after applying the existing 64-row cap before unwrapping.
+Three samples per size: 1.549–1.615 versus 1.745–1.814 microseconds. Normal local
+app requests still fetch only 64 rows. This does not measure model inference;
+the added retained storage is not presented as zero disk cost.
+
+After readiness generation and displaying expanded provider settings, the final
+review process measured 77,541,376 B working set / 63,598,592 B private. This is
+an observational Windows sample, not a controlled attribution against earlier
+process lifetimes; the existing idle-RSS waiver remains open.
+
+77 synthetic live hosted calls include all failures and the rejected cache
+prototype. The final full HTTP chat path retained 222 messages and completed in
+3.360 s without repair/fallback or motion. Review builds use separate data and
+an available local model; account credentials are not copied.
+
+## 2026-10-11 — User-report diagnostics, prompt assignment and check-ins
+
+No dependency, motion loop, hidden cloud request, or extra interactive generation
+is added. Failure storage is separate from dialogue, capped at 24 records across
+chats, and written only on failure. The new views fetch on demand. See the
+[evaluation and limitations](user-report-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+the prior review binary is 22,155,264 B; this build is 22,240,256 B (+84,992 B).
+The main UI chunk changes from 1,138,935 to 1,151,474 B raw and from 308,358 to
+311,544 B gzip (+3,186 B). One canonical dist is rebuilt; bundle advisories and
+all safety gates remain in force.
+
+Small live Gemma 12B samples retain 16/16 valid, 15/16 intent-correct interactive
+results with reasoning Off. Idle check-in mean falls from 664 to 499 ms; invited
+conversation is 677 versus 679 ms. All 108 final speech opportunities across Gemma
+and Vanessa use one request without repair. Vanessa does not show a repetition
+benefit and its idle scenario rises from 321 to 437 ms; do not generalize the
+default-model result to every local model.
+
+After local text generation and rendering prompt settings, an isolated previous
+build measured 40,591,360 B working set / 60,911,616 B private; the current review
+app measured 76,447,744 B / 63,463,424 B. These are single-process observations
+with different lifetimes and UI interaction, not a controlled attribution of the
+35.9 MB residency difference. Private allocation differs by 2.55 MB and remains
+below the existing active budget. The existing Windows idle-RSS waiver remains
+open; this change does not claim it resolved or claim zero resident-memory cost.
+
+## 2026-10-11 — Optional asynchronous motion review
+
+No new dependency, local prompt suffix, extra local generation, or motion loop.
+Disabled review creates no worker or cloud request; enabled review has one worker
+and one replaceable pending choice. The blocked-provider tests verify the local
+reply and motion finish first. The live app kept immediate local generation and
+completed cloud review in the background; see [the experiment](motion-second-opinion-review-2026-10-11.md).
+
+Windows amd64, Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`:
+an archive of `03062e8a` builds to 22,061,056 B; the review branch builds to
+22,155,264 B (+94,208 B). The main UI chunk increases from 1,132,798 to
+1,138,935 B raw and 306,738 to 308,358 B gzip (+1,620 B gzip). Existing bundle
+size advisories remain; no threshold was changed. An idle simulator review app
+after local readiness/text chat and opening settings measured 33,120,256 B
+working set. This is one host observation, not an isolated causal RSS comparison.
 
 ## 2026-10-10 — Reach guide only where the schema is enforced
 
@@ -1569,6 +2051,7 @@ Risk R11 (goals unmeasured) is substantially closed for memory, with the Phase
 | Full app path — Cloud REST | **Met** | A 2026-07-12 isolated Phase 14B app build at 20% passed the connection check, preflight Stop, Start, Pause/Resume, live reverse refresh, active Stop, and repeated-idle Stop. Its 19 transport results all succeeded without starvation. The latest installed-session trace added 439 points/85 legs, ordinary 330–341 ms append acknowledgements, one network error, and a successful 330 ms user Stop; it exposed a long 31–35% Creative span plateau and abrupt endpoint shape. That trace predates alpha.27's correction, so matched post-change feel remains open (`docs/motion-calibration.md`). |
 | Full app path — Browser Bluetooth | **At Risk** | The 2026-07-02 visible Edge Web Bluetooth run moved and stopped the real device, but it predates the reverse-direction fix and was a short session. Revalidate reverse, unconditional Stop, and endurance on hardware. |
 | Full app path — Intiface | **At Risk** | The 2026-07-12 Handy workflow passed safety and lifecycle checks, but it predates the deadline-driven asynchronous-ACK pacer and measured queue admission rather than wire timing. Repeat the matched run with `motion_trace.v3` and record subjective feel (`docs/intiface.md`). |
+| Full app path — Coyote 3.0 | **At Risk** | Simulated end to end: DG-LAB's example packets, the worker as a real process in `-simulate`, the owner, the Handy + Coyote fan-out and the HTTP routes. Physical acceptance on a Coyote 3.0 is open: pairing and remembered reconnection, ceilings against the device's switches, Stop to silence and to zero, silence on link loss and the feel of each profile (`docs/estim.md`). |
 | Controller ownership + owner-switch semantics | **Met** | Phase 9B controller lease, read-only clients, stop-first owner switch, motion SSE, and explicit stop-first takeover with a globally locked handoff (`docs/controller-dispatch-semantics.md`) |
 
 ### Functional Parity (UI/UX vs StrokeGPT-ReVibed)

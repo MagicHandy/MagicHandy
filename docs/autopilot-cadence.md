@@ -67,6 +67,9 @@ repeated timing values, and allow speech generation latency to disturb motion.
   `ApplyTarget`, rebuilds a motion plan, or dispatches transport work.
 - The model selects only a timing category: `soon`, `normal`, or `later`.
   Deterministic code samples the actual delay inside the user's saved bounds.
+  The one exception is [Auto timing](#auto-timing-hosted-planners): a hosted
+  planner the user has switched on chooses whole seconds, which code still
+  varies and bounds.
 - A model failure falls back to deterministic motion planning. A speech failure
   postpones speech; it cannot stall or stop motion.
 - User chat invalidates stale autonomous decisions, blocks new autonomous
@@ -169,8 +172,56 @@ check-ins; interactive user chat keeps its existing capability gates.
 Motion and speech each have an independent adaptive-timing switch. When
 enabled, the model returns `soon`, `normal`, or `later`; code maps that category
 to an overlapping portion of the selected range and samples a concrete delay.
-When disabled, code samples the full selected range. The model never emits
-seconds or a deadline.
+When disabled, code samples the full selected range. Apart from Auto timing
+below, the model never emits seconds or a deadline.
+
+Creative v2 and Layered planning returns no category: their turns always
+sample the `normal` portion of the window.
+
+### Auto timing (hosted planners)
+
+[ADR 0050](decisions/0050-hosted-autopilot-auto-timing.md). An Auto timing
+switch, off by default, lets a hosted Autopilot planner choose how long each
+stretch plays. The Autopilot card offers it only when the Autopilot route is
+hosted, and the backend honors it only then: local planners settle on one
+value (Gemma 12B chose 120 seconds on all twelve turns of a build), so their
+cadence stays sampled.
+
+With the switch on, motion turns require `next_check_seconds` (8–300) in place
+of the category. The scheduler varies it by up to ±12% from the seeded cadence
+stream, clamps it to 8–300 seconds and sets the deadline as before; a hold
+carries a horizon too, and a missing value falls back to the sampled window.
+Chat, pause, Stop and settings changes keep their authority, so a chat turn
+still brings the next decision forward. Speech keeps its own cadence.
+
+The prompt explains that until the next decision the person feels one
+unchanged motion, offers the Motion change rate window as the reference length
+of an ordinary stretch, and names reasons to leave it: a brief accent, a build
+that needs time, a stretch the person enjoys or asked to keep. The planner's
+last six horizons are listed as observations. None of this is a rule: the
+model may pick any value in the bounds. See the
+[review](autopilot-auto-timing-review-2026-10-16.md) for measured sessions.
+
+### Prepared decisions (external planners)
+
+A second switch, on by default and honored for any external planner (a hosted
+route or Decisions), plans each motion decision as soon as its stretch is
+armed instead of one measured latency before the boundary. The result waits as
+the ordinary pending choice and applies at the deadline, so an external call's
+latency never delays the change unless it outlasts the whole stretch. The
+decision's scheduler facts (session time, speed and phrase ages, recent
+speeds, buildup) and the chat ages it reads are projected to the deadline:
+without an interruption, they are what will be true when it applies.
+
+Chat activity, settings changes and Stop discard a prepared decision. Once
+chat finishes, Autopilot prepares again with the person's words, and a chat
+turn that leaves the motion unchanged still brings the decision forward to now
+in the continuous modes. Pause shifts the deadline and keeps the prepared
+choice. Spoken check-ins are never prepared, and local planners keep the
+just-in-time lead because they hold a single model slot that chat needs.
+While a prepared decision waits, the Chat sidebar keeps counting down to the
+deadline and marks the motion ready. Traces record `prepared=<seconds>` on
+each prepared decision.
 
 The status API carries `status_at`, `motion_change_due_at`, and
 `speech_due_at` as RFC3339 timestamps, with the former remaining-millisecond
@@ -382,7 +433,9 @@ authority, and the lower-level tracking switch remain under Advanced.
 
 Motion is the higher-priority clock. The manager starts the first target
 immediately, then plans the next target shortly before its due time using the
-last measured decision latency. Planning runs while the current pattern keeps
+last measured decision latency, or, for an external planner with
+[prepared decisions](#prepared-decisions-external-planners), as soon as the
+stretch is armed. Planning runs while the current pattern keeps
 playing. A result is applied only if its mode generation is still current.
 
 Speech is checked after due motion work. If TTS is already queued or active,

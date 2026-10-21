@@ -89,3 +89,31 @@ func (m *Manager) ConnectionKeySource(connection config.ModelConnection) llm.Tok
 		return token, err
 	}
 }
+
+// RemoveConnectionKeys deletes the credentials of connections that were
+// removed from saved settings, so a later connection that reuses the id never
+// inherits an old key. Unknown ids are ignored.
+func (m *Manager) RemoveConnectionKeys(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	m.mu.Lock()
+	removed := false
+	err := m.transaction(ctx, func(data *credentialFile) error {
+		for _, id := range ids {
+			if _, ok := data.ConnectionKeys[id]; ok {
+				delete(data.ConnectionKeys, id)
+				removed = true
+			}
+		}
+		return nil
+	})
+	if err == nil && removed {
+		m.generation++
+	}
+	m.mu.Unlock()
+	if err == nil && removed {
+		m.notifyChange()
+	}
+	return err
+}

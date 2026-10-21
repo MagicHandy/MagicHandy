@@ -44,11 +44,17 @@ func (s *Server) newModeManager() (*modes.Manager, error) {
 			settings, _ := s.store.Snapshot()
 			return settings.LLM.MotionGenerationMode
 		},
-		Traces:       s.traces,
-		Decide:       s.autopilotDecide,
-		DecideSpeech: s.autopilotDecideSpeech,
-		CanAnnounce:  s.autopilotCanAnnounce,
-		Announce:     s.autopilotAnnounce,
+		PrepareNextDecision: func() bool {
+			settings, _ := s.store.Snapshot()
+			return prepareAutopilotDecisions(settings)
+		},
+		Traces:        s.traces,
+		Decide:        s.autopilotDecide,
+		DecideSpeech:  s.autopilotDecideSpeech,
+		CanAnnounce:   s.autopilotCanAnnounce,
+		Announce:      s.autopilotAnnounce,
+		ObserveChoice: s.reviewAutopilotChoice,
+		ReviewEnabled: func() bool { settings, _ := s.store.Snapshot(); return settings.LLM.MotionReviewer.Enabled },
 	})
 }
 

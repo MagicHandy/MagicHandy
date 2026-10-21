@@ -33,12 +33,15 @@ type userControlState struct {
 }
 
 type chatRecoveryState struct {
-	target     *motion.MotionTarget
-	keepalive  bool
-	pending    bool
-	activity   bool
-	activityID uint64
-	version    uint64
+	target    *motion.MotionTarget
+	keepalive bool
+	pending   bool
+	// pendingOwner is the generation that began the handoff. Chat activity can
+	// advance the live generation while that same handoff is still unwinding.
+	pendingOwner uint64
+	activity     bool
+	activityID   uint64
+	version      uint64
 }
 
 func (s *chatRecoveryState) beginActivity() uint64 {
@@ -63,6 +66,7 @@ type motionScheduleState struct {
 	planAt           time.Time
 	pending          *segmentChoice
 	lastDecisionTime time.Duration
+	preparing        bool // the next decision is planned at once, for this stretch's deadline
 	cadenceRNG       *rand.Rand
 	swayRNG          *rand.Rand
 	// swayPoints is the remaining intra-segment speed schedule, in time order.
@@ -82,6 +86,7 @@ type motionHistoryState struct {
 	recentPatternIDs    []string
 	recentPositionBands []PositionBand
 	recentSpeeds        []speedMark
+	recentChecks        []int // the planner's latest auto-timing horizons, seconds
 	earlierPhrases      []phraseMark
 	// currentPhraseHeard is set when the person speaks while the current
 	// phrase plays; such phrases stay recallable longer.

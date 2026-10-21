@@ -4,6 +4,7 @@ import { LOCALE_OPTIONS, t, useI18n } from "../i18n";
 import type { ReactNode } from "react";
 import { useAppState } from "../state/app-state";
 import { VoicePlaybackProvider } from "../state/voice-playback";
+import { DeviceRuntimeProvider } from "../devices/runtime";
 import { NavRail } from "./NavRail";
 import { ConfirmHost } from "../components/ConfirmHost";
 import { StatusBar } from "./StatusBar";
@@ -28,6 +29,7 @@ export function AppShell({
     ?? requestedLocale;
   return (
     <VoicePlaybackProvider>
+      <DeviceRuntimeProvider>
       <div className="app-shell">
         <NavRail authenticationLocked={authenticationLocked} remoteURL={authenticationStatus?.remote_url} />
         <StatusBar
@@ -56,6 +58,7 @@ export function AppShell({
         </main>
         <ConfirmHost />
       </div>
+      </DeviceRuntimeProvider>
     </VoicePlaybackProvider>
   );
 }
