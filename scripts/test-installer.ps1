@@ -2068,9 +2068,30 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
         }
     }
 
+    Write-Host 'Checking patched Go version boundaries...'
+    foreach ($goCase in @(
+        @{ Version = $null; Supported = $false },
+        @{ Version = '1.26.9'; Supported = $false },
+        @{ Version = '1.26.10'; Supported = $true },
+        @{ Version = '1.26.11'; Supported = $true },
+        @{ Version = '1.27.0'; Supported = $false },
+        @{ Version = '1.27.1'; Supported = $false },
+        @{ Version = '1.27.2'; Supported = $false },
+        @{ Version = '1.27.3'; Supported = $true },
+        @{ Version = '1.27.4'; Supported = $true },
+        @{ Version = '1.28.0'; Supported = $true }
+    )) {
+        $supported = & (Get-Module InstallerSupport) {
+            param($version)
+            Test-MagicHandySupportedGoVersion -Version $version
+        } $goCase.Version
+        Assert-Equal -Expected $goCase.Supported -Actual $supported -Message "patched Go acceptance for $($goCase.Version)"
+    }
+
     Write-Host 'Checking selected-component plans...'
     $managedPlan = @(Get-MagicHandyProvisionPlan -State $loaded)
     Assert-PlanContains -Plan $managedPlan -Pattern 'Go 1\.26\.10'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'Go 1\.27 requires 1\.27\.3'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Apply app UI language English and chat reply language English'
     Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verify.+managed llama\.cpp \(cuda\)'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'

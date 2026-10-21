@@ -948,18 +948,28 @@ function Get-MagicHandyGoVersion {
     return [Version]::new([int]$Matches[1], [int]$Matches[2], $patch)
 }
 
+function Test-MagicHandySupportedGoVersion {
+    param([AllowNull()][Version]$Version)
+    if ($null -eq $Version -or $Version -lt $script:MinimumGoVersion) {
+        return $false
+    }
+    # GO-2026-6809 is fixed in both maintained release lines. A numeric
+    # minimum of 1.26.10 alone would still admit unpatched Go 1.27.0-1.27.2.
+    return $Version.Major -ne 1 -or $Version.Minor -ne 27 -or $Version -ge [Version]'1.27.3'
+}
+
 function Ensure-MagicHandyGo {
     [CmdletBinding()]
     param([switch]$AssumeYes)
 
     $version = Get-MagicHandyGoVersion
-    if ($null -eq $version -or $version -lt $script:MinimumGoVersion) {
+    if (-not (Test-MagicHandySupportedGoVersion -Version $version)) {
         Confirm-MagicHandyPackageInstall -Name 'Go' -Purpose (Get-MagicHandyText -Key 'purpose_go') -License 'BSD-3-Clause; https://go.dev/LICENSE' -AssumeYes:$AssumeYes
         Invoke-MagicHandyWinGetInstall -ID 'GoLang.Go' -AssumeYes:$AssumeYes
         $version = Get-MagicHandyGoVersion
     }
-    if ($null -eq $version -or $version -lt $script:MinimumGoVersion) {
-        throw "Go $script:MinimumGoVersion or newer is required. Restart PowerShell and rerun install.ps1 if Go was just installed."
+    if (-not (Test-MagicHandySupportedGoVersion -Version $version)) {
+        throw "Go $script:MinimumGoVersion or newer is required; Go 1.27 requires 1.27.3 or newer. Restart PowerShell and rerun install.ps1 if Go was just installed."
     }
     $go = Resolve-MagicHandyExecutable -Name 'go'
     Write-Host "Found $(& $go version)" -ForegroundColor Green

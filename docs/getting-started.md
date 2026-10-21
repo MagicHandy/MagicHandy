@@ -6,7 +6,7 @@ Everything you need to install, update, and run MagicHandy from source. The
 ## Windows release package
 
 The current Windows x64 release is
-[v0.1.0-alpha.64](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.64).
+[v0.1.0-alpha.66](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.66).
 Download its setup EXE and `SHA256SUMS` file, verify the setup hash, and run it.
 The portable ZIP remains available when installer integration is not wanted.
 The prebuilt core requires no Go, Node, Python, CMake, or Visual Studio and opens
@@ -14,7 +14,7 @@ the same guided setup described below.
 
 The executables remain unsigned. Microsoft completed false-positive case
 `15c1e36d-fb35-4c5d-85de-83707169818a` with final determination `Not malware`
-and removed the alpha.6 detection. Alpha.63 explicitly extends the reviewed
+and removed the alpha.6 detection. Alpha.66 explicitly extends the reviewed
 unsigned setup policy, retains the hardened x64/non-solid package, receives an
 exact-artifact Defender scan, and passes the full installer lifecycle before
 publication. If
@@ -252,7 +252,8 @@ in [windows-release-packaging.md](windows-release-packaging.md) and
 
 ## Build and run by hand
 
-Requires [Go](https://go.dev/dl/) 1.26.9 or newer.
+Requires [Go](https://go.dev/dl/) 1.26.10 or newer. Go 1.27 installations require
+1.27.3 or newer; earlier 1.27 patches still contain GO-2026-6809.
 
 ```powershell
 go run ./cmd/magichandy

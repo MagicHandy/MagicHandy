@@ -1,5 +1,7 @@
 # Alpha.66 security release review — 2026-10-20
 
+Dates use America/New_York (EDT); explicit incident timestamps use UTC.
+
 The requested update includes PR #329's cloud authentication and Windows DPAPI
 changes and PR #332's local startup recovery. Their exact heads were merged in
 main `da27d8ed`, with green candidate, merged-main, packaging and tag checks.
@@ -27,6 +29,9 @@ patch. Updating the supported 1.26 patch line avoids a major toolchain migration
 - `go.mod` and the Windows source installer require Go 1.26.10. CI and the
   release builder select that version from `go.mod`; exact-binary verification
   continues to reject older compiled Go versions and reachable vulnerabilities.
+  The source installer separately rejects unpatched Go 1.27.0 through 1.27.2;
+  that release line requires 1.27.3 or newer. Numeric ordering against the older
+  supported line alone does not establish the security fix.
 - The active reviewed unsigned policy removes unpublished alpha.65 and admits
   only alpha.66 alongside the previously reviewed releases. Both alpha.65 and
   unreviewed alpha.67 are explicitly rejected by installer tests. No scanner,
@@ -52,3 +57,12 @@ release-note tests pass. Its comparable stripped core is 23,446,016 B, up
 2,048 B from the Go 1.26.9 candidate; the canonical UI is unchanged. The
 scorecard retains the measurement flags and separates this toolchain change
 from the original feature costs. Full CI remains required before merge/tag.
+
+Claude Opus 5.5 reviewed this follow-up through Claude Code CLI at medium
+effort and reported no blocking issue. Its Low finding about accepting older
+1.27 patches was adopted with boundary tests and installer-plan wording in all
+five locales. Active manual setup/security docs were updated; historical
+measurements retain their actual compiler versions. All workflows already read
+`go.mod`, and source updates follow the branch/main ref rather than choosing
+the failed alpha.65 tag. The README's pre-publication release link follows the
+existing reviewed-PR/tag workflow.

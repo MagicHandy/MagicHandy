@@ -53,7 +53,7 @@ voice choices remain in the GUI. To update the same source installation later:
 .\update.ps1
 ```
 
-Developers with Go 1.26.10+ can run `go run ./cmd/magichandy` and open
+Developers with Go 1.26.10+ (Go 1.27 requires 1.27.3+) can run `go run ./cmd/magichandy` and open
 <http://127.0.0.1:49717>. See the
 [Getting Started guide](docs/getting-started.md) for manual setup, deployment
 flags, and validation commands.

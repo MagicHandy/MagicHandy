@@ -19,6 +19,8 @@ Go 1.26.9. No release or public artifacts were created. Its source tag remains
 immutable. Alpha.66 retains PR #329's cloud authentication changes and PR #332's
 startup recovery, and raises the build and source-installer minimum to Go
 1.26.10, which distrusts the compromised intermediate certificates.
+Source installations using Go 1.27 require the corresponding fixed patch,
+1.27.3 or newer; the installer rejects 1.27.0 through 1.27.2.
 
 This amendment admits only `0.1.0-alpha.66`, removes the unpublished alpha.65
 from the active allowlist, and leaves alpha.67 and later unreviewed. The payload,
