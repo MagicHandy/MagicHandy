@@ -65,6 +65,14 @@ fixed test port. The app correctly refused that bind; the isolated repeat after
 the other local processes finished passed. The original failure log is
 retained with the local evidence rather than weakening fixed-port assertions.
 
+One release-candidate Linux race run observed an empty Autopilot decision source
+after the segment index was armed but before its provenance was recorded. The
+test helper now waits for both startup observations before callers inspect the
+source; the model/fallback assertions and production motion code are unchanged.
+The complete modes race suite passed 20 repetitions, and the model/fallback
+startup tests passed 500 repetitions. The failed CI run remains part of the
+release evidence; the updated candidate must pass the full CI gates again.
+
 ## Packaging and release boundaries
 
 ADR 0014 and the verifier admit only `0.1.0-alpha.65` in addition to previously
