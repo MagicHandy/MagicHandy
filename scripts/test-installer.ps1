@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 
 $Repo = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $support = Join-Path $Repo 'scripts\installer\InstallerSupport.psm1'
-Import-Module $support -Force -DisableNameChecking
+$installerSupportModule = Import-Module $support -Force -DisableNameChecking -PassThru
 $supportModule = Get-Module InstallerSupport
 
 function Assert-True([bool]$Condition, [string]$Message) {
@@ -800,7 +800,7 @@ func main() {
     $releaseVerifierSource = [System.IO.File]::ReadAllText((Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'))
     Assert-True -Condition ($releaseVerifierSource.Contains("'ReviewedUnsignedPublic'")) -Message 'release verifier should expose the reviewed unsigned public policy'
     Assert-True -Condition ($releaseVerifierSource.Contains('ReviewedUnsignedPublic requires Microsoft false-positive case')) -Message 'reviewed unsigned publication should fail closed without the recorded Microsoft case'
-    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39', '0.1.0-alpha.40', '0.1.0-alpha.41', '0.1.0-alpha.42', '0.1.0-alpha.43', '0.1.0-alpha.44', '0.1.0-alpha.45', '0.1.0-alpha.46', '0.1.0-alpha.47', '0.1.0-alpha.48', '0.1.0-alpha.49', '0.1.0-alpha.50', '0.1.0-alpha.51', '0.1.0-alpha.52', '0.1.0-alpha.53', '0.1.0-alpha.54', '0.1.0-alpha.55', '0.1.0-alpha.56', '0.1.0-alpha.57', '0.1.0-alpha.58', '0.1.0-alpha.59', '0.1.0-alpha.60', '0.1.0-alpha.61', '0.1.0-alpha.62', '0.1.0-alpha.63', '0.1.0-alpha.64', '0.1.0-alpha.65')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
+    Assert-True -Condition ($releaseVerifierSource.Contains("`$reviewedVersions = @('0.1.0-alpha.8', '0.1.0-alpha.9', '0.1.0-alpha.10', '0.1.0-alpha.11', '0.1.0-alpha.13', '0.1.0-alpha.14', '0.1.0-alpha.15', '0.1.0-alpha.16', '0.1.0-alpha.17', '0.1.0-alpha.18', '0.1.0-alpha.19', '0.1.0-alpha.20', '0.1.0-alpha.21', '0.1.0-alpha.22', '0.1.0-alpha.23', '0.1.0-alpha.24', '0.1.0-alpha.25', '0.1.0-alpha.26', '0.1.0-alpha.27', '0.1.0-alpha.28', '0.1.0-alpha.29', '0.1.0-alpha.30', '0.1.0-alpha.31', '0.1.0-alpha.32', '0.1.0-alpha.33', '0.1.0-alpha.34', '0.1.0-alpha.35', '0.1.0-alpha.36', '0.1.0-alpha.37', '0.1.0-alpha.38', '0.1.0-alpha.39', '0.1.0-alpha.40', '0.1.0-alpha.41', '0.1.0-alpha.42', '0.1.0-alpha.43', '0.1.0-alpha.44', '0.1.0-alpha.45', '0.1.0-alpha.46', '0.1.0-alpha.47', '0.1.0-alpha.48', '0.1.0-alpha.49', '0.1.0-alpha.50', '0.1.0-alpha.51', '0.1.0-alpha.52', '0.1.0-alpha.53', '0.1.0-alpha.54', '0.1.0-alpha.55', '0.1.0-alpha.56', '0.1.0-alpha.57', '0.1.0-alpha.58', '0.1.0-alpha.59', '0.1.0-alpha.60', '0.1.0-alpha.61', '0.1.0-alpha.62', '0.1.0-alpha.63', '0.1.0-alpha.64', '0.1.0-alpha.66')")) -Message 'reviewed unsigned publication should be bound to the explicitly approved release versions'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
             -Version '0.0.0-local' `
@@ -818,12 +818,20 @@ func main() {
     } -Pattern 'approved only for versions 0.1.0-alpha.8, 0.1.0-alpha.9, 0.1.0-alpha.10, 0.1.0-alpha.11, 0.1.0-alpha.13' -Message 'non-allowlisted version rejected by ReviewedUnsignedPublic'
     Assert-Throws -Action {
         & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
-            -Version '0.1.0-alpha.66' `
+            -Version '0.1.0-alpha.67' `
             -Commit ('0' * 40) `
             -ArtifactsRoot $tempRoot `
             -ArtifactPolicy ReviewedUnsignedPublic `
             -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
-    } -Pattern 'approved only for versions' -Message 'alpha.65 review grants no permission to later versions'
+    } -Pattern 'approved only for versions' -Message 'alpha.66 review grants no permission to later versions'
+    Assert-Throws -Action {
+        & (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1') `
+            -Version '0.1.0-alpha.65' `
+            -Commit ('0' * 40) `
+            -ArtifactsRoot $tempRoot `
+            -ArtifactPolicy ReviewedUnsignedPublic `
+            -ReviewedFalsePositiveCaseID '15c1e36d-fb35-4c5d-85de-83707169818a'
+    } -Pattern 'approved only for versions' -Message 'unpublished alpha.65 is removed from the active reviewed policy'
     $portablePolicyFixture = Join-Path $tempRoot 'portable-policy-fixture'
     New-Item -ItemType Directory -Force -Path $portablePolicyFixture | Out-Null
     $portableFixtureName = 'MagicHandy-0.1.0-alpha.12-windows-amd64-portable.zip'
@@ -2060,9 +2068,30 @@ if ($Device -ne 'cuda' -or -not $ApplyInstallerChoices -or -not $Yes -or -not $A
         }
     }
 
+    Write-Host 'Checking patched Go version boundaries...'
+    foreach ($goCase in @(
+        @{ Version = $null; Supported = $false },
+        @{ Version = '1.26.9'; Supported = $false },
+        @{ Version = '1.26.10'; Supported = $true },
+        @{ Version = '1.26.11'; Supported = $true },
+        @{ Version = '1.27.0'; Supported = $false },
+        @{ Version = '1.27.1'; Supported = $false },
+        @{ Version = '1.27.2'; Supported = $false },
+        @{ Version = '1.27.3'; Supported = $true },
+        @{ Version = '1.27.4'; Supported = $true },
+        @{ Version = '1.28.0'; Supported = $true }
+    )) {
+        $supported = & $installerSupportModule {
+            param($version)
+            Test-MagicHandySupportedGoVersion -Version $version
+        } $goCase.Version
+        Assert-Equal -Expected $goCase.Supported -Actual $supported -Message "patched Go acceptance for $($goCase.Version)"
+    }
+
     Write-Host 'Checking selected-component plans...'
     $managedPlan = @(Get-MagicHandyProvisionPlan -State $loaded)
-    Assert-PlanContains -Plan $managedPlan -Pattern 'Go 1\.26\.9'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'Go 1\.26\.10'
+    Assert-PlanContains -Plan $managedPlan -Pattern 'Go 1\.27 requires 1\.27\.3'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Apply app UI language English and chat reply language English'
     Assert-PlanContains -Plan $managedPlan -Pattern 'checksum-verify.+managed llama\.cpp \(cuda\)'
     Assert-PlanContains -Plan $managedPlan -Pattern 'Parakeet CPU runner'

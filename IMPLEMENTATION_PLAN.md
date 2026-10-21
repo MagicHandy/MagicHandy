@@ -2,11 +2,14 @@
 
 ## Core Direction
 
-The alpha.65 release integrates PR #329's responsive cloud authentication and
+The alpha.66 release integrates PR #329's responsive cloud authentication and
 Windows credential protection with PR #332's local startup recovery. Startup
 history is part of the standard diagnostic report. Explicit fixed ports and
 hosted policies remain strict; system network services are never reset.
-See [the release review](docs/alpha65-release-review-2026-10-20.md).
+It requires Go 1.26.10 to fix GO-2026-6809. Alpha.65's binary scan blocked
+publication; its tag is retained without public artifacts. See
+[the security release review](docs/alpha66-release-review-2026-10-20.md) and
+[the feature review](docs/alpha65-release-review-2026-10-20.md).
 
 The October 20 startup recovery pass adds bounded local port fallback, a
 profile lock and verified existing-instance discovery before datastore/worker

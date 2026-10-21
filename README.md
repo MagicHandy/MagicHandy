@@ -5,14 +5,14 @@ MagicHandy is a free, open-source, local-first app for controlling
 pattern library, and video funscript playback. App data stays on your machine, with
 cloud services available only when you enable them.
 
-[Download](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.65)
+[Download](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.66)
 | [Getting Started](docs/getting-started.md)
 | [Roadmap](IMPLEMENTATION_PLAN.md)
 | [Contributing](#contributing)
 
 > [!IMPORTANT]
 > MagicHandy is still in early development (alpha). The current
-> Windows build is `v0.1.0-alpha.65` and remains unsigned.
+> Windows build is `v0.1.0-alpha.66` and remains unsigned.
 
 ## Highlights
 
@@ -30,7 +30,7 @@ cloud services available only when you enable them.
 ## Install On Windows
 
 Download the installer package from the
-[latest release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.65):
+[latest release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.66):
 
 - **Setup EXE:** standard installation, shortcuts, and Windows integration.
 - **Portable ZIP:** no installer or Windows integration.
@@ -53,7 +53,7 @@ voice choices remain in the GUI. To update the same source installation later:
 .\update.ps1
 ```
 
-Developers with Go 1.26.9+ can run `go run ./cmd/magichandy` and open
+Developers with Go 1.26.10+ (Go 1.27 requires 1.27.3+) can run `go run ./cmd/magichandy` and open
 <http://127.0.0.1:49717>. See the
 [Getting Started guide](docs/getting-started.md) for manual setup, deployment
 flags, and validation commands.

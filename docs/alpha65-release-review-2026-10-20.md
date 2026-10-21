@@ -6,6 +6,12 @@ head `0fa45cec8ed650dceee853583c26b8b4e1c68a59` and startup head `3092d6a2` abov
 alpha.64 main `4a46c0ff`. Merge conflicts were additive documentation and locale
 entries; the canonical frontend was rebuilt from the combined source.
 
+Publication was subsequently blocked by the final Windows binary vulnerability
+scan for GO-2026-6809. No public artifacts were uploaded. The source tag remains
+immutable; [alpha.66](alpha66-release-review-2026-10-20.md) carries the same
+features with the patched Go toolchain. This record retains the original
+feature review and candidate validation evidence.
+
 ## Independent source review
 
 The release review inspected PR #329's credential envelope and DPAPI calls,

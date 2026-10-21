@@ -6,11 +6,30 @@ Accepted; amended 2026-10-20 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.65 package-preserving releases.
+reviewed alpha.14 through alpha.64 and alpha.66 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.66 amendment
+
+Alpha.65's final Windows symbol scan blocked publication for GO-2026-6809 in
+Go 1.26.9. No release or public artifacts were created. Its source tag remains
+immutable. Alpha.66 retains PR #329's cloud authentication changes and PR #332's
+startup recovery, and raises the build and source-installer minimum to Go
+1.26.10, which distrusts the compromised intermediate certificates.
+Source installations using Go 1.27 require the corresponding fixed patch,
+1.27.3 or newer; the installer rejects 1.27.0 through 1.27.2.
+
+This amendment admits only `0.1.0-alpha.66`, removes the unpublished alpha.65
+from the active allowlist, and leaves alpha.67 and later unreviewed. The payload,
+packaging and signing shape is unchanged. The security review and budget result
+are recorded in [alpha66-release-review-2026-10-20.md](../alpha66-release-review-2026-10-20.md).
+All source and exact-binary vulnerability checks, Defender scanning, checksum
+and manifest verification, installer lifecycle, green CI and current-main
+provenance gates remain mandatory. The prior Microsoft case does not approve
+these new hashes. Trusted Authenticode remains the long-term requirement.
 
 ### Alpha.65 amendment
 
@@ -659,7 +678,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.65 reviewed unsigned
+3. **Alpha.8 through alpha.11, alpha.13 through alpha.64, and alpha.66 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -773,11 +792,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.65 version, the recorded
+  alpha.8 through alpha.11, alpha.13 through alpha.64, or alpha.66 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.65 reviewed setup
+- Alpha.9 through alpha.11, alpha.13 through alpha.64, and alpha.66 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
