@@ -2,6 +2,12 @@
 
 ## Core Direction
 
+The alpha.65 release integrates PR #329's responsive cloud authentication and
+Windows credential protection with PR #332's local startup recovery. Startup
+history is part of the standard diagnostic report. Explicit fixed ports and
+hosted policies remain strict; system network services are never reset.
+See [the release review](docs/alpha65-release-review-2026-10-20.md).
+
 The October 20 startup recovery pass adds bounded local port fallback, a
 profile lock and verified existing-instance discovery before datastore/worker
 startup, actual-URL source launcher readiness, and retained startup diagnostics.
@@ -18,6 +24,15 @@ Local contracts and the motion engine are unchanged. The
 [review](docs/hosted-layered-operations-review-2026-10-18.md) records the final
 44/44 live ChatGPT checks, failed intermediate proposals, visual review and
 the limits of that evaluation.
+
+The October 18 [cloud authentication follow-up](docs/cloud-auth-hardening-review-2026-10-18.md)
+addresses stalled status during OAuth I/O and Windows credential encryption.
+Network operations release local state locks; account revisions reject stale
+refresh results while per-registration locks preserve cross-process rotation.
+Windows DPAPI migrates legacy credentials and explicit Settings/setup recovery
+handles unreadable stores. Other platforms retain owner-only files. No new
+dependency, local prompt, model request or motion path is introduced; ADR 0039
+remains proposed pending independent review.
 
 The alpha.63 release integrates PR #326's external Autopilot auto timing and
 prepared decisions. The packaging amendment admits only that exact alpha

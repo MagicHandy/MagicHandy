@@ -51,6 +51,12 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Test Windows credential protection and refresh coordination
+        shell: powershell
+        env:
+          CGO_ENABLED: "0"
+        run: go test ./internal/openaiauth -count=1
+
       - name: Install verified Inno Setup 7
         shell: powershell
         run: |

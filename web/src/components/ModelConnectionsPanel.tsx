@@ -8,6 +8,7 @@ import { DecisionsConnection } from "./DecisionsConnection";
 import { ModelConnectionEditor } from "./ModelConnectionEditor";
 import { MotionReviewerSettings } from "./MotionReviewerSettings";
 import { FieldRow } from "./SetupSection";
+import { CloudCredentialRecovery } from "./CloudCredentialRecovery";
 
 const defaultPlanner: MotionPlannerSettings = { provider: "conversation", model: "", context_policy: "conversation" };
 const MAX_CONNECTIONS = 16;
@@ -153,6 +154,10 @@ function ExternalProviders({ settings, status, locked, setup, patch, refreshStat
   }
   const roleNames = (roles: ModelRole[]) => roles.map(role => role === "chat" ? t("Chat") : role === "reviewer" ? t("Reviewer model") : t("Autopilot"));
 
+  if (status?.connection.recovery_required) return <section className="group cloud-motion-settings external-providers" aria-label={t("External providers")}>
+    <h3 className="group-title">{t("External providers")}</h3>
+    <CloudCredentialRecovery locked={locked} onReset={refreshStatus} />
+  </section>;
   return <section className="group cloud-motion-settings external-providers" aria-label={t("External providers")}>
     <h3 className="group-title">{t("External providers")}<span className="hint-inline">{t("{count} of {max}", { count: connections.length, max: MAX_CONNECTIONS })}</span></h3>
     {connections.length > 0 || showDecisions ? <div className="provider-list">

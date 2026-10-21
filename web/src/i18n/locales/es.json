@@ -3299,5 +3299,11 @@
   "Use a shorter history for lighter requests without reducing room for motion planning.": "Usa un historial más corto para reducir las solicitudes sin quitar espacio a la planificación del movimiento.",
   "Match context budget": "Según el presupuesto de contexto",
   "The budget is a ceiling, not a fixed request size. Choose 128K for richer motion planning when your model supports it; sending more history can increase latency and usage. History is always capped by the selected budget.": "El presupuesto es un límite, no un tamaño fijo de solicitud. Elige 128K para una planificación más completa si tu modelo lo admite; enviar más historial puede aumentar la latencia y el uso. El historial siempre se limita al presupuesto elegido.",
-  "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first.": "Elige un presupuesto dentro de la capacidad real de contexto del modelo. Si el modelo no aparece en la lista o lo alojas tú, comprueba primero su contexto configurado."
+  "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first.": "Elige un presupuesto dentro de la capacidad real de contexto del modelo. Si el modelo no aparece en la lista o lo alojas tú, comprueba primero su contexto configurado.",
+  "Cloud credential recovery": "Recuperación de credenciales en la nube",
+  "Saved cloud credentials cannot be opened": "No se pueden abrir las credenciales guardadas de la nube",
+  "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.": "Esto puede ocurrir al mover los datos de la aplicación a otra cuenta de Windows u otro equipo. Restablece las credenciales guardadas y vuelve a iniciar sesión o introduce de nuevo tus claves API.",
+  "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.": "Se eliminarán todos los inicios de sesión de ChatGPT y las claves API de la nube guardados en este equipo. Se conservarán los ajustes de proveedores y modelos. El acceso remoto no se revocará; gestiónalo con cada proveedor si es necesario.",
+  "Reset all saved cloud credentials": "Restablecer todas las credenciales guardadas de la nube",
+  "Reset saved credentials…": "Restablecer credenciales guardadas…"
 }

@@ -775,6 +775,7 @@ export const api = {
   cloudDecisionsKey: (api_key: string) => request<CloudPlanningStatus>("PUT", "/api/llm/cloud/decisions-key", { api_key }).then(checkedCloudStatus),
   cloudTest: (provider: string, model: string) => request<CloudPlanningStatus>("POST", "/api/llm/cloud/test", { provider, model }).then(checkedCloudStatus),
   cloudWelcome: () => request<CloudPlanningStatus>("POST", "/api/llm/cloud/welcome", {}).then(checkedCloudStatus),
+  cloudResetCredentials: () => request<CloudPlanningStatus>("POST", "/api/llm/cloud/reset-credentials", { confirm: true }).then(checkedCloudStatus),
   llmLoad: () => request<LLMProviderStatus>("POST", "/api/llm/load", {}),
   checkSetupLocalModel: () => request<{ ready: boolean; message: string; model: string }>("POST", "/api/llm/local/test", {}),
   llmUnload: () => request<LLMProviderStatus>("POST", "/api/llm/unload", {}),

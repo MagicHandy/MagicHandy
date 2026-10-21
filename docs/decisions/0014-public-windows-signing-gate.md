@@ -2,15 +2,37 @@
 
 ## Status
 
-Accepted; amended 2026-10-18 after Microsoft completed the false-positive
+Accepted; amended 2026-10-20 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.64 package-preserving releases.
+reviewed alpha.14 through alpha.65 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.65 amendment
+
+On 2026-10-20 the maintainer requested an update including PR #329 alongside
+startup recovery from PR #332. This amendment adds only `0.1.0-alpha.65` to the
+reviewed unsigned Windows policy; alpha.66 and later still require their own
+review. The release combines bounded local port fallback and instance discovery
+with responsive cloud authentication and current-user DPAPI credential storage.
+The retained startup records are included in the existing diagnostic report.
+Explicit fixed ports and hosted deployments remain strict; no HNS reset is made.
+
+The independent release review of the authentication delta, migration and
+recovery boundaries, startup integration, and validation is recorded in
+[alpha65-release-review-2026-10-20.md](../alpha65-release-review-2026-10-20.md).
+No external runtime dependency or payload executable is added. DPAPI is supplied
+by Windows and called through the existing pure-Go Windows bindings. The source
+and exact-binary vulnerability scans, exact-artifact Defender scan, checksum and
+manifest verification, installer lifecycle, green CI, review and current-main
+provenance gates remain mandatory. Microsoft's earlier case does not approve
+these new hashes; trusted Authenticode remains the long-term requirement.
+The credential downgrade/move limitations and existing hardware acceptance
+limits are disclosed in the release notes.
 
 ### Alpha.64 amendment
 
@@ -637,7 +659,7 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11 and alpha.13 through alpha.64 reviewed unsigned
+3. **Alpha.8 through alpha.11 and alpha.13 through alpha.65 reviewed unsigned
    setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
@@ -751,11 +773,11 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11 or alpha.13 through alpha.64 version, the recorded
+  alpha.8 through alpha.11 or alpha.13 through alpha.65 version, the recorded
   Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11 and alpha.13 through alpha.64 reviewed setup
+- Alpha.9 through alpha.11 and alpha.13 through alpha.65 reviewed setup
   workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,

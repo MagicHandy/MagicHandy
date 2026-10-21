@@ -72,6 +72,49 @@ outside app settings and exports. Refresh is serialized across processes.
 Losing plan authorization invalidates existing readiness and request sources.
 The callback server drains its confirmation response before closing.
 
+### October 18 amendment: responsive authentication and Windows storage
+
+Issuer discovery, code exchange, refresh/JWKS requests and revocation run outside
+the manager mutex and the credential-file transaction lock. Refreshes share one
+in-process operation and a separate per-registration file lock across processes.
+The file transaction rechecks the active registration, persistent revision and
+original credential snapshot before committing. Switching accounts or signing
+out retires pending requests; a late response cannot restore their authority.
+Welcome acknowledgments merge without discarding a valid rotating token. Close
+cancels network work and waits for owned operations and callback listeners.
+
+Sign-out clears local authority immediately and retains an in-memory copy only
+for bounded best-effort revocation. An unconfirmed revocation is reported; a late
+result cannot overwrite a newer sign-in. Registration/client mapping is retained.
+These boundaries preserve [OpenAI's serialized refresh and credential storage
+requirements](https://developers.openai.com/siwc/token-sharing-open-source/profiles-and-sessions).
+
+On Windows, the complete credential payload is protected with current-user
+[DPAPI](https://learn.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptprotectdata),
+without machine-wide decryption or interactive prompts. Existing owner/SYSTEM
+ACLs remain. Valid legacy JSON migrates under the file lock via a protected
+temporary file and replacement; host/client IDs, account metadata and API-key
+bindings survive. A versioned non-JSON envelope makes older binaries reject the
+store rather than misread it as empty. No plaintext backup is written. Reading
+unchanged credentials does not re-encrypt/rewrite the file. The existing pure-Go
+`x/sys/windows` dependency supplies the platform calls; no dependency is added.
+
+Unreadable, incompatible or undecryptable stores stay intact and expose only a
+recovery flag and safe message. Setup and model settings offer an explicit,
+administrator/controller-only reset with confirmation of its all-provider scope.
+It rechecks unreadability under the same file lock, preventing a stale reset from
+erasing newly repaired credentials. Reset removes the unreadable registrations
+and model API keys, retires request sources, and creates a new host identity;
+model/provider settings remain. It cannot revoke inaccessible remote tokens.
+
+DPAPI protects copied files/backups from ordinary access outside the Windows
+user context; it does not protect against code running as that user or a
+compromised host. Windows migration is not backward compatible with old app
+versions sharing the profile. macOS/Linux retain owner-only file protection;
+native keyring integration is deferred. A Windows-sealed file on another
+platform requires reset and reconnection. Local-only absent stores remain lazy.
+See the [implementation evidence](../cloud-auth-hardening-review-2026-10-18.md).
+
 OpenAI API and Decisions keys authorize separate billing; ChatGPT sign-in does
 not enable either. Decisions chooses only opaque IDs for enabled, precompiled
 library candidates or keep-current, through the existing library path.

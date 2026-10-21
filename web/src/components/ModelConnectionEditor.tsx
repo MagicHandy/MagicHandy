@@ -7,6 +7,7 @@ import { connectionSignature } from "../util/model-connections";
 import { ModelResponseSettings, modelReadyMessage, selectedModelChange } from "./ModelResponseSettings";
 import { FieldRow } from "./SetupSection";
 import { ModelContextSettings } from "./ModelContextSettings";
+import { CloudCredentialRecovery } from "./CloudCredentialRecovery";
 
 // One editor for a provider connection, in Setup and in Settings. Catalog
 // discovery is automatic; generation remains an explicit user action.
@@ -24,6 +25,7 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
   const [testMessage, setTestMessage] = useState("");
   const [accountReady, setAccountReady] = useState(false);
   const [needsAuthorization, setNeedsAuthorization] = useState(false);
+  const [recovery, setRecovery] = useState(false);
   const accountGeneration = useRef<number | undefined>();
   const readyRef = useRef(onReady); readyRef.current = onReady;
   const patchRef = useRef(patch); patchRef.current = patch;
@@ -93,6 +95,8 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
     const revision = keyRevision.current;
     void api.cloudPlanningStatus().then(async status => {
       if (!mounted.current || signatureRef.current !== signature) return;
+      setRecovery(Boolean(status.connection.recovery_required));
+      if (status.connection.recovery_required) { readyRef.current(false); return; }
       if (connection.provider === "chatgpt") accountChanged(status);
       const readiness = status.connection_readiness?.[connection.id];
       if (readiness?.ready && readiness.connection && connectionSignature(readiness.connection) === signature) { setTestMessage(modelReadyMessage(readiness.elapsed_ms)); readyRef.current(true); }
@@ -125,6 +129,10 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
   });
   // Rows: the credential, the model, then a check. Each has its label and
   // explanation on the left and its control on the right.
+  if (recovery) return <CloudCredentialRecovery locked={disabled} onReset={status => {
+    setRecovery(false); setKeySaved(false); savedKey.current = false; setModels([]); setTestMessage(""); setError(""); catalogAttempt.current = "";
+    accountChanged(status);
+  }} />;
   return <div className="model-connection-editor form-rows">
     {full && <FieldRow id={`connection-name-${connection.id}`} label={t("Name")} hint={t("Shown in role choices next to the provider.")}>
       <input id={`connection-name-${connection.id}`} aria-describedby={`connection-name-${connection.id}-hint`} type="text" value={connection.name} disabled={disabled} onChange={event => patch({ name: event.target.value })} />

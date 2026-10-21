@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -49,6 +48,7 @@ type registration struct {
 }
 
 type credentialFile struct {
+	Revision       uint64                   `json:"revision,omitempty"`
 	ConnectionKeys map[string]connectionKey `json:"connection_keys,omitempty"`
 	HostID         string                   `json:"ext_agent_host_id"`
 	Active         string                   `json:"active"`
@@ -71,13 +71,14 @@ type Profile struct {
 // Status contains backend-owned connection state. Readiness requires a real
 // generation, and is deliberately reset when an account changes or disconnects.
 type Status struct {
-	Profiles        []Profile `json:"profiles"`
-	Active          string    `json:"active"`
-	Pending         bool      `json:"pending"`
-	State           string    `json:"state"`
-	Message         string    `json:"message,omitempty"`
-	DecisionsKeySet bool      `json:"decisions_key_set"`
-	Generation      uint64    `json:"generation"`
+	Profiles         []Profile `json:"profiles"`
+	Active           string    `json:"active"`
+	Pending          bool      `json:"pending"`
+	State            string    `json:"state"`
+	Message          string    `json:"message,omitempty"`
+	DecisionsKeySet  bool      `json:"decisions_key_set"`
+	Generation       uint64    `json:"generation"`
+	RecoveryRequired bool      `json:"recovery_required,omitempty"`
 }
 
 // Manager serializes rotating refresh across goroutines and processes.
@@ -94,6 +95,9 @@ type Manager struct {
 	wg           sync.WaitGroup
 	onChange     func()
 	storageReady bool
+	networkCtx   context.Context
+	cancel       context.CancelFunc
+	refreshes    map[refreshKey]*tokenRefresh
 }
 
 // Open creates protected host storage without contacting an account service.
@@ -111,13 +115,16 @@ func Open(options Options) (*Manager, error) {
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	options.Client = &client
 	m := &Manager{path: filepath.Join(directory, "credentials.json"), issuer: options.Issuer, client: options.Client, state: "disconnected", onChange: options.OnChange}
+	m.networkCtx, m.cancel = context.WithCancel(context.Background())
+	m.refreshes = map[refreshKey]*tokenRefresh{}
 	if options.LazyStorage {
 		return m, nil
 	}
 	m.mu.Lock()
 	err := m.transaction(context.Background(), func(*credentialFile) error { return nil })
 	m.mu.Unlock()
-	if err != nil {
+	if err != nil && !errors.Is(err, errUnreadableCredentials) {
+		m.cancel()
 		return nil, err
 	}
 	return m, nil
@@ -139,67 +146,6 @@ func newHostID() (string, error) {
 	value[6] = (value[6] & 0x0f) | 0x40
 	value[8] = (value[8] & 0x3f) | 0x80
 	return fmt.Sprintf("urn:uuid:%x-%x-%x-%x-%x", value[:4], value[4:6], value[6:8], value[8:10], value[10:]), nil
-}
-
-// transaction is called with mu held. The process lock protects the entire
-// refresh and its atomic replacement so other app processes see the new token.
-func (m *Manager) transaction(ctx context.Context, action func(*credentialFile) error) error {
-	if !m.storageReady {
-		directory := filepath.Dir(m.path)
-		if err := os.MkdirAll(directory, 0700); err != nil {
-			return errors.New("create protected OpenAI storage")
-		}
-		if err := restrictPath(directory); err != nil {
-			return errors.New("protect OpenAI storage")
-		}
-		m.storageReady = true
-	}
-	unlock, err := lockCredentials(ctx, m.path+".lock")
-	if err != nil {
-		return errors.New("OpenAI credentials are busy or unavailable")
-	}
-	defer unlock()
-	data := credentialFile{Profiles: []registration{}}
-	raw, err := os.ReadFile(m.path)
-	if err == nil {
-		if len(raw) > 1<<20 || json.Unmarshal(raw, &data) != nil {
-			return errors.New("OpenAI credentials could not be read; reconnect from settings")
-		}
-	} else if !os.IsNotExist(err) {
-		return errors.New("OpenAI credentials could not be read")
-	}
-
-	if err := initializeCredentialHost(&data); err != nil {
-		return err
-	}
-	if err := action(&data); err != nil {
-		return err
-	}
-	encoded, err := json.Marshal(data) // #nosec G117 -- credentials are written only to owner-restricted host storage, never logs or public JSON.
-	if err != nil {
-		return errors.New("OpenAI credentials could not be saved")
-	}
-	if string(raw) == string(encoded) {
-		return nil
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(m.path), "credentials-*.tmp")
-	if err != nil {
-		return errors.New("OpenAI credentials could not be saved")
-	}
-	defer func() { _ = os.Remove(temporary.Name()) }()
-	if err := restrictPath(temporary.Name()); err != nil {
-		_ = temporary.Close()
-		return errors.New("OpenAI credentials could not be protected")
-	}
-	_, writeErr := temporary.Write(encoded)
-	if writeErr == nil {
-		writeErr = temporary.Sync()
-	}
-	closeErr := temporary.Close()
-	if writeErr != nil || closeErr != nil || os.Rename(temporary.Name(), m.path) != nil {
-		return errors.New("OpenAI credentials could not be saved")
-	}
-	return nil
 }
 
 func initializeCredentialHost(data *credentialFile) error {
@@ -238,7 +184,7 @@ func (m *Manager) Status(ctx context.Context) Status {
 		return nil
 	})
 	if err != nil {
-		status.State, status.Message = "unavailable", err.Error()
+		status = Status{Profiles: []Profile{}, State: "unavailable", Message: err.Error(), Generation: m.generation, RecoveryRequired: errors.Is(err, errUnreadableCredentials)}
 	}
 	if status.State == "disconnected" && status.Active != "" {
 		status.State = "connected"
@@ -261,63 +207,6 @@ func (m *Manager) ActiveTokenSource(ctx context.Context) (llm.TokenSource, error
 	}
 	generation := m.generation
 	return func(ctx context.Context) (string, error) { return m.accessToken(ctx, id, generation) }, nil
-}
-
-func (m *Manager) accessToken(ctx context.Context, id string, generation uint64) (string, error) {
-	m.mu.Lock()
-	changed := false
-	defer func() {
-		m.mu.Unlock()
-		if changed {
-			m.notifyChange()
-		}
-	}()
-	if m.closed || generation != m.generation {
-		return "", context.Canceled
-	}
-	var token string
-	var outcome error
-	err := m.transaction(ctx, func(data *credentialFile) error {
-		if data.Active != id {
-			return context.Canceled
-		}
-		index := slices.IndexFunc(data.Profiles, func(p registration) bool { return p.ID == id })
-		if index < 0 || data.Profiles[index].AccessToken == "" {
-			return &llm.CloudError{Kind: "signed_out"}
-		}
-		profile := &data.Profiles[index]
-		if !slices.Contains(profile.Scopes, "chatgpt.tokens.use.direct") {
-			return &llm.CloudError{Kind: "permission"}
-		}
-		if time.Now().Add(90 * time.Second).After(profile.ExpiresAt) {
-			if time.Now().Before(profile.EarliestRefreshAt) {
-				return &llm.CloudError{Kind: "unavailable"}
-			}
-			if err := m.refresh(ctx, profile); err != nil {
-				var failure *llm.CloudError
-				if errors.As(err, &failure) && failure.Kind == "signed_out" {
-					profile.AccessToken, profile.RefreshToken, profile.IDToken = "", "", ""
-					m.generation++
-					changed = true
-					outcome = err
-					return nil
-				}
-				return err
-			}
-		}
-		if !slices.Contains(profile.Scopes, "chatgpt.tokens.use.direct") {
-			m.generation++
-			changed = true
-			outcome = &llm.CloudError{Kind: "permission"}
-			return nil
-		}
-		token = profile.AccessToken
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	return token, outcome
 }
 
 // APIKeySource returns only the separately authorized Decisions credential.
@@ -355,9 +244,9 @@ func (m *Manager) SetAPIKey(ctx context.Context, key string) error {
 		return errors.New("invalid OpenAI API key")
 	}
 	m.mu.Lock()
-	err := m.transaction(ctx, func(data *credentialFile) error { data.APIKey = key; return nil })
+	err := m.transaction(ctx, func(data *credentialFile) error { data.APIKey = key; data.Revision++; return nil })
 	if err == nil {
-		m.generation++
+		m.invalidateLocked()
 	}
 	m.mu.Unlock()
 	if err == nil {
@@ -374,10 +263,15 @@ func (m *Manager) Select(ctx context.Context, id string) error {
 			return errors.New("connect this ChatGPT account first")
 		}
 		data.Active = id
+		data.Revision++
 		return nil
 	})
 	if err == nil {
-		m.generation++
+		m.invalidateLocked()
+		if m.pending != nil {
+			m.pending.cancel()
+			m.pending = nil
+		}
 		m.state = "connected"
 		m.message = ""
 	}
@@ -406,13 +300,28 @@ func (m *Manager) AcknowledgeWelcome(ctx context.Context) error {
 func (m *Manager) Close() {
 	m.mu.Lock()
 	m.closed = true
-	m.generation++
+	m.cancel()
+	m.invalidateLocked()
 	if m.pending != nil {
 		m.pending.cancel()
 		m.pending = nil
 	}
 	m.mu.Unlock()
 	m.wg.Wait()
+}
+
+func (m *Manager) invalidateLocked() {
+	m.generation++
+	for _, call := range m.refreshes {
+		call.cancel()
+	}
+}
+
+// A network operation follows both its caller and the manager's lifetime.
+func (m *Manager) operationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	operation, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(m.networkCtx, cancel)
+	return operation, func() { stop(); cancel() }
 }
 
 func (m *Manager) notifyChange() {

@@ -3299,5 +3299,11 @@
   "Use a shorter history for lighter requests without reducing room for motion planning.": "履歴を短くすると、動作計画に使える容量を保ったままリクエストを軽くできます。",
   "Match context budget": "コンテキスト予算に合わせる",
   "The budget is a ceiling, not a fixed request size. Choose 128K for richer motion planning when your model supports it; sending more history can increase latency and usage. History is always capped by the selected budget.": "予算は上限であり、毎回その量を送るわけではありません。対応モデルでは128Kを選ぶと、より詳しい動作計画を扱えます。履歴を増やすと遅延や使用量が増える場合があります。履歴は常に選択した予算内に収まります。",
-  "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first.": "モデルの実際のコンテキスト容量内で予算を選んでください。一覧にないモデルや自分でホストするモデルでは、先に設定済みの容量を確認してください。"
+  "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first.": "モデルの実際のコンテキスト容量内で予算を選んでください。一覧にないモデルや自分でホストするモデルでは、先に設定済みの容量を確認してください。",
+  "Cloud credential recovery": "クラウド認証情報の復旧",
+  "Saved cloud credentials cannot be opened": "保存されたクラウド認証情報を開けません",
+  "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.": "アプリのデータを別の Windows アカウントやパソコンに移すと、この状態になることがあります。保存された認証情報をリセットしてから、再度サインインするか API キーを入力してください。",
+  "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.": "このアプリのホストに保存されたすべての ChatGPT サインインとクラウド API キーを削除します。プロバイダーとモデルの設定は保持されます。リモートアクセスは取り消されないため、必要に応じて各プロバイダーで管理してください。",
+  "Reset all saved cloud credentials": "保存されたクラウド認証情報をすべてリセット",
+  "Reset saved credentials…": "保存された認証情報をリセット…"
 }

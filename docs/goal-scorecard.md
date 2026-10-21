@@ -1,5 +1,24 @@
 # Goal Scorecard
 
+## 2026-10-20 — Alpha.65 combined release
+
+PR #329's cloud authentication/Windows DPAPI changes and PR #332's startup
+recovery are integrated above alpha.64 `4a46c0ff`. Windows amd64, Go 1.26.9,
+`CGO_ENABLED=0`, identical `-trimpath -buildvcs=false -ldflags '-s -w'`:
+**23,332,352 -> 23,443,968 B** (+111,616 B, 0.48%). The baseline is rebuilt from
+an isolated alpha.64 source archive. No Go module or external runtime dependency
+is added. Release packaging retains symbol tables for vulnerability checks;
+these stripped builds are comparable core-budget samples.
+
+Complete canonical embedded UI: **2,692,105 -> 2,699,602 B** (+7,497 B).
+Main JavaScript: **1,240,414 -> 1,243,507 B raw** (+3,093 B), **334,294 ->
+335,056 B gzip** (+762 B, gzip level 9 with `mtime=0`). The UI addition is
+localized credential recovery; startup adds no panel, download or frontend
+request. Stale hashed assets were removed. Existing bundle-size advisories
+remain; no threshold was changed. The feature entries below record the startup
+RSS/readiness samples and authentication limitations; no new combined cold-start
+or steady-state RSS claim is made. See [the release review](alpha65-release-review-2026-10-20.md).
+
 ## 2026-10-20 — Local startup recovery
 
 Bounded local port fallback, per-profile OS ownership, verified endpoint
@@ -104,6 +123,20 @@ Autopilot and reviewer paths, retained/released pace, named/custom shapes and
 recall. All failed iterations are retained in a 233-record shared-engine atlas.
 This is a small evaluation, not a general intent guarantee or latency benchmark.
 See the [review and limitations](hosted-layered-operations-review-2026-10-18.md).
+
+## 2026-10-18 — Cloud authentication locking and Windows encryption
+
+[Evidence](cloud-auth-hardening-review-2026-10-18.md). Against alpha.63 `5e02daa0`,
+Windows amd64 Go 1.26.9, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`: core **23,264,768 -> 23,309,312 B**
+(+44,544 B). No module/dependency added. Local-only absent credential stores
+remain lazy; no new model request, motion loop or idle polling is introduced.
+
+Main UI JS **1,238,130 -> 1,241,223 B raw** (+3,093 B), **333,863 -> 334,612 B
+gzip** (+749 B, Python gzip `mtime=0`). CSS stays **204,527 B**. Complete embedded
+UI **2,683,548 -> 2,691,045 B** (+7,497 B), including localized recovery text.
+The one canonical dist was rebuilt with stale hashes removed. No new RSS or
+cold-start claim; the recovery UI mounts only for a backend-reported failure.
 
 ## 2026-10-16 — Auto timing and prepared decisions for external planners
 

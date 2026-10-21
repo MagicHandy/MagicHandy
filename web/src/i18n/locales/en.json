@@ -3299,5 +3299,11 @@
   "Use a shorter history for lighter requests without reducing room for motion planning.": "Use a shorter history for lighter requests without reducing room for motion planning.",
   "Match context budget": "Match context budget",
   "The budget is a ceiling, not a fixed request size. Choose 128K for richer motion planning when your model supports it; sending more history can increase latency and usage. History is always capped by the selected budget.": "The budget is a ceiling, not a fixed request size. Choose 128K for richer motion planning when your model supports it; sending more history can increase latency and usage. History is always capped by the selected budget.",
-  "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first.": "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first."
+  "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first.": "Choose a budget within your model's actual context capacity. For an unlisted or self-hosted model, check its configured context first.",
+  "Cloud credential recovery": "Cloud credential recovery",
+  "Saved cloud credentials cannot be opened": "Saved cloud credentials cannot be opened",
+  "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.": "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.",
+  "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.": "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.",
+  "Reset all saved cloud credentials": "Reset all saved cloud credentials",
+  "Reset saved credentials…": "Reset saved credentials…"
 }
