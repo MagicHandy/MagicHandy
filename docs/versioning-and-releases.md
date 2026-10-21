@@ -57,7 +57,7 @@ the release manifest, `SOURCE.txt`, and `magichandy.exe -version`.
 
 ## Release Artifacts
 
-The reviewed unsigned Windows alpha.65 release contains exactly these
+The reviewed unsigned Windows alpha.66 release contains exactly these
 downloadable artifacts:
 
 - `MagicHandy-<version>-windows-amd64-setup.exe`
@@ -72,10 +72,15 @@ remains for provenance.
 
 Pull-request workflows continue to retain setup only as a short-lived
 `unsigned-ci` artifact and exercise its full lifecycle. The tag workflow uses
-`ReviewedUnsignedPublic`, limited to alpha.8 through alpha.11 and alpha.13
-through alpha.65, scans the exact public directory with Defender, verifies the
+`ReviewedUnsignedPublic`, limited to alpha.8 through alpha.11, alpha.13
+through alpha.64, and alpha.66, scans the exact public directory with Defender, verifies the
 setup/ZIP manifests and two-entry outer checksum, exercises the exact setup
 lifecycle, and publishes three explicit assets.
+
+Alpha.65 was blocked by the exact Windows binary scan for GO-2026-6809 before
+publication. Its source tag remains immutable without public artifacts.
+Alpha.66 carries the same features with Go 1.26.10; alpha.65 is no longer in
+the active reviewed unsigned allowlist.
 
 When trusted signing is provisioned, setup publication can resume under
 `SignedPublic`, restoring the signed setup/ZIP/checksum set. That gate requires

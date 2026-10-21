@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $script:InstallStateSchema = 3
-$script:MinimumGoVersion = [Version]'1.26.9'
+$script:MinimumGoVersion = [Version]'1.26.10'
 # How long to wait for a launched app's verified local URL.
 $script:MagicHandyStartupSeconds = 30
 $script:ParakeetRunnerURL = 'https://github.com/mudler/parakeet.cpp/releases/download/v0.4.0/parakeet-v0.4.0-bin-win-cpu-x64.zip'

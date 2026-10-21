@@ -1,6 +1,19 @@
 # Goal Scorecard
 
-## 2026-10-20 — Alpha.65 combined release
+## 2026-10-20 — Alpha.66 security toolchain
+
+Alpha.65's public Windows core scan was blocked by GO-2026-6809 before
+publication. The same application source now requires Go 1.26.10. Matching
+Windows amd64, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`
+core-budget samples: **23,443,968 -> 23,446,016 B** (+2,048 B, 0.009%).
+The symbol-bearing patched core (`-w`, without `-s`) is 25,013,248 B and its
+actual-binary `govulncheck@v1.8.0` scan reports zero reachable vulnerabilities.
+No Go module, external runtime, payload executable or application behavior is
+added. The canonical embedded UI remains **2,699,602 B**, with the same
+**335,056 B gzip** main JavaScript measured below. No new RSS or cold-start
+performance claim is made. See [the security release review](alpha66-release-review-2026-10-20.md).
+
+## 2026-10-20 — Alpha.65 combined release candidate (unpublished)
 
 PR #329's cloud authentication/Windows DPAPI changes and PR #332's startup
 recovery are integrated above alpha.64 `4a46c0ff`. Windows amd64, Go 1.26.9,
