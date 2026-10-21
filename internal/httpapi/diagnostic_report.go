@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/startup"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -167,7 +168,7 @@ func (s *Server) populateDiagnosticReport(r *http.Request, archive *diagnosticAr
 		}
 	}
 	archive.notes = append(archive.notes,
-		"Status is always included. Only selected sections are exported. No model or device request is made.",
+		"Status, including retained startup diagnostics, is always included. Only selected sections are exported. No model or device request is made.",
 		fmt.Sprintf("Chat exports contain all retained committed messages at each session's captured head (up to %d per session); pending, pruned and deleted messages are not recoverable. Recent failures are retained separately (up to %d across chats).", chat.MessageRetentionCap, chat.FailureRetention),
 		"Prompt inclusion contains captured system prompts, which can also contain conversation, persona, lore or memory text. Failure content may have been truncated when captured.",
 		"Stored credentials, common token forms, URLs and local paths are redacted. Review optional personal content before sharing. No audio, images, environment dump, account sessions or database file is included.",
@@ -185,6 +186,7 @@ func (s *Server) diagnosticStatus(r *http.Request) map[string]any {
 	_, tools := s.mediaTools(r.Context())
 	return map[string]any{
 		"app_version": s.version.Version, "app_commit": s.version.Commit, "platform": runtime.GOOS + "/" + runtime.GOARCH,
+		"startup":    startup.ReadReports(s.store.DataDir()),
 		"go_version": runtime.Version(), "cpu_threads": runtime.NumCPU(), "uptime_seconds": int64(time.Since(s.started).Seconds()),
 		"browser_user_agent": r.UserAgent(), "stop_sequence": s.stopSequence.Load(), "motion_simulated": s.motion.simulated,
 		"motion": s.clientMotionState(r), "modes": mode, "llm": s.llmState(r.Context()), "voice_workers": s.voice.Status(),

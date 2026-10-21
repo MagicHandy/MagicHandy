@@ -1,5 +1,61 @@
 # Goal Scorecard
 
+## 2026-10-20 — Local startup recovery
+
+Bounded local port fallback, per-profile OS ownership, verified endpoint
+discovery and retained startup reports are implemented in
+[ADR 0051](decisions/0051-local-startup-recovery.md). The standard diagnostic
+report includes current startup, last failure and last recovery under
+`status.json` → `startup`, including exports with all optional sections off.
+No separate startup panel, download, endpoint or frontend asset is shipped.
+No dependency is added; the canonical embedded UI is identical to `main`.
+
+Final comparison after integration with `main` at `4a46c0ff`: Windows amd64,
+Go 1.26.9, `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`,
+built from `./cmd/magichandy`. The baseline is a source archive of that commit;
+the candidate is this branch's integrated application source.
+
+| Measure | Baseline | Candidate | Change |
+| --- | ---: | ---: | ---: |
+| Stripped binary | 23,332,352 B | 23,399,424 B | +67,072 B |
+| Complete canonical embedded UI | 2,692,105 B | 2,692,105 B | unchanged |
+| Main JavaScript, gzip level 9 | 334,294 B | 334,294 B | unchanged |
+| Idle working set, median of 3 | 23,908,352 B | 25,690,112 B | +1,781,760 B |
+| Idle private bytes, median of 3 | 57,475,072 B | 58,699,776 B | +1,224,704 B |
+| Process launch to HTTP health, median of 3 | 519 ms | 519 ms | within sample noise |
+
+Startup/idle samples use equivalent initialized isolated profiles, external
+Ollama, voice disabled, `-simulate-motion`, a fixed loopback address and
+`-remote-port -1`. Working set is sampled two seconds after readiness with no
+browser connected. Process launches include PowerShell/Windows launch and HTTP
+polling overhead and use a warm filesystem; these are not OS-cold-start or
+active-motion measurements. Startup ranges were 508–520 ms baseline and
+506–520 ms candidate. Three samples do not establish a performance improvement
+or a steady-state RSS guarantee. The external model process and browser RSS
+are excluded. The core remains below the 30 MB binary budget; existing frontend
+bundle-size advisories remain in effect.
+
+Acceptance includes real occupied app/remote ports, injected native Windows
+10013 denial, strict fixed-port refusal, duplicate executable/launcher reuse,
+stale/foreign endpoint rejection, held sockets and failure cleanup, report
+retention/redaction/temporary storage, standard diagnostic archive inclusion,
+Windows PowerShell 5.1 and PowerShell 7 installer suites, full Go/race/vet/lint/
+architecture/lifecycle checks, and frontend localization/typecheck/tests/build.
+
+The integrated isolated simulator deliberately failed a fixed bind on 48717
+(native 10048), retained that failure and recovered automatically to app 14395
+and remote 14396. The ordinary diagnostic ZIP includes both startup records;
+there is no separate startup UI. The exact app passed `check-review-llm.ps1`
+with real text generation from the configured Ollama model. No hardware was
+connected and no motion or system network reset was requested. Original-user
+HNS state was not reproduced; the 10013 regression uses an injected native error.
+
+[The Opus 5.5 review and dispositions](startup-recovery-review-2026-10-20.md)
+cover saved hosted-policy compatibility, explicit simulation, recovered-profile
+installer consumers, bounded Windows replacement retries, fixed remote-port
+reuse and startup messages. The review records its pre-integration scope and
+the subsequent diagnostic-report consolidation.
+
 ## 2026-10-18 — Constraint lifetimes and independent external history
 
 Hosted planning distinguishes temporary settings from lasting directions.

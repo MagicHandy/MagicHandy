@@ -2,6 +2,13 @@
 
 ## Core Direction
 
+The October 20 startup recovery pass adds bounded local port fallback, a
+profile lock and verified existing-instance discovery before datastore/worker
+startup, actual-URL source launcher readiness, and retained startup diagnostics.
+Explicit fixed addresses and hosted network deployments remain strict. HNS and
+system port reservations are untouched. See
+[ADR 0051](docs/decisions/0051-local-startup-recovery.md).
+
 The October 18 Layered fix gives hosted models exclusive set/adjust controls,
 named-versus-manual composition and per-axis edit/removal operations. Chat,
 Autopilot and hosted second opinions translate these into the existing atomic

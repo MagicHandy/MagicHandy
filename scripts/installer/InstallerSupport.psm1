@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 
 $script:InstallStateSchema = 3
 $script:MinimumGoVersion = [Version]'1.26.9'
-# How long a launched app may take to answer before it counts as failed.
+# How long to wait for a launched app's verified local URL.
 $script:MagicHandyStartupSeconds = 30
 $script:ParakeetRunnerURL = 'https://github.com/mudler/parakeet.cpp/releases/download/v0.4.0/parakeet-v0.4.0-bin-win-cpu-x64.zip'
 $script:ParakeetRunnerSHA256 = '2880150a1bad2944baed46f2e6bb9f1bc55263a9f2bb85573785a7ec4fa35f27'
@@ -1698,12 +1698,50 @@ function ConvertTo-MagicHandyNativeArgument {
 function New-MagicHandyAppArgumentLine {
     param(
         [Parameter(Mandatory = $true)][string]$Address,
-        [Parameter(Mandatory = $true)][string]$DataDir
+        [Parameter(Mandatory = $true)][string]$DataDir,
+        [ValidateSet('auto', 'fixed')][string]$PortPolicy = 'fixed'
     )
 
-    return '-addr {0} -data-dir {1}' -f `
+    $arguments = '-addr {0} -data-dir {1}' -f `
         (ConvertTo-MagicHandyNativeArgument -Value $Address), `
         (ConvertTo-MagicHandyNativeArgument -Value $DataDir)
+    # An explicit -addr is already strict in both old and current executables.
+    if ($PortPolicy -eq 'auto') { $arguments += ' -port-policy auto' }
+    return $arguments
+}
+
+# Let the app verify its private instance record with a fresh challenge. This
+# never opens the datastore, takes controller ownership, or sends the token.
+function Get-MagicHandyRunningInstance {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryPath,
+        [Parameter(Mandatory = $true)][string]$DataDir
+    )
+    $exe = Join-Path $RepositoryPath 'magichandy.exe'
+    try {
+        $output = @(& $exe -data-dir $DataDir -running-instance -console plain 2>$null)
+        if ($LASTEXITCODE -ne 0) { return $null }
+        $instance = ($output -join "`n") | ConvertFrom-Json
+        if ($null -eq $instance) { return $null }
+        $origin = [Uri]([string]$instance.url)
+        if ($origin.Scheme -ne 'http' -or -not $origin.IsLoopback -or $origin.UserInfo -ne '' -or
+            $origin.AbsolutePath -ne '/' -or $origin.Query -ne '' -or $origin.Fragment -ne '') { return $null }
+        $owned = @(Get-MagicHandyCheckoutProcesses -RepositoryPath $RepositoryPath | Where-Object { [int]$_.ProcessId -eq [int]$instance.pid })
+        $listeners = @(Get-MagicHandyLoopbackListeners -Port $origin.Port | Where-Object { [int]$_.OwningProcess -eq [int]$instance.pid })
+        if ($owned.Count -ne 1 -or $listeners.Count -eq 0) { return $null }
+        return $instance
+    } catch {
+        return $null
+    }
+}
+
+function Test-MagicHandyFixedInstance {
+    param([object]$Instance, [string]$URL)
+    if ([string]$Instance.url -ne $URL) { return $false }
+    $remote = $Instance.PSObject.Properties['remote_url']
+    if ($null -eq $remote -or [string]::IsNullOrWhiteSpace([string]$remote.Value)) { return $true }
+    $preferred = $Instance.PSObject.Properties['preferred_remote_url']
+    return $null -ne $preferred -and [string]$preferred.Value -eq [string]$remote.Value
 }
 
 function Get-MagicHandyCheckoutProcesses {
@@ -1940,10 +1978,15 @@ function Stop-MagicHandyAppForRebuild {
     param(
         [Parameter(Mandatory = $true)][string]$RepositoryPath,
         [Parameter(Mandatory = $true)][ValidateRange(1, 65535)][int]$Port,
+        [string]$DataDir = '',
         [switch]$AllowPhysicalStopConfirmation,
         [scriptblock]$PhysicalStopConfirmation
     )
 
+    if (-not [string]::IsNullOrWhiteSpace($DataDir)) {
+        $instance = Get-MagicHandyRunningInstance -RepositoryPath $RepositoryPath -DataDir $DataDir
+        if ($null -ne $instance) { $Port = ([Uri]$instance.url).Port }
+    }
     $listeners = @(Get-MagicHandyLoopbackListeners -Port $Port)
     $processes = @(Get-MagicHandyCheckoutProcesses -RepositoryPath $RepositoryPath)
     if ($processes.Count -eq 0) {
@@ -2252,6 +2295,7 @@ function Invoke-MagicHandyProvision {
         [Parameter(Mandatory = $true)][object]$State,
         [Parameter(Mandatory = $true)][string]$RepositoryPath,
         [int]$RunningPort = 0,
+        [string]$RunningDataDir = '',
         [switch]$AssumeYes,
         [switch]$PlanOnly,
         [switch]$PreserveAppLanguages,
@@ -2276,7 +2320,8 @@ function Invoke-MagicHandyProvision {
     if ($RunningPort -eq 0) {
         $RunningPort = [int]$State.port
     }
-    Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $RunningPort -AllowPhysicalStopConfirmation:(-not $AssumeYes)
+    if ([string]::IsNullOrWhiteSpace($RunningDataDir)) { $RunningDataDir = [string]$State.data_dir }
+    Stop-MagicHandyAppForRebuild -RepositoryPath $RepositoryPath -Port $RunningPort -DataDir $RunningDataDir -AllowPhysicalStopConfirmation:(-not $AssumeYes)
     $go = Ensure-MagicHandyGo -AssumeYes:$AssumeYes
     Build-MagicHandyBinaries -RepositoryPath $RepositoryPath -GoExecutable $go
 
@@ -2335,6 +2380,7 @@ function Start-MagicHandyApp {
         [Parameter(Mandatory = $true)][string]$RepositoryPath,
         [Parameter(Mandatory = $true)][string]$DataDir,
         [Parameter(Mandatory = $true)][int]$Port,
+        [ValidateSet('default', 'auto', 'fixed')][string]$PortPolicy = 'default',
         [switch]$NoBrowser,
         [switch]$Setup
     )
@@ -2342,48 +2388,58 @@ function Start-MagicHandyApp {
     if (-not (Test-Path -LiteralPath $exe)) {
         throw "MagicHandy executable not found at '$exe'."
     }
+    if ($PortPolicy -eq 'default') {
+        $PortPolicy = if ($Port -eq 49717) { 'auto' } else { 'fixed' }
+    }
     $url = "http://127.0.0.1:$Port"
-    $browserURL = if ($Setup) { "$url/#/setup" } else { $url }
-    $listeners = @(Get-MagicHandyLoopbackListeners -Port $Port)
-    if ($listeners.Count -gt 0) {
-        $ownedProcesses = @(Get-MagicHandyCheckoutProcesses -RepositoryPath $RepositoryPath)
-        $ownedIDs = @($ownedProcesses | ForEach-Object { [int]$_.ProcessId })
-        $ownedListeners = @($listeners | Where-Object { [int]$_.OwningProcess -in $ownedIDs })
-        $foreignListeners = @($listeners | Where-Object { [int]$_.OwningProcess -notin $ownedIDs })
-        if ($ownedProcesses.Count -eq 1 -and $ownedListeners.Count -gt 0 -and $foreignListeners.Count -eq 0 -and (Test-MagicHandyHTTPReady -Port $Port)) {
-            if (-not $NoBrowser) {
-                Start-Process $browserURL
-            }
-            Write-Host "MagicHandy is already running at $url" -ForegroundColor Green
-            return
+    $instance = Get-MagicHandyRunningInstance -RepositoryPath $RepositoryPath -DataDir $DataDir
+    if ($null -ne $instance) {
+        if ($PortPolicy -eq 'fixed' -and -not (Test-MagicHandyFixedInstance -Instance $instance -URL $url)) {
+            throw "MagicHandy already runs for this data directory at $($instance.url); fixed ports for the app and remote were not started."
         }
+        $browserURL = if ($Setup) { "$($instance.url)/#/setup/reconfigure" } else { [string]$instance.url }
+        if (-not $NoBrowser) { Start-Process $browserURL }
+        Write-Host "MagicHandy is already running at $($instance.url)" -ForegroundColor Green
+        return
+    }
+    $listeners = @(Get-MagicHandyLoopbackListeners -Port $Port)
+    if ($listeners.Count -gt 0 -and $PortPolicy -eq 'fixed') {
         throw "Port $Port is already in use by a process that cannot be verified as this checkout's MagicHandy app."
     }
 
-    $argumentLine = New-MagicHandyAppArgumentLine -Address "127.0.0.1:$Port" -DataDir $DataDir
+    $argumentLine = New-MagicHandyAppArgumentLine -Address "127.0.0.1:$Port" -DataDir $DataDir -PortPolicy $PortPolicy
+    $startedAt = [DateTime]::UtcNow
     $process = Start-Process -FilePath $exe -ArgumentList $argumentLine -PassThru -WindowStyle Hidden
     # The first start of a newly installed or rebuilt executable can wait on an
     # antivirus scan, so allow it time. A process that exits still fails at once.
     $deadline = [DateTime]::UtcNow.AddSeconds($script:MagicHandyStartupSeconds)
     do {
         $process.Refresh()
-        if ($process.HasExited) {
-            throw "MagicHandy exited before its local server became ready (exit $($process.ExitCode))."
-        }
-        if (Test-MagicHandyProcessReady -Port $Port -TargetProcessId $process.Id) {
-            if (-not $NoBrowser) {
-                Start-Process $browserURL
+        $instance = Get-MagicHandyRunningInstance -RepositoryPath $RepositoryPath -DataDir $DataDir
+        if ($null -ne $instance) {
+            if ($PortPolicy -eq 'fixed' -and -not (Test-MagicHandyFixedInstance -Instance $instance -URL $url)) {
+                throw "MagicHandy already runs for this data directory at $($instance.url); fixed ports for the app and remote were not started."
             }
-            Write-Host "MagicHandy is running at $url" -ForegroundColor Green
+            $browserURL = if ($Setup) { "$($instance.url)/#/setup/reconfigure" } else { [string]$instance.url }
+            if (-not $NoBrowser) { Start-Process $browserURL }
+            Write-Host "MagicHandy is running at $($instance.url)" -ForegroundColor Green
             return
+        }
+        if ($process.HasExited) {
+            $reportPath = Join-Path $DataDir 'startup\last-failure.json'
+            $report = Get-Item -LiteralPath $reportPath -ErrorAction SilentlyContinue
+            if ($null -ne $report -and $report.LastWriteTimeUtc -ge $startedAt) {
+                throw "MagicHandy exited before its local server became ready (exit $($process.ExitCode)). Startup report: $reportPath"
+            }
+            throw "MagicHandy exited without publishing a verified local URL (exit $($process.ExitCode)). Another instance may be starting or using a fixed HTTPS/proxy endpoint. Check this checkout's running MagicHandy processes or run the executable directly for details. Rebuild with update.ps1 -NoPull if the executable predates these launcher scripts."
         }
         Start-Sleep -Milliseconds 250
     } while ([DateTime]::UtcNow -lt $deadline)
 
-    if (-not $process.HasExited) {
-        Stop-MagicHandyProcessTree -TargetProcessId $process.Id
-    }
-    throw "MagicHandy did not become ready at $url within $script:MagicHandyStartupSeconds seconds. The failed process was stopped."
+    $process.Refresh()
+    if ($process.HasExited) { throw "MagicHandy exited while its startup URL was being verified (exit $($process.ExitCode)). Check '$DataDir\startup' for startup reports." }
+    $timeout = [TimeoutException]::new("MagicHandy did not publish a verified local URL within $script:MagicHandyStartupSeconds seconds. Process $($process.Id) was left running. A fixed HTTPS/proxy deployment uses its configured public URL. Otherwise retry the launcher or check '$DataDir\startup' for startup reports.")
+    $PSCmdlet.ThrowTerminatingError([System.Management.Automation.ErrorRecord]::new($timeout, 'MagicHandy.StartedUnverified', [System.Management.Automation.ErrorCategory]::OperationTimeout, $process.Id))
 }
 
 function Update-MagicHandySource {
@@ -2536,6 +2592,7 @@ Export-ModuleMember -Function @(
     'Sync-MagicHandyTTSModuleArtifacts',
     'Invoke-MagicHandyProvision',
     'Test-MagicHandyAppRunning',
+    'Get-MagicHandyRunningInstance',
     'Stop-MagicHandyAppForRebuild',
     'Set-MagicHandyAppLanguages',
     'Start-MagicHandyApp',
