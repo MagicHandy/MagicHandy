@@ -23,7 +23,7 @@ func restrictPath(path string) error {
 		return err
 	}
 	if info.IsDir() {
-		return os.Chmod(path, 0700)
+		return os.Chmod(path, 0700) // #nosec G302 -- the owner needs directory traversal; group and other access are denied.
 	}
 	return os.Chmod(path, 0600)
 }
