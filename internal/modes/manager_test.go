@@ -207,7 +207,11 @@ func waitForAutonomousStart(t *testing.T, manager *Manager, engine *fakeEngine) 
 	t.Helper()
 	waitFor(t, 2*time.Second, func() bool {
 		starts, _ := engine.counts()
-		return starts == 1 && manager.Status().SegmentIndex >= 1
+		status := manager.Status()
+		// Autopilot arms the segment before recording its decision source.
+		// Wait for both before callers inspect the completed startup status.
+		return starts == 1 && status.SegmentIndex >= 1 &&
+			(status.Mode != ModeAutopilot || status.DecisionSource != "")
 	})
 }
 

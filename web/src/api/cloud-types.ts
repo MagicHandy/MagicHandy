@@ -32,6 +32,7 @@ export interface CloudPlanningStatus {
     pending: boolean;
     state: string;
     message?: string;
+    recovery_required?: boolean;
     decisions_key_set: boolean;
     generation: number;
   };

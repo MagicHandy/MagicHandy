@@ -39,10 +39,11 @@ func (m *Manager) SetConnectionKey(ctx context.Context, connection config.ModelC
 		} else {
 			data.ConnectionKeys[connection.ID] = connectionKey{Provider: connection.Provider, BaseURL: connection.BaseURL, Key: key}
 		}
+		data.Revision++
 		return nil
 	})
 	if err == nil {
-		m.generation++
+		m.invalidateLocked()
 	}
 	m.mu.Unlock()
 	if err == nil {
@@ -106,10 +107,13 @@ func (m *Manager) RemoveConnectionKeys(ctx context.Context, ids []string) error 
 				removed = true
 			}
 		}
+		if removed {
+			data.Revision++
+		}
 		return nil
 	})
 	if err == nil && removed {
-		m.generation++
+		m.invalidateLocked()
 	}
 	m.mu.Unlock()
 	if err == nil && removed {

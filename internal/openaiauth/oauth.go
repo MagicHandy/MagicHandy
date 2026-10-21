@@ -49,25 +49,30 @@ type signInAttempt struct {
 // Start binds a short-lived loopback callback before returning an authorization
 // URL. The caller opens it on the app host; remote browsers cannot complete it.
 func (m *Manager) Start(ctx context.Context, profileID string, returnURLs ...string) (string, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return "", context.Canceled
-	}
-	if m.pending != nil {
-		m.pending.cancel()
-		m.pending = nil
-	}
-	discovery, err := m.discover(ctx)
+	attempt, err := m.prepareSignIn(ctx, profileID)
 	if err != nil {
 		return "", err
 	}
+	defer m.wg.Done()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed || m.pending != attempt || attempt.ctx.Err() != nil {
+		attempt.cancel()
+		return "", context.Canceled
+	}
+	started := false
+	defer func() {
+		if !started {
+			attempt.cancel()
+			m.pending = nil
+			m.state, m.message = "disconnected", ""
+		}
+	}()
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
 		return "", errors.New("the host could not open a ChatGPT sign-in callback")
 	}
-	attemptCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	attempt := &signInAttempt{state: randomValue(), nonce: randomValue(), verifier: randomValue(), callback: "http://" + listener.Addr().String() + "/auth/callback", clientID: "dynamic_agent_client", profileID: profileID, ctx: attemptCtx, cancel: cancel, discovery: discovery}
+	attempt.callback = "http://" + listener.Addr().String() + "/auth/callback"
 	if len(returnURLs) > 0 {
 		target, err := url.Parse(returnURLs[0])
 		if err == nil && (target.Scheme == "http" || target.Scheme == "https") && target.User == nil && (target.Hostname() == "localhost" || net.ParseIP(target.Hostname()).IsLoopback()) {
@@ -90,7 +95,6 @@ func (m *Manager) Start(ctx context.Context, profileID string, returnURLs ...str
 		return nil
 	})
 	if err != nil {
-		cancel()
 		_ = listener.Close()
 		return "", err
 	}
@@ -104,7 +108,7 @@ func (m *Manager) Start(ctx context.Context, profileID string, returnURLs ...str
 	mux.HandleFunc("GET /auth/callback", func(w http.ResponseWriter, r *http.Request) { m.callback(w, r, attempt) })
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 10 * time.Second}
 	shutdownDone := make(chan struct{})
-	stopClose := context.AfterFunc(attemptCtx, func() {
+	stopClose := context.AfterFunc(attempt.ctx, func() {
 		defer close(shutdownDone)
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second)
 		defer shutdownCancel()
@@ -119,7 +123,7 @@ func (m *Manager) Start(ctx context.Context, profileID string, returnURLs ...str
 		if !stopClose() {
 			<-shutdownDone
 		}
-		cancel()
+		attempt.cancel()
 		m.mu.Lock()
 		if m.pending == attempt {
 			m.pending = nil
@@ -128,7 +132,45 @@ func (m *Manager) Start(ctx context.Context, profileID string, returnURLs ...str
 		}
 		m.mu.Unlock()
 	}()
-	return discovery.AuthorizationEndpoint + "?" + query.Encode(), nil
+	started = true
+	return attempt.discovery.AuthorizationEndpoint + "?" + query.Encode(), nil
+}
+
+func (m *Manager) prepareSignIn(ctx context.Context, profileID string) (*signInAttempt, error) {
+	m.mu.Lock()
+	if m.closed {
+		m.mu.Unlock()
+		return nil, context.Canceled
+	}
+	if m.pending != nil {
+		m.pending.cancel()
+	}
+	attemptCtx, cancel := context.WithTimeout(m.networkCtx, 5*time.Minute)
+	attempt := &signInAttempt{state: randomValue(), nonce: randomValue(), verifier: randomValue(), clientID: "dynamic_agent_client", profileID: profileID, ctx: attemptCtx, cancel: cancel}
+	m.pending, m.state, m.message = attempt, "signing_in", "Contacting ChatGPT sign-in."
+	m.wg.Add(1)
+	m.mu.Unlock()
+	discoveryCtx, cancelDiscovery := m.operationContext(ctx)
+	stop := context.AfterFunc(attemptCtx, cancelDiscovery)
+	document, err := m.discover(discoveryCtx)
+	stop()
+	cancelDiscovery()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed || m.pending != attempt || attempt.ctx.Err() != nil {
+		err = context.Canceled
+	}
+	if err != nil {
+		cancel()
+		if m.pending == attempt {
+			m.pending = nil
+			m.state, m.message = "error", err.Error()
+		}
+		m.wg.Done()
+		return nil, err
+	}
+	attempt.discovery = document
+	return attempt, nil
 }
 
 // Cancel tears down the pending sign-in while preserving verified accounts.
@@ -155,15 +197,22 @@ func (m *Manager) callback(w http.ResponseWriter, r *http.Request, attempt *sign
 		return
 	}
 	attempt.consumed = true
-	err := m.completeCallback(attempt, r.URL.Query())
-	m.pending = nil
-	if err != nil {
-		m.state = "error"
-		m.message = err.Error()
+	m.mu.Unlock()
+	identity, tokens, err := m.completeCallback(attempt, r.URL.Query())
+	m.mu.Lock()
+	if m.closed || m.pending != attempt || attempt.ctx.Err() != nil {
+		err = context.Canceled
 	} else {
-		m.state = "connected"
-		m.message = ""
-		m.generation++
+		if err == nil {
+			err = m.saveVerifiedRegistration(attempt, identity, tokens)
+		}
+		m.pending = nil
+		if err != nil {
+			m.state, m.message = "error", err.Error()
+		} else {
+			m.state, m.message = "connected", ""
+			m.invalidateLocked()
+		}
 	}
 	m.mu.Unlock()
 	if err == nil {
@@ -183,17 +232,17 @@ func (m *Manager) callback(w http.ResponseWriter, r *http.Request, attempt *sign
 	attempt.cancel()
 }
 
-func (m *Manager) completeCallback(attempt *signInAttempt, query url.Values) error {
+func (m *Manager) completeCallback(attempt *signInAttempt, query url.Values) (verifiedIdentity, tokenReply, error) {
 	if query.Get("error") != "" {
-		return errors.New("sign-in with ChatGPT was declined; choose a model connection in settings")
+		return verifiedIdentity{}, tokenReply{}, errors.New("sign-in with ChatGPT was declined; choose a model connection in settings")
 	}
 	clientID := query.Get("client_id")
 	if attempt.clientID == "dynamic_agent_client" {
 		if clientID == "" || clientID == "dynamic_agent_client" || len(clientID) > 256 {
-			return errors.New("ChatGPT registration did not issue a client ID")
+			return verifiedIdentity{}, tokenReply{}, errors.New("ChatGPT registration did not issue a client ID")
 		}
 		attempt.clientID = clientID
-		if err := m.transaction(attempt.ctx, func(data *credentialFile) error {
+		if err := m.attemptTransaction(attempt, func(data *credentialFile) error {
 			if !slices.Contains(data.PendingClients, clientID) {
 				data.PendingClients = append(data.PendingClients, clientID)
 			}
@@ -207,24 +256,30 @@ func (m *Manager) completeCallback(attempt *signInAttempt, query url.Values) err
 			}
 			return nil
 		}); err != nil {
-			return err
+			return verifiedIdentity{}, tokenReply{}, err
 		}
 	} else if clientID != "" && clientID != attempt.clientID {
-		return errors.New("ChatGPT returned a different account registration")
+		return verifiedIdentity{}, tokenReply{}, errors.New("ChatGPT returned a different account registration")
 	}
 	code := query.Get("code")
 	if code == "" || len(code) > 8192 {
-		return errors.New("ChatGPT did not return an authorization code")
+		return verifiedIdentity{}, tokenReply{}, errors.New("ChatGPT did not return an authorization code")
 	}
 	tokens, err := m.exchange(attempt.ctx, attempt.discovery.TokenEndpoint, url.Values{"grant_type": {"authorization_code"}, "client_id": {attempt.clientID}, "code": {code}, "code_verifier": {attempt.verifier}, "redirect_uri": {attempt.callback}, "resource": {resourceURL}})
 	if err != nil {
-		return err
+		return verifiedIdentity{}, tokenReply{}, err
 	}
 	identity, err := m.verifyIDToken(attempt.ctx, attempt.discovery, tokens.IDToken, attempt.clientID, attempt.nonce)
-	if err != nil {
-		return err
+	return identity, tokens, err
+}
+
+func (m *Manager) attemptTransaction(attempt *signInAttempt, action func(*credentialFile) error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed || m.pending != attempt || attempt.ctx.Err() != nil {
+		return context.Canceled
 	}
-	return m.saveVerifiedRegistration(attempt, identity, tokens)
+	return m.transaction(attempt.ctx, action)
 }
 
 func (m *Manager) saveVerifiedRegistration(attempt *signInAttempt, identity verifiedIdentity, tokens tokenReply) error {
@@ -248,6 +303,7 @@ func (m *Manager) saveVerifiedRegistration(attempt *signInAttempt, identity veri
 			data.Profiles = append(data.Profiles, profile)
 		}
 		data.Active = profile.ID
+		data.Revision++
 		data.PendingClients = slices.DeleteFunc(data.PendingClients, func(id string) bool { return id == attempt.clientID })
 		return nil
 	})
@@ -359,39 +415,54 @@ func (m *Manager) refresh(ctx context.Context, profile *registration) error {
 	return nil
 }
 
-// Disconnect attempts revocation, always clears tokens locally, and preserves
-// the verified account/client mapping for a later sign-in.
+// Disconnect clears local authority before revocation. Account state remains
+// usable while the network is slow; a late result cannot overwrite newer state.
 func (m *Manager) Disconnect(ctx context.Context, id string) (bool, error) {
 	m.mu.Lock()
-	defer func() { m.mu.Unlock(); m.notifyChange() }()
-	m.generation++
-	if m.pending != nil {
-		m.pending.cancel()
-		m.pending = nil
+	if m.closed {
+		m.mu.Unlock()
+		return false, context.Canceled
 	}
-	confirmed := true
+	var removed registration
 	err := m.transaction(ctx, func(data *credentialFile) error {
 		index := slices.IndexFunc(data.Profiles, func(p registration) bool { return p.ID == id })
 		if index < 0 {
 			return errors.New("unknown ChatGPT account")
 		}
 		profile := &data.Profiles[index]
-		if profile.RefreshToken != "" {
-			confirmed = m.revoke(ctx, *profile)
-		}
+		removed = *profile
 		profile.AccessToken, profile.RefreshToken, profile.IDToken = "", "", ""
 		profile.Scopes = nil
 		if data.Active == id {
 			data.Active = ""
 		}
+		data.Revision++
 		return nil
 	})
-	m.state = "disconnected"
-	m.message = ""
-	if !confirmed {
+	if err != nil {
+		m.mu.Unlock()
+		return false, err
+	}
+	m.invalidateLocked()
+	if m.pending != nil {
+		m.pending.cancel()
+		m.pending = nil
+	}
+	m.state, m.message = "disconnected", ""
+	generation := m.generation
+	operation, cancel := m.operationContext(ctx)
+	m.wg.Add(1)
+	m.mu.Unlock()
+	defer m.wg.Done()
+	defer cancel()
+	m.notifyChange()
+	confirmed := removed.RefreshToken == "" || m.revoke(operation, removed)
+	m.mu.Lock()
+	if !confirmed && !m.closed && m.generation == generation && m.pending == nil {
 		m.message = "Signed out locally. Remote revocation was not confirmed; disconnect MagicHandy in ChatGPT Settings."
 	}
-	return confirmed, err
+	m.mu.Unlock()
+	return confirmed, nil
 }
 
 func (m *Manager) revoke(ctx context.Context, profile registration) bool {
