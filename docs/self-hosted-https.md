@@ -22,6 +22,25 @@ the forwarding rule available for renewal. LAN clients instead use
 `https://192.168.1.20:49717`, with TCP 49717 allowed only on private networks.
 Reserve the host's LAN address in DHCP so these rules continue to point to it.
 
+If another service already owns public TCP 443, keep its forwarding rule and
+use **Advanced HTTPS options > Use existing certificate files** with a
+certificate issued by an external ACME client using DNS-01 validation. Set the
+exact public origin including the chosen port (for example,
+`https://control.example.com:8443`) and forward that TCP port to the app's local
+listener. A domain/DDNS record maps the address, not the port. The external
+client must renew the certificate and update the configured chain/key files;
+MagicHandy reloads valid replacements on TLS handshakes at most every 30 seconds
+and keeps the previous valid certificate during an incomplete replacement.
+The optional remote interface needs its own advertised HTTPS origin and TCP
+forwarding rule (for example, public 8444 to local 49718). Do not expose worker
+ports. DNS validation avoids taking over another service's certificate port.
+
+The automatic Public flow opens a temporary challenge listener on the selected
+local address while the current app stays running. If changing an existing LAN
+HTTPS setup, that address may already belong to MagicHandy itself. Use a
+different unused local port for automatic preparation, then forward public 443
+to that new port; alternatively use the external DNS-01 certificate flow above.
+
 Public setup detects the outgoing IPv4 using ipify and reads Let's Encrypt's
 current terms. It contacts these services only after choosing automatic Public
 setup or pressing Detect. You can replace the detected IP with your domain or

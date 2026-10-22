@@ -1,5 +1,20 @@
 # Goal Scorecard
 
+## 2026-10-21 — Browser-managed sign-in values
+
+Sign-in reads submitted browser fields and uses native required-field validation,
+so a password-manager fill does not depend on React change events. No dependency,
+background polling, motion behavior, or account policy is added. Comparing the
+parent and candidate with the same Node 24.15.0 gzip implementation, level 9 and
+`mtime=0`, main JavaScript is **1,243,507 -> 1,243,824 B raw** (+317 B),
+**334,591 -> 334,695 B gzip** (+104 B). Complete canonical embedded UI is
+**2,699,602 -> 2,699,919 B** (+317 B); stale hashed assets are removed. These
+gzip values remeasure both sides with the same current runtime rather than
+mixing the previous release's compressor sample. The Windows amd64 candidate
+core, built with Go 1.26.10, `CGO_ENABLED=0`, `-trimpath -ldflags '-s -w'`, is
+**23,447,040 B**, within the existing binary budget. No new RSS or cold-start
+claim is made.
+
 ## 2026-10-20 — Alpha.66 security toolchain
 
 Alpha.65's public Windows core scan was blocked by GO-2026-6809 before

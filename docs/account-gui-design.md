@@ -146,8 +146,14 @@ running/healthy state; solid red remains Emergency Stop.
 The login screen is one quiet bounded panel inside the permanent shell, not a
 marketing hero. Settings follows the existing section/group grammar. The
 top-bar trigger stays compact and collapses gracefully at narrow widths. Every
-form uses native labels and password autocomplete semantics. New-password forms
-share an eight-Unicode-character minimum and show live textual confirmation:
+form uses native labels and password autocomplete semantics. Sign-in leaves
+credential fields under browser control, reads their actual submitted values,
+and uses native required-field validation instead of disabling submission from
+React state. This supports password managers that fill fields without change
+events and avoids clearing their values during a re-render. Password autofill
+still requires a browser-trusted origin; a bypassed local certificate warning
+does not establish that trust. New-password forms
+share a fifteen-Unicode-character minimum and show live textual confirmation:
 steel azure with a check for an exact match, or amber with an exclamation mark
 and `aria-invalid` for a mismatch. The polite live region is always present, so
 the state is announced without relying on color or adding motion. Disclosures

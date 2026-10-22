@@ -15,27 +15,34 @@ export function LoginRoute() {
   const [error, setError] = useState("");
   const [recovery, setRecovery] = useState(false);
   const usernameInput = useRef<HTMLInputElement>(null);
+  const passwordInput = useRef<HTMLInputElement>(null);
   const bootstrap = auth.status?.initialized === false;
 
   useEffect(() => usernameInput.current?.focus(), [bootstrap]);
 
-  const submit = async (event: FormEvent) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (busy) return;
-    const normalized = username.trim();
-    if (bootstrap && !passwordMeetsMinimum(password)) {
+    // Password managers can fill the DOM without sending React a change event.
+    // Read the submitted fields, rather than a possibly stale state snapshot.
+    const fields = new FormData(event.currentTarget);
+    const normalized = String(fields.get("username") ?? "").trim();
+    const enteredPassword = String(fields.get("password") ?? "");
+    if (!normalized || !enteredPassword) return;
+    if (bootstrap && !passwordMeetsMinimum(enteredPassword)) {
       setError(t("Use a password or passphrase of at least 15 characters."));
       return;
     }
-    if (bootstrap && password !== confirmation) {
+    if (bootstrap && enteredPassword !== String(fields.get("password-confirmation") ?? "")) {
       setError(t("The passwords do not match."));
       return;
     }
     setBusy(true);
     setError("");
     try {
-      if (bootstrap) await auth.bootstrap(normalized, password);
-      else await auth.login(normalized, password);
+      if (bootstrap) await auth.bootstrap(normalized, enteredPassword);
+      else await auth.login(normalized, enteredPassword);
+      if (passwordInput.current) passwordInput.current.value = "";
       setPassword("");
       setConfirmation("");
     } catch (reason) {
@@ -67,16 +74,18 @@ export function LoginRoute() {
             <span>{t("Create the first administrator from the computer running MagicHandy, then sign in remotely.")}</span>
           </div>
         ) : (
-          <form className="auth-form" onSubmit={(event) => void submit(event)}>
+          <form className="auth-form" method="post" onSubmit={(event) => void submit(event)}>
             <label className="field">
               <span className="label">{t("Username")}</span>
               <input
                 ref={usernameInput}
+                id="auth-username"
                 type="text"
                 name="username"
                 autoComplete="username"
                 spellCheck={false}
-                value={username}
+                defaultValue={username}
+                required
                 disabled={busy}
                 onChange={(event) => setUsername(event.target.value)}
               />
@@ -84,12 +93,14 @@ export function LoginRoute() {
             <label className="field">
               <span className="label">{t("Password")}</span>
               <input
+                ref={passwordInput}
+                id="auth-password"
                 type="password"
                 name="password"
                 autoComplete={bootstrap ? "new-password" : "current-password"}
-                value={password}
+                required
                 disabled={busy}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => { if (bootstrap) setPassword(event.target.value); }}
               />
               {bootstrap && <span className="hint">{t("At least 15 characters. A long, unique passphrase is recommended.")}</span>}
             </label>
@@ -101,13 +112,13 @@ export function LoginRoute() {
               onChange={setConfirmation}
             />}
             {error && <p className="form-status auth-error" role="alert">{error}</p>}
-            <button className="btn btn-primary auth-submit" type="submit" disabled={busy || !username.trim() || !password}>
+            <button className="btn btn-primary auth-submit" type="submit" disabled={busy}>
               {busy ? t("Checking…") : bootstrap ? t("Create administrator") : t("Sign in")}
             </button>
           </form>
         )}
         {auth.status?.interface !== "remote" && auth.status?.remote_url && <a className="auth-recovery-link" href={auth.status.remote_url}>{t("Open remote interface")}</a>}
-        {!bootstrap && !recovery && auth.status?.initialized && <button className="auth-recovery-link" type="button" disabled={busy} onClick={() => { setPassword(""); setConfirmation(""); setError(""); setRecovery(true); }}>{t("Forgot password?")}</button>}
+        {!bootstrap && !recovery && auth.status?.initialized && <button className="auth-recovery-link" type="button" disabled={busy} onClick={() => { setUsername(usernameInput.current?.value ?? username); setPassword(""); setConfirmation(""); setError(""); setRecovery(true); }}>{t("Forgot password?")}</button>}
         <DismissibleNotice id="sign-in-safety" className="auth-safety-note">
           <strong>{t("Emergency Stop remains available.")}</strong>
           <span>{t("Signing in does not transfer device control; the existing controller lease still decides which browser may command motion.")}</span>
