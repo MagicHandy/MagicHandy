@@ -3305,5 +3305,16 @@
   "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.": "Isso pode acontecer após mover os dados do app para outra conta do Windows ou outro computador. Redefina as credenciais salvas e entre novamente ou insira suas chaves de API outra vez.",
   "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.": "Isso remove todos os logins do ChatGPT e as chaves de API da nuvem salvos neste host do app. As configurações de provedores e modelos são mantidas. O acesso remoto não é revogado; gerencie-o em cada provedor, se necessário.",
   "Reset all saved cloud credentials": "Redefinir todas as credenciais salvas da nuvem",
-  "Reset saved credentials…": "Redefinir credenciais salvas…"
+  "Reset saved credentials…": "Redefinir credenciais salvas…",
+  "Automatic sign-out": "Saída automática",
+  "Sign out after inactivity": "Sair após inatividade",
+  "30 minutes": "30 minutos",
+  "2 hours": "2 horas",
+  "8 hours (default)": "8 horas (padrão)",
+  "Idle sign-out: Off": "Saída por inatividade: desativada",
+  "Idle sign-out changed": "Saída por inatividade alterada",
+  "Could not load idle sign-out settings.": "Não foi possível carregar as configurações de saída por inatividade.",
+  "Could not confirm the change. Refresh to check the saved setting.": "Não foi possível confirmar a alteração. Atualize para verificar a configuração salva.",
+  "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.": "Aplica-se imediatamente a todas as sessões ativas. Visualizar a página ou reproduzir movimentos não conta como atividade.",
+  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "Desativado elimina a saída por inatividade. As sessões ainda expiram {hours} horas após o login. A perda da conexão do controlador ainda interrompe o movimento."
 }

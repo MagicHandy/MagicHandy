@@ -3305,5 +3305,16 @@
   "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.": "アプリのデータを別の Windows アカウントやパソコンに移すと、この状態になることがあります。保存された認証情報をリセットしてから、再度サインインするか API キーを入力してください。",
   "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.": "このアプリのホストに保存されたすべての ChatGPT サインインとクラウド API キーを削除します。プロバイダーとモデルの設定は保持されます。リモートアクセスは取り消されないため、必要に応じて各プロバイダーで管理してください。",
   "Reset all saved cloud credentials": "保存されたクラウド認証情報をすべてリセット",
-  "Reset saved credentials…": "保存された認証情報をリセット…"
+  "Reset saved credentials…": "保存された認証情報をリセット…",
+  "Automatic sign-out": "自動サインアウト",
+  "Sign out after inactivity": "操作しない場合のサインアウト時間",
+  "30 minutes": "30 分",
+  "2 hours": "2 時間",
+  "8 hours (default)": "8 時間（既定）",
+  "Idle sign-out: Off": "操作なしでサインアウト：オフ",
+  "Idle sign-out changed": "操作なしのサインアウト設定を変更",
+  "Could not load idle sign-out settings.": "操作なしのサインアウト設定を読み込めませんでした。",
+  "Could not confirm the change. Refresh to check the saved setting.": "変更を確認できませんでした。更新して保存済みの設定を確認してください。",
+  "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.": "すべての有効なログインにすぐ適用されます。ページの表示や動作の再生だけでは操作として扱われません。",
+  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "オフにすると操作なしでのサインアウトを無効にします。ログインは引き続き {hours} 時間で期限切れになります。コントローラーの接続が失われると動作は停止します。"
 }

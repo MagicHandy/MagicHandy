@@ -48,6 +48,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   const activeStream = useRef<AbortController | null>(null);
   const observedStopSequence = useRef(state?.stop_sequence);
   const observedEpoch = useRef(state?.observation?.epoch);
+  const observedControllerGeneration = useRef(state?.controller?.generation);
   const [voiceActive, setVoiceActive] = useState(false);
   const activeChat = state?.chat?.active_session_id === sessionId ? state.chat : undefined;
   const {
@@ -81,8 +82,18 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   useEffect(() => {
     const previous = observedEpoch.current;
     observedEpoch.current = state?.observation?.epoch;
-    if (!backendOnline || readOnly || previous !== state?.observation?.epoch) activeStream.current?.abort();
-  }, [backendOnline, readOnly, state?.observation?.epoch]);
+    const authority = state?.controller;
+    const previousGeneration = observedControllerGeneration.current;
+    observedControllerGeneration.current = authority?.generation;
+    const protectedTurn = authority?.heartbeat_required && authority.active && !authority.read_only;
+    const ownershipChanged = previousGeneration !== undefined && previousGeneration !== authority?.generation;
+    // A delayed status/heartbeat response locks new input, but is not proof that
+    // an already-admitted streamed turn lost its server-side lease. Keep that
+    // request alive until its own connection fails or authority is revoked.
+    // The backend still fences inference/dispatch at Stop, expiry and takeover.
+    if (previous !== state?.observation?.epoch || ownershipChanged || authority?.read_only ||
+        (authority?.heartbeat_required && !authority.active) || ((!backendOnline || readOnly) && !protectedTurn)) activeStream.current?.abort();
+  }, [backendOnline, readOnly, state?.observation?.epoch, state?.controller]);
 
   useEffect(() => {
     const hidden = () => { if (document.visibilityState === "hidden") activeStream.current?.abort(); };

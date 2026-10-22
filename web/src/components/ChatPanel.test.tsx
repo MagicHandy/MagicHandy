@@ -2,10 +2,15 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api, streamChat } from "../api/client";
 import { ChatPanel } from "./ChatPanel";
+import type { ControllerSnapshot, BackendObservation } from "../api/types";
 
 const app = vi.hoisted(() => ({
   sessionId: "chat-test",
+  readOnly: false,
+  backendOnline: true,
   state: {
+    controller: undefined as ControllerSnapshot | undefined,
+    observation: undefined as BackendObservation | undefined,
     uptime_seconds: 1,
     stop_sequence: 1,
     chat: { latest_seq: 0, active_session_id: "chat-test" },
@@ -27,8 +32,8 @@ vi.mock("../api/client", () => ({
 
 vi.mock("../state/app-state", () => ({
   useAppState: () => ({
-    backendOnline: true,
-    readOnly: false,
+    backendOnline: app.backendOnline,
+    readOnly: app.readOnly,
     state: app.state,
     refresh: app.refresh,
   }),
@@ -46,11 +51,15 @@ const streamChatMock = vi.mocked(streamChat);
 describe("ChatPanel history", () => {
   beforeEach(() => {
     app.state = {
+      controller: undefined,
+      observation: undefined,
       uptime_seconds: 1,
       stop_sequence: 1,
       chat: { latest_seq: 0, active_session_id: SESSION_ID },
       settings: { voice: { enabled: false, asr_provider: "none" } },
     };
+    app.readOnly = false;
+    app.backendOnline = true;
     app.show.mockReset();
     app.queueSpeech.mockReset();
     app.refresh.mockReset();
@@ -509,6 +518,39 @@ describe("ChatPanel history", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await screen.findByText("Chat canceled by Emergency Stop.")).toBeInTheDocument();
+  });
+
+  it.each(["ownership", "generation", "epoch", "hidden"])("keeps an admitted WAN turn through status delays but cancels on %s loss", async (loss) => {
+    app.state.controller = { active: true, read_only: false, heartbeat_required: true, generation: 4, epoch: "test-process", revision: 1 };
+    app.state.observation = { epoch: "test-process", revision: 1, observed_at: "2026-10-22T12:00:00Z" };
+    getChatMessages.mockResolvedValue({ messages: [], latest_seq: 0, cursor: 0, session_id: SESSION_ID,
+      server_epoch: "test-process", revision: 0, next_revision: 0, first_seq: 0, has_more: false, reset: true });
+    let signal: AbortSignal | undefined;
+    streamChatMock.mockImplementation((_id, _message, _event, abort) => {
+      signal = abort;
+      return new Promise<void>((_resolve, reject) => abort?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+    });
+    const view = render(<ChatPanel sessionId={SESSION_ID} />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Continue the conversation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(signal).toBeDefined());
+    app.readOnly = true;
+    app.backendOnline = false;
+    view.rerender(<ChatPanel sessionId={SESSION_ID} />);
+    expect(signal?.aborted).toBe(false);
+    expect(screen.getByRole("textbox", { name: "Message" })).toBeDisabled();
+    if (loss === "ownership") app.state.controller = { ...app.state.controller, active: false, read_only: true };
+    if (loss === "generation") app.state.controller = { ...app.state.controller, generation: 5 };
+    if (loss === "epoch") app.state.observation = { ...app.state.observation, epoch: "new-process" };
+    const visibility = vi.spyOn(document, "visibilityState", "get");
+    if (loss === "hidden") {
+      visibility.mockReturnValue("hidden");
+      act(() => document.dispatchEvent(new Event("visibilitychange")));
+    }
+    view.rerender(<ChatPanel sessionId={SESSION_ID} />);
+    await waitFor(() => expect(signal?.aborted).toBe(true));
+    visibility.mockRestore();
   });
 
   it("aborts the active stream without callbacks when the panel unmounts", async () => {

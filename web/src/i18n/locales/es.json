@@ -3305,5 +3305,16 @@
   "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.": "Esto puede ocurrir al mover los datos de la aplicación a otra cuenta de Windows u otro equipo. Restablece las credenciales guardadas y vuelve a iniciar sesión o introduce de nuevo tus claves API.",
   "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.": "Se eliminarán todos los inicios de sesión de ChatGPT y las claves API de la nube guardados en este equipo. Se conservarán los ajustes de proveedores y modelos. El acceso remoto no se revocará; gestiónalo con cada proveedor si es necesario.",
   "Reset all saved cloud credentials": "Restablecer todas las credenciales guardadas de la nube",
-  "Reset saved credentials…": "Restablecer credenciales guardadas…"
+  "Reset saved credentials…": "Restablecer credenciales guardadas…",
+  "Automatic sign-out": "Cierre de sesión automático",
+  "Sign out after inactivity": "Cerrar sesión tras inactividad",
+  "30 minutes": "30 minutos",
+  "2 hours": "2 horas",
+  "8 hours (default)": "8 horas (predeterminado)",
+  "Idle sign-out: Off": "Cierre por inactividad: desactivado",
+  "Idle sign-out changed": "Cierre por inactividad cambiado",
+  "Could not load idle sign-out settings.": "No se pudo cargar la configuración de cierre por inactividad.",
+  "Could not confirm the change. Refresh to check the saved setting.": "No se pudo confirmar el cambio. Actualiza para comprobar la configuración guardada.",
+  "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.": "Se aplica de inmediato a todas las sesiones activas. Ver la página o reproducir movimiento no cuenta como actividad.",
+  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "Desactivado elimina el cierre por inactividad. Las sesiones caducan {hours} horas después de iniciar sesión. Perder la conexión del controlador sigue deteniendo el movimiento."
 }

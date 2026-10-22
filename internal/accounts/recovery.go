@@ -37,18 +37,19 @@ type RecoveryCodes struct {
 func (s *Store) RecoveryStatus(ctx context.Context, actorKey string) (RecoveryStatus, error) {
 	status := RecoveryStatus{Limit: MaxRecoveryCodes}
 	var lastSeen, expires string
+	var idleMinutes int
 	err := s.db.SQL().QueryRowContext(ctx, `SELECT s.last_seen_at, s.expires_at,
-		count(c.code_hash), coalesce(max(c.created_at), '') FROM user_sessions s
+		count(c.code_hash), coalesce(max(c.created_at), ''), `+sessionIdleSelect+` FROM user_sessions s
 		JOIN user_accounts a ON a.id = s.user_id AND a.disabled = 0
 		LEFT JOIN user_recovery_codes c ON c.user_id = a.id
-		WHERE s.token_hash = ? GROUP BY s.token_hash`, actorKey).Scan(&lastSeen, &expires, &status.Remaining, &status.CreatedAt)
+		WHERE s.token_hash = ? GROUP BY s.token_hash`, actorKey).Scan(&lastSeen, &expires, &status.Remaining, &status.CreatedAt, &idleMinutes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RecoveryStatus{}, ErrInvalidSession
 	}
 	if err != nil {
 		return RecoveryStatus{}, err
 	}
-	if _, _, valid := s.sessionTimes(lastSeen, expires); !valid {
+	if _, _, valid := s.sessionTimes(lastSeen, expires, idleMinutes); !valid {
 		return RecoveryStatus{}, ErrInvalidSession
 	}
 	if status.Remaining > MaxRecoveryCodes {

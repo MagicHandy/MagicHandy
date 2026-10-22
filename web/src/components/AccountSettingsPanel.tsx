@@ -53,7 +53,7 @@ export function AccountSettingsPanel({ backendOnline }: { backendOnline: boolean
         <div className="access-content" key={`${auth.status.session_id || account.id}:${account.role}:${section}`}>
           {section === "profile" && <><ProfileGroup account={account} disabled={!backendOnline} onChanged={auth.refresh} /><NoticePreferencesPanel /><LinkedProfilesGroup /></>}
           {section === "security" && <><AccountPasswordPanel disabled={!backendOnline} onChanged={auth.refresh} /><RecoveryCodesPanel backendOnline={backendOnline} /></>}
-          {section === "sessions" && <SessionSettingsPanel backendOnline={backendOnline} onSignedOut={auth.refresh} />}
+          {section === "sessions" && <SessionSettingsPanel backendOnline={backendOnline} onSignedOut={auth.refresh} administrator={administrator} />}
           {section === "network" && administrator && <><NetworkSettingsPanel backendOnline={backendOnline} administrator /><ServerPortSettings /></>}
           {(section === "accounts" || section === "history") && administrator && <AccountDirectory current={account} backendOnline={backendOnline} history={section === "history"} />}
         </div>

@@ -79,6 +79,25 @@ backoff, visibility behavior and the remaining acceptance work.
 
 ### Authentication lifetime and streaming
 
+The October 22 WAN review found a confirmed 30-minute idle expiry and separate
+short controller heartbeat losses. Login inactivity now defaults to **8 hours**.
+An administrator can choose 30 minutes, 1/2/4/8 hours or Off in Access → Sessions.
+Off disables only login inactivity; the existing **12-hour absolute lifetime**,
+revocation, grant boundaries and **15-second controller lease** remain enforced.
+The policy is stored in the shared datastore's `app_kv` and read alongside
+session validation, including transaction revalidation and recovery/session
+management reads. A policy update is one administrator-authorized transaction:
+retire logins expired under the previous policy, persist the new choice, then
+retire any newly expired logins. The HTTP owner cancels their work. Initial
+upgrade likewise retires logins expired under the old 30-minute limit before
+adopting the longer default; no previously expired login is resurrected.
+The reduced remote interface cannot read or change this host policy.
+
+Controller retry backoff and already-admitted chat observation handling are
+specified in the [observation contract](../lan-wan-observations.md). The
+[October 22 review](../wan-session-review-2026-10-22.md) separates observed
+evidence from reproducible contributing defects and remaining WAN uncertainty.
+
 On September 19, the user requested a permanent duration for existing operator
 control permissions. Administrators may explicitly choose a timed grant or a
 permanent grant that remains revocable and replaceable. Schema 26 makes the

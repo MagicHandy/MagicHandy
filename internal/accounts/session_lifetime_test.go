@@ -20,7 +20,7 @@ func TestPassiveSessionChecksDoNotExtendIdleLifetime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for range 29 {
+	for range int(DefaultSessionIdleLimit/time.Minute) - 1 {
 		now = now.Add(time.Minute)
 		if _, err := store.InspectSession(t.Context(), token); err != nil {
 			t.Fatalf("passive inspection: %v", err)

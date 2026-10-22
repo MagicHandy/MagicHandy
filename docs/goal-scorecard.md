@@ -1,5 +1,22 @@
 # Goal Scorecard
 
+## 2026-10-22 — WAN continuity and idle sign-out controls
+
+Against alpha.67 `25353690`, matching Windows amd64 builds with Go 1.26.10,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'` measure
+**23,447,040 → 23,470,592 B** (+23,552 B, 0.10%). Complete canonical embedded
+UI is **2,699,919 → 2,708,695 B** (+8,776 B). Main JavaScript is
+**1,243,824 → 1,248,124 B raw** (+4,300 B) and **335,149 → 336,123 B gzip**
+(+974 B). Both gzip samples use the same Python 3.14 runtime, level 9, `mtime=0`;
+they are not compared with older Node compressor samples. Stale hashed bundles
+are removed by the canonical frontend build.
+
+No dependency, worker, steady-state polling channel or model-prompt expansion is
+added. Active-controller failure retries use the existing two-second cadence
+instead of extending beyond the lease; observer retries still back off. Session
+policy uses the existing database and one scalar lookup alongside session reads.
+No new RSS/cold-start claim is made. See [the review](wan-session-review-2026-10-22.md).
+
 ## 2026-10-21 — Browser page navigation
 
 The browser boundary admits linked top-level GET/HEAD pages on an allowed

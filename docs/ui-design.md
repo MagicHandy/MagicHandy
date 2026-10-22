@@ -2,6 +2,15 @@
 
 ## Setup and settings
 
+Access → Sessions includes an administrator-only Automatic sign-out group.
+A compact native select applies the installation's idle policy immediately:
+30 minutes, 1/2/4/8 hours, or Off. The selected value comes from the backend;
+an unconfirmed write keeps the old value and offers a read-only refresh.
+Nearby copy distinguishes inactivity from the 12-hour absolute login lifetime
+and controller connection-loss Stop. Existing session details display Off when
+there is no idle deadline. The reduced remote interface keeps only its own
+session management; it cannot configure this host policy.
+
 Diagnostics has one report group with Download diagnostic report and a
 Customize report disclosure button. Inset rows use dividers and existing switches;
 chat content uses a select that stacks on narrow screens. A visible summary

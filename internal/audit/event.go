@@ -28,6 +28,7 @@ const (
 	RecoveryCodesReplaced    Kind = "recovery_codes_replaced"
 	RecoveryCodesRemoved     Kind = "recovery_codes_removed"
 	SessionCreated           Kind = "session_created"
+	SessionPolicyChanged     Kind = "session_policy_changed"
 	SessionRevoked           Kind = "session_revoked"
 	SessionsRevoked          Kind = "sessions_revoked"
 	GrantIssued              Kind = "grant_issued"
@@ -156,7 +157,7 @@ func validActor(actor Actor) bool {
 
 func validKind(kind Kind) bool {
 	switch kind {
-	case AccountCreated, AccountEnabled, AccountDisabled, AccountAccessChanged, PasswordChanged, PasswordRecovered, RecoveryCodesReplaced, RecoveryCodesRemoved, SessionCreated, SessionRevoked, SessionsRevoked, GrantIssued, GrantRevoked, LoginFailed, LoginThrottled, CredentialCheckFailed, CredentialCheckThrottled, ControlClaimed, ControlTransferred, ControlLost, CommandFinished, StopFinished, ServerStarted, ServerStopped, HistoryGap:
+	case AccountCreated, AccountEnabled, AccountDisabled, AccountAccessChanged, PasswordChanged, PasswordRecovered, RecoveryCodesReplaced, RecoveryCodesRemoved, SessionCreated, SessionPolicyChanged, SessionRevoked, SessionsRevoked, GrantIssued, GrantRevoked, LoginFailed, LoginThrottled, CredentialCheckFailed, CredentialCheckThrottled, ControlClaimed, ControlTransferred, ControlLost, CommandFinished, StopFinished, ServerStarted, ServerStopped, HistoryGap:
 		return true
 	default:
 		return false

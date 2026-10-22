@@ -265,6 +265,17 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-10-22 WAN session continuity and configurable idle sign-out
+
+Review of the installed alpha.67 session separates login idle expiry, controller
+heartbeat loss, upstream model wait, and Cloud startup preparation. Login idle
+expiry now defaults to eight hours with an administrator selector including Off;
+absolute expiry and lost-controller Stop remain independent. Active controllers
+retry heartbeat failures on the regular two-second cadence, and pending protected
+chat no longer aborts merely because an independent status observation is late.
+See [the review and validation](docs/wan-session-review-2026-10-22.md) and
+[ADR 0029](docs/decisions/0029-session-bound-network-control.md).
+
 ### 2026-10-16 Auto timing and prepared decisions for external planners
 
 Creative v2 and Layered Autopilot ignored the planner's timing: every stretch

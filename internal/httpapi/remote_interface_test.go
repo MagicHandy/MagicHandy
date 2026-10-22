@@ -50,7 +50,7 @@ func remoteOnlyLogin(t *testing.T, s *Server, store *accounts.Store, admin accou
 func TestRemoteInterfaceLimitsAPIsAndBindsSessions(t *testing.T) {
 	s, store, admin, desktop, _ := newRemoteFixture(t)
 	_, cookie := remoteOnlyLogin(t, s, store, admin, desktop)
-	for _, path := range []string{"/api/state", "/api/settings", "/api/accounts", "/api/chat/messages", "/api/media/videos", "/api/diagnostics", "/api/controller"} {
+	for _, path := range []string{"/api/state", "/api/settings", "/api/accounts", "/api/chat/messages", "/api/media/videos", "/api/diagnostics", "/api/controller", "/api/auth/session-policy"} {
 		r := remotePortalRequest(s, cookie, http.MethodGet, path, "")
 		if r.Code != http.StatusNotFound {
 			t.Errorf("remote exposed %s: %d", path, r.Code)

@@ -3305,5 +3305,16 @@
   "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.": "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.",
   "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.": "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.",
   "Reset all saved cloud credentials": "Reset all saved cloud credentials",
-  "Reset saved credentials…": "Reset saved credentials…"
+  "Reset saved credentials…": "Reset saved credentials…",
+  "Automatic sign-out": "Automatic sign-out",
+  "Sign out after inactivity": "Sign out after inactivity",
+  "30 minutes": "30 minutes",
+  "2 hours": "2 hours",
+  "8 hours (default)": "8 hours (default)",
+  "Idle sign-out: Off": "Idle sign-out: Off",
+  "Idle sign-out changed": "Idle sign-out changed",
+  "Could not load idle sign-out settings.": "Could not load idle sign-out settings.",
+  "Could not confirm the change. Refresh to check the saved setting.": "Could not confirm the change. Refresh to check the saved setting.",
+  "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.": "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.",
+  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion."
 }

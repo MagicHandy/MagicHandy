@@ -123,6 +123,8 @@ func (s *Server) writeSessionManagementError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, accounts.ErrInvalidSession):
 		s.writeAuthenticationRequired(w)
+	case errors.Is(err, accounts.ErrAdministratorRequired):
+		writeError(w, http.StatusForbidden, err)
 	case errors.Is(err, accounts.ErrManagedSessionNotFound):
 		writeError(w, http.StatusNotFound, err)
 	case errors.Is(err, accounts.ErrInvalidSessionName):

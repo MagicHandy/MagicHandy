@@ -7,7 +7,7 @@ import { t, translateKnown, type MessageKey } from "../i18n";
 const eventLabels: Record<string, MessageKey> = {
   account_access_changed: "Account access changed",
   account_created: "Account created", account_enabled: "Account enabled", account_disabled: "Account disabled",
-  password_changed: "Password changed", session_created: "Signed in", session_revoked: "Session signed out",
+  password_changed: "Password changed", session_created: "Signed in", session_revoked: "Session signed out", session_policy_changed: "Idle sign-out changed",
   password_recovered: "Password recovered", recovery_codes_replaced: "Recovery codes replaced", recovery_codes_removed: "Recovery codes removed",
   credential_check_failed: "Credential check failed", credential_check_throttled: "Credential check throttled",
   sessions_revoked: "Other sessions signed out", grant_issued: "Control permission granted", grant_revoked: "Control permission revoked",

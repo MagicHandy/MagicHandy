@@ -42,7 +42,7 @@ timer and cancellation lifecycle:
 | Channel | Timing and failure behavior |
 | --- | --- |
 | Full state | Poll again two seconds after completion; abort after eight seconds. Failed or timed-out reads make the UI stale/read-only. |
-| Controller | Discover with `GET /api/controller`; protected sessions renew explicitly with a heartbeat. Repeat two seconds after success, with a three-second request deadline. Failure retries use four then eight seconds, with ±20% jitter. |
+| Controller | Discover with `GET /api/controller`; protected sessions renew explicitly with a heartbeat. Repeat two seconds after completion, with a three-second request deadline. An active controller also retries failures after two seconds, so two timed-out renewals leave another attempt before its 15-second lease expires. Discovery and observers back off four then eight seconds, with ±20% jitter. |
 | Motion events | On error, close the old EventSource before scheduling one retry. Retry delays grow from one second to a maximum of ten seconds, with jitter. An accepted motion packet resets the backoff. |
 
 Controller discovery and its first heartbeat share the same three-second
@@ -50,6 +50,15 @@ deadline. A slow full-state request cannot delay heartbeat scheduling. The
 heartbeat deadline does not apply to LLM generation or speech. A successful
 heartbeat alone cannot enable motion controls: a fresh full snapshot and
 backend-authorized ownership are also required.
+
+An already-admitted protected chat stream survives a missed observation while
+the last backend controller snapshot still identifies this tab as active in the
+same generation/epoch. New input remains locked. The stream's own connection
+failure, confirmed ownership/generation loss, Stop, hidden document, route exit
+or authentication teardown still cancels it. This prevents a healthy inference
+from being discarded just because an unrelated status request timed out; the
+server continues to enforce the actual lease before dispatching motion. The
+browser does not extend a lease or infer permission to submit new commands.
 
 The API client retains newer controller metadata by backend revision, even
 when an earlier-issued HTTP request observed the server later. A canceled

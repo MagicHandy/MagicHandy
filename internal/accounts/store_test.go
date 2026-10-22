@@ -182,7 +182,6 @@ func TestSessionAbsoluteLifetimeAndPerAccountCap(t *testing.T) {
 	clock := time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)
 	accounts.now = func() time.Time { return clock }
 	accounts.lifetime = time.Hour
-	accounts.idleLimit = 2 * time.Hour
 	admin, err := accounts.BootstrapAdmin(ctx, "owner", "correct horse battery staple")
 	if err != nil {
 		t.Fatalf("BootstrapAdmin: %v", err)

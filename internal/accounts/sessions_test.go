@@ -130,7 +130,7 @@ func TestSessionInspectionDoesNotRenewActivityAndOmitsExpiredLogins(t *testing.T
 	store.now = func() time.Time { return now }
 	owner := managementAccount(t, store, "owner", RoleAdmin)
 	_, older := managementSession(t, store, owner.ID, SessionClient{})
-	now = now.Add(20 * time.Minute)
+	now = now.Add(DefaultSessionIdleLimit - 10*time.Minute)
 	_, current := managementSession(t, store, owner.ID, SessionClient{})
 	now = now.Add(11 * time.Minute)
 	sessions, err := store.ListOwnSessions(t.Context(), current.Key)

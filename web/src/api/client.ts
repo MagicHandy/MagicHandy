@@ -10,7 +10,7 @@ import type { CloudPlanningStatus, ModelConnection, HostedModel } from "./cloud-
 import { checkedCloudStatus } from "./cloud-status";
 import type { ModelCheckReport } from "./model-check-types";
 import type { AccessAuditPage } from "./audit-types";
-import type { RecoveryCodeStatus, IssuedRecoveryCodes } from "./access-types";
+import type { RecoveryCodeStatus, IssuedRecoveryCodes, SessionPolicy } from "./access-types";
 import type { RemoteClaim, RemoteCommand, RemoteCommandInput, RemotePresence, RemoteState } from "./remote-types";
 import type {
   AppState,
@@ -506,6 +506,8 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  sessionPolicy: (signal?: AbortSignal) => request<SessionPolicy>("GET", "/api/auth/session-policy", undefined, signal),
+  saveSessionPolicy: (idleMinutes: number, signal?: AbortSignal) => request<SessionPolicy>("PUT", "/api/auth/session-policy", { idle_minutes: idleMinutes }, signal),
   noticePreferences: (scope: "account" | "browser", signal?: AbortSignal) => request<import("../notice-catalog").NoticePreferences>("GET", "/api/notice-preferences", undefined, signal, { "X-MagicHandy-Notice-Scope": scope }),
   saveNoticePreference: (id: string, hidden: boolean, scope: "account" | "browser", signal?: AbortSignal) => request<import("../notice-catalog").NoticePreferences>("PUT", "/api/notice-preferences", { notice_id: id, hidden }, signal, { "X-MagicHandy-Notice-Scope": scope }),
   resetNoticePreferences: (scope: "account" | "browser", signal?: AbortSignal) => request<import("../notice-catalog").NoticePreferences>("DELETE", "/api/notice-preferences", undefined, signal, { "X-MagicHandy-Notice-Scope": scope }),
