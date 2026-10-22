@@ -113,7 +113,7 @@ func (v *IntifaceVibrator) play(ctx context.Context, command PlayCommand, start 
 func (v *IntifaceVibrator) Stop(ctx context.Context, command StopCommand) (CommandResult, error) {
 	v.mu.Lock()
 	v.invalidateLocked("idle")
-	selection := v.selection
+	selection := v.selectionSnapshotLocked()
 	v.mu.Unlock()
 	recorded := Command{Kind: CommandKindStop, Stop: &command}
 	if !selection.selected {
@@ -354,7 +354,7 @@ func (v *IntifaceVibrator) failSend(send vibratorSend, cause error, timedOut boo
 		v.stats.rejected++
 	}
 	v.stats.lastError = cause.Error()
-	selection := v.selection
+	selection := v.selectionSnapshotLocked()
 	current := selection.selected && selection.deviceIndex == send.deviceIndex
 	if current {
 		v.invalidateLocked("stale")
