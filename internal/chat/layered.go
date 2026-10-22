@@ -31,12 +31,22 @@ type LayeredStrokeWidth struct {
 
 // LayeredLayerEdit updates only supplied attributes of one modulation axis.
 type LayeredLayerEdit struct {
-	Axis               string  `json:"axis"`
-	AmountPercent      *int    `json:"amount_percent,omitempty"`
-	PeriodCycles       *int    `json:"period_cycles,omitempty"`
-	PeriodChangeCycles *int    `json:"period_change_cycles,omitempty"`
-	PhasePercent       *int    `json:"phase_percent,omitempty"`
-	Shape              *string `json:"shape,omitempty"`
+	Axis               string         `json:"axis"`
+	AmountPercent      *int           `json:"amount_percent,omitempty"`
+	PeriodCycles       *int           `json:"period_cycles,omitempty"`
+	PeriodChangeCycles *int           `json:"period_change_cycles,omitempty"`
+	PhasePercent       *int           `json:"phase_percent,omitempty"`
+	Shape              *string        `json:"shape,omitempty"`
+	LowRatePercent     *int           `json:"low_rate_percent,omitempty"`
+	Inverted           *bool          `json:"inverted,omitempty"`
+	Follow             *LayeredFollow `json:"follow,omitempty"`
+}
+
+// LayeredFollow materializes an explicit timing relationship into the score.
+// It interprets only a model-selected operation, never conversation text.
+type LayeredFollow struct {
+	Axis     string `json:"axis"`
+	Relation string `json:"relation"`
 }
 
 var layeredControlNames = []string{"min_percent", "max_percent", "speed_percent", "anchor_percent", "memory_cycles", "pace_variation_percent", "variation_mode"}
@@ -211,12 +221,18 @@ func applyLayeredLayers(next *motion.FlowSpec, edits []LayeredLayerEdit, remove 
 		}
 		applyLayeredLayer(&next.Layers[index], edit)
 	}
-	return nil
+	return applyLayeredFollowing(next, edits)
 }
 
 func layeredAxis(axis string) bool { return axis == "range" || axis == "center" || axis == "pace" }
 
 func applyLayeredLayer(layer *motion.FlowLayer, edit LayeredLayerEdit) {
+	if edit.Inverted != nil {
+		layer.Inverted = *edit.Inverted
+	}
+	if edit.LowRatePercent != nil {
+		layer.LowRatePercent = *edit.LowRatePercent
+	}
 	if edit.AmountPercent != nil {
 		layer.AmountPercent = *edit.AmountPercent
 	}

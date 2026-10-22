@@ -3,7 +3,7 @@ import type { MotionLabCandidate, MotionLabRequest } from "../api/motion-lab";
 import type { MotionSettings } from "../api/types";
 
 export interface FlowStep { min_percent: number; max_percent: number; speed_percent: number; cycles: number }
-export interface FlowLayer { axis: "range" | "center" | "pace"; amount_percent: number; period_cycles: number; phase_percent: number; shape?: "wave" | "drift" | "alternate" }
+export interface FlowLayer { axis: "range" | "center" | "pace"; amount_percent: number; period_cycles: number; phase_percent: number; shape?: "wave" | "drift" | "alternate"; low_rate_percent?: number; inverted?: boolean }
 export interface StrokeTurn { at_percent: number; vary_to_percent: number; character: string }
 export interface FlowSpec {
   strokes?: {bottom: StrokeTurn; top: StrokeTurn; accents?: Array<{move: string; rate: string}>; variation_percent: number};

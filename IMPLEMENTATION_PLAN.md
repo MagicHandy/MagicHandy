@@ -265,6 +265,16 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-10-22 Hosted pace descriptions and compound timing
+
+Hosted continuous prompts distinguish a low saved ceiling from a fast pace.
+Layered gains an explicit pace-follow operation and optional rate floor/exact
+envelope inversion in the existing Flow compiler, allowing stronger, correctly
+aligned tempo contrast without another motion loop or fixed speed targets.
+Local contracts and historical scores retain their behavior. Real ChatGPT,
+fake-transport application flow, continuation and visual checks are recorded in
+[the evaluation](docs/hosted-pace-review-2026-10-22.md).
+
 ### 2026-10-22 WAN session continuity and configurable idle sign-out
 
 Review of the installed alpha.67 session separates login idle expiry, controller

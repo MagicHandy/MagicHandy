@@ -56,14 +56,17 @@ as failures/gaps rather than invented successful trajectories.
   position. Its 22% pace matched the configured ceiling at that stage.
 - The compound region/tempo request produced repeating upper/lower groups and
   pauses at an overall 12% pace. Spatial alternation worked; distinct fast and
-  slow phases were less faithful. This remains a planning-quality opportunity,
-  not a transport-speed defect established by these records.
+  slow phases were less faithful. The follow-up
+  [hosted pace review](hosted-pace-review-2026-10-22.md) tests and addresses that
+  planning/representation gap.
 - The full-range request produced regular 0–100% sweeps at 22%, with rounded
   reversals. The final gentle request settled into 0–30% strokes at 7% after
   the queued prior sweep/transition cleared.
 
-Motion generation, prompts, speed mapping, limits, sampling, startup and transport
-dispatch are intentionally unchanged. No deterministic language rules were added.
+The WAN fixes leave motion generation and dispatch unchanged. The subsequent
+[pace/compound-motion changes](hosted-pace-review-2026-10-22.md) extend hosted
+planning and optional Flow modulation; existing scores, speed mapping, limits,
+sampling and startup retain their behavior. No deterministic language rules were added.
 Private artifacts remain under `.scratch/wan-session-review/`: the diagnostic
 inspection scripts, `motion-overview.png`, nine detailed plots, and test logs.
 

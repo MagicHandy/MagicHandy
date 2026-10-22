@@ -1,5 +1,17 @@
 # Goal Scorecard
 
+## 2026-10-22 — Hosted pace and compound motion follow-up
+
+Using the same build flags and baseline as the WAN entry below, the combined
+change measures **23,487,488 B**: +40,448 B (0.17%) against alpha.67, or +16,896 B
+on top of the WAN changes. The canonical UI remains **2,708,695 B**, main JS
+**1,248,124 B raw / 336,123 B gzip**. The only additional frontend change is a
+TypeScript score type. No runtime dependency, worker, polling channel or model
+pass is added. Hosted instructions/schema grow; local contracts and legacy
+motion clocks are unchanged and covered by regression checks. Local text-only
+chat on the rebuilt review app completed in 295 ms. No new RSS/cold-start claim
+is made. See [the pace evaluation](hosted-pace-review-2026-10-22.md).
+
 ## 2026-10-22 — WAN continuity and idle sign-out controls
 
 Against alpha.67 `25353690`, matching Windows amd64 builds with Go 1.26.10,

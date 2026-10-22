@@ -52,6 +52,13 @@ type FlowLayer struct {
 	PeriodCycles  int    `json:"period_cycles"`
 	PhasePercent  int    `json:"phase_percent"`
 	Shape         string `json:"shape,omitempty"`
+	// LowRatePercent optionally widens a pace layer's contrast. It is a
+	// fraction of the base travel rate, not a selected speed or device command.
+	// Zero keeps the historical half-rate envelope for existing/local scores.
+	LowRatePercent int `json:"low_rate_percent,omitempty"`
+	// Inverted reverses an envelope exactly, including unequal alternation
+	// dwells; a half-period phase shift is equivalent only for a simple wave.
+	Inverted bool `json:"inverted,omitempty"`
 }
 
 // DefaultFlowSpec supplies a reproducible starting comparison.
@@ -127,6 +134,7 @@ func (s FlowSpec) validateLayers() error {
 		if (layer.Axis != "range" && layer.Axis != "center" && layer.Axis != "pace") || seen[layer.Axis] ||
 			layer.AmountPercent < 0 || layer.AmountPercent > 100 || layer.PeriodCycles < 2 || layer.PeriodCycles > 32 ||
 			layer.PhasePercent < 0 || layer.PhasePercent > 100 ||
+			layer.LowRatePercent < 0 || layer.LowRatePercent > 100 || (layer.Axis != "pace" && layer.LowRatePercent != 0) ||
 			(layer.Shape != "" && layer.Shape != "wave" && layer.Shape != "drift" && layer.Shape != "alternate") {
 			return errors.New("flow layers require distinct range/center/pace axes and bounded modulation")
 		}
@@ -279,7 +287,11 @@ func (s FlowSpec) flowState(u float64, handyModel string) (position, span, milli
 		case "center":
 			anchor = (1-amount)*anchor + amount*wave
 		case "pace":
-			pace *= 1 - 0.5*amount + 0.5*amount*wave
+			depth := 0.5 * amount
+			if layer.LowRatePercent != 0 {
+				depth = (1 - float64(layer.LowRatePercent)/100) * amount
+			}
+			pace *= 1 - depth + depth*wave
 		}
 	}
 	position = lo + anchor*(width-span) + span*s.carrier(u)
