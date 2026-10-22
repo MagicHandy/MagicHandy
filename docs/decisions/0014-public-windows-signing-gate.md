@@ -2,15 +2,34 @@
 
 ## Status
 
-Accepted; amended 2026-10-20 after Microsoft completed the false-positive
+Accepted; amended 2026-10-21 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.64 and alpha.66 package-preserving releases.
+reviewed alpha.14 through alpha.64 and alpha.66 through alpha.67
+package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.67 amendment
+
+The maintainer requested merging PR #337 after green CI and releasing an
+update. Alpha.67 fixes browser password-manager sign-in and linked page
+navigation, and documents existing external DNS-01/alternate-port HTTPS setup.
+The source and browser acceptance review is recorded in
+[alpha67-release-review-2026-10-21.md](../alpha67-release-review-2026-10-21.md).
+
+This amendment adds only `0.1.0-alpha.67` to the reviewed unsigned policy;
+alpha.68 and later require another review, and unpublished alpha.65 remains
+excluded. No dependency, payload executable, native loader, compression format,
+artifact set or installation contract changes. Source and exact-binary
+vulnerability scans, exact-artifact Defender scanning, manifest/checksum
+verification, installer lifecycle, green CI and current-main provenance remain
+mandatory. Microsoft's prior case does not approve these new hashes. Trusted
+Authenticode remains the long-term requirement; the unsigned warning and
+existing hardware acceptance limits remain disclosed.
 
 ### Alpha.66 amendment
 
@@ -678,8 +697,8 @@ VirusTotal report:
    Acceptance reads the PE header and fails if either the setup loader or a
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
-3. **Alpha.8 through alpha.11, alpha.13 through alpha.64, and alpha.66 reviewed unsigned
-   setup are explicit exceptions.** The tag workflow may publish only those
+3. **Alpha.8 through alpha.11, alpha.13 through alpha.64, and alpha.66 through
+   alpha.67 reviewed unsigned setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
    case ID above. Alpha.9 corrects installer-script argument handling without
@@ -792,12 +811,12 @@ Negative:
 - `Test-WindowsRelease.ps1 -ArtifactPolicy PortablePublic` requires exactly a
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
-  alpha.8 through alpha.11, alpha.13 through alpha.64, or alpha.66 version, the recorded
-  Microsoft case ID, the
+  alpha.8 through alpha.11, alpha.13 through alpha.64, or alpha.66 through
+  alpha.67 version, the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
-- Alpha.9 through alpha.11, alpha.13 through alpha.64, and alpha.66 reviewed setup
-  workflows run Microsoft Defender against the exact public artifact directory
+- Alpha.9 through alpha.11, alpha.13 through alpha.64, and alpha.66 through
+  alpha.67 reviewed setup workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
   timestamped Authenticode from the explicitly pinned signer on the setup
