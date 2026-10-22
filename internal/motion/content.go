@@ -122,6 +122,10 @@ type Curve struct {
 	linear        bool
 	mediaFillets  []mediaFillet
 	mediaRounding MediaRoundingEffect
+	// Layered field coordinates, aligned with authoredKnots, preserve phrase
+	// context even when a geometry edit changes the number of fitted strokes.
+	flowCycles []float64
+	flowPeriod float64
 	// minPosition and maxPosition bound the authored span. Shape-preserving
 	// interpolation never overshoots a knot, so the authored extremes are the
 	// curve's extremes.

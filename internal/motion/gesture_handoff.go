@@ -8,12 +8,12 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
-// A gesture edit continues nearby in the reach field. A global nearest-point
+// A generated-score edit continues nearby in its phrase. A global nearest-point
 // search can jump to a different repeated stroke near the start of the phrase
 // on every LLM turn, discarding its longer-term progression. Position/direction
 // still lead the bounded local search, and the shared transition and sanitizer
 // retain authority over the actual handoff.
-func chooseGesturePhase(previous MotionPlan, target MotionTarget, settings config.MotionSettings, at int64, position float64, direction int, velocity float64) float64 {
+func chooseNearbyStrokePhase(previous MotionPlan, target MotionTarget, settings config.MotionSettings, at int64, position float64, direction int, velocity float64) float64 {
 	next := NewMotionPlan("gesture-handoff", target, settings, 0, 0, time.Unix(0, 0))
 	if next.compilationError() != nil || len(previous.curve.authoredKnots) < 3 || len(next.curve.authoredKnots) < 3 {
 		return chooseNearestPhase(target, settings, position, direction, velocity)
@@ -23,9 +23,16 @@ func chooseGesturePhase(previous MotionPlan, target MotionTarget, settings confi
 	oldIndex := max(0, sort.Search(len(oldKnots), func(i int) bool { return float64(oldKnots[i].TimeMillis) > oldTime })-1)
 	count := len(knots) - 1
 	index := oldIndex * count / (len(oldKnots) - 1)
+	if len(previous.curve.flowCycles) == len(oldKnots) && len(next.curve.flowCycles) == len(knots) {
+		fraction := (oldTime - float64(oldKnots[oldIndex].TimeMillis)) / float64(oldKnots[oldIndex+1].TimeMillis-oldKnots[oldIndex].TimeMillis)
+		cycle := previous.curve.flowCycles[oldIndex] + fraction*(previous.curve.flowCycles[oldIndex+1]-previous.curve.flowCycles[oldIndex])
+		cycle *= next.curve.flowPeriod / previous.curve.flowPeriod
+		cycle = next.curve.flowCycles[0] + positiveModulo(cycle-next.curve.flowCycles[0], next.curve.flowPeriod)
+		index = max(0, sort.Search(len(next.curve.flowCycles), func(i int) bool { return next.curve.flowCycles[i] > cycle })-1)
+	}
 	best, phase := math.Inf(1), 0.0
 	for offset := -4; offset <= 4; offset++ {
-		slot := (index + offset + count) % count
+		slot := (index + offset%count + count) % count
 		left, right := knots[slot].TimeMillis, knots[slot+1].TimeMillis
 		for step := range 65 {
 			clock := float64(left) + float64(right-left)*float64(step)/64

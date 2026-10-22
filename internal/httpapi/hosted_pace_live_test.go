@@ -64,10 +64,12 @@ func TestHostedPaceLiveProductionConversation(t *testing.T) {
 	if !strings.Contains(textProbe, "event: done") || strings.Contains(textProbe, "event: motion") || len(fake.Commands()) != 0 || provider.calls != 1 {
 		t.Fatal("text-only probe failed or issued motion")
 	}
+	previousSpeed := 0
 	for index, request := range []string{
 		"Start short strokes alternating between fast travel near the tip and slow travel near the base, repeating smoothly.",
 		"Reverse that contrast: slow near the tip and quicker near the base. Keep alternating short strokes.",
 		"Replace that alternation with full strokes across the whole slider. Remove the pace layer and pace variation, and ease the overall speed back.",
+		"Keep exactly that full-stroke geometry and increase only the overall speed moderately. Keep the pace steady.",
 	} {
 		beforeCalls := provider.calls
 		body, _ := json.Marshal(map[string]string{"message": request})
@@ -100,6 +102,10 @@ func TestHostedPaceLiveProductionConversation(t *testing.T) {
 		} else if score.MinPercent != 0 || score.MaxPercent != 100 || score.RangeFloorPercent != 100 || len(score.Layers) != 0 || score.PaceVariationPercent != 0 {
 			t.Fatal("new request did not release the previous compound shape")
 		}
+		if index == 3 && score.SpeedPercent <= previousSpeed {
+			t.Fatal("pace-only edit failed to increase the actual speed")
+		}
+		previousSpeed = score.SpeedPercent
 		row["intent_pass"] = true
 		time.Sleep(1200 * time.Millisecond)
 	}

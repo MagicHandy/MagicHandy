@@ -7,6 +7,10 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
+func isLayeredFlow(spec *FlowSpec) bool {
+	return spec != nil && spec.Gesture == nil && spec.Strokes == nil && spec.Freestyle == nil
+}
+
 func normalizeFlowTarget(target MotionTarget, settings config.MotionSettings) MotionTarget {
 	target.Flow = CloneFlowSpec(target.Flow)
 	target.Dynamic, target.Pattern, target.Program, target.Media = nil, nil, nil, nil

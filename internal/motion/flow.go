@@ -264,16 +264,23 @@ func (s FlowSpec) signal(u float64, handyModel string) (position, millisPerCycle
 // flowState evaluates the layered score at cycle position u: where the carrier
 // puts the stroke, how wide the stroke window is, and the local clock.
 func (s FlowSpec) flowState(u float64, handyModel string) (position, span, millisPerCycle float64) {
+	position, span, speed, pace, ceiling := s.flowGeometry(u)
+	return position, span, s.flowClock(span, speed, pace, ceiling, handyModel)
+}
+
+// Geometry is independent of the device clock. Extrema discovery evaluates it
+// many times per compile and does not need repeated kinematic clock fits.
+func (s FlowSpec) flowGeometry(u float64) (position, span, speed, pace, ceiling float64) {
 	lo, hi, speed, floor := s.band(u)
 	width := hi - lo
-	ceiling := width
+	ceiling = width
 	if s.RangeCeilingPercent > 0 {
 		ceiling = clampFloat(float64(s.RangeCeilingPercent), floor, width)
 	}
 	span = floor + (ceiling-floor)*s.field(u, 0x9e3779b9)
 	anchor := float64(s.AnchorPercent) / 100
 	paceVariation := float64(s.PaceVariationPercent) / 100
-	pace := 1 - paceVariation + paceVariation*s.field(u, 0x85ebca6b)
+	pace = 1 - paceVariation + paceVariation*s.field(u, 0x85ebca6b)
 	for _, layer := range s.Layers {
 		amount := float64(layer.AmountPercent) / 100
 		wave := s.layerEnvelope(u, layer)
@@ -295,6 +302,10 @@ func (s FlowSpec) flowState(u float64, handyModel string) (position, span, milli
 		}
 	}
 	position = lo + anchor*(width-span) + span*s.carrier(u)
+	return position, span, speed, pace, ceiling
+}
+
+func (s FlowSpec) flowClock(span, speed, pace, ceiling float64, handyModel string) float64 {
 	// The clock compensates for span, so a short stroke does not automatically
 	// become a slow stroke. Section speeds interpolate continuously as rates.
 	lowerSpeed := int(math.Floor(speed))
@@ -314,5 +325,5 @@ func (s FlowSpec) flowState(u float64, handyModel string) (position, span, milli
 	// Smooth local clock limiting anticipates tight strokes without imposing
 	// their time requirement on every broad stroke. Exact extrema still gate playback.
 	period := math.Pow(math.Pow(desired, 8)+math.Pow(accelerationTime, 8)+math.Pow(jerkTime, 8), 1.0/8)
-	return position, span, 1000 * period
+	return 1000 * period
 }

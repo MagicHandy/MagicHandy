@@ -265,6 +265,17 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-10-22 Layered steady motion and pace handoffs
+
+Layered compiles actual combined-field extrema and keeps its place in the
+phrase across edits. Identical-destination pace changes use a bounded monotone
+splice when feasible. Buffered quantization aligns crossings without artificial
+append-boundary pins, and normal fitting resumes at the actual end of a blend.
+All changes stay within the shared engine and existing motion envelope.
+Claude Opus 5.5 Max consultation, full-loop/profile measurements, live GPT chat,
+rendered comparisons and remaining physical-validation limits are recorded in
+[the review](docs/layered-smoothness-review-2026-10-22.md).
+
 ### 2026-10-22 Hosted pace descriptions and compound timing
 
 Hosted continuous prompts distinguish a low saved ceiling from a fast pace.

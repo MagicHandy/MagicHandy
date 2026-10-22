@@ -1,5 +1,25 @@
 # Goal Scorecard
 
+## 2026-10-22 — Layered smoothness and buffered timing
+
+Matching Windows amd64 builds with Go 1.26.10, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'` measure **23,487,488 → 23,524,352 B**
+(+36,864 B, 0.157%) over the hosted-pace head. The UI remains **2,708,695 B**;
+no dependency, polling loop, model invocation or prompt growth is added.
+
+Three one-second benchmark repetitions on Ryzen 9 9950X3D give median Layered
+compile time **2.187 → 3.420 ms**, **790,339 → 861,086 B/op**. The richer
+combined-field extrema and additional real strokes have a measured once-per-
+proposal cost of about 1.23 ms. Shared buffered-frame fitting measures
+**140.5 → 150.6 microseconds**, **111,104 → 111,248 B/op**. These are small
+increases, not a claim of zero overhead; frame work remains below 0.2 ms per
+roughly one-second append. Local inference contracts/context and immediate
+transport pacing are unchanged. No RSS/cold-start claim is made. See
+[the motion review](layered-smoothness-review-2026-10-22.md) for full-loop and
+physical-validation limits; raw benchmark logs remain ignored under `.scratch`.
+The current-source isolated app completed its local Gemma text-only chat in
+**303 ms** (125 ms to first token), with motion idle and no repair/fallback.
+
 ## 2026-10-22 — Hosted pace and compound motion follow-up
 
 Using the same build flags and baseline as the WAN entry below, the combined

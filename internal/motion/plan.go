@@ -256,7 +256,9 @@ func (p MotionPlan) retargetFromState(
 		case target.Flow != nil && target.Flow.Freestyle != nil:
 			target, phase = chooseFreestylePhase(p, target, settings, streamMillis, currentPosition, currentDirection, currentVelocity)
 		case p.Target.Flow != nil && p.Target.Flow.Gesture != nil && target.Flow != nil && target.Flow.Gesture != nil:
-			phase = chooseGesturePhase(p, target, settings, streamMillis, currentPosition, currentDirection, currentVelocity)
+			phase = chooseNearbyStrokePhase(p, target, settings, streamMillis, currentPosition, currentDirection, currentVelocity)
+		case isLayeredFlow(p.Target.Flow) && isLayeredFlow(target.Flow):
+			phase = chooseNearbyStrokePhase(p, target, settings, streamMillis, currentPosition, currentDirection, currentVelocity)
 		default:
 			phase = chooseNearestPhase(target, settings, currentPosition, currentDirection, currentVelocity)
 		}
