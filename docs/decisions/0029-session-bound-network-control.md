@@ -160,6 +160,18 @@ loopback-only bootstrap, native path-picker or recovery privileges. The
 documented proxy configuration must preserve streaming and avoid caching
 authenticated responses. Private inference/worker ports are not published.
 
+The browser boundary distinguishes opening a public page from accessing an API.
+Top-level GET/HEAD navigation to the configured hostname may load the app or
+remote shell when initiated on another site or port. Fetch Metadata's
+`cross-site` label describes that navigation context; it does not make opening
+a link a privileged API call. The exception requires `navigate`/`document`, no
+Origin header and a path outside `/api`. API reads and writes, login submissions,
+script fetches, frames and unconfigured Hosts retain the existing checks.
+Authentication and controller authority are evaluated independently after the
+shell loads. Cache variation includes Origin and Fetch Metadata headers.
+This follows the distinction between page navigation and resource requests in
+the [Fetch Metadata resource isolation guidance](https://web.dev/articles/fetch-metadata).
+
 Certificate import/renewal, DNS/address changes, firewall scope and startup
 recovery are part of the setup contract. Configurations must fail closed and
 retain a local repair path. Router forwarding, public DNS changes, certificate

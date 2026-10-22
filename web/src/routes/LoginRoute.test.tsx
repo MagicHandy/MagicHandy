@@ -44,6 +44,36 @@ describe("LoginRoute", () => {
     expect(screen.getByText("Emergency Stop remains available.")).toBeInTheDocument();
   });
 
+  it("submits password-manager fills without change events and preserves them across renders", async () => {
+    const view = render(<LoginRoute />);
+    const username = screen.getByLabelText("Username") as HTMLInputElement;
+    const password = screen.getByLabelText("Password") as HTMLInputElement;
+    // Model a browser password manager, which need not dispatch change/input.
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    setValue.call(username, " autofilled-owner ");
+    setValue.call(password, "autofilled secret passphrase");
+    view.rerender(<LoginRoute />);
+
+    expect(password).toHaveValue("autofilled secret passphrase");
+    const submit = screen.getByRole("button", { name: "Sign in" });
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(auth.login).toHaveBeenCalledWith("autofilled-owner", "autofilled secret passphrase"));
+    expect(password).toHaveValue("");
+  });
+
+  it("keeps native required-field validation when sign-in fields are empty", () => {
+    render(<LoginRoute />);
+    const username = screen.getByLabelText("Username") as HTMLInputElement;
+    const password = screen.getByLabelText("Password") as HTMLInputElement;
+    expect(username).toBeRequired();
+    expect(password).toBeRequired();
+    expect(username.form!.checkValidity()).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(auth.login).not.toHaveBeenCalled();
+  });
+
   it("validates and creates the initial local administrator", async () => {
     auth.status = status(false);
     render(<LoginRoute />);
