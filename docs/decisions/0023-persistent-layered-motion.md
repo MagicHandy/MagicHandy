@@ -82,6 +82,17 @@ legacy extra pace modulation or pattern fallback.
 
 ## Consequences and validation
 
+The October 22 smoothness follow-up compiles the complete layered field's real
+turning points rather than assuming the carrier's half-cycles remain extrema.
+The existing joint fitter and derivative bounds still determine the trajectory.
+Field cycle coordinates preserve phrase context across geometry changes.
+Pace-only edits with identical destinations can use a monotone, bounded
+position/velocity/acceleration splice in the shared transition path; geometry
+and unsupported edits retain the established transition. Buffered rounding
+alignment keeps real knots and submitted points fixed, without pinning
+unsubmitted append cutoffs. See [the evaluation](../layered-smoothness-review-2026-10-22.md)
+for measurements, rejected alternatives and the physical-validation limit.
+
 The controller remains simple, with more complexity contained in the validated
 semantic contract. Flow metadata is present in snapshots and trace exports so
 plots can reproduce the accepted motion. A saved seed is evidence, not a fixed

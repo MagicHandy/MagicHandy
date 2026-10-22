@@ -62,6 +62,9 @@ func readRequest(r *http.Request) bool {
 }
 
 func hostPrivateRead(route string) bool {
+	if route == "/api/auth/session-policy" {
+		return true
+	}
 	return hostDiagnosticsRoute(route) || route == "/api/audit" || strings.HasPrefix(route, "/api/audit/") || route == "/api/network" || strings.HasPrefix(route, "/api/network/") ||
 		route == "/api/setup" || strings.HasPrefix(route, "/api/setup/") ||
 		(strings.HasPrefix(route, "/api/llm/") && route != "/api/llm/status") ||

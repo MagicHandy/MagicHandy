@@ -3,7 +3,6 @@ package motion
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"math"
 	"sort"
 )
@@ -90,7 +89,7 @@ func motionProbeTimes(
 	if preservePlanKnots {
 		for _, at := range motionPathKnotTimes(plan, transition, chunkStart, chunkEnd) {
 			times = append(times, at)
-			if !transitionInChunk {
+			if !motionPathBlendsAt(transition, at) {
 				mandatory[at] = struct{}{}
 			}
 		}
@@ -220,9 +219,9 @@ func (e *Engine) fitMotionWindowLocked(
 	if positionResolution > 0 && e.plan.Target.continuousCurve() {
 		samples = e.refineContinuousSamples(samples, referenceSamples, mandatory, positionResolution, hasPreviousAnchor, transitionInChunk)
 	}
-	if positionResolution > 0 && e.plan.Target.continuousCurve() && !transitionInChunk {
+	if positionResolution > 0 && e.plan.Target.continuousCurve() {
 		var err error
-		samples, err = e.retimeBufferedSamples(samples, referenceSamples, mandatory, positionResolution, hasPreviousAnchor, chunkStart)
+		samples, err = e.retimeBufferedSamples(samples, referenceSamples, mandatory, positionResolution, hasPreviousAnchor)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -253,39 +252,47 @@ func (e *Engine) fitImmediateMotionSamples(reference []MotionSample, resolution 
 	return samples, mandatory, nil
 }
 
-func (e *Engine) retimeBufferedSamples(samples, reference []MotionSample, mandatory map[int64]struct{}, resolution float64, hasPrevious bool, chunkStart int64) ([]MotionSample, error) {
-	partition := maps.Clone(mandatory)
-	if hasPrevious && len(samples) > 0 {
-		// Preserve both sides of the already committed batch boundary.
-		partition[samples[0].TimeMillis] = struct{}{}
-	}
-	// Keep the established append partition stable. A shifted cutoff changes
-	// the next fit's phase and can create a pulse despite local improvements.
-	targetTail := chunkStart + int64(e.chunkSize)*e.sampleInterval.Milliseconds()
-	for index, point := range samples {
-		if point.TimeMillis >= targetTail {
-			partition[point.TimeMillis] = struct{}{}
-			if index > 0 {
-				partition[samples[index-1].TimeMillis] = struct{}{}
-			}
-			break
-		}
-	}
+func (e *Engine) retimeBufferedSamples(samples, reference []MotionSample, mandatory map[int64]struct{}, resolution float64, hasPrevious bool) ([]MotionSample, error) {
 	if hasPrevious {
 		samples = append([]MotionSample{*e.lastSample}, samples...)
 	}
-	fitted, err := fitQuantizedMotionTiming(samples, reference, partition, resolution,
-		referenceTravelRateForSpeed(100, e.settings.HandyModel), 1)
-	if err != nil {
-		// An unsubmitted partition point is not a motion knot. At the velocity
-		// ceiling, whole-percent rounding can make two such fixed points demand
-		// an impossible interval. Refit without those artificial constraints,
-		// keeping the committed tail, real reversals and velocity limit intact.
-		fitted, err = fitQuantizedMotionTiming(samples, reference, mandatory, resolution,
-			referenceTravelRateForSpeed(100, e.settings.HandyModel), 1)
+	if e.transition == nil {
+		fitted, err := fitQuantizedMotionTiming(samples, reference, mandatory, resolution, referenceTravelRateForSpeed(100, e.settings.HandyModel), 1)
+		if err != nil {
+			return nil, err
+		}
+		if hasPrevious {
+			fitted = fitted[1:]
+		}
+		return fitted, nil
 	}
-	if err != nil {
-		return nil, err
+	if len(samples) == 0 {
+		return samples, nil
+	}
+	// Only the already submitted tail and real trajectory anchors are fixed.
+	// An arbitrary append cutoff is still unsent: pinning it injects a timing
+	// pulse once per batch. The natural cutoff is selected after alignment.
+	fitted := []MotionSample{samples[0]}
+	for start := 0; start < len(samples)-1; {
+		blendedEdge := func(index int) bool {
+			return motionPathBlendsAt(e.transition, samples[index].TimeMillis) || motionPathBlendsAt(e.transition, samples[index+1].TimeMillis-1)
+		}
+		if blendedEdge(start) {
+			fitted = append(fitted, samples[start+1])
+			start++
+			continue
+		}
+		end := start + 1
+		for end < len(samples)-1 && !blendedEdge(end) {
+			end++
+		}
+		section, err := fitQuantizedMotionTiming(samples[start:end+1], reference, mandatory, resolution,
+			referenceTravelRateForSpeed(100, e.settings.HandyModel), 1)
+		if err != nil {
+			return nil, err
+		}
+		fitted = append(fitted, section[1:]...)
+		start = end
 	}
 	if hasPrevious {
 		fitted = fitted[1:]

@@ -170,7 +170,7 @@ func contractInstructions(capabilities Capabilities) string {
 	if capabilities.MotionMode == MotionModeLayered {
 		text := layeredContract
 		if capabilities.HostedMotion {
-			text = hostedLayeredContract(text)
+			text = hostedLayeredContract(text) + "\n" + hostedPaceGuide + "\n" + hostedLayeredCoordinationGuide
 		}
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()
@@ -181,6 +181,9 @@ func contractInstructions(capabilities Capabilities) string {
 		text := creativeV2ReachGuide + "\n\n" + creativeV2Contract
 		if capabilities.SchemaUnenforced {
 			text = creativeV2Contract
+		}
+		if capabilities.HostedMotion {
+			text += "\n" + hostedPaceGuide
 		}
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()

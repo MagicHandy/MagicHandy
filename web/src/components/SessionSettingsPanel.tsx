@@ -3,14 +3,16 @@ import { confirmThen } from "../util/confirm";
 import { api } from "../api/client";
 import type { ManagedSession, ManagedSessionsResponse } from "../api/types";
 import { t, translateKnown } from "../i18n";
+import { SessionPolicySettings } from "./SessionPolicySettings";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const visible = () => document.visibilityState !== "hidden";
 const failure = (reason: unknown) => reason instanceof Error ? translateKnown(reason.message) : t("Session management is unavailable.");
 
-export function SessionSettingsPanel({ backendOnline, onSignedOut }: {
+export function SessionSettingsPanel({ backendOnline, onSignedOut, administrator = false }: {
   backendOnline: boolean;
   onSignedOut: () => Promise<unknown>;
+  administrator?: boolean;
 }) {
   const [sessions, setSessions] = useState<ManagedSession[]>([]);
   const [loading, setLoading] = useState(false);
@@ -129,7 +131,9 @@ export function SessionSettingsPanel({ backendOnline, onSignedOut }: {
     void mutate((signal) => api.renameSession(editing, name.trim(), signal), false, true);
   };
 
-  return <section className="group session-management" aria-labelledby="session-management-title" aria-busy={loading || busy || undefined}>
+  return <>
+    {administrator && <SessionPolicySettings backendOnline={backendOnline} onChanged={() => { cancelRead(); void load(); }} />}
+    <section className="group session-management" aria-labelledby="session-management-title" aria-busy={loading || busy || undefined}>
     <div className="access-section-header">
       <h3 id="session-management-title" className="group-title">{t("Your signed-in browsers")}</h3>
       <button type="button" className="btn btn-secondary" aria-label={t("Refresh sessions")} disabled={!backendOnline || loading || busy} onClick={() => void load()}>{t("Refresh")}</button>
@@ -155,7 +159,7 @@ export function SessionSettingsPanel({ backendOnline, onSignedOut }: {
           <small>{t("Last activity: {time}", { time: formatSessionTime(session.last_active_at) })}</small>
           <details className="session-details"><summary>{t("Session details")}</summary>
             <small>{t("Signed in: {time}", { time: formatSessionTime(session.created_at) })}</small>
-            <small>{t("Idle sign-out: {time}", { time: formatSessionTime(session.idle_expires_at) })}</small>
+            <small>{session.idle_expires_at ? t("Idle sign-out: {time}", { time: formatSessionTime(session.idle_expires_at) }) : t("Idle sign-out: Off")}</small>
             <small>{t("Sign-in expires: {time}", { time: formatSessionTime(session.expires_at) })}</small>
           </details>
           </div>
@@ -172,7 +176,7 @@ export function SessionSettingsPanel({ backendOnline, onSignedOut }: {
       </li>)}
     </ul>
     <button type="button" className="btn btn-secondary" disabled={!backendOnline || busy || sessions.every((session) => session.current)} onClick={revokeOthers}>{t("Sign out other sessions")}</button>
-  </section>;
+  </section></>;
 }
 
 function validateSessions(result: ManagedSessionsResponse) {

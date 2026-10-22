@@ -18,6 +18,8 @@ type planTransition struct {
 	previousTransition *planTransition
 	startMillis        int64
 	endMillis          int64
+	stroke             *quinticSegment
+	strokeStartMillis  int64
 }
 
 func newPlanTransition(previous MotionPlan, transition *planTransition, startMillis int64) *planTransition {
@@ -37,6 +39,14 @@ func sampleMotionPath(plan MotionPlan, transition *planTransition, streamMillis 
 	previous := sampleMotionPath(transition.previousPlan, transition.previousTransition, streamMillis)
 	if streamMillis < transition.startMillis {
 		return previous
+	}
+	if transition.stroke != nil {
+		if streamMillis < transition.strokeStartMillis {
+			return previous
+		}
+		u := float64(streamMillis-transition.strokeStartMillis) / float64(transition.endMillis-transition.strokeStartMillis)
+		next.PositionPercent = transition.stroke.position(u)
+		return next
 	}
 
 	progress := float64(streamMillis-transition.startMillis) /
@@ -120,6 +130,13 @@ func motionPathDirection(plan MotionPlan, transition *planTransition, streamMill
 }
 
 func motionPathKnotTimes(plan MotionPlan, transition *planTransition, startMillis, endMillis int64) []int64 {
+	if transition != nil && transition.stroke != nil && startMillis < transition.endMillis {
+		times := plan.knotTimesBetween(max(startMillis, transition.endMillis), endMillis)
+		if startMillis < transition.strokeStartMillis {
+			times = append(times, motionPathKnotTimes(transition.previousPlan, transition.previousTransition, startMillis, min(endMillis, transition.strokeStartMillis))...)
+		}
+		return times
+	}
 	times := plan.knotTimesBetween(startMillis, endMillis)
 	if transition != nil && startMillis < transition.endMillis {
 		times = append(times, motionPathKnotTimes(
@@ -150,6 +167,19 @@ func transitionOverlaps(transition *planTransition, startMillis, endMillis int64
 	return transitionOverlaps(transition.previousTransition, startMillis, endMillis)
 }
 
+// Only an oscillator blend changes the meaning of an authored turn. Outside
+// that interval (including a bounded single-stroke splice), ordinary knots and
+// quantized timing retain their normal guarantees.
+func motionPathBlendsAt(transition *planTransition, at int64) bool {
+	if transition == nil || at >= transition.endMillis {
+		return false
+	}
+	if at < transition.startMillis || (transition.stroke != nil && at < transition.strokeStartMillis) {
+		return motionPathBlendsAt(transition.previousTransition, at)
+	}
+	return transition.stroke == nil
+}
+
 func transitionBoundaryTimes(transition *planTransition, startMillis, endMillis int64) []int64 {
 	if transition == nil {
 		return nil
@@ -159,6 +189,9 @@ func transitionBoundaryTimes(transition *planTransition, startMillis, endMillis 
 		if at >= startMillis && at < endMillis {
 			times = append(times, at)
 		}
+	}
+	if transition.stroke != nil && transition.strokeStartMillis >= startMillis && transition.strokeStartMillis < endMillis {
+		times = append(times, transition.strokeStartMillis)
 	}
 	return times
 }

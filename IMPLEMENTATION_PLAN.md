@@ -265,6 +265,38 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-10-22 Layered steady motion and pace handoffs
+
+Layered compiles actual combined-field extrema and keeps its place in the
+phrase across edits. Identical-destination pace changes use a bounded monotone
+splice when feasible. Buffered quantization aligns crossings without artificial
+append-boundary pins, and normal fitting resumes at the actual end of a blend.
+All changes stay within the shared engine and existing motion envelope.
+Claude Opus 5.5 Max consultation, full-loop/profile measurements, live GPT chat,
+rendered comparisons and remaining physical-validation limits are recorded in
+[the review](docs/layered-smoothness-review-2026-10-22.md).
+
+### 2026-10-22 Hosted pace descriptions and compound timing
+
+Hosted continuous prompts distinguish a low saved ceiling from a fast pace.
+Layered gains an explicit pace-follow operation and optional rate floor/exact
+envelope inversion in the existing Flow compiler, allowing stronger, correctly
+aligned tempo contrast without another motion loop or fixed speed targets.
+Local contracts and historical scores retain their behavior. Real ChatGPT,
+fake-transport application flow, continuation and visual checks are recorded in
+[the evaluation](docs/hosted-pace-review-2026-10-22.md).
+
+### 2026-10-22 WAN session continuity and configurable idle sign-out
+
+Review of the installed alpha.67 session separates login idle expiry, controller
+heartbeat loss, upstream model wait, and Cloud startup preparation. Login idle
+expiry now defaults to eight hours with an administrator selector including Off;
+absolute expiry and lost-controller Stop remain independent. Active controllers
+retry heartbeat failures on the regular two-second cadence, and pending protected
+chat no longer aborts merely because an independent status observation is late.
+See [the review and validation](docs/wan-session-review-2026-10-22.md) and
+[ADR 0029](docs/decisions/0029-session-bound-network-control.md).
+
 ### 2026-10-16 Auto timing and prepared decisions for external planners
 
 Creative v2 and Layered Autopilot ignored the planner's timing: every stretch

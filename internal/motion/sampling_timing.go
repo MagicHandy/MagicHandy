@@ -3,6 +3,7 @@ package motion
 import (
 	"fmt"
 	"math"
+	"sort"
 )
 
 // fitSpacedMotionSamples retains true reversals and fits each intervening leg
@@ -70,6 +71,7 @@ func fitQuantizedMotionTiming(samples, probes []MotionSample, mandatory map[int6
 		return samples, nil
 	}
 	result := append([]MotionSample(nil), samples...)
+	tolerance := quantizedProbeTolerance(probes, resolution)
 	encoded := func(sample MotionSample) float64 {
 		if resolution <= 0 {
 			return sample.PositionPercent
@@ -110,79 +112,86 @@ func fitQuantizedMotionTiming(samples, probes []MotionSample, mandatory map[int6
 			end--
 		}
 		latest := make([]int64, end-start+1)
+		originalTimes := make([]int64, end-start+1)
+		for index := start; index <= end; index++ {
+			originalTimes[index-start] = result[index].TimeMillis
+		}
+		alignCrossings := resolution > 0 && floor <= 1 && monotoneProbeInterval(probes, result[start].TimeMillis, result[end].TimeMillis)
 		latest[end-start] = result[end].TimeMillis
 		for index := end - 1; index > start; index-- {
 			latest[index-start] = latest[index+1-start] - minimum(result[index], result[index+1])
 		}
 		for index := start + 1; index < end; index++ {
 			at := result[index].TimeMillis
-			if resolution > 0 && floor <= 1 {
-				at = smootherQuantizedTime(result, probes, index, start, end, resolution, minimum)
+			if alignCrossings {
+				at = boundedQuantizedCrossingTime(result, probes, index, start, end, resolution, tolerance, minimum)
 			}
 			result[index].TimeMillis = min(latest[index-start], max(result[index-1].TimeMillis+minimum(result[index-1], result[index]), at))
+		}
+		if alignCrossings {
+			if err := verifyRetimedSamples(result[start:end+1], originalTimes, probes, resolution, tolerance); err != nil {
+				return nil, err
+			}
 		}
 		start = end
 	}
 	return result, nil
 }
 
-func smootherQuantizedTime(samples, probes []MotionSample, index, start, end int, resolution float64, minimum func(MotionSample, MotionSample) int64) int64 {
+func verifyRetimedSamples(samples []MotionSample, originalTimes []int64, probes []MotionSample, resolution, tolerance float64) error {
+	for index := 1; index < len(samples); index++ {
+		changed := samples[index-1].TimeMillis != originalTimes[index-1] || samples[index].TimeMillis != originalTimes[index]
+		if changed && !wireSegmentFits(samples[index-1], samples[index], probes, resolution, tolerance) {
+			return fmt.Errorf("quantized motion timing loses trajectory fidelity between %dms and %dms", samples[index-1].TimeMillis, samples[index].TimeMillis)
+		}
+	}
+	return nil
+}
+
+// Crossing alignment is only meaningful within one direction of travel. A
+// transition or a missing knot must not let a point migrate to another stroke.
+func monotoneProbeInterval(probes []MotionSample, start, end int64) bool {
+	first := sort.Search(len(probes), func(i int) bool { return probes[i].TimeMillis >= start })
+	direction := 0
+	for index := first + 1; index < len(probes) && probes[index].TimeMillis <= end; index++ {
+		next := curveDirection(probes[index].PositionPercent - probes[index-1].PositionPercent)
+		if next != 0 {
+			if direction != 0 && next != direction {
+				return false
+			}
+			direction = next
+		}
+	}
+	return true
+}
+
+func boundedQuantizedCrossingTime(samples, probes []MotionSample, index, start, end int, resolution, tolerance float64, minimum func(MotionSample, MotionSample) int64) int64 {
 	original := samples[index].TimeMillis
 	position := quantizedMotionPosition(samples[index].PositionPercent, resolution)
 	candidate := quantizedCrossingTime(probes, samples[index], position, samples[start].TimeMillis, samples[end].TimeMillis)
-	// A rounded extremum may be unreachable on this leg. Never chase it on a
-	// different stroke, or trade a new speed pulse for positional accuracy.
-	if absMillis(candidate-original) > wireTimingApproximationFloorMillis {
-		return original
-	}
+	// A rounded extremum may be unreachable on this leg. Search only between
+	// fixed anchors and retain the original timestamp if there is no crossing.
+	// Restricting the correction to a fixed number of milliseconds leaves large
+	// relative rate errors on slow/short strokes. Fidelity and velocity bounds,
+	// rather than a timing heuristic, decide whether the crossing is usable.
 	point := samples[index]
 	point.TimeMillis = candidate
-	before := localWireVelocityJump(samples, index, resolution)
-	samples[index].TimeMillis = candidate
-	after := localWireVelocityJump(samples, index, resolution)
-	samples[index].TimeMillis = original
-	if after < before && candidate-samples[index-1].TimeMillis >= minimum(samples[index-1], point) &&
+	if candidate-samples[index-1].TimeMillis >= minimum(samples[index-1], point) &&
 		samples[index+1].TimeMillis-candidate >= minimum(point, samples[index+1]) &&
-		wireSegmentFits(samples[index-1], point, probes, resolution) && wireSegmentFits(point, samples[index+1], probes, resolution) {
+		wireSegmentFits(samples[index-1], point, probes, resolution, tolerance) && wireSegmentFits(point, samples[index+1], probes, resolution, tolerance) {
 		return candidate
 	}
 	return original
 }
 
-func localWireVelocityJump(samples []MotionSample, at int, resolution float64) float64 {
-	var previous, largest float64
-	start := max(1, at-1)
-	for index := start; index <= min(len(samples)-1, at+2); index++ {
-		duration := samples[index].TimeMillis - samples[index-1].TimeMillis
-		if duration <= 0 {
-			return math.Inf(1)
-		}
-		velocity := (quantizedMotionPosition(samples[index].PositionPercent, resolution) - quantizedMotionPosition(samples[index-1].PositionPercent, resolution)) * 1000 / float64(duration)
-		if index > start {
-			largest = math.Max(largest, math.Abs(velocity-previous))
-		}
-		previous = velocity
-	}
-	return largest
-}
-
-func absMillis(value int64) int64 {
-	if value < 0 {
-		return -value
-	}
-	return value
-}
-
-func wireSegmentFits(left, right MotionSample, probes []MotionSample, resolution float64) bool {
+func wireSegmentFits(left, right MotionSample, probes []MotionSample, resolution, tolerance float64) bool {
 	if right.TimeMillis <= left.TimeMillis {
 		return false
 	}
 	l, r := quantizedMotionPosition(left.PositionPercent, resolution), quantizedMotionPosition(right.PositionPercent, resolution)
-	tolerance := quantizedProbeTolerance(probes, resolution)
-	for _, probe := range probes {
-		if probe.TimeMillis < left.TimeMillis || probe.TimeMillis > right.TimeMillis {
-			continue
-		}
+	first := sort.Search(len(probes), func(i int) bool { return probes[i].TimeMillis >= left.TimeMillis })
+	for index := first; index < len(probes) && probes[index].TimeMillis <= right.TimeMillis; index++ {
+		probe := probes[index]
 		fraction := float64(probe.TimeMillis-left.TimeMillis) / float64(right.TimeMillis-left.TimeMillis)
 		if math.Abs(l+(r-l)*fraction-probe.PositionPercent) > tolerance {
 			return false
@@ -193,11 +202,9 @@ func wireSegmentFits(left, right MotionSample, probes []MotionSample, resolution
 
 func quantizedCrossingTime(probes []MotionSample, sample MotionSample, position float64, start, end int64) int64 {
 	best, distance := sample.TimeMillis, math.Inf(1)
-	for index := 1; index < len(probes); index++ {
+	first := sort.Search(len(probes), func(i int) bool { return probes[i].TimeMillis >= start }) + 1
+	for index := first; index < len(probes) && probes[index].TimeMillis <= end; index++ {
 		left, right := probes[index-1], probes[index]
-		if left.TimeMillis < start || right.TimeMillis > end {
-			continue
-		}
 		delta := right.PositionPercent - left.PositionPercent
 		if delta == 0 || position < math.Min(left.PositionPercent, right.PositionPercent) || position > math.Max(left.PositionPercent, right.PositionPercent) {
 			continue

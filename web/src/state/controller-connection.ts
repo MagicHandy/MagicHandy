@@ -64,8 +64,12 @@ export function useControllerConnection(enabled: boolean): ControllerConnection 
           window.clearTimeout(timeout);
           active = null;
           if (!closed && visible() && admitted === generation) {
-            const base = Math.min(8000, HEARTBEAT_MS * 2 ** Math.min(failures, 2));
-            const delay = failures ? base * (0.8 + Math.random() * 0.4) : base;
+            // A controller's 15-second lease cannot survive exponential
+            // backoff after two 3-second WAN timeouts. Keep its one bounded
+            // request on the normal cadence; only discovery/observers back off.
+            const renewing = known?.heartbeat_required && known.active && !known.read_only;
+            const base = renewing ? HEARTBEAT_MS : Math.min(8000, HEARTBEAT_MS * 2 ** Math.min(failures, 2));
+            const delay = failures && !renewing ? base * (0.8 + Math.random() * 0.4) : base;
             timer = window.setTimeout(() => void update(), delay);
           }
         }

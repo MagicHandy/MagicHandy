@@ -1,5 +1,54 @@
 # Goal Scorecard
 
+## 2026-10-22 — Layered smoothness and buffered timing
+
+Matching Windows amd64 builds with Go 1.26.10, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'` measure **23,487,488 → 23,524,352 B**
+(+36,864 B, 0.157%) over the hosted-pace head. The UI remains **2,708,695 B**;
+no dependency, polling loop, model invocation or prompt growth is added.
+
+Three one-second benchmark repetitions on Ryzen 9 9950X3D give median Layered
+compile time **2.187 → 3.420 ms**, **790,339 → 861,086 B/op**. The richer
+combined-field extrema and additional real strokes have a measured once-per-
+proposal cost of about 1.23 ms. Shared buffered-frame fitting measures
+**140.5 → 150.6 microseconds**, **111,104 → 111,248 B/op**. These are small
+increases, not a claim of zero overhead; frame work remains below 0.2 ms per
+roughly one-second append. Local inference contracts/context and immediate
+transport pacing are unchanged. No RSS/cold-start claim is made. See
+[the motion review](layered-smoothness-review-2026-10-22.md) for full-loop and
+physical-validation limits; raw benchmark logs remain ignored under `.scratch`.
+The current-source isolated app completed its local Gemma text-only chat in
+**303 ms** (125 ms to first token), with motion idle and no repair/fallback.
+
+## 2026-10-22 — Hosted pace and compound motion follow-up
+
+Using the same build flags and baseline as the WAN entry below, the combined
+change measures **23,487,488 B**: +40,448 B (0.17%) against alpha.67, or +16,896 B
+on top of the WAN changes. The canonical UI remains **2,708,695 B**, main JS
+**1,248,124 B raw / 336,123 B gzip**. The only additional frontend change is a
+TypeScript score type. No runtime dependency, worker, polling channel or model
+pass is added. Hosted instructions/schema grow; local contracts and legacy
+motion clocks are unchanged and covered by regression checks. Local text-only
+chat on the rebuilt review app completed in 295 ms. No new RSS/cold-start claim
+is made. See [the pace evaluation](hosted-pace-review-2026-10-22.md).
+
+## 2026-10-22 — WAN continuity and idle sign-out controls
+
+Against alpha.67 `25353690`, matching Windows amd64 builds with Go 1.26.10,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'` measure
+**23,447,040 → 23,470,592 B** (+23,552 B, 0.10%). Complete canonical embedded
+UI is **2,699,919 → 2,708,695 B** (+8,776 B). Main JavaScript is
+**1,243,824 → 1,248,124 B raw** (+4,300 B) and **335,149 → 336,123 B gzip**
+(+974 B). Both gzip samples use the same Python 3.14 runtime, level 9, `mtime=0`;
+they are not compared with older Node compressor samples. Stale hashed bundles
+are removed by the canonical frontend build.
+
+No dependency, worker, steady-state polling channel or model-prompt expansion is
+added. Active-controller failure retries use the existing two-second cadence
+instead of extending beyond the lease; observer retries still back off. Session
+policy uses the existing database and one scalar lookup alongside session reads.
+No new RSS/cold-start claim is made. See [the review](wan-session-review-2026-10-22.md).
+
 ## 2026-10-21 — Browser page navigation
 
 The browser boundary admits linked top-level GET/HEAD pages on an allowed

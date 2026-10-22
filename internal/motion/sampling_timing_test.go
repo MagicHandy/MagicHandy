@@ -9,6 +9,47 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
+func TestBufferedQuantizationUsesCrossingsWithoutInventingSpeedPulses(t *testing.T) {
+	var probes []MotionSample
+	for at := int64(0); at <= 1000; at += 5 {
+		probes = append(probes, MotionSample{TimeMillis: at, PositionPercent: float64(at) / 100})
+	}
+	samples := []MotionSample{{TimeMillis: 0}, {TimeMillis: 240, PositionPercent: 2.4},
+		{TimeMillis: 540, PositionPercent: 5.4}, {TimeMillis: 760, PositionPercent: 7.6}, {TimeMillis: 1000, PositionPercent: 10}}
+	fitted, err := fitQuantizedMotionTiming(samples, probes, map[int64]struct{}{0: {}, 1000: {}}, 1, 400, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []int64{0, 200, 500, 800, 1000} {
+		if fitted[i].TimeMillis != want {
+			t.Fatalf("point %d retained a speed pulse: at %d, want rounded-position crossing %d", i, fitted[i].TimeMillis, want)
+		}
+	}
+	for i := 1; i < len(fitted); i++ {
+		left, right := fitted[i-1], fitted[i]
+		velocity := (math.Round(right.PositionPercent) - math.Round(left.PositionPercent)) * 1000 / float64(right.TimeMillis-left.TimeMillis)
+		if math.Abs(velocity-10) > 1e-9 {
+			t.Fatalf("constant-rate input pulsed at %f", velocity)
+		}
+	}
+	// Authored anchors and paced transports must retain their timing.
+	for _, floor := range []int64{1, 110} {
+		mandatory := map[int64]struct{}{0: {}, 240: {}, 540: {}, 760: {}, 1000: {}}
+		if floor > 1 {
+			mandatory = map[int64]struct{}{0: {}, 1000: {}}
+		}
+		fixed, err := fitQuantizedMotionTiming(samples, probes, mandatory, 1, 400, floor)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range samples {
+			if fixed[i].TimeMillis != samples[i].TimeMillis {
+				t.Fatal("retimed a mandatory or paced point")
+			}
+		}
+	}
+}
+
 func TestImmediateSamplingPreservesReversalAndTimingAcrossAppends(t *testing.T) {
 	for _, floor := range []int64{30, 50, 100, 110} {
 		settings := config.DefaultSettings().Motion
@@ -123,6 +164,40 @@ func BenchmarkQuantizedMotionFrame(b *testing.B) {
 		if _, err := engine.nextMotionSamplesLocked(); err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func TestCrossingTimingDoesNotSearchAcrossAnUnpinnedReversal(t *testing.T) {
+	probes := []MotionSample{{TimeMillis: 0, PositionPercent: 0}, {TimeMillis: 250, PositionPercent: 5}, {TimeMillis: 500, PositionPercent: 0}, {TimeMillis: 750, PositionPercent: 5}, {TimeMillis: 1000, PositionPercent: 0}}
+	samples := []MotionSample{probes[0], {TimeMillis: 240, PositionPercent: 4.8}, {TimeMillis: 760, PositionPercent: 4.8}, probes[4]}
+	fitted, err := fitQuantizedMotionTiming(samples, probes, nil, 1, 320, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range samples {
+		if fitted[i] != samples[i] {
+			t.Fatal("aligned a point to a crossing in another stroke")
+		}
+	}
+}
+
+func TestBufferedTimingResumesAtTheActualBlendEnd(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	engine := &Engine{settings: settings, transition: &planTransition{startMillis: 0, endMillis: 1000}}
+	var probes []MotionSample
+	for at := int64(0); at <= 2000; at += 10 {
+		probes = append(probes, MotionSample{TimeMillis: at, PositionPercent: float64(at) / 100})
+	}
+	samples := []MotionSample{{TimeMillis: 0}, {TimeMillis: 240, PositionPercent: 2.4}, {TimeMillis: 1000, PositionPercent: 10}, {TimeMillis: 1240, PositionPercent: 12.4}, {TimeMillis: 1540, PositionPercent: 15.4}, {TimeMillis: 2000, PositionPercent: 20}}
+	fitted, err := engine.retimeBufferedSamples(samples, probes, map[int64]struct{}{1000: {}}, 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fitted[1] != samples[1] || fitted[2] != samples[2] {
+		t.Fatal("changed the blend or its boundary")
+	}
+	if fitted[3].TimeMillis != 1200 || fitted[4].TimeMillis != 1500 {
+		t.Fatal("ordinary strokes after the blend lost crossing alignment")
 	}
 }
 

@@ -39,7 +39,7 @@ type SessionInfo struct {
 	CreatedAt     string        `json:"created_at"`
 	LastActiveAt  string        `json:"last_active_at"`
 	ExpiresAt     time.Time     `json:"expires_at"`
-	IdleExpiresAt time.Time     `json:"idle_expires_at"`
+	IdleExpiresAt *time.Time    `json:"idle_expires_at"`
 	Current       bool          `json:"current"`
 	Interface     string        `json:"interface"`
 	Key           string        `json:"-"`
@@ -78,6 +78,10 @@ func (s *Store) ListOwnSessions(ctx context.Context, actorKey string) ([]Session
 	if err != nil {
 		return nil, err
 	}
+	idleMinutes, err := readIdleMinutes(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT token_hash, public_id, device_name, client_browser, client_platform,
 		created_at, last_seen_at, expires_at, interface FROM user_sessions WHERE user_id = ?
 		ORDER BY (token_hash = ?) DESC, created_at DESC, token_hash DESC LIMIT ?`, owner, actorKey, MaxSessionsPerAccount)
@@ -93,13 +97,17 @@ func (s *Store) ListOwnSessions(ctx context.Context, actorKey string) ([]Session
 			_ = rows.Close()
 			return nil, err
 		}
-		lastSeen, deadline, valid := s.sessionTimes(item.LastActiveAt, expires)
+		lastSeen, deadline, valid := s.sessionTimes(item.LastActiveAt, expires, idleMinutes)
 		if !valid {
 			continue
 		}
-		item.ExpiresAt, item.IdleExpiresAt = deadline, lastSeen.Add(s.idleLimit)
-		if item.IdleExpiresAt.After(deadline) {
-			item.IdleExpiresAt = deadline
+		item.ExpiresAt = deadline
+		if idleMinutes > 0 {
+			idleExpiry := lastSeen.Add(time.Duration(idleMinutes) * time.Minute)
+			if idleExpiry.After(deadline) {
+				idleExpiry = deadline
+			}
+			item.IdleExpiresAt = &idleExpiry
 		}
 		item.Current, item.Client = item.Key == actorKey, normalizedSessionClient(item.Client)
 		sessions = append(sessions, item)
@@ -117,11 +125,15 @@ func (s *Store) ListOwnSessions(ctx context.Context, actorKey string) ([]Session
 	return sessions, nil
 }
 
-func (s *Store) sessionTimes(lastSeenRaw, expiresRaw string) (time.Time, time.Time, bool) {
+func (s *Store) sessionTimes(lastSeenRaw, expiresRaw string, idleMinutes int) (time.Time, time.Time, bool) {
+	return sessionTimesAt(lastSeenRaw, expiresRaw, idleMinutes, s.now())
+}
+
+func sessionTimesAt(lastSeenRaw, expiresRaw string, idleMinutes int, now time.Time) (time.Time, time.Time, bool) {
 	lastSeen, seenErr := time.Parse(time.RFC3339Nano, lastSeenRaw)
 	expires, expiresErr := time.Parse(time.RFC3339Nano, expiresRaw)
-	now := s.now()
-	return lastSeen, expires, seenErr == nil && expiresErr == nil && now.Before(expires) && now.Sub(lastSeen) <= s.idleLimit
+	return lastSeen, expires, seenErr == nil && expiresErr == nil && now.Before(expires) &&
+		validIdleMinutes(idleMinutes) && (idleMinutes == 0 || now.Sub(lastSeen) <= time.Duration(idleMinutes)*time.Minute)
 }
 
 // SessionOwnerTx revalidates an account's session inside a domain write
@@ -134,15 +146,16 @@ func (s *Store) SessionOwnerTx(ctx context.Context, tx *sql.Tx, key string) (str
 // waited behind logout, password reset, disabling or expiry cannot apply later.
 func (s *Store) liveSessionOwner(ctx context.Context, tx *sql.Tx, key string) (string, error) {
 	var owner, lastSeen, expires string
-	err := tx.QueryRowContext(ctx, `SELECT s.user_id, s.last_seen_at, s.expires_at FROM user_sessions s
-		JOIN user_accounts a ON a.id = s.user_id WHERE s.token_hash = ? AND a.disabled = 0`, key).Scan(&owner, &lastSeen, &expires)
+	var idleMinutes int
+	err := tx.QueryRowContext(ctx, `SELECT s.user_id, s.last_seen_at, s.expires_at, `+sessionIdleSelect+` FROM user_sessions s
+		JOIN user_accounts a ON a.id = s.user_id WHERE s.token_hash = ? AND a.disabled = 0`, key).Scan(&owner, &lastSeen, &expires, &idleMinutes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", ErrInvalidSession
 	}
 	if err != nil {
 		return "", err
 	}
-	if _, _, valid := s.sessionTimes(lastSeen, expires); !valid {
+	if _, _, valid := s.sessionTimes(lastSeen, expires, idleMinutes); !valid {
 		return "", ErrInvalidSession
 	}
 	return owner, nil

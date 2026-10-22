@@ -64,5 +64,20 @@ func hostedLayeredLayersSchema(layer map[string]any) map[string]any {
 		map[string]any{"type": "object", "properties": map[string]any{"op": map[string]any{"const": "edit"}, "value": patch}, "required": []string{"op", "value"}, "additionalProperties": false},
 		map[string]any{"type": "object", "properties": map[string]any{"op": map[string]any{"const": "remove"}}, "required": []string{"op"}, "additionalProperties": false},
 	}}
-	return map[string]any{"type": "object", "properties": map[string]any{"range": operation, "center": operation, "pace": operation}, "required": []string{}, "additionalProperties": false}
+	// Only hosted pace edits advertise the optional rate floor. Other axes and
+	// the compact local contract keep their existing grammar and prompt size.
+	paceProperties := maps.Clone(properties)
+	paceProperties["low_rate_percent"] = map[string]any{"type": "integer", "minimum": 0, "maximum": 100}
+	paceProperties["inverted"] = map[string]any{"type": "boolean"}
+	pacePatch := maps.Clone(patch)
+	pacePatch["properties"] = paceProperties
+	paceEdit := map[string]any{"type": "object", "properties": map[string]any{"op": map[string]any{"const": "edit"}, "value": pacePatch}, "required": []string{"op", "value"}, "additionalProperties": false}
+	followFields := map[string]any{"axis": map[string]any{"type": "string", "enum": []string{"center", "range"}},
+		"relation":       map[string]any{"type": "string", "enum": []string{"same", "opposite"}},
+		"amount_percent": properties["amount_percent"], "low_rate_percent": paceProperties["low_rate_percent"]}
+	follow := map[string]any{"type": "object", "properties": map[string]any{"op": map[string]any{"const": "follow"}, "value": map[string]any{
+		"type": "object", "properties": followFields, "required": []string{"axis", "relation", "amount_percent", "low_rate_percent"}, "additionalProperties": false}},
+		"required": []string{"op", "value"}, "additionalProperties": false}
+	paceOperation := map[string]any{"oneOf": []any{paceEdit, operation["oneOf"].([]any)[1], follow}}
+	return map[string]any{"type": "object", "properties": map[string]any{"range": operation, "center": operation, "pace": paceOperation}, "required": []string{}, "additionalProperties": false}
 }

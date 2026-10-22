@@ -27,6 +27,7 @@ func CloneFlowSpec(spec *FlowSpec) *FlowSpec {
 
 func (s FlowSpec) layerEnvelope(u float64, layer FlowLayer) float64 {
 	phase := float64(layer.PhasePercent) / 100
+	var value float64
 	switch layer.Shape {
 	case "drift":
 		s.MemoryCycles = layer.PeriodCycles
@@ -37,12 +38,16 @@ func (s FlowSpec) layerEnvelope(u float64, layer FlowLayer) float64 {
 		case "pace":
 			salt = 0xd3a2646c
 		}
-		return s.driftField(u+phase*s.cycleCount(), salt)
+		value = s.driftField(u+phase*s.cycleCount(), salt)
 	case "alternate":
-		return s.alternatingLayer(u, layer)
+		value = s.alternatingLayer(u, layer)
 	default:
-		return 0.5 + 0.5*flowWave(u, s.cycleCount(), float64(layer.PeriodCycles), phase)
+		value = 0.5 + 0.5*flowWave(u, s.cycleCount(), float64(layer.PeriodCycles), phase)
 	}
+	if layer.Inverted {
+		return 1 - value
+	}
+	return value
 }
 
 // Alternation reaches both requested extremes, with seeded unequal dwell and

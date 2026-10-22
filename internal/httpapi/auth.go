@@ -85,6 +85,8 @@ func newAuthenticationComponents(store *config.Store, runtime Runtime) (*account
 }
 
 func (s *Server) authenticationRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/auth/session-policy", s.sessionManagementHandler(s.handleSessionPolicy))
+	mux.HandleFunc("PUT /api/auth/session-policy", s.sessionManagementHandler(s.handleSessionPolicy))
 	s.controlGrantRoutes(mux)
 	s.authenticationPortalRoutes(mux)
 	mux.HandleFunc("POST /api/auth/bootstrap", s.handleAuthenticationBootstrap)

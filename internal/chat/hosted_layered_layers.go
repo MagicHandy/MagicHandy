@@ -32,7 +32,7 @@ func normalizeHostedLayerOperations(edits map[string]json.RawMessage) error {
 		}
 		var op string
 		if json.Unmarshal(fields["op"], &op) != nil {
-			return errors.New("layer operation must be edit or remove")
+			return errors.New("layer operation must be edit, remove or pace follow")
 		}
 		delete(fields, "op")
 		switch op {
@@ -54,8 +54,14 @@ func normalizeHostedLayerOperations(edits map[string]json.RawMessage) error {
 			}
 			patch["axis"], _ = json.Marshal(axis)
 			layers = append(layers, patch)
+		case "follow":
+			patch, err := normalizeHostedFollowLayer(axis, fields)
+			if err != nil {
+				return err
+			}
+			layers = append(layers, patch)
 		default:
-			return errors.New("layer operation must be edit or remove")
+			return errors.New("layer operation must be edit, remove or pace follow")
 		}
 	}
 	edits["layers"], _ = json.Marshal(layers)
@@ -63,4 +69,20 @@ func normalizeHostedLayerOperations(edits map[string]json.RawMessage) error {
 		edits["remove_layers"], _ = json.Marshal(remove)
 	}
 	return nil
+}
+
+func normalizeHostedFollowLayer(axis string, fields map[string]json.RawMessage) (map[string]json.RawMessage, error) {
+	if axis != "pace" || len(fields) != 1 || fields["value"] == nil {
+		return nil, errors.New("only pace supports a follow operation with one value")
+	}
+	patch, err := uniqueLayeredObject(fields["value"])
+	if err != nil {
+		return nil, err
+	}
+	if len(patch) != 4 || patch["axis"] == nil || patch["relation"] == nil || patch["amount_percent"] == nil || patch["low_rate_percent"] == nil {
+		return nil, errors.New("pace follow requires axis, relation, amount_percent and low_rate_percent")
+	}
+	follow, _ := json.Marshal(map[string]json.RawMessage{"axis": patch["axis"], "relation": patch["relation"]})
+	return map[string]json.RawMessage{"axis": json.RawMessage(`"pace"`), "follow": follow,
+		"amount_percent": patch["amount_percent"], "low_rate_percent": patch["low_rate_percent"]}, nil
 }

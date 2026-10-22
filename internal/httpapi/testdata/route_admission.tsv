@@ -5,6 +5,8 @@
 host	DELETE /api/accounts/{id}/control-grant
 host	GET /api/audit
 host	GET /api/audit/export
+host	GET /api/auth/session-policy
+host	PUT /api/auth/session-policy
 self	DELETE /api/auth/profile-image
 self	DELETE /api/auth/recovery-codes
 self	DELETE /api/auth/sessions

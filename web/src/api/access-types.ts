@@ -20,7 +20,7 @@ export interface ManagedSession {
   created_at: string;
   last_active_at: string;
   expires_at: string;
-  idle_expires_at: string;
+  idle_expires_at: string | null;
   current: boolean;
   interface?: "full" | "remote";
   controller: boolean;
@@ -31,6 +31,11 @@ export interface ManagedSessionsResponse {
   sessions: ManagedSession[];
   current_session_id: string;
   limit: number;
+}
+
+export interface SessionPolicy {
+  idle_minutes: number;
+  lifetime_minutes: number;
 }
 
 export interface UserAccount {

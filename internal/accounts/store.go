@@ -28,8 +28,8 @@ const (
 
 	// DefaultSessionLifetime is the absolute server-side session limit.
 	DefaultSessionLifetime = 12 * time.Hour
-	// DefaultSessionIdleLimit expires a session not seen by the server.
-	DefaultSessionIdleLimit = 30 * time.Minute
+	// DefaultSessionIdleLimit expires a login without deliberate user activity.
+	DefaultSessionIdleLimit = 8 * time.Hour
 	// MaxSessionsPerAccount bounds persistent sessions for one account.
 	MaxSessionsPerAccount = 20
 )
@@ -96,7 +96,6 @@ type Store struct {
 	db           *appstore.DB
 	now          func() time.Time
 	lifetime     time.Duration
-	idleLimit    time.Duration
 	randomBytes  func([]byte) error
 	passwordSlot chan struct{}
 	profileMu    sync.RWMutex
@@ -108,10 +107,9 @@ func New(db *appstore.DB) (*Store, error) {
 		return nil, errors.New("account datastore is required")
 	}
 	store := &Store{
-		db:        db,
-		now:       func() time.Time { return time.Now().UTC() },
-		lifetime:  DefaultSessionLifetime,
-		idleLimit: DefaultSessionIdleLimit,
+		db:       db,
+		now:      func() time.Time { return time.Now().UTC() },
+		lifetime: DefaultSessionLifetime,
 		// Argon2id is intentionally memory-hard. One slot bounds a burst of
 		// simultaneous login attempts to one 19 MiB work area.
 		passwordSlot: make(chan struct{}, 1),
@@ -122,6 +120,9 @@ func New(db *appstore.DB) (*Store, error) {
 	}
 	if err := store.reconcileProfileImages(context.Background()); err != nil {
 		return nil, err
+	}
+	if err := store.initializeSessionPolicy(context.Background()); err != nil {
+		return nil, fmt.Errorf("initialize session policy: %w", err)
 	}
 	return store, nil
 }
@@ -415,9 +416,10 @@ func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (
 	var account Account
 	var disabled int
 	var lastSeenRaw, expiresRaw, controlAccountID, publicID, audience string
+	var idleMinutes int
 	err := s.db.SQL().QueryRowContext(ctx, `
 		SELECT a.id, a.username, a.role, a.disabled, a.last_login_at, a.created_at, a.updated_at,
-		       a.profile_updated_at, a.interface_access, s.last_seen_at, s.expires_at, s.public_id, s.interface,
+		       a.profile_updated_at, a.interface_access, s.last_seen_at, s.expires_at, s.public_id, s.interface, `+sessionIdleSelect+`,
 		       CASE
 		         WHEN EXISTS (
 		           SELECT 1
@@ -436,7 +438,7 @@ func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (
 	`, key).Scan(
 		&account.ID, &account.Username, &account.Role, &disabled,
 		&account.LastLoginAt, &account.CreatedAt, &account.UpdatedAt,
-		&account.ProfileUpdatedAt, &account.InterfaceAccess, &lastSeenRaw, &expiresRaw, &publicID, &audience, &controlAccountID,
+		&account.ProfileUpdatedAt, &account.InterfaceAccess, &lastSeenRaw, &expiresRaw, &publicID, &audience, &idleMinutes, &controlAccountID,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Session{}, ErrInvalidSession
@@ -446,14 +448,18 @@ func (s *Store) resolveSessionKey(ctx context.Context, key string, touch bool) (
 	}
 	account.Disabled = disabled != 0
 	account.HasProfileImage = account.ProfileUpdatedAt != ""
-	lastSeen, lastSeenErr := time.Parse(time.RFC3339Nano, lastSeenRaw)
-	expires, expiresErr := time.Parse(time.RFC3339Nano, expiresRaw)
 	now := s.now()
-	if lastSeenErr != nil || expiresErr != nil || account.Disabled || !now.Before(expires) || now.Sub(lastSeen) > s.idleLimit {
+	lastSeen, expires, valid := sessionTimesAt(lastSeenRaw, expiresRaw, idleMinutes, now)
+	if !valid || account.Disabled {
 		return Session{}, ErrInvalidSession
 	}
 	if touch && now.Sub(lastSeen) >= time.Minute {
 		if err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
+			// Policy shortening, revocation or expiry while waiting for the
+			// writer must not be undone by a late activity update.
+			if _, err := s.liveSessionOwner(ctx, tx, key); err != nil {
+				return err
+			}
 			result, err := tx.ExecContext(ctx, `
 				UPDATE user_sessions SET last_seen_at = ?
 				WHERE token_hash = ?

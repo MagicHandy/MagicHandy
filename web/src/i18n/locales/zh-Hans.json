@@ -3305,5 +3305,16 @@
   "This can happen after moving app data to another Windows account or computer. Reset saved credentials, then sign in again or re-enter your API keys.": "将应用数据移至其他 Windows 账户或电脑后，可能会出现此情况。请重置已保存的凭据，然后重新登录或输入 API 密钥。",
   "This removes all saved ChatGPT sign-ins and cloud API keys on this app host. Provider and model settings stay. Remote access is not revoked; manage it with each provider if needed.": "这会移除本应用主机上保存的所有 ChatGPT 登录和云端 API 密钥，保留服务商及模型设置。远程访问权限不会被撤销；如有需要，请在各服务商处管理。",
   "Reset all saved cloud credentials": "重置所有已保存的云端凭据",
-  "Reset saved credentials…": "重置已保存的凭据…"
+  "Reset saved credentials…": "重置已保存的凭据…",
+  "Automatic sign-out": "自动退出登录",
+  "Sign out after inactivity": "闲置多久后退出登录",
+  "30 minutes": "30 分钟",
+  "2 hours": "2 小时",
+  "8 hours (default)": "8 小时（默认）",
+  "Idle sign-out: Off": "闲置自动退出：关闭",
+  "Idle sign-out changed": "闲置退出设置已更改",
+  "Could not load idle sign-out settings.": "无法加载闲置退出设置。",
+  "Could not confirm the change. Refresh to check the saved setting.": "无法确认更改。请刷新以查看已保存的设置。",
+  "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.": "立即应用于所有有效登录。仅查看页面或播放动作不计为活动。",
+  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "关闭后不会因闲置退出。登录仍会在 {hours} 小时后到期。控制端连接中断仍会停止动作。"
 }

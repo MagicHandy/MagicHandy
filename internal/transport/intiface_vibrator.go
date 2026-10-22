@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -367,7 +368,7 @@ func (v *IntifaceVibrator) prepareSelection(deviceIndex uint32) (vibratorSelecti
 func (v *IntifaceVibrator) Release(ctx context.Context) error {
 	v.mu.Lock()
 	v.invalidateLocked("idle")
-	selection := v.selection
+	selection := v.selectionSnapshotLocked()
 	v.selection = vibratorSelection{}
 	v.epoch++
 	v.intensity = 0
@@ -539,7 +540,7 @@ func (v *IntifaceVibrator) invalidateForClose() {
 
 func (v *IntifaceVibrator) stopForClose(connected bool) error {
 	v.mu.Lock()
-	selection := v.selection
+	selection := v.selectionSnapshotLocked()
 	v.mu.Unlock()
 	if !connected || !selection.selected {
 		return nil
@@ -554,6 +555,14 @@ func (v *IntifaceVibrator) closedLocked() {
 	v.stream.state = "disconnected"
 	v.diag.Connected = false
 	v.mu.Unlock()
+}
+
+// Stop sends after releasing mu. The pacer may still finish a command and
+// update motor.last, so an unlocked stop must not retain that mutable slice.
+func (v *IntifaceVibrator) selectionSnapshotLocked() vibratorSelection {
+	selection := v.selection
+	selection.motors = slices.Clone(selection.motors)
+	return selection
 }
 
 // paceAlive reports false while playback runs on a stalled pacer, so the

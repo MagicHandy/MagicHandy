@@ -53,6 +53,22 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("remote observation ordering", () => {
+  it("recovers an active controller before its lease expires after two WAN heartbeat timeouts", async () => {
+    render(<AppStateProvider><Harness /></AppStateProvider>);
+    await act(async () => {});
+    const hang = (signal?: AbortSignal) => new Promise<ControllerSnapshot>((_resolve, reject) => {
+      signal!.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+    });
+    vi.mocked(api.controllerHeartbeat).mockImplementationOnce(hang).mockImplementationOnce(hang)
+      .mockResolvedValue(control("boot-a", 3));
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+    expect(current.readOnly).toBe(true);
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(api.controllerHeartbeat).toHaveBeenCalledTimes(4); // Initial claim and three renewal attempts.
+    expect(current.readOnly).toBe(false);
+    expect(api.takeControl).not.toHaveBeenCalled();
+    expect(api.resumeMotion).not.toHaveBeenCalled();
+  });
   it("revalidates after phone-style backgrounding without reclaiming an expired controller or resuming motion", async () => {
     vi.mocked(api.getState).mockResolvedValue(full("boot-a", 1, 2, true));
     render(<AppStateProvider><Harness /></AppStateProvider>);
