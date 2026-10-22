@@ -154,6 +154,17 @@ Forwarded loopback addresses never acquire local bootstrap/file-dialog
 privileges. Direct/local modes reject forwarding headers. Secure HttpOnly
 host-only cookies and external-origin checks apply even on an HTTP backend hop.
 
+Opening the app or remote interface from a link on another site is allowed as a
+top-level GET/HEAD page navigation to the configured hostname. The browser may
+label this `Sec-Fetch-Site: cross-site`, including when an extension opens a
+tab. This exception loads the public app shell; it grants no login or control
+authority. API requests, form submissions, script fetches and embedded frames
+retain the same-origin checks, and unconfigured hostnames remain rejected.
+Responses vary on Origin and Fetch Metadata headers so caches preserve those
+request boundaries. Enter the advertised HTTPS address directly when repairing
+an older installation that rejects an external link; reloading the rejected
+navigation can retain its original site context.
+
 An nginx location in an already configured HTTPS virtual host can implement
 this contract. Adapt the literal hostname and upstream port together:
 

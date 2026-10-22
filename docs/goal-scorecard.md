@@ -1,5 +1,16 @@
 # Goal Scorecard
 
+## 2026-10-21 — Browser page navigation
+
+The browser boundary admits linked top-level GET/HEAD pages on an allowed
+hostname while retaining same-origin API, mutation, fetch and frame checks.
+Responses vary on Origin and Fetch Metadata headers to preserve those checks
+through caches. Matching Windows amd64 builds with Go 1.26.10,
+`CGO_ENABLED=0`, `-trimpath -ldflags '-s -w'` measure **23,447,040 ->
+23,447,552 B** (+512 B), within the existing core binary budget. Frontend
+assets are unchanged from the sign-in measurement below. No dependency,
+background worker or RSS/cold-start claim is added.
+
 ## 2026-10-21 — Browser-managed sign-in values
 
 Sign-in reads submitted browser fields and uses native required-field validation,

@@ -933,7 +933,8 @@ func logRequests(logger *slog.Logger, next http.Handler) http.Handler {
 
 func protectBrowserRequests(allowedHosts []string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isBrowserRequest(r) && (!isAllowedBrowserHost(r.Host, allowedHosts) || (!isSameOriginBrowserRequest(r) && !isSiblingPageNavigation(r))) {
+		w.Header().Add("Vary", "Origin, Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest")
+		if isBrowserRequest(r) && (!isAllowedBrowserHost(r.Host, allowedHosts) || (!isSameOriginBrowserRequest(r) && !isTopLevelPageNavigation(r))) {
 			rejectRequest(w, r, http.StatusForbidden, errors.New("browser requests must use an allowed MagicHandy origin"))
 			return
 		}
@@ -941,17 +942,16 @@ func protectBrowserRequests(allowedHosts []string, next http.Handler) http.Handl
 	})
 }
 
-// isSiblingPageNavigation admits a top-level page load that another MagicHandy
-// port on the same host started, such as the main app's link to the Remote on
-// the next port. The browser shows the page without handing it to the page
-// that linked to it, and only the app shell lives outside /api/, so API
-// requests and pages from other sites keep the same-origin rule.
-func isSiblingPageNavigation(r *http.Request) bool {
+// isTopLevelPageNavigation admits safe page loads from links on other sites or
+// MagicHandy ports. The browser shows the public shell without giving the
+// linking page access to it. API calls, form posts, embedded frames and fetches
+// still require the same origin; the caller separately checks the allowed Host.
+func isTopLevelPageNavigation(r *http.Request) bool {
 	header := func(name string) string { return strings.ToLower(strings.TrimSpace(r.Header.Get(name))) }
 	return (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
 		r.URL.Path != "/api" && !strings.HasPrefix(r.URL.Path, "/api/") &&
 		r.Header.Get("Origin") == "" &&
-		header("Sec-Fetch-Site") == "same-site" &&
+		(header("Sec-Fetch-Site") == "same-site" || header("Sec-Fetch-Site") == "cross-site") &&
 		header("Sec-Fetch-Mode") == "navigate" &&
 		header("Sec-Fetch-Dest") == "document"
 }
