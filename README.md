@@ -5,14 +5,14 @@ MagicHandy is a free, open-source, local-first app for controlling
 pattern library, and video funscript playback. App data stays on your machine, with
 cloud services available only when you enable them.
 
-[Download](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.66)
+[Download](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.67)
 | [Getting Started](docs/getting-started.md)
 | [Roadmap](IMPLEMENTATION_PLAN.md)
 | [Contributing](#contributing)
 
 > [!IMPORTANT]
 > MagicHandy is still in early development (alpha). The current
-> Windows build is `v0.1.0-alpha.66` and remains unsigned.
+> Windows build is `v0.1.0-alpha.67` and remains unsigned.
 
 ## Highlights
 
@@ -30,7 +30,7 @@ cloud services available only when you enable them.
 ## Install On Windows
 
 Download the installer package from the
-[latest release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.66):
+[latest release](https://github.com/MagicHandy/MagicHandy/releases/tag/v0.1.0-alpha.67):
 
 - **Setup EXE:** standard installation, shortcuts, and Windows integration.
 - **Portable ZIP:** no installer or Windows integration.
