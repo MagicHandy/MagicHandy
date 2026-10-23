@@ -51,7 +51,7 @@ func TestHostedLayeredResponsesRoundTrip(t *testing.T) {
 			current := DefaultLayeredScore(25)
 			state := MotionContext{Running: true, Autopilot: true, Layered: &current, MotionMode: MotionModeLayered}
 			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true}
-			service := Service{Provider: provider, Capabilities: &caps, MotionContext: &state, MaxTokens: 512}
+			service := Service{Provider: provider, Capabilities: &caps, MotionContext: &state, MaxTokens: 1536}
 			got, err := service.Complete(t.Context(), Request{Message: "Lower the pace by five, move the anchor to zero, and lengthen the pace cycle by four."}, nil)
 			_, want, _, domainErr := ParseLayeredReply(`{"edits":{"controls":{"anchor_percent":0},"change_by":{"speed_percent":-5},"layers":[{"axis":"pace","period_change_cycles":4,"low_rate_percent":23}]},"reply":"Test."}`, current, config.DefaultSettings().Motion)
 			if err != nil || domainErr != nil || got.Response.Motion == nil || !reflect.DeepEqual(*got.Response.Motion.Layered, want) || calls != 1 || got.Repaired || got.SemanticFallback {

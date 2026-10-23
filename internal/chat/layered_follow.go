@@ -14,6 +14,9 @@ func applyLayeredFollowing(score *motion.FlowSpec, edits []LayeredLayerEdit) err
 		if edit.Follow == nil {
 			continue
 		}
+		if score.Phrase != nil {
+			return errors.New("a counted phrase has no range or center layer to follow; edit independent pace instead")
+		}
 		link := edit.Follow
 		if edit.Axis != "pace" || (link.Axis != "center" && link.Axis != "range") || (link.Relation != "same" && link.Relation != "opposite") {
 			return errors.New("pace follow requires center or range and a same or opposite relation")

@@ -1,5 +1,24 @@
 # Goal Scorecard
 
+## 2026-10-23 — Counted Layered phrases and reach preservation
+
+Matching Windows amd64 builds from alpha.68 and the candidate, Go 1.26.10,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`, measure
+**23,524,352 → 23,505,408 B** (−18,944 B). The direct hosted contract replaces
+older duplicated text while adding optional counted phrases. The canonical UI
+remains **2,708,695 B**; no dependency, worker, polling channel or extra model
+pass is added. No RSS/cold-start improvement is claimed.
+
+Five idle repeats of the unchanged ordinary Layered compile benchmark give
+median **3.504 → 3.495 ms**, about 861 kB/op in both builds. All 47 ordinary
+Layered probe outputs match alpha.68 exactly. Turn coverage adds bounded
+once-per-plan summary work; these measurements do not claim zero overhead for
+every workload. Local contract/schema and ordinary local context are unchanged.
+Final hosted 12-case runs each pass without repair: None reasoning median
+**5.284 s**, Low **5.235 s**. This small sample does not establish a latency
+winner. The exact review app's local text-only chat took **320 ms**, first token
+**123 ms**, with motion idle. See [the evaluation](layered-range-review-2026-10-23.md).
+
 ## 2026-10-22 — Layered smoothness and buffered timing
 
 Matching Windows amd64 builds with Go 1.26.10, `CGO_ENABLED=0`,

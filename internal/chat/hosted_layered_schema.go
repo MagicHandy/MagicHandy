@@ -46,11 +46,17 @@ func hostedLayeredEditSchema(fields map[string]any) map[string]any {
 		}
 	}
 	geometry["geometry"] = map[string]any{"type": "string", "enum": names}
+	geometry["stroke_width"] = fields["stroke_width"]
+	// A phrase has no field range/center layer to follow. Existing copied pace
+	// envelopes remain ordinary independent layers; new follow edits are absent.
+	phrasePace := map[string]any{"oneOf": paceLayer.(map[string]any)["oneOf"].([]any)[:2]}
+	phrase := object(map[string]any{"composition": map[string]any{"const": "phrase"}, "phrase": hostedPhraseSchema(), "controls": object(paceControls), "layers": object(map[string]any{"pace": phrasePace}), "evolve": fields["evolve"]}, "composition", "phrase")
 	return map[string]any{"oneOf": []any{
 		map[string]any{"const": map[string]any{}},
 		object(manual, "composition"),
 		object(geometry, "composition", "geometry"),
 		fullSlider,
+		phrase,
 	}}
 }
 

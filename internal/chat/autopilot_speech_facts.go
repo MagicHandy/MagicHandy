@@ -21,6 +21,8 @@ func writeAutopilotSpeechFacts(b *strings.Builder, c AutopilotContext) {
 		f := c.CurrentFlow
 		if f.Gesture != nil {
 			writeGestureSpeechFacts(b, *f)
+		} else if f.Phrase != nil {
+			writePhraseSpeechFacts(b, *f)
 		} else {
 			ceiling := f.RangeCeilingPercent
 			if ceiling == 0 {
@@ -44,6 +46,17 @@ func writeAutopilotSpeechFacts(b *strings.Builder, c AutopilotContext) {
 	if c.CommandedPeakSpeed > 0 {
 		fmt.Fprintf(b, "The compiled phrase travels within approximately %d–%d%% of the slider; these are its outer bounds, not its current position.\n", c.CommandedPositionMin, c.CommandedPositionMax)
 	}
+}
+
+func writePhraseSpeechFacts(b *strings.Builder, f motion.FlowSpec) {
+	b.WriteString("These counted groups repeat in order; reach does not wander between their selected turning positions.\n")
+	for i, group := range f.Phrase.Strokes {
+		fmt.Fprintf(b, "Group %d: %d strokes with lower/upper turns %d/%d%%; relative travel rate %d%% of the selected base rate.\n", i+1, group.Count, group.BottomPercent, group.TopPercent, group.RatePercent)
+	}
+	if f.PaceVariationPercent > 0 {
+		b.WriteString("Seeded pace variation remains active within the repeating geometry.\n")
+	}
+	writeLayerSpeechFacts(b, f)
 }
 
 func writeGestureSpeechFacts(b *strings.Builder, f motion.FlowSpec) {
@@ -103,7 +116,7 @@ func writeLayerSpeechFacts(b *strings.Builder, f motion.FlowSpec) {
 			fmt.Fprintf(b, "Travel rate varies with a %s pace layer; its instantaneous phase is unknown.\n", layer.Shape)
 		}
 	}
-	if !movingCenter {
+	if !movingCenter && f.Phrase == nil {
 		fmt.Fprintf(b, "The stroke window remains anchored at %d%% within its active band.\n", f.AnchorPercent)
 	}
 }

@@ -1,5 +1,29 @@
 # MagicHandy Risk Register
 
+## R37: Counted Layered intent and reach-edit transients
+
+Level: Medium
+
+A plausible reply or valid motion schema does not establish the requested
+counts, typical endpoint coverage, or preservation of unrelated pace. A narrow
+new stroke can also give a joining stroke too little time if its remaining
+travel is inferred from the new width alone.
+
+Mitigation: hosted counted phrases supply explicit semantic turn pairs to the
+existing fitter; bounds, counts and seams validate atomically. Typical turn
+coverage supplements whole-loop extrema. Phrase reach splices account for the
+actual remaining distance and are bounded by the old/new legs' selected peaks,
+with an old-pair completion when needed. Real-model tests assess actual edits,
+retain wrong selections, and render accepted plans and fake transport output.
+Local prompt/schema and ordinary field behavior remain separate. No prose
+classifier or deterministic language correction is introduced.
+
+Remaining limits: model intent is not guaranteed by a finite fixture. Altered
+count/order can still use the general transition, and commanded endpoints do
+not establish physical carriage reach. Original Handy Cloud physical acceptance
+of the counted candidate is outstanding. See [ADR 0052](decisions/0052-counted-layered-phrases.md)
+and [the evaluation](layered-range-review-2026-10-23.md).
+
 ## R36: Local port denial and ambiguous startup ownership
 
 Level: Medium

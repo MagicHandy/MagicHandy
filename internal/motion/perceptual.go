@@ -33,18 +33,19 @@ type PaceSummary struct {
 // It contains no transport payload and is safe to expose to the mode planner
 // and diagnostics without retaining raw curve points.
 type PerceptualSummary struct {
-	PositionMinPercent             float64     `json:"position_min_percent"`
-	PositionMaxPercent             float64     `json:"position_max_percent"`
-	MeanStrokePercent              float64     `json:"mean_stroke_percent"`
-	StrokeLengthCV                 float64     `json:"stroke_length_cv"`
-	MinimumLocalStrokeCV           float64     `json:"minimum_local_stroke_cv"`
-	MinimumLocalStrokeRange        float64     `json:"minimum_local_stroke_range_percent"`
-	CommandedMeanTravelPerSecond   float64     `json:"commanded_mean_travel_percent_per_second"`
-	CommandedPeakVelocityPerSecond float64     `json:"commanded_peak_velocity_percent_per_second"`
-	AnchorCount                    int         `json:"anchor_count"`
-	SectionCount                   int         `json:"section_count"`
-	SpanProfile                    string      `json:"span_profile,omitempty"`
-	Pace                           PaceSummary `json:"pace"`
+	PositionMinPercent             float64      `json:"position_min_percent"`
+	PositionMaxPercent             float64      `json:"position_max_percent"`
+	MeanStrokePercent              float64      `json:"mean_stroke_percent"`
+	StrokeLengthCV                 float64      `json:"stroke_length_cv"`
+	MinimumLocalStrokeCV           float64      `json:"minimum_local_stroke_cv"`
+	MinimumLocalStrokeRange        float64      `json:"minimum_local_stroke_range_percent"`
+	CommandedMeanTravelPerSecond   float64      `json:"commanded_mean_travel_percent_per_second"`
+	CommandedPeakVelocityPerSecond float64      `json:"commanded_peak_velocity_percent_per_second"`
+	AnchorCount                    int          `json:"anchor_count"`
+	SectionCount                   int          `json:"section_count"`
+	SpanProfile                    string       `json:"span_profile,omitempty"`
+	Pace                           PaceSummary  `json:"pace"`
+	Turns                          TurnCoverage `json:"turn_coverage"`
 }
 
 func summarizeMotionPlan(
@@ -75,6 +76,7 @@ func summarizeMotionPlan(
 	summary.Pace = summarizeMotionPace(target, curve, gain, timeFactor, periodMillis, handyModel, summary)
 
 	reversals := perceptualReversals(curve, focus, periodMillis)
+	summary.Turns = summarizeTurnCoverage(reversals)
 	if len(reversals) < 2 {
 		return summary
 	}

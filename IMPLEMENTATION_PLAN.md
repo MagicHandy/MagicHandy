@@ -2,6 +2,12 @@
 
 ## Core Direction
 
+The October 23 [Layered range review](docs/layered-range-review-2026-10-23.md)
+adds hosted counted phrases to the shared Layered fitter, model-chosen regional
+widths, compiled turn coverage and bounded phrase handoffs. Ordinary local
+contracts and field timing remain intact. See [ADR 0052](docs/decisions/0052-counted-layered-phrases.md).
+The candidate remains under review; physical Cloud acceptance is outstanding.
+
 The alpha.66 release integrates PR #329's responsive cloud authentication and
 Windows credential protection with PR #332's local startup recovery. Startup
 history is part of the standard diagnostic report. Explicit fixed ports and

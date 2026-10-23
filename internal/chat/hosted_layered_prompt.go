@@ -5,52 +5,17 @@ import (
 	"strings"
 )
 
-const hostedLayeredControlsGuide = `- controls: each requested control has exactly one operation: {"op":"set","value":<absolute value>} OR {"op":"adjust","value":<signed delta>}. Never emit change_by. Preserve unrequested controls by omitting them (or null only when the output schema requires nullable fields). Do not fill them with copied current values or zero deltas. Zero is a real value, not a placeholder.
-Absolute bounds: min_percent 0..90, max_percent 10..100, speed_percent saved limits, anchor_percent 0..100, memory_cycles 2..32, pace_variation_percent 0..40, variation_mode drift or waves. Numeric adjustments are -100..100; variation_mode only supports set. A delta changes the current value; do not also emit its calculated absolute result. Resolve compound requests by dimension: permission to develop location or reach does not authorize changing a pace the person has asked to retain.
-Position and pace are separate scales: saved speed limits constrain speed_percent only. Never copy a speed limit into min_percent or max_percent; those are travel endpoints. Short strokes at both ends need narrow stroke_width within the whole band, not a narrower middle band. Preserve outer endpoints unless the requested locations require changing them.
-current_score.controls contains plain state values, not edit operations. Examples below describe only requested changes.`
-
-const hostedLayeredPeriodGuide = `For layer timing use period_cycles:{"op":"set","value":<2..32>} or period_cycles:{"op":"adjust","value":<-30..30>}. Never emit period_change_cycles. Increasing an existing pace period BY 4 cycles uses {"op":"adjust","value":4}: current 22 becomes 26, not 4. Slower development changes period, not amount or speed. Omit unchanged timing (or null only when required by the output schema).`
-
-const hostedLayeredLayersGuide = `- layers: an object keyed by range, center and pace. Each chosen axis has one operation: {"op":"edit","value":{...partial fields...}} patches amount_percent (0..100), period_cycles (set/adjust), phase_percent (0..100), or shape (drift/alternate/wave); {"op":"remove"} removes it. Choose the operation before its value. Omitted axes stay unchanged. Never emit remove_layers or an axis field inside the operation. A removed axis has no value. New defaults: amount 30, period 12, phase 0, drift.`
-
-const hostedLayeredGeometryGuide = `Composition: choose a named geometry OR manual refinements.
-For a named operation, edits.composition is "geometry" and edits.geometry names it. That operation supplies its coupled shape controls, widths and range/center layers. Do not restate those fields. You may additionally change speed_percent, memory_cycles, pace_variation_percent, or the pace layer. Outer min_percent/max_percent are also available except with full_slider, which sets them itself. Geometry composition has no stroke_width, anchor_percent, variation_mode, or range/center layer fields.
-Full-slider travel is a distinct composition: {"composition":"full_slider"}, with no geometry field. Choose it only for intended travel over 0..100; it replaces the outer band. The other named geometries, including full_band, use composition "geometry" and operate inside the chosen band.
-For custom shape or layer refinements, edits.composition is "manual" and geometry is omitted. Every control, custom stroke_width and layer edit is available in this branch. Use it for a custom anchor, custom widths, changes to a range/center layer, or combinations that differ from a named geometry's definition. It also handles independent pace edits. The base width envelope follows variation_mode (waves is periodic, drift is irregular); a drift range layer does not replace that underlying mode. This is a partial patch, not a snapshot: omit unrelated values and layers instead of copying the current score.
-Plan from current_score, not from the schema's numeric bounds: saved_limits are permission limits, never targets. Check each proposed operation against the request, including the resulting pace and outer band. A geometry-only request normally needs no controls, pace-layer edits or evolution. The reply must describe the actual resulting score; claiming a value stayed unchanged cannot undo an emitted change.
-For no change, edits is {}. Pace stays independent of shape: change it only when the current request or autonomous permission calls for it. Use null only when the strict schema requires an unchosen field. A custom alternating-end example (current full band):
-{"edits":{"stroke_width":{"min_percent":20,"max_percent":40},"layers":[{"axis":"center","amount_percent":100,"period_cycles":8,"shape":"alternate"}],"remove_layers":["range"]},"reply":"Custom short strokes alternate between the ends."}
-`
-
-// hostedLayeredContract translates only the code-owned contract and its JSON
-// examples. Persona text, history and the user's request never pass through it.
-// It is idempotent because interactive composition adds state-specific examples
-// after the common contract is composed. Local prompt bytes remain untouched.
+// Translate only code-owned examples added by the live lifecycle contract.
+// Persona text, history and requests never pass through this function.
 func hostedLayeredContract(contract string) string {
-	lines := strings.Split(contract, "\n")
-	kept := make([]string, 0, len(lines))
-	hasGeometryGuide := strings.Contains(contract, "Composition: choose a named geometry OR manual refinements.")
-	for _, line := range lines {
-		switch {
-		case strings.HasPrefix(line, "Use geometry for coupled reach/location edits."):
-			line = "Choose the composition method for coupled reach/location edits. Named geometry preserves pace; additionally change speed_percent only when requested or autonomously authorized. Decide the intended shape and preserved dimensions before emitting independent controls."
-		case !hasGeometryGuide && strings.HasPrefix(line, "Geometry works inside the outer band."):
-			line += "\n" + hostedLayeredGeometryGuide
-		case strings.HasPrefix(line, "- controls: partial absolute"):
-			line = hostedLayeredControlsGuide
-		case strings.HasPrefix(line, "- change_by:"):
-			continue
-		case strings.HasPrefix(line, "For relative timing use period_change_cycles"):
-			line = hostedLayeredPeriodGuide
-		case strings.HasPrefix(line, "- layers: partial axis edits"):
-			line = hostedLayeredLayersGuide
-		}
-		for _, part := range strings.Split(line, "\n") {
-			kept = append(kept, hostedLayeredExample(part))
-		}
+	if contract == layeredContract {
+		return hostedLayeredBaseContract
 	}
-	return strings.Join(kept, "\n")
+	lines := strings.Split(contract, "\n")
+	for i, line := range lines {
+		lines[i] = hostedLayeredExample(line)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func hostedLayeredExample(line string) string {

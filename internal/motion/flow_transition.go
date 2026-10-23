@@ -5,13 +5,15 @@ import (
 	"sort"
 )
 
-// A pace-only Layered edit keeps the stroke destinations. Splice the unfinished
+// A pace-only Layered edit keeps the stroke destinations. Counted phrases also
+// preserve their ordinal stroke when reach changes without changing counts.
+// Splice the unfinished
 // stroke into the next reversal instead of crossfading two oscillators that can
 // oppose one another. The exact quintic must be monotone and fit the existing
 // Flow envelope; otherwise the normal transition remains the fallback.
 func layeredPaceTransition(previous MotionPlan, active *planTransition, next *MotionPlan, start int64) *planTransition {
 	if active != nil || !isLayeredFlow(previous.Target.Flow) || !isLayeredFlow(next.Target.Flow) ||
-		!sameLayeredDestinations(previous, *next) {
+		(!sameLayeredDestinations(previous, *next) && !samePhraseSlots(previous, *next)) {
 		return nil
 	}
 	knots := next.curve.authoredKnots
@@ -39,22 +41,59 @@ func layeredPaceTransition(previous MotionPlan, active *planTransition, next *Mo
 		math.Pow(float64(next.curve.duration)/float64(next.PeriodMillis), 2)
 	preferred := max(int64(1), int64(math.Round((float64(knots[endIndex].TimeMillis)-clock)*float64(next.PeriodMillis)/float64(next.curve.duration))))
 	budget := legBudget{velocity: referenceTravelRateForSpeed(100, next.timingModel), acceleration: flowAccelerationBudget, jerk: flowJerkBudget}
-	if bridge := fitLayeredSplice(previous, next, start, start, from, to, v, a, endAcceleration, preferred, phase, budget); bridge != nil {
+	preferred, boundedBudget := phraseReachSpliceParameters(previous, *next, endIndex, from, v, preferred, budget)
+	if bridge := fitLayeredSplice(previous, next, start, start, from, to, v, a, endAcceleration, preferred, phase, boundedBudget); bridge != nil {
 		return bridge
 	}
 	// Near a turn the inherited momentum may not permit a monotone splice to
 	// that destination. Finish the already moving stroke, then splice the next
 	// stroke from its actual state; never blend opposed oscillators to force it.
-	oldRemaining := (float64(previous.curve.authoredKnots[endIndex].TimeMillis) - oldClock) * float64(previous.PeriodMillis) / float64(previous.curve.duration)
-	strokeStart := start + max(int64(1), int64(math.Ceil(oldRemaining)))
-	from = previous.SampleAt(strokeStart).PositionPercent
-	v, a = layeredPlanDerivatives(previous, strokeStart)
-	endIndex = endIndex%(len(knots)-1) + 1
-	to = next.focus.apply(knots[endIndex].PositionPercent)
-	phase = float64(knots[endIndex].TimeMillis) / float64(next.curve.duration)
-	endAcceleration = next.curve.accelerationFloat(float64(knots[endIndex].TimeMillis)) * next.focus.gain() * math.Pow(float64(next.curve.duration)/float64(next.PeriodMillis), 2)
-	preferred = max(int64(1), int64(math.Round(float64(knots[endIndex].TimeMillis-knots[endIndex-1].TimeMillis)*float64(next.PeriodMillis)/float64(next.curve.duration))))
-	return fitLayeredSplice(previous, next, start, strokeStart, from, to, v, a, endAcceleration, preferred, phase, budget)
+	return deferredLayeredSplice(previous, next, start, oldClock, endIndex, budget)
+}
+
+func deferredLayeredSplice(previous MotionPlan, next *MotionPlan, start int64, oldClock float64, endIndex int, budget legBudget) *planTransition {
+	knots, oldKnots := next.curve.authoredKnots, previous.curve.authoredKnots
+	oldFactor := float64(previous.PeriodMillis) / float64(previous.curve.duration)
+	strokeStart := start + max(int64(1), int64(math.Ceil((float64(oldKnots[endIndex].TimeMillis)-oldClock)*oldFactor)))
+	attempts := 1
+	if samePhraseSlots(previous, *next) && !sameLayeredDestinations(previous, *next) {
+		// A severe narrowing can need the old pair to finish: a single long
+		// quintic cannot always join the short turn's acceleration at low speed.
+		// The next shared turnaround offers a feasible join without a speed burst.
+		attempts = 2
+	}
+	for range attempts {
+		previousIndex := endIndex % (len(knots) - 1)
+		endIndex = previousIndex + 1
+		from := previous.SampleAt(strokeStart).PositionPercent
+		v, a := layeredPlanDerivatives(previous, strokeStart)
+		to := next.focus.apply(knots[endIndex].PositionPercent)
+		phase := float64(knots[endIndex].TimeMillis) / float64(next.curve.duration)
+		endAcceleration := next.curve.accelerationFloat(float64(knots[endIndex].TimeMillis)) * next.focus.gain() * math.Pow(float64(next.curve.duration)/float64(next.PeriodMillis), 2)
+		preferred := max(int64(1), int64(math.Round(float64(knots[endIndex].TimeMillis-knots[endIndex-1].TimeMillis)*float64(next.PeriodMillis)/float64(next.curve.duration))))
+		preferred, boundedBudget := phraseReachSpliceParameters(previous, *next, endIndex, from, v, preferred, budget)
+		if bridge := fitLayeredSplice(previous, next, start, strokeStart, from, to, v, a, endAcceleration, preferred, phase, boundedBudget); bridge != nil {
+			return bridge
+		}
+		strokeStart += max(int64(1), int64(math.Ceil(float64(oldKnots[endIndex].TimeMillis-oldKnots[previousIndex].TimeMillis)*oldFactor)))
+	}
+	return nil
+}
+
+func samePhraseSlots(previous, next MotionPlan) bool {
+	if !previous.Loop || !next.Loop || !sameFocusProjection(previous.focus, next.focus) || previous.Target.Flow == nil || next.Target.Flow == nil {
+		return false
+	}
+	a, b := previous.Target.Flow.Phrase, next.Target.Flow.Phrase
+	if a == nil || b == nil || len(a.Strokes) != len(b.Strokes) || len(previous.curve.authoredKnots) != len(next.curve.authoredKnots) {
+		return false
+	}
+	for i := range a.Strokes {
+		if a.Strokes[i].Count != b.Strokes[i].Count {
+			return false
+		}
+	}
+	return true
 }
 
 func fitLayeredSplice(previous MotionPlan, next *MotionPlan, start, strokeStart int64, from, to, v, a, endAcceleration float64, preferred int64, phase float64, budget legBudget) *planTransition {
