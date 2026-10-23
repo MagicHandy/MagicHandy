@@ -64,7 +64,8 @@ func (s *Server) handleProductionChatTest(w http.ResponseWriter, r *http.Request
 	motionContext := s.chatTurnMotion(settings, context.UserRequests, sessionID)
 	timed := newTimedLLMProvider(provider)
 	service := chat.Service{Provider: timed, Prompt: prompt, Memories: memories, Patterns: patterns,
-		Model: settings.LLM.Model, MaxTokens: settings.LLM.ChatMaxOutputTokens(effectiveReplyLength(settings.LLM, context.Persona)),
+		HostedResponseRepair: settings.LLM.IsHosted() && settings.LLM.HostedResponseRepair(),
+		Model:                settings.LLM.Model, MaxTokens: settings.LLM.ChatMaxOutputTokens(effectiveReplyLength(settings.LLM, context.Persona)),
 		ReasoningMode: settings.LLM.ReasoningMode, ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
 		PromptBudget: chatPromptBudget(settings.LLM), MotionContext: &motionContext, ConversationContext: context.ConversationContext, Capabilities: &context.Capabilities}
 	providerCtx, wait, release, err := s.acquireProviderRequest(ctx, llmRequestInteractive, settings.LLM)

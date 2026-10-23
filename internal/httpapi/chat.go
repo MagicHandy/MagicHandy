@@ -114,6 +114,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
+	sourceSettings := settings
 	localDefaults := settings.LLM.LocalSettings()
 	settings.LLM = settings.LLM.ConversationSettings()
 	// Stop is a global safety action. It must not depend on chat storage, the
@@ -133,73 +134,48 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer finishChat()
+	s.chatRepair.clear()
 	if settings.LLM.IsHosted() {
 		chatCtx = s.guardHostedChat(chatCtx)
 	}
 	activityID, started := s.beginChatActivity(settings.Voice)
 	defer s.modes.NotifyChatActivityComplete(activityID)
+	chatCtx = s.withOptionalChatRepair(chatCtx, settings.LLM.IsHosted(), sessionID, stopSequence, sourceSettings)
 
 	promptContext, err := s.loadInteractiveChatPromptContext(chatCtx, sessionID, settings.LLM, body.Message)
 	if err != nil {
 		s.writeChatStorageError(w, err)
 		return
 	}
-	promptID := effectivePersonaPromptSet(settings.LLM.PromptSet, promptContext.Persona)
-	prompt, memories, storageDomain, err := s.resolveInteractiveChatPersonalization(chatCtx, promptID)
-	if err != nil {
-		s.writePersonalizationStorageError(w, storageDomain, err)
+	service, ok := s.prepareInteractiveChatService(chatCtx, w, r, settings, sessionID, motionHolder, promptContext)
+	if !ok {
 		return
 	}
-	capabilities := promptContext.Capabilities
-	capabilities.MotionHolder = motionHolder
-	patternChoices, err := s.chatPatternChoicesFor(capabilities)
-	if err != nil {
-		s.writeLibraryStorageError(w, err)
-		return
-	}
-	provider, err := s.prepareLLMProvider(settings.LLM)
-	if err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": s.clientRuntimeError(r, err)})
-		return
-	}
-
-	motionContext := s.chatTurnMotion(settings, promptContext.UserRequests, sessionID)
+	capabilities := *service.Capabilities
 	reviewBefore := s.beforeChatReview(settings.LLM, capabilities)
-	service := chat.Service{
-		Provider:              provider,
-		Prompt:                prompt,
-		Model:                 settings.LLM.Model,
-		MaxTokens:             settings.LLM.ChatMaxOutputTokens(effectiveReplyLength(settings.LLM, promptContext.Persona)),
-		ReasoningMode:         settings.LLM.ReasoningMode,
-		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
-		PromptBudget:          chatPromptBudget(settings.LLM),
-		Memories:              memories,
-		Patterns:              patternChoices,
-		MotionContext:         &motionContext,
-		ConversationContext:   promptContext.ConversationContext,
-		Capabilities:          &capabilities,
-	}
-	emit, ok := s.beginInteractiveChatStream(w, r, settings.LLM, prompt.ID, sessionID, body.Message, promptContext)
+	emit, userSeq, ok := s.beginInteractiveChatStream(w, r, settings.LLM, service.Prompt.ID, sessionID, body.Message, promptContext)
 	if !ok {
 		return
 	}
 	preparation := time.Since(started)
-	diagnostics := interactiveDiagnostics(settings.LLM, prompt.ID, promptContext.Persona)
+	diagnostics := interactiveDiagnostics(settings.LLM, service.Prompt.ID, promptContext.Persona)
 	request := chat.Request{
 		Message:                body.Message,
 		History:                promptContext.History,
 		HistoryMessagesDropped: promptContext.HistoryOmitted,
 	}
+	bindChatRepair(chatCtx, userSeq, service, settings.LLM, promptContext)
 	result, ok, completionErr := s.completeInteractiveChat(chatCtx, settings.LLM, service, request, emit, started, preparation, &diagnostics)
 	if !ok {
 		return
 	}
-	if shouldRetryDeclinedChat(settings.LLM, completionErr) && !s.chatCanceled(chatCtx, stopSequence) {
+	if !result.RepairAttempted && shouldRetryDeclinedChat(settings.LLM, completionErr) && !s.chatCanceled(chatCtx, stopSequence) {
 		result, ok, completionErr = s.retryDeclinedChat(chatCtx, stopSequence, localDefaults, settings, service, request, promptContext, sessionID, emit, started, &diagnostics)
 		if !ok {
 			return
 		}
 	}
+	result.UserSeq = userSeq
 	applyPersonaStartingArea(&result, capabilities, promptContext.Persona)
 	completed := s.emitChatCompletionResult(chatCtx, stopSequence, emit, result, completionErr, sessionID,
 		diagnostics,
@@ -215,20 +191,20 @@ func (s *Server) beginInteractiveChatStream(
 	sessionID string,
 	message string,
 	promptContext interactiveChatPromptContext,
-) (sseEmitter, bool) {
+) (sseEmitter, int64, bool) {
 	emit := s.clientChatEmitter(w, r)
 	// Persist before starting SSE so canonical history failure cannot produce
 	// an untracked model turn. The seq rides the status event for client sync.
 	userSeq, err := s.chatLog.AppendTo(sessionID, chat.MessageRoleUser, message, clientIDFromRequest(r), nil)
 	if err != nil {
 		s.writeChatStorageError(w, err)
-		return nil, false
+		return nil, 0, false
 	}
 	setSSEHeaders(w)
 	if err := emitChatStarted(emit, settings, promptID, sessionID, userSeq, promptContext.CurrentMood, promptContext.Persona); err != nil {
-		return nil, false
+		return nil, 0, false
 	}
-	return emit, true
+	return emit, userSeq, true
 }
 
 func (s *Server) interruptChatSpeech(settings config.VoiceSettings) {
@@ -269,6 +245,11 @@ func (s *Server) completeInteractiveChat(
 	timedProvider := newTimedLLMProvider(service.Provider)
 	service.Provider = timedProvider
 	result, completionErr := service.Complete(providerCtx, request, func(event chat.StreamEvent) error {
+		if event.Type == "repair_start" {
+			if err := s.activateChatRepair(ctx); err != nil {
+				return err
+			}
+		}
 		return emitChatStreamEvent(emit, event)
 	})
 	if providerCtx.Err() != nil {
@@ -276,7 +257,7 @@ func (s *Server) completeInteractiveChat(
 	}
 	releaseLLM()
 	timedProvider.applyDiagnostics(diagnostics, started, preparation, schedulerWait)
-	if completionErr != nil || result.Malformed {
+	if (completionErr != nil || result.Malformed || result.RepairAttempted) && result.Input == nil {
 		result.Input = timedProvider.initialRequest
 	}
 	return result, true, completionErr
@@ -480,6 +461,8 @@ func emitChatStarted(emit sseEmitter, settings config.LLMSettings, promptID, ses
 
 func emitChatStreamEvent(emit sseEmitter, event chat.StreamEvent) error {
 	switch event.Type {
+	case "repair_start", "local_repair_start":
+		return emit("status", map[string]any{"state": "repairing_response"})
 	case "delta", "repair_delta":
 		return emit(event.Type, map[string]any{
 			"phase": event.Phase,
@@ -508,14 +491,11 @@ func managedLlamaReasoningBudget(settings config.LLMSettings, runtimeCurrent boo
 
 func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint64, emit sseEmitter, result chat.Result, err error, sessionID string, diagnostics chat.MessageDiagnostics, currentMood chat.Mood, started time.Time) (completed bool) {
 	result, err = s.retainChatFailure(ctx, stopSequence, sessionID, result, err, diagnostics)
-	if err != nil {
-		s.logger.Warn("chat stream failed", "provider", diagnostics.Provider, "error", err)
-		_ = emit("error", map[string]string{"message": err.Error()})
-		_ = emit("done", map[string]any{"ok": false})
+	if s.emitChatCompletionError(ctx, stopSequence, emit, result, err, diagnostics) {
 		return
 	}
 	if s.chatCanceled(ctx, stopSequence) {
-		emitChatCancellation(emit)
+		s.emitChatCancellationAt(ctx, stopSequence, emit, false)
 		return
 	}
 	if result.Malformed {
@@ -552,7 +532,7 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		}
 	}()
 	if s.chatCanceled(ctx, stopSequence) {
-		emitChatCancellation(emit)
+		s.emitChatCancellationAt(ctx, stopSequence, emit, false)
 		return
 	}
 
@@ -578,7 +558,7 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		return
 	}
 	if !committed {
-		emitChatCancellation(emit)
+		s.emitChatCancellationAt(ctx, stopSequence, emit, false)
 		return
 	}
 	replyCommitted = true
@@ -591,7 +571,7 @@ func (s *Server) emitChatCompletionResult(ctx context.Context, stopSequence uint
 		// The reply is already committed to canonical history, so reporting a
 		// whole-turn cancellation here would contradict what a reload shows.
 		// Only the motion and speech that followed it were canceled.
-		emitChatPostReplyCancellation(emit)
+		s.emitChatCancellationAt(ctx, stopSequence, emit, true)
 		return
 	}
 	if speech != nil {
@@ -655,11 +635,12 @@ func (s *Server) commitPendingChatReply(ctx context.Context, stopSequence uint64
 	if err := s.chatLog.CommitPending(seq); err != nil {
 		return false, nil, err
 	}
+	s.markChatRepairPublished(ctx)
 	return true, s.enqueueSpeechAt(ctx, stopSequence, reply), nil
 }
 
 func (s *Server) chatCanceled(ctx context.Context, stopSequence uint64) bool {
-	return ctx.Err() != nil || s.stopSequence.Load() != stopSequence || s.hostedChatRetired(ctx)
+	return ctx.Err() != nil || s.stopSequence.Load() != stopSequence || s.hostedChatRetired(ctx) || s.chatRepairRetired(ctx)
 }
 
 func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCommand) (chatMotionDispatch, error) {
@@ -681,6 +662,10 @@ func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionC
 		}
 		return chatMotionDispatch{Action: action}, errors.New("chat motion canceled by Emergency Stop")
 	}
+	if s.chatRepairRetired(ctx) {
+		return chatMotionDispatch{}, errChatRepairStale
+	}
+	defer s.markChatRepairDispatched(ctx)
 	return s.dispatchChatMotionLocked(ctx, command, stopSequence)
 }
 
@@ -712,7 +697,7 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 		}
 		if current.Running {
 			state, applyErr := s.applyChatTargetHandoff(target, func() (motion.ActiveMotionState, error) {
-				return engine.ApplyTarget(ctx, target, "chat_start_retarget")
+				return s.applyChatTargetAtRepairBase(ctx, engine, target, "chat_start_retarget")
 			})
 			return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, applyErr
 		}
@@ -735,7 +720,7 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 			return chatMotionDispatch{Action: command.Action}, err
 		}
 		state, applyErr := s.applyChatTargetHandoff(target, func() (motion.ActiveMotionState, error) {
-			return engine.ApplyTarget(ctx, target, "chat_target")
+			return s.applyChatTargetAtRepairBase(ctx, engine, target, "chat_target")
 		})
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, applyErr
 	case chat.MotionActionStop:

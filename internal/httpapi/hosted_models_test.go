@@ -161,7 +161,7 @@ func TestHostedAutopilotHoldsRefusalWithoutLocalCallsOrDispatch(t *testing.T) {
 	}
 }
 
-func TestHostedUnstructuredRefusalAndMalformedOutputNeverRepairOrDispatch(t *testing.T) {
+func TestHostedUnstructuredRefusalAndDisabledRepairNeverDispatch(t *testing.T) {
 	for name, raw := range map[string]string{
 		"plain refusal": "I cannot help with this request.",
 		"malformed":     `{"reply":"unfinished`,
@@ -171,6 +171,11 @@ func TestHostedUnstructuredRefusalAndMalformedOutputNeverRepairOrDispatch(t *tes
 			s, fake, _ := hostedFixture(t, func(w http.ResponseWriter, _ *http.Request) {
 				calls.Add(1)
 				writeHostedFixtureReply(w, raw)
+			})
+			saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+				enabled := false
+				settings.LLM.HostedResponseRepairEnabled = &enabled
+				return settings
 			})
 			stream := postChatStream(t, s, `{"message":"Text only, please."}`)
 			if calls.Load() != 1 || strings.Contains(stream, "event: reply") || strings.Contains(stream, "event: motion") || len(fake.Commands()) != 0 {

@@ -2,6 +2,30 @@
 
 ## Core Direction
 
+The October 23 hosted response follow-up adds one bounded correction request
+for rejected interactive hosted JSON, with exact validator feedback and the
+unchanged original contract. It defaults on for external chat; when disabled,
+the latest error offers a single-use Repair response action. Canonical
+session/control/Stop/target guards reject stale corrections, and the existing
+diagnostic log retains rejected and repaired outputs. Autopilot policies remain
+unchanged. A separate
+interactive lifecycle clarification treats a fresh motion request as permission
+to start stopped motion when LLM motion is enabled; hosted legacy starts use
+model intent plus backend state/ownership checks, without word-based start
+filters. Paused/off/script-owned motion and Stop cancellation remain strict. See
+[ADR 0053](docs/decisions/0053-hosted-chat-response-repair.md) and the
+[evaluation](docs/hosted-response-repair-review-2026-10-23.md).
+
+The tested local adaptation extends the existing one-correction local policy
+to interactive Layered and Creative v2. It regenerates from the original
+request/contract plus validator feedback, without replaying the invalid draft
+that anchored Gemma to its mistake. Normal successful replies still use one
+call; an over-budget correction makes no extra call. Local paused Creative uses
+a reply-only schema, and local Pattern chat uses state-specific action branches.
+Broader prompt and start-authorization changes were rejected after live tests
+introduced false starts or lost correct motion choices. Local planning prompts,
+start filters and the shared motion implementation remain intact.
+
 The October 23 [Layered range review](docs/layered-range-review-2026-10-23.md)
 adds hosted counted phrases to the shared Layered fitter, model-chosen regional
 widths, compiled turn coverage and bounded phrase handoffs. Ordinary local

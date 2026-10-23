@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { ChatMessageDiagnostics, ChatMessagesResponse } from "../api/types";
+import type { ChatMessageDiagnostics, ChatMessagesResponse, ChatResponseRepair } from "../api/types";
 import { t, translateKnown } from "../i18n";
 
 export interface ChatDisplayMessage {
@@ -12,6 +12,10 @@ export interface ChatDisplayMessage {
   warning?: boolean;
   diagnostics?: ChatMessageDiagnostics;
   contentDownload?: string;
+  repair?: ChatResponseRepair;
+  repairState?: "repairing" | "failed" | "unavailable";
+  sourceUserSequence?: number;
+  responseRejected?: boolean;
 }
 
 interface HistoryOptions {
@@ -131,7 +135,11 @@ export function useChatHistory(options: HistoryOptions) {
           if (modern && !replace && (next! < (before.revision ?? 0) || (page.has_more && next! <= (before.revision ?? 0)))) {
             throw new Error("Invalid conversation recovery response.");
           }
-          setMessages((existing) => mergeMessages(existing, page, replace));
+          // A first-turn tail can legitimately return a canonical reset from
+          // revision zero. Keep this tab's live failure/action in that same
+          // process; a full reload or process/session replacement clears it.
+          const preserveTransient = !full && before.epoch === page.server_epoch;
+          setMessages((existing) => mergeMessages(existing, page, replace, preserveTransient));
           position.current = { seq: deliveredSeq, revision: next, epoch: modern ? page.server_epoch : undefined, snapshot: page.snapshot };
           needsAcknowledgement = deliveredSeq > page.cursor || (modern && next! > (page.cursor_revision ?? 0));
           seeded.current = true;
@@ -242,11 +250,11 @@ function validatePage(page: ChatMessagesResponse, sessionId: string, expectedEpo
   return modern;
 }
 
-function mergeMessages(existing: ChatDisplayMessage[], page: ChatMessagesResponse, replace: boolean): ChatDisplayMessage[] {
+function mergeMessages(existing: ChatDisplayMessage[], page: ChatMessagesResponse, replace: boolean, preserveTransient = false): ChatDisplayMessage[] {
   const bySequence = new Map<number, ChatDisplayMessage>();
   const transient: ChatDisplayMessage[] = [];
-  if (!replace) for (const item of existing) {
-    if (item.seq !== undefined) { if (item.seq >= (page.first_seq ?? 0)) bySequence.set(item.seq, item); }
+  if (!replace || preserveTransient) for (const item of existing) {
+    if (item.seq !== undefined) { if (!replace && item.seq >= (page.first_seq ?? 0)) bySequence.set(item.seq, item); }
     else transient.push(item);
   }
   for (const message of page.messages) {
@@ -254,8 +262,19 @@ function mergeMessages(existing: ChatDisplayMessage[], page: ChatMessagesRespons
     bySequence.set(message.seq, {
       id: `log-${message.seq}`, seq: message.seq, role: message.role, text: message.content,
       diagnostics: message.diagnostics, warning: previous?.warning,
+      repairState: previous?.repairState,
       contentDownload: message.content_truncated ? `/api/chat/messages/${message.seq}/content?${new URLSearchParams({ session_id: page.session_id, revision: String(message.revision) })}` : undefined,
     });
   }
-  return [...[...bySequence.values()].sort((a, b) => a.seq! - b.seq!), ...transient].slice(-HISTORY_LIMIT);
+  // Live failures are not assistant turns in canonical history. Anchor them
+  // to the user turn that failed so a subsequent reply cannot move an old
+  // error to the bottom of the conversation.
+  const anchored = new Map<number, ChatDisplayMessage[]>();
+  const trailing: ChatDisplayMessage[] = [];
+  for (const item of transient) {
+    if (item.sourceUserSequence && bySequence.has(item.sourceUserSequence)) {
+      anchored.set(item.sourceUserSequence, [...(anchored.get(item.sourceUserSequence) ?? []), item]);
+    } else trailing.push(item);
+  }
+  return [...[...bySequence.values()].sort((a, b) => a.seq! - b.seq!).flatMap(item => [item, ...(anchored.get(item.seq!) ?? [])]), ...trailing].slice(-HISTORY_LIMIT);
 }

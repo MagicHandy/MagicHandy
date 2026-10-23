@@ -8,8 +8,8 @@ import { t, translateKnown } from "../i18n";
 // on, the controller tab (the audio-lease owner) plays the ordered speech queue.
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { streamChat } from "../api/client";
-import type { ChatMessageDiagnostics } from "../api/types";
+import { streamChat, streamChatRepair } from "../api/client";
+import type { ChatMessageDiagnostics, ChatResponseRepair, ChatStreamEvent } from "../api/types";
 import { useAppState, useToast } from "../state/app-state";
 import { useRemoteChatSurface } from "../remote/RemoteExecutorProvider";
 import { useVoicePlayback } from "../state/voice-playback";
@@ -42,6 +42,9 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   const busyRef = useRef(false);
   const [showJump, setShowJump] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const repairFocusMessage = useRef<string>();
+  const restoreRepairFocus = useRef(false);
   const stick = useRef(true);
   const mounted = useRef(false);
   const streamGeneration = useRef(0);
@@ -49,6 +52,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   const observedStopSequence = useRef(state?.stop_sequence);
   const observedEpoch = useRef(state?.observation?.epoch);
   const observedControllerGeneration = useRef(state?.controller?.generation);
+  const observedMotionOwner = useRef(motionOwner);
   const [voiceActive, setVoiceActive] = useState(false);
   const activeChat = state?.chat?.active_session_id === sessionId ? state.chat : undefined;
   const {
@@ -59,6 +63,11 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     latestSeq: activeChat?.latest_seq ?? 0, revision: activeChat?.revision,
     pollEpoch: state?.uptime_seconds ?? 0, queueSpeech,
   });
+
+  function clearRepairOffers() {
+    setMessages(current => current.some(message => message.repair?.available) ? current.map(message => message.repair?.available
+      ? { ...message, repair: undefined, repairState: "unavailable" } : message) : current);
+  }
 
   useEffect(() => {
     mounted.current = true;
@@ -76,7 +85,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     const previous = observedStopSequence.current;
     const current = state?.stop_sequence;
     observedStopSequence.current = current;
-    if (previous !== undefined && current !== undefined && previous !== current) activeStream.current?.abort();
+    if (previous !== undefined && current !== undefined && previous !== current) { activeStream.current?.abort(); clearRepairOffers(); }
   }, [state?.stop_sequence]);
 
   useEffect(() => {
@@ -92,8 +101,16 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     // request alive until its own connection fails or authority is revoked.
     // The backend still fences inference/dispatch at Stop, expiry and takeover.
     if (previous !== state?.observation?.epoch || ownershipChanged || authority?.read_only ||
-        (authority?.heartbeat_required && !authority.active) || ((!backendOnline || readOnly) && !protectedTurn)) activeStream.current?.abort();
+        (authority?.heartbeat_required && !authority.active) || ((!backendOnline || readOnly) && !protectedTurn)) {
+      activeStream.current?.abort();
+      clearRepairOffers();
+    }
   }, [backendOnline, readOnly, state?.observation?.epoch, state?.controller]);
+
+  useEffect(() => {
+    if (observedMotionOwner.current !== motionOwner) { activeStream.current?.abort(); clearRepairOffers(); }
+    observedMotionOwner.current = motionOwner;
+  }, [motionOwner]);
 
   useEffect(() => {
     const hidden = () => { if (document.visibilityState === "hidden") activeStream.current?.abort(); };
@@ -107,6 +124,13 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
       if (el) el.scrollTop = el.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (!busy && restoreRepairFocus.current) {
+      restoreRepairFocus.current = false;
+      if (document.activeElement === document.body) composerRef.current?.focus({ preventScroll: true });
+    }
+  }, [busy]);
 
   function onScroll() {
     const el = logRef.current;
@@ -125,6 +149,16 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   const historyUnavailable = historyLoading || Boolean(historyError);
   const locked = disabled || !backendOnline || !state || readOnly || historyUnavailable;
   const assistantName = personaName?.trim() || "MagicHandy";
+
+  // A new canonical turn invalidates the live offer. The backend owns all
+  // context validation; this view never reconstructs eligibility from settings.
+  const hasRepair = messages.some(message => message.repair?.available);
+  useEffect(() => {
+    if (!hasRepair) return;
+    setMessages(current => current.map(message => message.repair?.available && message.sourceUserSequence && (activeChat?.latest_seq ?? 0) > message.sourceUserSequence
+      ? { ...message, repair: undefined, repairState: "unavailable" }
+      : message));
+  }, [hasRepair, activeChat?.latest_seq, setMessages]);
 
   // Speech input shows only when it can work: voice on and an ASR provider
   // selected. A configured-but-stopped worker leaves the button disabled with
@@ -151,17 +185,19 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   }), [sessionId, assistantName, busy, remoteReady, activeChat?.latest_seq, activeChat?.revision]);
   useRemoteChatSurface(remoteChat);
 
-  async function sendText(input: string, stopSequence?: number) {
+  async function sendText(input: string, stopSequence?: number, repairMessage?: Msg) {
     const text = input.trim();
-    if (!text || busyRef.current || locked) return;
+    if ((!text && !repairMessage) || busyRef.current || locked) return;
+    if (repairMessage && (!repairMessage.repair?.available ||
+      Boolean(repairMessage.sourceUserSequence && (activeChat?.latest_seq ?? 0) > repairMessage.sourceUserSequence))) return;
     cancelReads();
     const userId = uid();
-    const assistantId = uid();
-    setMessages((m) => [
-      ...m,
-      { id: userId, role: "user" as const, text },
-      { id: assistantId, role: "assistant" as const, text: "", streaming: true },
-    ].slice(-202));
+    const assistantId = repairMessage?.id ?? uid();
+    setMessages((m) => {
+      const previous = m.map(item => ({ ...item, repair: undefined }));
+      return repairMessage ? previous.map(item => item.id === assistantId ? { ...item, streaming: true, repairState: "repairing" } : item)
+        : [...previous, { id: userId, role: "user" as const, text }, { id: assistantId, role: "assistant" as const, text: "", streaming: true }].slice(-202);
+    });
     busyRef.current = true;
     setBusy(true);
     onBusyChange?.(true);
@@ -174,8 +210,11 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     let retainReplyOnAbort = false;
     let stagedReplySeen = false;
     let mustRefreshStopState = false;
+    let rejectionSeen = false;
+    let repairAttempted = Boolean(repairMessage);
+    let userSequence = 0;
     try {
-      await streamChat(sessionId, text, (ev) => {
+      const receive = (ev: ChatStreamEvent) => {
         if (!mounted.current || streamGeneration.current !== requestGeneration || controller.signal.aborted) return;
         if (ev.event === "status") {
           const status = ev.data as {
@@ -191,9 +230,14 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
             refusal_fallback_model?: string;
           };
           const userSeq = Number(status.user_seq ?? 0);
+          if (Number.isSafeInteger(userSeq) && userSeq > 0) userSequence = userSeq;
           if (Number.isSafeInteger(userSeq) && userSeq > 0) setMessages((m) => m.map((x) => x.id === userId ? { ...x, seq: userSeq } : x));
           if (status.state === "deterministic_stop") mustRefreshStopState = true;
           if (status.state === "retrying_local") { raw = ""; repairRaw = ""; initialReply = ""; }
+          if (status.state === "repairing_response") {
+            repairAttempted = true;
+            setMessages((m) => m.map((x) => x.id === assistantId ? { ...x, text: repairMessage ? x.text : "", warning: Boolean(repairMessage), repair: undefined, repairState: "repairing" } : x));
+          }
           const statusDiagnostics: ChatMessageDiagnostics = {
             source: "interactive",
             provider: status.provider,
@@ -212,6 +256,9 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
           const phase = (ev.data as { phase?: string }).phase;
           const chunk = (ev.data as { text?: string }).text ?? "";
           const repairing = ev.event === "repair_delta" || phase === "repair";
+          // A manual repair keeps the original rejection visible until the
+          // backend accepts a replacement, instead of exposing another draft.
+          if (repairAttempted && repairing) return;
           if (repairing) repairRaw += chunk;
           else raw += chunk;
           const draftReply = extractReplyDraft(repairing ? repairRaw : raw);
@@ -226,7 +273,10 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
             ...x,
             seq: Number.isSafeInteger(replySeq) && replySeq > 0 ? replySeq : x.seq,
             text: finalReply || "...",
-            warning: Boolean(ev.data.initial_malformed),
+            warning: Boolean(ev.data.initial_malformed) && !repairAttempted,
+            repair: undefined,
+            repairState: undefined,
+            responseRejected: false,
             diagnostics: ev.data.diagnostics ?? x.diagnostics,
           } : x)));
         } else if (ev.event === "malformed") {
@@ -242,29 +292,39 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
             setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, warning: true } : x)));
           }
         } else if (ev.event === "error") {
+          rejectionSeen = true;
           const message = translateKnown(String((ev.data as { message?: string }).message ?? "Chat error"));
+          const offer = (ev.data as { repair?: ChatResponseRepair }).repair;
+          const repair = offer?.available && Number.isSafeInteger(offer.failure_id) && offer.failure_id > 0 ? offer : undefined;
           // A reply the backend already committed stays visible: replacing it
           // with the error would contradict the history a reload shows.
           const replyRetained = String((ev.data as { reply_retained?: string }).reply_retained ?? "") === "true";
           if (replyRetained) retainReplyOnAbort = true;
-          show(message, "error");
+          if (!repair && !repairAttempted) show(message, "error");
           setMessages((m) => m.map((x) => (x.id === assistantId
-            ? { ...x, text: replyRetained ? x.text : message, warning: true }
+            ? { ...x, text: replyRetained ? x.text : message, warning: true, repair,
+                sourceUserSequence: userSequence || x.sourceUserSequence, responseRejected: !replyRetained && Boolean(repair),
+                repairState: repairAttempted ? "failed" : undefined }
             : x)));
         } else if (ev.event === "done" && ev.data.ok === false) {
           const malformed = Boolean(ev.data.malformed);
           setMessages((m) => m.map((x) => (x.id === assistantId ? {
             ...x,
-            text: malformed ? t("Malformed model response.") : x.text || t("Malformed model response."),
+            text: malformed && !rejectionSeen ? t("Malformed model response.") : x.text || t("Malformed model response."),
             warning: true,
+            repairState: repairAttempted ? "failed" : x.repairState,
           } : x)));
         }
-      }, controller.signal, stopSequence, motionOwner);
+      };
+      if (repairMessage?.repair) await streamChatRepair(sessionId, repairMessage.repair.failure_id, receive, controller.signal, stopSequence, motionOwner);
+      else await streamChat(sessionId, text, receive, controller.signal, stopSequence, motionOwner);
     } catch (e) {
       if (controller.signal.aborted || !mounted.current || streamGeneration.current !== requestGeneration) return;
       const message = e instanceof Error ? translateKnown(e.message) : t("Chat failed.");
-      show(message, "error");
-      setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: message, warning: true } : x)));
+      if (!repairAttempted) show(message, "error");
+      const staleRepair = typeof e === "object" && e !== null && "status" in e && e.status === 409;
+      setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: message, warning: true, repair: undefined, responseRejected: false,
+        repairState: repairAttempted ? staleRepair ? "unavailable" : "failed" : undefined } : x)));
     } finally {
       if (activeStream.current === controller) activeStream.current = null;
       if (!mounted.current || streamGeneration.current !== requestGeneration) return;
@@ -280,7 +340,9 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
       onBusyChange?.(false);
       setMessages((m) => m.flatMap((x) => {
         if (x.id !== assistantId) return [x];
-        if (controller.signal.aborted && !retainReplyOnAbort) return [];
+        if (controller.signal.aborted && !retainReplyOnAbort) return repairMessage
+          ? [{ ...repairMessage, streaming: false, repair: undefined, repairState: "unavailable" }]
+          : [];
         return [{ ...x, streaming: false }];
       }));
       if (controller.signal.aborted && stagedReplySeen && !retainReplyOnAbort) {
@@ -297,7 +359,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
 
   async function send() {
     const text = draft.trim();
-    if (!text) return;
+    if (!text || busyRef.current || locked || voiceActive) return;
     setDraft("");
     await sendText(text, state?.stop_sequence);
   }
@@ -324,9 +386,14 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
                   {m.role === "assistant" ? <AssistantAvatar message={m} /> : <span className="chat-avatar" aria-hidden="true">Y</span>}
                   <div className="chat-body">
                     <span className="chat-speaker">
-                      {m.role === "user" ? t("You") : m.diagnostics?.persona_name || "MagicHandy"}
+                      {m.role === "user" ? t("You") : m.responseRejected || m.repairState ? "MagicHandy" : m.diagnostics?.persona_name || "MagicHandy"}
                     </span>
-                    <div className="chat-bubble">{m.text || (m.warning ? t("Malformed model JSON — the reply could not be parsed.") : "")}</div>
+                    {(m.text || m.repairState !== "repairing") && <div className="chat-bubble">{m.responseRejected ? t("The model returned an invalid response. That response was not applied.") : m.text || (m.warning ? t("Malformed model JSON — the reply could not be parsed.") : "")}</div>}
+                    {(m.repair?.available || m.repairState || m.responseRejected) && <div className="chat-repair-row">
+                      {m.repair?.available && <button type="button" className="btn btn-secondary btn-sm" disabled={locked || busy || voiceActive} onClick={() => { repairFocusMessage.current = m.id; restoreRepairFocus.current = true; void sendText("", state?.stop_sequence, m); }}>{t("Repair response")}</button>}
+                      {m.repairState && <span className="form-status" tabIndex={m.repairState === "repairing" ? -1 : undefined} ref={element => { if (element && m.repairState === "repairing" && repairFocusMessage.current === m.id) { repairFocusMessage.current = undefined; element.focus({ preventScroll: true }); } }}>{m.repairState === "repairing" ? t("Repairing response…") : m.repairState === "failed" ? t("Repair did not succeed. You can send a new request.") : t("Repair is no longer available. Send a new request.")}</span>}
+                      {m.responseRejected && m.repairState !== "repairing" && <a href="#/settings/diagnostics" className="btn btn-quiet btn-sm">{t("View details in Diagnostics")}</a>}
+                    </div>}
                     {m.diagnostics?.refusal_fallback_from && <p className="form-status chat-sync-status" role={m.streaming ? "status" : undefined}>{m.streaming ? t("Provider declined; retrying with the local model…") : t("Local retry after a provider refusal.")}</p>}
                     {m.contentDownload && <p className="form-status chat-sync-status">{t("Long message preview.")} {" "}
                       <a href={m.contentDownload} download>{t("Download full message")}</a>
@@ -370,6 +437,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
           )}
           <label className="visually-hidden" htmlFor="chat-input">{t("Message")}</label>
           <textarea
+            ref={composerRef}
             id="chat-input"
             rows={2}
             maxLength={1000}
@@ -386,7 +454,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
           />
           <button type="submit" className="btn btn-primary chat-send" disabled={locked || busy || voiceActive || !draft.trim()}>{t("Send")}</button>
         </div>
-        <span className="visually-hidden" role="status">{busy ? t("Streaming") : voiceActive ? t("Voice input active") : historyError ? t("Conversation history unavailable") : historyLoading ? t("Loading conversation history") : locked ? (readOnly ? t("Read-only") : t("Core offline")) : t("Idle")}</span>
+        <span className="visually-hidden" role="status">{busy ? messages.some(message => message.repairState === "repairing") ? t("Repairing response…") : t("Streaming") : voiceActive ? t("Voice input active") : historyError ? t("Conversation history unavailable") : historyLoading ? t("Loading conversation history") : locked ? (readOnly ? t("Read-only") : t("Core offline")) : t("Idle")}</span>
       </form>
     </div>
   );
@@ -416,7 +484,7 @@ function AssistantAvatar({ message }: { message: Msg }) {
       document.removeEventListener("scroll", position, true);
     };
   }, [open, diagnostics]);
-  const initial = Array.from(diagnostics?.persona_name?.trim() || "MagicHandy")[0]?.toUpperCase() || "M";
+  const initial = message.responseRejected || message.repairState ? "M" : Array.from(diagnostics?.persona_name?.trim() || "MagicHandy")[0]?.toUpperCase() || "M";
   if (!diagnostics || !Object.values(diagnostics).some((value) => value !== undefined && value !== "" && value !== false)) {
     return <span className="chat-avatar" aria-hidden="true">{initial}</span>;
   }

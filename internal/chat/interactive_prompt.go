@@ -135,8 +135,8 @@ For "Start full strokes from 0 to 100 at speed %d" (current band 5..95): {"actio
 For "Start full strokes from 0 to 100 at speed %d" (current band 5..95): {"action":"start","edits":[{"range":{"max_percent":100,"min_percent":0}},{"focus":{"mix_percent":0,"position_percent":50,"roam_percent":100,"width_percent":25}},{"speed_percent":%d}],"reply":"Starting full strokes between 0 and 100."}`, speed, speed)
 	}
 	return contract + `
-Only an explicit request to begin movement permits: {"action":"start","edits":` + empty + `,"reply":"Starting with the current settings."}
-Changing settings while stopped is not permission to start. Otherwise use none with empty edits.`
+For "Use the current motion again": {"action":"start","edits":` + empty + `,"reply":"Starting with the current settings."}
+Apply requested edits with start. A fresh motion request can start after an earlier Stop; questions and explicitly future/settings-only requests use none.`
 }
 
 // InteractiveResponseSchema is shared by production and prompt inspection.

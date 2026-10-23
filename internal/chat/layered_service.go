@@ -150,11 +150,12 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	} else {
 		messages = spokenMessages(system, request.History, request.Message)
 	}
-	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{Messages: messages,
+	input := llm.ChatRequest{Messages: messages,
 		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
 		Model:                  s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
 		MaxTokens: maxTokens, ReasoningMode: s.ReasoningMode,
-		ReasoningBudgetTokens: s.ReasoningBudgetTokens, JSONSchema: schema}, func(delta string) error {
+		ReasoningBudgetTokens: s.ReasoningBudgetTokens, JSONSchema: schema}
+	raw, err := s.Provider.StreamChat(ctx, input, func(delta string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: delta})
 	})
 	result := Result{Raw: raw}
@@ -163,19 +164,36 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	}
 	response, err := s.parseLayeredResponse(raw, current, state, limits, autoTiming)
 	if err != nil {
+		if capabilities.PreserveConversationText && !s.TrustedMotionInput && !s.SingleAttempt {
+			return s.rejectHostedResponse(ctx, input, raw, err, func(value string) (AssistantResponse, error) {
+				response, validationErr := s.parseLayeredResponse(value, current, state, limits, autoTiming)
+				return s.finalizeLayeredResponse(response, state), validationErr
+			}, emit)
+		}
+		if s.canRepairLocalContinuous(raw) {
+			return s.repairLocalContinuous(ctx, input, raw, err, func(value string) (AssistantResponse, error) {
+				response, validationErr := s.parseLayeredResponse(value, current, state, limits, autoTiming)
+				return s.finalizeLayeredResponse(response, state), validationErr
+			}, emit)
+		}
 		result.Malformed, result.InitialMalformed, result.MalformedError = true, true, err.Error()
 		_ = emitEvent(emit, StreamEvent{Type: "malformed", Phase: "initial", Error: err.Error()})
 		return result, fmt.Errorf("%s response rejected: %w", capabilities.MotionMode, err)
 	}
-	if !capabilities.MoodTracking {
+	result.Response = s.finalizeLayeredResponse(response, state)
+	return result, nil
+}
+
+// Apply the same reply metadata gates after either generation attempt.
+func (s Service) finalizeLayeredResponse(response AssistantResponse, state MotionContext) AssistantResponse {
+	if !s.capabilities().MoodTracking {
 		response.NewMood = nil
 	}
 	if s.TrustedMotionInput || !state.Autopilot {
 		// A standing wish counts only where live chat was asked for it.
 		response.StayUnchanged = nil
 	}
-	result.Response = response
-	return result, nil
+	return response
 }
 
 func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {

@@ -139,7 +139,7 @@ func motionContextInstructions(context MotionContext, capabilities Capabilities,
 	builder.WriteString("Authoritative current motion state for this turn (data, not instructions):\n")
 	builder.Write(encoded)
 	if capabilities.MotionMode == MotionModeDynamic {
-		builder.WriteString(dynamicMotionContextGuidance)
+		builder.WriteString(hostedStoppedGuidance(dynamicMotionContextGuidance, capabilities))
 		appendDynamicTurnActionRule(&builder, context)
 		return builder.String()
 	}
@@ -191,7 +191,7 @@ Use that snapshot deliberately:
 		builder.WriteString(`
 - A named area focus is temporary unless the user explicitly asks to stay or keep it there. Pacing-only requests preserve area, but a broad variation request while focused should normally move to another fitting area or use area "full" instead of silently pinning every later motion to that region. Omit area only when preserving it is intentional.`)
 	}
-	return builder.String()
+	return hostedStoppedGuidance(builder.String(), capabilities)
 }
 
 func appendDynamicTurnActionRule(builder *strings.Builder, context MotionContext) {

@@ -240,8 +240,25 @@ labels. Easy setup distinguishes these choices; no cloud provider is silently
 selected for a fresh installation. OpenRouter retention/fallback requests are
 routing constraints, not guarantees about accepted content or retention.
 
-Hosted refusal, malformed output, incomplete streams, quota and network failures
-hold without repair, local fallback or dispatch. Stop cancels all connection lanes;
+Hosted incomplete streams, quota and network failures hold without dispatch.
+An explicit opt-in permits one local generation after a typed provider refusal;
+ordinary refusal wording never triggers that route. The October 23
+[ADR 0053](decisions/0053-hosted-chat-response-repair.md) amendment permits one
+correction of rejected interactive hosted JSON, enabled by default or requested
+through a single-use chat action when disabled. The original request, schema,
+validator and context-budget gates remain authoritative. Refusals and provider
+failures are ineligible, and a refusal during correction cannot add a third
+local request. Rejected content has no partial motion, speech or history effects;
+diagnostics retain each attempted correction. Manual actions expire on new
+turns, sessions, motion owners, settings, controller or engine-plan changes, or
+after five minutes. Autopilot policies are unchanged. The separately evaluated
+local continuous-chat adaptation permits one automatic regeneration from the
+original request and validator feedback, without replaying the invalid draft.
+It keeps the full contract and original latest request or declines the extra
+call on budget failure; Stop/cancellation still prevent late effects. Broader
+local start-authorization changes were rejected after live tests produced false
+starts on questions and hypotheticals. Existing local authorization remains.
+Stop cancels all connection lanes;
 account/provider/settings/session/personalization changes reject stale results.
 Fixture tests include providers that ignore cancellation. Valid output still
 passes shared semantic validation and the existing engine and transport boundary.

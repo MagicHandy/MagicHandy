@@ -7,10 +7,23 @@ import "encoding/json"
 // Intent, lifecycle authority and actual motion still pass normal validation.
 // It never supplies a missing action or selects a pattern.
 func PatternResponseSchema(patterns []PatternChoice, capabilities Capabilities, state *MotionContext) json.RawMessage {
+	return patternResponseSchema(patterns, capabilities, state, true)
+}
+
+func patternResponseSchema(patterns []PatternChoice, capabilities Capabilities, state *MotionContext, interactive bool) json.RawMessage {
 	if !capabilities.Motion {
 		return chatOnlyResponseSchema(capabilities)
 	}
-	if capabilities.MotionMode == MotionModeDynamic || !capabilities.Patterns {
+	if capabilities.MotionMode == MotionModeDynamic {
+		// Paused local Creative needs only an explanation. Advertising no
+		// motion fields avoids a malformed start and its extra repair call.
+		// The parser still rejects a start from an unconstrained provider.
+		if interactive && !capabilities.HostedMotion && state != nil && state.Paused {
+			return chatOnlyResponseSchema(capabilities)
+		}
+		return nil
+	}
+	if !capabilities.Patterns {
 		return nil
 	}
 	minimum, maximum := 1, 100
@@ -36,7 +49,11 @@ func PatternResponseSchema(patterns []PatternChoice, capabilities Capabilities, 
 	if capabilities.AreaFocus {
 		motionFields["area"] = map[string]any{"type": "string", "enum": AreaZones()}
 	}
-	fields := map[string]any{"reply": map[string]any{"type": "string"}, "motion": object(motionFields, []string{"action"})}
+	var motionSchema any = object(motionFields, []string{"action"})
+	if interactive && (capabilities.HostedMotion || state != nil) {
+		motionSchema = interactivePatternActionSchema(motionFields, state)
+	}
+	fields := map[string]any{"reply": map[string]any{"type": "string"}, "motion": motionSchema}
 	if capabilities.MoodTracking {
 		fields["new_mood"] = map[string]any{"type": "string", "enum": Moods()}
 	}

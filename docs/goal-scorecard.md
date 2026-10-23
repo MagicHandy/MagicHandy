@@ -1,5 +1,38 @@
 # Goal Scorecard
 
+## 2026-10-23 — Bounded hosted response repair
+
+Matching Windows amd64 builds from alpha.69 and this candidate, Go 1.26.10,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`, measure
+**23,505,408 → 23,618,560 B** (+113,152 B, 0.481%). The complete canonical UI
+is **2,708,695 → 2,718,244 B** (+9,549 B, 0.353%). No dependency, worker or
+polling channel is added. One bounded process-local continuation is retained
+for an eligible failed hosted turn; normal replies keep one generation.
+Local continuous chat gains one correction only after a structural rejection;
+its original prompt is unchanged. Correction preflights the full context and
+skips the extra call if essential input cannot fit. The tested local strategy
+regenerates the original request plus validator feedback without replaying the
+invalid draft. The 256-output-token live run passes 14/14 structural/control
+checks, median 1.064 seconds added generation; visual review identifies one
+remaining endpoint-variation intent miss, so this is not 14/14 motion fidelity.
+The separate fresh-start clarification replaces the shared continuous
+interactive guide with **681 → 656 bytes**; local legacy instruction text stays
+unchanged. It introduces no extra inference call. Local Pattern adopts the
+state-specific action branches (stopped schema 658 → 866 B, paused 658 → 349 B)
+and paused local Creative adds a 108 B reply-only schema. All four voice budget
+checks for these schemas pass at 16K and 32K. Autopilot retains its original
+schema. The 40-case local comparison takes 41 → 40 provider calls, with
+30/40 → 31/40 intent checks; medians 818 → 803.5 ms are roughly unchanged.
+All 24 additional non-motion holdouts stay inert with one call each.
+
+The combined hosted phrase/composition guides shrink **2,282 → 2,257 bytes**,
+including the new join and regional-turn guidance. Final real ChatGPT trials
+pass 10/10 normal selections and 10/10 injected-error corrections, including
+checks of compiled turns. Correction adds one model call: median **5.005 s**,
+range **4.234–7.462 s**. Normal-success generation-count tests pass;
+no RSS/cold-start or local-throughput improvement is claimed. See the
+[evaluation and visual review](hosted-response-repair-review-2026-10-23.md).
+
 ## 2026-10-23 — Counted Layered phrases and reach preservation
 
 Matching Windows amd64 builds from alpha.68 and the candidate, Go 1.26.10,

@@ -42,6 +42,29 @@ sharing of recent user messages. This is distinct from the primary model roles.
 Correction mechanics stay in a disclosure; backend outcomes use the standard
 dismissible notice in Chat. Removing its provider disables the review role.
 
+An external Chat model exposes **Automatically repair rejected chat responses**
+in Model roles, using the shared switch row and the normal Save settings flow.
+It defaults on and discloses the extra request, waiting time and potential quota
+use. With it off, the backend can offer **Repair response** directly below the
+eligible error in Chat. This is a single attempt against the same model, separate
+from refusal fallback to a local model. Autopilot behavior is unchanged.
+Repair progress occupies one compact line beneath that message; successful
+repair becomes an ordinary reply, with provenance in its diagnostic tooltip,
+without duplicating the user turn. A failed response uses a short application
+notice and a Diagnostics link, not the persona's wording or a duplicate toast.
+The server owns eligibility and validation. New turns, Stop, controller or video
+motion-source changes clear the live action; the backend rejects stale context
+or configuration changes. The normal conversation stream handles cancellation and recovery, and
+Emergency Stop stays reachable throughout. Reloading keeps canonical chat
+history; expired repair actions are not reconstructed from diagnostic records.
+
+Local Layered/Creative v2 can make one automatic correction under the existing
+local repair policy. They reuse the compact progress line and diagnostic
+provenance, without another setting, error bubble or manual continuation.
+The external repair toggle controls external models only. A local correction
+that cannot fit the configured context leaves the original failure visible
+instead of silently dropping the profile or latest request.
+
 ## Launch console
 
 On Windows, the Start menu and desktop shortcuts start `magichandy.exe` in a

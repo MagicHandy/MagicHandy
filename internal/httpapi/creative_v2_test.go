@@ -23,7 +23,7 @@ func TestCreativeV2RejectedRepliesDoNotReachMotionOrAssistantHistory(t *testing.
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fake := transport.NewFake()
-			provider := &scriptedLLMProvider{responses: []string{tc.raw}}
+			provider := &scriptedLLMProvider{responses: []string{tc.raw, tc.raw}}
 			server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: provider})
 			t.Cleanup(server.Close)
 			saveSettings(t, server.store, func(s config.Settings) config.Settings {
@@ -35,14 +35,36 @@ func TestCreativeV2RejectedRepliesDoNotReachMotionOrAssistantHistory(t *testing.
 			if !strings.Contains(response, "event: error") || !strings.Contains(response, tc.problem) || strings.Contains(response, "event: motion") || strings.Contains(response, "event: message") {
 				t.Fatalf("incorrect rejection stream: %s", response)
 			}
-			if before != server.currentMotionEngine() || len(fake.Commands()) != 0 || provider.callCount() != 1 {
-				t.Fatal("invalid response commanded motion or retried the model")
+			if before != server.currentMotionEngine() || len(fake.Commands()) != 0 || provider.callCount() != 2 {
+				t.Fatal("invalid attempts commanded motion or exceeded the single correction")
 			}
-			messages, _, _ := getChatMessages(t, server, "")
-			if len(messages) != 1 || messages[0].Role != chat.MessageRoleUser {
-				t.Fatalf("rejected output entered assistant history: %+v", messages)
-			}
+			assertOnlyUserChatHistory(t, server)
+			assertRejectedCreativeAttempts(t, server, tc.raw, tc.problem)
 		})
+	}
+}
+
+func assertOnlyUserChatHistory(t *testing.T, server *Server) {
+	t.Helper()
+	messages, _, _ := getChatMessages(t, server, "")
+	if len(messages) != 1 || messages[0].Role != chat.MessageRoleUser {
+		t.Fatalf("rejected output entered assistant history: %+v", messages)
+	}
+}
+
+func assertRejectedCreativeAttempts(t *testing.T, server *Server, raw, problem string) {
+	t.Helper()
+	sessionID, _ := server.chatLog.ActiveSessionID()
+	failures, err := server.chatLog.Failures(t.Context(), sessionID)
+	if err != nil || len(failures) != 1 {
+		t.Fatalf("missing rejected attempts: %+v %v", failures, err)
+	}
+	retained, err := server.chatLog.Failure(t.Context(), sessionID, failures[0].ID, true)
+	if err != nil || retained.Details == nil || retained.Details.Raw != raw || retained.Details.RepairRaw != raw || !strings.Contains(retained.Details.InitialError, problem) {
+		t.Fatalf("original or replacement rejection was lost: %+v %v", retained, err)
+	}
+	if retained.Kind != "response_repair" || retained.RepairOutcome != "failed" || retained.Diagnostics.Repaired || retained.Diagnostics.ProviderCalls != 2 {
+		t.Fatalf("incorrect rejection diagnostics: %+v", retained)
 	}
 }
 

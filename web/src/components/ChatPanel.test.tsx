@@ -28,6 +28,7 @@ vi.mock("../api/client", () => ({
     advanceChatCursor: vi.fn(),
   },
   streamChat: vi.fn(),
+  streamChatRepair: vi.fn(),
 }));
 
 vi.mock("../state/app-state", () => ({

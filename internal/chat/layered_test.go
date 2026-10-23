@@ -202,7 +202,7 @@ func (p *layeredTestProvider) StreamChat(_ context.Context, request llm.ChatRequ
 	return p.raw, nil
 }
 
-func TestLayeredProductionAuthorityAndNoRepair(t *testing.T) {
+func TestLayeredSingleAttemptAuthority(t *testing.T) {
 	for _, tc := range []struct {
 		name, message, raw              string
 		running, paused, reject, motion bool
@@ -219,7 +219,7 @@ func TestLayeredProductionAuthorityAndNoRepair(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			provider := &layeredTestProvider{raw: tc.raw}
 			spec := DefaultLayeredScore(25)
-			service := Service{Provider: provider, Capabilities: &Capabilities{Motion: true, MotionMode: MotionModeLayered}, MotionContext: &MotionContext{Running: tc.running, Paused: tc.paused, Layered: &spec}}
+			service := Service{Provider: provider, SingleAttempt: true, Capabilities: &Capabilities{Motion: true, MotionMode: MotionModeLayered}, MotionContext: &MotionContext{Running: tc.running, Paused: tc.paused, Layered: &spec}}
 			result, err := service.Complete(t.Context(), Request{Message: tc.message}, nil)
 			if (err != nil) != tc.reject || (result.Response.Motion != nil) != tc.motion || result.Raw != tc.raw || provider.calls != 1 || result.Repaired || result.SemanticFallback {
 				t.Fatalf("unexpected result %+v err=%v calls=%d", result, err, provider.calls)

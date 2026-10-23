@@ -45,6 +45,13 @@ type Result struct {
 	MalformedError   string
 	Repaired         bool
 	SemanticFallback bool
+	// Rejection is a process-local, one-attempt continuation. It never enters
+	// history or JSON and cannot be reconstructed from a client-supplied payload.
+	Rejection       *ResponseRejection `json:"-"`
+	InitialError    string
+	RepairAttempted bool
+	FailureID       int64 `json:"-"`
+	UserSeq         int64 `json:"-"`
 }
 
 const (
@@ -107,6 +114,9 @@ type Service struct {
 	AutonomousTemperature float64
 	// SingleAttempt disables local repair/salvage for an explicitly bounded retry.
 	SingleAttempt bool
+	// HostedResponseRepair enables one validation-only repair for interactive
+	// hosted chat. Local and autonomous policies are deliberately unchanged.
+	HostedResponseRepair bool
 }
 
 func (s Service) capabilities() Capabilities {
@@ -185,7 +195,7 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 	}
 
 	messages := capabilityMessages(systemPrompt, request.History, userMessage, capabilities)
-	raw, err := s.Provider.StreamChat(ctx, llm.ChatRequest{
+	input := llm.ChatRequest{
 		Messages:               messages,
 		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
 		Model:                  s.Model,
@@ -197,7 +207,8 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		ReasoningMode:          s.ReasoningMode,
 		ReasoningBudgetTokens:  s.ReasoningBudgetTokens,
 		JSONSchema:             PatternResponseSchema(s.Patterns, capabilities, s.MotionContext),
-	}, func(text string) error {
+	}
+	raw, err := s.Provider.StreamChat(ctx, input, func(text string) error {
 		return emitEvent(emit, StreamEvent{Type: "delta", Phase: "initial", Text: text})
 	})
 	truncated := errors.Is(err, llm.ErrOutputTruncated)
@@ -213,9 +224,12 @@ func (s Service) Complete(ctx context.Context, request Request, emit func(Stream
 		return Result{Raw: raw, InitialMalformed: true, Malformed: true}, errors.New("the local retry did not produce a valid response")
 	}
 	if capabilities.PreserveConversationText {
-		// Hosted refusals can arrive as ordinary prose or invalid contract JSON.
-		// Never reinterpret them through a second generation or semantic fallback.
-		return Result{Raw: raw, InitialMalformed: true, Malformed: true}, &llm.CloudError{Kind: "incomplete"}
+		if truncated {
+			return Result{Raw: raw, InitialMalformed: true, Malformed: true}, err
+		}
+		return s.rejectHostedResponse(ctx, input, raw, parseErr, func(value string) (AssistantResponse, error) {
+			return s.parseAndValidateResponse(value, capabilities, validationMessage)
+		}, emit)
 	}
 	if truncated {
 		parseErr = fmt.Errorf("assistant response was truncated before valid JSON: %w", parseErr)
@@ -498,7 +512,7 @@ func (s Service) normalizeAndValidateDynamicAction(response *AssistantResponse, 
 			return err
 		}
 	}
-	return nil
+	return s.validateHostedStartState(*response, capabilities)
 }
 
 func (s Service) stripUnauthorizedMotion(
@@ -506,7 +520,7 @@ func (s Service) stripUnauthorizedMotion(
 	capabilities Capabilities,
 	userMessage string,
 ) bool {
-	if response.Motion == nil || s.TrustedMotionInput ||
+	if response.Motion == nil || s.TrustedMotionInput || s.authorizesHostedStart(*response.Motion, capabilities) ||
 		userAuthorizesMotionCommandForCapabilities(userMessage, *response.Motion, capabilities, s.MotionContext) ||
 		authorizesNamedContinuousStart(userMessage, *response.Motion, capabilities, s.MotionContext) {
 		return false

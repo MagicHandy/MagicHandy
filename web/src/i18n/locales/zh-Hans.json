@@ -1,4 +1,12 @@
 {
+  "Automatically repair rejected chat responses": "自动修正被拒绝的聊天回复",
+  "Ask the same external model once to correct an invalid response. Adds time and may use more quota. When off, eligible chat errors offer Repair response.": "请同一个外部模型尝试修正一次无效回复。这会增加等待时间，并可能消耗更多配额。关闭后，可修正的聊天错误旁会显示“修正回复”按钮。",
+  "Repair response": "修正回复",
+  "Repairing response…": "正在修正回复…",
+  "The model returned an invalid response. That response was not applied.": "模型返回了无效回复。该回复未被应用。",
+  "View details in Diagnostics": "在诊断中查看详情",
+  "Repair did not succeed. You can send a new request.": "修正未成功。您可以发送新请求。",
+  "Repair is no longer available. Send a new request.": "此回复已无法修正。请发送新请求。",
   "Intiface Stop limitation": "Intiface 停止功能限制",
   "Intiface Central 3.2.2 may report Stop without stopping The Handy. Native Bluetooth or Handy Cloud sends the device's Stop command directly.": "Intiface Central 3.2.2 可能报告已停止，但未停止 The Handy。原生蓝牙或 Handy Cloud 会直接向设备发送停止命令。",
   "Full sweeps": "全程往复",

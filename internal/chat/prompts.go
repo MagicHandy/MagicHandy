@@ -170,7 +170,7 @@ func contractInstructions(capabilities Capabilities) string {
 	if capabilities.MotionMode == MotionModeLayered {
 		text := layeredContract
 		if capabilities.HostedMotion {
-			text = hostedLayeredContract(text) + "\n" + hostedPaceGuide + "\n" + hostedLayeredCoordinationGuide + "\n" + hostedLayeredPhraseGuide
+			text = hostedLayeredContract(text) + "\n" + hostedPaceGuide + "\n" + hostedLayeredCoordinationGuide + "\n" + hostedLayeredPhraseGuide + "\n" + hostedLayeredRegionGuide
 		}
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()
@@ -191,13 +191,13 @@ func contractInstructions(capabilities Capabilities) string {
 		return text
 	}
 	if capabilities.MotionMode == MotionModeDynamic {
-		text := contractDynamic
+		text := hostedStartContract(contractDynamic, capabilities)
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()
 		}
 		return text
 	}
-	text := contractBase
+	text := hostedStartContract(contractBase, capabilities)
 	if capabilities.MoodTracking {
 		text += "\n" + moodContractInstructions()
 	}

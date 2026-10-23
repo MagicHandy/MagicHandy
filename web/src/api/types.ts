@@ -1425,6 +1425,11 @@ export interface MotionTarget {
   label?: string;
 }
 
+export interface ChatResponseRepair {
+  failure_id: number;
+  available: boolean;
+}
+
 export type ChatStreamEvent =
   | { event: "status"; data: { state: string; provider?: string; model?: string; prompt_set?: string; persona_id?: string; persona_name?: string; session_id?: string; user_seq?: number; current_mood?: AssistantMood | ""; stop_sequence?: number } }
   | { event: "delta" | "repair_delta"; data: { phase?: string; text?: string } }
@@ -1432,6 +1437,6 @@ export type ChatStreamEvent =
   | { event: "speech"; data: { request_id?: string } }
   | { event: "motion"; data: { applied?: boolean; action?: string; error?: string } }
   | { event: "malformed"; data: { repaired?: boolean; recoverable?: boolean; phase?: string; error?: string } }
-  | { event: "error"; data: { message?: string } }
+  | { event: "error"; data: { message?: string; repair?: ChatResponseRepair } }
   | { event: "done"; data: { ok?: boolean; malformed?: boolean } }
   | { event: string; data: Record<string, unknown> };

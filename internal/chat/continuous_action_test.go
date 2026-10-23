@@ -25,6 +25,9 @@ func TestContinuousActionEnforcesStateWithoutClassifyingUserWords(t *testing.T) 
 			{name: "compound request", action: `"update"`, running: true, edits: true, moves: true, message: "Cut the rate by a quarter without changing the reach, then explain why it feels different."},
 			{name: "translated request", action: `"update"`, running: true, edits: true, moves: true, message: "Reduce la velocidad un cuarto y conserva todo lo demás."},
 			{name: "explicit start", action: `"start"`, moves: true, message: "Begin at the current settings."},
+			{name: "fresh motion request", action: `"start"`, edits: true, moves: true, message: "Use syncopation."},
+			{name: "fresh translated request", action: `"start"`, edits: true, moves: true, message: "Usa un ritmo sincopado."},
+			{name: "prospective settings only", action: `"none"`, message: "Set up a slower rhythm for later; don't move now."},
 			{name: "stopped hold", action: `"none"`},
 			{name: "paused hold", action: `"none"`, running: true, paused: true},
 			{name: "contradictory hold", action: `"none"`, running: true, edits: true, reject: true},
@@ -56,7 +59,7 @@ func TestContinuousActionEnforcesStateWithoutClassifyingUserWords(t *testing.T) 
 				}
 				raw := fmt.Sprintf(`{%s"edits":%s,"reply":"A bounded response."}`, action, fragment)
 				provider := &layeredTestProvider{raw: raw}
-				service := Service{Provider: provider, Capabilities: &Capabilities{Motion: true, MotionMode: mode}, MotionContext: &MotionContext{Running: tc.running, Paused: tc.paused, Layered: &score, SpeedMinPercent: 10, SpeedMaxPercent: 50}}
+				service := Service{Provider: provider, SingleAttempt: true, Capabilities: &Capabilities{Motion: true, MotionMode: mode}, MotionContext: &MotionContext{Running: tc.running, Paused: tc.paused, Layered: &score, SpeedMinPercent: 10, SpeedMaxPercent: 50}}
 				message := tc.message
 				if message == "" {
 					message = "Keep the current settings."
