@@ -18,7 +18,7 @@ export function EdgeButton() {
   const detail = hold?.phase === "failed" && hold.message ? translateKnown(hold.message) : active
     ? hold?.phase === "planning" ? t("Planning the return…")
       : hold?.automatic ? hold.resume_in_seconds ? t("Autopilot returns in {seconds} s", {seconds: hold.resume_in_seconds}) : t("Autopilot will resume") : t("Holding until you resume")
-    : t("Gentle holding pattern");
+    : "";
   const hint = active
     ? hold?.message ? translateKnown(hold.message) : t("Return to the previous motion. Stop always ends the session.")
     : t("Switch to a gentle hold without waiting for AI. Queued device motion may briefly continue.");
@@ -46,6 +46,6 @@ export function EdgeButton() {
     {active && <button type="button" className="edge-return" disabled={disabled} onClick={() => void invoke(true)}
       aria-label={t("Resume from gentle hold")} title={hint}>{t("Return")}</button>}
     </div>
-    <span className="edge-caption" role="status" aria-live={hold?.automatic ? "off" : "polite"} title={hint}>{detail}</span>
+    {detail && <span className="edge-caption" role="status" aria-live={hold?.automatic ? "off" : "polite"} title={hint}>{detail}</span>}
   </div>;
 }

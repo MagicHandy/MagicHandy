@@ -4,6 +4,8 @@ Edge sits above permanent Stop. It applies a backend-generated gentle semantic
 target to the existing engine without inference or a second playback loop.
 Return is separate: repeated Edge presses keep holding and cancel automatic
 return. Stop retains its independent path and precedence.
+The idle button has no caption; holding status and the return countdown appear
+only when relevant, with compact spacing on mobile.
 
 The hold lowers pace inside saved limits, removes modulation and softens turns.
 It uses the current working region's midpoint, independent of the click phase.

@@ -775,10 +775,13 @@
     bottom: auto;
     z-index: var(--layer-emergency-stop);
   }
-  .app-shell:has(.edge-control) { --footer-h: 176px; }
-  .nav-rail:has(.edge-control) { padding-top: 124px; }
+  .app-shell:has(.edge-control) { --footer-h: 156px; }
+  .nav-rail:has(.edge-control) { padding-top: 104px; }
   .nav-rail > .edge-control { position: absolute; left: 8px; right: 8px; top: 6px; margin: 0; gap: 1px; }
-  .nav-rail:has(.edge-control) > .nav-stop { top: 68px; }
+  .nav-rail:has(.edge-control) > .nav-stop { top: 48px; }
+  .app-shell:has(.edge-caption) { --footer-h: 176px; }
+  .nav-rail:has(.edge-caption) { padding-top: 124px; }
+  .nav-rail:has(.edge-caption) > .nav-stop { top: 68px; }
   .notification-center-panel {
     top: calc(var(--status-h) + 8px);
     right: 8px;
