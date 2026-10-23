@@ -23,6 +23,8 @@ The backend review corrected several integration gaps before submission:
   slowest participant in refill latency and honor every sampling constraint.
 - Bind engines to connection generations, cancel pending native connections on
   Stop, and keep removed Intiface owners from retaining a pacer or claim.
+- Publish the surviving clock to the engine after failover/resume, covered by
+  a regression that failed against the prior clock lookup.
 - Stop prepared/excluded devices and drain every available Stop even when a
   different configured transport cannot be constructed.
 - Preserve named inventory during old full-settings writes, clone mutable
@@ -33,7 +35,7 @@ The backend review corrected several integration gaps before submission:
 Local Windows checks: `go test ./...`, `go vet` on affected packages,
 `golangci-lint run ./...` (zero issues), architecture/import-boundary tests,
 `CGO_ENABLED=0` build, TypeScript, localization and the full frontend suite
-(122 files / 966 tests). Linux race and release gates run in CI before merge.
+(122 files / 967 tests). Linux race and release gates run in CI before merge.
 
 New regressions exercise independent persistence/removal, duplicate private
 identities, the inventory cap, participating-model calibration, old lease
@@ -92,7 +94,7 @@ conversation.” in 296 ms (128 ms first token), without repair/fallback or moti
 ## Weight and remaining limits
 
 Matched Windows amd64 `CGO_ENABLED=0 go build` binaries: 32,303,104 B before,
-32,557,568 B candidate (+254,464 B, 0.78%). Complete canonical UI:
+32,558,080 B candidate (+254,976 B, 0.79%). Complete canonical UI:
 2,731,986 → 2,760,234 B (+28,248 B, 1.03%); main JavaScript gzip:
 338,685 → 341,879 B (+3,194 B, 0.94%). No dependency was added. A post-test
 three-connection review process sampled 90.1 MB working set / 66.4 MB private

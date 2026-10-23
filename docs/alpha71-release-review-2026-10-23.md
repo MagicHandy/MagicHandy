@@ -61,7 +61,7 @@ sampling honor the slowest participating requirements; connection delays mean
 physical synchronization is an estimate. The original Browser Bluetooth bridge
 remains a single Handy connection.
 
-The full frontend suite passes 966 tests across 122 files. Full Go tests, vet,
+The full frontend suite passes 967 tests across 122 files. Full Go tests, vet,
 lint, architecture and pure-Go build pass locally. Three simulated protocols
 completed three patterns, Stop and repeated Cloud/Intiface reconnects; startup
 and mixed-motion command plots were inspected. The review app completed direct

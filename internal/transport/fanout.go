@@ -19,7 +19,7 @@ type AlignedPlayer interface {
 }
 
 // LinkedParticipant is one device in a linked playback session. ID is the
-// stable device identifier (handy, coyote, vibrator); Label names it in
+// stable singleton or named-instance identifier; Label names it in
 // errors and warnings.
 type LinkedParticipant struct {
 	ID        string
@@ -28,19 +28,20 @@ type LinkedParticipant struct {
 }
 
 // FanOut is one linked playback session. The first participant is the run
-// clock: companions start on its playback origin, and sampling and startup
-// state follow it. A fault latches until a new session is constructed, so
+// clock: companions start on its playback origin. Sampling honors all owners
+// and each telemetry-capable slider prepares independently. A fault latches, so
 // reconnecting cannot silently rejoin an existing run.
 type FanOut struct {
-	participants     []LinkedParticipant
-	mu               sync.Mutex
-	playing          bool
-	fault            error
-	continueHealthy  bool
-	retired          []bool
-	warnings         string
-	faultStopped     bool
-	faultParticipant string
+	participants      []LinkedParticipant
+	mu                sync.Mutex
+	playing           bool
+	playbackStartedAt time.Time
+	fault             error
+	continueHealthy   bool
+	retired           []bool
+	warnings          string
+	faultStopped      bool
+	faultParticipant  string
 }
 
 type fanOutWithStartup struct {
@@ -110,6 +111,7 @@ func (f *FanOut) Stop(ctx context.Context, command StopCommand) (CommandResult, 
 	f.mu.Lock()
 	command.Fault = command.Fault || f.fault != nil && !f.faultStopped
 	f.playing = false
+	f.playbackStartedAt = time.Time{}
 	f.mu.Unlock()
 	results := make([]CommandResult, len(f.participants))
 	errs := make([]error, len(f.participants))
@@ -254,6 +256,7 @@ func (f *FanOut) Play(ctx context.Context, command PlayCommand) (CommandResult, 
 	}
 	f.mu.Lock()
 	f.playing = true
+	f.playbackStartedAt = origin
 	f.mu.Unlock()
 	result.LatencyMillis = max(result.LatencyMillis, time.Since(started).Milliseconds())
 	return result, nil
@@ -433,16 +436,13 @@ func (f *FanOut) MotionSamplingCapabilities() MotionSamplingCapabilities {
 	return result
 }
 
-// PlaybackStartTime follows the clock participant only. A companion's own
-// pre-roll must not shift the clock, so the engine runs exactly as it would
-// with the clock participant alone.
+// PlaybackStartTime is the clock chosen by the last successful Play. When a
+// failed clock is retired, a later resume must report the surviving clock to
+// the engine as well as to its companions.
 func (f *FanOut) PlaybackStartTime() time.Time {
-	if len(f.participants) > 0 {
-		if provider, ok := f.participants[0].Transport.(PlaybackStartTimeProvider); ok {
-			return provider.PlaybackStartTime()
-		}
-	}
-	return time.Time{}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.playbackStartedAt
 }
 
 func timingOf(owner Transport) MotionTimingCapabilities {
