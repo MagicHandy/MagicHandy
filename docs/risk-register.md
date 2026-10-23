@@ -18,8 +18,16 @@ retain wrong selections, and render accepted plans and fake transport output.
 Local prompt/schema and ordinary field behavior remain separate. No prose
 classifier or deterministic language correction is introduced.
 
-Remaining limits: model intent is not guaranteed by a finite fixture. Altered
-count/order can still use the general transition, and commanded endpoints do
+October 23 follow-up: changed Layered grammar can join a nearby authored turn
+with a monotone C2 stroke rather than crossfading independent oscillators. The
+search rejects interior braking shoulders and retains selected pace bounds;
+active blends and infeasible joins keep the existing fallback. The tested
+counted cases lose their four spurious small reversals. The
+[follow-up review](motion-smoothness-review-2026-10-23.md) retains every candidate
+and fallback and separates numerical results from physical acceptance.
+
+Remaining limits: model intent is not guaranteed by a finite fixture. Some
+count/order changes can still use the general transition, and commanded endpoints do
 not establish physical carriage reach. Original Handy Cloud physical acceptance
 of the counted candidate is outstanding. See [ADR 0052](decisions/0052-counted-layered-phrases.md)
 and [the evaluation](layered-range-review-2026-10-23.md).

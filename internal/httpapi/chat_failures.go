@@ -15,11 +15,7 @@ import (
 )
 
 func (s *Server) emitChatCompletionError(ctx context.Context, stop uint64, emit sseEmitter, result chat.Result, failure error, diagnostics chat.MessageDiagnostics) bool {
-	if result.RepairAttempted && (ctx.Err() != nil || s.stopSequence.Load() != stop) {
-		s.emitChatCancellationAt(ctx, stop, emit, false)
-		return true
-	}
-	if s.chatRepairRetired(ctx) {
+	if s.chatCanceled(ctx, stop) {
 		s.emitChatCancellationAt(ctx, stop, emit, false)
 		return true
 	}
@@ -28,6 +24,9 @@ func (s *Server) emitChatCompletionError(ctx context.Context, stop uint64, emit 
 	}
 	s.logger.Warn("chat stream failed", "provider", diagnostics.Provider, "error", failure)
 	payload := map[string]any{"message": failure.Error()}
+	if message := s.chatInterruptionMessage(ctx, stop, failure); message != "" {
+		payload["message"] = message
+	}
 	if repair := s.offerChatRepair(ctx, result, diagnostics); repair != nil {
 		payload["repair"] = repair
 	}
@@ -40,14 +39,25 @@ func (s *Server) retainChatFailure(ctx context.Context, sequence uint64, session
 	if failure == nil && !result.Malformed && !result.RepairAttempted {
 		return result, failure
 	}
-	if !result.RepairAttempted && s.chatCanceled(ctx, sequence) {
+	if !result.RepairAttempted && s.chatCanceled(ctx, sequence) && failure == nil {
 		return result, failure
+	}
+	// Some providers return an SDK/transport error when their context ends.
+	// Retain the lifecycle cause before detaching persistence, so diagnostics
+	// and the public explanation classify the same interrupted request.
+	if cause := context.Cause(ctx); failure != nil && cause != nil && !errors.Is(failure, cause) {
+		failure = errors.Join(failure, cause)
 	}
 	outcome := ""
 	if result.RepairAttempted {
 		outcome = s.chatRepairCancellationOutcome(ctx, sequence, failure)
 		// Diagnostics cannot publish a reply or touch motion. Keep the rejected
 		// attempt after cancellation, under recordChatFailure's short deadline.
+		ctx = context.WithoutCancel(ctx)
+	}
+	// Keep the technical cancellation evidence after its request has ended.
+	// Persistence remains bounded and cannot resurrect a deleted session.
+	if failure != nil && s.chatInterruptionMessage(ctx, sequence, failure) != "" {
 		ctx = context.WithoutCancel(ctx)
 	}
 	id, message := s.recordChatFailure(ctx, sessionID, result, failure, diagnostics, outcome)
@@ -57,7 +67,7 @@ func (s *Server) retainChatFailure(ctx context.Context, sequence uint64, session
 	}
 	result.MalformedError = message
 	if failure != nil {
-		failure = errors.New(message)
+		failure = retainedChatFailure{message: message, cause: failure}
 	}
 	return result, failure
 }
@@ -70,6 +80,9 @@ func (s *Server) chatFailureEvidence(result chat.Result, failure error, diagnost
 	item := chat.RequestFailure{UserSeq: result.UserSeq, CreatedAt: time.Now().UTC().Format(time.RFC3339), Error: message, Diagnostics: diagnostics, MotionMode: settings.MotionGenerationMode,
 		ReasoningMode: settings.ReasoningMode, Version: s.version.Version, Commit: s.version.Commit,
 		Details: &chat.FailureContent{Raw: result.Raw, RepairRaw: result.RepairRaw}}
+	if errors.Is(failure, context.Canceled) || errors.Is(failure, context.DeadlineExceeded) {
+		item.Kind = "interrupted"
+	}
 	if result.RepairAttempted {
 		item.Kind = "response_repair"
 		item.RepairOutcome = "failed"

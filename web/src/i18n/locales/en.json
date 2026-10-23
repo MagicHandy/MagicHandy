@@ -3324,5 +3324,12 @@
   "Could not load idle sign-out settings.": "Could not load idle sign-out settings.",
   "Could not confirm the change. Refresh to check the saved setting.": "Could not confirm the change. Refresh to check the saved setting.",
   "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.": "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.",
-  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion."
+  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.",
+  "The reply was interrupted before it finished. Please try again.": "The reply was interrupted before it finished. Please try again.",
+  "The model took too long to reply. Please try again.": "The model took too long to reply. Please try again.",
+  "The model or motion settings changed while the reply was being prepared. Please send your request again.": "The model or motion settings changed while the reply was being prepared. Please send your request again.",
+  "The reply was interrupted because this browser lost control of the session. Take control, then try again.": "The reply was interrupted because this browser lost control of the session. Take control, then try again.",
+  "Your sign-in session ended before the reply finished. Sign in again to continue.": "Your sign-in session ended before the reply finished. Sign in again to continue.",
+  "MagicHandy is shutting down, so this reply could not finish.": "MagicHandy is shutting down, so this reply could not finish.",
+  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again."
 }

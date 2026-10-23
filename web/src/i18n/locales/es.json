@@ -3324,5 +3324,12 @@
   "Could not load idle sign-out settings.": "No se pudo cargar la configuración de cierre por inactividad.",
   "Could not confirm the change. Refresh to check the saved setting.": "No se pudo confirmar el cambio. Actualiza para comprobar la configuración guardada.",
   "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.": "Se aplica de inmediato a todas las sesiones activas. Ver la página o reproducir movimiento no cuenta como actividad.",
-  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "Desactivado elimina el cierre por inactividad. Las sesiones caducan {hours} horas después de iniciar sesión. Perder la conexión del controlador sigue deteniendo el movimiento."
+  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "Desactivado elimina el cierre por inactividad. Las sesiones caducan {hours} horas después de iniciar sesión. Perder la conexión del controlador sigue deteniendo el movimiento.",
+  "The reply was interrupted before it finished. Please try again.": "La respuesta se interrumpió antes de terminar. Inténtalo de nuevo.",
+  "The model took too long to reply. Please try again.": "El modelo tardó demasiado en responder. Inténtalo de nuevo.",
+  "The model or motion settings changed while the reply was being prepared. Please send your request again.": "La configuración del modelo o del movimiento cambió mientras se preparaba la respuesta. Vuelve a enviar tu solicitud.",
+  "The reply was interrupted because this browser lost control of the session. Take control, then try again.": "La respuesta se interrumpió porque este navegador perdió el control de la sesión. Toma el control e inténtalo de nuevo.",
+  "Your sign-in session ended before the reply finished. Sign in again to continue.": "Tu sesión de acceso terminó antes de completarse la respuesta. Inicia sesión de nuevo para continuar.",
+  "MagicHandy is shutting down, so this reply could not finish.": "MagicHandy se está cerrando, por lo que no pudo terminar la respuesta.",
+  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "La respuesta se guardó, pero su movimiento o voz se interrumpió. Revisa los controles actuales antes de volver a intentarlo."
 }

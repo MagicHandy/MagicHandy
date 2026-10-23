@@ -632,7 +632,7 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 	}
 	bridgeInserted := transitionRequired(previous, previousTransition, next, handoff)
 	if bridgeInserted {
-		e.transition = layeredPaceTransition(previous, previousTransition, &next, handoff)
+		e.transition = layeredTurnTransition(previous, previousTransition, &next, handoff)
 		if e.transition == nil {
 			e.transition = newPlanTransition(previous, previousTransition, handoff)
 		}
@@ -676,7 +676,7 @@ func (e *Engine) refreshSettings(runEpoch uint64, settings config.MotionSettings
 	next.PhasePreserved = true
 	bridgeInserted := transitionRequired(previous, previousTransition, next, handoff)
 	if bridgeInserted {
-		e.transition = layeredPaceTransition(previous, previousTransition, &next, handoff)
+		e.transition = layeredTurnTransition(previous, previousTransition, &next, handoff)
 		if e.transition == nil {
 			e.transition = newPlanTransition(previous, previousTransition, handoff)
 		}

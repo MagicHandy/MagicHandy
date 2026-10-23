@@ -235,9 +235,14 @@ func (s *Server) completeInteractiveChat(
 	preparation time.Duration,
 	diagnostics *chat.MessageDiagnostics,
 ) (chat.Result, bool, error) {
+	waitStopSequence := s.stopSequence.Load()
 	providerCtx, schedulerWait, releaseLLM, err := s.acquireProviderRequest(ctx, llmRequestInteractive, settings)
 	if err != nil {
-		_ = emit("error", map[string]string{"message": err.Error()})
+		message := s.chatInterruptionMessage(ctx, waitStopSequence, err)
+		if message == "" {
+			message = err.Error()
+		}
+		_ = emit("error", map[string]string{"message": message})
 		_ = emit("done", map[string]any{"ok": false})
 		return chat.Result{}, false, err
 	}
@@ -253,7 +258,7 @@ func (s *Server) completeInteractiveChat(
 		return emitChatStreamEvent(emit, event)
 	})
 	if providerCtx.Err() != nil {
-		completionErr = providerCtx.Err()
+		completionErr = context.Cause(providerCtx)
 	}
 	releaseLLM()
 	timedProvider.applyDiagnostics(diagnostics, started, preparation, schedulerWait)

@@ -2,6 +2,14 @@
 
 ## Core Direction
 
+The October 23 [installed-session smoothness review](docs/motion-smoothness-review-2026-10-23.md)
+adds bounded, single-stroke joins for changed Layered phrase layouts and
+application-owned explanations for interrupted chat. Cancellation causes survive
+in diagnostics; Stop, model parsing and local prompts retain their boundaries.
+Real GPT comparisons show Creative v2 cannot replace Layered for exact counted
+or regional-timing requests. A broader Advanced planner remains an evaluated
+design direction, not another execution path or an enabled mode.
+
 The October 23 hosted response follow-up adds one bounded correction request
 for rejected interactive hosted JSON, with exact validator feedback and the
 unchanged original contract. It defaults on for external chat; when disabled,
