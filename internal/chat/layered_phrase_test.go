@@ -150,3 +150,14 @@ func TestPhraseFieldExitKeepsSharedAnchorAndRejectsFollowing(t *testing.T) {
 		t.Fatal("leaving a phrase prevented ordinary field following")
 	}
 }
+
+func TestPhraseCheckInDescribesCountsInsteadOfAnInactiveAnchor(t *testing.T) {
+	score := DefaultLayeredScore(30)
+	score.Phrase = &motion.FlowPhrase{Strokes: []motion.PhraseStroke{{BottomPercent: 70, TopPercent: 100, Count: 2, RatePercent: 100}, {BottomPercent: 0, TopPercent: 25, Count: 2, RatePercent: 100}, {BottomPercent: 0, TopPercent: 100, Count: 1, RatePercent: 60}}}
+	var b strings.Builder
+	writeAutopilotSpeechFacts(&b, AutopilotContext{CurrentFlow: &score, CurrentSpeed: 30})
+	facts := b.String()
+	if !strings.Contains(facts, "Group 1: 2 strokes with lower/upper turns 70/100%") || !strings.Contains(facts, "Group 3: 1 strokes with lower/upper turns 0/100%") || strings.Contains(facts, "window remains anchored") || strings.Contains(facts, "Stroke width varies within") {
+		t.Fatalf("check-in lost counted semantics: %s", facts)
+	}
+}

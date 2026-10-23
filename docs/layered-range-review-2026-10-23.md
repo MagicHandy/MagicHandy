@@ -44,7 +44,7 @@ regional preference or speed target. Ordinary field motion remains available
 when variation is uncounted or the user releases the phrase.
 
 Hosted current context includes commanded bounds and typical turn coverage,
-including lower/upper percentiles and endpoint-visit fractions. A whole-loop
+including lower/upper percentiles and endpoint-visit fractions. Autopilot speech facts describe the actual ordered groups instead of an inactive field anchor. A whole-loop
 minimum alone no longer stands in for how often the base is visited. Local
 contracts/schema and ordinary local context remain unchanged. There is no
 language classifier, reply rewriting, keyword-based motion rule or extra model

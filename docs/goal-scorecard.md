@@ -4,7 +4,7 @@
 
 Matching Windows amd64 builds from alpha.68 and the candidate, Go 1.26.10,
 `CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`, measure
-**23,524,352 → 23,503,360 B** (−20,992 B). The direct hosted contract replaces
+**23,524,352 → 23,505,408 B** (−18,944 B). The direct hosted contract replaces
 older duplicated text while adding optional counted phrases. The canonical UI
 remains **2,708,695 B**; no dependency, worker, polling channel or extra model
 pass is added. No RSS/cold-start improvement is claimed.
