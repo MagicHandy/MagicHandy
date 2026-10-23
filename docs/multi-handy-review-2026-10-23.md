@@ -27,6 +27,8 @@ The backend review corrected several integration gaps before submission:
   a regression that failed against the prior clock lookup.
 - Stop prepared/excluded devices and drain every available Stop even when a
   different configured transport cannot be constructed.
+- Rebuild a degraded session on an explicit new Start after Stop, so a
+  recovered device can rejoin the new run without a physical reconnect.
 - Preserve named inventory during old full-settings writes, clone mutable
   slices, redact all instance credentials, and list additional Intiface leases.
 
@@ -94,7 +96,7 @@ conversation.” in 296 ms (128 ms first token), without repair/fallback or moti
 ## Weight and remaining limits
 
 Matched Windows amd64 `CGO_ENABLED=0 go build` binaries: 32,303,104 B before,
-32,558,080 B candidate (+254,976 B, 0.79%). Complete canonical UI:
+32,558,592 B candidate (+255,488 B, 0.79%). Complete canonical UI:
 2,731,986 → 2,760,234 B (+28,248 B, 1.03%); main JavaScript gzip:
 338,685 → 341,879 B (+3,194 B, 0.94%). No dependency was added. A post-test
 three-connection review process sampled 90.1 MB working set / 66.4 MB private

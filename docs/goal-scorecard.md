@@ -3,7 +3,7 @@
 ## 2026-10-23 — Named Handy connections
 
 Matched Windows amd64 `CGO_ENABLED=0 go build` binaries measure
-**32,303,104 → 32,558,080 B** (+254,976 B, 0.79%). Complete canonical UI:
+**32,303,104 → 32,558,592 B** (+255,488 B, 0.79%). Complete canonical UI:
 **2,731,986 → 2,760,234 B** (+28,248 B, 1.03%); main JavaScript gzip:
 **338,685 → 341,879 B** (+3,194 B, 0.94%). No dependency or extra LLM call.
 Additional connected native Handys each own a worker; Intiface outputs share

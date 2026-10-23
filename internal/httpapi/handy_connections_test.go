@@ -155,3 +155,52 @@ func TestNamedHandyDiscoveryTokensAreBoundAndPrivate(t *testing.T) {
 		t.Fatal("non-Handy discovery accepted")
 	}
 }
+
+func TestNamedHandyExplicitRestartRebuildsDegradedSession(t *testing.T) {
+	s := newTestServer(t)
+	s.motion.simulated = true
+	a, b := addTestHandy(t, s, config.DispatchOwnerCloudREST), addTestHandy(t, s, config.DispatchOwnerCloudREST)
+	connectTestHandy(t, s, a)
+	connectTestHandy(t, s, b)
+	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+		settings.Device = settings.Device.WithPlaybackDevices([]string{a, b})
+		settings.Device.LinkedFailurePolicy = config.LinkedFailureContinueHealthy
+		return settings
+	})
+	flaky := &failingStrokeTransport{Fake: transport.NewFake()}
+	entry := s.handyEntry(a)
+	entry.mu.Lock()
+	entry.owner = flaky
+	entry.mu.Unlock()
+	linked, err := s.newSelectedMotionTransport()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := linked.Play(t.Context(), transport.PlayCommand{StreamID: "shared"}); err != nil {
+		t.Fatal(err)
+	}
+	flaky.FailStrokeWindow()
+	if _, err := linked.SetStrokeWindow(t.Context(), transport.StrokeWindowCommand{MaxPercent: 100}); err != nil {
+		t.Fatal(err)
+	}
+	_, _ = linked.Stop(t.Context(), transport.StopCommand{})
+	flaky.mu.Lock()
+	flaky.failStroke = false
+	flaky.mu.Unlock()
+	old, err := motion.NewEngine(motion.EngineOptions{Transport: linked, Traces: s.traces})
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings, _ := s.store.Snapshot()
+	s.setMotionEngine(old, s.engineOwnerKey(settings.Device))
+	if old.Snapshot().LinkedSession.Status != "degraded" {
+		t.Fatal("fixture did not retain the retired participant")
+	}
+	next, _, err := s.motionEngineForStart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next == old || next.Snapshot().LinkedSession.Status != "ready" {
+		t.Fatal("explicit new run retained the previous session's retired device")
+	}
+}

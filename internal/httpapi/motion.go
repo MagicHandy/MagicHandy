@@ -983,7 +983,10 @@ func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
 	failed := false
 	if engine != nil {
 		state := engine.Snapshot()
-		failed = !state.Running && !state.Starting && !state.Paused && (state.LastError != "" || settings.Device.Plays(config.DeviceOutputCoyote))
+		// Retirements belong to one run. Stop followed by an explicit new Start
+		// rechecks every selected device, even if the socket never disconnected.
+		retired := state.LinkedSession != nil && (state.LinkedSession.Status == "degraded" || state.LinkedSession.Status == "failed")
+		failed = !state.Running && !state.Starting && !state.Paused && (state.LastError != "" || retired || settings.Device.Plays(config.DeviceOutputCoyote))
 	}
 	if engine != nil && (engineOwner != owner || failed) {
 		if err := s.stopAndClearMotionEngineLocked(context.Background(), "dispatch_owner_changed"); err != nil {
