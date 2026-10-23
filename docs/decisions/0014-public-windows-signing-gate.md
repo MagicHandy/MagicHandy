@@ -2,16 +2,35 @@
 
 ## Status
 
-Accepted; amended 2026-10-22 after Microsoft completed the false-positive
+Accepted; amended 2026-10-23 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.64 and alpha.66 through alpha.68
+reviewed alpha.14 through alpha.64 and alpha.66 through alpha.69
 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.69 amendment
+
+The maintainer requested publication after PR #341's counted Layered phrase,
+reach-preservation and transition review. The completed Claude Opus 5.5 Max
+review, addressed findings, live ChatGPT evaluations and shared-engine visual
+acceptance are recorded in
+[alpha69-release-review-2026-10-23.md](../alpha69-release-review-2026-10-23.md).
+Physical Original Handy / Cloud acceptance remains pending and is explicitly
+disclosed; commanded endpoint coverage is not physical carriage telemetry.
+
+This amendment adds only `0.1.0-alpha.69` to the reviewed unsigned policy;
+alpha.70 and later require another review, and unpublished alpha.65 remains
+excluded. The payload executables, dependencies, native loader, compression,
+artifact set and installation contract are unchanged. Source and exact-binary
+vulnerability scans, exact-artifact Defender scanning, manifest/checksum
+verification, installer lifecycle, green CI and current-main provenance remain
+mandatory. Microsoft's prior case does not approve these new hashes. Trusted
+Authenticode remains the long-term requirement.
 
 ### Alpha.68 amendment
 
@@ -717,7 +736,7 @@ VirusTotal report:
    payload executable is not x64. These constraints remain mandatory for both
    CI and public setup builds.
 3. **Alpha.8 through alpha.11, alpha.13 through alpha.64, and alpha.66 through
-   alpha.68 reviewed unsigned setup are explicit exceptions.** The tag workflow may publish only those
+   alpha.69 reviewed unsigned setup are explicit exceptions.** The tag workflow may publish only those
    listed unsigned setup versions with the
    `ReviewedUnsignedPublic` verification policy and the completed Microsoft
    case ID above. Alpha.9 corrects installer-script argument handling without
@@ -831,11 +850,11 @@ Negative:
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
   alpha.8 through alpha.11, alpha.13 through alpha.64, or alpha.66 through
-  alpha.68 version, the recorded Microsoft case ID, the
+  alpha.69 version, the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
 - Alpha.9 through alpha.11, alpha.13 through alpha.64, and alpha.66 through
-  alpha.68 reviewed setup workflows run Microsoft Defender against the exact public artifact directory
+  alpha.69 reviewed setup workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
   timestamped Authenticode from the explicitly pinned signer on the setup
