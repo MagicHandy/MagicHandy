@@ -3,9 +3,9 @@
 ## 2026-10-23 — Immediate holding control
 
 Matched Windows amd64 `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`
-builds grow from **23,644,672 B** to approximately **23.71 MB**. The canonical
-five-locale UI grows from **2,724,562 B** to approximately **2.732 MB**; exact final
-artifact sizes are recorded with the PR. No dependency, worker, ordinary-chat
+builds grow from **23,644,672 B** to **23,709,184 B** (+64,512 B, 0.273%). The
+canonical five-locale UI grows from **2,724,562 B** to **2,731,865 B** (+7,303 B,
+0.268%). No dependency, worker, ordinary-chat
 inference or second motion scheduler is added. One compact request runs only
 after Edge during Autopilot; manual holds use no model. Extra join search runs
 only during an explicit hold transition. RSS/cold-start improvements are not

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
+	"github.com/mapledaemon/MagicHandy/internal/modes"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -45,5 +46,33 @@ func TestEdgeHTTPSharedEngineAndStop(t *testing.T) {
 	}
 	if counts := countModeCommands(fake.Commands()); counts.plays != 1 {
 		t.Fatal("return after Stop started playback")
+	}
+}
+
+func TestEdgeFreestyleKeepsOneStream(t *testing.T) {
+	fake := transport.NewFake()
+	s := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake})
+	t.Cleanup(s.Close)
+	if _, err := s.modes.Start(t.Context(), modes.ModeFreestyle); err != nil {
+		t.Fatal(err)
+	}
+	waitForEngineRunning(t, s)
+	stream := s.currentMotionEngine().Snapshot().StreamID
+	if _, err := s.modes.ActivateEdge(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if s.currentMotionEngine().Snapshot().Target.Source != "edge" {
+		t.Fatal("Freestyle replaced the hold")
+	}
+	if _, err := s.modes.ResumeEdge(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	state := s.currentMotionEngine().Snapshot()
+	if state.StreamID != stream || state.Target.Source != modes.ModeFreestyle {
+		t.Fatal("return lost the Freestyle stream")
+	}
+	if counts := countModeCommands(fake.Commands()); counts.plays != 1 || counts.stops != 0 {
+		t.Fatalf("private restart: %+v", counts)
 	}
 }

@@ -356,7 +356,7 @@ func (m *Manager) reconcileEdge() {
 	}
 	if state.Target.Source == "edge" {
 		e.planID, e.holding = state.PlanID, cloneTarget(state.Target)
-		m.suspendEdgeLocked("Motion limits changed. Choose Return when ready.")
+		m.suspendEdgeLocked("Hold updated. Choose Return when ready.")
 	} else {
 		m.edge = nil
 		m.adoptEdgeReturnLocked(e, state)
