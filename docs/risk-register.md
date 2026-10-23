@@ -43,6 +43,15 @@ counted cases lose their four spurious small reversals. The
 [follow-up review](motion-smoothness-review-2026-10-23.md) retains every candidate
 and fallback and separates numerical results from physical acceptance.
 
+The later slow-turn review reproduced obsolete regional timing surviving a
+field-to-phrase replacement, and velocity steps in low-speed whole-percent
+output. Hosted timing-scope guidance and bounded buffered velocity refinement
+are proposed; local prompts and immediate transports are unchanged. A separate
+shorter-turn profile remains experimental. The user deferred physical testing:
+the [documented A/B and Stop checklist](layered-slow-turn-review-2026-10-23.md#physical-acceptance-required-before-the-next-update)
+must pass before the next update includes these motion changes. Lower sampled
+velocity error does not establish smoother carriage movement.
+
 Remaining limits: model intent is not guaranteed by a finite fixture. Some
 count/order changes can still use the general transition, and commanded endpoints do
 not establish physical carriage reach. Original Handy Cloud physical acceptance

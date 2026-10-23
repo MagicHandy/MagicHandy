@@ -147,6 +147,7 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 		}
 		if natural || windowEnd >= maximumWindowEnd {
 			samples = samples[:cutoff+1]
+			samples = e.refineBufferedVelocityChunk(samples, positionResolution, maximumPoints)
 			if len(samples) > maximumPoints {
 				return nil, fmt.Errorf(
 					"motion content has %d essential points in the %dms output window; trim or slow the content",

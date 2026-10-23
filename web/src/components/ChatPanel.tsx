@@ -85,7 +85,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     const previous = observedStopSequence.current;
     const current = state?.stop_sequence;
     observedStopSequence.current = current;
-    if (previous !== undefined && current !== undefined && previous !== current) { activeStream.current?.abort(); clearRepairOffers(); }
+    if (previous !== undefined && current !== undefined && previous !== current) { activeStream.current?.abort("Chat canceled by Emergency Stop."); clearRepairOffers(); }
   }, [state?.stop_sequence]);
 
   useEffect(() => {
@@ -102,13 +102,16 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     // The backend still fences inference/dispatch at Stop, expiry and takeover.
     if (previous !== state?.observation?.epoch || ownershipChanged || authority?.read_only ||
         (authority?.heartbeat_required && !authority.active) || ((!backendOnline || readOnly) && !protectedTurn)) {
-      activeStream.current?.abort();
+      const lostControl = ownershipChanged || authority?.read_only || (authority?.heartbeat_required && !authority.active);
+      activeStream.current?.abort(previous === state?.observation?.epoch && lostControl
+        ? "The reply was interrupted because this browser lost control of the session. Take control, then try again."
+        : "The reply was interrupted before it finished. Please try again.");
       clearRepairOffers();
     }
   }, [backendOnline, readOnly, state?.observation?.epoch, state?.controller]);
 
   useEffect(() => {
-    if (observedMotionOwner.current !== motionOwner) { activeStream.current?.abort(); clearRepairOffers(); }
+    if (observedMotionOwner.current !== motionOwner) { activeStream.current?.abort("The model or motion settings changed while the reply was being prepared. Please send your request again."); clearRepairOffers(); }
     observedMotionOwner.current = motionOwner;
   }, [motionOwner]);
 
@@ -342,7 +345,9 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
         if (x.id !== assistantId) return [x];
         if (controller.signal.aborted && !retainReplyOnAbort) return repairMessage
           ? [{ ...repairMessage, streaming: false, repair: undefined, repairState: "unavailable" }]
-          : [];
+          : [{ id: x.id, role: "assistant", streaming: false, warning: true,
+            text: typeof controller.signal.reason === "string" ? translateKnown(controller.signal.reason)
+              : t("The reply was interrupted before it finished. Please try again.") }];
         return [{ ...x, streaming: false }];
       }));
       if (controller.signal.aborted && stagedReplySeen && !retainReplyOnAbort) {

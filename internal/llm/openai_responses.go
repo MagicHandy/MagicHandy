@@ -169,6 +169,9 @@ func (p *OpenAIResponsesProvider) StreamChat(ctx context.Context, request ChatRe
 	defer func() { _ = response.Body.Close() }()
 	raw, err := consumeResponsesStream(response.Body, request.OnProgress)
 	if err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 		return "", err
 	}
 	if len(request.JSONSchema) > 0 {
@@ -294,5 +297,16 @@ func consumeResponsesStream(reader io.Reader, progress func(ProviderProgress)) (
 			return output.String(), nil
 		}
 	}
-	return "", &CloudError{Kind: "incomplete"}
+	return "", responsesStreamReadError(scanner.Err())
+}
+
+// Keep deadline/cancellation identity for the app's interruption handling.
+// Other read errors remain redacted and no partial proposal can escape.
+func responsesStreamReadError(err error) error {
+	for _, cause := range []error{context.Canceled, context.DeadlineExceeded} {
+		if errors.Is(err, cause) {
+			return cause
+		}
+	}
+	return &CloudError{Kind: "incomplete"}
 }
