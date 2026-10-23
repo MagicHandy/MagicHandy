@@ -359,6 +359,10 @@ func (m *Manager) reconcileEdge() {
 		m.suspendEdgeLocked("Hold updated. Choose Return when ready.")
 	} else {
 		m.edge = nil
-		m.adoptEdgeReturnLocked(e, state)
+		// A chat handoff has its own final adoption and history update. A
+		// status observation between apply and notify must not adopt it twice.
+		if !m.chat.pending {
+			m.adoptEdgeReturnLocked(e, state)
+		}
 	}
 }

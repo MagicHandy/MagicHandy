@@ -11,7 +11,7 @@ import (
 // familiar working region, soften the turns, and reduce pace inside saved limits.
 func HoldingTarget(state ActiveMotionState, settings config.MotionSettings) (MotionTarget, error) {
 	lo, hi := 0, 100
-	if state.Perceptual.PositionMaxPercent-state.Perceptual.PositionMinPercent >= 10 {
+	if state.Perceptual.PositionMaxPercent > state.Perceptual.PositionMinPercent || state.Perceptual.Pace.RequestedPercent > 0 {
 		lo = max(0, int(math.Floor(state.Perceptual.PositionMinPercent)))
 		hi = min(100, int(math.Ceil(state.Perceptual.PositionMaxPercent)))
 	} else if state.Target.Flow != nil {

@@ -32,6 +32,16 @@ func TestHoldingTargetKeepsBoundsAndIgnoresClickPhase(t *testing.T) {
 	}
 }
 
+func TestHoldingTargetNeverWidensAnUnusableMeasuredRegion(t *testing.T) {
+	settings := config.DefaultSettings().Motion
+	for _, end := range []float64{30, 35} {
+		_, err := HoldingTarget(ActiveMotionState{Target: MotionTarget{PatternID: "user-pattern", SpeedPercent: 30}, Perceptual: PerceptualSummary{PositionMinPercent: 30, PositionMaxPercent: end, Pace: PaceSummary{RequestedPercent: 30}}}, settings)
+		if err == nil {
+			t.Fatal("unusable measured region fell back to full range")
+		}
+	}
+}
+
 func TestEdgeHoldTransitionsDoNotInsertTinyReversals(t *testing.T) {
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMinPercent, settings.SpeedMaxPercent = 1, 100

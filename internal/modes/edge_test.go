@@ -226,3 +226,28 @@ func TestEdgeUnavailableForStoppedPausedAndFiniteMotion(t *testing.T) {
 		})
 	}
 }
+
+func TestEdgeObservationDoesNotDoubleAdoptPendingChat(t *testing.T) {
+	m, e, _ := edgeManager(t)
+	m.loop.mode = ModeAutopilot
+	if _, err := m.ActivateEdge(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	generation := m.PrepareChatTarget()
+	target := motion.MotionTarget{PatternID: motion.PatternStroke, SpeedPercent: 30, Source: "chat"}
+	if _, err := e.ApplyTargetIfCurrent(t.Context(), target, "chat", e.Snapshot().PlanID); err != nil {
+		t.Fatal(err)
+	}
+	if m.Status().EdgeHold != nil {
+		t.Fatal("old hold survived a newer chat target")
+	}
+	if len(m.history.recentSpeeds) != 0 {
+		t.Fatal("observation prematurely adopted chat")
+	}
+	if !m.NotifyChatTarget(generation, target) {
+		t.Fatal("observation invalidated pending chat adoption")
+	}
+	if len(m.history.recentSpeeds) != 1 {
+		t.Fatal("chat was not adopted exactly once")
+	}
+}
