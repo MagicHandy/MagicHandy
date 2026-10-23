@@ -1,8 +1,9 @@
 # Alpha.71 release review — 2026-10-23
 
 Dates use America/New_York. The maintainer requested merging PRs #344 and #345
-after their CI passes and publishing an update. The reviewed feature heads are
-`854e9d0d` and `b3ac8844`; release preparation is stacked on those commits.
+after green CI and publishing an update, then explicitly included multi-Handy
+support in that update. PRs #344 and #345 are merged. This candidate adds named
+Handy connections and the version-specific release preparation on that source.
 
 ## Source and acceptance review
 
@@ -49,16 +50,35 @@ release request authorizes alpha publication with those limitations disclosed;
 it does not establish physical acceptance. The installed app and its data remain
 untouched.
 
+## Multi-Handy integration
+
+The [multi-Handy review](multi-handy-review-2026-10-23.md) records Claude's UI
+implementation, Codex's integration review, shared-engine startup/dispatch
+changes and mixed-connection simulation. Additional Cloud, native Bluetooth and
+Intiface Handys have independent configuration and generation-bound owners.
+There is still one semantic motion engine. Shared calibration, timing and
+sampling honor the slowest participating requirements; connection delays mean
+physical synchronization is an estimate. The original Browser Bluetooth bridge
+remains a single Handy connection.
+
+The full frontend suite passes 966 tests across 122 files. Full Go tests, vet,
+lint, architecture and pure-Go build pass locally. Three simulated protocols
+completed three patterns, Stop and repeated Cloud/Intiface reconnects; startup
+and mixed-motion command plots were inspected. The review app completed direct
+local generation and a text-only app chat with no repair/fallback/motion.
+Physical multi-Handy acceptance and long-running radio/network behavior remain
+pending. Prior Intiface Stop and loaded electrical/vibration limits still apply.
+
 ## Release preparation and boundaries
 
 Only `0.1.0-alpha.71` is added to ADR 0014's reviewed unsigned policy. Alpha.72
-and unpublished alpha.65 remain rejected. No dependency, worker, loader,
+and unpublished alpha.65 remain rejected. No dependency, worker protocol, loader,
 compression format, public artifact set or installer contract changes. The
 version-specific amendment preserves all vulnerability, Defender, provenance,
 manifest, checksum and installer-lifecycle gates. Microsoft's prior case does
 not approve these new hashes; trusted Authenticode remains the long-term target.
 
-Both feature PRs, this release preparation and merged-main CI must pass before
+The multi-Handy/release PR and merged-main CI must pass before
 tagging. The tag workflow repeats quality checks and scans all five exact
 Windows executables, then verifies and exercises the exact public installer on
 a disposable host before publication. The three public assets are setup,
