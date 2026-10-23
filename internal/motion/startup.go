@@ -74,19 +74,41 @@ type startupMotionProfile struct {
 // every motion source gets the same startup behavior and media time remains at
 // zero until the device has reached the script's first point.
 func (e *Engine) prepareMotionStartup(ctx context.Context, runEpoch uint64, prefix string) error {
-	provider, ok := e.transport.(transport.MotionStartupStateProvider)
+	if group, ok := e.transport.(transport.MotionStartupParticipantsProvider); ok {
+		if err := e.stopTransportForStartup(ctx, runEpoch, prefix+"_linked_startup_stop"); err != nil {
+			return err
+		}
+		for _, participant := range group.MotionStartupParticipants() {
+			if err := e.prepareMotionStartupOwner(ctx, runEpoch, prefix+"_"+participant.ID, participant.Transport); err != nil {
+				return fmt.Errorf("%s: %w", participant.Label, err)
+			}
+		}
+		return nil
+	}
+	return e.prepareMotionStartupOwner(ctx, runEpoch, prefix, e.transport)
+}
+
+func startupTransport(fallback transport.Transport, owners []transport.Transport) transport.Transport {
+	if len(owners) > 0 {
+		return owners[0]
+	}
+	return fallback
+}
+
+func (e *Engine) prepareMotionStartupOwner(ctx context.Context, runEpoch uint64, prefix string, owner transport.Transport) error {
+	provider, ok := owner.(transport.MotionStartupStateProvider)
 	if !ok {
-		return e.setStrokeWindow(ctx, runEpoch, prefix+"_stroke_window", false)
+		return e.setStrokeWindow(ctx, runEpoch, prefix+"_stroke_window", false, owner)
 	}
 
-	if err := e.stopTransportForStartup(ctx, runEpoch, prefix+"_startup_stop"); err != nil {
+	if err := e.stopTransportForStartup(ctx, runEpoch, prefix+"_startup_stop", owner); err != nil {
 		return err
 	}
 	state, err := e.readStationaryStartupState(ctx, runEpoch, provider, prefix)
 	if err != nil {
 		return err
 	}
-	profile, err := e.buildStartupMotionProfile(runEpoch, state)
+	profile, err := e.buildStartupMotionProfile(runEpoch, state, owner)
 	if err != nil {
 		return err
 	}
@@ -95,7 +117,7 @@ func (e *Engine) prepareMotionStartup(ctx context.Context, runEpoch uint64, pref
 		profile.observedFullPercent <= float64(profile.settings.MaxPercent)
 	if currentInsideFinalWindow &&
 		math.Abs(profile.mainTargetFullPercent-profile.observedFullPercent) <= startupPositionTolerancePercent {
-		return e.setStrokeWindowCommand(ctx, runEpoch, prefix+"_stroke_window", profile.settings, false)
+		return e.setStrokeWindowCommand(ctx, runEpoch, prefix+"_stroke_window", profile.settings, false, owner)
 	}
 
 	windowReason := prefix + "_startup_window"
@@ -103,22 +125,22 @@ func (e *Engine) prepareMotionStartup(ctx context.Context, runEpoch uint64, pref
 		windowReason = prefix + "_stroke_window"
 		profile.finalWindowReady = true
 	}
-	if err := e.setStrokeWindowCommand(ctx, runEpoch, windowReason, profile.unionWindow, false); err != nil {
+	if err := e.setStrokeWindowCommand(ctx, runEpoch, windowReason, profile.unionWindow, false, owner); err != nil {
 		return err
 	}
-	if err := e.appendStartupLeadIn(ctx, runEpoch, profile, prefix+"_startup_points"); err != nil {
+	if err := e.appendStartupLeadIn(ctx, runEpoch, profile, prefix+"_startup_points", owner); err != nil {
 		return err
 	}
-	if err := e.playStartupLeadIn(ctx, runEpoch, profile, prefix+"_startup_play"); err != nil {
+	if err := e.playStartupLeadIn(ctx, runEpoch, profile, prefix+"_startup_play", owner); err != nil {
 		return err
 	}
-	if err := e.waitForStartupLeadIn(ctx, profile.leadInDuration); err != nil {
+	if err := e.waitForStartupLeadIn(ctx, profile.leadInDuration, owner); err != nil {
 		return err
 	}
 	if _, err := e.waitForStartupArrival(ctx, runEpoch, provider, profile, prefix); err != nil {
 		return err
 	}
-	if err := e.stopTransportForStartup(ctx, runEpoch, prefix+"_startup_lead_in_complete"); err != nil {
+	if err := e.stopTransportForStartup(ctx, runEpoch, prefix+"_startup_lead_in_complete", owner); err != nil {
 		return err
 	}
 
@@ -132,7 +154,7 @@ func (e *Engine) prepareMotionStartup(ctx context.Context, runEpoch uint64, pref
 	if profile.finalWindowReady {
 		return nil
 	}
-	return e.setStrokeWindowCommand(ctx, runEpoch, prefix+"_stroke_window", profile.settings, false)
+	return e.setStrokeWindowCommand(ctx, runEpoch, prefix+"_stroke_window", profile.settings, false, owner)
 }
 
 // waitForStartupArrival observes the physical slider while the final lead-in
@@ -240,7 +262,7 @@ func (e *Engine) readStationaryStartupState(
 	return transport.MotionStartupState{}, errors.New("device slider remained in motion after the motion startup Stop")
 }
 
-func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.MotionStartupState) (startupMotionProfile, error) {
+func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.MotionStartupState, owners ...transport.Transport) (startupMotionProfile, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err := e.validateRunLocked(runEpoch); err != nil {
@@ -290,7 +312,7 @@ func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.Moti
 	// Arrival must match the point the owner can encode in the temporary
 	// window. Keep the semantic point and lead-in timing unchanged; quantizing
 	// early would discard precision for other owners and alter authored motion.
-	commandedFullPercent := e.startupCommandFullPercent(targetSemantic, union)
+	commandedFullPercent := e.startupCommandFullPercent(targetSemantic, union, owners...)
 	delta := math.Abs(targetFullPercent - observedFullPercent)
 	return startupMotionProfile{
 		settings:              settings,
@@ -298,7 +320,7 @@ func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.Moti
 		currentFullPercent:    currentFullPercent,
 		targetFullPercent:     commandedFullPercent,
 		targetAbsolute:        calibration.absoluteAt(commandedFullPercent),
-		mainTargetFullPercent: e.startupCommandFullPercent(first, settings),
+		mainTargetFullPercent: e.startupCommandFullPercent(first, settings, owners...),
 		finalMinAbsolute:      calibration.absoluteAt(float64(settings.MinPercent)),
 		finalMaxAbsolute:      calibration.absoluteAt(float64(settings.MaxPercent)),
 		fullTravelAbsolute:    calibration.fullTravelAbsolute,
@@ -315,13 +337,21 @@ func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.Moti
 // fitting encoded knots. Reverse direction and temporary/final windows must be
 // applied in the same order as the owner. This only changes arrival comparison;
 // semantic commands still reach the transport at their original precision.
-func (e *Engine) startupCommandFullPercent(position float64, window transport.StrokeWindowCommand) float64 {
+func (e *Engine) startupCommandFullPercent(position float64, window transport.StrokeWindowCommand, owners ...transport.Transport) float64 {
 	resolution := e.positionResolutionPercent
-	if resolution > 0 && !e.resolutionAfterStrokeWindow {
+	afterWindow := e.resolutionAfterStrokeWindow
+	if len(owners) > 0 {
+		resolution, afterWindow = 0, false
+		if capabilities, ok := owners[0].(transport.MotionSamplingCapabilitiesProvider); ok {
+			sampling := capabilities.MotionSamplingCapabilities()
+			resolution, afterWindow = sampling.PositionResolutionPercent, sampling.ResolutionAfterStrokeWindow
+		}
+	}
+	if resolution > 0 && !afterWindow {
 		position = quantizedMotionPosition(position, resolution)
 	}
 	fullPercent := physicalPositionForSemantic(position, window)
-	if resolution > 0 && e.resolutionAfterStrokeWindow {
+	if resolution > 0 && afterWindow {
 		fullPercent = quantizedMotionPosition(fullPercent, resolution)
 	}
 	return fullPercent
@@ -376,7 +406,7 @@ func (e *Engine) readMotionStartupState(
 	return state, results, err
 }
 
-func (e *Engine) stopTransportForStartup(ctx context.Context, runEpoch uint64, reason string) error {
+func (e *Engine) stopTransportForStartup(ctx context.Context, runEpoch uint64, reason string, owners ...transport.Transport) error {
 	e.commandMu.Lock()
 	defer e.commandMu.Unlock()
 	commandCtx, cleanup, err := e.contextForRun(ctx, runEpoch)
@@ -384,7 +414,7 @@ func (e *Engine) stopTransportForStartup(ctx context.Context, runEpoch uint64, r
 		return err
 	}
 	command := transport.StopCommand{Reason: reason}
-	result, err := e.transport.Stop(commandCtx, command)
+	result, err := startupTransport(e.transport, owners).Stop(commandCtx, command)
 	cleanup()
 	e.recordTransportResult(reason, nil, transport.Command{Kind: transport.CommandKindStop, Stop: &command}, result, err)
 	e.rememberResult(result, err)
@@ -396,6 +426,7 @@ func (e *Engine) appendStartupLeadIn(
 	runEpoch uint64,
 	profile startupMotionProfile,
 	reason string,
+	owners ...transport.Transport,
 ) error {
 	e.commandMu.Lock()
 	defer e.commandMu.Unlock()
@@ -415,7 +446,7 @@ func (e *Engine) appendStartupLeadIn(
 			{PositionPercent: profile.targetSemantic, TimeMillis: (profile.leadInDuration + startupTargetHold).Milliseconds()},
 		},
 	}
-	result, err := e.transport.AppendPoints(commandCtx, command)
+	result, err := startupTransport(e.transport, owners).AppendPoints(commandCtx, command)
 	cleanup()
 	annotation := fmt.Sprintf("commanded_target_full_percent=%.4f;commanded_target_absolute=%.4f;arrival_tolerance_absolute=%.4f",
 		profile.targetFullPercent, profile.targetAbsolute, profile.fullTravelAbsolute*startupPositionTolerancePercent/100)
@@ -429,6 +460,7 @@ func (e *Engine) playStartupLeadIn(
 	runEpoch uint64,
 	profile startupMotionProfile,
 	reason string,
+	owners ...transport.Transport,
 ) error {
 	e.commandMu.Lock()
 	defer e.commandMu.Unlock()
@@ -437,16 +469,16 @@ func (e *Engine) playStartupLeadIn(
 		return err
 	}
 	command := transport.PlayCommand{StreamID: profile.startupStreamID}
-	result, err := e.transport.Play(commandCtx, command)
+	result, err := startupTransport(e.transport, owners).Play(commandCtx, command)
 	cleanup()
 	e.recordTransportResult(reason, nil, transport.Command{Kind: transport.CommandKindPointsPlay, PointsPlay: &command}, result, err)
 	e.rememberResult(result, err)
 	return err
 }
 
-func (e *Engine) waitForStartupLeadIn(ctx context.Context, duration time.Duration) error {
+func (e *Engine) waitForStartupLeadIn(ctx context.Context, duration time.Duration, owners ...transport.Transport) error {
 	wait := duration + startupArrivalSettle
-	if provider, ok := e.transport.(transport.PlaybackStartTimeProvider); ok {
+	if provider, ok := startupTransport(e.transport, owners).(transport.PlaybackStartTimeProvider); ok {
 		if startedAt := provider.PlaybackStartTime(); !startedAt.IsZero() {
 			wait = time.Until(startedAt.Add(duration + startupArrivalSettle))
 		}

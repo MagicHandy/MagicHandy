@@ -4,12 +4,13 @@
 // itself stays backend-owned: these are snapshots, never a parallel model.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../api/client";
-import { configuredDevices, playbackDevices } from "../api/devices";
+import { configuredDevices, isHandyInstance, isKnownDevice, playbackDevices } from "../api/devices";
+import type { HandyConnectionState } from "../api/handy-types";
 import type { CoyoteTransportSnapshot, DeviceId, IntifaceTransportSnapshot } from "../api/types";
 import { BluetoothBridge, type BluetoothBridgeHandle, type BluetoothBridgeState } from "../components/BluetoothBridge";
 import { t, translateKnown } from "../i18n";
 import { useAppState, useToast } from "../state/app-state";
-import type { DeviceContext } from "./types";
+import type { DeviceContext, DeviceRequestKey } from "./types";
 
 // Levels change faster than the app-state poll while someone watches them.
 const WATCH_POLL_MS = 500;
@@ -24,14 +25,16 @@ export const EMPTY_INTIFACE: IntifaceTransportSnapshot = {
 const EMPTY_BLUETOOTH: BluetoothBridgeState = { connected: false, connecting: false, status: "disconnected", deviceName: "", supported: false };
 
 interface DeviceRuntime {
-  busy: Partial<Record<DeviceId, string>>;
-  failed: Partial<Record<DeviceId, boolean>>;
+  busy: Partial<Record<DeviceRequestKey, string>>;
+  failed: Partial<Record<DeviceRequestKey, boolean>>;
   setFailed: (device: DeviceId, failed: boolean) => void;
   run: DeviceContext["run"];
   coyote?: CoyoteTransportSnapshot;
   setCoyote: (snapshot: CoyoteTransportSnapshot) => void;
   intiface?: IntifaceTransportSnapshot;
   setIntiface: (snapshot: IntifaceTransportSnapshot) => void;
+  handys?: HandyConnectionState[];
+  setHandy: (snapshot: HandyConnectionState) => void;
   bluetooth: BluetoothBridgeState;
   browserBluetooth: DeviceContext["browserBluetooth"];
   watch: () => () => void;
@@ -43,11 +46,12 @@ const DeviceRuntimeContext = createContext<DeviceRuntime | null>(null);
 export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
   const { state, backendOnline, readOnly, refresh } = useAppState();
   const { show } = useToast();
-  const [busy, setBusy] = useState<Partial<Record<DeviceId, string>>>({});
-  const [failed, setFailedMap] = useState<Partial<Record<DeviceId, boolean>>>({});
-  const pending = useRef(new Set<DeviceId>());
+  const [busy, setBusy] = useState<Partial<Record<DeviceRequestKey, string>>>({});
+  const [failed, setFailedMap] = useState<Partial<Record<DeviceRequestKey, boolean>>>({});
+  const pending = useRef(new Set<DeviceRequestKey>());
   const [coyote, setCoyote] = useState(state?.coyote_transport);
   const [intiface, setIntiface] = useState(state?.intiface_transport);
+  const [handys, setHandys] = useState(state?.handy_connections);
   const [bluetooth, setBluetooth] = useState(EMPTY_BLUETOOTH);
   const [watchers, setWatchers] = useState(0);
   const [bluetoothDetails, setBluetoothDetails] = useState<HTMLElement | null>(null);
@@ -57,10 +61,13 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
   const watching = watchers > 0;
   const coyoteConnected = configured.includes("coyote") && Boolean(coyote?.status.connected);
   const vibratorLeased = configured.includes("vibrator") && Boolean(intiface?.status.connected && intiface.leases?.includes("vibrator"));
-  const usesIntiface = configured.includes("vibrator") || (configured.includes("handy") && owner === "intiface");
+  const additionalHandys = (state?.settings?.device?.handy_connections ?? []).filter((connection) => configured.includes(connection.id));
+  const usesIntiface = configured.includes("vibrator") || (configured.includes("handy") && owner === "intiface")
+    || additionalHandys.some((connection) => connection.method === "intiface");
 
   useEffect(() => { if (state?.coyote_transport) setCoyote(state.coyote_transport); }, [state?.coyote_transport]);
   useEffect(() => { if (state?.intiface_transport) setIntiface(state.intiface_transport); }, [state?.intiface_transport]);
+  useEffect(() => { if (state?.handy_connections) setHandys(state.handy_connections); }, [state?.handy_connections]);
   // A failed attempt belongs to the method it was made with.
   useEffect(() => setFailedMap((current) => (current.handy ? { ...current, handy: false } : current)), [owner]);
 
@@ -69,6 +76,10 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
     if (!watching || !backendOnline || !usesIntiface) return;
     void api.intifaceStatus().then(setIntiface).catch(() => undefined);
   }, [watching, backendOnline, usesIntiface]);
+  useEffect(() => {
+    if (!watching || !backendOnline || !additionalHandys.length) return;
+    void api.handyConnections().then((result) => setHandys(result.connections)).catch(() => undefined);
+  }, [watching, backendOnline, additionalHandys.length]);
   useEffect(() => {
     if (!watching || !coyoteConnected) return;
     const timer = window.setInterval(() => void api.coyoteStatus().then(setCoyote).catch(() => undefined), WATCH_POLL_MS);
@@ -107,6 +118,13 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
   }, [refresh, show]);
 
   const setFailed = useCallback((device: DeviceId, value: boolean) => setFailedMap((current) => ({ ...current, [device]: value })), []);
+  // A reply carries one instance's link; the next snapshot replaces them all.
+  const setHandy = useCallback((snapshot: HandyConnectionState) => {
+    if (!isHandyInstance(snapshot.id)) return;
+    setHandys((current = []) => current.some((link) => link.id === snapshot.id)
+      ? current.map((link) => (link.id === snapshot.id ? snapshot : link))
+      : [...current, snapshot]);
+  }, []);
   const watch = useCallback(() => {
     setWatchers((count) => count + 1);
     return () => setWatchers((count) => count - 1);
@@ -117,8 +135,8 @@ export function DeviceRuntimeProvider({ children }: { children: ReactNode }) {
   }), []);
 
   const runtime = useMemo<DeviceRuntime>(() => ({
-    busy, failed, setFailed, run, coyote, setCoyote, intiface, setIntiface, bluetooth, browserBluetooth, watch, setBluetoothDetails,
-  }), [busy, failed, setFailed, run, coyote, intiface, bluetooth, browserBluetooth, watch]);
+    busy, failed, setFailed, run, coyote, setCoyote, intiface, setIntiface, handys, setHandy, bluetooth, browserBluetooth, watch, setBluetoothDetails,
+  }), [busy, failed, setFailed, run, coyote, intiface, handys, setHandy, bluetooth, browserBluetooth, watch]);
 
   return (
     <DeviceRuntimeContext.Provider value={runtime}>
@@ -188,11 +206,12 @@ export function useDeviceContext(): DeviceContext {
     configured: configuredDevices(settings?.device),
     playing: playbackDevices(settings?.device),
     engineActive: Boolean(engine?.running || engine?.starting || engine?.completing),
-    retired: linked?.status === "degraded" ? linked.retired_devices.filter(isDevice) : [],
+    retired: linked?.status === "degraded" ? linked.retired_devices.filter(isKnownDevice) : [],
     stopSequence: state?.stop_sequence,
     intiface: runtime?.intiface ?? state?.intiface_transport ?? EMPTY_INTIFACE,
     coyote: runtime?.coyote ?? state?.coyote_transport,
     native: state?.native_bluetooth_transport,
+    handys: runtime?.handys ?? state?.handy_connections ?? [],
     bluetooth: runtime?.bluetooth ?? EMPTY_BLUETOOTH,
     busy: runtime?.busy ?? {},
     failed: runtime?.failed ?? {},
@@ -201,10 +220,7 @@ export function useDeviceContext(): DeviceContext {
     setFailed: runtime?.setFailed ?? noop,
     setCoyote: runtime?.setCoyote ?? noop,
     setIntiface: runtime?.setIntiface ?? noop,
+    setHandy: runtime?.setHandy ?? noop,
     browserBluetooth: runtime?.browserBluetooth ?? { connect: noop, disconnect: noop },
   };
-}
-
-function isDevice(value: string): value is DeviceId {
-  return value === "handy" || value === "coyote" || value === "vibrator";
 }

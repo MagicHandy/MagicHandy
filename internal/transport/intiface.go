@@ -124,6 +124,7 @@ type Intiface struct {
 	*intifaceSession
 
 	stopMu    sync.RWMutex
+	ownerStop context.CancelFunc
 	selection intifaceSelection
 	selected  bool
 	diagnosis TransportDiagnostics
@@ -191,8 +192,12 @@ func (i *Intiface) Connect(ctx context.Context) error {
 }
 
 func (i *Intiface) sessionReady(sessionCtx context.Context) {
+	ownerCtx, cancel := context.WithCancel(sessionCtx)
+	i.mu.Lock()
+	i.ownerStop = cancel
+	i.mu.Unlock()
 	i.wg.Add(1)
-	go i.paceLoop(sessionCtx)
+	go i.paceLoop(ownerCtx)
 }
 
 // paceAlive is always true: the linear pacer is deadline-driven and reports

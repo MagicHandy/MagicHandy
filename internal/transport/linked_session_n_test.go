@@ -150,6 +150,9 @@ func TestLinkedSessionHandsTheClockOnWhenItRetires(t *testing.T) {
 	if second.plays != 2 || !reflect.DeepEqual(third.startedAt, []time.Time{start}) {
 		t.Fatalf("the next participant did not take the clock: plays %d, starts %v", second.plays, third.startedAt)
 	}
+	if f.PlaybackStartTime() != start {
+		t.Fatal("the engine still reads the retired participant's clock")
+	}
 }
 
 func TestLinkedStopErrorsNameEachParticipant(t *testing.T) {

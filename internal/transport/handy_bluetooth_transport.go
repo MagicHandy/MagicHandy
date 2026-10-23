@@ -196,6 +196,16 @@ func (t *HandyBluetoothTransport) AppendPoints(ctx context.Context, command Appe
 
 // Play starts or resumes timed-point playback through Handy HSP.
 func (t *HandyBluetoothTransport) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
+	return t.playAt(ctx, command, time.Time{})
+}
+
+// PlayAligned follows the shared timeline, with GATT delivery latency remaining
+// a physical estimate rather than a synchronization guarantee.
+func (t *HandyBluetoothTransport) PlayAligned(ctx context.Context, command PlayCommand, start time.Time) (CommandResult, error) {
+	return t.playAt(ctx, command, start)
+}
+
+func (t *HandyBluetoothTransport) playAt(ctx context.Context, command PlayCommand, origin time.Time) (CommandResult, error) {
 	admission, err := t.motionGate.admit()
 	if err != nil {
 		return t.recordBuildError(CommandKindPointsPlay, err), err
@@ -209,6 +219,9 @@ func (t *HandyBluetoothTransport) Play(ctx context.Context, command PlayCommand)
 	semanticStreamID, bluetoothStreamID, err := t.bluetoothStreamIDLocked(command.StreamID)
 	if err != nil {
 		return t.recordBuildError(CommandKindPointsPlay, err), err
+	}
+	if !origin.IsZero() {
+		command.StartTimeMillis = max(command.StartTimeMillis, time.Since(origin).Milliseconds())
 	}
 	if err := validateHandyHSPStart(command.StartTimeMillis); err != nil {
 		return t.recordBuildError(CommandKindPointsPlay, err), err

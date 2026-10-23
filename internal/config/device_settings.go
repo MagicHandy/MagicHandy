@@ -2,11 +2,13 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
 // DeviceSettings contains device transport configuration.
 type DeviceSettings struct {
+	HandyConnections []HandyConnection `json:"handy_connections,omitempty"`
 	// NativeBluetoothAddress is a private hardware identifier, never a public setting.
 	NativeBluetoothAddress string   `json:"native_bluetooth_address,omitempty"`
 	ConfiguredDevices      []string `json:"configured_devices"`
@@ -27,16 +29,17 @@ type DeviceSettings struct {
 
 // PublicDeviceSettings is the API-safe device settings view.
 type PublicDeviceSettings struct {
-	ConfiguredDevices        []string `json:"configured_devices"`
-	PlaybackDevices          []string `json:"playback_devices"`
-	LinkedFailurePolicy      string   `json:"linked_failure_policy"`
-	Output                   string   `json:"output"`
-	HSPDispatchOwner         string   `json:"hsp_dispatch_owner"`
-	IntifaceServerAddress    string   `json:"intiface_server_address"`
-	FirmwareAPIRequirement   string   `json:"firmware_api_requirement"`
-	APIApplicationIDSource   string   `json:"api_application_id_source"`
-	APIApplicationIDOverride string   `json:"api_application_id_override,omitempty"`
-	ConnectionKeySet         bool     `json:"connection_key_set"`
+	HandyConnections         []PublicHandyConnection `json:"handy_connections"`
+	ConfiguredDevices        []string                `json:"configured_devices"`
+	PlaybackDevices          []string                `json:"playback_devices"`
+	LinkedFailurePolicy      string                  `json:"linked_failure_policy"`
+	Output                   string                  `json:"output"`
+	HSPDispatchOwner         string                  `json:"hsp_dispatch_owner"`
+	IntifaceServerAddress    string                  `json:"intiface_server_address"`
+	FirmwareAPIRequirement   string                  `json:"firmware_api_requirement"`
+	APIApplicationIDSource   string                  `json:"api_application_id_source"`
+	APIApplicationIDOverride string                  `json:"api_application_id_override,omitempty"`
+	ConnectionKeySet         bool                    `json:"connection_key_set"`
 }
 
 // DeviceUpdate is the API write payload for device settings.
@@ -66,6 +69,12 @@ func applyDeviceUpdate(next Settings, update SettingsUpdate) (Settings, error) {
 	}
 	if update.Device.ConfiguredDevices != nil {
 		next.Device.ConfiguredDevices = append([]string{}, update.Device.ConfiguredDevices...)
+		// Older full-settings writers cannot remove named instances.
+		for _, connection := range next.Device.HandyConnections {
+			if !slices.Contains(next.Device.ConfiguredDevices, connection.ID) {
+				next.Device.ConfiguredDevices = append(next.Device.ConfiguredDevices, connection.ID)
+			}
+		}
 	}
 	output := strings.TrimSpace(update.Device.Output)
 	switch {

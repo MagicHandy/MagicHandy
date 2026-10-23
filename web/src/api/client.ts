@@ -3,6 +3,7 @@
 // other tabs become read-only. The frontend never builds raw transport
 // payloads — only the semantic endpoints below.
 import type { NativeBluetoothSnapshot } from "./native-bluetooth-types";
+import type { HandyCandidate, HandyConnectionMethod, HandyConnectionPatch, HandyConnectionState } from "./handy-types";
 import type { LLMCatalog } from "./catalog-types";
 import type { ChatRequestFailure } from "./chat-diagnostic-types";
 import type { DiagnosticReportOptions } from "./diagnostic-report-types";
@@ -88,6 +89,7 @@ import type {
   DeviceId,
   DeviceOptionsPatch,
   DeviceOutput,
+  HandyInstanceId,
 } from "./types";
 
 
@@ -880,8 +882,31 @@ export const api = {
     request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/test", { channel }, undefined,
       { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
   coyoteZero: () => request<CoyoteTransportSnapshot>("POST", "/api/transport/coyote/zero", {}),
+  // Additional Handys take include and exclude by their instance ID; adding
+  // and removing one goes through /api/settings/handys.
   changeDeviceConnection: (device: DeviceId, action: "add" | "remove" | "include" | "exclude") =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/connections", { device, action }),
+  // Adding saves another Handy ready to set up: it never connects it or adds
+  // it to playback. The backend names it and returns its ID.
+  addHandy: (body: { name?: string; method?: HandyConnectionMethod; handy_model?: HandyModel } = {}) =>
+    request<{ settings: PublicSettings; device_id: HandyInstanceId }>("POST", "/api/settings/handys", body),
+  updateHandy: (id: HandyInstanceId, patch: HandyConnectionPatch) =>
+    request<{ settings: PublicSettings }>("PATCH", `/api/settings/handys/${encodeURIComponent(id)}`, patch),
+  removeHandy: (id: HandyInstanceId) =>
+    request<{ settings: PublicSettings }>("DELETE", `/api/settings/handys/${encodeURIComponent(id)}`),
+  handyConnections: () => request<{ connections: HandyConnectionState[] }>("GET", "/api/transport/handys"),
+  // Discovery and a chosen candidate serve the primary Handy too, for when
+  // several Handys advertise nearby.
+  handyDiscover: (id: "handy" | HandyInstanceId) =>
+    request<{ candidates: HandyCandidate[] }>("POST", `/api/transport/handys/${encodeURIComponent(id)}/discover`, {}),
+  handyConnect: (id: "handy" | HandyInstanceId, candidateID?: string) =>
+    request<HandyConnectionState>("POST", `/api/transport/handys/${encodeURIComponent(id)}/connect`, candidateID ? { candidate_id: candidateID } : {}),
+  handyDisconnect: (id: HandyInstanceId) =>
+    request<HandyConnectionState>("POST", `/api/transport/handys/${encodeURIComponent(id)}/disconnect`, {}),
+  handySelect: (id: HandyInstanceId, device_index: number, actuator_index: number) =>
+    request<HandyConnectionState>("POST", `/api/transport/handys/${encodeURIComponent(id)}/select`, { device_index, actuator_index }),
+  handyForget: (id: HandyInstanceId) =>
+    request<HandyConnectionState>("POST", `/api/transport/handys/${encodeURIComponent(id)}/forget`, {}),
   setDeviceOutput: (output: DeviceOutput) =>
     request<{ settings: PublicSettings }>("PUT", "/api/settings/device/output", { output }),
   setEstimSafety: (acknowledged: boolean) =>

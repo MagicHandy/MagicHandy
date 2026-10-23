@@ -40,6 +40,7 @@ func (s *Server) configureNativeBluetooth(app Runtime, logger *slog.Logger) {
 		s.nativeBluetooth.available, s.nativeBluetooth.supported = true, true
 	}
 	s.nativeBluetooth.owner = transport.NewNativeBluetoothOwner(connector)
+	s.handys.connector = connector
 }
 
 func (s *Server) nativeBluetoothSnapshot() nativeBluetoothSnapshot {
@@ -71,6 +72,8 @@ func (s *Server) handleNativeBluetoothConnect(w http.ResponseWriter, r *http.Req
 	}
 	s.settingsLifecycleMu.Lock()
 	defer s.settingsLifecycleMu.Unlock()
+	s.handys.nativeMu.Lock()
+	defer s.handys.nativeMu.Unlock()
 	settings, _ := s.store.Snapshot()
 	if settings.Device.HSPDispatchOwner != config.DispatchOwnerNativeBluetooth {
 		writeError(w, http.StatusConflict, errors.New("select Native Bluetooth before connecting"))
@@ -78,6 +81,14 @@ func (s *Server) handleNativeBluetoothConnect(w http.ResponseWriter, r *http.Req
 	}
 	if !s.nativeBluetooth.available {
 		writeError(w, http.StatusServiceUnavailable, ble.ErrHelperMissing)
+		return
+	}
+	if len(settings.Device.HandyConnections) > 0 && settings.Device.NativeBluetoothAddress == "" {
+		writeError(w, http.StatusConflict, errors.New("find nearby Handys and choose the primary device before connecting"))
+		return
+	}
+	if handyAddressInUse(settings, config.DeviceOutputHandy, settings.Device.NativeBluetoothAddress) {
+		writeError(w, http.StatusConflict, errors.New("this Bluetooth device is already saved for another Handy"))
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)

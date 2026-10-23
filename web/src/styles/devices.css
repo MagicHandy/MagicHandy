@@ -143,6 +143,16 @@
 .device-chip-dot[data-status="needs_setup"] {
   background: var(--bg);
 }
+/* More devices than glyphs: the last place counts the rest. */
+.device-chip-more {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-hint);
+  font-variant-numeric: tabular-nums;
+}
 :is(.device-chip:hover, .device-panel-anchor[data-open="true"] .device-chip) .device-chip-dot {
   box-shadow: 0 0 0 2px var(--surface-2);
 }
@@ -528,6 +538,16 @@
   align-items: center;
   gap: 8px;
   font-size: var(--fs-label);
+}
+/* The status word, then whether the device is in playback. */
+.device-list-state {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.device-list-state small {
+  color: var(--muted);
+  font-size: var(--fs-hint);
 }
 .device-list-chevron {
   flex: none;

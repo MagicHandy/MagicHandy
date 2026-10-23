@@ -1,3 +1,4 @@
+import { additionalHandyDevice } from "./additional-handy";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api/client";
 import type { CoyoteStatus, CoyoteTransportSnapshot, IntifaceTransportSnapshot, PublicSettings } from "../api/types";
@@ -59,6 +60,8 @@ function makeCtx(patch: Partial<DeviceContext> = {}, settings: Partial<PublicSet
     intiface: EMPTY_INTIFACE,
     coyote: undefined,
     native: undefined,
+    handys: [],
+    setHandy: vi.fn(),
     bluetooth: { connected: false, connecting: false, status: "disconnected", deviceName: "", supported: true },
     busy: {},
     failed: {},
@@ -252,5 +255,19 @@ describe("the device chip", () => {
 
   it("reads Chat only without devices", () => {
     expect(chipSummary([])).toEqual({ title: "Devices", status: "Chat only" });
+  });
+});
+
+
+describe("named Handy state", () => {
+  const id = "handy-010203040506" as const;
+  it("uses the backend's participation, connection and retired state", () => {
+    const ctx = makeCtx({ configured: ["handy", id], playing: [id], handys: [{ id, connected: true, connecting: false, status: "connected", simulated: false, native_available: true, native_supported: true }] });
+    ctx.settings!.device.handy_connections = [{ id, name: "Guest Handy", method: "cloud_rest", handy_model: "handy_original", connection_key_set: true, remembered_device: false }];
+    const descriptor = additionalHandyDevice(id, ctx.settings);
+    expect(descriptor.model(ctx)).toMatchObject({ name: "Guest Handy", status: "connected", inPlayback: true });
+    expect(descriptor.model({ ...ctx, engineActive: true }).status).toBe("playing");
+    expect(descriptor.model({ ...ctx, engineActive: true, retired: [id] }).status).toBe("lost");
+    expect(descriptor.model({ ...ctx, playing: [], engineActive: true })).toMatchObject({ status: "connected", inPlayback: false });
   });
 });

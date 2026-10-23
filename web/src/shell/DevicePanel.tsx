@@ -3,16 +3,21 @@
 // the Speed and Stroke limits. Setup and configuration live in Settings >
 // Devices, which Device settings opens (docs/ui-design-guidelines.md).
 import { useEffect, useId, useRef } from "react";
+import { isHandy } from "../api/devices";
 import { QuickSettings } from "../components/QuickSettings";
 import { DeviceRow } from "../devices/DeviceRow";
 import { DevicesGlyph } from "../devices/glyphs";
-import { useDevices } from "../devices/registry";
+import { deviceDescriptor, useDevices, type DeviceEntry } from "../devices/registry";
 import { useDeviceWatch } from "../devices/runtime";
 import { chipPhrase, chipSummary } from "../devices/status";
 import type { DeviceContext } from "../devices/types";
 import { t } from "../i18n";
 import { ArrowRightIcon, ChevronUpIcon, CloseIcon, PlusIcon, SettingsIcon } from "./icons";
 import { useTakeControl } from "./useTakeControl";
+
+// The chip shows this many glyphs; with more devices, the last place counts
+// the rest. Every device's status stays in its accessible name.
+const CHIP_GLYPHS = 4;
 
 interface Props {
   open: boolean;
@@ -52,6 +57,8 @@ export function DevicePanel({ open, onOpenChange, restoreFocusOnClose = true }: 
   const summary = initializing ? { title: t("Devices"), status: t("Checking…") } : chipSummary(models);
   const statuses = initializing ? [t("Checking…")] : models.length ? models.map(chipPhrase) : [t("Chat only")];
   const chipLabel = [t("Devices"), ...statuses, open ? t("Close the device panel") : t("Open the device panel")].join(". ");
+  const glyphs = devices.length > CHIP_GLYPHS ? devices.slice(0, CHIP_GLYPHS - 1) : devices;
+  const more = devices.length - glyphs.length;
 
   return (
     <div className="device-panel-anchor" data-open={open}>
@@ -73,7 +80,7 @@ export function DevicePanel({ open, onOpenChange, restoreFocusOnClose = true }: 
             <CloseIcon />
           </button>
         </header>
-        <PanelNotices ctx={ctx} />
+        <PanelNotices ctx={ctx} devices={devices} />
         {initializing ? (
           <p className="form-status device-panel-reason" role="status">{t("Checking devices…")}</p>
         ) : devices.length === 0 ? (
@@ -118,12 +125,13 @@ export function DevicePanel({ open, onOpenChange, restoreFocusOnClose = true }: 
         onClick={() => onOpenChange(!open)}
       >
         <span className="device-chip-glyphs" aria-hidden="true">
-          {devices.length ? devices.map(({ descriptor, model }) => (
+          {devices.length ? glyphs.map(({ descriptor, model }) => (
             <span key={descriptor.id} className="device-chip-glyph" data-status={model.status}>
               <descriptor.Glyph />
               <span className="device-dot device-chip-dot" data-status={model.status} />
             </span>
           )) : <span className="device-chip-glyph"><DevicesGlyph /></span>}
+          {more > 0 && <span className="device-chip-more">+{more}</span>}
         </span>
         <span className="device-chip-copy">
           <strong>{summary.title}</strong>
@@ -137,10 +145,12 @@ export function DevicePanel({ open, onOpenChange, restoreFocusOnClose = true }: 
 
 /** One reason and one way out: offline, a tab that watches, or a run that
  * lost a device. */
-function PanelNotices({ ctx }: { ctx: DeviceContext }) {
+function PanelNotices({ ctx, devices }: { ctx: DeviceContext; devices: DeviceEntry[] }) {
   const { takeControl, takingControl, handoffInProgress } = useTakeControl();
   const linked = ctx.state?.motion?.engine?.linked_session;
-  const names = ctx.retired.map((id) => id === "handy" ? t("The Handy") : id === "coyote" ? t("Coyote") : t("Vibrator"));
+  // A device removed during the run keeps a generic name.
+  const names = ctx.retired.map((id) => devices.find((entry) => entry.descriptor.id === id)?.model.name
+    ?? deviceDescriptor(id)?.name() ?? t("Additional Handy"));
   return (
     <>
       {!ctx.backendOnline && <p className="form-status device-panel-reason">{t("Core offline.")}</p>}
@@ -180,7 +190,7 @@ function LimitsReadout({ ctx }: { ctx: DeviceContext }) {
   return (
     <dl className="device-limits-readout">
       <div><dt>{t("Speed")}</dt><dd>{t("{a}–{b}%", { a: motion.speed_min_percent, b: motion.speed_max_percent })}</dd></div>
-      {ctx.playing.includes("handy") && <div><dt>{t("Stroke")}</dt><dd>{t("{a}–{b}%", { a: motion.stroke_min_percent, b: motion.stroke_max_percent })}</dd></div>}
+      {ctx.playing.some(isHandy) && <div><dt>{t("Stroke")}</dt><dd>{t("{a}–{b}%", { a: motion.stroke_min_percent, b: motion.stroke_max_percent })}</dd></div>}
     </dl>
   );
 }

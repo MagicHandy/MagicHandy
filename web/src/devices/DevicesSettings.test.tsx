@@ -20,6 +20,14 @@ vi.mock("../state/app-state", () => ({
 vi.mock("../api/client", () => ({
   api: {
     applyQuick: vi.fn(async () => undefined),
+    addHandy: vi.fn(),
+    updateHandy: vi.fn(async () => ({ settings: {} })),
+    removeHandy: vi.fn(async () => ({ settings: {} })),
+    handyConnections: vi.fn(() => new Promise(() => undefined)),
+    handyConnect: vi.fn(),
+    handyDisconnect: vi.fn(),
+    handyDiscover: vi.fn(),
+    handySelect: vi.fn(),
     bluetoothStatus: vi.fn(() => new Promise(() => undefined)),
     changeDeviceConnection: vi.fn(async () => ({ settings: {} })),
     connectionCheck: vi.fn(),
@@ -102,7 +110,7 @@ describe("Settings > Devices", () => {
     expect(handy).toHaveAttribute("href", "#/settings/devices/handy");
     expect(handy).toHaveTextContent("Handy Cloud · Original · 110 mm");
     expect(within(list).getByRole("link", { name: /Coyote/ })).toHaveTextContent("ceilings 30 and 30");
-    expect(within(list).getByText("Every device is added. Each can be added once.")).toBeInTheDocument();
+    expect(within(list).getByRole("button", { name: "Add device" })).toBeInTheDocument();
     expect(screen.getByText("Changes save as you make them")).toBeInTheDocument();
   });
 
@@ -291,5 +299,76 @@ describe("The vibrator's page", () => {
     renderPage("vibrator");
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Add Vibrator" })));
     expect(api.changeDeviceConnection).toHaveBeenCalledWith("vibrator", "add");
+  });
+});
+
+
+describe("additional Handys", () => {
+  const id = "handy-010203040506" as const;
+  function extra(method = "cloud_rest") {
+    app.state.settings!.device.configured_devices = ["handy", id];
+    app.state.settings!.device.handy_connections = [{ id, name: "Partner's Handy", method, handy_model: "handy_2_standard", connection_key_set: true, remembered_device: false }];
+    app.state.handy_connections = [{ id, connected: false, connecting: false, status: "disconnected", simulated: false, native_available: true, native_supported: true }];
+  }
+  it("keeps Add Handy available and navigates using the returned ID without connecting", async () => {
+    vi.mocked(api.addHandy).mockResolvedValue({ device_id: id, settings: app.state.settings! });
+    renderPage("add");
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: /Another Handy/ })));
+    expect(api.addHandy).toHaveBeenCalledOnce();
+    expect(api.handyConnect).not.toHaveBeenCalled();
+    expect(api.changeDeviceConnection).not.toHaveBeenCalled();
+    expect(window.location.hash).toBe("#/settings/devices/" + id);
+  });
+  it("lists the additional instance by name and keeps it excluded", () => {
+    extra(); renderPage("");
+    const row = screen.getByRole("link", { name: /Partner's Handy/ });
+    expect(row).toHaveAttribute("href", "#/settings/devices/" + id);
+    expect(row).toHaveTextContent("Not in playback");
+    expect(screen.getByText(/one shared motion from one timeline/)).toBeInTheDocument();
+  });
+  it("edits only this instance's name and key, and clears the key after Save", async () => {
+    extra(); renderPage(id);
+    const name = screen.getByRole("textbox", { name: "Name" });
+    fireEvent.change(name, { target: { value: "Guest Handy" } });
+    await act(async () => fireEvent.blur(name));
+    expect(api.updateHandy).toHaveBeenCalledWith(id, { name: "Guest Handy" });
+    const key = screen.getByLabelText("Connection key");
+    fireEvent.change(key, { target: { value: "synthetic-private-key" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save" })));
+    expect(api.updateHandy).toHaveBeenCalledWith(id, { connection_key: "synthetic-private-key" });
+    await waitFor(() => expect(key).toHaveValue(""));
+    expect(api.saveConnectionKey).not.toHaveBeenCalled();
+  });
+  it("offers supported methods only and removes exactly this instance", async () => {
+    extra(); renderPage(id);
+    expect(screen.queryByRole("radio", { name: /Browser Bluetooth/ })).not.toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Remove Partner's Handy" })));
+    expect(api.removeHandy).toHaveBeenCalledWith(id);
+    expect(api.changeDeviceConnection).not.toHaveBeenCalled();
+  });
+  it("keeps the shared motion test available with no primary Handy", async () => {
+    extra(); app.state.settings!.device.configured_devices = [id];
+    app.state.settings!.device.playback_devices = [id]; renderPage(id);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start test" })));
+    expect(api.startManualTest).toHaveBeenCalledWith({ pattern: "flow-full-sweeps", speed_percent: 25 });
+    expect(api.handyConnect).not.toHaveBeenCalled();
+  });
+  it("disables setup and connection changes for an operator", () => {
+    extra(); app.state.capabilities!.configure_host = false; renderPage(id);
+    expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Connect Partner's Handy" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove Partner's Handy" })).toBeDisabled();
+  });
+  it("disconnects all named Intiface leases through their own endpoints", async () => {
+    extra("intiface");
+    app.state.settings!.device.hsp_dispatch_owner = "intiface";
+    app.state.intiface_transport = session({ leases: ["handy", id], status: { connected: true, scanning: false, playback_state: "idle", max_ping_time_ms: 500, queue_depth: 0, devices: [] } });
+    vi.mocked(api.intifaceDisconnect).mockResolvedValue(session());
+    vi.mocked(api.handyDisconnect).mockResolvedValue(app.state.handy_connections![0]);
+    renderPage("");
+    expect(screen.getByText("Connected · used by The Handy, Partner's Handy")).toBeInTheDocument();
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Disconnect" })));
+    expect(api.intifaceDisconnect).toHaveBeenCalledWith("handy");
+    expect(api.handyDisconnect).toHaveBeenCalledWith(id);
   });
 });

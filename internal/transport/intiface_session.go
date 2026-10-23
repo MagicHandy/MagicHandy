@@ -125,9 +125,37 @@ func newIntifaceSession(options IntifaceOptions) (*intifaceSession, error) {
 }
 
 func (s *intifaceSession) bind(owner intifaceSessionOwner) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
 	s.mu.Lock()
 	s.owners = append(s.owners, owner)
+	ready := s.connected && s.sessionCtx != nil && s.sessionCtx.Err() == nil && !s.closed
+	ctx := s.sessionCtx
+	if ready {
+		owner.sessionConnectedLocked()
+	}
 	s.mu.Unlock()
+	if ready {
+		owner.sessionReady(ctx)
+	}
+}
+
+func (s *intifaceSession) unbind(owner intifaceSessionOwner) {
+	s.lifecycleMu.Lock()
+	defer s.lifecycleMu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for index, value := range s.owners {
+		if value == owner {
+			s.owners = append(s.owners[:index], s.owners[index+1:]...)
+			break
+		}
+	}
+	for device, claim := range s.claims {
+		if claim == owner {
+			delete(s.claims, device)
+		}
+	}
 }
 
 // Connect opens the websocket and completes the Buttplug v3 handshake and

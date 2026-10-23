@@ -4,7 +4,8 @@
 // catches up, and the snapshot again if the save fails.
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api } from "../api/client";
-import type { DeviceOptionsPatch } from "../api/types";
+import type { HandyConnectionPatch } from "../api/handy-types";
+import type { DeviceOptionsPatch, HandyInstanceId } from "../api/types";
 import { RangeInput } from "../components/RangeInput";
 import { t, translateKnown } from "../i18n";
 import { useAppState, useToast } from "../state/app-state";
@@ -64,18 +65,27 @@ export function useLiveSetting<T>(server: T, save: (value: T) => Promise<void>, 
 
 /** Saves one device option change, reports a failure, and refreshes. */
 export function useSaveDeviceOptions(): (patch: DeviceOptionsPatch) => Promise<void> {
+  return useSaveChange(useCallback((patch: DeviceOptionsPatch) => api.saveDeviceOptions(patch), []));
+}
+
+/** Saves one change to an additional Handy, the same way. */
+export function useSaveHandy(id: HandyInstanceId): (patch: HandyConnectionPatch) => Promise<void> {
+  return useSaveChange(useCallback((patch: HandyConnectionPatch) => api.updateHandy(id, patch), [id]));
+}
+
+function useSaveChange<P>(send: (patch: P) => Promise<unknown>): (patch: P) => Promise<void> {
   const { refresh } = useAppState();
   const { show } = useToast();
-  return useCallback(async (patch: DeviceOptionsPatch) => {
+  return useCallback(async (patch: P) => {
     try {
-      await api.saveDeviceOptions(patch);
+      await send(patch);
     } catch (error) {
       show(error instanceof Error ? translateKnown(error.message) : t("The setting could not be saved."), "error");
       throw error;
     } finally {
       await refresh();
     }
-  }, [refresh, show]);
+  }, [send, refresh, show]);
 }
 
 /** A label and hint on the left, its control on the right. */

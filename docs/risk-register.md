@@ -2571,3 +2571,17 @@ starvation, but previously buffered Handy points can remain after controller
 loss. Physical Stop delay, failure decay, negotiated MTU/write properties and
 simultaneous Handy/COYOTE radio performance remain explicit acceptance items.
 See [software evidence and hardware checklist](native-handy-bluetooth-review-2026-10-14.md).
+
+
+## Multi-Handy follow-up (2026-10-23)
+
+Mixed transports share a commanded timeline, not measured physical phase.
+Per-slider Cloud startup and elapsed-time companion starts mitigate position
+mismatch and serial request delay; the strictest sampling/timing constraints
+and slowest participating model bound the shared plan. Physical multi-Handy
+synchronization, adapter link capacity and soak remain unverified. Generation
+leases and the existing linked failure policy prevent reconnect hot-joins;
+Global Stop also reaches prepared/excluded instances. Cross-protocol identities
+cannot be compared, so do not assign one physical Handy to both Cloud and BLE
+instances. Existing upstream Intiface Stop limitations remain unchanged.
+See [review](multi-handy-review-2026-10-23.md).

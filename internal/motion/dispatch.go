@@ -123,7 +123,7 @@ func (e *Engine) prebufferBeforePlay(ctx context.Context, runEpoch uint64, reaso
 	return errors.New("motion startup could not build the transport's minimum lead buffer")
 }
 
-func (e *Engine) setStrokeWindow(ctx context.Context, runEpoch uint64, reason string, recoverFailure bool) error {
+func (e *Engine) setStrokeWindow(ctx context.Context, runEpoch uint64, reason string, recoverFailure bool, owners ...transport.Transport) error {
 	settings, err := e.motionSettings(runEpoch)
 	if err != nil {
 		return err
@@ -132,7 +132,7 @@ func (e *Engine) setStrokeWindow(ctx context.Context, runEpoch uint64, reason st
 		MinPercent:       settings.StrokeMinPercent,
 		MaxPercent:       settings.StrokeMaxPercent,
 		ReverseDirection: settings.ReverseDirection,
-	}, recoverFailure)
+	}, recoverFailure, owners...)
 }
 
 func (e *Engine) setStrokeWindowCommand(
@@ -141,6 +141,7 @@ func (e *Engine) setStrokeWindowCommand(
 	reason string,
 	strokeCommand transport.StrokeWindowCommand,
 	recoverFailure bool,
+	owners ...transport.Transport,
 ) error {
 	e.commandMu.Lock()
 	commandCtx, cleanup, err := e.contextForRun(ctx, runEpoch)
@@ -148,7 +149,7 @@ func (e *Engine) setStrokeWindowCommand(
 		e.commandMu.Unlock()
 		return err
 	}
-	result, err := e.transport.SetStrokeWindow(commandCtx, strokeCommand)
+	result, err := startupTransport(e.transport, owners).SetStrokeWindow(commandCtx, strokeCommand)
 	cleanup()
 	e.recordTransportResult(reason, nil, transport.Command{
 		Kind:         transport.CommandKindStrokeWindow,

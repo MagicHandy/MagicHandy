@@ -108,15 +108,15 @@ func (s *Server) runLabCompare(parent context.Context, body labCompareRequest) (
 		return labCompareResult{}, err
 	}
 	prompt := chat.LLMLabPromptsFor(schemaUnenforced(settings.LLM))[body.Method]
-	start := labStartingScore(body.Method, settings.Motion)
-	trial := chat.RunLLMLab(ctx, provider, settings.LLM.Model, body.Method, prompt, body.Message, start, settings.Motion, nil, body.SchemaGuided)
+	start := labStartingScore(body.Method, settings.EffectiveMotion())
+	trial := chat.RunLLMLab(ctx, provider, settings.LLM.Model, body.Method, prompt, body.Message, start, settings.EffectiveMotion(), nil, body.SchemaGuided)
 	if ctx.Err() != nil || s.stopSequence.Load() != stopSequence {
 		return labCompareResult{}, errors.New("the comparison was canceled by Stop or its client")
 	}
-	trial = s.validateLabTrial(trial, llmLabState{Current: start, SettingsKey: motion.LabSettingsKey(settings.Motion)})
+	trial = s.validateLabTrial(trial, llmLabState{Current: start, SettingsKey: motion.LabSettingsKey(settings.EffectiveMotion())})
 	result := labCompareResult{Trial: trial, Trace: []float64{}}
-	if target, err := motion.FlowTarget(trial.After, settings.Motion); err == nil {
-		plan := motion.NewMotionPlan("lab-compare", target, settings.Motion, 0, 0, time.Unix(0, 0))
+	if target, err := motion.FlowTarget(trial.After, settings.EffectiveMotion()); err == nil {
+		plan := motion.NewMotionPlan("lab-compare", target, settings.EffectiveMotion(), 0, 0, time.Unix(0, 0))
 		result.Perceptual = plan.Perceptual
 		for millis := int64(0); millis <= 12000; millis += 100 {
 			result.Trace = append(result.Trace, math.Round(plan.SampleAt(millis).PositionPercent*10)/10)

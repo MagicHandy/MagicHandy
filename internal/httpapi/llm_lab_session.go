@@ -250,7 +250,7 @@ func (s *Server) applyLabConversationTarget(ctx context.Context, stopSequence ui
 		return false, "Live test ended because motion ownership changed."
 	}
 	settings, _ := s.store.Snapshot()
-	target, err := motion.FlowTarget(spec, settings.Motion)
+	target, err := motion.FlowTarget(spec, settings.EffectiveMotion())
 	if err == nil {
 		target.Label = "LLM Lab"
 		_, err = engine.ApplyTargetIfCurrent(ctx, target, "lab_conversation", current.PlanID)
@@ -315,7 +315,7 @@ func (s *Server) startLabConversationMotion(ctx context.Context, stopSequence ui
 		return nil, err
 	}
 	settings, _ := s.store.Snapshot()
-	target, err := motion.FlowTarget(spec, settings.Motion)
+	target, err := motion.FlowTarget(spec, settings.EffectiveMotion())
 	if err != nil {
 		return nil, err
 	}
@@ -323,6 +323,6 @@ func (s *Server) startLabConversationMotion(ctx context.Context, stopSequence ui
 	if ctx.Err() != nil || s.stopSequence.Load() != stopSequence {
 		return nil, errors.New("test start was canceled by Stop")
 	}
-	_, err = engine.StartAtGeneration(ctx, target, settings.Motion, admission)
+	_, err = engine.StartAtGeneration(ctx, target, settings.EffectiveMotion(), admission)
 	return engine, err
 }

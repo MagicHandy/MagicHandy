@@ -186,7 +186,7 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(ctx)
 	}
 	settings, _ := s.store.Snapshot()
-	if _, err := body.target(settings.Motion); err != nil {
+	if _, err := body.target(settings.EffectiveMotion()); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -218,7 +218,7 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 	settings, _ = s.store.Snapshot()
 	// Revalidate after draining prior work; a settings edit may have occurred
 	// during that wait. Stop epochs are checked independently below.
-	target, err := body.target(settings.Motion)
+	target, err := body.target(settings.EffectiveMotion())
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
@@ -227,7 +227,7 @@ func (s *Server) handleMotionStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, errors.New("motion start was invalidated by Emergency Stop"))
 		return
 	}
-	state, err := engine.StartAtGeneration(r.Context(), target, settings.Motion, admission)
+	state, err := engine.StartAtGeneration(r.Context(), target, settings.EffectiveMotion(), admission)
 	s.writeMotionResult(w, r, state, err)
 }
 
@@ -260,7 +260,7 @@ func (s *Server) handleMotionTarget(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	target, err := body.target(settings.Motion)
+	target, err := body.target(settings.EffectiveMotion())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -453,8 +453,11 @@ func (s *Server) dispatchEmergencyStop(ctx context.Context, reason string, reque
 	defer func() { err = errors.Join(err, waitCoyote(), waitIntiface()) }()
 	engine, engineOwner := s.currentMotionEngineWithOwner()
 	if engine != nil {
+		outside := make(chan error, 2)
+		go func() { outside <- s.stopHandyOutsideEngine(stopCtx, engineOwner, reason) }()
+		go func() { outside <- s.stopNamedHandysOutsideEngine(stopCtx, engineOwner, reason) }()
 		state, err := engine.Stop(stopCtx, reason)
-		return emergencyStopResult{state: state, engineAvailable: true}, errors.Join(err, s.stopHandyOutsideEngine(stopCtx, engineOwner, reason))
+		return emergencyStopResult{state: state, engineAvailable: true}, errors.Join(err, <-outside, <-outside)
 	}
 
 	result, err := s.stopSelectedTransport(stopCtx, reason+"_no_engine")
@@ -469,6 +472,7 @@ func (s *Server) beginGlobalStop(reason string, origins ...context.Context) (fun
 	// so browser-owned capture can discard pending speech in every client.
 	finishInvalidation, sequence := s.invalidateWorkForStop(reason, origins...)
 	s.nativeBluetooth.owner.Interrupt()
+	s.interruptNamedHandys()
 	// Mark autonomous modes stopped before touching the engine, but drain their
 	// goroutine only after Engine.Stop has canceled any blocked mode startup.
 	finishModeStop := func() {}
@@ -485,12 +489,9 @@ func (s *Server) beginGlobalStop(reason string, origins ...context.Context) (fun
 }
 
 func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (transport.CommandResult, error) {
-	commandTransport, err := s.newSelectedStopTransport()
-	if err != nil {
-		return transport.CommandResult{}, err
-	}
+	commandTransport, buildErr := s.newSelectedStopTransport()
 	if commandTransport == nil {
-		return transport.CommandResult{OK: true, Status: "no_devices"}, nil
+		return transport.CommandResult{OK: buildErr == nil, Status: "no_devices"}, buildErr
 	}
 	result, stopErr := commandTransport.Stop(ctx, transport.StopCommand{Reason: reason})
 	switch selected := commandTransport.(type) {
@@ -504,7 +505,7 @@ func (s *Server) stopSelectedTransport(ctx context.Context, reason string) (tran
 		}
 		s.traceBluetoothResult(reason, diagnostics, result)
 	}
-	return result, stopErr
+	return result, errors.Join(buildErr, stopErr)
 }
 
 func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context) (func(), uint64) {
@@ -695,13 +696,14 @@ func (s *Server) applySettingsRuntimeTransition(ctx context.Context, previous co
 	if previous.Motion == next.Motion {
 		return runtimeErr
 	}
-	return errors.Join(runtimeErr, s.refreshActiveMotion(ctx, next.Motion))
+	return errors.Join(runtimeErr, s.refreshActiveMotion(ctx, next.EffectiveMotion()))
 }
 
 // applyDeviceSettingsTransition stops active motion, including any autonomous
 // mode, when what it drives or how it reaches the Handy changed, and applies
 // Coyote settings. It reports whether motion was stopped.
 func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, next config.Settings) (bool, error) {
+	namedStopped, namedErr := s.applyHandyConnectionsTransition(ctx, previous, next)
 	dispatchOwnerChanged := previous.Device.HSPDispatchOwner != next.Device.HSPDispatchOwner
 	handyRemoved := previous.Device.HasDevice(config.DeviceOutputHandy) && !next.Device.HasDevice(config.DeviceOutputHandy)
 	ownerChanged := dispatchOwnerChanged || !slices.Equal(previous.Device.PlaybackSet(), next.Device.PlaybackSet()) || previous.Device.LinkedFailurePolicy != next.Device.LinkedFailurePolicy || handyRemoved
@@ -711,7 +713,7 @@ func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, ne
 		previous.Device.APIApplicationIDOverride != next.Device.APIApplicationIDOverride ||
 		previous.Device.HandyConnectionKey != next.Device.HandyConnectionKey
 	if !ownerChanged && !intifaceAddressChanged && !cloudConfigChanged {
-		return false, errors.Join(s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next))
+		return namedStopped, errors.Join(namedErr, s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next))
 	}
 	reason := "transport_config_changed"
 	if ownerChanged {
@@ -737,11 +739,11 @@ func (s *Server) applyDeviceSettingsTransition(ctx context.Context, previous, ne
 	if handyRemoved {
 		removeErr = errors.Join(removeErr, s.removeHandyConnection(ctx, previous))
 	}
-	return true, errors.Join(stopErr, removeErr, s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next))
+	return true, errors.Join(namedErr, stopErr, removeErr, s.applyCoyoteSettingsTransition(previous, next), s.applyVibratorSettingsTransition(ctx, previous, next))
 }
 
 func (s *Server) applyPlanningSettingsTransition(previous, next config.Settings) {
-	if !reflect.DeepEqual(previous.LLM, next.LLM) || previous.Motion != next.Motion || previous.Autopilot != next.Autopilot {
+	if !reflect.DeepEqual(previous.LLM, next.LLM) || previous.Motion != next.Motion || previous.Autopilot != next.Autopilot || !reflect.DeepEqual(previous.Device, next.Device) {
 		s.invalidateCloudPlanning()
 	}
 	s.removeDeletedConnectionKeys(previous.LLM.Connections, next.LLM.Connections)
@@ -897,6 +899,7 @@ func (s *Server) Quiesce() {
 			s.modes.Shutdown()
 		}
 		s.closeIntiface()
+		s.closeNamedHandys(ctx)
 		s.closeCoyote()
 		_ = s.nativeBluetooth.owner.Close()
 	})
@@ -980,7 +983,10 @@ func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
 	failed := false
 	if engine != nil {
 		state := engine.Snapshot()
-		failed = !state.Running && !state.Starting && !state.Paused && (state.LastError != "" || settings.Device.Plays(config.DeviceOutputCoyote))
+		// Retirements belong to one run. Stop followed by an explicit new Start
+		// rechecks every selected device, even if the socket never disconnected.
+		retired := state.LinkedSession != nil && (state.LinkedSession.Status == "degraded" || state.LinkedSession.Status == "failed")
+		failed = !state.Running && !state.Starting && !state.Paused && (state.LastError != "" || retired || settings.Device.Plays(config.DeviceOutputCoyote))
 	}
 	if engine != nil && (engineOwner != owner || failed) {
 		if err := s.stopAndClearMotionEngineLocked(context.Background(), "dispatch_owner_changed"); err != nil {
@@ -1039,7 +1045,7 @@ func (s *Server) newHandyMotionTransport(settings config.Settings) (transport.Tr
 		if !s.nativeBluetooth.owner.Status().Connected {
 			return nil, errors.New("native Bluetooth is not connected")
 		}
-		return s.nativeBluetooth.owner.NewTransport(transport.HandyBluetoothOptions{ReverseDirection: settings.Motion.ReverseDirection}), nil
+		return s.nativeBluetooth.owner.NewTransport(transport.HandyBluetoothOptions{ReverseDirection: settings.EffectiveMotion().ReverseDirection}), nil
 	}
 	switch settings.Device.HSPDispatchOwner {
 	case config.DispatchOwnerCloudREST:

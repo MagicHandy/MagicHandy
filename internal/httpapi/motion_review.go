@@ -87,7 +87,7 @@ func (s *Server) queueMotionReview(settings config.Settings, state motion.Active
 	if !ok {
 		return
 	}
-	input.After, input.Limits = state.Target, settings.Motion
+	input.After, input.Limits = state.Target, settings.EffectiveMotion()
 	job := motionReviewJob{input: input, settings: settings, reviewer: reviewer, state: state, ticket: ticket, queuedAt: time.Now(), stopSequence: s.stopSequence.Load()}
 	s.commands.mu.Lock()
 	job.scope, job.commandSequence = s.commands.scope, s.commands.motionSequence
@@ -149,7 +149,7 @@ func (s *Server) runMotionReview(ctx context.Context, job motionReviewJob, cance
 		return status
 	}
 	job.input.RecentRequests, _ = chat.UserRequestTimeline(requests, time.Now())
-	job.input.Context = s.chatMotionContext(job.settings.Motion, job.settings.LLM)
+	job.input.Context = s.chatMotionContext(job.settings.EffectiveMotion(), job.settings.LLM)
 	capabilities := chatCapabilities(job.settings.LLM, nil)
 	// The reviewed choice is local, but its correction uses the reviewer's
 	// provider contract. Do not change the local model's prompt or history.

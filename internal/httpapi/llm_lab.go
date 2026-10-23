@@ -57,13 +57,13 @@ func (s *Server) labState() llmLabState {
 	defer s.lab.mu.Unlock()
 	if s.lab.current == nil {
 		initial := chat.FreshLayeredScore(25)
-		initial.SpeedPercent = max(settings.Motion.SpeedMinPercent, min(initial.SpeedPercent, settings.Motion.SpeedMaxPercent))
+		initial.SpeedPercent = max(settings.EffectiveMotion().SpeedMinPercent, min(initial.SpeedPercent, settings.EffectiveMotion().SpeedMaxPercent))
 		s.lab.current = &initial
 	}
 	return llmLabState{Current: *s.lab.current, Turns: append([]chat.LLMLabTrial{}, s.lab.turns...),
 		DirectiveTurns: append([]chat.LLMLabTrial{}, s.lab.directiveTurns...),
 		Revision:       s.lab.revision, Busy: s.lab.busy, Prompts: prompts, Model: settings.LLM.Model,
-		SettingsKey: motion.LabSettingsKey(settings.Motion), Limits: settings.Motion, Session: s.lab.session}
+		SettingsKey: motion.LabSettingsKey(settings.EffectiveMotion()), Limits: settings.EffectiveMotion(), Session: s.lab.session}
 }
 
 func (s *Server) handleLLMLabState(w http.ResponseWriter, _ *http.Request) {
@@ -97,10 +97,10 @@ func (s *Server) handleLLMLabReset(w http.ResponseWriter, r *http.Request) {
 	}
 	settings, _ := s.store.Snapshot()
 	if body.Spec == nil {
-		initial := labStartingScore(body.Method, settings.Motion)
+		initial := labStartingScore(body.Method, settings.EffectiveMotion())
 		body.Spec = &initial
 	}
-	if err := body.Spec.Validate(settings.Motion); err != nil {
+	if err := body.Spec.Validate(settings.EffectiveMotion()); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -219,7 +219,7 @@ func (s *Server) runLabChat(parent context.Context, body labChatRequest, automat
 	if automatic {
 		body.Message = labContinuationMessage(body.Method, body.Message)
 	}
-	trial := chat.RunLLMLab(ctx, provider, settings.LLM.Model, body.Method, body.Prompt, body.Message, state.Current, settings.Motion, history, body.SchemaGuided)
+	trial := chat.RunLLMLab(ctx, provider, settings.LLM.Model, body.Method, body.Prompt, body.Message, state.Current, settings.EffectiveMotion(), history, body.SchemaGuided)
 	trial.Autopilot = automatic
 	if ctx.Err() != nil || s.stopSequence.Load() != stopSequence {
 		return llmLabState{}, errors.New("lab trial was canceled by Stop or its client")

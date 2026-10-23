@@ -1,15 +1,68 @@
 package transport
 
-import "context"
+import (
+	"context"
+	"sync"
+	"time"
+)
+
+// PlayAligned starts the selected linear output at the shared stream's current
+// position. The existing anchor and paced-command safety path remain in use.
+func (i *Intiface) PlayAligned(ctx context.Context, command PlayCommand, start time.Time) (CommandResult, error) {
+	if !start.IsZero() {
+		command.StartTimeMillis = max(command.StartTimeMillis, time.Since(start).Milliseconds())
+	}
+	return i.Play(ctx, command)
+}
 
 // IntifaceHub is one Intiface Central connection shared by every output it
 // reaches. Intiface Central serves a single client, so the linear owner (a
 // stroker) and any other output reached through the same server bind to this
 // one session. The hub never paces motion itself.
 type IntifaceHub struct {
+	mu       sync.Mutex
+	linears  map[string]*Intiface
 	session  *intifaceSession
 	linear   *Intiface
 	vibrator *IntifaceVibrator
+}
+
+// LinearFor binds a named stroker to the same socket and device-claim registry.
+// It can be added after connection; each output still has its own queue/lease.
+func (h *IntifaceHub) LinearFor(id string) *Intiface {
+	if id == "handy" {
+		return h.linear
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.linears == nil {
+		h.linears = map[string]*Intiface{}
+	}
+	if owner := h.linears[id]; owner != nil {
+		return owner
+	}
+	owner := newIntifaceLinear(h.session)
+	h.linears[id] = owner
+	return owner
+}
+
+// RemoveLinear stops and removes only this output; other hub leases survive.
+func (h *IntifaceHub) RemoveLinear(ctx context.Context, id string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	owner := h.linears[id]
+	if owner == nil {
+		return nil
+	}
+	err := owner.Release(ctx)
+	owner.mu.Lock()
+	if owner.ownerStop != nil {
+		owner.ownerStop()
+	}
+	owner.mu.Unlock()
+	h.session.unbind(owner)
+	delete(h.linears, id)
+	return err
 }
 
 // IntifaceHubStatus is the shared connection's safe snapshot.

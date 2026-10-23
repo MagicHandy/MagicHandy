@@ -351,7 +351,7 @@ func (s *Server) intifaceSnapshot() intifaceSnapshot {
 		snapshot.Status = hub.Linear().Status()
 		snapshot.Diagnostics = hub.Linear().Diagnostics()
 		snapshot.PingWatchdog = hub.Status().PingWatchdog
-		for _, device := range intifaceLeaseDevices {
+		for _, device := range settings.Device.ConfiguredDevices {
 			if s.intiface.leases[device] {
 				snapshot.Leases = append(snapshot.Leases, device)
 			}

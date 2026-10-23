@@ -1,11 +1,13 @@
 // Settings > Devices: your devices, how they play together, and the shared
 // connections they use. Each device opens its own page. Every option saves
-// as it changes; only the Handy's connection key keeps an explicit Save.
+// as it changes; only a Handy's connection key keeps an explicit Save.
 import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../api/client";
-import type { DeviceId } from "../api/types";
+import { MAX_HANDYS, isHandy, isHandyInstance } from "../api/devices";
+import type { DeviceId, HandyInstanceId } from "../api/types";
 import { t } from "../i18n";
 import { ArrowRightIcon, CheckIcon, PlusIcon } from "../shell/icons";
+import { useAppState } from "../state/app-state";
 import { confirmThen } from "../util/confirm";
 import { DevicePage } from "./DevicePage";
 import { deviceRoute } from "./DeviceRow";
@@ -20,8 +22,9 @@ import type { DeviceContext, DeviceDescriptor } from "./types";
 export function DevicesSettings({ page }: { page: string }) {
   const { ctx, devices, addable } = useDevices();
   useDeviceWatch();
-  const descriptor = deviceDescriptor(page);
-  if (descriptor) return <DevicePage descriptor={descriptor} ctx={ctx} model={devices.find((entry) => entry.descriptor.id === descriptor.id)?.model} />;
+  const entry = devices.find((item) => item.descriptor.id === page);
+  const descriptor = entry?.descriptor ?? deviceDescriptor(page);
+  if (descriptor) return <DevicePage descriptor={descriptor} ctx={ctx} model={entry?.model} />;
   return (
     <>
       <h2 className="section-title">{t("Devices")}</h2>
@@ -45,7 +48,10 @@ function YourDevices({ ctx, devices, addable, adding }: { ctx: DeviceContext; de
               <a className="device-list-row" href={deviceRoute(descriptor.id)}>
                 <span className="device-glyph-tile" aria-hidden="true"><descriptor.Glyph /></span>
                 <span className="device-list-copy"><strong>{model.name}</strong><small>{model.summary}</small></span>
-                <span className="device-list-status"><span className="device-dot" data-status={model.status} aria-hidden="true" />{statusWord(model.status)}</span>
+                <span className="device-list-status">
+                  <span className="device-dot" data-status={model.status} aria-hidden="true" />
+                  <span className="device-list-state">{statusWord(model.status)}<small>{model.inPlayback ? t("In playback") : t("Not in playback")}</small></span>
+                </span>
                 <ArrowRightIcon size={12} className="device-list-chevron" />
               </a>
             </li>
@@ -61,7 +67,12 @@ function AddDevice({ ctx, addable, adding }: { ctx: DeviceContext; addable: Devi
   const listId = useId();
   const [open, setOpen] = useState(adding);
   const first = useRef<HTMLButtonElement>(null);
+  const { refresh } = useAppState();
   const locked = ctx.locked || !ctx.canConfigureHost;
+  // With The Handy saved, the Handy choice adds another one beside it, after
+  // the kinds not added yet.
+  const another = ctx.configured.includes("handy");
+  const choices = another ? [...addable.filter((item) => item.id !== "handy"), ...addable.filter((item) => item.id === "handy")] : addable;
   useEffect(() => {
     if (!adding) return;
     setOpen(true);
@@ -72,7 +83,7 @@ function AddDevice({ ctx, addable, adding }: { ctx: DeviceContext; addable: Devi
     return (
       <p className="device-add-full">
         <span className="device-glyph-tile device-glyph-tile-add" aria-hidden="true"><PlusIcon size={14} /></span>
-        {t("Every device is added. Each can be added once.")}
+        {t("Every device is added: up to {count} Handys, one Coyote and one vibrator.", { count: MAX_HANDYS })}
       </p>
     );
   }
@@ -85,6 +96,18 @@ function AddDevice({ ctx, addable, adding }: { ctx: DeviceContext; addable: Devi
     if (added) window.location.hash = deviceRoute(id);
   }
 
+  // The backend names the new Handy and returns its ID; its page opens once
+  // the snapshot knows it.
+  async function addAnotherHandy() {
+    const created: { id?: HandyInstanceId } = {};
+    const added = await ctx.run("new_handy", "add", async () => {
+      created.id = (await api.addHandy()).device_id;
+    });
+    if (!added || !created.id) return;
+    await refresh();
+    window.location.hash = deviceRoute(created.id);
+  }
+
   return (
     <div className="device-add">
       <button type="button" className="device-add-toggle" aria-expanded={open} aria-controls={listId} disabled={locked} onClick={() => setOpen(!open)}>
@@ -93,14 +116,21 @@ function AddDevice({ ctx, addable, adding }: { ctx: DeviceContext; addable: Devi
       </button>
       {open && (
         <div id={listId} className="device-add-list">
-          {addable.map((descriptor, index) => (
-            <button key={descriptor.id} ref={index === 0 ? first : undefined} type="button" className="device-add-choice"
-              disabled={locked || Boolean(ctx.busy[descriptor.id])} onClick={() => void add(descriptor.id)}>
-              <span className="device-glyph-tile" aria-hidden="true"><descriptor.Glyph /></span>
-              <span className="device-list-copy"><strong>{descriptor.name()}</strong><small>{descriptor.addDetail()}</small></span>
-              <PlusIcon size={14} className="device-list-chevron" />
-            </button>
-          ))}
+          {choices.map((descriptor, index) => {
+            const handy = another && descriptor.id === "handy";
+            return (
+              <button key={descriptor.id} ref={index === 0 ? first : undefined} type="button" className="device-add-choice"
+                disabled={locked || Boolean(ctx.busy[handy ? "new_handy" : descriptor.id])}
+                onClick={() => void (handy ? addAnotherHandy() : add(descriptor.id))}>
+                <span className="device-glyph-tile" aria-hidden="true"><descriptor.Glyph /></span>
+                <span className="device-list-copy">
+                  <strong>{handy ? t("Another Handy") : descriptor.name()}</strong>
+                  <small>{handy ? t("Follows the same motion · Cloud, Bluetooth or Intiface Central") : descriptor.addDetail()}</small>
+                </span>
+                <PlusIcon size={14} className="device-list-chevron" />
+              </button>
+            );
+          })}
           <p className="hint">{t("Adding saves the device, ready to set up. It does not connect it or add it to playback.")}</p>
         </div>
       )}
@@ -115,6 +145,7 @@ function Playback({ ctx, devices }: { ctx: DeviceContext; devices: DeviceEntry[]
   const locked = ctx.locked || !ctx.canConfigureHost;
   const [policy, setPolicy] = useLiveSetting(ctx.settings?.device?.linked_failure_policy ?? "stop_all", (value) => save({ linked_failure_policy: value }));
   const timed = devices.filter((entry) => entry.descriptor.timing);
+  const handys = devices.filter((entry) => isHandy(entry.descriptor.id)).length;
   return (
     <section className="group" aria-labelledby={titleId}>
       <h3 className="group-title" id={titleId}>{t("Playback")}</h3>
@@ -137,6 +168,7 @@ function Playback({ ctx, devices }: { ctx: DeviceContext; devices: DeviceEntry[]
           </div>
         )}
       </div>
+      {handys > 1 && <p className="hint-block">{t("Every Handy in playback plays one shared motion from one timeline, within the same range and speed limits, at a pace the slowest model can follow. Each connection adds its own delay, so the Handys may not move in perfect step.")}</p>}
       <p className="hint-block">{t("Changing playback devices or the failure policy stops the current run.")}</p>
     </section>
   );
@@ -176,22 +208,25 @@ function usersOf(ctx: DeviceContext, devices: DeviceEntry[], connection: "intifa
   return devices.filter((entry) => entry.descriptor.connection(ctx.settings) === connection).map((entry) => entry.model.name).join(", ");
 }
 
+type IntifaceLease = "handy" | "vibrator" | HandyInstanceId;
+
 // One Intiface Central connection serves every device that uses it: one
-// address, one status, one Disconnect.
+// address, one status, one Disconnect. Each Handy holds its own lease.
 function IntifaceConnection({ ctx, devices }: { ctx: DeviceContext; devices: DeviceEntry[] }) {
   const addressId = useId();
   const save = useSaveDeviceOptions();
   const status = ctx.intiface.status;
-  const leases = (ctx.intiface.leases ?? []).filter((lease): lease is "handy" | "vibrator" => lease === "handy" || lease === "vibrator");
+  const leases = (ctx.intiface.leases ?? []).filter((lease): lease is IntifaceLease => lease === "handy" || lease === "vibrator" || isHandyInstance(lease));
   const users = usersOf(ctx, devices, "intiface");
-  const holders = devices.filter((entry) => leases.includes(entry.descriptor.id as "handy" | "vibrator")).map((entry) => entry.model.name).join(", ");
+  const holders = devices.filter((entry) => leases.some((lease) => lease === entry.descriptor.id)).map((entry) => entry.model.name).join(", ");
   const address = ctx.settings?.device?.intiface_server_address ?? "";
   const busy = leases.some((lease) => ctx.busy[lease]);
   const locked = ctx.locked || !ctx.canConfigureHost;
 
   async function disconnect() {
     for (const lease of leases) {
-      await ctx.run(lease, "disconnect", async () => { ctx.setIntiface(await api.intifaceDisconnect(lease)); });
+      if (isHandyInstance(lease)) await ctx.run(lease, "disconnect", async () => { ctx.setHandy(await api.handyDisconnect(lease)); });
+      else await ctx.run(lease, "disconnect", async () => { ctx.setIntiface(await api.intifaceDisconnect(lease)); });
     }
   }
 

@@ -66,7 +66,7 @@ func (s *Server) localAutopilotDecide(ctx context.Context, input modes.DecisionI
 		return modes.Decision{}, err
 	}
 	settings, _ := s.store.Snapshot()
-	admitted, cosmetic := curateAutopilotPerceptualChange(decision, input, settings.Motion)
+	admitted, cosmetic := curateAutopilotPerceptualChange(decision, input, settings.EffectiveMotion())
 	if !cosmetic || input.MotionChangeLevel < 6 {
 		return withNextCheck(admitted, response), nil
 	}
@@ -80,7 +80,7 @@ func (s *Server) localAutopilotDecide(ctx context.Context, input modes.DecisionI
 	if retryErr != nil {
 		return withNextCheck(admitted, response), nil
 	}
-	retryAdmitted, _ := curateAutopilotPerceptualChange(retryDecision, retryInput, settings.Motion)
+	retryAdmitted, _ := curateAutopilotPerceptualChange(retryDecision, retryInput, settings.EffectiveMotion())
 	return withNextCheck(retryAdmitted, retryResponse), nil
 }
 
@@ -109,7 +109,7 @@ func (s *Server) autopilotDecideSpeech(ctx context.Context, input modes.Decision
 		return modes.Decision{}, err
 	}
 	settings, _ := s.store.Snapshot()
-	admitted, _ := curateAutopilotPerceptualChange(decision, input, settings.Motion)
+	admitted, _ := curateAutopilotPerceptualChange(decision, input, settings.EffectiveMotion())
 	return admitted, nil
 }
 

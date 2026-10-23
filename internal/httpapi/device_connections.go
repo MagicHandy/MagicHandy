@@ -47,10 +47,10 @@ func (s *Server) stopHandyOutsideEngine(ctx context.Context, engineOwner, reason
 	switch settings.Device.HSPDispatchOwner {
 	case config.DispatchOwnerNativeBluetooth:
 		connected = s.nativeBluetooth.owner.Status().Connected
-		outside = outside || !strings.HasSuffix(engineOwner, fmt.Sprintf("/native-ble-%d", s.nativeBluetooth.owner.SessionID()))
+		outside = outside || !strings.Contains(engineOwner+"/", fmt.Sprintf("/native-ble-%d/", s.nativeBluetooth.owner.SessionID()))
 	case config.DispatchOwnerBrowserBluetooth:
 		connected = s.bluetooth.bridge.Snapshot().Ready
-		outside = outside || !strings.HasSuffix(engineOwner, fmt.Sprintf("/ble-%d", s.bluetooth.bridge.SessionID()))
+		outside = outside || !strings.Contains(engineOwner+"/", fmt.Sprintf("/ble-%d/", s.bluetooth.bridge.SessionID()))
 	case config.DispatchOwnerIntiface:
 		if owner, err := s.currentIntiface(); err == nil {
 			connected = owner.Status().Connected

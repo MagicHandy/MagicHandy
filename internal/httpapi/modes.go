@@ -30,7 +30,7 @@ func (s *Server) newModeManager() (*modes.Manager, error) {
 		},
 		Settings: func() config.MotionSettings {
 			settings, _ := s.store.Snapshot()
-			return settings.Motion
+			return settings.EffectiveMotion()
 		},
 		FreestyleSettings: func() config.FreestyleSettings {
 			settings, _ := s.store.Snapshot()

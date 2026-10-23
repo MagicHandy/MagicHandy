@@ -1,4 +1,5 @@
 import { t } from "../i18n";
+import { isHandy } from "../api/devices";
 import type { DeviceId } from "../api/types";
 import type { DeviceAction, DeviceContext, DeviceModel, DeviceStatusWord } from "./types";
 
@@ -66,6 +67,14 @@ export function chipPhrase(model: DeviceModel): string {
   }
 }
 
+// Several Handys in playback read as their count, so the Coyote or the
+// vibrator beside them still fits the chip.
+function playingTitle(playing: DeviceModel[]): string {
+  const handys = playing.filter((model) => isHandy(model.id));
+  if (handys.length < 2) return playing.map((model) => model.name).join(" + ");
+  return [t("{count} Handys", { count: handys.length }), ...playing.filter((model) => !isHandy(model.id)).map((model) => model.name)].join(" + ");
+}
+
 /**
  * The chip names what plays, then the one problem that needs attention:
  * a lost device first, then setup, then a playing device that is not
@@ -78,7 +87,7 @@ export function chipSummary(models: DeviceModel[]): { title: string; status: str
     return { title: only.name, status: [statusWord(only.status), ...only.details.slice(0, 1)].join(" · ") };
   }
   const playing = models.filter((model) => model.inPlayback);
-  const title = playing.length ? playing.map((model) => model.name).join(" + ") : t("No device in playback");
+  const title = playing.length ? playingTitle(playing) : t("No device in playback");
   const problem = models.find((model) => model.status === "lost")
     ?? models.find((model) => model.status === "needs_setup")
     ?? playing.find((model) => model.status === "not_connected" || model.status === "connecting");

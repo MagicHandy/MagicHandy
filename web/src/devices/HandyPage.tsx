@@ -1,6 +1,10 @@
-// The Handy's device page: Connection, Calibration and Test.
+// The Handy's device page: Connection, Calibration and Test. An additional
+// Handy's page reuses the method choice, the key, the native Bluetooth rows
+// and the notices below with its own ID.
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { api } from "../api/client";
+import { isHandy } from "../api/devices";
+import type { DeviceId, HandyInstanceId } from "../api/types";
 import { DismissibleNotice } from "../components/DismissibleNotice";
 import { ManualMotionTest } from "../components/ManualMotionTest";
 import { QuickSettings } from "../components/QuickSettings";
@@ -9,27 +13,46 @@ import { t } from "../i18n";
 import { confirmThen } from "../util/confirm";
 import { CommitInput, OptionRow, useLiveSetting, useSaveDeviceOptions } from "./fields";
 import { IntifaceGlyph } from "./glyphs";
-import { handyConnectionMethods } from "./handy-methods";
+import { handyConnectionMethods, type ConnectionMethod } from "./handy-methods";
 import { IntifaceDeviceChoice } from "./IntifaceDeviceChoice";
+import { NearbyHandys } from "./NearbyHandys";
 import { useBluetoothDetailsTarget } from "./runtime";
 import type { DeviceContext, DeviceSectionProps } from "./types";
 
 export function HandyConnectionSection({ ctx }: DeviceSectionProps) {
   const owner = ctx.settings?.device?.hsp_dispatch_owner ?? "";
+  const save = useSaveDeviceOptions();
+  const advertised = ctx.settings?.options?.hsp_dispatch_owners;
+  const native = ctx.native;
+
+  function forgetKey() {
+    confirmThen(t("Forget the saved connection key? The Handy cannot connect through Cloud until you save a key again."), { confirmLabel: t("Forget key"), destructive: true },
+      () => void save({ clear_connection_key: true }).catch(() => undefined));
+  }
+
   return (
     <div className="form-rows device-rows">
-      <MethodChoice ctx={ctx} owner={owner} />
+      <MethodChoice ctx={ctx} device="handy" current={owner}
+        methods={handyConnectionMethods().filter((method) => !advertised?.length || advertised.includes(method.value))}
+        hint={t("Changing the method stops motion and disconnects The Handy.")}
+        confirm={(method) => t("Switch The Handy to {method}? Motion stops and The Handy disconnects.", { method })}
+        apply={async (method) => {
+          const result = await api.saveSetupPreferences({ device_owner: method });
+          if ("warning" in result && result.warning) throw new Error(t("the setting was saved, but the device runtime could not be updated"));
+        }} />
       {owner === "cloud_rest" && <>
-        <ConnectionKeyRow ctx={ctx} />
+        <ConnectionKeyRow ctx={ctx} device="handy" keySet={Boolean(ctx.settings?.device?.connection_key_set)}
+          save={(key) => api.saveConnectionKey(key)} forget={forgetKey} />
         <CloudCheckRow ctx={ctx} />
       </>}
-      {owner === "native_bluetooth" && <NativeBluetoothRows ctx={ctx} />}
+      {owner === "native_bluetooth" && (
+        <NativeBluetoothRows ctx={ctx} device="handy" supported={native?.supported} available={native?.available}
+          remembered={Boolean(native?.remembered_device)} connected={Boolean(native?.status.connected)}
+          forget={() => void ctx.run("handy", "forget", async () => { await api.nativeBluetoothForget(); })} />
+      )}
       {owner === "browser_bluetooth" && <BrowserBluetoothRow />}
       {owner === "intiface" && <>
-        <DismissibleNotice id="intiface-handy-stop-322" className="device-requirement">
-          <span className="label">{t("Intiface Stop limitation")}</span>
-          <p>{t("Intiface Central 3.2.2 may report Stop without stopping The Handy. Native Bluetooth or Handy Cloud sends the device's Stop command directly.")}</p>
-        </DismissibleNotice>
+        <IntifaceStopNotice />
         <IntifaceConnectionRow ctx={ctx} />
         <div className="form-row form-row-plain"><IntifaceDeviceChoice ctx={ctx} device="handy" /></div>
       </>}
@@ -40,22 +63,29 @@ export function HandyConnectionSection({ ctx }: DeviceSectionProps) {
 
 // Browsing the methods changes nothing; Use this method applies the choice,
 // because the backend stops motion and closes the old session to switch.
-function MethodChoice({ ctx, owner }: { ctx: DeviceContext; owner: string }) {
+export function MethodChoice({ ctx, device, current, methods, hint, note, confirm, apply }: {
+  ctx: DeviceContext;
+  device: DeviceId;
+  current: string;
+  methods: ConnectionMethod[];
+  /** What applying does, beside the button. */
+  hint: string;
+  /** Why a method is not offered, under the choices. */
+  note?: string;
+  /** The question while motion runs, for the chosen method's label. */
+  confirm: (method: string) => string;
+  apply: (method: string) => Promise<unknown>;
+}) {
   const labelId = useId();
-  const [chosen, setChosen] = useState(owner);
-  useEffect(() => setChosen(owner), [owner]);
-  const advertised = ctx.settings?.options?.hsp_dispatch_owners;
-  const methods = handyConnectionMethods().filter((method) => !advertised?.length || advertised.includes(method.value));
+  const [chosen, setChosen] = useState(current);
+  useEffect(() => setChosen(current), [current]);
   const locked = ctx.locked || !ctx.canConfigureHost;
-  const busy = Boolean(ctx.busy.handy);
+  const busy = Boolean(ctx.busy[device]);
   const chosenLabel = methods.find((method) => method.value === chosen)?.label ?? chosen;
 
-  function apply() {
-    const change = () => void ctx.run("handy", "method", async () => {
-      const result = await api.saveSetupPreferences({ device_owner: chosen });
-      if ("warning" in result && result.warning) throw new Error(t("the setting was saved, but the device runtime could not be updated"));
-    });
-    if (ctx.engineActive) confirmThen(t("Switch The Handy to {method}? Motion stops and The Handy disconnects.", { method: chosenLabel }), { confirmLabel: t("Use this method") }, change);
+  function use() {
+    const change = () => void ctx.run(device, "method", async () => { await apply(chosen); });
+    if (ctx.engineActive) confirmThen(confirm(chosenLabel), { confirmLabel: t("Use this method") }, change);
     else change();
   }
 
@@ -67,38 +97,39 @@ function MethodChoice({ ctx, owner }: { ctx: DeviceContext; owner: string }) {
           <SetupChoice key={method.value} selected={chosen === method.value} title={method.label} detail={method.detail} disabled={locked || busy} onSelect={() => setChosen(method.value)} />
         ))}
       </div>
+      {note && <span className="hint">{note}</span>}
       <div className="row-actions">
-        {chosen !== owner && <button type="button" className="btn btn-primary" disabled={locked || busy} onClick={apply}>{t("Use this method")}</button>}
-        <span className="hint">{t("Changing the method stops motion and disconnects The Handy.")}</span>
+        {chosen !== current && <button type="button" className="btn btn-primary" disabled={locked || busy} onClick={use}>{t("Use this method")}</button>}
+        <span className="hint">{hint}</span>
       </div>
     </div>
   );
 }
 
 // The one device option with an explicit Save: a key is pasted whole.
-function ConnectionKeyRow({ ctx }: { ctx: DeviceContext }) {
+export function ConnectionKeyRow({ ctx, device, keySet, save, forget }: {
+  ctx: DeviceContext;
+  device: DeviceId;
+  keySet: boolean;
+  save: (key: string) => Promise<unknown>;
+  /** Asks first, then forgets the saved key. */
+  forget: () => void;
+}) {
   const id = useId();
   const hintId = useId();
   const [key, setKey] = useState("");
-  const save = useSaveDeviceOptions();
-  const keySet = Boolean(ctx.settings?.device?.connection_key_set);
-  const busy = ctx.busy.handy === "key";
+  const busy = ctx.busy[device] === "key";
   const locked = ctx.locked || !ctx.canConfigureHost;
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const next = key.trim();
     if (!next) return;
-    void ctx.run("handy", "key", async () => {
-      await api.saveConnectionKey(next);
+    void ctx.run(device, "key", async () => {
+      await save(next);
       setKey("");
       return t("Handy connection key saved.");
     });
-  }
-
-  function forget() {
-    confirmThen(t("Forget the saved connection key? The Handy cannot connect through Cloud until you save a key again."), { confirmLabel: t("Forget key"), destructive: true },
-      () => void save({ clear_connection_key: true }).catch(() => undefined));
   }
 
   return (
@@ -113,8 +144,26 @@ function ConnectionKeyRow({ ctx }: { ctx: DeviceContext }) {
           value={key} disabled={locked || busy} onChange={(event) => setKey(event.target.value)} />
         <button type="submit" className="btn btn-secondary" disabled={locked || busy || !key.trim()}>{busy ? t("Saving") : t("Save")}</button>
       </div>
-      {keySet && <button type="button" className="btn btn-quiet device-key-forget" disabled={locked || Boolean(ctx.busy.handy)} onClick={forget}>{t("Forget key")}</button>}
+      {keySet && <button type="button" className="btn btn-quiet device-key-forget" disabled={locked || Boolean(ctx.busy[device])} onClick={forget}>{t("Forget key")}</button>}
     </form>
+  );
+}
+
+export function CloudFirmwareNotice() {
+  return (
+    <DismissibleNotice id="device-firmware" className="device-requirement">
+      <span className="label">{t("Firmware / API requirement")}</span>
+      <p>{t("Cloud REST requires Handy firmware v4 with API v3 access.")}</p>
+    </DismissibleNotice>
+  );
+}
+
+export function IntifaceStopNotice() {
+  return (
+    <DismissibleNotice id="intiface-handy-stop-322" className="device-requirement">
+      <span className="label">{t("Intiface Stop limitation")}</span>
+      <p>{t("Intiface Central 3.2.2 may report Stop without stopping The Handy. Native Bluetooth or Handy Cloud sends the device's Stop command directly.")}</p>
+    </DismissibleNotice>
   );
 }
 
@@ -132,10 +181,7 @@ function CloudCheckRow({ ctx }: { ctx: DeviceContext }) {
   }
   return (
     <>
-      <DismissibleNotice id="device-firmware" className="device-requirement">
-        <span className="label">{t("Firmware / API requirement")}</span>
-        <p>{t("Cloud REST requires Handy firmware v4 with API v3 access.")}</p>
-      </DismissibleNotice>
+      <CloudFirmwareNotice />
       <OptionRow label={t("Check connection")} hint={t("Asks The Handy for its state. It never moves the device or reconnects a released one.")}>
         <button type="button" className="btn btn-secondary" disabled={ctx.locked || !keySet || Boolean(ctx.busy.handy)} onClick={check}>{busy ? t("Checking…") : t("Check")}</button>
       </OptionRow>
@@ -143,11 +189,18 @@ function CloudCheckRow({ ctx }: { ctx: DeviceContext }) {
   );
 }
 
-function NativeBluetoothRows({ ctx }: { ctx: DeviceContext }) {
-  const native = ctx.native;
-  const unavailable = native?.supported === false
+export function NativeBluetoothRows({ ctx, device, supported, available, remembered, connected, forget }: {
+  ctx: DeviceContext;
+  device: "handy" | HandyInstanceId;
+  supported?: boolean;
+  available?: boolean;
+  remembered: boolean;
+  connected: boolean;
+  forget: () => void;
+}) {
+  const unavailable = supported === false
     ? t("Native Bluetooth is available on Windows and Linux.")
-    : native?.available === false ? t("The native Bluetooth helper is missing. Update MagicHandy to install it.") : "";
+    : available === false ? t("The native Bluetooth helper is missing. Update MagicHandy to install it.") : "";
   const locked = ctx.locked || !ctx.canConfigureHost;
   return (
     <>
@@ -155,12 +208,12 @@ function NativeBluetoothRows({ ctx }: { ctx: DeviceContext }) {
         <p className="hint-block">{t("Uses Bluetooth on the computer running MagicHandy. Put the Handy in firmware 4 Bluetooth mode before connecting.")}</p>
         {unavailable && <p className="form-status" role="status">{unavailable}</p>}
       </div>
-      {native?.remembered_device && (
+      {remembered && (
         <OptionRow label={t("Remembered device")} hint={t("Reconnects without pairing again. Forget it to use a different Handy.")}>
-          <button type="button" className="btn btn-secondary" disabled={locked || Boolean(ctx.busy.handy) || Boolean(native.status.connected)}
-            onClick={() => void ctx.run("handy", "forget", async () => { await api.nativeBluetoothForget(); })}>{t("Forget")}</button>
+          <button type="button" className="btn btn-secondary" disabled={locked || Boolean(ctx.busy[device]) || connected} onClick={forget}>{t("Forget")}</button>
         </OptionRow>
       )}
+      {!unavailable && <NearbyHandys ctx={ctx} device={device} connected={connected} />}
     </>
   );
 }
@@ -227,10 +280,25 @@ function ApplicationIdDetails({ ctx }: { ctx: DeviceContext }) {
   );
 }
 
-export function HandyCalibrationSection() {
-  return <QuickSettings section="calibration" />;
+/** With several Handys, each keeps its own model and the shared pace suits the slowest. */
+export function severalHandys(ctx: DeviceContext): boolean {
+  return ctx.configured.filter(isHandy).length > 1;
 }
 
-export function HandyTestSection() {
-  return <ManualMotionTest />;
+export function HandyCalibrationSection({ ctx }: DeviceSectionProps) {
+  return (
+    <>
+      <QuickSettings section="calibration" />
+      {severalHandys(ctx) && <p className="hint-block">{t("Each Handy has its own model on its page. With several Handys in playback, the shared pace follows the slowest model.")}</p>}
+    </>
+  );
+}
+
+export function HandyTestSection({ ctx }: DeviceSectionProps) {
+  return (
+    <>
+      <ManualMotionTest />
+      {severalHandys(ctx) && <p className="hint-block">{t("The test plays on every device in playback, not only The Handy.")}</p>}
+    </>
+  );
 }

@@ -23,7 +23,6 @@ import { ChatSettingsPanel, resolveChatSettingsSection } from "../components/Cha
 import { SettingsNavigation, SettingsNavigationLabel } from "../components/SettingsNavigation";
 import { LabsSettings } from "../components/LabsSettings";
 import { DevicesSettings } from "../devices/DevicesSettings";
-import { playbackDevices } from "../api/devices";
 
 const msg = (e: unknown) => (e instanceof Error ? translateKnown(e.message) : t("Request failed"));
 const SETTING_OPTION_LABELS: Partial<Record<string, MessageKey>> = {
@@ -230,9 +229,10 @@ export function SettingsRoute() {
       },
       // Device options save in Settings > Devices; the write shape requires
       // these, so they repeat the followed values. The optional Coyote and
-      // vibrator blocks are left out entirely.
+      // vibrator blocks are left out entirely, and so is the playback set:
+      // the backend keeps it, so a stale draft never changes who plays or
+      // drops an additional Handy.
       device: {
-        playback_devices: playbackDevices(s.device),
         linked_failure_policy: s.device.linked_failure_policy ?? "stop_all",
         hsp_dispatch_owner: s.device.hsp_dispatch_owner,
         intiface_server_address: s.device.intiface_server_address,

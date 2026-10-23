@@ -3006,3 +3006,14 @@ alternatives are rejected. Cloud/native buffered output, imported media and
 other linear devices are unchanged. See the
 [physical feedback, 144-case matrix and precision trade-off](docs/intiface-smoothness-review-2026-10-15.md).
 The independent upstream Stop issue remains with Buttplug.
+
+
+## Named Handy connections (2026-10-23)
+
+Implemented bounded multi-Handy inventory, generation-bound dispatch owners,
+shared Intiface output leases, per-slider engine-owned startup, concurrent linked
+I/O and conservative shared calibration. Claude implemented the device-kit UI;
+Codex completed and reviewed integration/tests. The existing primary adapter
+keeps compatibility; additional Cloud/native/Intiface connections follow the
+same engine. See [ADR 0054](docs/decisions/0054-named-handy-connections.md) and
+[validation / physical follow-up](docs/multi-handy-review-2026-10-23.md).
