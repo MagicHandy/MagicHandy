@@ -1,4 +1,12 @@
 {
+  "Automatically repair rejected chat responses": "Automatically repair rejected chat responses",
+  "Ask the same external model once to correct an invalid response. Adds time and may use more quota. When off, eligible chat errors offer Repair response.": "Ask the same external model once to correct an invalid response. Adds time and may use more quota. When off, eligible chat errors offer Repair response.",
+  "Repair response": "Repair response",
+  "Repairing response…": "Repairing response…",
+  "The model returned an invalid response. That response was not applied.": "The model returned an invalid response. That response was not applied.",
+  "View details in Diagnostics": "View details in Diagnostics",
+  "Repair did not succeed. You can send a new request.": "Repair did not succeed. You can send a new request.",
+  "Repair is no longer available. Send a new request.": "Repair is no longer available. Send a new request.",
   "Intiface Stop limitation": "Intiface Stop limitation",
   "Intiface Central 3.2.2 may report Stop without stopping The Handy. Native Bluetooth or Handy Cloud sends the device's Stop command directly.": "Intiface Central 3.2.2 may report Stop without stopping The Handy. Native Bluetooth or Handy Cloud sends the device's Stop command directly.",
   "Full sweeps": "Full sweeps",

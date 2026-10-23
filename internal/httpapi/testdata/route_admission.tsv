@@ -142,6 +142,7 @@ self	POST /api/auth/logout
 self	POST /api/chat/cursor
 control	POST /api/chat/sessions
 control	POST /api/chat/stream
+control	POST /api/chat/repair
 self	POST /api/controller/heartbeat
 control	POST /api/controller/takeover
 host	POST /api/host/path-picker

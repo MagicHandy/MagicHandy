@@ -64,6 +64,15 @@ or recursively retry. It is visibly identified in chat and diagnostics. It does
 not change the saved primary provider or Autopilot behavior. Stop and source
 invalidation apply through both stages, including the gap between request lanes.
 
+The October 23 [ADR 0053](0053-hosted-chat-response-repair.md) amendment lets
+interactive hosted chat correct a structurally or semantically rejected JSON
+response once using the original request, schema and exact validator feedback.
+It defaults on; disabling it exposes a single-use action on the latest eligible
+chat error. It never repairs provider refusals, truncation or transport errors,
+and a repair cannot chain into the local refusal fallback. No rejected partial
+motion is applied. Context, controller, Stop and atomic engine-plan guards
+reject stale corrections. Local-only generation and Autopilot remain unchanged.
+
 ChatGPT sign-in uses a host-only loopback OAuth flow, PKCE, nonce/state checks,
 verified RS256 identity claims, and a stable UUID host identifier. Account and
 workspace registrations remain distinct. Rotating credentials live in a host

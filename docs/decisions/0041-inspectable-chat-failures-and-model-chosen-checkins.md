@@ -54,3 +54,16 @@ Language quality remains model-dependent. The selected prompt reduced idle
 speech on Gemma 12B while preserving an invited conversation; Vanessa continued
 repeating status. Stronger silence prompts and a wording filter were rejected.
 See [the review and limitations](../user-report-review-2026-10-11.md).
+
+## October 23 amendment: hosted response correction evidence
+
+[ADR 0053](0053-hosted-chat-response-repair.md) adds bounded automatic and manual
+repair for eligible hosted chat JSON. The same failure table also retains the
+initial rejected output when its replacement succeeds; ordinary valid replies
+still create no failure record. Metadata includes the original canonical user
+sequence and repair outcome, while private content includes initial validator
+feedback and replacement output. Redaction, retention and administrator-only
+content access remain unchanged. The optional live Repair response action is
+an expiring server-owned continuation, never a persistent replayable command.
+The production-context preview follows the saved hosted repair setting, with
+no motion, speech or conversation publication.

@@ -2,6 +2,7 @@ package motion
 
 import (
 	"errors"
+	"fmt"
 	"math"
 )
 
@@ -43,9 +44,9 @@ func (s FlowSpec) validatePhrase() error {
 	total := 0
 	bottom, top := 100, 0
 	previousTop := p.Strokes[len(p.Strokes)-1].TopPercent
-	for _, stroke := range p.Strokes {
-		if !stroke.validWithin(s.MinPercent, s.MaxPercent, previousTop) {
-			return errors.New("phrase pairs need at least ten points between each lower turn and both adjacent upper turns, counts 1-8 and rates 1-100")
+	for i, stroke := range p.Strokes {
+		if err := stroke.validateWithin(s.MinPercent, s.MaxPercent, previousTop, i, len(p.Strokes)); err != nil {
+			return err
 		}
 		previousTop = stroke.TopPercent
 		bottom, top = min(bottom, stroke.BottomPercent), max(top, stroke.TopPercent)
@@ -60,8 +61,29 @@ func (s FlowSpec) validatePhrase() error {
 	return nil
 }
 
-func (s PhraseStroke) validWithin(bottom, top, previousTop int) bool {
-	return s.BottomPercent >= bottom && s.TopPercent <= top && s.TopPercent-s.BottomPercent >= 10 && previousTop-s.BottomPercent >= 10 && s.Count >= 1 && s.Count <= 8 && s.RatePercent >= 1 && s.RatePercent <= 100
+func (s PhraseStroke) validateWithin(bottom, top, previousTop, index, groups int) error {
+	group := index + 1
+	if s.BottomPercent < bottom || s.TopPercent > top {
+		return fmt.Errorf("phrase group %d turns %d..%d must stay within the outer bounds %d..%d", group, s.BottomPercent, s.TopPercent, bottom, top)
+	}
+	if s.TopPercent-s.BottomPercent < 10 {
+		return fmt.Errorf("phrase group %d top_percent (%d) must be at least 10 points above its bottom_percent (%d)", group, s.TopPercent, s.BottomPercent)
+	}
+	if s.Count < 1 || s.Count > 8 {
+		return fmt.Errorf("phrase group %d count must be 1..8; got %d", group, s.Count)
+	}
+	if s.RatePercent < 1 || s.RatePercent > 100 {
+		return fmt.Errorf("phrase group %d rate_percent must be 1..100; got %d", group, s.RatePercent)
+	}
+	if previousTop-s.BottomPercent < 10 {
+		previousGroup := index
+		join := "join"
+		if index == 0 {
+			previousGroup, join = groups, "loop seam"
+		}
+		return fmt.Errorf("phrase %s from group %d to group %d is not a downward leg: previous top_percent (%d) must be at least 10 points above the next bottom_percent (%d); every group join, including last-to-first, must alternate lower and upper turns", join, previousGroup, group, previousTop, s.BottomPercent)
+	}
+	return nil
 }
 
 func compilePhraseCurve(spec FlowSpec, handyModel string) (Curve, error) {

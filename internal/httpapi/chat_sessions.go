@@ -13,6 +13,7 @@ import (
 
 func (s *Server) chatRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/chat/stream", s.handleChatStream)
+	mux.HandleFunc("POST /api/chat/repair", s.handleChatRepair)
 	mux.HandleFunc("GET /api/chat/sessions", s.handleChatSessions)
 	mux.HandleFunc("POST /api/chat/sessions", s.handleCreateChatSession)
 	mux.HandleFunc("PUT /api/chat/sessions/{id}/active", s.handleActivateChatSession)

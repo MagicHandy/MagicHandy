@@ -1063,12 +1063,29 @@ export async function streamChat(
   /** Beside an open video: what drives the device when the chat does not. */
   motionOwner?: "script" | "off",
 ): Promise<void> {
+  return streamChatRequest("/api/chat/stream", motionOwner ? { session_id: sessionId, message, motion_owner: motionOwner } : { session_id: sessionId, message }, onEvent, signal, stopSequence);
+}
+
+// A repair refers to the server's retained failure, never a client-supplied
+// prompt or response. It uses the same controller/Stop fencing and SSE reader.
+export async function streamChatRepair(
+  sessionId: string,
+  failureId: number,
+  onEvent: (e: ChatStreamEvent) => void,
+  signal?: AbortSignal,
+  stopSequence?: number,
+  motionOwner?: "script" | "off",
+): Promise<void> {
+  return streamChatRequest("/api/chat/repair", motionOwner ? { session_id: sessionId, failure_id: failureId, motion_owner: motionOwner } : { session_id: sessionId, failure_id: failureId }, onEvent, signal, stopSequence);
+}
+
+async function streamChatRequest(path: string, body: Record<string, unknown>, onEvent: (e: ChatStreamEvent) => void, signal?: AbortSignal, stopSequence?: number): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/json", ...controllerRequestHeaders() };
   if (stopSequence !== undefined) headers["X-MagicHandy-Stop-Sequence"] = String(stopSequence);
-  const res = await fetch("/api/chat/stream", {
+  const res = await fetch(path, {
     method: "POST",
     headers,
-    body: JSON.stringify(motionOwner ? { session_id: sessionId, message, motion_owner: motionOwner } : { session_id: sessionId, message }),
+    body: JSON.stringify(body),
     signal,
   });
   if (!res.ok) {

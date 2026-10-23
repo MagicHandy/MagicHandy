@@ -15,9 +15,11 @@ const FailureRetention = 24
 // RequestFailure contains non-secret provenance. Content is fetched explicitly.
 type RequestFailure struct {
 	ID            int64              `json:"id"`
+	UserSeq       int64              `json:"user_seq,omitempty"`
 	CreatedAt     string             `json:"created_at"`
 	Error         string             `json:"error"`
 	Kind          string             `json:"kind,omitempty"`
+	RepairOutcome string             `json:"repair_outcome,omitempty"`
 	MotionMode    string             `json:"motion_mode"`
 	ReasoningMode string             `json:"reasoning_mode"`
 	MaxTokens     int                `json:"max_tokens"`
@@ -29,11 +31,12 @@ type RequestFailure struct {
 
 // FailureContent is redacted before storage and omitted from default reports.
 type FailureContent struct {
-	Raw       string `json:"raw_response"`
-	RepairRaw string `json:"repair_response,omitempty"`
-	Prompt    string `json:"system_prompt"`
-	Schema    string `json:"response_schema"`
-	Truncated bool   `json:"truncated"`
+	Raw          string `json:"raw_response"`
+	RepairRaw    string `json:"repair_response,omitempty"`
+	InitialError string `json:"initial_error,omitempty"`
+	Prompt       string `json:"system_prompt"`
+	Schema       string `json:"response_schema"`
+	Truncated    bool   `json:"truncated"`
 }
 
 // SaveFailure retains only a bounded diagnostic record; it publishes no reply.
@@ -63,6 +66,40 @@ func (l *MessageLog) SaveFailure(ctx context.Context, sessionID string, failure 
 		return pruneErr
 	})
 	return id, err
+}
+
+// SetFailureRepairOutcome amends only the non-secret cancellation outcome of
+// an already retained attempt. Deletion/retention may have removed it meanwhile.
+func (l *MessageLog) SetFailureRepairOutcome(ctx context.Context, sessionID string, id int64, outcome string) error {
+	if outcome != "stopped" && outcome != "canceled" && outcome != "stale" {
+		return errors.New("invalid repair cancellation outcome")
+	}
+	return l.db.WithTx(ctx, func(tx *sql.Tx) error {
+		var metadata string
+		if err := tx.QueryRowContext(ctx, `SELECT metadata FROM chat_failures WHERE session_id=? AND seq=?`, sessionID, id).Scan(&metadata); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil
+			}
+			return err
+		}
+		var failure RequestFailure
+		if err := json.Unmarshal([]byte(metadata), &failure); err != nil {
+			return err
+		}
+		if failure.RepairOutcome == outcome {
+			return nil
+		}
+		failure.RepairOutcome = outcome
+		encoded, err := json.Marshal(failure)
+		if err != nil {
+			return err
+		}
+		if len(encoded) > 8192 {
+			return errors.New("failure metadata exceeds its limit")
+		}
+		_, err = tx.ExecContext(ctx, `UPDATE chat_failures SET metadata=? WHERE session_id=? AND seq=?`, string(encoded), sessionID, id)
+		return err
+	})
 }
 
 // Failures reads a bounded metadata list for one conversation, newest first.

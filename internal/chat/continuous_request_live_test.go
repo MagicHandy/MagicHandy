@@ -231,7 +231,7 @@ func continuousRequestHoldouts(mode MotionMode) []continuousRequestCase {
 	cases := []continuousRequestCase{
 		{name: "quoted-start", message: `Explain what the instruction "start moving now" would do.`, stopped: true, check: same},
 		{name: "conditional-start", message: "If I decided to start later, would the current settings be used?", stopped: true, check: same},
-		{name: "stopped-adjustment", message: "Reduce the pace by five percentage points.", stopped: true, check: same},
+		{name: "stopped-adjustment", message: "For later, reduce the pace by five percentage points; don't start it now.", stopped: true, check: same},
 		{name: "quoted-update", message: `Someone suggested "increase the pace by ten". Explain that suggestion while keeping this motion.`, check: same},
 		{name: "compare-only", message: "Compare the current motion with a much faster, narrower one. This is just a discussion.", check: same},
 		{name: "start-paraphrase", message: "I'd like the device to begin moving now, using these same settings.", stopped: true, moves: true, check: same},

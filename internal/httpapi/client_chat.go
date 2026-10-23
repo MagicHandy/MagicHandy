@@ -41,7 +41,23 @@ func (s *Server) clientChatEvent(r *http.Request, event string, payload any) (an
 		view["error"] = administratorDetails
 		return view, nil
 	case "error":
-		return map[string]string{"message": clientChatFailure(payload)}, nil
+		view := map[string]any{"message": clientChatFailure(payload)}
+		if values, ok := payload.(map[string]string); ok && values["reply_retained"] == "true" {
+			view["reply_retained"] = "true"
+		}
+		if s.capabilities(r).Control {
+			if values, ok := payload.(map[string]any); ok {
+				if repair, ok := values["repair"].(map[string]any); ok {
+					id, validID := repair["failure_id"].(int64)
+					available, _ := repair["available"].(bool)
+					if validID && id > 0 && available {
+						view["message"] = "The model response was rejected. You can ask it to correct the response."
+						view["repair"] = map[string]any{"failure_id": id, "available": true}
+					}
+				}
+			}
+		}
+		return view, nil
 	case "motion":
 		dispatch, ok := payload.(chatMotionDispatch)
 		if !ok {
@@ -71,10 +87,17 @@ func chatEventFields(payload any, fields ...string) (map[string]any, error) {
 
 func clientChatFailure(payload any) string {
 	values, _ := payload.(map[string]string)
-	switch values["message"] {
-	case "Chat canceled by Emergency Stop.", "Chat history is unavailable; the reply was not applied.":
-		return values["message"]
+	message := values["message"]
+	if fields, ok := payload.(map[string]any); ok {
+		message, _ = fields["message"].(string)
+	}
+	switch message {
+	case "Chat canceled by Emergency Stop.", "Chat history is unavailable; the reply was not applied.", "Response repair canceled.":
+		return message
 	default:
+		if message == errChatRepairStale.Error() {
+			return message
+		}
 		return administratorDetails
 	}
 }

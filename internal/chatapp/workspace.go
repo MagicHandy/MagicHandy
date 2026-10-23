@@ -61,6 +61,23 @@ func NewWorkspace(lifetime context.Context, sessions Sessions, autopilotActive f
 
 // BeginTurn admits one interactive request against the canonical active session.
 func (w *Workspace) BeginTurn(parent context.Context, sessionID string) (context.Context, context.CancelFunc, error) {
+	return w.beginTurn(parent, sessionID, nil)
+}
+
+// BeginRepairTurn admits a continuation only while no turn, session switch, or
+// cancellation has occurred since its rejected response.
+func (w *Workspace) BeginRepairTurn(parent context.Context, sessionID string, revision uint64) (context.Context, context.CancelFunc, error) {
+	return w.beginTurn(parent, sessionID, &revision)
+}
+
+// Revision is an in-memory admission revision, independent of saved messages.
+func (w *Workspace) Revision() uint64 {
+	w.turnsMu.Lock()
+	defer w.turnsMu.Unlock()
+	return w.epoch
+}
+
+func (w *Workspace) beginTurn(parent context.Context, sessionID string, expected *uint64) (context.Context, context.CancelFunc, error) {
 	// Admission itself may wait on SQLite; link shutdown before that read, not
 	// only after the turn has entered the active slot.
 	ctx, cancel := w.withLifetime(parent)
@@ -92,13 +109,14 @@ func (w *Workspace) BeginTurn(parent context.Context, sessionID string) (context
 	if err := w.lifetime.Err(); err != nil {
 		return nil, nil, err
 	}
-	if w.epoch != admission {
+	if w.epoch != admission || (expected != nil && w.epoch != *expected) {
 		return nil, nil, ErrTurnInvalidated
 	}
 	if w.activeCancel != nil {
 		return nil, nil, errors.New("one chat reply is already active")
 	}
 	w.nextID++
+	w.epoch++
 	id := w.nextID
 	w.activeID, w.activeCancel = id, cancel
 	admitted = true
@@ -239,6 +257,11 @@ func (w *Workspace) mutate(idleAction string, apply func() error) ([]chat.Sessio
 	}
 	if err := apply(); err != nil {
 		return nil, err
+	}
+	if idleAction != "" {
+		w.turnsMu.Lock()
+		w.epoch++
+		w.turnsMu.Unlock()
 	}
 	return w.sessions.SessionsContext(context.Background())
 }

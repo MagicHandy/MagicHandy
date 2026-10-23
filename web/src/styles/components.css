@@ -621,6 +621,16 @@ summary::-webkit-details-marker {
   color: var(--accent);
   text-underline-offset: 0.15em;
 }
+.chat-repair-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 4px;
+}
+.chat-repair-row .form-status {
+  margin: 0;
+}
 .chat-log-shell {
   position: relative;
   display: flex;

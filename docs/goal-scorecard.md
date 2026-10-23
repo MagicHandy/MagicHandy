@@ -1,5 +1,28 @@
 # Goal Scorecard
 
+## 2026-10-23 — Bounded hosted response repair
+
+Matching Windows amd64 builds from alpha.69 and this candidate, Go 1.26.10,
+`CGO_ENABLED=0`, `-trimpath -buildvcs=false -ldflags '-s -w'`, measure
+**23,505,408 → 23,606,272 B** (+100,864 B, 0.429%). The complete canonical UI
+is **2,708,695 → 2,718,244 B** (+9,549 B, 0.353%). No dependency, worker or
+polling channel is added. One bounded process-local continuation is retained
+for an eligible failed hosted turn; normal replies keep one generation.
+Local prompt/schema and local repair behavior remain unchanged by repair.
+The separate fresh-start clarification replaces the shared continuous
+interactive guide with **681 → 656 bytes**; local legacy contracts/schema stay
+unchanged. It introduces no extra inference call. The minimum 16K local-context
+budget tests pass. Hosted Pattern chat gains state-specific action branches;
+Autopilot retains its original schema.
+
+The combined hosted phrase/composition guides shrink **2,282 → 2,257 bytes**,
+including the new join and regional-turn guidance. Final real ChatGPT trials
+pass 10/10 normal selections and 10/10 injected-error corrections, including
+checks of compiled turns. Correction adds one model call: median **5.005 s**,
+range **4.234–7.462 s**. Local request equality and generation-count tests pass;
+no RSS/cold-start or local-throughput improvement is claimed. See the
+[evaluation and visual review](hosted-response-repair-review-2026-10-23.md).
+
 ## 2026-10-23 — Counted Layered phrases and reach preservation
 
 Matching Windows amd64 builds from alpha.68 and the candidate, Go 1.26.10,

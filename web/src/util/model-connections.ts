@@ -37,11 +37,11 @@ export function newModelConnection(provider: ModelConnection["provider"], connec
 
 // Restore only this module's fields; other settings pages may have their own drafts.
 export function modelSettingsPatch(settings: LLMSettings): Partial<LLMSettings> {
-  const { connections, conversation_connection_id, retry_refusal_locally, motion_planner, motion_reviewer, provider, model,
+  const { connections, conversation_connection_id, retry_refusal_locally, hosted_response_repair_enabled, motion_planner, motion_reviewer, provider, model,
     llama_cpp_mode, llama_cpp_base_url, llama_cpp_context_size, ollama_base_url, ollama_models_path,
     request_timeout_ms, max_output_tokens, managed_load_policy, reasoning_mode, reply_length,
     motion_generation_mode, motion_capabilities } = settings;
-  return { connections, conversation_connection_id, retry_refusal_locally, motion_planner, motion_reviewer, provider, model,
+  return { connections, conversation_connection_id, retry_refusal_locally, hosted_response_repair_enabled, motion_planner, motion_reviewer, provider, model,
     llama_cpp_mode, llama_cpp_base_url, llama_cpp_context_size, ollama_base_url, ollama_models_path,
     request_timeout_ms, max_output_tokens, managed_load_policy, reasoning_mode, reply_length,
     motion_generation_mode, motion_capabilities };
@@ -53,7 +53,7 @@ export function modelSettingsSignature(settings: LLMSettings): string {
   const capabilities = settings.motion_capabilities ?? { motion: true, patterns: true, area_focus: true, experimental_patterns: false };
   return JSON.stringify([
     Boolean(settings.motion_reviewer?.enabled), settings.motion_reviewer?.connection_id || "",
-    settings.conversation_connection_id || "local", Boolean(settings.retry_refusal_locally), planner?.provider || "conversation",
+    settings.conversation_connection_id || "local", Boolean(settings.retry_refusal_locally), settings.hosted_response_repair_enabled ?? true, planner?.provider || "conversation",
     planner?.provider === "connection" ? planner.connection_id || "" : "", planner?.model || "",
     planner?.context_policy || "conversation", settings.provider, settings.model,
     settings.llama_cpp_mode, settings.llama_cpp_base_url, settings.ollama_base_url,

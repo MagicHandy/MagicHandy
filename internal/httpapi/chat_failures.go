@@ -14,11 +14,47 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 )
 
+func (s *Server) emitChatCompletionError(ctx context.Context, stop uint64, emit sseEmitter, result chat.Result, failure error, diagnostics chat.MessageDiagnostics) bool {
+	if result.RepairAttempted && (ctx.Err() != nil || s.stopSequence.Load() != stop) {
+		s.emitChatCancellationAt(ctx, stop, emit, false)
+		return true
+	}
+	if s.chatRepairRetired(ctx) {
+		s.emitChatCancellationAt(ctx, stop, emit, false)
+		return true
+	}
+	if failure == nil {
+		return false
+	}
+	s.logger.Warn("chat stream failed", "provider", diagnostics.Provider, "error", failure)
+	payload := map[string]any{"message": failure.Error()}
+	if repair := s.offerChatRepair(ctx, result, diagnostics); repair != nil {
+		payload["repair"] = repair
+	}
+	_ = emit("error", payload)
+	_ = emit("done", map[string]any{"ok": false})
+	return true
+}
+
 func (s *Server) retainChatFailure(ctx context.Context, sequence uint64, sessionID string, result chat.Result, failure error, diagnostics chat.MessageDiagnostics) (chat.Result, error) {
-	if (failure == nil && !result.Malformed) || s.chatCanceled(ctx, sequence) {
+	if failure == nil && !result.Malformed && !result.RepairAttempted {
 		return result, failure
 	}
-	message := s.recordChatFailure(ctx, sessionID, result, failure, diagnostics)
+	if !result.RepairAttempted && s.chatCanceled(ctx, sequence) {
+		return result, failure
+	}
+	outcome := ""
+	if result.RepairAttempted {
+		outcome = s.chatRepairCancellationOutcome(ctx, sequence, failure)
+		// Diagnostics cannot publish a reply or touch motion. Keep the rejected
+		// attempt after cancellation, under recordChatFailure's short deadline.
+		ctx = context.WithoutCancel(ctx)
+	}
+	id, message := s.recordChatFailure(ctx, sessionID, result, failure, diagnostics, outcome)
+	result.FailureID = id
+	if candidate, ok := ctx.Value(chatRepairContextKey{}).(*chatRepairCandidate); ok && result.RepairAttempted {
+		candidate.evidenceID.Store(id)
+	}
 	result.MalformedError = message
 	if failure != nil {
 		failure = errors.New(message)
@@ -31,9 +67,20 @@ func (s *Server) chatFailureEvidence(result chat.Result, failure error, diagnost
 	if failure != nil {
 		message = failure.Error()
 	}
-	item := chat.RequestFailure{CreatedAt: time.Now().UTC().Format(time.RFC3339), Error: message, Diagnostics: diagnostics, MotionMode: settings.MotionGenerationMode,
+	item := chat.RequestFailure{UserSeq: result.UserSeq, CreatedAt: time.Now().UTC().Format(time.RFC3339), Error: message, Diagnostics: diagnostics, MotionMode: settings.MotionGenerationMode,
 		ReasoningMode: settings.ReasoningMode, Version: s.version.Version, Commit: s.version.Commit,
 		Details: &chat.FailureContent{Raw: result.Raw, RepairRaw: result.RepairRaw}}
+	if result.RepairAttempted {
+		item.Kind = "response_repair"
+		item.RepairOutcome = "failed"
+		item.Diagnostics.Repaired = result.Repaired
+		item.Diagnostics.InitialMalformed = true
+		item.Details.InitialError = result.InitialError
+		if result.Repaired {
+			item.RepairOutcome = "repaired"
+			item.Error = result.InitialError
+		}
+	}
 	if errors.Is(failure, llm.ErrOutputTruncated) {
 		item.Kind = "output_limit"
 	}
@@ -52,19 +99,27 @@ func (s *Server) chatFailureEvidence(result chat.Result, failure error, diagnost
 	return item
 }
 
-func (s *Server) recordChatFailure(ctx context.Context, sessionID string, result chat.Result, failure error, diagnostics chat.MessageDiagnostics) string {
+func (s *Server) recordChatFailure(ctx context.Context, sessionID string, result chat.Result, failure error, diagnostics chat.MessageDiagnostics, outcome string) (int64, string) {
 	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	defer cancel()
 	settings, _ := s.store.Snapshot()
-	item := s.chatFailureEvidence(result, failure, diagnostics, settings.LLM.ConversationSettings())
+	modelSettings := settings.LLM.ConversationSettings()
+	if candidate, ok := ctx.Value(chatRepairContextKey{}).(*chatRepairCandidate); ok {
+		modelSettings = candidate.settings
+	}
+	item := s.chatFailureEvidence(result, failure, diagnostics, modelSettings)
+	if outcome != "" {
+		item.RepairOutcome = outcome
+	}
 	if err := s.prepareChatFailure(ctx, &item); err != nil {
 		s.logger.Warn("chat failure diagnostics unavailable")
-		return "Model request failed; diagnostics are unavailable."
+		return 0, "Model request failed; diagnostics are unavailable."
 	}
-	if _, err := s.chatLog.SaveFailure(ctx, sessionID, item); err != nil {
+	id, err := s.chatLog.SaveFailure(ctx, sessionID, item)
+	if err != nil {
 		s.logger.Warn("chat failure diagnostics could not be saved")
 	}
-	return item.Error
+	return id, item.Error
 }
 
 // Redact complete values before truncation so a credential crossing the size
@@ -77,6 +132,7 @@ func (s *Server) prepareChatFailure(ctx context.Context, item *chat.RequestFailu
 	if item.Details != nil {
 		item.Details.Raw = boundedFailureText(item.Details.Raw, 16384, &item.Details.Truncated)
 		item.Details.RepairRaw = boundedFailureText(item.Details.RepairRaw, 16384, &item.Details.Truncated)
+		item.Details.InitialError = boundedFailureText(item.Details.InitialError, 2048, &item.Details.Truncated)
 		item.Details.Prompt = boundedFailureText(item.Details.Prompt, 32768, &item.Details.Truncated)
 		item.Details.Schema = boundedFailureText(item.Details.Schema, 65536, &item.Details.Truncated)
 	}
@@ -102,7 +158,7 @@ func (s *Server) redactChatFailure(ctx context.Context, item *chat.RequestFailur
 	fields := []*string{&item.Error, &item.Version, &item.Commit, &item.MotionMode, &item.ReasoningMode,
 		&d.Provider, &d.Model, &d.PromptSet, &d.PersonaID, &d.PersonaName, &d.RefusalFallbackFrom, &d.RefusalFallbackModel}
 	if item.Details != nil {
-		fields = append(fields, &item.Details.Raw, &item.Details.RepairRaw, &item.Details.Prompt, &item.Details.Schema)
+		fields = append(fields, &item.Details.Raw, &item.Details.RepairRaw, &item.Details.InitialError, &item.Details.Prompt, &item.Details.Schema)
 	}
 	values := make([]string, len(fields))
 	for index, field := range fields {

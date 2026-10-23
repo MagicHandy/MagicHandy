@@ -158,6 +158,7 @@ type Server struct {
 	settingsLifecycleMu sync.Mutex
 	personaMutationMu   sync.Mutex
 	chatWorkspace       *chatapp.Workspace
+	chatRepair          chatRepairRuntime
 	chatSpeechMu        chatPublicationGate
 	chatSpeechRequests  map[int64]string
 	hostPathPicker      hostPathPicker

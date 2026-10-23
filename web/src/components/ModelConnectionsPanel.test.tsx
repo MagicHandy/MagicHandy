@@ -71,6 +71,32 @@ describe("model roles and external providers", () => {
     expect(retry).not.toBeChecked();
   });
 
+  it("defaults hosted response repair on, preserves routing, and restores it when model drafts are discarded", async () => {
+    quietCatalog();
+    render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id, provider: "ollama", model: "local-model" } as PublicSettings["llm"]} />);
+    const toggle = screen.getByRole("checkbox", { name: /^Automatically repair rejected chat responses/ });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue(chatgpt.id);
+    expect(screen.getByRole("checkbox", { name: /^Retry declined chat requests with the local model/ })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: "Discard model changes" }));
+    expect(toggle).toBeChecked();
+    expect(screen.queryByRole("button", { name: "Discard model changes" })).not.toBeInTheDocument();
+  });
+
+  it("keeps repair configuration out of local-only controls and respects read-only settings", async () => {
+    quietCatalog();
+    const local = { connections: [], conversation_connection_id: "local" } as unknown as PublicSettings["llm"];
+    const view = render(<ModelConnectionsPanel settings={local} saved={local} locked={false} patch={vi.fn()} />);
+    expect(screen.queryByRole("checkbox", { name: /^Automatically repair/ })).not.toBeInTheDocument();
+    const external = { ...local, connections: [chatgpt], conversation_connection_id: chatgpt.id, hosted_response_repair_enabled: false };
+    view.rerender(<ModelConnectionsPanel settings={external} saved={external} locked patch={vi.fn()} />);
+    const toggle = screen.getByRole("checkbox", { name: /^Automatically repair rejected chat responses/ });
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toBeDisabled();
+  });
+
   it("never creates a provider from a role choice; adding one leaves both roles alone", async () => {
     quietCatalog();
     render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id } as PublicSettings["llm"]} />);

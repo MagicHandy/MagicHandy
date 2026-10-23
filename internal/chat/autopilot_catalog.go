@@ -29,7 +29,9 @@ func autopilotCatalog(patterns []PatternChoice, kind AutopilotKind, autoTiming b
 }
 
 func autopilotPatternSchema(patterns []PatternChoice, capabilities Capabilities, state *MotionContext, kind AutopilotKind) json.RawMessage {
-	base := PatternResponseSchema(patterns, capabilities, state)
+	// Autonomous target selection keeps its separate contract and authority;
+	// it must not inherit live chat's state-specific start/none branches.
+	base := patternResponseSchema(patterns, capabilities, state, false)
 	if len(base) == 0 {
 		return nil
 	}

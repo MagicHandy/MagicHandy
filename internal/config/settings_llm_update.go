@@ -3,6 +3,11 @@ package config
 import "fmt"
 
 func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) {
+	repairEnabled := current.HostedResponseRepairEnabled
+	if update.HostedResponseRepairEnabled != nil {
+		enabled := *update.HostedResponseRepairEnabled
+		repairEnabled = &enabled
+	}
 	retryRefusalLocally := current.RetryRefusalLocally
 	if update.RetryRefusalLocally != nil {
 		retryRefusalLocally = *update.RetryRefusalLocally
@@ -71,29 +76,30 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		capabilities = &copied
 	}
 	return normalizeLLMStrings(LLMSettings{
-		Connections:              connections,
-		ConversationConnectionID: conversation,
-		RetryRefusalLocally:      retryRefusalLocally,
-		MotionPlanner:            planner,
-		MotionReviewer:           reviewer,
-		Provider:                 update.Provider,
-		LlamaCPPMode:             update.LlamaCPPMode,
-		ManagedLoadPolicy:        managedLoadPolicy,
-		LlamaCPPBaseURL:          update.LlamaCPPBaseURL,
-		LlamaCPPContextSize:      contextSize,
-		OllamaBaseURL:            update.OllamaBaseURL,
-		OllamaModelsPath:         update.OllamaModelsPath,
-		Model:                    update.Model,
-		PromptSet:                update.PromptSet,
-		RequestTimeoutMillis:     update.RequestTimeoutMillis,
-		MaxOutputTokens:          maxOutputTokens,
-		ReasoningMode:            reasoningMode,
-		ChatVoice:                chatVoice,
-		ReplyLength:              replyLength,
-		UserAnatomy:              userAnatomy,
-		CustomAnatomy:            customAnatomy,
-		PersonaDescription:       personaDescription,
-		MotionGenerationMode:     motionGenerationMode,
-		MotionCapabilities:       capabilities,
+		Connections:                 connections,
+		ConversationConnectionID:    conversation,
+		RetryRefusalLocally:         retryRefusalLocally,
+		HostedResponseRepairEnabled: repairEnabled,
+		MotionPlanner:               planner,
+		MotionReviewer:              reviewer,
+		Provider:                    update.Provider,
+		LlamaCPPMode:                update.LlamaCPPMode,
+		ManagedLoadPolicy:           managedLoadPolicy,
+		LlamaCPPBaseURL:             update.LlamaCPPBaseURL,
+		LlamaCPPContextSize:         contextSize,
+		OllamaBaseURL:               update.OllamaBaseURL,
+		OllamaModelsPath:            update.OllamaModelsPath,
+		Model:                       update.Model,
+		PromptSet:                   update.PromptSet,
+		RequestTimeoutMillis:        update.RequestTimeoutMillis,
+		MaxOutputTokens:             maxOutputTokens,
+		ReasoningMode:               reasoningMode,
+		ChatVoice:                   chatVoice,
+		ReplyLength:                 replyLength,
+		UserAnatomy:                 userAnatomy,
+		CustomAnatomy:               customAnatomy,
+		PersonaDescription:          personaDescription,
+		MotionGenerationMode:        motionGenerationMode,
+		MotionCapabilities:          capabilities,
 	}), nil
 }

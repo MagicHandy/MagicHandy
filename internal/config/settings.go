@@ -523,23 +523,24 @@ type PublicSettingsOptionHints struct {
 // LLMUpdate is the settings API write shape. New tuning fields are pointers so
 // older clients that omit them preserve the current persisted values.
 type LLMUpdate struct {
-	Connections              *[]ModelConnection      `json:"connections,omitempty"`
-	ConversationConnectionID *string                 `json:"conversation_connection_id,omitempty"`
-	RetryRefusalLocally      *bool                   `json:"retry_refusal_locally,omitempty"`
-	MotionPlanner            *MotionPlannerSettings  `json:"motion_planner,omitempty"`
-	MotionReviewer           *MotionReviewerSettings `json:"motion_reviewer,omitempty"`
-	Provider                 string                  `json:"provider"`
-	LlamaCPPMode             string                  `json:"llama_cpp_mode"`
-	ManagedLoadPolicy        *string                 `json:"managed_load_policy,omitempty"`
-	LlamaCPPBaseURL          string                  `json:"llama_cpp_base_url"`
-	LlamaCPPContextSize      *int                    `json:"llama_cpp_context_size,omitempty"`
-	OllamaBaseURL            string                  `json:"ollama_base_url"`
-	OllamaModelsPath         string                  `json:"ollama_models_path,omitempty"`
-	Model                    string                  `json:"model"`
-	PromptSet                string                  `json:"prompt_set"`
-	RequestTimeoutMillis     int                     `json:"request_timeout_ms"`
-	MaxOutputTokens          *int                    `json:"max_output_tokens,omitempty"`
-	ReasoningMode            *string                 `json:"reasoning_mode,omitempty"`
+	Connections                 *[]ModelConnection      `json:"connections,omitempty"`
+	ConversationConnectionID    *string                 `json:"conversation_connection_id,omitempty"`
+	RetryRefusalLocally         *bool                   `json:"retry_refusal_locally,omitempty"`
+	HostedResponseRepairEnabled *bool                   `json:"hosted_response_repair_enabled,omitempty"`
+	MotionPlanner               *MotionPlannerSettings  `json:"motion_planner,omitempty"`
+	MotionReviewer              *MotionReviewerSettings `json:"motion_reviewer,omitempty"`
+	Provider                    string                  `json:"provider"`
+	LlamaCPPMode                string                  `json:"llama_cpp_mode"`
+	ManagedLoadPolicy           *string                 `json:"managed_load_policy,omitempty"`
+	LlamaCPPBaseURL             string                  `json:"llama_cpp_base_url"`
+	LlamaCPPContextSize         *int                    `json:"llama_cpp_context_size,omitempty"`
+	OllamaBaseURL               string                  `json:"ollama_base_url"`
+	OllamaModelsPath            string                  `json:"ollama_models_path,omitempty"`
+	Model                       string                  `json:"model"`
+	PromptSet                   string                  `json:"prompt_set"`
+	RequestTimeoutMillis        int                     `json:"request_timeout_ms"`
+	MaxOutputTokens             *int                    `json:"max_output_tokens,omitempty"`
+	ReasoningMode               *string                 `json:"reasoning_mode,omitempty"`
 	// ChatVoice replaces the saved voice when present; omitted preserves the
 	// current persisted value (older clients keep working).
 	ChatVoice *string `json:"chat_voice,omitempty"`
@@ -561,30 +562,31 @@ type LLMUpdate struct {
 // LLMUpdateFromSettings creates a complete write payload from a settings view.
 func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 	return LLMUpdate{
-		Connections:              &settings.Connections,
-		ConversationConnectionID: &settings.ConversationConnectionID,
-		RetryRefusalLocally:      &settings.RetryRefusalLocally,
-		MotionPlanner:            &settings.MotionPlanner,
-		MotionReviewer:           &settings.MotionReviewer,
-		Provider:                 settings.Provider,
-		LlamaCPPMode:             settings.LlamaCPPMode,
-		ManagedLoadPolicy:        &settings.ManagedLoadPolicy,
-		LlamaCPPBaseURL:          settings.LlamaCPPBaseURL,
-		LlamaCPPContextSize:      &settings.LlamaCPPContextSize,
-		OllamaBaseURL:            settings.OllamaBaseURL,
-		OllamaModelsPath:         settings.OllamaModelsPath,
-		Model:                    settings.Model,
-		PromptSet:                settings.PromptSet,
-		RequestTimeoutMillis:     settings.RequestTimeoutMillis,
-		MaxOutputTokens:          &settings.MaxOutputTokens,
-		ReasoningMode:            &settings.ReasoningMode,
-		ChatVoice:                &settings.ChatVoice,
-		ReplyLength:              &settings.ReplyLength,
-		UserAnatomy:              &settings.UserAnatomy,
-		CustomAnatomy:            &settings.CustomAnatomy,
-		PersonaDescription:       &settings.PersonaDescription,
-		MotionGenerationMode:     &settings.MotionGenerationMode,
-		MotionCapabilities:       settings.MotionCapabilities,
+		Connections:                 &settings.Connections,
+		ConversationConnectionID:    &settings.ConversationConnectionID,
+		RetryRefusalLocally:         &settings.RetryRefusalLocally,
+		HostedResponseRepairEnabled: settings.HostedResponseRepairEnabled,
+		MotionPlanner:               &settings.MotionPlanner,
+		MotionReviewer:              &settings.MotionReviewer,
+		Provider:                    settings.Provider,
+		LlamaCPPMode:                settings.LlamaCPPMode,
+		ManagedLoadPolicy:           &settings.ManagedLoadPolicy,
+		LlamaCPPBaseURL:             settings.LlamaCPPBaseURL,
+		LlamaCPPContextSize:         &settings.LlamaCPPContextSize,
+		OllamaBaseURL:               settings.OllamaBaseURL,
+		OllamaModelsPath:            settings.OllamaModelsPath,
+		Model:                       settings.Model,
+		PromptSet:                   settings.PromptSet,
+		RequestTimeoutMillis:        settings.RequestTimeoutMillis,
+		MaxOutputTokens:             &settings.MaxOutputTokens,
+		ReasoningMode:               &settings.ReasoningMode,
+		ChatVoice:                   &settings.ChatVoice,
+		ReplyLength:                 &settings.ReplyLength,
+		UserAnatomy:                 &settings.UserAnatomy,
+		CustomAnatomy:               &settings.CustomAnatomy,
+		PersonaDescription:          &settings.PersonaDescription,
+		MotionGenerationMode:        &settings.MotionGenerationMode,
+		MotionCapabilities:          settings.MotionCapabilities,
 	}
 }
 
@@ -1333,6 +1335,10 @@ func validateIntifaceServerAddress(address string) error {
 }
 
 func cloneSettings(settings Settings) Settings {
+	if settings.LLM.HostedResponseRepairEnabled != nil {
+		enabled := *settings.LLM.HostedResponseRepairEnabled
+		settings.LLM.HostedResponseRepairEnabled = &enabled
+	}
 	if settings.Device.ConfiguredDevices != nil {
 		settings.Device.ConfiguredDevices = append([]string{}, settings.Device.ConfiguredDevices...)
 	}

@@ -8,7 +8,7 @@ import (
 
 func deferredMotionCommand(route string) bool {
 	route, _, _ = strings.Cut(route, "?")
-	return route == "/api/chat/stream" || route == "/api/labs/llm/chat"
+	return route == "/api/chat/stream" || route == "/api/chat/repair" || route == "/api/labs/llm/chat"
 }
 
 // Only commands that can change motion supersede a pending model proposal.
@@ -16,7 +16,7 @@ func deferredMotionCommand(route string) bool {
 func motionCommandRoute(route string) bool {
 	route, _, _ = strings.Cut(route, "?")
 	switch route {
-	case "/api/chat/stream", "/api/labs/llm/chat", "/api/labs/llm/session",
+	case "/api/chat/stream", "/api/chat/repair", "/api/labs/llm/chat", "/api/labs/llm/session",
 		"/api/motion/start", "/api/motion/target", "/api/motion/quick", "/api/motion/pause", "/api/motion/resume",
 		"/api/settings", "/api/settings/reset", "/api/settings/labs", "/api/settings/llm-motion-mode", "/api/settings/device/connection-key",
 		"/api/settings/device", "/api/settings/device/output", "/api/settings/device/connections",
