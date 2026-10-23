@@ -251,7 +251,13 @@ failures are ineligible, and a refusal during correction cannot add a third
 local request. Rejected content has no partial motion, speech or history effects;
 diagnostics retain each attempted correction. Manual actions expire on new
 turns, sessions, motion owners, settings, controller or engine-plan changes, or
-after five minutes. Local-only and Autopilot policies are unchanged.
+after five minutes. Autopilot policies are unchanged. The separately evaluated
+local continuous-chat adaptation permits one automatic regeneration from the
+original request and validator feedback, without replaying the invalid draft.
+It keeps the full contract and original latest request or declines the extra
+call on budget failure; Stop/cancellation still prevent late effects. Broader
+local start-authorization changes were rejected after live tests produced false
+starts on questions and hypotheticals. Existing local authorization remains.
 Stop cancels all connection lanes;
 account/provider/settings/session/personalization changes reject stale results.
 Fixture tests include providers that ignore cancellation. Valid output still

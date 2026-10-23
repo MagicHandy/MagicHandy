@@ -14,7 +14,16 @@ func patternResponseSchema(patterns []PatternChoice, capabilities Capabilities, 
 	if !capabilities.Motion {
 		return chatOnlyResponseSchema(capabilities)
 	}
-	if capabilities.MotionMode == MotionModeDynamic || !capabilities.Patterns {
+	if capabilities.MotionMode == MotionModeDynamic {
+		// Paused local Creative needs only an explanation. Advertising no
+		// motion fields avoids a malformed start and its extra repair call.
+		// The parser still rejects a start from an unconstrained provider.
+		if interactive && !capabilities.HostedMotion && state != nil && state.Paused {
+			return chatOnlyResponseSchema(capabilities)
+		}
+		return nil
+	}
+	if !capabilities.Patterns {
 		return nil
 	}
 	minimum, maximum := 1, 100
@@ -41,8 +50,8 @@ func patternResponseSchema(patterns []PatternChoice, capabilities Capabilities, 
 		motionFields["area"] = map[string]any{"type": "string", "enum": AreaZones()}
 	}
 	var motionSchema any = object(motionFields, []string{"action"})
-	if interactive && capabilities.HostedMotion {
-		motionSchema = hostedPatternActionSchema(motionFields, state)
+	if interactive && (capabilities.HostedMotion || state != nil) {
+		motionSchema = interactivePatternActionSchema(motionFields, state)
 	}
 	fields := map[string]any{"reply": map[string]any{"type": "string"}, "motion": motionSchema}
 	if capabilities.MoodTracking {

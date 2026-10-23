@@ -120,7 +120,7 @@ func TestCreativeV2AuthorityAndContractIsolation(t *testing.T) {
 	} {
 		provider := &layeredTestProvider{raw: tc.raw}
 		s := FreshCreativeV2Score(25)
-		service := Service{Provider: provider, Capabilities: &Capabilities{Motion: true, MotionMode: MotionModeCreativeV2}, MotionContext: &MotionContext{Running: tc.running, Paused: tc.paused, Layered: &s}}
+		service := Service{Provider: provider, SingleAttempt: true, Capabilities: &Capabilities{Motion: true, MotionMode: MotionModeCreativeV2}, MotionContext: &MotionContext{Running: tc.running, Paused: tc.paused, Layered: &s}}
 		result, err := service.Complete(t.Context(), Request{Message: tc.message}, nil)
 		if (err != nil) != tc.reject || (result.Response.Motion != nil) != tc.applied || provider.calls != 1 || result.Repaired || result.SemanticFallback {
 			t.Fatalf("%s: %+v %v", tc.message, result, err)

@@ -1,9 +1,9 @@
 package chat
 
-// The hosted library contract follows the same lifecycle as continuous chat.
+// The interactive library contract follows the same lifecycle as continuous chat.
 // A none/stop branch cannot accidentally carry a pattern selection or speed.
-// The local grammar stays compact and unchanged.
-func hostedPatternActionSchema(targetFields map[string]any, state *MotionContext) map[string]any {
+// Autonomous callers keep their separate target-selection grammar.
+func interactivePatternActionSchema(targetFields map[string]any, state *MotionContext) map[string]any {
 	choices := []any{}
 	for _, action := range []string{MotionActionNone, MotionActionStop} {
 		choices = append(choices, map[string]any{

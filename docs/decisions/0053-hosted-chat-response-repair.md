@@ -82,12 +82,32 @@ independently of the context revision used for stale-work checks.
 Valid hosted replies retain their single generation. Invalid replies can incur
 one additional model call and its cost/latency. The UI explains that tradeoff
 and keeps the setting alongside the selected external chat connection.
-Automatic and manual repair use identical validation. Repair leaves local-only
-prompts, schemas, generation count, existing local repair behavior and
-Autopilot's separate decision/repair policies unchanged. The accompanying
+Automatic and manual repair use identical validation. The hosted mechanism
+does not change local or autonomous repair policy. The accompanying
 fresh-motion-request clarification separately replaces compact interactive
 lifecycle wording; it does not grant an old or canceled repair permission to
 restart motion.
+
+## Local continuous-chat adaptation
+
+The local follow-up separately extends the existing one-correction local policy
+to interactive Layered and Creative v2. In Gemma trials, replaying rejected JSON
+encouraged the model to repeat invalid choices or omit part of a compound
+request. Local correction therefore regenerates from the original conversation,
+contract and latest user request plus exact validator feedback; the bad draft
+is retained in diagnostics but is not added to the next generation's context.
+The schema and parser are unchanged between attempts. A successful first reply
+still uses one call. Single-attempt retries and autonomous decisions cannot
+enter this path, and provider errors, refusals, truncation and plain prose are
+not retried.
+
+The correction is automatic and uses the existing local policy; the external
+setting and manual continuation remain external-only. Before making the extra
+call, the shared budget preserves the full system/profile and original latest
+request. If essential input does not fit, the original failure remains visible
+and no extra call is made. Stop and cancellation prevent publication or motion
+from the replacement. Local progress uses the same compact chat status, with
+no pending manual continuation or new background work.
 
 An expired correction requires a new user request against current state. This
 is intentional: replaying a technically valid but stale score is not a repair

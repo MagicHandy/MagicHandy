@@ -130,3 +130,34 @@ func TestFreshHostedMotionDoesNotRevivePreStopRepair(t *testing.T) {
 	}
 	callMotion(t, s, http.MethodPost, "/api/motion/stop", `{}`)
 }
+
+func TestLocalPausedChatUsesOneInertResponseThroughApp(t *testing.T) {
+	for _, mode := range []string{config.LLMMotionModeDynamic, config.LLMMotionModePattern} {
+		t.Run(mode, func(t *testing.T) {
+			fake := transport.NewFake()
+			provider := &scriptedLLMProvider{responses: []string{`{"reply":"Resume using the app before changing the rhythm."}`}}
+			s := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: provider})
+			t.Cleanup(s.Close)
+			saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+				settings.LLM.MotionGenerationMode = mode
+				return settings
+			})
+			callMotion(t, s, http.MethodPost, "/api/motion/start", `{"pattern":"flow-full-sweeps","speed_percent":30}`)
+			callMotion(t, s, http.MethodPost, "/api/motion/pause", `{}`)
+			before := len(fake.Commands())
+			body := postChatStream(t, s, `{"message":"Use syncopation."}`)
+			if !strings.Contains(body, "event: message") || strings.Contains(body, "event: malformed") || strings.Contains(body, "event: motion") || provider.callCount() != 1 || len(fake.Commands()) != before {
+				t.Fatalf("paused local chat retried or applied motion: %s", body)
+			}
+			if state := s.currentMotionEngine().Snapshot(); state.Running || !state.Paused {
+				t.Fatal("inert local response changed the paused lifecycle")
+			}
+			provider.mu.Lock()
+			schema := string(provider.requests[0].JSONSchema)
+			provider.mu.Unlock()
+			if schema == "" || strings.Contains(schema, `"start"`) || strings.Contains(schema, `"target"`) || strings.Contains(schema, `"update"`) {
+				t.Fatalf("paused local request advertised active motion: %s", schema)
+			}
+		})
+	}
+}

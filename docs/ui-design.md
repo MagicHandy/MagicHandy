@@ -58,6 +58,13 @@ or configuration changes. The normal conversation stream handles cancellation an
 Emergency Stop stays reachable throughout. Reloading keeps canonical chat
 history; expired repair actions are not reconstructed from diagnostic records.
 
+Local Layered/Creative v2 can make one automatic correction under the existing
+local repair policy. They reuse the compact progress line and diagnostic
+provenance, without another setting, error bubble or manual continuation.
+The external repair toggle controls external models only. A local correction
+that cannot fit the configured context leaves the original failure visible
+instead of silently dropping the profile or latest request.
+
 ## Launch console
 
 On Windows, the Start menu and desktop shortcuts start `magichandy.exe` in a

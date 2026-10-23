@@ -170,6 +170,12 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 				return s.finalizeLayeredResponse(response, state), validationErr
 			}, emit)
 		}
+		if s.canRepairLocalContinuous(raw) {
+			return s.repairLocalContinuous(ctx, input, raw, err, func(value string) (AssistantResponse, error) {
+				response, validationErr := s.parseLayeredResponse(value, current, state, limits, autoTiming)
+				return s.finalizeLayeredResponse(response, state), validationErr
+			}, emit)
+		}
 		result.Malformed, result.InitialMalformed, result.MalformedError = true, true, err.Error()
 		_ = emitEvent(emit, StreamEvent{Type: "malformed", Phase: "initial", Error: err.Error()})
 		return result, fmt.Errorf("%s response rejected: %w", capabilities.MotionMode, err)

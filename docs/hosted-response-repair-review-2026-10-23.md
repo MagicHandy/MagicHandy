@@ -140,9 +140,132 @@ All nine final moving proposals also pass production chat-target mapping and
 shared-sampler compilation, without starting an engine or transport. The final
 lifecycle atlas contains 25 records / seven distinct plots at
 `.scratch/hosted-response-repair/lifecycle-atlas/index.html`. Older fixtures and
-catalog rejections are retained in a separate combined lifecycle atlas; an
+catalog rejections are retained in a separate combined lifecycle atlas
+(`lifecycle-atlas-all/index.html`, 85 records / 15 plots); an
 obsolete test ID that cannot map to production is recorded as an error, not
 plotted as an unrelated default score.
+
+Both lifecycle overview sheets and detailed final Layered, Creative v2,
+Creative, counted and Pattern starts were inspected. The counted output has
+two upper strokes followed by one full-device sweep, with no extra reversal
+at the join. The generic syncopation outputs vary in character: the phrase
+uses a repeated long/short timing motif, while the field and catalog choices
+use broader pace/geometry development. These cases verify start intent and
+valid shared-engine motion, not identical rhythmic interpretation across modes.
+The planned-versus-quantized overlays track these outputs without added rests
+or chatter; knot velocity and acceleration jumps round to zero in the detailed
+plots. Lifecycle transition and Stop coverage comes from the separate
+fake-transport tests, not these steady-loop figures.
+
+## Local-model adaptation review
+
+The local follow-up uses the available Gemma 12B Ollama model
+`igorls/gemma-4-12B-it-qat-q4_0-unquantized-heretic:Q4_0`, explicitly allocating
+16K context, reasoning off, and the ordinary 256-token utility reply allowance.
+No installed conversation, external provider, engine or hardware is involved.
+The captured baseline contains 40 lifecycle, negative-intent and Layered
+composition cases. It follows intent in 30/40; its missed starts include valid
+Creative/Pattern commands removed by the existing local word-based authority
+checks. Questions, quoted instructions and prospective requests remain inert.
+
+Do not assume that a change successful with GPT transfers to the smaller model.
+The first combined candidate removed those start filters and used the hosted
+start guidance, recovering four intended starts but introducing three false
+starts on questions/hypotheticals. Its compact replacement Layered paragraph
+also regressed fixed-width roaming and did not resolve full-device coverage.
+That candidate was rejected, with no production authorization change. Both
+`local-motion-baseline-production.json` and `local-motion-combined.json` remain
+under the ignored evidence directory, including raw failed selections.
+
+A narrower Layered example change and a same-sized clarification naming the
+full-and-tip/base geometry choices were also rejected. The former lost a
+previously correct fixed-width roaming response; the latter still missed
+outer bounds and turned one regional request into a rejection plus another
+generation. The final local planning prompt and its geometry examples remain
+unchanged by this adaptation. The hosted phrase grammar is not enabled locally.
+
+The adopted state-schema changes are small: local paused Creative advertises
+only a reply, and interactive Pattern library uses the state-specific action
+branches already tested with hosted chat. None/stop do not advertise target
+fields; stopped start and running target are distinct. Existing local start
+authorization remains in place. Hosted schema bytes and the autonomous base
+schema are unchanged by this follow-up.
+
+| Actual local production path | Intended results | Provider calls | Median generation |
+| --- | ---: | ---: | ---: |
+| Baseline, 40 cases | 30/40 | 41 | 818 ms |
+| Final, same 40 cases | 31/40 | 40 | 803.5 ms |
+| Final, 24 additional negative holdouts | 24/24 inert | 24 | 782.5 ms |
+
+The final matrix uses the actual production service with no experimental prompt
+or parser wrapper. The paused Creative case changes from two calls and an
+unusable result (2.918 seconds) to one valid, inert explanation (1.125 seconds).
+The median differences across the matrix are too small to establish a throughput
+improvement. No extra normal-success generation is introduced. New holdouts
+include commands inside quotations and negations, reported instructions,
+future-only setup, and comparisons across all four motion modes.
+
+Nine semantic misses remain in that deliberately difficult matrix: four legacy
+starts removed by existing local authorization, one Layered request asking for
+confirmation, two mixed full-device/regional requests that keep the old outer
+bounds, and two regional pace-coordination requests. They are retained as
+failures, not fixed by deterministic text rules or reported as successes. The
+new correction path handles rejected output; it does not detect every valid
+but inappropriate motion choice.
+
+Repair evaluation is separate from initial response quality. Before this change,
+local continuous modes rejected after the first invalid answer, while legacy
+local chat already allowed one repair. The adopted continuous correction makes
+one fresh generation from the unchanged original request, profile and contract
+plus exact validator feedback. The rejected draft stays in diagnostics but is
+not replayed to Gemma: replaying it anchored the model to invalid choices or
+encouraged it to remove a requested control while claiming success.
+
+| Local correction comparison, 768-token allowance | Control/intent checks | Median added generation |
+| --- | ---: | ---: |
+| Exact feedback with rejected draft | 6/8 | 928.5 ms |
+| Compact feedback with rejected draft | 6/8 | 845.5 ms |
+| Compact feedback, regenerate original request | 8/8 | 790 ms |
+
+The final production helper at the ordinary **256-token** output cap passes
+**14/14 structural and requested-control checks**, median **1.064 seconds**,
+range **0.603–1.601 seconds** for the additional generation. Eight injected
+failure fixtures cover malformed JSON, missing action, invalid enum/shape,
+duplicate or incomplete groups, and compound requests. Six holdouts cover
+questions, paused motion and long history in both modes. The two history cases
+drop 13 older messages while retaining the exact latest request and unrequested
+controls. Each fixture's initial rejection is injected; only its replacement
+is live Gemma. This is recovery evidence, not the natural failure rate.
+
+The compiled visual review adds an important qualification to the control
+checks: `creative_ungrouped_focus` sets the full range and removes short-focus
+mixing, but retains natural endpoint variation. Its strokes therefore do not
+all traverse exactly 0–100 as requested. The original 14/14 control report is
+retained unchanged; that result is not a claim of 14/14 physical-intent fidelity.
+The separate `local-repair-compiled-assessment.json` measures an 88.44% mean
+stroke and only 12.90%/11.29% of lower/upper turns within one point of the
+base/tip. The unchanged 50% variation permits inward landings. Future live
+evaluations now check compiled turn coverage separately from control fields.
+No runtime language rule or forced parameter override conceals this limitation.
+
+Full-profile budget checks pass all **24 configurations at 32K** (both modes,
+four voices, 256/512/768 output limits). At 16K all six Utility combinations fit;
+Explicit voice at 256 fits the initial request but lacks room for correction in
+both modes. Some richer initial prompts already exceed that minimum. The helper
+preflights the correction before another call and preserves the original failure
+if essential context cannot fit. It never drops system/profile instructions or
+the latest request to force admission. The default managed allocation remains
+32K. These are budget checks, not additional live-generation reliability tests.
+
+The local atlas at `local-atlas/index.html` contains **254 records, 32 distinct
+plots and two overview sheets**, including rejected candidates and final
+corrections. Both overview sheets were inspected, with detailed plots for the
+false-start candidate, missing outer reach, valid full-length Layered correction,
+the Creative v2 endpoint-variation miss, and long-history control preservation.
+Layered full-length correction reaches both endpoints; the existing Creative v2
+holds and variation remain visible rather than being smoothed away. Quantized
+overlays follow the shared plan in these inspected outputs. No engine timing or
+transport code is changed, and no hardware was used.
 
 ## Evaluation method and retained failures
 
@@ -243,15 +366,15 @@ Go's GNU-style race build. No gate is removed or weakened.
 The isolated review app uses a real available Ollama model, with no copied
 credentials, no fixture providers, LLM motion Off, Autopilot inactive and motion
 idle. `scripts/check-review-llm.ps1` completes real generation. A text-only
-request through the final app chat path returns a nonempty response with no
-repair or fallback; the observed 3.118 seconds includes 2.740 seconds of model
-load. A warm check before restart took 365 ms. These are readiness observations,
+request through the final app chat path returns a nonempty response with one
+provider call, no repair or fallback, and motion idle. It takes 395 ms with a
+139 ms first token and 3 ms model load. These are readiness observations,
 not a local performance benchmark.
 
-No sampler, motion timing, transport protocol, local schema, local repair
-policy, or Autopilot decision policy changes. The separate fresh-start request
-updates compact interactive lifecycle wording, including local continuous
-modes. Physical feel was not tested in
+No sampler, motion timing, transport protocol or Autopilot decision policy
+changes. Local schema/correction adaptations are limited to those evaluated
+above. The separate fresh-start request updates compact interactive lifecycle
+wording, including local continuous modes. Physical feel was not tested in
 this investigation. Compiled plots and simulated dispatch validate the proposed
 motion and control lifecycle; they are not carriage telemetry. A successful
 validator cannot prove subjective motion quality or guarantee every future

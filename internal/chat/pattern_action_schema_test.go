@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestHostedPatternGrammarKeepsHoldsInertAndFollowsState(t *testing.T) {
+func TestInteractivePatternGrammarKeepsHoldsInertAndFollowsState(t *testing.T) {
 	for _, state := range []*MotionContext{nil, {}, {Running: true}, {Paused: true}, {Running: true, Paused: true}} {
 		caps := Capabilities{Motion: true, MotionMode: MotionModePattern, Patterns: true, HostedMotion: true}
 		var schema struct {
@@ -51,15 +51,24 @@ func TestHostedPatternGrammarKeepsHoldsInertAndFollowsState(t *testing.T) {
 		if !slices.Equal(got, want) {
 			t.Fatalf("wrong lifecycle choices: got %v want %v", got, want)
 		}
-		caps.HostedMotion = false
-		var local map[string]any
-		if err := json.Unmarshal(PatternResponseSchema(continuousTestChoices(), caps, state), &local); err != nil {
-			t.Fatal(err)
+		assertLocalPatternStateSchema(t, caps, state)
+	}
+}
+
+func assertLocalPatternStateSchema(t *testing.T, caps Capabilities, state *MotionContext) {
+	t.Helper()
+	caps.HostedMotion = false
+	var local map[string]any
+	if err := json.Unmarshal(PatternResponseSchema(continuousTestChoices(), caps, state), &local); err != nil {
+		t.Fatal(err)
+	}
+	motion := local["properties"].(map[string]any)["motion"].(map[string]any)
+	if state != nil {
+		if motion["oneOf"] == nil || motion["properties"] != nil {
+			t.Fatal("local interactive library did not receive state branches")
 		}
-		motion := local["properties"].(map[string]any)["motion"].(map[string]any)
-		if motion["oneOf"] != nil || motion["properties"].(map[string]any)["speed_percent"] == nil {
-			t.Fatal("local library schema changed")
-		}
+	} else if motion["oneOf"] != nil || motion["properties"].(map[string]any)["speed_percent"] == nil {
+		t.Fatal("state-free local contract changed")
 	}
 }
 

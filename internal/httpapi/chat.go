@@ -461,7 +461,7 @@ func emitChatStarted(emit sseEmitter, settings config.LLMSettings, promptID, ses
 
 func emitChatStreamEvent(emit sseEmitter, event chat.StreamEvent) error {
 	switch event.Type {
-	case "repair_start":
+	case "repair_start", "local_repair_start":
 		return emit("status", map[string]any{"state": "repairing_response"})
 	case "delta", "repair_delta":
 		return emit(event.Type, map[string]any{

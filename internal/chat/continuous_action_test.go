@@ -59,7 +59,7 @@ func TestContinuousActionEnforcesStateWithoutClassifyingUserWords(t *testing.T) 
 				}
 				raw := fmt.Sprintf(`{%s"edits":%s,"reply":"A bounded response."}`, action, fragment)
 				provider := &layeredTestProvider{raw: raw}
-				service := Service{Provider: provider, Capabilities: &Capabilities{Motion: true, MotionMode: mode}, MotionContext: &MotionContext{Running: tc.running, Paused: tc.paused, Layered: &score, SpeedMinPercent: 10, SpeedMaxPercent: 50}}
+				service := Service{Provider: provider, SingleAttempt: true, Capabilities: &Capabilities{Motion: true, MotionMode: mode}, MotionContext: &MotionContext{Running: tc.running, Paused: tc.paused, Layered: &score, SpeedMinPercent: 10, SpeedMaxPercent: 50}}
 				message := tc.message
 				if message == "" {
 					message = "Keep the current settings."

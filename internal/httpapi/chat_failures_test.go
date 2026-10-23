@@ -16,7 +16,8 @@ import (
 func TestCreativeV2FailureRetainsRedactedOutputAndRealContract(t *testing.T) {
 	const secret = "local-fixture-private-key"
 	raw := `{"edits":[{"speed_percent":30}],"reply":"` + secret + `"}`
-	provider := &scriptedLLMProvider{responses: []string{raw}}
+	replacement := `{"edits":[{"speed_percent":35}],"reply":"Still invalid: ` + secret + `"}`
+	provider := &scriptedLLMProvider{responses: []string{raw, replacement}}
 	fake := transport.NewFake()
 	server := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: provider})
 	t.Cleanup(server.Close)
@@ -26,9 +27,10 @@ func TestCreativeV2FailureRetainsRedactedOutputAndRealContract(t *testing.T) {
 		return s
 	})
 	response := postChatStream(t, server, `{"message":"Make it slightly faster."}`)
-	if !strings.Contains(response, "action none, start or update") || len(fake.Commands()) != 0 {
-		t.Fatal("invalid action escaped validation")
+	if !strings.Contains(response, "action none, start or update") || strings.Contains(response, "event: message") || len(fake.Commands()) != 0 {
+		t.Fatal("either invalid attempt escaped validation or hid the action failure")
 	}
+	assertOnlyUserChatHistory(t, server)
 	sessionID, _ := server.chatLog.ActiveSessionID()
 	items, err := server.chatLog.Failures(t.Context(), sessionID)
 	if err != nil || len(items) != 1 || items[0].Details != nil {
@@ -55,10 +57,21 @@ func TestCreativeV2FailureRetainsRedactedOutputAndRealContract(t *testing.T) {
 	if err := json.Unmarshal([]byte(full), &retained); err != nil {
 		t.Fatal(err)
 	}
-	if retained.Details == nil || !strings.Contains(retained.Details.Raw, "[redacted]") || !strings.Contains(retained.Details.Prompt, "LIVE CHAT DECISION") || !strings.Contains(retained.Details.Schema, "action") {
-		t.Fatalf("incomplete evidence: %+v", retained)
+	assertCreativeRepairRedaction(t, retained, raw, replacement, secret)
+	if retained.Diagnostics.ProviderCalls != 2 || provider.callCount() != 2 {
+		t.Fatal("failure diagnostics lost the bounded correction count or generated another response")
 	}
-	if retained.Diagnostics.ProviderCalls != 1 || provider.callCount() != 1 {
-		t.Fatal("failure diagnostics generated another response")
+}
+
+func assertCreativeRepairRedaction(t *testing.T, retained chat.RequestFailure, raw, replacement, secret string) {
+	t.Helper()
+	if retained.Details == nil || retained.Details.Raw != strings.ReplaceAll(raw, secret, "[redacted]") ||
+		retained.Details.RepairRaw != strings.ReplaceAll(replacement, secret, "[redacted]") ||
+		!strings.Contains(retained.Details.InitialError, "action none, start or update") ||
+		!strings.Contains(retained.Details.Prompt, "LIVE CHAT DECISION") || !strings.Contains(retained.Details.Schema, "action") {
+		t.Fatalf("incomplete or unredacted correction evidence: %+v", retained)
+	}
+	if retained.Kind != "response_repair" || retained.RepairOutcome != "failed" || retained.Diagnostics.Repaired {
+		t.Fatalf("failed correction recorded as success: %+v", retained)
 	}
 }
