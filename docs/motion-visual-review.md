@@ -219,3 +219,23 @@ python scripts/render-motion-atlas.py .scratch/session-atlas.json .scratch/sessi
 The atlas shows each score's steady loop. The report's samples show each
 stretch as it was played, including where a phrase resumed. See the
 [naturalness review](motion-naturalness-review-2026-09-24.md).
+
+## Counted Layered review
+
+`TestHostedLayeredRangeComparison` and `TestHostedLayeredPhraseContinuation`
+under `liveeval` exercise real hosted coverage/count/pace proposals. Configure
+`MAGICHANDY_HOSTED_DATA_DIR` to an existing signed-in profile,
+`MAGICHANDY_LIVE_MODEL`, `MAGICHANDY_LIVE_REASONING` (`none` or `low`),
+`MAGICHANDY_LIVE_CONTEXT` and `MAGICHANDY_RANGE_SUMMARY=1`. Use an absolute
+ignored `MAGICHANDY_EXPERIMENT_CAPTURE` path. The range fixture fails on intent
+as well as generation errors. Each report retains raw proposals and failures.
+`TestHostedLayeredPhraseLiveHTTP` requires `liveeval,magichandy_labs` and uses
+None reasoning with a fake transport; its capture can be passed to the renderer
+with `--captured`.
+
+`TestPhraseHandoffVisualReview` under `magichandy_labs` exports inert shared
+transition paths when `MAGICHANDY_PHRASE_HANDOFF_OUTPUT` is an absolute ignored
+path. It covers severe narrowing at low/middle/high speeds on all three Handy
+profiles. Inspect selected-pace preservation, delayed joins and transient
+shoulders as well as endpoint/count accuracy. See the
+[October 23 evaluation](layered-range-review-2026-10-23.md).

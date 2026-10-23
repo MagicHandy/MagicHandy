@@ -10,11 +10,13 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
-// FlowSpec describes a continuous carrier and slow modulation in cycle space.
-// It does not use DynamicDefinition, span profiles, authored reversal routes,
-// or the Creative interval fitter. All values are semantic, never wire points.
+// FlowSpec describes semantic motion content: a continuous layered field or
+// an explicitly selected generated-stroke grammar. All compile through the
+// shared plan, safety fitter and sampler; values are never wire points.
 type FlowSpec struct {
 	Gesture *GestureSpec `json:"gesture,omitempty"`
+	// Phrase is an explicitly counted stroke motif inside Layered mode.
+	Phrase *FlowPhrase `json:"phrase,omitempty"`
 	// Strokes is an LLM Lab experiment; see StrokeSpec.
 	Strokes *StrokeSpec `json:"strokes,omitempty"`
 	// Freestyle is one window of the Freestyle mode's generated stream.
@@ -71,6 +73,9 @@ func DefaultFlowSpec() FlowSpec {
 // Validate rejects ambiguous or out-of-bounds scores rather than silently
 // clipping model output. Physical speed limits remain backend authoritative.
 func (s FlowSpec) Validate(settings config.MotionSettings) error {
+	if err := s.validatePhrase(); err != nil {
+		return err
+	}
 	if err := s.validateGesture(); err != nil {
 		return err
 	}
@@ -157,6 +162,9 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 	var err error
 	name := "Continuous flow"
 	switch {
+	case spec.Phrase != nil:
+		curve, err = compilePhraseCurve(spec, settings.HandyModel)
+		name = "Layered phrase"
 	case spec.Freestyle != nil:
 		curve, window, err = compileFreestyleCurve(spec, settings.HandyModel)
 		name = "Freestyle"
@@ -294,15 +302,20 @@ func (s FlowSpec) flowGeometry(u float64) (position, span, speed, pace, ceiling 
 		case "center":
 			anchor = (1-amount)*anchor + amount*wave
 		case "pace":
-			depth := 0.5 * amount
-			if layer.LowRatePercent != 0 {
-				depth = (1 - float64(layer.LowRatePercent)/100) * amount
-			}
-			pace *= 1 - depth + depth*wave
+			pace *= flowPaceFactor(layer, wave)
 		}
 	}
 	position = lo + anchor*(width-span) + span*s.carrier(u)
 	return position, span, speed, pace, ceiling
+}
+
+func flowPaceFactor(layer FlowLayer, wave float64) float64 {
+	amount := float64(layer.AmountPercent) / 100
+	depth := 0.5 * amount
+	if layer.LowRatePercent != 0 {
+		depth = (1 - float64(layer.LowRatePercent)/100) * amount
+	}
+	return 1 - depth + depth*wave
 }
 
 func (s FlowSpec) flowClock(span, speed, pace, ceiling float64, handyModel string) float64 {

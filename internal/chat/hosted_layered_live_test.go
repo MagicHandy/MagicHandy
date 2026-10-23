@@ -51,7 +51,11 @@ func hostedLayeredLiveProvider(t *testing.T) (*hostedLayeredCapture, string) {
 			t.Fatal("MAGICHANDY_LIVE_CONTEXT must be a supported conversation window: 32768, 131072 or 262144")
 		}
 	}
-	responses, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: model, PlanUsage: true, ReasoningEffort: "none", ContextSize: contextSize, Token: token, Timeout: 60 * time.Second})
+	effort := os.Getenv("MAGICHANDY_LIVE_REASONING")
+	if effort == "" {
+		effort = "none"
+	}
+	responses, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: model, PlanUsage: true, ReasoningEffort: effort, ContextSize: contextSize, Token: token, Timeout: 60 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

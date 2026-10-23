@@ -24,6 +24,12 @@ tests three possible replacements for this contract in the LLM Lab. They edit
 a stroke score whose turns are absolute slider positions, so depth no longer
 depends on a band the model must also move. Layered itself is unchanged.
 
+Update: [ADR 0052](0052-counted-layered-phrases.md) proposes a hosted-only
+counted phrase within the same engine. Explicit lower/upper pairs express exact
+counts while preserving independent pace texture. Ordinary field motion and
+the compact local contract remain unchanged; this is not an ordered-section
+player.
+
 ## Context
 
 The user's relative/layer experiment preserved motion better than ordered

@@ -9,6 +9,12 @@ import (
 // Missing composition remains compatible with unambiguous earlier responses;
 // a selected geometry still cannot be paired with competing manual shape edits.
 func normalizeHostedLayeredComposition(edits map[string]json.RawMessage) error {
+	if string(edits["composition"]) == `"phrase"` {
+		return validateHostedPhraseComposition(edits)
+	}
+	if edits["phrase"] != nil {
+		return errors.New("a counted phrase requires phrase composition")
+	}
 	geometry, hasGeometry := "", false
 	if raw, present := edits["geometry"]; present {
 		if json.Unmarshal(raw, &geometry) != nil || geometry == "" {
@@ -30,9 +36,6 @@ func normalizeHostedLayeredComposition(edits map[string]json.RawMessage) error {
 	}
 	if !hasGeometry {
 		return nil
-	}
-	if _, present := edits["stroke_width"]; present {
-		return errors.New("custom stroke width requires manual composition without geometry")
 	}
 	if err := validateHostedGeometryControls(edits, geometry); err != nil {
 		return err

@@ -31,7 +31,11 @@ func chooseNearbyStrokePhase(previous MotionPlan, target MotionTarget, settings 
 		index = max(0, sort.Search(len(next.curve.flowCycles), func(i int) bool { return next.curve.flowCycles[i] > cycle })-1)
 	}
 	best, phase := math.Inf(1), 0.0
-	for offset := -4; offset <= 4; offset++ {
+	searchRadius := 4
+	if samePhraseSlots(previous, next) {
+		searchRadius = 0
+	}
+	for offset := -searchRadius; offset <= searchRadius; offset++ {
 		slot := (index + offset%count + count) % count
 		left, right := knots[slot].TimeMillis, knots[slot+1].TimeMillis
 		for step := range 65 {

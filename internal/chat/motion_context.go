@@ -32,6 +32,8 @@ type MotionContext struct {
 	SectionCount     int
 	Layered          *motion.FlowSpec
 	Envelope         motion.PlanningEnvelope
+	// Reuse the active engine plan's summary; no extra compilation/model call.
+	CommandedSummary *motion.PerceptualSummary
 	// Autopilot reports that continuous Autopilot composes the motion between
 	// chat turns, and StandingHold that it is holding it because the human
 	// asked. Only then can live chat declare or release that wish.
@@ -98,7 +100,8 @@ Use that snapshot deliberately:
 func motionContextInstructions(context MotionContext, capabilities Capabilities, patterns []PatternChoice) string {
 	if capabilities.MotionMode == MotionModeLayered || capabilities.MotionMode == MotionModeCreativeV2 {
 		context.MotionMode = capabilities.MotionMode
-		return layeredContextInstructions(context)
+		text := layeredContextInstructions(context)
+		return text + hostedCommandedReach(context, capabilities)
 	}
 	data := normalizedPromptMotionContext(context)
 	data.MotionMode = capabilities.MotionMode

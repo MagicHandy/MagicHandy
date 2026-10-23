@@ -12,8 +12,10 @@ import (
 )
 
 // LayeredEdit describes changes to a persistent continuous score. It contains
-// no device commands, playback clock, ordered sections or turnaround shaping.
+// no device commands, playback clock or turnaround shaping. A counted phrase
+// supplies semantic turning pairs, not scheduled playback sections.
 type LayeredEdit struct {
+	Phrase       *motion.FlowPhrase         `json:"phrase,omitempty"`
 	Geometry     string                     `json:"geometry,omitempty"`
 	StrokeWidth  *LayeredStrokeWidth        `json:"stroke_width,omitempty"`
 	Controls     map[string]json.RawMessage `json:"controls,omitempty"`
@@ -114,6 +116,11 @@ func rejectLayeredNulls(raw string) error {
 			}
 		}
 	}
+	if raw, present := fields["phrase"]; present {
+		if err := validatePhraseObject(raw); err != nil {
+			return err
+		}
+	}
 	var layers []map[string]json.RawMessage
 	if value, ok := fields["layers"]; ok {
 		if err := json.Unmarshal(value, &layers); err != nil {
@@ -166,6 +173,9 @@ func ApplyLayeredEdit(edit LayeredEdit, current motion.FlowSpec, limits config.M
 		// the limit allows. Rejecting it kept the old pace after a request to
 		// slow right down. Absolute speeds stay bounded by the schema.
 		next.SpeedPercent = min(max(next.SpeedPercent, limits.SpeedMinPercent), limits.SpeedMaxPercent)
+	}
+	if err := applyLayeredPhrase(&next, edit); err != nil {
+		return current, err
 	}
 	if err := applyLayeredGeometryEdit(&next, edit); err != nil {
 		return current, err
