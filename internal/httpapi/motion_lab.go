@@ -33,7 +33,7 @@ func (s *Server) handleFlowPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	preview, err := motion.PreviewFlow(spec, settings.Motion, true)
+	preview, err := motion.PreviewFlow(spec, settings.EffectiveMotion(), true)
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, err)
 		return
@@ -51,7 +51,7 @@ func (s *Server) handleLabPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings, _ := s.store.Snapshot()
-	preview, err := motion.PreviewMotionLab(request, settings.Motion)
+	preview, err := motion.PreviewMotionLab(request, settings.EffectiveMotion())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -125,7 +125,7 @@ func (s *Server) handleMotionLabProposal(w http.ResponseWriter, r *http.Request)
 	}
 	body.Request.RangeAnchorPercent = *proposal.RangeAnchorPercent
 	body.Request.OutboundTimePercent = *proposal.OutboundTimePercent
-	preview, err := motion.PreviewMotionLab(body.Request, settings.Motion)
+	preview, err := motion.PreviewMotionLab(body.Request, settings.EffectiveMotion())
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, err)
 		return

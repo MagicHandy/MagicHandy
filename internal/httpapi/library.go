@@ -250,7 +250,7 @@ func (s *Server) playLibraryPattern(r *http.Request, target motion.MotionTarget,
 	if s.stopSequence.Load() != stopSequence {
 		return engine.Snapshot(), errors.New("pattern play was invalidated by Emergency Stop")
 	}
-	return engine.StartAtGeneration(r.Context(), target, settings.Motion, admission)
+	return engine.StartAtGeneration(r.Context(), target, settings.EffectiveMotion(), admission)
 }
 
 func (s *Server) playLibraryProgram(r *http.Request, target motion.MotionTarget, stopSequence uint64) (motion.ActiveMotionState, error) {
@@ -278,7 +278,7 @@ func (s *Server) playLibraryProgram(r *http.Request, target motion.MotionTarget,
 	if s.stopSequence.Load() != stopSequence {
 		return engine.Snapshot(), errors.New("program play was invalidated by Emergency Stop")
 	}
-	return engine.StartAtGeneration(r.Context(), target, settings.Motion, admission)
+	return engine.StartAtGeneration(r.Context(), target, settings.EffectiveMotion(), admission)
 }
 
 func (s *Server) handleLibraryFeedback(w http.ResponseWriter, r *http.Request) {

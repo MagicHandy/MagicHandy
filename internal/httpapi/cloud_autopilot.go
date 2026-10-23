@@ -139,7 +139,7 @@ func (s *Server) cloudAutopilotDecide(ctx context.Context, input modes.DecisionI
 		}
 		candidate.Pattern = &resolved
 	}
-	candidate, _ = curateAutopilotPerceptualChange(candidate, input, settings.Motion)
+	candidate, _ = curateAutopilotPerceptualChange(candidate, input, settings.EffectiveMotion())
 	candidate.Abstain = true
 	return candidate, nil
 }
@@ -147,7 +147,7 @@ func (s *Server) cloudAutopilotDecide(ctx context.Context, input modes.DecisionI
 func technicalStartingDecision(input modes.DecisionInput, settings config.Settings) modes.Decision {
 	speed := input.CurrentSpeed
 	if speed <= 0 {
-		speed = max(settings.Motion.SpeedMinPercent, min(25, settings.Motion.SpeedMaxPercent))
+		speed = max(settings.EffectiveMotion().SpeedMinPercent, min(25, settings.EffectiveMotion().SpeedMaxPercent))
 	}
 	segment := modes.Segment{PatternID: input.CurrentPatternID, Flow: motion.CloneFlowSpec(input.CurrentFlow), Dynamic: input.CurrentDynamic, SpeedPercent: speed, AreaFocus: input.CurrentAreaFocus}
 	return modes.Decision{Segment: segment, Next: modes.TimingNormal, Variability: modes.VariabilitySettled}
@@ -174,8 +174,8 @@ func technicalMotionEvidence(input modes.DecisionInput, local modes.Decision, se
 	segment.Dynamic = technicalDynamicEvidence(segment.Dynamic)
 	data := map[string]any{
 		"proposal": segment, "current_flow": input.CurrentFlow, "current_dynamic": technicalDynamicEvidence(input.CurrentDynamic),
-		"current_speed_percent": input.CurrentSpeed, "saved_limits": map[string]int{"speed_min_percent": settings.Motion.SpeedMinPercent, "speed_max_percent": settings.Motion.SpeedMaxPercent},
-		"engine_envelope": motion.CurrentPlanningEnvelope(settings.Motion), "motion_change_level": input.MotionChangeLevel,
+		"current_speed_percent": input.CurrentSpeed, "saved_limits": map[string]int{"speed_min_percent": settings.EffectiveMotion().SpeedMinPercent, "speed_max_percent": settings.EffectiveMotion().SpeedMaxPercent},
+		"engine_envelope": motion.CurrentPlanningEnvelope(settings.EffectiveMotion()), "motion_change_level": input.MotionChangeLevel,
 		"recent_speeds":         input.RecentSpeeds[max(0, len(input.RecentSpeeds)-8):],
 		"recent_position_bands": input.RecentPositionBands[max(0, len(input.RecentPositionBands)-8):],
 		"phrase_age_seconds":    input.SecondsAtCurrentPhrase, "consecutive_holds": input.ConsecutiveHolds,
@@ -216,7 +216,7 @@ func (s *Server) cloudComposedCandidate(ctx context.Context, input modes.Decisio
 	if settings.LLM.MotionGenerationMode != config.LLMMotionModeDynamic {
 		return modes.Decision{}, &llm.CloudError{Kind: "unsupported"}
 	}
-	state := s.chatMotionContext(settings.Motion, settings.LLM)
+	state := s.chatMotionContext(settings.EffectiveMotion(), settings.LLM)
 	capabilities := chatCapabilities(settings.LLM, nil)
 	raw, err := provider.StreamChat(ctx, llm.ChatRequest{Messages: []llm.Message{
 		{Role: "system", Content: "Compose one bounded semantic movement proposal from the supplied technical intent. Preserve the proposed speed and position envelope. Do not start or stop hardware, infer intimate context, or claim measured device performance. Return the supplied JSON contract. Use intent as a brief technical explanation, motion.action update or none, next normal, variability settled. Omitted values mean unchanged. Never emit device points or timestamps."},
@@ -258,7 +258,7 @@ func (s *Server) cloudPatternCandidate(ctx context.Context, input modes.Decision
 		candidate := local
 		candidate.Segment.PatternID = motion.PatternID(definition.ID)
 		candidate.Pattern = &definition
-		plan := motion.NewMotionPlan("cloud-candidate", motion.MotionTarget{PatternID: candidate.Segment.PatternID, Pattern: candidate.Pattern, SpeedPercent: candidate.Segment.SpeedPercent, AreaFocus: candidate.Segment.AreaFocus}, settings.Motion, 0, 0, time.Unix(0, 0))
+		plan := motion.NewMotionPlan("cloud-candidate", motion.MotionTarget{PatternID: candidate.Segment.PatternID, Pattern: candidate.Pattern, SpeedPercent: candidate.Segment.SpeedPercent, AreaFocus: candidate.Segment.AreaFocus}, settings.EffectiveMotion(), 0, 0, time.Unix(0, 0))
 		if plan.Perceptual.CommandedPeakVelocityPerSecond <= 0 {
 			continue
 		}

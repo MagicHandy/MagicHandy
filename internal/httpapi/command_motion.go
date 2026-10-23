@@ -25,7 +25,7 @@ func motionCommandRoute(route string) bool {
 		"/api/media/sync", "/api/media/script-offset", "/api/media/playback":
 		return true
 	}
-	return strings.HasPrefix(route, "/api/modes/") ||
+	return strings.HasPrefix(route, "/api/modes/") || strings.HasPrefix(route, "/api/settings/handys") ||
 		(strings.HasPrefix(route, "/api/library/") && strings.HasSuffix(route, "/play")) ||
 		(strings.HasPrefix(route, "/api/transport/") && (strings.HasSuffix(route, "/connect") || strings.HasSuffix(route, "/disconnect") || strings.HasSuffix(route, "/select")))
 }

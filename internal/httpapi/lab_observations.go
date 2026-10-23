@@ -94,16 +94,16 @@ func (s *Server) prepareLabObservation(body observationRequest) (labObservation,
 		return labObservation{}, errors.New("write an observation of 1 to 2000 characters")
 	}
 	settings, _ := s.store.Snapshot()
-	row := labObservation{ID: rand.Text(), CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Text: text, Source: body.Source, Settings: settings.Motion}
+	row := labObservation{ID: rand.Text(), CreatedAt: time.Now().UTC().Format(time.RFC3339Nano), Text: text, Source: body.Source, Settings: settings.EffectiveMotion()}
 	switch body.Source {
 	case "motion":
-		if body.SettingsKey != motion.LabSettingsKey(settings.Motion) {
+		if body.SettingsKey != motion.LabSettingsKey(settings.EffectiveMotion()) {
 			return labObservation{}, errors.New("saved limits changed; refresh the preview before recording an observation")
 		}
 		if body.Spec == nil || body.Method != "flow" && body.Method != "creative" && body.Method != "anchored" {
 			return labObservation{}, errors.New("select the motion preview this observation describes")
 		}
-		if err := body.Spec.Validate(settings.Motion); err != nil {
+		if err := body.Spec.Validate(settings.EffectiveMotion()); err != nil {
 			return labObservation{}, err
 		}
 		row.Spec, row.Method, row.Label = *body.Spec, body.Method, "Motion preview"

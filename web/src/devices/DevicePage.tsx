@@ -36,7 +36,9 @@ export function DevicePage({ descriptor, ctx, model }: { descriptor: DeviceDescr
 
   function remove() {
     confirmThen(t("Remove {device}? {consequence}", { device: name, consequence: descriptor.removeNote() }), { confirmLabel: t("Remove {device}", { device: name }), destructive: true }, () => {
-      void ctx.run(descriptor.id, "remove", async () => { await api.changeDeviceConnection(descriptor.id, "remove"); }).then((removed) => {
+      void ctx.run(descriptor.id, "remove", async () => {
+        await (descriptor.remove ? descriptor.remove() : api.changeDeviceConnection(descriptor.id, "remove"));
+      }).then((removed) => {
         if (removed) window.location.hash = "#/settings/devices";
       });
     });
@@ -51,7 +53,7 @@ export function DevicePage({ descriptor, ctx, model }: { descriptor: DeviceDescr
         <span className="device-glyph-tile device-glyph-tile-page" aria-hidden="true"><descriptor.Glyph /></span>
         <div className="device-page-title">
           <h2>{name}</h2>
-          <DeviceStatusLine model={model} />
+          <DeviceStatusLine model={model} extra={model.inPlayback ? undefined : t("not in playback")} />
         </div>
         {action && <DeviceActionButton action={action} model={model} size="md" />}
       </div>

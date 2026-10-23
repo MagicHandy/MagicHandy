@@ -313,6 +313,17 @@ func (t *CloudRESTTransport) AppendPoints(ctx context.Context, command AppendPoi
 
 // Play starts or resumes timed-point playback through Cloud REST HSP.
 func (t *CloudRESTTransport) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
+	return t.playAt(ctx, command, time.Time{})
+}
+
+// PlayAligned joins the linked stream's elapsed time after this connection's
+// clock refresh. This avoids accumulating a full setup round trip of phase lag
+// per Cloud companion; physical simultaneity is still an estimate.
+func (t *CloudRESTTransport) PlayAligned(ctx context.Context, command PlayCommand, start time.Time) (CommandResult, error) {
+	return t.playAt(ctx, command, start)
+}
+
+func (t *CloudRESTTransport) playAt(ctx context.Context, command PlayCommand, origin time.Time) (CommandResult, error) {
 	admission, err := t.motionGate.admit()
 	if err != nil {
 		return t.recordBuildError(CommandKindPointsPlay, err), err
@@ -331,6 +342,9 @@ func (t *CloudRESTTransport) Play(ctx context.Context, command PlayCommand) (Com
 	command.ServerTimeMillis = 0
 	if serverTime, ok := t.estimatedServerTimeMillisLocked(ctx); ok {
 		command.ServerTimeMillis = serverTime
+	}
+	if !origin.IsZero() {
+		command.StartTimeMillis = max(command.StartTimeMillis, time.Since(origin).Milliseconds())
 	}
 	if err := t.motionGate.validate(admission); err != nil {
 		return t.recordBuildError(CommandKindPointsPlay, err), err

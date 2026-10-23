@@ -7,7 +7,7 @@ import type { IntifaceTransportSnapshot, VibrationSettings } from "./intiface-ty
 import type { SetupAssessment } from "./setup-assessment-types";
 import type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { CoyoteTransportSnapshot, EstimSettings } from "./coyote-types";
-export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceId, DeviceOptionsPatch, DeviceOutput, EstimSettings } from "./coyote-types";
+export type { CoyoteStatus, CoyoteTransportSnapshot, DeviceId, DeviceKind, DeviceOptionsPatch, DeviceOutput, EstimSettings, HandyInstanceId } from "./coyote-types";
 export type { IntifaceLinearActuator, IntifaceScalarActuator, IntifaceDevice, IntifaceDispatchStatus, IntifaceTransportSnapshot, IntifaceVibratorMotor, IntifaceVibratorStatus, VibrationSettings } from "./intiface-types";
 export type { FreestyleSettings, FreestyleStatus } from "./freestyle-types";
 import type { AccountCapabilities } from "./access-types";
@@ -1424,6 +1424,7 @@ export interface AppState {
   intiface_transport?: IntifaceTransportSnapshot;
   coyote_transport?: CoyoteTransportSnapshot;
   native_bluetooth_transport?: import("./native-bluetooth-types").NativeBluetoothSnapshot;
+  handy_connections?: import("./handy-types").HandyConnectionState[];
   trace?: Record<string, unknown>;
 }
 

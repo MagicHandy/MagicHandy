@@ -788,3 +788,16 @@ Removing the last device is valid and leaves chat-only use. Settings > Devices
 going on healthy devices). A degraded linked run shows one notice and marks the
 device it left as Connection lost; reconnecting never silently rejoins a run.
 Emergency Stop remains unconditional and reaches every output.
+
+
+### Multiple Handys
+
+The device panel and Settings > Devices render named instances from the backend.
+Keep Add Handy available while inventory capacity remains. Each page owns only
+its name, model and connection setup; shared motion limits stay in the panel.
+Show connection and playback participation separately, including when excluded.
+All Intiface leases belong to the one shared connection row. Native discovery
+presents opaque choices by signal strength and disables devices already reserved
+by another Handy. Keep the primary Browser Bluetooth limitation explicit at the
+additional-method choice. Do not promise physical synchronization. See
+[ADR 0054](decisions/0054-named-handy-connections.md).

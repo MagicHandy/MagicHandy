@@ -81,6 +81,21 @@ func NewLinkedSession(participants []LinkedParticipant, continueHealthy bool) Tr
 	return fanOut
 }
 
+// MotionStartupParticipants lets the shared engine position each physical
+// slider from its own telemetry. A primary's lead-in is never broadcast to
+// another slider that may be resting at a different position.
+func (f *FanOut) MotionStartupParticipants() []LinkedParticipant {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	result := make([]LinkedParticipant, 0, len(f.participants))
+	for i, p := range f.participants {
+		if !f.retired[i] {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
 func (f *fanOutWithStartup) ReadMotionStartupState(ctx context.Context) (MotionStartupState, MotionStartupStateResults, error) {
 	state, results, err := f.startup.ReadMotionStartupState(ctx)
 	if err != nil {
@@ -134,40 +149,113 @@ func (f *FanOut) Stop(ctx context.Context, command StopCommand) (CommandResult, 
 
 // SetStrokeWindow applies the shared stroke window to each active participant.
 func (f *FanOut) SetStrokeWindow(ctx context.Context, command StrokeWindowCommand) (CommandResult, error) {
-	return f.dispatch(ctx, func(_ int, t Transport) (CommandResult, error) { return t.SetStrokeWindow(ctx, command) })
+	return f.dispatchParallel(ctx, func(t Transport) (CommandResult, error) { return t.SetStrokeWindow(ctx, command) })
 }
 
 // AppendPoints sends the shared engine's points to each active participant.
 func (f *FanOut) AppendPoints(ctx context.Context, command AppendPointsCommand) (CommandResult, error) {
-	return f.dispatch(ctx, func(_ int, t Transport) (CommandResult, error) { return t.AppendPoints(ctx, command) })
+	return f.dispatchParallel(ctx, func(t Transport) (CommandResult, error) { return t.AppendPoints(ctx, command) })
 }
 
-// Play starts the clock participant first, then starts every companion on
-// its playback origin before any companion output is enabled.
-func (f *FanOut) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
-	var clockStart time.Time
-	clock := -1
-	result, err := f.dispatch(ctx, func(index int, t Transport) (CommandResult, error) {
-		if clock < 0 {
-			next, err := t.Play(ctx, command)
-			if err != nil {
-				// A retired clock hands the clock to the next participant.
-				return next, err
-			}
-			clock = index
-			if provider, ok := t.(PlaybackStartTimeProvider); ok {
-				clockStart = provider.PlaybackStartTime()
-			}
-			return next, nil
+// Independent device I/O shares the same frame and runs concurrently, so each
+// extra Cloud device does not add another round trip to every append. All writes
+// finish before rollback/return; no detached command can outlive this operation.
+func (f *FanOut) dispatchParallel(ctx context.Context, send func(Transport) (CommandResult, error)) (CommandResult, error) {
+	started := time.Now()
+	f.mu.Lock()
+	fault, retired := f.fault, append([]bool(nil), f.retired...)
+	f.mu.Unlock()
+	if fault != nil {
+		return CommandResult{}, fault
+	}
+	results := make([]CommandResult, len(f.participants))
+	errs := make([]error, len(f.participants))
+	var wait sync.WaitGroup
+	for index, p := range f.participants {
+		if retired[index] {
+			continue
 		}
-		return playCompanion(ctx, t, command, clockStart)
-	})
-	if err != nil {
-		return result, err
+		wait.Add(1)
+		go func(index int, owner Transport) { defer wait.Done(); results[index], errs[index] = send(owner) }(index, p.Transport)
+	}
+	wait.Wait()
+	var result CommandResult
+	var latency int64
+	for index, p := range f.participants {
+		if retired[index] {
+			continue
+		}
+		if err := errs[index]; err != nil {
+			if f.retire(ctx, index, err) {
+				continue
+			}
+			return results[index], f.failedCommand(ctx, p.Label, err)
+		}
+		latency = max(latency, results[index].LatencyMillis)
+		if !result.OK {
+			result = results[index]
+		}
+	}
+	result.LatencyMillis = max(result.LatencyMillis, latency, time.Since(started).Milliseconds())
+	return result, nil
+}
+
+// Play establishes one clock, then starts the companions concurrently at its
+// current position. All starts drain before failure rollback or return.
+func (f *FanOut) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
+	started := time.Now()
+	f.mu.Lock()
+	fault, retired := f.fault, append([]bool(nil), f.retired...)
+	f.mu.Unlock()
+	if fault != nil {
+		return CommandResult{}, fault
+	}
+	clock := -1
+	var result CommandResult
+	for index, p := range f.participants {
+		if retired[index] {
+			continue
+		}
+		next, err := p.Transport.Play(ctx, command)
+		if err != nil {
+			if f.retire(ctx, index, err) {
+				retired[index] = true
+				continue
+			}
+			return next, f.failedCommand(ctx, p.Label, err)
+		}
+		clock, result = index, next
+		break
+	}
+	if clock < 0 {
+		return CommandResult{}, errors.New("no linked device can start")
+	}
+	var origin time.Time
+	if provider, ok := f.participants[clock].Transport.(PlaybackStartTimeProvider); ok {
+		origin = provider.PlaybackStartTime()
+	}
+	errs := make([]error, len(f.participants))
+	var wait sync.WaitGroup
+	for index, p := range f.participants {
+		if index == clock || retired[index] {
+			continue
+		}
+		wait.Add(1)
+		go func(index int, owner Transport) {
+			defer wait.Done()
+			_, errs[index] = playCompanion(ctx, owner, command, origin)
+		}(index, p.Transport)
+	}
+	wait.Wait()
+	for index, err := range errs {
+		if err != nil && !f.retire(ctx, index, err) {
+			return result, f.failedCommand(ctx, f.participants[index].Label, err)
+		}
 	}
 	f.mu.Lock()
 	f.playing = true
 	f.mu.Unlock()
+	result.LatencyMillis = max(result.LatencyMillis, time.Since(started).Milliseconds())
 	return result, nil
 }
 
@@ -182,32 +270,6 @@ func playCompanion(ctx context.Context, companion Transport, command PlayCommand
 		}
 	}
 	return result, err
-}
-
-func (f *FanOut) dispatch(ctx context.Context, send func(int, Transport) (CommandResult, error)) (CommandResult, error) {
-	f.mu.Lock()
-	fault, retired := f.fault, append([]bool(nil), f.retired...)
-	f.mu.Unlock()
-	if fault != nil {
-		return CommandResult{}, fault
-	}
-	var result CommandResult
-	for index, participant := range f.participants {
-		if retired[index] {
-			continue
-		}
-		next, err := send(index, participant.Transport)
-		if err != nil {
-			if f.retire(ctx, index, err) {
-				continue
-			}
-			return next, f.failedCommand(ctx, participant.Label, err)
-		}
-		if !result.OK {
-			result = next
-		}
-	}
-	return result, nil
 }
 
 // retire only applies to an established run with the explicit continue
@@ -279,8 +341,10 @@ func (f *FanOut) latch(participant string, err error) {
 func (f *FanOut) Diagnostics() TransportDiagnostics {
 	states := make([]TransportDiagnostics, len(f.participants))
 	stopping := false
+	var latency int64
 	for index, participant := range f.participants {
 		states[index] = participant.Transport.Diagnostics()
+		latency = max(latency, states[index].LastLatencyMillis)
 		stopping = stopping || index > 0 && states[index].PlaybackState == "stopping"
 	}
 	f.mu.Lock()
@@ -320,6 +384,7 @@ func (f *FanOut) Diagnostics() TransportDiagnostics {
 	if reported >= 0 {
 		result = states[reported]
 	}
+	result.LastLatencyMillis = latency
 	result.Connected = connected
 	if f.fault != nil {
 		result.PlaybackState = "stale"
@@ -351,14 +416,21 @@ func (f *FanOut) MotionTimingCapabilities() MotionTimingCapabilities {
 	return result
 }
 
-// MotionSamplingCapabilities follows the clock participant's encoding limits.
+// MotionSamplingCapabilities honors every participant's encoding limits.
 func (f *FanOut) MotionSamplingCapabilities() MotionSamplingCapabilities {
-	if len(f.participants) > 0 {
-		if provider, ok := f.participants[0].Transport.(MotionSamplingCapabilitiesProvider); ok {
-			return provider.MotionSamplingCapabilities()
+	var result MotionSamplingCapabilities
+	for _, p := range f.participants {
+		if provider, ok := p.Transport.(MotionSamplingCapabilitiesProvider); ok {
+			c := provider.MotionSamplingCapabilities()
+			result.PositionResolutionPercent = max(result.PositionResolutionPercent, c.PositionResolutionPercent)
+			result.ResolutionAfterStrokeWindow = result.ResolutionAfterStrokeWindow || c.ResolutionAfterStrokeWindow
+			if c.MaximumPointsPerAppend > 0 && (result.MaximumPointsPerAppend == 0 || c.MaximumPointsPerAppend < result.MaximumPointsPerAppend) {
+				result.MaximumPointsPerAppend = c.MaximumPointsPerAppend
+			}
+			result.PreferredPointInterval = max(result.PreferredPointInterval, c.PreferredPointInterval)
 		}
 	}
-	return MotionSamplingCapabilities{}
+	return result
 }
 
 // PlaybackStartTime follows the clock participant only. A companion's own

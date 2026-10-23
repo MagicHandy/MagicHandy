@@ -92,7 +92,7 @@ func (s *Server) testRunView(run labTestRun) labTestRunView {
 		return view
 	}
 	settings, _ := s.store.Snapshot()
-	if motion.LabSettingsKey(settings.Motion) != step.Preview.SettingsKey {
+	if motion.LabSettingsKey(settings.EffectiveMotion()) != step.Preview.SettingsKey {
 		view.Warning = "Saved limits changed. You can review the captured result, or create a new sequence to audition with current limits."
 		return view
 	}

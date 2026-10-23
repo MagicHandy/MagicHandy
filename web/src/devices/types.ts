@@ -10,9 +10,14 @@ import type {
   IntifaceTransportSnapshot,
   PublicSettings,
 } from "../api/types";
+import type { HandyConnectionState } from "../api/handy-types";
 import type { NativeBluetoothSnapshot } from "../api/native-bluetooth-types";
 import type { BluetoothBridgeState } from "../components/BluetoothBridge";
 import type { DeviceGlyph } from "./glyphs";
+
+/** What a request in flight is tracked by: the device it is for, or another
+ * Handy being added, which has no ID until the backend returns one. */
+export type DeviceRequestKey = DeviceId | "new_handy";
 
 /** One word per state, with its dot (Device kit, Status words). */
 export type DeviceStatusWord = "playing" | "connected" | "connecting" | "not_connected" | "needs_setup" | "lost";
@@ -94,17 +99,21 @@ export interface DeviceContext {
   intiface: IntifaceTransportSnapshot;
   coyote?: CoyoteTransportSnapshot;
   native?: NativeBluetoothSnapshot;
+  /** The additional Handys' links, one per instance. */
+  handys: HandyConnectionState[];
   bluetooth: BluetoothBridgeState;
-  busy: Partial<Record<DeviceId, string>>;
-  failed: Partial<Record<DeviceId, boolean>>;
+  busy: Partial<Record<DeviceRequestKey, string>>;
+  failed: Partial<Record<DeviceRequestKey, boolean>>;
   /** Runs a device request with busy state, a toast on failure and a
    * refresh. A request that resolves to text shows it as the success toast. */
-  run: (device: DeviceId, action: string, request: () => Promise<string | void>) => Promise<boolean>;
+  run: (device: DeviceRequestKey, action: string, request: () => Promise<string | void>) => Promise<boolean>;
   /** Sends a live step (strength, intensity) without busy state or refresh. */
   send: (request: () => Promise<unknown>) => void;
   setFailed: (device: DeviceId, failed: boolean) => void;
   setCoyote: (snapshot: CoyoteTransportSnapshot) => void;
   setIntiface: (snapshot: IntifaceTransportSnapshot) => void;
+  /** Applies one additional Handy's link from a connection reply. */
+  setHandy: (snapshot: HandyConnectionState) => void;
   browserBluetooth: { connect: () => void; disconnect: () => void };
 }
 
@@ -129,6 +138,8 @@ export interface DeviceDescriptor {
   /** The device page, top to bottom; Remove follows the last section. */
   sections: DevicePageSection[];
   removeNote: () => string;
+  /** Removes the saved device; without it, the shared device removal. */
+  remove?: () => Promise<unknown>;
   /** A timing offset, under Settings > Devices > Playback. */
   timing?: { value: (settings: PublicSettings) => number; patch: (ms: number) => DeviceOptionsPatch };
   /** The shared connection this device reaches its hardware through. */

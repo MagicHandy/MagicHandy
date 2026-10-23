@@ -264,7 +264,7 @@ func (m *mediaSyncRuntime) arm(ctx context.Context, event mediaSyncEvent, stopSe
 		MediaID: timeline.ID,
 		Media:   &timeline,
 	}
-	state, err := engine.StartAtGeneration(ctx, target, settings.Motion, admission)
+	state, err := engine.StartAtGeneration(ctx, target, settings.EffectiveMotion(), admission)
 	if err != nil {
 		return m.setError(event, err), err
 	}

@@ -318,10 +318,10 @@ func (s *Server) modelCheckService(ctx context.Context, provider llm.Provider, s
 		return chat.Service{}, err
 	}
 	stopped := chat.MotionContext{
-		SpeedMinPercent: settings.Motion.SpeedMinPercent,
-		SpeedMaxPercent: settings.Motion.SpeedMaxPercent,
+		SpeedMinPercent: settings.EffectiveMotion().SpeedMinPercent,
+		SpeedMaxPercent: settings.EffectiveMotion().SpeedMaxPercent,
 		MotionMode:      chatMotionMode(settings.LLM.MotionGenerationMode),
-		Envelope:        motion.CurrentPlanningEnvelope(settings.Motion),
+		Envelope:        motion.CurrentPlanningEnvelope(settings.EffectiveMotion()),
 	}
 	return chat.Service{
 		Provider:              provider,

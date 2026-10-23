@@ -734,6 +734,7 @@ func (s Settings) Public() PublicSettings {
 			ShowSupersededOriginals:     s.Media.ShowSupersededOriginals,
 		},
 		Device: PublicDeviceSettings{
+			HandyConnections:         s.Device.publicHandyConnections(),
 			ConfiguredDevices:        s.Device.configuredSnapshot(),
 			PlaybackDevices:          s.Device.playbackSnapshot(),
 			LinkedFailurePolicy:      s.Device.LinkedFailurePolicy,
@@ -1335,6 +1336,10 @@ func validateIntifaceServerAddress(address string) error {
 }
 
 func cloneSettings(settings Settings) Settings {
+	settings.Device.HandyConnections = append([]HandyConnection(nil), settings.Device.HandyConnections...)
+	if settings.Device.PlaybackDevices != nil {
+		settings.Device.PlaybackDevices = append([]string{}, settings.Device.PlaybackDevices...)
+	}
 	if settings.LLM.HostedResponseRepairEnabled != nil {
 		enabled := *settings.LLM.HostedResponseRepairEnabled
 		settings.LLM.HostedResponseRepairEnabled = &enabled

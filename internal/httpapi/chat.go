@@ -708,7 +708,7 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 		}
 		settings, _ := s.store.Snapshot()
 		state, startErr := s.applyChatTargetHandoff(target, func() (motion.ActiveMotionState, error) {
-			return engine.StartAtGeneration(ctx, target, settings.Motion, admission)
+			return engine.StartAtGeneration(ctx, target, settings.EffectiveMotion(), admission)
 		})
 		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, startErr
 	case chat.MotionActionTarget, chat.MotionActionUpdate:
@@ -962,7 +962,7 @@ func (s *Server) writeChatStorageError(w http.ResponseWriter, err error) {
 func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.ActiveMotionState) (motion.MotionTarget, error) {
 	if command.Layered != nil {
 		settings, _ := s.store.Snapshot()
-		target, err := motion.FlowTarget(*command.Layered, settings.Motion)
+		target, err := motion.FlowTarget(*command.Layered, settings.EffectiveMotion())
 		target.Label, target.Source = "Layered", "chat"
 		if command.Layered.Gesture != nil {
 			target.Label = "Creative v2"

@@ -288,3 +288,12 @@ shared	GET /api/transport/native-bluetooth/status
 host	POST /api/transport/native-bluetooth/connect
 host	POST /api/transport/native-bluetooth/disconnect
 host	POST /api/transport/native-bluetooth/forget
+host	POST /api/settings/handys
+host	PATCH /api/settings/handys/{id}
+host	DELETE /api/settings/handys/{id}
+shared	GET /api/transport/handys
+host	POST /api/transport/handys/{id}/connect
+host	POST /api/transport/handys/{id}/disconnect
+host	POST /api/transport/handys/{id}/discover
+host	POST /api/transport/handys/{id}/select
+host	POST /api/transport/handys/{id}/forget

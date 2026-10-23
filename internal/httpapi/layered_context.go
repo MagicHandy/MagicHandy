@@ -17,7 +17,7 @@ func (s *Server) contextualChatMotion(settings config.Settings, requests []chat.
 // contextualChatMotionAt measures the human lines' ages at asOf. A prepared
 // Autopilot decision takes effect at its stretch's end, so it reads them there.
 func (s *Server) contextualChatMotionAt(settings config.Settings, requests []chat.RecentUserRequest, asOf time.Time) chat.MotionContext {
-	state := s.chatMotionContext(settings.Motion, settings.LLM)
+	state := s.chatMotionContext(settings.EffectiveMotion(), settings.LLM)
 	state.UserRequests, state.UserRequestSecondsAgo = chat.UserRequestTimeline(requests, asOf)
 	return state
 }
@@ -39,5 +39,5 @@ func mapContinuousAutopilotCommand(command *chat.MotionCommand, settings config.
 	if command.Layered != nil && ((command.Layered.Gesture != nil) != (settings.LLM.MotionGenerationMode == config.LLMMotionModeCreativeV2)) {
 		return modes.Decision{}, errors.New("continuous motion mode changed during Autopilot generation")
 	}
-	return mapLayeredAutopilotCommand(command, settings.Motion, say, next)
+	return mapLayeredAutopilotCommand(command, settings.EffectiveMotion(), say, next)
 }

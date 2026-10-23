@@ -5,8 +5,14 @@
 /** Legacy participation: older backends report only the Handy and a Coyote. */
 export type DeviceOutput = "none" | "handy" | "coyote" | "handy_coyote";
 
+/** The device kinds. The Coyote and the vibrator are saved at most once. */
+export type DeviceKind = "handy" | "coyote" | "vibrator";
+
+/** An additional Handy's opaque backend ID; the primary Handy stays "handy". */
+export type HandyInstanceId = `handy-${string}`;
+
 /** A saved device, in run-clock order: the first playing device sets the clock. */
-export type DeviceId = "handy" | "coyote" | "vibrator";
+export type DeviceId = DeviceKind | HandyInstanceId;
 
 /** Coyote settings. Ceilings are written to the device on every connection. */
 export interface EstimSettings {
@@ -65,6 +71,8 @@ export interface PublicDeviceSettings {
     output?: DeviceOutput;
     configured_devices?: DeviceId[];
     linked_failure_policy?: "stop_all" | "continue_healthy";
+    /** Additional Handys beside the primary one; absent from older backends. */
+    handy_connections?: import("./handy-types").HandyConnection[];
     hsp_dispatch_owner: string;
     intiface_server_address: string;
     firmware_api_requirement: string;

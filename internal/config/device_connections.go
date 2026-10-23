@@ -68,12 +68,19 @@ func configuredFromOutput(output string) []string {
 func canonicalDevices(devices []string) []string {
 	ordered := make([]string, 0, len(devices))
 	for _, known := range knownDevices {
+		if known == DeviceOutputCoyote {
+			for _, device := range devices {
+				if IsHandyConnectionID(device) {
+					ordered = append(ordered, device)
+				}
+			}
+		}
 		if slices.Contains(devices, known) {
 			ordered = append(ordered, known)
 		}
 	}
 	for _, device := range devices {
-		if !slices.Contains(knownDevices, device) {
+		if !slices.Contains(knownDevices, device) && !IsHandyConnectionID(device) {
 			ordered = append(ordered, device)
 		}
 	}
@@ -142,10 +149,14 @@ func (d DeviceSettings) WithPlaybackOutput(output string) DeviceSettings {
 // ChangeConnection applies one inventory or participation edit atomically.
 // Adding never includes a device in playback; removing also excludes it.
 func (d DeviceSettings) ChangeConnection(device, action string) (DeviceSettings, error) {
-	if !slices.Contains(knownDevices, device) {
+	_, namedHandy := d.HandyConnection(device)
+	if !slices.Contains(knownDevices, device) && !namedHandy {
 		return d, fmt.Errorf("unknown device %q", device)
 	}
 	d = d.materialized()
+	if namedHandy && (action == "add" || action == "remove") {
+		return d, fmt.Errorf("use the named Handy settings to add or remove it")
+	}
 	playback := d.PlaybackDevices
 	switch action {
 	case "add":
@@ -189,6 +200,9 @@ func normalizeDeviceParticipation(d DeviceSettings, defaultOutput string) Device
 }
 
 func validateDeviceConnections(d DeviceSettings) error {
+	if err := validateHandyConnections(d); err != nil {
+		return err
+	}
 	if d.LinkedFailurePolicy != LinkedFailureStopAll && d.LinkedFailurePolicy != LinkedFailureContinueHealthy {
 		return fmt.Errorf("unknown linked failure policy %q", d.LinkedFailurePolicy)
 	}
@@ -212,7 +226,7 @@ func validateDeviceConnections(d DeviceSettings) error {
 func validateDeviceList(kind string, devices []string) error {
 	seen := map[string]bool{}
 	for _, device := range devices {
-		if !slices.Contains(knownDevices, device) || seen[device] {
+		if (!slices.Contains(knownDevices, device) && !IsHandyConnectionID(device)) || seen[device] {
 			return fmt.Errorf("invalid or duplicate %s %q", kind, device)
 		}
 		seen[device] = true

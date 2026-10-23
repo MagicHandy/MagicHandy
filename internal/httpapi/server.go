@@ -112,6 +112,7 @@ type Server struct {
 	intiface            intifaceRuntime
 	coyote              coyoteRuntime
 	nativeBluetooth     nativeBluetoothRuntime
+	handys              handyConnectionsRuntime
 	motion              motionRuntime
 	lab                 llmLabRuntime
 	// autopilotHold remembers a human's standing wish to keep continuous motion.
@@ -450,6 +451,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	s.intifaceRoutes(mux)
 	s.coyoteRoutes(mux)
 	s.nativeBluetoothRoutes(mux)
+	s.handyConnectionRoutes(mux)
 	mux.HandleFunc("GET /api/motion/state", s.handleMotionState)
 	mux.HandleFunc("GET /api/motion/events", s.handleMotionEvents)
 	s.motionLabRoutes(mux)
@@ -677,6 +679,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		"intiface_transport":         s.clientIntifaceSnapshot(r),
 		"coyote_transport":           s.clientCoyoteSnapshot(r),
 		"native_bluetooth_transport": s.nativeBluetoothSnapshot(),
+		"handy_connections":          s.handyConnectionSnapshots(),
 		"trace":                      s.traces.Summary(),
 	})
 }

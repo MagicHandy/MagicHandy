@@ -5,7 +5,7 @@ import { t, translateKnown } from "../i18n";
 // backend-offline clients with a visible reason.
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import { playbackDevices } from "../api/devices";
+import { isHandy, playbackDevices } from "../api/devices";
 import type { HandyModel, MotionSettings } from "../api/types";
 import { RangeSlider } from "./RangeSlider";
 import { SegmentedChoice } from "./SetpointControls";
@@ -13,7 +13,7 @@ import { useAppState, useToast } from "../state/app-state";
 import { useApplicationAudience } from "../state/application-audience";
 
 const STYLES = ["gentle", "balanced", "intense"] as const;
-const DEFAULT_HANDY_MODELS: HandyModel[] = ["handy_original", "handy_2_standard", "handy_2_pro"];
+export const DEFAULT_HANDY_MODELS: HandyModel[] = ["handy_original", "handy_2_standard", "handy_2_pro"];
 type QuickPatch = Parameters<typeof api.applyQuick>[0];
 type QuickKey = keyof QuickPatch;
 
@@ -116,10 +116,11 @@ export function QuickSettings({ section = "all" }: QuickSettingsProps) {
 
   if (!vals) return <p className="form-status">{t("Loading…")}</p>;
 
-  // Without the Handy in playback, only Speed still matters: it sets the pace
-  // the other devices follow. The stroke window is Handy-only. Calibration
-  // lives on the Handy's own page, so it shows whether or not it plays.
-  const handyShown = playbackDevices(state?.settings?.device).includes("handy");
+  // Without a Handy in playback, only Speed still matters: it sets the pace
+  // the other devices follow. The stroke window is for every Handy that
+  // plays. Calibration lives on the Handy's own page, so it shows whether or
+  // not it plays.
+  const handyShown = playbackDevices(state?.settings?.device).some(isHandy);
   const calibration = section === "calibration";
   const showLimits = section === "all" || section === "limits";
   const showDirection = calibration || (handyShown && section === "all");

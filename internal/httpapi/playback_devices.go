@@ -57,7 +57,7 @@ func (s *Server) engineOwnerKey(device config.DeviceSettings) string {
 	if device.Plays(config.DeviceVibrator) {
 		owner += s.vibratorEngineSuffix()
 	}
-	return owner
+	return owner + s.namedHandyOwnerSuffix(device)
 }
 
 // engineOwnerPlays reports whether the engine built for owner drives device.
@@ -82,7 +82,11 @@ func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
 		if err != nil {
 			return nil, err
 		}
-		participants[index] = transport.LinkedParticipant{ID: devices[index], Label: deviceLabel(devices[index]), Transport: owner}
+		label := deviceLabel(devices[index])
+		if c, ok := settings.Device.HandyConnection(devices[index]); ok {
+			label = c.Name
+		}
+		participants[index] = transport.LinkedParticipant{ID: devices[index], Label: label, Transport: owner}
 	}
 	if len(participants) == 1 {
 		return participants[0].Transport, nil
@@ -91,6 +95,9 @@ func (s *Server) newSelectedMotionTransport() (transport.Transport, error) {
 }
 
 func (s *Server) playbackDeviceTransport(settings config.Settings, device string) (transport.Transport, error) {
+	if config.IsHandyConnectionID(device) {
+		return s.namedHandyTransport(device)
+	}
 	switch device {
 	case config.DeviceOutputHandy:
 		return s.newHandyMotionTransport(settings)
@@ -108,12 +115,22 @@ func (s *Server) playbackDeviceTransport(settings config.Settings, device string
 func (s *Server) newSelectedStopTransport() (transport.Transport, error) {
 	settings, _ := s.store.Snapshot()
 	var participants []transport.LinkedParticipant
-	if settings.Device.HasDevice(config.DeviceOutputHandy) {
+	var buildErr error
+	// An excluded Cloud placeholder with no key has never acquired a device.
+	// It must not turn another device's confirmed Stop into a setup failure.
+	primaryReachable := settings.Device.Plays(config.DeviceOutputHandy) || s.motion.transport != nil || settings.Device.HSPDispatchOwner != config.DispatchOwnerCloudREST || settings.Device.HandyConnectionKey != ""
+	if settings.Device.HasDevice(config.DeviceOutputHandy) && primaryReachable {
 		handy, err := s.newHandyStopTransport(settings)
 		if err != nil {
-			return nil, err
+			buildErr = errors.Join(buildErr, err)
+		} else {
+			participants = append(participants, transport.LinkedParticipant{ID: config.DeviceOutputHandy, Label: deviceLabel(config.DeviceOutputHandy), Transport: handy})
 		}
-		participants = append(participants, transport.LinkedParticipant{ID: config.DeviceOutputHandy, Label: deviceLabel(config.DeviceOutputHandy), Transport: handy})
+	}
+	for _, c := range settings.Device.HandyConnections {
+		if owner, _ := s.handyEntry(c.ID).current(); owner != nil {
+			participants = append(participants, transport.LinkedParticipant{ID: c.ID, Label: c.Name, Transport: owner})
+		}
 	}
 	if settings.Device.HasDevice(config.DeviceOutputCoyote) {
 		participants = append(participants, transport.LinkedParticipant{ID: config.DeviceOutputCoyote, Label: deviceLabel(config.DeviceOutputCoyote), Transport: s.coyote.owner})
@@ -123,10 +140,10 @@ func (s *Server) newSelectedStopTransport() (transport.Transport, error) {
 	}
 	switch len(participants) {
 	case 0:
-		return nil, nil
+		return nil, buildErr
 	case 1:
-		return participants[0].Transport, nil
+		return participants[0].Transport, buildErr
 	default:
-		return transport.NewLinkedSession(participants, false), nil
+		return transport.NewLinkedSession(participants, false), buildErr
 	}
 }

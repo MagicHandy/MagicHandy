@@ -121,6 +121,12 @@ type MotionStartupStateProvider interface {
 	ReadMotionStartupState(context.Context) (MotionStartupState, MotionStartupStateResults, error)
 }
 
+// MotionStartupParticipantsProvider exposes individual owners only for the
+// engine's existing startup sequence; ordinary playback uses the linked owner.
+type MotionStartupParticipantsProvider interface {
+	MotionStartupParticipants() []LinkedParticipant
+}
+
 // TimedPoint is a single transport-neutral timed point. Position is expressed as 0..100.
 type TimedPoint struct {
 	PositionPercent float64 `json:"position_percent"`
