@@ -10,6 +10,9 @@ func (s *Server) chatRepairCancellationOutcome(ctx context.Context, stop uint64,
 	if s.stopSequence.Load() != stop {
 		return "stopped"
 	}
+	if errors.Is(context.Cause(ctx), errLLMSettingsChanged) || errors.Is(failure, errLLMSettingsChanged) || errors.Is(failure, errChatRepairStale) {
+		return "stale"
+	}
 	if ctx.Err() != nil {
 		return "canceled"
 	}
@@ -28,10 +31,11 @@ func (s *Server) emitChatCancellationAt(ctx context.Context, stop uint64, emit s
 		if outcome == "stale" || outcome == "canceled" {
 			message := errChatRepairStale.Error()
 			if outcome == "canceled" {
-				message = "Response repair canceled."
+				message = s.chatInterruptionMessage(ctx, stop, context.Canceled)
 			}
 			payload := map[string]string{"message": message}
 			if replyRetained {
+				payload["message"] = chatPostReplyInterruptedMessage
 				payload["reply_retained"] = "true"
 			}
 			_ = emit("error", payload)
@@ -39,11 +43,21 @@ func (s *Server) emitChatCancellationAt(ctx context.Context, stop uint64, emit s
 			return
 		}
 	}
-	if replyRetained {
-		emitChatPostReplyCancellation(emit)
-	} else {
-		emitChatCancellation(emit)
+	if s.stopSequence.Load() != stop {
+		if replyRetained {
+			emitChatPostReplyCancellation(emit)
+		} else {
+			emitChatCancellation(emit)
+		}
+		return
 	}
+	message := s.chatInterruptionMessage(ctx, stop, context.Canceled)
+	payload := map[string]string{"message": message}
+	if replyRetained {
+		payload["message"], payload["reply_retained"] = chatPostReplyInterruptedMessage, "true"
+	}
+	_ = emit("error", payload)
+	_ = emit("done", map[string]any{"ok": false})
 }
 
 func (s *Server) recordLateRepairCancellation(ctx context.Context, candidate *chatRepairCandidate, outcome string) {

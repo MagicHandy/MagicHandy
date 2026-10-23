@@ -117,6 +117,29 @@ describe("chat response repair", () => {
     expect(repair).not.toHaveBeenCalled();
   });
 
+  it.each([
+    "The reply was interrupted before it finished. Please try again.",
+    "The model took too long to reply. Please try again.",
+    "The model or motion settings changed while the reply was being prepared. Please send your request again.",
+  ])("shows a useful interruption message without presenting it as rejected model output: %s", async (message) => {
+    send.mockImplementation(async (_session, _text, receive) => {
+      receive({ event: "delta", data: { text: '{"reply":"Unfinished draft' } });
+      receive({ event: "error", data: { message } });
+      receive({ event: "done", data: { ok: false } });
+    });
+    render(<ChatPanel sessionId={sessionId} />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Hello" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText(message)).toBeVisible();
+    expect(screen.queryByText("Unfinished draft")).not.toBeInTheDocument();
+    expect(screen.queryByText(rejectionLabel)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Repair response" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Try again" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Send" })).toBeEnabled());
+    expect(repair).not.toHaveBeenCalled();
+  });
+
   it("does not invent repair eligibility for a refusal or network error", async () => {
     send.mockImplementation(async (_session, _text, receive) => {
       receive({ event: "error", data: { message: "Provider declined request" } });

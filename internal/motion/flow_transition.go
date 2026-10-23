@@ -97,6 +97,10 @@ func samePhraseSlots(previous, next MotionPlan) bool {
 }
 
 func fitLayeredSplice(previous MotionPlan, next *MotionPlan, start, strokeStart int64, from, to, v, a, endAcceleration float64, preferred int64, phase float64, budget legBudget) *planTransition {
+	return fitLayeredSpliceShape(previous, next, start, strokeStart, from, to, v, a, endAcceleration, preferred, phase, budget, false)
+}
+
+func fitLayeredSpliceShape(previous MotionPlan, next *MotionPlan, start, strokeStart int64, from, to, v, a, endAcceleration float64, preferred int64, phase float64, budget legBudget, singleCrest bool) *planTransition {
 	if (to-from)*v < -1e-9 || math.Abs(to-from) < 1 {
 		return nil
 	}
@@ -111,6 +115,9 @@ func fitLayeredSplice(previous MotionPlan, next *MotionPlan, start, strokeStart 
 			duration := max(int64(1), int64(math.Round(float64(preferred)*math.Pow(1.08, direction*float64(step)))))
 			segment := newQuinticSegment(CurvePoint{TimeMillis: 0, PositionPercent: from}, CurvePoint{TimeMillis: duration, PositionPercent: to}, v, 0, a, endAcceleration)
 			if !monotoneLayeredBridge(segment, to-from, budget) {
+				continue
+			}
+			if singleCrest && !singleCrestJoin(segment, to-from) {
 				continue
 			}
 			bridge := newPlanTransition(previous, nil, start)

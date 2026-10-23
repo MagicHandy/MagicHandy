@@ -276,7 +276,7 @@ func (s *Server) completeInteractiveRepair(ctx context.Context, candidate *chatR
 		return emitChatStreamEvent(emit, event)
 	})
 	if providerCtx.Err() != nil {
-		err = providerCtx.Err()
+		err = context.Cause(providerCtx)
 	}
 	var timing chat.MessageDiagnostics
 	timed.applyDiagnostics(&timing, started, 0, wait)

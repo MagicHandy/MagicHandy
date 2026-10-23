@@ -117,18 +117,18 @@ func (s *Server) trackSessionActivity(next http.Handler) http.Handler {
 			defer leave()
 			lifetime = entry.ctx
 		}
-		ctx, cancel := context.WithCancel(r.Context())
-		defer cancel()
-		stopSession := context.AfterFunc(lifetime, cancel)
+		ctx, cancel := context.WithCancelCause(r.Context())
+		defer cancel(nil)
+		stopSession := context.AfterFunc(lifetime, func() { cancel(errChatAccessEnded) })
 		defer stopSession()
 		ctx = context.WithValue(ctx, sessionCancellationKey{}, stopSession)
 		if lifetime.Err() != nil {
-			cancel()
+			cancel(errChatAccessEnded)
 		}
-		stopServer := context.AfterFunc(s.lifecycleCtx, cancel)
+		stopServer := context.AfterFunc(s.lifecycleCtx, func() { cancel(errChatServerStopped) })
 		defer stopServer()
 		if authenticated && r.URL.Path != "/api/controller/takeover" {
-			binding := &controllerRequestBinding{cancel: cancel}
+			binding := &controllerRequestBinding{cancel: func() { cancel(errChatControlChanged) }}
 			// The device browser must still deliver Stop when a remote controller
 			// takes over. Its gateway traffic is bound to its login and gateway,
 			// while a handler may explicitly bind an administrative control action.

@@ -23,7 +23,7 @@ type llmRequestCoordinator struct {
 	mu                 sync.Mutex
 	active             bool
 	activePriority     llmRequestPriority
-	activeCancel       context.CancelFunc
+	activeCancel       context.CancelCauseFunc
 	interactiveWaiters int
 	changed            chan struct{}
 	generation         uint64
@@ -50,7 +50,7 @@ func (c *llmRequestCoordinator) acquire(
 		// A dead interactive request must not preempt valid autonomous work.
 		err := ctx.Err()
 		if generation != c.generation {
-			err = context.Canceled
+			err = errLLMSettingsChanged
 		}
 		if err != nil {
 			if registered {
@@ -67,12 +67,12 @@ func (c *llmRequestCoordinator) acquire(
 			c.interactiveWaiters++
 			registered = true
 			if c.active && c.activePriority == llmRequestAutonomous && c.activeCancel != nil {
-				c.activeCancel()
+				c.activeCancel(context.Canceled)
 			}
 			c.signalLocked()
 		}
 		if !c.active && c.changing == 0 && (interactive || c.interactiveWaiters == 0) {
-			leaseCtx, leaseCancel := context.WithCancel(ctx)
+			leaseCtx, leaseCancel := context.WithCancelCause(ctx)
 			c.active = true
 			c.activePriority = priority
 			c.activeCancel = leaseCancel
@@ -85,7 +85,7 @@ func (c *llmRequestCoordinator) acquire(
 			var once sync.Once
 			return leaseCtx, time.Since(started), func() {
 				once.Do(func() {
-					leaseCancel()
+					leaseCancel(nil)
 					c.mu.Lock()
 					c.active = false
 					c.activeCancel = nil
@@ -110,7 +110,7 @@ func (c *llmRequestCoordinator) invalidate() {
 	c.mu.Lock()
 	c.generation++
 	if c.activeCancel != nil {
-		c.activeCancel()
+		c.activeCancel(errLLMSettingsChanged)
 	}
 	c.signalLocked()
 	c.mu.Unlock()
@@ -123,7 +123,7 @@ func (c *llmRequestCoordinator) beginChange() func() {
 	c.changing++
 	c.generation++
 	if c.activeCancel != nil {
-		c.activeCancel()
+		c.activeCancel(errLLMSettingsChanged)
 	}
 	c.signalLocked()
 	c.mu.Unlock()

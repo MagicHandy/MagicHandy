@@ -3324,5 +3324,12 @@
   "Could not load idle sign-out settings.": "无法加载闲置退出设置。",
   "Could not confirm the change. Refresh to check the saved setting.": "无法确认更改。请刷新以查看已保存的设置。",
   "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.": "立即应用于所有有效登录。仅查看页面或播放动作不计为活动。",
-  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "关闭后不会因闲置退出。登录仍会在 {hours} 小时后到期。控制端连接中断仍会停止动作。"
+  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "关闭后不会因闲置退出。登录仍会在 {hours} 小时后到期。控制端连接中断仍会停止动作。",
+  "The reply was interrupted before it finished. Please try again.": "回复在完成前被中断。请重试。",
+  "The model took too long to reply. Please try again.": "模型回复超时。请重试。",
+  "The model or motion settings changed while the reply was being prepared. Please send your request again.": "生成回复时，模型或运动设置发生了变化。请重新发送请求。",
+  "The reply was interrupted because this browser lost control of the session. Take control, then try again.": "此浏览器失去了会话控制权，回复已中断。请取得控制权后重试。",
+  "Your sign-in session ended before the reply finished. Sign in again to continue.": "回复完成前，登录会话已结束。请重新登录以继续。",
+  "MagicHandy is shutting down, so this reply could not finish.": "MagicHandy 正在关闭，无法完成此回复。",
+  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "回复已保存，但相应的运动或语音被中断。重试前请检查当前控制状态。"
 }

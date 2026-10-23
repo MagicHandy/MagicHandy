@@ -58,6 +58,12 @@ or configuration changes. The normal conversation stream handles cancellation an
 Emergency Stop stays reachable throughout. Reloading keeps canonical chat
 history; expired repair actions are not reconstructed from diagnostic records.
 
+Interrupted replies use short, localized application explanations for a model
+timeout, changed settings, lost control or expired sign-in. An unknown cause
+asks the user to retry without claiming Emergency Stop. A committed reply stays
+visible when only its follow-up motion or speech was interrupted. Technical
+causes remain in Diagnostics; cancellation does not offer response repair.
+
 Local Layered/Creative v2 can make one automatic correction under the existing
 local repair policy. They reuse the compact progress line and diagnostic
 provenance, without another setting, error bubble or manual continuation.

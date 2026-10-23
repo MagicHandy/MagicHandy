@@ -3324,5 +3324,12 @@
   "Could not load idle sign-out settings.": "操作なしのサインアウト設定を読み込めませんでした。",
   "Could not confirm the change. Refresh to check the saved setting.": "変更を確認できませんでした。更新して保存済みの設定を確認してください。",
   "Applies immediately to all active logins. Viewing the page or playing motion does not count as activity.": "すべての有効なログインにすぐ適用されます。ページの表示や動作の再生だけでは操作として扱われません。",
-  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "オフにすると操作なしでのサインアウトを無効にします。ログインは引き続き {hours} 時間で期限切れになります。コントローラーの接続が失われると動作は停止します。"
+  "Off disables inactivity sign-out. Logins still expire {hours} hours after sign-in. Losing the controller connection still stops motion.": "オフにすると操作なしでのサインアウトを無効にします。ログインは引き続き {hours} 時間で期限切れになります。コントローラーの接続が失われると動作は停止します。",
+  "The reply was interrupted before it finished. Please try again.": "返答が完了する前に中断されました。もう一度お試しください。",
+  "The model took too long to reply. Please try again.": "モデルの返答に時間がかかりすぎました。もう一度お試しください。",
+  "The model or motion settings changed while the reply was being prepared. Please send your request again.": "返答の準備中にモデルまたは動作の設定が変更されました。リクエストをもう一度送信してください。",
+  "The reply was interrupted because this browser lost control of the session. Take control, then try again.": "このブラウザーがセッションの操作権を失ったため、返答が中断されました。操作権を取得してから、もう一度お試しください。",
+  "Your sign-in session ended before the reply finished. Sign in again to continue.": "返答が完了する前にログインセッションが終了しました。続行するには、もう一度ログインしてください。",
+  "MagicHandy is shutting down, so this reply could not finish.": "MagicHandyの終了処理中のため、返答を完了できませんでした。",
+  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "返答は保存されましたが、その動作または音声は中断されました。再試行する前に現在の操作状態を確認してください。"
 }

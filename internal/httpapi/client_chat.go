@@ -91,6 +91,9 @@ func clientChatFailure(payload any) string {
 	if fields, ok := payload.(map[string]any); ok {
 		message, _ = fields["message"].(string)
 	}
+	if sharedChatInterruption(message) {
+		return message
+	}
 	switch message {
 	case "Chat canceled by Emergency Stop.", "Chat history is unavailable; the reply was not applied.", "Response repair canceled.":
 		return message

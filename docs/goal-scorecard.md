@@ -1,5 +1,18 @@
 # Goal Scorecard
 
+## 2026-10-23 — Layered handoffs and chat interruptions
+
+Matching alpha.70/current Windows amd64 builds with Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`, measure
+**23,618,560 → 23,645,184 B** (+26,624 B, 0.113%). The canonical UI is
+**2,718,244 → 2,724,562 B** (+6,318 B) for five-locale interruption explanations.
+No dependency, worker, normal model call or periodic background task is added. Canceled request
+evidence reuses the bounded failure log and a 500 ms detached persistence budget.
+The new search runs only during a Layered retarget; steady generation is intact.
+RSS/cold-start improvements are not claimed. See the
+[evaluation](motion-smoothness-review-2026-10-23.md) for live model intent scores,
+rejected steady-shaping variants and remaining physical validation.
+
 ## 2026-10-23 — Bounded hosted response repair
 
 Matching Windows amd64 builds from alpha.69 and this candidate, Go 1.26.10,
