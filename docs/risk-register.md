@@ -52,6 +52,14 @@ the [documented A/B and Stop checklist](layered-slow-turn-review-2026-10-23.md#p
 must pass before the next update includes these motion changes. Lower sampled
 velocity error does not establish smoother carriage movement.
 
+Expanded response testing also found one autonomous band violation and a
+historical failed request leaking into a later partial edit. Hosted guidance now
+distinguishes human restrictions from model-selected coverage and applied
+state from historical intentions. The [response-depth review](model-response-depth-review-2026-10-23.md)
+records 106/106 final focused checks, retained failures and known local-model
+misses. This is finite semantic evidence, not a guarantee that prose restrictions
+become hard engine limits. Saved motion limits remain authoritative.
+
 Remaining limits: model intent is not guaranteed by a finite fixture. Some
 count/order changes can still use the general transition, and commanded endpoints do
 not establish physical carriage reach. Original Handy Cloud physical acceptance

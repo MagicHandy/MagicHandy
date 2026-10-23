@@ -36,7 +36,11 @@ func TestLongContextFlowLive(t *testing.T) {
 			t.Error(err)
 		}
 	}()
-	for _, model := range []string{"gpt-6-sol", "gpt-6.1-sol"} {
+	models := []string{"gpt-6-sol", "gpt-6.1-sol"}
+	if selected := os.Getenv("MAGICHANDY_LIVE_MODEL"); selected != "" {
+		models = []string{selected}
+	}
+	for _, model := range models {
 		native, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{PlanUsage: true, Model: model, ReasoningEffort: "low", ContextSize: 131072, Token: token, Timeout: 60 * time.Second})
 		if err != nil {
 			t.Fatal(err)
@@ -52,7 +56,7 @@ func TestLongContextFlowLive(t *testing.T) {
 		}
 		provider := &contextEvalProvider{Provider: native}
 		history := contextStoryFixture(72000)
-		caps := Capabilities{PreserveConversationText: true, HistoryMessages: 256, HistoryBytes: 96000, Voice: VoiceUtility, Motion: true, MotionMode: MotionModeCreativeV2}
+		caps := Capabilities{HostedMotion: true, PreserveConversationText: true, HistoryMessages: 256, HistoryBytes: 96000, Voice: VoiceUtility, Motion: true, MotionMode: MotionModeCreativeV2}
 		limits := config.DefaultSettings().Motion
 		limits.SpeedMinPercent, limits.SpeedMaxPercent = 10, 80
 		score := FreshCreativeV2Score(25)
@@ -113,6 +117,9 @@ func TestLongContextFlowLive(t *testing.T) {
 			rows = append(rows, map[string]any{"model": model, "case": i, "message": message, "reply": result.Response.Reply, "raw": result.Raw, "valid": callErr == nil, "intent_pass": passed, "error": errorText, "elapsed_ms": time.Since(started).Milliseconds(), "budget": provider.budget, "progress": provider.progress, "method": "creative_v2", "after": score, "limits": limits, "paused": state.Paused, "running": state.Running})
 			history = append(history, llm.Message{Role: "user", Content: message}, llm.Message{Role: "assistant", Content: result.Response.Reply})
 			t.Logf("%s turn=%d pass=%v ms=%d cached=%d", model, i, passed, time.Since(started).Milliseconds(), provider.progress.CachedPromptTokens)
+			if !passed {
+				t.Errorf("turn %d failed its story, motion or lifecycle check; response retained", i)
+			}
 		}
 	}
 }

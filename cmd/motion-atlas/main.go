@@ -123,6 +123,7 @@ func unwrapTrials(data []byte, path string) ([]byte, []motion.Review) {
 		var report struct {
 			Model string
 			Turns json.RawMessage
+			Inert bool
 		}
 		must(json.Unmarshal(data, &report))
 		if len(report.Turns) == 0 {
@@ -143,13 +144,24 @@ func unwrapTrials(data []byte, path string) ([]byte, []motion.Review) {
 					continue
 				}
 				entry := *turn.Motion
-				entry.Group, entry.Model, entry.Request, entry.Raw = "llm-output", report.Model, turn.Request, turn.Response
+				entry.Group, entry.Request, entry.Raw = "llm-output", turn.Request, turn.Response
+				if entry.Model == "" {
+					entry.Model = report.Model
+				}
 				entry.Outcome = "Live app path: captured target; inspect the response and fixture result for intent"
 				if turn.IntentPass != nil {
 					if *turn.IntentPass {
 						entry.Outcome = "Intent pass: live app target and captured transport"
 					} else {
 						entry.Outcome = "Intent failure: accepted live target retained for review"
+					}
+				}
+				if report.Inert {
+					entry.Outcome = "Compiled model proposal; no transport or playback"
+					if turn.IntentPass != nil && *turn.IntentPass {
+						entry.Outcome = "Intent check passed; inert shared-engine review"
+					} else if turn.IntentPass != nil {
+						entry.Outcome = "Intent failure retained; inert shared-engine review"
 					}
 				}
 				entries = append(entries, entry)

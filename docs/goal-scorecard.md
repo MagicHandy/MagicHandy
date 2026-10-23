@@ -1,5 +1,21 @@
 # Goal Scorecard
 
+## 2026-10-23 — Model-response depth follow-up
+
+Matched Windows amd64 `CGO_ENABLED=0 go build -trimpath` binaries for the
+pre-follow-up source and final source both measure **32,480,768 B**. This uses
+identical build options and source overlays; compare within this pair rather
+than against the differently built earlier review binary. Canonical UI remains
+**2,760,892 B**, with main JavaScript gzip **342,081 B**. No dependency,
+background task or extra normal-success generation is added.
+
+Active local prompts and the motion sampler are unchanged by this follow-up.
+The small local intent guide applies only to stopped Layered chat. Its 40-case
+comparison has median **809.5 → 800.5 ms**, not evidence of a throughput gain,
+and improves requested behavior from 31/40 to 32/40 while retaining known
+limitations. The final focused cloud confirmation passes **106/106** checks.
+See [model-response evidence and visual review](model-response-depth-review-2026-10-23.md).
+
 ## 2026-10-23 — Slow Layered sampling candidate and scoped hosted timing
 
 The complete candidate, including interruption feedback below, measures
