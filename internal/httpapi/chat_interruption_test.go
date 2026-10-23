@@ -175,6 +175,11 @@ func TestSpecificCancellationCausePrecedesStaleRepair(t *testing.T) {
 	if got := s.chatInterruptionMessage(ctx, s.stopSequence.Load(), context.Canceled); got != chatAccessEndedMessage {
 		t.Fatalf("known sign-out mislabeled as stale repair: %s", got)
 	}
+	ctx, cancel = context.WithCancelCause(context.WithValue(t.Context(), chatRepairContextKey{}, candidate))
+	cancel(context.Canceled)
+	if got := s.chatInterruptionMessage(ctx, s.stopSequence.Load(), context.Canceled); got != chatInterruptedMessage {
+		t.Fatalf("unknown cancellation invented a repair-input change: %s", got)
+	}
 	ctx, cancel = context.WithCancelCause(t.Context())
 	cancel(errLLMSettingsChanged)
 	if outcome := s.chatRepairCancellationOutcome(ctx, s.stopSequence.Load(), context.Canceled); outcome != "stale" {

@@ -44,7 +44,15 @@ func (s *Server) chatInterruptionMessage(ctx context.Context, stop uint64, failu
 			return item.message
 		}
 	}
-	if s.chatRepairRetired(context.WithoutCancel(ctx)) || errors.Is(failure, errChatRepairStale) {
+	if errors.Is(failure, errChatRepairStale) {
+		return errChatRepairStale.Error()
+	}
+	// An ended request is not itself evidence that repair inputs changed.
+	// Do not detach it merely to revalidate repair state for an error message.
+	if ctx.Err() != nil {
+		return chatInterruptedMessage
+	}
+	if s.chatRepairRetired(ctx) {
 		return errChatRepairStale.Error()
 	}
 	if s.hostedChatRetired(ctx) {
