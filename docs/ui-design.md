@@ -1,5 +1,16 @@
 # UI Design
 
+## Holding control
+
+Edge lives immediately above permanent Stop, including the mobile footer. It
+requests a gentle holding target without inference; a separate Return action
+appears while holding. Repeated Edge presses never become Return. Backend
+snapshots own status/countdown. Edge requires active live motion and controller
+access; Stop stays usable while Edge is pending, read-only or offline. The hint
+distinguishes prompt application from queued physical motion. During a hold,
+Autopilot displays holding state and retains Pause instead of a misleading Due
+clock. See the [evaluation](edge-hold-review-2026-10-23.md).
+
 ## Setup and settings
 
 Access → Sessions includes an administrator-only Automatic sign-out group.

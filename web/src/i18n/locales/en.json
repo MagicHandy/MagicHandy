@@ -3331,5 +3331,15 @@
   "The reply was interrupted because this browser lost control of the session. Take control, then try again.": "The reply was interrupted because this browser lost control of the session. Take control, then try again.",
   "Your sign-in session ended before the reply finished. Sign in again to continue.": "Your sign-in session ended before the reply finished. Sign in again to continue.",
   "MagicHandy is shutting down, so this reply could not finish.": "MagicHandy is shutting down, so this reply could not finish.",
-  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again."
+  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.",
+  "Planning the return…": "Planning the return…",
+  "Autopilot will resume": "Autopilot will resume",
+  "Holding until you resume": "Holding until you resume",
+  "Gentle holding pattern": "Gentle holding pattern",
+  "Return to the previous motion. Stop always ends the session.": "Return to the previous motion. Stop always ends the session.",
+  "Switch to a gentle hold without waiting for AI. Queued device motion may briefly continue.": "Switch to a gentle hold without waiting for AI. Queued device motion may briefly continue.",
+  "Resume from gentle hold": "Resume from gentle hold",
+  "Edge — gentle hold": "Edge — gentle hold",
+  "Return": "Return",
+  "Autopilot returns in {seconds} s": "Autopilot returns in {seconds} s"
 }

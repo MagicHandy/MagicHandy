@@ -643,6 +643,7 @@ func (m *Manager) completeSpeechWait(requestID string, reason string) bool {
 func (m *Manager) NotifyAutopilotSettingsChanged() {
 	now := m.options.Now()
 	m.mu.Lock()
+	m.suspendEdgeLocked("Settings changed. Resume when ready.")
 	if m.loop.mode != ModeAutopilot || m.user.stopped {
 		m.mu.Unlock()
 		return

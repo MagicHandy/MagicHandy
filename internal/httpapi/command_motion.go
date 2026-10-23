@@ -18,6 +18,7 @@ func motionCommandRoute(route string) bool {
 	switch route {
 	case "/api/chat/stream", "/api/chat/repair", "/api/labs/llm/chat", "/api/labs/llm/session",
 		"/api/motion/start", "/api/motion/target", "/api/motion/quick", "/api/motion/pause", "/api/motion/resume",
+		"/api/motion/edge", "/api/motion/edge/resume",
 		"/api/settings", "/api/settings/reset", "/api/settings/labs", "/api/settings/llm-motion-mode", "/api/settings/device/connection-key",
 		"/api/settings/device", "/api/settings/device/output", "/api/settings/device/connections",
 		"/api/transport/coyote/strength", "/api/transport/coyote/test",

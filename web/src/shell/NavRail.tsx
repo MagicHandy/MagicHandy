@@ -4,6 +4,7 @@ import { t, translateKnown } from "../i18n";
 import { useAppState, useHashRoute } from "../state/app-state";
 import { ChatIcon, LibraryIcon, ModesIcon, PersonaIcon, RemoteIcon, SettingsIcon, VideoIcon } from "./icons";
 import { StopButton } from "./StopButton";
+import { EdgeButton } from "./EdgeButton";
 import {LAB_BASE,LabsNavLink} from "@labs";
 
 // Personas sits second, directly under Chat: a persona is chat furniture, closer
@@ -47,6 +48,7 @@ export function NavRail({ authenticationLocked = false, remoteURL }: { authentic
         <LabsNavLink active={active} enabled={Boolean(state?.labs_enabled)} />
       </div>}
       <div className="nav-spacer" />
+      {!authenticationLocked && <EdgeButton />}
       <StopButton className="nav-stop" />
     </nav>
   );

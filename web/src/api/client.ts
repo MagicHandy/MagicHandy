@@ -573,6 +573,8 @@ export const api = {
     request("POST", "/api/motion/start", body),
   pauseMotion: () => request("POST", "/api/motion/pause", {}),
   resumeMotion: () => request("POST", "/api/motion/resume", {}),
+  activateEdge: () => request("POST", "/api/motion/edge", {}),
+  resumeEdge: () => request("POST", "/api/motion/edge/resume", {}),
   applyQuick: (patch: Partial<{
     speed_min_percent: number;
     speed_max_percent: number;

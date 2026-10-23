@@ -50,6 +50,7 @@ func (s *Server) newModeManager() (*modes.Manager, error) {
 		},
 		Traces:        s.traces,
 		Decide:        s.autopilotDecide,
+		DecideEdge:    s.decideEdge,
 		DecideSpeech:  s.autopilotDecideSpeech,
 		CanAnnounce:   s.autopilotCanAnnounce,
 		Announce:      s.autopilotAnnounce,

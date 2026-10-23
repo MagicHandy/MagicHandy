@@ -2,6 +2,13 @@
 
 ## Core Direction
 
+The [Edge holding control](docs/edge-hold-review-2026-10-23.md) uses a backend
+semantic override and the existing mode scheduler. Button activation performs
+no inference; Autopilot may subsequently choose a bounded duration and return.
+Stop, plan-ID guards, current limits and one shared motion stream remain
+authoritative. The review includes real ChatGPT/local wording trials and inert
+motion comparisons; hardware confirmation remains outstanding.
+
 The October 23 [installed-session smoothness review](docs/motion-smoothness-review-2026-10-23.md)
 adds bounded, single-stroke joins for changed Layered phrase layouts and
 application-owned explanations for interrupted chat. Cancellation causes survive
