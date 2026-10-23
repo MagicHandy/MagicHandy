@@ -104,6 +104,22 @@
   flex: 1 1 auto;
   min-height: 8px;
 }
+.edge-control { display: grid; gap: 4px; margin-bottom: 8px; min-width: 0; }
+.edge-actions { display: flex; gap: 6px; }
+.edge-return { flex: 0 0 auto; min-height: 40px; padding: 4px 6px; color: var(--accent); background: transparent; border: 0; font-size: var(--fs-label); }
+.edge-return:disabled { opacity: .5; cursor: not-allowed; }
+.edge-return:not(:disabled):hover { background: var(--accent-tint); }
+.edge-button {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 40px; width: 100%; padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  color: var(--text); background: var(--surface-2); font-weight: 600;
+}
+.edge-button:not(:disabled):hover, .edge-control[data-active] .edge-button {
+  border-color: var(--accent); background: var(--accent-tint);
+}
+.edge-button:disabled { opacity: .5; cursor: not-allowed; }
+.edge-caption { color: var(--muted); font-size: var(--fs-hint); text-align: center; line-height: 1.4; }
 .stop-button.nav-stop {
   position: relative;
   z-index: var(--layer-emergency-stop);
@@ -759,6 +775,13 @@
     bottom: auto;
     z-index: var(--layer-emergency-stop);
   }
+  .app-shell:has(.edge-control) { --footer-h: 156px; }
+  .nav-rail:has(.edge-control) { padding-top: 104px; }
+  .nav-rail > .edge-control { position: absolute; left: 8px; right: 8px; top: 6px; margin: 0; gap: 1px; }
+  .nav-rail:has(.edge-control) > .nav-stop { top: 48px; }
+  .app-shell:has(.edge-caption) { --footer-h: 176px; }
+  .nav-rail:has(.edge-caption) { padding-top: 124px; }
+  .nav-rail:has(.edge-caption) > .nav-stop { top: 68px; }
   .notification-center-panel {
     top: calc(var(--status-h) + 8px);
     right: 8px;

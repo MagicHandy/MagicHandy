@@ -4,6 +4,7 @@ import "time"
 
 // Status returns the UI-facing mode state.
 func (m *Manager) Status() Status {
+	m.reconcileEdge()
 	m.mu.Lock()
 	mode := m.loop.mode
 	lastEvent := m.events.lastEvent
@@ -17,10 +18,19 @@ func (m *Manager) Status() Status {
 	speechDeadline := m.speech.deadline
 	speechWaiting := m.speech.waitingID != ""
 	freestyle := m.freestyle
+	var edge *EdgeStatus
+	if m.edge != nil {
+		snapshot := m.edge.status
+		if !m.edge.resumeAt.IsZero() {
+			snapshot.ResumeInSeconds = max(0, int((m.edge.resumeAt.Sub(m.options.Now())+time.Second-1)/time.Second))
+		}
+		edge = &snapshot
+	}
 	m.mu.Unlock()
 	now := m.options.Now()
 
 	status := Status{
+		EdgeHold:  edge,
 		Active:    mode != "",
 		Mode:      mode,
 		LastEvent: lastEvent,

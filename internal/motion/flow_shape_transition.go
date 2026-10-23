@@ -14,7 +14,15 @@ func layeredTurnTransition(previous MotionPlan, active *planTransition, next *Mo
 	if bridge := layeredPaceTransition(previous, active, next, start); bridge != nil {
 		return bridge
 	}
-	if active != nil || !layeredStrokePlan(previous) || !layeredStrokePlan(*next) || !sameFocusProjection(previous.focus, next.focus) {
+	// An explicit holding override may enter or leave another compiled stroke
+	// grammar. Use the same bounded join; ordinary Creative edits retain their
+	// established transition policy.
+	edge := previous.Target.Source == "edge" || next.Target.Source == "edge"
+	eligible := layeredStrokePlan(previous) && layeredStrokePlan(*next)
+	if edge {
+		eligible = previous.Loop && next.Loop && len(previous.curve.authoredKnots) > 2 && len(next.curve.authoredKnots) > 2
+	}
+	if active != nil || !eligible || !sameFocusProjection(previous.focus, next.focus) {
 		return nil
 	}
 	// The existing splice owns ordinal preservation for same-slot edits. If
@@ -38,7 +46,29 @@ func layeredTurnTransition(previous MotionPlan, active *planTransition, next *Mo
 		return nil
 	}
 	strokeStart := start + max(int64(1), int64(math.Ceil((float64(previous.curve.authoredKnots[end].TimeMillis)-oldClock)*float64(previous.PeriodMillis)/float64(previous.curve.duration))))
-	return joinContinuousTurn(previous, next, start, strokeStart, index)
+	if bridge := joinContinuousTurn(previous, next, start, strokeStart, index); bridge != nil {
+		return bridge
+	}
+	if edge {
+		return delayedHoldingJoin(previous, next, start, index)
+	}
+	return nil
+}
+
+// A fast generated turn can exceed the gentle join's acceleration budget.
+// Continue the authored path briefly until the same bounded join is feasible,
+// rather than blending in another reversal. Never relax the fit limits.
+func delayedHoldingJoin(previous MotionPlan, next *MotionPlan, start int64, index int) *planTransition {
+	for candidate := start + 25; candidate <= start+1000; candidate += 25 {
+		_, acceleration := layeredPlanDerivatives(previous, candidate)
+		if math.Abs(acceleration)*1e6 > flowAccelerationBudget {
+			continue
+		}
+		if bridge := joinContinuousTurn(previous, next, start, candidate, index); bridge != nil {
+			return bridge
+		}
+	}
+	return nil
 }
 
 func layeredStrokePlan(plan MotionPlan) bool {

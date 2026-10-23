@@ -21,7 +21,8 @@ func (m *Manager) BeginUserPause() (func(keepPaused bool), bool) {
 	m.mu.Lock()
 	m.user.intentID++
 	pauseID := m.user.intentID
-	latched := m.loop.mode != ""
+	m.suspendEdgeLocked("Paused. Resume the holding motion before returning.")
+	latched := m.loop.mode != "" || m.edge != nil
 	if latched {
 		if m.user.pending == nil {
 			m.user.pending = make(map[uint64]struct{})
@@ -111,7 +112,7 @@ func (m *Manager) refreshUserPauseLocked() {
 			}
 		}
 	}
-	m.user.paused = m.loop.mode != "" && paused
+	m.user.paused = (m.loop.mode != "" || m.edge != nil) && paused
 }
 
 func (m *Manager) resetUserPauseLocked() {
@@ -128,6 +129,7 @@ func (m *Manager) resetUserPauseLocked() {
 func (m *Manager) BeginUserStop() func() {
 	m.lifecycleMu.Lock()
 	m.mu.Lock()
+	m.edge = nil
 	m.resetUserPauseLocked()
 	m.user.stopped = true
 	m.chat.target = nil

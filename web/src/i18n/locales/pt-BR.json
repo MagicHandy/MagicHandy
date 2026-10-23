@@ -3331,5 +3331,15 @@
   "The reply was interrupted because this browser lost control of the session. Take control, then try again.": "A resposta foi interrompida porque este navegador perdeu o controle da sessão. Assuma o controle e tente novamente.",
   "Your sign-in session ended before the reply finished. Sign in again to continue.": "Sua sessão de login terminou antes de a resposta ser concluída. Entre novamente para continuar.",
   "MagicHandy is shutting down, so this reply could not finish.": "O MagicHandy está sendo encerrado, por isso esta resposta não pôde ser concluída.",
-  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "A resposta foi salva, mas seu movimento ou fala foi interrompido. Confira os controles atuais antes de tentar novamente."
+  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "A resposta foi salva, mas seu movimento ou fala foi interrompido. Confira os controles atuais antes de tentar novamente.",
+  "Planning the return…": "Planejando a retomada…",
+  "Autopilot will resume": "O Autopilot retomará o movimento",
+  "Holding until you resume": "Mantendo até você retomar",
+  "Gentle holding pattern": "Padrão suave de espera",
+  "Return to the previous motion. Stop always ends the session.": "Retorna ao movimento anterior. Parar sempre encerra a sessão.",
+  "Switch to a gentle hold without waiting for AI. Queued device motion may briefly continue.": "Muda para um padrão suave sem esperar pela IA. O movimento já enviado ao dispositivo pode continuar brevemente.",
+  "Resume from gentle hold": "Retomar a partir do padrão suave",
+  "Edge — gentle hold": "Edge — espera suave",
+  "Return": "Retornar",
+  "Autopilot returns in {seconds} s": "O Autopilot retorna em {seconds} s"
 }

@@ -14,6 +14,8 @@ const decisionSourceCopy: Partial<Record<string, MessageKey>> = {
   hold: "Continuing current pattern",
   requested_hold: "Keeping the motion as you asked",
   speech: "Spoken check-in changed motion",
+  edge_hold: "Gentle holding pattern",
+  edge_return: "Return",
 };
 
 const speechOptions = [
@@ -159,7 +161,8 @@ export function AutopilotControl() {
   const modes = state?.modes;
   const active = modes?.mode === "autopilot" || modes?.active_mode === "autopilot";
   const engine = motion?.engine;
-  const autopilotMotionActive = ownsActiveMotion(engine, "autopilot");
+  const holding = Boolean(modes?.edge_hold?.active);
+  const autopilotMotionActive = ownsActiveMotion(engine, "autopilot") || (holding && engine?.target?.source === "edge");
   const autopilotPaused = autopilotMotionActive && engine?.paused === true;
   const canPause = active && autopilotMotionActive && Boolean(engine?.running || engine?.paused);
   const locked = !backendOnline || !state || readOnly;
@@ -171,13 +174,13 @@ export function AutopilotControl() {
     modes?.motion_change_in_ms,
     // A prepared decision waits for the same deadline, so the clock keeps
     // counting while it is ready.
-    active && !autopilotPaused,
+    active && !autopilotPaused && !holding,
   );
   const speechClock = useDeadlineClock(
     modes?.speech_due_at,
     modes?.status_at,
     modes?.speech_in_ms,
-    active && !autopilotPaused && !modes?.speech_waiting_playback,
+    active && !autopilotPaused && !holding && !modes?.speech_waiting_playback,
   );
 
   async function toggle() {
@@ -229,6 +232,8 @@ export function AutopilotControl() {
     status = { start: t("Starting"), stop: t("Stopping"), pause: t("Pausing"), resume: t("Resuming") }[pending];
   } else if (active && autopilotPaused) {
     status = t("Paused");
+  } else if (active && holding) {
+    status = t("Gentle holding pattern");
   } else if (active && segment === 0) {
     status = t("Choosing first segment");
   } else if (active) {
@@ -254,7 +259,7 @@ export function AutopilotControl() {
     }
   };
   let clockStatus = "";
-  if (active && preferences) {
+  if (active && preferences && !holding) {
     const speech = preferences.speech_cadence === "off"
       ? t("Off")
       : modes?.speech_waiting_playback

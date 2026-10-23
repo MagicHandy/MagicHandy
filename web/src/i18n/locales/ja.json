@@ -3331,5 +3331,15 @@
   "The reply was interrupted because this browser lost control of the session. Take control, then try again.": "このブラウザーがセッションの操作権を失ったため、返答が中断されました。操作権を取得してから、もう一度お試しください。",
   "Your sign-in session ended before the reply finished. Sign in again to continue.": "返答が完了する前にログインセッションが終了しました。続行するには、もう一度ログインしてください。",
   "MagicHandy is shutting down, so this reply could not finish.": "MagicHandyの終了処理中のため、返答を完了できませんでした。",
-  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "返答は保存されましたが、その動作または音声は中断されました。再試行する前に現在の操作状態を確認してください。"
+  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "返答は保存されましたが、その動作または音声は中断されました。再試行する前に現在の操作状態を確認してください。",
+  "Planning the return…": "再開を計画中…",
+  "Autopilot will resume": "自動モードが動作を再開します",
+  "Holding until you resume": "再開するまで穏やかな動きを維持",
+  "Gentle holding pattern": "穏やかな保持パターン",
+  "Return to the previous motion. Stop always ends the session.": "前の動作に戻ります。停止ボタンは常にセッションを終了します。",
+  "Switch to a gentle hold without waiting for AI. Queued device motion may briefly continue.": "AIを待たずに穏やかな保持へ切り替えます。デバイスに送信済みの動作が短時間続く場合があります。",
+  "Resume from gentle hold": "穏やかな保持から再開",
+  "Edge — gentle hold": "Edge — 穏やかな保持",
+  "Return": "戻る",
+  "Autopilot returns in {seconds} s": "自動モードは {seconds} 秒後に再開"
 }

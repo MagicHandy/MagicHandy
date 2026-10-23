@@ -3331,5 +3331,15 @@
   "The reply was interrupted because this browser lost control of the session. Take control, then try again.": "此浏览器失去了会话控制权，回复已中断。请取得控制权后重试。",
   "Your sign-in session ended before the reply finished. Sign in again to continue.": "回复完成前，登录会话已结束。请重新登录以继续。",
   "MagicHandy is shutting down, so this reply could not finish.": "MagicHandy 正在关闭，无法完成此回复。",
-  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "回复已保存，但相应的运动或语音被中断。重试前请检查当前控制状态。"
+  "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again.": "回复已保存，但相应的运动或语音被中断。重试前请检查当前控制状态。",
+  "Planning the return…": "正在规划恢复…",
+  "Autopilot will resume": "自动模式将恢复运动",
+  "Holding until you resume": "保持直到手动恢复",
+  "Gentle holding pattern": "轻柔保持模式",
+  "Return to the previous motion. Stop always ends the session.": "恢复之前的运动。停止按钮始终结束会话。",
+  "Switch to a gentle hold without waiting for AI. Queued device motion may briefly continue.": "无需等待 AI 即可切换为轻柔保持。设备队列中的运动可能会短暂继续。",
+  "Resume from gentle hold": "从轻柔保持恢复",
+  "Edge — gentle hold": "Edge — 轻柔保持",
+  "Return": "返回",
+  "Autopilot returns in {seconds} s": "自动模式将在 {seconds} 秒后恢复"
 }

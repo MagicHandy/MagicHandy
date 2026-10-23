@@ -9,6 +9,7 @@ const app = vi.hoisted(() => ({
   state: { modes: {}, settings: {} } as {
     modes: {
       mode?: string;
+      edge_hold?: { active: boolean };
       status_at?: string;
       segment_index?: number;
       decision_source?: string;
@@ -555,4 +556,18 @@ describe("AutopilotControl", () => {
       expect.objectContaining({ session_tracking: false, session_arc: false }),
     );
   });
+});
+
+
+it("keeps pause available and hides due clocks during an Edge hold", async () => {
+  app.state.modes = { mode: "autopilot", segment_index: 2, decision_source: "edge_hold", edge_hold: { active: true } };
+  app.state.settings = { autopilot: autopilotPreferences };
+  app.motion = { engine: { running: true, paused: false, target: { source: "edge" } } };
+  app.backendOnline = true; app.readOnly = false;
+  render(<AutopilotControl />);
+  expect(screen.getByText("Gentle holding pattern")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Pause Autopilot" })).toBeEnabled();
+  expect(screen.queryByText(/Motion Due/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Pause Autopilot" }));
+  await waitFor(() => expect(pauseMotion).toHaveBeenCalled());
 });

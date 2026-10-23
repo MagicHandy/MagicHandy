@@ -6,6 +6,7 @@ import "time"
 // loop has drained. Keep state initialization separate from admission and loop
 // ownership so cancellation checks remain visible in Start. Caller holds m.mu.
 func (m *Manager) resetForModeStartLocked(mode string) {
+	m.edge = nil
 	m.loop.generation++
 	m.chat.version++
 	m.loop.mode = mode

@@ -192,6 +192,8 @@ host	POST /api/motion/lab/flow
 host	POST /api/motion/lab/preview
 host	POST /api/motion/lab/proposal
 control	POST /api/motion/pause
+control	POST /api/motion/edge
+control	POST /api/motion/edge/resume
 control	POST /api/motion/quick
 control	POST /api/motion/resume
 control	POST /api/motion/start

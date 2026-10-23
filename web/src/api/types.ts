@@ -536,6 +536,14 @@ export interface LLMMotionCapabilities {
 }
 
 export interface ModesStatus {
+  edge_hold?: {
+    active: boolean;
+    phase: "applying" | "planning" | "holding" | "failed";
+    automatic: boolean;
+    resume_at?: string;
+    resume_in_seconds?: number;
+    message?: string;
+  };
   running?: boolean;
   mode?: string;
   active_mode?: string;

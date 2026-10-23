@@ -28,6 +28,7 @@ func (m *Manager) NotifyChatActivity() uint64 {
 	now := m.options.Now()
 	m.mu.Lock()
 	activityID := m.chat.beginActivity()
+	m.suspendEdgeLocked("New chat received. Resume when ready, or request new motion.")
 	if m.loop.mode != ModeAutopilot || m.user.stopped {
 		m.mu.Unlock()
 		return activityID
@@ -111,6 +112,7 @@ func (m *Manager) notifyTarget(generation uint64, target motion.MotionTarget, re
 	}
 	m.chat.pending = false
 	m.chat.version++
+	m.edge = nil
 	m.loop.generation++
 	m.cancelOperationLocked()
 	m.chat.target = &copied
@@ -182,6 +184,7 @@ func (m *Manager) notifyTarget(generation uint64, target motion.MotionTarget, re
 func (m *Manager) NotifyChatStop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.edge = nil
 	m.resetUserPauseLocked()
 	m.chat.target = nil
 	m.chat.keepalive = false

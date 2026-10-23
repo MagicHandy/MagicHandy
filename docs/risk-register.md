@@ -1,5 +1,22 @@
 # MagicHandy Risk Register
 
+## R38: Holding override intent ordering and physical delay
+
+Level: Medium
+
+An older model reply or scheduled return could overwrite a newer holding/Stop
+intent. Motion command receipts, mode generations, cancellation and engine
+plan-ID guards fence these operations. Repeated Edge is idempotent; Return is
+separate. Stop clears the override, a lost transport latches recovery off, and
+model errors retain a manual hold. Limits or chat revoke automatic return.
+Current engine snapshots reconcile changed plans before exposing holding state.
+
+An accepted Edge command cannot erase device-buffered points. The UI explains
+that queued motion may briefly continue and retains the independent Stop
+control. Compiled transition tests and visual review do not establish physical
+comfort or latency. Hardware feedback is required before release; see the
+[holding review](edge-hold-review-2026-10-23.md).
+
 ## R37: Counted Layered intent and reach-edit transients
 
 Level: Medium

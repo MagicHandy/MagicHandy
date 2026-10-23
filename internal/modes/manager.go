@@ -72,6 +72,8 @@ type Options struct {
 	// Decide is Autopilot's injected LLM curation step. Autopilot cannot
 	// start without it; Freestyle and chat keepalive never use it.
 	Decide DecideFunc
+	// DecideEdge plans only the duration and return after an immediate hold.
+	DecideEdge func(context.Context, EdgeInput) (EdgeDecision, error)
 	// DecideSpeech runs the independent autonomous speech contract.
 	DecideSpeech DecideFunc
 	// CanAnnounce is false while autonomous speech would deepen a TTS backlog.
@@ -86,9 +88,10 @@ type Options struct {
 
 // Status is the UI-facing mode state.
 type Status struct {
-	Active bool   `json:"active"`
-	Mode   string `json:"mode,omitempty"`
-	Style  string `json:"style,omitempty"`
+	EdgeHold *EdgeStatus `json:"edge_hold,omitempty"`
+	Active   bool        `json:"active"`
+	Mode     string      `json:"mode,omitempty"`
+	Style    string      `json:"style,omitempty"`
 	// StatusAt and the absolute deadlines let a client render a smooth clock
 	// between backend snapshots without inventing its own schedule. The legacy
 	// remaining fields stay as a compatibility and clock-skew fallback.
@@ -136,6 +139,7 @@ type Manager struct {
 	history       motionHistoryState
 	freestyle     freestyleState
 	events        modeEventState
+	edge          *edgeState
 }
 
 // NewManager creates an idle mode manager.
@@ -241,6 +245,7 @@ func (m *Manager) Stop(reason string) {
 
 func (m *Manager) stopLoop(reason string) {
 	m.mu.Lock()
+	m.suspendEdgeLocked("Autopilot stopped. Resume when ready.")
 	if m.loop.mode == "" {
 		m.mu.Unlock()
 		return
@@ -310,6 +315,9 @@ func (m *Manager) run(ctx context.Context, mode string) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			if m.tickEdge(ctx) {
+				continue
+			}
 			if mode == ModeFreestyle || mode == ModeAutopilot {
 				m.tickAutonomous(ctx, mode)
 			} else {
@@ -501,8 +509,13 @@ func (m *Manager) beginStartOperation(
 	generation uint64,
 	chatVersion uint64,
 ) (context.Context, func(), bool) {
+	return m.beginModeOperation(parent, mode, generation, chatVersion, false)
+}
+
+func (m *Manager) beginModeOperation(parent context.Context, mode string, generation, chatVersion uint64, edge bool) (context.Context, func(), bool) {
 	m.mu.Lock()
 	if parent.Err() != nil || m.loop.mode != mode || m.loop.generation != generation || m.user.stopped || m.user.paused || m.chat.pending ||
+		(m.edge != nil && !edge) ||
 		(mode == ModeAutopilot && m.chat.activity) ||
 		(mode == ModeChat && (m.chat.version != chatVersion || m.chat.target == nil || !m.chat.keepalive)) {
 		m.mu.Unlock()
