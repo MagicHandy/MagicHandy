@@ -84,13 +84,22 @@ func (s Settings) AddHandyConnection(id string, patch HandyConnectionPatch) (Set
 	if _, exists := next.Device.HandyConnection(id); exists {
 		return s, errors.New("handy connection already exists")
 	}
-	c := HandyConnection{ID: id, Name: fmt.Sprintf("The Handy %d", len(next.Device.HandyConnections)+2),
+	c := HandyConnection{ID: id, Name: next.Device.nextHandyName(),
 		Method: DispatchOwnerCloudREST, HandyModel: HandyModelOriginal}
 	c = applyHandyConnectionPatch(c, patch)
 	next.Device = next.Device.materialized()
 	next.Device.HandyConnections = append(next.Device.HandyConnections, c)
 	next.Device.ConfiguredDevices = append(next.Device.ConfiguredDevices, id)
 	return NormalizeSettings(next)
+}
+
+func (d DeviceSettings) nextHandyName() string {
+	for number := 2; ; number++ {
+		name := fmt.Sprintf("The Handy %d", number)
+		if !slices.ContainsFunc(d.HandyConnections, func(c HandyConnection) bool { return c.Name == name }) {
+			return name
+		}
+	}
 }
 
 // PatchHandyConnection updates an instance without mutating its input.

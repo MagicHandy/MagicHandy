@@ -10,6 +10,7 @@ import { AdditionalHandyCalibrationSection, AdditionalHandyConnectionSection } f
 import { HandyGlyph } from "./glyphs";
 import { handyConnection, handyInstanceLink, handyInstanceName, handyMethodConnection } from "./handy-instances";
 import { handyMethod } from "./handy-methods";
+import { HandyTestSection } from "./HandyPage";
 import { actionFor, liveStatus, lockReason } from "./status";
 import type { DeviceContext, DeviceDescriptor, DeviceModel, DeviceStatusWord } from "./types";
 
@@ -64,6 +65,7 @@ function additionalHandyModel(ctx: DeviceContext, connection: HandyConnection): 
 const SECTIONS: DeviceDescriptor["sections"] = [
   { id: "connection", title: () => t("Connection"), Body: AdditionalHandyConnectionSection },
   { id: "calibration", title: () => t("Calibration"), Body: AdditionalHandyCalibrationSection },
+  { id: "test", title: () => t("Test"), Body: HandyTestSection },
 ];
 
 /** The descriptor for one saved additional Handy. */

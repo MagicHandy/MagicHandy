@@ -95,3 +95,17 @@ func TestNamedHandySharedCalibrationOnlyIncludesParticipants(t *testing.T) {
 		t.Fatal("single device behavior changed")
 	}
 }
+
+func TestNamedHandyDefaultNamesRemainDistinctAfterRemoval(t *testing.T) {
+	s, _ := NormalizeSettings(DefaultSettings())
+	s, _ = s.AddHandyConnection("handy-010203040506", HandyConnectionPatch{})
+	s, _ = s.AddHandyConnection("handy-010203040507", HandyConnectionPatch{})
+	s, _ = s.RemoveHandyConnection("handy-010203040506")
+	s, err := s.AddHandyConnection("handy-010203040508", HandyConnectionPatch{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Device.HandyConnections[0].Name == s.Device.HandyConnections[1].Name {
+		t.Fatal("adding reused a name still in the inventory")
+	}
+}

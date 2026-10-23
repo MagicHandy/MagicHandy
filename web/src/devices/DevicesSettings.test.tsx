@@ -346,6 +346,13 @@ describe("additional Handys", () => {
     expect(api.removeHandy).toHaveBeenCalledWith(id);
     expect(api.changeDeviceConnection).not.toHaveBeenCalled();
   });
+  it("keeps the shared motion test available with no primary Handy", async () => {
+    extra(); app.state.settings!.device.configured_devices = [id];
+    app.state.settings!.device.playback_devices = [id]; renderPage(id);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start test" })));
+    expect(api.startManualTest).toHaveBeenCalledWith({ pattern: "flow-full-sweeps", speed_percent: 25 });
+    expect(api.handyConnect).not.toHaveBeenCalled();
+  });
   it("disables setup and connection changes for an operator", () => {
     extra(); app.state.capabilities!.configure_host = false; renderPage(id);
     expect(screen.getByRole("textbox", { name: "Name" })).toBeDisabled();

@@ -1,7 +1,7 @@
 // An additional Handy's page: Connection (its name, its method and what the
 // method needs) and Calibration (its model). The motion, its limits and the
 // motion test are shared by every Handy in playback, so they stay in the
-// device panel and on The Handy's page.
+// device panel and the shared test section.
 import { useId } from "react";
 import { api } from "../api/client";
 import { isHandyInstance } from "../api/devices";

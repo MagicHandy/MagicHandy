@@ -47,7 +47,9 @@ time; latency tests retain the slowest companion's budget.
 Frontend tests cover returned-ID navigation, adding without connecting,
 independent names/keys, supported protocol choices, host permissions, named
 Intiface disconnection and backend-owned playing/retired state. Existing
-single-device, Coyote, vibrator and Stop tests remain in the suite.
+single-device, Coyote, vibrator and Stop tests remain in the suite. Follow-up
+regressions keep the shared test available without the primary Handy and
+default names distinct after removing and adding an instance.
 
 ## Review app and motion evidence
 
@@ -90,9 +92,9 @@ conversation.” in 296 ms (128 ms first token), without repair/fallback or moti
 ## Weight and remaining limits
 
 Matched Windows amd64 `CGO_ENABLED=0 go build` binaries: 32,303,104 B before,
-32,555,520 B candidate (+252,416 B, 0.78%). Complete canonical UI:
-2,731,986 → 2,760,194 B (+28,208 B, 1.03%); main JavaScript gzip:
-338,685 → 341,875 B (+3,190 B, 0.94%). No dependency was added. A post-test
+32,557,568 B candidate (+254,464 B, 0.78%). Complete canonical UI:
+2,731,986 → 2,760,234 B (+28,248 B, 1.03%); main JavaScript gzip:
+338,685 → 341,879 B (+3,194 B, 0.94%). No dependency was added. A post-test
 three-connection review process sampled 90.1 MB working set / 66.4 MB private
 memory; this is not a matched idle/soak comparison. No RSS/cold-start improvement
 is claimed. Unconfigured instances do not start transport workers.
