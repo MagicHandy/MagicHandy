@@ -1,6 +1,6 @@
 # ADR 0052: Counted phrases within the shared Layered engine
 
-Status: Proposed for review, 2026-10-23. Extends ADR 0023.
+Status: Accepted in PR #341, 2026-10-23. Extends ADR 0023.
 
 ## Context
 

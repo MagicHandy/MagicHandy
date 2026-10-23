@@ -157,9 +157,20 @@ passed `check-review-llm.ps1` and a real local Gemma text-only chat in 320 ms
 (123 ms to first token), with no repair/fallback or motion. Layered is selected,
 Autopilot is off, and no hardware credentials were copied into that profile.
 
-Still required before release: observe the counted pattern and reach on the
+Outstanding physical acceptance: observe the counted pattern and reach on the
 Original Handy over Cloud, including ordinary and broader tip coverage and
 live retargets. Retain a matched trace and physical feedback. The installed
 instance's reported shortfall is not declared physically solved by a plot.
 Count/order changes retain the general transition rather than the specialized
 same-slot splice. No release is published as part of this candidate review.
+
+
+## Alpha publication decision
+
+After this candidate review, the maintainer explicitly requested an update.
+PR #341 passed all branch and PR checks, including race tests and Windows
+packaging, and merged as `74ffdcd9`. Alpha.69 publishes the reviewed changes
+with the physical acceptance limitation in its public notes. No physical test
+is claimed by that decision. See the
+[release review](alpha69-release-review-2026-10-23.md) for the version-specific
+artifact policy and publication gates.
