@@ -43,10 +43,35 @@ counted cases lose their four spurious small reversals. The
 [follow-up review](motion-smoothness-review-2026-10-23.md) retains every candidate
 and fallback and separates numerical results from physical acceptance.
 
+The later slow-turn review reproduced obsolete regional timing surviving a
+field-to-phrase replacement, and velocity steps in low-speed whole-percent
+output. Hosted timing-scope guidance and bounded buffered velocity refinement
+are proposed; local prompts and immediate transports are unchanged. A separate
+shorter-turn profile remains experimental. The user deferred physical testing:
+the [documented A/B and Stop checklist](layered-slow-turn-review-2026-10-23.md#physical-acceptance-required-before-the-next-update)
+must pass before the next update includes these motion changes. Lower sampled
+velocity error does not establish smoother carriage movement.
+
+Expanded response testing also found one autonomous band violation and a
+historical failed request leaking into a later partial edit. Hosted guidance now
+distinguishes human restrictions from model-selected coverage and applied
+state from historical intentions. The [response-depth review](model-response-depth-review-2026-10-23.md)
+records 106/106 final focused checks, retained failures and known local-model
+misses. This is finite semantic evidence, not a guarantee that prose restrictions
+become hard engine limits. Saved motion limits remain authoritative.
+
+October 24 physical acceptance supersedes the unaccepted sampler above: the
+maintainer preferred sparse D and confirmed the final production slow/compound
+runs and Stops. The [review](cloud-sampling-review-2026-10-24.md) records all
+29 runs, rejected variants, corrected speed comparison and remaining turn
+hesitation. A bounded scale-aware policy applies only to a single Original
+Handy Cloud generated path. Extra velocity refinement remains test-only;
+multi-device, other profiles/transports, media and transition fits are unchanged.
+
 Remaining limits: model intent is not guaranteed by a finite fixture. Some
 count/order changes can still use the general transition, and commanded endpoints do
-not establish physical carriage reach. Original Handy Cloud physical acceptance
-of the counted candidate is outstanding. See [ADR 0052](decisions/0052-counted-layered-phrases.md)
+not establish physical carriage reach. Acceptance covers the tested Original
+Handy Cloud fixtures, not every count/order change. See [ADR 0052](decisions/0052-counted-layered-phrases.md)
 and [the evaluation](layered-range-review-2026-10-23.md).
 
 ## R36: Local port denial and ambiguous startup ownership

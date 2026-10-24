@@ -422,15 +422,21 @@ func (f *FanOut) MotionTimingCapabilities() MotionTimingCapabilities {
 // MotionSamplingCapabilities honors every participant's encoding limits.
 func (f *FanOut) MotionSamplingCapabilities() MotionSamplingCapabilities {
 	var result MotionSamplingCapabilities
+	// The physical acceptance covers one Original Handy on Cloud. Preserve
+	// existing shared-stream fitting for multi-device sessions.
+	result.PreferSparseGeneratedMotion = len(f.participants) == 1
 	for _, p := range f.participants {
 		if provider, ok := p.Transport.(MotionSamplingCapabilitiesProvider); ok {
 			c := provider.MotionSamplingCapabilities()
+			result.PreferSparseGeneratedMotion = result.PreferSparseGeneratedMotion && c.PreferSparseGeneratedMotion
 			result.PositionResolutionPercent = max(result.PositionResolutionPercent, c.PositionResolutionPercent)
 			result.ResolutionAfterStrokeWindow = result.ResolutionAfterStrokeWindow || c.ResolutionAfterStrokeWindow
 			if c.MaximumPointsPerAppend > 0 && (result.MaximumPointsPerAppend == 0 || c.MaximumPointsPerAppend < result.MaximumPointsPerAppend) {
 				result.MaximumPointsPerAppend = c.MaximumPointsPerAppend
 			}
 			result.PreferredPointInterval = max(result.PreferredPointInterval, c.PreferredPointInterval)
+		} else {
+			result.PreferSparseGeneratedMotion = false
 		}
 	}
 	return result

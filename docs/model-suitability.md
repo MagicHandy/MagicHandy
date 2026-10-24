@@ -215,7 +215,7 @@ The default 12B and the HTNZ555 E4B measured the same on `b11149` as on
 ### In-app model test (Creative v2)
 
 The harness above measures the pattern/speed contract. The in-app model test
-(ADR 0035) runs the product's default Creative v2 mode through the real chat
+(ADR 0035) ran the then-default Creative v2 mode through the real chat
 service, here with the Utility voice. On a 16 GB RTX 5070 Ti and `b11149`:
 
 | Build | Load | GPU layers | Hidden reasoning | Valid turns | Speed | Words |

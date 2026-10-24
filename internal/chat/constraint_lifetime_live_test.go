@@ -39,6 +39,7 @@ func constraintEpisodes() []constraintEpisode {
 		{name: "released_speed", lines: []string{"Keep the base speed at 25 percent until I say otherwise.", "You can take over again now, including changing the pace."}, initialSpeed: 25, releaseAfter: 0},
 		{name: "lasting_speed", lines: []string{"Keep the base speed at 25 percent throughout this session. Develop the reach, location and texture naturally."}, initialSpeed: 25, keepSpeed: 25},
 		{name: "lasting_band", lines: []string{"Keep all travel between 20 and 70 percent throughout this session. Develop the pace and texture naturally."}, initialSpeed: 25, band: true},
+		{name: "released_band", lines: []string{"Keep all travel between 20 and 70 percent throughout this session.", "Release that travel restriction now; use the full device again and develop the pace and texture naturally."}, initialSpeed: 25},
 		{name: "exact_hold", lines: []string{"Keep this exact pattern and speed repeating until I tell you otherwise."}, initialSpeed: 25, exactHold: true},
 	}
 }
@@ -286,13 +287,15 @@ func TestConstraintLifetimeChatLive(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := DefaultLayeredScore(25)
+			limits := config.DefaultSettings().Motion
+			limits.SpeedMinPercent, limits.SpeedMaxPercent = 10, 50
 			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
 			state := MotionContext{Running: true, Autopilot: true, StandingHold: tc.held, MotionMode: MotionModeLayered, Layered: &before, SpeedMinPercent: 10, SpeedMaxPercent: 50}
 			service := Service{Provider: provider, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off"}
 			started := time.Now()
 			result, err := service.Complete(t.Context(), Request{Message: tc.text}, nil)
 			pass := err == nil && result.Response.StayUnchanged != nil && *result.Response.StayUnchanged == tc.wantHold && !result.Repaired && !result.SemanticFallback
-			row := hostedLayeredLiveRow("chat_"+tc.name, model, tc.text, result.Raw, before, result.Response.Motion, config.DefaultSettings().Motion, started, err, pass)
+			row := hostedLayeredLiveRow("chat_"+tc.name, model, tc.text, result.Raw, before, result.Response.Motion, limits, started, err, pass)
 			row["stay_unchanged"], row["expected_hold"] = result.Response.StayUnchanged, tc.wantHold
 			rows = append(rows, row)
 			t.Logf("pass=%t hold=%v err=%v", pass, result.Response.StayUnchanged, err)

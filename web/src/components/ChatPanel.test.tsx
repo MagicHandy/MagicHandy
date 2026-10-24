@@ -552,6 +552,9 @@ describe("ChatPanel history", () => {
     view.rerender(<ChatPanel sessionId={SESSION_ID} />);
     await waitFor(() => expect(signal?.aborted).toBe(true));
     visibility.mockRestore();
+    expect(await screen.findByText(loss === "ownership" || loss === "generation"
+      ? "The reply was interrupted because this browser lost control of the session. Take control, then try again."
+      : "The reply was interrupted before it finished. Please try again.")).toBeInTheDocument();
   });
 
   it("aborts the active stream without callbacks when the panel unmounts", async () => {
@@ -628,6 +631,7 @@ describe("ChatPanel history", () => {
     await waitFor(() => expect(streamSignal?.aborted).toBe(true));
     await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
     expect(screen.queryByText("Uncommitted draft")).not.toBeInTheDocument();
+    expect(screen.getByText("Chat canceled by Emergency Stop.")).toBeInTheDocument();
     expect(app.show).not.toHaveBeenCalled();
     expect(app.queueSpeech).not.toHaveBeenCalled();
     expect(app.refresh).not.toHaveBeenCalled();

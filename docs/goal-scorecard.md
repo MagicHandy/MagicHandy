@@ -1,5 +1,61 @@
 # Goal Scorecard
 
+## 2026-10-24 — Physically accepted Cloud sampling
+
+The [accepted D policy](cloud-sampling-review-2026-10-24.md) replaces the
+unaccepted extra velocity refinement below. Matched Windows amd64 pure-Go
+`-trimpath` builds measure **32,480,768 → 32,468,992 B** (−11,776 B) before the
+subsequent mode-order/default change. No dependency, task, ordinary model call
+or prompt expansion. The three-run shared-frame benchmark compares the detailed
+fit without extra velocity refinement against the sparse policy: median
+**93.880 → 69.586 µs/frame**, **100,512 → 92,928 B/frame**, **35 → 26 allocations**.
+This is bounded sampler work, not an end-to-end latency or RSS claim. After the
+mode-order/default change, the same build is **32,468,992 B**. Canonical UI
+remains **2,760,892 B**, main JavaScript gzip **342,081 → 342,082 B**. Existing
+labels are reordered; no parallel frontend assets are retained.
+
+## 2026-10-23 — Model-response depth follow-up
+
+Matched Windows amd64 `CGO_ENABLED=0 go build -trimpath` binaries for the
+pre-follow-up source and final source both measure **32,480,768 B**. This uses
+identical build options and source overlays; compare within this pair rather
+than against the differently built earlier review binary. Canonical UI remains
+**2,760,892 B**, with main JavaScript gzip **342,081 B**. No dependency,
+background task or extra normal-success generation is added.
+
+Active local prompts and the motion sampler are unchanged by this follow-up.
+The small local intent guide applies only to stopped Layered chat. Its 40-case
+comparison has median **809.5 → 800.5 ms**, not evidence of a throughput gain,
+and improves requested behavior from 31/40 to 32/40 while retaining known
+limitations. The final focused cloud confirmation passes **106/106** checks.
+See [model-response evidence and visual review](model-response-depth-review-2026-10-23.md).
+
+## 2026-10-23 — Slow Layered sampling candidate and scoped hosted timing
+
+The complete candidate, including interruption feedback below, measures
+**32,576,000 B** in the same Windows amd64 pure-Go build: **+17,408 B** versus
+alpha.71, or +16,384 B beyond the feedback-only build. UI sizes remain those
+of the feedback change. No dependency, goroutine or extra ordinary model call.
+Local-model prompts and immediate-transport command spacing are unchanged.
+
+Three matched shared-frame benchmark runs measured median **110.7 → 143.5 µs**
+and **111,249 → 135,680 B/frame**, 37 → 44 allocations. This is about 33 µs
+additional work per generated buffered frame; it is not an end-to-end latency
+or RSS improvement claim. The bounded refinement runs after the original
+frame cutoff and is skipped for transitions and immediate transports.
+The experimental turn profiles are test-only and do not enter the release
+binary. See the [evaluation and mandatory physical acceptance checklist](layered-slow-turn-review-2026-10-23.md).
+
+## 2026-10-23 — Chat interruption and timeout feedback
+
+Matched Windows amd64 `CGO_ENABLED=0 go build` binaries measure
+**32,558,592 → 32,559,616 B** (+1,024 B). Complete canonical UI:
+**2,760,234 → 2,760,892 B** (+658 B); main JavaScript gzip:
+**341,879 → 342,081 B** (+202 B). No dependency, background task, extra
+generation, prompt change, or motion-path change is added. RSS/cold-start
+improvements are not claimed. See the
+[investigation and validation](chat-response-investigation-2026-10-23.md).
+
 ## 2026-10-23 — Named Handy connections
 
 Matched Windows amd64 `CGO_ENABLED=0 go build` binaries measure

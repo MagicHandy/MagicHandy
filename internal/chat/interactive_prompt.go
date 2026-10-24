@@ -33,6 +33,9 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 		}
 		if section.ID == "output_guard" {
 			sections = appendPromptSection(sections, "live_action", "Live chat action", continuousActionGuideFor(current))
+			if !capabilities.HostedMotion && capabilities.MotionMode == MotionModeLayered && state != nil && !current.Running && !current.Paused {
+				sections = appendPromptSection(sections, "local_start_intent", "Stopped motion intent", localStoppedIntentGuide)
+			}
 		}
 		sections = append(sections, section)
 	}
@@ -46,6 +49,11 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 	composition.Bytes = len(composition.Prompt)
 	return composition
 }
+
+// Local stopped chat needs an explicit distinction between a performance
+// request and an explanation. Keep it off active motion and autonomous prompts
+// so their established small-model budget and timing are unchanged.
+const localStoppedIntentGuide = `A request to perform a rhythm asks you to start it now, without another confirmation. An explanation, quoted command or future possibility asks for conversation, not a demonstration. "Give me a rolling rhythm" requests motion; "What would it feel like?" does not. Decide the action before writing the reply.`
 
 // Experimental examples omit action. Replaying those beside a mandatory live
 // action field encourages unconstrained models to copy an invalid envelope.

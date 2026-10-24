@@ -109,6 +109,15 @@ func (s *Server) chatFailureEvidence(result chat.Result, failure error, diagnost
 			}
 		}
 	}
+	if connection := settings.ActiveConnection; connection != nil &&
+		(connection.Provider == config.LLMProviderChatGPT || connection.Provider == config.LLMProviderOpenAI) {
+		// Responses uses the connection's effort, not the local model switch
+		// retained in ChatRequest. Reporting "off" here hid real reasoning work.
+		item.ReasoningMode = connection.ReasoningEffort
+		if item.ReasoningMode == "" {
+			item.ReasoningMode = "default"
+		}
+	}
 	return item
 }
 

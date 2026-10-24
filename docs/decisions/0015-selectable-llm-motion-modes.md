@@ -15,6 +15,14 @@ before the mode selector existed still adopt Creative, the vocabulary they
 used, and every explicitly saved mode is unchanged. Creative, Layered, Pattern
 Library and Off remain explicit choices.
 
+Update (2026-10-24): the maintainer selected Layered as the new-install default
+for alpha.72 after the response and physical smoothness reviews. Chat and model
+settings list Layered, Creative v2, Creative, Pattern Library, then Off. Existing
+saved choices and the pre-selector Creative/Off migration remain intact. This
+changes neither motion permissions nor automatic startup behavior. See the
+[hardware acceptance](../cloud-sampling-review-2026-10-24.md) and
+[model evaluation](../model-response-depth-review-2026-10-23.md).
+
 ## Context
 
 MagicHandy's original LLM contract only let the model choose enabled library

@@ -16,7 +16,7 @@ func TestBufferedQuantizationUsesCrossingsWithoutInventingSpeedPulses(t *testing
 	}
 	samples := []MotionSample{{TimeMillis: 0}, {TimeMillis: 240, PositionPercent: 2.4},
 		{TimeMillis: 540, PositionPercent: 5.4}, {TimeMillis: 760, PositionPercent: 7.6}, {TimeMillis: 1000, PositionPercent: 10}}
-	fitted, err := fitQuantizedMotionTiming(samples, probes, map[int64]struct{}{0: {}, 1000: {}}, 1, 400, 1)
+	fitted, err := fitQuantizedMotionTiming(samples, probes, map[int64]struct{}{0: {}, 1000: {}}, 1, 400, wireApproximationTolerance, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestBufferedQuantizationUsesCrossingsWithoutInventingSpeedPulses(t *testing
 		if floor > 1 {
 			mandatory = map[int64]struct{}{0: {}, 1000: {}}
 		}
-		fixed, err := fitQuantizedMotionTiming(samples, probes, mandatory, 1, 400, floor)
+		fixed, err := fitQuantizedMotionTiming(samples, probes, mandatory, 1, 400, wireApproximationTolerance, floor)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -170,7 +170,7 @@ func BenchmarkQuantizedMotionFrame(b *testing.B) {
 func TestCrossingTimingDoesNotSearchAcrossAnUnpinnedReversal(t *testing.T) {
 	probes := []MotionSample{{TimeMillis: 0, PositionPercent: 0}, {TimeMillis: 250, PositionPercent: 5}, {TimeMillis: 500, PositionPercent: 0}, {TimeMillis: 750, PositionPercent: 5}, {TimeMillis: 1000, PositionPercent: 0}}
 	samples := []MotionSample{probes[0], {TimeMillis: 240, PositionPercent: 4.8}, {TimeMillis: 760, PositionPercent: 4.8}, probes[4]}
-	fitted, err := fitQuantizedMotionTiming(samples, probes, nil, 1, 320, 1)
+	fitted, err := fitQuantizedMotionTiming(samples, probes, nil, 1, 320, wireApproximationTolerance, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestBufferedTimingResumesAtTheActualBlendEnd(t *testing.T) {
 		probes = append(probes, MotionSample{TimeMillis: at, PositionPercent: float64(at) / 100})
 	}
 	samples := []MotionSample{{TimeMillis: 0}, {TimeMillis: 240, PositionPercent: 2.4}, {TimeMillis: 1000, PositionPercent: 10}, {TimeMillis: 1240, PositionPercent: 12.4}, {TimeMillis: 1540, PositionPercent: 15.4}, {TimeMillis: 2000, PositionPercent: 20}}
-	fitted, err := engine.retimeBufferedSamples(samples, probes, map[int64]struct{}{1000: {}}, 1, false)
+	fitted, err := engine.retimeBufferedSamples(samples, probes, map[int64]struct{}{1000: {}}, 1, wireApproximationTolerance, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestQuantizedCreativeSamplingHonorsVelocityCeiling(t *testing.T) {
 func TestQuantizedTimingRetainsCommittedTailAndExtrema(t *testing.T) {
 	points := []MotionSample{{TimeMillis: 0, PositionPercent: 0}, {TimeMillis: 31, PositionPercent: 9.49}, {TimeMillis: 100, PositionPercent: 20}}
 	probes := []MotionSample{{TimeMillis: 0, PositionPercent: 0}, {TimeMillis: 30, PositionPercent: 9}, {TimeMillis: 31, PositionPercent: 9.49}, {TimeMillis: 100, PositionPercent: 20}}
-	fit, err := fitQuantizedMotionTiming(points, probes, map[int64]struct{}{100: {}}, 1, 320, 1)
+	fit, err := fitQuantizedMotionTiming(points, probes, map[int64]struct{}{100: {}}, 1, 320, wireApproximationTolerance, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

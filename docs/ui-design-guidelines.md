@@ -593,6 +593,11 @@ bottom `--accent` edge.
   `--line-strong`, `--radius`) holding the textarea, voice input and Send.
 - Streaming cursor: a blinking `--accent` caret; warning state tints the border
   `--warn`. All animation respects `prefers-reduced-motion`.
+- A canceled in-flight reply leaves a plain-language warning in the open chat,
+  rather than silently removing its pending bubble. Use a known Stop, control,
+  or settings-change cause when available; otherwise say it was interrupted
+  without guessing why. Discard uncommitted output and never automatically
+  resend it. Detailed failure evidence remains in Diagnostics.
 
 ### Phone remote
 

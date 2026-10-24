@@ -21,8 +21,10 @@ turn construction for strokes described by where they turn. It is a Lab
 experiment that production modes do not produce; see [the stroke vocabulary
 review](../lab-stroke-modes-review-2026-09-26.md).
 
-Update: new installs start on Creative v2; settings saved before the mode
-selector keep Creative. See [ADR 0015](0015-selectable-llm-motion-modes.md).
+Update (2026-09-26): new installs started on Creative v2; alpha.72 switches
+new installs to Layered at the maintainer's request. Saved choices and settings
+that predate the selector retain their modes. See
+[ADR 0015](0015-selectable-llm-motion-modes.md).
 
 ## Context
 

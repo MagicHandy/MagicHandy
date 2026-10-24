@@ -66,12 +66,12 @@ func fitSpacedMotionSamplesPreferred(probes []MotionSample, floor, preferred int
 // time creates avoidable speed pulses, particularly beside a reversal. Fixed
 // knots and the already submitted append tail keep their exact times.
 // A final interval projection enforces the velocity ceiling after rounding.
-func fitQuantizedMotionTiming(samples, probes []MotionSample, mandatory map[int64]struct{}, resolution, maximumVelocity float64, floor int64) ([]MotionSample, error) {
+func fitQuantizedMotionTiming(samples, probes []MotionSample, mandatory map[int64]struct{}, resolution, maximumVelocity, positionTolerance float64, floor int64) ([]MotionSample, error) {
 	if len(samples) < 2 {
 		return samples, nil
 	}
 	result := append([]MotionSample(nil), samples...)
-	tolerance := quantizedProbeTolerance(probes, resolution)
+	tolerance := quantizedProbeTolerance(probes, resolution, positionTolerance)
 	encoded := func(sample MotionSample) float64 {
 		if resolution <= 0 {
 			return sample.PositionPercent

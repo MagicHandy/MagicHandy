@@ -4,6 +4,7 @@ package motion
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"sort"
@@ -18,19 +19,18 @@ import (
 func TestLayeredSmoothnessProbe(t *testing.T) {
 	input := os.Getenv("MAGICHANDY_LAYERED_SMOOTHNESS_INPUT")
 	output := os.Getenv("MAGICHANDY_LAYERED_SMOOTHNESS_OUTPUT")
-	if input == "" || output == "" {
-		t.Skip("set the inert comparison input/output paths")
+	if output == "" {
+		t.Skip("set the inert comparison output path; optional input overrides the slow-motion matrix")
 	}
-	data, err := os.ReadFile(input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var cases []struct {
-		Name string
-		Spec FlowSpec
-	}
-	if err := json.Unmarshal(data, &cases); err != nil {
-		t.Fatal(err)
+	cases := slowMotionReviewCases()
+	if input != "" {
+		data, err := os.ReadFile(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(data, &cases); err != nil {
+			t.Fatal(err)
+		}
 	}
 	var results []map[string]any
 	settings := config.DefaultSettings().Motion
@@ -58,7 +58,8 @@ func TestLayeredSmoothnessProbe(t *testing.T) {
 				}
 			}
 			engine := &Engine{plan: plan, settings: settings, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
-				preservePlanKnots: true, positionResolutionPercent: 1, maximumChunkPoints: 100}
+				preservePlanKnots: true, positionResolutionPercent: 1, maximumChunkPoints: 100,
+				preferSparseGeneratedMotion: os.Getenv("MAGICHANDY_SMOOTHNESS_CLOUD") == "1"}
 			var samples []MotionSample
 			end := min(plan.PeriodMillis, int64(20000))
 			if os.Getenv("MAGICHANDY_SMOOTHNESS_FULL_MATRIX") == "1" {
@@ -129,6 +130,38 @@ func TestLayeredSmoothnessProbe(t *testing.T) {
 	if err := os.WriteFile(output, encoded, 0600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+type smoothnessReviewCase struct {
+	Name string
+	Spec FlowSpec
+}
+
+func slowMotionReviewCases() []smoothnessReviewCase {
+	var cases []smoothnessReviewCase
+	for _, speed := range []int{10, 25, 58, 90} {
+		base := FlowSpec{MinPercent: 0, MaxPercent: 100, SpeedPercent: speed,
+			AnchorPercent: 100, MemoryCycles: 8, Seed: 17, LoopCycles: 6}
+		for _, width := range []int{10, 28, 100} {
+			spec := base
+			spec.RangeFloorPercent, spec.RangeCeilingPercent = width, width
+			cases = append(cases, smoothnessReviewCase{fmt.Sprintf("steady-w%d-s%d", width, speed), spec})
+		}
+		for _, rate := range []int{25, 12} {
+			spec := base
+			spec.RangeFloorPercent, spec.RangeCeilingPercent = 28, 100
+			spec.Phrase = &FlowPhrase{Strokes: []PhraseStroke{
+				{BottomPercent: 72, TopPercent: 100, Count: 2, RatePercent: rate},
+				{BottomPercent: 0, TopPercent: 100, Count: 1, RatePercent: rate},
+			}}
+			name := fmt.Sprintf("phrase-slow-s%d", speed)
+			if rate == 12 {
+				name += "-rate12"
+			}
+			cases = append(cases, smoothnessReviewCase{name, spec})
+		}
+	}
+	return cases
 }
 
 // Compare wire velocities at the same normalized phase of identical strokes.

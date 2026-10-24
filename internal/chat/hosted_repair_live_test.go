@@ -48,6 +48,7 @@ func TestHostedResponseRepairLive(t *testing.T) {
 			{"duplicate_operation", "Increase the overall speed slightly. Keep the reach, counts and rhythm unchanged.", `{"action":"update","edits":{"composition":"manual","controls":{"speed_percent":{"op":"set","op":"adjust","value":5}}},"reply":"A little faster."}`, false},
 			{"invalid_count", "Repeat two short upper-end strokes followed by one full sweep, at the current base speed.", `{"action":"update","edits":{"composition":"phrase","phrase":{"strokes":[{"bottom_percent":70,"count":9,"rate_percent":100,"top_percent":100},{"bottom_percent":0,"count":1,"rate_percent":100,"top_percent":100}]}},"reply":"Two upper strokes then a full sweep."}`, true},
 			{"counted_seam", "Repeat four short upper-end strokes and two short lower-end strokes, with smooth travel between the regions. Keep those counts and the base speed.", `{"action":"update","edits":{"composition":"phrase","phrase":{"strokes":[{"bottom_percent":70,"count":4,"rate_percent":100,"top_percent":100},{"bottom_percent":0,"count":2,"rate_percent":100,"top_percent":35},{"bottom_percent":0,"count":1,"rate_percent":100,"top_percent":70}]}},"reply":"Four upper and two lower strokes, with a connecting stroke."}`, true},
+			{"counted_seam_explicit", "Repeat four upper-end strokes from 70 to 100 and two lower-end strokes from 0 to 35, with smooth connecting travel between the regions. Keep those endpoints, counts and the base speed.", `{"action":"update","edits":{"composition":"phrase","phrase":{"strokes":[{"bottom_percent":70,"count":4,"rate_percent":100,"top_percent":100},{"bottom_percent":0,"count":2,"rate_percent":100,"top_percent":35},{"bottom_percent":0,"count":1,"rate_percent":100,"top_percent":70}]}},"reply":"Four upper and two lower strokes, with a connecting stroke."}`, true},
 			{"wrong_shape_contract", "Switch to short strokes alternating between the upper and lower ends, with the upper region faster. Keep the current base speed.", `{"action":"update","edits":{"composition":"geometry","geometry":"alternate_ends","layers":{"center":{"op":"edit","value":{"amount_percent":100}},"pace":{"op":"follow","value":{"axis":"center","relation":"same","amount_percent":100,"low_rate_percent":35}}}},"reply":"Alternating regions."}`, false},
 		} {
 			t.Run(fmt.Sprintf("automatic_%t/%s", automatic, tc.name), func(t *testing.T) {
@@ -80,11 +81,17 @@ func TestHostedResponseRepairLive(t *testing.T) {
 						pass = after.SpeedPercent > before.SpeedPercent && fmt.Sprint(after.Phrase) == fmt.Sprint(before.Phrase)
 					case "invalid_count":
 						pass = phraseCountIntent(*after, 100, 2) && after.SpeedPercent == before.SpeedPercent
-					case "counted_seam":
+					case "counted_seam", "counted_seam_explicit":
 						pass = after.Phrase != nil && len(after.Phrase.Strokes) == 3 && after.SpeedPercent == before.SpeedPercent
 						if pass {
 							a, b, join := after.Phrase.Strokes[0], after.Phrase.Strokes[1], after.Phrase.Strokes[2]
-							pass = a.Count == 4 && b.Count == 2 && join.Count == 1 && a.BottomPercent == 70 && a.TopPercent == 100 && b.BottomPercent == 0 && b.TopPercent == 35 && join.TopPercent >= a.BottomPercent+10
+							// Unrequested coordinates in the rejected JSON are not
+							// user constraints. Check regional intent and counts;
+							// enforce exact endpoints only in the explicit case.
+							pass = a.Count == 4 && b.Count == 2 && join.Count == 1 && a.BottomPercent >= 50 && b.TopPercent <= 50 && join.TopPercent >= a.BottomPercent+10
+							if tc.name == "counted_seam_explicit" {
+								pass = pass && a.BottomPercent == 70 && a.TopPercent == 100 && b.BottomPercent == 0 && b.TopPercent == 35
+							}
 						}
 					case "wrong_shape_contract":
 						pass = after.Phrase == nil && after.SpeedPercent == before.SpeedPercent && hasCompiledRegionalTurns(*after, limits)
