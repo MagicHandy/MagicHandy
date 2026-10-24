@@ -14,6 +14,9 @@ const (
 	controllerHeaderName       = "X-MagicHandy-Client-ID"
 	controllerGenerationHeader = "X-MagicHandy-Control-Generation"
 	controllerEpochHeader      = "X-MagicHandy-Control-Epoch"
+	// A hidden tab marks its observations: they never renew its lease, not even
+	// an unprotected local one (ADR 0056).
+	controllerBackgroundHeader = "X-MagicHandy-Background"
 	controllerLeaseTTL         = 15 * time.Second
 )
 
@@ -38,6 +41,10 @@ type controllerSnapshot struct {
 	ActiveClientAgeMillis int64  `json:"active_client_age_ms,omitempty"`
 	LeaseExpiresInMillis  int64  `json:"lease_expires_in_ms,omitempty"`
 	TakeoverInProgress    bool   `json:"takeover_in_progress,omitempty"`
+	// RemoteHeld tells the owner tab that its phone remote is keeping the
+	// lease alive, so a hidden owner stays awake to carry out the phone's
+	// commands (ADR 0056).
+	RemoteHeld bool `json:"remote_held,omitempty"`
 }
 
 type controllerTakeoverResponse struct {
@@ -133,7 +140,11 @@ func (s *Server) handleControllerTakeover(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) controllerState(r *http.Request) controllerSnapshot {
-	snapshot := s.controller.Observe(controllerActor(r, clientIDFromRequest(r)))
+	observe := s.controller.Observe
+	if r.Header.Get(controllerBackgroundHeader) == "1" {
+		observe = s.controller.Peek
+	}
+	snapshot := observe(controllerActor(r, clientIDFromRequest(r)))
 	if !s.capabilities(r).Control {
 		snapshot.Active, snapshot.ReadOnly = false, true
 		snapshot.Reason = "this account is an observer; ask the administrator for a control permission"

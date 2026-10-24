@@ -1,4 +1,6 @@
 {
+  "Video and chat return when the desktop tab is in front. Edge and Stop work from here.": "El vídeo y el chat vuelven cuando la pestaña del escritorio está en primer plano. Al límite y Detener funcionan desde aquí.",
+  "This phone keeps the session going while the desktop tab is in the background.": "Este teléfono mantiene la sesión activa mientras la pestaña del escritorio está en segundo plano.",
   "Automatically repair rejected chat responses": "Corregir automáticamente las respuestas de chat rechazadas",
   "Ask the same external model once to correct an invalid response. Adds time and may use more quota. When off, eligible chat errors offer Repair response.": "Pide una vez al mismo modelo externo que corrija una respuesta no válida. Tarda más y puede consumir más cuota. Si está desactivado, los errores que lo permitan ofrecen Corregir respuesta.",
   "Repair response": "Corregir respuesta",
@@ -2426,6 +2428,11 @@
   "Back to remote": "Volver al control remoto",
   "Desktop connected": "Escritorio conectado",
   "No desktop connected": "Ningún escritorio conectado",
+  "Session kept alive from this phone": "Sesión mantenida desde este teléfono",
+  "The desktop tab is not taking commands. This phone is keeping its session going.": "La pestaña del escritorio no está recibiendo órdenes. Este teléfono mantiene su sesión activa.",
+  "Video and chat return when the desktop tab is in front. Edge and Stop work from here. Keep this page open: locking this phone ends the session within 15 seconds.": "El vídeo y el chat vuelven cuando la pestaña del escritorio está en primer plano. Al límite y Detener funcionan desde aquí. Mantén esta página abierta: bloquear este teléfono termina la sesión en 15 segundos.",
+  "Connected to the desktop in the background: {page}": "Conectado al escritorio en segundo plano: {page}",
+  "This phone keeps the session going while the desktop tab is in the background. Keep this page open: locking this phone ends the session within 15 seconds.": "Este teléfono mantiene la sesión activa mientras la pestaña del escritorio está en segundo plano. Mantén esta página abierta: bloquear este teléfono termina la sesión en 15 segundos.",
   "Search titles and tags": "Buscar títulos y etiquetas",
   "Show more": "Mostrar más",
   "Ask the administrator for a control permission to use this remote.": "Pide al administrador un permiso de control para usar este mando.",

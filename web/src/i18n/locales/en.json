@@ -1,4 +1,6 @@
 {
+  "Video and chat return when the desktop tab is in front. Edge and Stop work from here.": "Video and chat return when the desktop tab is in front. Edge and Stop work from here.",
+  "This phone keeps the session going while the desktop tab is in the background.": "This phone keeps the session going while the desktop tab is in the background.",
   "Automatically repair rejected chat responses": "Automatically repair rejected chat responses",
   "Ask the same external model once to correct an invalid response. Adds time and may use more quota. When off, eligible chat errors offer Repair response.": "Ask the same external model once to correct an invalid response. Adds time and may use more quota. When off, eligible chat errors offer Repair response.",
   "Repair response": "Repair response",
@@ -2426,6 +2428,11 @@
   "Back to remote": "Back to remote",
   "Desktop connected": "Desktop connected",
   "No desktop connected": "No desktop connected",
+  "Session kept alive from this phone": "Session kept alive from this phone",
+  "The desktop tab is not taking commands. This phone is keeping its session going.": "The desktop tab is not taking commands. This phone is keeping its session going.",
+  "Video and chat return when the desktop tab is in front. Edge and Stop work from here. Keep this page open: locking this phone ends the session within 15 seconds.": "Video and chat return when the desktop tab is in front. Edge and Stop work from here. Keep this page open: locking this phone ends the session within 15 seconds.",
+  "Connected to the desktop in the background: {page}": "Connected to the desktop in the background: {page}",
+  "This phone keeps the session going while the desktop tab is in the background. Keep this page open: locking this phone ends the session within 15 seconds.": "This phone keeps the session going while the desktop tab is in the background. Keep this page open: locking this phone ends the session within 15 seconds.",
   "Search titles and tags": "Search titles and tags",
   "Show more": "Show more",
   "Ask the administrator for a control permission to use this remote.": "Ask the administrator for a control permission to use this remote.",

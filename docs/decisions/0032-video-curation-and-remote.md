@@ -4,6 +4,10 @@
 - Status: Implemented; reviewed and hardened on 2026-09-29
 - Amends: the media-manager guardrail in [video-playback.md](../video-playback.md)
 - Extends: ADRs 0002, 0026 and 0029
+- Amended by: [ADR 0055](0055-phone-remote-keepalive-and-edge.md): the phone
+  keeps a hidden desktop's session alive and offers Edge directly;
+  [ADR 0056](0056-hidden-desktop-acts-for-its-phone.md): that hidden desktop
+  keeps carrying out video and chat
 
 ## Context
 
@@ -122,7 +126,8 @@ motion path.
   command: it takes no command ticket, never waits behind live control, adds
   nothing to the audit log and does not renew login idle time. Presence lapses
   after 20 seconds. A hidden tab, a tab that loses control and a closing tab
-  withdraw it.
+  withdraw it; a hidden tab its phone holds keeps reporting, marked as in the
+  background ([ADR 0056](0056-hidden-desktop-acts-for-its-phone.md)).
 - **Commands.** Video: play, pause, toggle, seek, seek by, volume, mute,
   speed, motion source, open and close. Chat: open and send. The phone needs control
   permission and the same account as the desktop. Commands wait at most ten

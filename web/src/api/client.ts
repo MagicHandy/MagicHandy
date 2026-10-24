@@ -12,7 +12,7 @@ import { checkedCloudStatus } from "./cloud-status";
 import type { ModelCheckReport } from "./model-check-types";
 import type { AccessAuditPage } from "./audit-types";
 import type { RecoveryCodeStatus, IssuedRecoveryCodes, SessionPolicy } from "./access-types";
-import type { RemoteClaim, RemoteCommand, RemoteCommandInput, RemotePresence, RemoteState } from "./remote-types";
+import type { RemoteClaim, RemoteCommand, RemoteCommandInput, RemotePresence, RemoteSession, RemoteState } from "./remote-types";
 import type {
   AppState,
   AutopilotSettings,
@@ -156,6 +156,7 @@ export const AUTHENTICATION_REQUIRED_EVENT = "magichandy:authentication-required
 export const COMMAND_RECOVERED_EVENT = "magichandy:command-recovered";
 // A phone's command for this tab, forwarded from its motion stream.
 export const REMOTE_COMMAND_EVENT = "magichandy:remote-command";
+const BACKGROUND_HEADERS = { "X-MagicHandy-Background": "1" };
 
 // Transport metadata copied from backend snapshots. It never grants local
 // ownership; the server independently checks session, tab and generation.
@@ -562,8 +563,11 @@ export const api = {
   saveAccountProfileImage: (image: Blob) => uploadAccountProfileImage(image),
   deleteAccountProfileImage: () => request<{ account: UserAccount }>("DELETE", "/api/auth/profile-image"),
 
-  getState: (signal?: AbortSignal) => request<AppState>("GET", "/api/state", undefined, signal),
-  controllerState: (signal?: AbortSignal) => request<ControllerSnapshot>("GET", "/api/controller", undefined, signal),
+  // A hidden tab observes in the background: it never renews its lease (ADR 0056).
+  getState: (signal?: AbortSignal, background = false) =>
+    request<AppState>("GET", "/api/state", undefined, signal, background ? BACKGROUND_HEADERS : undefined),
+  controllerState: (signal?: AbortSignal, background = false) =>
+    request<ControllerSnapshot>("GET", "/api/controller", undefined, signal, background ? BACKGROUND_HEADERS : undefined),
   takeControl: () => request<ControllerTakeoverResponse>("POST", "/api/controller/takeover", {}),
   controllerHeartbeat: (signal?: AbortSignal) => request<ControllerSnapshot>("POST", "/api/controller/heartbeat", {}, signal),
   commandReceipt: (id: string, signal?: AbortSignal) => request<CommandReceipt>("GET", `/api/controller/commands/${encodeURIComponent(id)}`, undefined, signal),
@@ -649,6 +653,12 @@ export const api = {
   claimRemoteCommand: (id: string, stopSequence: number) =>
     request<RemoteClaim>("POST", `/api/remote/commands/${encodeURIComponent(id)}/claim`, {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
   remoteEventsURL: () => `/api/remote/events?client_id=${encodeURIComponent(clientId)}`,
+  remoteKeepalive: (signal?: AbortSignal) =>
+    request<{ keepalive: { renewed: boolean; lease_expires_in_ms?: number } }>("POST", "/api/remote/keepalive", {}, signal),
+  remoteEdge: (stopSequence: number) =>
+    request<{ session: RemoteSession }>("POST", "/api/remote/edge", {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  remoteEdgeResume: (stopSequence: number) =>
+    request<{ session: RemoteSession }>("POST", "/api/remote/edge/resume", {}, undefined, { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
   saveMediaPlayback: (patch: Partial<{
     script_smoothing_percent: number;
     peak_rounding_ms: number;

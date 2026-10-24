@@ -13,9 +13,10 @@ interface RemoteSurfaces {
 const RemoteSurfaceContext = createContext<RemoteSurfaces>({ setVideo: () => undefined, setChat: () => undefined });
 
 // Makes this tab the phone remote's desktop while it holds control and is in
-// front. Pages register what they show; commands arrive on the motion stream.
+// front, or while hidden its phone keeps the session alive (ADR 0056). Pages
+// register what they show; commands arrive on the motion stream.
 export function RemoteExecutorProvider({ route, children }: { route: string; children: ReactNode }) {
-  const { backendOnline, readOnly, state } = useAppState();
+  const { backendOnline, readOnly, remoteHeld, state } = useAppState();
   const visible = useDocumentVisible();
   const executor = useMemo(() => new RemoteExecutor({
     claim: (id, stopSequence) => api.claimRemoteCommand(id, stopSequence),
@@ -25,7 +26,7 @@ export function RemoteExecutorProvider({ route, children }: { route: string; chi
       window.location.hash = hash;
     },
   }), []);
-  const eligible = backendOnline && !readOnly && state?.capabilities?.control !== false && visible;
+  const eligible = backendOnline && !readOnly && state?.capabilities?.control !== false && (visible || remoteHeld);
 
   // Unmounting only steps back, so StrictMode's remount resumes the same executor.
   useLayoutEffect(() => {
@@ -36,6 +37,7 @@ export function RemoteExecutorProvider({ route, children }: { route: string; chi
     return () => executor.setEligible(false);
   }, [executor, eligible]);
   useEffect(() => executor.setRoute(route), [executor, route]);
+  useEffect(() => executor.setBackground(!visible), [executor, visible]);
   useEffect(() => {
     const receive = (event: Event) => void executor.execute((event as CustomEvent<RemoteCommand>).detail);
     const stop = () => executor.cancelPending();

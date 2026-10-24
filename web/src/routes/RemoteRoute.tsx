@@ -37,6 +37,16 @@ export function RemoteRoute({ remote, canControl, onRefresh }: { remote: RemoteV
       <SegmentedChoice className="remote-mode" label={t("Control")} value={mode}
         options={[{ value: "video", label: t("Video") }, { value: "chat", label: t("Chat") }]} onChange={chooseMode} />
       {status && <p className="remote-command-status" data-tone={status.tone} role={status.tone === "error" ? "alert" : "status"}>{status.message}</p>}
+      {!reachable && !remote.stale && state?.session?.alive && !state.other_account && <p className="remote-notice" role="status">
+        {state.session.stop_on_expiry
+          ? t("Video and chat return when the desktop tab is in front. Edge and Stop work from here. Keep this page open: locking this phone ends the session within 15 seconds.")
+          : t("Video and chat return when the desktop tab is in front. Edge and Stop work from here.")}
+      </p>}
+      {reachable && state?.background && <p className="remote-notice" role="status">
+        {state.session?.stop_on_expiry
+          ? t("This phone keeps the session going while the desktop tab is in the background. Keep this page open: locking this phone ends the session within 15 seconds.")
+          : t("This phone keeps the session going while the desktop tab is in the background.")}
+      </p>}
       {reachable && state && <div className="remote-workspace" data-mode={mode}>
         <section className="remote-video-column" aria-label={t("Video")}>
           {state.video ? <RemoteVideoControls key={`${state.video.video_id}:${state.stop_sequence}`} video={state.video} position={remotePosition(state, remote.receivedAt, now)} send={send} />
@@ -64,11 +74,17 @@ export function RemoteConnection({ remote }: { remote: RemoteView }) {
   } else if (state.other_account) {
     tone = "warn";
     text = t("The desktop is signed in to another account.");
+  } else if (!state.connected && state.session?.alive && !remote.stale) {
+    tone = "ok";
+    text = t("The desktop tab is not taking commands. This phone is keeping its session going.");
   } else if (!state.connected) {
     text = t("No desktop is taking commands. On the desktop, take control in MagicHandy and keep that tab in front.");
   } else if (remote.stale) {
     tone = "warn";
     text = t("Reconnecting to the desktop…");
+  } else if (state.background) {
+    tone = "ok";
+    text = t("Connected to the desktop in the background: {page}", { page: pageLabel(state.route) });
   } else {
     tone = "ok";
     text = t("Connected to the desktop: {page}", { page: pageLabel(state.route) });

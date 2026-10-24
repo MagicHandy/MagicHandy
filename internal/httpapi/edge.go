@@ -21,13 +21,7 @@ func (s *Server) handleEdge(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	// Cancel existing chat/planning without waiting for inference or taking the
-	// Stop path. Their own contexts and motion plan guards reject late work.
-	s.chatWorkspace.CancelTurns()
-	s.motionReview.invalidate()
-	s.cloudRequests.invalidate()
-	s.autopilotHold.release()
-	status, err := s.modes.ActivateEdge(r.Context())
+	status, err := s.activateEdge(r.Context())
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
@@ -39,7 +33,7 @@ func (s *Server) handleEdgeResume(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	status, err := s.modes.ResumeEdge(r.Context())
+	status, err := s.resumeEdge(r.Context())
 	if err != nil {
 		writeError(w, http.StatusConflict, err)
 		return

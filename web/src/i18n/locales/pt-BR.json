@@ -1,4 +1,6 @@
 {
+  "Video and chat return when the desktop tab is in front. Edge and Stop work from here.": "Vídeo e chat voltam quando a aba da área de trabalho estiver em primeiro plano. No limite e Parar funcionam daqui.",
+  "This phone keeps the session going while the desktop tab is in the background.": "Este telefone mantém a sessão ativa enquanto a aba da área de trabalho está em segundo plano.",
   "Automatically repair rejected chat responses": "Corrigir automaticamente respostas de chat rejeitadas",
   "Ask the same external model once to correct an invalid response. Adds time and may use more quota. When off, eligible chat errors offer Repair response.": "Pede uma vez ao mesmo modelo externo que corrija uma resposta inválida. Leva mais tempo e pode consumir mais cota. Quando desativado, os erros elegíveis oferecem Corrigir resposta.",
   "Repair response": "Corrigir resposta",
@@ -2426,6 +2428,11 @@
   "Back to remote": "Voltar ao controle remoto",
   "Desktop connected": "Área de trabalho conectada",
   "No desktop connected": "Nenhuma área de trabalho conectada",
+  "Session kept alive from this phone": "Sessão mantida por este telefone",
+  "The desktop tab is not taking commands. This phone is keeping its session going.": "A aba da área de trabalho não está recebendo comandos. Este telefone está mantendo a sessão ativa.",
+  "Video and chat return when the desktop tab is in front. Edge and Stop work from here. Keep this page open: locking this phone ends the session within 15 seconds.": "Vídeo e chat voltam quando a aba da área de trabalho estiver em primeiro plano. No limite e Parar funcionam daqui. Mantenha esta página aberta: bloquear este telefone encerra a sessão em 15 segundos.",
+  "Connected to the desktop in the background: {page}": "Conectado ao computador em segundo plano: {page}",
+  "This phone keeps the session going while the desktop tab is in the background. Keep this page open: locking this phone ends the session within 15 seconds.": "Este telefone mantém a sessão ativa enquanto a aba da área de trabalho está em segundo plano. Mantenha esta página aberta: bloquear este telefone encerra a sessão em 15 segundos.",
   "Search titles and tags": "Buscar títulos e etiquetas",
   "Show more": "Mostrar mais",
   "Ask the administrator for a control permission to use this remote.": "Peça ao administrador uma permissão de controle para usar este controle remoto.",

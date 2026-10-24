@@ -34,7 +34,7 @@ interface Props {
 const uid = () => Math.random().toString(36).slice(2, 10);
 
 export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChanged, motionOwner, disabled = false }: Props) {
-  const { backendOnline, readOnly, state, refresh } = useAppState();
+  const { backendOnline, readOnly, remoteHeld, state, refresh } = useAppState();
   const { show } = useToast();
   const { queueSpeech } = useVoicePlayback();
   const [draft, setDraft] = useState("");
@@ -59,7 +59,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     messages, setMessages, historyLoading, historyError, tailError, historyNotice,
     loadHistory, reconcileHistory, cancelReads, queueSpeechOnce,
   } = useChatHistory({
-    sessionId, epoch: state?.observation?.epoch, backendOnline, readOnly, busy, busyRef,
+    sessionId, epoch: state?.observation?.epoch, backendOnline, readOnly, remoteHeld, busy, busyRef,
     latestSeq: activeChat?.latest_seq ?? 0, revision: activeChat?.revision,
     pollEpoch: state?.uptime_seconds ?? 0, queueSpeech,
   });
@@ -115,8 +115,12 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     observedMotionOwner.current = motionOwner;
   }, [motionOwner]);
 
+  // A tab its phone remote holds stays awake while hidden, so its reply keeps
+  // streaming (ADR 0056).
+  const held = useRef(remoteHeld);
+  useLayoutEffect(() => { held.current = remoteHeld; });
   useEffect(() => {
-    const hidden = () => { if (document.visibilityState === "hidden") activeStream.current?.abort(); };
+    const hidden = () => { if (document.visibilityState === "hidden" && !held.current) activeStream.current?.abort(); };
     document.addEventListener("visibilitychange", hidden);
     return () => document.removeEventListener("visibilitychange", hidden);
   }, []);

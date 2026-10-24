@@ -7,6 +7,7 @@ import type { ControllerSnapshot, BackendObservation } from "../api/types";
 const app = vi.hoisted(() => ({
   sessionId: "chat-test",
   readOnly: false,
+  remoteHeld: false,
   backendOnline: true,
   state: {
     controller: undefined as ControllerSnapshot | undefined,
@@ -35,6 +36,7 @@ vi.mock("../state/app-state", () => ({
   useAppState: () => ({
     backendOnline: app.backendOnline,
     readOnly: app.readOnly,
+    remoteHeld: app.remoteHeld,
     state: app.state,
     refresh: app.refresh,
   }),
@@ -60,6 +62,7 @@ describe("ChatPanel history", () => {
       settings: { voice: { enabled: false, asr_provider: "none" } },
     };
     app.readOnly = false;
+    app.remoteHeld = false;
     app.backendOnline = true;
     app.show.mockReset();
     app.queueSpeech.mockReset();
@@ -555,6 +558,29 @@ describe("ChatPanel history", () => {
     expect(await screen.findByText(loss === "ownership" || loss === "generation"
       ? "The reply was interrupted because this browser lost control of the session. Take control, then try again."
       : "The reply was interrupted before it finished. Please try again.")).toBeInTheDocument();
+  });
+
+  it("keeps a reply streaming while hidden when its phone remote holds the session", async () => {
+    app.remoteHeld = true;
+    app.state.controller = { active: true, read_only: false, heartbeat_required: true, generation: 4, epoch: "test-process", revision: 1, remote_held: true };
+    app.state.observation = { epoch: "test-process", revision: 1, observed_at: "2026-10-22T12:00:00Z" };
+    getChatMessages.mockResolvedValue({ messages: [], latest_seq: 0, cursor: 0, session_id: SESSION_ID,
+      server_epoch: "test-process", revision: 0, next_revision: 0, first_seq: 0, has_more: false, reset: true });
+    let signal: AbortSignal | undefined;
+    streamChatMock.mockImplementation((_id, _message, _event, abort) => {
+      signal = abort;
+      return new Promise<void>((_resolve, reject) => abort?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+    });
+    const view = render(<ChatPanel sessionId={SESSION_ID} />);
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Keep going" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(signal).toBeDefined());
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    view.rerender(<ChatPanel sessionId={SESSION_ID} />);
+    expect(signal?.aborted).toBe(false);
+    visibility.mockRestore();
   });
 
   it("aborts the active stream without callbacks when the panel unmounts", async () => {

@@ -187,6 +187,24 @@ describe("committed conversation recovery", () => {
     expect(getMessages.mock.calls[2][2]?.revision).toBe(1);
   });
 
+  it("loads, reads on and speaks while hidden when its phone remote holds the page", async () => {
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    getMessages.mockResolvedValueOnce(page([row(1, 1, "opened from the phone")], 1, { reset: true }))
+      .mockResolvedValueOnce(page([row(2, 2, "the reply", "tts-reply")], 2, { first_seq: 1 }));
+    const props = { ...options(), remoteHeld: true, revision: 1, latestSeq: 1 };
+    const view = renderHook(useChatHistory, { initialProps: props });
+    await waitFor(() => expect(view.result.current.historyLoading).toBe(false));
+    expect(view.result.current.messages).toHaveLength(1);
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    view.rerender({ ...props, revision: 2, latestSeq: 2, pollEpoch: 2 });
+    await waitFor(() => expect(view.result.current.messages.map((item) => item.seq)).toEqual([1, 2]));
+    expect(props.queueSpeech).toHaveBeenCalledWith("tts-reply");
+
+    const asleep = renderHook(useChatHistory, { initialProps: { ...options(), sessionId: "another" } });
+    expect(asleep.result.current.historyLoading).toBe(true);
+    expect(getMessages).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps the rendered conversation through repeated visibility changes", async () => {
     let visibility: DocumentVisibilityState = "visible";
     vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);

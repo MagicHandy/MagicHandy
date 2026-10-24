@@ -98,6 +98,7 @@ export class RemoteExecutor {
   private readonly now: () => number;
   private readonly canPlaySound: () => boolean;
   private eligible = false;
+  private background = false;
   private stopSequence: number | undefined;
   private authority = "";
   private generation = 0;
@@ -124,13 +125,23 @@ export class RemoteExecutor {
     this.canPlaySound = deps.canPlaySound ?? (() => navigator.userActivation?.hasBeenActive !== false);
   }
 
-  /** Only a visible tab that holds control reports and takes commands. */
+  /**
+   * Only a tab that holds control reports and takes commands: one in front,
+   * or a hidden one whose phone keeps the session alive.
+   */
   setEligible(eligible: boolean): void {
     if (eligible === this.eligible || this.disposed) return;
     this.eligible = eligible;
     this.generation += 1;
     if (eligible) this.schedule(0);
     else this.stopReporting();
+  }
+
+  /** A hidden tab says so, and the phone shows it is keeping the session going. */
+  setBackground(background: boolean): void {
+    if (background === this.background) return;
+    this.background = background;
+    this.schedule(0);
   }
 
   /** A claim response from an earlier Stop or controller lease cannot act. */
@@ -311,6 +322,7 @@ export class RemoteExecutor {
     const outcomes = this.outcomes;
     this.outcomes = [];
     const presence: RemotePresence = { route: this.route };
+    if (this.background) presence.background = true;
     if (this.video) presence.video = videoPresence(this.video);
     if (this.chat) presence.chat = chatPresence(this.chat);
     if (outcomes.length) presence.outcomes = outcomes;

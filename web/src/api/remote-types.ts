@@ -42,9 +42,37 @@ export interface RemoteOutcome {
 
 export interface RemotePresence {
   route: string;
+  /** The desktop tab is hidden and stays awake because this phone keeps its session alive. */
+  background?: boolean;
   video?: RemoteVideoPresence;
   chat?: RemoteChatPresence;
   outcomes?: RemoteOutcome[];
+}
+
+/** Edge holding status, as the desktop's Edge button shows it. */
+export interface RemoteEdgeHold {
+  active: boolean;
+  phase: "applying" | "planning" | "holding" | "failed" | string;
+  automatic: boolean;
+  resume_in_seconds?: number;
+  message?: string;
+}
+
+/**
+ * The desktop's control session (ADR 0055). It outlives presence: a hidden
+ * desktop withdraws its presence but keeps control while this phone keeps it
+ * alive.
+ */
+export interface RemoteSession {
+  /** A desktop of this account still holds control. */
+  alive: boolean;
+  /** The backend enforces this desktop's lease expiry with Stop. */
+  stop_on_expiry?: boolean;
+  running?: boolean;
+  paused?: boolean;
+  /** Edge can act now: live motion, not a video or a timed program. */
+  edge_allowed?: boolean;
+  edge?: RemoteEdgeHold;
 }
 
 export interface RemoteState {
@@ -55,11 +83,13 @@ export interface RemoteState {
   /** The desktop is signed in to another account; every detail is withheld. */
   other_account?: boolean;
   route?: string;
+  background?: boolean;
   video?: RemoteVideoPresence;
   chat?: RemoteChatPresence;
   pending: number;
   recent: RemoteOutcome[];
   updated_at?: string;
+  session?: RemoteSession;
 }
 
 export interface RemoteVideoItem { id: string; title: string; duration_ms: number | null; has_funscript: boolean }

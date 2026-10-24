@@ -1,11 +1,11 @@
 import { render, waitFor } from "@testing-library/react";
 import { StrictMode, useMemo } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REMOTE_COMMAND_EVENT, api } from "../api/client";
 import type { VideoPlayerHandle } from "../media/playbackController";
 import { RemoteExecutorProvider, useRemoteVideoSurface } from "./RemoteExecutorProvider";
 
-const app = vi.hoisted(() => ({ value: { backendOnline: true, readOnly: false, state: { capabilities: { control: true }, stop_sequence: 3 } } }));
+const app = vi.hoisted(() => ({ value: { backendOnline: true, readOnly: false, remoteHeld: false, state: { capabilities: { control: true }, stop_sequence: 3 } } }));
 
 vi.mock("../state/app-state", () => ({ useAppState: () => app.value }));
 vi.mock("../api/client", async (importOriginal) => {
@@ -41,7 +41,7 @@ function Player({ handle }: { handle: VideoPlayerHandle }) {
 describe("remote executor provider", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    app.value = { backendOnline: true, readOnly: false, state: { capabilities: { control: true }, stop_sequence: 3 } };
+    app.value = { backendOnline: true, readOnly: false, remoteHeld: false, state: { capabilities: { control: true }, stop_sequence: 3 } };
     vi.mocked(api.reportRemotePresence).mockResolvedValue({ remote: { revision: 1, connected: true, pending: 0, recent: [] } });
     vi.mocked(api.claimRemoteCommand).mockImplementation(async (id) => ({ command: { id, sequence: 1, target: "video", action: "pause", video_id: "clip", stop_sequence: 3, issued_at: "" }, remaining_ms: 10_000 }));
     vi.mocked(api.withdrawRemotePresence).mockResolvedValue({ status: "withdrawn" });
@@ -68,6 +68,54 @@ describe("remote executor provider", () => {
     window.dispatchEvent(new CustomEvent(REMOTE_COMMAND_EVENT, {
       detail: { id: "phone-2", sequence: 2, target: "video", action: "play", stop_sequence: 3, issued_at: "" },
     }));
+    expect(handle.commands.play).not.toHaveBeenCalled();
+  });
+});
+
+describe("hidden desktop", () => {
+  let visibility: DocumentVisibilityState = "visible";
+  let spy: { mockRestore: () => void } | undefined;
+  beforeEach(() => {
+    vi.resetAllMocks();
+    visibility = "visible";
+    spy = vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibility);
+    vi.mocked(api.reportRemotePresence).mockResolvedValue({ remote: { revision: 1, connected: true, pending: 0, recent: [] } });
+    vi.mocked(api.claimRemoteCommand).mockImplementation(async (id) => ({ command: { id, sequence: 1, target: "video", action: "pause", video_id: "clip", stop_sequence: 3, issued_at: "" }, remaining_ms: 10_000 }));
+    vi.mocked(api.withdrawRemotePresence).mockResolvedValue({ status: "withdrawn" });
+  });
+
+  afterEach(() => spy?.mockRestore());
+
+  function hide() {
+    visibility = "hidden";
+    document.dispatchEvent(new Event("visibilitychange"));
+  }
+
+  it("keeps carrying out the phone's commands while that phone holds its session", async () => {
+    app.value = { backendOnline: true, readOnly: false, remoteHeld: true, state: { capabilities: { control: true }, stop_sequence: 3 } };
+    const handle = player();
+    render(<RemoteExecutorProvider route="videos"><Player handle={handle} /></RemoteExecutorProvider>);
+    await waitFor(() => expect(api.reportRemotePresence).toHaveBeenCalled());
+    hide();
+    await waitFor(() => expect(api.reportRemotePresence).toHaveBeenLastCalledWith(expect.objectContaining({ background: true, route: "videos" })));
+    window.dispatchEvent(new CustomEvent(REMOTE_COMMAND_EVENT, {
+      detail: { id: "phone-hidden", sequence: 1, target: "video", action: "pause", stop_sequence: 3, issued_at: "" },
+    }));
+    await waitFor(() => expect(handle.commands.pause).toHaveBeenCalledTimes(1));
+    expect(api.withdrawRemotePresence).not.toHaveBeenCalled();
+  });
+
+  it("steps back when hidden without a phone holding it", async () => {
+    app.value = { backendOnline: true, readOnly: false, remoteHeld: false, state: { capabilities: { control: true }, stop_sequence: 3 } };
+    const handle = player();
+    render(<RemoteExecutorProvider route="videos"><Player handle={handle} /></RemoteExecutorProvider>);
+    await waitFor(() => expect(api.reportRemotePresence).toHaveBeenCalled());
+    hide();
+    await waitFor(() => expect(api.withdrawRemotePresence).toHaveBeenCalled());
+    window.dispatchEvent(new CustomEvent(REMOTE_COMMAND_EVENT, {
+      detail: { id: "phone-unheld", sequence: 2, target: "video", action: "play", stop_sequence: 3, issued_at: "" },
+    }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(handle.commands.play).not.toHaveBeenCalled();
   });
 });

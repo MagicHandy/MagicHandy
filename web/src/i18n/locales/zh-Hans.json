@@ -1,4 +1,6 @@
 {
+  "Video and chat return when the desktop tab is in front. Edge and Stop work from here.": "桌面端标签页回到前台后即可使用视频和聊天。边缘控制和停止可以在这里使用。",
+  "This phone keeps the session going while the desktop tab is in the background.": "桌面端标签页在后台时，由此手机保持会话。",
   "Automatically repair rejected chat responses": "自动修正被拒绝的聊天回复",
   "Ask the same external model once to correct an invalid response. Adds time and may use more quota. When off, eligible chat errors offer Repair response.": "请同一个外部模型尝试修正一次无效回复。这会增加等待时间，并可能消耗更多配额。关闭后，可修正的聊天错误旁会显示“修正回复”按钮。",
   "Repair response": "修正回复",
@@ -2426,6 +2428,11 @@
   "Back to remote": "返回遥控",
   "Desktop connected": "桌面已连接",
   "No desktop connected": "没有已连接的桌面",
+  "Session kept alive from this phone": "正在由此手机保持会话",
+  "The desktop tab is not taking commands. This phone is keeping its session going.": "桌面端标签页目前不接收命令。此手机正在保持会话。",
+  "Video and chat return when the desktop tab is in front. Edge and Stop work from here. Keep this page open: locking this phone ends the session within 15 seconds.": "桌面端标签页回到前台后即可使用视频和聊天。边缘控制和停止可以在这里使用。请保持此页面打开：锁定此手机后，会话会在 15 秒内结束。",
+  "Connected to the desktop in the background: {page}": "已连接后台的桌面端：{page}",
+  "This phone keeps the session going while the desktop tab is in the background. Keep this page open: locking this phone ends the session within 15 seconds.": "桌面端标签页在后台时，由此手机保持会话。请保持此页面打开：锁定此手机后，会话会在 15 秒内结束。",
   "Search titles and tags": "搜索标题和标签",
   "Show more": "显示更多",
   "Ask the administrator for a control permission to use this remote.": "请向管理员申请控制权限以使用此遥控。",
