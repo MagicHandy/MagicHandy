@@ -310,6 +310,26 @@ Local LLM support is quality-first. The primary MagicHandy LLM path is a managed
 
 ## Status
 
+### 2026-10-24 Hidden desktop acts for its phone
+
+A hidden desktop slept even while its phone kept the session alive: it closed
+the stream that carries phone commands, went read-only (pausing a paired video
+and its motion), cancelled chat replies and had no command tickets. Now the
+phone's renewals issue the tickets, and a hidden tab that holds control keeps
+observing without renewing; while its phone holds the session it stays awake
+and carries out video and chat, and the phone says the desktop is in the
+background. See [ADR 0056](docs/decisions/0056-hidden-desktop-acts-for-its-phone.md)
+and [the review](docs/hidden-desktop-remote-review-2026-10-24.md).
+
+### 2026-10-24 Phone remote keepalive and Edge
+
+The remote lost its desktop the moment the desktop tab was hidden, and a
+protected session then stopped as abandoned after its 15-second lease. The
+phone remote now renews its desktop's lease while its page is in front, sees
+the session after the hidden desktop withdraws presence, and offers Edge and
+Return beside Stop through admitted server routes. See [ADR 0055](docs/decisions/0055-phone-remote-keepalive-and-edge.md)
+and [the review](docs/remote-keepalive-edge-review-2026-10-24.md).
+
 ### 2026-10-22 Layered steady motion and pace handoffs
 
 Layered compiles actual combined-field extrema and keeps its place in the

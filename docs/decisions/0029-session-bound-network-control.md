@@ -47,6 +47,10 @@ detection bound, not a promise of physical stop within 16 seconds: transport
 latency, unavailable links and already buffered motion require separate
 measurement and honest UI reporting. Protected foreground sessions pause their
 heartbeat while hidden; local unprotected unattended use remains distinct.
+[ADR 0055](0055-phone-remote-keepalive-and-edge.md) lets the desktop account's
+phone remote, while its page is in front, renew that hidden tab's lease, and
+[ADR 0056](0056-hidden-desktop-acts-for-its-phone.md) lets the hidden tab act
+for that phone with the tickets the phone's renewals issue.
 
 ### Command ordering and reconciliation
 
@@ -70,7 +74,9 @@ embedded motion carries an independent capture stamp. It does not claim an
 atomic cross-module snapshot. No capture lock spans network/database work.
 
 The browser runs the lightweight controller channel independently of full-state
-polling and motion SSE. Hidden documents stop all three channels. Return,
+polling and motion SSE. Hidden documents stop all three channels, except that
+an owner tab its phone remote holds keeps observing without renewing
+([ADR 0056](0056-hidden-desktop-acts-for-its-phone.md)). Return,
 restart and lost freshness require a full resync; old responses/events cannot
 restore obsolete control or motion, and recovery does not trigger takeover or
 resume. JSON responses are not cacheable. The

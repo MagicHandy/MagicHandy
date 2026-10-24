@@ -78,6 +78,9 @@ A separate process/store would duplicate authority and complicate Stop. A shared
 session cookie with a hidden navigation menu would provide no API isolation.
 
 This remains a remote for a visible desktop browser, not unattended server playback.
+[ADR 0056](0056-hidden-desktop-acts-for-its-phone.md) lets that desktop tab
+keep acting while hidden only as long as its phone remote, in front, holds the
+session.
 The desktop controls the picture/audio clock and retains browser autoplay and
 visibility requirements. The capability and standards review records deliberate
 limits and possible follow-up work in [the review](../remote-access-review-2026-09-29.md).

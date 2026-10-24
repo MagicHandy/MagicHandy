@@ -10,6 +10,8 @@ import { SessionSettingsPanel } from "../components/SessionSettingsPanel";
 import { RecoveryCodesPanel } from "../components/RecoveryCodesPanel";
 import { NoticePreferencesPanel } from "../components/NoticePreferencesPanel";
 import { AccountPasswordPanel } from "../components/AccountPasswordPanel";
+import { RemoteEdgeButton } from "./RemoteEdgeButton";
+import { useRemoteKeepalive } from "./useRemoteKeepalive";
 import { useRemoteState } from "./useRemoteState";
 import "../styles/remote.css";
 
@@ -23,6 +25,11 @@ export function RemoteApplication() {
   const signedIn = Boolean(auth.status && (!auth.status.authentication_required || auth.status.authenticated));
   const canControl = signedIn && auth.status?.capabilities?.remote_control !== false;
   const remote = useRemoteState(canControl);
+  // Keeps a hidden desktop's session alive while this page is in front.
+  useRemoteKeepalive(canControl);
+  const connected = Boolean(remote.state?.connected && !remote.stale);
+  // A hidden desktop keeps taking commands, but this phone holds its session.
+  const keptAlive = Boolean(!remote.stale && (connected ? remote.state?.background : remote.state?.session?.alive));
   useEffect(() => { document.title = "MagicHandy Remote"; }, []);
 
   async function logout() {
@@ -71,8 +78,11 @@ export function RemoteApplication() {
     </main>
     <ConfirmHost />
     <footer className="remote-safety">
-      <span>{remote.state?.connected && !remote.stale ? t("Desktop connected") : t("No desktop connected")}</span>
-      <StopButton className="remote-stop" onStopped={remote.refresh} />
+      <span>{keptAlive ? t("Session kept alive from this phone") : connected ? t("Desktop connected") : t("No desktop connected")}</span>
+      <div className="remote-safety-actions">
+        {canControl && <RemoteEdgeButton remote={remote} />}
+        <StopButton className="remote-stop" onStopped={remote.refresh} />
+      </div>
     </footer>
   </div>;
 }

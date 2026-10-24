@@ -14,8 +14,9 @@ import (
 const (
 	remoteKeepaliveInterval = 15 * time.Second
 	// Remote state is re-read on this cadence even without a change, so a
-	// desktop that stops reporting is shown as gone once its presence expires.
-	remoteStateRecheck = 5 * time.Second
+	// desktop that stops reporting is shown as gone once its presence expires,
+	// and the session's motion, Edge hold and return countdown stay current.
+	remoteStateRecheck = 2 * time.Second
 	maxRemoteOutcomes  = 64
 )
 
@@ -121,6 +122,9 @@ func (s *Server) handleRemoteState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := s.remoteState(r)
+	if !state.OtherAccount {
+		state.Session = s.remoteSession(r.Context(), remoteIdentity(r, clientIDFromRequest(r)))
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"remote": state})
 }
 
@@ -282,7 +286,11 @@ func (s *Server) handleRemoteEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		state, changed := s.remote.State(viewer)
 		state.StopSequence, state.CanControl = s.stopSequence.Load(), true
-		if first || state.Revision != sent.Revision || state.Connected != sent.Connected || state.StopSequence != sent.StopSequence {
+		if !state.OtherAccount {
+			state.Session = s.remoteSession(r.Context(), viewer)
+		}
+		if first || state.Revision != sent.Revision || state.Connected != sent.Connected || state.StopSequence != sent.StopSequence ||
+			!state.Session.Equal(sent.Session) {
 			if err := writeSSE(w, "state", state); err != nil {
 				return
 			}

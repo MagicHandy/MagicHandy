@@ -6,6 +6,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -22,6 +23,11 @@ interface AppStateValue {
   backendOnline: boolean;
   stale: boolean;
   readOnly: boolean;
+  /**
+   * This tab holds control and its phone remote keeps the session alive.
+   * Hidden, the tab then stays awake to carry out the phone's commands.
+   */
+  remoteHeld: boolean;
   startupError: string;
   refresh: () => Promise<void>;
 }
@@ -48,9 +54,20 @@ export function AppStateProvider({ children, enabled = true }: { children: React
   const liveObservation = useRef<MotionInfo | null>(null);
   const freshnessBarrier = useRef(0);
   const connection = useControllerConnection(enabled);
+  const controller = connection.snapshot && controllerIsNewer(connection.snapshot, state?.controller)
+    ? connection.snapshot : state?.controller;
+  // A hidden tab sleeps: no state poll or motion stream, and it rediscovers
+  // before acting again. One that holds control while its phone remote keeps
+  // the session alive stays awake to carry out the phone's commands, without
+  // renewing anything itself (ADR 0056).
+  const remoteHeld = Boolean(controller?.active && !controller.read_only && controller.remote_held);
+  const [awake, setAwake] = useState(() => document.visibilityState !== "hidden");
+  const awakeRef = useRef(awake);
+  const remoteHeldRef = useRef(remoteHeld);
+  useLayoutEffect(() => { remoteHeldRef.current = remoteHeld; });
 
   const performRefresh = useCallback((): Promise<void> => {
-    if (!enabled || !pollingEnabled.current || document.visibilityState === "hidden") return Promise.resolve();
+    if (!enabled || !pollingEnabled.current || !awakeRef.current) return Promise.resolve();
     if (inFlight.current) return inFlight.current;
     const controller = new AbortController();
     activeRequest.current = controller;
@@ -59,7 +76,7 @@ export function AppStateProvider({ children, enabled = true }: { children: React
     const timeout = window.setTimeout(() => controller.abort(), STATE_TIMEOUT_MS);
     const task = (async () => {
       try {
-        const next = await api.getState(controller.signal);
+        const next = await api.getState(controller.signal, document.visibilityState === "hidden");
         if (controller.signal.aborted || activeRequest.current !== controller) return;
         const previous = stateObservation.current;
         if (validObservation(next.observation) && validObservation(previous?.observation) &&
@@ -185,11 +202,28 @@ export function AppStateProvider({ children, enabled = true }: { children: React
     };
   }, [enabled, performRefresh]);
 
+  const sleep = useCallback(() => {
+    awakeRef.current = false;
+    setAwake(false);
+    invalidate();
+  }, [invalidate]);
+
+  const wake = useCallback(() => {
+    awakeRef.current = true;
+    setAwake(true);
+    revalidate();
+  }, [revalidate]);
+
+  // A tab kept awake stays current, so it returns to the front without
+  // rediscovering; a page restored from the back-forward cache always does.
   useEffect(() => {
     if (!enabled) return;
-    const changed = () => {
-      if (document.visibilityState !== "hidden") revalidate();
-      else invalidate();
+    const changed = (event: Event) => {
+      if (document.visibilityState === "hidden") {
+        if (!remoteHeldRef.current) sleep();
+      } else if (event.type === "pageshow" || !awakeRef.current) {
+        wake();
+      }
     };
     document.addEventListener("visibilitychange", changed);
     window.addEventListener("pageshow", changed);
@@ -197,32 +231,32 @@ export function AppStateProvider({ children, enabled = true }: { children: React
       document.removeEventListener("visibilitychange", changed);
       window.removeEventListener("pageshow", changed);
     };
-  }, [enabled, invalidate, revalidate]);
+  }, [enabled, sleep, wake]);
+
+  // While hidden, the phone's hold decides: it can end (the phone went quiet)
+  // or begin again before this tab's lease lapses.
+  useEffect(() => {
+    if (!enabled || document.visibilityState !== "hidden") return;
+    if (remoteHeld && !awakeRef.current) wake();
+    else if (!remoteHeld && awakeRef.current) sleep();
+  }, [enabled, remoteHeld, sleep, wake]);
 
   // Live motion over SSE for a responsive visualizer; the poll snapshot remains
   // the source of truth and reconciles this between events.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !awake) return;
     let source: EventSource | null = null;
     let closed = false;
     let retryTimer: number | undefined;
     let failures = 0;
-    if (document.visibilityState === "hidden") return;
-    const hide = () => {
-      if (document.visibilityState === "hidden") {
-        closed = true;
-        window.clearTimeout(retryTimer);
-        source?.close();
-      }
-    };
     const retry = () => {
-      if (closed || document.visibilityState === "hidden") return;
+      if (closed || !awakeRef.current) return;
       failures++;
       const delay = Math.min(10000, 1000 * 2 ** Math.min(failures - 1, 4) * (0.8 + Math.random() * 0.4));
       retryTimer = window.setTimeout(connect, delay);
     };
     const connect = () => {
-      if (closed || document.visibilityState === "hidden") return;
+      if (closed || !awakeRef.current) return;
       let currentSource: EventSource;
       try {
         currentSource = new EventSource(`/api/motion/events?client_id=${encodeURIComponent(clientId)}`);
@@ -278,24 +312,20 @@ export function AppStateProvider({ children, enabled = true }: { children: React
       };
     };
     connect();
-    document.addEventListener("visibilitychange", hide);
     return () => {
       closed = true;
       window.clearTimeout(retryTimer);
       source?.close();
-      document.removeEventListener("visibilitychange", hide);
     };
-  }, [enabled, state?.observation?.epoch, streamGeneration, refresh, resync]);
+  }, [enabled, awake, state?.observation?.epoch, streamGeneration, refresh, resync]);
 
-  const controller = connection.snapshot && controllerIsNewer(connection.snapshot, state?.controller)
-    ? connection.snapshot : state?.controller;
   const epochMismatch = !!(connection.snapshot?.epoch && state?.observation?.epoch && connection.snapshot.epoch !== state.observation.epoch);
   const readOnly = !state || stale || !backendOnline || epochMismatch || controller?.read_only === true ||
     (controller?.heartbeat_required === true && (!connection.fresh || !validObservation(state.observation)));
   const motion = liveMotion ?? state?.motion ?? null;
   const observedState = useMemo(() => state && controller ? { ...state, controller } : state, [state, controller]);
-  const appValue = useMemo(() => ({ state: observedState, backendOnline, stale, readOnly, startupError, refresh }),
-    [observedState, backendOnline, stale, readOnly, startupError, refresh]);
+  const appValue = useMemo(() => ({ state: observedState, backendOnline, stale, readOnly, remoteHeld, startupError, refresh }),
+    [observedState, backendOnline, stale, readOnly, remoteHeld, startupError, refresh]);
 
   return (
     <AppStateContext.Provider value={appValue}>

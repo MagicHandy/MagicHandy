@@ -127,6 +127,33 @@ describe("phone remote", () => {
     expect(screen.queryByRole("button", { name: "Play" })).not.toBeInTheDocument();
   });
 
+  it("keeps a live session in view while its desktop tab takes no commands", () => {
+    render(<RemoteRoute />);
+    publish(desktop({ connected: false, video: undefined, session: { alive: true, stop_on_expiry: true, running: true, edge_allowed: true } }));
+    expect(screen.getAllByText("The desktop tab is not taking commands. This phone is keeping its session going.").length).toBeGreaterThan(0);
+    expect(screen.getByText(/locking this phone ends the session within 15 seconds/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Play" })).not.toBeInTheDocument();
+    expect(screen.queryByText("No desktop is taking commands. On the desktop, take control in MagicHandy and keep that tab in front.")).not.toBeInTheDocument();
+  });
+
+  it("keeps controlling a desktop tab in the background and says this phone holds it", () => {
+    render(<RemoteRoute />);
+    publish(desktop({ background: true, route: "videos", session: { alive: true, stop_on_expiry: true, running: true, edge_allowed: true } }));
+    expect(screen.getByText("Connected to the desktop in the background: Videos")).toBeInTheDocument();
+    expect(screen.getByText(/This phone keeps the session going while the desktop tab is in the background/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Play" })).toBeEnabled();
+    expect(screen.queryByText(/Video and chat return when the desktop tab is in front/)).not.toBeInTheDocument();
+  });
+
+  it.each([false, true])("does not promise Stop on expiry for an unprotected local session (connected: %s)", (connected) => {
+    render(<RemoteRoute />);
+    publish(desktop({ connected, background: connected, session: { alive: true, stop_on_expiry: false } }));
+    expect(screen.queryByText(/locking this phone ends the session within 15 seconds/)).not.toBeInTheDocument();
+    expect(screen.getByText(connected
+      ? "This phone keeps the session going while the desktop tab is in the background."
+      : "Video and chat return when the desktop tab is in front. Edge and Stop work from here.")).toBeInTheDocument();
+  });
+
   it("explains how to get a desktop when none is taking commands", () => {
     render(<RemoteRoute />);
     publish(desktop({ connected: false, video: undefined }));

@@ -91,6 +91,9 @@ func (s *Server) remoteClientRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/remote/state", s.handleRemoteState)
 	mux.HandleFunc("GET /api/remote/events", s.handleRemoteEvents)
 	mux.HandleFunc("POST /api/remote/commands", s.handleRemoteCommand)
+	mux.HandleFunc("POST /api/remote/keepalive", s.handleRemoteKeepalive)
+	mux.HandleFunc("POST /api/remote/edge", s.handleRemoteEdge)
+	mux.HandleFunc("POST /api/remote/edge/resume", s.handleRemoteEdgeResume)
 	mux.HandleFunc("GET /api/remote/videos", s.handleRemoteVideos)
 	mux.HandleFunc("GET /api/remote/chat/messages", s.handleRemoteMessages)
 }

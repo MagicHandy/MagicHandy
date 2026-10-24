@@ -1,5 +1,57 @@
 # MagicHandy Risk Register
 
+## R40: Hidden desktops acting for their phone
+
+Level: Medium
+
+A hidden desktop tab held by its phone remote stays awake and keeps carrying
+out commands: its paired video, chat replies and speech continue with nobody
+in front of that tab, using command tickets the phone's renewals issue.
+
+Mitigation:
+
+- the hidden tab never renews anything itself; it acts only with tickets from
+  the phone's live-lease renewals, which carry the R39 admission, so it loses
+  device authority within 10 seconds of the phone going quiet and the session
+  stops with the lease at 15 seconds
+- background observations never renew a lease, protected or local, and a tab
+  that hides without a phone watches its lease for at most 15 seconds
+- phone commands keep their one-shot claim, ten-second expiry, Stop-sequence
+  fencing and the desktop's own control admission; the phone shows that the
+  desktop is in the background and that locking the phone ends the session
+- Browser Bluetooth still disconnects when its tab hides
+
+Residual risk: a browser that freezes, discards or throttles a background tab
+can stop it mid-command; a muted paired video's sync can lapse after several
+minutes in the background, which stops its motion. See
+[ADR 0056](decisions/0056-hidden-desktop-acts-for-its-phone.md).
+
+## R39: Phone-sustained sessions and phone Edge
+
+Level: Medium
+
+A phone remote in front renews a hidden desktop's control lease, so it now
+holds the dead-man's switch. A phone left open on a table keeps a session
+going with nobody watching the desktop, and Edge from the phone acts without
+the desktop tab that used to carry every remote intent.
+
+Mitigation:
+
+- renewal needs remote-control permission, an active login and grant and the
+  same desktop account as the live controller; it never claims control, issues
+  command tickets, crosses a Stop or handoff, or revives an expired lease
+- only a visible remote page renews; a locked or hidden phone stops renewing,
+  and the session then stops within about 15 seconds as before; keepalives do
+  not extend login idle time, so idle sign-out still ends a forgotten phone
+- phone Edge and Return need the same admission plus the current Emergency
+  Stop sequence, share the desktop's server path and plan guards, and are
+  audited under the phone's login; Stop stays public on both listeners
+- other accounts see no session details
+
+Residual risk: a phone kept awake and open sustains a session as long as it
+stays signed in. Physical latency of phone Edge over WAN is not measured. See
+[ADR 0055](decisions/0055-phone-remote-keepalive-and-edge.md).
+
 ## R38: Holding override intent ordering and physical delay
 
 Level: Medium

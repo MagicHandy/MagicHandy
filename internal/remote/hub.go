@@ -124,10 +124,13 @@ type ChatPresence struct {
 
 // Presence is what the desktop tab reports about itself.
 type Presence struct {
-	Route    string         `json:"route"`
-	Video    *VideoPresence `json:"video,omitempty"`
-	Chat     *ChatPresence  `json:"chat,omitempty"`
-	Outcomes []Outcome      `json:"outcomes,omitempty"`
+	Route string `json:"route"`
+	// Background is set while the desktop tab is hidden and stays awake only
+	// because this account's phone remote keeps its session alive.
+	Background bool           `json:"background,omitempty"`
+	Video      *VideoPresence `json:"video,omitempty"`
+	Chat       *ChatPresence  `json:"chat,omitempty"`
+	Outcomes   []Outcome      `json:"outcomes,omitempty"`
 }
 
 // State is what remotes see. It carries no account or tab identity.
@@ -140,11 +143,50 @@ type State struct {
 	// signed in to an account other than the viewer's.
 	OtherAccount bool           `json:"other_account,omitempty"`
 	Route        string         `json:"route,omitempty"`
+	Background   bool           `json:"background,omitempty"`
 	Video        *VideoPresence `json:"video,omitempty"`
 	Chat         *ChatPresence  `json:"chat,omitempty"`
 	Pending      int            `json:"pending"`
 	Recent       []Outcome      `json:"recent"`
 	UpdatedAt    *time.Time     `json:"updated_at,omitempty"`
+	// Session is filled by the server, not the hub: it outlives the desktop's
+	// presence, because a hidden desktop withdraws presence but keeps control.
+	Session *Session `json:"session,omitempty"`
+}
+
+// Session is the desktop's control session as its phone may see it: whether a
+// desktop of the phone's account still holds control, and the live motion and
+// Edge state the phone's Edge button needs. It names no account or tab.
+type Session struct {
+	Alive        bool      `json:"alive"`
+	StopOnExpiry bool      `json:"stop_on_expiry,omitempty"`
+	Running      bool      `json:"running,omitempty"`
+	Paused       bool      `json:"paused,omitempty"`
+	EdgeAllowed  bool      `json:"edge_allowed,omitempty"`
+	Edge         *EdgeHold `json:"edge,omitempty"`
+}
+
+// EdgeHold mirrors the backend-owned Edge holding status.
+type EdgeHold struct {
+	Active          bool   `json:"active"`
+	Phase           string `json:"phase"`
+	Automatic       bool   `json:"automatic"`
+	ResumeInSeconds int    `json:"resume_in_seconds,omitempty"`
+	Message         string `json:"message,omitempty"`
+}
+
+// Equal reports whether two session views would render the same.
+func (s *Session) Equal(other *Session) bool {
+	if s == nil || other == nil {
+		return s == other
+	}
+	if s.Alive != other.Alive || s.Running != other.Running || s.Paused != other.Paused || s.EdgeAllowed != other.EdgeAllowed {
+		return false
+	}
+	if s.Edge == nil || other.Edge == nil {
+		return s.Edge == other.Edge
+	}
+	return *s.Edge == *other.Edge
 }
 
 // Hub holds one desktop's presence and its queue. It starts no goroutines:
@@ -197,6 +239,18 @@ func (h *Hub) Report(executor Identity, presence Presence) State {
 	h.presenceAt = now
 	h.touchLocked()
 	return h.stateLocked(now)
+}
+
+// ExecutorAccount names the account of the last tab that reported with this
+// login. It outlives presence: a desktop that hides withdraws its presence but
+// still holds control, and its phone may keep that control alive.
+func (h *Hub) ExecutorAccount(sessionKey string) (string, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if sessionKey == "" || h.executor.SessionKey != sessionKey {
+		return "", false
+	}
+	return h.executor.AccountID, true
 }
 
 // Withdraw ends a tab's presence: it closed its video and chat, or it lost
@@ -304,6 +358,7 @@ func (h *Hub) stateLocked(now time.Time) State {
 		updated := h.presenceAt
 		state.Connected = true
 		state.Route = h.presence.Route
+		state.Background = h.presence.Background
 		state.Video = h.presence.Video
 		state.Chat = h.presence.Chat
 		state.UpdatedAt = &updated

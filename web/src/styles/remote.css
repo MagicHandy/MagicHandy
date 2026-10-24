@@ -105,6 +105,9 @@
 .remote-safety { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px var(--remote-pad) calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--rail); z-index: var(--layer-emergency-stop); }
 .remote-safety > span { color: var(--muted); font-size: var(--fs-label); }
 .remote-safety .remote-stop { width: 240px; min-height: 48px; margin: 0; }
+.remote-safety-actions { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.remote-safety .remote-edge { width: 200px; margin: 0; }
+.remote-safety .remote-edge .edge-button { min-height: 48px; }
 
 @media (max-width: 879px) {
   .remote-header { gap: 8px; }
@@ -132,5 +135,7 @@
   .remote-chat-form .chat-compose-row textarea { font-size: 16px; }
   .remote-safety { padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); }
   .remote-safety > span { display: none; }
-  .remote-safety .remote-stop { width: 100%; }
+  .remote-safety-actions { width: 100%; }
+  .remote-safety .remote-edge { flex: 1 1 0; width: auto; }
+  .remote-safety .remote-stop { flex: 1 1 0; width: 100%; }
 }

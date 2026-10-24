@@ -100,6 +100,78 @@ describe("backend snapshot lifecycle", () => {
     expect(current.readOnly).toBe(true);
   });
 
+  it("keeps a hidden document awake while its phone holds the session, never renewing control itself", async () => {
+    const held = { active: true, read_only: false, heartbeat_required: true, generation: 2, epoch: "server", revision: 3, remote_held: true };
+    const released = { ...held, remote_held: false };
+    const state = snapshot();
+    state.controller = held;
+    state.observation = { epoch: "server", revision: 1, observed_at: "2026-09-13T00:00:00Z" };
+    vi.mocked(api.getState).mockResolvedValue(state);
+    vi.mocked(api.controllerState).mockResolvedValue(held);
+    vi.mocked(api.controllerHeartbeat).mockResolvedValue(held);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    render(view());
+    await act(async () => {});
+    expect(current.remoteHeld).toBe(true);
+    const source = FakeEventSource.instances[FakeEventSource.instances.length - 1];
+    const heartbeats = vi.mocked(api.controllerHeartbeat).mock.calls.length;
+    const polls = vi.mocked(api.getState).mock.calls.length;
+
+    visibility.mockReturnValue("hidden");
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => vi.advanceTimersByTimeAsync(20000));
+    expect(source.close).not.toHaveBeenCalled();
+    expect(current.readOnly).toBe(false);
+    expect(api.controllerHeartbeat).toHaveBeenCalledTimes(heartbeats);
+    expect(vi.mocked(api.getState).mock.calls.length).toBeGreaterThan(polls + 5);
+    expect(api.getState).toHaveBeenLastCalledWith(expect.any(AbortSignal), true);
+    expect(api.controllerState).toHaveBeenLastCalledWith(expect.any(AbortSignal), true);
+
+    // The phone went quiet: the document sleeps but keeps watching its lease.
+    vi.mocked(api.controllerState).mockResolvedValue(released);
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(source.close).toHaveBeenCalled();
+    expect(current.readOnly).toBe(true);
+    const asleep = vi.mocked(api.getState).mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(6000));
+    expect(api.getState).toHaveBeenCalledTimes(asleep);
+
+    // Held again before that lease lapsed: it wakes, still without renewing.
+    const sources = FakeEventSource.instances.length;
+    vi.mocked(api.controllerState).mockResolvedValue({ ...held, revision: 4 });
+    vi.mocked(api.getState).mockResolvedValue({ ...state, controller: { ...held, revision: 4 }, observation: { ...state.observation, revision: 2 } });
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(FakeEventSource.instances.length).toBeGreaterThan(sources);
+    expect(current.readOnly).toBe(false);
+    expect(api.controllerHeartbeat).toHaveBeenCalledTimes(heartbeats);
+  });
+
+  it("returns a document kept awake to the front without a read-only gap", async () => {
+    const held = { active: true, read_only: false, heartbeat_required: true, generation: 2, epoch: "server", revision: 3, remote_held: true };
+    const state = snapshot();
+    state.controller = held;
+    state.observation = { epoch: "server", revision: 1, observed_at: "2026-09-13T00:00:00Z" };
+    vi.mocked(api.getState).mockResolvedValue(state);
+    vi.mocked(api.controllerState).mockResolvedValue(held);
+    vi.mocked(api.controllerHeartbeat).mockResolvedValue(held);
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+    const readOnly: boolean[] = [];
+    function Recorder() { readOnly.push(useAppState().readOnly); return null; }
+    render(<AppStateProvider><Recorder /><Harness /></AppStateProvider>);
+    await act(async () => {});
+    visibility.mockReturnValue("hidden");
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => vi.advanceTimersByTimeAsync(4000));
+    const sources = FakeEventSource.instances.length;
+    const before = readOnly.length;
+    visibility.mockReturnValue("visible");
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => vi.advanceTimersByTimeAsync(2000));
+    expect(readOnly.slice(before).every((value) => !value)).toBe(true);
+    expect(FakeEventSource.instances).toHaveLength(sources);
+    expect(api.controllerHeartbeat).toHaveBeenLastCalledWith(expect.any(AbortSignal));
+  });
+
   it("does not restart a waiting explicit refresh after access is disabled", async () => {
     const pending = deferred<AppState>();
     vi.mocked(api.getState).mockReturnValueOnce(pending.promise);

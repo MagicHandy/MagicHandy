@@ -25,6 +25,7 @@ type controllerRuntime struct {
 	pending        controllerIdentity
 	activeSince    time.Time
 	lastSeenAt     time.Time
+	remoteSeenAt   time.Time
 	generation     uint64
 	revision       uint64
 	epoch          string
@@ -50,6 +51,14 @@ func (c *controllerRuntime) Observe(actor controllerIdentity) controllerSnapshot
 	if actor.sessionKey == "" {
 		c.touchLocalLocked(actor)
 	}
+	return c.snapshotLocked(actor)
+}
+
+// Peek observes without renewing even a local lease. A hidden tab uses it to
+// watch whether its phone remote still holds the session (ADR 0056).
+func (c *controllerRuntime) Peek(actor controllerIdentity) controllerSnapshot {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.snapshotLocked(actor)
 }
 
@@ -205,6 +214,9 @@ func (c *controllerRuntime) AdvanceStopGeneration() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.active.sessionKey == "" {
+		// Local control keeps its lease and generation across Stop, but a
+		// phone's in-flight action must still be canceled before engine work.
+		c.cancelRequestsLocked()
 		return
 	}
 	c.cancelOwnerLocked()
@@ -220,18 +232,23 @@ func (c *controllerRuntime) activateLocked(actor controllerIdentity) {
 	c.generation++
 	c.activeSince = c.clock()
 	c.lastSeenAt = c.activeSince
+	c.remoteSeenAt = time.Time{}
 	c.ownerCtx, c.ownerCancel = context.WithCancel(context.Background())
 	c.tickets = nil
 	c.issueCommandTicketLocked()
 }
 
 func (c *controllerRuntime) cancelOwnerLocked() {
+	c.cancelRequestsLocked()
+	if c.ownerCancel != nil {
+		c.ownerCancel()
+	}
+}
+
+func (c *controllerRuntime) cancelRequestsLocked() {
 	for id, cancel := range c.requests {
 		cancel()
 		delete(c.requests, id)
-	}
-	if c.ownerCancel != nil {
-		c.ownerCancel()
 	}
 }
 
@@ -240,6 +257,7 @@ func (c *controllerRuntime) clearOwnerLocked() {
 	c.active = controllerIdentity{}
 	c.activeSince = time.Time{}
 	c.lastSeenAt = time.Time{}
+	c.remoteSeenAt = time.Time{}
 	c.generation++
 }
 
@@ -280,6 +298,7 @@ func (c *controllerRuntime) snapshotLocked(actor controllerIdentity) controllerS
 		ActiveClientID: c.active.clientID, ActiveClientAgeMillis: age,
 		LeaseExpiresInMillis: remaining, TakeoverInProgress: c.stopping || c.pending.clientID != "",
 		Generation: c.generation, Epoch: c.epoch, HeartbeatRequired: actor.sessionKey != "",
+		RemoteHeld: active && c.remoteHeldLocked(now),
 	}
 	c.revision++
 	if active && actor.sessionKey != "" && len(c.tickets) > 0 {

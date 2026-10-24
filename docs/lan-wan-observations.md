@@ -54,7 +54,8 @@ backend-authorized ownership are also required.
 An already-admitted protected chat stream survives a missed observation while
 the last backend controller snapshot still identifies this tab as active in the
 same generation/epoch. New input remains locked. The stream's own connection
-failure, confirmed ownership/generation loss, Stop, hidden document, route exit
+failure, confirmed ownership/generation loss, Stop, hidden document (unless its
+phone remote holds the session, ADR 0056), route exit
 or authentication teardown still cancels it. This prevents a healthy inference
 from being discarded just because an unrelated status request timed out; the
 server continues to enforce the actual lease before dispatching motion. The

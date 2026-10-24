@@ -23,6 +23,8 @@ interface HistoryOptions {
   epoch?: string;
   backendOnline: boolean;
   readOnly: boolean;
+  /** Hidden, the page still reads and speaks while its phone remote holds it (ADR 0056). */
+  remoteHeld?: boolean;
   busy: boolean;
   busyRef: { current: boolean };
   latestSeq: number;
@@ -34,7 +36,8 @@ interface HistoryOptions {
 const HISTORY_LIMIT = 200;
 const READ_TIMEOUT_MS = 15_000;
 const MAX_PAGES_PER_READ = 4;
-const pageVisible = () => document.visibilityState !== "hidden";
+// A hidden page sleeps unless its phone remote holds it (ADR 0056).
+const pageAwake = (remoteHeld?: boolean) => document.visibilityState !== "hidden" || Boolean(remoteHeld);
 const nonnegative = (value: unknown): value is number => Number.isSafeInteger(value) && Number(value) >= 0;
 const failure = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Conversation history request failed.");
 
@@ -75,7 +78,7 @@ export function useChatHistory(options: HistoryOptions) {
     if (!id || speechSeen.current.has(id)) return;
     speechSeen.current.add(id);
     if (speechSeen.current.size > 256) speechSeen.current.delete(speechSeen.current.values().next().value!);
-    if (latest.current.readOnly || !latest.current.backendOnline || !pageVisible()) return;
+    if (latest.current.readOnly || !latest.current.backendOnline || !pageAwake(latest.current.remoteHeld)) return;
     latest.current.queueSpeech(id);
   }, []);
 
@@ -96,7 +99,7 @@ export function useChatHistory(options: HistoryOptions) {
   }, []);
 
   const read = useCallback((full: boolean, suppressSpeech = full): Promise<void> => {
-    if (!alive.current || !latest.current.backendOnline || !pageVisible() || (!full && (latest.current.busyRef.current || !seeded.current))) return Promise.resolve();
+    if (!alive.current || !latest.current.backendOnline || !pageAwake(latest.current.remoteHeld) || (!full && (latest.current.busyRef.current || !seeded.current))) return Promise.resolve();
     if (inFlight.current && (!full || inFlight.current.full)) return inFlight.current.promise;
     if (full) cancelReads();
     const token = generation.current;
@@ -200,13 +203,16 @@ export function useChatHistory(options: HistoryOptions) {
     return () => { alive.current = false; cancelReads(); };
   }, [options.sessionId, options.epoch, options.backendOnline, loadHistory, cancelReads]);
 
-  // Hiding cancels reads. Returning catches up from the delivered revision
-  // without replaying speech and keeps the rendered history in place; only a
-  // conversation that never loaded starts over.
+  // Hiding cancels reads, unless the page stays awake for its phone remote.
+  // Returning catches up from the delivered revision without replaying speech
+  // and keeps the rendered history in place; only a conversation that never
+  // loaded starts over.
   useEffect(() => {
     const changed = () => {
+      const hidden = document.visibilityState === "hidden";
+      if (hidden && latest.current.remoteHeld) return;
       cancelReads();
-      if (!pageVisible()) return;
+      if (hidden) return;
       if (!seeded.current) { void loadHistory(); return; }
       recoveringSpeech.current = true;
       needsTail.current = true;

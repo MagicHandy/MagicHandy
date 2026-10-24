@@ -265,3 +265,22 @@ func TestValidateRejectsIncompleteCommands(t *testing.T) {
 		}
 	}
 }
+
+// A hidden desktop kept awake by its phone says so; another account learns
+// nothing about it.
+func TestStateTellsItsAccountTheDesktopIsInTheBackground(t *testing.T) {
+	hub, _ := newTestHub()
+	presence := videoPresence()
+	presence.Background = true
+	hub.Report(desktop, presence)
+	if state, _ := hub.State(phone); !state.Connected || !state.Background || state.Video == nil {
+		t.Fatalf("own account state = %+v", state)
+	}
+	if state, _ := hub.State(Identity{ClientID: "guest-phone", AccountID: "guest"}); state.Background || state.Video != nil {
+		t.Fatalf("another account state = %+v", state)
+	}
+	hub.Report(desktop, videoPresence())
+	if state, _ := hub.State(phone); state.Background {
+		t.Fatal("a desktop back in front still reads as background")
+	}
+}

@@ -155,6 +155,8 @@ export interface ControllerSnapshot {
   active_client_age_ms?: number;
   lease_expires_in_ms?: number;
   takeover_in_progress?: boolean;
+  /** This tab's phone remote keeps the lease alive; hidden, the tab stays awake for it (ADR 0056). */
+  remote_held?: boolean;
 }
 
 export interface CommandReceipt {

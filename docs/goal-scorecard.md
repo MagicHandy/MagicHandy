@@ -1,5 +1,59 @@
 # Goal Scorecard
 
+## 2026-10-24 — Remote release review corrections
+
+The final review binds phone Edge/Return to controller cancellation and makes
+the expiry notice follow a backend flag. Independent Windows amd64 Go 1.26.10
+builds with `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'` measure
+**23,930,368 -> 23,965,184 B** (+34,816 B) against `4d41718b`; the base build
+reproduces the size below. This is +4,096 B beyond Claude's combined changes.
+The stripped binaries here measure change size only; shipping releases retain
+their symbol tables for exact-binary vulnerability scanning.
+
+Final main JS is **1,278,438 B raw / 343,501 B gzip**, versus the base
+**1,273,294 / 342,082 B** (+5,144 / +1,419 B). CSS is **206,484 / 36,066 B**,
+versus **206,203 / 36,020 B** (+281 / +46 B). The complete canonical UI is
+**2,772,339 B**, versus **2,760,892 B** (+11,447 B). Gzip uses Python with
+`mtime=0`; the rebuilt dist contains one set of current chunks. The additions
+include five-locale notices. No dependency or worker is added; no RSS or
+cold-start improvement is claimed.
+
+## 2026-10-24 — Hidden desktop acts for its phone
+
+[ADR 0056](decisions/0056-hidden-desktop-acts-for-its-phone.md) adds a
+snapshot flag, a ticket per phone renewal and a background header. No route,
+dependency, model call or worker is added. A hidden tab its phone holds keeps
+the requests of a tab in front (state poll, controller observation instead of
+heartbeat, motion stream, presence); a tab that hides without a phone observes
+its lease for at most 15 seconds, one request every two seconds.
+
+Same build settings as the entry below, measured on top of it: core
+**23,953,408 -> 23,961,088 B** (+7,680 B), still **14 modules**. Main UI JS:
+**1,276,098 -> 1,277,860 B raw** (+1,762 B), **342,897 -> 343,391 B gzip**
+(+494 B). CSS is unchanged. Each locale chunk grows about 400–550 B raw for two
+strings and one reworded one. The complete embedded UI grows
+**2,766,551 -> 2,770,190 B** (+3,639 B). No new RSS or cold-start claim.
+
+## 2026-10-24 — Phone remote keepalive and Edge
+
+[ADR 0055](decisions/0055-phone-remote-keepalive-and-edge.md) adds three
+remote routes, one phone keepalive every three seconds while the remote page is
+in front, a session block on the existing remote stream (re-read every two
+seconds instead of five) and the shared Edge control on the phone. No
+dependency, model call, worker or desktop request is added.
+
+Windows amd64, Go 1.26.10, `CGO_ENABLED=0`,
+`-trimpath -buildvcs=false -ldflags '-s -w'`, against `4d41718b`: core
+**23,930,368 -> 23,953,408 B** (+23,040 B), still **14 modules**.
+
+Main UI JS: **1,273,294 -> 1,276,098 B raw** (+2,804 B), **342,082 ->
+342,897 B gzip** (+815 B). CSS: **206,203 -> 206,484 B raw** (+281 B),
+**36,020 -> 36,066 B gzip** (+46 B). Each locale chunk grows 568–744 B raw
+(180–232 B gzip) for three strings. The complete embedded UI grows
+**2,760,892 -> 2,766,551 B** (+5,659 B). Measurements use Python gzip with
+`mtime=0`; the canonical dist is rebuilt with stale hashes removed. No new
+RSS or cold-start claim.
+
 ## 2026-10-24 — Physically accepted Cloud sampling
 
 The [accepted D policy](cloud-sampling-review-2026-10-24.md) replaces the

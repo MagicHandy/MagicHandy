@@ -1,4 +1,6 @@
 {
+  "Video and chat return when the desktop tab is in front. Edge and Stop work from here.": "動画とチャットは、デスクトップのタブを前面に戻すと使えます。寸止めと停止はここから使えます。",
+  "This phone keeps the session going while the desktop tab is in the background.": "デスクトップのタブがバックグラウンドにある間は、この端末がセッションを維持します。",
   "Automatically repair rejected chat responses": "拒否されたチャット応答を自動修正",
   "Ask the same external model once to correct an invalid response. Adds time and may use more quota. When off, eligible chat errors offer Repair response.": "同じ外部モデルに無効な応答の修正を1回依頼します。待ち時間が増え、利用枠を追加で消費する場合があります。オフの場合、修正可能なチャットエラーに「応答を修正」ボタンが表示されます。",
   "Repair response": "応答を修正",
@@ -2426,6 +2428,11 @@
   "Back to remote": "リモートに戻る",
   "Desktop connected": "デスクトップ接続済み",
   "No desktop connected": "デスクトップ未接続",
+  "Session kept alive from this phone": "この端末でセッションを維持中",
+  "The desktop tab is not taking commands. This phone is keeping its session going.": "デスクトップのタブはコマンドを受け付けていません。この端末がセッションを維持しています。",
+  "Video and chat return when the desktop tab is in front. Edge and Stop work from here. Keep this page open: locking this phone ends the session within 15 seconds.": "動画とチャットは、デスクトップのタブを前面に戻すと使えます。寸止めと停止はここから使えます。このページを開いたままにしてください。この端末をロックすると、15 秒以内にセッションが終了します。",
+  "Connected to the desktop in the background: {page}": "バックグラウンドのデスクトップに接続中: {page}",
+  "This phone keeps the session going while the desktop tab is in the background. Keep this page open: locking this phone ends the session within 15 seconds.": "デスクトップのタブがバックグラウンドにある間は、この端末がセッションを維持します。このページを開いたままにしてください。この端末をロックすると、15 秒以内にセッションが終了します。",
   "Search titles and tags": "タイトルとタグを検索",
   "Show more": "もっと表示",
   "Ask the administrator for a control permission to use this remote.": "リモートを使うには管理者に操作権限を申請してください。",

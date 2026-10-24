@@ -9,7 +9,10 @@ snapshots own status/countdown. Edge requires active live motion and controller
 access; Stop stays usable while Edge is pending, read-only or offline. The hint
 distinguishes prompt application from queued physical motion. During a hold,
 Autopilot displays holding state and retains Pause instead of a misleading Due
-clock. See the [evaluation](edge-hold-review-2026-10-23.md).
+clock. See the [evaluation](edge-hold-review-2026-10-23.md). The phone remote
+renders the same control beside its Stop in the remote footer, admitted by the
+phone's own session view rather than desktop control
+([ADR 0055](decisions/0055-phone-remote-keepalive-and-edge.md)).
 
 ## Setup and settings
 
@@ -181,8 +184,18 @@ catalog pages.
 Opening a video never starts it. Committed chat text stays bounded to the active
 conversation. Selected choices use a filled surface, never a left accent or
 underline. A stale connection hides controls; errors remain explicit. Red is
-reserved for the always-mounted Stop in a footer outside the scrolling content.
-See [ADR 0033](decisions/0033-remote-listener-and-account-scope.md).
+reserved for the always-mounted Stop in a footer outside the scrolling content;
+Edge sits beside it in the same footer and both share the width on phones.
+A desktop tab hidden while this phone holds its session keeps taking
+commands: the readout says the phone is connected to the desktop in the
+background, a notice says this phone keeps the session going and that locking
+it ends the session within 15 seconds, and the footer says the session is kept
+alive from this phone. When the session lives but no desktop tab takes
+commands (closed, frozen by the browser or offline), the readout says so, and a
+notice explains that video and chat return when that tab is in front.
+See [ADR 0033](decisions/0033-remote-listener-and-account-scope.md),
+[ADR 0055](decisions/0055-phone-remote-keepalive-and-edge.md) and
+[ADR 0056](decisions/0056-hidden-desktop-acts-for-its-phone.md).
 
 ## Informational notices
 
@@ -373,7 +386,11 @@ model. See the [observation contract](lan-wan-observations.md) and the original
 The controller heartbeat runs independently of full-state polling. A stream
 error retains the newest known motion and requires a fresh state request before
 clearing the stale/read-only indicator. A hidden document stops its requests,
-heartbeat and stream. Returning keeps the last view on screen, stale and
+heartbeat and stream, unless it holds control and its phone remote holds the
+session: then it keeps its poll and stream, observes control in the background
+without renewing it, and returns to the front without a stale period
+([ADR 0056](decisions/0056-hidden-desktop-acts-for-its-phone.md)). Otherwise
+returning keeps the last view on screen, stale and
 read-only, until a fresh snapshot arrives, so routes and drafts survive
 switching tabs or unlocking a phone. Server restart retires
 old responses and event callbacks. Neither reconnect nor visibility return
