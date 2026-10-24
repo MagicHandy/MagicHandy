@@ -27,21 +27,8 @@ func TestAutopilotModelHorizonSetsTheBoundary(t *testing.T) {
 		{Hold: true},
 	}}
 	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
-	secondDecided := make(chan struct{})
-	releaseSecond := make(chan struct{}, 1)
+	secondDecided, releaseSecond := blockSecondHorizonDecision(manager, decider)
 	defer close(releaseSecond)
-	manager.options.Decide = func(ctx context.Context, input DecisionInput) (Decision, error) {
-		decision, err := decider.decide(ctx, input)
-		if input.SegmentIndex == 1 {
-			close(secondDecided)
-			select {
-			case <-releaseSecond:
-			case <-ctx.Done():
-				return Decision{}, ctx.Err()
-			}
-		}
-		return decision, err
-	}
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -91,6 +78,23 @@ func TestAutopilotModelHorizonSetsTheBoundary(t *testing.T) {
 	if !found {
 		t.Fatal("the start trace does not record the model horizon")
 	}
+}
+
+func blockSecondHorizonDecision(manager *Manager, decider *fakeDecider) (<-chan struct{}, chan struct{}) {
+	decided, release := make(chan struct{}), make(chan struct{}, 1)
+	manager.options.Decide = func(ctx context.Context, input DecisionInput) (Decision, error) {
+		decision, err := decider.decide(ctx, input)
+		if input.SegmentIndex == 1 {
+			close(decided)
+			select {
+			case <-release:
+			case <-ctx.Done():
+				return Decision{}, ctx.Err()
+			}
+		}
+		return decision, err
+	}
+	return decided, release
 }
 
 // The model chooses the length, but the bounds always hold, the variation is
