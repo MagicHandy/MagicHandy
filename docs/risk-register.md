@@ -60,10 +60,18 @@ records 106/106 final focused checks, retained failures and known local-model
 misses. This is finite semantic evidence, not a guarantee that prose restrictions
 become hard engine limits. Saved motion limits remain authoritative.
 
+October 24 physical acceptance supersedes the unaccepted sampler above: the
+maintainer preferred sparse D and confirmed the final production slow/compound
+runs and Stops. The [review](cloud-sampling-review-2026-10-24.md) records all
+29 runs, rejected variants, corrected speed comparison and remaining turn
+hesitation. A bounded scale-aware policy applies only to a single Original
+Handy Cloud generated path. Extra velocity refinement remains test-only;
+multi-device, other profiles/transports, media and transition fits are unchanged.
+
 Remaining limits: model intent is not guaranteed by a finite fixture. Some
 count/order changes can still use the general transition, and commanded endpoints do
-not establish physical carriage reach. Original Handy Cloud physical acceptance
-of the counted candidate is outstanding. See [ADR 0052](decisions/0052-counted-layered-phrases.md)
+not establish physical carriage reach. Acceptance covers the tested Original
+Handy Cloud fixtures, not every count/order change. See [ADR 0052](decisions/0052-counted-layered-phrases.md)
 and [the evaluation](layered-range-review-2026-10-23.md).
 
 ## R36: Local port denial and ambiguous startup ownership

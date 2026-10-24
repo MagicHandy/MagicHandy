@@ -78,6 +78,11 @@ type MotionSamplingCapabilities struct {
 	// preference, not a limit: authored reversals still use MinimumPointInterval.
 	// Zero preserves the ordinary fit. Imported media does not use this preference.
 	PreferredPointInterval time.Duration
+	// PreferSparseGeneratedMotion requests fewer optional curve points on
+	// buffered firmware. The engine chooses bounded, scale-aware precision;
+	// authored media and motion limits are unaffected. Multi-device fan-out
+	// retains its existing fit until separately accepted on physical devices.
+	PreferSparseGeneratedMotion bool
 }
 
 // MotionSamplingCapabilitiesProvider exposes optional output-resolution

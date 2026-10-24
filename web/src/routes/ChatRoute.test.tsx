@@ -109,7 +109,7 @@ describe("ChatRoute", () => {
     const mode = within(controls).getByRole("combobox", { name: "LLM motion" });
     expect(mode).toHaveValue("pattern");
     expect(within(mode).getAllByRole("option").map((option) => option.textContent))
-      .toEqual(["Creative v2", "Creative", "Layered", "Pattern library", "Off"]);
+      .toEqual(["Layered", "Creative v2", "Creative", "Pattern library", "Off"]);
     expect(mode).toHaveAccessibleDescription("The AI picks from your enabled library patterns and sets the speed.");
 
     fireEvent.change(mode, { target: { value: "dynamic" } });

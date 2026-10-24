@@ -1,5 +1,10 @@
 # Model response reliability review — 2026-10-23
 
+October 24 follow-up: the maintainer completed the later
+[physical sampling comparison](cloud-sampling-review-2026-10-24.md), accepted
+the production D policy and requested release. The earlier deferred status
+below describes this model-only evaluation, not the final release gate.
+
 This extends the [slow Layered review](layered-slow-turn-review-2026-10-23.md)
 with real provider, parser and shared-compiler tests. It does not connect to
 hardware or change the installed session. Physical acceptance remains deferred

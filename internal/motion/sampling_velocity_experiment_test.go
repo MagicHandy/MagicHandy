@@ -1,5 +1,8 @@
 package motion
 
+// Rejected production experiment retained for inert comparison. Hardware
+// auditions favored fewer points despite this approach's numerical gains.
+
 import "math"
 
 func (e *Engine) refineBufferedVelocityChunk(samples []MotionSample, resolution float64, maximumPoints int) []MotionSample {
@@ -31,7 +34,7 @@ func refineBufferedVelocity(samples, probes []MotionSample, resolution, maximumV
 		return samples
 	}
 	const minimumSpacing = int64(40)
-	tolerance := quantizedProbeTolerance(probes, resolution)
+	tolerance := quantizedProbeTolerance(probes, resolution, wireApproximationTolerance)
 	result := []MotionSample{samples[0]}
 	var split func(MotionSample, MotionSample)
 	split = func(left, right MotionSample) {

@@ -1,6 +1,12 @@
 # Slow Layered motion and direction changes
 
-Status: **software evaluation complete; physical acceptance pending**. On
+Update (October 24): the [physical comparison and production review](cloud-sampling-review-2026-10-24.md)
+supersedes the sampler candidate below. The maintainer preferred sparse D,
+confirmed the final production runs and Stop, and requested release. Extra
+velocity refinement and the shorter-turn prototype are not shipped. Some turn
+hesitation remains. The following records the original investigation.
+
+Original October 23 status: **software evaluation complete; physical acceptance pending**. On
 October 23 the user asked to defer hardware tests and document them for the next
 update. Do not release the motion changes below until the physical checklist
 passes. No device was connected or moved during this investigation, and the

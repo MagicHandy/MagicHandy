@@ -86,6 +86,7 @@ type Engine struct {
 	preservePlanKnots              bool
 	minimumPointIntervalMillis     int64
 	preferredPointIntervalMillis   int64
+	preferSparseGeneratedMotion    bool
 	minimumBufferedLeadMillis      int64
 	minimumMediaBufferedLeadMillis int64
 	positionResolutionPercent      float64
@@ -173,6 +174,7 @@ func NewEngine(options EngineOptions) (*Engine, error) {
 	}
 	if provider, ok := options.Transport.(transport.MotionSamplingCapabilitiesProvider); ok {
 		capabilities := provider.MotionSamplingCapabilities()
+		engine.preferSparseGeneratedMotion = capabilities.PreferSparseGeneratedMotion
 		if capabilities.PreferredPointInterval > 0 {
 			engine.preferredPointIntervalMillis = int64((capabilities.PreferredPointInterval + time.Millisecond - 1) / time.Millisecond)
 		}

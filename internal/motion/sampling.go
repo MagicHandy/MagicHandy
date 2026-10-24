@@ -147,7 +147,6 @@ func (e *Engine) nextMotionSamplesLocked() ([]MotionSample, error) {
 		}
 		if natural || windowEnd >= maximumWindowEnd {
 			samples = samples[:cutoff+1]
-			samples = e.refineBufferedVelocityChunk(samples, positionResolution, maximumPoints)
 			if len(samples) > maximumPoints {
 				return nil, fmt.Errorf(
 					"motion content has %d essential points in the %dms output window; trim or slow the content",
@@ -198,7 +197,8 @@ func (e *Engine) fitMotionWindowLocked(
 	if e.minimumPointIntervalMillis > 0 {
 		return e.fitImmediateMotionSamples(referenceSamples, positionResolution, hasPreviousAnchor)
 	}
-	samples = simplifyMotionSamples(samples, wireApproximationTolerance, mandatory)
+	positionTolerance := e.generatedPositionTolerance(transitionInChunk)
+	samples = simplifyMotionSamples(samples, positionTolerance, mandatory)
 	if transitionInChunk {
 		samples = stabilizeTransitionSamples(samples, mandatory)
 	}
@@ -206,7 +206,7 @@ func (e *Engine) fitMotionWindowLocked(
 		samples = simplifyQuantizedMotionSamples(
 			samples,
 			positionResolution,
-			wireApproximationTolerance+positionResolution/2,
+			positionTolerance+positionResolution/2,
 			mandatory,
 			e.plan.Target.continuousCurve(),
 		)
@@ -218,11 +218,11 @@ func (e *Engine) fitMotionWindowLocked(
 		samples = samples[1:]
 	}
 	if positionResolution > 0 && e.plan.Target.continuousCurve() {
-		samples = e.refineContinuousSamples(samples, referenceSamples, mandatory, positionResolution, hasPreviousAnchor, transitionInChunk)
+		samples = e.refineContinuousSamples(samples, referenceSamples, mandatory, positionResolution, positionTolerance, hasPreviousAnchor, transitionInChunk)
 	}
 	if positionResolution > 0 && e.plan.Target.continuousCurve() {
 		var err error
-		samples, err = e.retimeBufferedSamples(samples, referenceSamples, mandatory, positionResolution, hasPreviousAnchor)
+		samples, err = e.retimeBufferedSamples(samples, referenceSamples, mandatory, positionResolution, positionTolerance, hasPreviousAnchor)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -243,7 +243,7 @@ func (e *Engine) fitImmediateMotionSamples(reference []MotionSample, resolution 
 		samples = removeRedundantQuantizedSamples(samples, resolution, mandatory)
 	}
 	samples, err = fitQuantizedMotionTiming(samples, reference, mandatory, resolution,
-		referenceTravelRateForSpeed(100, e.settings.HandyModel), e.minimumPointIntervalMillis)
+		referenceTravelRateForSpeed(100, e.settings.HandyModel), wireApproximationTolerance, e.minimumPointIntervalMillis)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -253,12 +253,12 @@ func (e *Engine) fitImmediateMotionSamples(reference []MotionSample, resolution 
 	return samples, mandatory, nil
 }
 
-func (e *Engine) retimeBufferedSamples(samples, reference []MotionSample, mandatory map[int64]struct{}, resolution float64, hasPrevious bool) ([]MotionSample, error) {
+func (e *Engine) retimeBufferedSamples(samples, reference []MotionSample, mandatory map[int64]struct{}, resolution, positionTolerance float64, hasPrevious bool) ([]MotionSample, error) {
 	if hasPrevious {
 		samples = append([]MotionSample{*e.lastSample}, samples...)
 	}
 	if e.transition == nil {
-		fitted, err := fitQuantizedMotionTiming(samples, reference, mandatory, resolution, referenceTravelRateForSpeed(100, e.settings.HandyModel), 1)
+		fitted, err := fitQuantizedMotionTiming(samples, reference, mandatory, resolution, referenceTravelRateForSpeed(100, e.settings.HandyModel), positionTolerance, 1)
 		if err != nil {
 			return nil, err
 		}
@@ -288,7 +288,7 @@ func (e *Engine) retimeBufferedSamples(samples, reference []MotionSample, mandat
 			end++
 		}
 		section, err := fitQuantizedMotionTiming(samples[start:end+1], reference, mandatory, resolution,
-			referenceTravelRateForSpeed(100, e.settings.HandyModel), 1)
+			referenceTravelRateForSpeed(100, e.settings.HandyModel), positionTolerance, 1)
 		if err != nil {
 			return nil, err
 		}

@@ -83,8 +83,9 @@ var _ MotionStartupStateProvider = (*CloudRESTTransport)(nil)
 // CloudRESTTransport remains a mapping/dispatch owner.
 func (*CloudRESTTransport) MotionSamplingCapabilities() MotionSamplingCapabilities {
 	return MotionSamplingCapabilities{
-		PositionResolutionPercent: 1,
-		MaximumPointsPerAppend:    maximumCloudHSPAddPoints,
+		PositionResolutionPercent:   1,
+		MaximumPointsPerAppend:      maximumCloudHSPAddPoints,
+		PreferSparseGeneratedMotion: true,
 	}
 }
 

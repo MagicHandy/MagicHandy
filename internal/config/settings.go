@@ -666,9 +666,9 @@ func DefaultSettings() Settings {
 			ChatVoice:            LLMChatVoiceUtility,
 			ReplyLength:          LLMReplyLengthBalanced,
 			UserAnatomy:          LLMUserAnatomyPenis,
-			// Creative v2 is the model-facing motion vocabulary for new installs.
-			// Creative, Layered and Pattern Library remain explicit saved choices.
-			MotionGenerationMode: LLMMotionModeCreativeV2,
+			// Layered is the model-facing motion vocabulary for new installs.
+			// Existing stores retain their explicitly saved mode.
+			MotionGenerationMode: LLMMotionModeLayered,
 			// A store with nothing saved serves these defaults unnormalized, and
 			// setup reads an empty planner as a customized saved assignment.
 			MotionPlanner: normalizeMotionPlanner(MotionPlannerSettings{}),
@@ -1049,7 +1049,7 @@ func loadSettingsFromBytes(data []byte) (Settings, bool, error) {
 	// Motion generation mode is additive, so it does not force a schema
 	// migration. Documents that predate the selector keep Creative, the
 	// vocabulary they already used, even though new installs start on
-	// Creative v2; a saved chat-only capability becomes Off. Explicit saved
+	// Layered; a saved chat-only capability becomes Off. Explicit saved
 	// choices remain untouched.
 	if _, present := header.LLM["motion_generation_mode"]; !present {
 		settings.LLM.MotionGenerationMode = LLMMotionModeDynamic

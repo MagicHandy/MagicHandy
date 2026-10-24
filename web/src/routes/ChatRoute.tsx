@@ -70,9 +70,9 @@ export function ChatRoute() {
     ? savedMotionMode
     : motionCapabilities?.motion === false ? "off" : "dynamic";
   const motionModeOptions: ReadonlyArray<{ value: MotionMode; label: string }> = [
+    { value: "layered", label: t("Layered") },
     { value: "creative_v2", label: t("Creative v2") },
     { value: "dynamic", label: t("Creative") },
-    { value: "layered", label: t("Layered") },
     { value: "pattern", label: t("Pattern library") },
     { value: "off", label: t("Off") },
   ];

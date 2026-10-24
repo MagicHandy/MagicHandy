@@ -58,7 +58,8 @@ func TestLayeredSmoothnessProbe(t *testing.T) {
 				}
 			}
 			engine := &Engine{plan: plan, settings: settings, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
-				preservePlanKnots: true, positionResolutionPercent: 1, maximumChunkPoints: 100}
+				preservePlanKnots: true, positionResolutionPercent: 1, maximumChunkPoints: 100,
+				preferSparseGeneratedMotion: os.Getenv("MAGICHANDY_SMOOTHNESS_CLOUD") == "1"}
 			var samples []MotionSample
 			end := min(plan.PeriodMillis, int64(20000))
 			if os.Getenv("MAGICHANDY_SMOOTHNESS_FULL_MATRIX") == "1" {

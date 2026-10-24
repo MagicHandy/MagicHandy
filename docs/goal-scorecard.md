@@ -1,5 +1,19 @@
 # Goal Scorecard
 
+## 2026-10-24 — Physically accepted Cloud sampling
+
+The [accepted D policy](cloud-sampling-review-2026-10-24.md) replaces the
+unaccepted extra velocity refinement below. Matched Windows amd64 pure-Go
+`-trimpath` builds measure **32,480,768 → 32,468,992 B** (−11,776 B) before the
+subsequent mode-order/default change. No dependency, task, ordinary model call
+or prompt expansion. The three-run shared-frame benchmark compares the detailed
+fit without extra velocity refinement against the sparse policy: median
+**93.880 → 69.586 µs/frame**, **100,512 → 92,928 B/frame**, **35 → 26 allocations**.
+This is bounded sampler work, not an end-to-end latency or RSS claim. After the
+mode-order/default change, the same build is **32,468,992 B**. Canonical UI
+remains **2,760,892 B**, main JavaScript gzip **342,081 → 342,082 B**. Existing
+labels are reordered; no parallel frontend assets are retained.
+
 ## 2026-10-23 — Model-response depth follow-up
 
 Matched Windows amd64 `CGO_ENABLED=0 go build -trimpath` binaries for the
