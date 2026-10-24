@@ -27,6 +27,21 @@ func TestAutopilotModelHorizonSetsTheBoundary(t *testing.T) {
 		{Hold: true},
 	}}
 	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+	secondDecided := make(chan struct{})
+	releaseSecond := make(chan struct{}, 1)
+	defer close(releaseSecond)
+	manager.options.Decide = func(ctx context.Context, input DecisionInput) (Decision, error) {
+		decision, err := decider.decide(ctx, input)
+		if input.SegmentIndex == 1 {
+			close(secondDecided)
+			select {
+			case <-releaseSecond:
+			case <-ctx.Done():
+				return Decision{}, ctx.Err()
+			}
+		}
+		return decision, err
+	}
 	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -36,7 +51,18 @@ func TestAutopilotModelHorizonSetsTheBoundary(t *testing.T) {
 	}
 
 	clock.Advance(170 * time.Second)
-	waitFor(t, time.Second, func() bool { return decider.callCount() >= 2 && remainingSeconds(manager) < 30 })
+	select {
+	case <-secondDecided:
+	case <-time.After(time.Second):
+		t.Fatal("second decision did not begin")
+	}
+	// A decider call is not an applied segment. While its result is pending,
+	// the old deadline has expired and legitimately reports zero remaining.
+	if status := manager.Status(); status.SegmentIndex != 1 || status.SegmentEndsMs != 0 {
+		t.Fatalf("pending decision changed the applied segment: %+v", status)
+	}
+	releaseSecond <- struct{}{}
+	waitFor(t, time.Second, func() bool { return manager.Status().SegmentIndex >= 2 })
 	if remaining := remainingSeconds(manager); remaining < 17 || remaining > 23 {
 		t.Fatalf("held boundary in %.1fs, want 20s ±12%%", remaining)
 	}
@@ -45,7 +71,7 @@ func TestAutopilotModelHorizonSetsTheBoundary(t *testing.T) {
 	}
 
 	clock.Advance(25 * time.Second)
-	waitFor(t, time.Second, func() bool { return decider.callCount() >= 3 })
+	waitFor(t, time.Second, func() bool { return manager.Status().SegmentIndex >= 3 })
 	// Level 4 with adaptive timing samples the middle of 20-60 seconds.
 	waitFor(t, time.Second, func() bool { remaining := remainingSeconds(manager); return remaining >= 28 && remaining <= 52 })
 
