@@ -67,13 +67,21 @@ func (s *Server) handleAutopilotPreferences(w http.ResponseWriter, r *http.Reque
 	if !s.requireController(w, r) {
 		return
 	}
-	var preferences config.AutopilotSettings
-	if err := decodeJSON(r, &preferences); err != nil {
+	var body struct {
+		config.AutopilotSettings
+		IntermediatePlanning *bool `json:"intermediate_planning"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 	var updateErr error
 	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
+		preferences := body.AutopilotSettings
+		preferences.IntermediatePlanning = current.Autopilot.IntermediatePlanning
+		if body.IntermediatePlanning != nil {
+			preferences.IntermediatePlanning = *body.IntermediatePlanning
+		}
 		current.Autopilot = preferences
 		var next config.Settings
 		next, updateErr = config.NormalizeSettings(current)

@@ -133,14 +133,14 @@ describe("model catalog downloads", () => {
     expect(screen.getByText(/1.00 GiB of 6.87 GiB already downloaded; the rest resumes./)).toBeInTheDocument();
   });
 
-  it("folds generation tuning away and explains the selected motion mode", async () => {
+  it("folds generation tuning away and keeps context beside the capability", async () => {
     renderPanel();
 
     const advanced = (await screen.findByText("Advanced generation settings")).closest("details")!;
     expect(advanced).not.toHaveAttribute("open");
-    expect(advanced).toContainElement(screen.getByRole("combobox", { name: "Context size" }));
     expect(advanced).toContainElement(screen.getByRole("combobox", { name: "Maximum output" }));
     expect(advanced).not.toContainElement(screen.getByRole("combobox", { name: "Model loading" }));
-    expect(screen.getByText("A flowing phrase that keeps developing over many strokes. The default.")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Context size" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "LLM motion" })).not.toBeInTheDocument();
   });
 });

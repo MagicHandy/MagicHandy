@@ -24,9 +24,11 @@ func chatPromptBudget(settings config.LLMSettings) chat.PromptBudgetSettings {
 	budget := chat.PromptBudgetSettings{MaxOutputTokens: settings.MaxOutputTokens}
 	if settings.ActiveConnection != nil {
 		budget.ContextSize, _, _ = settings.ActiveConnection.ConversationWindow()
+	} else if settings.ModelCapabilityLevel() != config.ModelCapabilitySimple {
+		budget.ContextSize = settings.LocalContextSize()
 	}
 	if settings.Provider == config.LLMProviderLlamaCPP && settings.LlamaCPPMode == config.LlamaCPPModeManaged {
-		budget.ContextSize = settings.LlamaCPPContextSize
+		budget.ContextSize = settings.LocalContextSize()
 		budget.ReasoningBudgetTokens = managedLlamaReasoningBudget(settings, true)
 	}
 	return budget

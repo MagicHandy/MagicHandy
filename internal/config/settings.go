@@ -483,41 +483,42 @@ type PublicSettings struct {
 
 // PublicSettingsOptionHints lists valid option values for settings clients.
 type PublicSettingsOptionHints struct {
-	DeviceOutputs           []string `json:"device_outputs"`
-	EstimFollowModes        []string `json:"estim_follow_modes"`
-	VibrationFollowModes    []string `json:"vibration_follow_modes"`
-	HSPDispatchOwners       []string `json:"hsp_dispatch_owners"`
-	APIApplicationIDSources []string `json:"api_application_id_sources"`
-	DiagnosticsVerbosities  []string `json:"diagnostics_verbosities"`
-	MotionStyles            []string `json:"motion_styles"`
-	FreestyleFeels          []string `json:"freestyle_feels"`
-	FreestyleAccents        []string `json:"freestyle_accents"`
-	FreestyleShapes         []string `json:"freestyle_shapes"`
-	HandyModels             []string `json:"handy_models"`
-	AutopilotSpeechCadences []string `json:"autopilot_speech_cadences"`
-	AutopilotMotionCadences []string `json:"autopilot_motion_cadences"`
-	AutopilotAuthorities    []string `json:"autopilot_speech_motion_authorities"`
-	LLMProviders            []string `json:"llm_providers"`
-	LlamaCPPModes           []string `json:"llama_cpp_modes"`
-	LLMManagedLoadPolicies  []string `json:"llm_managed_load_policies"`
-	LlamaCPPContextSizes    []int    `json:"llama_cpp_context_sizes"`
-	LLMReasoningModes       []string `json:"llm_reasoning_modes"`
-	LLMMaxOutputTokens      []int    `json:"llm_max_output_tokens"`
-	LLMMotionModes          []string `json:"llm_motion_modes"`
-	LLMChatVoices           []string `json:"llm_chat_voices"`
-	LLMReplyLengths         []string `json:"llm_reply_lengths"`
-	LLMUserAnatomies        []string `json:"llm_user_anatomies"`
-	LLMReactionStyles       []string `json:"llm_reaction_styles"`
-	PromptSets              []string `json:"prompt_sets"`
-	TTSProviders            []string `json:"tts_providers"`
-	ASRProviders            []string `json:"asr_providers"`
-	ParakeetSources         []string `json:"parakeet_sources"`
-	TTSDevices              []string `json:"tts_devices"`
-	TTSTonePresets          []string `json:"tts_tone_presets"`
-	ChatSpeechPolicies      []string `json:"chat_speech_policies"`
-	ChatStartupBehaviors    []string `json:"chat_startup_behaviors"`
-	Locales                 []string `json:"locales"`
-	Themes                  []string `json:"themes"`
+	LocalModelCapabilities  []ModelCapabilityOption `json:"local_model_capabilities"`
+	DeviceOutputs           []string                `json:"device_outputs"`
+	EstimFollowModes        []string                `json:"estim_follow_modes"`
+	VibrationFollowModes    []string                `json:"vibration_follow_modes"`
+	HSPDispatchOwners       []string                `json:"hsp_dispatch_owners"`
+	APIApplicationIDSources []string                `json:"api_application_id_sources"`
+	DiagnosticsVerbosities  []string                `json:"diagnostics_verbosities"`
+	MotionStyles            []string                `json:"motion_styles"`
+	FreestyleFeels          []string                `json:"freestyle_feels"`
+	FreestyleAccents        []string                `json:"freestyle_accents"`
+	FreestyleShapes         []string                `json:"freestyle_shapes"`
+	HandyModels             []string                `json:"handy_models"`
+	AutopilotSpeechCadences []string                `json:"autopilot_speech_cadences"`
+	AutopilotMotionCadences []string                `json:"autopilot_motion_cadences"`
+	AutopilotAuthorities    []string                `json:"autopilot_speech_motion_authorities"`
+	LLMProviders            []string                `json:"llm_providers"`
+	LlamaCPPModes           []string                `json:"llama_cpp_modes"`
+	LLMManagedLoadPolicies  []string                `json:"llm_managed_load_policies"`
+	LlamaCPPContextSizes    []int                   `json:"llama_cpp_context_sizes"`
+	LLMReasoningModes       []string                `json:"llm_reasoning_modes"`
+	LLMMaxOutputTokens      []int                   `json:"llm_max_output_tokens"`
+	LLMMotionModes          []string                `json:"llm_motion_modes"`
+	LLMChatVoices           []string                `json:"llm_chat_voices"`
+	LLMReplyLengths         []string                `json:"llm_reply_lengths"`
+	LLMUserAnatomies        []string                `json:"llm_user_anatomies"`
+	LLMReactionStyles       []string                `json:"llm_reaction_styles"`
+	PromptSets              []string                `json:"prompt_sets"`
+	TTSProviders            []string                `json:"tts_providers"`
+	ASRProviders            []string                `json:"asr_providers"`
+	ParakeetSources         []string                `json:"parakeet_sources"`
+	TTSDevices              []string                `json:"tts_devices"`
+	TTSTonePresets          []string                `json:"tts_tone_presets"`
+	ChatSpeechPolicies      []string                `json:"chat_speech_policies"`
+	ChatStartupBehaviors    []string                `json:"chat_startup_behaviors"`
+	Locales                 []string                `json:"locales"`
+	Themes                  []string                `json:"themes"`
 }
 
 // LLMUpdate is the settings API write shape. New tuning fields are pointers so
@@ -534,6 +535,7 @@ type LLMUpdate struct {
 	ManagedLoadPolicy           *string                 `json:"managed_load_policy,omitempty"`
 	LlamaCPPBaseURL             string                  `json:"llama_cpp_base_url"`
 	LlamaCPPContextSize         *int                    `json:"llama_cpp_context_size,omitempty"`
+	LocalCapabilityLevel        *string                 `json:"local_capability_level,omitempty"`
 	OllamaBaseURL               string                  `json:"ollama_base_url"`
 	OllamaModelsPath            string                  `json:"ollama_models_path,omitempty"`
 	Model                       string                  `json:"model"`
@@ -573,6 +575,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 		ManagedLoadPolicy:           &settings.ManagedLoadPolicy,
 		LlamaCPPBaseURL:             settings.LlamaCPPBaseURL,
 		LlamaCPPContextSize:         &settings.LlamaCPPContextSize,
+		LocalCapabilityLevel:        &settings.LocalCapabilityLevel,
 		OllamaBaseURL:               settings.OllamaBaseURL,
 		OllamaModelsPath:            settings.OllamaModelsPath,
 		Model:                       settings.Model,
@@ -1382,6 +1385,7 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	}
 	settings.MotionPlanner = normalizeMotionPlanner(settings.MotionPlanner)
 	settings.Provider = strings.TrimSpace(settings.Provider)
+	settings.LocalCapabilityLevel = strings.ToLower(strings.TrimSpace(settings.LocalCapabilityLevel))
 	settings.LlamaCPPMode = strings.TrimSpace(settings.LlamaCPPMode)
 	settings.ManagedLoadPolicy = strings.TrimSpace(settings.ManagedLoadPolicy)
 	settings.LlamaCPPBaseURL = strings.TrimRight(strings.TrimSpace(settings.LlamaCPPBaseURL), "/")

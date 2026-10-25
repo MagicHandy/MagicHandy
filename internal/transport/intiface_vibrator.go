@@ -58,32 +58,38 @@ type IntifaceVibratorMotor struct {
 	Index             uint32 `json:"index"`
 	FeatureDescriptor string `json:"feature_descriptor,omitempty"`
 	StepCount         int    `json:"step_count"`
+	LevelPercent      int    `json:"level_percent"`
 }
 
 // IntifaceVibratorStatus is the vibrator's safe snapshot. Percentages are
 // whole numbers; the effective ceiling is the highest level the motors can
 // deliver at or below the ceiling.
 type IntifaceVibratorStatus struct {
-	Selected                bool                    `json:"selected"`
-	DeviceIndex             *uint32                 `json:"device_index,omitempty"`
-	DeviceName              string                  `json:"device_name,omitempty"`
-	Motors                  []IntifaceVibratorMotor `json:"motors"`
-	IntensityPercent        int                     `json:"intensity_percent"`
-	CeilingPercent          int                     `json:"ceiling_percent"`
-	EffectiveCeilingPercent int                     `json:"effective_ceiling_percent"`
-	LevelPercent            int                     `json:"level_percent"`
-	PlaybackState           string                  `json:"playback_state"`
-	Testing                 bool                    `json:"testing"`
-	CommandedCount          uint64                  `json:"commanded_count"`
-	AcknowledgedCount       uint64                  `json:"acknowledged_count"`
-	RejectedCount           uint64                  `json:"rejected_count"`
-	TimeoutCount            uint64                  `json:"timeout_count"`
-	LastError               string                  `json:"last_error,omitempty"`
+	ResumeIntensityPercent    int                     `json:"resume_intensity_percent,omitempty"`
+	EffectiveIntensityPercent int                     `json:"effective_intensity_percent"`
+	TestAvailable             bool                    `json:"test_available"`
+	Selected                  bool                    `json:"selected"`
+	DeviceIndex               *uint32                 `json:"device_index,omitempty"`
+	DeviceName                string                  `json:"device_name,omitempty"`
+	Motors                    []IntifaceVibratorMotor `json:"motors"`
+	IntensityPercent          int                     `json:"intensity_percent"`
+	CeilingPercent            int                     `json:"ceiling_percent"`
+	EffectiveCeilingPercent   int                     `json:"effective_ceiling_percent"`
+	LevelPercent              int                     `json:"level_percent"`
+	PlaybackState             string                  `json:"playback_state"`
+	Testing                   bool                    `json:"testing"`
+	CommandedCount            uint64                  `json:"commanded_count"`
+	AcknowledgedCount         uint64                  `json:"acknowledged_count"`
+	RejectedCount             uint64                  `json:"rejected_count"`
+	TimeoutCount              uint64                  `json:"timeout_count"`
+	LastError                 string                  `json:"last_error,omitempty"`
+	SilentReason              string                  `json:"silent_reason,omitempty"`
 }
 
 type vibratorMotor struct {
 	IntifaceVibratorMotor
-	last int
+	last    int
+	written int
 }
 
 // IntifaceVibrator drives one Buttplug device's Vibrate actuators from the
@@ -98,31 +104,41 @@ type IntifaceVibrator struct {
 	// manual clock; the watchdog still runs.
 	manualPace bool
 
-	mu        sync.Mutex
-	config    VibratorConfig
-	intensity float64
-	selection vibratorSelection
-	epoch     uint64
+	// Lifecycle operations and watchdog Stop cannot overtake one another.
+	// The watchdog stops hardware before taking mu for bookkeeping.
+	lifecycleMu     sync.Mutex
+	mu              sync.Mutex
+	config          VibratorConfig
+	intensity       float64
+	resumeIntensity float64
+	levelRevision   uint64
+	selection       vibratorSelection
+	epoch           uint64
 	// control changes with every Stop, selection and session change: a raise
 	// or test prepared before one of them is refused.
-	control  uint64
-	stream   vibratorStream
-	inFlight bool
+	runGeneration uint64
+	control       uint64
+	stream        vibratorStream
+	inFlight      bool
+	nextSend      uint64
+	inFlightID    uint64
+	zeroReason    string
+	loweredLimit  bool
+	events        []VibratorEvent
+	eventsDropped uint64
 	// lastSent spaces nonzero levels by the device's advisory timing gap.
 	lastSent  time.Time
 	testUntil time.Time
-	// testGeneration fences a test's levels like a run's: a Stop ends it
-	// before any composed level can be written.
-	testGeneration uint64
-	level          float64
-	stats          vibratorStats
-	diag           TransportDiagnostics
+	level     float64
+	stats     vibratorStats
+	diag      TransportDiagnostics
 
 	// Read without the lock by the watchdog and the session's ping loop.
 	lastPace     atomic.Int64
 	playingFlag  atomic.Bool
 	stalled      atomic.Bool
 	watchedIndex atomic.Uint32
+	testDeadline atomic.Int64
 }
 
 type vibratorSelection struct {
@@ -135,14 +151,17 @@ type vibratorSelection struct {
 }
 
 type vibratorStream struct {
-	renderer   *vibration.Renderer
-	timeline   companion.Timeline
-	origin     companion.Clock
-	coverage   companion.Coverage
-	id         string
-	playing    bool
-	generation uint64
-	state      string
+	independent       bool
+	vibration         companion.Timeline
+	vibrationRevision uint64
+	renderer          *vibration.Renderer
+	timeline          companion.Timeline
+	origin            companion.Clock
+	coverage          companion.Coverage
+	id                string
+	playing           bool
+	generation        uint64
+	state             string
 }
 
 type vibratorStats struct {
@@ -177,10 +196,19 @@ func (v *IntifaceVibrator) Configure(config VibratorConfig) {
 	config.Minimum = clampUnit(config.Minimum)
 	config.Ceiling = clampUnit(config.Ceiling)
 	config.OffsetMillis = max(-maxVibratorOffsetMs, min(maxVibratorOffsetMs, config.OffsetMillis))
+	v.session.writeMu.Lock()
+	defer v.session.writeMu.Unlock()
 	v.mu.Lock()
+	v.loweredLimit = v.loweredLimit || config.Ceiling < v.config.Ceiling
+	if config != v.config {
+		v.levelRevision++
+		v.resumeIntensity = math.Min(v.resumeIntensity, config.Ceiling)
+	}
 	v.config = config
 	v.stream.renderer.SetProfile(config.Profile)
 	v.intensity = math.Min(v.intensity, config.Ceiling)
+	v.invalidateOutputLocked()
+	v.addEventLocked("settings", 0, nil)
 	v.mu.Unlock()
 	v.signal()
 }
@@ -189,8 +217,16 @@ func (v *IntifaceVibrator) Configure(config VibratorConfig) {
 // it. Permission to raise belongs to the caller; a lower value takes effect
 // on the next send, without waiting for the pacer's tick.
 func (v *IntifaceVibrator) SetIntensity(fraction float64) float64 {
+	v.session.writeMu.Lock()
+	defer v.session.writeMu.Unlock()
 	v.mu.Lock()
+	v.resumeIntensity = 0
+	v.levelRevision++
+	v.loweredLimit = v.loweredLimit || fraction < v.intensity
 	v.intensity = math.Min(clampUnit(fraction), v.config.Ceiling)
+	v.zeroReason = "intensity_zero"
+	v.invalidateOutputLocked()
+	v.addEventLocked("intensity", 0, nil)
 	intensity := v.intensity
 	v.mu.Unlock()
 	v.signal()
@@ -207,10 +243,12 @@ func (v *IntifaceVibrator) ControlGeneration() uint64 {
 // SetIntensityAt changes the live intensity for a request prepared at
 // generation. Lowering always applies; a raise prepared before a Stop, a
 // selection or a session change is refused.
-func (v *IntifaceVibrator) SetIntensityAt(generation uint64, fraction float64) (float64, error) {
+func (v *IntifaceVibrator) SetIntensityAt(generation uint64, fraction float64, allowRaise bool) (float64, error) {
+	v.session.writeMu.Lock()
+	defer v.session.writeMu.Unlock()
 	v.mu.Lock()
 	target := math.Min(clampUnit(fraction), v.config.Ceiling)
-	if target > v.intensity && generation != v.control {
+	if target > v.intensity && (!allowRaise || generation != v.control) {
 		v.mu.Unlock()
 		return 0, errVibratorControlStale
 	}
@@ -218,7 +256,13 @@ func (v *IntifaceVibrator) SetIntensityAt(generation uint64, fraction float64) (
 		v.mu.Unlock()
 		return 0, errVibratorNotSelected
 	}
+	v.loweredLimit = v.loweredLimit || target < v.intensity
+	v.resumeIntensity = 0
+	v.levelRevision++
 	v.intensity = target
+	v.zeroReason = "intensity_zero"
+	v.invalidateOutputLocked()
+	v.addEventLocked("intensity", 0, nil)
 	v.signalLocked()
 	v.mu.Unlock()
 	return target, nil
@@ -227,6 +271,8 @@ func (v *IntifaceVibrator) SetIntensityAt(generation uint64, fraction float64) (
 // TestAt starts a test for a request prepared at generation. The check and
 // the start share one lock, so a Stop between them cannot be missed.
 func (v *IntifaceVibrator) TestAt(generation uint64) error {
+	v.lifecycleMu.Lock()
+	defer v.lifecycleMu.Unlock()
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	if generation != v.control {
@@ -245,6 +291,8 @@ func (v *IntifaceVibrator) Intensity() float64 {
 // Test plays one second at the lower of the live intensity and 25% while
 // motion is idle.
 func (v *IntifaceVibrator) Test() error {
+	v.lifecycleMu.Lock()
+	defer v.lifecycleMu.Unlock()
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	return v.testLocked()
@@ -252,16 +300,24 @@ func (v *IntifaceVibrator) Test() error {
 
 func (v *IntifaceVibrator) testLocked() error {
 	switch {
+	case v.stalled.Load():
+		return errVibratorStale
 	case !v.selection.selected:
 		return errVibratorNotSelected
 	case v.stream.playing:
 		return errVibratorPlaying
 	case v.intensity <= 0:
 		return errVibratorSilent
+	case v.effectiveIntensityLocked(min(v.intensity, vibratorTestCeiling)) == 0:
+		return errors.New("the vibrator motor steps cannot produce a nonzero level within the 25% test limit")
 	}
-	v.stream.generation++
-	v.testGeneration = v.stream.generation
+	v.invalidateOutputLocked()
+	v.runGeneration++
 	v.testUntil = v.clock().Add(vibratorTestDuration)
+	v.testDeadline.Store(v.testUntil.UnixNano())
+	v.lastPace.Store(v.clock().UnixNano())
+	v.playingFlag.Store(true)
+	v.addEventLocked("test", 0, nil)
 	v.signalLocked()
 	return nil
 }
@@ -270,6 +326,8 @@ func (v *IntifaceVibrator) testLocked() error {
 // and both the previous and the new device are stopped before it is ready.
 // The live intensity starts again at zero.
 func (v *IntifaceVibrator) Select(ctx context.Context, deviceIndex uint32) error {
+	v.lifecycleMu.Lock()
+	defer v.lifecycleMu.Unlock()
 	selection, err := v.prepareSelection(deviceIndex)
 	if err != nil {
 		return err
@@ -283,6 +341,10 @@ func (v *IntifaceVibrator) Select(ctx context.Context, deviceIndex uint32) error
 		v.releaseClaim(deviceIndex, keepsClaim)
 		return errVibratorPlaying
 	}
+	v.mu.Lock()
+	v.resumeIntensity = 0
+	v.invalidateLocked("idle")
+	v.mu.Unlock()
 	targets := []uint32{deviceIndex}
 	if previous.selected && !keepsClaim {
 		targets = append(targets, previous.deviceIndex)
@@ -306,12 +368,15 @@ func (v *IntifaceVibrator) Select(ctx context.Context, deviceIndex uint32) error
 	}
 	v.mu.Lock()
 	v.selection = selection
+	v.resumeIntensity = 0
 	v.lastSent = time.Time{}
 	v.testUntil = time.Time{}
 	v.epoch++
 	v.control++
 	v.intensity = 0
+	v.zeroReason = "intensity_zero"
 	v.stream.state = "idle"
+	v.addEventLocked("selected", 0, nil)
 	v.mu.Unlock()
 	v.watchedIndex.Store(deviceIndex)
 	return nil
@@ -366,7 +431,10 @@ func (v *IntifaceVibrator) prepareSelection(deviceIndex uint32) (vibratorSelecti
 // other outputs. A Stop that cannot be confirmed fails the session, because
 // the server then stops its devices.
 func (v *IntifaceVibrator) Release(ctx context.Context) error {
+	v.lifecycleMu.Lock()
+	defer v.lifecycleMu.Unlock()
 	v.mu.Lock()
+	v.resumeIntensity = 0
 	v.invalidateLocked("idle")
 	selection := v.selectionSnapshotLocked()
 	v.selection = vibratorSelection{}
@@ -393,26 +461,32 @@ func (v *IntifaceVibrator) Status() IntifaceVibratorStatus {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	status := IntifaceVibratorStatus{
-		Selected:          v.selection.selected,
-		DeviceName:        v.selection.deviceName,
-		Motors:            []IntifaceVibratorMotor{},
-		IntensityPercent:  percent(v.intensity),
-		CeilingPercent:    percent(v.config.Ceiling),
-		LevelPercent:      percent(v.level),
-		PlaybackState:     v.playbackStateLocked(),
-		Testing:           !v.testUntil.IsZero(),
-		CommandedCount:    v.stats.commanded,
-		AcknowledgedCount: v.stats.acked,
-		RejectedCount:     v.stats.rejected,
-		TimeoutCount:      v.stats.timeouts,
-		LastError:         v.stats.lastError,
+		ResumeIntensityPercent:    percent(v.resumableIntensityLocked()),
+		Selected:                  v.selection.selected,
+		DeviceName:                v.selection.deviceName,
+		Motors:                    []IntifaceVibratorMotor{},
+		IntensityPercent:          percent(v.intensity),
+		CeilingPercent:            percent(v.config.Ceiling),
+		LevelPercent:              percent(v.level),
+		PlaybackState:             v.playbackStateLocked(),
+		Testing:                   !v.testUntil.IsZero(),
+		CommandedCount:            v.stats.commanded,
+		AcknowledgedCount:         v.stats.acked,
+		RejectedCount:             v.stats.rejected,
+		TimeoutCount:              v.stats.timeouts,
+		LastError:                 v.stats.lastError,
+		SilentReason:              v.silentReasonLocked(),
+		EffectiveIntensityPercent: percent(v.effectiveIntensityLocked(v.intensity)),
+		TestAvailable:             v.selection.selected && !v.stream.playing && !v.stalled.Load() && v.testUntil.IsZero() && v.effectiveIntensityLocked(min(v.intensity, vibratorTestCeiling)) > 0,
 	}
 	if v.selection.selected {
 		index := v.selection.deviceIndex
 		status.DeviceIndex = &index
 		effective := v.config.Ceiling
 		for _, motor := range v.selection.motors {
-			status.Motors = append(status.Motors, motor.IntifaceVibratorMotor)
+			motorStatus := motor.IntifaceVibratorMotor
+			motorStatus.LevelPercent = percent(float64(motor.written) / float64(motor.StepCount))
+			status.Motors = append(status.Motors, motorStatus)
 			steps := float64(motor.StepCount)
 			effective = math.Min(effective, math.Floor(v.config.Ceiling*steps+1e-9)/steps)
 		}
@@ -431,15 +505,23 @@ func (v *IntifaceVibrator) playbackStateLocked() string {
 // invalidateLocked ends playback and any test so no queued level from them
 // can reach the wire.
 func (v *IntifaceVibrator) invalidateLocked(state string) {
+	if state != "idle" {
+		v.resumeIntensity = 0
+	}
 	v.control++
-	v.stream.generation++
+	v.runGeneration++
+	v.invalidateOutputLocked()
 	v.stream.playing = false
 	v.stream.id = ""
 	v.stream.timeline.Reset()
+	v.stream.vibration.Reset()
+	v.stream.vibrationRevision = 0
+	v.stream.independent = false
 	v.stream.origin.Stop()
 	v.stream.coverage.Reset()
 	v.stream.state = state
 	v.testUntil = time.Time{}
+	v.testDeadline.Store(0)
 	v.level = 0
 	v.playingFlag.Store(false)
 	// The stalled run is over; a later test or run starts clean.
@@ -462,13 +544,14 @@ func (v *IntifaceVibrator) signalLocked() {
 // Session hooks. Locked hooks run with the session lock held; the vibrator
 // lock is always taken after it, never before.
 
-func (v *IntifaceVibrator) admitWrite(_ string, _ map[string]any, generation uint64, _ *intifacePacedRequest) (intifaceWriteAdmission, error) {
+func (v *IntifaceVibrator) admitWrite(_ string, fields map[string]any, generation uint64, _ *intifacePacedRequest) (intifaceWriteAdmission, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	playing := v.stream.playing && v.stream.generation == generation
-	testing := !v.testUntil.IsZero() && v.testGeneration == generation
-	if !playing && !testing {
+	if generation != v.stream.generation || !v.selection.selected || fields["DeviceIndex"] != v.selection.deviceIndex {
 		return intifaceWriteAdmission{}, errPacerSuperseded
+	}
+	if err := v.admitLevelsLocked(fields); err != nil {
+		return intifaceWriteAdmission{}, err
 	}
 	return intifaceWriteAdmission{}, nil
 }
@@ -477,6 +560,7 @@ func (v *IntifaceVibrator) releaseWrite(bool) {}
 
 func (v *IntifaceVibrator) sessionConnectedLocked() {
 	v.mu.Lock()
+	v.resumeIntensity = 0
 	v.intensity = 0
 	v.stream.state = "idle"
 	v.diag.Connected = true
@@ -524,16 +608,23 @@ func (v *IntifaceVibrator) deviceRemovedLocked(deviceIndex uint32) func() {
 }
 
 // invalidateForEmergency ends playback before StopAllDevices and returns the
-// live intensity to zero, as the global Stop does for the Coyote's strength.
+// live intensity to zero. A later manual request may resume the previous
+// human-selected level on this same device; autonomous work cannot restore it.
 func (v *IntifaceVibrator) invalidateForEmergency() {
 	v.mu.Lock()
+	if v.intensity > 0 {
+		v.resumeIntensity = v.intensity
+	}
 	v.invalidateLocked("idle")
 	v.intensity = 0
+	v.zeroReason = "emergency_stop"
+	v.addEventLocked("emergency_stop", 0, nil)
 	v.mu.Unlock()
 }
 
 func (v *IntifaceVibrator) invalidateForClose() {
 	v.mu.Lock()
+	v.resumeIntensity = 0
 	v.invalidateLocked("idle")
 	v.mu.Unlock()
 }
@@ -571,6 +662,9 @@ func (v *IntifaceVibrator) selectionSnapshotLocked() vibratorSelection {
 func (v *IntifaceVibrator) paceAlive(now time.Time) bool {
 	if !v.playingFlag.Load() {
 		return true
+	}
+	if deadline := v.testDeadline.Load(); deadline != 0 && now.UnixNano() >= deadline+vibratorStallLimit.Nanoseconds() {
+		return false
 	}
 	return now.Sub(time.Unix(0, v.lastPace.Load())) < vibratorStallLimit
 }

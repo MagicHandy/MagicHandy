@@ -39,6 +39,10 @@ func (e *Engine) dispatchThrough(
 		StreamID: streamID,
 		Points:   points,
 	}
+	e.mu.Lock()
+	appendCommand.VibrationOnly = e.plan.Target.VibrationOnly
+	appendCommand.Vibration = e.vibrationFrameLocked(e.estimatedPlaybackMillisLocked(e.now()))
+	e.mu.Unlock()
 	result, err := e.transport.AppendPoints(commandCtx, appendCommand)
 	cleanup()
 	e.recordTransportResult(reason, lastSample, transport.Command{
@@ -182,7 +186,10 @@ func (e *Engine) play(ctx context.Context, runEpoch uint64) error {
 		return err
 	}
 	defer cleanup()
-	playCommand := transport.PlayCommand{StreamID: streamID}
+	e.mu.Lock()
+	only := e.plan.Target.VibrationOnly
+	e.mu.Unlock()
+	playCommand := transport.PlayCommand{StreamID: streamID, VibrationOnly: only}
 	result, err := e.transport.Play(commandCtx, playCommand)
 	e.recordTransportResult("play", nil, transport.Command{
 		Kind:       transport.CommandKindPointsPlay,

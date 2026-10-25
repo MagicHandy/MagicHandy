@@ -20,7 +20,7 @@ import type { DeviceGlyph } from "./glyphs";
 export type DeviceRequestKey = DeviceId | "new_handy";
 
 /** One word per state, with its dot (Device kit, Status words). */
-export type DeviceStatusWord = "playing" | "connected" | "connecting" | "not_connected" | "needs_setup" | "lost";
+export type DeviceStatusWord = "playing" | "silent" | "connected" | "connecting" | "not_connected" | "needs_setup" | "lost";
 
 /** The one action a device row offers for its state. */
 export interface DeviceAction {
@@ -58,7 +58,7 @@ export interface DeviceLevelGroup {
   /** The group's accessible name, which says whose levels these are. */
   name: string;
   levels: DeviceLevelModel[];
-  /** Coyote's Zero both. */
+  /** An explicit zero, including clearing permission to resume later. */
   zero?: { label: string; run: () => void; disabled: boolean };
   /** A note under the levels, such as an unconfirmed zero. */
   note?: string;
@@ -134,6 +134,8 @@ export interface DeviceDescriptor {
   Glyph: DeviceGlyph;
   /** The Add device list: what it is and how it connects. */
   addDetail: () => string;
+  /** A short capability note shown before adding this device. */
+  addNotice?: () => string;
   model: (ctx: DeviceContext) => DeviceModel;
   /** The device page, top to bottom; Remove follows the last section. */
   sections: DevicePageSection[];

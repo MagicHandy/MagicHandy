@@ -109,6 +109,9 @@ type Service struct {
 	// TrustedMotionInput is reserved for backend-generated Autopilot decision
 	// messages. Interactive user chat must leave this false.
 	TrustedMotionInput bool
+	// Set only by backend Simple/Intermediate Autopilot motion. The decision
+	// note's measured latency trade-off is recorded in ADR 0060.
+	localAutopilotPlan bool
 	// AutonomousTemperature is supplied only by the backend scheduler. Ordinary
 	// chat keeps its reviewed sampling controls.
 	AutonomousTemperature float64

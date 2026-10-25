@@ -15,7 +15,7 @@ export function coyoteConnect(ctx: DeviceContext, candidateID?: string) {
 export function vibratorTestAvailable(ctx: DeviceContext): boolean {
   const vibrator = ctx.intiface.vibrator;
   return !ctx.locked && ctx.canConfigureHost && Boolean(vibrator?.selected) && (vibrator?.intensity_percent ?? 0) > 0
-    && !ctx.engineActive && !vibrator?.testing && ctx.stopSequence !== undefined;
+    && vibrator?.test_available !== false && vibrator?.playback_state !== "stale" && !ctx.engineActive && !vibrator?.testing && ctx.stopSequence !== undefined;
 }
 
 export function vibratorTest(ctx: DeviceContext) {

@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { api } from "../api/client";
 import type { CloudPlanningStatus, ModelConnection, ModelRoute, ModelRoutingSnapshot, MotionPlannerSettings } from "../api/cloud-types";
-import type { PublicSettings } from "../api/types";
+import type { ModelCapabilityLevel, ModelCapabilityOption } from "../api/llm-settings-types";
+import type { LLMProviderStatus, PublicSettings } from "../api/types";
 import { t, translateKnown } from "../i18n";
-import { connectionRoles, connectionSignature, modelConnectionLabel, modelProviderNames, modelSettingsPatch, modelSettingsSignature, newModelConnection, removeConnection, type ModelRole } from "../util/model-connections";
+import { capabilityNames, connectionCapability, connectionRoles, connectionSignature, modelConnectionLabel, modelProviderNames, modelSettingsPatch, modelSettingsSignature, newModelConnection, removeConnection, roleCapability, type ModelRole } from "../util/model-connections";
 import { DecisionsConnection } from "./DecisionsConnection";
 import { ModelConnectionEditor } from "./ModelConnectionEditor";
-import { MotionReviewerSettings } from "./MotionReviewerSettings";
+import { SecondOpinionRow } from "./MotionReviewerSettings";
 import { FieldRow } from "./SetupSection";
 import { CloudCredentialRecovery } from "./CloudCredentialRecovery";
 
 const defaultPlanner: MotionPlannerSettings = { provider: "conversation", model: "", context_policy: "conversation" };
 const MAX_CONNECTIONS = 16;
 type Provider = ModelConnection["provider"];
+type LLM = PublicSettings["llm"];
 
 // Role choices list only connections that exist. Adding a provider happens in
-// External providers, so picking a role never creates one.
+// Models, so picking a role never creates one.
 function ConnectionOptions({ connections }: { connections: ModelConnection[] }) {
   return <>
     <option value="local">{t("Local model")}</option>
@@ -42,9 +44,24 @@ function autopilotRouteText(routing?: ModelRoutingSnapshot): string {
     : t("Autopilot also receives included conversation context.");
 }
 
-export function ModelConnectionsPanel({ settings, saved, routing, locked, patch, localEditor, setup = false }: {
-  settings: PublicSettings["llm"]; saved: PublicSettings["llm"] | undefined; routing?: PublicSettings["model_routing"];
-  locked: boolean; patch: (next: Partial<PublicSettings["llm"]>) => void; localEditor?: ReactNode; setup?: boolean;
+// The draft Autopilot role's capability. Decisions picks library patterns and
+// has no motion contract; the legacy ChatGPT planner is Advanced.
+function plannerCapability(settings: LLM, chatID: string): ModelCapabilityLevel | undefined {
+  const planner = settings.motion_planner ?? defaultPlanner;
+  if (planner.provider === "conversation") return roleCapability(settings, chatID);
+  if (planner.provider === "local") return roleCapability(settings, "local");
+  if (planner.provider === "connection") return roleCapability(settings, planner.connection_id || "local");
+  return planner.provider === "chatgpt" ? "advanced" : undefined;
+}
+
+function CapabilityBadge({ level }: { level?: ModelCapabilityLevel }) {
+  return level ? <span className="setup-badge">{translateKnown(capabilityNames[level])}</span> : null;
+}
+
+export function ModelConnectionsPanel({ settings, saved, routing, locked, patch, localEditor, localStatus, capabilityOptions = [], setup = false }: {
+  settings: LLM; saved: LLM | undefined; routing?: PublicSettings["model_routing"];
+  locked: boolean; patch: (next: Partial<LLM>) => void; localEditor?: ReactNode; localStatus?: LLMProviderStatus | null;
+  capabilityOptions?: ModelCapabilityOption[]; setup?: boolean;
 }) {
   const connections = settings.connections ?? [];
   const planner = settings.motion_planner ?? defaultPlanner;
@@ -54,7 +71,6 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
   const planningConnection = planner.provider === "connection" ? connections.find(connection => connection.id === planner.connection_id) : undefined;
   const plannerHosted = planner.provider === "decisions" || planner.provider === "chatgpt" || (planner.provider === "conversation" ? conversationID !== "local" : Boolean(planningConnection));
   const [status, setStatus] = useState<CloudPlanningStatus | null>(null);
-  const [editRetryModel, setEditRetryModel] = useState(false);
   const statusRevision = useRef(0);
   const refreshStatus = useCallback(() => {
     const revision = ++statusRevision.current;
@@ -73,20 +89,28 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
     patch({ conversation_connection_id: nextChat, motion_planner: nextPlanner });
   }
   const draftChanged = Boolean(saved && modelSettingsSignature(saved) !== modelSettingsSignature(settings));
-  const usesLocal = conversationID === "local" || planner.provider === "local" || planner.connection_id === "local";
+  const chatChanged = Boolean(saved && (saved.conversation_connection_id || "local") !== conversationID);
+  const usesLocal = conversationID === "local" || planner.provider === "local" || planner.connection_id === "local" || Boolean(conversation && settings.retry_refusal_locally);
+  const chatLevel = roleCapability(settings, conversationID);
+  const autopilotLevel = plannerCapability(settings, conversationID);
+  const reviewable = [chatLevel, autopilotLevel].some(level => level !== undefined && level !== "advanced");
+  const routeHint = chatRouteText(routing);
+  const [localOpen, setLocalOpen] = useState(usesLocal);
+  // Assigning a role to the local model opens it, since it may need setting up.
+  useEffect(() => { if (usesLocal) setLocalOpen(true); }, [usesLocal]);
 
   return <>
     {draftChanged && !setup && <div className="model-routing-draft"><p className="hint" role="status">{t("Unsaved model changes. Chat still uses the saved routing until you save settings.")}</p><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => { if (saved) patch(modelSettingsPatch(saved)); }}>{t("Discard model changes")}</button><p className="hint">{t("Saved accounts and API keys are not changed by Discard.")}</p></div>}
     <section className="group cloud-motion-settings model-roles" aria-label={t("Model roles")}>
       <h3 className="group-title">{t("Model roles")}</h3>
       <div className="form-rows">
-        <FieldRow id="model-role-chat" label={t("Chat model")} hint={setup ? t("This model receives your chat messages and handles any motion requests made in chat.") : chatRouteText(routing)}>
+        <FieldRow id="model-role-chat" label={t("Chat model")} badge={<CapabilityBadge level={chatLevel} />} hint={setup ? t("This model receives your chat messages and handles any motion requests made in chat.") : chatChanged ? t("Not saved yet. {route}", { route: routeHint }) : routeHint}>
           <select id="model-role-chat" aria-describedby="model-role-chat-hint" value={conversationID} disabled={locked} onChange={event => chooseConnection(event.target.value, "chat")}>
             {conversationID !== "local" && !conversation && <option value={conversationID} disabled>{t("Unavailable connection")}</option>}
             <ConnectionOptions connections={connections} />
           </select>
         </FieldRow>
-        <FieldRow id="model-role-autopilot" label={t("Autopilot model")} hint={autopilotRouteText(setup ? undefined : routing)}>
+        <FieldRow id="model-role-autopilot" label={t("Autopilot model")} badge={<CapabilityBadge level={autopilotLevel} />} hint={autopilotRouteText(setup ? undefined : routing)}>
           <select id="model-role-autopilot" aria-describedby="model-role-autopilot-hint" value={plannerID || "conversation"} disabled={locked} onChange={event => chooseConnection(event.target.value, "autopilot")}>
             <option value="conversation">{t("Same as conversation")}</option>
             {planner.provider === "connection" && planner.connection_id !== "local" && !planningConnection && <option value={planner.connection_id} disabled>{t("Unavailable connection")}</option>}
@@ -100,25 +124,52 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
             <option value="conversation">{t("Conversation context")}</option><option value="technical">{t("Motion details only")}</option>
           </select>
         </FieldRow>}
-        {conversation && <label className="toggle-line form-row"><span className="toggle"><input type="checkbox" disabled={locked} checked={settings.hosted_response_repair_enabled ?? true} onChange={event => patch({ hosted_response_repair_enabled: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Automatically repair rejected chat responses")}<small>{t("Ask the same external model once to correct an invalid response. Adds time and may use more quota. When off, eligible chat errors offer Repair response.")}</small></span></label>}
+        <SecondOpinionRow settings={settings} locked={locked} eligible={reviewable} patch={patch} />
+        {chatLevel === "advanced" && <label className="toggle-line form-row"><span className="toggle"><input type="checkbox" disabled={locked} checked={settings.hosted_response_repair_enabled ?? true} onChange={event => patch({ hosted_response_repair_enabled: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Automatically repair rejected chat responses")}<small>{t("Ask the same model once to correct an invalid response. Adds time and another model request. When off, eligible chat errors offer Repair response.")}</small></span></label>}
         {conversation && !setup && <label className="toggle-line form-row"><span className="toggle"><input type="checkbox" disabled={locked} checked={Boolean(settings.retry_refusal_locally)} onChange={event => patch({ retry_refusal_locally: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Retry declined chat requests with the local model")}<small>{settings.retry_refusal_locally
           ? t("Local retry model: {provider} · {model}", { provider: settings.provider === "ollama" ? "Ollama" : "llama.cpp", model: settings.model || t("Choose a model") })
           : t("One local attempt after an explicit provider refusal, using your local prompt and the original conversation. Errors, incomplete output and refusal wording in an otherwise valid reply do not trigger a retry. Autopilot is unchanged.")}</small></span></label>}
-        {conversation && !setup && settings.retry_refusal_locally && localEditor && !usesLocal && <details className="form-row-details" onToggle={event => setEditRetryModel(event.currentTarget.open)}><summary>{t("Configure local retry model")}</summary>{editRetryModel && localEditor}</details>}
       </div>
     </section>
-    <MotionReviewerSettings settings={settings} locked={locked} local={usesLocal} patch={patch} />
-    <ExternalProviders settings={settings} status={status} locked={locked} setup={setup} patch={patch} refreshStatus={refreshStatus} />
-    {usesLocal && localEditor}
+    <ModelsCard settings={settings} saved={saved} status={status} locked={locked} setup={setup} patch={patch} refreshStatus={refreshStatus} capabilityOptions={capabilityOptions}
+      local={localEditor ? { editor: localEditor, status: localStatus, open: localOpen, toggle: () => setLocalOpen(open => !open) } : undefined} />
   </>;
 }
 
-// One list of every provider that isn't the built-in local model: its status,
-// the roles that use it, and Edit and Remove. The open row's editor sits
-// directly under it.
-function ExternalProviders({ settings, status, locked, setup, patch, refreshStatus }: {
-  settings: PublicSettings["llm"]; status: CloudPlanningStatus | null; locked: boolean; setup: boolean;
-  patch: (next: Partial<PublicSettings["llm"]>) => void; refreshStatus: () => void;
+// The local model's draft runtime, for its row's "Not saved" state.
+function localSignature(s: LLM | undefined): string {
+  return s ? JSON.stringify([s.provider, s.model, s.llama_cpp_mode, s.llama_cpp_base_url, s.ollama_base_url, s.llama_cpp_context_size, s.local_capability_level || "simple", s.max_output_tokens, s.reasoning_mode, s.request_timeout_ms, s.managed_load_policy || "startup"]) : "";
+}
+
+function localRuntimeLabel(settings: LLM): string {
+  const host = (url: string) => url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  if (settings.provider === "ollama") return "Ollama · " + host(settings.ollama_base_url);
+  return settings.llama_cpp_mode === "managed" ? t("Managed llama.cpp") : t("External llama.cpp server") + " · " + host(settings.llama_cpp_base_url);
+}
+
+function localRoleNames(settings: LLM): string[] {
+  const chat = (settings.conversation_connection_id || "local") === "local";
+  const planner = settings.motion_planner ?? defaultPlanner;
+  const autopilot = planner.provider === "local" || (planner.provider === "conversation" && chat);
+  const retry = !chat && Boolean(settings.retry_refusal_locally);
+  return [...(chat ? [t("Chat")] : []), ...(autopilot ? [t("Autopilot")] : []), ...(retry ? [t("Retry")] : [])];
+}
+
+function localState(settings: LLM, saved: LLM | undefined, status: LLMProviderStatus | null | undefined): ProviderState {
+  const model = settings.model.trim();
+  if (!model) return { tone: "warn", text: t("Choose a model") };
+  if (saved && localSignature(saved) !== localSignature(settings)) return { tone: "idle", text: model + " · " + t("Not saved") };
+  return status?.available ? { tone: "ok", text: model + " · " + t("Ready") } : { tone: "idle", text: model };
+}
+
+// One list of every model MagicHandy can use: the local model first, then each
+// provider with its status, capability, the roles that use it, and Edit and
+// Remove. The open row's editor sits directly under it. Setup lists only the
+// providers, since its own steps cover the local model.
+function ModelsCard({ settings, saved, status, locked, setup, patch, refreshStatus, capabilityOptions, local }: {
+  settings: LLM; saved: LLM | undefined; status: CloudPlanningStatus | null; locked: boolean; setup: boolean;
+  patch: (next: Partial<LLM>) => void; refreshStatus: () => void; capabilityOptions: ModelCapabilityOption[];
+  local?: { editor: ReactNode; status?: LLMProviderStatus | null; open: boolean; toggle: () => void };
 }) {
   const connections = settings.connections ?? [];
   const [openID, setOpenID] = useState("");
@@ -129,6 +180,7 @@ function ExternalProviders({ settings, status, locked, setup, patch, refreshStat
   const planner = settings.motion_planner ?? defaultPlanner;
   const showDecisions = decisionsSet || openID === "decisions";
   const full = connections.length >= MAX_CONNECTIONS;
+  const title = local ? t("Models") : t("External providers");
 
   function toggle(id: string) { setConfirmID(""); setOpenID(current => current === id ? "" : id); if (openID === id) refreshStatus(); }
   function add(provider: Provider | "decisions") {
@@ -136,7 +188,7 @@ function ExternalProviders({ settings, status, locked, setup, patch, refreshStat
     if (provider === "decisions") { setOpenID("decisions"); return; }
     if (full) return;
     const connection = newModelConnection(provider, connections);
-    const change: Partial<PublicSettings["llm"]> = { connections: [...connections, connection] };
+    const change: Partial<LLM> = { connections: [...connections, connection] };
     // Setup's Hosted model choice means chat should use the first provider added.
     if (setup && (settings.conversation_connection_id || "local") === "local") change.conversation_connection_id = connection.id;
     patch(change); setOpenID(connection.id);
@@ -153,15 +205,22 @@ function ExternalProviders({ settings, status, locked, setup, patch, refreshStat
       if (openID === "decisions") setOpenID("");
     } finally { setDecisionsBusy(false); refreshStatus(); }
   }
-  const roleNames = (roles: ModelRole[]) => roles.map(role => role === "chat" ? t("Chat") : role === "reviewer" ? t("Reviewer model") : t("Autopilot"));
+  const roleNames = (roles: ModelRole[]) => roles.map(role => role === "chat" ? t("Chat") : role === "reviewer" ? t("Second opinion") : t("Autopilot"));
+  const localRow = local && <ProviderItem key="local" title={t("Local model")} provider={localRuntimeLabel(settings)}
+    state={localState(settings, saved, local.status)} badge={translateKnown(capabilityNames[settings.local_capability_level ?? "simple"])}
+    roles={localRoleNames(settings)} open={local.open} locked={locked} onToggle={local.toggle} confirm={null}>
+    {local.open && local.editor}
+  </ProviderItem>;
 
-  if (status?.connection.recovery_required) return <section className="group cloud-motion-settings external-providers" aria-label={t("External providers")}>
-    <h3 className="group-title">{t("External providers")}</h3>
+  if (status?.connection.recovery_required) return <section className="group cloud-motion-settings external-providers" aria-label={title}>
+    <h3 className="group-title">{title}</h3>
+    {localRow && <div className="provider-list">{localRow}</div>}
     <CloudCredentialRecovery locked={locked} onReset={refreshStatus} />
   </section>;
-  return <section className="group cloud-motion-settings external-providers" aria-label={t("External providers")}>
-    <h3 className="group-title">{t("External providers")}<span className="hint-inline">{t("{count} of {max}", { count: connections.length, max: MAX_CONNECTIONS })}</span></h3>
-    {connections.length > 0 || showDecisions ? <div className="provider-list">
+  return <section className="group cloud-motion-settings external-providers" aria-label={title}>
+    <h3 className="group-title">{title}{!local && <span className="hint-inline">{t("{count} of {max}", { count: connections.length, max: MAX_CONNECTIONS })}</span>}</h3>
+    {localRow || connections.length > 0 || showDecisions ? <div className="provider-list">
+      {localRow}
       {connections.map(connection => {
         const roles = connectionRoles(settings, connection.id);
         const open = openID === connection.id;
@@ -169,15 +228,16 @@ function ExternalProviders({ settings, status, locked, setup, patch, refreshStat
           title={connection.name.trim() || translateKnown(modelProviderNames[connection.provider])}
           provider={translateKnown(modelProviderNames[connection.provider]) + (connection.provider === "compatible" ? " · " + connection.base_url.replace(/^https?:\/\//, "").replace(/\/v1\/?$/, "") : "")}
           state={connectionState(connection, status)}
+          badge={translateKnown(capabilityNames[connectionCapability(connection)])}
           roles={roleNames(roles)}
           open={open} locked={locked}
           onToggle={() => toggle(connection.id)}
           onRemove={() => { setOpenID(""); setConfirmID(connection.id); }}
           confirm={confirmID === connection.id && <RemoveConfirm
-            text={[roles.includes("reviewer") ? t("Motion second opinion will be switched off.") : "", roles.some(role => role !== "reviewer") ? t("{roles} will switch to the local model. The saved API key is deleted when you save settings.", { roles: roleNames(roles.filter(role => role !== "reviewer")).join(" · ") }) : t("Its saved API key is deleted when you save settings.")].filter(Boolean).join(" ")}
+            text={[roles.includes("reviewer") ? t("Second opinion will be switched off.") : "", roles.some(role => role !== "reviewer") ? t("{roles} will switch to the local model. The saved API key is deleted when you save settings.", { roles: roleNames(roles.filter(role => role !== "reviewer")).join(" · ") }) : t("Its saved API key is deleted when you save settings.")].filter(Boolean).join(" ")}
             name={connection.name.trim() || translateKnown(modelProviderNames[connection.provider])}
             onCancel={() => setConfirmID("")} onConfirm={() => remove(connection.id)} />}>
-          {open && <ModelConnectionEditor key={connection.id} full={!setup} connection={connection} locked={locked} patch={change => patch({ connections: connections.map(item => item.id === connection.id ? { ...item, ...change } : item) })} />}
+          {open && <ModelConnectionEditor key={connection.id} full={!setup} connection={connection} locked={locked} capabilityOptions={capabilityOptions} patch={change => patch({ connections: connections.map(item => item.id === connection.id ? { ...item, ...change } : item) })} />}
         </ProviderItem>;
       })}
       {showDecisions && <ProviderItem
@@ -225,8 +285,8 @@ function connectionState(connection: ModelConnection, status: CloudPlanningStatu
   return { tone: "idle", text: connection.model + " · " + t("Not checked") };
 }
 
-function ProviderItem({ title, provider, state, roles, open, locked, onToggle, onRemove, confirm, children }: {
-  title: string; provider: string; state: ProviderState; roles: string[]; open: boolean; locked: boolean;
+function ProviderItem({ title, provider, state, badge, roles, open, locked, onToggle, onRemove, confirm, children }: {
+  title: string; provider: string; state: ProviderState; badge?: string; roles: string[]; open: boolean; locked: boolean;
   onToggle: () => void; onRemove?: () => void; confirm: ReactNode; children: ReactNode;
 }) {
   return <>
@@ -234,6 +294,7 @@ function ProviderItem({ title, provider, state, roles, open, locked, onToggle, o
       <span className="provider-id">
         <strong>{title}<span className="provider-kind">{provider}</span></strong>
         <small><span className="provider-state"><span className="status-dot" data-state={state.tone === "ok" ? "ok" : state.tone === "warn" ? "warn" : "idle"} aria-hidden="true" />{state.text}</span>
+          {badge && <span className="setup-badge">{badge}</span>}
           {roles.length > 0 ? <span className="provider-roles">{t("Used by")} {roles.map(role => <span key={role} className="setup-badge">{role}</span>)}</span> : <span>{t("Not used")}</span>}</small>
       </span>
       <span className="provider-actions">

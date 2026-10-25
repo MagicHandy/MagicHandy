@@ -1,5 +1,11 @@
 # MagicHandy Go Implementation Plan
 
+Fresh manual chat can resume a stopped vibrator at its previous human-selected
+intensity, using a one-use backend permission and the shared engine; Stop still
+cancels older work. Questions and autonomous decisions cannot restore intensity.
+See [ADR 0059](docs/decisions/0059-manual-chat-resume-after-stop.md) for authority,
+UI behavior, model evidence and limitations.
+
 ## Core Direction
 
 The [Edge holding control](docs/edge-hold-review-2026-10-23.md) uses a backend
@@ -2968,6 +2974,18 @@ See the [linked review](docs/native-linked-hardware-review-2026-10-15.md),
 [ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and
 [review](docs/native-handy-bluetooth-review-2026-10-14.md).
 
+### Independent vibration and startup fixes (2026-10-25)
+
+[ADR 0057](docs/decisions/0057-independent-vibration-envelope.md) adds a bounded
+relative-drive envelope inside the existing engine for external Layered/Creative
+v2 chat and Autopilot. Local prompts/schemas remain unchanged after live Gemma
+comparison. Scalar-only edits preserve Handy motion; an idle Handy starts only
+through the normal prepared linear path. The startup-history false starvation,
+writer-limit races, stale acknowledgements and Test watchdog gaps are corrected.
+UI and bounded diagnostic events now expose silence, arming and motor commands.
+The external minimum is 64K with unchanged compact history retention. See
+[the model/format evaluation and physical follow-up](docs/intiface-vibrator-review-2026-10-25.md).
+
 ### Intiface vibrator output (2026-10-15)
 
 Implemented and tested in simulation; physical acceptance is open. A Buttplug
@@ -3037,3 +3055,42 @@ Codex completed and reviewed integration/tests. The existing primary adapter
 keeps compatibility; additional Cloud/native/Intiface connections follow the
 same engine. See [ADR 0054](docs/decisions/0054-named-handy-connections.md) and
 [validation / physical follow-up](docs/multi-handy-review-2026-10-23.md).
+
+## Local model capability levels (2026-10-25)
+
+Implemented explicit Simple / Intermediate / Advanced local contracts, with
+backend-owned feature projection for chat and Autopilot. Simple preserves the
+compact default; Intermediate uses a tested 32K grouped interactive contract
+and task-specific Autopilot guidance; Advanced uses the external tools with a
+64K minimum, Auto timing, preparation, independent vibration and response repair.
+Provider routing and human output arming are unchanged. Matched live 12B tests
+favor Intermediate; that model is not recommended for Advanced independent
+control. See [ADR 0058](docs/decisions/0058-model-capability-levels.md) and the
+[model evaluation, graphs and remaining limitations](docs/model-capability-review-2026-10-25.md).
+Setup defaults known Gemma 12B models to Intermediate and E4B to Simple using
+backend catalog metadata, while preserving saved and manual capability choices.
+
+Simple follow-up: E4B received tested sparse-edit/reach guidance where language
+set comparisons supported it, a compact stopped-state cue, and correction-budget
+headroom without shortening the full contract. Simple and Intermediate Autopilot
+use a bounded decision note. The deliberately accepted background latency cost
+is recorded with measurements and revisit criteria in
+[ADR 0060](docs/decisions/0060-local-autopilot-decision-notes.md); see the
+[E4B and transfer review](docs/e4b-simple-review-2026-10-25.md). Interactive
+Intermediate and Advanced prompts retain their existing contracts.
+Intermediate's additional planning is now optional through Chat > Autopilot >
+Extra planning, enabled by default. Off restores its previous shorter request;
+Simple's E4B improvement remains active. The saved planning role determines
+availability, including Intermediate models on compatible API connections.
+
+## Capability for every model and one-home model settings (2026-10-25)
+
+External connections choose Simple / Intermediate / Advanced too, so a server
+such as LM Studio running a small model gets the compact contract and a 16K or
+32K budget. New compatible servers start Simple; hosted providers and earlier
+connections keep Advanced. The second opinion reviews any role below Advanced.
+Settings > Chat > Model is two cards: Model roles, and one Models list holding
+the local model and each provider with the same Capability and Context rows.
+Reply length moved to Prompts & memory; the LLM motion mode and Pattern library
+options live only on the Chat page. See the [ADR 0058 amendment](docs/decisions/0058-model-capability-levels.md#amendment-every-model-has-a-level-2026-10-25)
+and the [settings review](docs/chat-model-settings-review-2026-10-25.md).

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -46,8 +47,8 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 	if err != nil && planning.IsHosted() {
 		err = cloudPlanningOutcome(err)
 	}
-	if planning.IsHosted() {
-		// A hosted abstention must never trigger the local library fallback.
+	if planning.AdvancedMotion() {
+		// An advanced planner's abstention must not trigger a library fallback.
 		decision.Abstain = true
 	}
 	return decision, err
@@ -104,7 +105,8 @@ func (s *Server) autopilotDecideSpeech(ctx context.Context, input modes.Decision
 	if response.Reply == "" && response.Next == chat.AutopilotTimingLater {
 		return modes.Decision{Hold: true, Abstain: true, Next: modes.TimingLater}, nil
 	}
-	decision, err := s.mapAutopilotResponse(response, input)
+	saved, _ := s.store.Snapshot()
+	decision, err := s.mapAutopilotResponseForModel(response, input, saved.LLM.ConversationSettings())
 	if err != nil {
 		return modes.Decision{}, err
 	}
@@ -189,19 +191,20 @@ func (s *Server) autopilotModelTurn(
 		temperature = 0.98
 	}
 	service := chat.AutopilotService{
-		Provider:              provider,
-		Prompt:                prompt,
-		Model:                 settings.LLM.Model,
-		MaxTokens:             settings.LLM.MaxOutputTokens,
-		ReasoningMode:         settings.LLM.ReasoningMode,
-		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
-		PromptBudget:          chatPromptBudget(settings.LLM),
-		Temperature:           temperature,
-		Memories:              memories,
-		Patterns:              patternChoices,
-		MotionContext:         &motionContext,
-		ConversationContext:   promptContext.ConversationContext,
-		Capabilities:          capabilities,
+		Provider:                    provider,
+		Prompt:                      prompt,
+		Model:                       settings.LLM.Model,
+		MaxTokens:                   settings.LLM.MaxOutputTokens,
+		ReasoningMode:               settings.LLM.ReasoningMode,
+		ReasoningBudgetTokens:       managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
+		PromptBudget:                chatPromptBudget(settings.LLM),
+		Temperature:                 temperature,
+		Memories:                    memories,
+		Patterns:                    patternChoices,
+		MotionContext:               &motionContext,
+		ConversationContext:         promptContext.ConversationContext,
+		Capabilities:                capabilities,
+		DisableIntermediatePlanning: !settings.Autopilot.IntermediatePlanning,
 	}
 	modelContext := autopilotPromptContext(input, capabilities)
 	if technical {
@@ -225,7 +228,7 @@ func (s *Server) autopilotModelTurn(
 		History:                history,
 		HistoryMessagesDropped: promptContext.HistoryOmitted,
 	})
-	if err == nil && settings.LLM.IsHosted() {
+	if err == nil && settings.LLM.AdvancedMotion() {
 		err = s.validateCloudAdmission(providerCtx, admission)
 	}
 	return response, err
@@ -279,7 +282,7 @@ func (s *Server) autopilotRoleSettings(ctx context.Context, kind chat.AutopilotK
 		settings.LLM = settings.LLM.ConversationSettings()
 	}
 	var admission cloudPlanAdmission
-	if err == nil && settings.LLM.IsHosted() {
+	if err == nil && settings.LLM.AdvancedMotion() {
 		admission, err = s.captureCloudAdmission(ctx, source)
 	}
 	return settings, admission, err
@@ -289,7 +292,7 @@ func (s *Server) autopilotRoleSettings(ctx context.Context, kind chat.AutopilotK
 // planning marks when each human line was said, as of the moment the decision
 // applies, so an old line is not read as a reaction to the pace chosen since.
 func autopilotHistory(kind chat.AutopilotKind, settings config.Settings, promptContext interactiveChatPromptContext, asOf time.Time) []llm.Message {
-	if settings.LLM.IsHosted() {
+	if settings.LLM.AdvancedMotion() {
 		return promptContext.History
 	}
 	if kind == chat.AutopilotKindMotion && continuousChatMode(settings.LLM.MotionGenerationMode) {
@@ -318,7 +321,8 @@ func autopilotTemperature(kind chat.AutopilotKind, level int) float64 {
 // exercise the exact context the app sends rather than reconstructing it.
 func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabilities) chat.AutopilotContext {
 	modelContext := chat.AutopilotContext{
-		Hosted:            capabilities.HostedMotion,
+		Hosted:            capabilities.AdvancedMotion,
+		Intermediate:      capabilities.IntermediateMotion,
 		Style:             input.Style,
 		SegmentIndex:      input.SegmentIndex,
 		RecentPatternIDs:  input.RecentPatternIDs,
@@ -385,9 +389,8 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 }
 
 // prepareAutopilotDecisions reports whether Autopilot plans each motion
-// decision as its stretch begins. Only external planners qualify: they answer
-// over their own request lanes, while a local model would hold its single slot
-// for a decision that chat may still discard.
+// decision as its stretch begins. Advanced local models may opt in too; their
+// speculative work stays on the existing autonomous lane and yields to chat.
 func prepareAutopilotDecisions(settings config.Settings) bool {
 	if !settings.Autopilot.PrepareNextDecision || settings.LLM.MotionGenerationMode == config.LLMMotionModeOff {
 		return false
@@ -396,15 +399,15 @@ func prepareAutopilotDecisions(settings config.Settings) bool {
 		return true
 	}
 	planning, err := settings.LLM.PlanningSettings()
-	return err == nil && planning.IsHosted()
+	return err == nil && planning.ModelFeatures().PrepareDecisions
 }
 
 // autoMotionTiming reports whether a motion turn chooses its own horizon: the
 // person enabled Auto timing and the planning route, already resolved into
-// settings.LLM, is hosted. Local planners keep the sampled window because
-// small models settle on one value.
+// settings.LLM, has advanced capabilities. Simple/intermediate models keep the
+// sampled window; enabling a larger context alone does not enable this feature.
 func autoMotionTiming(kind chat.AutopilotKind, settings config.Settings) bool {
-	return kind == chat.AutopilotKindMotion && settings.Autopilot.AutoMotionTiming && settings.LLM.IsHosted()
+	return kind == chat.AutopilotKindMotion && settings.Autopilot.AutoMotionTiming && settings.LLM.ModelFeatures().AutoTiming
 }
 
 func autopilotSpeechCapabilities(capabilities chat.Capabilities, authority string) chat.Capabilities {
@@ -428,70 +431,47 @@ func (s *Server) mapAutopilotResponse(
 	response chat.AutopilotResponse,
 	input modes.DecisionInput,
 ) (modes.Decision, error) {
+	saved, _ := s.store.Snapshot()
+	planning, err := saved.LLM.PlanningSettings()
+	if err != nil {
+		return modes.Decision{}, err
+	}
+	return s.mapAutopilotResponseForModel(response, input, planning)
+}
+
+func (s *Server) mapAutopilotResponseForModel(response chat.AutopilotResponse, input modes.DecisionInput, model config.LLMSettings) (modes.Decision, error) {
 	say := strings.TrimSpace(response.Reply)
 	next := modes.TimingPreference(response.Next)
 	variability := modes.VariabilityPreference(response.Variability)
 	command := response.Motion
+	var vibration *motion.VibrationSpec
+	if command != nil {
+		vibration = command.Vibration
+	}
+	if err := s.validateModelVibration(vibration, model); err != nil {
+		if !errors.Is(err, errVibrationUnavailable) {
+			return modes.Decision{}, err
+		}
+		// Keep the valid linear choice, but do not announce a vibration change
+		// that lost authority while generation was in flight.
+		vibration, say = nil, ""
+		s.logger.Info("autopilot vibration unavailable; preserving linear decision")
+	}
 	if command == nil || command.Action == chat.MotionActionNone ||
 		command.Action == chat.MotionActionStop || command.Action == chat.MotionActionStart {
-		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
+		return modes.Decision{Hold: true, Vibration: vibration, Say: say, Next: next, Variability: variability}, nil
 	}
 	settings, _ := s.store.Snapshot()
 	if continuousChatMode(settings.LLM.MotionGenerationMode) {
-		return mapContinuousAutopilotCommand(command, settings, say, next)
+		decision, err := mapContinuousAutopilotCommand(command, settings, say, next)
+		decision.Vibration = vibration
+		return decision, err
 	}
 	if settings.LLM.MotionGenerationMode == config.LLMMotionModeDynamic {
 		return mapDynamicAutopilotCommand(command, input, say, next, variability), nil
 	}
 
-	patternID := strings.TrimSpace(command.PatternID)
-	if patternID == "" {
-		patternID = string(input.CurrentPatternID)
-	}
-	speed := input.CurrentSpeed
-	if command.SpeedPercent != nil {
-		speed = *command.SpeedPercent
-	} else if command.Intensity != nil {
-		speed = *command.Intensity
-	}
-	var areaFocus *motion.AreaFocus
-	if input.CurrentAreaFocus != nil {
-		focus := *input.CurrentAreaFocus
-		areaFocus = &focus
-	}
-	if command.Area != "" {
-		focus, ok := zoneAreaFocus(command.Area)
-		if !ok {
-			return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
-		}
-		areaFocus = focus
-	}
-	if patternID == "" || speed <= 0 {
-		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
-	}
-	if strings.EqualFold(patternID, string(input.CurrentPatternID)) &&
-		speed == input.CurrentSpeed && sameAreaFocus(areaFocus, input.CurrentAreaFocus) {
-		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
-	}
-
-	resolved, found, err := s.patterns.ResolveEnabled(patternID)
-	if err != nil {
-		return modes.Decision{}, fmt.Errorf("resolve Autopilot pattern: %w", err)
-	}
-	if !found {
-		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
-	}
-	return modes.Decision{
-		Segment: modes.Segment{
-			PatternID:    motion.PatternID(resolved.ID),
-			SpeedPercent: speed,
-			AreaFocus:    areaFocus,
-		},
-		Pattern:     &resolved,
-		Say:         say,
-		Next:        next,
-		Variability: variability,
-	}, nil
+	return s.mapPatternAutopilotCommand(command, input, say, next, variability)
 }
 
 func mapDynamicAutopilotCommand(

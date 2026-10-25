@@ -485,13 +485,38 @@ func (s *Server) settingsAndUpdateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
 }
 
+// llmMotionModeRequest is the Chat motion card: the mode, plus the two Pattern
+// library options that only that mode reads.
+type llmMotionModeRequest struct {
+	Mode                 string `json:"mode"`
+	AreaFocus            *bool  `json:"area_focus,omitempty"`
+	ExperimentalPatterns *bool  `json:"experimental_patterns,omitempty"`
+}
+
+func (body llmMotionModeRequest) apply(current config.Settings) (next config.Settings, modeChanged bool, err error) {
+	modeChanged = current.LLM.MotionGenerationMode != body.Mode
+	current.LLM.MotionGenerationMode = body.Mode
+	capabilities := current.LLM.Capabilities()
+	capabilities.Motion = body.Mode != config.LLMMotionModeOff
+	if body.Mode == config.LLMMotionModePattern {
+		capabilities.Patterns = true
+	}
+	if body.AreaFocus != nil {
+		capabilities.AreaFocus = *body.AreaFocus
+	}
+	if body.ExperimentalPatterns != nil {
+		capabilities.ExperimentalPatterns = *body.ExperimentalPatterns
+	}
+	current.LLM.MotionCapabilities = &capabilities
+	next, err = config.NormalizeSettings(current)
+	return next, modeChanged, err
+}
+
 func (s *Server) handlePutLLMMotionMode(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
 	}
-	var body struct {
-		Mode string `json:"mode"`
-	}
+	var body llmMotionModeRequest
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -502,16 +527,10 @@ func (s *Server) handlePutLLMMotionMode(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var updateErr error
+	modeChanged := false
 	_, saved, saveErr, runtimeErr := s.updateSettingsAndRuntime(r.Context(), func(current config.Settings) (config.Settings, error) {
-		current.LLM.MotionGenerationMode = body.Mode
-		capabilities := current.LLM.Capabilities()
-		capabilities.Motion = body.Mode != config.LLMMotionModeOff
-		if body.Mode == config.LLMMotionModePattern {
-			capabilities.Patterns = true
-		}
-		current.LLM.MotionCapabilities = &capabilities
 		var next config.Settings
-		next, updateErr = config.NormalizeSettings(current)
+		next, modeChanged, updateErr = body.apply(current)
 		return next, updateErr
 	})
 	if updateErr != nil {
@@ -522,7 +541,9 @@ func (s *Server) handlePutLLMMotionMode(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, errors.New("LLM motion mode could not be saved"))
 		return
 	}
-	if s.modes != nil {
+	// A new mode replaces the running plan. The Pattern library options apply
+	// from the next decision without stopping it.
+	if s.modes != nil && modeChanged {
 		s.modes.Stop("llm_motion_mode_changed")
 	}
 	payload := map[string]any{"settings": s.clientSettings(r, saved.Public()), "mode": saved.LLM.MotionGenerationMode}

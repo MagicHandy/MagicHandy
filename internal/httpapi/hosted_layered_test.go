@@ -21,7 +21,7 @@ func TestLayeredOperationsFollowResolvedProvider(t *testing.T) {
 		settings.LlamaCPPMode = config.LlamaCPPModeExternal
 		settings.MotionGenerationMode = "layered"
 		caps := chatCapabilities(settings, nil)
-		if got := caps.HostedMotion; got != tc.hosted {
+		if got := caps.AdvancedMotion; got != tc.hosted {
 			t.Errorf("provider %s operations=%v want=%v", tc.provider, got, tc.hosted)
 		}
 		if got := autopilotPromptContext(modes.DecisionInput{}, caps).Hosted; got != tc.hosted {

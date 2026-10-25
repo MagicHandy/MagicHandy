@@ -126,6 +126,7 @@ function AddDevice({ ctx, addable, adding }: { ctx: DeviceContext; addable: Devi
                 <span className="device-list-copy">
                   <strong>{handy ? t("Another Handy") : descriptor.name()}</strong>
                   <small>{handy ? t("Follows the same motion · Cloud, Bluetooth or Intiface Central") : descriptor.addDetail()}</small>
+                  {descriptor.addNotice && <small>{descriptor.addNotice()}</small>}
                 </span>
                 <PlusIcon size={14} className="device-list-chevron" />
               </button>

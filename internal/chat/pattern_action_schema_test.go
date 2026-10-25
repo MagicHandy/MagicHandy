@@ -8,7 +8,7 @@ import (
 
 func TestInteractivePatternGrammarKeepsHoldsInertAndFollowsState(t *testing.T) {
 	for _, state := range []*MotionContext{nil, {}, {Running: true}, {Paused: true}, {Running: true, Paused: true}} {
-		caps := Capabilities{Motion: true, MotionMode: MotionModePattern, Patterns: true, HostedMotion: true}
+		caps := Capabilities{Motion: true, MotionMode: MotionModePattern, Patterns: true, AdvancedMotion: true}
 		var schema struct {
 			Properties struct {
 				Motion struct {
@@ -57,7 +57,7 @@ func TestInteractivePatternGrammarKeepsHoldsInertAndFollowsState(t *testing.T) {
 
 func assertLocalPatternStateSchema(t *testing.T, caps Capabilities, state *MotionContext) {
 	t.Helper()
-	caps.HostedMotion = false
+	caps.AdvancedMotion = false
 	var local map[string]any
 	if err := json.Unmarshal(PatternResponseSchema(continuousTestChoices(), caps, state), &local); err != nil {
 		t.Fatal(err)
@@ -77,7 +77,7 @@ func TestHostedPatternStartGrammarDoesNotChangeAutopilot(t *testing.T) {
 		for _, kind := range []AutopilotKind{AutopilotKindMotion, AutopilotKindSpeech} {
 			caps := Capabilities{Motion: true, MotionMode: MotionModePattern, Patterns: true}
 			before := autopilotPatternSchema(continuousTestChoices(), caps, state, kind)
-			caps.HostedMotion = true
+			caps.AdvancedMotion = true
 			after := autopilotPatternSchema(continuousTestChoices(), caps, state, kind)
 			if string(before) != string(after) {
 				t.Fatal("hosted interactive start policy changed the autonomous contract")

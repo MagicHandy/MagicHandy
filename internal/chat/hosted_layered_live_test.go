@@ -23,7 +23,7 @@ func TestHostedLayeredLiveOperations(t *testing.T) {
 	provider, model := hostedLayeredLiveProvider(t)
 	limits := config.DefaultSettings().Motion
 	limits.SpeedMinPercent, limits.SpeedMaxPercent = 10, 50
-	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
+	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 	rows := []map[string]any{}
 	t.Cleanup(func() { saveHostedLayeredRows(t, rows) })
 	runHostedLayeredOperationCases(t, provider, model, limits, caps, &rows)
@@ -47,8 +47,8 @@ func hostedLayeredLiveProvider(t *testing.T) (*hostedLayeredCapture, string) {
 	contextSize := 32768
 	if value := os.Getenv("MAGICHANDY_LIVE_CONTEXT"); value != "" {
 		contextSize, err = strconv.Atoi(value)
-		if err != nil || (contextSize != 32768 && contextSize != 131072 && contextSize != 262144) {
-			t.Fatal("MAGICHANDY_LIVE_CONTEXT must be a supported conversation window: 32768, 131072 or 262144")
+		if err != nil || (contextSize != 32768 && contextSize != 65536 && contextSize != 131072 && contextSize != 262144) {
+			t.Fatal("MAGICHANDY_LIVE_CONTEXT must be a supported conversation window: 32768, 65536, 131072 or 262144")
 		}
 	}
 	effort := os.Getenv("MAGICHANDY_LIVE_REASONING")

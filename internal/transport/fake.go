@@ -196,6 +196,11 @@ func (f *Fake) currentPlaybackState() string {
 
 func cloneAppendPoints(command AppendPointsCommand) *AppendPointsCommand {
 	clone := command
+	if command.Vibration != nil {
+		frame := *command.Vibration
+		frame.Points = append([]TimedLevel(nil), frame.Points...)
+		clone.Vibration = &frame
+	}
 	clone.Points = make([]TimedPoint, len(command.Points))
 	copy(clone.Points, command.Points)
 	return &clone

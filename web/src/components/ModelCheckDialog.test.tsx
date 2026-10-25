@@ -18,7 +18,7 @@ const finished: ModelCheckReport = {
   managed: true,
   load_millis: 2400,
   load_report: { offloaded_layers: 43, total_layers: 43 },
-  runtime: { version: "b11149", expected: "b11149", current: true },
+  runtime: { version: "b11533", expected: "b11533", current: true },
   template: { model_id: "gemma-e4b", architecture: "gemma4", fix_offer: "gemma4-close-thinking" },
   items: [
     { id: "load", status: "pass" }, { id: "gpu", status: "pass" }, { id: "template", status: "warn" },

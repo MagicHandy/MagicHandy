@@ -117,7 +117,8 @@ func (s *Server) handleVibratorIntensity(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	target := float64(body.IntensityPercent) / 100
-	if target > vibrator.Intensity() {
+	allowRaise := target > vibrator.Intensity()
+	if allowRaise {
 		if _, err := s.requestStopSequence(r); err != nil {
 			writeError(w, http.StatusConflict, err)
 			return
@@ -130,7 +131,7 @@ func (s *Server) handleVibratorIntensity(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	if _, err := vibrator.SetIntensityAt(generation, target); err != nil {
+	if _, err := vibrator.SetIntensityAt(generation, target, allowRaise); err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
 	}

@@ -162,7 +162,8 @@ describe("Easy hosted setup", () => {
   });
 
   it("includes the selected managed backup download in the install plan while preserving API chat", async () => {
-    vi.mocked(api.llmCatalog).mockResolvedValue({ hardware: { nvidia: true }, models: [{ id: "backup-catalog", display_name: "Backup Gemma", fit: "recommended", size_bytes: 1000 }] as never });
+    settings.options = { ...settings.options, local_model_capabilities: [{ level: "simple", minimum_context: 16384, minimum_output: 64 }, { level: "intermediate", minimum_context: 32768, minimum_output: 512 }], llama_cpp_context_sizes: [16384, 32768, 65536] };
+    vi.mocked(api.llmCatalog).mockResolvedValue({ hardware: { nvidia: true }, models: [{ id: "backup-catalog", display_name: "Backup Gemma", fit: "recommended", size_bytes: 1000, recommended_capability: "intermediate" }] as never });
     await openEasy(); await chooseAPIModel();
     fireEvent.click(screen.getByRole("button", { name: "Check model" }));
     await screen.findByText("Ready");
@@ -173,6 +174,7 @@ describe("Easy hosted setup", () => {
     fireEvent.click(screen.getByRole("button", { name: "Install and continue" }));
     await screen.findByRole("heading", { name: "Installing selected features" });
     expect(api.installSetupPlan).toHaveBeenCalledWith({ llama: { backend: "auto" }, model: { catalog_id: "backup-catalog" }, parakeet: false });
+    expect(settings.llm).toMatchObject({ local_capability_level: "intermediate", llama_cpp_context_size: 32768, max_output_tokens: 512 });
     expect(settings.llm.conversation_connection_id).toBe("openrouter-1");
     expect(settings.llm.retry_refusal_locally).toBe(true);
   });

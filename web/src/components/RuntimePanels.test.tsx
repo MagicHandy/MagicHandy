@@ -49,6 +49,12 @@ const llmSettings = {
   motion_generation_mode: "pattern",
 } as PublicSettings["llm"];
 
+const capabilityOptions = [
+  { level: "simple" as const, minimum_context: 16384, minimum_output: 64 },
+  { level: "intermediate" as const, minimum_context: 32768, minimum_output: 512 },
+  { level: "advanced" as const, minimum_context: 65536, minimum_output: 1024 },
+];
+
 const emptyManager = {
   models: [],
   imports: [],
@@ -117,51 +123,41 @@ describe("runtime panels", () => {
     expect(screen.queryByText("No models reported by Ollama.")).not.toBeInTheDocument();
   });
 
-  it("persists model motion capability choices as one complete gate set", async () => {
+  it("keeps reply length and the LLM motion mode out of the local model editor", async () => {
     llmModels.mockResolvedValue(emptyManager);
-    const patch = vi.fn();
-    const user = userEvent.setup();
-    renderModelPanel({
-      ...llmSettings,
-      motion_capabilities: { motion: true, patterns: true, area_focus: true, experimental_patterns: false },
-    }, patch);
-
-    await user.click(screen.getByRole("checkbox", { name: "Experimental patterns" }));
-
-    expect(patch).toHaveBeenCalledWith({
-      motion_capabilities: { motion: true, patterns: true, area_focus: true, experimental_patterns: true },
-    });
-  });
-
-  it("uses the mode list for chat-only motion and hides pattern-only gates", async () => {
-    llmModels.mockResolvedValue(emptyManager);
-    renderModelPanel({
-      ...llmSettings,
-      motion_generation_mode: "off",
-      motion_capabilities: { motion: false, patterns: true, area_focus: true, experimental_patterns: true },
-    });
+    renderModelPanel({ ...llmSettings, motion_generation_mode: "pattern" });
 
     expect(await screen.findByText("No managed models.")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "LLM motion" })).toHaveValue("off");
+    // Reply length lives in Prompts & memory; the motion mode on the Chat page.
+    expect(screen.queryByRole("combobox", { name: "LLM motion" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Reply length" })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: "Area focus" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("checkbox", { name: "Experimental patterns" })).not.toBeInTheDocument();
   });
 
-  it("keeps the selected mode and legacy motion master gate consistent", async () => {
+  it("chooses provider and llama.cpp mode as one runtime", async () => {
     llmModels.mockResolvedValue(emptyManager);
     const patch = vi.fn();
-    renderModelPanel({
-      ...llmSettings,
-      motion_capabilities: { motion: true, patterns: true, area_focus: true, experimental_patterns: false },
-    }, patch);
+    renderModelPanel(llmSettings, patch);
 
-    await screen.findByText("No managed models.");
-    fireEvent.change(screen.getByRole("combobox", { name: "LLM motion" }), { target: { value: "off" } });
+    const runtime = await screen.findByRole("combobox", { name: "Runtime" });
+    expect(runtime).toHaveValue("managed");
+    expect(Array.from(runtime.querySelectorAll("option")).map(option => option.value)).toEqual(["managed", "ollama", "external"]);
+    fireEvent.change(runtime, { target: { value: "external" } });
+    expect(patch).toHaveBeenCalledWith({ provider: "llama_cpp", llama_cpp_mode: "external" });
+    fireEvent.change(runtime, { target: { value: "ollama" } });
+    expect(patch).toHaveBeenCalledWith({ provider: "ollama" });
+  });
 
-    expect(patch).toHaveBeenCalledWith({
-      motion_generation_mode: "off",
-      motion_capabilities: { motion: false, patterns: true, area_focus: true, experimental_patterns: false },
-    });
+  it("shows the model store only where it serves the runtime", async () => {
+    llmModels.mockResolvedValue(emptyManager);
+    ollamaModels.mockResolvedValue({ available: true, models: [] });
+    const view = renderModelPanel(llmSettings);
+
+    expect(await screen.findByText("Models on this computer")).toBeInTheDocument();
+    view.rerender(modelPanel({ ...llmSettings, provider: "ollama", model: "small:latest" }));
+    await screen.findByText("No models reported by Ollama.");
+    expect(screen.queryByText("Models on this computer")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Import GGUF" })).not.toBeInTheDocument();
   });
 
   it("keeps a large Ollama inventory collapsed until requested", async () => {
@@ -191,15 +187,16 @@ describe("runtime panels", () => {
     const managed = { ...llmSettings, llama_cpp_context_size: 65536 };
     const view = renderModelPanel(managed, patch, [16384, 32768, 131072]);
 
-    const select = await screen.findByRole("combobox", { name: "Context size" });
+    // Managed llama.cpp shows its context beside the capability, even at Simple.
+    const select = await screen.findByRole("combobox", { name: "Context" });
     expect(select).toHaveValue("65536");
-    expect(screen.getByRole("option", { name: "65536 tokens" })).toBeInTheDocument();
+    expect(Array.from(select.querySelectorAll("option")).map(option => option.textContent)).toEqual(["16K", "32K", "64K", "128K"]);
     expect(screen.getByText(/A context smaller than the prompt cannot fit the request/)).toBeInTheDocument();
     await user.selectOptions(select, "131072");
     expect(patch).toHaveBeenCalledWith({ llama_cpp_context_size: 131072 });
 
     view.rerender(modelPanel({ ...managed, llama_cpp_mode: "external" }, patch));
-    expect(screen.queryByRole("combobox", { name: "Context size" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Context" })).not.toBeInTheDocument();
   });
 
   it("makes managed startup loading an explicit latency versus memory choice", async () => {
@@ -539,6 +536,7 @@ function modelPanel(settings: PublicSettings["llm"] = llmSettings, patch = vi.fn
       llamaContextSizes={contextSizes}
       reasoningModes={["off", "auto"]}
       maxOutputOptions={[128, 256, 512]}
+      capabilityOptions={capabilityOptions}
       locked={false}
       patch={patch}
     />

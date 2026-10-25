@@ -230,3 +230,16 @@
     animation: none;
   }
 }
+
+/* Scalar outputs show backend commands, never a fictitious slider position. */
+.vibration-readout { display: grid; gap: 8px; min-width: 0; }
+.vibration-readout > small { color: var(--muted); }
+.vibration-motors { display: grid; gap: 6px; }
+.vibration-motor { display: flex; align-items: center; gap: 8px; }
+.vibration-motor meter { width: 100%; min-width: 48px; height: 14px; accent-color: var(--accent); }
+.vibration-motor output { min-width: 3ch; font-variant-numeric: tabular-nums; color: var(--muted); }
+.vibration-readout.mini { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.vibration-readout.mini .vibration-motors { gap: 0; }
+.vibration-readout.mini meter { width: 48px; }
+.vibration-motor meter::-webkit-meter-bar { background: var(--panel); border: 1px solid var(--border); border-radius: 2px; }
+.vibration-motor meter::-webkit-meter-optimum-value { background: var(--accent); }

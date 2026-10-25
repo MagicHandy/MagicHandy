@@ -84,7 +84,7 @@ func validateLayeredGeometry(s motion.FlowSpec, geometry string) error {
 			valid = valid && s.MinPercent == 0 && s.MaxPercent == 100
 		}
 		if !valid {
-			return errors.New("edits conflict with the selected geometry")
+			return layeredGeometryConflict(s, geometry)
 		}
 		return nil
 	}
@@ -125,7 +125,7 @@ func validateLayeredVariationGeometry(s motion.FlowSpec, geometry string) error 
 		valid = s.AnchorPercent == anchor && still("center")
 	}
 	if !valid {
-		return errors.New("edits conflict with the selected geometry")
+		return layeredGeometryConflict(s, geometry)
 	}
 	return nil
 }

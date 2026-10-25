@@ -56,6 +56,13 @@ func TestLLMCatalogRatesModelsAgainstDetectedGPU(t *testing.T) {
 				if model.SHA256 == "" || model.License == "" || model.SourceURL == "" || model.DownloadURL == "" {
 					t.Errorf("%s is missing the facts shown before download: %+v", model.ID, model)
 				}
+				wantCapability := config.ModelCapabilityIntermediate
+				if model.ID == "gemma-4-e4b-qat-heretic-q4-0" {
+					wantCapability = config.ModelCapabilitySimple
+				}
+				if model.RecommendedCapability != wantCapability {
+					t.Errorf("%s setup capability = %q, want %q", model.ID, model.RecommendedCapability, wantCapability)
+				}
 			}
 		})
 	}

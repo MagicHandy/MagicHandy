@@ -9,7 +9,7 @@ import (
 
 func TestLocalPausedCreativeUsesReplyOnlyWithoutWeakeningValidation(t *testing.T) {
 	for _, hosted := range []bool{false, true} {
-		caps := Capabilities{Motion: true, MotionMode: MotionModeDynamic, HostedMotion: hosted}
+		caps := Capabilities{Motion: true, MotionMode: MotionModeDynamic, AdvancedMotion: hosted}
 		for _, paused := range []bool{false, true} {
 			state := MotionContext{MotionMode: MotionModeDynamic, Paused: paused, SpeedMinPercent: 10, SpeedMaxPercent: 80}
 			schema := PatternResponseSchema(nil, caps, &state)

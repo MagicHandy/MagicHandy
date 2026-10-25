@@ -47,6 +47,8 @@ export interface AutopilotSettings {
   // An external planner's next decision is planned as each stretch begins and
   // applied at its end. Chat replaces it. Absent means on.
   prepare_next_decision?: boolean;
+  // Extra planning for Intermediate continuous motion. Absent means on.
+  intermediate_planning?: boolean;
   // Inert read-only context: elapsed time, speed history, and backend-measured
   // phrase sameness. Off omits the facts from the prompt rather than sending
   // zeros.
@@ -92,6 +94,8 @@ export interface EngineSnapshot {
   phase?: number;
   recent_command_latency_ms?: number;
   target?: {
+    vibration_only?: boolean;
+    vibration?: { mode: "follow" | "off" | "steady" | "wave" | "pulse"; min_percent: number; max_percent: number; period_seconds: number };
     label?: string;
     source?: string;
     speed_percent?: number;
@@ -1047,6 +1051,7 @@ export interface VoiceRequestSnapshot {
 }
 
 export interface OptionHints {
+  local_model_capabilities?: import("./llm-settings-types").ModelCapabilityOption[];
   hsp_dispatch_owners?: string[];
   api_application_id_sources?: string[];
   diagnostics_verbosities?: string[];

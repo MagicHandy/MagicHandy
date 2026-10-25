@@ -114,6 +114,8 @@ type TraceExport struct {
 	IntifaceDispatches        []transport.IntifaceDispatchStatus `json:"intiface_dispatches,omitempty"`
 	IntifaceDispatchesDropped uint64                             `json:"intiface_dispatches_dropped"`
 	IntifaceLinearSentCount   uint64                             `json:"intiface_linear_sent_count"`
+	VibratorEvents            []transport.VibratorEvent          `json:"vibrator_events,omitempty"`
+	VibratorEventsDropped     uint64                             `json:"vibrator_events_dropped,omitempty"`
 }
 
 // TraceSummary is a compact app-state view of trace availability.

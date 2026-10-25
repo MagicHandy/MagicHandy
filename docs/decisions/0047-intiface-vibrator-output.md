@@ -4,9 +4,9 @@
 
 Accepted 2026-10-15. Implemented and tested against simulated Buttplug servers
 only: no vibrator was available. Physical acceptance is open (see Validation).
-Model replies still assume a linear stroker; the
-[device-aware model responses plan](../device-aware-prompts-plan-2026-10-15.md)
-covers that later work. Extends [ADR 0010](0010-transport-neutral-frames-intiface.md)
+[ADR 0057](0057-independent-vibration-envelope.md) adds external-model independent
+envelopes and backend output awareness; local models retain this shared-profile
+contract. Extends [ADR 0010](0010-transport-neutral-frames-intiface.md)
 (Intiface), [ADR 0044](0044-coyote-estim-output.md) (companion helpers) and
 [ADR 0045](0045-device-inventory-and-linked-sessions.md) (participation and
 linked sessions). [ADR 0048](0048-device-kit-and-settings-devices.md) moves the

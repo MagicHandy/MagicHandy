@@ -5,13 +5,14 @@ import "net/url"
 // ModelRoute describes a saved destination, not credential or inference readiness.
 // It is projected from the same runtime resolution used by chat and Autopilot.
 type ModelRoute struct {
-	Kind          string `json:"kind"`
-	Provider      string `json:"provider"`
-	ConnectionID  string `json:"connection_id,omitempty"`
-	Model         string `json:"model"`
-	EndpointHost  string `json:"endpoint_host,omitempty"`
-	ContextPolicy string `json:"context_policy"`
-	State         string `json:"state"`
+	Features      ModelFeatures `json:"features"`
+	Kind          string        `json:"kind"`
+	Provider      string        `json:"provider"`
+	ConnectionID  string        `json:"connection_id,omitempty"`
+	Model         string        `json:"model"`
+	EndpointHost  string        `json:"endpoint_host,omitempty"`
+	ContextPolicy string        `json:"context_policy"`
+	State         string        `json:"state"`
 }
 
 // ModelRoutingSnapshot is the public projection of both saved model roles.
@@ -33,7 +34,7 @@ func (s LLMSettings) ModelRouting() ModelRoutingSnapshot {
 	}
 	motion.ContextPolicy = normalizeMotionPlanner(s.MotionPlanner).ContextPolicy
 	if s.MotionPlanner.Provider == MotionPlannerDecisions {
-		motion = ModelRoute{Kind: "decisions", Provider: LLMProviderOpenAI, EndpointHost: "api.openai.com", ContextPolicy: ContextTechnical, State: "configured"}
+		motion = ModelRoute{Kind: "decisions", Provider: LLMProviderOpenAI, EndpointHost: "api.openai.com", ContextPolicy: ContextTechnical, State: "configured", Features: ModelFeatures{Level: ModelCapabilityAdvanced, PrepareDecisions: true}}
 	}
 	snapshot := ModelRoutingSnapshot{Chat: chat, Autopilot: motion}
 	if s.MotionReviewer.Enabled {
@@ -54,7 +55,7 @@ func (s LLMSettings) ModelRouting() ModelRoutingSnapshot {
 }
 
 func describeModelRoute(s LLMSettings) ModelRoute {
-	route := ModelRoute{Kind: "local", Provider: s.Provider, Model: s.Model, State: "configured"}
+	route := ModelRoute{Kind: "local", Provider: s.Provider, Model: s.Model, State: "configured", Features: s.ModelFeatures()}
 	endpoint := s.LlamaCPPBaseURL
 	if s.Provider == LLMProviderOllama {
 		endpoint = s.OllamaBaseURL

@@ -41,7 +41,7 @@ func TestHostedStoppedMotionIntentLive(t *testing.T) {
 			}
 			before.Seed = 915
 			state := MotionContext{MotionMode: tc.mode, Layered: &before, Paused: tc.paused, SpeedPercent: 40, SpeedMinPercent: 1, SpeedMaxPercent: 100, Envelope: motion.CurrentPlanningEnvelope(limits)}
-			caps := Capabilities{Motion: !tc.off, MotionMode: tc.mode, Patterns: tc.mode == MotionModePattern, HostedMotion: true, PreserveConversationText: true, MotionHolder: tc.holder}
+			caps := Capabilities{Motion: !tc.off, MotionMode: tc.mode, Patterns: tc.mode == MotionModePattern, AdvancedMotion: true, PreserveConversationText: true, MotionHolder: tc.holder}
 			svc := Service{Provider: provider, Model: model, Capabilities: &caps, MotionContext: &state, Patterns: hostedLifecyclePatterns(tc.mode), ReasoningMode: "off", MaxTokens: 512}
 			request := Request{Message: tc.message}
 			if tc.afterStop {

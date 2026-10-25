@@ -203,13 +203,24 @@ Mitigation:
 
 - the user alone raises the live intensity, which starts at 0 on every
   connection and selection. Motion only shapes the level beneath it, never
-  above the saved ceiling (default 40%), and the model has no vibrator control
+  above the saved ceiling (default 40%). Advanced model contracts may choose an
+  engine-owned relative envelope under ADRs 0057/0058, but cannot raise arming or
+  limits. A capability choice, local or on a connection such as LM Studio, is
+  not proof of model quality; Simple remains the default for the local model and
+  new compatible servers, and the tested 12B model is recommended only through
+  Intermediate
 - Pause, Stop, coverage loss, the end of Test, exclusion and removal send an
   explicit zero; Stop adds `StopDeviceCmd`, and generation fencing keeps any
   older `ScalarCmd` from following a Stop
 - Emergency Stop closes write admission and sends `StopAllDevices` on a live
   session whatever the engine and selections are. It also zeroes the
   intensity, and an unconfirmed stop fails the session
+- a fresh manual chat request may restore only the previously human-selected
+  intensity under [ADR 0059](decisions/0059-manual-chat-resume-after-stop.md).
+  Permission binds the same selection and current Stop/control/level revisions.
+  Questions and autonomous work cannot consume it; explicit zero, reconnection
+  and faults clear it. Failed dispatch rolls back without undoing newer controls.
+  No model-selected strength or language rule grants this permission
 - a watchdog stops a stalled pacer and allows only silence until the run
   stops, and a stalled pacer stops the keepalive so Intiface's own watchdog
   stops the devices too
@@ -217,6 +228,11 @@ Mitigation:
   loss faults both, and one device cannot hold both roles
 - raises and Test need the controlling host and the current Stop sequence,
   and are refused after any Stop, selection or session change
+- independent scalar edits share the engine clock and Stop admissions; stale
+  replies, retired recipients and canceled decisions cannot restart an output
+- unavailable vibrator-only sessions expose a reply-only continuous contract;
+  validation enforces the same restriction without constrained decoding. Tier
+  changes retire prepared work and repair offers; output arming stays human-owned
 - simulation covers the protocol; automated tests never reach hardware
 
 Residual risk: physical acceptance is still needed for each of these:

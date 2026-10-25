@@ -43,6 +43,12 @@ func (s *Server) currentTraceExport() diagnostics.TraceExport {
 	export.IntifaceDispatches = intifaceStatus.RecentDispatches
 	export.IntifaceDispatchesDropped = intifaceStatus.RecentDispatchesDropped
 	export.IntifaceLinearSentCount = intifaceStatus.LinearSentCount
+	s.intiface.mu.Lock()
+	hub := s.intiface.hub
+	s.intiface.mu.Unlock()
+	if hub != nil {
+		export.VibratorEvents, export.VibratorEventsDropped = hub.Vibrator().Events()
+	}
 	return export
 }
 

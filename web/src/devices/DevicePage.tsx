@@ -25,6 +25,7 @@ export function DevicePage({ descriptor, ctx, model }: { descriptor: DeviceDescr
         {breadcrumb}
         <div className="group device-not-added">
           <p>{t("{device} is not added.", { device: name })}</p>
+          {descriptor.addNotice && <p className="hint">{descriptor.addNotice()}</p>}
           <button type="button" className="btn btn-primary" disabled={locked || Boolean(ctx.busy[descriptor.id])}
             onClick={() => void ctx.run(descriptor.id, "add", async () => { await api.changeDeviceConnection(descriptor.id, "add"); })}>
             {t("Add {device}", { device: name })}

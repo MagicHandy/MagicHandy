@@ -11,6 +11,7 @@ import (
 )
 
 func (s *Server) motionControlRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/motion/vibration/follow", s.handleVibrationFollow)
 	mux.HandleFunc("POST /api/motion/pause", s.handleMotionPause)
 	mux.HandleFunc("POST /api/motion/resume", s.handleMotionResume)
 	mux.HandleFunc("POST /api/motion/edge", s.handleEdge)
@@ -60,7 +61,7 @@ func (s *Server) decideEdge(ctx context.Context, input modes.EdgeInput) (modes.E
 	}
 	defer release()
 	plan, _, err := (chat.EdgeService{Provider: provider, Model: settings.LLM.Model, ReasoningMode: settings.LLM.ReasoningMode}).Complete(providerCtx, chat.EdgeContext(input))
-	if err == nil && settings.LLM.IsHosted() {
+	if err == nil && settings.LLM.AdvancedMotion() {
 		err = s.validateCloudAdmission(providerCtx, admission)
 	}
 	return modes.EdgeDecision(plan), err

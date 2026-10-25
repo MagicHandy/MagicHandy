@@ -20,6 +20,7 @@ import { EasyAISetup, initialEasyAIChoice, setupCloudConnectionID, type EasyAICh
 import type { ModelConnection } from "../api/cloud-types";
 import { newModelConnection } from "../util/model-connections";
 import { setupRequiredBytes } from "../util/setup-space";
+import { setupCapabilityDefaults } from "../util/setup-model-capability";
 import {
   AccessStep,
   DeviceStep,
@@ -98,6 +99,7 @@ export function SetupRoute() {
   const [easyConnectionID, setEasyConnectionID] = useState(() => setupCloudConnectionID(state?.settings?.llm));
   const [modelChoice, setModelChoice] = useState<ManagedModelChoice>("later");
   const chatDefaultsApplied = useRef(false);
+  const capabilityChosen = useRef(Boolean(state?.settings?.llm.local_capability_level));
   const [pendingImportID, setPendingImportID] = useState("");
   const [runtimeBackend, setRuntimeBackend] = useState<RuntimeBackend>("auto");
   const [handyModel, setHandyModel] = useState<HandyModel>(() => initialHandyModel(state?.settings));
@@ -204,6 +206,7 @@ export function SetupRoute() {
   useEffect(() => {
     if (!state?.settings || settings) return;
     setSettings(state.settings);
+    capabilityChosen.current = Boolean(state.settings.llm.local_capability_level);
     setRuntimeChoice(initialRuntimeChoice(state.settings.llm));
     setEasyAIChoice(initialEasyAIChoice(state.settings.llm));
     setBackupChoice(state.settings.llm.retry_refusal_locally ? true : null);
@@ -279,6 +282,14 @@ export function SetupRoute() {
     }
   }, [catalog, mode, models, settings, setup?.assessment]);
 
+  // Follow the chosen known model in Easy, Custom and local-backup setup.
+  // A saved or manually selected capability always wins over these defaults.
+  useEffect(() => {
+    if (capabilityChosen.current || !settings) return;
+    const next = setupCapabilityDefaults(settings, localRuntime, modelChoice, catalog, models, ollamaModels);
+    if (next !== settings) setSettings(next);
+  }, [catalog, localRuntime, modelChoice, models, ollamaModels, settings]);
+
   const changeMode = (next: SetupMode) => {
     if (next === "easy") easyDefaultsApplied.current = false;
     setMode(next);
@@ -348,6 +359,7 @@ export function SetupRoute() {
   };
 
   function patchLLM(patch: Partial<PublicSettings["llm"]>) {
+    if (patch.local_capability_level !== undefined) capabilityChosen.current = true;
     setBackupChecked(false);
     setSettings((current) => current ? { ...current, llm: { ...current.llm, ...patch } } : current);
   }
@@ -654,7 +666,7 @@ export function SetupRoute() {
             qwenReference={{ wav: qwenWAV, transcript: qwenTranscript, later: qwenLater, locked: locked || installationActive, setWAV: setQwenWAV, setTranscript: setQwenTranscript, setLater: setQwenLater }}
             useLocalAI={easyAIChoice === "local" || easyCombine}
             chatEnabled={easyAIChoice !== "local" || localAvailable}
-            aiSetup={<EasyAISetup choice={easyAIChoice} combine={easyCombine} localAvailable={localAvailable} connection={easyConnection} settings={settings.llm} locked={locked || installationActive}
+            aiSetup={<EasyAISetup choice={easyAIChoice} combine={easyCombine} localAvailable={localAvailable} connection={easyConnection} settings={settings.llm} capabilityOptions={settings.options?.local_model_capabilities} locked={locked || installationActive}
               editCustom={() => { setMode("custom"); setStep(CUSTOM_STEPS.indexOf("chat")); }}
               select={selectEasyAI}
               setCombine={combine => selectEasyAI(easyAIChoice, combine, easyConnection?.provider)}

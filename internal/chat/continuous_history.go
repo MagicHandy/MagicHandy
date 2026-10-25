@@ -105,7 +105,7 @@ func spokenReply(content string) string {
 
 func continuousOutputGuard(capabilities Capabilities) string {
 	empty := "{}"
-	if capabilities.MotionMode == MotionModeCreativeV2 {
+	if capabilities.MotionMode == MotionModeCreativeV2 || (capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion) {
 		empty = "[]"
 	}
 	guard := `FINAL OUTPUT RULE: Return one JSON object using this mode's contract. Conversation requires "edits":` + empty + `; no evolution. Reply in the selected voice, not the technical examples' style. Never output a "motion" field. Close JSON after the final sentence; no trailing blank lines.`

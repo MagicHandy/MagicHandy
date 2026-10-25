@@ -45,7 +45,7 @@ func TestHostedStartUsesModelIntentAndAuthoritativeState(t *testing.T) {
 				}
 				raw := hostedStartFixture(mode, action, speed)
 				provider := &scriptedProvider{responses: []string{raw}}
-				caps := Capabilities{Motion: !tc.disabled, MotionMode: mode, HostedMotion: tc.hosted, PreserveConversationText: tc.hosted, MotionHolder: MotionHolder(tc.owner)}
+				caps := Capabilities{Motion: !tc.disabled, MotionMode: mode, AdvancedMotion: tc.hosted, PreserveConversationText: tc.hosted, MotionHolder: MotionHolder(tc.owner)}
 				state := MotionContext{MotionMode: mode, Paused: tc.paused, SpeedMinPercent: 10, SpeedMaxPercent: 50}
 				svc := Service{Provider: provider, Capabilities: &caps, MotionContext: &state, SingleAttempt: true}
 				result, err := svc.Complete(t.Context(), Request{Message: tc.message}, nil)
@@ -67,7 +67,7 @@ func TestHostedStartGuidanceDoesNotChangeLocalLegacyPrompts(t *testing.T) {
 		if contractInstructions(caps) != want {
 			t.Fatal("local legacy contract changed")
 		}
-		caps.HostedMotion = true
+		caps.AdvancedMotion = true
 		if !strings.Contains(contractInstructions(caps), hostedStartGuide) || strings.Contains(contractInstructions(caps), "only for an explicit request to begin motion") {
 			t.Fatal("hosted contract contradicts model-owned start intent")
 		}

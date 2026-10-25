@@ -8,12 +8,15 @@ export function modelReadyMessage(elapsedMillis?: number): string {
 
 // Use the account catalog for ChatGPT. A manual model can keep its saved effort,
 // but we do not infer that an undiscovered model accepts another model's levels.
-export function selectedModelChange(model: HostedModel | undefined, id: string, connection: ModelConnection): Partial<ModelConnection> {
+// A compatible server's budget follows the server's own loaded context, so a
+// new model keeps it; `floor` is the connection's capability minimum.
+export function selectedModelChange(model: HostedModel | undefined, id: string, connection: ModelConnection, floor = 65536): Partial<ModelConnection> {
   const levels = model?.reasoning_efforts ?? [];
   const current = connection.reasoning_effort ?? "";
-  const suggestedWindow = connection.provider !== "compatible" && (model?.context_length ?? 0) >= 131072 ? 131072 : 32768;
+  const kept = Math.max(connection.context_window || 0, floor);
+  const suggestedWindow = connection.provider === "compatible" ? kept : (model?.context_length ?? 0) >= 131072 ? 131072 : floor;
   return { model: id, reasoning_effort: levels.includes(current) ? current : levels.includes("low") ? "low" : "",
-    context_window: id === connection.model ? connection.context_window || 32768 : suggestedWindow };
+    context_window: id === connection.model ? kept : suggestedWindow };
 }
 
 export function ModelResponseSettings({ connection, models, disabled, patch, compact = false }: {
@@ -35,14 +38,16 @@ export function ModelResponseSettings({ connection, models, disabled, patch, com
         {levels.map(level => <option key={level} value={level}>{names[level] ?? level}</option>)}
       </select>
     </label>;
-  if (compact && connection.provider === "chatgpt") return <div className="model-response-settings">
+  if (compact && connection.provider === "chatgpt") return <div className="form-row form-row-plain model-response-settings">
     <p className="hint">{t("Recommended for motion: GPT-6 Sol with Low reasoning.")}</p>
     <details><summary>{t("Response speed") + ": " + (names[effort] ?? t("Provider default"))}</summary>
       {effortField}
       <DismissibleNotice id="model-response-speed" className="model-help"><p className="hint">{t("Low reasoning favors quick updates. Faster service tiers are not verified for ChatGPT plan connections. Response time also depends on the network and account load.")}</p></DismissibleNotice>
     </details>
   </div>;
-  return <div className="model-response-settings">
+  // An OpenAI model without published effort levels has nothing to show here.
+  if (!effortField && connection.provider !== "chatgpt") return null;
+  return <div className="form-row form-row-plain model-response-settings">
     {effortField}
     {connection.provider === "chatgpt" && <DismissibleNotice id="model-response-speed" className="model-help">
       <p className="hint">{t("Recommended for motion: GPT-6 Sol with Low reasoning.")}</p>

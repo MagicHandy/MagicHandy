@@ -11,27 +11,33 @@ import (
 // turn. It contains only semantic state and the user's configured speed band;
 // the model never receives device or transport details.
 type MotionContext struct {
-	UserRequests     []string
-	Running          bool
-	Paused           bool
-	PatternID        string
-	ProgramID        string
-	RecentPatternIDs []string
-	SpeedPercent     int
-	Area             string
-	SpeedMinPercent  int
-	SpeedMaxPercent  int
-	MotionMode       MotionMode
-	CenterPercent    int
-	SpanPercent      int
-	SpanMinPercent   int
-	SpanProfile      string
-	Anchors          []string
-	VariationPercent int
-	SegmentSeconds   int
-	SectionCount     int
-	Layered          *motion.FlowSpec
-	Envelope         motion.PlanningEnvelope
+	// Intermediate/Advanced composition uses output facts. Simple stays compact.
+	Outputs      *OutputContext
+	UserRequests []string
+	Running      bool
+	Paused       bool
+	// Backend-confirmed fresh manual restart eligibility. This enables a short
+	// state cue without exposing the multi-output contract to Simple; admission
+	// and the one-use transport permit remain separate and authoritative.
+	ManualRestartAvailable bool `json:"-"`
+	PatternID              string
+	ProgramID              string
+	RecentPatternIDs       []string
+	SpeedPercent           int
+	Area                   string
+	SpeedMinPercent        int
+	SpeedMaxPercent        int
+	MotionMode             MotionMode
+	CenterPercent          int
+	SpanPercent            int
+	SpanMinPercent         int
+	SpanProfile            string
+	Anchors                []string
+	VariationPercent       int
+	SegmentSeconds         int
+	SectionCount           int
+	Layered                *motion.FlowSpec
+	Envelope               motion.PlanningEnvelope
 	// Reuse the active engine plan's summary; no extra compilation/model call.
 	CommandedSummary *motion.PerceptualSummary
 	// Autopilot reports that continuous Autopilot composes the motion between
@@ -100,7 +106,7 @@ Use that snapshot deliberately:
 func motionContextInstructions(context MotionContext, capabilities Capabilities, patterns []PatternChoice) string {
 	if capabilities.MotionMode == MotionModeLayered || capabilities.MotionMode == MotionModeCreativeV2 {
 		context.MotionMode = capabilities.MotionMode
-		text := layeredContextInstructions(context)
+		text := layeredContextInstructions(context, capabilities)
 		return text + hostedCommandedReach(context, capabilities)
 	}
 	data := normalizedPromptMotionContext(context)

@@ -11,7 +11,7 @@ const hostedStartGuide = `When stopped, use "start" for a fresh request to perfo
 // These replacements affect code-owned instructions only. The hosted model
 // interprets user intent; no words in a user message grant start authority.
 func hostedStartContract(text string, capabilities Capabilities) string {
-	if !capabilities.HostedMotion {
+	if !capabilities.AdvancedMotion {
 		return text
 	}
 	text = strings.Replace(text, `Use "start" only when the user asks to begin motion.`, hostedStartGuide, 1)
@@ -19,7 +19,7 @@ func hostedStartContract(text string, capabilities Capabilities) string {
 }
 
 func hostedStoppedGuidance(text string, capabilities Capabilities) string {
-	if !capabilities.HostedMotion {
+	if !capabilities.AdvancedMotion {
 		return text
 	}
 	text = strings.Replace(text, `use action "start" only for an explicit motion request`, `use action "start" for a fresh request to perform motion`, 1)
@@ -27,7 +27,7 @@ func hostedStoppedGuidance(text string, capabilities Capabilities) string {
 }
 
 func (s Service) validateHostedStartState(response AssistantResponse, capabilities Capabilities) error {
-	if !capabilities.HostedMotion || s.TrustedMotionInput || response.Motion == nil || response.Motion.Action != MotionActionStart {
+	if !capabilities.AdvancedMotion || s.TrustedMotionInput || response.Motion == nil || response.Motion.Action != MotionActionStart {
 		return nil
 	}
 	if s.MotionContext == nil || capabilities.MotionHolder != MotionHolderSettings {
@@ -53,7 +53,7 @@ func (s Service) validateHostedStartState(response AssistantResponse, capabiliti
 // This grants no inferred start: the model must emit a complete valid start
 // command for an interactive hosted turn that actually owns stopped motion.
 func (s Service) authorizesHostedStart(command MotionCommand, capabilities Capabilities) bool {
-	return capabilities.HostedMotion && capabilities.Motion && capabilities.MotionHolder == MotionHolderSettings &&
+	return capabilities.AdvancedMotion && capabilities.Motion && capabilities.MotionHolder == MotionHolderSettings &&
 		!s.TrustedMotionInput && command.Action == MotionActionStart && s.MotionContext != nil &&
 		!s.MotionContext.Running && !s.MotionContext.Paused
 }

@@ -125,10 +125,11 @@ type PositionBand struct {
 // Decision is one motion or speech curation outcome. Hold is scheduler-only:
 // it must never produce an engine retarget.
 type Decision struct {
-	Segment Segment
-	Pattern *motion.PatternDefinition
-	Say     string
-	Hold    bool
+	Vibration *motion.VibrationSpec
+	Segment   Segment
+	Pattern   *motion.PatternDefinition
+	Say       string
+	Hold      bool
 	// Abstain holds without starting a replacement when no segment exists.
 	Abstain bool
 	// Requested marks a hold the human asked for in chat, so status can say why
@@ -155,6 +156,7 @@ type DecideFunc func(ctx context.Context, input DecisionInput) (Decision, error)
 
 // segmentChoice is what one autonomous motion boundary applies.
 type segmentChoice struct {
+	vibration       *motion.VibrationSpec
 	segment         Segment
 	pattern         *motion.PatternDefinition
 	scores          []diagnostics.PlannerScore
@@ -255,13 +257,13 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		if segment, pattern, ok := m.heldSegment(); ok {
 			return segmentChoice{
 				segment: segment, pattern: pattern, source: "hold", requested: decision.Requested,
-				say: decision.Say, timing: timing, variability: variability,
+				vibration: decision.Vibration, say: decision.Say, timing: timing, variability: variability,
 				nextCheck: decision.NextCheck, decisionLatency: latency,
 			}
 		}
 		if !fallback || dynamicMode || decision.Abstain {
 			return segmentChoice{
-				source: "hold", requested: decision.Requested, say: decision.Say, timing: timing,
+				source: "hold", requested: decision.Requested, vibration: decision.Vibration, say: decision.Say, timing: timing,
 				variability: variability, nextCheck: decision.NextCheck, decisionLatency: latency,
 			}
 		}
@@ -269,13 +271,13 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 		segment.DriftToSpeedPercent = 0
 		return segmentChoice{
 			segment: segment, scores: scores, source: "fallback",
-			note: "hold_without_segment", say: decision.Say, timing: timing,
+			note: "hold_without_segment", vibration: decision.Vibration, say: decision.Say, timing: timing,
 			variability: variability, decisionLatency: latency,
 		}
 	}
 	return segmentChoice{
 		segment: NormalizeSegment(decision.Segment), pattern: decision.Pattern,
-		source: "model", say: decision.Say, timing: timing,
+		source: "model", vibration: decision.Vibration, say: decision.Say, timing: timing,
 		variability: variability, nextCheck: decision.NextCheck, decisionLatency: latency,
 	}
 }

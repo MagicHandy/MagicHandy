@@ -6,6 +6,7 @@ import type { DeviceAction, DeviceContext, DeviceModel, DeviceStatusWord } from 
 export function statusWord(status: DeviceStatusWord): string {
   switch (status) {
     case "playing": return t("Playing");
+    case "silent": return t("Silent");
     case "connected": return t("Connected");
     case "connecting": return t("Connecting…");
     case "needs_setup": return t("Needs setup");
@@ -26,7 +27,7 @@ export function statusLine(model: Pick<DeviceModel, "status" | "details">): stri
 export function liveStatus(ctx: DeviceContext, device: DeviceId, connected: boolean): DeviceStatusWord {
   if (ctx.retired.includes(device) && ctx.engineActive) return "lost";
   if (!connected) return "not_connected";
-  return ctx.engineActive && ctx.playing.includes(device) ? "playing" : "connected";
+  return ctx.engineActive && ctx.playing.includes(device) && !(ctx.state?.motion?.engine?.target?.vibration_only && device !== "vibrator") ? "playing" : "connected";
 }
 
 /** Why device commands are unavailable here, if they are. */
@@ -48,6 +49,7 @@ export function actionFor(status: DeviceStatusWord, options: { connect?: () => v
     case "lost":
       return { kind: "reconnect", run: options.connect, disabled: unavailable(options.connect), reason: options.reason };
     case "connected":
+    case "silent":
     case "playing":
       return { kind: "disconnect", run: options.disconnect, disabled: unavailable(options.disconnect), reason: options.reason };
     default:
@@ -59,6 +61,7 @@ export function actionFor(status: DeviceStatusWord, options: { connect?: () => v
 export function chipPhrase(model: DeviceModel): string {
   switch (model.status) {
     case "playing": return t("{device} connected and playing", { device: model.name });
+    case "silent": return t("{device} connected and silent", { device: model.name });
     case "connected": return t("{device} connected", { device: model.name });
     case "connecting": return t("{device} connecting", { device: model.name });
     case "needs_setup": return t("{device} needs setup", { device: model.name });

@@ -1,4 +1,5 @@
 import { useAppState, useMotionState } from "../state/app-state";
+import { LiveVibrationReadout, showsVibration } from "./VibrationReadout";
 import { MotionVisualizer } from "./MotionVisualizer";
 import type { VisualizerDevice } from "./visualizer/device";
 
@@ -12,5 +13,7 @@ export function useVisualizerDevice(): VisualizerDevice {
 export function LiveMotionVisualizer({ mini = false }: { mini?: boolean }) {
   const motion = useMotionState();
   const device = useVisualizerDevice();
+  const { state } = useAppState();
+  if (showsVibration(state?.settings, motion)) return <LiveVibrationReadout mini={mini} />;
   return <MotionVisualizer motion={motion} mini={mini} device={device} />;
 }

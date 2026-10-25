@@ -456,7 +456,7 @@ describe("AutopilotControl", () => {
     }));
   });
 
-  it("offers Auto timing only when Autopilot plans with a hosted model", async () => {
+  it("offers Auto timing for hosted routes in older snapshots", async () => {
     const route = (kind: string) => ({
       chat: { kind, provider: "compatible", model: "m", context_policy: "conversation", state: "configured" },
       autopilot: { kind, provider: "compatible", model: "m", context_policy: "conversation", state: "configured" },
@@ -487,6 +487,26 @@ describe("AutopilotControl", () => {
       auto_motion_timing: true,
       motion_change_level: 4,
     }));
+  });
+
+  it("follows saved planner features for Advanced local models and hides them after downgrade", () => {
+    const update = (advanced: boolean) => {
+      app.state = { modes: { mode: "autopilot" }, settings: {
+        autopilot: { ...autopilotPreferences, auto_motion_timing: true, prepare_next_decision: true },
+        model_routing: {
+          chat: { kind: "hosted", features: { auto_timing: true, prepare_decisions: true } },
+          autopilot: { kind: "local", provider: "ollama", features: { auto_timing: advanced, prepare_decisions: advanced } },
+        },
+      } };
+    };
+    update(true);
+    const view = render(<AutopilotControl />);
+    expect(screen.getByRole("checkbox", { name: "Auto timing" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Prepare decisions early" })).toBeChecked();
+    update(false);
+    view.rerender(<AutopilotControl />);
+    expect(screen.queryByRole("checkbox", { name: "Auto timing" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Prepare decisions early" })).not.toBeInTheDocument();
   });
 
   it("offers prepared decisions for any external planner and saves the choice", async () => {
@@ -536,6 +556,46 @@ describe("AutopilotControl", () => {
     expect(screen.getByText("Motion 32 s, ready · Speech Off")).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1_000));
     expect(screen.getByText("Motion 31 s, ready · Speech Off")).toBeInTheDocument();
+  });
+
+  it("offers extra planning only when the saved planner supports it, and saves both choices", async () => {
+    saveAutopilotPreferences.mockImplementation(async (next) => ({ autopilot: next }));
+    const settings = {
+      autopilot: { ...autopilotPreferences, intermediate_planning: true },
+      model_routing: {
+        chat: { kind: "hosted", features: { intermediate_planning: false } },
+        autopilot: { kind: "local", features: { intermediate_planning: true } },
+      },
+    };
+    app.state = { modes: {}, settings };
+    const view = render(<AutopilotControl />);
+    const toggle = screen.getByRole("checkbox", { name: "Extra planning" });
+    expect(toggle).toBeChecked();
+    expect(toggle).toHaveAccessibleDescription(/0.4–0.7 s.*Gemma 12B/);
+    await act(async () => fireEvent.click(toggle));
+    expect(saveAutopilotPreferences).toHaveBeenLastCalledWith(expect.objectContaining({ intermediate_planning: false, motion_change_level: 4 }));
+    expect(toggle).not.toBeChecked();
+    await act(async () => fireEvent.click(toggle));
+    expect(saveAutopilotPreferences).toHaveBeenLastCalledWith(expect.objectContaining({ intermediate_planning: true }));
+    app.state = { modes: {}, settings: { ...settings, model_routing: {
+      chat: { features: { intermediate_planning: true } },
+      autopilot: { kind: "hosted", features: { intermediate_planning: false } },
+    } } };
+    view.rerender(<AutopilotControl />);
+    expect(screen.queryByRole("checkbox", { name: "Extra planning" })).not.toBeInTheDocument();
+  });
+
+  it("restores the saved extra-planning choice when saving fails", async () => {
+    saveAutopilotPreferences.mockRejectedValue(new Error("Save failed"));
+    app.state = { modes: {}, settings: {
+      autopilot: { ...autopilotPreferences, intermediate_planning: true },
+      model_routing: { autopilot: { features: { intermediate_planning: true } } },
+    } };
+    render(<AutopilotControl />);
+    const toggle = screen.getByRole("checkbox", { name: "Extra planning" });
+    await act(async () => fireEvent.click(toggle));
+    expect(toggle).toBeChecked();
+    expect(app.show).toHaveBeenCalledWith("Save failed", "error");
   });
 
   it("clears the arc when session tracking is switched off", async () => {

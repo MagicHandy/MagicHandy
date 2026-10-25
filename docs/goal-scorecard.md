@@ -1,5 +1,111 @@
 # Goal Scorecard
 
+## 2026-10-25 — Combined model settings, planning toggle and llama.cpp b11533
+
+Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags
+'-s -w'`: **24,197,120 -> 24,220,160 B** (+23,040 B) against `cd9aef7e`.
+The combined canonical UI is **2805447 B**. Main JS and CSS sizes are recorded in the alpha.74
+release review. No Go/npm dependency, worker, timer or model round trip is
+added by this integration. The Intermediate switch restores the tested shorter
+request when off; its allocation remains 32K and Simple remains 16K.
+
+The optional upstream llama.cpp downloads are 19,513,403 B CPU and
+656,667,874 B CUDA including its runtime archive. They are installed only on
+request and are not embedded in the core or included in the app installer.
+Existing model files are reused. No RSS or cold-start improvement is claimed.
+
+
+## 2026-10-25 — E4B optimization and local Autopilot planning
+
+Same Windows amd64 Go 1.26.10 pure-Go stripped build, compared with `06f934da`:
+**24,183,808 → 24,197,120 B** (+13,312 B). No frontend files or dependencies
+changed: canonical UI remains **2,800,753 B**, main JS **1,290,230 B raw /
+345,912 B gzip**. No new timer, worker, inference round trip or motion loop.
+Context allocations remain 16K for Simple and 32K for Intermediate.
+
+The deliberate cost is local **Autopilot motion generation latency**, not idle
+core memory: E4B median +67–101.5 ms; Intermediate 12B +425–645 ms in the paired
+two-seed comparisons. Simple planning reserves at least 384 output tokens;
+Intermediate's existing 512 minimum is sufficient. Interactive response budgets
+are unchanged. Quality gains, exact captures, rollback locations and revisit
+criteria are recorded in [ADR 0060](decisions/0060-local-autopilot-decision-notes.md).
+No RSS or cold-start improvement is claimed. See the
+[response and prompt-set evaluation](e4b-simple-review-2026-10-25.md).
+
+## 2026-10-25 — Capability for every model and one-home model settings
+
+Against `06f934da`, the same Windows amd64 Go 1.26.10 pure-Go stripped build
+(`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`) measures
+**24,183,808 -> 24,199,680 B** (+15,872 B). Main JS **1,290,230 -> 1,291,585 B
+raw**, **345,912 -> 347,158 B gzip**; CSS **207,363 -> 208,113 B raw**,
+**36,240 -> 36,328 B gzip**. Locale chunks change by -99 to +46 B raw (23
+strings added, 30 retired). Canonical UI total **2,800,753 -> 2,802,838 B**
+(+2,085 B); gzip uses Python with `mtime=0`. No dependency, goroutine or
+background request is added: the local model row reads the existing status
+only while its editor is mounted. A Simple connection sends the compact contract
+within a 16K budget (9,956 prompt bytes in the review chat); no RSS or
+cold-start change is claimed.
+
+## 2026-10-25 — Manual chat resume after Stop
+
+Same Windows amd64 pure-Go stripped build: **24,162,304 -> 24,183,808 B**
+(+21,504 B). Main JS **1,288,968 -> 1,290,230 B raw** and
+**345,641 -> 345,912 B gzip**; canonical UI **2,800,753 B** (+4,697 B,
+including localized notes). No dependency, timer, worker or motion loop is added.
+The one-use permission is per selected vibrator, in memory only. Simple and
+normal running request budgets are unchanged. Eligible stopped Intermediate
+requests add a short backend-state cue. Live timing and the bounded-repair
+limitation are recorded in [ADR 0059](decisions/0059-manual-chat-resume-after-stop.md).
+No RSS or cold-start improvement is claimed.
+
+## 2026-10-25 — Setup capability recommendation
+
+Against `72de995a`, the same Windows amd64 Go 1.26.10 pure-Go stripped build
+measures **24,160,768 -> 24,162,304 B** (+1,536 B). Main JS grows
+**1,287,718 -> 1,288,968 B raw**, **345,266 -> 345,641 B gzip**; CSS is
+unchanged. Canonical UI total is **2,796,056 B** (+1,250 B). No dependency or
+background work is added. Setup uses the backend catalog to choose Intermediate
+for known Gemma 12B models and Simple for E4B; the explicit 32K allocation cost
+is already covered by the capability measurements below.
+
+## 2026-10-25 — Local model capability levels
+
+Matched Windows amd64 Go 1.26.10 builds against `c3d37aad`, using
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core
+**24,114,176 -> 24,160,768 B** (+46,592 B). No new dependency or goroutine.
+Main JS: **1,282,961 -> 1,287,718 B raw**, **344,083 -> 345,266 B gzip**.
+CSS: **207,215 -> 207,363 B raw**, **36,215 -> 36,240 B gzip**.
+Canonical UI total: **2,783,962 -> 2,794,806 B** (+10,844 B). Gzip uses
+Python with `mtime=0`; only the current canonical chunks are retained.
+
+Simple keeps the existing local request/resource behavior. Explicit Intermediate
+and Advanced choices raise allocation floors to 32K and 64K; this costs local
+runtime memory, not idle core memory. Ollama reported 7,954,224,905 B allocated
+VRAM for the tested 12B at 32K. In the matched 22-turn set, Simple/Intermediate
+medians were 914/899 ms; Autopilot medians were 1,385/1,520 ms. These small sets
+show no material chat latency penalty on this host and do not establish memory
+or performance guarantees elsewhere. No RSS or cold-start improvement is claimed.
+See the [model evidence and opt-in limitations](model-capability-review-2026-10-25.md).
+
+## 2026-10-25 — Independent vibration and Intiface startup
+
+Matched Windows amd64 Go 1.26.10 builds against `25b0e193`, using
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core
+**23,965,184 -> 24,114,176 B** (+148,992 B).
+No new runtime dependency or motion goroutine is added. The envelope runs on
+the existing engine loop; scalar frames are bounded to 64 points and diagnostic
+events to 128. The first implementation uses at most 31 sampled levels per
+refill. Local prompt/schema identity is covered across five modes and two states.
+
+Main JS: **1,278,438 -> 1,282,961 B raw**, **343,501 -> 344,083 B gzip**.
+CSS: **206,484 -> 207,215 B raw**, **36,066 -> 36,215 B gzip**.
+Canonical UI total: **2,772,339 -> 2,783,962 B**. Gzip uses Python
+with `mtime=0`. No RSS/cold-start improvement is claimed. External context now
+has a 64K minimum, retaining the previous compact history cap (64 messages /
+24 KB). The budget does not pad requests; full versus compact guidance showed
+no consistent timing advantage across the matched quality/preservation sets.
+See [the evaluation and physical follow-up](intiface-vibrator-review-2026-10-25.md).
+
 ## 2026-10-24 — Remote release review corrections
 
 The final review binds phone Edge/Return to controller cancellation and makes

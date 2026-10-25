@@ -19,6 +19,7 @@ export interface LLMCatalogModel {
   vram_mib: number;
   min_vram_mib: number;
   default: boolean;
+  recommended_capability?: import("./llm-settings-types").ModelCapabilityLevel;
   fit: LLMCatalogFit;
   installed_model_id?: string;
   partial_bytes?: number;

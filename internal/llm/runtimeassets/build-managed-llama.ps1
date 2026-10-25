@@ -11,28 +11,28 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$LlamaVersion = 'b11149'
-$LlamaCommit = 'd2e54583c7452353eb35d40431281f6ee984332f'
-$LlamaReleaseURL = 'https://github.com/ggml-org/llama.cpp/releases/tag/b11149'
+$LlamaVersion = 'b11533'
+$LlamaCommit = '64df9183f5ca178c049a392f35e795d8e97c97b3'
+$LlamaReleaseURL = 'https://github.com/ggml-org/llama.cpp/releases/tag/b11533'
 $LlamaAssets = @{
     cpu = @(
         [pscustomobject]@{
-            Name = 'llama-b11149-bin-win-cpu-x64.zip'
-            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b11149/llama-b11149-bin-win-cpu-x64.zip'
-            SHA256 = 'd1cb5f9ef7bbb7068954b4c9767d5b5309e20bcefeb61d4aafc47f9581f38752'
-            Bytes = 18559583L
+            Name = 'llama-b11533-bin-win-cpu-x64.zip'
+            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b11533/llama-b11533-bin-win-cpu-x64.zip'
+            SHA256 = '659ac73690e588bf60ba1c8de02479683e60ed2ce2915ddf3e15904b520fa933'
+            Bytes = 19513403L
         }
     )
     cuda = @(
         [pscustomobject]@{
-            Name = 'llama-b11149-bin-win-cuda-12.4-x64.zip'
-            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b11149/llama-b11149-bin-win-cuda-12.4-x64.zip'
-            SHA256 = 'd3140fe21ab2e665a706ca27923b27ca264f1c564b5837abea4566cc49c16096'
-            Bytes = 253869752L
+            Name = 'llama-b11533-bin-win-cuda-12.4-x64.zip'
+            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b11533/llama-b11533-bin-win-cuda-12.4-x64.zip'
+            SHA256 = 'cd3612cd8e0f3a5766fc97d3b603d37337dcc072f6c424b8210ad036514447db'
+            Bytes = 265224247L
         },
         [pscustomobject]@{
             Name = 'cudart-llama-bin-win-cuda-12.4-x64.zip'
-            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b11149/cudart-llama-bin-win-cuda-12.4-x64.zip'
+            URL = 'https://github.com/ggml-org/llama.cpp/releases/download/b11533/cudart-llama-bin-win-cuda-12.4-x64.zip'
             SHA256 = '8c79a9b226de4b3cacfd1f83d24f962d0773be79f1e7b75c6af4ded7e32ae1d6'
             Bytes = 391443627L
         }

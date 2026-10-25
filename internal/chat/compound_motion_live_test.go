@@ -87,7 +87,7 @@ func TestHostedCompoundMotionComparison(t *testing.T) {
 					}
 					before.Seed = 915
 					state := MotionContext{Running: true, MotionMode: mode, Layered: &before, SpeedPercent: 35, SpeedMinPercent: 1, SpeedMaxPercent: 100, Envelope: motion.CurrentPlanningEnvelope(limits)}
-					caps := Capabilities{Motion: true, MotionMode: mode, HostedMotion: true, PreserveConversationText: true}
+					caps := Capabilities{Motion: true, MotionMode: mode, AdvancedMotion: true, PreserveConversationText: true}
 					svc := Service{Provider: provider, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: 512}
 					started, calls := time.Now(), provider.calls
 					result, err := svc.Complete(t.Context(), Request{Message: tc.message}, nil)

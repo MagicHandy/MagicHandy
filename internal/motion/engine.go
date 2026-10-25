@@ -47,9 +47,13 @@ type EngineOptions struct {
 
 // Engine owns one active semantic motion loop.
 type Engine struct {
-	mu        sync.Mutex
-	commandMu sync.Mutex
-	targetMu  sync.Mutex
+	vibration          *vibrationPlan
+	vibrationRevision  uint64
+	vibrationTail      int64
+	linearStartPending bool
+	mu                 sync.Mutex
+	commandMu          sync.Mutex
+	targetMu           sync.Mutex
 
 	transport        transport.Transport
 	traces           *diagnostics.TraceRing
@@ -204,6 +208,10 @@ func (e *Engine) AdmissionGeneration() uint64 {
 
 // StartAtGeneration starts only when no Stop has occurred since admission.
 func (e *Engine) StartAtGeneration(ctx context.Context, target MotionTarget, settings config.MotionSettings, admission uint64) (ActiveMotionState, error) {
+	return e.startAtGeneration(ctx, target, settings, admission, false)
+}
+
+func (e *Engine) startAtGeneration(ctx context.Context, target MotionTarget, settings config.MotionSettings, admission uint64, promoting bool) (ActiveMotionState, error) {
 	// Create the loop cancel handle up front and publish it atomically with
 	// running=true (in begin). The startup transport commands also run on
 	// loopCtx, so a concurrent Stop/Pause cancels not just the future loop but
@@ -219,7 +227,7 @@ func (e *Engine) StartAtGeneration(ctx context.Context, target MotionTarget, set
 		stopRequestCancellation()
 		cancelStartup()
 	}()
-	runEpoch, err := e.begin(ctx, loopCtx, target, settings, cancel, admission)
+	runEpoch, err := e.begin(ctx, loopCtx, target, settings, cancel, admission, promoting)
 	if err != nil {
 		cancel()
 		return e.Snapshot(), err
@@ -273,6 +281,37 @@ func (e *Engine) applyTarget(ctx context.Context, target MotionTarget, reason st
 	runEpoch, err := e.activeRunEpoch(planID)
 	if err != nil {
 		return e.Snapshot(), err
+	}
+	if err := ctx.Err(); err != nil {
+		return e.Snapshot(), err
+	}
+	e.mu.Lock()
+	promote := e.plan.Target.VibrationOnly && !target.VibrationOnly
+	settings, admission, envelope := e.settings, e.stopGeneration, e.plan.Target.Vibration
+	if promote {
+		e.linearStartPending = true
+	}
+	e.mu.Unlock()
+	if promote {
+		defer func() { e.mu.Lock(); e.linearStartPending = false; e.mu.Unlock() }()
+		if target.Vibration == nil {
+			target.Vibration = envelope
+		}
+		if target.Vibration != nil {
+			if err := target.Vibration.Validate(); err != nil {
+				return e.Snapshot(), err
+			}
+		}
+		candidate := NewMotionPlan("linear_start_validation", target, settings, 0, 0, e.now())
+		if err := candidate.compilationError(); err != nil {
+			return e.Snapshot(), err
+		}
+		// Starting a previously idle slider requires its ordinary positioning
+		// and Play path, regardless of whether chat, library or Autopilot asks.
+		if _, err := e.Stop(ctx, "start_linear_playback"); err != nil {
+			return e.Snapshot(), err
+		}
+		return e.startAtGeneration(ctx, target, settings, admission+1, true)
 	}
 	if err := e.ensureLeadBuffer(ctx, runEpoch, "retarget_lead_points"); err != nil {
 		return e.Snapshot(), err
@@ -471,6 +510,11 @@ func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel cont
 	}
 	plan.PhasePreserved = true
 	e.plan = plan
+	e.vibration = nil
+	e.vibrationTail = 0
+	if plan.Target.Vibration != nil {
+		e.setVibrationLocked(*plan.Target.Vibration, 0)
+	}
 	e.captureCurrentSampleLocked(0)
 	e.paused = false
 	e.starting = true
@@ -542,7 +586,7 @@ func (e *Engine) Snapshot() ActiveMotionState {
 	return e.snapshotLocked()
 }
 
-func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target MotionTarget, settings config.MotionSettings, cancel context.CancelFunc, admission uint64) (uint64, error) {
+func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target MotionTarget, settings config.MotionSettings, cancel context.CancelFunc, admission uint64, promoting bool) (uint64, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -551,10 +595,18 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 	if e.stopGeneration != admission {
 		return 0, errors.New("motion start was invalidated by Stop")
 	}
+	if e.linearStartPending && !promoting {
+		return 0, errors.New("linear playback is being prepared")
+	}
 	if e.running || e.completing || e.stopBarriers > 0 {
 		return 0, errors.New("motion is running or stopping")
 	}
 
+	if target.Vibration != nil {
+		if err := target.Vibration.Validate(); err != nil {
+			return 0, err
+		}
+	}
 	settings = normalizeMotionSettings(settings)
 	e.runEpoch++
 	e.generation++
@@ -590,6 +642,11 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 		return 0, err
 	}
 	e.plan = plan
+	e.vibration = nil
+	e.vibrationTail = 0
+	if target.Vibration != nil {
+		e.setVibrationLocked(*target.Vibration, 0)
+	}
 	if e.traces != nil {
 		e.traceStartSequence = e.traces.LatestSequence() + 1
 	}
@@ -615,6 +672,15 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 	}
 	recentLatency := e.recentCommandLatencyMillisLocked()
 	previous := e.plan
+	if target.Vibration == nil {
+		target.Vibration = previous.Target.Vibration
+	}
+	if target.Vibration != nil {
+		if err := target.Vibration.Validate(); err != nil {
+			return err
+		}
+	}
+	target.VibrationOnly = previous.Target.VibrationOnly
 	previousSettings := e.settings
 	previousTransition := pruneTransitionHistory(e.transition, estimatedMillis)
 	e.transition = previousTransition
@@ -642,6 +708,9 @@ func (e *Engine) retarget(runEpoch uint64, target MotionTarget, reason string) e
 		e.transition = nil
 	}
 	e.plan = next
+	if target.Vibration != nil && (e.vibration == nil || e.vibration.spec != *target.Vibration) {
+		e.setVibrationLocked(*target.Vibration, estimatedMillis)
+	}
 	e.traceRetargetLocked(reason, previous, previousSettings, next, e.settings, current, handoff, leadMillis, recentLatency, bridgeInserted, "")
 	return nil
 }
@@ -725,6 +794,9 @@ func (e *Engine) runLoop(ctx context.Context, runEpoch uint64) {
 				return
 			}
 			if err := e.dispatchIfLeadNeeded(ctx, runEpoch, "append_points"); err != nil {
+				e.rememberError(err)
+			}
+			if err := e.dispatchVibrationIfNeeded(ctx, runEpoch); err != nil {
 				e.rememberError(err)
 			}
 		}

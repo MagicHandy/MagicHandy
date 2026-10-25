@@ -34,11 +34,13 @@ func layeredContextScore(state *MotionContext) (motion.FlowSpec, config.MotionSe
 	return FreshLayeredScore(max(limits.SpeedMinPercent, min(speed, limits.SpeedMaxPercent))), limits
 }
 
-func layeredContextInstructions(state MotionContext) string {
+func layeredContextInstructions(state MotionContext, capabilities Capabilities) string {
 	score, limits := layeredContextScore(&state)
 	var scoreContext any = layeredScoreContext(score)
 	if state.MotionMode == MotionModeCreativeV2 {
 		scoreContext = creativeV2ScoreContext(score)
+	} else if capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+		scoreContext = intermediateLayeredScoreContext(score)
 	}
 	context := map[string]any{
 		"current_score": scoreContext, "running": state.Running, "paused": state.Paused,
@@ -117,25 +119,8 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	current, limits := layeredContextScore(&state)
 	// The prompt and parser must share the same freshly seeded starting score.
 	state.Layered = &current
-	var system string
-	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.HostedMotion)
-	if capabilities.MotionMode == MotionModeCreativeV2 {
-		schema = CreativeV2ResponseSchema(limits, capabilities.MoodTracking)
-	}
-	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(state)))
 	autoTiming := s.TrustedMotionInput && capabilities.AutoTiming
-	if autoTiming {
-		schema = withNextCheckSchema(schema)
-	}
-	if !s.TrustedMotionInput {
-		system = ComposeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget).Prompt
-		schema = InteractiveResponseSchema(nil, capabilities, &state)
-	} else {
-		system = composeSystem(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget)
-	}
-	if !capabilities.Motion {
-		schema = nil
-	}
+	system, schema := s.continuousPrompt(prompt, capabilities, state, limits, autoTiming)
 	maxTokens := s.MaxTokens
 	if maxTokens <= 0 {
 		maxTokens = 1536
@@ -149,6 +134,11 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 		messages = verbatimMessages(system, request.History, request.Message, capabilities)
 	} else {
 		messages = spokenMessages(system, request.History, request.Message)
+	}
+	if !s.TrustedMotionInput {
+		messages = withLocalManualResumeState(messages, capabilities, state)
+	} else if s.localAutopilotPlan {
+		messages = localPlanningMessages(messages, state)
 	}
 	input := llm.ChatRequest{Messages: messages,
 		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
@@ -184,6 +174,34 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	return result, nil
 }
 
+func (s Service) continuousPrompt(prompt PromptSet, capabilities Capabilities, state MotionContext, limits config.MotionSettings, autoTiming bool) (string, json.RawMessage) {
+	var system string
+	schema := continuousEditSchema(limits, capabilities, state)
+	if autoTiming {
+		schema = withNextCheckSchema(schema)
+	}
+	if !s.TrustedMotionInput {
+		system = ComposeInteractivePrompt(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget).Prompt
+		schema = InteractiveResponseSchema(nil, capabilities, &state)
+	} else {
+		promptState := state
+		if s.localAutopilotPlan && capabilities.SimpleMotion {
+			// Move the bounded human timeline beside the decision; do not send
+			// it twice or grow the small model's context allocation.
+			promptState.UserRequests, promptState.UserRequestSecondsAgo = nil, nil
+		}
+		system = composeSystem(prompt, s.Memories, nil, capabilities, &promptState, s.ConversationContext, s.PromptBudget)
+	}
+	schema = withVibrationSchema(schema, capabilities, &state)
+	if !capabilities.Motion {
+		schema = nil
+	}
+	if s.localAutopilotPlan {
+		schema = withLocalPlanSchema(schema)
+	}
+	return system, schema
+}
+
 // Apply the same reply metadata gates after either generation attempt.
 func (s Service) finalizeLayeredResponse(response AssistantResponse, state MotionContext) AssistantResponse {
 	if !s.capabilities().MoodTracking {
@@ -198,7 +216,21 @@ func (s Service) finalizeLayeredResponse(response AssistantResponse, state Motio
 
 func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
 	capabilities := s.capabilities()
-	if capabilities.MotionMode == MotionModeLayered && capabilities.HostedMotion {
+	if s.localAutopilotPlan {
+		var err error
+		raw, err = takeLocalPlanNote(raw)
+		if err != nil {
+			return AssistantResponse{}, err
+		}
+	}
+	if capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+		var err error
+		raw, err = normalizeIntermediateLayeredReply(raw)
+		if err != nil {
+			return AssistantResponse{}, err
+		}
+	}
+	if capabilities.MotionMode == MotionModeLayered && capabilities.AdvancedMotion {
 		// Validate the original object before metadata/recall extraction can
 		// re-encode it and conceal duplicate fields from an unconstrained model.
 		var err error
@@ -206,6 +238,12 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 		if err != nil {
 			return AssistantResponse{}, err
 		}
+	}
+	var vibration *motion.VibrationSpec
+	var vibrationErr error
+	raw, vibration, vibrationErr = takeVibration(raw, capabilities, state)
+	if vibrationErr != nil {
+		return AssistantResponse{}, vibrationErr
 	}
 	nextCheck := 0
 	if autoTiming {
@@ -219,19 +257,33 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 	if err == nil {
 		err = s.authorizeLayeredReply(&response, next, changed, state)
 	}
+	if err == nil && vibration != nil {
+		if response.Motion == nil {
+			response.Motion = &MotionCommand{Action: MotionActionNone}
+		}
+		response.Motion.Vibration = vibration
+	}
 	response.nextCheckSeconds = nextCheck
 	return response, err
 }
 
-func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind AutopilotKind, request Request) (AutopilotResponse, error) {
+func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind AutopilotKind, request Request, localPlan bool) (AutopilotResponse, error) {
 	capabilities := s.Capabilities
 	capabilities.AutoTiming = s.autoTiming(kind)
 	service := Service{Provider: s.Provider, Prompt: s.Prompt, Model: s.Model, MaxTokens: s.MaxTokens,
 		ReasoningMode: s.ReasoningMode, ReasoningBudgetTokens: s.ReasoningBudgetTokens, Memories: s.Memories,
 		MotionContext: s.MotionContext, ConversationContext: s.ConversationContext, Capabilities: &capabilities, TrustedMotionInput: true,
 		AutonomousTemperature: s.Temperature, PromptBudget: s.PromptBudget}
+	service.localAutopilotPlan = kind == AutopilotKindMotion && localPlan
+	if service.localAutopilotPlan {
+		service.MaxTokens = localPlanningTokens(service.MaxTokens)
+		service.PromptBudget.MaxOutputTokens = max(service.PromptBudget.MaxOutputTokens, service.MaxTokens)
+	}
 	if kind == AutopilotKindMotion {
 		continuation := LayeredContinuationMessage()
+		if capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+			continuation = strings.ReplaceAll(continuation, `"edits":{}`, `"edits":[]`)
+		}
 		if s.Capabilities.MotionMode == MotionModeCreativeV2 {
 			continuation = CreativeV2ContinuationMessage()
 		}
@@ -251,7 +303,7 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 	if kind == AutopilotKindMotion && command != nil && s.MotionContext != nil {
 		relaxUnchosenAccents(s.MotionContext.Layered, command.Layered)
 	}
-	if command != nil {
+	if command != nil && command.Layered != nil {
 		command.Action = MotionActionUpdate
 	}
 	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled",

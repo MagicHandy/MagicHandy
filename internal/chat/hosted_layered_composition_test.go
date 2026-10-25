@@ -70,7 +70,7 @@ func TestHostedLayeredCompositionDiscriminatorsAndFirstPassExamples(t *testing.T
 func TestHostedLayeredGeometryCompositionRetainsDomainResults(t *testing.T) {
 	limits := config.DefaultSettings().Motion
 	current := DefaultLayeredScore(25)
-	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true}
+	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true}
 	state := MotionContext{Running: true, Autopilot: true, Layered: &current, MotionMode: MotionModeLayered}
 	schema := InteractiveResponseSchema(nil, caps, &state)
 	for _, geometry := range layeredGeometries {
@@ -153,7 +153,7 @@ func TestHostedLayeredManualCompositionKeepsCustomShapeFreedom(t *testing.T) {
 func TestHostedLayeredRecallIsOfferedForEveryComposition(t *testing.T) {
 	current := DefaultLayeredScore(25)
 	state := MotionContext{Running: true, MotionMode: MotionModeLayered, Layered: &current, EarlierScores: []EarlierScore{{Flow: current}}}
-	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true}
+	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true}
 	var root map[string]any
 	if err := json.Unmarshal(InteractiveResponseSchema(nil, caps, &state), &root); err != nil {
 		t.Fatal(err)

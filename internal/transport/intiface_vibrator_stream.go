@@ -7,13 +7,15 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/companion"
-	"github.com/mapledaemon/MagicHandy/internal/vibration"
 )
 
 // vibratorSend is one composed level command.
 type vibratorSend struct {
 	deviceIndex uint32
 	generation  uint64
+	epoch       uint64
+	serial      uint64
+	run         uint64
 	steps       []int
 	fields      map[string]any
 }
@@ -39,6 +41,9 @@ func (v *IntifaceVibrator) MotionTransport() (Transport, error) {
 // AppendPoints stores the stream's neutral points. The owner only samples
 // them; it never reshapes the frame.
 func (v *IntifaceVibrator) AppendPoints(ctx context.Context, command AppendPointsCommand) (CommandResult, error) {
+	return v.appendPoints(ctx, command, 0)
+}
+func (v *IntifaceVibrator) appendPoints(ctx context.Context, command AppendPointsCommand, epoch uint64) (CommandResult, error) {
 	recorded := Command{Kind: CommandKindPointsAdd, PointsAdd: &command}
 	if err := ctx.Err(); err != nil {
 		return v.record(recorded, err)
@@ -47,12 +52,45 @@ func (v *IntifaceVibrator) AppendPoints(ctx context.Context, command AppendPoint
 	for _, point := range command.Points {
 		points = append(points, companion.Point{TimeMillis: point.TimeMillis, Position: point.PositionPercent})
 	}
-	v.mu.Lock()
-	if command.StreamID != v.stream.id {
-		v.stream.timeline.Reset()
-		v.stream.id = command.StreamID
+	envelope, err := vibrationFrameTimeline(command.Vibration)
+	if err != nil {
+		return v.record(recorded, err)
 	}
-	err := v.stream.timeline.Append(points)
+	if command.Vibration != nil {
+		v.session.writeMu.Lock()
+		defer v.session.writeMu.Unlock()
+	}
+	v.mu.Lock()
+	if epoch != 0 && v.epoch != epoch {
+		v.mu.Unlock()
+		return CommandResult{}, errVibratorStale
+	}
+	newStream := command.StreamID != v.stream.id
+	if !newStream && command.Vibration != nil && command.Vibration.Revision < v.stream.vibrationRevision {
+		v.mu.Unlock()
+		return v.record(recorded, errPacerSuperseded)
+	}
+	next := v.stream.timeline
+	if newStream {
+		if len(command.Points) == 0 {
+			v.mu.Unlock()
+			return v.record(recorded, errVibratorStale)
+		}
+		next = companion.Timeline{}
+	}
+	if len(points) > 0 {
+		err = next.Append(points)
+	}
+	if err == nil {
+		if newStream {
+			v.stream.vibration = companion.Timeline{}
+			v.stream.vibrationRevision = 0
+			v.stream.independent = false
+			v.stream.id = command.StreamID
+		}
+		v.stream.timeline = next
+		v.applyVibrationFrameLocked(command.Vibration, envelope)
+	}
 	v.mu.Unlock()
 	return v.record(recorded, err)
 }
@@ -70,6 +108,11 @@ func (v *IntifaceVibrator) PlayAligned(ctx context.Context, command PlayCommand,
 }
 
 func (v *IntifaceVibrator) play(ctx context.Context, command PlayCommand, start time.Time) (CommandResult, error) {
+	return v.playBound(ctx, command, start, 0)
+}
+func (v *IntifaceVibrator) playBound(ctx context.Context, command PlayCommand, start time.Time, epoch uint64) (CommandResult, error) {
+	v.lifecycleMu.Lock()
+	defer v.lifecycleMu.Unlock()
 	recorded := Command{Kind: CommandKindPointsPlay, PointsPlay: &command}
 	if err := ctx.Err(); err != nil {
 		return v.record(recorded, err)
@@ -80,6 +123,8 @@ func (v *IntifaceVibrator) play(ctx context.Context, command PlayCommand, start 
 	v.mu.Lock()
 	var err error
 	switch {
+	case epoch != 0 && v.epoch != epoch:
+		err = errVibratorStale
 	case !connected:
 		err = errors.New("Intiface connection is stale")
 	case !v.selection.selected:
@@ -93,15 +138,19 @@ func (v *IntifaceVibrator) play(ctx context.Context, command PlayCommand, start 
 		} else {
 			v.stream.origin.StartAt(start)
 		}
-		v.stream.generation++
+		v.invalidateOutputLocked()
+		v.runGeneration++
 		v.stream.playing = true
 		v.stream.coverage.Reset()
 		v.stream.renderer.Restart(float64(command.StartTimeMillis))
 		v.stream.state = companion.StateCovered
 		v.testUntil = time.Time{}
+		v.testDeadline.Store(0)
+		v.stats.lastError = ""
 		v.playingFlag.Store(true)
 		v.stalled.Store(false)
 		v.lastPace.Store(v.clock().UnixNano())
+		v.addEventLocked("play", 0, nil)
 	}
 	v.mu.Unlock()
 	return v.record(recorded, err)
@@ -111,8 +160,18 @@ func (v *IntifaceVibrator) play(ctx context.Context, command PlayCommand, start 
 // then StopDeviceCmd. Pause arrives here too. A Stop that cannot be
 // confirmed fails the session, because the server then stops its devices.
 func (v *IntifaceVibrator) Stop(ctx context.Context, command StopCommand) (CommandResult, error) {
+	return v.stopBound(ctx, command, 0)
+}
+func (v *IntifaceVibrator) stopBound(ctx context.Context, command StopCommand, epoch uint64) (CommandResult, error) {
+	v.lifecycleMu.Lock()
+	defer v.lifecycleMu.Unlock()
 	v.mu.Lock()
+	if epoch != 0 && v.epoch != epoch {
+		v.mu.Unlock()
+		return CommandResult{OK: true, Status: "connection_retired"}, nil
+	}
 	v.invalidateLocked("idle")
+	v.addEventLocked("stop", 0, nil)
 	selection := v.selectionSnapshotLocked()
 	v.mu.Unlock()
 	recorded := Command{Kind: CommandKindStop, Stop: &command}
@@ -144,9 +203,13 @@ func (v *IntifaceVibrator) PlaybackStartTime() time.Time {
 
 // AlignPlaybackStart re-anchors a playing stream to another owner's start.
 func (v *IntifaceVibrator) AlignPlaybackStart(start time.Time) {
+	v.alignPlaybackStart(start, 0)
+}
+
+func (v *IntifaceVibrator) alignPlaybackStart(start time.Time, epoch uint64) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-	if v.stream.playing && !start.IsZero() {
+	if (epoch == 0 || v.epoch == epoch) && v.stream.playing && !start.IsZero() {
 		v.stream.origin.StartAt(start)
 	}
 }
@@ -229,186 +292,9 @@ func (v *IntifaceVibrator) paceOnce(ctx context.Context) {
 	}
 }
 
-// composeLocked picks this tick's level and returns a command only when a
-// motor's step changes. A nonzero level waits for the command in flight and
-// for the device's timing gap; a silent level is always sent at once.
-func (v *IntifaceVibrator) composeLocked(now time.Time) (vibratorSend, bool) {
-	if !v.selection.selected {
-		return vibratorSend{}, false
-	}
-	level, generation := v.targetLocked(now)
-	if v.stalled.Load() {
-		// The watchdog stopped this run: only silence until the next Play.
-		level, generation = 0, 0
-	}
-	v.level = level
-	silent := level <= 0
-	if !silent && (v.inFlight || (!v.lastSent.IsZero() && now.Sub(v.lastSent) < v.sendSpacingLocked())) {
-		return vibratorSend{}, false
-	}
-	send := vibratorSend{deviceIndex: v.selection.deviceIndex, generation: generation, steps: make([]int, len(v.selection.motors))}
-	changed := false
-	levels := make([]scalarLevel, 0, len(v.selection.motors))
-	for index, motor := range v.selection.motors {
-		step := vibration.Quantize(level, motor.StepCount, motor.last, v.config.Ceiling)
-		send.steps[index] = step
-		changed = changed || step != motor.last
-		levels = append(levels, scalarLevel{index: motor.Index, level: float64(step) / float64(motor.StepCount)})
-	}
-	if !changed {
-		return vibratorSend{}, false
-	}
-	if silent {
-		send.generation = 0
-	}
-	send.fields = encodeScalarCmd(send.deviceIndex, vibratorActuatorType, levels)
-	for index := range v.selection.motors {
-		v.selection.motors[index].last = send.steps[index]
-	}
-	v.inFlight = true
-	v.lastSent = now
-	v.stats.commanded++
-	return send, true
-}
-
-// targetLocked returns the level for this tick and the generation that may
-// carry it: playback levels are fenced by the playback generation, a test
-// and silence by none.
-func (v *IntifaceVibrator) targetLocked(now time.Time) (float64, uint64) {
-	if !v.testUntil.IsZero() {
-		if now.Before(v.testUntil) {
-			return min(v.intensity, vibratorTestCeiling), v.testGeneration
-		}
-		v.testUntil = time.Time{}
-		return 0, 0
-	}
-	if !v.stream.playing {
-		return 0, 0
-	}
-	at := v.stream.origin.StreamMillis(now) - float64(v.config.OffsetMillis)
-	drive, covered := v.stream.renderer.Drive(&v.stream.timeline, at)
-	v.stream.state = v.stream.coverage.Observe(now, covered)
-	v.stream.timeline.Prune(int64(at) - vibration.SpeedWindowMillis - vibratorPruneMillis)
-	if v.stream.state == companion.StateStarved {
-		// Stop and report: the engine reads the state and recovers.
-		v.stream.playing = false
-		v.playingFlag.Store(false)
-		return 0, 0
-	}
-	return vibration.Output(drive, v.config.Minimum, v.intensity), v.stream.generation
-}
-
-// send writes one level command and correlates its acknowledgement without
-// blocking the pacer. A missing or rejected acknowledgement makes the
-// vibrator unhealthy and stops the device.
-func (v *IntifaceVibrator) send(ctx context.Context, send vibratorSend) {
-	request, err := v.session.startRequestFor(ctx, v, buttplugScalarCmd, send.fields, send.generation, nil)
-	if err != nil {
-		// Nothing reached the wire: a superseded generation, the emergency
-		// barrier, a full request window or a lost session. The next tick
-		// recomputes the level; a broken socket already failed the session.
-		v.finishSend(send, false)
-		return
-	}
-	v.session.workerMu.Lock()
-	if v.session.workersClosed {
-		v.session.workerMu.Unlock()
-		v.finishSend(send, false)
-		return
-	}
-	v.session.wg.Add(1)
-	v.session.workerMu.Unlock()
-	go func() {
-		defer v.session.wg.Done()
-		message, err := v.session.awaitResponse(ctx, request)
-		if err == nil && message.kind != "Ok" {
-			err = fmt.Errorf("Intiface rejected ScalarCmd: %s", message.kind)
-		}
-		v.finishSend(send, err == nil)
-		if err != nil && ctx.Err() == nil {
-			v.failSend(send, err, errors.Is(err, errIntifaceResponseTime))
-		}
-	}()
-}
-
-func (v *IntifaceVibrator) finishSend(send vibratorSend, acknowledged bool) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	v.inFlight = false
-	if acknowledged {
-		v.stats.acked++
-		return
-	}
-	for index := range v.selection.motors {
-		if v.selection.deviceIndex == send.deviceIndex {
-			v.selection.motors[index].last = -1
-		}
-	}
-}
-
-func (v *IntifaceVibrator) failSend(send vibratorSend, cause error, timedOut bool) {
-	v.mu.Lock()
-	if timedOut {
-		v.stats.timeouts++
-	} else {
-		v.stats.rejected++
-	}
-	v.stats.lastError = cause.Error()
-	selection := v.selectionSnapshotLocked()
-	current := selection.selected && selection.deviceIndex == send.deviceIndex
-	if current {
-		v.invalidateLocked("stale")
-	}
-	v.mu.Unlock()
-	if current {
-		ctx, cancel := context.WithTimeout(context.Background(), vibratorStopTimeout)
-		_ = v.silence(ctx, selection)
-		cancel()
-	}
-}
-
-// silence sends a zero level for the selected motors and StopDeviceCmd. The
-// zero may be refused behind an emergency barrier or a closing session,
-// where StopAllDevices or StopDeviceCmd still reaches the device; only an
-// unconfirmed StopDeviceCmd fails the session.
-func (v *IntifaceVibrator) silence(ctx context.Context, selection vibratorSelection) error {
-	err := v.silenceWithoutFailure(ctx, selection)
-	if err != nil {
-		v.session.setSessionFailure(fmt.Errorf("Intiface vibrator Stop could not be confirmed: %w", err))
-	}
-	return err
-}
-
-func (v *IntifaceVibrator) silenceWithoutFailure(ctx context.Context, selection vibratorSelection) error {
-	levels := make([]scalarLevel, 0, len(selection.motors))
-	for _, motor := range selection.motors {
-		levels = append(levels, scalarLevel{index: motor.Index})
-	}
-	zeroCtx, cancel := context.WithTimeout(ctx, vibratorStopTimeout)
-	if v.session.requestOK(zeroCtx, buttplugScalarCmd, encodeScalarCmd(selection.deviceIndex, vibratorActuatorType, levels)) == nil {
-		v.markSilent(selection.deviceIndex)
-	}
-	cancel()
-	stopCtx, cancel := context.WithTimeout(ctx, vibratorStopTimeout)
-	defer cancel()
-	return v.session.requestOK(stopCtx, "StopDeviceCmd", map[string]any{"DeviceIndex": selection.deviceIndex})
-}
-
-// markSilent records a confirmed zero, so the pacer does not repeat it. An
-// unconfirmed zero leaves the steps unknown and the pacer sends it again.
-func (v *IntifaceVibrator) markSilent(deviceIndex uint32) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	if !v.selection.selected || v.selection.deviceIndex != deviceIndex {
-		return
-	}
-	for index := range v.selection.motors {
-		v.selection.motors[index].last = 0
-	}
-}
-
 // watchdog stops the device when playback runs on a stalled pacer. It reads
-// only atomics, so a pacer stuck holding the vibrator lock cannot block it.
+// atomics before Stop, so a pacer stuck holding the vibrator lock cannot
+// prevent the hardware Stop. Post-Stop bookkeeping takes the owner lock.
 func (v *IntifaceVibrator) watchdog(ctx context.Context) {
 	defer v.session.wg.Done()
 	ticker := time.NewTicker(vibratorWatchdogTick)
@@ -419,16 +305,32 @@ func (v *IntifaceVibrator) watchdog(ctx context.Context) {
 			return
 		case <-ticker.C:
 		}
-		if v.paceAlive(v.clock()) || v.stalled.Load() {
-			continue
+		v.stopStalledOutput(ctx)
+	}
+}
+
+func (v *IntifaceVibrator) stopStalledOutput(ctx context.Context) {
+	v.lifecycleMu.Lock()
+	defer v.lifecycleMu.Unlock()
+	if v.paceAlive(v.clock()) || v.stalled.Load() {
+		return
+	}
+	// Admission reads this flag under the writer lock, including for an
+	// already-composed command. A new Play/selection waits for this Stop.
+	v.stalled.Store(true)
+	stopCtx, cancel := context.WithTimeout(ctx, vibratorStopTimeout)
+	err := v.session.requestOK(stopCtx, "StopDeviceCmd", map[string]any{"DeviceIndex": v.watchedIndex.Load()})
+	cancel()
+	if err != nil && ctx.Err() == nil {
+		v.session.setSessionFailure(fmt.Errorf("Intiface vibrator watchdog Stop could not be confirmed: %w", err))
+	} else if err == nil {
+		v.mu.Lock()
+		v.addEventLocked("watchdog_stop", 0, nil)
+		v.level = 0
+		for index := range v.selection.motors {
+			v.selection.motors[index].written = 0
 		}
-		v.stalled.Store(true)
-		stopCtx, cancel := context.WithTimeout(ctx, vibratorStopTimeout)
-		err := v.session.requestOK(stopCtx, "StopDeviceCmd", map[string]any{"DeviceIndex": v.watchedIndex.Load()})
-		cancel()
-		if err != nil && ctx.Err() == nil {
-			v.session.setSessionFailure(fmt.Errorf("Intiface vibrator watchdog Stop could not be confirmed: %w", err))
-		}
+		v.mu.Unlock()
 	}
 }
 
@@ -448,21 +350,21 @@ func (r *vibratorRun) AppendPoints(ctx context.Context, command AppendPointsComm
 	if !r.current() {
 		return CommandResult{}, errVibratorStale
 	}
-	return r.owner.AppendPoints(ctx, command)
+	return r.owner.appendPoints(ctx, command, r.epoch)
 }
 
 func (r *vibratorRun) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
 	if !r.current() {
 		return CommandResult{}, errVibratorStale
 	}
-	return r.owner.Play(ctx, command)
+	return r.owner.playBound(ctx, command, time.Time{}, r.epoch)
 }
 
 func (r *vibratorRun) PlayAligned(ctx context.Context, command PlayCommand, start time.Time) (CommandResult, error) {
 	if !r.current() {
 		return CommandResult{}, errVibratorStale
 	}
-	return r.owner.PlayAligned(ctx, command, start)
+	return r.owner.playBound(ctx, command, start, r.epoch)
 }
 
 // Stop on a retired binding is a no-op: the device it named was already
@@ -471,7 +373,7 @@ func (r *vibratorRun) Stop(ctx context.Context, command StopCommand) (CommandRes
 	if !r.current() {
 		return CommandResult{OK: true, Status: "connection_retired"}, nil
 	}
-	return r.owner.Stop(ctx, command)
+	return r.owner.stopBound(ctx, command, r.epoch)
 }
 
 func (r *vibratorRun) SetStrokeWindow(ctx context.Context, command StrokeWindowCommand) (CommandResult, error) {
@@ -493,14 +395,14 @@ func (r *vibratorRun) MotionTimingCapabilities() MotionTimingCapabilities {
 }
 
 func (r *vibratorRun) PlaybackStartTime() time.Time {
-	if !r.current() {
+	r.owner.mu.Lock()
+	defer r.owner.mu.Unlock()
+	if r.owner.epoch != r.epoch {
 		return time.Time{}
 	}
-	return r.owner.PlaybackStartTime()
+	return r.owner.stream.origin.Anchor()
 }
 
 func (r *vibratorRun) AlignPlaybackStart(start time.Time) {
-	if r.current() {
-		r.owner.AlignPlaybackStart(start)
-	}
+	r.owner.alignPlaybackStart(start, r.epoch)
 }

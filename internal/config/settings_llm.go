@@ -11,6 +11,7 @@ type LLMSettings struct {
 	MotionPlanner               MotionPlannerSettings  `json:"motion_planner"`
 	MotionReviewer              MotionReviewerSettings `json:"motion_reviewer"`
 	Provider                    string                 `json:"provider"`
+	LocalCapabilityLevel        string                 `json:"local_capability_level,omitempty"`
 	LlamaCPPMode                string                 `json:"llama_cpp_mode"`
 	ManagedLoadPolicy           string                 `json:"managed_load_policy"`
 	LlamaCPPBaseURL             string                 `json:"llama_cpp_base_url"`

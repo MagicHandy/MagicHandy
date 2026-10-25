@@ -32,6 +32,7 @@ type LinkedParticipant struct {
 // and each telemetry-capable slider prepares independently. A fault latches, so
 // reconnecting cannot silently rejoin an existing run.
 type FanOut struct {
+	vibrationOnly     bool
 	participants      []LinkedParticipant
 	mu                sync.Mutex
 	playing           bool
@@ -111,6 +112,7 @@ func (f *FanOut) Stop(ctx context.Context, command StopCommand) (CommandResult, 
 	f.mu.Lock()
 	command.Fault = command.Fault || f.fault != nil && !f.faultStopped
 	f.playing = false
+	f.vibrationOnly = false
 	f.playbackStartedAt = time.Time{}
 	f.mu.Unlock()
 	results := make([]CommandResult, len(f.participants))
@@ -156,19 +158,38 @@ func (f *FanOut) SetStrokeWindow(ctx context.Context, command StrokeWindowComman
 
 // AppendPoints sends the shared engine's points to each active participant.
 func (f *FanOut) AppendPoints(ctx context.Context, command AppendPointsCommand) (CommandResult, error) {
-	return f.dispatchParallel(ctx, func(t Transport) (CommandResult, error) { return t.AppendPoints(ctx, command) })
+	if len(command.Points) > 0 {
+		f.mu.Lock()
+		f.vibrationOnly = command.VibrationOnly
+		f.mu.Unlock()
+	}
+	return f.dispatchSelected(ctx, command.Vibration != nil && len(command.Points) == 0, func(t Transport) (CommandResult, error) { return t.AppendPoints(ctx, command) })
 }
 
 // Independent device I/O shares the same frame and runs concurrently, so each
 // extra Cloud device does not add another round trip to every append. All writes
 // finish before rollback/return; no detached command can outlive this operation.
 func (f *FanOut) dispatchParallel(ctx context.Context, send func(Transport) (CommandResult, error)) (CommandResult, error) {
+	return f.dispatchSelected(ctx, false, send)
+}
+
+func (f *FanOut) dispatchSelected(ctx context.Context, scalarOnly bool, send func(Transport) (CommandResult, error)) (CommandResult, error) {
 	started := time.Now()
 	f.mu.Lock()
-	fault, retired := f.fault, append([]bool(nil), f.retired...)
+	fault, retired := f.fault, f.inactiveSnapshotLocked()
 	f.mu.Unlock()
 	if fault != nil {
 		return CommandResult{}, fault
+	}
+	if scalarOnly {
+		active := false
+		for index, p := range f.participants {
+			retired[index] = retired[index] || p.ID != "vibrator"
+			active = active || !retired[index]
+		}
+		if !active {
+			return CommandResult{}, ErrVibrationUnavailable
+		}
 	}
 	results := make([]CommandResult, len(f.participants))
 	errs := make([]error, len(f.participants))
@@ -188,6 +209,9 @@ func (f *FanOut) dispatchParallel(ctx context.Context, send func(Transport) (Com
 			continue
 		}
 		if err := errs[index]; err != nil {
+			if scalarOnly && ctx.Err() != nil {
+				return results[index], ctx.Err()
+			}
 			if f.retire(ctx, index, err) {
 				continue
 			}
@@ -207,7 +231,8 @@ func (f *FanOut) dispatchParallel(ctx context.Context, send func(Transport) (Com
 func (f *FanOut) Play(ctx context.Context, command PlayCommand) (CommandResult, error) {
 	started := time.Now()
 	f.mu.Lock()
-	fault, retired := f.fault, append([]bool(nil), f.retired...)
+	f.vibrationOnly = command.VibrationOnly
+	fault, retired := f.fault, f.inactiveSnapshotLocked()
 	f.mu.Unlock()
 	if fault != nil {
 		return CommandResult{}, fault
@@ -306,7 +331,7 @@ func (f *FanOut) retire(ctx context.Context, index int, cause error) bool {
 func (f *FanOut) healthyOthersLocked(index int) int {
 	count := 0
 	for other, retired := range f.retired {
-		if other != index && !retired {
+		if other != index && !retired && (!f.vibrationOnly || f.participants[other].ID == "vibrator") {
 			count++
 		}
 	}
@@ -348,11 +373,13 @@ func (f *FanOut) Diagnostics() TransportDiagnostics {
 	for index, participant := range f.participants {
 		states[index] = participant.Transport.Diagnostics()
 		latency = max(latency, states[index].LastLatencyMillis)
-		stopping = stopping || index > 0 && states[index].PlaybackState == "stopping"
 	}
 	f.mu.Lock()
-	playing, fault, retired := f.playing, f.fault, append([]bool(nil), f.retired...)
+	playing, fault, retired := f.playing, f.fault, f.inactiveSnapshotLocked()
 	f.mu.Unlock()
+	for index, state := range states {
+		stopping = stopping || !retired[index] && state.PlaybackState == "stopping"
+	}
 	if fault == nil && playing && !stopping {
 		for index, state := range states {
 			if retired[index] {
@@ -368,6 +395,10 @@ func (f *FanOut) Diagnostics() TransportDiagnostics {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	return f.diagnosticSummaryLocked(states, latency)
+}
+
+func (f *FanOut) diagnosticSummaryLocked(states []TransportDiagnostics, latency int64) TransportDiagnostics {
 	if len(states) == 0 {
 		return TransportDiagnostics{}
 	}
@@ -375,7 +406,7 @@ func (f *FanOut) Diagnostics() TransportDiagnostics {
 	reported := -1
 	connected := true
 	for index, state := range states {
-		if f.retired[index] {
+		if f.retired[index] || (f.vibrationOnly && f.participants[index].ID != "vibrator") {
 			continue
 		}
 		if reported < 0 {
@@ -456,4 +487,16 @@ func timingOf(owner Transport) MotionTimingCapabilities {
 		return provider.MotionTimingCapabilities()
 	}
 	return MotionTimingCapabilities{}
+}
+
+// Only dispatch/health snapshots exclude idle outputs; retired remains a fault
+// latch and global Stop still visits every configured participant.
+func (f *FanOut) inactiveSnapshotLocked() []bool {
+	result := append([]bool(nil), f.retired...)
+	if f.vibrationOnly {
+		for index, p := range f.participants {
+			result[index] = result[index] || p.ID != "vibrator"
+		}
+	}
+	return result
 }

@@ -46,6 +46,9 @@ type CatalogModel struct {
 	// Default marks the model the prompts are tuned against; setup chooses it
 	// when the GPU's memory cannot be read.
 	Default bool `json:"default"`
+	// RecommendedCapability is a setup default, never an override of a saved
+	// or explicit user choice. It is separate from the GPU fit recommendation.
+	RecommendedCapability string `json:"recommended_capability,omitempty"`
 }
 
 // CatalogHardware carries the GPU facts a recommendation needs.
@@ -86,9 +89,10 @@ var curatedCatalog = []CatalogModel{
 		SourceURL:     "https://ollama.com/n0404n0404/gemma-4-12b-it-heretic-b9a462",
 		DownloadURL: ollamaRegistryBlobBase + "n0404n0404/gemma-4-12b-it-heretic-b9a462/blobs/" +
 			"sha256:239ec362963977a0dc5de2402c71de39c1d96b2f6ef73d944c01f47281a038c2",
-		VRAMMiB:    8400,
-		MinVRAMMiB: 10240,
-		Default:    true,
+		VRAMMiB:               8400,
+		MinVRAMMiB:            10240,
+		Default:               true,
+		RecommendedCapability: "intermediate",
 	},
 	{
 		ID:            "gemma-4-12b-qat-heretic-v3-q4-0",
@@ -105,8 +109,9 @@ var curatedCatalog = []CatalogModel{
 		SourceURL:     huggingFaceBase + "OS-Software/gemma-4-12B-it-qat-q4_0-uncensored-heretic-v3-GGUF",
 		DownloadURL: huggingFaceBase + "OS-Software/gemma-4-12B-it-qat-q4_0-uncensored-heretic-v3-GGUF/resolve/" +
 			"7e1f9bc1a2056f68a3307d88e76e87ee7588bee6/gemma-4-12B-it-qat-q4_0-uncensored-heretic-v3-Q4_0.gguf",
-		VRAMMiB:    7766,
-		MinVRAMMiB: 10240,
+		VRAMMiB:               7766,
+		MinVRAMMiB:            10240,
+		RecommendedCapability: "intermediate",
 	},
 	{
 		ID:            "gemma-4-e4b-qat-heretic-q4-0",
@@ -123,8 +128,9 @@ var curatedCatalog = []CatalogModel{
 		SourceURL:     huggingFaceBase + "HTNZ555/gemma-4-E4B-it-heretic-QAT-GGUF",
 		DownloadURL: huggingFaceBase + "HTNZ555/gemma-4-E4B-it-heretic-QAT-GGUF/resolve/" +
 			"5b3ddc78cce49de4ad31e827b851797eb2498ad9/gemma-4-E4B-it-heretic-QAT-UD-Q4_K_XL.gguf",
-		VRAMMiB:    3446,
-		MinVRAMMiB: 6144,
+		VRAMMiB:               3446,
+		MinVRAMMiB:            6144,
+		RecommendedCapability: "simple",
 	},
 }
 

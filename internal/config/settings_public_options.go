@@ -2,10 +2,11 @@ package config
 
 func publicSettingsOptionHints() PublicSettingsOptionHints {
 	return withFreestyleOptionHints(PublicSettingsOptionHints{
-		DeviceOutputs:        []string{DeviceOutputNone, DeviceOutputHandy, DeviceOutputCoyote, DeviceOutputHandyCoyote},
-		EstimFollowModes:     []string{EstimFollowStroke, EstimFollowSpeed, EstimFollowPosition},
-		VibrationFollowModes: []string{VibrationFollowSpeed, VibrationFollowDepth, VibrationFollowSteady},
-		HSPDispatchOwners:    handyDispatchOwners(),
+		LocalModelCapabilities: ModelCapabilityOptions(),
+		DeviceOutputs:          []string{DeviceOutputNone, DeviceOutputHandy, DeviceOutputCoyote, DeviceOutputHandyCoyote},
+		EstimFollowModes:       []string{EstimFollowStroke, EstimFollowSpeed, EstimFollowPosition},
+		VibrationFollowModes:   []string{VibrationFollowSpeed, VibrationFollowDepth, VibrationFollowSteady},
+		HSPDispatchOwners:      handyDispatchOwners(),
 		APIApplicationIDSources: []string{
 			ApplicationIDSourceBundled,
 			ApplicationIDSourceDeveloperOverride,

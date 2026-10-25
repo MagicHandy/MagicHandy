@@ -244,12 +244,12 @@ export function AutopilotControl() {
   }
 
   const preferences = state?.settings?.autopilot;
-  // Auto timing is honored only when the backend routes Autopilot planning to a
-  // hosted model, and prepared decisions only for an external planner, so the
-  // switches are offered only there.
-  const plannerRoute = state?.settings?.model_routing?.autopilot?.kind;
-  const hostedPlanner = plannerRoute === "hosted";
-  const externalPlanner = hostedPlanner || plannerRoute === "decisions";
+  // Saved backend capabilities follow the planning role, independently of
+  // provider. Kind fallback supports snapshots from earlier app versions.
+  const plannerRoute = state?.settings?.model_routing?.autopilot;
+  const autoTimingAvailable = plannerRoute?.features?.auto_timing ?? plannerRoute?.kind === "hosted";
+  const prepareAvailable = plannerRoute?.features?.prepare_decisions ?? (plannerRoute?.kind === "hosted" || plannerRoute?.kind === "decisions");
+  const intermediatePlanningAvailable = plannerRoute?.features?.intermediate_planning === true;
   const resetBuildup = async () => {
     try {
       await api.resetAutopilotArc();
@@ -315,8 +315,9 @@ export function AutopilotControl() {
       {preferences && (
         <AutopilotPreferences
           value={preferences}
-          hostedPlanner={hostedPlanner}
-          externalPlanner={externalPlanner}
+          autoTimingAvailable={autoTimingAvailable}
+          prepareAvailable={prepareAvailable}
+          intermediatePlanningAvailable={intermediatePlanningAvailable}
           disabled={locked}
           onSaved={() => refresh()}
           onError={(error) => show(errorMessage(error), "error")}
@@ -328,15 +329,17 @@ export function AutopilotControl() {
 
 function AutopilotPreferences({
   value,
-  hostedPlanner,
-  externalPlanner,
+  autoTimingAvailable,
+  prepareAvailable,
+  intermediatePlanningAvailable,
   disabled,
   onSaved,
   onError,
 }: {
   value: AutopilotSettings;
-  hostedPlanner: boolean;
-  externalPlanner: boolean;
+  autoTimingAvailable: boolean;
+  prepareAvailable: boolean;
+  intermediatePlanningAvailable: boolean;
   disabled: boolean;
   onSaved: () => void;
   onError: (error: unknown) => void;
@@ -344,6 +347,7 @@ function AutopilotPreferences({
   const [draft, setDraft] = useState(value);
   const [saving, setSaving] = useState(false);
   const speechLabelId = useId();
+  const planningHintId = useId();
   const draftRef = useRef(value);
   const editingRef = useRef(false);
   const savingRef = useRef(false);
@@ -440,7 +444,23 @@ function AutopilotPreferences({
         })}
       />
       </div>
-      {hostedPlanner && (
+      {intermediatePlanningAvailable && (
+        <div className="control-row control-row-stack autopilot-auto-timing">
+          <label className="toggle-line">
+            <span className="toggle">
+              <input type="checkbox" checked={draft.intermediate_planning !== false}
+                aria-describedby={planningHintId}
+                onChange={(event) => void save({ ...draftRef.current, intermediate_planning: event.target.checked })} />
+              <span className="track" aria-hidden="true" />
+            </span>
+            <span>{t("Extra planning")}</span>
+          </label>
+          <p className="autopilot-timing-hint" id={planningHintId}>
+            {t("Helps follow your constraints. Added 0.4–0.7 s per decision in Gemma 12B tests; timing varies by hardware. Turn off for faster planning.")}
+          </p>
+        </div>
+      )}
+      {autoTimingAvailable && (
         <div className="control-row control-row-stack autopilot-auto-timing">
           <label className="toggle-line">
             <span className="toggle">
@@ -458,7 +478,7 @@ function AutopilotPreferences({
           </p>
         </div>
       )}
-      {externalPlanner && (
+      {prepareAvailable && (
         <div className="control-row control-row-stack autopilot-auto-timing">
           <label className="toggle-line">
             <span className="toggle">

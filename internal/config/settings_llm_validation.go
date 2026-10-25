@@ -75,6 +75,15 @@ func validateLLMConnections(settings LLMSettings) error {
 }
 
 func validateLLMBehaviorSettings(settings LLMSettings) error {
+	if settings.LocalCapabilityLevel != "" && !oneOf(settings.LocalCapabilityLevel, ModelCapabilityLevels()...) {
+		return fmt.Errorf("unknown local model capability %q", settings.LocalCapabilityLevel)
+	}
+	if settings.LlamaCPPContextSize < MinimumLocalContext(settings.LocalCapabilityLevel) {
+		return fmt.Errorf("%s capability requires at least %d context tokens", settings.LocalCapabilityLevel, MinimumLocalContext(settings.LocalCapabilityLevel))
+	}
+	if settings.MaxOutputTokens < MinimumLocalOutput(settings.LocalCapabilityLevel) {
+		return fmt.Errorf("%s capability requires at least %d output tokens", settings.LocalCapabilityLevel, MinimumLocalOutput(settings.LocalCapabilityLevel))
+	}
 	if !oneOf(settings.ReasoningMode, LLMReasoningAuto, LLMReasoningOff) {
 		return fmt.Errorf("unknown LLM reasoning mode %q", settings.ReasoningMode)
 	}

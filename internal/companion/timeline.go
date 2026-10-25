@@ -74,6 +74,15 @@ func (t *Timeline) End() (int64, bool) {
 	return t.points[len(t.points)-1].TimeMillis, true
 }
 
+// Start reports the first retained point. Before it, a new stream has not
+// begun; callers must not mistake its preparation time for an exhausted tail.
+func (t *Timeline) Start() (int64, bool) {
+	if len(t.points) == 0 {
+		return 0, false
+	}
+	return t.points[0].TimeMillis, true
+}
+
 // Len reports the number of retained points.
 func (t *Timeline) Len() int {
 	return len(t.points)

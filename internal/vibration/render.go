@@ -86,9 +86,21 @@ func (r *Renderer) Restart(streamMillis float64) {
 // covered it. Uncovered time is silent: the owner reports starvation instead
 // of holding the last level.
 func (r *Renderer) Drive(timeline *companion.Timeline, streamMillis float64) (float64, bool) {
+	first, exists := timeline.Start()
+	if !exists {
+		r.primed = false
+		return 0, false
+	}
+	// Pre-roll and a positive timing offset precede the first point. There is
+	// no output yet, but the already-buffered stream is healthy. This does not
+	// forgive an exhausted tail or invent a position outside the frame.
+	if streamMillis < float64(first) && float64(first) <= r.fadeFrom {
+		r.primed = false
+		return 0, true
+	}
 	from := streamMillis
 	if r.profile.Follow == FollowSpeed {
-		from -= SpeedWindowMillis
+		from = math.Max(streamMillis-SpeedWindowMillis, r.fadeFrom)
 	}
 	if !timeline.Covers(from, streamMillis) {
 		r.primed = false
@@ -104,6 +116,23 @@ func (r *Renderer) Drive(timeline *companion.Timeline, streamMillis float64) (fl
 		return 0, true
 	}
 	return math.Min(drive, 1), true
+}
+
+// DriveEnvelope reads engine-sampled drive, keeping the same coverage and
+// startup fade. The conversion profile does not reshape an independent lane.
+func (r *Renderer) DriveEnvelope(timeline *companion.Timeline, at float64) (float64, bool) {
+	first, exists := timeline.Start()
+	if !exists {
+		return 0, false
+	}
+	if at < float64(first) && float64(first) <= r.fadeFrom {
+		return 0, true
+	}
+	value, covered := timeline.At(at)
+	if !covered {
+		return 0, false
+	}
+	return clamp(value/100*r.fade(at), 0, 1), true
 }
 
 func (r *Renderer) raw(timeline *companion.Timeline, streamMillis float64) float64 {
@@ -126,10 +155,11 @@ func (r *Renderer) raw(timeline *companion.Timeline, streamMillis float64) float
 // streamMillis, in full spans per second.
 func averageSpeed(timeline *companion.Timeline, streamMillis float64) float64 {
 	step := float64(SpeedWindowMillis) / speedSamples
-	previous, _ := timeline.At(streamMillis - SpeedWindowMillis)
+	first, _ := timeline.Start()
+	previous, _ := timeline.At(math.Max(streamMillis-SpeedWindowMillis, float64(first)))
 	travel := 0.0
 	for index := 1; index <= speedSamples; index++ {
-		position, _ := timeline.At(streamMillis - SpeedWindowMillis + step*float64(index))
+		position, _ := timeline.At(math.Max(streamMillis-SpeedWindowMillis+step*float64(index), float64(first)))
 		travel += math.Abs(position - previous)
 		previous = position
 	}

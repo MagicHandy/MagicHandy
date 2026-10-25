@@ -26,9 +26,9 @@ export function SetupChoiceGroup({ label, labelledBy, panel, className, children
 // A field row: the label and its explanation on the left, the control
 // (given the matching id and aria-describedby `${id}-hint`) on the right, or
 // under the label when `stack` is set for wide values such as URLs.
-export function FieldRow({ id, label, hint, stack, children }: { id: string; label: string; hint?: ReactNode; stack?: boolean; children: ReactNode }) {
+export function FieldRow({ id, label, badge, hint, stack, children }: { id: string; label: string; badge?: ReactNode; hint?: ReactNode; stack?: boolean; children: ReactNode }) {
   return <div className={stack ? "form-row form-row-stack" : "form-row"}>
-    <span className="form-row-label"><label htmlFor={id}><strong>{label}</strong></label>{hint && <small id={`${id}-hint`}>{hint}</small>}</span>
+    <span className="form-row-label">{badge ? <span className="form-row-title"><label htmlFor={id}><strong>{label}</strong></label>{badge}</span> : <label htmlFor={id}><strong>{label}</strong></label>}{hint && <small id={`${id}-hint`}>{hint}</small>}</span>
     {children}
   </div>;
 }

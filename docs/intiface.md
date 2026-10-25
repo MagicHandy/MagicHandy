@@ -122,7 +122,11 @@ Behavior and safety:
   removal send an explicit zero, because a vibrator keeps its last level.
   Stop also sends `StopDeviceCmd`. A rejected or missing response stops the
   vibrator and applies the linked failure policy. Emergency Stop also sets
-  the intensity back to 0.
+  the intensity back to 0. A new manual chat motion request can resume the
+  previously chosen intensity on that connection, within the current ceiling.
+  Questions and background planning cannot. **Keep vibration off**, reconnection
+  and reselection clear this permission. A later Stop still cancels an in-flight
+  request. See [ADR 0059](decisions/0059-manual-chat-resume-after-stop.md).
 - **Test** runs one second at the lower of the intensity and 25%, only while
   motion is paused.
 - **Keepalive.** When Intiface Central reports no ping timeout, the vibrator

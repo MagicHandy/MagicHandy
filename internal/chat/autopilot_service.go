@@ -80,10 +80,18 @@ type AutopilotService struct {
 	MotionContext       *MotionContext
 	ConversationContext *ConversationContext
 	Capabilities        Capabilities
+	// Off only for an explicit saved Intermediate preference. Default behavior
+	// preserves the tested note; Simple and Advanced ignore this switch.
+	DisableIntermediatePlanning bool
 }
 
 // Complete runs one autonomous decision, with one repair for local output.
 func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, request Request) (AutopilotResponse, error) {
+	localPlan := localDecisionNotes(s.Capabilities, s.DisableIntermediatePlanning)
+	// The grouped local dialect improved interactive edits, but degraded
+	// autonomous Layered composition. Keep its proven compact grammar there;
+	// the explicitly selected context/output allocation remains available.
+	s.Capabilities.IntermediateMotion = s.Capabilities.IntermediateMotion && s.Capabilities.MotionMode != MotionModeLayered
 	if s.Provider == nil {
 		return AutopilotResponse{}, errors.New("LLM provider is required")
 	}
@@ -95,7 +103,7 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 		return AutopilotResponse{}, err
 	}
 	if s.Capabilities.Motion && (s.Capabilities.MotionMode == MotionModeLayered || s.Capabilities.MotionMode == MotionModeCreativeV2) {
-		return s.completeLayeredAutopilot(ctx, kind, request)
+		return s.completeLayeredAutopilot(ctx, kind, request, localPlan)
 	}
 	if kind == AutopilotKindSpeech {
 		message += "\n" + autopilotSpeechDecisionInstruction

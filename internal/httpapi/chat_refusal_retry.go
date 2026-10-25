@@ -42,6 +42,7 @@ func (s *Server) retryDeclinedChat(ctx context.Context, stopSequence uint64, loc
 	}
 	turn.LLM = local
 	motionContext := s.chatTurnMotion(turn, promptContext.UserRequests, sessionID)
+	s.addManualVibrationResumeContext(ctx, &motionContext)
 	service.Provider, service.Model = provider, local.Model
 	service.Capabilities, service.MotionContext, service.SingleAttempt = &capabilities, &motionContext, true
 	service.MaxTokens = local.ChatMaxOutputTokens(effectiveReplyLength(local, promptContext.Persona))

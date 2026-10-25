@@ -41,6 +41,7 @@ const baseState = {
       llm_providers: ["llama_cpp", "ollama"],
       llama_cpp_modes: ["managed", "external"],
       llama_cpp_context_sizes: [16384, 32768, 65536, 131072],
+      local_model_capabilities: [{ level: "simple", minimum_context: 16384, minimum_output: 64 }, { level: "intermediate", minimum_context: 32768, minimum_output: 512 }, { level: "advanced", minimum_context: 65536, minimum_output: 1024 }],
       llm_reasoning_modes: ["off", "auto"],
       llm_max_output_tokens: [128, 256, 512, 1024],
       prompt_sets: ["default"],
@@ -100,13 +101,13 @@ const modelManagerFixture: LLMModelManagerSnapshot = {
     current: true,
     build_supported: true,
     supported_backends: ["auto", "cpu", "cuda"],
-    expected_version: "b11149",
-    version: "b11149",
+    expected_version: "b11533",
+    version: "b11533",
     commit: "c749cb041706647f460bb918cccc9d91995205ab",
     backend: "cpu",
     source: "built_from_source",
     built_at: "2026-07-11T00:00:00Z",
-    message: "Managed llama.cpp b11149 (cpu) is installed.",
+    message: "Managed llama.cpp b11533 (cpu) is installed.",
   },
 };
 
@@ -896,9 +897,13 @@ describe("app shell safety invariants", () => {
 
     const remove = await screen.findByRole("button", { name: /remove managed model/i });
     expect(remove).toBeDisabled();
-    fireEvent.change(screen.getByRole("combobox", { name: /^provider$/i }), { target: { value: "ollama" } });
+    // The managed store belongs to managed llama.cpp; switching the draft to
+    // Ollama hides it, and switching back still protects the saved model.
+    fireEvent.change(screen.getByRole("combobox", { name: /^runtime$/i }), { target: { value: "ollama" } });
     await screen.findByLabelText(/models reported by ollama/i);
-    expect(remove).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /remove managed model/i })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: /^runtime$/i }), { target: { value: "managed" } });
+    expect(await screen.findByRole("button", { name: /remove managed model/i })).toBeDisabled();
   });
 
   it("refreshes provider health after a managed runtime build finishes", async () => {
@@ -909,7 +914,7 @@ describe("app shell safety invariants", () => {
           id: "runtime-build-complete",
           backend: "cpu",
           status: "complete",
-          message: "Managed llama.cpp b11149 (cpu) is installed.",
+          message: "Managed llama.cpp b11533 (cpu) is installed.",
           started_at: "now",
           updated_at: "now",
         },
@@ -918,7 +923,7 @@ describe("app shell safety invariants", () => {
     renderApp();
     await screen.findByRole("button", { name: /emergency stop/i });
     go("#/settings/model");
-    expect((await screen.findAllByText(/managed llama\.cpp b11149 \(cpu\) is installed/i)).length).toBeGreaterThanOrEqual(1);
+    expect((await screen.findAllByText(/managed llama\.cpp b11533 \(cpu\) is installed/i)).length).toBeGreaterThanOrEqual(1);
 
     await waitFor(() => {
       const statusCalls = fetch.mock.calls.filter(([url]) => String(url).includes("/api/llm/status"));

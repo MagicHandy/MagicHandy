@@ -33,6 +33,7 @@ func (r *chatRepairRuntime) clear() {
 }
 
 type chatRepairCandidate struct {
+	manualResume         *manualVibrationResume
 	service              chat.Service
 	settings             config.LLMSettings
 	prompt               interactiveChatPromptContext
@@ -53,8 +54,8 @@ type chatRepairCandidate struct {
 	evidenceID           atomic.Int64
 }
 
-func (s *Server) withOptionalChatRepair(ctx context.Context, hosted bool, session string, stop uint64, settings config.Settings) context.Context {
-	if !hosted {
+func (s *Server) withOptionalChatRepair(ctx context.Context, advanced bool, session string, stop uint64, settings config.Settings) context.Context {
+	if !advanced {
 		return ctx
 	}
 	repairCtx, err := s.prepareChatRepair(ctx, session, stop, settings)
@@ -63,7 +64,7 @@ func (s *Server) withOptionalChatRepair(ctx context.Context, hosted bool, sessio
 	}
 	// Optional repair bookkeeping cannot prevent an otherwise valid reply.
 	// Failed capture closes only repair admission, never its context guards.
-	s.logger.Warn("hosted response repair context unavailable")
+	s.logger.Warn("response repair context unavailable")
 	return ctx
 }
 
@@ -82,6 +83,7 @@ func (s *Server) prepareChatRepair(ctx context.Context, session string, stop uin
 	candidate := &chatRepairCandidate{admission: admission,
 		workspaceRevision: s.chatWorkspace.Revision(), expires: time.Now().Add(5 * time.Minute)}
 	candidate.hosted, _ = ctx.Value(hostedChatGuardKey{}).(hostedChatGuard)
+	candidate.manualResume, _ = ctx.Value(manualVibrationResumeKey{}).(*manualVibrationResume)
 	s.controller.mu.Lock()
 	candidate.actor, candidate.controllerGeneration = s.controller.active, s.controller.generation
 	s.controller.mu.Unlock()
@@ -125,6 +127,9 @@ func (s *Server) chatRepairSettingsCurrent(original config.Settings) bool {
 func (s *Server) chatRepairMotionCurrent(candidate *chatRepairCandidate) bool {
 	if candidate.dispatched.Load() {
 		return true
+	}
+	if resume := candidate.manualResume; resume != nil && !s.manualVibrationResumeCurrent(context.Background(), resume) {
+		return false
 	}
 	engine := s.currentMotionEngine()
 	if engine != candidate.engine {
@@ -234,6 +239,9 @@ func (s *Server) handleChatRepair(w http.ResponseWriter, r *http.Request) {
 	defer finish()
 	ctx = context.WithValue(ctx, hostedChatGuardKey{}, candidate.hosted)
 	ctx = context.WithValue(ctx, chatRepairContextKey{}, candidate)
+	if candidate.manualResume != nil {
+		ctx = context.WithValue(ctx, manualVibrationResumeKey{}, candidate.manualResume)
+	}
 	if err := s.activateChatRepair(ctx); err != nil {
 		writeError(w, http.StatusConflict, err)
 		return

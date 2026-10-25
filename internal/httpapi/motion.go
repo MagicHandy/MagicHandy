@@ -989,7 +989,11 @@ func (s *Server) motionEngineForStart() (*motion.Engine, uint64, error) {
 		failed = !state.Running && !state.Starting && !state.Paused && (state.LastError != "" || retired || settings.Device.Plays(config.DeviceOutputCoyote))
 	}
 	if engine != nil && (engineOwner != owner || failed) {
-		if err := s.stopAndClearMotionEngineLocked(context.Background(), "dispatch_owner_changed"); err != nil {
+		reason := "dispatch_owner_changed"
+		if engineOwner == owner {
+			reason = "inactive_run_replaced"
+		}
+		if err := s.stopAndClearMotionEngineLocked(context.Background(), reason); err != nil {
 			return nil, 0, fmt.Errorf("previous motion owner could not be stopped: %w", err)
 		}
 		engine = nil

@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from "react";
-import type { PromptSet, PublicSettings } from "../api/types";
+import type { LLMProviderStatus, PromptSet, PublicSettings } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { ModelSettingsPanel } from "./ModelSettingsPanel";
 import { ModelConnectionsPanel } from "./ModelConnectionsPanel";
 import { PromptSetEditor } from "./PromptSetEditor";
 import { MemoryManager } from "./MemoryManager";
+import { ReplyLengthField } from "./ReplyLengthField";
 import { SettingsNavigation, SettingsNavigationLabel } from "./SettingsNavigation";
 
 const sections = [
@@ -55,6 +56,7 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
   actions: ReactNode;
 }) {
   const [promptSets, setPromptSets] = useState<PromptSet[]>([]);
+  const [localStatus, setLocalStatus] = useState<LLMProviderStatus | null>(null);
   const promptIDs = promptSets.length ? promptSets.map(set => set.id) : opt.prompt_sets ?? [];
   const promptOptions = [...new Set([...promptIDs, s.llm.prompt_set])];
   return <>
@@ -64,8 +66,10 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
         <ul>{sections.map(item => <li key={item.id}><a href={`#/settings/chat/${item.id}`} aria-label={translateKnown(item.label)} title={translateKnown(item.label)} aria-current={section === item.id ? "page" : undefined}><SettingsNavigationLabel label={item.label} compact={"compact" in item ? item.compact : undefined} /></a></li>)}</ul>
       </SettingsNavigation>
       <div className="settings-content">
-        {section === "model" && (
-          <ModelConnectionsPanel routing={modelRouting ?? saved?.model_routing} saved={activeLLM ?? saved?.llm} settings={s.llm} locked={locked} patch={patchLLM} localEditor={<ModelSettingsPanel
+        {section === "model" && <>
+          <h3 className="section-title">{t("Model")}</h3>
+          <ModelConnectionsPanel routing={modelRouting ?? saved?.model_routing} saved={activeLLM ?? saved?.llm} settings={s.llm} locked={locked} patch={patchLLM}
+            capabilityOptions={opt.local_model_capabilities ?? []} localStatus={localStatus} localEditor={<ModelSettingsPanel
             configurationOnly={(s.llm.conversation_connection_id || "local") !== "local"}
             settings={s.llm}
             saved={saved?.llm}
@@ -73,13 +77,14 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
             llamaModes={opt.llama_cpp_modes ?? []}
             managedLoadPolicies={opt.llm_managed_load_policies ?? []}
             llamaContextSizes={opt.llama_cpp_context_sizes ?? []}
+            capabilityOptions={opt.local_model_capabilities ?? []}
             reasoningModes={opt.llm_reasoning_modes ?? []}
             maxOutputOptions={opt.llm_max_output_tokens ?? []}
-            replyLengths={opt.llm_reply_lengths ?? []}
             locked={locked}
             patch={patchLLM}
+            onStatus={setLocalStatus}
           />} />
-        )}
+        </>}
 
         {section === "conversation" && (
           <>
@@ -144,6 +149,7 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
               </select>
             </label>
             <p className="hint">{t("Utility keeps the neutral assistant register. Warm is flirtatious but never explicit. Intimate speaks as a partner with sensual language. Explicit permits direct sexual language like the legacy app. Voice changes wording only; motion limits, capability gates, and Stop are identical at every level.")}</p>
+            <ReplyLengthField value={s.llm.reply_length || "balanced"} options={opt.llm_reply_lengths ?? []} locked={locked} onChange={(reply_length) => patchLLM({ reply_length })} />
             </div>
             <div className="group">
             <h4 className="group-title">{t("Persona and anatomy")}</h4>

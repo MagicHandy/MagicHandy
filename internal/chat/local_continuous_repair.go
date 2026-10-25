@@ -27,6 +27,9 @@ func (s Service) repairLocalContinuous(ctx context.Context, input llm.ChatReques
 	result := Result{Input: &input, Raw: raw, InitialMalformed: true, Malformed: true,
 		MalformedError: validationErr.Error(), InitialError: validationErr.Error()}
 	repair := localContinuousRepairInput(input, validationErr.Error())
+	if simpleContinuous(s.capabilities()) {
+		repair = simpleRepairInput(repair)
+	}
 	bounded, budget, err := llm.BudgetChatRequest(repair, s.PromptBudget.ContextSize)
 	if err != nil {
 		// A larger local profile may fit its first call but leave no room for a

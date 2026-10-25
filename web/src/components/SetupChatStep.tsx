@@ -14,6 +14,7 @@ import { OllamaLibraryImport } from "./OllamaLibraryImport";
 import { SetupChoice } from "./SetupChoice";
 import { FieldRow, SetupChoiceGroup, SetupSection } from "./SetupSection";
 import { ModelConnectionsPanel } from "./ModelConnectionsPanel";
+import { ModelCapabilityField } from "./ModelCapabilityField";
 
 export type RuntimeChoice = "managed" | "ollama" | "external" | "hosted" | "skip";
 // "download:<catalog id>" picks a curated model (downloaded during Install
@@ -83,8 +84,12 @@ export function SetupChatStep(props: SetupChatStepProps) {
       </SetupChoiceGroup>
     </SetupSection>
     {choice === "managed" && <ManagedChatSetup {...props} />}
+    {(choice === "managed" || choice === "ollama" || choice === "external") && <ModelCapabilityField
+      settings={props.settings} options={props.savedSettings?.options?.local_model_capabilities ?? []}
+      contextSizes={props.savedSettings?.options?.llama_cpp_context_sizes ?? []}
+      locked={props.locked} patch={props.patchLLM} contextAtSimple={false} />}
     {/* Hosted routing brings its own cards (routing, chat, Autopilot), as in Settings. */}
-    {choice === "hosted" && <ModelConnectionsPanel setup settings={props.settings} saved={props.savedSettings?.llm} routing={props.savedSettings?.model_routing} locked={props.locked} patch={props.patchLLM} />}
+    {choice === "hosted" && <ModelConnectionsPanel setup settings={props.settings} saved={props.savedSettings?.llm} routing={props.savedSettings?.model_routing} locked={props.locked} patch={props.patchLLM} capabilityOptions={props.savedSettings?.options?.local_model_capabilities ?? []} />}
   </div>;
 }
 

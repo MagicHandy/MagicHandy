@@ -96,6 +96,10 @@ type AutopilotSettings struct {
 	// at the boundary. Chat, settings changes and Stop discard it. Local
 	// planning ignores it and keeps planning just before the boundary.
 	PrepareNextDecision bool `json:"prepare_next_decision"`
+	// IntermediatePlanning adds a bounded decision note to Intermediate
+	// continuous motion planning. Off restores the shorter request; Simple's
+	// note and Advanced contracts are unchanged. See ADR 0060 for latency.
+	IntermediatePlanning bool `json:"intermediate_planning"`
 	// SessionTracking lets the model see elapsed session time, speed history,
 	// and backend-measured phrase sameness (age, reconsiderations, and holds).
 	// Inert input: it informs decisions and authorizes nothing. Off removes the
@@ -133,7 +137,8 @@ func DefaultAutopilotSettings() AutopilotSettings {
 		SessionArcMinutes: AutopilotDefaultArcMinutes,
 		// Preparing changes when an external planner is asked, not what it
 		// decides, and costs no request unless chat discards one.
-		PrepareNextDecision: true,
+		PrepareNextDecision:  true,
+		IntermediatePlanning: true,
 	}
 }
 

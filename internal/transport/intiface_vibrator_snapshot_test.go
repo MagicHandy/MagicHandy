@@ -1,9 +1,12 @@
 package transport
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestVibratorStopSnapshotDoesNotAliasPacerState(t *testing.T) {
-	v := &IntifaceVibrator{selection: vibratorSelection{selected: true, deviceIndex: 3,
+	v := &IntifaceVibrator{clock: time.Now, selection: vibratorSelection{selected: true, deviceIndex: 3,
 		motors: []vibratorMotor{{IntifaceVibratorMotor: IntifaceVibratorMotor{Index: 2, StepCount: 20}, last: 4}}}}
 	v.mu.Lock()
 	selection := v.selectionSnapshotLocked()

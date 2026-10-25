@@ -297,6 +297,7 @@ describe("The vibrator's page", () => {
   it("offers to add a device that is not added yet", async () => {
     app.state = stateWith({ configured: ["handy"] });
     renderPage("vibrator");
+    expect(screen.getByText(/Independent vibration needs an Advanced model, such as a hosted one/)).toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Add Vibrator" })));
     expect(api.changeDeviceConnection).toHaveBeenCalledWith("vibrator", "add");
   });

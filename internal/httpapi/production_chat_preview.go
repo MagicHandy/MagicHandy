@@ -37,7 +37,7 @@ func (s *Server) handleProductionChatTest(w http.ResponseWriter, r *http.Request
 	defer finish()
 	settings, _ := s.store.Snapshot()
 	settings.LLM = settings.LLM.ConversationSettings()
-	if settings.LLM.IsHosted() {
+	if settings.LLM.AdvancedMotion() {
 		ctx = s.guardHostedChat(ctx)
 	}
 	stopSequence := s.stopSequence.Load()
@@ -64,7 +64,7 @@ func (s *Server) handleProductionChatTest(w http.ResponseWriter, r *http.Request
 	motionContext := s.chatTurnMotion(settings, context.UserRequests, sessionID)
 	timed := newTimedLLMProvider(provider)
 	service := chat.Service{Provider: timed, Prompt: prompt, Memories: memories, Patterns: patterns,
-		HostedResponseRepair: settings.LLM.IsHosted() && settings.LLM.HostedResponseRepair(),
+		HostedResponseRepair: settings.LLM.AdvancedMotion() && settings.LLM.HostedResponseRepair(),
 		Model:                settings.LLM.Model, MaxTokens: settings.LLM.ChatMaxOutputTokens(effectiveReplyLength(settings.LLM, context.Persona)),
 		ReasoningMode: settings.LLM.ReasoningMode, ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
 		PromptBudget: chatPromptBudget(settings.LLM), MotionContext: &motionContext, ConversationContext: context.ConversationContext, Capabilities: &context.Capabilities}
