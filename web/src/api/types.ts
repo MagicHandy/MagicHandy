@@ -92,6 +92,8 @@ export interface EngineSnapshot {
   phase?: number;
   recent_command_latency_ms?: number;
   target?: {
+    vibration_only?: boolean;
+    vibration?: { mode: "follow" | "off" | "steady" | "wave" | "pulse"; min_percent: number; max_percent: number; period_seconds: number };
     label?: string;
     source?: string;
     speed_percent?: number;

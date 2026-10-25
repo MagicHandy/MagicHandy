@@ -162,5 +162,5 @@ func InteractiveResponseSchema(patterns []PatternChoice, capabilities Capabiliti
 		schema = CreativeV2ResponseSchema(limits, capabilities.MoodTracking)
 	}
 	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(current)))
-	return continuousActionSchema(schema, current)
+	return withVibrationSchema(continuousActionSchema(schema, current), capabilities, &current)
 }

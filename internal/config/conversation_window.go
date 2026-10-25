@@ -1,5 +1,9 @@
 package config
 
+// MinimumExternalContext leaves room for compound output contracts without
+// increasing the compact tier's retained conversation history.
+const MinimumExternalContext = 65536
+
 // ConversationWindow is an application budget, not a claim about a provider's
 // maximum context. History may be shorter than the total request budget, leaving
 // room for a rich motion state without sending a longer conversation. Omitted
@@ -12,7 +16,7 @@ func (c ModelConnection) ConversationWindow() (contextSize, messages, historyByt
 	case 262144:
 		contextSize, messages, historyBytes = 262144, 512, 192000
 	default:
-		contextSize, messages, historyBytes = 32768, 64, 24000
+		contextSize, messages, historyBytes = MinimumExternalContext, 64, 24000
 	}
 	switch c.HistorySize {
 	case "recent":

@@ -117,7 +117,7 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
   const disabled = locked || Boolean(operation);
   const connected = connection.provider === "chatgpt" ? accountReady : keySaved || Boolean(connection.no_authentication);
   const filtered = models.filter(model => `${model.name} ${model.id}`.toLowerCase().includes(search.toLowerCase())).slice(0, 50);
-  const manualModel = <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={connection.model} disabled={disabled} onChange={event => patch({ model: event.target.value, reasoning_effort: "", context_window: 32768 })} /></label>;
+  const manualModel = <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={connection.model} disabled={disabled} onChange={event => patch({ model: event.target.value, reasoning_effort: "", context_window: 65536 })} /></label>;
   const checkModel = () => void run("check", async () => {
     const current = connectionRef.current;
     const snapshot = connectionSignature(current);

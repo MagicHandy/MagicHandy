@@ -48,6 +48,9 @@ func ValidConnectionID(id string) bool { return connectionIDPattern.MatchString(
 
 // Normalize applies endpoint and routing defaults without introducing a secret.
 func (c ModelConnection) Normalize() ModelConnection {
+	if c.ContextWindow == 32768 {
+		c.ContextWindow = MinimumExternalContext
+	}
 	c.Name = strings.TrimSpace(c.Name)
 	c.Model = strings.TrimSpace(c.Model)
 	c.BaseURL = strings.TrimRight(strings.TrimSpace(c.BaseURL), "/")
@@ -68,8 +71,8 @@ func (c ModelConnection) Normalize() ModelConnection {
 
 // Validate checks the public connection and capability policy.
 func (c ModelConnection) Validate() error {
-	if !slices.Contains([]int{0, 32768, 131072, 262144}, c.ContextWindow) {
-		return errors.New("conversation context must be 32768, 131072 or 262144")
+	if !slices.Contains([]int{0, 32768, MinimumExternalContext, 131072, 262144}, c.ContextWindow) {
+		return errors.New("conversation context must be 65536, 131072 or 262144")
 	}
 	if !oneOf(c.HistorySize, "", "recent", "long", "extended") {
 		return errors.New("conversation history must match the budget, or be recent, long or extended")

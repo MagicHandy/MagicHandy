@@ -74,6 +74,12 @@ type startupMotionProfile struct {
 // every motion source gets the same startup behavior and media time remains at
 // zero until the device has reached the script's first point.
 func (e *Engine) prepareMotionStartup(ctx context.Context, runEpoch uint64, prefix string) error {
+	e.mu.Lock()
+	only := e.plan.Target.VibrationOnly
+	e.mu.Unlock()
+	if only {
+		return nil
+	}
 	if group, ok := e.transport.(transport.MotionStartupParticipantsProvider); ok {
 		if err := e.stopTransportForStartup(ctx, runEpoch, prefix+"_linked_startup_stop"); err != nil {
 			return err

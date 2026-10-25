@@ -653,7 +653,7 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 }
 
 func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
-	if command != nil && command.Action != "" && command.Action != chat.MotionActionNone && command.Action != chat.MotionActionStop {
+	if command != nil && (command.Vibration != nil || (command.Action != "" && command.Action != chat.MotionActionNone && command.Action != chat.MotionActionStop)) {
 		release, err := s.beginDeferredMotion(ctx)
 		if err != nil {
 			return chatMotionDispatch{Action: command.Action}, err
@@ -679,6 +679,20 @@ func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionC
 // engine admission so a Stop that lands during admission cannot be overtaken
 // by the motion it was meant to prevent.
 func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
+	if command != nil && command.Vibration != nil {
+		if err := s.validateChatVibration(command.Vibration); err != nil {
+			if errors.Is(err, errVibrationUnavailable) && command.Action != "" && command.Action != chat.MotionActionNone {
+				linear := *command
+				linear.Vibration = nil
+				result, linearErr := s.dispatchChatMotionLocked(ctx, &linear, stopSequence)
+				return result, errors.Join(linearErr, err)
+			}
+			return chatMotionDispatch{}, err
+		}
+		if command.Action == "" || command.Action == chat.MotionActionNone {
+			return s.dispatchChatVibration(ctx, *command.Vibration, stopSequence)
+		}
+	}
 	if command == nil || command.Action == "" || command.Action == chat.MotionActionNone {
 		return chatMotionDispatch{Action: chat.MotionActionNone}, nil
 	}
@@ -688,46 +702,9 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 
 	switch command.Action {
 	case chat.MotionActionStart:
-		engine, admission, err := s.motionEngineForStart()
-		if err != nil {
-			return chatMotionDispatch{Action: command.Action}, err
-		}
-		if stopSequence != nil && s.stopSequence.Load() != *stopSequence {
-			return chatMotionDispatch{Action: command.Action}, errors.New("chat motion canceled by Emergency Stop")
-		}
-		current := engine.Snapshot()
-		target, err := s.chatMotionTarget(command, current)
-		if err != nil {
-			return chatMotionDispatch{Action: command.Action}, err
-		}
-		if current.Running {
-			state, applyErr := s.applyChatTargetHandoff(target, func() (motion.ActiveMotionState, error) {
-				return s.applyChatTargetAtRepairBase(ctx, engine, target, "chat_start_retarget")
-			})
-			return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, applyErr
-		}
-		settings, _ := s.store.Snapshot()
-		state, startErr := s.applyChatTargetHandoff(target, func() (motion.ActiveMotionState, error) {
-			return engine.StartAtGeneration(ctx, target, settings.EffectiveMotion(), admission)
-		})
-		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, startErr
+		return s.dispatchChatMotionStart(ctx, command, stopSequence)
 	case chat.MotionActionTarget, chat.MotionActionUpdate:
-		engine := s.currentMotionEngine()
-		if engine == nil {
-			return chatMotionDispatch{Action: command.Action}, errors.New("motion is not running; use start to begin")
-		}
-		current := engine.Snapshot()
-		if !current.Running {
-			return chatMotionDispatch{Action: command.Action, Engine: current}, errors.New("motion is not running; use start to begin")
-		}
-		target, err := s.chatMotionTarget(command, current)
-		if err != nil {
-			return chatMotionDispatch{Action: command.Action}, err
-		}
-		state, applyErr := s.applyChatTargetHandoff(target, func() (motion.ActiveMotionState, error) {
-			return s.applyChatTargetAtRepairBase(ctx, engine, target, "chat_target")
-		})
-		return chatMotionDispatch{Applied: true, Action: command.Action, Engine: state}, applyErr
+		return s.dispatchChatMotionUpdate(ctx, command)
 	case chat.MotionActionStop:
 		// A chat stop is a user stop: modes end and keepalive stands down.
 		finishModeStop := func() {}
@@ -964,6 +941,7 @@ func (s *Server) chatMotionTarget(command *chat.MotionCommand, current motion.Ac
 		settings, _ := s.store.Snapshot()
 		target, err := motion.FlowTarget(*command.Layered, settings.EffectiveMotion())
 		target.Label, target.Source = "Layered", "chat"
+		target.Vibration = command.Vibration
 		if command.Layered.Gesture != nil {
 			target.Label = "Creative v2"
 		}
@@ -1020,6 +998,9 @@ func (s *Server) chatMotionContext(settings config.MotionSettings, llmSettings c
 		MotionMode:      chatMotionMode(llmSettings.MotionGenerationMode),
 		Envelope:        motion.CurrentPlanningEnvelope(settings),
 	}
+	if llmSettings.IsHosted() {
+		context.Outputs = s.chatOutputContext(llmSettings)
+	}
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		return context
@@ -1028,7 +1009,7 @@ func (s *Server) chatMotionContext(settings config.MotionSettings, llmSettings c
 	if !snapshot.Running && !snapshot.Paused {
 		return context
 	}
-	context.Running = snapshot.Running
+	context.Running = snapshot.Running && !snapshot.Target.VibrationOnly
 	context.Paused = snapshot.Paused
 	context.PatternID = string(snapshot.Target.PatternID)
 	context.ProgramID = snapshot.Target.ProgramID

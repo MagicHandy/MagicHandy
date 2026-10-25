@@ -219,6 +219,8 @@ type Capabilities struct {
 	// set/adjust contract. It changes representation, never motion authority.
 	// Local runtimes retain their compact prompts and controls/change_by edits.
 	HostedMotion bool
+	// Evaluation can exercise the compact local grammar without changing production.
+	VibrationControl bool
 	// SchemaUnenforced marks a provider that may ignore the response schema,
 	// such as an external OpenAI-compatible server. Its Creative v2 contract
 	// omits the reach guide: without the schema, local Gemma 12B wrote
@@ -642,8 +644,10 @@ func composePrompt(set PromptSet, memories []string, patterns []PatternChoice, c
 			motionContextInstructions(*motionContext, capabilities, patterns))
 	}
 	if note := videoMotionNote(capabilities); note != "" {
+		// Video remains the motion authority regardless of the output devices.
 		sections = appendPromptSection(sections, "video_motion", "Video motion", note+"\n"+videoControlInstructions(locale))
 	}
+	sections = appendPromptSection(sections, "playback_outputs", "Playback outputs", playbackOutputInstructions(capabilities, motionContext))
 	sections = appendPromptSection(sections, "output_guard", "Final output guard", promptOutputGuard(capabilities))
 	texts := make([]string, 0, len(sections))
 	for _, section := range sections {

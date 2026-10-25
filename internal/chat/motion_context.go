@@ -11,6 +11,8 @@ import (
 // turn. It contains only semantic state and the user's configured speed band;
 // the model never receives device or transport details.
 type MotionContext struct {
+	// Only hosted composition uses output facts. Local prompts remain compact.
+	Outputs          *OutputContext
 	UserRequests     []string
 	Running          bool
 	Paused           bool

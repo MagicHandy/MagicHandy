@@ -466,7 +466,7 @@ func (s *intifaceSession) startRequestFor(ctx context.Context, owner intifaceSes
 		return intifaceRequest{}, err
 	}
 	var admission intifaceWriteAdmission
-	if owner != nil && generation != 0 {
+	if owner != nil {
 		var err error
 		if admission, err = owner.admitWrite(kind, fields, generation, paced); err != nil {
 			return s.rejectRequestWrite(owner, id, waiter, admission.linearReserved, err)

@@ -133,6 +133,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	} else {
 		system = composeSystem(prompt, s.Memories, nil, capabilities, &state, s.ConversationContext, s.PromptBudget)
 	}
+	schema = withVibrationSchema(schema, capabilities, &state)
 	if !capabilities.Motion {
 		schema = nil
 	}
@@ -207,6 +208,12 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 			return AssistantResponse{}, err
 		}
 	}
+	var vibration *motion.VibrationSpec
+	var vibrationErr error
+	raw, vibration, vibrationErr = takeVibration(raw, capabilities, state)
+	if vibrationErr != nil {
+		return AssistantResponse{}, vibrationErr
+	}
 	nextCheck := 0
 	if autoTiming {
 		raw, nextCheck = takeNextCheck(raw)
@@ -218,6 +225,12 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 	response, next, changed, err := parseContinuousReply(raw, current, state, limits, parser)
 	if err == nil {
 		err = s.authorizeLayeredReply(&response, next, changed, state)
+	}
+	if err == nil && vibration != nil {
+		if response.Motion == nil {
+			response.Motion = &MotionCommand{Action: MotionActionNone}
+		}
+		response.Motion.Vibration = vibration
 	}
 	response.nextCheckSeconds = nextCheck
 	return response, err
@@ -251,7 +264,7 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 	if kind == AutopilotKindMotion && command != nil && s.MotionContext != nil {
 		relaxUnchosenAccents(s.MotionContext.Layered, command.Layered)
 	}
-	if command != nil {
+	if command != nil && command.Layered != nil {
 		command.Action = MotionActionUpdate
 	}
 	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled",

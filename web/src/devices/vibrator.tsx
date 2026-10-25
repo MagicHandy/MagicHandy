@@ -19,7 +19,9 @@ function vibratorModel(ctx: DeviceContext): DeviceModel {
   const dropped = vibrator?.playback_state === "stale";
   const word: DeviceStatusWord = ctx.busy.vibrator === "connect"
     ? "connecting"
-    : leased && !selected && !dropped ? "needs_setup" : dropped ? "lost" : liveStatus(ctx, "vibrator", selected);
+    : leased && !selected && !dropped ? "needs_setup" : dropped ? "lost"
+      : selected && ((ctx.engineActive && ctx.state?.motion?.engine?.target?.vibration?.mode === "off") || vibrator?.silent_reason === "emergency_stop" || vibrator?.silent_reason === "intensity_zero" || vibrator?.silent_reason === "below_motor_step") ? "silent"
+        : liveStatus(ctx, "vibrator", selected);
   const details = word === "needs_setup"
     ? [t("choose a device")]
     : word === "lost" ? [dropped ? t("dropped") : t("left this run")]
@@ -61,7 +63,11 @@ function vibratorModel(ctx: DeviceContext): DeviceModel {
         raiseLabel: t("Raise the vibrator intensity"),
         testLabel: t("Test the vibrator"),
       }],
-      note: effective < ceiling ? t("With these motors' steps, the highest level is {percent}%.", { percent: effective }) : undefined,
+      note: vibrator?.silent_reason === "emergency_stop"
+        ? t("Stop reset the intensity to 0. Raise it to allow vibration again.")
+        : vibrator?.silent_reason === "below_motor_step" ? t("The intensity is below this device’s smallest motor step.")
+          : intensity === 0 ? t("Raise the intensity to allow vibration. The model cannot raise it.")
+          : effective < ceiling ? t("With these motors' steps, the highest level is {percent}%.", { percent: effective }) : undefined,
     } : undefined,
     readout: selected ? t("{intensity}% of {ceiling}%", { intensity, ceiling }) : undefined,
     summary: [t("Intiface Central"), selected && vibrator?.device_name ? vibrator.device_name : t("no device chosen")].join(" · "),

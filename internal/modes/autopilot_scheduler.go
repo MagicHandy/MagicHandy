@@ -154,6 +154,10 @@ func (m *Manager) applyAutopilotChoice(
 	reason string,
 ) {
 	if choice.source == "hold" {
+		if err := applyHeldVibration(ctx, engine, choice.vibration); err != nil {
+			m.backoff(ModeAutopilot, generation, "vibration_failed", err)
+			return
+		}
 		if !m.armAutopilotChoice(ModeAutopilot, &choice, generation) {
 			return
 		}
@@ -569,6 +573,9 @@ func (m *Manager) applyAutopilotSpeechMotion(
 	choice segmentChoice,
 ) {
 	if choice.source == "hold" || !choice.segment.hasContent() {
+		if err := applyHeldVibration(ctx, engine, choice.vibration); err != nil {
+			m.trace(ModeAutopilot, "speech_vibration_failed", nil, err.Error())
+		}
 		return
 	}
 	motionChoice := choice

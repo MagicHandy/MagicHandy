@@ -1,5 +1,24 @@
 # Goal Scorecard
 
+## 2026-10-25 — Independent vibration and Intiface startup
+
+Matched Windows amd64 Go 1.26.10 builds against `25b0e193`, using
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core
+**23,965,184 -> 24,114,176 B** (+148,992 B).
+No new runtime dependency or motion goroutine is added. The envelope runs on
+the existing engine loop; scalar frames are bounded to 64 points and diagnostic
+events to 128. The first implementation uses at most 31 sampled levels per
+refill. Local prompt/schema identity is covered across five modes and two states.
+
+Main JS: **1,278,438 -> 1,282,961 B raw**, **343,501 -> 344,083 B gzip**.
+CSS: **206,484 -> 207,215 B raw**, **36,066 -> 36,215 B gzip**.
+Canonical UI total: **2,772,339 -> 2,783,962 B**. Gzip uses Python
+with `mtime=0`. No RSS/cold-start improvement is claimed. External context now
+has a 64K minimum, retaining the previous compact history cap (64 messages /
+24 KB). The budget does not pad requests; full versus compact guidance showed
+no consistent timing advantage across the matched quality/preservation sets.
+See [the evaluation and physical follow-up](intiface-vibrator-review-2026-10-25.md).
+
 ## 2026-10-24 — Remote release review corrections
 
 The final review binds phone Edge/Return to controller cancellation and makes

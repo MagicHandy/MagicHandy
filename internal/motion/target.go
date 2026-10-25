@@ -149,14 +149,16 @@ type SoftAnchor struct {
 //
 //revive:disable-next-line:exported -- Phase 6 explicitly names this contract.
 type MotionTarget struct {
-	Label                  string    `json:"label,omitempty"`
-	Source                 string    `json:"source,omitempty"`
-	PatternID              PatternID `json:"pattern_id,omitempty"`
-	PatternName            string    `json:"pattern_name,omitempty"`
-	ProgramID              string    `json:"program_id,omitempty"`
-	MediaID                string    `json:"media_id,omitempty"`
-	SpeedPercent           int       `json:"speed_percent"`
-	MediaSpeedLimitEnabled bool      `json:"media_speed_limit_enabled,omitempty"`
+	Vibration              *VibrationSpec `json:"vibration,omitempty"`
+	VibrationOnly          bool           `json:"vibration_only,omitempty"`
+	Label                  string         `json:"label,omitempty"`
+	Source                 string         `json:"source,omitempty"`
+	PatternID              PatternID      `json:"pattern_id,omitempty"`
+	PatternName            string         `json:"pattern_name,omitempty"`
+	ProgramID              string         `json:"program_id,omitempty"`
+	MediaID                string         `json:"media_id,omitempty"`
+	SpeedPercent           int            `json:"speed_percent"`
+	MediaSpeedLimitEnabled bool           `json:"media_speed_limit_enabled,omitempty"`
 	// Derived compact geometry survives snapshots without copying media points.
 	MediaRoundingEffect MediaRoundingEffect `json:"-"`
 	AreaFocus           *AreaFocus          `json:"area_focus,omitempty"`

@@ -11,9 +11,9 @@ export function modelReadyMessage(elapsedMillis?: number): string {
 export function selectedModelChange(model: HostedModel | undefined, id: string, connection: ModelConnection): Partial<ModelConnection> {
   const levels = model?.reasoning_efforts ?? [];
   const current = connection.reasoning_effort ?? "";
-  const suggestedWindow = connection.provider !== "compatible" && (model?.context_length ?? 0) >= 131072 ? 131072 : 32768;
+  const suggestedWindow = connection.provider !== "compatible" && (model?.context_length ?? 0) >= 131072 ? 131072 : 65536;
   return { model: id, reasoning_effort: levels.includes(current) ? current : levels.includes("low") ? "low" : "",
-    context_window: id === connection.model ? connection.context_window || 32768 : suggestedWindow };
+    context_window: id === connection.model ? connection.context_window || 65536 : suggestedWindow };
 }
 
 export function ModelResponseSettings({ connection, models, disabled, patch, compact = false }: {

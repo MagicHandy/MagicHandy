@@ -20,7 +20,7 @@ import type { DeviceGlyph } from "./glyphs";
 export type DeviceRequestKey = DeviceId | "new_handy";
 
 /** One word per state, with its dot (Device kit, Status words). */
-export type DeviceStatusWord = "playing" | "connected" | "connecting" | "not_connected" | "needs_setup" | "lost";
+export type DeviceStatusWord = "playing" | "silent" | "connected" | "connecting" | "not_connected" | "needs_setup" | "lost";
 
 /** The one action a device row offers for its state. */
 export interface DeviceAction {

@@ -2968,6 +2968,18 @@ See the [linked review](docs/native-linked-hardware-review-2026-10-15.md),
 [ADR 0046](docs/decisions/0046-shared-native-bluetooth-worker.md) and
 [review](docs/native-handy-bluetooth-review-2026-10-14.md).
 
+### Independent vibration and startup fixes (2026-10-25)
+
+[ADR 0057](docs/decisions/0057-independent-vibration-envelope.md) adds a bounded
+relative-drive envelope inside the existing engine for external Layered/Creative
+v2 chat and Autopilot. Local prompts/schemas remain unchanged after live Gemma
+comparison. Scalar-only edits preserve Handy motion; an idle Handy starts only
+through the normal prepared linear path. The startup-history false starvation,
+writer-limit races, stale acknowledgements and Test watchdog gaps are corrected.
+UI and bounded diagnostic events now expose silence, arming and motor commands.
+The external minimum is 64K with unchanged compact history retention. See
+[the model/format evaluation and physical follow-up](docs/intiface-vibrator-review-2026-10-25.md).
+
 ### Intiface vibrator output (2026-10-15)
 
 Implemented and tested in simulation; physical acceptance is open. A Buttplug

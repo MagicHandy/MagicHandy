@@ -2,6 +2,7 @@ import { useState } from "react";
 import { t, translateKnown } from "../i18n";
 // Compact status readouts, run timer, mini visualizer, and the shell-level
 // disclosures. Motion controls remain in their routed workspaces.
+import { LiveVibrationReadout, showsVibration } from "../components/VibrationReadout";
 import { MotionVisualizer } from "../components/MotionVisualizer";
 import { useAppState, useMotionState } from "../state/app-state";
 import { formatClock } from "../util/format";
@@ -147,7 +148,7 @@ export function StatusBar({
           <span className="status-text status-controller-short" aria-hidden="true">{t("You")}</span>
         </span>
       ))}
-      <MotionVisualizer motion={motion} mini device={{ owner: state?.settings?.device?.hsp_dispatch_owner, model: state?.settings?.motion?.handy_model }} />
+      {showsVibration(state?.settings, motion) ? <LiveVibrationReadout mini /> : <MotionVisualizer motion={motion} mini device={{ owner: state?.settings?.device?.hsp_dispatch_owner, model: state?.settings?.motion?.handy_model }} />}
       {authenticationStatus?.authenticated && authenticationStatus.control_identities?.length && onLogout && onSelectControlIdentity ? (
         <ControlIdentitySelector
           identities={authenticationStatus.control_identities}

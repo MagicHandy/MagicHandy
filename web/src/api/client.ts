@@ -577,6 +577,7 @@ export const api = {
   // Manual test target uses semantic pattern and speed fields.
   startManualTest: (body: { pattern: string; speed_percent: number }) =>
     request("POST", "/api/motion/start", body),
+  followVibration: () => request("POST", "/api/motion/vibration/follow", {}),
   pauseMotion: () => request("POST", "/api/motion/pause", {}),
   resumeMotion: () => request("POST", "/api/motion/resume", {}),
   activateEdge: () => request("POST", "/api/motion/edge", {}),

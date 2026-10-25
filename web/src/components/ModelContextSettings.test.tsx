@@ -10,7 +10,7 @@ describe("provider conversation history", () => {
     const patch = vi.fn();
     render(<ModelContextSettings connection={connection} models={[]} disabled={false} patch={patch} />);
     const select = screen.getByRole("combobox", { name: "External context budget" });
-    expect(select).toHaveValue("32768");
+    expect(select).toHaveValue("65536");
     fireEvent.change(select, { target: { value: "131072" } });
     expect(patch).toHaveBeenCalledWith({ context_window: 131072 });
     expect(connectionSignature(connection)).not.toBe(connectionSignature({ ...connection, context_window: 131072 }));
@@ -18,8 +18,8 @@ describe("provider conversation history", () => {
   it("uses advertised capacity for new model recommendations without assuming manual models support it", () => {
     const connection = newModelConnection("chatgpt", []);
     expect(selectedModelChange({ id: "large", name: "Large", context_length: 272000 }, "large", connection).context_window).toBe(131072);
-    expect(selectedModelChange(undefined, "manual", connection).context_window).toBe(32768);
-    expect(selectedModelChange({ id: "local-api", name: "Local API", context_length: 262144 }, "local-api", { ...connection, provider: "compatible" }).context_window).toBe(32768);
+    expect(selectedModelChange(undefined, "manual", connection).context_window).toBe(65536);
+    expect(selectedModelChange({ id: "local-api", name: "Local API", context_length: 262144 }, "local-api", { ...connection, provider: "compatible" }).context_window).toBe(65536);
     render(<ModelContextSettings connection={{ ...connection, model: "small" }} models={[{ id: "small", name: "Small", context_length: 64000 }]} disabled={false} patch={vi.fn()} />);
     expect(screen.getByRole("option", { name: /128K —/ })).toBeDisabled();
     expect(screen.getByRole("option", { name: /256K —/ })).toBeDisabled();

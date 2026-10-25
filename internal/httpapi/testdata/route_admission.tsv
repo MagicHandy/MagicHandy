@@ -199,6 +199,7 @@ control	POST /api/motion/resume
 control	POST /api/motion/start
 public	POST /api/motion/stop
 control	POST /api/motion/target
+control	POST /api/motion/vibration/follow
 host	POST /api/network/validate
 host	POST /api/network/certificate
 host	POST /api/network/discover

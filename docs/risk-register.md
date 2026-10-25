@@ -203,7 +203,8 @@ Mitigation:
 
 - the user alone raises the live intensity, which starts at 0 on every
   connection and selection. Motion only shapes the level beneath it, never
-  above the saved ceiling (default 40%), and the model has no vibrator control
+  above the saved ceiling (default 40%). External models may choose an engine-owned
+  relative envelope under ADR 0057, but cannot raise arming or limits
 - Pause, Stop, coverage loss, the end of Test, exclusion and removal send an
   explicit zero; Stop adds `StopDeviceCmd`, and generation fencing keeps any
   older `ScalarCmd` from following a Stop
@@ -217,6 +218,8 @@ Mitigation:
   loss faults both, and one device cannot hold both roles
 - raises and Test need the controlling host and the current Stop sequence,
   and are refused after any Stop, selection or session change
+- independent scalar edits share the engine clock and Stop admissions; stale
+  replies, retired recipients and canceled decisions cannot restart an output
 - simulation covers the protocol; automated tests never reach hardware
 
 Residual risk: physical acceptance is still needed for each of these:

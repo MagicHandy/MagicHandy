@@ -3,7 +3,7 @@ package config
 import "testing"
 
 func TestConversationWindowIsPerConnectionAndBounded(t *testing.T) {
-	for _, size := range []int{0, 32768, 131072, 262144} {
+	for _, size := range []int{0, 32768, MinimumExternalContext, 131072, 262144} {
 		c := ModelConnection{ID: "example", Name: "Example", Provider: LLMProviderChatGPT, Model: "test", ContextWindow: size}.Normalize()
 		if err := c.Validate(); err != nil {
 			t.Fatal(err)
@@ -16,7 +16,7 @@ func TestConversationWindowIsPerConnectionAndBounded(t *testing.T) {
 		s.Connections = []ModelConnection{c}
 		s.ConversationConnectionID = c.ID
 		hosted := s.ConversationSettings()
-		if !hosted.IsHosted() || hosted.ActiveConnection.ContextWindow != size || s.ActiveConnection != nil {
+		if !hosted.IsHosted() || hosted.ActiveConnection.ContextWindow != c.ContextWindow || s.ActiveConnection != nil {
 			t.Fatal("role view changed local settings")
 		}
 		if s.LocalSettings().LlamaCPPContextSize != s.LlamaCPPContextSize {
@@ -44,12 +44,22 @@ func TestExternalHistoryCanBeShorterThanRequestBudget(t *testing.T) {
 	} {
 		connection := ModelConnection{ContextWindow: tc.budget, HistorySize: tc.history}
 		budget, messages, bytes := connection.ConversationWindow()
-		if budget != tc.budget || messages != tc.messages || bytes != tc.bytes {
+		if budget != max(MinimumExternalContext, tc.budget) || messages != tc.messages || bytes != tc.bytes {
 			t.Errorf("%+v: got budget=%d messages=%d bytes=%d", tc, budget, messages, bytes)
 		}
 	}
 	connection := ModelConnection{ID: "test", Name: "Test", Provider: LLMProviderChatGPT, HistorySize: "unbounded"}.Normalize()
 	if connection.Validate() == nil {
 		t.Fatal("unbounded external history admitted")
+	}
+}
+
+func TestLegacyCompactExternalBudgetKeepsHistoryAndLocalContext(t *testing.T) {
+	for _, size := range []int{0, 32768, 65536} {
+		c := ModelConnection{ContextWindow: size}.Normalize()
+		window, messages, bytes := c.ConversationWindow()
+		if window != MinimumExternalContext || messages != 64 || bytes != 24000 {
+			t.Fatal(window, messages, bytes)
+		}
 	}
 }

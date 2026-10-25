@@ -1,5 +1,6 @@
 // The vibrator's device page: Connection, Output and Test. The level range
 // shapes motion beneath the live intensity; it never raises the intensity.
+import { api } from "../api/client";
 import type { VibrationSettings } from "../api/types";
 import { RangeSlider } from "../components/RangeSlider";
 import { SegmentedChoice } from "../components/SetpointControls";
@@ -43,6 +44,7 @@ function followHint(follow: VibrationSettings["follow"]): string {
 export function VibratorOutputSection({ ctx }: DeviceSectionProps) {
   const vibration = { ...DEFAULT_VIBRATION_SETTINGS, ...ctx.settings?.vibration };
   const save = useSaveDeviceOptions();
+  const envelope = ctx.engineActive ? ctx.state?.motion?.engine?.target?.vibration : undefined;
   const locked = ctx.locked || !ctx.canConfigureHost;
   const [follow, setFollow] = useLiveSetting(vibration.follow, (follow) => save({ vibration: { follow } }));
   const [depthEnd, setDepthEnd] = useLiveSetting(vibration.depth_end, (depth_end) => save({ vibration: { depth_end } }));
@@ -50,6 +52,10 @@ export function VibratorOutputSection({ ctx }: DeviceSectionProps) {
     (value) => save({ vibration: { minimum_percent: value.min, ceiling_percent: value.max } }), SLIDER_SAVE_MS);
   return (
     <div className="form-rows device-rows">
+      <OptionRow label={t("Model control")} hint={t("External models in Layered or Creative v2 can control vibration independently of The Handy, within your intensity. Local models use the follow setting.")}>
+        <span>{envelope?.mode === "off" ? t("Off") : envelope && envelope.mode !== "follow" ? t("Independent pattern") : t("Following movement")}</span>
+        {envelope && envelope.mode !== "follow" && <button type="button" className="btn" disabled={ctx.locked} onClick={() => ctx.send(() => api.followVibration())}>{t("Follow movement")}</button>}
+      </OptionRow>
       <OptionRow label={t("Follows")} hint={followHint(follow)}>
         <SegmentedChoice className="device-segmented" label={t("Follows")} value={follow} disabled={locked}
           options={[
@@ -66,9 +72,14 @@ export function VibratorOutputSection({ ctx }: DeviceSectionProps) {
             onChange={setDepthEnd} />
         </OptionRow>
       )}
-      <OptionRow label={t("Level range")} hint={t("Motion drives the vibrator between these. The live intensity starts at 0 on every connection, you raise it in the device panel, and it never passes the ceiling. The model never changes it.")}>
+      <OptionRow label={t("Level range")} hint={t("The ceiling limits intensity. Set the live intensity in the device panel; connection changes and Stop reset it to 0. The model cannot raise it.")}>
         <RangeSlider label={t("Minimum to ceiling")} floor={0} ceil={100} minValue={range.min} maxValue={range.max} disabled={locked} onChange={setRange} />
       </OptionRow>
+      {ctx.intiface.vibrator?.selected && (
+        <OptionRow label={t("Motor output")} hint={t("Last commands sent to Intiface, not measured vibration.")}>
+          <output>{ctx.intiface.vibrator.motors.map((motor, index) => t("Motor {motor}: {percent}%", { motor: index + 1, percent: motor.level_percent ?? 0 })).join(" · ")}</output>
+        </OptionRow>
+      )}
     </div>
   );
 }

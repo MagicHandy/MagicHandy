@@ -11,6 +11,7 @@ import (
 )
 
 func (s *Server) motionControlRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/motion/vibration/follow", s.handleVibrationFollow)
 	mux.HandleFunc("POST /api/motion/pause", s.handleMotionPause)
 	mux.HandleFunc("POST /api/motion/resume", s.handleMotionResume)
 	mux.HandleFunc("POST /api/motion/edge", s.handleEdge)

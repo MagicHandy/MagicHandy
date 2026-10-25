@@ -118,7 +118,7 @@ func timingLiveProvider(t *testing.T) (llm.Provider, string, bool) {
 			t.Fatal(err)
 		}
 		provider, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{Model: model, PlanUsage: true, ReasoningEffort: "low",
-			Token: token, Timeout: 60 * time.Second})
+			Token: token, ContextSize: config.MinimumExternalContext, Timeout: 60 * time.Second})
 		if err != nil {
 			t.Fatal(err)
 		}

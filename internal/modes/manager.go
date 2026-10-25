@@ -385,6 +385,7 @@ func (m *Manager) startNextSegment(ctx context.Context, mode string, reason stri
 // resolved library pattern definition from an Autopilot curation decision.
 func (m *Manager) choiceTarget(mode string, choice segmentChoice) motion.MotionTarget {
 	target := choice.segment.Target(modeLabel(mode), mode)
+	target.Vibration = choice.vibration
 	if choice.pattern != nil {
 		target.Pattern = choice.pattern
 	}

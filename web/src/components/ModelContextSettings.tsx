@@ -6,12 +6,12 @@ export function ModelContextSettings({ connection, models, disabled, patch }: {
   connection: ModelConnection; models: HostedModel[]; disabled: boolean; patch: (change: Partial<ModelConnection>) => void;
 }) {
   const capacity = models.find(model => model.id === connection.model)?.context_length;
-  const value = connection.context_window || 32768;
+  const value = connection.context_window || 65536;
   const id = `connection-context-${connection.id}`;
   return <div className="form-row-details model-context-settings">
     <FieldRow id={id} label={t("External context budget")} hint={t("Room for instructions, motion state and conversation. Your local model keeps its own context setting.")}>
       <select id={id} aria-describedby={`${id}-hint`} value={value} disabled={disabled} onChange={event => patch({ context_window: Number(event.target.value) })}>
-        <option value={32768}>{t("32K — compact")}</option>
+        <option value={65536}>{t("64K — standard")}</option>
         <option value={131072} disabled={Boolean(capacity && capacity < 131072)}>{t("128K — recommended when supported")}</option>
         <option value={262144} disabled={Boolean(capacity && capacity < 262144)}>{t("256K — extended")}</option>
       </select>

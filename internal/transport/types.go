@@ -2,8 +2,13 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrVibrationUnavailable means no active scalar recipient remains in this run.
+// It is not a failure of the healthy linear participants.
+var ErrVibrationUnavailable = errors.New("no active vibrator remains in this run")
 
 // CommandKind identifies the physical transport command family.
 type CommandKind string
@@ -156,11 +161,30 @@ type StrokeWindowCommand struct {
 type AppendPointsCommand struct {
 	StreamID string       `json:"stream_id"`
 	Points   []TimedPoint `json:"points"`
+	// Vibration carries engine-sampled relative drive; owners without that
+	// output ignore it. An empty linear frame updates only this output.
+	Vibration     *VibrationFrame `json:"vibration,omitempty"`
+	VibrationOnly bool            `json:"vibration_only,omitempty"`
+}
+
+// VibrationFrame replaces a short, covered envelope on the shared stream clock.
+// Revision changes fence any level prepared from an older semantic envelope.
+type VibrationFrame struct {
+	Revision uint64       `json:"revision"`
+	Follow   bool         `json:"follow,omitempty"`
+	Points   []TimedLevel `json:"points,omitempty"`
+}
+
+// TimedLevel is engine-sampled relative vibration drive, in 0..100.
+type TimedLevel struct {
+	TimeMillis   int64   `json:"time_ms"`
+	LevelPercent float64 `json:"level_percent"`
 }
 
 // PlayCommand starts or resumes playback of a timed-point stream.
 type PlayCommand struct {
 	StreamID         string `json:"stream_id"`
+	VibrationOnly    bool   `json:"vibration_only,omitempty"`
 	StartTimeMillis  int64  `json:"start_time_ms"`
 	ServerTimeMillis int64  `json:"server_time_ms,omitempty"`
 }

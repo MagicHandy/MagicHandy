@@ -32,6 +32,8 @@ export interface IntifaceVibratorMotor {
   index: number;
   feature_descriptor?: string;
   step_count: number;
+  /** Last quantized command, not physical telemetry. */
+  level_percent?: number;
 }
 
 /** The vibrator's backend snapshot. Percentages are whole numbers. */
@@ -51,6 +53,9 @@ export interface IntifaceVibratorStatus {
   rejected_count: number;
   timeout_count: number;
   last_error?: string;
+  silent_reason?: string;
+  effective_intensity_percent?: number;
+  test_available?: boolean;
 }
 
 export interface IntifaceDevice {

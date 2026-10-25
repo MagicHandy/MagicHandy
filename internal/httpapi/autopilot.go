@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -104,7 +105,8 @@ func (s *Server) autopilotDecideSpeech(ctx context.Context, input modes.Decision
 	if response.Reply == "" && response.Next == chat.AutopilotTimingLater {
 		return modes.Decision{Hold: true, Abstain: true, Next: modes.TimingLater}, nil
 	}
-	decision, err := s.mapAutopilotResponse(response, input)
+	saved, _ := s.store.Snapshot()
+	decision, err := s.mapAutopilotResponseForModel(response, input, saved.LLM.ConversationSettings())
 	if err != nil {
 		return modes.Decision{}, err
 	}
@@ -428,70 +430,47 @@ func (s *Server) mapAutopilotResponse(
 	response chat.AutopilotResponse,
 	input modes.DecisionInput,
 ) (modes.Decision, error) {
+	saved, _ := s.store.Snapshot()
+	planning, err := saved.LLM.PlanningSettings()
+	if err != nil {
+		return modes.Decision{}, err
+	}
+	return s.mapAutopilotResponseForModel(response, input, planning)
+}
+
+func (s *Server) mapAutopilotResponseForModel(response chat.AutopilotResponse, input modes.DecisionInput, model config.LLMSettings) (modes.Decision, error) {
 	say := strings.TrimSpace(response.Reply)
 	next := modes.TimingPreference(response.Next)
 	variability := modes.VariabilityPreference(response.Variability)
 	command := response.Motion
+	var vibration *motion.VibrationSpec
+	if command != nil {
+		vibration = command.Vibration
+	}
+	if err := s.validateModelVibration(vibration, model); err != nil {
+		if !errors.Is(err, errVibrationUnavailable) {
+			return modes.Decision{}, err
+		}
+		// Keep the valid linear choice, but do not announce a vibration change
+		// that lost authority while generation was in flight.
+		vibration, say = nil, ""
+		s.logger.Info("autopilot vibration unavailable; preserving linear decision")
+	}
 	if command == nil || command.Action == chat.MotionActionNone ||
 		command.Action == chat.MotionActionStop || command.Action == chat.MotionActionStart {
-		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
+		return modes.Decision{Hold: true, Vibration: vibration, Say: say, Next: next, Variability: variability}, nil
 	}
 	settings, _ := s.store.Snapshot()
 	if continuousChatMode(settings.LLM.MotionGenerationMode) {
-		return mapContinuousAutopilotCommand(command, settings, say, next)
+		decision, err := mapContinuousAutopilotCommand(command, settings, say, next)
+		decision.Vibration = vibration
+		return decision, err
 	}
 	if settings.LLM.MotionGenerationMode == config.LLMMotionModeDynamic {
 		return mapDynamicAutopilotCommand(command, input, say, next, variability), nil
 	}
 
-	patternID := strings.TrimSpace(command.PatternID)
-	if patternID == "" {
-		patternID = string(input.CurrentPatternID)
-	}
-	speed := input.CurrentSpeed
-	if command.SpeedPercent != nil {
-		speed = *command.SpeedPercent
-	} else if command.Intensity != nil {
-		speed = *command.Intensity
-	}
-	var areaFocus *motion.AreaFocus
-	if input.CurrentAreaFocus != nil {
-		focus := *input.CurrentAreaFocus
-		areaFocus = &focus
-	}
-	if command.Area != "" {
-		focus, ok := zoneAreaFocus(command.Area)
-		if !ok {
-			return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
-		}
-		areaFocus = focus
-	}
-	if patternID == "" || speed <= 0 {
-		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
-	}
-	if strings.EqualFold(patternID, string(input.CurrentPatternID)) &&
-		speed == input.CurrentSpeed && sameAreaFocus(areaFocus, input.CurrentAreaFocus) {
-		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
-	}
-
-	resolved, found, err := s.patterns.ResolveEnabled(patternID)
-	if err != nil {
-		return modes.Decision{}, fmt.Errorf("resolve Autopilot pattern: %w", err)
-	}
-	if !found {
-		return modes.Decision{Hold: true, Say: say, Next: next, Variability: variability}, nil
-	}
-	return modes.Decision{
-		Segment: modes.Segment{
-			PatternID:    motion.PatternID(resolved.ID),
-			SpeedPercent: speed,
-			AreaFocus:    areaFocus,
-		},
-		Pattern:     &resolved,
-		Say:         say,
-		Next:        next,
-		Variability: variability,
-	}, nil
+	return s.mapPatternAutopilotCommand(command, input, say, next, variability)
 }
 
 func mapDynamicAutopilotCommand(
