@@ -90,14 +90,41 @@
   margin-top: 4px;
 }
 
-.model-capability-settings {
-  border-top: 1px solid var(--border);
+/* The local model's editor opens inside its row in Models, so its parts are
+   sections ruled apart within that one card, never cards themselves. */
+.model-editor-section > * + * {
   margin-top: 12px;
-  padding-top: 12px;
+}
+.model-editor-section + .model-editor-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.provider-editor > .model-editor-section:first-child,
+.provider-editor > .form-status:first-child {
+  padding-top: 10px;
+}
+/* Without a status line, the editor's top rule already opens the first row. */
+.provider-editor > .model-editor-section:first-child > .form-rows:first-child > .form-row:first-child {
+  border-top: 0;
+}
+.model-editor-section .group-title {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+.model-editor-section > .model-health {
+  max-width: none;
+  text-align: left;
 }
 
-.model-capability-settings > .form-status {
-  margin: 4px 0;
+/* Capability and context are ruled rows like the rest of the editor. After the
+   ruled Ollama list, its rule already separates them. */
+.model-capability-settings {
+  margin-top: 4px;
+}
+.ollama-daemon-disclosure + .model-capability-settings > .form-row:first-child {
+  border-top: 0;
 }
 
 .generation-notes {

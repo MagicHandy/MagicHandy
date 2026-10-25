@@ -21,6 +21,8 @@ export interface ModelConnection {
   data_collection: "deny" | "allow";
   zero_data_retention: boolean;
   no_authentication?: boolean;
+  // The model's motion contract. Absent means Advanced (saved before levels).
+  capability_level?: import("./llm-settings-types").ModelCapabilityLevel;
 }
 
 export interface HostedModel { id: string; name: string; supported_parameters?: string[]; reasoning_efforts?: string[]; default_reasoning_effort?: string; context_length?: number }
@@ -50,6 +52,7 @@ export interface ModelRoute {
     minimum_context: number;
     auto_timing: boolean;
     prepare_decisions: boolean;
+    intermediate_planning?: boolean;
     independent_vibration: boolean;
     response_repair: boolean;
   };

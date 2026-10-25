@@ -151,13 +151,13 @@ export function ChatRoute() {
     });
   }
 
-  async function changeMotionMode(mode: MotionMode) {
-    if (mode === motionMode || changingMotionMode || !backendOnline || readOnly) return;
+  async function changeMotionMode(mode: MotionMode, options?: { area_focus?: boolean; experimental_patterns?: boolean }) {
+    if ((mode === motionMode && !options) || changingMotionMode || !backendOnline || readOnly) return;
     setChangingMotionMode(true);
     try {
-      await api.setLLMMotionMode(mode);
+      await (options ? api.setLLMMotionMode(mode, options) : api.setLLMMotionMode(mode));
       await refresh();
-      show(t("LLM motion mode changed."));
+      if (!options) show(t("LLM motion mode changed."));
     } catch (error) {
       show(error instanceof Error ? translateKnown(error.message) : t("Request failed"), "error");
     } finally {
@@ -227,6 +227,13 @@ export function ChatRoute() {
                 {motionModeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
+            {/* The Pattern library's options live with the mode that reads them. */}
+            {motionMode === "pattern" && <>
+              <PatternOption label={t("Area focus")} hint={t("Tip, shaft, base and full-range targets.")} checked={motionCapabilities?.area_focus ?? true}
+                disabled={!backendOnline || readOnly || changingMotionMode} onChange={(checked) => void changeMotionMode("pattern", { area_focus: checked })} />
+              <PatternOption label={t("Experimental patterns")} hint={t("Library patterns tagged experimental.")} checked={motionCapabilities?.experimental_patterns ?? false}
+                disabled={!backendOnline || readOnly || changingMotionMode} onChange={(checked) => void changeMotionMode("pattern", { experimental_patterns: checked })} />
+            </>}
             <div className="control-row control-row-stack">
               <QuickSettings section="style" />
             </div>
@@ -248,4 +255,14 @@ export function ChatRoute() {
       )}
     </div>
   );
+}
+
+function PatternOption({ label, hint, checked, disabled, onChange }: { label: string; hint: string; checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) {
+  return <div className="control-row control-row-stack chat-pattern-option">
+    <label className="toggle-line">
+      <span className="toggle"><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /><span className="track" aria-hidden="true" /></span>
+      <span>{label}</span>
+    </label>
+    <p className="autopilot-timing-hint">{hint}</p>
+  </div>;
 }

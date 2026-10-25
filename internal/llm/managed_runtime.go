@@ -20,9 +20,9 @@ import (
 
 const (
 	// ManagedLlamaVersion is the upstream release installed and owned by MagicHandy.
-	ManagedLlamaVersion = "b11149"
+	ManagedLlamaVersion = "b11533"
 	// ManagedLlamaCommit pins the exact upstream source represented by ManagedLlamaVersion.
-	ManagedLlamaCommit = "d2e54583c7452353eb35d40431281f6ee984332f"
+	ManagedLlamaCommit = "64df9183f5ca178c049a392f35e795d8e97c97b3"
 
 	managedRuntimeManifestVersion = 1
 	managedRuntimeManifestLimit   = 32 * 1024

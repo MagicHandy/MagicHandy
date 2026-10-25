@@ -168,6 +168,7 @@ function settings(verbosity: string): PublicSettings {
       llm_providers: ["llama_cpp", "ollama"],
       llama_cpp_modes: ["managed", "external"],
       llama_cpp_context_sizes: [16384, 32768, 65536, 131072],
+      local_model_capabilities: [{ level: "simple", minimum_context: 16384, minimum_output: 64 }, { level: "intermediate", minimum_context: 32768, minimum_output: 512 }, { level: "advanced", minimum_context: 65536, minimum_output: 1024 }],
       llm_reasoning_modes: ["off", "auto"],
       llm_max_output_tokens: [128, 256, 512],
       llm_chat_voices: ["utility", "warm", "intimate", "explicit"],
@@ -443,9 +444,12 @@ describe("SettingsRoute", () => {
     expect(panel).not.toBeNull();
     expect(panel?.querySelector(":scope > h2.section-title")).toHaveTextContent("Chat");
     expect(screen.getByRole("region", { name: "Model roles" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "External providers" })).toBeInTheDocument();
+    const models = screen.getByRole("region", { name: "Models" });
+    expect(within(models).getByRole("button", { name: "Close · Local model" })).toBeInTheDocument();
     expect(panel?.querySelectorAll(".group .group")).toHaveLength(0);
-    expect(screen.getByRole("group", { name: "Motion generation" })).toBeInTheDocument();
+    // Reply length and the motion mode have one home each, outside the model tab.
+    expect(screen.queryByRole("group", { name: "Motion generation" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Reply length" })).not.toBeInTheDocument();
   });
 
   it("saves managed llama.cpp context size through the shared dirty form", async () => {
@@ -453,9 +457,9 @@ describe("SettingsRoute", () => {
     getSettings.mockResolvedValue({ settings: settings("normal") });
     render(<SettingsRoute />);
 
-    const contextSize = await screen.findByRole("combobox", { name: "Context size" });
+    const contextSize = await screen.findByRole("combobox", { name: "Context" });
     expect(contextSize).toHaveValue("32768");
-    expect(screen.getByText(/Larger contexts use more RAM and VRAM/)).toBeInTheDocument();
+    expect(contextSize).toHaveAccessibleDescription("Simple needs at least 16K. Larger contexts use more RAM and VRAM. Applied after Save.");
     fireEvent.change(contextSize, { target: { value: "65536" } });
     expect(screen.getByText("Save settings to check this configuration.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));

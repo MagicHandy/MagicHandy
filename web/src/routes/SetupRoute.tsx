@@ -666,7 +666,7 @@ export function SetupRoute() {
             qwenReference={{ wav: qwenWAV, transcript: qwenTranscript, later: qwenLater, locked: locked || installationActive, setWAV: setQwenWAV, setTranscript: setQwenTranscript, setLater: setQwenLater }}
             useLocalAI={easyAIChoice === "local" || easyCombine}
             chatEnabled={easyAIChoice !== "local" || localAvailable}
-            aiSetup={<EasyAISetup choice={easyAIChoice} combine={easyCombine} localAvailable={localAvailable} connection={easyConnection} settings={settings.llm} locked={locked || installationActive}
+            aiSetup={<EasyAISetup choice={easyAIChoice} combine={easyCombine} localAvailable={localAvailable} connection={easyConnection} settings={settings.llm} capabilityOptions={settings.options?.local_model_capabilities} locked={locked || installationActive}
               editCustom={() => { setMode("custom"); setStep(CUSTOM_STEPS.indexOf("chat")); }}
               select={selectEasyAI}
               setCombine={combine => selectEasyAI(easyAIChoice, combine, easyConnection?.provider)}

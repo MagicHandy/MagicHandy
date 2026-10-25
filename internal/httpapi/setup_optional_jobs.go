@@ -56,8 +56,8 @@ var setupLlamaRuntime = setupLlamaRuntimeCatalog{
 	Name:          "Managed llama.cpp",
 	Summary:       "A pinned app-owned local LLM runner. Installing it avoids requiring a separate Ollama runtime.",
 	License:       "MIT",
-	SourceVersion: "b11149 (d2e5458)",
-	DiskEstimate:  "CPU downloads about 18 MiB; CUDA downloads about 615 MiB and installs about 1.1 GiB.",
+	SourceVersion: llm.ManagedLlamaVersion + " (" + llm.ManagedLlamaCommit[:7] + ")",
+	DiskEstimate:  "CPU downloads about 19 MiB; CUDA downloads about 626 MiB.",
 	BuildDependencies: []string{
 		"PowerShell 5.1 or newer",
 		"A compatible NVIDIA driver and GPU for CUDA",

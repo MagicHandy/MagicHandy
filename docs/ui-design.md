@@ -49,14 +49,14 @@ errors, routing/privacy consequences and incomplete requirements are not hidden
 to make the screen look cleaner. The shared rules and responsive behavior are
 documented in [UI design guidelines](ui-design-guidelines.md#cards-sections-fields).
 
-When Chat or Autopilot uses the local model, the model settings include an
-off-by-default Motion second opinion switch. Enabling it reveals an existing
-provider/model selector, a recommendation for fast/Low reasoning, and explicit
-sharing of recent user messages. This is distinct from the primary model roles.
-Correction mechanics stay in a disclosure; backend outcomes use the standard
-dismissible notice in Chat. Removing its provider disables the review role.
+When Chat or Autopilot uses a Simple or Intermediate model, local or on a
+connection, Model roles include a **Second opinion** row, off by default.
+Choosing one of the existing providers enables it and states the sharing of
+recent user messages. Correction mechanics stay in a disclosure; backend
+outcomes use the standard dismissible notice in Chat. Removing its provider
+turns the second opinion off.
 
-An external Chat model exposes **Automatically repair rejected chat responses**
+An Advanced Chat model, external or local, exposes **Automatically repair rejected chat responses**
 in Model roles, using the shared switch row and the normal Save settings flow.
 It defaults on and discloses the extra request, waiting time and potential quota
 use. With it off, the backend can offer **Repair response** directly below the
@@ -81,7 +81,7 @@ causes remain in Diagnostics; cancellation does not offer response repair.
 Local Layered/Creative v2 can make one automatic correction under the existing
 local repair policy. They reuse the compact progress line and diagnostic
 provenance, without another setting, error bubble or manual continuation.
-The external repair toggle controls external models only. A local correction
+The repair switch controls Advanced chat models only. A local correction
 that cannot fit the configured context leaves the original failure visible
 instead of silently dropping the profile or latest request.
 

@@ -205,8 +205,10 @@ Mitigation:
   connection and selection. Motion only shapes the level beneath it, never
   above the saved ceiling (default 40%). Advanced model contracts may choose an
   engine-owned relative envelope under ADRs 0057/0058, but cannot raise arming or
-  limits. A local capability choice is not proof of model quality; Simple remains
-  the default, and the tested 12B model is recommended only through Intermediate
+  limits. A capability choice, local or on a connection such as LM Studio, is
+  not proof of model quality; Simple remains the default for the local model and
+  new compatible servers, and the tested 12B model is recommended only through
+  Intermediate
 - Pause, Stop, coverage loss, the end of Test, exclusion and removal send an
   explicit zero; Stop adds `StopDeviceCmd`, and generation fencing keeps any
   older `ScalarCmd` from following a Stop

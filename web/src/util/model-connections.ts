@@ -1,7 +1,35 @@
 import type { ModelConnection } from "../api/cloud-types";
-import type { LLMSettings } from "../api/llm-settings-types";
+import type { LLMSettings, ModelCapabilityLevel, ModelCapabilityOption } from "../api/llm-settings-types";
 
 export const modelProviderNames = { chatgpt: "ChatGPT", openrouter: "OpenRouter", openai: "OpenAI API", compatible: "Other compatible provider" } as const;
+
+export const capabilityNames: Record<ModelCapabilityLevel, string> = { simple: "Simple", intermediate: "Intermediate", advanced: "Advanced" };
+
+// Request budgets a connection may select; the backend validates the same list.
+export const connectionContextSizes = [16384, 32768, 65536, 131072, 262144] as const;
+
+// The backend publishes each level's floor. These fallbacks match it for a
+// client that renders before options arrive.
+const fallbackFloors: Record<ModelCapabilityLevel, number> = { simple: 16384, intermediate: 32768, advanced: 65536 };
+
+export function connectionCapability(connection: Pick<ModelConnection, "capability_level">): ModelCapabilityLevel {
+  return connection.capability_level ?? "advanced";
+}
+
+export function capabilityFloor(level: ModelCapabilityLevel, options: ModelCapabilityOption[] = []): number {
+  return options.find(option => option.level === level)?.minimum_context ?? fallbackFloors[level];
+}
+
+// The draft capability of a role: the local model's level, or its connection's.
+export function roleCapability(settings: LLMSettings, id: string): ModelCapabilityLevel | undefined {
+  if (id === "local") return settings.local_capability_level ?? "simple";
+  const connection = settings.connections?.find(item => item.id === id);
+  return connection ? connectionCapability(connection) : undefined;
+}
+
+export function contextLabel(tokens: number): string {
+  return tokens % 1024 === 0 ? `${tokens / 1024}K` : String(tokens);
+}
 
 // Provider identity is never inferred from a user-editable connection name.
 export function modelConnectionLabel(connection: ModelConnection): string {
@@ -28,10 +56,13 @@ export function newModelConnection(provider: ModelConnection["provider"], connec
   let number = 1;
   while (connections.some(connection => connection.id === `${provider}-${number}`)) number++;
   const names = { chatgpt: "ChatGPT", openrouter: "OpenRouter", openai: "OpenAI API", compatible: "Compatible API" };
+  // A compatible server often runs a small model, so it starts Simple, like an
+  // unknown local model. Hosted providers keep the Advanced contract.
+  const compact = provider === "compatible" ? { capability_level: "simple" as const, context_window: fallbackFloors.simple } : {};
   return {
     id: `${provider}-${number}`, name: names[provider], provider,
     base_url: provider === "openrouter" ? "https://openrouter.ai/api/v1" : provider === "compatible" ? "http://127.0.0.1:8000/v1" : "https://api.openai.com/v1",
-    model: "", output_mode: "auto", allow_fallbacks: false, data_collection: "deny", zero_data_retention: false,
+    model: "", output_mode: "auto", allow_fallbacks: false, data_collection: "deny", zero_data_retention: false, ...compact,
   };
 }
 
@@ -61,7 +92,9 @@ export function modelSettingsSignature(settings: LLMSettings): string {
     settings.managed_load_policy || "startup", settings.reasoning_mode, settings.reply_length,
     settings.ollama_models_path || "", settings.motion_generation_mode,
     capabilities.motion, capabilities.patterns, capabilities.area_focus, capabilities.experimental_patterns,
-    [...(settings.connections ?? [])].sort((a, b) => a.id.localeCompare(b.id)).map(connectionSignature),
+    // Capability is a draft change but not part of readiness: a checked
+    // endpoint stays checked when only its level changes.
+    [...(settings.connections ?? [])].sort((a, b) => a.id.localeCompare(b.id)).map(connection => [connectionSignature(connection), connectionCapability(connection)]),
   ]);
 }
 

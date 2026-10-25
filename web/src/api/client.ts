@@ -826,8 +826,9 @@ export const api = {
   getSettings: () => request<{ settings: PublicSettings }>("GET", "/api/settings"),
   saveSettings: (update: SettingsUpdate) => request("PUT", "/api/settings", update),
   setLabsEnabled: (enabled:boolean) => request<{enabled:boolean}>("PUT", "/api/settings/labs", {enabled}),
-  setLLMMotionMode: (mode: "dynamic" | "pattern" | "layered" | "creative_v2" | "off") =>
-    request<{ settings: PublicSettings; mode: string }>("PUT", "/api/settings/llm-motion-mode", { mode }),
+  // The Chat motion card: the mode, plus the Pattern library's two options.
+  setLLMMotionMode: (mode: "dynamic" | "pattern" | "layered" | "creative_v2" | "off", options: { area_focus?: boolean; experimental_patterns?: boolean } = {}) =>
+    request<{ settings: PublicSettings; mode: string }>("PUT", "/api/settings/llm-motion-mode", { mode, ...options }),
   pickHostPath: (kind: "executable" | "gguf" | "wav" | "file" | "directory", current: string) =>
     request<{ path: string; canceled: boolean }>("POST", "/api/host/path-picker", { kind, current }),
   saveConnectionKey: (connection_key: string) =>

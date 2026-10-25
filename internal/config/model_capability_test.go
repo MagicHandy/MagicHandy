@@ -83,3 +83,23 @@ func TestCapabilityFollowsResolvedModelRoleNotProviderName(t *testing.T) {
 		t.Fatal("motion-off advertised vibration")
 	}
 }
+
+func TestIntermediatePlanningFeatureFollowsPlannerCapability(t *testing.T) {
+	for _, level := range ModelCapabilityLevels() {
+		for _, mode := range []string{LLMMotionModeLayered, LLMMotionModeCreativeV2, LLMMotionModeDynamic, LLMMotionModePattern, LLMMotionModeOff} {
+			s := DefaultSettings().LLM
+			s.LocalCapabilityLevel, s.MotionGenerationMode = level, mode
+			want := level == ModelCapabilityIntermediate && (mode == LLMMotionModeLayered || mode == LLMMotionModeCreativeV2)
+			if s.ModelRouting().Autopilot.Features.IntermediatePlanning != want {
+				t.Fatalf("local %s/%s availability mismatch", level, mode)
+			}
+			s.LocalCapabilityLevel = ModelCapabilityAdvanced
+			c := ModelConnection{ID: "planner", Name: "Planner", Provider: LLMProviderCompatible, BaseURL: "http://127.0.0.1:1234/v1", Model: "model", CapabilityLevel: level}.Normalize()
+			s.Connections = []ModelConnection{c}
+			s.MotionPlanner = MotionPlannerSettings{Provider: "connection", ConnectionID: c.ID, ContextPolicy: ContextTechnical}
+			if s.ModelRouting().Autopilot.Features.IntermediatePlanning != want || s.ModelRouting().Chat.Features.IntermediatePlanning {
+				t.Fatalf("connection %s/%s availability followed chat instead of planning", level, mode)
+			}
+		}
+	}
+}

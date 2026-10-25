@@ -1,49 +1,65 @@
 import type { LLMSettings, ModelCapabilityLevel, ModelCapabilityOption } from "../api/llm-settings-types";
 import { t, translateKnown } from "../i18n";
+import { capabilityNames, contextLabel } from "../util/model-connections";
+import { FieldRow } from "./SetupSection";
 
-const names: Record<ModelCapabilityLevel, string> = { simple: "Simple", intermediate: "Intermediate", advanced: "Advanced" };
+function levelHint(level: ModelCapabilityLevel): string {
+  return level === "simple" ? t("Compact prompts for smaller models. Vibration follows movement.")
+    : level === "intermediate" ? t("Fuller guidance and grouped motion edits for capable models. Vibration follows movement.")
+      : t("Counted phrases, independent vibration, Auto timing and response repair. Choose it only for a model that handles complex instructions reliably.");
+}
 
-// Options and allocation floors come from the backend. These are drafts for
-// Save; live controls use the saved model-routing features instead.
-export function ModelCapabilityField({ settings, options, contextSizes, locked, patch }: {
-  settings: LLMSettings; options: ModelCapabilityOption[]; contextSizes: number[]; locked: boolean;
-  patch: (change: Partial<LLMSettings>) => void;
+// One capability and context pair for every model: the local model and each
+// connection. Levels and their floors come from the backend; a higher level
+// raises a smaller budget, and a larger saved budget is kept. These are drafts
+// for Save; live controls follow the saved model-routing features instead.
+export function CapabilityRows({ id, level, options, context, contextSizes = [], contextHint, locked, onChange }: {
+  id: string; level: ModelCapabilityLevel; options: ModelCapabilityOption[];
+  context?: number; contextSizes?: readonly number[]; contextHint?: string; locked: boolean;
+  onChange: (change: { level?: ModelCapabilityOption; context?: number }) => void;
 }) {
-  const level = settings.local_capability_level || "simple";
   const selected = options.find(option => option.level === level);
   if (!selected) return null;
-  const context = Math.max(settings.llama_cpp_context_size, selected.minimum_context);
-  const sizes = [...new Set([context, ...contextSizes])].filter(size => size >= selected.minimum_context).sort((a, b) => a - b);
-  return <div className="model-capability-settings">
-    <div className="model-runtime-grid">
-      <label className="field">
-        <span className="label">{t("Model capability")}</span>
-        <select value={level} disabled={locked} aria-describedby="model-capability-hint" onChange={event => {
-          const choice = options.find(option => option.level === event.target.value);
-          if (choice) patch({ local_capability_level: choice.level,
-            llama_cpp_context_size: Math.max(settings.llama_cpp_context_size, choice.minimum_context),
-            max_output_tokens: Math.max(settings.max_output_tokens, choice.minimum_output) });
-        }}>
-          {options.map(option => <option key={option.level} value={option.level}>{translateKnown(names[option.level])}</option>)}
-        </select>
-      </label>
-      {level !== "simple" && <label className="field">
-        <span className="label">{t("Context size")}</span>
-        <select value={context} disabled={locked} onChange={event => patch({ llama_cpp_context_size: Number(event.target.value) })}>
-          {sizes.map(size => <option key={size} value={size}>{t("{count} tokens", { count: size })}</option>)}
-        </select>
-      </label>}
-    </div>
-    <p className="form-status" id="model-capability-hint">
-      {level === "simple" ? t("Compact prompts for smaller models. Vibration follows movement.")
-        : level === "intermediate" ? t("Fuller guidance and grouped motion edits for capable local models. Vibration still follows movement.")
-        : t("The same motion tools as external models: counted phrases, independent vibration, Auto timing, and response repair. Requires a model that handles complex instructions reliably.")}
-    </p>
-    {level !== "simple" && <p className="form-status">
-      {t("At least {context} context tokens and {output} output tokens. Larger contexts use more RAM and VRAM.", { context: selected.minimum_context, output: selected.minimum_output })}
-      {" "}{settings.provider === "llama_cpp" && settings.llama_cpp_mode === "external"
-        ? t("Configure your server to provide this context size; MagicHandy uses it as the request budget.")
-        : t("Applied to the local runtime after Save.")}
-    </p>}
+  const value = context === undefined ? undefined : Math.max(context, selected.minimum_context);
+  const sizes = value === undefined ? [] : [...new Set([value, ...contextSizes])].filter(size => size >= selected.minimum_context).sort((a, b) => a - b);
+  return <>
+    <FieldRow id={`${id}-capability`} label={t("Capability")} hint={levelHint(level)}>
+      <select id={`${id}-capability`} aria-describedby={`${id}-capability-hint`} value={level} disabled={locked} onChange={event => {
+        const option = options.find(item => item.level === event.target.value);
+        if (option) onChange({ level: option, context: value === undefined ? undefined : Math.max(value, option.minimum_context) });
+      }}>
+        {options.map(option => <option key={option.level} value={option.level}>{translateKnown(capabilityNames[option.level])}</option>)}
+      </select>
+    </FieldRow>
+    {value !== undefined && <FieldRow id={`${id}-context`} label={t("Context")} hint={contextHint}>
+      <select id={`${id}-context`} aria-describedby={contextHint ? `${id}-context-hint` : undefined} value={value} disabled={locked} onChange={event => onChange({ context: Number(event.target.value) })}>
+        {sizes.map(size => <option key={size} value={size}>{contextLabel(size)}</option>)}
+      </select>
+    </FieldRow>}
+  </>;
+}
+
+// The local model's pair. Ollama keeps its own allocation at Simple, so its
+// context appears only once a level needs more; managed llama.cpp shows it in
+// Settings, because MagicHandy sets that allocation. Setup keeps Simple short.
+export function ModelCapabilityField({ settings, options, contextSizes, locked, patch, contextAtSimple = true }: {
+  settings: LLMSettings; options: ModelCapabilityOption[]; contextSizes: number[]; locked: boolean;
+  patch: (change: Partial<LLMSettings>) => void; contextAtSimple?: boolean;
+}) {
+  const level = settings.local_capability_level || "simple";
+  const managed = settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed";
+  const server = settings.provider === "llama_cpp" && settings.llama_cpp_mode === "external";
+  const floor = options.find(option => option.level === level)?.minimum_context ?? 0;
+  const showContext = level !== "simple" || (managed && contextAtSimple);
+  const contextHint = server
+    ? t("Set your server's context length to at least {context}. MagicHandy budgets each request to fit.", { context: contextLabel(floor) })
+    : t("{level} needs at least {context}. Larger contexts use more RAM and VRAM. Applied after Save.", { level: translateKnown(capabilityNames[level]), context: contextLabel(floor) });
+  return <div className="form-rows model-capability-settings">
+    <CapabilityRows id="local-model" level={level} options={options} context={showContext ? settings.llama_cpp_context_size : undefined}
+      contextSizes={contextSizes} contextHint={contextHint} locked={locked}
+      onChange={({ level: option, context }) => patch({
+        ...(option ? { local_capability_level: option.level, max_output_tokens: Math.max(settings.max_output_tokens, option.minimum_output) } : {}),
+        llama_cpp_context_size: context ?? Math.max(settings.llama_cpp_context_size, option?.minimum_context ?? 0),
+      })} />
   </div>;
 }

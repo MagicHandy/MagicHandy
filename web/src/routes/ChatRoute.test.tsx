@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   appState: { modes: {} } as {
     modes: { mode?: string };
-    settings?: { llm?: { motion_generation_mode?: string; motion_capabilities?: { motion?: boolean } } };
+    settings?: { llm?: { motion_generation_mode?: string; motion_capabilities?: { motion?: boolean; area_focus?: boolean; experimental_patterns?: boolean } } };
     chat?: { active_session_id?: string; latest_seq?: number; current_mood?: string };
     uptime_seconds?: number;
   },
@@ -118,6 +118,27 @@ describe("ChatRoute", () => {
     await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("layered"));
     fireEvent.change(mode, { target: { value: "creative_v2" } });
     await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("creative_v2"));
+  });
+
+  it("keeps the Pattern library options with the mode that reads them", async () => {
+    mocks.appState = {
+      modes: {},
+      settings: { llm: { motion_generation_mode: "pattern", motion_capabilities: { motion: true, area_focus: true, experimental_patterns: false } } },
+    };
+    mocks.setLLMMotionMode.mockResolvedValue({ mode: "pattern" });
+    const view = render(<ChatRoute />);
+
+    const controls = screen.getByRole("complementary", { name: "Motion controls" });
+    expect(within(controls).getByRole("checkbox", { name: "Area focus" })).toBeChecked();
+    const experimental = within(controls).getByRole("checkbox", { name: "Experimental patterns" });
+    expect(experimental).not.toBeChecked();
+    fireEvent.click(experimental);
+    await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("pattern", { experimental_patterns: true }));
+    expect(mocks.show).not.toHaveBeenCalledWith("LLM motion mode changed.");
+
+    mocks.appState = { modes: {}, settings: { llm: { motion_generation_mode: "layered", motion_capabilities: { motion: true } } } };
+    view.rerender(<ChatRoute />);
+    expect(within(controls).queryByRole("checkbox", { name: "Area focus" })).not.toBeInTheDocument();
   });
 
   it("uses Creative while an older backend snapshot has no saved motion mode", async () => {

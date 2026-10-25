@@ -3078,3 +3078,19 @@ is recorded with measurements and revisit criteria in
 [ADR 0060](docs/decisions/0060-local-autopilot-decision-notes.md); see the
 [E4B and transfer review](docs/e4b-simple-review-2026-10-25.md). Interactive
 Intermediate and Advanced prompts retain their existing contracts.
+Intermediate's additional planning is now optional through Chat > Autopilot >
+Extra planning, enabled by default. Off restores its previous shorter request;
+Simple's E4B improvement remains active. The saved planning role determines
+availability, including Intermediate models on compatible API connections.
+
+## Capability for every model and one-home model settings (2026-10-25)
+
+External connections choose Simple / Intermediate / Advanced too, so a server
+such as LM Studio running a small model gets the compact contract and a 16K or
+32K budget. New compatible servers start Simple; hosted providers and earlier
+connections keep Advanced. The second opinion reviews any role below Advanced.
+Settings > Chat > Model is two cards: Model roles, and one Models list holding
+the local model and each provider with the same Capability and Context rows.
+Reply length moved to Prompts & memory; the LLM motion mode and Pattern library
+options live only on the Chat page. See the [ADR 0058 amendment](docs/decisions/0058-model-capability-levels.md#amendment-every-model-has-a-level-2026-10-25)
+and the [settings review](docs/chat-model-settings-review-2026-10-25.md).

@@ -63,6 +63,17 @@
 .chat-motion-mode > select {
   margin-top: 1px;
 }
+/* Pattern library options: switch rows in the card's rhythm, like Auto timing. */
+.chat-pattern-option {
+  gap: 8px;
+}
+.chat-pattern-option .toggle-line {
+  min-height: 28px;
+  font-size: var(--fs-body);
+}
+.chat-pattern-option .toggle-line > span:last-child {
+  font-weight: 600;
+}
 .chat-motion-card .quick-fields-style {
   width: 100%;
 }

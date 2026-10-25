@@ -35,15 +35,14 @@ describe("model roles and external providers", () => {
   it("keeps second opinion opt-in, discloses message sharing, and does not reroute chat", async () => {
     quietCatalog();
     render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: "local", provider: "ollama", model: "local-model" } as PublicSettings["llm"]} />);
-    const toggle = screen.getByRole("checkbox", { name: /^Review local motion choices/ });
-    expect(toggle).not.toBeChecked();
-    fireEvent.click(toggle);
-    expect(screen.getByRole("combobox", { name: "Reviewer model" })).toHaveValue(chatgpt.id);
+    const review = screen.getByRole("combobox", { name: "Second opinion" });
+    expect(review).toHaveValue("off");
+    fireEvent.change(review, { target: { value: chatgpt.id } });
+    expect(review).toHaveValue(chatgpt.id);
     expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue("local");
     expect(screen.getByText(/Shares motion details and up to eight recent user messages/)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Discard model changes" }));
-    expect(toggle).not.toBeChecked();
-    expect(screen.queryByRole("combobox", { name: "Reviewer model" })).not.toBeInTheDocument();
+    expect(review).toHaveValue("off");
   });
 
   it("turns review off when its provider is removed instead of assigning the local model as its own reviewer", async () => {
@@ -51,10 +50,43 @@ describe("model roles and external providers", () => {
     render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: "local", motion_reviewer: { enabled: true, connection_id: chatgpt.id } } as PublicSettings["llm"]} />);
     fireEvent.click(screen.getByRole("button", { name: "Remove · ChatGPT" }));
     const confirm = screen.getByRole("alertdialog", { name: "Remove ChatGPT?" });
-    expect(confirm).toHaveTextContent("Motion second opinion will be switched off.");
+    expect(confirm).toHaveTextContent("Second opinion will be switched off.");
     fireEvent.click(within(confirm).getByRole("button", { name: "Remove" }));
-    expect(screen.getByRole("checkbox", { name: /^Review local motion choices/ })).not.toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Second opinion" })).toHaveValue("off");
     expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue("local");
+  });
+
+  it("reviews a Simple compatible server and leaves Advanced roles unreviewed", async () => {
+    quietCatalog();
+    render(<Panel initial={{ connections: [chatgpt, compatible], conversation_connection_id: chatgpt.id } as PublicSettings["llm"]} />);
+    expect(screen.queryByRole("combobox", { name: "Second opinion" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Chat model" }), { target: { value: compatible.id } });
+    expect(screen.getByRole("combobox", { name: "Second opinion" })).toHaveValue("off");
+    expect(screen.queryByRole("checkbox", { name: /^Automatically repair/ })).not.toBeInTheDocument();
+  });
+
+  it("names each role's capability and lists the local model first in Models", async () => {
+    quietCatalog();
+    const initial = { connections: [compatible], conversation_connection_id: "local", provider: "ollama", model: "local-model", ollama_base_url: "http://127.0.0.1:11434", local_capability_level: "intermediate" } as PublicSettings["llm"];
+    function LocalPanel() {
+      const [settings, setSettings] = useState(initial);
+      return <ModelConnectionsPanel settings={settings} saved={initial} locked={false} patch={change => setSettings(current => ({ ...current, ...change }))} localEditor={<p>Local editor</p>} />;
+    }
+    render(<LocalPanel />);
+    const models = screen.getByRole("region", { name: "Models" });
+    const rows = within(models).getAllByRole("button", { name: /^(Edit|Close) · / });
+    expect(rows[0]).toHaveAccessibleName("Close · Local model");
+    expect(within(models).getByText("Ollama · 127.0.0.1:11434")).toBeVisible();
+    expect(within(models).getByText("Local editor")).toBeVisible();
+    expect(within(models).getAllByText("Intermediate")).toHaveLength(1);
+    expect(within(models).getByText("Simple")).toBeVisible();
+    const roles = screen.getByRole("region", { name: "Model roles" });
+    expect(within(roles).getAllByText("Intermediate")).toHaveLength(2);
+    fireEvent.click(rows[0]);
+    expect(within(models).queryByText("Local editor")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Chat model" }), { target: { value: compatible.id } });
+    expect(within(roles).getAllByText("Simple")).toHaveLength(2);
+    expect(screen.getByText(/^Not saved yet\./)).toBeVisible();
   });
 
   it("keeps local retry opt-in and includes the toggle in model draft discard", async () => {

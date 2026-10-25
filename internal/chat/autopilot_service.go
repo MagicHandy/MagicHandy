@@ -80,11 +80,14 @@ type AutopilotService struct {
 	MotionContext       *MotionContext
 	ConversationContext *ConversationContext
 	Capabilities        Capabilities
+	// Off only for an explicit saved Intermediate preference. Default behavior
+	// preserves the tested note; Simple and Advanced ignore this switch.
+	DisableIntermediatePlanning bool
 }
 
 // Complete runs one autonomous decision, with one repair for local output.
 func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, request Request) (AutopilotResponse, error) {
-	localPlan := localDecisionNotes(s.Capabilities)
+	localPlan := localDecisionNotes(s.Capabilities, s.DisableIntermediatePlanning)
 	// The grouped local dialect improved interactive edits, but degraded
 	// autonomous Layered composition. Keep its proven compact grammar there;
 	// the explicitly selected context/output allocation remains available.

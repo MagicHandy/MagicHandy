@@ -25,6 +25,14 @@ disagrees with this file, this file and the build win. In particular, the
 tab strip were superseded the same day; its finding that underline tab
 indicators are rejected still applies (see Tabs).
 
+The Chat Autopilot card offers **Extra planning** for an Intermediate planner
+using Layered or Creative v2. It uses the existing compact toggle row and hint,
+saves immediately, and follows the backend's resolved planning-role features.
+The hint gives the measured Gemma 12B latency trade-off; other capability levels
+do not show an ineffective control. Model roles and capability selection remain
+in the consolidated model settings; this cadence-related preference stays with
+the other Autopilot controls.
+
 Use existing tokens instead of raw hex values in implementation, and do not
 invent parallel values. A component-local value either stays local to that
 component or is promoted to a token before it is reused elsewhere.
@@ -814,14 +822,27 @@ additional-method choice. Do not promise physical synchronization. See
 
 ### Model capability levels (2026-10-25)
 
-Local setup and Chat model settings share Simple / Intermediate / Advanced.
-Use backend option names and budget floors; show the context select next to the
-capability choice only when relevant. Keep explanations brief and separated by
-the existing row rule, without another nested card. Preserve larger saved values.
+Every model shares Simple / Intermediate / Advanced: the local model and each
+external connection, in Settings and in setup. Use backend option names and
+budget floors. Capability and Context are one pair of field rows with the same
+labels everywhere, and budgets read 16K, 32K, 64K, 128K and 256K. Managed
+llama.cpp always shows Context; Ollama shows it above Simple; a server
+MagicHandy does not run asks for at least that context. Preserve larger saved
+values.
+
+Settings > Chat > Model has two cards. **Model roles**: Chat, Autopilot (with
+context sharing when relevant), Second opinion, and the response-repair and
+declined-request-retry switches; each role names its draft capability in a
+quiet badge. **Models**: one provider list, the local model first, each row with
+status, capability and the roles that use it, and the open row's editor under
+it. The managed model store is a section of the local editor, shown only for
+managed llama.cpp. No card nests another and no option has two homes: Reply
+length is in Prompts & memory, and the LLM motion mode with its Pattern library
+options is on the Chat page.
 
 Live controls follow the saved role's backend `features`, not the provider name
-or an unsaved settings draft. Advanced local Autopilot exposes Auto timing and
-Prepare decisions early, and Advanced local chat exposes repair and independent
-output help, just like the corresponding external role. Different chat and
-Autopilot routes may have different features. Capability never implies device
-connection, arming, or permission to move. See [ADR 0058](decisions/0058-model-capability-levels.md).
+or an unsaved settings draft. Advanced Autopilot exposes Auto timing and Prepare
+decisions early, and Advanced chat exposes repair and independent output help,
+whatever the transport. Different chat and Autopilot routes may have different
+features. Capability never implies device connection, arming, or permission to
+move. See [ADR 0058](decisions/0058-model-capability-levels.md).

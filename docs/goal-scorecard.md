@@ -1,5 +1,20 @@
 # Goal Scorecard
 
+## 2026-10-25 — Combined model settings, planning toggle and llama.cpp b11533
+
+Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags
+'-s -w'`: **24,197,120 -> 24,220,160 B** (+23,040 B) against `cd9aef7e`.
+The combined canonical UI is **2805447 B**. Main JS and CSS sizes are recorded in the alpha.74
+release review. No Go/npm dependency, worker, timer or model round trip is
+added by this integration. The Intermediate switch restores the tested shorter
+request when off; its allocation remains 32K and Simple remains 16K.
+
+The optional upstream llama.cpp downloads are 19,513,403 B CPU and
+656,667,874 B CUDA including its runtime archive. They are installed only on
+request and are not embedded in the core or included in the app installer.
+Existing model files are reused. No RSS or cold-start improvement is claimed.
+
+
 ## 2026-10-25 — E4B optimization and local Autopilot planning
 
 Same Windows amd64 Go 1.26.10 pure-Go stripped build, compared with `06f934da`:
@@ -16,6 +31,20 @@ are unchanged. Quality gains, exact captures, rollback locations and revisit
 criteria are recorded in [ADR 0060](decisions/0060-local-autopilot-decision-notes.md).
 No RSS or cold-start improvement is claimed. See the
 [response and prompt-set evaluation](e4b-simple-review-2026-10-25.md).
+
+## 2026-10-25 — Capability for every model and one-home model settings
+
+Against `06f934da`, the same Windows amd64 Go 1.26.10 pure-Go stripped build
+(`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`) measures
+**24,183,808 -> 24,199,680 B** (+15,872 B). Main JS **1,290,230 -> 1,291,585 B
+raw**, **345,912 -> 347,158 B gzip**; CSS **207,363 -> 208,113 B raw**,
+**36,240 -> 36,328 B gzip**. Locale chunks change by -99 to +46 B raw (23
+strings added, 30 retired). Canonical UI total **2,800,753 -> 2,802,838 B**
+(+2,085 B); gzip uses Python with `mtime=0`. No dependency, goroutine or
+background request is added: the local model row reads the existing status
+only while its editor is mounted. A Simple connection sends the compact contract
+within a 16K budget (9,956 prompt bytes in the review chat); no RSS or
+cold-start change is claimed.
 
 ## 2026-10-25 — Manual chat resume after Stop
 

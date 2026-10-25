@@ -1,20 +1,24 @@
 package config
 
-// Capability is chosen independently of transport. External connections retain
-// their existing advanced contract; local models start with the simple one.
+// Capability is chosen per model, independently of transport. The local model
+// starts with the simple contract; a connection saved without a level keeps the
+// advanced contract it had before levels existed.
 const (
 	ModelCapabilitySimple       = "simple"
 	ModelCapabilityIntermediate = "intermediate"
 	ModelCapabilityAdvanced     = "advanced"
 )
 
-// ModelCapabilityLevels lists the user-selectable local contracts.
+// ModelCapabilityLevels lists the user-selectable contracts.
 func ModelCapabilityLevels() []string {
 	return []string{ModelCapabilitySimple, ModelCapabilityIntermediate, ModelCapabilityAdvanced}
 }
 
 // ModelCapabilityLevel resolves a role's contract without changing its provider.
 func (s LLMSettings) ModelCapabilityLevel() string {
+	if s.ActiveConnection != nil {
+		return s.ActiveConnection.ModelCapabilityLevel()
+	}
 	if s.IsHosted() {
 		return ModelCapabilityAdvanced
 	}
@@ -23,6 +27,17 @@ func (s LLMSettings) ModelCapabilityLevel() string {
 		return s.LocalCapabilityLevel
 	default:
 		return ModelCapabilitySimple
+	}
+}
+
+// ModelCapabilityLevel resolves a connection's contract. A server such as LM
+// Studio may run a small model, so the level is chosen with the connection.
+func (c ModelConnection) ModelCapabilityLevel() string {
+	switch c.CapabilityLevel {
+	case ModelCapabilitySimple, ModelCapabilityIntermediate:
+		return c.CapabilityLevel
+	default:
+		return ModelCapabilityAdvanced
 	}
 }
 
@@ -37,6 +52,7 @@ func (s LLMSettings) IntermediateMotion() bool {
 }
 
 // MinimumLocalContext reserves space for the selected contract and its schema.
+// Connections use the same floors for their request budget.
 func MinimumLocalContext(level string) int {
 	switch level {
 	case ModelCapabilityAdvanced:
@@ -68,7 +84,8 @@ type ModelCapabilityOption struct {
 	MinimumOutput  int    `json:"minimum_output"`
 }
 
-// ModelCapabilityOptions describes valid local choices for settings clients.
+// ModelCapabilityOptions describes valid choices for settings clients. Output
+// floors apply to the local model; connections use their own output limits.
 func ModelCapabilityOptions() []ModelCapabilityOption {
 	options := make([]ModelCapabilityOption, 0, 3)
 	for _, level := range ModelCapabilityLevels() {
@@ -90,6 +107,7 @@ type ModelFeatures struct {
 	MinimumContext       int    `json:"minimum_context"`
 	AutoTiming           bool   `json:"auto_timing"`
 	PrepareDecisions     bool   `json:"prepare_decisions"`
+	IntermediatePlanning bool   `json:"intermediate_planning"`
 	IndependentVibration bool   `json:"independent_vibration"`
 	ResponseRepair       bool   `json:"response_repair"`
 }
@@ -99,5 +117,6 @@ func (s LLMSettings) ModelFeatures() ModelFeatures {
 	advanced := s.AdvancedMotion()
 	return ModelFeatures{Level: s.ModelCapabilityLevel(), MinimumContext: MinimumLocalContext(s.ModelCapabilityLevel()),
 		AutoTiming: advanced, PrepareDecisions: advanced, ResponseRepair: advanced,
+		IntermediatePlanning: s.IntermediateMotion() && (s.MotionGenerationMode == LLMMotionModeLayered || s.MotionGenerationMode == LLMMotionModeCreativeV2),
 		IndependentVibration: advanced && (s.MotionGenerationMode == LLMMotionModeLayered || s.MotionGenerationMode == LLMMotionModeCreativeV2)}
 }

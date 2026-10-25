@@ -222,3 +222,22 @@ func TestPrepareNextDecisionDefaultsOnForOldDocuments(t *testing.T) {
 		t.Fatalf("explicit off was not kept: %+v, %v", settings.Autopilot, err)
 	}
 }
+
+func TestIntermediatePlanningDefaultsOnAndPreservesExplicitOff(t *testing.T) {
+	if !DefaultAutopilotSettings().IntermediatePlanning {
+		t.Fatal("existing Intermediate behavior must remain the default")
+	}
+	legacy, _, err := loadSettingsFromBytes([]byte(`{"version":2,"autopilot":{"speech_cadence":"natural","motion_change_level":5}}`))
+	if err != nil || !legacy.Autopilot.IntermediatePlanning {
+		t.Fatalf("old settings lost extra planning: %+v %v", legacy.Autopilot, err)
+	}
+	legacy.Autopilot.IntermediatePlanning = false
+	encoded, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, _, err := loadSettingsFromBytes(encoded)
+	if err != nil || loaded.Autopilot.IntermediatePlanning || loaded.Autopilot.MotionChangeLevel != 5 {
+		t.Fatalf("explicit off or other preferences changed on reload: %+v %v", loaded.Autopilot, err)
+	}
+}

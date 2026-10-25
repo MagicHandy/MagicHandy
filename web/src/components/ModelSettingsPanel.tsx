@@ -6,7 +6,6 @@ import type { LLMCatalog, LLMCatalogModel } from "../api/catalog-types";
 import type {
   LLMModelImport,
   LLMModelManagerSnapshot,
-  LLMMotionCapabilities,
   LLMProviderStatus,
   ManagedLlamaRuntimeBuild,
   ManagedLlamaRuntimeStatus,
@@ -18,12 +17,11 @@ import { RefreshIcon, TrashIcon, UploadIcon } from "../shell/icons";
 import { useToast } from "../state/app-state";
 import { formatBytes } from "../util/format";
 import { HostPathField } from "./HostPathField";
-import { llmMotionModeHelp } from "./LLMMotionModeHelp";
 import { ModelCatalogDownloads } from "./ModelCatalog";
 import { ModelCheckDialog } from "./ModelCheckDialog";
-import { ReplyLengthField } from "./ReplyLengthField";
 import { OllamaLibraryImport } from "./OllamaLibraryImport";
 import { ModelCapabilityField } from "./ModelCapabilityField";
+import { FieldRow } from "./SetupSection";
 import type { ModelCapabilityOption } from "../api/llm-settings-types";
 
 type LLMSettings = PublicSettings["llm"];
@@ -38,10 +36,11 @@ interface ModelSettingsPanelProps {
   llamaContextSizes: number[];
   reasoningModes: string[];
   maxOutputOptions: number[];
-  replyLengths?: string[];
   capabilityOptions?: ModelCapabilityOption[];
   locked: boolean;
   patch: (next: Partial<LLMSettings>) => void;
+  // Reports the chat runtime's status for the local model's row in Models.
+  onStatus?: (status: LLMProviderStatus | null) => void;
 }
 
 const message = (error: unknown) => (error instanceof Error ? translateKnown(error.message) : t("Request failed"));
@@ -50,11 +49,13 @@ const isActiveRuntimeBuild = (build?: ManagedLlamaRuntimeBuild) => build?.status
 const providerLabel = (provider: string) => provider === "llama_cpp" ? "llama.cpp" : provider === "ollama" ? "Ollama" : provider;
 const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic / provider default" : mode === "off" ? "Disabled when supported" : mode;
 
-// Absent capabilities resolve to the server defaults: everything but
-// experimental patterns (mirrors config.DefaultLLMMotionCapabilities).
-const defaultCapabilities: LLMMotionCapabilities = { motion: true, patterns: true, area_focus: true, experimental_patterns: false };
+// Provider and llama.cpp mode read as one choice: where the model runs.
+type Runtime = "managed" | "ollama" | "external";
+const runtimeOf = (settings: LLMSettings): Runtime => settings.provider === "ollama" ? "ollama" : settings.llama_cpp_mode === "external" ? "external" : "managed";
+const runtimePatch = (runtime: Runtime): Partial<LLMSettings> => runtime === "ollama" ? { provider: "ollama" } : { provider: "llama_cpp", llama_cpp_mode: runtime };
+const runtimeLabel = (runtime: Runtime) => runtime === "managed" ? "Managed llama.cpp" : runtime === "ollama" ? "Ollama" : "External llama.cpp server";
 
-export function ModelSettingsPanel({ settings, saved, providers, llamaModes, managedLoadPolicies = [], llamaContextSizes, reasoningModes, maxOutputOptions, replyLengths = [], capabilityOptions = [], locked, patch, configurationOnly = false }: ModelSettingsPanelProps) {
+export function ModelSettingsPanel({ settings, saved, providers, llamaModes, managedLoadPolicies = [], llamaContextSizes, reasoningModes, maxOutputOptions, capabilityOptions = [], locked, patch, configurationOnly = false, onStatus }: ModelSettingsPanelProps) {
   const { show } = useToast();
   const [manager, setManager] = useState<LLMModelManagerSnapshot | null>(null);
   const [catalog, setCatalog] = useState<LLMCatalog | null>(null);
@@ -90,25 +91,13 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
   const protectedManagedModelID = saved?.provider === "llama_cpp" && saved.llama_cpp_mode === "managed" ? saved.model : "";
   const minimumOutput = capabilityOptions.find(option => option.level === (settings.local_capability_level || "simple"))?.minimum_output ?? 64;
   const outputOptions = Array.from(new Set([settings.max_output_tokens, ...(maxOutputOptions.length ? maxOutputOptions : [128, 256, 512, 1024])])).filter(value => value >= minimumOutput).sort((a, b) => a - b);
-  const contextSize = settings.llama_cpp_context_size;
   const managedLoadPolicy = settings.managed_load_policy || "startup";
-  const contextSizeOptions = Array.from(new Set([contextSize, ...llamaContextSizes])).sort((a, b) => a - b);
-  const capabilities = settings.motion_capabilities ?? defaultCapabilities;
+  const runtime = runtimeOf(settings);
+  const runtimes = (["managed", "ollama", "external"] as Runtime[]).filter(item => item === runtime
+    || (item === "ollama" ? providers.length === 0 || providers.includes("ollama") : (providers.length === 0 || providers.includes("llama_cpp")) && (llamaModes.length === 0 || llamaModes.includes(item))));
+  const managed = runtime === "managed";
 
-  function patchCapability(key: keyof LLMMotionCapabilities, value: boolean) {
-    patch({ motion_capabilities: { ...capabilities, [key]: value } });
-  }
-
-  function patchMotionMode(mode: string) {
-    patch({
-      motion_generation_mode: mode,
-      motion_capabilities: {
-        ...capabilities,
-        motion: mode !== "off",
-        patterns: mode === "pattern" ? true : capabilities.patterns,
-      },
-    });
-  }
+  useEffect(() => { onStatus?.(configurationOnly ? null : status); }, [configurationOnly, onStatus, status]);
 
   const refreshManager = useCallback(async () => {
     if (managerRefresh.current) return managerRefresh.current;
@@ -362,35 +351,19 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
   const statusMessage = dirty ? "Save settings to check this configuration." : status?.message || "Checking runtime";
   return (
     <>
-      <h3 className="section-title">{t("Model")}</h3>
       {managerMessage && <p className="form-status form-status-error" role="alert">{t("Model list unavailable: {message}", { message: managerMessage })}</p>}
 
-      <div className="group">
-        <div className="model-section-head model-runtime-section-head">
-          <h4 className="group-title">{t("Local LLM")}</h4>
-          {!configurationOnly && <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite" aria-busy={status?.loading || undefined}>
-            <span className="status-dot" aria-hidden="true" />
-            <span>{statusMessage}</span>
-          </div>}
-        </div>
-
-        <div className="model-runtime-grid">
-          <label className="field">
-            <span className="label">{t("Provider")}</span>
-            <select value={settings.provider} disabled={locked} onChange={(event) => patch({ provider: event.target.value })}>
-              {(providers.length ? providers : [settings.provider]).map((provider) => (
-                <option key={provider} value={provider}>{providerLabel(provider)}</option>
-              ))}
+      <div className="model-editor-section">
+        {!configurationOnly && <div className={`model-health model-health-${statusTone}`} role="status" aria-live="polite" aria-busy={status?.loading || undefined}>
+          <span className="status-dot" aria-hidden="true" />
+          <span>{statusMessage}</span>
+        </div>}
+        <div className="form-rows">
+          <FieldRow id="local-model-runtime" label={t("Runtime")} hint={t("Managed llama.cpp, your Ollama, or a llama.cpp server you run.")}>
+            <select id="local-model-runtime" aria-describedby="local-model-runtime-hint" value={runtime} disabled={locked} onChange={(event) => patch(runtimePatch(event.target.value as Runtime))}>
+              {runtimes.map((item) => <option key={item} value={item}>{translateKnown(runtimeLabel(item))}</option>)}
             </select>
-          </label>
-          {settings.provider === "llama_cpp" && (
-            <label className="field">
-              <span className="label">{t("llama.cpp mode")}</span>
-              <select value={settings.llama_cpp_mode} disabled={locked} onChange={(event) => patch({ llama_cpp_mode: event.target.value })}>
-                {(llamaModes.length ? llamaModes : [settings.llama_cpp_mode]).map((mode) => <option key={mode} value={mode}>{mode}</option>)}
-              </select>
-            </label>
-          )}
+          </FieldRow>
         </div>
 
         {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
@@ -445,14 +418,6 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
           <summary>{t("Advanced generation settings")}</summary>
           <p className="form-status">{t("The defaults suit the tested models. Change these only to fix a specific problem.")}</p>
           <div className="model-generation-settings" aria-label={t("Generation optimizations")}>
-            {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (!settings.local_capability_level || settings.local_capability_level === "simple") && (
-              <label className="field">
-                <span className="label">{t("Context size")}</span>
-                <select value={contextSize} disabled={locked} onChange={(event) => patch({ llama_cpp_context_size: Number(event.target.value) })}>
-                  {contextSizeOptions.map((tokens) => <option key={tokens} value={tokens}>{t("{count} tokens", { count: tokens })}</option>)}
-                </select>
-              </label>
-            )}
             <label className="field">
               <span className="label">{t("Maximum output")}</span>
               <select value={settings.max_output_tokens} disabled={locked} onChange={(event) => patch({ max_output_tokens: Number(event.target.value) })}>
@@ -496,58 +461,10 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
 
       </div>
 
-      <div className="group">
-        <h4 className="group-title">{t("Replies")}</h4>
-        <ReplyLengthField value={settings.reply_length || "balanced"} options={replyLengths} locked={locked} onChange={(reply_length) => patch({ reply_length })} />
-      </div>
-
-      <div className="group">
-        <h4 id="model-permissions-title" className="group-title">{t("Motion generation")}</h4>
-        <div className="capability-gates" role="group" aria-labelledby="model-permissions-title">
-          <label className="field capability-mode">
-            <span className="label">{t("LLM motion")}</span>
-            <select
-              value={settings.motion_generation_mode || (capabilities.motion ? "dynamic" : "off")}
-              disabled={locked}
-              onChange={(event) => patchMotionMode(event.target.value)}
-            >
-              <option value="layered">{t("Layered")}</option>
-              <option value="creative_v2">{t("Creative v2")}</option>
-              <option value="dynamic">{t("Creative")}</option>
-              <option value="pattern">{t("Pattern library")}</option>
-              <option value="off">{t("Off")}</option>
-            </select>
-          </label>
-          <p className="capability-mode-help">{llmMotionModeHelp(settings.motion_generation_mode || (capabilities.motion ? "dynamic" : "off"))}</p>
-          {(settings.motion_generation_mode || "dynamic") === "pattern" && (
-            <>
-              <label className="capability-gate" title={t("Allow tip, shaft, base, and full-range targets")}>
-                <input
-                  type="checkbox"
-                  checked={capabilities.area_focus}
-                  disabled={locked}
-                  onChange={(event) => patchCapability("area_focus", event.target.checked)}
-                />
-                <span>{t("Area focus")}</span>
-              </label>
-              <label className="capability-gate" title={t("Allow experimental-tagged library patterns")}>
-                <input
-                  type="checkbox"
-                  checked={capabilities.experimental_patterns}
-                  disabled={locked}
-                  onChange={(event) => patchCapability("experimental_patterns", event.target.checked)}
-                />
-                <span>{t("Experimental patterns")}</span>
-              </label>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="group">
+      {managed && <div className="model-editor-section">
         <div className="model-section-head">
           <div>
-            <h4 className="group-title">{t("Managed models")}</h4>
+            <h4 className="group-title">{t("Models on this computer")}</h4>
             <p className="model-store-path">{manager?.store_path || (managerMessage ? t("Model store unavailable") : t("Loading model store"))}</p>
           </div>
           <div className="row-actions model-import-actions">
@@ -595,7 +512,7 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
             />
           </>
         ) : !managerMessage && <p className="form-status" role="status">{t("Loading model list...")}</p>}
-      </div>
+      </div>}
     </>
   );
 }

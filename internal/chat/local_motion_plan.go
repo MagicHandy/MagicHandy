@@ -17,8 +17,8 @@ const localHumanDirectionGuide = "Judge which wishes are still active before pro
 const localPlanNoteLimit = 240
 const localPlanOutputFloor = 384
 
-func localDecisionNotes(caps Capabilities) bool {
-	return !caps.AdvancedMotion && (caps.SimpleMotion || caps.IntermediateMotion)
+func localDecisionNotes(caps Capabilities, disableIntermediate bool) bool {
+	return !caps.AdvancedMotion && (caps.SimpleMotion || (caps.IntermediateMotion && !disableIntermediate))
 }
 
 func localPlanningMessages(messages []llm.Message, state MotionContext) []llm.Message {

@@ -29,8 +29,9 @@ a pre-Stop or otherwise stale repair cannot acquire it.
 
 The backend exposes the pending level for a short stopped-state explanation.
 **Keep vibration off** explicitly sets zero and clears permission. The Add device
-notice explains independent control: external models and Advanced local models
-support it in Layered/Creative v2; other models use movement-follow vibration.
+notice explains independent control: Advanced models, such as hosted ones,
+support it in Layered/Creative v2; other models use movement-follow vibration
+(capability is per model since the ADR 0058 amendment).
 
 ## Evidence
 

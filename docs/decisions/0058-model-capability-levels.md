@@ -69,3 +69,42 @@ Simple for E4B. Easy, Custom and local-backup setup apply that recommendation to
 the selected model, including matching family/parameter metadata from existing
 Ollama or managed imports. Unknown models stay Simple; names alone do not promote
 them. Saved or manually selected capabilities win, and higher budgets are kept.
+
+## Amendment: every model has a level (2026-10-25)
+
+The owner asked for the capability choice on external providers too, in
+particular a server such as LM Studio, which may run the same small model as a
+local runtime. Resolving every connection to Advanced gave such a server the
+contract the tested 12B fails (4/20 independent-control turns), and a 64K floor
+its loaded context may not provide. This amends "External connections retain
+their Advanced contract" above.
+
+- `ModelConnection.capability_level` selects Simple, Intermediate or Advanced
+  per connection. An empty value keeps Advanced, so connections saved before
+  levels existed are unchanged. New "Other compatible provider" connections
+  start Simple, like an unknown local model; ChatGPT, OpenAI and OpenRouter
+  start Advanced. No level is inferred from a model name.
+- A connection's request budget uses the same floors: 16K, 32K and 64K, then
+  128K and 256K. Below 64K it keeps the local prompt history of 64 messages /
+  24 KB. Raising a level raises an insufficient budget, lowering it keeps a
+  larger saved one, and a saved 32K Advanced connection still moves to 64K.
+- Features, prompts and history follow the resolved level, not the transport.
+  A Simple connection uses the compact contract without Auto timing,
+  preparation, response repair or independent vibration. Routing, credentials,
+  readiness checks and the hosted request lane are unchanged.
+- The motion second opinion reviews any role below Advanced, local or served by
+  a connection, and no Advanced role. Before, it reviewed every local role.
+
+Settings gives each option one home; see the
+[settings review](../chat-model-settings-review-2026-10-25.md). Model roles holds
+Chat, Autopilot, the second opinion and the repair and declined-request retry
+switches. One Models list holds the local model and each provider, each with the
+same Capability and Context rows. Reply length moved beside Chat voice, and the
+LLM motion mode and its Pattern library options live only on the Chat page.
+
+Validation: config and HTTP tests cover per-connection resolution, budgets,
+validation, routing features, the compact contract and budget for a Simple
+connection, reviewer eligibility and the motion card's Pattern library options.
+A Simple compatible connection to Ollama's OpenAI endpoint completed the
+readiness probe and a text-only chat in one provider call (9,956 of 11,633
+prompt bytes), without repair, fallback or motion.

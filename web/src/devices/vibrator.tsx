@@ -84,7 +84,7 @@ export const vibratorDevice: DeviceDescriptor = {
   name: () => t("Vibrator"),
   Glyph: VibratorGlyph,
   addDetail: () => t("Any vibrator Intiface Central supports"),
-  addNotice: () => t("Independent vibration needs an external model or an Advanced local model, using Layered or Creative v2. Otherwise it follows movement."),
+  addNotice: () => t("Independent vibration needs an Advanced model, such as a hosted one, using Layered or Creative v2. Otherwise it follows movement."),
   model: vibratorModel,
   sections: [
     { id: "connection", title: () => t("Connection"), Body: VibratorConnectionSection },

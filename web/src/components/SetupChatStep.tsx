@@ -87,9 +87,9 @@ export function SetupChatStep(props: SetupChatStepProps) {
     {(choice === "managed" || choice === "ollama" || choice === "external") && <ModelCapabilityField
       settings={props.settings} options={props.savedSettings?.options?.local_model_capabilities ?? []}
       contextSizes={props.savedSettings?.options?.llama_cpp_context_sizes ?? []}
-      locked={props.locked} patch={props.patchLLM} />}
+      locked={props.locked} patch={props.patchLLM} contextAtSimple={false} />}
     {/* Hosted routing brings its own cards (routing, chat, Autopilot), as in Settings. */}
-    {choice === "hosted" && <ModelConnectionsPanel setup settings={props.settings} saved={props.savedSettings?.llm} routing={props.savedSettings?.model_routing} locked={props.locked} patch={props.patchLLM} />}
+    {choice === "hosted" && <ModelConnectionsPanel setup settings={props.settings} saved={props.savedSettings?.llm} routing={props.savedSettings?.model_routing} locked={props.locked} patch={props.patchLLM} capabilityOptions={props.savedSettings?.options?.local_model_capabilities ?? []} />}
   </div>;
 }
 

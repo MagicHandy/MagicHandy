@@ -24,12 +24,14 @@ type motionReviewJob struct {
 	queuedAt                                                                    time.Time
 }
 
-func (s *Server) reviewLocalChoice(settings config.LLMSettings) bool {
-	return settings.MotionReviewer.Enabled && !settings.IsHosted() && chatCapabilities(settings, nil).Motion
+// reviewModelChoice reviews models below Advanced, local or served by a
+// connection such as LM Studio; Advanced models plan on their own.
+func (s *Server) reviewModelChoice(settings config.LLMSettings) bool {
+	return settings.MotionReviewer.Enabled && !settings.AdvancedMotion() && chatCapabilities(settings, nil).Motion
 }
 
 func (s *Server) beforeChatReview(settings config.LLMSettings, capabilities chat.Capabilities) *motion.MotionTarget {
-	if !s.reviewLocalChoice(settings) || !capabilities.Motion || capabilities.MotionHolder != chat.MotionHolderSettings {
+	if !s.reviewModelChoice(settings) || !capabilities.Motion || capabilities.MotionHolder != chat.MotionHolderSettings {
 		return nil
 	}
 	before := motion.MotionTarget{}
@@ -52,7 +54,7 @@ func (s *Server) reviewCompletedChat(ctx context.Context, completed bool, before
 
 func (s *Server) queueChatMotionReview(before motion.MotionTarget, applied motion.ActiveMotionState, request string) {
 	settings, _ := s.store.Snapshot()
-	if !s.reviewLocalChoice(settings.LLM.ConversationSettings()) {
+	if !s.reviewModelChoice(settings.LLM.ConversationSettings()) {
 		return
 	}
 	s.queueMotionReview(settings, applied, chat.MotionReviewInput{Source: "chat", Request: request, Before: before})
@@ -61,7 +63,7 @@ func (s *Server) queueChatMotionReview(before motion.MotionTarget, applied motio
 func (s *Server) reviewAutopilotChoice(input modes.DecisionInput, state motion.ActiveMotionState) {
 	settings, _ := s.store.Snapshot()
 	planning, err := settings.LLM.PlanningSettings()
-	if err != nil || settings.LLM.MotionPlanner.Provider == config.MotionPlannerDecisions || !s.reviewLocalChoice(planning) {
+	if err != nil || settings.LLM.MotionPlanner.Provider == config.MotionPlannerDecisions || !s.reviewModelChoice(planning) {
 		return
 	}
 	capabilities := chatCapabilities(settings.LLM, nil)

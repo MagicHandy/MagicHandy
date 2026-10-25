@@ -11,8 +11,8 @@ const outdated = {
   suggested_ollama_path: "",
   runtime: {
     state: "outdated", installed: true, current: false, build_supported: true,
-    supported_backends: ["auto", "cpu", "cuda"], expected_version: "b11149", version: "b9966",
-    backend: "cuda", message: "Managed llama.cpp b9966 is installed; b11149 is the current pinned build.",
+    supported_backends: ["auto", "cpu", "cuda"], expected_version: "b11533", version: "b9966",
+    backend: "cuda", message: "Managed llama.cpp b9966 is installed; b11533 is the current pinned build.",
   },
 } as LLMModelManagerSnapshot;
 
@@ -30,7 +30,7 @@ describe("RuntimeUpdateSettings", () => {
 
   it("offers an update with the backend already in use", async () => {
     render(<RuntimeUpdateSettings automatic={false} preferenceDisabled={false} actionDisabled={false} onAutomaticChange={vi.fn()} />);
-    expect(await screen.findByText("b9966 is installed; this release uses b11149.")).toBeVisible();
+    expect(await screen.findByText("b9966 is installed; this release uses b11533.")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Update now" }));
     await waitFor(() => expect(api.buildManagedLlamaRuntime).toHaveBeenCalledWith("cuda"));
   });

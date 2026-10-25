@@ -134,6 +134,35 @@ func TestSimplePlanUnknownAgesAndMessageOwnership(t *testing.T) {
 	}
 }
 
+func TestIntermediatePlanningSwitchDoesNotAlterOtherLevels(t *testing.T) {
+	for _, mode := range []MotionMode{MotionModeLayered, MotionModeCreativeV2} {
+		for _, level := range []string{"simple", "intermediate", "advanced"} {
+			for _, kind := range []AutopilotKind{AutopilotKindMotion, AutopilotKindSpeech} {
+				caps := Capabilities{Motion: true, MotionMode: mode, SimpleMotion: level == "simple", IntermediateMotion: level == "intermediate", AdvancedMotion: level == "advanced"}
+				flow, edits := DefaultLayeredScore(43), `{}`
+				if mode == MotionModeCreativeV2 {
+					flow, edits = FreshCreativeV2Score(43), `[]`
+				}
+				provider := &scriptedProvider{responses: []string{`{"edits":` + edits + `,"reply":"Keeping the rhythm."}`}}
+				service := AutopilotService{Provider: provider, Capabilities: caps, MaxTokens: 256, DisableIntermediatePlanning: true,
+					MotionContext: &MotionContext{Running: true, MotionMode: mode, Layered: &flow}}
+				if _, err := service.Complete(t.Context(), kind, Request{Message: "Continue."}); err != nil {
+					t.Fatalf("%s/%s/%s: %v", mode, level, kind, err)
+				}
+				request := provider.requests[0]
+				planned := level == "simple" && kind == AutopilotKindMotion
+				wantTokens := 256
+				if planned {
+					wantTokens = 384
+				}
+				if strings.Contains(string(request.JSONSchema), `"basis"`) != planned || request.MaxTokens != wantTokens || strings.Contains(request.Messages[0].Content, localPlanGuide) != planned {
+					t.Fatalf("%s/%s/%s: disabling Intermediate changed another contract or retained its cost", mode, level, kind)
+				}
+			}
+		}
+	}
+}
+
 func TestSimpleLifecyclePromptFits16K(t *testing.T) {
 	for _, set := range BuiltinPromptSets() {
 		for _, mode := range []MotionMode{MotionModeLayered, MotionModeCreativeV2} {

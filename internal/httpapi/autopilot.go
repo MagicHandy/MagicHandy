@@ -191,19 +191,20 @@ func (s *Server) autopilotModelTurn(
 		temperature = 0.98
 	}
 	service := chat.AutopilotService{
-		Provider:              provider,
-		Prompt:                prompt,
-		Model:                 settings.LLM.Model,
-		MaxTokens:             settings.LLM.MaxOutputTokens,
-		ReasoningMode:         settings.LLM.ReasoningMode,
-		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
-		PromptBudget:          chatPromptBudget(settings.LLM),
-		Temperature:           temperature,
-		Memories:              memories,
-		Patterns:              patternChoices,
-		MotionContext:         &motionContext,
-		ConversationContext:   promptContext.ConversationContext,
-		Capabilities:          capabilities,
+		Provider:                    provider,
+		Prompt:                      prompt,
+		Model:                       settings.LLM.Model,
+		MaxTokens:                   settings.LLM.MaxOutputTokens,
+		ReasoningMode:               settings.LLM.ReasoningMode,
+		ReasoningBudgetTokens:       managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
+		PromptBudget:                chatPromptBudget(settings.LLM),
+		Temperature:                 temperature,
+		Memories:                    memories,
+		Patterns:                    patternChoices,
+		MotionContext:               &motionContext,
+		ConversationContext:         promptContext.ConversationContext,
+		Capabilities:                capabilities,
+		DisableIntermediatePlanning: !settings.Autopilot.IntermediatePlanning,
 	}
 	modelContext := autopilotPromptContext(input, capabilities)
 	if technical {

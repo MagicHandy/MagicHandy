@@ -47,6 +47,8 @@ export interface AutopilotSettings {
   // An external planner's next decision is planned as each stretch begins and
   // applied at its end. Chat replaces it. Absent means on.
   prepare_next_decision?: boolean;
+  // Extra planning for Intermediate continuous motion. Absent means on.
+  intermediate_planning?: boolean;
   // Inert read-only context: elapsed time, speed history, and backend-measured
   // phrase sameness. Off omits the facts from the prompt rather than sending
   // zeros.

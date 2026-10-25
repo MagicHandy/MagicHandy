@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import type { CloudPlanningStatus, HostedModel, ModelConnection } from "../api/cloud-types";
+import type { ModelCapabilityOption } from "../api/llm-settings-types";
 import { t } from "../i18n";
 import { ChatGPTConnection } from "./ChatGPTConnection";
-import { connectionSignature } from "../util/model-connections";
+import { capabilityFloor, connectionCapability, connectionSignature } from "../util/model-connections";
 import { ModelResponseSettings, modelReadyMessage, selectedModelChange } from "./ModelResponseSettings";
 import { FieldRow } from "./SetupSection";
 import { ModelContextSettings } from "./ModelContextSettings";
@@ -11,10 +12,12 @@ import { CloudCredentialRecovery } from "./CloudCredentialRecovery";
 
 // One editor for a provider connection, in Setup and in Settings. Catalog
 // discovery is automatic; generation remains an explicit user action.
-// `full` adds what only Settings shows: the connection's name and its
-// advanced capability and routing options.
-export function ModelConnectionEditor({ connection, locked, patch, onReady = () => {}, full = false }: {
+// `full` adds what only Settings shows: the connection's name and its request
+// format and routing options. Capability and context show in both, because a
+// server such as LM Studio may run a small model.
+export function ModelConnectionEditor({ connection, locked, patch, onReady = () => {}, full = false, capabilityOptions = [] }: {
   connection: ModelConnection; locked: boolean; patch: (change: Partial<ModelConnection>) => void; onReady?: (ready: boolean) => void; full?: boolean;
+  capabilityOptions?: ModelCapabilityOption[];
 }) {
   const [key, setKey] = useState("");
   const [keySaved, setKeySaved] = useState(false);
@@ -69,7 +72,7 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
     setModels(result.models);
     if (current.provider === "chatgpt" && !current.model && result.models[0]) {
       const recommended = result.models.find(model => model.id === "gpt-6-sol") ?? result.models.find(model => model.id === "gpt-6.1-sol") ?? result.models[0];
-      patchRef.current(selectedModelChange(recommended, recommended.id, current));
+      patchRef.current(selectedModelChange(recommended, recommended.id, current, capabilityFloor(connectionCapability(current), capabilityOptions)));
     }
   }
   function discover(generation: number) {
@@ -117,7 +120,8 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
   const disabled = locked || Boolean(operation);
   const connected = connection.provider === "chatgpt" ? accountReady : keySaved || Boolean(connection.no_authentication);
   const filtered = models.filter(model => `${model.name} ${model.id}`.toLowerCase().includes(search.toLowerCase())).slice(0, 50);
-  const manualModel = <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={connection.model} disabled={disabled} onChange={event => patch({ model: event.target.value, reasoning_effort: "", context_window: 65536 })} /></label>;
+  const floor = capabilityFloor(connectionCapability(connection), capabilityOptions);
+  const manualModel = <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={connection.model} disabled={disabled} onChange={event => patch({ model: event.target.value, reasoning_effort: "", context_window: connection.provider === "compatible" ? Math.max(connection.context_window || 0, floor) : floor })} /></label>;
   const checkModel = () => void run("check", async () => {
     const current = connectionRef.current;
     const snapshot = connectionSignature(current);
@@ -150,13 +154,13 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
     </>}
     {operation === "catalog" && <p className="hint form-row-note" role="status">{t("Fetching models...")}</p>}
     {models.length > 20 && <label className="form-row"><span className="form-row-label"><strong>{t("Search models")}</strong></span><input type="text" value={search} disabled={disabled} onChange={event => setSearch(event.target.value)} /></label>}
-    {models.length > 0 && <label className="form-row"><span className="form-row-label"><strong>{t("Available models")}</strong></span><select value={connection.model} disabled={disabled} onChange={event => patch(selectedModelChange(models.find(model => model.id === event.target.value), event.target.value, connection))}>
+    {models.length > 0 && <label className="form-row"><span className="form-row-label"><strong>{t("Available models")}</strong></span><select value={connection.model} disabled={disabled} onChange={event => patch(selectedModelChange(models.find(model => model.id === event.target.value), event.target.value, connection, floor))}>
       <option value="">{t("Select an available model")}</option>
       {connection.model && !filtered.some(model => model.id === connection.model) && <option value={connection.model}>{connection.model}</option>}
       {filtered.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
     </select></label>}
-    {connected && <div className="form-row form-row-plain"><ModelResponseSettings connection={connection} models={models} disabled={disabled} patch={patch} compact /></div>}
-    {connection.model.trim() && <ModelContextSettings connection={connection} models={models} disabled={disabled} patch={patch} />}
+    {connected && <ModelResponseSettings connection={connection} models={models} disabled={disabled} patch={patch} compact />}
+    {connection.model.trim() && <ModelContextSettings connection={connection} models={models} options={capabilityOptions} disabled={disabled} patch={patch} />}
     {connected && <div className="form-row">
       <span className="form-row-label"><small role="status">{testMessage || t("Check model uses a text-only request. Nothing moves.")}</small></span>
       <button type="button" className="btn btn-secondary" disabled={disabled || !connection.model.trim()} onClick={checkModel}>{operation === "check" ? t("Checking model...") : t("Check model")}</button>
@@ -172,7 +176,7 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
       })}>{t("Remove API key")}</button></details>}
     </div>}
     {full && (connection.provider === "openrouter" || connection.provider === "compatible") && <details className="form-row-details">
-      <summary>{t("Provider capabilities and routing")}</summary>
+      <summary>{t("Request format and routing")}</summary>
       <AdvancedRows connection={connection} disabled={disabled} patch={patch} />
     </details>}
     {error && <p className="form-status form-status-error" role="alert">{error}</p>}

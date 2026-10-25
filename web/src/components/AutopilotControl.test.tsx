@@ -558,6 +558,46 @@ describe("AutopilotControl", () => {
     expect(screen.getByText("Motion 31 s, ready · Speech Off")).toBeInTheDocument();
   });
 
+  it("offers extra planning only when the saved planner supports it, and saves both choices", async () => {
+    saveAutopilotPreferences.mockImplementation(async (next) => ({ autopilot: next }));
+    const settings = {
+      autopilot: { ...autopilotPreferences, intermediate_planning: true },
+      model_routing: {
+        chat: { kind: "hosted", features: { intermediate_planning: false } },
+        autopilot: { kind: "local", features: { intermediate_planning: true } },
+      },
+    };
+    app.state = { modes: {}, settings };
+    const view = render(<AutopilotControl />);
+    const toggle = screen.getByRole("checkbox", { name: "Extra planning" });
+    expect(toggle).toBeChecked();
+    expect(toggle).toHaveAccessibleDescription(/0.4–0.7 s.*Gemma 12B/);
+    await act(async () => fireEvent.click(toggle));
+    expect(saveAutopilotPreferences).toHaveBeenLastCalledWith(expect.objectContaining({ intermediate_planning: false, motion_change_level: 4 }));
+    expect(toggle).not.toBeChecked();
+    await act(async () => fireEvent.click(toggle));
+    expect(saveAutopilotPreferences).toHaveBeenLastCalledWith(expect.objectContaining({ intermediate_planning: true }));
+    app.state = { modes: {}, settings: { ...settings, model_routing: {
+      chat: { features: { intermediate_planning: true } },
+      autopilot: { kind: "hosted", features: { intermediate_planning: false } },
+    } } };
+    view.rerender(<AutopilotControl />);
+    expect(screen.queryByRole("checkbox", { name: "Extra planning" })).not.toBeInTheDocument();
+  });
+
+  it("restores the saved extra-planning choice when saving fails", async () => {
+    saveAutopilotPreferences.mockRejectedValue(new Error("Save failed"));
+    app.state = { modes: {}, settings: {
+      autopilot: { ...autopilotPreferences, intermediate_planning: true },
+      model_routing: { autopilot: { features: { intermediate_planning: true } } },
+    } };
+    render(<AutopilotControl />);
+    const toggle = screen.getByRole("checkbox", { name: "Extra planning" });
+    await act(async () => fireEvent.click(toggle));
+    expect(toggle).toBeChecked();
+    expect(app.show).toHaveBeenCalledWith("Save failed", "error");
+  });
+
   it("clears the arc when session tracking is switched off", async () => {
     saveAutopilotPreferences.mockResolvedValue({ autopilot: autopilotPreferences });
     app.state = {

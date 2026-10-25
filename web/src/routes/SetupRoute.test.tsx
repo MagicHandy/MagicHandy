@@ -328,8 +328,8 @@ describe("SetupRoute", () => {
     expect(screen.getByRole("link", { name: "License terms" })).toHaveAttribute("href", catalogModel.license_url);
     expect(screen.queryByRole("button", { name: /build managed|install managed/i })).not.toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Use my existing Ollama/i })).not.toBeChecked();
-    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("intermediate");
-    expect(screen.getByRole("combobox", { name: "Context size" })).toHaveValue("32768");
+    expect(screen.getByRole("combobox", { name: "Capability" })).toHaveValue("intermediate");
+    expect(screen.getByRole("combobox", { name: "Context" })).toHaveValue("32768");
     await continueTo("Add voice features");
     expect(api.saveSetupPreferences).toHaveBeenLastCalledWith({ llm: expect.objectContaining({ local_capability_level: "intermediate", llama_cpp_context_size: 32768, max_output_tokens: 512 }) });
   });
@@ -338,10 +338,10 @@ describe("SetupRoute", () => {
     const small = { ...catalogModel, id: "e4b", display_name: "Gemma E4B fixture", parameter_size: "7.5B", recommended_capability: "simple" as const, default: true, fit: "recommended" as const };
     vi.mocked(api.llmCatalog).mockResolvedValue({ ...catalogFixture("supported"), models: [small, { ...catalogModel, default: false, fit: "supported" }] });
     await openChatStep();
-    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("simple");
+    expect(screen.getByRole("combobox", { name: "Capability" })).toHaveValue("simple");
     fireEvent.click(screen.getByRole("radio", { name: /Gemma 4 12B fixture/ }));
-    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("intermediate");
-    fireEvent.change(screen.getByRole("combobox", { name: "Model capability" }), { target: { value: "advanced" } });
+    expect(screen.getByRole("combobox", { name: "Capability" })).toHaveValue("intermediate");
+    fireEvent.change(screen.getByRole("combobox", { name: "Capability" }), { target: { value: "advanced" } });
     fireEvent.click(screen.getByRole("radio", { name: /Gemma E4B fixture/ }));
     fireEvent.click(screen.getByRole("radio", { name: /Gemma 4 12B fixture/ }));
     await continueTo("Add voice features");
@@ -357,16 +357,16 @@ describe("SetupRoute", () => {
     fireEvent.click(screen.getByRole("radio", { name: /use my existing ollama/i }));
     const select = await screen.findByRole("combobox", { name: "Ollama model" });
     fireEvent.change(select, { target: { value: "some-other-12b" } });
-    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("simple");
+    expect(screen.getByRole("combobox", { name: "Capability" })).toHaveValue("simple");
     fireEvent.change(select, { target: { value: "renamed-local-model" } });
-    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("intermediate");
+    expect(screen.getByRole("combobox", { name: "Capability" })).toHaveValue("intermediate");
   });
 
   it("preserves a saved explicit capability when reconfiguring a 12B model", async () => {
     settings.llm.local_capability_level = "simple";
     await openChatStep();
     expect(screen.getByRole("radio", { name: /Gemma 4 12B fixture/ })).toBeChecked();
-    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("simple");
+    expect(screen.getByRole("combobox", { name: "Capability" })).toHaveValue("simple");
   });
 
   it("downloads the recommended model as part of the installation plan", async () => {

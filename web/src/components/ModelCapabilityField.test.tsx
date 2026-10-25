@@ -23,17 +23,17 @@ function Field() {
 describe("local model capability", () => {
   it("preserves Simple until selected, then applies server-provided floors without rerouting", () => {
     render(<Field />);
-    const selector = screen.getByRole("combobox", { name: "Model capability" });
+    const selector = screen.getByRole("combobox", { name: "Capability" });
     expect(selector).toHaveValue("simple");
-    expect(screen.queryByRole("combobox", { name: "Context size" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Context" })).not.toBeInTheDocument();
     fireEvent.change(selector, { target: { value: "intermediate" } });
-    expect(screen.getByRole("combobox", { name: "Context size" })).toHaveValue("32768");
+    expect(screen.getByRole("combobox", { name: "Context" })).toHaveValue("32768");
     expect(JSON.parse(screen.getByTestId("draft").textContent!)).toMatchObject({ provider: "ollama", model: "model", max_output_tokens: 512, local_capability_level: "intermediate" });
     fireEvent.change(selector, { target: { value: "advanced" } });
-    const context = screen.getByRole("combobox", { name: "Context size" });
+    const context = screen.getByRole("combobox", { name: "Context" });
     expect(context).toHaveValue("65536");
-    expect(within(context).queryByRole("option", { name: "32768 tokens" })).not.toBeInTheDocument();
-    expect(screen.getByText(/The same motion tools as external models/)).toBeInTheDocument();
+    expect(within(context).queryByRole("option", { name: "32K" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Counted phrases, independent vibration, Auto timing and response repair/)).toBeInTheDocument();
     fireEvent.change(context, { target: { value: "131072" } });
     fireEvent.change(selector, { target: { value: "simple" } });
     expect(JSON.parse(screen.getByTestId("draft").textContent!)).toMatchObject({ llama_cpp_context_size: 131072, max_output_tokens: 1024, local_capability_level: "simple" });
@@ -42,10 +42,18 @@ describe("local model capability", () => {
     const patch = vi.fn();
     render(<ModelCapabilityField settings={{ ...initial, provider: "llama_cpp", llama_cpp_mode: "external", local_capability_level: "advanced", llama_cpp_context_size: 65536 }}
       options={options} contextSizes={sizes} locked patch={patch} />);
-    expect(screen.getByRole("combobox", { name: "Model capability" })).toBeDisabled();
-    expect(screen.getByRole("combobox", { name: "Context size" })).toBeDisabled();
-    expect(screen.getByText(/Configure your server to provide this context size/)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Capability" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Context" })).toBeDisabled();
+    expect(screen.getByText("Set your server's context length to at least 64K. MagicHandy budgets each request to fit.")).toBeInTheDocument();
     expect(patch).not.toHaveBeenCalled();
+  });
+  it("shows managed llama.cpp context at Simple in Settings but keeps setup short", () => {
+    const managed = { ...initial, provider: "llama_cpp", llama_cpp_mode: "managed" };
+    const view = render(<ModelCapabilityField settings={managed} options={options} contextSizes={sizes} locked={false} patch={vi.fn()} />);
+    expect(screen.getByRole("combobox", { name: "Context" })).toHaveValue("16384");
+    expect(screen.getByText("Simple needs at least 16K. Larger contexts use more RAM and VRAM. Applied after Save.")).toBeInTheDocument();
+    view.rerender(<ModelCapabilityField settings={managed} options={options} contextSizes={sizes} locked={false} patch={vi.fn()} contextAtSimple={false} />);
+    expect(screen.queryByRole("combobox", { name: "Context" })).not.toBeInTheDocument();
   });
   it("includes capability in draft save/discard and readiness invalidation", () => {
     const advanced = { ...initial, local_capability_level: "advanced" as const };

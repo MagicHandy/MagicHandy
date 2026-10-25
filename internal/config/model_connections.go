@@ -39,6 +39,8 @@ type ModelConnection struct {
 	DataCollection      string   `json:"data_collection"`
 	ZeroDataRetention   bool     `json:"zero_data_retention"`
 	NoAuthentication    bool     `json:"no_authentication,omitempty"`
+	// CapabilityLevel is the model's motion contract. Empty keeps Advanced.
+	CapabilityLevel string `json:"capability_level,omitempty"`
 }
 
 var connectionIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
@@ -48,8 +50,11 @@ func ValidConnectionID(id string) bool { return connectionIDPattern.MatchString(
 
 // Normalize applies endpoint and routing defaults without introducing a secret.
 func (c ModelConnection) Normalize() ModelConnection {
-	if c.ContextWindow == 32768 {
-		c.ContextWindow = MinimumExternalContext
+	c.CapabilityLevel = strings.ToLower(strings.TrimSpace(c.CapabilityLevel))
+	// A level raises an insufficient budget, as it does for the local model;
+	// saved 32K Advanced connections move to the 64K floor.
+	if floor := MinimumLocalContext(c.ModelCapabilityLevel()); c.ContextWindow != 0 && c.ContextWindow < floor && slices.Contains(ConnectionContextSizes, c.ContextWindow) {
+		c.ContextWindow = floor
 	}
 	c.Name = strings.TrimSpace(c.Name)
 	c.Model = strings.TrimSpace(c.Model)
@@ -71,11 +76,8 @@ func (c ModelConnection) Normalize() ModelConnection {
 
 // Validate checks the public connection and capability policy.
 func (c ModelConnection) Validate() error {
-	if !slices.Contains([]int{0, 32768, MinimumExternalContext, 131072, 262144}, c.ContextWindow) {
-		return errors.New("conversation context must be 65536, 131072 or 262144")
-	}
-	if !oneOf(c.HistorySize, "", "recent", "long", "extended") {
-		return errors.New("conversation history must match the budget, or be recent, long or extended")
+	if err := c.validateBudget(); err != nil {
+		return err
 	}
 	if !ValidConnectionID(c.ID) || len(c.Name) == 0 || len(c.Name) > 100 || len(c.Model) > 160 {
 		return errors.New("connection needs a stable ID, bounded name and model")
@@ -104,6 +106,23 @@ func (c ModelConnection) Validate() error {
 		if len(provider) == 0 || len(provider) > 120 {
 			return errors.New("invalid OpenRouter provider restriction")
 		}
+	}
+	return nil
+}
+
+// validateBudget checks the capability level, its context floor and history.
+func (c ModelConnection) validateBudget() error {
+	if c.ContextWindow != 0 && !slices.Contains(ConnectionContextSizes, c.ContextWindow) {
+		return errors.New("conversation context must be 16384, 32768, 65536, 131072 or 262144")
+	}
+	if c.CapabilityLevel != "" && !oneOf(c.CapabilityLevel, ModelCapabilityLevels()...) {
+		return fmt.Errorf("unknown model capability %q", c.CapabilityLevel)
+	}
+	if floor := MinimumLocalContext(c.ModelCapabilityLevel()); c.ContextWindow != 0 && c.ContextWindow < floor {
+		return fmt.Errorf("%s capability requires at least %d context tokens", c.ModelCapabilityLevel(), floor)
+	}
+	if !oneOf(c.HistorySize, "", "recent", "long", "extended") {
+		return errors.New("conversation history must match the budget, or be recent, long or extended")
 	}
 	return nil
 }

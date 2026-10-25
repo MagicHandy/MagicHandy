@@ -23,6 +23,29 @@ introduced; scheduling priority, Stop and late-result admission remain intact.
 
 ## Explicitly accepted latency compromise
 
+### User control (2026-10-25 amendment)
+
+**Chat > Autopilot > Extra planning** controls the Intermediate trade-off.
+The durable setting is `autopilot.intermediate_planning`, enabled by default
+for fresh and older profiles to preserve the tested behavior. Explicit off
+survives saving and restarting, and clients that omit the new field preserve
+the existing choice when saving other Autopilot preferences.
+
+The toggle is shown only when the saved planning role has Intermediate
+capability and uses Layered or Creative v2. This follows the backend feature
+projection, including compatible API connections given Intermediate capability
+in the model settings redesign. It does not follow the chat model when the
+two roles differ. Its concise hint states the measured 12B cost below and that
+hardware changes the timing.
+
+Off removes the decision note, its schema field and the late human-direction
+copy, restoring the shorter Intermediate request on subsequent decisions.
+The ordinary system timeline remains. Simple retains its tested E4B note;
+Advanced, interactive chat and speech check-ins retain their existing formats.
+This setting introduces no additional model call or motion authority.
+
+### Measurements
+
 Measured on RTX 5070 Ti, reasoning off, two sampling seeds. Times are median
 elapsed generation/validation per decision, not physical device latency or a
 guaranteed service level. These are small scenario sets; caching and host load
