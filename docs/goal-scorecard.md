@@ -1,5 +1,16 @@
 # Goal Scorecard
 
+## 2026-10-25 — README donation QR codes
+
+The Ethereum and Bitcoin QR SVGs add **7,614 B** of documentation assets
+(3,408 B and 4,206 B). Each has one canonical copy under
+`docs/assets/donations/`; neither is embedded in the app or browser bundle.
+They add that uncompressed size to the packaged documentation. The original
+StrokeGPT-ReVibed codes exposed the correct addresses but failed independent
+QR checksum validation; regenerated codes for the identical addresses decode
+at both the README's 135 px display size and 450 px. No runtime dependency,
+core source, canonical UI bundle, timer, or model request changes.
+
 ## 2026-10-25 — Combined model settings, planning toggle and llama.cpp b11533
 
 Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags
