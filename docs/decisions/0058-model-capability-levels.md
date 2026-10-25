@@ -59,3 +59,10 @@ is introduced. E4B was unavailable for live evaluation; its compact path remains
 the default. See the [evidence and remaining limitations](../model-capability-review-2026-10-25.md).
 
 No new dependency, transport, engine goroutine or raw device command is added.
+
+Setup follow-up: the owner requested Intermediate automatically for Gemma 12B.
+The backend catalog now recommends Intermediate for both curated 12B builds and
+Simple for E4B. Easy, Custom and local-backup setup apply that recommendation to
+the selected model, including matching family/parameter metadata from existing
+Ollama or managed imports. Unknown models stay Simple; names alone do not promote
+them. Saved or manually selected capabilities win, and higher budgets are kept.

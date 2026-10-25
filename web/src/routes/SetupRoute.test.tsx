@@ -67,6 +67,7 @@ const catalogModel = {
   vram_mib: 8144,
   min_vram_mib: 10240,
   default: true,
+  recommended_capability: "intermediate",
 } as const;
 
 function catalogFixture(fit: LLMCatalog["models"][number]["fit"], nvidia = true): LLMCatalog {
@@ -90,7 +91,14 @@ function freshSettings(): PublicSettings {
       ollama_base_url: "http://127.0.0.1:11434",
       model: "",
       prompt_set: "magichandy_motion_v1",
+      llama_cpp_context_size: 16384,
+      max_output_tokens: 256,
     },
+    options: { llama_cpp_context_sizes: [16384, 32768, 65536, 131072], local_model_capabilities: [
+      { level: "simple", minimum_context: 16384, minimum_output: 64 },
+      { level: "intermediate", minimum_context: 32768, minimum_output: 512 },
+      { level: "advanced", minimum_context: 65536, minimum_output: 1024 },
+    ] },
   } as PublicSettings;
 }
 
@@ -320,6 +328,45 @@ describe("SetupRoute", () => {
     expect(screen.getByRole("link", { name: "License terms" })).toHaveAttribute("href", catalogModel.license_url);
     expect(screen.queryByRole("button", { name: /build managed|install managed/i })).not.toBeInTheDocument();
     expect(screen.getByRole("radio", { name: /Use my existing Ollama/i })).not.toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("intermediate");
+    expect(screen.getByRole("combobox", { name: "Context size" })).toHaveValue("32768");
+    await continueTo("Add voice features");
+    expect(api.saveSetupPreferences).toHaveBeenLastCalledWith({ llm: expect.objectContaining({ local_capability_level: "intermediate", llama_cpp_context_size: 32768, max_output_tokens: 512 }) });
+  });
+
+  it("defaults E4B to Simple and applies Intermediate when 12B is chosen", async () => {
+    const small = { ...catalogModel, id: "e4b", display_name: "Gemma E4B fixture", parameter_size: "7.5B", recommended_capability: "simple" as const, default: true, fit: "recommended" as const };
+    vi.mocked(api.llmCatalog).mockResolvedValue({ ...catalogFixture("supported"), models: [small, { ...catalogModel, default: false, fit: "supported" }] });
+    await openChatStep();
+    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("simple");
+    fireEvent.click(screen.getByRole("radio", { name: /Gemma 4 12B fixture/ }));
+    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("intermediate");
+    fireEvent.change(screen.getByRole("combobox", { name: "Model capability" }), { target: { value: "advanced" } });
+    fireEvent.click(screen.getByRole("radio", { name: /Gemma E4B fixture/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /Gemma 4 12B fixture/ }));
+    await continueTo("Add voice features");
+    expect(api.saveSetupPreferences).toHaveBeenLastCalledWith({ llm: expect.objectContaining({ local_capability_level: "advanced", llama_cpp_context_size: 65536, max_output_tokens: 1024 }) });
+  });
+
+  it("recognizes known 12B metadata in Ollama setup without promoting unknown models", async () => {
+    vi.mocked(api.ollamaModels).mockResolvedValue({ available: true, models: [
+      { name: "renamed-local-model", family: "gemma4", parameter_size: "11.9B", size_bytes: 4096 },
+      { name: "some-other-12b", family: "other", parameter_size: "12B", size_bytes: 4096 },
+    ] as never });
+    await openChatStep();
+    fireEvent.click(screen.getByRole("radio", { name: /use my existing ollama/i }));
+    const select = await screen.findByRole("combobox", { name: "Ollama model" });
+    fireEvent.change(select, { target: { value: "some-other-12b" } });
+    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("simple");
+    fireEvent.change(select, { target: { value: "renamed-local-model" } });
+    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("intermediate");
+  });
+
+  it("preserves a saved explicit capability when reconfiguring a 12B model", async () => {
+    settings.llm.local_capability_level = "simple";
+    await openChatStep();
+    expect(screen.getByRole("radio", { name: /Gemma 4 12B fixture/ })).toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Model capability" })).toHaveValue("simple");
   });
 
   it("downloads the recommended model as part of the installation plan", async () => {
@@ -372,7 +419,7 @@ describe("SetupRoute", () => {
     expect(screen.getByRole("radio", { name: /Gemma 4 12B fixture/ })).toBeChecked();
     await continueTo("Add voice features");
     expect(api.saveSetupPreferences).toHaveBeenLastCalledWith({
-      llm: expect.objectContaining({ provider: "llama_cpp", llama_cpp_mode: "managed", model: "gemma-installed" }),
+      llm: expect.objectContaining({ provider: "llama_cpp", llama_cpp_mode: "managed", model: "gemma-installed", local_capability_level: "intermediate" }),
     });
     await continueTo("Installing selected features");
     expect(api.installSetupPlan).toHaveBeenCalledWith({ llama: { backend: "auto" }, parakeet: false });
@@ -623,7 +670,7 @@ describe("SetupRoute", () => {
     await screen.findByRole("heading", { name: "Installing selected features" });
 
     expect(api.saveSetupPreferences).toHaveBeenCalledWith({
-      llm: expect.objectContaining({ chat_voice: "explicit", provider: "llama_cpp", llama_cpp_mode: "managed" }),
+      llm: expect.objectContaining({ chat_voice: "explicit", provider: "llama_cpp", llama_cpp_mode: "managed", local_capability_level: "intermediate", llama_cpp_context_size: 32768, max_output_tokens: 512 }),
     });
     expect(api.installSetupPlan).toHaveBeenCalledWith({
       llama: { backend: "auto" },

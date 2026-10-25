@@ -1,5 +1,15 @@
 # Goal Scorecard
 
+## 2026-10-25 — Setup capability recommendation
+
+Against `72de995a`, the same Windows amd64 Go 1.26.10 pure-Go stripped build
+measures **24,160,768 -> 24,162,304 B** (+1,536 B). Main JS grows
+**1,287,718 -> 1,288,968 B raw**, **345,266 -> 345,641 B gzip**; CSS is
+unchanged. Canonical UI total is **2,796,056 B** (+1,250 B). No dependency or
+background work is added. Setup uses the backend catalog to choose Intermediate
+for known Gemma 12B models and Simple for E4B; the explicit 32K allocation cost
+is already covered by the capability measurements below.
+
 ## 2026-10-25 — Local model capability levels
 
 Matched Windows amd64 Go 1.26.10 builds against `c3d37aad`, using

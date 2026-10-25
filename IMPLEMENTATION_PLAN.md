@@ -3061,3 +3061,5 @@ Provider routing and human output arming are unchanged. Matched live 12B tests
 favor Intermediate; that model is not recommended for Advanced independent
 control. See [ADR 0058](docs/decisions/0058-model-capability-levels.md) and the
 [model evaluation, graphs and remaining limitations](docs/model-capability-review-2026-10-25.md).
+Setup defaults known Gemma 12B models to Intermediate and E4B to Simple using
+backend catalog metadata, while preserving saved and manual capability choices.

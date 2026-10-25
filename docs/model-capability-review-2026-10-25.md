@@ -8,7 +8,11 @@ Advanced levels with the external feature UI available in Advanced.
 ## Implemented selection
 
 Setup and Chat model settings share a backend-defined capability selector.
-Simple remains the default. Intermediate raises context to at least 32K and
+Simple remains the general default. Setup automatically chooses Intermediate
+for known Gemma 12B models, using the backend catalog recommendation; E4B stays
+Simple. This covers Easy, Custom and local-backup setup, existing curated models
+and matching Ollama/import metadata. Saved/manual capability choices are retained.
+Intermediate raises context to at least 32K and
 output to 512; Advanced raises them to 64K and 1,024. Larger saved budgets are
 preserved. Managed llama.cpp and Ollama receive the allocation; an external
 llama.cpp server needs its own matching allocation. The UI explains this and
@@ -145,3 +149,12 @@ The final build also answers a real local request to start an unavailable,
 unarmed vibrator by explaining the connection/intensity step, with one call,
 no repair/fallback and no motion. Both final app responses are retained in
 `review-release-ready.json` and the accompanying SSE captures.
+
+The setup-default follow-up passes all 996 frontend tests, including automatic
+12B selection in Easy/Custom/backup setup, installed catalog reuse, Ollama
+metadata, E4B, unknown models and explicit overrides. Catalog API tests verify
+the recommendations independently of GPU fit. Full Go tests, focused catalog
+race tests, vet, lint, typecheck and the pure-Go build pass. The port 50291 review
+profile began with no saved capability; Custom setup recognized the actual
+Ollama 12B, selected Intermediate, saved 32K/512, and completed the model probe
+and one-call text-only chat. No model download or hardware connection was used.
