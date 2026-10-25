@@ -1049,6 +1049,7 @@ export interface VoiceRequestSnapshot {
 }
 
 export interface OptionHints {
+  local_model_capabilities?: import("./llm-settings-types").ModelCapabilityOption[];
   hsp_dispatch_owners?: string[];
   api_application_id_sources?: string[];
   diagnostics_verbosities?: string[];

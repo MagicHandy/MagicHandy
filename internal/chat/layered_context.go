@@ -7,7 +7,7 @@ import (
 )
 
 func hostedCommandedReach(context MotionContext, capabilities Capabilities) string {
-	if !capabilities.HostedMotion || context.CommandedSummary == nil {
+	if !capabilities.AdvancedMotion || context.CommandedSummary == nil {
 		return ""
 	}
 	s := context.CommandedSummary

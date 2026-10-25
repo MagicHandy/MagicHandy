@@ -1,5 +1,8 @@
 import type { LLMMotionCapabilities, LLMUserAnatomy } from './types';
 
+export type ModelCapabilityLevel = "simple" | "intermediate" | "advanced";
+export interface ModelCapabilityOption { level: ModelCapabilityLevel; minimum_context: number; minimum_output: number }
+
 // Mirrors the backend model settings; private credentials have no API field.
 export interface LLMSettings {
 	  motion_planner?: import("./cloud-types").MotionPlannerSettings;
@@ -13,6 +16,7 @@ export interface LLMSettings {
     managed_load_policy?: "startup" | "on_demand" | string;
     llama_cpp_base_url: string;
     llama_cpp_context_size: number;
+    local_capability_level?: ModelCapabilityLevel;
     ollama_base_url: string;
     ollama_models_path?: string;
     model: string;

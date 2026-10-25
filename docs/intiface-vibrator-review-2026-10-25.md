@@ -1,5 +1,10 @@
 # Intiface vibration and independent model control — 2026-10-25
 
+Follow-up: the [capability-level evaluation](model-capability-review-2026-10-25.md)
+adds opt-in Intermediate and Advanced local contracts. The findings below record
+the initial implementation; Simple remains the compact default, while a capable
+local model may explicitly use the same independent tools as external models.
+
 ## Report and diagnosis
 
 The alpha.73 report described an Edge 2 that worked with Test but usually did

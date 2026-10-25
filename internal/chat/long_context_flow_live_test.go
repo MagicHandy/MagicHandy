@@ -56,7 +56,7 @@ func TestLongContextFlowLive(t *testing.T) {
 		}
 		provider := &contextEvalProvider{Provider: native}
 		history := contextStoryFixture(72000)
-		caps := Capabilities{HostedMotion: true, PreserveConversationText: true, HistoryMessages: 256, HistoryBytes: 96000, Voice: VoiceUtility, Motion: true, MotionMode: MotionModeCreativeV2}
+		caps := Capabilities{AdvancedMotion: true, PreserveConversationText: true, HistoryMessages: 256, HistoryBytes: 96000, Voice: VoiceUtility, Motion: true, MotionMode: MotionModeCreativeV2}
 		limits := config.DefaultSettings().Motion
 		limits.SpeedMinPercent, limits.SpeedMaxPercent = 10, 80
 		score := FreshCreativeV2Score(25)

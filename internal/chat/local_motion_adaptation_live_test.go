@@ -123,7 +123,7 @@ func evaluateLocalMotionTrial(t *testing.T, provider llm.Provider, model, varian
 		// Evaluate model intent after the ordinary local path, without asking
 		// another model or rewriting its command. No target is dispatched.
 		interpreted := caps
-		interpreted.HostedMotion = true
+		interpreted.AdvancedMotion = true
 		result.Response, err = svc.parseAndValidateResponse(result.Raw, interpreted, request.Message)
 	}
 	command := result.Response.Motion
@@ -164,7 +164,7 @@ func (p *localAdaptationProvider) StreamChat(ctx context.Context, request llm.Ch
 	if p.variant != "baseline" && p.variant != "narrow" && p.caps.Motion {
 		if p.caps.MotionMode == MotionModePattern || p.caps.MotionMode == MotionModeDynamic {
 			caps := p.caps
-			caps.HostedMotion = true
+			caps.AdvancedMotion = true
 			request.Messages[0].Content = hostedStoppedGuidance(hostedStartContract(request.Messages[0].Content, caps), caps)
 			request.JSONSchema = PatternResponseSchema(p.patterns, caps, &p.state)
 		}
@@ -221,7 +221,7 @@ func (p *localAdaptationProvider) narrowTrial(request *llm.ChatRequest) {
 	}
 	if p.caps.MotionMode == MotionModePattern {
 		caps := p.caps
-		caps.HostedMotion = true
+		caps.AdvancedMotion = true
 		request.JSONSchema = PatternResponseSchema(p.patterns, caps, &p.state)
 	}
 	if (p.caps.MotionMode == MotionModeLayered || p.caps.MotionMode == MotionModeCreativeV2) && !p.state.Running && !p.state.Paused {

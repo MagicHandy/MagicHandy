@@ -90,6 +90,16 @@
   margin-top: 4px;
 }
 
+.model-capability-settings {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.model-capability-settings > .form-status {
+  margin: 4px 0;
+}
+
 .generation-notes {
   margin: -2px 0 14px;
   padding: 8px 12px;

@@ -34,11 +34,13 @@ func layeredContextScore(state *MotionContext) (motion.FlowSpec, config.MotionSe
 	return FreshLayeredScore(max(limits.SpeedMinPercent, min(speed, limits.SpeedMaxPercent))), limits
 }
 
-func layeredContextInstructions(state MotionContext) string {
+func layeredContextInstructions(state MotionContext, capabilities Capabilities) string {
 	score, limits := layeredContextScore(&state)
 	var scoreContext any = layeredScoreContext(score)
 	if state.MotionMode == MotionModeCreativeV2 {
 		scoreContext = creativeV2ScoreContext(score)
+	} else if capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+		scoreContext = intermediateLayeredScoreContext(score)
 	}
 	context := map[string]any{
 		"current_score": scoreContext, "running": state.Running, "paused": state.Paused,
@@ -118,11 +120,7 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	// The prompt and parser must share the same freshly seeded starting score.
 	state.Layered = &current
 	var system string
-	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.HostedMotion)
-	if capabilities.MotionMode == MotionModeCreativeV2 {
-		schema = CreativeV2ResponseSchema(limits, capabilities.MoodTracking)
-	}
-	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(state)))
+	schema := continuousEditSchema(limits, capabilities, state)
 	autoTiming := s.TrustedMotionInput && capabilities.AutoTiming
 	if autoTiming {
 		schema = withNextCheckSchema(schema)
@@ -199,7 +197,14 @@ func (s Service) finalizeLayeredResponse(response AssistantResponse, state Motio
 
 func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
 	capabilities := s.capabilities()
-	if capabilities.MotionMode == MotionModeLayered && capabilities.HostedMotion {
+	if capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+		var err error
+		raw, err = normalizeIntermediateLayeredReply(raw)
+		if err != nil {
+			return AssistantResponse{}, err
+		}
+	}
+	if capabilities.MotionMode == MotionModeLayered && capabilities.AdvancedMotion {
 		// Validate the original object before metadata/recall extraction can
 		// re-encode it and conceal duplicate fields from an unconstrained model.
 		var err error
@@ -245,6 +250,9 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 		AutonomousTemperature: s.Temperature, PromptBudget: s.PromptBudget}
 	if kind == AutopilotKindMotion {
 		continuation := LayeredContinuationMessage()
+		if capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+			continuation = strings.ReplaceAll(continuation, `"edits":{}`, `"edits":[]`)
+		}
 		if s.Capabilities.MotionMode == MotionModeCreativeV2 {
 			continuation = CreativeV2ContinuationMessage()
 		}

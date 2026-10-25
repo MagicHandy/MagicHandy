@@ -169,8 +169,10 @@ func contractInstructions(capabilities Capabilities) string {
 	}
 	if capabilities.MotionMode == MotionModeLayered {
 		text := layeredContract
-		if capabilities.HostedMotion {
+		if capabilities.AdvancedMotion {
 			text = hostedLayeredContract(text) + "\n" + hostedPaceGuide + "\n" + hostedLayeredCoordinationGuide + "\n" + hostedLayeredPhraseGuide + "\n" + hostedLayeredRegionGuide
+		} else if capabilities.IntermediateMotion {
+			text = intermediateLayeredContract(text)
 		}
 		if capabilities.MoodTracking {
 			text += "\n" + moodContractInstructions()
@@ -182,7 +184,7 @@ func contractInstructions(capabilities Capabilities) string {
 		if capabilities.SchemaUnenforced {
 			text = creativeV2Contract
 		}
-		if capabilities.HostedMotion {
+		if capabilities.AdvancedMotion {
 			text += "\n" + hostedPaceGuide
 		}
 		if capabilities.MoodTracking {
@@ -215,10 +217,11 @@ func contractInstructions(capabilities Capabilities) string {
 // value is chat-only in the utility voice; callers resolve defaults from
 // settings.
 type Capabilities struct {
-	// HostedMotion selects hosted planning guidance and the exclusive Layered
-	// set/adjust contract. It changes representation, never motion authority.
-	// Local runtimes retain their compact prompts and controls/change_by edits.
-	HostedMotion bool
+	// AdvancedMotion selects the rich planning contract independently of the
+	// provider. It changes representation, never motion authority.
+	AdvancedMotion bool
+	// IntermediateMotion enables the fuller local contract after explicit opt-in.
+	IntermediateMotion bool
 	// Evaluation can exercise the compact local grammar without changing production.
 	VibrationControl bool
 	// SchemaUnenforced marks a provider that may ignore the response schema,

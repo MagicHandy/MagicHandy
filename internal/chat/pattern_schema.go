@@ -18,7 +18,7 @@ func patternResponseSchema(patterns []PatternChoice, capabilities Capabilities, 
 		// Paused local Creative needs only an explanation. Advertising no
 		// motion fields avoids a malformed start and its extra repair call.
 		// The parser still rejects a start from an unconstrained provider.
-		if interactive && !capabilities.HostedMotion && state != nil && state.Paused {
+		if interactive && !capabilities.AdvancedMotion && state != nil && state.Paused {
 			return chatOnlyResponseSchema(capabilities)
 		}
 		return nil
@@ -50,7 +50,7 @@ func patternResponseSchema(patterns []PatternChoice, capabilities Capabilities, 
 		motionFields["area"] = map[string]any{"type": "string", "enum": AreaZones()}
 	}
 	var motionSchema any = object(motionFields, []string{"action"})
-	if interactive && (capabilities.HostedMotion || state != nil) {
+	if interactive && (capabilities.AdvancedMotion || state != nil) {
 		motionSchema = interactivePatternActionSchema(motionFields, state)
 	}
 	fields := map[string]any{"reply": map[string]any{"type": "string"}, "motion": motionSchema}

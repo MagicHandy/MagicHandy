@@ -18,10 +18,11 @@ const ollamaProviderName = "ollama"
 
 // OllamaProvider talks to an externally managed Ollama daemon.
 type OllamaProvider struct {
-	baseURL string
-	model   string
-	client  *http.Client
-	timeout time.Duration
+	baseURL     string
+	model       string
+	client      *http.Client
+	timeout     time.Duration
+	contextSize int
 }
 
 // NewOllamaProvider creates an Ollama HTTP provider.
@@ -31,10 +32,11 @@ func NewOllamaProvider(options HTTPProviderOptions) (*OllamaProvider, error) {
 		return nil, err
 	}
 	return &OllamaProvider{
-		baseURL: normalized.BaseURL,
-		model:   normalized.Model,
-		client:  normalized.Client,
-		timeout: normalized.Timeout,
+		baseURL:     normalized.BaseURL,
+		model:       normalized.Model,
+		client:      normalized.Client,
+		timeout:     normalized.Timeout,
+		contextSize: normalized.ContextSize,
 	}, nil
 }
 
@@ -42,7 +44,7 @@ func NewOllamaProvider(options HTTPProviderOptions) (*OllamaProvider, error) {
 func (p *OllamaProvider) StreamChat(ctx context.Context, request ChatRequest, onDelta func(string) error) (string, error) {
 	ctx, cancel := checkedRequestContext(ctx, p.timeout)
 	defer cancel()
-	request, budget, err := BudgetChatRequest(request, 0)
+	request, budget, err := BudgetChatRequest(request, p.contextSize)
 	if request.OnBudget != nil {
 		request.OnBudget(budget)
 	}
@@ -76,6 +78,9 @@ func (p *OllamaProvider) StreamChat(ctx context.Context, request ChatRequest, on
 	}
 	if request.MaxTokens > 0 {
 		body.Options["num_predict"] = request.MaxTokens
+	}
+	if p.contextSize > 0 {
+		body.Options["num_ctx"] = p.contextSize
 	}
 	if request.ReasoningMode == "off" {
 		disabled := false

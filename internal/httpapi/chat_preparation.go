@@ -40,6 +40,6 @@ func (s *Server) prepareInteractiveChatService(ctx context.Context, w http.Respo
 		ReasoningBudgetTokens: managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
 		PromptBudget:          chatPromptBudget(settings.LLM), Memories: memories, Patterns: patternChoices,
 		MotionContext: &motionContext, ConversationContext: promptContext.ConversationContext, Capabilities: &capabilities,
-		HostedResponseRepair: settings.LLM.IsHosted() && settings.LLM.HostedResponseRepair() && repairAvailable,
+		HostedResponseRepair: settings.LLM.AdvancedMotion() && settings.LLM.HostedResponseRepair() && repairAvailable,
 	}, true
 }

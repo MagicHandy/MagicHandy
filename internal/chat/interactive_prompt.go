@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/mapledaemon/MagicHandy/internal/config"
 )
 
 // ComposeInteractivePrompt includes the lifecycle contract used by live chat.
@@ -23,7 +25,10 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 	for _, section := range composition.Sections {
 		if section.ID == "response_contract" {
 			section.Text = continuousInteractiveContract(section.Text, current)
-			if capabilities.MotionMode == MotionModeLayered && capabilities.HostedMotion {
+			if capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+				section.Text = intermediateLayeredContract(section.Text)
+			}
+			if capabilities.MotionMode == MotionModeLayered && capabilities.AdvancedMotion {
 				// Include the state-specific examples generated above. Only this
 				// code-owned contract is translated, never conversation text.
 				section.Text = hostedLayeredContract(section.Text)
@@ -33,7 +38,7 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 		}
 		if section.ID == "output_guard" {
 			sections = appendPromptSection(sections, "live_action", "Live chat action", continuousActionGuideFor(current))
-			if !capabilities.HostedMotion && capabilities.MotionMode == MotionModeLayered && state != nil && !current.Running && !current.Paused {
+			if !capabilities.AdvancedMotion && capabilities.MotionMode == MotionModeLayered && state != nil && !current.Running && !current.Paused {
 				sections = appendPromptSection(sections, "local_start_intent", "Stopped motion intent", localStoppedIntentGuide)
 			}
 		}
@@ -77,7 +82,7 @@ func continuousInteractiveContract(contract string, state MotionContext) string 
 			fields["stay_unchanged"] = json.RawMessage(`false`)
 			// This code-owned example explicitly asks for a lasting hold.
 			// It must not teach the opposite decision; no user text is matched.
-			if (state.StandingHold && string(fields["action"]) == `"none"`) || line[start:] == strings.Replace(layeredHoldExample, `{"edits":`, `{"action":"none","edits":`, 1) {
+			if (state.StandingHold && string(fields["action"]) == `"none"`) || string(fields["reply"]) == `"Keeping this exact score."` {
 				fields["stay_unchanged"] = json.RawMessage(`true`)
 			}
 			encoded, _ := json.Marshal(fields)
@@ -89,7 +94,7 @@ func continuousInteractiveContract(contract string, state MotionContext) string 
 }
 
 func continuousInteractiveExamples(contract string, state MotionContext) string {
-	if state.Running && !state.Paused {
+	if state.Running && !state.Paused && !unavailableVibrationOnly(state) {
 		// Keep the established motion examples for active local sessions. Only
 		// fix their envelope; removing useful geometry examples harms smaller models.
 		contract = strings.ReplaceAll(contract, `{"edits":[]`, `{"action":"none","edits":[]`)
@@ -99,6 +104,7 @@ func continuousInteractiveExamples(contract string, state MotionContext) string 
 	_, limits := layeredContextScore(&state)
 	speed := min(max(20, limits.SpeedMinPercent), limits.SpeedMaxPercent)
 	if state.MotionMode == MotionModeLayered {
+		contract = strings.ReplaceAll(contract, `Output {"edits":[...],"reply":"..."}.`, `Output {"action":"none|start|update","edits":[...],"reply":"..."}; choose one action permitted by the current state.`)
 		if begin := strings.Index(contract, "\nExamples:"); begin >= 0 {
 			if end := strings.Index(contract[begin:], "Independent refinements"); end >= 0 {
 				contract = contract[:begin] + "\n\n" + contract[begin+end:]
@@ -119,6 +125,9 @@ func continuousInteractiveExamples(contract string, state MotionContext) string 
 	}
 	contract += "\n\nLive chat envelope examples (reply wording follows the selected voice):\n" +
 		`A question or ordinary conversation: {"action":"none","edits":` + empty + `,"reply":"A brief answer."}`
+	if unavailableVibrationOnly(state) {
+		return contract + "\nThe only selected output is not ready or has zero user intensity. Only none with empty edits is permitted. Explain the backend state and the needed connection or intensity setting."
+	}
 	if state.Paused {
 		return contract + "\nMotion is paused: only none with empty edits is permitted. The person must resume using the app."
 	}
@@ -157,10 +166,20 @@ func InteractiveResponseSchema(patterns []PatternChoice, capabilities Capabiliti
 		current = *state
 	}
 	_, limits := layeredContextScore(&current)
-	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.HostedMotion)
+	schema := continuousEditSchema(limits, capabilities, current)
+	return withVibrationSchema(continuousActionSchema(schema, current), capabilities, &current)
+}
+
+// Both interactive and autonomous requests use the same tier's edit grammar;
+// their lifecycle and timing envelopes remain independently constrained.
+func continuousEditSchema(limits config.MotionSettings, capabilities Capabilities, state MotionContext) json.RawMessage {
+	schema := layeredResponseSchema(limits, capabilities.MoodTracking, capabilities.AdvancedMotion)
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		schema = CreativeV2ResponseSchema(limits, capabilities.MoodTracking)
 	}
-	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(current)))
-	return withVibrationSchema(continuousActionSchema(schema, current), capabilities, &current)
+	schema = withRecallSchema(schema, capabilities.MotionMode, len(recallableScores(state)))
+	if capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+		schema = intermediateLayeredSchema(schema)
+	}
+	return schema
 }

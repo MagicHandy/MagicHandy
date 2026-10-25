@@ -203,8 +203,10 @@ Mitigation:
 
 - the user alone raises the live intensity, which starts at 0 on every
   connection and selection. Motion only shapes the level beneath it, never
-  above the saved ceiling (default 40%). External models may choose an engine-owned
-  relative envelope under ADR 0057, but cannot raise arming or limits
+  above the saved ceiling (default 40%). Advanced model contracts may choose an
+  engine-owned relative envelope under ADRs 0057/0058, but cannot raise arming or
+  limits. A local capability choice is not proof of model quality; Simple remains
+  the default, and the tested 12B model is recommended only through Intermediate
 - Pause, Stop, coverage loss, the end of Test, exclusion and removal send an
   explicit zero; Stop adds `StopDeviceCmd`, and generation fencing keeps any
   older `ScalarCmd` from following a Stop
@@ -220,6 +222,9 @@ Mitigation:
   and are refused after any Stop, selection or session change
 - independent scalar edits share the engine clock and Stop admissions; stale
   replies, retired recipients and canceled decisions cannot restart an output
+- unavailable vibrator-only sessions expose a reply-only continuous contract;
+  validation enforces the same restriction without constrained decoding. Tier
+  changes retire prepared work and repair offers; output arming stays human-owned
 - simulation covers the protocol; automated tests never reach hardware
 
 Residual risk: physical acceptance is still needed for each of these:

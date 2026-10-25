@@ -76,7 +76,7 @@ func (s *Server) validateModelVibration(spec *motion.VibrationSpec, model config
 		return err
 	}
 	settings, _ := s.store.Snapshot()
-	if !model.IsHosted() || (model.MotionGenerationMode != config.LLMMotionModeLayered && model.MotionGenerationMode != config.LLMMotionModeCreativeV2) || !settings.Device.Plays(config.DeviceVibrator) {
+	if !model.ModelFeatures().IndependentVibration || !settings.Device.Plays(config.DeviceVibrator) {
 		return errors.New("independent vibration is unavailable in the current playback/model configuration")
 	}
 	if err := s.vibrationReadiness(); err != nil {

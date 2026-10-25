@@ -21,7 +21,8 @@ type SpeedStep struct {
 type AutopilotContext struct {
 	// Hosted selects guidance for API models. It is resolved from the provider,
 	// never from the person's words; local prompt bytes stay unchanged.
-	Hosted bool
+	Hosted       bool
+	Intermediate bool
 	// Technical marks a planning turn that is shown motion state only: no
 	// conversation, persona or memory. It replaces guidance that depends on the
 	// person's words with what the motion history alone can say.
@@ -134,6 +135,9 @@ func formatSessionSpan(seconds int) string {
 // AutopilotMotionMessage renders one motion-planning turn. Its strict model
 // contract has no reply field; the independent speech clock owns spoken lines.
 func AutopilotMotionMessage(context AutopilotContext) string {
+	if context.MotionMode == MotionModeLayered {
+		context.Intermediate = false // match the autonomous Layered grammar
+	}
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "Autopilot motion decision %d. You are steering the device autonomously between chat turns.\n", context.SegmentIndex+1)
 	fmt.Fprintf(&builder, "Motion style preference: %s. Allowed speed range: %d-%d%%.\n", context.Style, context.SpeedMinPercent, context.SpeedMaxPercent)

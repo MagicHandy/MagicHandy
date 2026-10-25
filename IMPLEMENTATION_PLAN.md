@@ -3049,3 +3049,15 @@ Codex completed and reviewed integration/tests. The existing primary adapter
 keeps compatibility; additional Cloud/native/Intiface connections follow the
 same engine. See [ADR 0054](docs/decisions/0054-named-handy-connections.md) and
 [validation / physical follow-up](docs/multi-handy-review-2026-10-23.md).
+
+## Local model capability levels (2026-10-25)
+
+Implemented explicit Simple / Intermediate / Advanced local contracts, with
+backend-owned feature projection for chat and Autopilot. Simple preserves the
+compact default; Intermediate uses a tested 32K grouped interactive contract
+and task-specific Autopilot guidance; Advanced uses the external tools with a
+64K minimum, Auto timing, preparation, independent vibration and response repair.
+Provider routing and human output arming are unchanged. Matched live 12B tests
+favor Intermediate; that model is not recommended for Advanced independent
+control. See [ADR 0058](docs/decisions/0058-model-capability-levels.md) and the
+[model evaluation, graphs and remaining limitations](docs/model-capability-review-2026-10-25.md).

@@ -1,5 +1,24 @@
 # Goal Scorecard
 
+## 2026-10-25 — Local model capability levels
+
+Matched Windows amd64 Go 1.26.10 builds against `c3d37aad`, using
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core
+**24,114,176 -> 24,160,768 B** (+46,592 B). No new dependency or goroutine.
+Main JS: **1,282,961 -> 1,287,718 B raw**, **344,083 -> 345,266 B gzip**.
+CSS: **207,215 -> 207,363 B raw**, **36,215 -> 36,240 B gzip**.
+Canonical UI total: **2,783,962 -> 2,794,806 B** (+10,844 B). Gzip uses
+Python with `mtime=0`; only the current canonical chunks are retained.
+
+Simple keeps the existing local request/resource behavior. Explicit Intermediate
+and Advanced choices raise allocation floors to 32K and 64K; this costs local
+runtime memory, not idle core memory. Ollama reported 7,954,224,905 B allocated
+VRAM for the tested 12B at 32K. In the matched 22-turn set, Simple/Intermediate
+medians were 914/899 ms; Autopilot medians were 1,385/1,520 ms. These small sets
+show no material chat latency penalty on this host and do not establish memory
+or performance guarantees elsewhere. No RSS or cold-start improvement is claimed.
+See the [model evidence and opt-in limitations](model-capability-review-2026-10-25.md).
+
 ## 2026-10-25 — Independent vibration and Intiface startup
 
 Matched Windows amd64 Go 1.26.10 builds against `25b0e193`, using

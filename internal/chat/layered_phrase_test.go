@@ -81,7 +81,7 @@ func TestLayeredPhraseHostedOnlyContractAndSummary(t *testing.T) {
 	if contractInstructions(caps) != layeredContract {
 		t.Fatal("compact local contract changed")
 	}
-	caps.HostedMotion = true
+	caps.AdvancedMotion = true
 	state.CommandedSummary = &motion.PerceptualSummary{PositionMinPercent: 14.25, PositionMaxPercent: 85.8, MeanStrokePercent: 30}
 	if text := motionContextInstructions(state, caps, nil); !strings.Contains(text, `"min_percent":14.25`) || !strings.Contains(text, "not merely permission bounds") {
 		t.Fatal("hosted context hid actual planned reach")

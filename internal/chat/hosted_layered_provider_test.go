@@ -50,7 +50,7 @@ func TestHostedLayeredResponsesRoundTrip(t *testing.T) {
 			}
 			current := DefaultLayeredScore(25)
 			state := MotionContext{Running: true, Autopilot: true, Layered: &current, MotionMode: MotionModeLayered}
-			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true}
+			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true}
 			service := Service{Provider: provider, Capabilities: &caps, MotionContext: &state, MaxTokens: 1536}
 			got, err := service.Complete(t.Context(), Request{Message: "Lower the pace by five, move the anchor to zero, and lengthen the pace cycle by four."}, nil)
 			_, want, _, domainErr := ParseLayeredReply(`{"edits":{"controls":{"anchor_percent":0},"change_by":{"speed_percent":-5},"layers":[{"axis":"pace","period_change_cycles":4,"low_rate_percent":23}]},"reply":"Test."}`, current, config.DefaultSettings().Motion)
@@ -67,7 +67,7 @@ func TestHostedLayeredResponsesRoundTrip(t *testing.T) {
 func TestHostedLayeredReviewerUsesSameOperations(t *testing.T) {
 	current := DefaultLayeredScore(25)
 	provider := &layeredTestProvider{raw: `{"verdict":"correct","confidence":"high","reason":"wrong_pace","feedback":"Requested lower pace.","correction":{"edits":{"controls":{"speed_percent":{"op":"adjust","value":-5}}},"reply":"Pace corrected."}}`}
-	service := MotionReviewService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true}}
+	service := MotionReviewService{Provider: provider, Capabilities: Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true}}
 	for _, source := range []string{"chat", "autopilot"} {
 		result, err := service.Complete(t.Context(), MotionReviewInput{Source: source, Request: "Slower.", Limits: config.DefaultSettings().Motion, Before: motion.MotionTarget{Flow: &current}, After: motion.MotionTarget{Flow: &current}})
 		if err != nil || result.Motion == nil || result.Motion.Action != MotionActionUpdate || result.Motion.Layered.SpeedPercent != 20 {

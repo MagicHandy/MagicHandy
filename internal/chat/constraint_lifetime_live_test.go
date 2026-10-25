@@ -61,7 +61,7 @@ func TestConstraintLifetimeLive(t *testing.T) {
 				continue
 			}
 			initial := newConstraintSession(mode, episode)
-			caps := Capabilities{Motion: true, MotionMode: mode, HostedMotion: true, PreserveConversationText: true}
+			caps := Capabilities{Motion: true, MotionMode: mode, AdvancedMotion: true, PreserveConversationText: true}
 			if os.Getenv("MAGICHANDY_CONSTRAINT_CHAT_SETUP") == "1" && !prepareConstraintChat(t, provider, model, &initial, caps, "shared_setup", &rows) {
 				continue
 			}
@@ -159,7 +159,7 @@ func (s constraintSession) context(at int, hosted bool) (MotionContext, Autopilo
 func runConstraintEpisode(t *testing.T, provider *hostedLayeredCapture, model string, s constraintSession, variant string, rows *[]map[string]any) {
 	t.Helper()
 	mode, episode := s.mode, s.episode
-	caps := Capabilities{Motion: true, MotionMode: mode, HostedMotion: true, PreserveConversationText: true}
+	caps := Capabilities{Motion: true, MotionMode: mode, AdvancedMotion: true, PreserveConversationText: true}
 	for index, at := range []int{15, 90, 180, 360} {
 		state, facts := s.context(at, variant != "prior")
 		planner := AutopilotService{Provider: provider, Model: model, Capabilities: caps, MotionContext: &state, ReasoningMode: "off", Temperature: 0.9}
@@ -289,7 +289,7 @@ func TestConstraintLifetimeChatLive(t *testing.T) {
 			before := DefaultLayeredScore(25)
 			limits := config.DefaultSettings().Motion
 			limits.SpeedMinPercent, limits.SpeedMaxPercent = 10, 50
-			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
+			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 			state := MotionContext{Running: true, Autopilot: true, StandingHold: tc.held, MotionMode: MotionModeLayered, Layered: &before, SpeedMinPercent: 10, SpeedMaxPercent: 50}
 			service := Service{Provider: provider, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off"}
 			started := time.Now()

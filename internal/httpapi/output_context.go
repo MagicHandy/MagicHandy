@@ -17,7 +17,7 @@ func (s *Server) chatOutputContext(model config.LLMSettings) *chat.OutputContext
 			output.Strokers++
 		}
 	}
-	output.Vibrator.Independent = model.IsHosted() && (model.MotionGenerationMode == config.LLMMotionModeLayered || model.MotionGenerationMode == config.LLMMotionModeCreativeV2)
+	output.Vibrator.Independent = model.ModelFeatures().IndependentVibration
 	if engine := s.currentMotionEngine(); engine != nil {
 		state := engine.Snapshot()
 		if state.Running || state.Paused {

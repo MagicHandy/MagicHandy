@@ -45,6 +45,7 @@ export function VibratorOutputSection({ ctx }: DeviceSectionProps) {
   const vibration = { ...DEFAULT_VIBRATION_SETTINGS, ...ctx.settings?.vibration };
   const save = useSaveDeviceOptions();
   const envelope = ctx.engineActive ? ctx.state?.motion?.engine?.target?.vibration : undefined;
+  const independent = ctx.state?.settings?.model_routing?.chat?.features?.independent_vibration === true;
   const locked = ctx.locked || !ctx.canConfigureHost;
   const [follow, setFollow] = useLiveSetting(vibration.follow, (follow) => save({ vibration: { follow } }));
   const [depthEnd, setDepthEnd] = useLiveSetting(vibration.depth_end, (depth_end) => save({ vibration: { depth_end } }));
@@ -52,7 +53,9 @@ export function VibratorOutputSection({ ctx }: DeviceSectionProps) {
     (value) => save({ vibration: { minimum_percent: value.min, ceiling_percent: value.max } }), SLIDER_SAVE_MS);
   return (
     <div className="form-rows device-rows">
-      <OptionRow label={t("Model control")} hint={t("External models in Layered or Creative v2 can control vibration independently of The Handy, within your intensity. Local models use the follow setting.")}>
+      <OptionRow label={t("Model control")} hint={independent
+        ? t("Your chat model can control vibration independently of The Handy, within your intensity.")
+        : t("Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2.")}>
         <span>{envelope?.mode === "off" ? t("Off") : envelope && envelope.mode !== "follow" ? t("Independent pattern") : t("Following movement")}</span>
         {envelope && envelope.mode !== "follow" && <button type="button" className="btn" disabled={ctx.locked} onClick={() => ctx.send(() => api.followVibration())}>{t("Follow movement")}</button>}
       </OptionRow>

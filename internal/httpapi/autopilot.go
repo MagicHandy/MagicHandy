@@ -47,8 +47,8 @@ func (s *Server) autopilotDecide(ctx context.Context, input modes.DecisionInput)
 	if err != nil && planning.IsHosted() {
 		err = cloudPlanningOutcome(err)
 	}
-	if planning.IsHosted() {
-		// A hosted abstention must never trigger the local library fallback.
+	if planning.AdvancedMotion() {
+		// An advanced planner's abstention must not trigger a library fallback.
 		decision.Abstain = true
 	}
 	return decision, err
@@ -227,7 +227,7 @@ func (s *Server) autopilotModelTurn(
 		History:                history,
 		HistoryMessagesDropped: promptContext.HistoryOmitted,
 	})
-	if err == nil && settings.LLM.IsHosted() {
+	if err == nil && settings.LLM.AdvancedMotion() {
 		err = s.validateCloudAdmission(providerCtx, admission)
 	}
 	return response, err
@@ -281,7 +281,7 @@ func (s *Server) autopilotRoleSettings(ctx context.Context, kind chat.AutopilotK
 		settings.LLM = settings.LLM.ConversationSettings()
 	}
 	var admission cloudPlanAdmission
-	if err == nil && settings.LLM.IsHosted() {
+	if err == nil && settings.LLM.AdvancedMotion() {
 		admission, err = s.captureCloudAdmission(ctx, source)
 	}
 	return settings, admission, err
@@ -291,7 +291,7 @@ func (s *Server) autopilotRoleSettings(ctx context.Context, kind chat.AutopilotK
 // planning marks when each human line was said, as of the moment the decision
 // applies, so an old line is not read as a reaction to the pace chosen since.
 func autopilotHistory(kind chat.AutopilotKind, settings config.Settings, promptContext interactiveChatPromptContext, asOf time.Time) []llm.Message {
-	if settings.LLM.IsHosted() {
+	if settings.LLM.AdvancedMotion() {
 		return promptContext.History
 	}
 	if kind == chat.AutopilotKindMotion && continuousChatMode(settings.LLM.MotionGenerationMode) {
@@ -320,7 +320,8 @@ func autopilotTemperature(kind chat.AutopilotKind, level int) float64 {
 // exercise the exact context the app sends rather than reconstructing it.
 func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabilities) chat.AutopilotContext {
 	modelContext := chat.AutopilotContext{
-		Hosted:            capabilities.HostedMotion,
+		Hosted:            capabilities.AdvancedMotion,
+		Intermediate:      capabilities.IntermediateMotion,
 		Style:             input.Style,
 		SegmentIndex:      input.SegmentIndex,
 		RecentPatternIDs:  input.RecentPatternIDs,
@@ -387,9 +388,8 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 }
 
 // prepareAutopilotDecisions reports whether Autopilot plans each motion
-// decision as its stretch begins. Only external planners qualify: they answer
-// over their own request lanes, while a local model would hold its single slot
-// for a decision that chat may still discard.
+// decision as its stretch begins. Advanced local models may opt in too; their
+// speculative work stays on the existing autonomous lane and yields to chat.
 func prepareAutopilotDecisions(settings config.Settings) bool {
 	if !settings.Autopilot.PrepareNextDecision || settings.LLM.MotionGenerationMode == config.LLMMotionModeOff {
 		return false
@@ -398,15 +398,15 @@ func prepareAutopilotDecisions(settings config.Settings) bool {
 		return true
 	}
 	planning, err := settings.LLM.PlanningSettings()
-	return err == nil && planning.IsHosted()
+	return err == nil && planning.ModelFeatures().PrepareDecisions
 }
 
 // autoMotionTiming reports whether a motion turn chooses its own horizon: the
 // person enabled Auto timing and the planning route, already resolved into
-// settings.LLM, is hosted. Local planners keep the sampled window because
-// small models settle on one value.
+// settings.LLM, has advanced capabilities. Simple/intermediate models keep the
+// sampled window; enabling a larger context alone does not enable this feature.
 func autoMotionTiming(kind chat.AutopilotKind, settings config.Settings) bool {
-	return kind == chat.AutopilotKindMotion && settings.Autopilot.AutoMotionTiming && settings.LLM.IsHosted()
+	return kind == chat.AutopilotKindMotion && settings.Autopilot.AutoMotionTiming && settings.LLM.ModelFeatures().AutoTiming
 }
 
 func autopilotSpeechCapabilities(capabilities chat.Capabilities, authority string) chat.Capabilities {

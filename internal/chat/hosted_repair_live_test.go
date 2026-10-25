@@ -60,7 +60,7 @@ func TestHostedResponseRepairLive(t *testing.T) {
 					t.Fatalf("invalid evaluation starting score: %v", err)
 				}
 				state := MotionContext{Running: true, MotionMode: MotionModeLayered, Layered: &before, SpeedPercent: 40, SpeedMinPercent: 1, SpeedMaxPercent: 100, Envelope: motion.CurrentPlanningEnvelope(limits)}
-				caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
+				caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 				injected := &rejectedFirstProvider{Provider: p, raw: tc.raw}
 				svc := Service{Provider: injected, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: 512, HostedResponseRepair: automatic}
 				started, calls := time.Now(), p.calls

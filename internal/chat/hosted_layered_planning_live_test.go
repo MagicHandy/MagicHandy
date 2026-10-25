@@ -28,7 +28,7 @@ func TestHostedLayeredLivePlanning(t *testing.T) {
 	provider, model := hostedLayeredLiveProvider(t)
 	limits := config.DefaultSettings().Motion
 	limits.SpeedMinPercent, limits.SpeedMaxPercent = 10, 50
-	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
+	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 	rows := []map[string]any{}
 	t.Cleanup(func() { saveHostedLayeredRows(t, rows) })
 	repeats, _ := strconv.Atoi(os.Getenv("MAGICHANDY_EVAL_REPEATS"))

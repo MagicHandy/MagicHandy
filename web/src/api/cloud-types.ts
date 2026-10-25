@@ -45,6 +45,14 @@ export interface CloudPlanningStatus {
 
 // Read-only backend projection; never part of a settings update.
 export interface ModelRoute {
+  features?: {
+    level: import("./llm-settings-types").ModelCapabilityLevel;
+    minimum_context: number;
+    auto_timing: boolean;
+    prepare_decisions: boolean;
+    independent_vibration: boolean;
+    response_repair: boolean;
+  };
   kind: "local" | "hosted" | "decisions" | "unavailable";
   provider: string; connection_id?: string; model: string; endpoint_host?: string;
   context_policy: "conversation" | "technical" | "motion_and_user_requests"; state: "configured" | "incomplete" | "unavailable";

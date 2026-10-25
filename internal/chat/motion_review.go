@@ -71,7 +71,7 @@ func (s MotionReviewService) Complete(ctx context.Context, input MotionReviewInp
 	case MotionModeCreativeV2:
 		correctionSchema = CreativeV2ResponseSchema(input.Limits, false)
 	case MotionModeLayered:
-		correctionSchema = layeredResponseSchema(input.Limits, false, s.Capabilities.HostedMotion)
+		correctionSchema = layeredResponseSchema(input.Limits, false, s.Capabilities.AdvancedMotion)
 	default:
 		grammar = autopilotContract(AutopilotKindMotion, s.Capabilities)
 	}
@@ -83,7 +83,7 @@ func (s MotionReviewService) Complete(ctx context.Context, input MotionReviewInp
 	}
 	if input.Autopilot != nil {
 		context := *input.Autopilot
-		context.Hosted = s.Capabilities.HostedMotion
+		context.Hosted = s.Capabilities.AdvancedMotion
 		evidence["autopilot_facts"] = AutopilotMotionMessage(context)
 	}
 	encoded, err := json.Marshal(evidence)
@@ -176,7 +176,7 @@ func (s MotionReviewService) parseContinuousCorrection(result MotionReview, stat
 		response, next, changed, err = ParseCreativeV2Reply(string(result.Correction), current, limits)
 	} else {
 		parser := ParseLayeredReply
-		if s.Capabilities.HostedMotion {
+		if s.Capabilities.AdvancedMotion {
 			parser = parseHostedLayeredReply
 		}
 		response, next, changed, err = parser(string(result.Correction), current, limits)

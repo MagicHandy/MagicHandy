@@ -73,6 +73,7 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
             llamaModes={opt.llama_cpp_modes ?? []}
             managedLoadPolicies={opt.llm_managed_load_policies ?? []}
             llamaContextSizes={opt.llama_cpp_context_sizes ?? []}
+            capabilityOptions={opt.local_model_capabilities ?? []}
             reasoningModes={opt.llm_reasoning_modes ?? []}
             maxOutputOptions={opt.llm_max_output_tokens ?? []}
             replyLengths={opt.llm_reply_lengths ?? []}

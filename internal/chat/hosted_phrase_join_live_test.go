@@ -74,7 +74,7 @@ func TestHostedPhraseJoinChoices(t *testing.T) {
 					}
 					plan := motion.NewMotionPlan("before", motion.MotionTarget{Flow: &before, SpeedPercent: 100}, limits, 0, 0, time.Unix(0, 0))
 					state := MotionContext{Running: true, MotionMode: MotionModeLayered, Layered: &before, SpeedPercent: 100, SpeedMinPercent: 1, SpeedMaxPercent: 100, Envelope: motion.CurrentPlanningEnvelope(limits), CommandedSummary: &plan.Perceptual}
-					caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
+					caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 					svc := Service{Provider: phraseJoinEvaluationProvider{p, variant}, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: 512}
 					started, calls := time.Now(), p.calls
 					result, err := svc.Complete(t.Context(), Request{Message: tc.request}, nil)

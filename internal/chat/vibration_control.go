@@ -9,7 +9,7 @@ import (
 )
 
 func vibrationControlAvailable(c Capabilities, state *MotionContext) bool {
-	return c.Motion && (c.HostedMotion || c.VibrationControl) && state != nil && state.Outputs != nil && state.Outputs.Vibrator != nil && state.Outputs.Vibrator.Independent &&
+	return c.Motion && (c.AdvancedMotion || c.VibrationControl) && state != nil && state.Outputs != nil && state.Outputs.Vibrator != nil && state.Outputs.Vibrator.Independent &&
 		(c.MotionMode == MotionModeLayered || c.MotionMode == MotionModeCreativeV2)
 }
 

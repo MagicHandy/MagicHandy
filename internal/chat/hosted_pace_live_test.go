@@ -62,7 +62,7 @@ func TestHostedPaceLiveComparison(t *testing.T) {
 					limits.SpeedMinPercent, limits.SpeedMaxPercent = 1, tc.ceiling
 					before := DefaultLayeredScore(tc.speed)
 					before.MinPercent, before.MaxPercent, before.Seed = 0, 100, 841
-					caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
+					caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 					state := MotionContext{Running: true, MotionMode: MotionModeLayered, Layered: &before, SpeedPercent: tc.speed,
 						SpeedMinPercent: 1, SpeedMaxPercent: tc.ceiling, Envelope: motion.CurrentPlanningEnvelope(limits)}
 					service := Service{Provider: paceEvaluationProvider{Provider: provider, variant: variant}, Model: model,
@@ -228,7 +228,7 @@ func TestHostedCreativePaceLive(t *testing.T) {
 			limits.SpeedMinPercent, limits.SpeedMaxPercent = 1, tc.ceiling
 			before := FreshCreativeV2Score(tc.speed)
 			before.Seed = 841
-			caps := Capabilities{Motion: true, MotionMode: MotionModeCreativeV2, HostedMotion: true, PreserveConversationText: true}
+			caps := Capabilities{Motion: true, MotionMode: MotionModeCreativeV2, AdvancedMotion: true, PreserveConversationText: true}
 			state := MotionContext{Running: true, MotionMode: MotionModeCreativeV2, Layered: &before, SpeedPercent: tc.speed,
 				SpeedMinPercent: 1, SpeedMaxPercent: tc.ceiling, Envelope: motion.CurrentPlanningEnvelope(limits)}
 			service := Service{Provider: provider, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: 512}

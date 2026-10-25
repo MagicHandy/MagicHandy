@@ -116,7 +116,7 @@ func TestHostedLayeredRepairUsesSameAuthorizationAndNoPartialEdits(t *testing.T)
 		`{"action":"update","edits":{"controls":{"speed_percent":{"op":"set","value":30}}},"reply":"Changed."}`,
 	} {
 		provider := &scriptedProvider{responses: []string{`{"action":"none","edits":{"unknown":true},"reply":"Bad."}`, repaired}}
-		caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
+		caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 		score := DefaultLayeredScore(25)
 		state := MotionContext{Running: false, MotionMode: MotionModeLayered, Layered: &score, SpeedMinPercent: 10, SpeedMaxPercent: 50}
 		service := Service{Provider: provider, Capabilities: &caps, MotionContext: &state, HostedResponseRepair: true}

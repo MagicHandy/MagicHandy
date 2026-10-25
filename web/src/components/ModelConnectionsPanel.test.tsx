@@ -85,11 +85,15 @@ describe("model roles and external providers", () => {
     expect(screen.queryByRole("button", { name: "Discard model changes" })).not.toBeInTheDocument();
   });
 
-  it("keeps repair configuration out of local-only controls and respects read-only settings", async () => {
+  it("offers repair for Advanced local models while preserving local routing and read-only settings", async () => {
     quietCatalog();
     const local = { connections: [], conversation_connection_id: "local" } as unknown as PublicSettings["llm"];
     const view = render(<ModelConnectionsPanel settings={local} saved={local} locked={false} patch={vi.fn()} />);
     expect(screen.queryByRole("checkbox", { name: /^Automatically repair/ })).not.toBeInTheDocument();
+    const advanced = { ...local, local_capability_level: "advanced" as const };
+    view.rerender(<ModelConnectionsPanel settings={advanced} saved={advanced} locked={false} patch={vi.fn()} />);
+    expect(screen.getByRole("checkbox", { name: /^Automatically repair/ })).toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Chat model" })).toHaveValue("local");
     const external = { ...local, connections: [chatgpt], conversation_connection_id: chatgpt.id, hosted_response_repair_enabled: false };
     view.rerender(<ModelConnectionsPanel settings={external} saved={external} locked patch={vi.fn()} />);
     const toggle = screen.getByRole("checkbox", { name: /^Automatically repair rejected chat responses/ });

@@ -38,11 +38,11 @@ export function newModelConnection(provider: ModelConnection["provider"], connec
 // Restore only this module's fields; other settings pages may have their own drafts.
 export function modelSettingsPatch(settings: LLMSettings): Partial<LLMSettings> {
   const { connections, conversation_connection_id, retry_refusal_locally, hosted_response_repair_enabled, motion_planner, motion_reviewer, provider, model,
-    llama_cpp_mode, llama_cpp_base_url, llama_cpp_context_size, ollama_base_url, ollama_models_path,
+    llama_cpp_mode, llama_cpp_base_url, llama_cpp_context_size, local_capability_level, ollama_base_url, ollama_models_path,
     request_timeout_ms, max_output_tokens, managed_load_policy, reasoning_mode, reply_length,
     motion_generation_mode, motion_capabilities } = settings;
   return { connections, conversation_connection_id, retry_refusal_locally, hosted_response_repair_enabled, motion_planner, motion_reviewer, provider, model,
-    llama_cpp_mode, llama_cpp_base_url, llama_cpp_context_size, ollama_base_url, ollama_models_path,
+    llama_cpp_mode, llama_cpp_base_url, llama_cpp_context_size, local_capability_level, ollama_base_url, ollama_models_path,
     request_timeout_ms, max_output_tokens, managed_load_policy, reasoning_mode, reply_length,
     motion_generation_mode, motion_capabilities };
 }
@@ -57,7 +57,7 @@ export function modelSettingsSignature(settings: LLMSettings): string {
     planner?.provider === "connection" ? planner.connection_id || "" : "", planner?.model || "",
     planner?.context_policy || "conversation", settings.provider, settings.model,
     settings.llama_cpp_mode, settings.llama_cpp_base_url, settings.ollama_base_url,
-    settings.llama_cpp_context_size, settings.request_timeout_ms, settings.max_output_tokens,
+    settings.llama_cpp_context_size, settings.local_capability_level || "simple", settings.request_timeout_ms, settings.max_output_tokens,
     settings.managed_load_policy || "startup", settings.reasoning_mode, settings.reply_length,
     settings.ollama_models_path || "", settings.motion_generation_mode,
     capabilities.motion, capabilities.patterns, capabilities.area_focus, capabilities.experimental_patterns,

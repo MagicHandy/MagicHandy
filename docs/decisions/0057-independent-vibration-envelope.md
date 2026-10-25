@@ -44,3 +44,8 @@ Gemma's misleading unarmed-output replies; local prompts/schemas stay unchanged.
 The external minimum context is 64K, with the existing compact history cap of
 64 messages/24 KB. Full guidance is retained; the limit does not pad requests.
 See [evaluation, review and acceptance](../intiface-vibrator-review-2026-10-25.md).
+
+Follow-up: [ADR 0058](0058-model-capability-levels.md) makes the model contract
+an explicit local capability choice. Simple remains compact; Intermediate adds
+tested guidance/awareness, and Advanced can opt into this independent envelope.
+The tested 12B model is not recommended for Advanced. Human arming is unchanged.

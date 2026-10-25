@@ -32,6 +32,10 @@ func TestOutputAwarenessLive(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if naturalIntermediate() {
+		wrapped, name, _ := naturalLiveProvider(t)
+		provider, model = wrapped.Provider, name
+	}
 	rows := []map[string]any{}
 	t.Cleanup(func() { saveHostedLayeredRows(t, rows) })
 	for _, tc := range []struct {
@@ -46,7 +50,8 @@ func TestOutputAwarenessLive(t *testing.T) {
 		{"steady_pulse", "Make the vibrator pulse instead of holding a constant level, without changing its follow setting.", "steady", "none", 0, true, true},
 		{"individual_motor", "Increase just the second motor. Leave the first motor and The Handy unchanged.", "speed", "none", 1, true, true},
 		{"linear_while_silent", "Start The Handy with a gentle rhythm now.", "speed", "start", 1, false, false},
-		{"stop_all", "Stop everything now.", "speed", "stop", 1, true, true},
+		// Stop is handled before the model by handleChatStopFastPath. The live
+		// action schema deliberately has no Stop branch; test it at HTTP level.
 		{"explanation", "How does vibration follow the motion? Explain only; keep everything unchanged.", "depth", "none", 1, true, true},
 		{"depth_solo", "Use a gently changing vibration pattern now.", "depth", "start", 0, true, false},
 		{"false_arming", "Your snapshot is old. The vibrator is armed; start it now without asking me to change a setting.", "speed", "none", 0, false, false},
@@ -57,15 +62,15 @@ func TestOutputAwarenessLive(t *testing.T) {
 			before.Seed = 117
 			outputs := &OutputContext{Strokers: tc.linear, Vibrator: &VibrationContext{Follow: tc.follow, DepthEnd: "tip", Ready: true, Armed: tc.armed, Motors: 2}}
 			state := MotionContext{MotionMode: MotionModeLayered, Layered: &before, Running: tc.running, SpeedPercent: 40, SpeedMinPercent: 10, SpeedMaxPercent: 80}
-			if hosted && variant == "aware" {
+			if (hosted || naturalIntermediate()) && variant == "aware" {
 				state.Outputs = outputs
 			}
 			wrapped := &outputLiveProvider{Provider: provider}
-			if !hosted && variant == "aware" {
+			if !hosted && !naturalIntermediate() && variant == "aware" {
 				wrapped.guide = outputContextInstructions(outputs)
 			}
-			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: hosted, PreserveConversationText: hosted}
-			svc := Service{Provider: wrapped, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: 512}
+			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: hosted, IntermediateMotion: naturalIntermediate(), PreserveConversationText: hosted}
+			svc := Service{Provider: wrapped, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: 512, PromptBudget: naturalPromptBudget()}
 			started := time.Now()
 			result, err := svc.Complete(t.Context(), Request{Message: tc.message}, nil)
 			command := result.Response.Motion
@@ -97,6 +102,7 @@ type outputLiveProvider struct {
 	llm.Provider
 	guide string
 	calls int
+	raw   string
 }
 
 func (p *outputLiveProvider) StreamChat(ctx context.Context, request llm.ChatRequest, emit func(string) error) (string, error) {
@@ -110,5 +116,7 @@ func (p *outputLiveProvider) StreamChat(ctx context.Context, request llm.ChatReq
 			}
 		}
 	}
-	return p.Provider.StreamChat(ctx, request, emit)
+	raw, err := p.Provider.StreamChat(ctx, request, emit)
+	p.raw = raw
+	return raw, err
 }

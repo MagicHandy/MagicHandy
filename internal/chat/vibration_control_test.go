@@ -32,7 +32,7 @@ func TestOutputFactsLeaveLocalPromptsAndSchemasUnchanged(t *testing.T) {
 func TestIndependentVibrationValidationAndIsolation(t *testing.T) {
 	before := DefaultLayeredScore(40)
 	state := MotionContext{MotionMode: MotionModeLayered, Running: true, Layered: &before, Outputs: &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true, Armed: true}}}
-	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true}
+	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true}
 	svc := Service{Capabilities: &caps}
 	raw := `{"action":"none","edits":{},"vibration":{"mode":"wave","min_percent":10,"max_percent":70,"period_seconds":4},"reply":"Independent swell."}`
 	response, err := svc.parseLayeredResponse(raw, before, state, config.DefaultSettings().Motion, false)
@@ -77,7 +77,7 @@ func TestGeometryRepairNamesConflictingStructuredFields(t *testing.T) {
 
 func TestUnavailableVibrationStrictSchemaUsesTypedOffOrNull(t *testing.T) {
 	state := MotionContext{MotionMode: MotionModeLayered, Outputs: &OutputContext{Vibrator: &VibrationContext{Independent: true, Ready: true}}}
-	caps := Capabilities{Motion: true, HostedMotion: true, MotionMode: MotionModeLayered}
+	caps := Capabilities{Motion: true, AdvancedMotion: true, MotionMode: MotionModeLayered}
 	raw, err := llm.OpenAISchema(InteractiveResponseSchema(nil, caps, &state))
 	if err != nil {
 		t.Fatal(err)

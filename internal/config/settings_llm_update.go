@@ -1,8 +1,15 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) {
+	level, contextSize, maxOutputTokens, err := localCapabilityUpdate(current, update)
+	if err != nil {
+		return LLMSettings{}, err
+	}
 	repairEnabled := current.HostedResponseRepairEnabled
 	if update.HostedResponseRepairEnabled != nil {
 		enabled := *update.HostedResponseRepairEnabled
@@ -26,17 +33,6 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 	}
 	if update.MotionPlanner != nil {
 		planner = *update.MotionPlanner
-	}
-	if update.LlamaCPPContextSize != nil && !oneOfInt(*update.LlamaCPPContextSize, LlamaCPPContextSizes()...) {
-		return LLMSettings{}, fmt.Errorf("unsupported managed llama.cpp context size %d", *update.LlamaCPPContextSize)
-	}
-	contextSize := current.LlamaCPPContextSize
-	if update.LlamaCPPContextSize != nil {
-		contextSize = *update.LlamaCPPContextSize
-	}
-	maxOutputTokens := current.MaxOutputTokens
-	if update.MaxOutputTokens != nil {
-		maxOutputTokens = *update.MaxOutputTokens
 	}
 	reasoningMode := current.ReasoningMode
 	if update.ReasoningMode != nil {
@@ -87,6 +83,7 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		ManagedLoadPolicy:           managedLoadPolicy,
 		LlamaCPPBaseURL:             update.LlamaCPPBaseURL,
 		LlamaCPPContextSize:         contextSize,
+		LocalCapabilityLevel:        level,
 		OllamaBaseURL:               update.OllamaBaseURL,
 		OllamaModelsPath:            update.OllamaModelsPath,
 		Model:                       update.Model,
@@ -102,4 +99,30 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		MotionGenerationMode:        motionGenerationMode,
 		MotionCapabilities:          capabilities,
 	}), nil
+}
+
+// A capability change may raise the required allocation, while omitted fields
+// from older clients preserve the user's saved level and larger budgets.
+func localCapabilityUpdate(current LLMSettings, update LLMUpdate) (string, int, int, error) {
+	level := current.LocalCapabilityLevel
+	if update.LocalCapabilityLevel != nil {
+		level = *update.LocalCapabilityLevel
+	}
+	level = strings.ToLower(strings.TrimSpace(level))
+	if update.LlamaCPPContextSize != nil && !oneOfInt(*update.LlamaCPPContextSize, LlamaCPPContextSizes()...) {
+		return "", 0, 0, fmt.Errorf("unsupported managed llama.cpp context size %d", *update.LlamaCPPContextSize)
+	}
+	contextSize := current.LlamaCPPContextSize
+	if update.LlamaCPPContextSize != nil {
+		contextSize = *update.LlamaCPPContextSize
+	}
+	contextSize = max(contextSize, MinimumLocalContext(level))
+	maxOutputTokens := current.MaxOutputTokens
+	if update.MaxOutputTokens != nil {
+		maxOutputTokens = *update.MaxOutputTokens
+	}
+	if level == ModelCapabilityIntermediate || level == ModelCapabilityAdvanced {
+		maxOutputTokens = max(maxOutputTokens, MinimumLocalOutput(level))
+	}
+	return level, contextSize, maxOutputTokens, nil
 }

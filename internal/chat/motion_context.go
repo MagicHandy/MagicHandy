@@ -102,7 +102,7 @@ Use that snapshot deliberately:
 func motionContextInstructions(context MotionContext, capabilities Capabilities, patterns []PatternChoice) string {
 	if capabilities.MotionMode == MotionModeLayered || capabilities.MotionMode == MotionModeCreativeV2 {
 		context.MotionMode = capabilities.MotionMode
-		text := layeredContextInstructions(context)
+		text := layeredContextInstructions(context, capabilities)
 		return text + hostedCommandedReach(context, capabilities)
 	}
 	data := normalizedPromptMotionContext(context)

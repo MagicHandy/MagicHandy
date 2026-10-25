@@ -24,6 +24,15 @@ type VibrationContext struct {
 	Motors      int                   `json:"motors_driven_together"`
 }
 
+// No inference from a user message can arm the only selected output. Nil data
+// preserves the existing generic/simulator contract; a mixed session may still
+// move its other participants.
+func unavailableVibrationOnly(state MotionContext) bool {
+	outputs := state.Outputs
+	return outputs != nil && outputs.Strokers == 0 && !outputs.Coyote &&
+		outputs.Vibrator != nil && (!outputs.Vibrator.Ready || !outputs.Vibrator.Armed)
+}
+
 const outputContextGuide = `The outputs share one movement timeline; there is no independent device or motor command. A vibrator follows that timeline, within the intensity set by the user. Never claim to change its intensity setting, ceiling, profile, individual motors, or playback participation.
 For follows=speed, the vibrator follows averaged absolute movement speed, with smoothing and fade-in. Shared pace changes affect it; position alone does not address a body region or select a motor. For follows=depth, the hidden position controls vibration: base is strongest near 0, tip near 100. For follows=steady, vibration stays constant while the timeline plays; movement edits cannot make it pulse or alter its level.
 With no linear device, describe vibration rather than physical strokes, travel, or penetration. The motion JSON remains a hidden control signal. With a linear device, any movement edit also changes that device: if asked to change vibration independently while preserving its movement, use no change and explain the limitation. Do not invent a separate vibration pattern or use Stop to silence only one participant.
@@ -42,7 +51,7 @@ func outputContextInstructions(outputs *OutputContext) string {
 }
 
 func playbackOutputInstructions(caps Capabilities, state *MotionContext) string {
-	if !caps.Motion || (!caps.HostedMotion && !caps.VibrationControl) || state == nil {
+	if !caps.Motion || (!caps.AdvancedMotion && !caps.IntermediateMotion && !caps.VibrationControl) || state == nil {
 		return ""
 	}
 	return outputContextInstructions(state.Outputs)

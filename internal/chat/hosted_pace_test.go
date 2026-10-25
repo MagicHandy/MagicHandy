@@ -50,7 +50,7 @@ func TestHostedPaceGuidanceKeepsLocalContractAndSchema(t *testing.T) {
 		if local != want {
 			t.Fatal("local prompt changed")
 		}
-		caps.HostedMotion = true
+		caps.AdvancedMotion = true
 		hosted := contractInstructions(caps)
 		if strings.Count(hosted, hostedPaceGuide) != 1 {
 			t.Fatal("missing or duplicated pace guidance")

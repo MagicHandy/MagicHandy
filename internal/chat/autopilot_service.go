@@ -84,6 +84,10 @@ type AutopilotService struct {
 
 // Complete runs one autonomous decision, with one repair for local output.
 func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, request Request) (AutopilotResponse, error) {
+	// The grouped local dialect improved interactive edits, but degraded
+	// autonomous Layered composition. Keep its proven compact grammar there;
+	// the explicitly selected context/output allocation remains available.
+	s.Capabilities.IntermediateMotion = s.Capabilities.IntermediateMotion && s.Capabilities.MotionMode != MotionModeLayered
 	if s.Provider == nil {
 		return AutopilotResponse{}, errors.New("LLM provider is required")
 	}

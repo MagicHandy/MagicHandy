@@ -244,12 +244,11 @@ export function AutopilotControl() {
   }
 
   const preferences = state?.settings?.autopilot;
-  // Auto timing is honored only when the backend routes Autopilot planning to a
-  // hosted model, and prepared decisions only for an external planner, so the
-  // switches are offered only there.
-  const plannerRoute = state?.settings?.model_routing?.autopilot?.kind;
-  const hostedPlanner = plannerRoute === "hosted";
-  const externalPlanner = hostedPlanner || plannerRoute === "decisions";
+  // Saved backend capabilities follow the planning role, independently of
+  // provider. Kind fallback supports snapshots from earlier app versions.
+  const plannerRoute = state?.settings?.model_routing?.autopilot;
+  const autoTimingAvailable = plannerRoute?.features?.auto_timing ?? plannerRoute?.kind === "hosted";
+  const prepareAvailable = plannerRoute?.features?.prepare_decisions ?? (plannerRoute?.kind === "hosted" || plannerRoute?.kind === "decisions");
   const resetBuildup = async () => {
     try {
       await api.resetAutopilotArc();
@@ -315,8 +314,8 @@ export function AutopilotControl() {
       {preferences && (
         <AutopilotPreferences
           value={preferences}
-          hostedPlanner={hostedPlanner}
-          externalPlanner={externalPlanner}
+          autoTimingAvailable={autoTimingAvailable}
+          prepareAvailable={prepareAvailable}
           disabled={locked}
           onSaved={() => refresh()}
           onError={(error) => show(errorMessage(error), "error")}
@@ -328,15 +327,15 @@ export function AutopilotControl() {
 
 function AutopilotPreferences({
   value,
-  hostedPlanner,
-  externalPlanner,
+  autoTimingAvailable,
+  prepareAvailable,
   disabled,
   onSaved,
   onError,
 }: {
   value: AutopilotSettings;
-  hostedPlanner: boolean;
-  externalPlanner: boolean;
+  autoTimingAvailable: boolean;
+  prepareAvailable: boolean;
   disabled: boolean;
   onSaved: () => void;
   onError: (error: unknown) => void;
@@ -440,7 +439,7 @@ function AutopilotPreferences({
         })}
       />
       </div>
-      {hostedPlanner && (
+      {autoTimingAvailable && (
         <div className="control-row control-row-stack autopilot-auto-timing">
           <label className="toggle-line">
             <span className="toggle">
@@ -458,7 +457,7 @@ function AutopilotPreferences({
           </p>
         </div>
       )}
-      {externalPlanner && (
+      {prepareAvailable && (
         <div className="control-row control-row-stack autopilot-auto-timing">
           <label className="toggle-line">
             <span className="toggle">

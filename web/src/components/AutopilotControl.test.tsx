@@ -456,7 +456,7 @@ describe("AutopilotControl", () => {
     }));
   });
 
-  it("offers Auto timing only when Autopilot plans with a hosted model", async () => {
+  it("offers Auto timing for hosted routes in older snapshots", async () => {
     const route = (kind: string) => ({
       chat: { kind, provider: "compatible", model: "m", context_policy: "conversation", state: "configured" },
       autopilot: { kind, provider: "compatible", model: "m", context_policy: "conversation", state: "configured" },
@@ -487,6 +487,26 @@ describe("AutopilotControl", () => {
       auto_motion_timing: true,
       motion_change_level: 4,
     }));
+  });
+
+  it("follows saved planner features for Advanced local models and hides them after downgrade", () => {
+    const update = (advanced: boolean) => {
+      app.state = { modes: { mode: "autopilot" }, settings: {
+        autopilot: { ...autopilotPreferences, auto_motion_timing: true, prepare_next_decision: true },
+        model_routing: {
+          chat: { kind: "hosted", features: { auto_timing: true, prepare_decisions: true } },
+          autopilot: { kind: "local", provider: "ollama", features: { auto_timing: advanced, prepare_decisions: advanced } },
+        },
+      } };
+    };
+    update(true);
+    const view = render(<AutopilotControl />);
+    expect(screen.getByRole("checkbox", { name: "Auto timing" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Prepare decisions early" })).toBeChecked();
+    update(false);
+    view.rerender(<AutopilotControl />);
+    expect(screen.queryByRole("checkbox", { name: "Auto timing" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Prepare decisions early" })).not.toBeInTheDocument();
   });
 
   it("offers prepared decisions for any external planner and saves the choice", async () => {

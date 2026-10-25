@@ -53,8 +53,8 @@ type chatRepairCandidate struct {
 	evidenceID           atomic.Int64
 }
 
-func (s *Server) withOptionalChatRepair(ctx context.Context, hosted bool, session string, stop uint64, settings config.Settings) context.Context {
-	if !hosted {
+func (s *Server) withOptionalChatRepair(ctx context.Context, advanced bool, session string, stop uint64, settings config.Settings) context.Context {
+	if !advanced {
 		return ctx
 	}
 	repairCtx, err := s.prepareChatRepair(ctx, session, stop, settings)
@@ -63,7 +63,7 @@ func (s *Server) withOptionalChatRepair(ctx context.Context, hosted bool, sessio
 	}
 	// Optional repair bookkeeping cannot prevent an otherwise valid reply.
 	// Failed capture closes only repair admission, never its context guards.
-	s.logger.Warn("hosted response repair context unavailable")
+	s.logger.Warn("response repair context unavailable")
 	return ctx
 }
 

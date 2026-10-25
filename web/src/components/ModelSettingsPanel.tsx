@@ -23,6 +23,8 @@ import { ModelCatalogDownloads } from "./ModelCatalog";
 import { ModelCheckDialog } from "./ModelCheckDialog";
 import { ReplyLengthField } from "./ReplyLengthField";
 import { OllamaLibraryImport } from "./OllamaLibraryImport";
+import { ModelCapabilityField } from "./ModelCapabilityField";
+import type { ModelCapabilityOption } from "../api/llm-settings-types";
 
 type LLMSettings = PublicSettings["llm"];
 
@@ -37,6 +39,7 @@ interface ModelSettingsPanelProps {
   reasoningModes: string[];
   maxOutputOptions: number[];
   replyLengths?: string[];
+  capabilityOptions?: ModelCapabilityOption[];
   locked: boolean;
   patch: (next: Partial<LLMSettings>) => void;
 }
@@ -51,7 +54,7 @@ const reasoningLabel = (mode: string) => mode === "auto" ? "Automatic / provider
 // experimental patterns (mirrors config.DefaultLLMMotionCapabilities).
 const defaultCapabilities: LLMMotionCapabilities = { motion: true, patterns: true, area_focus: true, experimental_patterns: false };
 
-export function ModelSettingsPanel({ settings, saved, providers, llamaModes, managedLoadPolicies = [], llamaContextSizes, reasoningModes, maxOutputOptions, replyLengths = [], locked, patch, configurationOnly = false }: ModelSettingsPanelProps) {
+export function ModelSettingsPanel({ settings, saved, providers, llamaModes, managedLoadPolicies = [], llamaContextSizes, reasoningModes, maxOutputOptions, replyLengths = [], capabilityOptions = [], locked, patch, configurationOnly = false }: ModelSettingsPanelProps) {
   const { show } = useToast();
   const [manager, setManager] = useState<LLMModelManagerSnapshot | null>(null);
   const [catalog, setCatalog] = useState<LLMCatalog | null>(null);
@@ -85,7 +88,8 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
     ? saved?.llama_cpp_context_size ?? settings.llama_cpp_context_size
     : undefined;
   const protectedManagedModelID = saved?.provider === "llama_cpp" && saved.llama_cpp_mode === "managed" ? saved.model : "";
-  const outputOptions = Array.from(new Set([settings.max_output_tokens, ...(maxOutputOptions.length ? maxOutputOptions : [128, 256, 512, 1024])])).sort((a, b) => a - b);
+  const minimumOutput = capabilityOptions.find(option => option.level === (settings.local_capability_level || "simple"))?.minimum_output ?? 64;
+  const outputOptions = Array.from(new Set([settings.max_output_tokens, ...(maxOutputOptions.length ? maxOutputOptions : [128, 256, 512, 1024])])).filter(value => value >= minimumOutput).sort((a, b) => a - b);
   const contextSize = settings.llama_cpp_context_size;
   const managedLoadPolicy = settings.managed_load_policy || "startup";
   const contextSizeOptions = Array.from(new Set([contextSize, ...llamaContextSizes])).sort((a, b) => a - b);
@@ -436,11 +440,12 @@ export function ModelSettingsPanel({ settings, saved, providers, llamaModes, man
             </label>
           </div>
         )}
+        <ModelCapabilityField settings={settings} options={capabilityOptions} contextSizes={llamaContextSizes} locked={locked} patch={patch} />
         <details className="model-advanced">
           <summary>{t("Advanced generation settings")}</summary>
           <p className="form-status">{t("The defaults suit the tested models. Change these only to fix a specific problem.")}</p>
           <div className="model-generation-settings" aria-label={t("Generation optimizations")}>
-            {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (
+            {settings.provider === "llama_cpp" && settings.llama_cpp_mode === "managed" && (!settings.local_capability_level || settings.local_capability_level === "simple") && (
               <label className="field">
                 <span className="label">{t("Context size")}</span>
                 <select value={contextSize} disabled={locked} onChange={(event) => patch({ llama_cpp_context_size: Number(event.target.value) })}>

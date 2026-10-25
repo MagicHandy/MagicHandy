@@ -135,12 +135,12 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 	}
 	defer finishChat()
 	s.chatRepair.clear()
-	if settings.LLM.IsHosted() {
+	if settings.LLM.AdvancedMotion() {
 		chatCtx = s.guardHostedChat(chatCtx)
 	}
 	activityID, started := s.beginChatActivity(settings.Voice)
 	defer s.modes.NotifyChatActivityComplete(activityID)
-	chatCtx = s.withOptionalChatRepair(chatCtx, settings.LLM.IsHosted(), sessionID, stopSequence, sourceSettings)
+	chatCtx = s.withOptionalChatRepair(chatCtx, settings.LLM.AdvancedMotion(), sessionID, stopSequence, sourceSettings)
 
 	promptContext, err := s.loadInteractiveChatPromptContext(chatCtx, sessionID, settings.LLM, body.Message)
 	if err != nil {
@@ -328,6 +328,12 @@ func (s *Server) loadInteractiveChatPromptContext(ctx context.Context, sessionID
 	var historyOmitted int
 	if settings.ActiveConnection != nil {
 		_, historyLimit, historyBytes := settings.ActiveConnection.ConversationWindow()
+		loggedHistory, historyOmitted, err = s.chatLog.RecentPromptHistoryContext(ctx, sessionID, historyLimit, historyBytes)
+	} else if settings.AdvancedMotion() {
+		// Advanced local models use the same bounded conversation retention as
+		// an external connection with the selected application context budget.
+		window := config.ModelConnection{ContextWindow: settings.LocalContextSize()}
+		_, historyLimit, historyBytes := window.ConversationWindow()
 		loggedHistory, historyOmitted, err = s.chatLog.RecentPromptHistoryContext(ctx, sessionID, historyLimit, historyBytes)
 	} else {
 		loggedHistory, err = s.chatLog.RecentSessionContext(ctx, sessionID, interactiveChatHistoryLimit)
@@ -998,7 +1004,7 @@ func (s *Server) chatMotionContext(settings config.MotionSettings, llmSettings c
 		MotionMode:      chatMotionMode(llmSettings.MotionGenerationMode),
 		Envelope:        motion.CurrentPlanningEnvelope(settings),
 	}
-	if llmSettings.IsHosted() {
+	if llmSettings.AdvancedMotion() || llmSettings.IntermediateMotion() {
 		context.Outputs = s.chatOutputContext(llmSettings)
 	}
 	engine := s.currentMotionEngine()
@@ -1129,9 +1135,10 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 	resolved := settings.Capabilities()
 	mode := chatMotionMode(settings.MotionGenerationMode)
 	capabilities := chat.Capabilities{
-		HostedMotion:             settings.IsHosted(),
+		AdvancedMotion:           settings.AdvancedMotion(),
+		IntermediateMotion:       settings.IntermediateMotion(),
 		SchemaUnenforced:         schemaUnenforced(settings),
-		PreserveConversationText: settings.IsHosted(),
+		PreserveConversationText: settings.AdvancedMotion(),
 		Motion:                   resolved.Motion && mode != chat.MotionModeOff,
 		MotionMode:               mode,
 		Patterns:                 resolved.Motion && mode == chat.MotionModePattern && resolved.Patterns,

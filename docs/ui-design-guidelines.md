@@ -806,3 +806,17 @@ presents opaque choices by signal strength and disables devices already reserved
 by another Handy. Keep the primary Browser Bluetooth limitation explicit at the
 additional-method choice. Do not promise physical synchronization. See
 [ADR 0054](decisions/0054-named-handy-connections.md).
+
+### Model capability levels (2026-10-25)
+
+Local setup and Chat model settings share Simple / Intermediate / Advanced.
+Use backend option names and budget floors; show the context select next to the
+capability choice only when relevant. Keep explanations brief and separated by
+the existing row rule, without another nested card. Preserve larger saved values.
+
+Live controls follow the saved role's backend `features`, not the provider name
+or an unsaved settings draft. Advanced local Autopilot exposes Auto timing and
+Prepare decisions early, and Advanced local chat exposes repair and independent
+output help, just like the corresponding external role. Different chat and
+Autopilot routes may have different features. Capability never implies device
+connection, arming, or permission to move. See [ADR 0058](decisions/0058-model-capability-levels.md).

@@ -84,6 +84,9 @@ func (s *Server) resolveLLMProvider(ctx context.Context, settings config.LLMSett
 		Client:  s.llm.httpClient,
 		Timeout: timeout,
 	}
+	if settings.ModelCapabilityLevel() != config.ModelCapabilitySimple {
+		options.ContextSize = settings.LocalContextSize()
+	}
 
 	var provider llm.Provider
 	switch settings.Provider {
@@ -93,7 +96,7 @@ func (s *Server) resolveLLMProvider(ctx context.Context, settings config.LLMSett
 				HTTPProviderOptions: options,
 				RunnerPath:          paths.runner,
 				ModelPath:           paths.model,
-				ContextSize:         settings.LlamaCPPContextSize,
+				ContextSize:         settings.LocalContextSize(),
 				ChatTemplateFile:    paths.template,
 			})
 		} else {
@@ -408,6 +411,10 @@ func llmCacheKey(settings config.LLMSettings, managedKey string) string {
 		settings.Provider,
 		settings.Model,
 		fmt.Sprint(settings.RequestTimeoutMillis),
+		settings.ModelCapabilityLevel(),
+	}
+	if settings.ModelCapabilityLevel() != config.ModelCapabilitySimple {
+		parts = append(parts, fmt.Sprint(settings.LocalContextSize()))
 	}
 	switch settings.Provider {
 	case config.LLMProviderLlamaCPP:

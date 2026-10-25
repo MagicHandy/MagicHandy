@@ -19,7 +19,7 @@ func continuousActionSchema(schema json.RawMessage, state MotionContext) json.Ra
 		return schema
 	}
 	actions := []string{MotionActionNone}
-	if !state.Paused {
+	if !state.Paused && !unavailableVibrationOnly(state) {
 		if state.Running {
 			actions = append(actions, MotionActionUpdate)
 		} else {
@@ -45,7 +45,11 @@ func continuousActionSchema(schema json.RawMessage, state MotionContext) json.Ra
 		}
 		if action == MotionActionNone {
 			var empty any = map[string]any{}
-			if state.MotionMode == MotionModeCreativeV2 {
+			var editShape struct {
+				Type string `json:"type"`
+			}
+			_ = json.Unmarshal(root.Properties["edits"], &editShape)
+			if state.MotionMode == MotionModeCreativeV2 || editShape.Type == "array" {
 				empty = []any{}
 			}
 			fields["edits"], _ = json.Marshal(map[string]any{"const": empty})
@@ -66,6 +70,9 @@ const continuousKeepGuide = `
 AUTOPILOT WISH: After reply, set "stay_unchanged" from the HUMAN'S intent, not your reply. It controls FUTURE autonomous edits, independently of this turn's action: "none" can leave future variation enabled. Use false unless the person asks to freeze the exact score indefinitely, possibly after this edit. Enjoying motion or wanting it to continue does not freeze Autopilot. Preserve an existing user-requested hold until they ask for change, variety or surprise, or return the lead to you.`
 
 func continuousActionGuideFor(state MotionContext) string {
+	if unavailableVibrationOnly(state) {
+		return "LIVE CHAT DECISION: Use action none and empty edits. The only selected output is a vibrator that is not connected/selected or has zero user intensity. Explain which setting needs attention; do not claim to have started it. The user must connect/select it and set a nonzero intensity in the app."
+	}
 	if state.Autopilot {
 		guide := continuousActionGuide + continuousKeepGuide
 		if state.StandingHold {
@@ -78,6 +85,12 @@ func continuousActionGuideFor(state MotionContext) string {
 
 func (s Service) authorizeLayeredReply(response *AssistantResponse, after motion.FlowSpec, changed []string, state MotionContext) error {
 	if !s.capabilities().Motion {
+		return nil
+	}
+	if unavailableVibrationOnly(state) {
+		if len(changed) > 0 || (response.continuousAction != "" && response.continuousAction != MotionActionNone) {
+			return errors.New("the selected vibrator is not ready or has zero intensity; motion edits cannot arm it")
+		}
 		return nil
 	}
 	if state.Paused {

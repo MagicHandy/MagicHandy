@@ -79,7 +79,7 @@ func TestHostedLayeredRangeComparison(t *testing.T) {
 						plan := motion.NewMotionPlan("review", motion.MotionTarget{Flow: &before, SpeedPercent: before.SpeedPercent}, limits, 0, 0, time.Unix(0, 0))
 						state.CommandedSummary = &plan.Perceptual
 					}
-					caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
+					caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 					svc := Service{Provider: rangeEvaluationProvider{Provider: provider, variant: variant}, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: 2048}
 					started, calls := time.Now(), provider.calls
 					result, err := svc.Complete(t.Context(), Request{Message: tc.request, History: tc.history}, nil)
@@ -161,7 +161,7 @@ func TestHostedLayeredPhraseContinuation(t *testing.T) {
 		"Keep this exact motion repeating unchanged.",
 	} {
 		before := *motion.CloneFlowSpec(&score)
-		caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, HostedMotion: true, PreserveConversationText: true}
+		caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 		plan := motion.NewMotionPlan("current", motion.MotionTarget{Flow: &score, SpeedPercent: score.SpeedPercent}, limits, 0, 0, time.Unix(0, 0))
 		state := MotionContext{Running: true, Layered: &score, MotionMode: MotionModeLayered, SpeedPercent: score.SpeedPercent, SpeedMinPercent: 1, SpeedMaxPercent: 100, Envelope: motion.CurrentPlanningEnvelope(limits), CommandedSummary: &plan.Perceptual}
 		svc := Service{Provider: provider, Model: model, Capabilities: &caps, MotionContext: &state, MaxTokens: 1536, ReasoningMode: "off"}
