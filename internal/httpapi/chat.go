@@ -1136,6 +1136,7 @@ func chatCapabilities(settings config.LLMSettings, active *persona.Persona) chat
 	resolved := settings.Capabilities()
 	mode := chatMotionMode(settings.MotionGenerationMode)
 	capabilities := chat.Capabilities{
+		SimpleMotion:             settings.ModelCapabilityLevel() == config.ModelCapabilitySimple,
 		AdvancedMotion:           settings.AdvancedMotion(),
 		IntermediateMotion:       settings.IntermediateMotion(),
 		SchemaUnenforced:         schemaUnenforced(settings),

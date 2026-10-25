@@ -65,16 +65,21 @@ func playbackOutputInstructions(caps Capabilities, state *MotionContext) string 
 	return outputContextInstructions(state.Outputs)
 }
 
-// The 12B model can read old "playing" speech as the current state despite a
+// Small models can read old "playing" speech as the current state despite a
 // correct large system prompt. A short backend fact beside this fresh request
 // resolves that ambiguity without classifying or rewriting the person's words.
-// Keep ordinary turns, Simple, Advanced and autonomous budgets unchanged.
+// Keep ordinary turns, Advanced and autonomous budgets unchanged.
 func withLocalManualResumeState(messages []llm.Message, caps Capabilities, state MotionContext) []llm.Message {
-	if !caps.IntermediateMotion || caps.AdvancedMotion || state.Running || state.Paused ||
-		state.Outputs == nil || state.Outputs.Vibrator == nil || !state.Outputs.Vibrator.ResumeOnMotionRequest || len(messages) == 0 {
+	available := state.ManualRestartAvailable || (state.Outputs != nil && state.Outputs.Vibrator != nil && state.Outputs.Vibrator.ResumeOnMotionRequest)
+	if (!caps.IntermediateMotion && !caps.SimpleMotion) || caps.AdvancedMotion || state.Running || state.Paused ||
+		!available || len(messages) == 0 {
 		return messages
 	}
 	last := len(messages) - 1
 	result := append([]llm.Message{}, messages[:last]...)
-	return append(result, llm.Message{Role: "system", Content: "Current app state for this turn: playback is stopped, not paused. Previous chat describes earlier runs. A new motion request may start the saved or revised rhythm; a question leaves playback stopped. The app can restore the previous human-selected vibrator intensity for this request."}, messages[last])
+	content := "Current app state for this turn: playback is stopped, not paused. Previous chat describes earlier runs. A new motion request may start the saved or revised rhythm; a question leaves playback stopped."
+	if caps.IntermediateMotion {
+		content += " The app can restore the previous human-selected vibrator intensity for this request."
+	}
+	return append(result, llm.Message{Role: "system", Content: content}, messages[last])
 }

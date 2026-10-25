@@ -68,6 +68,9 @@ func TestManualChatResumesVibrationAfterStop(t *testing.T) {
 			if level != config.ModelCapabilitySimple && !strings.Contains(prompt, `"manual_request_can_resume_previous_intensity":true`) {
 				t.Fatal("manual permission did not reach model")
 			}
+			if level == config.ModelCapabilitySimple && (!strings.Contains(prompt, "Current app state for this turn: playback is stopped") || strings.Contains(prompt, "Active playback outputs")) {
+				t.Fatal("Simple needs the stopped-state cue without the multi-output contract")
+			}
 		})
 	}
 }

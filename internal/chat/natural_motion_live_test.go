@@ -11,6 +11,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,7 +32,14 @@ func naturalLiveProvider(t *testing.T) (*outputLiveProvider, string, bool) {
 	model := os.Getenv("MAGICHANDY_LOCAL_MODEL")
 	if model == "" {
 		provider, name := hostedLayeredLiveProvider(t)
-		return &outputLiveProvider{Provider: provider}, name, true
+		return naturalOutputProvider(provider), name, true
+	}
+	if baseURL := os.Getenv("MAGICHANDY_NATURAL_LLAMA_URL"); baseURL != "" {
+		provider, err := llm.NewLlamaCPPProvider(llm.HTTPProviderOptions{BaseURL: baseURL, Model: model, Timeout: 90 * time.Second, Client: &http.Client{Transport: naturalOpenAISeedTransport{}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return naturalOutputProvider(provider), model, os.Getenv("MAGICHANDY_NATURAL_LEVEL") == config.ModelCapabilityAdvanced
 	}
 	provider, err := llm.NewOllamaProvider(llm.HTTPProviderOptions{BaseURL: "http://127.0.0.1:11434", Model: model, Timeout: 90 * time.Second, Client: &http.Client{Transport: local16KTransport{}}})
 	if level := os.Getenv("MAGICHANDY_NATURAL_LEVEL"); level == config.ModelCapabilityIntermediate || level == config.ModelCapabilityAdvanced {
@@ -44,12 +52,97 @@ func naturalLiveProvider(t *testing.T) (*outputLiveProvider, string, bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &outputLiveProvider{Provider: provider}, model, os.Getenv("MAGICHANDY_NATURAL_LEVEL") == config.ModelCapabilityAdvanced
+	return naturalOutputProvider(provider), model, os.Getenv("MAGICHANDY_NATURAL_LEVEL") == config.ModelCapabilityAdvanced
+}
+
+func naturalOutputProvider(provider llm.Provider) *outputLiveProvider {
+	var guide string
+	switch os.Getenv("MAGICHANDY_TRANSFER_GUIDE") {
+	case "sparse":
+		guide = simplePatchGuide
+	case "sparse_reach":
+		guide = simplePatchGuide + "\n" + simpleReachGuide
+	}
+	return &outputLiveProvider{Provider: withSimplePlanTrial(provider), guide: guide}
 }
 
 // Reproducible comparisons may pin sampling, without overriding the production
 // context allocation or changing the provider's shipped defaults.
 type naturalSeedTransport struct{}
+
+// The same deterministic evaluation can use the installed managed GGUF runtime
+// directly, without importing another copy of a model into Ollama.
+type naturalOpenAISeedTransport struct{}
+
+func (naturalOpenAISeedTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	seed, err := strconv.Atoi(os.Getenv("MAGICHANDY_NATURAL_SEED"))
+	if err != nil || request.Body == nil {
+		return http.DefaultTransport.RoundTrip(request)
+	}
+	data, err := io.ReadAll(request.Body)
+	if err != nil {
+		return nil, err
+	}
+	_ = request.Body.Close()
+	var body map[string]any
+	if err = json.Unmarshal(data, &body); err != nil {
+		return nil, err
+	}
+	body["seed"] = seed
+	if os.Getenv("MAGICHANDY_SIMPLE_VARIANT") == "human_focus" {
+		if messages, ok := body["messages"].([]any); ok && len(messages) > 0 {
+			first := messages[0].(map[string]any)
+			for _, line := range strings.Split(first["content"].(string), "\n") {
+				var state map[string]any
+				if json.Unmarshal([]byte(line), &state) == nil && state["autopilot"] != nil && state["recent_user_requests_oldest_first"] != nil {
+					recent, _ := json.Marshal(state["recent_user_requests_oldest_first"])
+					last := messages[len(messages)-1].(map[string]any)
+					last["content"] = last["content"].(string) + "\n\nHuman direction for this decision (oldest first, with age in seconds): " + string(recent) + "\nDecide which wishes still apply before choosing edits. An ongoing exact hold means no edits; a fixed-speed wish leaves other dimensions free. Release a restriction when the person releases it or its requested duration ends. Prior assistant suggestions are not human constraints. Choose natural development only within the remaining freedom."
+				}
+			}
+		}
+	}
+	if os.Getenv("MAGICHANDY_SIMPLE_VARIANT") == "compact" {
+		if messages, ok := body["messages"].([]any); ok && len(messages) > 0 {
+			first := messages[0].(map[string]any)
+			first["content"] = simpleTrialContract(first["content"].(string))
+		}
+	}
+	if variant := os.Getenv("MAGICHANDY_SIMPLE_VARIANT"); variant == "recency" {
+		if messages, ok := body["messages"].([]any); ok && len(messages) > 0 {
+			first := messages[0].(map[string]any)
+			lines := strings.Split(first["content"].(string), "\n")
+			for i, line := range lines {
+				var state map[string]any
+				if json.Unmarshal([]byte(line), &state) == nil && state["current_score"] != nil {
+					delete(state, "recent_user_requests_oldest_first")
+					b, _ := json.Marshal(state)
+					lines[i] = string(b)
+				}
+			}
+			first["content"] = strings.Join(lines, "\n") + "\n\nThe latest user message supersedes older requests where they conflict. Current endpoints describe the previous pattern, not permanent limits. A released regional restriction does not constrain the next requested pattern. Do not carry an old restriction forward after the person has removed it."
+		}
+	}
+	if strings.HasPrefix(os.Getenv("MAGICHANDY_SIMPLE_VARIANT"), "sparse") {
+		if messages, ok := body["messages"].([]any); ok && len(messages) > 0 {
+			first := messages[0].(map[string]any)
+			first["content"] = first["content"].(string) + "\n\nSPARSE PATCH: Write compact JSON without indentation or trailing whitespace. Include only fields you are changing; the saved score is state to preserve, not an object to copy. A speed-only request needs only one speed edit. When geometry supplies a shape, do not recreate its layers. Complete every requested change before the reply, and leave every unrequested setting out of the patch."
+			if strings.HasPrefix(os.Getenv("MAGICHANDY_SIMPLE_VARIANT"), "sparse_reach") {
+				first["content"] = first["content"].(string) + "\nFINAL EDIT CHECK: Full-device sweeps after a released regional restriction need BOTH outer endpoints 0 and 100. A full-and-tip/base geometry alone keeps the previous band. Broader SHORT strokes change the shortest/local width while preserving the broad strokes and outer band; re-emitting the same geometry does not broaden anything. Exact repetition means empty edits, with no evolve. Only a request for fresh details authorizes evolve. Compare the actual fields with the latest request before describing success."
+				if os.Getenv("MAGICHANDY_SIMPLE_VARIANT") == "sparse_reach_precision" {
+					first["content"] = first["content"].(string) + "\nFor Layered, EVERY stroke over the full slider uses geometry full_slider, not full_and_tip/base. Broadening shorter strokes raises stroke_width.min_percent while keeping its maximum. Stroke width is a distance: it cannot exceed max endpoint minus min endpoint unless you also widen the outer band. A pace-only request changes speed only, including preserving the seed."
+				}
+			}
+		}
+	}
+	data, err = json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	cloned := request.Clone(request.Context())
+	cloned.Body, cloned.ContentLength = io.NopCloser(bytes.NewReader(data)), int64(len(data))
+	return http.DefaultTransport.RoundTrip(cloned)
+}
 
 func (naturalSeedTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	seed, err := strconv.Atoi(os.Getenv("MAGICHANDY_NATURAL_SEED"))
@@ -81,6 +174,10 @@ func (naturalSeedTransport) RoundTrip(request *http.Request) (*http.Response, er
 
 func naturalIntermediate() bool {
 	return os.Getenv("MAGICHANDY_LOCAL_MODEL") != "" && os.Getenv("MAGICHANDY_NATURAL_LEVEL") == config.ModelCapabilityIntermediate
+}
+
+func naturalSimple() bool {
+	return os.Getenv("MAGICHANDY_SIMPLE_PRODUCTION") == "1" && os.Getenv("MAGICHANDY_NATURAL_LEVEL") == config.ModelCapabilitySimple
 }
 
 func naturalMaxTokens() int {
@@ -142,7 +239,7 @@ func TestNaturalMotionConversationLive(t *testing.T) {
 					for n := range state.UserRequests {
 						state.UserRequestSecondsAgo = append(state.UserRequestSecondsAgo, (len(state.UserRequests)-n)*20)
 					}
-					caps := Capabilities{Motion: true, MotionMode: mode, AdvancedMotion: hosted, IntermediateMotion: naturalIntermediate(), PreserveConversationText: hosted}
+					caps := Capabilities{Motion: true, MotionMode: mode, SimpleMotion: naturalSimple(), AdvancedMotion: hosted, IntermediateMotion: naturalIntermediate(), PreserveConversationText: hosted}
 					svc := Service{Provider: provider, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: naturalMaxTokens(), PromptBudget: naturalPromptBudget()}
 					started, calls := time.Now(), provider.calls
 					result, err := svc.Complete(t.Context(), Request{Message: message, History: history}, nil)
@@ -154,6 +251,8 @@ func TestNaturalMotionConversationLive(t *testing.T) {
 					pass = pass && naturalConversationIntent(i, before, score)
 					row := hostedLayeredLiveRow(fmt.Sprintf("conversation/%s/%02d", mode, i+1), model, message, result.Raw, before, command, limits, started, err, pass)
 					row["method"], row["reply"], row["provider_calls"] = mode, result.Response.Reply, provider.calls-calls
+					row["raw_wire"] = naturalTrialWire(provider)
+					row["raw_attempts"] = append([]string(nil), provider.raws[calls:]...)
 					row["repaired"], row["repair_raw"], row["fallback"], row["history"] = result.Repaired, result.RepairRaw, result.SemanticFallback, append([]llm.Message{}, history...)
 					rows = append(rows, row)
 					saveHostedLayeredRows(t, rows)

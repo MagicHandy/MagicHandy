@@ -16,7 +16,7 @@ local in routing, authentication, resource coordination and diagnostics.
 
 | Local level | Minimum context | Minimum output | Contract |
 | --- | ---: | ---: | --- |
-| Simple | Existing 16K managed allocation | Existing limit, at least 64 | Existing compact local prompts and motion-follow vibration |
+| Simple | Existing 16K managed allocation | Existing chat limit; Autopilot motion at least 384 | E4B-tuned local prompts and motion-follow vibration |
 | Intermediate | 32K | 512 | Full local guidance, grouped interactive Layered edits and backend output awareness |
 | Advanced | 64K | 1,024 | External motion contract, counted Layered phrases, independent vibration, Auto timing, preparation and response repair |
 
@@ -55,8 +55,11 @@ that unavailable output. Stop still requires a human to restore live intensity.
 Advanced is an explicit opt-in, not a claim about model size or the selected
 model's quality. The tested Gemma 12B improved under Intermediate but did poorly
 with independent control even at 64K. No automatic promotion based on model name
-is introduced. E4B was unavailable for live evaluation; its compact path remains
-the default. See the [evidence and remaining limitations](../model-capability-review-2026-10-25.md).
+is introduced. E4B was unavailable during the initial evaluation, then tested
+in the [Simple follow-up](../e4b-simple-review-2026-10-25.md). Simple and
+Intermediate Autopilot now use [ADR 0060's decision note](0060-local-autopilot-decision-notes.md),
+which records the accepted latency cost. See also the
+[initial evidence and limitations](../model-capability-review-2026-10-25.md).
 
 No new dependency, transport, engine goroutine or raw device command is added.
 

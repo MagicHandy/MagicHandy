@@ -3069,3 +3069,12 @@ control. See [ADR 0058](docs/decisions/0058-model-capability-levels.md) and the
 [model evaluation, graphs and remaining limitations](docs/model-capability-review-2026-10-25.md).
 Setup defaults known Gemma 12B models to Intermediate and E4B to Simple using
 backend catalog metadata, while preserving saved and manual capability choices.
+
+Simple follow-up: E4B received tested sparse-edit/reach guidance where language
+set comparisons supported it, a compact stopped-state cue, and correction-budget
+headroom without shortening the full contract. Simple and Intermediate Autopilot
+use a bounded decision note. The deliberately accepted background latency cost
+is recorded with measurements and revisit criteria in
+[ADR 0060](docs/decisions/0060-local-autopilot-decision-notes.md); see the
+[E4B and transfer review](docs/e4b-simple-review-2026-10-25.md). Interactive
+Intermediate and Advanced prompts retain their existing contracts.

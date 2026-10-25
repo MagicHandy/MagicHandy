@@ -217,6 +217,9 @@ func contractInstructions(capabilities Capabilities) string {
 // value is chat-only in the utility voice; callers resolve defaults from
 // settings.
 type Capabilities struct {
+	// SimpleMotion selects the E4B-focused local guidance. It remains explicit
+	// when Intermediate Autopilot reuses the compact Layered grammar.
+	SimpleMotion bool
 	// AdvancedMotion selects the rich planning contract independently of the
 	// provider. It changes representation, never motion authority.
 	AdvancedMotion bool

@@ -17,10 +17,13 @@ func TestLocalResumeCueKeepsMessagesAndOnlyAppliesToEligibleTurns(t *testing.T) 
 		want  bool
 	}{
 		{"intermediate stopped", Capabilities{IntermediateMotion: true}, MotionContext{}, true},
-		{"simple unchanged", Capabilities{}, MotionContext{}, false},
+		{"simple stopped", Capabilities{SimpleMotion: true}, MotionContext{}, true},
+		{"legacy unchanged", Capabilities{}, MotionContext{}, false},
 		{"advanced unchanged", Capabilities{AdvancedMotion: true, IntermediateMotion: true}, MotionContext{}, false},
 		{"active unchanged", Capabilities{IntermediateMotion: true}, MotionContext{Running: true}, false},
 		{"paused unchanged", Capabilities{IntermediateMotion: true}, MotionContext{Paused: true}, false},
+		{"simple active unchanged", Capabilities{SimpleMotion: true}, MotionContext{Running: true}, false},
+		{"simple paused unchanged", Capabilities{SimpleMotion: true}, MotionContext{Paused: true}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, permit := range []bool{false, true} {
@@ -64,5 +67,13 @@ func TestManualResumeOutputGuideAndIntermediateGuard(t *testing.T) {
 	caps.AdvancedMotion = true
 	if !strings.Contains(continuousOutputGuard(caps), `"edits":{}`) {
 		t.Fatal("Advanced guard changed")
+	}
+}
+
+func TestSimpleManualRestartCueDoesNotNeedOutputAwareness(t *testing.T) {
+	messages := []llm.Message{{Role: "system", Content: "Compact contract"}, {Role: "user", Content: "What is the state?"}}
+	got := withLocalManualResumeState(messages, Capabilities{SimpleMotion: true}, MotionContext{ManualRestartAvailable: true})
+	if len(got) != 3 || !strings.Contains(got[1].Content, "playback is stopped") || strings.Contains(got[1].Content, "vibrator") {
+		t.Fatal("Simple state cue acquired output-specific instructions or was missing")
 	}
 }

@@ -1,5 +1,22 @@
 # Goal Scorecard
 
+## 2026-10-25 — E4B optimization and local Autopilot planning
+
+Same Windows amd64 Go 1.26.10 pure-Go stripped build, compared with `06f934da`:
+**24,183,808 → 24,197,120 B** (+13,312 B). No frontend files or dependencies
+changed: canonical UI remains **2,800,753 B**, main JS **1,290,230 B raw /
+345,912 B gzip**. No new timer, worker, inference round trip or motion loop.
+Context allocations remain 16K for Simple and 32K for Intermediate.
+
+The deliberate cost is local **Autopilot motion generation latency**, not idle
+core memory: E4B median +67–101.5 ms; Intermediate 12B +425–645 ms in the paired
+two-seed comparisons. Simple planning reserves at least 384 output tokens;
+Intermediate's existing 512 minimum is sufficient. Interactive response budgets
+are unchanged. Quality gains, exact captures, rollback locations and revisit
+criteria are recorded in [ADR 0060](decisions/0060-local-autopilot-decision-notes.md).
+No RSS or cold-start improvement is claimed. See the
+[response and prompt-set evaluation](e4b-simple-review-2026-10-25.md).
+
 ## 2026-10-25 — Manual chat resume after Stop
 
 Same Windows amd64 pure-Go stripped build: **24,162,304 -> 24,183,808 B**

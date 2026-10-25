@@ -44,6 +44,9 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 		}
 		sections = append(sections, section)
 	}
+	if guide := simpleInteractiveGuideForLocale(capabilities, current, promptLocaleForID(set.ID)); guide != "" {
+		sections = appendPromptSection(sections, "simple_edit_check", "Simple motion edits", guide)
+	}
 	texts := make([]string, 0, len(sections))
 	for _, section := range sections {
 		texts = append(texts, section.Text)

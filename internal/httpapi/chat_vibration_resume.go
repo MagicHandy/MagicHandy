@@ -44,7 +44,11 @@ func (s *Server) manualVibrationResumeCurrent(ctx context.Context, resume *manua
 
 func (s *Server) addManualVibrationResumeContext(ctx context.Context, state *chat.MotionContext) {
 	resume, _ := ctx.Value(manualVibrationResumeKey{}).(*manualVibrationResume)
-	if state.Outputs != nil && state.Outputs.Vibrator != nil && s.manualVibrationResumeCurrent(ctx, resume) {
+	if !s.manualVibrationResumeCurrent(ctx, resume) {
+		return
+	}
+	state.ManualRestartAvailable = true
+	if state.Outputs != nil && state.Outputs.Vibrator != nil {
 		state.Outputs.Vibrator.ResumeOnMotionRequest = true
 	}
 }

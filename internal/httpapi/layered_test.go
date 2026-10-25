@@ -110,7 +110,13 @@ func TestLayeredAutopilotMapsFlowAndPreservesHumanRequests(t *testing.T) {
 	}
 	provider.mu.Lock()
 	defer provider.mu.Unlock()
-	if !strings.Contains(provider.requests[0].Messages[0].Content, "Alternate full strokes and short tip strokes") {
+	// Simple places the bounded, aged human timeline beside the decision;
+	// other capability levels retain it in the system snapshot.
+	var humanContext strings.Builder
+	for _, message := range provider.requests[0].Messages {
+		humanContext.WriteString(message.Content)
+	}
+	if !strings.Contains(humanContext.String(), "Alternate full strokes and short tip strokes") {
 		t.Fatal("automatic replies displaced human intent")
 	}
 }

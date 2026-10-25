@@ -110,7 +110,7 @@ func TestNaturalAutopilotContinuityLive(t *testing.T) {
 						state.UserRequests = append([]string{"Keep this exact pattern repeating."}, state.UserRequests...)
 						state.UserRequestSecondsAgo = append([]int{300 + turn*30}, state.UserRequestSecondsAgo...)
 					}
-					caps := Capabilities{Motion: true, MotionMode: mode, AdvancedMotion: hosted, IntermediateMotion: naturalIntermediate(), PreserveConversationText: hosted, AutoTiming: hosted}
+					caps := Capabilities{Motion: true, MotionMode: mode, SimpleMotion: naturalSimple(), AdvancedMotion: hosted, IntermediateMotion: naturalIntermediate(), PreserveConversationText: hosted, AutoTiming: hosted}
 					svc := AutopilotService{Provider: provider, Model: model, Capabilities: caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: naturalMaxTokens(), PromptBudget: naturalPromptBudget()}
 					age := tc.age + turn*30
 					message := AutopilotMotionMessage(AutopilotContext{Hosted: hosted, Intermediate: naturalIntermediate(), MotionMode: mode, CurrentFlow: &score, CurrentSpeed: score.SpeedPercent, SpeedMinPercent: 10, SpeedMaxPercent: 100, MotionChangeLevel: 4, AutoTiming: hosted, LastHumanSecondsAgo: &age, SessionTracking: true, SessionSeconds: 300 + turn*30, SecondsAtCurrentPhrase: 180 + turn*30, DecisionsAtCurrentPhrase: turn + 4})
@@ -139,6 +139,8 @@ func TestNaturalAutopilotContinuityLive(t *testing.T) {
 					}
 					row := hostedLayeredLiveRow(fmt.Sprintf("autopilot/%s/%s/%d", mode, tc.name, turn+1), model, tc.wish, provider.raw, before, response.Motion, limits, started, err, pass)
 					row["method"], row["reply"], row["provider_calls"], row["planning_message"] = mode, response.Reply, provider.calls-calls, message
+					row["raw_wire"] = naturalTrialWire(provider)
+					row["raw_attempts"] = append([]string(nil), provider.raws[calls:]...)
 					row["meaningful_changes_so_far"] = changed
 					rows = append(rows, row)
 					saveHostedLayeredRows(t, rows)

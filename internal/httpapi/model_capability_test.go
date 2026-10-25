@@ -87,6 +87,9 @@ func TestLocalTierReachesChatAndPlanningCapabilities(t *testing.T) {
 			settings.Autopilot.AutoMotionTiming, settings.Autopilot.PrepareNextDecision = true, true
 			caps := chatCapabilities(settings.LLM, nil)
 			advanced := level == config.ModelCapabilityAdvanced
+			if caps.SimpleMotion != (level == config.ModelCapabilitySimple) {
+				t.Fatalf("Simple guidance not isolated to its selected level: %+v", caps)
+			}
 			if caps.AdvancedMotion != advanced || caps.IntermediateMotion != (level == config.ModelCapabilityIntermediate) || caps.PreserveConversationText != advanced || autoMotionTiming(chat.AutopilotKindMotion, settings) != advanced || prepareAutopilotDecisions(settings) != advanced {
 				t.Fatalf("capabilities not applied: %+v", caps)
 			}

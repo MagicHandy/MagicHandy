@@ -103,6 +103,7 @@ type outputLiveProvider struct {
 	guide string
 	calls int
 	raw   string
+	raws  []string
 }
 
 func (p *outputLiveProvider) StreamChat(ctx context.Context, request llm.ChatRequest, emit func(string) error) (string, error) {
@@ -118,5 +119,6 @@ func (p *outputLiveProvider) StreamChat(ctx context.Context, request llm.ChatReq
 	}
 	raw, err := p.Provider.StreamChat(ctx, request, emit)
 	p.raw = raw
+	p.raws = append(p.raws, raw)
 	return raw, err
 }
