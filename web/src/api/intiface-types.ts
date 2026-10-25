@@ -43,6 +43,8 @@ export interface IntifaceVibratorStatus {
   device_name?: string;
   motors: IntifaceVibratorMotor[];
   intensity_percent: number;
+  /** Previous human level available to a fresh manual chat motion request. */
+  resume_intensity_percent?: number;
   ceiling_percent: number;
   effective_ceiling_percent: number;
   level_percent: number;

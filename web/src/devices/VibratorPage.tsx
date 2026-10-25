@@ -75,7 +75,7 @@ export function VibratorOutputSection({ ctx }: DeviceSectionProps) {
             onChange={setDepthEnd} />
         </OptionRow>
       )}
-      <OptionRow label={t("Level range")} hint={t("The ceiling limits intensity. Set the live intensity in the device panel; connection changes and Stop reset it to 0. The model cannot raise it.")}>
+      <OptionRow label={t("Level range")} hint={t("The ceiling limits intensity. Stop silences output; a new chat motion request can resume your previous intensity. Reconnecting clears it.")}>
         <RangeSlider label={t("Minimum to ceiling")} floor={0} ceil={100} minValue={range.min} maxValue={range.max} disabled={locked} onChange={setRange} />
       </OptionRow>
       {ctx.intiface.vibrator?.selected && (

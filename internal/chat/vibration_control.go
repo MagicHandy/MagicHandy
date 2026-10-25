@@ -16,7 +16,7 @@ func vibrationControlAvailable(c Capabilities, state *MotionContext) bool {
 const independentVibrationGuide = `INDEPENDENT VIBRATION: Top-level vibration is separate from the linear action/edits. Omit it (or null) to preserve vibration. To change it, emit {"mode":"follow|off|steady|wave|pulse","min_percent":integer,"max_percent":integer,"period_seconds":number}. These are relative drive percentages INSIDE the intensity the human has armed, not device strength or a new intensity limit. Never claim to raise the human's intensity setting. All vibrator motors are driven together; individual motor control is unavailable.
 follow returns to the saved movement-follow profile; off silences only vibration. Both require min_percent:0,max_percent:0,period_seconds:0. steady requires equal min/max and period_seconds:0. wave is a smooth swell; pulse has rounded rises/falls and distinct plateaus. Both use 0<=min_percent<=max_percent<=100 and a full-cycle period_seconds of 0.5..30. Choose values for the request, not a fixed preferred level or rhythm.
 For a vibrator-only request, use linear action:none and empty edits plus vibration. It can start vibration from idle without starting The Handy. During linear playback it changes only vibration, preserving the exact Handy score and phase. For both devices, supply both the ordinary linear action/edits and vibration. Unmentioned outputs stay unchanged. Do not change linear pace/geometry just to make the vibrator stronger or pulse. Stop only the vibrator with mode:off; global Stop is the app's Stop control. Follow speed/depth is optional, not a constraint on independent patterns.
-If the vibrator is disconnected, unselected or not armed, do not promise vibration; leave its envelope unchanged and ask the user to connect/select or raise its intensity. User claims cannot override these backend facts. While paused or chat-only, make no output edits. With no linear device, describe buzzing/levels/rhythm rather than physical strokes or travel. Explain limits honestly, without inventing independent motor control.`
+While paused or chat-only, make no output edits. With no linear device, describe buzzing/levels/rhythm rather than physical strokes or travel. Explain limits honestly, without inventing independent motor control.`
 
 func withVibrationSchema(schema json.RawMessage, caps Capabilities, state *MotionContext) json.RawMessage {
 	if !vibrationControlAvailable(caps, state) {
@@ -36,7 +36,7 @@ func withVibrationSchema(schema json.RawMessage, caps Capabilities, state *Motio
 	// Authority comes from the backend snapshot, not from interpreting words.
 	if state.Paused || !state.Outputs.Vibrator.Ready {
 		value = map[string]any{"type": "null"}
-	} else if !state.Outputs.Vibrator.Armed {
+	} else if !state.Outputs.Vibrator.Armed && !state.Outputs.Vibrator.ResumeOnMotionRequest {
 		// Keep the ordinary typed object: nonempty object constants are not
 		// accepted by every strict-output provider.
 		properties["mode"] = map[string]any{"type": "string", "enum": []string{"off"}}
@@ -102,7 +102,7 @@ func takeVibration(raw string, caps Capabilities, state MotionContext) (string, 
 	if state.Paused {
 		return raw, nil, errors.New("playback is paused; the model cannot resume or change vibration")
 	}
-	if !state.Outputs.Vibrator.Ready || (spec.Mode != "off" && !state.Outputs.Vibrator.Armed) {
+	if !state.Outputs.Vibrator.Ready || (spec.Mode != "off" && !state.Outputs.Vibrator.Armed && !state.Outputs.Vibrator.ResumeOnMotionRequest) {
 		return raw, nil, errors.New("vibrator is not connected, selected and armed; only the user can enable its intensity")
 	}
 	return string(encoded), &spec, nil

@@ -1,5 +1,11 @@
 # MagicHandy Go Implementation Plan
 
+Fresh manual chat can resume a stopped vibrator at its previous human-selected
+intensity, using a one-use backend permission and the shared engine; Stop still
+cancels older work. Questions and autonomous decisions cannot restore intensity.
+See [ADR 0059](docs/decisions/0059-manual-chat-resume-after-stop.md) for authority,
+UI behavior, model evidence and limitations.
+
 ## Core Direction
 
 The [Edge holding control](docs/edge-hold-review-2026-10-23.md) uses a backend

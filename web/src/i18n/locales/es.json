@@ -3397,5 +3397,9 @@
   "Applied to the local runtime after Save.": "Se aplica al motor local al guardar.",
   "Ask the same model once to correct an invalid response. Adds time and another model request. When off, eligible chat errors offer Repair response.": "Pide una vez al mismo modelo que corrija una respuesta no válida. Añade tiempo y otra solicitud. Si está desactivado, los errores que lo permitan ofrecen Corregir respuesta.",
   "Your chat model can control vibration independently of The Handy, within your intensity.": "Tu modelo de chat puede controlar la vibración independientemente de The Handy, dentro de la intensidad que hayas fijado.",
-  "Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2.": "La vibración sigue el movimiento. Los patrones independientes están disponibles con modelos Avanzados en Layered o Creative v2."
+  "Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2.": "La vibración sigue el movimiento. Los patrones independientes están disponibles con modelos Avanzados en Layered o Creative v2.",
+  "Independent vibration needs an external model or an Advanced local model, using Layered or Creative v2. Otherwise it follows movement.": "La vibración independiente requiere un modelo externo o un modelo local Avanzado, con Layered o Creative v2. En los demás casos sigue el movimiento.",
+  "Keep vibration off": "Mantener la vibración apagada",
+  "Stopped. A new chat motion request can resume your previous {percent}% intensity.": "Detenido. Una nueva petición de movimiento en el chat puede reanudar la intensidad anterior del {percent}%.",
+  "The ceiling limits intensity. Stop silences output; a new chat motion request can resume your previous intensity. Reconnecting clears it.": "El límite restringe la intensidad. Detener silencia la salida; una nueva petición de movimiento en el chat puede reanudar la intensidad anterior. Al reconectar se borra."
 }

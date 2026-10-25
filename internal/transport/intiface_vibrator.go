@@ -65,6 +65,7 @@ type IntifaceVibratorMotor struct {
 // whole numbers; the effective ceiling is the highest level the motors can
 // deliver at or below the ceiling.
 type IntifaceVibratorStatus struct {
+	ResumeIntensityPercent    int                     `json:"resume_intensity_percent,omitempty"`
 	EffectiveIntensityPercent int                     `json:"effective_intensity_percent"`
 	TestAvailable             bool                    `json:"test_available"`
 	Selected                  bool                    `json:"selected"`
@@ -105,12 +106,14 @@ type IntifaceVibrator struct {
 
 	// Lifecycle operations and watchdog Stop cannot overtake one another.
 	// The watchdog stops hardware before taking mu for bookkeeping.
-	lifecycleMu sync.Mutex
-	mu          sync.Mutex
-	config      VibratorConfig
-	intensity   float64
-	selection   vibratorSelection
-	epoch       uint64
+	lifecycleMu     sync.Mutex
+	mu              sync.Mutex
+	config          VibratorConfig
+	intensity       float64
+	resumeIntensity float64
+	levelRevision   uint64
+	selection       vibratorSelection
+	epoch           uint64
 	// control changes with every Stop, selection and session change: a raise
 	// or test prepared before one of them is refused.
 	runGeneration uint64
@@ -197,6 +200,10 @@ func (v *IntifaceVibrator) Configure(config VibratorConfig) {
 	defer v.session.writeMu.Unlock()
 	v.mu.Lock()
 	v.loweredLimit = v.loweredLimit || config.Ceiling < v.config.Ceiling
+	if config != v.config {
+		v.levelRevision++
+		v.resumeIntensity = math.Min(v.resumeIntensity, config.Ceiling)
+	}
 	v.config = config
 	v.stream.renderer.SetProfile(config.Profile)
 	v.intensity = math.Min(v.intensity, config.Ceiling)
@@ -213,6 +220,8 @@ func (v *IntifaceVibrator) SetIntensity(fraction float64) float64 {
 	v.session.writeMu.Lock()
 	defer v.session.writeMu.Unlock()
 	v.mu.Lock()
+	v.resumeIntensity = 0
+	v.levelRevision++
 	v.loweredLimit = v.loweredLimit || fraction < v.intensity
 	v.intensity = math.Min(clampUnit(fraction), v.config.Ceiling)
 	v.zeroReason = "intensity_zero"
@@ -248,6 +257,8 @@ func (v *IntifaceVibrator) SetIntensityAt(generation uint64, fraction float64, a
 		return 0, errVibratorNotSelected
 	}
 	v.loweredLimit = v.loweredLimit || target < v.intensity
+	v.resumeIntensity = 0
+	v.levelRevision++
 	v.intensity = target
 	v.zeroReason = "intensity_zero"
 	v.invalidateOutputLocked()
@@ -331,6 +342,7 @@ func (v *IntifaceVibrator) Select(ctx context.Context, deviceIndex uint32) error
 		return errVibratorPlaying
 	}
 	v.mu.Lock()
+	v.resumeIntensity = 0
 	v.invalidateLocked("idle")
 	v.mu.Unlock()
 	targets := []uint32{deviceIndex}
@@ -356,6 +368,7 @@ func (v *IntifaceVibrator) Select(ctx context.Context, deviceIndex uint32) error
 	}
 	v.mu.Lock()
 	v.selection = selection
+	v.resumeIntensity = 0
 	v.lastSent = time.Time{}
 	v.testUntil = time.Time{}
 	v.epoch++
@@ -421,6 +434,7 @@ func (v *IntifaceVibrator) Release(ctx context.Context) error {
 	v.lifecycleMu.Lock()
 	defer v.lifecycleMu.Unlock()
 	v.mu.Lock()
+	v.resumeIntensity = 0
 	v.invalidateLocked("idle")
 	selection := v.selectionSnapshotLocked()
 	v.selection = vibratorSelection{}
@@ -447,6 +461,7 @@ func (v *IntifaceVibrator) Status() IntifaceVibratorStatus {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	status := IntifaceVibratorStatus{
+		ResumeIntensityPercent:    percent(v.resumableIntensityLocked()),
 		Selected:                  v.selection.selected,
 		DeviceName:                v.selection.deviceName,
 		Motors:                    []IntifaceVibratorMotor{},
@@ -490,6 +505,9 @@ func (v *IntifaceVibrator) playbackStateLocked() string {
 // invalidateLocked ends playback and any test so no queued level from them
 // can reach the wire.
 func (v *IntifaceVibrator) invalidateLocked(state string) {
+	if state != "idle" {
+		v.resumeIntensity = 0
+	}
 	v.control++
 	v.runGeneration++
 	v.invalidateOutputLocked()
@@ -542,6 +560,7 @@ func (v *IntifaceVibrator) releaseWrite(bool) {}
 
 func (v *IntifaceVibrator) sessionConnectedLocked() {
 	v.mu.Lock()
+	v.resumeIntensity = 0
 	v.intensity = 0
 	v.stream.state = "idle"
 	v.diag.Connected = true
@@ -589,9 +608,13 @@ func (v *IntifaceVibrator) deviceRemovedLocked(deviceIndex uint32) func() {
 }
 
 // invalidateForEmergency ends playback before StopAllDevices and returns the
-// live intensity to zero, as the global Stop does for the Coyote's strength.
+// live intensity to zero. A later manual request may resume the previous
+// human-selected level on this same device; autonomous work cannot restore it.
 func (v *IntifaceVibrator) invalidateForEmergency() {
 	v.mu.Lock()
+	if v.intensity > 0 {
+		v.resumeIntensity = v.intensity
+	}
 	v.invalidateLocked("idle")
 	v.intensity = 0
 	v.zeroReason = "emergency_stop"
@@ -601,6 +624,7 @@ func (v *IntifaceVibrator) invalidateForEmergency() {
 
 func (v *IntifaceVibrator) invalidateForClose() {
 	v.mu.Lock()
+	v.resumeIntensity = 0
 	v.invalidateLocked("idle")
 	v.mu.Unlock()
 }

@@ -1,5 +1,17 @@
 # Goal Scorecard
 
+## 2026-10-25 — Manual chat resume after Stop
+
+Same Windows amd64 pure-Go stripped build: **24,162,304 -> 24,183,808 B**
+(+21,504 B). Main JS **1,288,968 -> 1,290,230 B raw** and
+**345,641 -> 345,912 B gzip**; canonical UI **2,800,753 B** (+4,697 B,
+including localized notes). No dependency, timer, worker or motion loop is added.
+The one-use permission is per selected vibrator, in memory only. Simple and
+normal running request budgets are unchanged. Eligible stopped Intermediate
+requests add a short backend-state cue. Live timing and the bounded-repair
+limitation are recorded in [ADR 0059](decisions/0059-manual-chat-resume-after-stop.md).
+No RSS or cold-start improvement is claimed.
+
 ## 2026-10-25 — Setup capability recommendation
 
 Against `72de995a`, the same Windows amd64 Go 1.26.10 pure-Go stripped build

@@ -213,6 +213,12 @@ Mitigation:
 - Emergency Stop closes write admission and sends `StopAllDevices` on a live
   session whatever the engine and selections are. It also zeroes the
   intensity, and an unconfirmed stop fails the session
+- a fresh manual chat request may restore only the previously human-selected
+  intensity under [ADR 0059](decisions/0059-manual-chat-resume-after-stop.md).
+  Permission binds the same selection and current Stop/control/level revisions.
+  Questions and autonomous work cannot consume it; explicit zero, reconnection
+  and faults clear it. Failed dispatch rolls back without undoing newer controls.
+  No model-selected strength or language rule grants this permission
 - a watchdog stops a stalled pacer and allows only silence until the run
   stops, and a stalled pacer stops the keepalive so Intiface's own watchdog
   stops the devices too

@@ -3397,5 +3397,9 @@
   "Applied to the local runtime after Save.": "保存後にローカル実行環境へ適用されます。",
   "Ask the same model once to correct an invalid response. Adds time and another model request. When off, eligible chat errors offer Repair response.": "同じモデルに無効な応答の修正を1回依頼します。待ち時間とモデルへのリクエストが増えます。オフの場合、修正可能なチャットエラーに「応答を修正」が表示されます。",
   "Your chat model can control vibration independently of The Handy, within your intensity.": "チャットモデルは設定した強度の範囲内で、The Handy とは独立して振動を制御できます。",
-  "Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2.": "振動は動きに追従します。独立したパターンは Advanced モデルの Layered または Creative v2 で利用できます。"
+  "Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2.": "振動は動きに追従します。独立したパターンは Advanced モデルの Layered または Creative v2 で利用できます。",
+  "Independent vibration needs an external model or an Advanced local model, using Layered or Creative v2. Otherwise it follows movement.": "独立した振動制御には、外部モデルまたは「高度」なローカルモデルと、Layered または Creative v2 が必要です。それ以外では動作に連動します。",
+  "Keep vibration off": "振動を停止したままにする",
+  "Stopped. A new chat motion request can resume your previous {percent}% intensity.": "停止中です。チャットで新しく動作をリクエストすると、以前の強度 {percent}% で再開できます。",
+  "The ceiling limits intensity. Stop silences output; a new chat motion request can resume your previous intensity. Reconnecting clears it.": "上限は強度を制限します。停止すると出力が止まり、チャットで新しく動作をリクエストすると以前の強度で再開できます。再接続するとリセットされます。"
 }

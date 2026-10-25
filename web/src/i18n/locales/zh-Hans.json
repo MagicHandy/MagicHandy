@@ -3397,5 +3397,9 @@
   "Applied to the local runtime after Save.": "保存后应用到本地运行环境。",
   "Ask the same model once to correct an invalid response. Adds time and another model request. When off, eligible chat errors offer Repair response.": "请同一个模型尝试修正一次无效回复。这会增加等待时间和一次模型请求。关闭后，可修正的聊天错误旁会显示“修正回复”。",
   "Your chat model can control vibration independently of The Handy, within your intensity.": "聊天模型可以在您设定的强度内，独立于 The Handy 控制振动。",
-  "Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2.": "振动跟随运动。在 Layered 或 Creative v2 模式下，高级模型可使用独立模式。"
+  "Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2.": "振动跟随运动。在 Layered 或 Creative v2 模式下，高级模型可使用独立模式。",
+  "Independent vibration needs an external model or an Advanced local model, using Layered or Creative v2. Otherwise it follows movement.": "独立控制振动需要外部模型或“高级”本地模型，并使用 Layered 或 Creative v2 模式。其他情况下，振动跟随运动。",
+  "Keep vibration off": "保持振动关闭",
+  "Stopped. A new chat motion request can resume your previous {percent}% intensity.": "已停止。在聊天中发送新的运动请求，可恢复之前 {percent}% 的强度。",
+  "The ceiling limits intensity. Stop silences output; a new chat motion request can resume your previous intensity. Reconnecting clears it.": "上限限制强度。停止会关闭输出；在聊天中发送新的运动请求，可恢复之前的强度。重新连接会清除该值。"
 }

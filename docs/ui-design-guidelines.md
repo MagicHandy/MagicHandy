@@ -347,6 +347,11 @@ idioms. The backend owns every value: the models only read its snapshots.
   plays only while motion is paused. Coyote strength A and B share a caption
   row with a quiet **Zero both**; the vibrator has one Intensity level. The
   ceiling comes from the device page.
+- **After Stop:** when the backend retains a vibrator resume level, show a
+  concise explanation that a new chat motion request can resume it, plus a
+  quiet **Keep vibration off** action that clears it through the intensity
+  endpoint. Do not infer this state in the frontend. Add-device capability
+  notes stay in the compact choice row and include the Advanced local exception.
 - **Glyphs:** centered 16-unit SVG drawings in `currentColor` (The Handy,
   Coyote, Vibrator, Intiface Central, Bluetooth on this computer). Render at
   20px in 32px panel tiles, 24px in 36px Settings/Add/connection tiles, and 28px

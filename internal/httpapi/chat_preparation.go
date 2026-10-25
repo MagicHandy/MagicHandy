@@ -32,6 +32,7 @@ func (s *Server) prepareInteractiveChatService(ctx context.Context, w http.Respo
 		return chat.Service{}, false
 	}
 	motionContext := s.chatTurnMotion(settings, promptContext.UserRequests, sessionID)
+	s.addManualVibrationResumeContext(ctx, &motionContext)
 	_, repairAvailable := ctx.Value(chatRepairContextKey{}).(*chatRepairCandidate)
 	return chat.Service{
 		Provider: provider, Prompt: prompt, Model: settings.LLM.Model,

@@ -230,6 +230,18 @@ describe("The vibrator's descriptor", () => {
     expect(vibratorDevice.model(zero).levels!.levels[0]).toMatchObject({ canTest: false, canLower: false });
   });
 
+  it("can clear the backend's post-Stop resume permission without raising output", async () => {
+    const ctx = makeCtx({ intiface: intiface({ leases: ["vibrator"], status: { connected: true }, vibrator: vibrator({ intensity_percent: 0, resume_intensity_percent: 35, silent_reason: "emergency_stop" }) }) });
+    const levels = vibratorDevice.model(ctx).levels!;
+    expect(levels.note).toContain("35% intensity");
+    expect(levels.zero).toMatchObject({ label: "Keep vibration off", disabled: false });
+    levels.zero!.run();
+    await vi.waitFor(() => expect(api.vibratorIntensity).toHaveBeenCalledWith(0, undefined));
+    expect(vibratorDevice.model({ ...ctx, locked: true }).levels!.zero!.disabled).toBe(true);
+    const cleared = { ...ctx, intiface: { ...ctx.intiface, vibrator: vibrator({ intensity_percent: 0 }) } };
+    expect(vibratorDevice.model(cleared).levels!.zero).toBeUndefined();
+  });
+
   it("says when the motors' steps lower the effective ceiling", () => {
     const model = vibratorDevice.model(makeCtx({ intiface: intiface({ leases: ["vibrator"], status: { connected: true }, vibrator: vibrator({ effective_ceiling_percent: 35 }) }) }));
     expect(model.levels?.note).toMatch(/highest level is 35%/);

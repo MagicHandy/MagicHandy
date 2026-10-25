@@ -1,6 +1,7 @@
 // The vibrator's descriptor (ADR 0047). The backend owns the shared Intiface
 // connection, the device choice and the live intensity, which starts at 0 on
-// every connection and never rises on its own.
+// every connection. A fresh manual motion request can restore the last human
+// level after Stop, only when the backend grants that permission.
 import { api } from "../api/client";
 import { t } from "../i18n";
 import { vibratorTest, vibratorTestAvailable } from "./actions";
@@ -27,6 +28,7 @@ function vibratorModel(ctx: DeviceContext): DeviceModel {
     : word === "lost" ? [dropped ? t("dropped") : t("left this run")]
       : [t("Intiface Central"), ...(word === "not_connected" && ctx.failed.vibrator ? [t("last attempt failed")] : [])];
   const intensity = vibrator?.intensity_percent ?? 0;
+  const resumeIntensity = vibrator?.resume_intensity_percent ?? 0;
   const ceiling = vibrator?.ceiling_percent ?? 0;
   const effective = vibrator?.effective_ceiling_percent ?? ceiling;
   const setIntensity = (percent: number) => ctx.send(async () => ctx.setIntiface(await api.vibratorIntensity(percent, percent > intensity ? ctx.stopSequence : undefined)));
@@ -63,7 +65,10 @@ function vibratorModel(ctx: DeviceContext): DeviceModel {
         raiseLabel: t("Raise the vibrator intensity"),
         testLabel: t("Test the vibrator"),
       }],
-      note: vibrator?.silent_reason === "emergency_stop"
+      zero: resumeIntensity > 0 ? { label: t("Keep vibration off"), run: () => setIntensity(0), disabled: ctx.locked } : undefined,
+      note: resumeIntensity > 0
+        ? t("Stopped. A new chat motion request can resume your previous {percent}% intensity.", { percent: resumeIntensity })
+        : vibrator?.silent_reason === "emergency_stop"
         ? t("Stop reset the intensity to 0. Raise it to allow vibration again.")
         : vibrator?.silent_reason === "below_motor_step" ? t("The intensity is below this device’s smallest motor step.")
           : intensity === 0 ? t("Raise the intensity to allow vibration. The model cannot raise it.")
@@ -79,6 +84,7 @@ export const vibratorDevice: DeviceDescriptor = {
   name: () => t("Vibrator"),
   Glyph: VibratorGlyph,
   addDetail: () => t("Any vibrator Intiface Central supports"),
+  addNotice: () => t("Independent vibration needs an external model or an Advanced local model, using Layered or Creative v2. Otherwise it follows movement."),
   model: vibratorModel,
   sections: [
     { id: "connection", title: () => t("Connection"), Body: VibratorConnectionSection },

@@ -134,6 +134,7 @@ func (s *Server) handleChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer finishChat()
+	chatCtx = s.withManualVibrationResume(chatCtx, settings, stopSequence)
 	s.chatRepair.clear()
 	if settings.LLM.AdvancedMotion() {
 		chatCtx = s.guardHostedChat(chatCtx)
@@ -677,7 +678,7 @@ func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionC
 		return chatMotionDispatch{}, errChatRepairStale
 	}
 	defer s.markChatRepairDispatched(ctx)
-	return s.dispatchChatMotionLocked(ctx, command, stopSequence)
+	return s.dispatchManualChatMotion(ctx, command, stopSequence)
 }
 
 // dispatchChatMotionLocked applies one validated command. stopSequence, when

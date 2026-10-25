@@ -19,12 +19,14 @@ import (
 
 type vibrationAppCapture struct {
 	llm.Provider
-	calls int
-	raw   string
+	calls       int
+	raw         string
+	lastRequest llm.ChatRequest
 }
 
 func (p *vibrationAppCapture) StreamChat(ctx context.Context, req llm.ChatRequest, delta func(string) error) (string, error) {
 	p.calls++
+	p.lastRequest = req
 	raw, err := p.Provider.StreamChat(ctx, req, delta)
 	p.raw = raw
 	return raw, err

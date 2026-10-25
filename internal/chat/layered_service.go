@@ -149,6 +149,9 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	} else {
 		messages = spokenMessages(system, request.History, request.Message)
 	}
+	if !s.TrustedMotionInput {
+		messages = withLocalManualResumeState(messages, capabilities, state)
+	}
 	input := llm.ChatRequest{Messages: messages,
 		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
 		Model:                  s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,

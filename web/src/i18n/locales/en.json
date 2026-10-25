@@ -3397,5 +3397,9 @@
   "Applied to the local runtime after Save.": "Applied to the local runtime after Save.",
   "Ask the same model once to correct an invalid response. Adds time and another model request. When off, eligible chat errors offer Repair response.": "Ask the same model once to correct an invalid response. Adds time and another model request. When off, eligible chat errors offer Repair response.",
   "Your chat model can control vibration independently of The Handy, within your intensity.": "Your chat model can control vibration independently of The Handy, within your intensity.",
-  "Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2.": "Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2."
+  "Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2.": "Vibration follows movement. Independent patterns are available with Advanced models in Layered or Creative v2.",
+  "Independent vibration needs an external model or an Advanced local model, using Layered or Creative v2. Otherwise it follows movement.": "Independent vibration needs an external model or an Advanced local model, using Layered or Creative v2. Otherwise it follows movement.",
+  "Keep vibration off": "Keep vibration off",
+  "Stopped. A new chat motion request can resume your previous {percent}% intensity.": "Stopped. A new chat motion request can resume your previous {percent}% intensity.",
+  "The ceiling limits intensity. Stop silences output; a new chat motion request can resume your previous intensity. Reconnecting clears it.": "The ceiling limits intensity. Stop silences output; a new chat motion request can resume your previous intensity. Reconnecting clears it."
 }
