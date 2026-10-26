@@ -6,6 +6,13 @@ retained stopped-run diagnostics; awaiting matched real-device confirmation
 
 ## Layered saturation integration — 2026-10-26
 
+The [review follow-up](layered-review-followup-2026-10-26.md) limits optional
+cruise shaping to constrained legs and preserves the authored clock for pace
+reporting. Deliberate rate/cadence/pace variation is no longer mislabeled as a
+physical limit. Gentle transitions use a relative derivative envelope with
+headroom; finished buffered bridges retain their history without forcing a
+crossfade at a later handoff. Accepted fast steady periods remain unchanged.
+
 The Original Handy / Cloud / Layered report is reproducible before transport
 dispatch. The former 2400/24000 acceleration/jerk envelope and conservative
 clock restricted mean pace, particularly on short strokes. Alpha.75 uses the

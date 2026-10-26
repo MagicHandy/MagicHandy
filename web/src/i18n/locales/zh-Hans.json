@@ -1155,6 +1155,7 @@
   "Pace": "节奏",
   "Estimated pace": "估算节奏",
   "Commanded estimate, not measured device speed.": "这是指令估算值，并非设备实测速度。",
+  "The pattern plans an average pace of {planned}%.": "模式计划的平均节奏为 {planned}%。",
   "Effective {effective}%; requested {requested}%.": "有效 {effective}%；请求 {requested}%。",
   "Limited by {limiters}.": "受限于{limiters}。",
   "device velocity": "设备速度",

@@ -11,6 +11,21 @@ import (
 // stroke with matching position, velocity and acceleration at both ends.
 // Counts inside the new phrase are unchanged; only the entry stroke is a join.
 func layeredTurnTransition(previous MotionPlan, active *planTransition, next *MotionPlan, start int64) *planTransition {
+	history := active
+	if active != nil && start >= active.endMillis {
+		// Queued playback may still be inside this bridge, but the new handoff
+		// is beyond it. Preserve the old path for snapshots and sampling without
+		// treating it as an unfinished join at the future handoff.
+		active = nil
+	}
+	bridge := layeredTurnTransitionAt(previous, active, next, start)
+	if bridge != nil {
+		bridge.previousTransition = history
+	}
+	return bridge
+}
+
+func layeredTurnTransitionAt(previous MotionPlan, active *planTransition, next *MotionPlan, start int64) *planTransition {
 	if bridge := layeredPaceTransition(previous, active, next, start); bridge != nil {
 		return bridge
 	}
@@ -35,7 +50,8 @@ func layeredTurnTransition(previous MotionPlan, active *planTransition, next *Mo
 	clock := next.PhaseAt(start) * float64(next.curve.duration)
 	knots := next.curve.authoredKnots
 	index := max(0, sort.Search(len(knots), func(i int) bool { return float64(knots[i].TimeMillis) > clock })-1)
-	if bridge := joinContinuousTurn(previous, next, start, start, index); bridge != nil {
+	budget := layeredJoinBudget(previous, *next)
+	if bridge := joinContinuousTurnWithin(previous, next, start, start, index, budget); bridge != nil {
 		return bridge
 	}
 	// Inherited momentum near a turn can make an immediate join infeasible.
@@ -46,7 +62,7 @@ func layeredTurnTransition(previous MotionPlan, active *planTransition, next *Mo
 		return nil
 	}
 	strokeStart := start + max(int64(1), int64(math.Ceil((float64(previous.curve.authoredKnots[end].TimeMillis)-oldClock)*float64(previous.PeriodMillis)/float64(previous.curve.duration))))
-	if bridge := joinContinuousTurn(previous, next, start, strokeStart, index); bridge != nil {
+	if bridge := joinContinuousTurnWithin(previous, next, start, strokeStart, index, budget); bridge != nil {
 		return bridge
 	}
 	if edge {
@@ -59,12 +75,13 @@ func layeredTurnTransition(previous MotionPlan, active *planTransition, next *Mo
 // Continue the authored path briefly until the same bounded join is feasible,
 // rather than blending in another reversal. Never relax the fit limits.
 func delayedHoldingJoin(previous MotionPlan, next *MotionPlan, start int64, index int) *planTransition {
+	budget := layeredJoinBudget(previous, *next)
 	for candidate := start + 25; candidate <= start+1000; candidate += 25 {
 		_, acceleration := layeredPlanDerivatives(previous, candidate)
-		if math.Abs(acceleration)*1e6 > flowAccelerationBudget {
+		if math.Abs(acceleration)*1e6 > budget.acceleration {
 			continue
 		}
-		if bridge := joinContinuousTurn(previous, next, start, candidate, index); bridge != nil {
+		if bridge := joinContinuousTurnWithin(previous, next, start, candidate, index, budget); bridge != nil {
 			return bridge
 		}
 	}
@@ -77,6 +94,10 @@ func layeredStrokePlan(plan MotionPlan) bool {
 }
 
 func joinContinuousTurn(previous MotionPlan, next *MotionPlan, start, strokeStart int64, index int) *planTransition {
+	return joinContinuousTurnWithin(previous, next, start, strokeStart, index, layeredJoinBudget(previous, *next))
+}
+
+func joinContinuousTurnWithin(previous MotionPlan, next *MotionPlan, start, strokeStart int64, index int, envelope legBudget) *planTransition {
 	from := previous.SampleAt(strokeStart).PositionPercent
 	v, a := layeredPlanDerivatives(previous, strokeStart)
 	knots := next.curve.authoredKnots
@@ -95,7 +116,8 @@ func joinContinuousTurn(previous MotionPlan, next *MotionPlan, start, strokeStar
 		}
 		fullTime := float64(knots[slot+1].TimeMillis-knots[slot].TimeMillis) * float64(next.PeriodMillis) / float64(next.curve.duration)
 		preferred := max(int64(1), int64(math.Ceil(fullTime*math.Abs(right-from)/math.Abs(right-left))))
-		budget := legBudget{velocity: min(referenceTravelRateForSpeed(100, next.timingModel), max(math.Abs(v)*1000, layeredLegPeakVelocity(previous, oldEnd), layeredLegPeakVelocity(*next, slot+1))), acceleration: flowAccelerationBudget, jerk: flowJerkBudget}
+		budget := envelope
+		budget.velocity = min(budget.velocity, max(math.Abs(v)*1000, layeredLegPeakVelocity(previous, oldEnd), layeredLegPeakVelocity(*next, slot+1)))
 		phase := float64(knots[slot+1].TimeMillis) / float64(next.curve.duration)
 		endAcceleration := next.curve.accelerationFloat(float64(knots[slot+1].TimeMillis)) * next.focus.gain() * math.Pow(float64(next.curve.duration)/float64(next.PeriodMillis), 2)
 		if bridge := fitLayeredSpliceShape(previous, next, start, strokeStart, from, right, v, a, endAcceleration, preferred, phase, budget, true); bridge != nil {

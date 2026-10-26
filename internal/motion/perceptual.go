@@ -21,6 +21,8 @@ type PaceSummary struct {
 	RequestedPercent               int      `json:"requested_percent"`
 	EffectivePercent               float64  `json:"effective_percent"`
 	RequestedMeanTravelPerSecond   float64  `json:"requested_mean_travel_percent_per_second"`
+	PlannedPercent                 float64  `json:"planned_percent,omitempty"`
+	PlannedMeanTravelPerSecond     float64  `json:"planned_mean_travel_percent_per_second,omitempty"`
 	CommandedMeanTravelPerSecond   float64  `json:"commanded_mean_travel_percent_per_second"`
 	CommandedPeakVelocityPerSecond float64  `json:"commanded_peak_velocity_percent_per_second"`
 	DevicePeakVelocityPerSecond    float64  `json:"device_peak_velocity_percent_per_second"`
@@ -148,8 +150,15 @@ func summarizeMotionPace(
 		CommandedPeakVelocityPerSecond: perceptual.CommandedPeakVelocityPerSecond,
 		DevicePeakVelocityPerSecond:    devicePeak,
 	}
-	pace.Limited = requestedMean > 0 &&
-		perceptual.CommandedMeanTravelPerSecond < requestedMean*0.985
+	plannedMean := requestedMean
+	if curve.plannedDuration > 0 && target.prepared != nil && target.prepared.referenceRate > 0 {
+		plannedMean = totalCurveTravel(curve.authoredKnots) * 1000 / float64(curve.plannedDuration) *
+			requestedMean / target.prepared.referenceRate
+		pace.PlannedMeanTravelPerSecond = plannedMean
+		pace.PlannedPercent = equivalentSpeedPercentForTravelRate(plannedMean, handyModel)
+	}
+	pace.Limited = plannedMean > 0 &&
+		perceptual.CommandedMeanTravelPerSecond < plannedMean*0.985
 	if !pace.Limited {
 		return pace
 	}

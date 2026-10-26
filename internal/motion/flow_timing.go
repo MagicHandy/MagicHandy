@@ -20,7 +20,8 @@ func layeredDurationMillis(millis float64) int64 {
 // valid fit. Unconstrained timing and explicitly softened turns keep their
 // original shape; no language-dependent speed or range rules are involved.
 func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, name string) (Curve, error) {
-	curves, err := fitLegCurves(legs, slices.Clone(durations), budget)
+	fittedDurations := slices.Clone(durations)
+	curves, err := fitLegCurves(legs, fittedDurations, budget)
 	if err != nil {
 		return Curve{}, err
 	}
@@ -28,19 +29,29 @@ func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, nam
 	if err != nil {
 		return Curve{}, err
 	}
-	requested := int64(0)
+	softened := false
 	for i, leg := range legs {
-		if leg.softness > 0 {
-			return best, nil
-		}
-		requested += durations[i]
+		softened = softened || leg.softness > 0
+		best.plannedDuration += durations[i]
 	}
-	if best.duration <= requested {
+	if softened || best.duration <= best.plannedDuration {
 		return best, nil
 	}
 	for _, amount := range []float64{.25, .5, .75, 1} {
 		candidateLegs := slices.Clone(legs)
 		if !fitGestureCruise(candidateLegs, amount, budget) {
+			continue
+		}
+		changed := false
+		for i := range candidateLegs {
+			// A fast neighbor must not flatten an already feasible slow stroke.
+			// The joint fitter still reconciles their common turnaround state.
+			if fittedDurations[i] <= durations[i] {
+				candidateLegs[i] = legs[i]
+			}
+			changed = changed || candidateLegs[i].cruise != legs[i].cruise
+		}
+		if !changed {
 			continue
 		}
 		candidateCurves, fitErr := fitLegCurves(candidateLegs, slices.Clone(durations), budget)
@@ -49,6 +60,7 @@ func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, nam
 		}
 		candidate, fitErr := assembleLegCurve(candidateLegs, candidateCurves, name)
 		if fitErr == nil && candidate.duration < best.duration {
+			candidate.plannedDuration = best.plannedDuration
 			best = candidate
 		}
 	}

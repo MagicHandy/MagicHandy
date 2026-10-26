@@ -1155,6 +1155,7 @@
   "Pace": "Ritmo",
   "Estimated pace": "Ritmo estimado",
   "Commanded estimate, not measured device speed.": "Estimativa dos comandos, não uma medição da velocidade do dispositivo.",
+  "The pattern plans an average pace of {planned}%.": "O padrão prevê um ritmo médio de {planned}%.",
   "Effective {effective}%; requested {requested}%.": "Efetivo {effective}%; solicitado {requested}%.",
   "Limited by {limiters}.": "Limitado por {limiters}.",
   "device velocity": "velocidade do dispositivo",

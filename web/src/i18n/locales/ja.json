@@ -1155,6 +1155,7 @@
   "Pace": "ペース",
   "Estimated pace": "推定ペース",
   "Commanded estimate, not measured device speed.": "指令値の推定です。デバイスの実測速度ではありません。",
+  "The pattern plans an average pace of {planned}%.": "パターンで予定されている平均ペースは {planned}% です。",
   "Effective {effective}%; requested {requested}%.": "実効 {effective}%、要求 {requested}%。",
   "Limited by {limiters}.": "制限要因: {limiters}。",
   "device velocity": "デバイス速度",

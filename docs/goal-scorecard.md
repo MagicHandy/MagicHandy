@@ -1,5 +1,25 @@
 # Goal Scorecard
 
+## 2026-10-26 — Layered independent-review follow-up
+
+Against alpha.75 `37775586`, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core
+**24,288,256 → 24,292,864 B** (+4,608 B). Main JS **1,307,156 → 1,307,460 B**
+raw (+304 B), **351,557 → 351,669 B** gzip (+112 B). CSS is unchanged at
+**210,037 / 36,604 B** raw/gzip. Canonical UI **2,840,848 → 2,841,582 B**
+(+734 B), including locales; gzip uses `mtime=0`.
+
+The compiled curve gains one int64 authored duration and pace snapshots gain
+two optional float64 fields; no dependency, timer, background task, model call
+or persistent cache is added. Compilation allocations remain effectively
+unchanged (about 46/46/44 kB at selected 5 and 525/68/649 kB at selected 100
+for full/short/compound). Paired median compilation times differ by -0.012 to
++0.030 ms; these are not an end-to-end latency claim. A demanding Edge join
+measured 9.85 ms median and 2.05 MB transient allocation. A deliberately
+contended Stop completed in 11.26 ms on a zero-latency fake transport; this is
+not a physical Stop latency or universal worst-case guarantee. No idle RSS or
+cold-start improvement is claimed. See [the follow-up evidence](layered-review-followup-2026-10-26.md).
+
 ## 2026-10-26 — Accepted Layered timing and readable pace estimates
 
 Against the Autopilot build below, Windows amd64 Go 1.26.10,
