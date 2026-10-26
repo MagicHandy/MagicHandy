@@ -40,7 +40,7 @@ func layeredPaceTransition(previous MotionPlan, active *planTransition, next *Mo
 	endAcceleration := next.curve.accelerationFloat(float64(knots[endIndex].TimeMillis)) * next.focus.gain() *
 		math.Pow(float64(next.curve.duration)/float64(next.PeriodMillis), 2)
 	preferred := max(int64(1), int64(math.Round((float64(knots[endIndex].TimeMillis)-clock)*float64(next.PeriodMillis)/float64(next.curve.duration))))
-	budget := legBudget{velocity: referenceTravelRateForSpeed(100, next.timingModel), acceleration: flowAccelerationBudget, jerk: flowJerkBudget}
+	budget := layeredJoinBudget(previous, *next)
 	preferred, boundedBudget := phraseReachSpliceParameters(previous, *next, endIndex, from, v, preferred, budget)
 	if bridge := fitLayeredSplice(previous, next, start, start, from, to, v, a, endAcceleration, preferred, phase, boundedBudget); bridge != nil {
 		return bridge

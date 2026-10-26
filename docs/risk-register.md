@@ -808,6 +808,16 @@ installed full-range run still felt slower than matched command timing, so
 that discrepancy is not declared fixed. See
 `docs/layered-speed-support-review-2026-10-26.md` and the alpha.75 review.
 
+October 26 independent-review follow-up: feasible slow legs no longer receive
+their fast neighbor's cruise shaping, gentle joins have a plan-relative
+derivative envelope, and completed buffered transitions can splice without
+losing their queued history. Planned pace is distinguished from physical
+limiting. A contended Stop, all three model profiles and 50/110 ms dispatch
+floors are covered. A 200 ms floor still explicitly rejects unrepresentable
+128 ms strokes; automatic transport-aware retiming remains open. Physical
+transition feel and the installed-app discrepancy are not declared resolved.
+See [the measured follow-up](layered-review-followup-2026-10-26.md).
+
 Status 2026-08-20 range-envelope follow-up: Creative now separates outer
 geometry, a model-selected 20%-or-wider span floor/profile, center/rhythm
 variation, pace, and decision horizon. Breathe, wander, and contrast compile to

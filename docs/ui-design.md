@@ -1445,6 +1445,12 @@ label/value rows below the device drawing so a narrow sidebar does not crop
 the requested value or overlap the labels. Fixed patterns without a backend
 pace estimate retain their selected Speed readout.
 
+Layered also exposes its planned mean pace before physical fitting. When that
+differs from the selected base pace, the existing tooltip explains the planned
+average; deliberate variation is not described as device limiting. The row
+still shows effective/selected values when they differ, without adding a third
+number or another status row. This remains a backend-supplied command estimate.
+
 ## Voice status (2026-10-26)
 
 Each Voice settings card leads with its worker status, a compact dot and word,

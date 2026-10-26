@@ -8,6 +8,13 @@ UI behavior, model evidence and limitations.
 
 ## Core Direction
 
+The October 26 [Layered review follow-up](docs/layered-review-followup-2026-10-26.md)
+separates planned pace from physical limiting, preserves feasible slow legs
+beside fast strokes, bounds gentle joins relative to the two plans, and lets
+completed buffered transitions splice again without losing playback history.
+Comparisons retain the rejected stricter envelope. Simulated Stop/timing tests
+and rendered matrices pass; new transition feel awaits physical comparison.
+
 The October 26 [Layered speed integration](docs/alpha75-release-review-2026-10-26.md)
 adopts the physically accepted Creative-envelope/cruise candidate in the shared
 compiler. Exact kinematic fitting replaces a duplicated conservative clock;

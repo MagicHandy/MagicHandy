@@ -77,6 +77,8 @@ export interface MotionPaceSummary {
   requested_percent: number;
   effective_percent: number;
   requested_mean_travel_percent_per_second: number;
+  planned_percent?: number;
+  planned_mean_travel_percent_per_second?: number;
   commanded_mean_travel_percent_per_second: number;
   commanded_peak_velocity_percent_per_second: number;
   device_peak_velocity_percent_per_second: number;

@@ -1118,6 +1118,7 @@
   "Pace": "Pace",
   "Estimated pace": "Estimated pace",
   "Commanded estimate, not measured device speed.": "Commanded estimate, not measured device speed.",
+  "The pattern plans an average pace of {planned}%.": "The pattern plans an average pace of {planned}%.",
   "Effective {effective}%; requested {requested}%.": "Effective {effective}%; requested {requested}%.",
   "Limited by {limiters}.": "Limited by {limiters}.",
   "device velocity": "device velocity",

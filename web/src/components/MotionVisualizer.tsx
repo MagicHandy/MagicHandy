@@ -87,11 +87,15 @@ export function MotionVisualizer({ motion, mini = false, device, kind: kindOverr
     ? Math.round(clampPercent(pace.requested_percent, 0))
     : undefined;
   const paceDisplay = paceEffective !== undefined && paceRequested !== undefined
-    ? pace?.limited ? `${paceEffective}% / ${paceRequested}%` : `${paceEffective}%`
+    ? paceEffective !== paceRequested ? `${paceEffective}% / ${paceRequested}%` : `${paceEffective}%`
     : speed;
+  const plannedPace = pace?.planned_percent;
+  const plannedTitle = typeof plannedPace === "number" && Number.isFinite(plannedPace) && paceRequested !== undefined && Math.abs(plannedPace - paceRequested) >= 0.5
+    ? ` ${t("The pattern plans an average pace of {planned}%.", { planned: formatNumber(Math.round(plannedPace * 10) / 10) })}`
+    : "";
   const paceLimiterLabels = (pace?.limiters ?? []).map(paceLimiterLabel);
   const paceTitle = paceEffective !== undefined && paceRequested !== undefined
-    ? `${t("Effective {effective}%; requested {requested}%.", { effective: paceEffective, requested: paceRequested })} ${t("Commanded estimate, not measured device speed.")}${pace?.limited && paceLimiterLabels.length ? ` ${t("Limited by {limiters}.", { limiters: paceLimiterLabels.join(", ") })}` : ""}`
+    ? `${t("Effective {effective}%; requested {requested}%.", { effective: paceEffective, requested: paceRequested })}${plannedTitle} ${t("Commanded estimate, not measured device speed.")}${pace?.limited && paceLimiterLabels.length ? ` ${t("Limited by {limiters}.", { limiters: paceLimiterLabels.join(", ") })}` : ""}`
     : "";
   const resolvedPatternName = engine?.target?.pattern_name?.trim() || engine?.target?.pattern_id?.trim();
   const resolvedMediaName = engine?.target?.source === "media"

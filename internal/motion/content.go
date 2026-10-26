@@ -126,6 +126,9 @@ type Curve struct {
 	// context even when a geometry edit changes the number of fitted strokes.
 	flowCycles []float64
 	flowPeriod float64
+	// Layered's authored clock before kinematic fitting. Deliberate pace layers
+	// and phrase rates belong to this clock, not to physical limiting.
+	plannedDuration int64
 	// minPosition and maxPosition bound the authored span. Shape-preserving
 	// interpolation never overshoots a knot, so the authored extremes are the
 	// curve's extremes.

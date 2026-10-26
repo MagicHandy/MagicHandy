@@ -8,6 +8,25 @@ import { MotionVisualizer } from "./MotionVisualizer";
 afterEach(() => setLocaleForTest("en", english));
 
 describe("MotionVisualizer", () => {
+  it("explains authored slower pacing without calling it physically limited", () => {
+    render(<MotionVisualizer motion={{ available: true, engine: {
+      running: true, paused: false,
+      target: { pattern_name: "Continuous flow", source: "chat", speed_percent: 10 },
+      pace: {
+        requested_percent: 10, effective_percent: 7.78, planned_percent: 7.78,
+        requested_mean_travel_percent_per_second: 59.5,
+        planned_mean_travel_percent_per_second: 52,
+        commanded_mean_travel_percent_per_second: 52,
+        commanded_peak_velocity_percent_per_second: 85.5,
+        device_peak_velocity_percent_per_second: 363.6,
+        limited: false,
+      },
+    } }} />);
+    const pace = screen.getByText("8% / 10%");
+    expect(pace).toHaveAttribute("title", expect.stringContaining("The pattern plans an average pace of 7.8%."));
+    expect(pace.getAttribute("title")).not.toContain("Limited by");
+  });
+
   it.each(["Layered", "Creative v2"])("shows the backend pace estimate for %s without requiring Creative geometry", (name) => {
     render(<MotionVisualizer motion={{ available: true, engine: {
       running: true, paused: false,
