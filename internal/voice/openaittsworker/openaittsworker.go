@@ -50,6 +50,7 @@ const (
 )
 
 var errHealthNotReady = errors.New("health endpoint reports not ready")
+var errHealthLoading = fmt.Errorf("%w: model is loading", errHealthNotReady)
 
 // Options configures one worker session. ServerCommand selects managed mode;
 // otherwise BaseURL points at an external server that this worker never stops.
@@ -220,6 +221,16 @@ func (s *session) handleLoad(request protocol.Request) {
 	timeout := externalLoadTimeout
 	if s.server != nil {
 		timeout = managedLoadTimeout
+		if s.managedFailureMessage() != "" {
+			// A live process is insufficient evidence of a usable CUDA model.
+			// Reload after an inference failure must replace the owned runtime.
+			s.setLoaded(false)
+			s.cancelAll()
+			if err := s.server.Stop(); err != nil {
+				s.sendError(request.ID, protocol.ErrorCodeInternal, "restart local TTS server: "+sanitize(err.Error(), s.options.APIKey), true)
+				return
+			}
+		}
 		if err := s.server.Start(); err != nil {
 			message := "local TTS server could not start: " + sanitize(err.Error(), s.options.APIKey)
 			s.setManagedFailure(message)
@@ -272,7 +283,7 @@ func (s *session) waitReady(ctx context.Context) error {
 		}
 		if err := s.probe(ctx); err == nil {
 			return nil
-		} else if errors.Is(err, errHealthNotReady) {
+		} else if errors.Is(err, errHealthNotReady) && !errors.Is(err, errHealthLoading) {
 			return err
 		} else if s.server == nil {
 			return err
@@ -336,7 +347,7 @@ func (s *session) probe(parent context.Context) error {
 		return fmt.Errorf("%w: field %q is not boolean", errHealthNotReady, s.options.HealthReadyField)
 	}
 	if !ready {
-		return fmt.Errorf("%w: field %q is false", errHealthNotReady, s.options.HealthReadyField)
+		return fmt.Errorf("%w: field %q is false", errHealthLoading, s.options.HealthReadyField)
 	}
 	return nil
 }

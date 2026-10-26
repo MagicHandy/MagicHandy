@@ -1,5 +1,17 @@
 # Autopilot cadence and autonomy
 
+## Planning admission and failure visibility (2026-10-26)
+
+Autopilot's generated context uses the complete model request budget rather
+than the 4 KiB limit for typed chat messages. The interactive limit is unchanged.
+The backend counts consecutive failed motion decisions; two failures show a
+short retry notice and Diagnostics link in the Autopilot panel. Valid plans or
+deliberate holds clear it, but spoken check-ins do not. Invalidated work cannot
+change the counter. Continuous modes keep their current motion on failure;
+pattern-mode fallback is unchanged. Check-in diagnostics carry the resolved
+conversation provider/model from generation through publication. See the
+[review and live replay](autopilot-admission-review-2026-10-26.md).
+
 ## Continuous motion follow-up
 
 Layered and Creative v2 Autopilot read up to eight recent human lines and

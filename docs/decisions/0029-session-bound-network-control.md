@@ -151,6 +151,18 @@ During application shutdown, cancellation permits a bounded five-second socket
 write grace so healthy responses can finish their HTTP framing. Session and
 ownership revocation on a running server still interrupt writes immediately.
 
+Emergency Stop is the second exception (2026-10-25). It cancels admitted
+controller-bound work with its own cause, and that cause allows a bounded
+two-second grace for both socket reads and writes. A canceled chat stream then
+delivers "Chat canceled by Emergency Stop." and closes normally. The immediate
+deadline had reset its HTTP/2 stream, so browsers showed only their own
+"network error". Reads share the grace because an expired read fails HTTP/1.1's
+background read, which leaves a cleanly closed keep-alive connection serving
+later requests already canceled. The canceled work still ends at once, and
+Stop's fencing of motion, speech and admission is unchanged. Takeover,
+ownership loss and session revocation keep the immediate interruption. See the
+[review](../stop-network-error-review-2026-10-25.md).
+
 ### Browser device gateway
 
 Protected Bluetooth dispatch binds the authenticated session, declared tab,

@@ -49,6 +49,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
   const mounted = useRef(false);
   const streamGeneration = useRef(0);
   const activeStream = useRef<AbortController | null>(null);
+  const activeTurn = useRef({ started: false, stopRequested: false });
   const observedStopSequence = useRef(state?.stop_sequence);
   const observedEpoch = useRef(state?.observation?.epoch);
   const observedControllerGeneration = useRef(state?.controller?.generation);
@@ -81,12 +82,34 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     };
   }, [onBusyChange]);
 
+  // Stop cancels the active reply once its stream has begun. The first event
+  // names the request it answers, so a Stop pressed earlier waits for it and
+  // the notice stays under that request instead of beside a duplicate of it.
+  // The backend ends a canceled turn within moments; never wait long.
+  function cancelForStop() {
+    const controller = activeStream.current;
+    const turn = activeTurn.current;
+    if (controller && !turn.started) {
+      if (!turn.stopRequested) window.setTimeout(() => controller.abort("Chat canceled by Emergency Stop."), 2000);
+      turn.stopRequested = true;
+    } else controller?.abort("Chat canceled by Emergency Stop.");
+    clearRepairOffers();
+  }
+
   useEffect(() => {
     const previous = observedStopSequence.current;
     const current = state?.stop_sequence;
     observedStopSequence.current = current;
-    if (previous !== undefined && current !== undefined && previous !== current) { activeStream.current?.abort("Chat canceled by Emergency Stop."); clearRepairOffers(); }
+    if (previous !== undefined && current !== undefined && previous !== current) cancelForStop();
   }, [state?.stop_sequence]);
+
+  // This tab's own Stop acts at once. Waiting for the next state snapshot let
+  // the backend end the stream first, which the browser reported only as its
+  // own network error.
+  useEffect(() => {
+    window.addEventListener("magichandy:emergency-stop", cancelForStop);
+    return () => window.removeEventListener("magichandy:emergency-stop", cancelForStop);
+  }, []);
 
   useEffect(() => {
     const previous = observedEpoch.current;
@@ -211,6 +234,9 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     const controller = new AbortController();
     const requestGeneration = ++streamGeneration.current;
     activeStream.current = controller;
+    // A repair continues a reply whose request is already known.
+    const turn = { started: Boolean(repairMessage), stopRequested: false };
+    activeTurn.current = turn;
     let raw = "";
     let repairRaw = "";
     let initialReply = "";
@@ -223,6 +249,11 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
     try {
       const receive = (ev: ChatStreamEvent) => {
         if (!mounted.current || streamGeneration.current !== requestGeneration || controller.signal.aborted) return;
+        turn.started = true;
+        handleEvent(ev);
+        if (turn.stopRequested) controller.abort("Chat canceled by Emergency Stop.");
+      };
+      const handleEvent = (ev: ChatStreamEvent) => {
         if (ev.event === "status") {
           const status = ev.data as {
             state?: string;
@@ -327,10 +358,16 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
       else await streamChat(sessionId, text, receive, controller.signal, stopSequence, motionOwner);
     } catch (e) {
       if (controller.signal.aborted || !mounted.current || streamGeneration.current !== requestGeneration) return;
-      const message = e instanceof Error ? translateKnown(e.message) : t("Chat failed.");
+      // A dropped connection rejects with the browser's own TypeError text,
+      // such as "network error"; explain it in the app's words instead.
+      const message = turn.stopRequested ? t("Chat canceled by Emergency Stop.")
+        : e instanceof TypeError ? t("The reply was interrupted before it finished. Please try again.")
+        : e instanceof Error ? translateKnown(e.message) : t("Chat failed.");
       if (!repairAttempted) show(message, "error");
       const staleRepair = typeof e === "object" && e !== null && "status" in e && e.status === 409;
+      // Anchored to its request, so later replies cannot move this failure.
       setMessages((m) => m.map((x) => (x.id === assistantId ? { ...x, text: message, warning: true, repair: undefined, responseRejected: false,
+        sourceUserSequence: userSequence || x.sourceUserSequence,
         repairState: repairAttempted ? staleRepair ? "unavailable" : "failed" : undefined } : x)));
     } finally {
       if (activeStream.current === controller) activeStream.current = null;
@@ -349,7 +386,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
         if (x.id !== assistantId) return [x];
         if (controller.signal.aborted && !retainReplyOnAbort) return repairMessage
           ? [{ ...repairMessage, streaming: false, repair: undefined, repairState: "unavailable" }]
-          : [{ id: x.id, role: "assistant", streaming: false, warning: true,
+          : [{ id: x.id, role: "assistant", streaming: false, warning: true, sourceUserSequence: userSequence || x.sourceUserSequence,
             text: typeof controller.signal.reason === "string" ? translateKnown(controller.signal.reason)
               : t("The reply was interrupted before it finished. Please try again.") }];
         return [{ ...x, streaming: false }];
@@ -431,7 +468,7 @@ export function ChatPanel({ sessionId, personaName, onBusyChange, onSessionChang
             <VoiceComposerControls
               disabled={locked}
               ready={asrReady}
-              unavailableTitle={t("Start and load the speech-input worker in Settings → Voice")}
+              unavailableTitle={asrWorker?.state === "starting" || asrWorker?.model_state === "loading" ? t("Loading...") : t("Start and load the speech-input worker in Settings → Voice")}
               preferences={{
                 input_mode: voiceSettings?.input_mode ?? "hands_free",
                 input_sensitivity: voiceSettings?.input_sensitivity ?? 55,

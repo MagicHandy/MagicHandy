@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { api } from "../api/client";
-import type { PublicSettings, SetupJob, VoiceModuleStatus, VoiceRequestSnapshot, VoiceWorkerStatus } from "../api/types";
+import { useId } from "react";
+import type { PublicSettings } from "../api/types";
 import { t, translateKnown, type MessageKey } from "../i18n";
 import { RefreshIcon } from "../shell/icons";
+import { useAppState } from "../state/app-state";
 import { HostPathField } from "./HostPathField";
+import { TTSModuleUpdate } from "./TTSModuleUpdate";
+import { useParakeetRepair } from "./useParakeetRepair";
+import { useVoiceRuntimeStatus, type VoiceRuntimeStatus } from "./useVoiceRuntimeStatus";
 import { VoiceRequestQueue } from "./VoiceRequestQueue";
 import { VoiceWorkers } from "./VoiceWorkers";
-import { TTSModuleUpdate } from "./TTSModuleUpdate";
 
 const joinArgs = (args?: string[]) => (args ?? []).join("\n");
 const splitArgs = (value: string) => value.split(/\r?\n/).map((arg) => arg.trim()).filter(Boolean);
@@ -38,7 +40,6 @@ const SPEECH_POLICY_LABELS: Partial<Record<string, MessageKey>> = {
 };
 
 const MANAGED_TTS = new Set(["faster_qwen3_tts", "chatterbox_tts"]);
-const message = (error: unknown) => error instanceof Error ? translateKnown(error.message) : t("Voice runtime request failed.");
 
 interface Props {
   settings: PublicSettings;
@@ -71,13 +72,23 @@ export function VoiceSettingsPanel({
   setClearOpenAIKey = () => undefined,
   onRuntimeChanged = () => undefined,
 }: Props) {
-  const tonePromptID = useId();
-  const tonePromptHintID = `${tonePromptID}-hint`;
+  const baseID = useId();
+  const enableHintID = `${baseID}-enable-hint`;
+  const toneID = `${baseID}-tone`;
+  const toneHintID = `${baseID}-tone-hint`;
+  const tonePromptID = `${baseID}-tone-prompt`;
+  const tonePromptHintID = `${baseID}-tone-prompt-hint`;
+  const seedHintID = `${baseID}-seed-hint`;
   const voice = s.voice;
-  const voiceRuntime = useVoiceRuntimeStatus();
+  const runtime = useVoiceRuntimeStatus();
+  // Worker status describes the saved settings. The backend snapshot names the
+  // saved providers, so an unsaved provider choice can be told apart from them.
+  const savedVoice = useAppState().state?.settings?.voice;
+  const savedASR = savedVoice?.asr_provider ?? voice.asr_provider;
+  const savedTTS = savedVoice?.tts_provider ?? voice.tts_provider;
+  const providerLabel = (provider: string) => translateKnown(PROVIDER_LABELS[provider] ?? provider);
   const parakeetSource = voice.parakeet_source || "app_managed";
   const managedTTS = MANAGED_TTS.has(voice.tts_provider);
-  const ttsModuleName = voice.tts_provider === "faster_qwen3_tts" ? t("Faster Qwen3-TTS") : t("Chatterbox Turbo");
   const responseFormats = ["wav", "mp3", "opus", "aac", "flac"];
   const tonePresets = s.options.tts_tone_presets?.length
     ? s.options.tts_tone_presets
@@ -86,13 +97,35 @@ export function VoiceSettingsPanel({
     ? s.options.chat_speech_policies
     : ["interrupt", "finish_current"];
   const tonePreset = voice.tts_tone_preset ?? "natural";
+  const seedMode = voice.tts_seed_mode ?? "fixed";
   const parakeetRepair = useParakeetRepair(
     voice.asr_provider === "parakeet_managed",
     () => {
-      void voiceRuntime.refresh();
+      void runtime.refresh();
       onRuntimeChanged();
     },
   );
+  const runtimeProps = {
+    locked,
+    dirty,
+    enabled: voice.enabled,
+    workers: runtime.workers,
+    requests: runtime.requests,
+    modules: runtime.modules,
+    refresh: runtime.refresh,
+    loaded: runtime.loaded,
+    snapshotRequestedAt: runtime.requestedAt,
+    statusError: runtime.error,
+  };
+  // While a draft names another provider, the card keeps showing the saved
+  // one's worker (it is still what runs) and says so.
+  const roleCard = (draft: string, saved: string) => {
+    const changed = dirty && saved !== draft;
+    return {
+      providerSelected: draft !== "none" || (changed && saved !== "none"),
+      savedProviderLabel: changed && saved !== "none" ? providerLabel(saved) : undefined,
+    };
+  };
 
   const providerSelect = (
     accessibleLabel: string,
@@ -102,7 +135,7 @@ export function VoiceSettingsPanel({
   ) => (
     <select aria-label={accessibleLabel} value={value} disabled={locked} onChange={(event) => onChange(event.target.value)}>
       {(options?.length ? options : [value]).map((option) => (
-        <option key={option} value={option}>{translateKnown(PROVIDER_LABELS[option] ?? option)}</option>
+        <option key={option} value={option}>{providerLabel(option)}</option>
       ))}
     </select>
   );
@@ -144,30 +177,29 @@ export function VoiceSettingsPanel({
   return (
     <>
       <h2 className="section-title">{t("Voice")}</h2>
-      {voiceRuntime.error && <p className="form-status form-status-error" role="alert">{t("Voice runtime unavailable: {message}", { message: voiceRuntime.error })}</p>}
-      {voiceRuntime.initialLoading && !voiceRuntime.error && <p className="form-status" role="status">{t("Checking voice runtime...")}</p>}
+      <VoiceStatusNotice runtime={runtime} />
 
       <div className="group">
-        <h3 className="group-title">{t("Workers")}</h3>
+        <h3 className="group-title">{t("Voice features")}</h3>
         <label className="toggle-line">
-          <span className="toggle"><input type="checkbox" checked={voice.enabled} disabled={locked} onChange={(event) => patch({ enabled: event.target.checked })} /><span className="track" aria-hidden="true" /></span>
-          <span>{t("Enable voice workers")}</span>
+          <span className="toggle"><input type="checkbox" aria-describedby={enableHintID} checked={voice.enabled} disabled={locked} onChange={(event) => patch({ enabled: event.target.checked })} /><span className="track" aria-hidden="true" /></span>
+          <span>{t("Enable voice")}</span>
         </label>
+        <p id={enableHintID} className="hint-block">{t("Speech input and output run only while voice is on. Changes apply when you save.")}</p>
       </div>
 
       <div className="group">
-        <h3 className="group-title">{t("Speech input (ASR)")}</h3>
+        <h3 className="group-title">{t("Speech input")}</h3>
+        <VoiceWorkers role="asr" {...roleCard(voice.asr_provider, savedASR)} showParakeetModule={voice.asr_provider === "parakeet_managed" && parakeetSource === "app_managed"} parakeetRepair={parakeetRepair} {...runtimeProps} />
         <label className="field"><span className="label">{t("Provider")}</span>{providerSelect(t("Speech input provider"), voice.asr_provider, s.options.asr_providers, (asr_provider) => patch(asr_provider === "parakeet_managed" ? { asr_provider, parakeet_source: "app_managed" } : { asr_provider }))}</label>
-        {voice.asr_provider === "parakeet_managed" && <>
-          <details className="advanced-fields"><summary>{t("Advanced")}</summary>
-            <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={parakeetSource === "custom_local"} disabled={locked} onChange={(event) => patch({ parakeet_source: event.target.checked ? "custom_local" : "app_managed" })} /><span className="track" aria-hidden="true" /></span><span>{t("Custom local server")}</span></label>
-            {parakeetSource === "custom_local" && <>
-              <HostPathField label={t("Custom parakeet-server path")} kind="executable" value={voice.parakeet_server_path ?? ""} disabled={locked} onChange={(parakeet_server_path) => patch({ parakeet_server_path })} />
-              <HostPathField label={t("Custom GGUF model path")} kind="gguf" value={voice.parakeet_model_path ?? ""} disabled={locked} onChange={(parakeet_model_path) => patch({ parakeet_model_path })} />
-              <label className="field"><span className="label">{t("Server port")}</span><input type="number" min={1} max={65535} value={voice.parakeet_port ?? 8990} disabled={locked} onChange={(event) => patch({ parakeet_port: Number(event.target.value) })} /></label>
-            </>}
-          </details>
-        </>}
+        {voice.asr_provider === "parakeet_managed" && <details className="advanced-fields"><summary>{t("Advanced")}</summary>
+          <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={parakeetSource === "custom_local"} disabled={locked} onChange={(event) => patch({ parakeet_source: event.target.checked ? "custom_local" : "app_managed" })} /><span className="track" aria-hidden="true" /></span><span>{t("Custom local server")}</span></label>
+          {parakeetSource === "custom_local" && <>
+            <HostPathField label={t("Custom parakeet-server path")} kind="executable" value={voice.parakeet_server_path ?? ""} disabled={locked} onChange={(parakeet_server_path) => patch({ parakeet_server_path })} />
+            <HostPathField label={t("Custom GGUF model path")} kind="gguf" value={voice.parakeet_model_path ?? ""} disabled={locked} onChange={(parakeet_model_path) => patch({ parakeet_model_path })} />
+            <label className="field"><span className="label">{t("Server port")}</span><input type="number" min={1} max={65535} value={voice.parakeet_port ?? 8990} disabled={locked} onChange={(event) => patch({ parakeet_port: Number(event.target.value) })} /></label>
+          </>}
+        </details>}
         {voice.asr_provider === "openai_compatible" && <>
           <label className="field"><span className="label">{t("Base URL")}</span><input type="url" value={voice.asr_base_url ?? ""} disabled={locked} onChange={(event) => patch({ asr_base_url: event.target.value })} /></label>
           <label className="field"><span className="label">{t("Model name")}</span><input type="text" value={voice.asr_model ?? ""} disabled={locked} onChange={(event) => patch({ asr_model: event.target.value })} /></label>
@@ -176,11 +208,13 @@ export function VoiceSettingsPanel({
           <HostPathField label={t("ASR worker path")} kind="file" value={voice.asr_worker_path ?? ""} disabled={locked} onChange={(asr_worker_path) => patch({ asr_worker_path })} />
           <label className="field"><span className="label">{t("Worker arguments")}</span><textarea rows={4} value={joinArgs(voice.asr_worker_args)} disabled={locked} onChange={(event) => patch({ asr_worker_args: splitArgs(event.target.value) })} /></label>
         </>}
-        <VoiceWorkers locked={locked} role="asr" dirty={dirty} enabled={voice.enabled} providerSelected={voice.asr_provider !== "none"} showParakeetModule={voice.asr_provider === "parakeet_managed" && parakeetSource === "app_managed"} parakeetRepair={parakeetRepair} {...voiceRuntime} />
       </div>
 
       <div className="group">
-        <h3 className="group-title">{t("Speech output (TTS)")}</h3>
+        <h3 className="group-title">{t("Speech output")}</h3>
+        {/* The backend inspects the saved TTS module, so its readout only belongs under that provider. */}
+        <VoiceWorkers role="tts" {...roleCard(voice.tts_provider, savedTTS)} showTTSModule={managedTTS && savedTTS === voice.tts_provider} {...runtimeProps} />
+        {managedTTS && <TTSModuleUpdate update={runtime.modules.tts?.update} locked={locked} dirty={dirty} refresh={runtime.refresh} onComplete={onRuntimeChanged} />}
         <label className="field"><span className="label">{t("Provider")}</span>{providerSelect(t("Speech output provider"), voice.tts_provider, s.options.tts_providers, selectTTSProvider)}</label>
 
         {voice.tts_provider === "elevenlabs" && <>
@@ -190,21 +224,18 @@ export function VoiceSettingsPanel({
           <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={voice.elevenlabs_model_id ?? ""} disabled={locked} onChange={(event) => patch({ elevenlabs_model_id: event.target.value })} /></label>
         </>}
 
-        {managedTTS && <>
-          {voice.tts_provider === "faster_qwen3_tts" && <>
-            <p className="form-status">{t("Faster Qwen3-TTS requires an NVIDIA GPU with CUDA.")}</p>
-            <HostPathField label={t("Reference WAV")} kind="wav" value={voice.tts_reference_wav ?? ""} disabled={locked} onChange={(tts_reference_wav) => patch({ tts_reference_wav })} />
-            <label className="field"><span className="label">{t("Exact reference transcript")}</span><textarea rows={3} value={voice.tts_reference_text ?? ""} disabled={locked} onChange={(event) => patch({ tts_reference_text: event.target.value })} /></label>
-            <p className="form-status">{t("Use clean single-speaker audio, ideally 3 to 10 seconds, with an exact transcript.")}</p>
-            <label className="field"><span className="label">{t("Language")}</span><input type="text" value={voice.tts_language ?? "Auto"} disabled={locked} onChange={(event) => patch({ tts_language: event.target.value })} /></label>
-            <label className="field"><span className="label">{t("Voice tone")}</span><select value={tonePreset} disabled={locked} onChange={(event) => patch({ tts_tone_preset: event.target.value })}>{tonePresets.map((preset) => <option key={preset} value={preset}>{translateKnown(TONE_LABELS[preset] ?? preset)}</option>)}</select></label>
-            {tonePreset === "custom" && <div className="field"><label className="label" htmlFor={tonePromptID}>{t("Custom tone prompt")}</label><textarea id={tonePromptID} aria-describedby={tonePromptHintID} rows={3} maxLength={2048} required value={voice.tts_tone_prompt ?? ""} disabled={locked} onChange={(event) => patch({ tts_tone_prompt: event.target.value })} /><span id={tonePromptHintID} className="hint">{t("Describe the delivery you want, such as pace, emotion, pitch, or emphasis.")}</span></div>}
-            <p className="form-status">{t("Tone prompting is experimental for cloned Base voices; results vary with the reference audio and seed.")}</p>
-          </>}
-          {voice.tts_provider === "chatterbox_tts" && <>
-            <HostPathField label={t("Reference WAV")} kind="wav" value={voice.tts_reference_wav ?? ""} disabled={locked} onChange={(tts_reference_wav) => patch({ tts_reference_wav })} />
-            <label className="field"><span className="label">{t("Voice name")}</span><input type="text" value={voice.tts_voice ?? ""} disabled={locked} onChange={(event) => patch({ tts_voice: event.target.value })} /></label>
-          </>}
+        {voice.tts_provider === "faster_qwen3_tts" && <>
+          <p className="hint-block">{t("Faster Qwen3-TTS requires an NVIDIA GPU with CUDA.")}</p>
+          <HostPathField label={t("Reference WAV")} kind="wav" value={voice.tts_reference_wav ?? ""} disabled={locked} onChange={(tts_reference_wav) => patch({ tts_reference_wav })} />
+          <label className="field"><span className="label">{t("Exact reference transcript")}</span><textarea rows={3} value={voice.tts_reference_text ?? ""} disabled={locked} onChange={(event) => patch({ tts_reference_text: event.target.value })} /></label>
+          <p className="hint-block">{t("Use clean single-speaker audio, ideally 3 to 10 seconds, with an exact transcript.")}</p>
+          <label className="field"><span className="label">{t("Language")}</span><input type="text" value={voice.tts_language ?? "Auto"} disabled={locked} onChange={(event) => patch({ tts_language: event.target.value })} /></label>
+          <div className="field"><label className="label" htmlFor={toneID}>{t("Voice tone")}</label><select id={toneID} aria-describedby={toneHintID} value={tonePreset} disabled={locked} onChange={(event) => patch({ tts_tone_preset: event.target.value })}>{tonePresets.map((preset) => <option key={preset} value={preset}>{translateKnown(TONE_LABELS[preset] ?? preset)}</option>)}</select><span id={toneHintID} className="hint">{t("Tone prompting is experimental for cloned Base voices; results vary with the reference audio and seed.")}</span></div>
+          {tonePreset === "custom" && <div className="field"><label className="label" htmlFor={tonePromptID}>{t("Custom tone prompt")}</label><textarea id={tonePromptID} aria-describedby={tonePromptHintID} rows={3} maxLength={2048} required value={voice.tts_tone_prompt ?? ""} disabled={locked} onChange={(event) => patch({ tts_tone_prompt: event.target.value })} /><span id={tonePromptHintID} className="hint">{t("Describe the delivery you want, such as pace, emotion, pitch, or emphasis.")}</span></div>}
+        </>}
+        {voice.tts_provider === "chatterbox_tts" && <>
+          <HostPathField label={t("Reference WAV")} kind="wav" value={voice.tts_reference_wav ?? ""} disabled={locked} onChange={(tts_reference_wav) => patch({ tts_reference_wav })} />
+          <label className="field"><span className="label">{t("Voice name")}</span><input type="text" value={voice.tts_voice ?? ""} disabled={locked} onChange={(event) => patch({ tts_voice: event.target.value })} /></label>
         </>}
 
         {voice.tts_provider === "openai_compatible" && <>
@@ -222,9 +253,9 @@ export function VoiceSettingsPanel({
 
         {(voice.tts_provider === "faster_qwen3_tts" || voice.tts_provider === "openai_compatible") && <details className="advanced-fields"><summary>{t("Advanced")}</summary>
           {voice.tts_provider === "faster_qwen3_tts" && <>
-            <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={(voice.tts_seed_mode ?? "fixed") === "fixed"} disabled={locked} onChange={(event) => patch({ tts_seed_mode: event.target.checked ? "fixed" : "varied" })} /><span className="track" aria-hidden="true" /></span><span>{t("Repeatable voice generation")}</span></label>
-            <p className="form-status">{(voice.tts_seed_mode ?? "fixed") === "fixed" ? t("Fixed mode reuses one seed for more consistent output.") : t("Varied mode uses a new seed for every request and can produce unusually long or degraded speech.")}</p>
-            {(voice.tts_seed_mode ?? "fixed") === "fixed" && <div className="field"><span className="label">{t("Generation seed")}</span><div className="field-action-row"><input aria-label={t("Generation seed")} type="number" min={0} max={4294967295} step={1} value={voice.tts_seed ?? 1337} disabled={locked} onChange={(event) => { const seed = Number(event.target.value); if (Number.isSafeInteger(seed) && seed >= 0 && seed <= 4294967295) patch({ tts_seed: seed }); }} /><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => { const values = new Uint32Array(1); globalThis.crypto.getRandomValues(values); patch({ tts_seed: values[0], tts_seed_mode: "fixed" }); }}><RefreshIcon size={16} />{t("New seed")}</button></div></div>}
+            <label className="toggle-line"><span className="toggle"><input type="checkbox" aria-describedby={seedHintID} checked={seedMode === "fixed"} disabled={locked} onChange={(event) => patch({ tts_seed_mode: event.target.checked ? "fixed" : "varied" })} /><span className="track" aria-hidden="true" /></span><span>{t("Repeatable voice generation")}</span></label>
+            <p id={seedHintID} className="hint-block">{seedMode === "fixed" ? t("Fixed mode reuses one seed for more consistent output.") : t("Varied mode uses a new seed for every request and can produce unusually long or degraded speech.")}</p>
+            {seedMode === "fixed" && <div className="field"><span className="label">{t("Generation seed")}</span><div className="field-action-row"><input aria-label={t("Generation seed")} type="number" min={0} max={4294967295} step={1} value={voice.tts_seed ?? 1337} disabled={locked} onChange={(event) => { const seed = Number(event.target.value); if (Number.isSafeInteger(seed) && seed >= 0 && seed <= 4294967295) patch({ tts_seed: seed }); }} /><button type="button" className="btn btn-secondary" disabled={locked} onClick={() => { const values = new Uint32Array(1); globalThis.crypto.getRandomValues(values); patch({ tts_seed: values[0], tts_seed_mode: "fixed" }); }}><RefreshIcon size={16} />{t("New seed")}</button></div></div>}
           </>}
           {voice.tts_provider === "openai_compatible" && <>
             <label className="field"><span className="label">{t("Response format")}</span><select value={voice.tts_response_format ?? "wav"} disabled={locked} onChange={(event) => patch({ tts_response_format: event.target.value })}>{responseFormats.map((format) => <option key={format} value={format}>{format.toUpperCase()}</option>)}</select></label>
@@ -233,150 +264,28 @@ export function VoiceSettingsPanel({
         </details>}
         {voice.tts_provider !== "none" && <label className="toggle-line"><span className="toggle"><input type="checkbox" checked={voice.speak_replies ?? false} disabled={locked} onChange={(event) => patch({ speak_replies: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Speak chat replies")}</span></label>}
         {voice.tts_provider !== "none" && (voice.speak_replies ?? false) && <div className="field"><label className="label" htmlFor="chat-speech-policy">{t("When a new message is sent")}</label><select id="chat-speech-policy" value={voice.chat_speech_policy || "interrupt"} disabled={locked} onChange={(event) => patch({ chat_speech_policy: event.target.value })}>{speechPolicies.map((policy) => <option key={policy} value={policy}>{translateKnown(SPEECH_POLICY_LABELS[policy] ?? policy)}</option>)}</select><span className="hint">{voice.chat_speech_policy === "finish_current" ? t("Finishing speech preserves playback, but a shared local GPU can delay the next model response.") : t("Interrupting speech frees a shared local GPU sooner for the next model response.")}</span></div>}
-        <VoiceWorkers locked={locked} role="tts" dirty={dirty} enabled={voice.enabled} providerSelected={voice.tts_provider !== "none"} showTTSModule={managedTTS} ttsModuleName={ttsModuleName} {...voiceRuntime} />
-        {managedTTS && <TTSModuleUpdate update={voiceRuntime.modules.tts?.update} locked={locked} dirty={dirty} refresh={voiceRuntime.refresh} onComplete={onRuntimeChanged} />}
       </div>
 
-      <VoiceRequestQueue locked={locked} requests={voiceRuntime.requests} refresh={voiceRuntime.refresh} />
+      <VoiceRequestQueue locked={locked} requests={runtime.requests} refresh={runtime.refresh} />
     </>
   );
 }
 
-function useVoiceRuntimeStatus() {
-  const [workers, setWorkers] = useState<Record<string, VoiceWorkerStatus>>({});
-  const [requests, setRequests] = useState<VoiceRequestSnapshot[]>([]);
-  const [modules, setModules] = useState<Record<string, VoiceModuleStatus>>({});
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
-  const mounted = useRef(false);
-  const hasLoaded = useRef(false);
-  const inFlight = useRef<Promise<void> | null>(null);
-
-  const refresh = useCallback(async () => {
-    if (inFlight.current) return inFlight.current;
-    if (mounted.current && hasLoaded.current) setRefreshing(true);
-    const request = (async () => {
-      try {
-        const response = await api.voiceStatus();
-        if (!mounted.current) return;
-        setWorkers(response.voice.workers ?? {});
-        setModules(response.voice.modules ?? {});
-        setRequests(response.requests ?? []);
-        setError("");
-      } catch (requestError) {
-        if (mounted.current) setError(message(requestError));
-      } finally {
-        if (mounted.current) {
-          if (!hasLoaded.current) {
-            hasLoaded.current = true;
-            setInitialLoading(false);
-          }
-          setRefreshing(false);
-        }
-      }
-    })();
-    inFlight.current = request;
-    try {
-      await request;
-    } finally {
-      if (inFlight.current === request) inFlight.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    mounted.current = true;
-    let canceled = false;
-    let timer: number | undefined;
-    const poll = async () => {
-      await refresh();
-      if (!canceled) timer = window.setTimeout(() => void poll(), 3000);
-    };
-    void poll();
-    return () => {
-      canceled = true;
-      mounted.current = false;
-      window.clearTimeout(timer);
-    };
-  }, [refresh]);
-
-  return { workers, requests, modules, initialLoading, refreshing, error, refresh };
-}
-
-function setupJobIsActive(job?: SetupJob) {
-  return job?.status === "queued" || job?.status === "running";
-}
-
-function setupJobIncludesParakeet(job?: SetupJob) {
-  if (!job) return false;
-  if (job.kind === "parakeet") return true;
-  return Boolean(job.steps?.some((step) => step.id === "parakeet" && step.status !== "queued"));
-}
-
-function useParakeetRepair(enabled: boolean, onComplete: () => void) {
-  const [job, setJob] = useState<SetupJob>();
-  const [setupBusy, setSetupBusy] = useState(false);
-  const [error, setError] = useState("");
-  const mounted = useRef(false);
-  const completedJob = useRef("");
-  const onCompleteRef = useRef(onComplete);
-  onCompleteRef.current = onComplete;
-
-  const refresh = useCallback(async () => {
-    try {
-      const response = await api.setupStatus();
-      if (!mounted.current) return;
-      const installation = response.installation;
-      setSetupBusy(setupJobIsActive(installation));
-      const parakeetJob = setupJobIncludesParakeet(installation) ? installation : undefined;
-      setJob(parakeetJob);
-      setError("");
-      if (parakeetJob?.status === "complete" && completedJob.current !== parakeetJob.id) {
-        completedJob.current = parakeetJob.id;
-        onCompleteRef.current();
-      }
-    } catch (reason) {
-      if (mounted.current) setError(message(reason));
-    }
-  }, []);
-
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!enabled) return;
-    void refresh();
-  }, [enabled, refresh]);
-
-  useEffect(() => {
-    if (!enabled || !setupBusy) return;
-    const timer = window.setInterval(() => void refresh(), 1000);
-    return () => window.clearInterval(timer);
-  }, [enabled, refresh, setupBusy]);
-
-  const repair = useCallback(async () => {
-    setError("");
-    try {
-      const response = await api.installSetupParakeet();
-      if (!mounted.current) return;
-      setJob(response.installation);
-      setSetupBusy(true);
-    } catch (reason) {
-      if (mounted.current) setError(message(reason));
-    }
-  }, []);
-
-  const cancel = useCallback(async () => {
-    setError("");
-    try {
-      const response = await api.cancelSetupInstall();
-      if (mounted.current) setJob(response.installation);
-    } catch (reason) {
-      if (mounted.current) setError(message(reason));
-    }
-  }, []);
-
-  return { job, setupBusy, error, repair, cancel };
+// Poll failures are page-level: they make every card's status uncertain.
+// Before any snapshot the cards say Status unavailable; afterwards they keep
+// the last snapshot, labeled with its time, and runtime actions wait.
+function VoiceStatusNotice({ runtime }: { runtime: VoiceRuntimeStatus }) {
+  if (!runtime.error) return null;
+  const time = runtime.receivedAt ? new Date(runtime.receivedAt).toLocaleTimeString() : "";
+  return (
+    <div className="voice-status-notice" role="alert">
+      <div className="voice-status-notice-text">
+        <span className="status-dot" data-state={runtime.loaded ? "pending" : "error"} aria-hidden="true" />
+        <strong>{runtime.loaded ? t("Voice status is not updating") : t("Voice status is unavailable")}</strong>
+        {runtime.loaded && time && <span>{t("Showing the last status, received at {time}. Starting and testing wait until it updates.", { time })}</span>}
+        <span>{runtime.error}</span>
+      </div>
+      <button type="button" className="btn btn-secondary btn-sm" disabled={runtime.retrying} onClick={() => void runtime.retry()}>{runtime.retrying ? t("Retrying…") : t("Retry")}</button>
+    </div>
+  );
 }

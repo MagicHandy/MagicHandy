@@ -112,6 +112,7 @@ func (s *Server) autopilotDecideSpeech(ctx context.Context, input modes.Decision
 	}
 	settings, _ := s.store.Snapshot()
 	admitted, _ := curateAutopilotPerceptualChange(decision, input, settings.EffectiveMotion())
+	admitted.SpeechSource = modes.SpeechSource{Provider: response.Provider, Model: response.Model}
 	return admitted, nil
 }
 
@@ -231,6 +232,7 @@ func (s *Server) autopilotModelTurn(
 	if err == nil && settings.LLM.AdvancedMotion() {
 		err = s.validateCloudAdmission(providerCtx, admission)
 	}
+	response.Provider, response.Model = settings.LLM.Provider, settings.LLM.Model
 	return response, err
 }
 
@@ -543,7 +545,7 @@ func sameAreaFocus(left, right *motion.AreaFocus) bool {
 // autopilotAnnounce publishes through canonical Chat first, then optionally
 // queues TTS. The returned request ID lets the scheduler start its next interval
 // after actual browser playback.
-func (s *Server) autopilotAnnounce(ctx context.Context, say string) modes.Announcement {
+func (s *Server) autopilotAnnounce(ctx context.Context, say string, source modes.SpeechSource) modes.Announcement {
 	say = strings.TrimSpace(say)
 	if say == "" || ctx.Err() != nil {
 		return modes.Announcement{}
@@ -572,8 +574,8 @@ func (s *Server) autopilotAnnounce(ctx context.Context, say string) modes.Announ
 	}
 	diagnostics := &chat.MessageDiagnostics{
 		Source:    "autopilot",
-		Provider:  settings.LLM.Provider,
-		Model:     settings.LLM.Model,
+		Provider:  source.Provider,
+		Model:     source.Model,
 		PromptSet: promptID,
 	}
 	if activePersona != nil {

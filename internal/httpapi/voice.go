@@ -115,6 +115,9 @@ func openAITTSWorkerConfig(settings config.VoiceSettings, executablePath, dataDi
 	if settings.TTSProvider == config.VoiceTTSProviderChatterbox {
 		worker.Args = append(worker.Args, "-health-ready-field", "loaded")
 	}
+	if settings.TTSProvider == config.VoiceTTSProviderFasterQwen {
+		worker.Args = append(worker.Args, "-health-ready-field", "model_loaded")
+	}
 	if settings.TTSProvider == config.VoiceTTSProviderOpenAICompat || !settings.TTSAutoLaunch {
 		return worker
 	}
@@ -816,9 +819,8 @@ func (s *Server) writeStartedWorker(w http.ResponseWriter, worker *voice.Supervi
 	defer cancel()
 	if err := ensureVoiceWorkerReady(ctx, worker); err != nil {
 		s.logger.Warn("voice model auto-load failed", "role", worker.Status().Role, "error", err)
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), voiceHealthTimeout)
-		_ = worker.Stop(stopCtx)
-		stopCancel()
+		// The worker owns cleanup of a failed model load. Keep the failure
+		// available for Retry; this caller must not stop a replacement process.
 		writeJSON(w, http.StatusConflict, map[string]any{
 			"error":  fmt.Sprintf("voice worker could not become ready: %s", err),
 			"worker": worker.Status(),
@@ -829,6 +831,9 @@ func (s *Server) writeStartedWorker(w http.ResponseWriter, worker *voice.Supervi
 }
 
 func ensureVoiceWorkerReady(ctx context.Context, worker *voice.Supervisor) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	status := worker.Status()
 	if status.State == voice.StateRunning && status.ModelState == voice.ModelStateReady {
 		response, err := worker.Health(ctx)
@@ -908,9 +913,8 @@ func (s *Server) autoloadVoiceWorker(ctx context.Context, role voice.Role) {
 		if ctx.Err() == nil {
 			s.logger.Warn("voice worker autoload failed", "role", role, "error", err)
 		}
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), voiceHealthTimeout)
-		_ = worker.Stop(stopCtx)
-		stopCancel()
+		// The worker owns cleanup of a failed model load. Keep the failure
+		// available for Retry; this caller must not stop a replacement process.
 		return
 	}
 	s.logger.Info("voice worker autoloaded", "role", role, "model_state", worker.Status().ModelState)

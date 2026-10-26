@@ -558,6 +558,7 @@ export interface ModesStatus {
   segment_ends_in_ms?: number;
   segment_due_at?: string;
   decision_source?: string;
+  planning_failures?: number;
   last_say?: string;
   motion_change_in_ms?: number;
   motion_change_due_at?: string;

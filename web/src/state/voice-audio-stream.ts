@@ -2,6 +2,8 @@ import { api } from "../api/client";
 import { playPCMChunks } from "../util/audio";
 import { PCMStreamDecoder, type PCMChunk } from "../util/pcm-stream";
 
+import { readVoice, waitForVoice } from "../util/voice-read";
+
 const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 
 export async function playSpeechStream(id: string, format: string, token: number, signal: AbortSignal) {
@@ -17,7 +19,7 @@ export async function playSpeechStream(id: string, format: string, token: number
     let offset = 0;
     for (;;) {
       if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-      const chunk = await api.voiceRequestAudioChunk(id, offset, signal);
+      const chunk = await readVoice(() => api.voiceRequestAudioChunk(id, offset, signal), signal);
       if (signal.aborted || chunk.state === "canceled") throw new DOMException("Aborted", "AbortError");
       if (chunk.state === "failed") throw new Error(chunk.error?.message || "Speech generation failed");
       const data = Uint8Array.from(atob(chunk.data ?? ""), (character) => character.charCodeAt(0));
@@ -28,7 +30,7 @@ export async function playSpeechStream(id: string, format: string, token: number
       const pcm = decoder.push(data);
       if (pcm) yield pcm;
       if (chunk.done) { decoder.finish(); return; }
-      if (!data.length) await waitForAudio(100, signal);
+      if (!data.length) await waitForVoice(100, signal);
     }
   }
   try {
@@ -37,13 +39,4 @@ export async function playSpeechStream(id: string, format: string, token: number
     parent.removeEventListener("abort", abort);
     window.removeEventListener("magichandy:audio-stop", abort);
   }
-}
-
-function waitForAudio(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const abort = () => { clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); };
-    const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, ms);
-    if (signal.aborted) abort();
-    else signal.addEventListener("abort", abort, { once: true });
-  });
 }

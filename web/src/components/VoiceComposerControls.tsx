@@ -5,6 +5,7 @@ import { MicrophoneIcon } from "../shell/icons";
 import { encodePCM16WAV, recordingToWAV } from "../util/recording";
 import { VoiceActivitySegmenter } from "../util/voice-activity";
 import { openPCMStream, type PCMStream } from "../util/voice-capture";
+import { readVoice, waitForVoice } from "../util/voice-read";
 import { RangeInput } from "./RangeInput";
 
 const HOLD_RECORDING_LIMIT_SECONDS = 30;
@@ -711,12 +712,12 @@ async function waitForTranscript(requestID: string, canceled: () => boolean, sig
       await api.voiceRequestCancel(requestID).catch(() => undefined);
       return "";
     }
-    const res = await api.voiceRequest(requestID, signal);
+    const res = await readVoice(() => api.voiceRequest(requestID, signal), signal);
     const request = res.request;
     if (request.role !== "asr" || request.type !== "transcribe") throw new Error(t("The voice worker returned the wrong request."));
     if (request.state === "done") return request.transcript?.[0]?.text?.trim() ?? "";
     if (request.state === "failed") throw new Error(request.error?.message || t("Transcription failed."));
     if (request.state === "canceled") return "";
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    await waitForVoice(150, signal);
   }
 }

@@ -120,7 +120,11 @@ func assertSampledJoinContinuity(t *testing.T, next MotionPlan, bridge *planTran
 		leftA, rightA := p(0)-2*p(-1)+p(-2), p(2)-2*p(1)+p(0)
 		// One-sided finite differences span two milliseconds; allow the bounded
 		// change in acceleration over that interval, not a discontinuous jump.
-		if math.Abs(leftV-rightV) > 1e-4 || math.Abs(leftA-rightA) > 6e-5 {
+		// Each acceleration estimate is centered one millisecond away from
+		// the join. Their allowed difference follows the actual jerk envelope.
+		// assertLayeredSplice separately checks exact C2 continuity at 1e-7.
+		accelerationDifference := 2*flowJerkBudget/1e9 + 1e-8
+		if math.Abs(leftV-rightV) > 1e-4 || math.Abs(leftA-rightA) > accelerationDifference {
 			t.Fatalf("sampled join is discontinuous at %d: velocity %g/%g acceleration %g/%g", at, leftV, rightV, leftA, rightA)
 		}
 	}

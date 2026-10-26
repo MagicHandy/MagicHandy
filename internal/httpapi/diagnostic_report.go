@@ -190,7 +190,8 @@ func (s *Server) diagnosticStatus(r *http.Request) map[string]any {
 		"go_version": runtime.Version(), "cpu_threads": runtime.NumCPU(), "uptime_seconds": int64(time.Since(s.started).Seconds()),
 		"browser_user_agent": r.UserAgent(), "stop_sequence": s.stopSequence.Load(), "motion_simulated": s.motion.simulated,
 		"motion": s.clientMotionState(r), "modes": mode, "llm": s.llmState(r.Context()), "voice_workers": s.voice.Status(),
-		"transport": diagnosticTransportSummary(s.transport.Diagnostics()), "cloud_transport": diagnosticTransportSummary(s.cloudDiagnostics()), "bluetooth_transport": diagnosticTransportSummary(s.bluetoothDiagnostics()),
+		"voice_requests": diagnosticVoiceRequests(s.voice.Requests()),
+		"transport":      diagnosticTransportSummary(s.transport.Diagnostics()), "cloud_transport": diagnosticTransportSummary(s.cloudDiagnostics()), "bluetooth_transport": diagnosticTransportSummary(s.bluetoothDiagnostics()),
 		"native_bluetooth_transport": s.nativeBluetoothSnapshot(),
 		"intiface_transport":         intiface, "media_tools": tools, "trace_summary": s.traces.Summary(),
 	}

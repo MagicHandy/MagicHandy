@@ -12,7 +12,7 @@ type controllerRequestBindingKey struct{}
 // advances engine work; its own request detaches before rotating ownership.
 type controllerRequestBinding struct {
 	mu     sync.Mutex
-	cancel context.CancelFunc
+	cancel context.CancelCauseFunc
 	detach func() bool
 }
 
@@ -22,7 +22,7 @@ func (b *controllerRequestBinding) bind(controller *controllerRuntime, actor con
 	if b.detach != nil {
 		return true
 	}
-	b.detach = controller.bindRequest(actor, b.cancel)
+	b.detach = controller.bindRequestCause(actor, b.cancel)
 	return b.detach != nil
 }
 
@@ -38,13 +38,19 @@ func (b *controllerRequestBinding) release() bool {
 }
 
 func (c *controllerRuntime) bindRequest(actor controllerIdentity, cancel context.CancelFunc) func() bool {
+	return c.bindRequestCause(actor, func(error) { cancel() })
+}
+
+// bindRequestCause also tells the work why its ownership lifetime ended:
+// Emergency Stop or an ownership change.
+func (c *controllerRuntime) bindRequestCause(actor controllerIdentity, cancel context.CancelCauseFunc) func() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.snapshotLocked(actor).Active {
 		return nil
 	}
 	if c.requests == nil {
-		c.requests = make(map[uint64]context.CancelFunc)
+		c.requests = make(map[uint64]context.CancelCauseFunc)
 	}
 	c.requestID++
 	id := c.requestID

@@ -157,6 +157,14 @@ establish behavior under every endpoint-security policy.
 
 Level: Medium
 
+October 26: rich generated contexts were rejected by the typed-message limit
+before inference. They now use the complete request budget. Consecutive failed
+motion decisions are visible separately from deliberate holds, and spoken
+check-ins retain their generating provider/model. A 12-turn hosted replay
+confirms autonomous development while preserving counted motifs and explicit
+holds; a second model's unavailable responses are retained as failures. See
+the [follow-up](autopilot-admission-review-2026-10-26.md).
+
 With Auto timing on, a hosted planner sets how long each stretch plays. A model
 could keep one pattern far longer than the person wants, settle on one length,
 or choose short horizons that raise request volume and plan usage. It could also
@@ -785,6 +793,20 @@ matched run must still record selected model/profile, transport, latency,
 trace, subjective continuity,
 and Emergency Stop before physical acceptance is claimed. See
 `docs/motion-calibration.md`.
+
+Status 2026-10-26 Layered speed integration: the former quiet envelope and
+duplicated conservative clock caused early pace saturation. Alpha.75 adopts
+the physically accepted shared Creative envelope and cruise fitting, within
+the same device velocity ceiling, while retaining explicit softness and rate
+contrast. The UI shows effective/requested pace as a command estimate. Exact
+kinematic and monotonicity checks gate large speed handoffs, including joins
+inside the same next stroke when a turn-only join is infeasible. A 132-case
+rendered matrix and simulated Cloud retarget/Stop capture cover integration.
+Physical feedback covers three Original Handy Cloud fixtures only; other
+transports/models and arbitrary modulation remain unverified. The reported
+installed full-range run still felt slower than matched command timing, so
+that discrepancy is not declared fixed. See
+`docs/layered-speed-support-review-2026-10-26.md` and the alpha.75 review.
 
 Status 2026-08-20 range-envelope follow-up: Creative now separates outer
 geometry, a model-selected 20%-or-wider span floor/profile, center/rhythm
@@ -1539,6 +1561,15 @@ Exit evidence:
 ## R17: Local TTS Quality, Performance, And Module Lifecycle
 
 Level: Medium
+
+October 26 follow-up: a mid-stream CUDA allocation failure was reproduced with
+an alive but unusable Qwen process. Managed stream failures now invalidate
+readiness and explicit retry replaces the owned child. Loading has its own
+supervisor-owned state, health polls cannot overwrite it, and canceled/stale
+callers cannot stop a replacement. Parakeet child failures persist across
+polls. The [pressure review](voice-reliability-review-2026-10-26.md) includes
+recovery and shared-GPU measurements. The reporter's exact 12 GB configuration
+remains untested, so the risk stays open.
 
 Description:
 The NeuTTS experiment proved the optional worker boundary and fast persistent
@@ -2419,6 +2450,19 @@ three-artifact reviewed setup path without reusing or moving alpha.12.
 ## R29: Authenticated LAN Session And Credential Risk
 
 Level: High
+
+Review update 2026-10-25: Emergency Stop during a signed-in reply reset its
+HTTP/2 stream through the immediate cancellation deadline, so browsers showed
+only their own “network error”. That unanchored failure then resurfaced below
+every later reply. Stop now cancels with its own cause and a bounded two-second
+socket grace, so the stream closes with its Stop reason. Takeover, ownership
+loss, revocation and expiry still interrupt at once. Reads share the grace:
+during verification, an immediate read deadline left a cleanly closed HTTP/1.1
+keep-alive connection serving the tab's later requests already canceled, and
+session checks returned 503 for seconds. The browser cancels its own reply when
+its Stop is pressed and anchors live failures to their requests. HTTP/2,
+HTTP/1.1 keep-alive and browser regressions cover these; see the
+[review](stop-network-error-review-2026-10-25.md).
 
 The [saved recovery checkpoint](lan-wan-account-recovery.md) closes password
 verification/reset races and binds password/code mutations to still-live proof

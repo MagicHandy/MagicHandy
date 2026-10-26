@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import { audioPlaybackToken, installAudioPlaybackUnlock, playBlob, stopAllAudioPlayback } from "../util/audio";
 import { useAppState, useToast } from "./app-state";
 import { playSpeechStream } from "./voice-audio-stream";
+import { readVoice } from "../util/voice-read";
 import { UnsupportedPCMStream } from "../util/pcm-stream";
 
 interface VoicePlaybackValue {
@@ -53,7 +54,7 @@ async function waitForSpeech(requestId: string, signal: AbortSignal, progressive
   // minutes, so a second browser deadline would discard a valid request while
   // the backend is still loading or generating audio.
   for (;;) {
-    const response = await api.voiceRequest(requestId, signal);
+    const response = await readVoice(() => api.voiceRequest(requestId, signal), signal);
     const request = response.request;
     if (request?.role !== "tts" || request.type !== "speak") {
       throw new Error("the voice worker returned the wrong request");
@@ -81,7 +82,7 @@ async function prepareSpeech(requestId: string, signal: AbortSignal): Promise<Sp
     const ready = await waitForSpeech(requestId, signal);
     if (!ready) return { ok: false };
     if (typeof ready === "string") return { ok: true, format: ready };
-    return { ok: true, audio: await api.voiceRequestAudio(requestId, signal) };
+    return { ok: true, audio: await readVoice(() => api.voiceRequestAudio(requestId, signal), signal) };
   } catch (error) {
     return { ok: false, error };
   }
@@ -146,7 +147,7 @@ export function VoicePlaybackProvider({ children }: { children: ReactNode }) {
             } catch (error) {
               if (!(error instanceof UnsupportedPCMStream)) throw error;
               if (!await waitForSpeech(entry.id, entry.controller.signal, false)) continue;
-              const audio = await api.voiceRequestAudio(entry.id, entry.controller.signal);
+              const audio = await readVoice(() => api.voiceRequestAudio(entry.id, entry.controller.signal), entry.controller.signal);
               if (entry.controller.signal.aborted || entry.token !== audioPlaybackToken()) continue;
               await playBlob(audio, entry.token);
             }

@@ -106,22 +106,24 @@ type Supervisor struct {
 	role        Role
 	lifecycleMu sync.Mutex
 
-	mu         sync.Mutex
-	config     WorkerConfig
-	state      WorkerState
-	process    *exec.Cmd
-	conn       *conn
-	stderr     *tailBuffer
-	hello      Response
-	lastHealth Response
-	lastError  string
-	startedAt  time.Time
-	stopping   bool
-	queue      chan *PendingRequest
-	queued     int
-	activeID   string
-	nextID     uint64
-	exited     chan struct{}
+	mu             sync.Mutex
+	config         WorkerConfig
+	state          WorkerState
+	process        *exec.Cmd
+	conn           *conn
+	stderr         *tailBuffer
+	hello          Response
+	lastHealth     Response
+	modelOperation *modelOperation
+	modelRevision  uint64
+	lastError      string
+	startedAt      time.Time
+	stopping       bool
+	queue          chan *PendingRequest
+	queued         int
+	activeID       string
+	nextID         uint64
+	exited         chan struct{}
 }
 
 // NewSupervisor creates a stopped supervisor for one worker role.
@@ -222,6 +224,8 @@ func (s *Supervisor) start(ctx context.Context) error {
 	s.lastError = ""
 	s.hello = Response{}
 	s.lastHealth = Response{}
+	s.modelRevision++
+	s.modelOperation = nil
 	s.queue = queue
 	s.queued = 0
 	s.activeID = ""
@@ -229,7 +233,9 @@ func (s *Supervisor) start(ctx context.Context) error {
 	s.mu.Unlock()
 
 	go s.waitForExit(command, workerConn, exited)
-	go s.monitorConnection(command, workerConn, exited)
+	// A worker outlives the HTTP request that started it. Its exit/connection
+	// channels own this monitor's lifetime; individual probes remain bounded.
+	go s.monitorConnection(context.WithoutCancel(ctx), command, workerConn, exited)
 	go s.dispatchLoop(workerConn, queue)
 
 	hello, err := s.handshake(ctx, workerConn)
@@ -330,11 +336,21 @@ func (s *Supervisor) stop(ctx context.Context) error {
 	workerConn := s.conn
 	exited := s.exited
 	if process == nil {
-		s.state = s.idleStateLocked()
+		if s.state != StateCrashed {
+			s.state = s.idleStateLocked()
+		}
 		s.mu.Unlock()
 		return nil
 	}
 	s.stopping = true
+	s.modelRevision++
+	if operation := s.modelOperation; operation != nil {
+		operation.interrupted = context.Canceled
+		operation.cancel()
+		s.modelOperation = nil
+		s.lastHealth = Response{}
+		s.lastError = ""
+	}
 	s.mu.Unlock()
 
 	stopCtx, cancel := context.WithTimeout(ctx, shutdownGrace)
@@ -372,11 +388,26 @@ func (s *Supervisor) Restart(ctx context.Context) error {
 	return s.start(ctx)
 }
 
-func (s *Supervisor) monitorConnection(command *exec.Cmd, workerConn *conn, exited <-chan struct{}) {
-	select {
-	case <-exited:
-		return
-	case <-workerConn.closedChan():
+func (s *Supervisor) monitorConnection(ctx context.Context, command *exec.Cmd, workerConn *conn, exited <-chan struct{}) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+monitor:
+	for {
+		select {
+		case <-exited:
+			return
+		case <-workerConn.closedChan():
+			break monitor
+		case <-ticker.C:
+			s.mu.Lock()
+			probe := s.conn == workerConn && s.state == StateRunning && !s.stopping
+			s.mu.Unlock()
+			if probe {
+				probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+				_, _ = s.Health(probeCtx)
+				cancel()
+			}
+		}
 	}
 
 	s.mu.Lock()
@@ -401,6 +432,15 @@ func (s *Supervisor) waitForExit(command *exec.Cmd, workerConn *conn, exited cha
 
 	s.mu.Lock()
 	if s.conn == workerConn {
+		s.modelRevision++
+		if s.modelOperation != nil {
+			s.modelOperation.interrupted = workerConn.failure()
+			if s.stopping {
+				s.modelOperation.interrupted = context.Canceled
+			}
+			s.modelOperation.cancel()
+			s.modelOperation = nil
+		}
 		queue := s.queue
 		s.process = nil
 		s.conn = nil
@@ -471,89 +511,6 @@ func (s *Supervisor) roundTrip(ctx context.Context, workerConn *conn, request Re
 			return Response{}, ctx.Err()
 		}
 	}
-}
-
-// Health performs a live health round-trip and caches the result for status
-// snapshots. It fails fast when the worker is not running.
-func (s *Supervisor) Health(ctx context.Context) (Response, error) {
-	s.mu.Lock()
-	workerConn := s.conn
-	s.mu.Unlock()
-	if workerConn == nil {
-		return Response{}, fmt.Errorf("%s worker is not running", s.role)
-	}
-	response, err := s.roundTrip(ctx, workerConn, Request{Type: RequestHealth}, controlTimeout)
-	if err != nil {
-		s.recordControlFailure(err)
-		return Response{}, err
-	}
-	if response.Type == ResponseError {
-		s.recordControlFailure(response.Error)
-		return Response{}, response.Error
-	}
-	if response.Type != ResponseHealth {
-		err := fmt.Errorf("%s worker returned %q to health, want %q", s.role, response.Type, ResponseHealth)
-		s.recordControlFailure(err)
-		return Response{}, err
-	}
-	s.mu.Lock()
-	s.lastHealth = response
-	s.lastError = ""
-	s.mu.Unlock()
-	return response, nil
-}
-
-// SetModelLoaded asks the worker to load or unload its model.
-func (s *Supervisor) SetModelLoaded(ctx context.Context, loaded bool) (Response, error) {
-	s.mu.Lock()
-	workerConn := s.conn
-	s.mu.Unlock()
-	if workerConn == nil {
-		return Response{}, fmt.Errorf("%s worker is not running", s.role)
-	}
-	requestType := RequestUnload
-	timeout := controlTimeout
-	if loaded {
-		requestType = RequestLoad
-		if deadline, ok := ctx.Deadline(); ok {
-			if remaining := time.Until(deadline); remaining > timeout {
-				timeout = remaining
-			}
-		}
-	}
-	response, err := s.roundTrip(ctx, workerConn, Request{Type: requestType}, timeout)
-	if err != nil {
-		s.recordControlFailure(err)
-		return Response{}, err
-	}
-	if response.Type == ResponseError {
-		s.recordControlFailure(response.Error)
-		return Response{}, response.Error
-	}
-	wantState := ModelStateUnloaded
-	if loaded {
-		wantState = ModelStateReady
-	}
-	if response.Type != ResponseHealth || response.ModelState != wantState {
-		err := fmt.Errorf("%s worker returned %q with model state %q, want health/%s", s.role, response.Type, response.ModelState, wantState)
-		s.recordControlFailure(err)
-		return Response{}, err
-	}
-	s.mu.Lock()
-	s.lastHealth = response
-	s.lastError = ""
-	s.mu.Unlock()
-	return response, nil
-}
-
-func (s *Supervisor) recordControlFailure(err error) {
-	if err == nil {
-		return
-	}
-	s.mu.Lock()
-	s.lastHealth = Response{}
-	s.lastError = err.Error()
-	s.mu.Unlock()
 }
 
 // Status reports the current lifecycle snapshot without touching the worker.

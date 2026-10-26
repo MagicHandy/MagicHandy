@@ -5,6 +5,7 @@ package motion
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"testing"
@@ -44,6 +45,21 @@ func TestSpeedReviewRuntime(t *testing.T) {
 	if path == "" {
 		t.Skip("set MAGICHANDY_SPEED_RUNTIME_REPORT for an inert runtime capture")
 	}
+	initial, next := fullSpeedGesture(), fullSpeedGesture()
+	initial.SpeedPercent, next.SpeedPercent = 75, 90
+	runSpeedReviewRuntime(t, path, initial, next)
+}
+
+func TestLayeredSpeedSupportRuntime(t *testing.T) {
+	path := os.Getenv("MAGICHANDY_LAYERED_SPEED_RUNTIME_REPORT")
+	if path == "" {
+		t.Skip("set MAGICHANDY_LAYERED_SPEED_RUNTIME_REPORT for an inert Cloud capture")
+	}
+	runSpeedReviewRuntime(t, path, speedSupportSpec("full", 100), speedSupportSpec("two-upper-one-full", 100))
+}
+
+func runSpeedReviewRuntime(t *testing.T, path string, initial, next FlowSpec) {
+	t.Helper()
 	owner := &speedReviewTransport{transport.NewFake(transport.WithLatency(350 * time.Millisecond))}
 	traces := diagnostics.NewTraceRing(256)
 	engine, err := NewEngine(EngineOptions{Transport: owner, Traces: traces})
@@ -53,9 +69,7 @@ func TestSpeedReviewRuntime(t *testing.T) {
 	t.Cleanup(func() { _, _ = engine.Stop(context.Background(), "review cleanup") })
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMinPercent, settings.SpeedMaxPercent = 1, 100
-	spec := fullSpeedGesture()
-	spec.SpeedPercent = 75
-	target, err := FlowTarget(spec, settings)
+	target, err := FlowTarget(initial, settings)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,15 +78,16 @@ func TestSpeedReviewRuntime(t *testing.T) {
 	}
 	time.Sleep(3 * time.Second)
 	before := engine.Snapshot()
-	spec.SpeedPercent = 90
-	target, err = FlowTarget(spec, settings)
+	target, err = FlowTarget(next, settings)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := engine.ApplyTarget(t.Context(), target, "speed review retarget"); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(3 * time.Second)
+	// Let the buffered transition and new pattern both enter the playback
+	// window; an immediate Stop could otherwise cancel the whole new phrase.
+	time.Sleep(6 * time.Second)
 	after := engine.Snapshot()
 	stopped, err := engine.Stop(t.Context(), "speed review completed")
 	if err != nil || stopped.Running || before.LastError != "" || after.LastError != "" {
@@ -87,7 +102,8 @@ func TestSpeedReviewRuntime(t *testing.T) {
 		t.Fatal("command escaped Stop")
 	}
 	payloads := speedReviewCloudMappings(t, commands)
-	writeSpeedReviewReport(t, path, map[string]any{"simulated_append_latency_ms": 350, "before": before, "after": after, "stopped": stopped,
+	scenario := fmt.Sprintf("%s at %d%% → %s at %d%% → Stop", before.Target.PatternName, before.Target.SpeedPercent, after.Target.PatternName, after.Target.SpeedPercent)
+	writeSpeedReviewReport(t, path, map[string]any{"scenario": scenario, "simulated_append_latency_ms": 350, "before": before, "after": after, "stopped": stopped,
 		"commands": commands, "point_mapping_examples": payloads, "trace": traces.Export()})
 }
 

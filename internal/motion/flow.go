@@ -148,8 +148,11 @@ func (s FlowSpec) validateLayers() error {
 	return nil
 }
 
-const flowAccelerationBudget = 2400.0
-const flowJerkBudget = 24000.0
+// Layered uses the same fitted kinematic envelope as the other generated
+// stroke grammars. Softness and pace modulation belong to the authored score;
+// an additional quiet clock must not silently cap its requested travel rate.
+const flowAccelerationBudget = runtimeMaxAccelerationPercentPerSecond2
+const flowJerkBudget = runtimeMaxJerkPercentPerSecond3
 
 // FlowTarget compiles the score once into immutable kinematic content. The
 // ordinary engine owns playback, live limit changes, handoffs and Stop.
@@ -191,11 +194,6 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 	content := &preparedMotion{id: id, name: name, curve: curve, stream: window,
 		referenceRate: referenceTravelRateForSpeed(peakSpeed, settings.HandyModel),
 		acceleration:  flowAccelerationBudget, jerk: flowJerkBudget}
-	if spec.Gesture != nil || spec.Strokes != nil || spec.Freestyle != nil {
-		// The generated-stroke grammars use Creative's existing runtime envelope.
-		// Historical flow comparisons keep their quieter authoring budget.
-		content.acceleration, content.jerk = runtimeMaxAccelerationPercentPerSecond2, runtimeMaxJerkPercentPerSecond3
-	}
 	return MotionTarget{Label: name, Source: TargetSourceMotionLab,
 		SpeedPercent: peakSpeed, Flow: CloneFlowSpec(&spec), prepared: content}, nil
 }
@@ -325,18 +323,8 @@ func (s FlowSpec) flowClock(span, speed, pace, ceiling float64, handyModel strin
 	rate := referenceTravelRateForSpeed(lowerSpeed, handyModel)
 	rate += (referenceTravelRateForSpeed(min(lowerSpeed+1, 100), handyModel) - rate) * (speed - float64(lowerSpeed))
 	clockSpan := span + float64(s.CadenceHoldPercent)/100*(ceiling-span)
-	desired := 2 * clockSpan / (rate * pace)
-	accelerationTime := math.Pi * math.Sqrt(2*span/flowAccelerationBudget)
-	jerkTime := math.Pi * math.Cbrt(4*span/flowJerkBudget)
-	if s.TurnSoftnessPercent > 0 {
-		softness := float64(s.TurnSoftnessPercent) / 100
-		// Convex derivative bounds of cosine and the septic half-stroke.
-		// Exact compiled extrema still gate the shared plan below this clock.
-		accelerationTime *= math.Sqrt(1 + softness*((67.2/math.Sqrt(5))/(2*math.Pi*math.Pi)-1))
-		jerkTime *= math.Cbrt(1 + softness*(420/(4*math.Pi*math.Pi*math.Pi)-1))
-	}
-	// Smooth local clock limiting anticipates tight strokes without imposing
-	// their time requirement on every broad stroke. Exact extrema still gate playback.
-	period := math.Pow(math.Pow(desired, 8)+math.Pow(accelerationTime, 8)+math.Pow(jerkTime, 8), 1.0/8)
-	return 1000 * period
+	// Fit the actual joined strokes once, downstream. Combining a conservative
+	// cosine floor with the desired clock here, then fitting again, made even
+	// neutral full strokes saturate long before the selected speed ceiling.
+	return 2000 * clockSpan / (rate * pace)
 }

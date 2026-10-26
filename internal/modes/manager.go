@@ -79,7 +79,7 @@ type Options struct {
 	// CanAnnounce is false while autonomous speech would deepen a TTS backlog.
 	CanAnnounce func() bool
 	// Announce publishes an Autopilot line and optionally queues browser audio.
-	Announce func(ctx context.Context, say string) Announcement
+	Announce func(ctx context.Context, say string, source SpeechSource) Announcement
 	// ObserveChoice is a nonblocking observer of accepted local model choices.
 	// It must not do network work on the mode loop.
 	ObserveChoice func(DecisionInput, motion.ActiveMotionState)
@@ -107,6 +107,9 @@ type Status struct {
 	// "requested_hold" while the human asked chat to keep the motion as it is,
 	// or "interactive" when chat supplied the live target.
 	DecisionSource string `json:"decision_source,omitempty"`
+	// PlanningFailures counts consecutive failed motion decisions in this run.
+	// Deliberate holds and successful plans reset it; speech does not affect it.
+	PlanningFailures int `json:"planning_failures,omitempty"`
 	// LastSay is the most recent Autopilot line. The planner uses it to avoid
 	// repetition; the API retains it as diagnostic state while Chat owns display.
 	LastSay string `json:"last_say,omitempty"`
@@ -359,6 +362,7 @@ func (m *Manager) startNextSegment(ctx context.Context, mode string, reason stri
 	if operationCtx.Err() != nil {
 		return
 	}
+	m.recordPlanningOutcome(choice, generation)
 	if !choice.segment.hasContent() {
 		detail := "model did not provide a startable motion target"
 		if note := strings.TrimSpace(choice.note); note != "" {

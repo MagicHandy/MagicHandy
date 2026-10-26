@@ -44,7 +44,9 @@ func TestCanceledAutopilotWaiterDoesNotPublish(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 	done := make(chan modes.Announcement, 1)
-	go func() { done <- s.autopilotAnnounce(ctx, "queued synthetic announcement") }()
+	go func() {
+		done <- s.autopilotAnnounce(ctx, "queued synthetic announcement", modes.SpeechSource{Provider: "ollama", Model: "test-model"})
+	}()
 	select {
 	case announcement := <-done:
 		if announcement.Published {

@@ -6,7 +6,8 @@ import type { LLMModelManagerSnapshot, LLMProviderStatus, PublicSettings } from 
 import { ModelSettingsPanel } from "./ModelSettingsPanel";
 import { VoiceSettingsPanel } from "./VoiceSettingsPanel";
 
-const app = vi.hoisted(() => ({ show: vi.fn() }));
+const app = vi.hoisted(() => ({ show: vi.fn(), savedVoice: undefined as Record<string, unknown> | undefined }));
+const workerProps = vi.hoisted(() => vi.fn());
 
 vi.mock("../api/client", () => ({
   api: {
@@ -14,15 +15,20 @@ vi.mock("../api/client", () => ({
     llmStatus: vi.fn(),
     ollamaModels: vi.fn(),
     voiceStatus: vi.fn(),
+    setupStatus: vi.fn(() => new Promise(() => undefined)),
   },
 }));
 
 vi.mock("../state/app-state", () => ({
   useToast: () => ({ show: app.show }),
+  useAppState: () => ({ state: app.savedVoice ? { settings: { voice: app.savedVoice } } : null }),
 }));
 
 vi.mock("./VoiceWorkers", () => ({
-  VoiceWorkers: ({ role }: { role: string }) => <div>{role} worker readout</div>,
+  VoiceWorkers: (props: { role: string }) => {
+    workerProps(props);
+    return <div>{props.role} worker readout</div>;
+  },
 }));
 
 vi.mock("./VoiceRequestQueue", () => ({
@@ -91,6 +97,8 @@ describe("runtime panels", () => {
     llmStatus.mockReset();
     ollamaModels.mockReset();
     voiceStatus.mockReset();
+    workerProps.mockReset();
+    app.savedVoice = undefined;
     llmStatus.mockResolvedValue(providerStatus);
   });
 
@@ -276,10 +284,14 @@ describe("runtime panels", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("voice endpoint unavailable");
   });
 
-  it("does not flash the initial voice loading row during background polls", async () => {
+  it("keeps background polls quiet and labels a later poll failure as stale with Retry", async () => {
     vi.useFakeTimers();
     const snapshot = { voice: { enabled: false, protocol_version: 1, workers: {}, modules: {} }, requests: [] };
-    voiceStatus.mockResolvedValueOnce(snapshot).mockImplementation(() => new Promise(() => undefined));
+    voiceStatus
+      .mockResolvedValueOnce(snapshot)
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(snapshot)
+      .mockImplementation(() => new Promise(() => undefined));
     const view = render(
       <VoiceSettingsPanel
         settings={voiceSettings()}
@@ -293,15 +305,78 @@ describe("runtime panels", () => {
       />,
     );
 
-    expect(screen.getByText("Checking voice runtime...")).toBeInTheDocument();
     await act(async () => { await Promise.resolve(); });
-    expect(screen.queryByText("Checking voice runtime...")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
-    expect(voiceStatus).toHaveBeenCalledTimes(2);
-    expect(screen.queryByText("Checking voice runtime...")).not.toBeInTheDocument();
+    const notice = screen.getByRole("alert");
+    expect(notice).toHaveTextContent("Voice status is not updating");
+    expect(notice).toHaveTextContent("MagicHandy could not be reached.");
+    expect(notice).not.toHaveTextContent("Failed to fetch");
+
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Retry" })); });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(voiceStatus).toHaveBeenCalledTimes(3);
 
     view.unmount();
+  });
+
+  it("passes status progress to each worker and keeps the provider fields", async () => {
+    voiceStatus.mockImplementation(() => new Promise(() => undefined));
+    const settings = voiceSettings();
+    settings.voice = { ...settings.voice, enabled: true, asr_provider: "parakeet_managed", tts_provider: "faster_qwen3_tts" };
+    render(
+      <VoiceSettingsPanel
+        settings={settings}
+        locked={false}
+        dirty={false}
+        patch={vi.fn()}
+        newKey=""
+        setNewKey={vi.fn()}
+        clearKey={false}
+        setClearKey={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("asr worker readout")).toBeInTheDocument();
+    expect(screen.getByText("tts worker readout")).toBeInTheDocument();
+    expect(workerProps).toHaveBeenCalledWith(expect.objectContaining({ role: "asr", loaded: false, statusError: "", showParakeetModule: true }));
+    expect(screen.getByRole("checkbox", { name: "Enable voice" })).toHaveAccessibleDescription(/run only while voice is on/);
+    await act(async () => { await Promise.resolve(); });
+  });
+
+  it("keeps a running saved provider visible and labelled while the draft chooses another", () => {
+    voiceStatus.mockImplementation(() => new Promise(() => undefined));
+    const settings = voiceSettings();
+    app.savedVoice = { ...settings.voice, enabled: true, asr_provider: "parakeet_managed", tts_provider: "faster_qwen3_tts" };
+    settings.voice = { ...settings.voice, enabled: true, asr_provider: "none", tts_provider: "chatterbox_tts" };
+    const panel = (dirty: boolean) => (
+      <VoiceSettingsPanel settings={settings} locked={false} dirty={dirty} patch={vi.fn()} newKey="" setNewKey={vi.fn()} clearKey={false} setClearKey={vi.fn()} />
+    );
+    const view = render(panel(true));
+
+    const latest = (role: string) => {
+      const calls = workerProps.mock.calls.map(([props]) => props).filter((props) => props.role === role);
+      return calls[calls.length - 1];
+    };
+    expect(latest("asr")).toEqual(expect.objectContaining({ providerSelected: true, savedProviderLabel: "Parakeet (managed, local)", showParakeetModule: false }));
+    // The saved Qwen module readout must not appear under the Chatterbox draft.
+    expect(latest("tts")).toEqual(expect.objectContaining({ providerSelected: true, savedProviderLabel: "Faster Qwen3-TTS (managed)", showTTSModule: false }));
+
+    view.rerender(panel(false));
+    expect(latest("asr")).toEqual(expect.objectContaining({ providerSelected: false, savedProviderLabel: undefined }));
+  });
+
+  it("does not label a newly chosen provider when nothing was saved before", () => {
+    voiceStatus.mockImplementation(() => new Promise(() => undefined));
+    const settings = voiceSettings();
+    app.savedVoice = { ...settings.voice };
+    settings.voice = { ...settings.voice, asr_provider: "parakeet_managed", tts_provider: "faster_qwen3_tts" };
+    render(<VoiceSettingsPanel settings={settings} locked={false} dirty patch={vi.fn()} newKey="" setNewKey={vi.fn()} clearKey={false} setClearKey={vi.fn()} />);
+
+    const calls = workerProps.mock.calls.map(([props]) => props);
+    expect(calls.find((props) => props.role === "asr")).toEqual(expect.objectContaining({ providerSelected: true, savedProviderLabel: undefined, showParakeetModule: true }));
+    expect(calls.find((props) => props.role === "tts")).toEqual(expect.objectContaining({ showTTSModule: false }));
   });
 
   it("hides managed execution settings for Faster Qwen", async () => {

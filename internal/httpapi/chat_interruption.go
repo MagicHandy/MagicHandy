@@ -11,8 +11,11 @@ import (
 var (
 	errLLMSettingsChanged = fmt.Errorf("model settings changed: %w", context.Canceled)
 	errChatControlChanged = fmt.Errorf("controller changed or disconnected: %w", context.Canceled)
-	errChatAccessEnded    = fmt.Errorf("sign-in session ended: %w", context.Canceled)
-	errChatServerStopped  = fmt.Errorf("application shutting down: %w", context.Canceled)
+	// Emergency Stop ends admitted work without ending its owner's control, so
+	// a canceled response may still close normally (ADR 0029).
+	errChatEmergencyStop = fmt.Errorf("emergency stop: %w", context.Canceled)
+	errChatAccessEnded   = fmt.Errorf("sign-in session ended: %w", context.Canceled)
+	errChatServerStopped = fmt.Errorf("application shutting down: %w", context.Canceled)
 )
 
 const (
@@ -34,6 +37,8 @@ func (s *Server) chatInterruptionMessage(ctx context.Context, stop uint64, failu
 		cause   error
 		message string
 	}{
+		// Stop cancels admitted work just before it advances the sequence.
+		{errChatEmergencyStop, "Chat canceled by Emergency Stop."},
 		{errLLMSettingsChanged, chatChangedMessage},
 		{errChatControlChanged, chatControlChangedMessage},
 		{errChatAccessEnded, chatAccessEndedMessage},

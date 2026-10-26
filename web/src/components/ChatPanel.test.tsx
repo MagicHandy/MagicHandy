@@ -703,6 +703,144 @@ describe("ChatPanel history", () => {
     expect(getChatMessages).toHaveBeenCalledTimes(2);
   });
 
+  const bubbleTexts = () => [...document.querySelectorAll(".chat-message .chat-bubble")].map(node => node.textContent);
+
+  it("explains a dropped connection and keeps it under its own request", async () => {
+    const interrupted = "The reply was interrupted before it finished. Please try again.";
+    getChatMessages
+      .mockResolvedValueOnce({ messages: [], latest_seq: 0, cursor: 0, session_id: SESSION_ID })
+      .mockResolvedValueOnce({ messages: [{ seq: 1, role: "user", content: "First request", created_at: "now" }],
+        latest_seq: 1, cursor: 0, session_id: SESSION_ID })
+      .mockResolvedValueOnce({ messages: [
+        { seq: 2, role: "user", content: "Second request", created_at: "now" },
+        { seq: 3, role: "assistant", content: "Second reply", created_at: "now" },
+      ], latest_seq: 3, cursor: 0, session_id: SESSION_ID });
+    streamChatMock
+      .mockImplementationOnce(async (_sessionId, _message, onEvent) => {
+        onEvent({ event: "status", data: { user_seq: 1 } });
+        // What Chromium's stream reader throws when the response is reset.
+        throw new TypeError("network error");
+      })
+      .mockImplementationOnce(async (_sessionId, _message, onEvent) => {
+        onEvent({ event: "status", data: { user_seq: 2 } });
+        onEvent({ event: "message", data: { seq: 3, reply: "Second reply" } });
+        onEvent({ event: "done", data: { ok: true } });
+      });
+
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Message" }), { target: { value: "First request" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText(interrupted)).toBeInTheDocument();
+    expect(screen.queryByText("network error")).not.toBeInTheDocument();
+    expect(app.show).toHaveBeenCalledWith(interrupted, "error");
+    await waitFor(() => expect(getChatMessages).toHaveBeenCalledTimes(2));
+
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Second request" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(getChatMessages).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(bubbleTexts()).toEqual(["First request", interrupted, "Second request", "Second reply"]));
+  });
+
+  it("cancels the reply as soon as this tab presses Stop and keeps that notice in place", async () => {
+    getChatMessages
+      .mockResolvedValueOnce({ messages: [], latest_seq: 0, cursor: 0, session_id: SESSION_ID })
+      .mockResolvedValueOnce({ messages: [
+        { seq: 1, role: "user", content: "First request", created_at: "now" },
+        { seq: 2, role: "user", content: "Second request", created_at: "now" },
+        { seq: 3, role: "assistant", content: "Second reply", created_at: "now" },
+      ], latest_seq: 3, cursor: 0, session_id: SESSION_ID });
+    let firstSignal: AbortSignal | undefined;
+    streamChatMock
+      .mockImplementationOnce((_sessionId, _message, onEvent, signal) => {
+        firstSignal = signal;
+        onEvent({ event: "status", data: { user_seq: 1 } });
+        return new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+        });
+      })
+      .mockImplementationOnce(async (_sessionId, _message, onEvent) => {
+        onEvent({ event: "status", data: { user_seq: 2 } });
+        onEvent({ event: "message", data: { seq: 3, reply: "Second reply" } });
+        onEvent({ event: "done", data: { ok: true } });
+      });
+
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Message" }), { target: { value: "First request" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(firstSignal).toBeDefined());
+    // The Stop button announces itself before its request; the next state
+    // snapshot (stop_sequence) has not arrived yet.
+    act(() => { window.dispatchEvent(new Event("magichandy:emergency-stop")); });
+    expect(firstSignal?.aborted).toBe(true);
+    expect(await screen.findByText("Chat canceled by Emergency Stop.")).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Second request" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(getChatMessages).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(bubbleTexts()).toEqual(["First request", "Chat canceled by Emergency Stop.", "Second request", "Second reply"]));
+  });
+
+  it("lets an early Stop wait for the request it cancels, so its notice keeps its place", async () => {
+    getChatMessages
+      .mockResolvedValueOnce({ messages: [], latest_seq: 0, cursor: 0, session_id: SESSION_ID })
+      .mockResolvedValueOnce({ messages: [
+        { seq: 1, role: "user", content: "First request", created_at: "now" },
+        { seq: 2, role: "user", content: "Second request", created_at: "now" },
+        { seq: 3, role: "assistant", content: "Second reply", created_at: "now" },
+      ], latest_seq: 3, cursor: 0, session_id: SESSION_ID });
+    let firstSignal: AbortSignal | undefined;
+    let confirmRequest = () => {};
+    streamChatMock
+      .mockImplementationOnce((_sessionId, _message, onEvent, signal) => {
+        firstSignal = signal;
+        confirmRequest = () => onEvent({ event: "status", data: { user_seq: 1 } });
+        return new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+        });
+      })
+      .mockImplementationOnce(async (_sessionId, _message, onEvent) => {
+        onEvent({ event: "status", data: { user_seq: 2 } });
+        onEvent({ event: "message", data: { seq: 3, reply: "Second reply" } });
+        onEvent({ event: "done", data: { ok: true } });
+      });
+
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Message" }), { target: { value: "First request" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(firstSignal).toBeDefined());
+    act(() => { window.dispatchEvent(new Event("magichandy:emergency-stop")); });
+    // The request this reply answers is not confirmed yet.
+    expect(firstSignal?.aborted).toBe(false);
+    act(() => confirmRequest());
+    expect(firstSignal?.aborted).toBe(true);
+    expect(await screen.findByText("Chat canceled by Emergency Stop.")).toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getByRole("textbox", { name: "Message" })).toBeEnabled());
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "Second request" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(getChatMessages).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(bubbleTexts()).toEqual(["First request", "Chat canceled by Emergency Stop.", "Second request", "Second reply"]));
+  });
+
+  it("reports Stop when the canceled request ends before its reply begins", async () => {
+    getChatMessages.mockResolvedValueOnce({ messages: [], latest_seq: 0, cursor: 0, session_id: SESSION_ID });
+    let rejectRequest = () => {};
+    streamChatMock.mockImplementationOnce(() => new Promise<void>((_resolve, reject) => {
+      rejectRequest = () => reject(new Error("chat requires the current Emergency Stop sequence"));
+    }));
+
+    render(<ChatPanel sessionId={SESSION_ID} />);
+    fireEvent.change(await screen.findByRole("textbox", { name: "Message" }), { target: { value: "First request" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(streamChatMock).toHaveBeenCalledOnce());
+    act(() => { window.dispatchEvent(new Event("magichandy:emergency-stop")); });
+    await act(async () => rejectRequest());
+    expect(await screen.findByText("Chat canceled by Emergency Stop.")).toBeInTheDocument();
+    expect(screen.queryByText("chat requires the current Emergency Stop sequence")).not.toBeInTheDocument();
+  });
+
   it("restores a committed reply when Stop wins the retention-event race", async () => {
     getChatMessages
       .mockResolvedValueOnce({

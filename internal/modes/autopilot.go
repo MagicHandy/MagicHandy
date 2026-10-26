@@ -125,11 +125,12 @@ type PositionBand struct {
 // Decision is one motion or speech curation outcome. Hold is scheduler-only:
 // it must never produce an engine retarget.
 type Decision struct {
-	Vibration *motion.VibrationSpec
-	Segment   Segment
-	Pattern   *motion.PatternDefinition
-	Say       string
-	Hold      bool
+	SpeechSource SpeechSource
+	Vibration    *motion.VibrationSpec
+	Segment      Segment
+	Pattern      *motion.PatternDefinition
+	Say          string
+	Hold         bool
 	// Abstain holds without starting a replacement when no segment exists.
 	Abstain bool
 	// Requested marks a hold the human asked for in chat, so status can say why
@@ -151,11 +152,20 @@ type Announcement struct {
 	AwaitPlayback bool
 }
 
+// SpeechSource is captured when a check-in is generated. Changing role routing
+// before publication must not relabel an already generated line.
+type SpeechSource struct {
+	Provider string
+	Model    string
+}
+
 // DecideFunc produces one bounded autonomous decision.
 type DecideFunc func(ctx context.Context, input DecisionInput) (Decision, error)
 
 // segmentChoice is what one autonomous motion boundary applies.
 type segmentChoice struct {
+	failed          bool
+	speechSource    SpeechSource
 	vibration       *motion.VibrationSpec
 	segment         Segment
 	pattern         *motion.PatternDefinition
@@ -221,6 +231,10 @@ func (m *Manager) runDecision(ctx context.Context, decide DecideFunc, fallback b
 	decideCtx, cancel := context.WithTimeout(ctx, decisionTimeout)
 	started := m.options.Now()
 	decision, err := decide(decideCtx, input)
+	defer func() {
+		choice.speechSource = decision.SpeechSource
+		choice.failed = err != nil
+	}()
 	cancel()
 	latency := m.options.Now().Sub(started)
 	if latency < 0 {

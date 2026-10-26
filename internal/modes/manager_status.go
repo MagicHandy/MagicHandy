@@ -13,6 +13,7 @@ func (m *Manager) Status() Status {
 	deadline := m.motion.deadline
 	waitingForChat := m.chat.target == nil
 	decisionSource := m.events.decisionSource
+	planningFailures := m.events.planningFailures
 	lastSay := m.speech.lastSay
 	pendingMotion := m.motion.pending != nil
 	speechDeadline := m.speech.deadline
@@ -57,6 +58,7 @@ func (m *Manager) Status() Status {
 	}
 	if mode == ModeAutopilot {
 		status.DecisionSource = decisionSource
+		status.PlanningFailures = planningFailures
 		status.LastSay = lastSay
 		status.MotionPlanned = pendingMotion
 		status.SpeechWaitingPlayback = speechWaiting

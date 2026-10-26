@@ -150,6 +150,21 @@ describe("VoiceComposerControls", () => {
     expect(track.stop).toHaveBeenCalled();
   });
 
+  it("recovers a dropped transcript poll without submitting the recording twice", async () => {
+    voiceRequest.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const { onTranscript } = renderControls();
+    fireEvent.click(screen.getByRole("button", { name: /start hands-free listening/i }));
+    await screen.findByRole("button", { name: /stop hands-free listening/i });
+    act(() => {
+      for (let index = 0; index < 6; index++) emitPCM(new Float32Array(50).fill(0.2));
+      for (let index = 0; index < 6; index++) emitPCM(new Float32Array(50));
+    });
+    await waitFor(() => expect(onTranscript).toHaveBeenCalledWith("hello", undefined));
+    expect(voiceTranscribe).toHaveBeenCalledOnce();
+    expect(voiceRequest).toHaveBeenCalledTimes(2);
+    expect(onTranscript).toHaveBeenCalledOnce();
+  });
+
   it("keeps the capture-start Stop sequence when the final phrase is flushed", async () => {
     const props = {
       disabled: false,

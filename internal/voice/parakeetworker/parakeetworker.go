@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -96,10 +97,11 @@ type session struct {
 	writeMu sync.Mutex
 	writer  io.Writer
 
-	mu      sync.Mutex
-	loaded  bool
-	pending int
-	jobs    workerhost.Jobs
+	mu             sync.Mutex
+	loaded         bool
+	pending        int
+	managedFailure string
+	jobs           workerhost.Jobs
 
 	queue chan protocol.Request
 
@@ -172,7 +174,15 @@ func (s *session) handleHealth(request protocol.Request) {
 	s.mu.Unlock()
 	if s.runner != nil && loaded && !s.runner.Running() {
 		s.setLoaded(false)
-		s.sendError(request.ID, protocol.ErrorCodeInternal, "managed ASR server exited unexpectedly", true)
+		s.mu.Lock()
+		s.managedFailure = s.runner.failureMessage(errors.New("managed ASR server exited unexpectedly")).Error()
+		s.mu.Unlock()
+	}
+	s.mu.Lock()
+	failure := s.managedFailure
+	s.mu.Unlock()
+	if failure != "" {
+		s.sendError(request.ID, protocol.ErrorCodeInternal, failure, true)
 		return
 	}
 	s.send(s.healthResponse(request.ID))
@@ -208,6 +218,9 @@ func (s *session) handleLoad(request protocol.Request) {
 
 func (s *session) handleUnload(request protocol.Request) {
 	s.setLoaded(false)
+	s.mu.Lock()
+	s.managedFailure = ""
+	s.mu.Unlock()
 	s.cancelAll()
 	if s.runner != nil {
 		if err := s.runner.Stop(); err != nil {
@@ -446,6 +459,9 @@ func (s *session) canceledLocked(id string) bool { return s.jobs.Canceled(id) }
 func (s *session) setLoaded(loaded bool) {
 	s.mu.Lock()
 	s.loaded = loaded
+	if loaded {
+		s.managedFailure = ""
+	}
 	s.mu.Unlock()
 }
 

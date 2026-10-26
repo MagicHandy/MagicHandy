@@ -939,13 +939,13 @@ describe("app shell safety invariants", () => {
     expect(await screen.findByRole("heading", { name: /^voice$/i })).toBeInTheDocument();
     // Provider choices remain visible, but an unconfigured role does not add a
     // second, redundant status card below its provider field.
-    expect(screen.getAllByText(/speech output \(tts\)/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(/speech input \(asr\)/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.queryByText(/^status$/i)).toBeNull();
+    expect(screen.getByRole("heading", { name: /^speech output$/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^speech input$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: /speech (input|output) status/i })).toBeNull();
     expect(screen.queryByText(/^disabled$/i)).toBeNull();
     expect(screen.queryByRole("region", { name: /voice queue/i })).toBeNull();
     // A missing/disabled worker never blocks the app or adds a row of unusable controls.
-    expect(screen.queryByRole("button", { name: /^(start|stop|restart|load model|unload model|send test)$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^(start|stop|try again|load model|unload model|play sample|test input)$/i })).toBeNull();
     expect(screen.getByRole("button", { name: /emergency stop/i })).toBeEnabled();
   });
 
@@ -975,10 +975,13 @@ describe("app shell safety invariants", () => {
 
     expect(await screen.findByRole("combobox", { name: /speech input provider/i })).toHaveValue("parakeet_managed");
     expect(screen.queryByText(/runtime source/i)).toBeNull();
-    expect(await screen.findByRole("status", { name: /magichandy parakeet module/i })).toHaveTextContent(/worker, runner, and model are installed/i);
+    // An installed module is a fact for the details; the status says what to do next.
+    expect(await screen.findByRole("status", { name: /speech input status/i })).toHaveTextContent(/turn on enable voice above, then save/i);
+    fireEvent.click(screen.getByText("Technical details"));
+    expect(screen.getByText(/worker, runner, and model are installed/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /repair parakeet/i }));
     await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => String(url).includes("/api/setup/parakeet/install") && (init as RequestInit | undefined)?.method === "POST")).toBe(true));
-    expect(screen.getByText(/enable voice workers and save; start will appear/i)).toBeInTheDocument();
+    expect(await screen.findByRole("status", { name: /speech input status/i })).toHaveTextContent(/installing/i);
     expect(screen.queryByRole("textbox", { name: /custom parakeet-server path/i })).toBeNull();
 
     fireEvent.click(screen.getByText("Advanced"));
@@ -1151,7 +1154,8 @@ describe("app shell safety invariants", () => {
     expect(start).toBeEnabled();
     const providers = screen.getAllByRole("combobox", { name: /provider/i });
     fireEvent.change(providers[1], { target: { value: "elevenlabs" } });
-    expect(await screen.findByText(/save settings to apply/i)).toBeInTheDocument();
+    // The status stays the saved worker's, and says so while the draft differs.
+    expect(await screen.findByText(/this status is for the saved provider, custom worker\. save settings/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^start$/i })).toBeDisabled();
   });
 

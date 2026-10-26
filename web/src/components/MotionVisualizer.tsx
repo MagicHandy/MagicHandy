@@ -79,7 +79,7 @@ export function MotionVisualizer({ motion, mini = false, device, kind: kindOverr
     ? `${Math.round(clampPercent(engine.target.speed_percent, 0))}%`
     : "--";
   const dynamic = active ? engine?.target?.dynamic : undefined;
-  const pace = dynamic ? engine?.pace : undefined;
+  const pace = active ? engine?.pace : undefined;
   const paceEffective = pace && Number.isFinite(pace.effective_percent)
     ? Math.round(clampPercent(pace.effective_percent, 0))
     : undefined;
@@ -91,7 +91,7 @@ export function MotionVisualizer({ motion, mini = false, device, kind: kindOverr
     : speed;
   const paceLimiterLabels = (pace?.limiters ?? []).map(paceLimiterLabel);
   const paceTitle = paceEffective !== undefined && paceRequested !== undefined
-    ? `${t("Effective {effective}%; requested {requested}%.", { effective: paceEffective, requested: paceRequested })}${pace?.limited && paceLimiterLabels.length ? ` ${t("Limited by {limiters}.", { limiters: paceLimiterLabels.join(", ") })}` : ""}`
+    ? `${t("Effective {effective}%; requested {requested}%.", { effective: paceEffective, requested: paceRequested })} ${t("Commanded estimate, not measured device speed.")}${pace?.limited && paceLimiterLabels.length ? ` ${t("Limited by {limiters}.", { limiters: paceLimiterLabels.join(", ") })}` : ""}`
     : "";
   const resolvedPatternName = engine?.target?.pattern_name?.trim() || engine?.target?.pattern_id?.trim();
   const resolvedMediaName = engine?.target?.source === "media"
@@ -161,15 +161,17 @@ export function MotionVisualizer({ motion, mini = false, device, kind: kindOverr
         } as DrawingProps["svgProps"]}
       />
       {!mini && (
-        <div className="viz-telemetry">
-          <div className="viz-summary">
-            <span className="viz-state"><span className="viz-state-dot" aria-hidden="true" />{stateLabel}</span>
-            <span className="viz-commanded" title={handy ? t("{n}%", { n: roundedPosition }) : undefined}><strong>{handy ? t("{n} mm", { n: millimetres }) : t("{n}%", { n: roundedPosition })}</strong><small>{t("commanded")}</small></span>
-          </div>
-          <div className="viz-pattern">
-            <span>{dynamic ? t("Motion") : t("Pattern")}</span>
-            <strong title={patternName}>{patternName}</strong>
-            {dynamicMeta && <small title={dynamicMeta}>{dynamicMeta}</small>}
+        <>
+          <div className="viz-telemetry">
+            <div className="viz-summary">
+              <span className="viz-state"><span className="viz-state-dot" aria-hidden="true" />{stateLabel}</span>
+              <span className="viz-commanded" title={handy ? t("{n}%", { n: roundedPosition }) : undefined}><strong>{handy ? t("{n} mm", { n: millimetres }) : t("{n}%", { n: roundedPosition })}</strong><small>{t("commanded")}</small></span>
+            </div>
+            <div className="viz-pattern">
+              <span>{dynamic ? t("Motion") : t("Pattern")}</span>
+              <strong title={patternName}>{patternName}</strong>
+              {dynamicMeta && <small title={dynamicMeta}>{dynamicMeta}</small>}
+            </div>
           </div>
           {dynamic ? (
             <dl className="viz-metrics dynamic-metrics">
@@ -178,7 +180,7 @@ export function MotionVisualizer({ motion, mini = false, device, kind: kindOverr
                 <dd>{dynamicSectionLabel ? dynamicSectionLabel : <>{formatNumber(dynamic.center_percent)}%</>}</dd>
               </div>
               <div><dt>{t("Span")}</dt><dd>{dynamicSpan}</dd></div>
-              <div><dt>{t("Pace")}</dt><dd title={paceTitle} aria-label={paceTitle || undefined}>{paceDisplay}</dd></div>
+              <div><dt>{t("Estimated pace")}</dt><dd title={paceTitle} aria-label={paceTitle || undefined}>{paceDisplay}</dd></div>
               <div><dt>{t("Variation")}</dt><dd>{dynamicVariation}</dd></div>
             </dl>
           ) : (
@@ -188,8 +190,8 @@ export function MotionVisualizer({ motion, mini = false, device, kind: kindOverr
                 <dd>{Math.round(min)}-{Math.round(max)}%</dd>
               </div>
               <div>
-                <dt>{t("Speed")}</dt>
-                <dd>{speed}</dd>
+                <dt>{pace ? t("Estimated pace") : t("Speed")}</dt>
+                <dd title={paceTitle || undefined} aria-label={paceTitle || undefined}>{pace ? paceDisplay : speed}</dd>
               </div>
               <div>
                 <dt>{t("Source")}</dt>
@@ -197,7 +199,7 @@ export function MotionVisualizer({ motion, mini = false, device, kind: kindOverr
               </div>
             </dl>
           )}
-        </div>
+        </>
       )}
     </div>
   );
