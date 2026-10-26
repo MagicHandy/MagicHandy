@@ -45,6 +45,9 @@ func layeredPaceTransition(previous MotionPlan, active *planTransition, next *Mo
 	if bridge := fitLayeredSplice(previous, next, start, start, from, to, v, a, endAcceleration, preferred, phase, boundedBudget); bridge != nil {
 		return bridge
 	}
+	if bridge := fitLayeredInteriorSplice(previous, next, start, start, endIndex, boundedBudget); bridge != nil {
+		return bridge
+	}
 	// Near a turn the inherited momentum may not permit a monotone splice to
 	// that destination. Finish the already moving stroke, then splice the next
 	// stroke from its actual state; never blend opposed oscillators to force it.
@@ -75,6 +78,9 @@ func deferredLayeredSplice(previous MotionPlan, next *MotionPlan, start int64, o
 		if bridge := fitLayeredSplice(previous, next, start, strokeStart, from, to, v, a, endAcceleration, preferred, phase, boundedBudget); bridge != nil {
 			return bridge
 		}
+		if bridge := fitLayeredInteriorSplice(previous, next, start, strokeStart, endIndex, boundedBudget); bridge != nil {
+			return bridge
+		}
 		strokeStart += max(int64(1), int64(math.Ceil(float64(oldKnots[endIndex].TimeMillis-oldKnots[previousIndex].TimeMillis)*oldFactor)))
 	}
 	return nil
@@ -101,19 +107,25 @@ func fitLayeredSplice(previous MotionPlan, next *MotionPlan, start, strokeStart 
 }
 
 func fitLayeredSpliceShape(previous MotionPlan, next *MotionPlan, start, strokeStart int64, from, to, v, a, endAcceleration float64, preferred int64, phase float64, budget legBudget, singleCrest bool) *planTransition {
+	return fitLayeredSpliceState(previous, next, start, strokeStart, from, to, v, a, 0, endAcceleration, preferred, phase, budget, singleCrest)
+}
+
+func fitLayeredSpliceState(previous MotionPlan, next *MotionPlan, start, strokeStart int64, from, to, v, a, endVelocity, endAcceleration float64, preferred int64, phase float64, budget legBudget, singleCrest bool) *planTransition {
 	if (to-from)*v < -1e-9 || math.Abs(to-from) < 1 {
 		return nil
 	}
 	// Search near the requested remaining stroke duration in both directions.
 	// A long stroke can overshoot with its inherited velocity just as a short
 	// one can exceed jerk; feasibility is not monotone in duration.
-	for step := range 25 {
+	// Fast destination turns can leave only a narrow feasible timing interval.
+	// A coarse 8% grid skipped valid joins after a large slow-to-fast edit.
+	for step := range 97 {
 		for _, direction := range []float64{1, -1} {
 			if step == 0 && direction < 0 {
 				continue
 			}
-			duration := max(int64(1), int64(math.Round(float64(preferred)*math.Pow(1.08, direction*float64(step)))))
-			segment := newQuinticSegment(CurvePoint{TimeMillis: 0, PositionPercent: from}, CurvePoint{TimeMillis: duration, PositionPercent: to}, v, 0, a, endAcceleration)
+			duration := max(int64(1), int64(math.Round(float64(preferred)*math.Pow(1.02, direction*float64(step)))))
+			segment := newQuinticSegment(CurvePoint{TimeMillis: 0, PositionPercent: from}, CurvePoint{TimeMillis: duration, PositionPercent: to}, v, endVelocity, a, endAcceleration)
 			if !monotoneLayeredBridge(segment, to-from, budget) {
 				continue
 			}

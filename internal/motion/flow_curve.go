@@ -9,11 +9,7 @@ func compileFlowCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	legs, durations := flowLegs(spec, handyModel)
 	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel),
 		acceleration: flowAccelerationBudget, jerk: flowJerkBudget}
-	curves, err := fitLegCurves(legs, durations, budget)
-	if err != nil {
-		return Curve{}, err
-	}
-	curve, err := assembleLegCurve(legs, curves, "flow")
+	curve, err := fitLayeredCurve(legs, durations, budget, "flow")
 	if err != nil {
 		return Curve{}, err
 	}
@@ -75,7 +71,7 @@ func flowLegs(spec FlowSpec, handyModel string) ([]gestureLeg, []int64) {
 			run++
 		}
 		legs = append(legs, gestureLeg{from: positions[start], to: positions[(start+run)%halves], weight: 1, softness: softness, sourceCycle: cycles[start]})
-		durations = append(durations, int64(math.Ceil(millis)))
+		durations = append(durations, layeredDurationMillis(millis))
 		offset += run
 	}
 	legs, durations = coalesceFlowChatter(legs, durations)

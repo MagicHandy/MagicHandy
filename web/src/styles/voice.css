@@ -224,34 +224,7 @@
   }
 }
 
-/* Voice settings keep module health, worker state, and active requests compact. */
-.voice-workers {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.voice-worker-row {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-
-.voice-worker-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.voice-worker-name {
-  font-weight: 600;
-  font-size: var(--fs-body);
-}
-
+/* Host path validation errors (HostPathField). */
 .voice-worker-error {
   color: var(--danger);
   max-block-size: 7.5rem;
@@ -260,54 +233,214 @@
   white-space: pre-wrap;
 }
 
-.voice-module-readout {
+/* Voice settings cards lead with their worker's status: dot and word, one
+   sentence, and only the actions that phase allows. Settings follow under a
+   rule. Text below the word lines up past the 8px dot and its 8px gap. */
+.voice-status {
+  container: voice-status / inline-size;
+  display: grid;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.voice-status > :not(.voice-status-head) {
+  margin: 0 0 0 16px;
+}
+
+.voice-status-head {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 10px 12px;
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: var(--fs-body);
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
 
-.voice-module-readout .status-dot {
-  flex: 0 0 auto;
-  margin-top: 0.35em;
-}
-
-.voice-module-message {
-  min-width: 0;
-  flex: 1 1 auto;
+.voice-status-readout {
   display: grid;
-  gap: 7px;
+  flex: 1 1 260px;
+  gap: 3px;
+  min-width: 0;
 }
 
-.voice-module-message progress {
+.voice-status-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--control-h);
+}
+
+.voice-status-label {
+  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.voice-status-message {
+  padding-inline-start: 16px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+  line-height: 1.45;
+}
+
+.voice-status-actions {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+}
+
+.voice-status .status-dot[data-state="idle"] {
+  background: var(--faint);
+}
+
+/* Not set up / not saved: something only this form or setup can supply. */
+.voice-status .status-dot[data-state="setup"] {
+  box-sizing: border-box;
+  border: 1.5px solid var(--muted);
+  background: transparent;
+}
+
+.voice-status-progress {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--fs-label);
+}
+
+.voice-status-progress progress {
   width: min(100%, 340px);
   height: 6px;
   accent-color: var(--accent);
 }
 
-.voice-module-actions {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
+/* A failure's own words, readable at body contrast; severity is carried by
+   the red dot and the Failed label beside it. */
+.voice-status-error {
+  max-block-size: 7.5rem;
+  padding: 8px 10px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text);
+  font-size: var(--fs-label);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
-.voice-module-actions .btn {
-  min-height: 34px;
-  padding: 6px 10px;
+.voice-status .voice-details {
   font-size: var(--fs-label);
 }
 
-.voice-module-setup-link {
-  flex: 0 0 auto;
-  margin-left: auto;
-  color: var(--accent);
-  font-weight: 600;
-  white-space: nowrap;
+.voice-details-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.voice-details-list > div {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr);
+  gap: 12px;
+}
+
+.voice-details-list dt {
+  color: var(--muted);
+}
+
+.voice-details-list dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.voice-details-request {
+  display: grid;
+  gap: 2px;
+}
+
+.voice-details-raw {
+  font-family: var(--font-mono);
+  font-size: var(--fs-hint);
+  white-space: pre-wrap;
+}
+
+.voice-details-caption {
+  margin: 10px 0 4px;
+  color: var(--muted);
+}
+
+.voice-details-output {
+  max-block-size: 12rem;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+  font-size: var(--fs-hint);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.voice-details .row-actions {
+  margin-top: 10px;
+}
+
+/* The status poll itself failing: page-level, above the cards. */
+.voice-status-notice {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  font-size: var(--fs-label);
+}
+
+.voice-status-notice-text {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.voice-status-notice-text > :not(.status-dot) {
+  grid-column: 2;
+}
+
+.voice-status-notice-text > .status-dot {
+  align-self: center;
+}
+
+.voice-status-notice-text strong {
+  color: var(--text);
+  font-size: var(--fs-body);
+}
+
+.voice-status-notice-text span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+@container voice-status (max-width: 480px) {
+  .voice-status-actions {
+    flex-basis: 100%;
+    justify-content: flex-start;
+    padding-inline-start: 16px;
+  }
+
+  .voice-details-list > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
 }
 
 .voice-request-queue {
@@ -384,17 +517,6 @@
   min-height: 32px;
   padding: 5px 10px;
   font-size: var(--fs-hint);
-}
-
-@media (max-width: 640px) {
-  .voice-module-readout {
-    flex-wrap: wrap;
-  }
-
-  .voice-module-actions {
-    width: 100%;
-    margin-left: 21px;
-  }
 }
 
 @media (max-width: 560px) {

@@ -195,6 +195,9 @@ func (p *PendingRequest) markCanceled() bool {
 	}
 	p.canceled = true
 	p.state = RequestStateCanceled
+	if p.completedAt.IsZero() {
+		p.completedAt = time.Now()
+	}
 	p.audio = nil
 	if p.writeCancel != nil {
 		p.writeCancel()
@@ -206,6 +209,9 @@ func (p *PendingRequest) invalidate() {
 	p.mu.Lock()
 	p.canceled = true
 	p.state = RequestStateCanceled
+	if p.completedAt.IsZero() {
+		p.completedAt = time.Now()
+	}
 	if p.writeCancel != nil {
 		p.writeCancel()
 	}
@@ -236,6 +242,7 @@ func (p *PendingRequest) fail(err *WorkerError) {
 		return
 	}
 	p.state = RequestStateFailed
+	p.completedAt = time.Now()
 	p.failure = err
 	p.mu.Unlock()
 }
@@ -247,6 +254,7 @@ func (p *PendingRequest) failAndCancel(err *WorkerError) *conn {
 		return nil
 	}
 	p.state = RequestStateFailed
+	p.completedAt = time.Now()
 	p.failure = err
 	if p.wire != nil && !p.cancelSent {
 		p.cancelSent = true
@@ -292,6 +300,7 @@ func (p *PendingRequest) timeOut(err *WorkerError) *conn {
 	}
 	p.canceled = true
 	p.state = RequestStateFailed
+	p.completedAt = time.Now()
 	p.failure = err
 	if p.wire != nil && !p.cancelSent {
 		p.cancelSent = true

@@ -420,7 +420,7 @@ func TestAutopilotAnnouncementIsDiscoverableByChatPlayback(t *testing.T) {
 	t.Cleanup(server.Close)
 	startSpeakingTTS(t, server, true)
 
-	announcement := server.autopilotAnnounce(t.Context(), "Shown and spoken autonomously.")
+	announcement := server.autopilotAnnounce(t.Context(), "Shown and spoken autonomously.", modes.SpeechSource{Provider: "ollama", Model: "test-model"})
 	messages, _, _ := getChatMessages(t, server, "")
 	if len(messages) != 1 || messages[0].Content != "Shown and spoken autonomously." {
 		t.Fatalf("autopilot message missing from chat: %+v", messages)
@@ -500,7 +500,7 @@ func TestAutopilotAnnouncementCarriesSessionMood(t *testing.T) {
 		t.Fatalf("seed mood: %v", err)
 	}
 
-	server.autopilotAnnounce(t.Context(), "Autonomous follow-up.")
+	server.autopilotAnnounce(t.Context(), "Autonomous follow-up.", modes.SpeechSource{Provider: "ollama", Model: "test-model"})
 	messages, _, _ := getChatMessages(t, server, "")
 	last := messages[len(messages)-1]
 	if last.Diagnostics == nil || last.Diagnostics.Mood != chat.MoodLoving {
@@ -529,7 +529,7 @@ func TestAutopilotAnnouncementCarriesPersonaProvenance(t *testing.T) {
 		t.Fatalf("bind persona: status %d body %s", recorder.Code, recorder.Body.String())
 	}
 
-	server.autopilotAnnounce(t.Context(), "Autonomous follow-up.")
+	server.autopilotAnnounce(t.Context(), "Autonomous follow-up.", modes.SpeechSource{Provider: "ollama", Model: "test-model"})
 	messages, _, _ := getChatMessages(t, server, "")
 	last := messages[len(messages)-1]
 	if last.Diagnostics == nil ||
@@ -562,7 +562,7 @@ func TestAutopilotAnnouncementDoesNotDeepenSpeechBacklog(t *testing.T) {
 		t.Fatal("existing speech never became active or queued")
 	}
 
-	server.autopilotAnnounce(t.Context(), "Visible while speech is busy.")
+	server.autopilotAnnounce(t.Context(), "Visible while speech is busy.", modes.SpeechSource{Provider: "ollama", Model: "test-model"})
 	messages, _, _ := getChatMessages(t, server, "")
 	if len(messages) != 1 || messages[0].Content != "Visible while speech is busy." {
 		t.Fatalf("autopilot message missing from chat: %+v", messages)
@@ -581,7 +581,7 @@ func TestCanceledAutopilotAnnouncementNeverEntersChat(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	server.autopilotAnnounce(ctx, "Do not publish this.")
+	server.autopilotAnnounce(ctx, "Do not publish this.", modes.SpeechSource{Provider: "ollama", Model: "test-model"})
 	messages, _, _ := getChatMessages(t, server, "")
 	if len(messages) != 0 {
 		t.Fatalf("canceled announcement entered chat: %+v", messages)

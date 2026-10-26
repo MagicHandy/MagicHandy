@@ -106,7 +106,8 @@ type motionHistoryState struct {
 }
 
 type modeEventState struct {
-	lastEvent      string
-	lastEventAt    time.Time
-	decisionSource string
+	planningFailures int
+	lastEvent        string
+	lastEventAt      time.Time
+	decisionSource   string
 }

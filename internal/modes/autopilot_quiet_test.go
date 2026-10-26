@@ -33,7 +33,10 @@ func TestSkippedCheckInWaitsForSpeechCadenceWithoutPublication(t *testing.T) {
 			return Decision{Hold: true, Abstain: true, Next: TimingLater}, nil
 		},
 		CanAnnounce: func() bool { return true },
-		Announce:    func(context.Context, string) Announcement { publications.Add(1); return Announcement{Published: true} },
+		Announce: func(context.Context, string, SpeechSource) Announcement {
+			publications.Add(1)
+			return Announcement{Published: true}
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -13,6 +13,7 @@ const app = vi.hoisted(() => ({
       status_at?: string;
       segment_index?: number;
       decision_source?: string;
+      planning_failures?: number;
       motion_change_in_ms?: number;
       motion_change_due_at?: string;
       speech_in_ms?: number;
@@ -121,6 +122,16 @@ describe("AutopilotControl", () => {
     render(<AutopilotControl />);
 
     expect(screen.getByRole("status")).toHaveTextContent("Segment 3 · Keeping the motion as you asked");
+  });
+
+  it("shows repeated planning failures and clears the notice on recovery", () => {
+    app.state = { modes: { mode: "autopilot", segment_index: 3, decision_source: "hold", planning_failures: 2 }, settings: {} };
+    const view = render(<AutopilotControl />);
+    expect(screen.getByRole("note")).toHaveTextContent("Autopilot couldn't plan the next change. It will retry.");
+    expect(screen.getByRole("link", { name: "Diagnostics" })).toHaveAttribute("href", "#/settings/diagnostics");
+    app.state.modes.planning_failures = 0;
+    view.rerender(<AutopilotControl />);
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
   it("keeps the control visible but disabled for read-only clients", () => {

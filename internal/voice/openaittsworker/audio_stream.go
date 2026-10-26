@@ -31,6 +31,14 @@ func (s *session) streamAudio(ctx context.Context, requestID string, reader io.R
 			break
 		}
 		if err != nil {
+			// An owned model can remain alive after a CUDA allocation/capture
+			// failure but be unusable for every later request. Do not report it
+			// as ready just because its Python process still exists. Intentional
+			// cancellation above is excluded from this recovery path.
+			if s.server != nil {
+				s.setLoaded(false)
+				s.setManagedFailure("Local speech generation was interrupted. Restart voice output and try again: " + sanitize(err.Error(), s.options.APIKey))
+			}
 			s.sendError(requestID, protocol.ErrorCodeInternal, "TTS audio stream was interrupted: "+sanitize(err.Error(), s.options.APIKey), true)
 			return
 		}

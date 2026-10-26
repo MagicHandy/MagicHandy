@@ -53,7 +53,7 @@ type announceLog struct {
 	says []string
 }
 
-func (a *announceLog) announce(_ context.Context, say string) Announcement {
+func (a *announceLog) announce(_ context.Context, say string, _ SpeechSource) Announcement {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.says = append(a.says, say)
@@ -554,7 +554,7 @@ func TestAutopilotAnnouncementContextCancelsWithStop(t *testing.T) {
 			settings.SpeechMaxSeconds = 8
 			return settings
 		},
-		Announce: func(ctx context.Context, _ string) Announcement {
+		Announce: func(ctx context.Context, _ string, _ SpeechSource) Announcement {
 			close(entered)
 			<-ctx.Done()
 			close(canceled)
@@ -622,7 +622,7 @@ func TestAutopilotSpeechClockIsIndependentAndPlaybackAware(t *testing.T) {
 			speechMu.Unlock()
 			return Decision{Hold: true, Say: "An independent line.", Next: TimingSoon}, nil
 		},
-		Announce: func(context.Context, string) Announcement {
+		Announce: func(context.Context, string, SpeechSource) Announcement {
 			return Announcement{Published: true, RequestID: "speech-1", AwaitPlayback: true}
 		},
 	})
@@ -692,7 +692,7 @@ func TestAutopilotSpeechMotionPreservesSpeechTimingChoice(t *testing.T) {
 				Next:    TimingLater,
 			}, nil
 		},
-		Announce: func(context.Context, string) Announcement {
+		Announce: func(context.Context, string, SpeechSource) Announcement {
 			return Announcement{Published: true, RequestID: "speech-motion-1", AwaitPlayback: true}
 		},
 	})
@@ -758,7 +758,7 @@ func TestAutopilotSpeechPublicationFailureDoesNotApplyMotion(t *testing.T) {
 				Variability: VariabilityRestless,
 			}, nil
 		},
-		Announce: func(context.Context, string) Announcement {
+		Announce: func(context.Context, string, SpeechSource) Announcement {
 			announcementOnce.Do(func() { close(announcementAttempted) })
 			return Announcement{}
 		},

@@ -100,3 +100,13 @@ chat, and projected chat ages. `TestLiveAutopilotAutoTiming` (build tag
 through an existing signed-in profile (`MAGICHANDY_HOSTED_DATA_DIR`, used in
 place, never copied) or a loopback llama.cpp control. Physical feel is not
 established by these runs.
+
+## Planning admission follow-up (2026-10-26)
+
+Generated Autopilot context is budgeted with the whole provider request, not
+the typed-message size limit. Repeated motion-planning failures are visible in
+backend status and Chat; speech cannot conceal those failures. A check-in's
+provider/model provenance follows its generated result rather than being read
+from current local settings at publication. Timing and prepared-decision
+invalidation are unchanged. See the
+[follow-up review](../autopilot-admission-review-2026-10-26.md).

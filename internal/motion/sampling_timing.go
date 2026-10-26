@@ -129,7 +129,7 @@ func fitQuantizedMotionTiming(samples, probes []MotionSample, mandatory map[int6
 			result[index].TimeMillis = min(latest[index-start], max(result[index-1].TimeMillis+minimum(result[index-1], result[index]), at))
 		}
 		if alignCrossings {
-			if err := verifyRetimedSamples(result[start:end+1], originalTimes, probes, resolution, tolerance); err != nil {
+			if err := verifyRetimedSamples(result[start:end+1], originalTimes, probes, resolution, positionTolerance); err != nil {
 				return nil, err
 			}
 		}
@@ -138,14 +138,28 @@ func fitQuantizedMotionTiming(samples, probes []MotionSample, mandatory map[int6
 	return result, nil
 }
 
-func verifyRetimedSamples(samples []MotionSample, originalTimes []int64, probes []MotionSample, resolution, tolerance float64) error {
+func verifyRetimedSamples(samples []MotionSample, originalTimes []int64, probes []MotionSample, resolution, positionTolerance float64) error {
 	for index := 1; index < len(samples); index++ {
 		changed := samples[index-1].TimeMillis != originalTimes[index-1] || samples[index].TimeMillis != originalTimes[index]
+		tolerance := quantizedIntervalTolerance(probes, samples[index-1].TimeMillis, samples[index].TimeMillis, resolution, positionTolerance)
 		if changed && !wireSegmentFits(samples[index-1], samples[index], probes, resolution, tolerance) {
 			return fmt.Errorf("quantized motion timing loses trajectory fidelity between %dms and %dms", samples[index-1].TimeMillis, samples[index].TimeMillis)
 		}
 	}
 	return nil
+}
+
+// Reserve interpolation error for the probes bracketing this actual segment.
+// A distant, sparse part of a transition must not consume the entire error
+// budget of a densely inspected fast leg. The position budget and A*dt²/8
+// bound are unchanged; only the interval used for that bound is corrected.
+func quantizedIntervalTolerance(probes []MotionSample, start, end int64, resolution, positionTolerance float64) float64 {
+	first := sort.Search(len(probes), func(i int) bool { return probes[i].TimeMillis >= start })
+	if first > 0 && (first == len(probes) || probes[first].TimeMillis > start) {
+		first--
+	}
+	last := sort.Search(len(probes), func(i int) bool { return probes[i].TimeMillis >= end })
+	return quantizedProbeTolerance(probes[first:min(last+1, len(probes))], resolution, positionTolerance)
 }
 
 // Crossing alignment is only meaningful within one direction of travel. A

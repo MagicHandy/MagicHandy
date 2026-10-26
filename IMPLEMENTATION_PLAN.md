@@ -8,6 +8,30 @@ UI behavior, model evidence and limitations.
 
 ## Core Direction
 
+The October 26 [Layered speed integration](docs/alpha75-release-review-2026-10-26.md)
+adopts the physically accepted Creative-envelope/cruise candidate in the shared
+compiler. Exact kinematic fitting replaces a duplicated conservative clock;
+large pace edits can join inside the same next stroke without dropping a turn.
+Softness, authored pace variation, device velocity limits and sparse Cloud
+sampling remain intact. The UI exposes effective/requested pace as a command
+estimate. Physical feedback covers Original Handy Cloud full, short and counted
+patterns; the installed-versus-controlled-run discrepancy remains unresolved.
+
+The October 26 [Autopilot follow-up](docs/autopilot-admission-review-2026-10-26.md)
+removes the typed-message gate from generated planning context while retaining
+whole-request budgeting. Repeated planning failures are visible separately
+from intentional holds, and spoken check-ins carry their generating model's
+identity. Live hosted replays cover autonomous variation, counted motifs and
+explicit holds through the existing compiler; no motion rules are added.
+
+The October 26 [voice reliability review](docs/voice-reliability-review-2026-10-26.md)
+adds supervisor-owned model loading, stale-result fencing, managed speech
+failure recovery, bounded browser read retries and private voice timing
+diagnostics. Claude's Graphite Voice settings redesign distinguishes startup,
+readiness and failure. Controlled CUDA/CPU pressure, real synthesis/transcription
+and an old/new llama.cpp comparison inform the changes; a poisoned CUDA process
+requires explicit replacement, while the existing short warm-up is retained.
+
 The [Edge holding control](docs/edge-hold-review-2026-10-23.md) uses a backend
 semantic override and the existing mode scheduler. Button activation performs
 no inference; Autopilot may subsequently choose a bounded duration and return.
@@ -3094,3 +3118,15 @@ the local model and each provider with the same Capability and Context rows.
 Reply length moved to Prompts & memory; the LLM motion mode and Pattern library
 options live only on the Chat page. See the [ADR 0058 amendment](docs/decisions/0058-model-capability-levels.md#amendment-every-model-has-a-level-2026-10-25)
 and the [settings review](docs/chat-model-settings-review-2026-10-25.md).
+
+## Stop during a signed-in reply (2026-10-25)
+
+Emergency Stop pressed while a signed-in reply streamed showed the browser's
+“network error”, and that bubble resurfaced under every later reply. Stop now
+cancels admitted work with its own cause and a bounded two-second socket grace,
+so the stream closes with “Chat canceled by Emergency Stop.”. Takeover and
+revocation still cut off at once. The chat panel cancels on its own Stop as
+soon as the reply names its request, explains dropped connections in the app's
+words and anchors live failures to their requests. See the
+[ADR 0029 amendment](docs/decisions/0029-session-bound-network-control.md) and
+the [review](docs/stop-network-error-review-2026-10-25.md).

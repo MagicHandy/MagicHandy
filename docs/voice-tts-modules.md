@@ -504,6 +504,28 @@ and passed to the worker only as `OPENAI_TTS_API_KEY`.
 
 ## Acceptance Checklist
 
+### Readiness, pressure and recovery (2026-10-26)
+
+The supervisor owns model loading across individual HTTP callers, reports
+loading/unloading without a competing health probe, and fences stale results
+after Stop or restart. Matching load requests share the same operation. A
+bounded background health probe runs every ten seconds in the existing worker
+connection monitor, including when Voice settings is closed.
+
+Managed Qwen readiness requires `model_loaded=true`. A broken managed audio
+stream marks the runtime unavailable; explicit retry replaces the owned child
+before reloading. A still-running Python process is not proof of a usable CUDA
+model. Deliberate cancellation is excluded, external services are not restarted,
+and synthesis is never silently replayed. Browser audio and status reads alone
+have bounded transient-network retries at the same byte offset.
+
+Voice settings separates ordinary loading from failures and keeps runtime
+output under Technical details. Diagnostic exports include recent timing and
+failure categories without speech content. See the
+[resource-pressure review](voice-reliability-review-2026-10-26.md) for live
+Qwen/Parakeet measurements, the unchanged warm-up choice and remaining hardware
+and browser acceptance.
+
 - first load and first playable clip complete without blocking the core;
 - warm repeated clips do not slur, truncate, or change speaker unexpectedly;
 - cancellation clears the active request and the next request succeeds;

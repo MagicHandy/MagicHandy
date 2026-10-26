@@ -73,8 +73,12 @@ Emergency Stop stays reachable throughout. Reloading keeps canonical chat
 history; expired repair actions are not reconstructed from diagnostic records.
 
 Interrupted replies use short, localized application explanations for a model
-timeout, changed settings, lost control or expired sign-in. An unknown cause
-asks the user to retry without claiming Emergency Stop. A committed reply stays
+timeout, changed settings, lost control or expired sign-in. An unknown cause,
+including a dropped connection, asks the user to retry without claiming
+Emergency Stop; the browser's raw error text is never shown. Stop pressed in
+this tab cancels its reply at once with “Chat canceled by Emergency Stop.”.
+Each failure stays beneath the request it answers, so later replies never move
+it. A committed reply stays
 visible when only its follow-up motion or speech was interrupted. Technical
 causes remain in Diagnostics; cancellation does not offer response repair.
 
@@ -1421,3 +1425,40 @@ every device by default, or keep going on healthy devices) and each device's
 timing offset. A degraded linked run shows one notice naming the devices it
 continues without, and marks them Connection lost; reconnecting never silently
 rejoins a run. Emergency Stop remains unconditional and reaches all outputs.
+
+## Autopilot planning status (2026-10-26)
+
+Autopilot's Chat panel shows a compact caution notice after two consecutive
+motion-planning failures, with a Diagnostics link. The backend counter drives
+it; it clears on a valid planning response or a new run. A spoken check-in
+does not clear motion-planning failure. No raw provider error or generated
+prompt is shown in this notice. Deliberate and user-requested holds retain
+their existing labels.
+
+## Motion pace readout (2026-10-26)
+
+Motion status shows the backend's effective/requested pace for Layered,
+Creative v2 and original Creative when available. The label is **Estimated
+pace**; the tooltip identifies both numbers and explains that they describe
+commands, not measured device speed. Range, pace and source occupy aligned
+label/value rows below the device drawing so a narrow sidebar does not crop
+the requested value or overlap the labels. Fixed patterns without a backend
+pace estimate retain their selected Speed readout.
+
+## Voice status (2026-10-26)
+
+Each Voice settings card leads with its worker status, a compact dot and word,
+one explanatory sentence and the actions that state allows. Provider settings
+follow below a separator. Loading comes from a tracked backend model operation
+or this tab's pending request and gives way to a newer reported failure.
+Loading is amber; only Ready is green. Start/test/Try again use saved settings;
+Stop/Cancel remain available with unsaved edits. A changed draft provider labels
+the still-running saved provider until the change is saved.
+
+Try again starts or restarts a failed worker. Long errors, output, versions,
+model state, request timings and Unload are in collapsed Technical details.
+An initial status-poll failure says Unavailable; a later failure retains the
+last-good snapshot with its time and disables stale runtime actions until a
+successful refresh. Operation epochs prevent an old Start or Test response
+from changing a newer action or queuing speech after Stop. See the
+[voice review](voice-reliability-review-2026-10-26.md).

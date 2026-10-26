@@ -1,5 +1,81 @@
 # Goal Scorecard
 
+## 2026-10-26 — Accepted Layered timing and readable pace estimates
+
+Against the Autopilot build below, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core **24,279,040 ->
+24,288,256 B** (+9,216 B). Main JS **1,306,865 -> 1,307,156 B raw**
+(+291 B), **351,495 -> 351,557 B gzip** (+62 B); CSS **210,176 ->
+210,037 B raw** (-139 B), **36,636 -> 36,604 B gzip** (-32 B). Canonical UI
+**2,840,073 -> 2,840,848 B** (+775 B), including locales. Gzip uses `mtime=0`.
+No dependency, worker, persistent timer, inference request or motion loop added.
+
+Three 300 ms benchmark repetitions on the review Ryzen 9950X3D, GOMAXPROCS=8,
+compare `FlowTarget` against the pre-integration Flow compiler via an ignored
+overlay. Six-cycle selected-100 full/short/compound medians are **0.162/0.164/
+0.048 -> 0.853/0.166/1.118 ms**. Their transient allocations are approximately
+**46/46/44 -> 524/68/648 kB per compilation**, reflecting the bounded optional
+cruise search. Selected-5 medians are **0.163/0.163/0.050 -> 0.135/0.133/
+0.048 ms**, with allocations approximately unchanged (44–46 kB). These are
+compilation costs on one host, not end-to-end chat latency or a low-end CPU
+guarantee. No idle RSS or cold-start improvement is claimed. Reports, fixture
+and baseline overlay remain under `.scratch/alpha75/`.
+
+See the [release review](alpha75-release-review-2026-10-26.md) for the rendered
+matrix, physical feedback and the unresolved installed-app speed distinction.
+
+## 2026-10-26 — Autopilot admission and failure visibility
+
+Against the voice-review build below, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: **24,268,800 ->
+24,279,040 B** (+10,240 B). Main JS **1,306,490 -> 1,306,865 B raw**
+(+375 B), **351,380 -> 351,495 B gzip** (+115 B); CSS **210,025 ->
+210,176 B raw** (+151 B), **36,606 -> 36,636 B gzip** (+30 B). Canonical
+UI **2,839,017 -> 2,840,073 B** (+1,056 B), including locale updates.
+No dependency, timer or goroutine added; status adds one bounded counter and
+speech carries two provenance strings. Context allocations are unchanged.
+Previously rejected generated prompts now reach the provider; this restores
+the intended model calls without adding an inference step. Twelve GPT-6 Sol
+decisions had median **5.17 s**, maximum **9.13 s** latency. No RSS or startup
+improvement is claimed. See the [Autopilot review](autopilot-admission-review-2026-10-26.md).
+
+## 2026-10-26 — Voice lifecycle, streaming recovery and Graphite settings
+
+Against the inherited local Stop-fix build below, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: **24,224,256 ->
+24,268,800 B** (+44,544 B). Main JS **1,293,472 -> 1,306,490 B raw**
+(+13,018 B), **347,598 -> 351,380 B gzip** (+3,782 B); CSS **208,113 ->
+210,025 B raw** (+1,912 B), **36,328 -> 36,606 B gzip** (+278 B). Canonical
+UI **2,806,183 -> 2,839,017 B** (+32,834 B), including five locale bundles.
+Gzip measured with Python `mtime=0`. No Go/npm/runtime dependency added.
+
+The existing worker connection monitor gains a ten-second health ticker with
+a bounded three-second probe; inactive voice has none. A model operation has
+one bounded owned goroutine, coalesced across callers, canceled by Stop/exit
+and capped at fifteen minutes for load or five seconds for unload. Browser
+read failures have at most three backoff timers (200/400/800 ms), canceled with
+the request. No extra synthesis request or persistent polling goroutine.
+
+After live text generation, speech playback and loading/cancel/restart checks,
+the review core sampled **81,100,800 B working set / 64,524,288 B private**;
+this is not an idle before/after benchmark or a memory-improvement claim.
+Optional Qwen alone reserved about **2776 MiB GPU memory**. Cold load and
+GPU/CPU contention measurements, recovery evidence and remaining hardware
+limits are in the [voice review](voice-reliability-review-2026-10-26.md).
+
+## 2026-10-25 — Stop closes signed-in chat replies cleanly
+
+Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags
+'-s -w'`: **24,220,160 -> 24,224,256 B** (+4,096 B) against `ad5450c2`. Main JS
+**1,292,736 -> 1,293,472 B raw** (+736 B) and **347,451 -> 347,598 B gzip**
+(+147 B); CSS is unchanged at **208,113 B / 36,328 B gzip**. Canonical UI
+**2,805,447 -> 2,806,183 B** (+736 B); gzip uses Python with `mtime=0`. No
+dependency, goroutine, worker or request is added. The only new timer is the
+chat panel's two-second fallback for a Stop pressed before a reply begins, and
+a Stop-canceled response may keep its socket for at most two seconds. No RSS
+or cold-start change is claimed. See the
+[review](stop-network-error-review-2026-10-25.md).
+
 ## 2026-10-25 — README donation QR codes
 
 The Ethereum and Bitcoin QR SVGs add **7,614 B** of documentation assets

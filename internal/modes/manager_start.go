@@ -12,6 +12,7 @@ func (m *Manager) resetForModeStartLocked(mode string) {
 	m.loop.mode = mode
 	m.resetUserPauseLocked()
 	m.user.stopped = false
+	m.events.planningFailures = 0
 	m.chat.target = nil
 	m.chat.keepalive = false
 	m.chat.pending = false

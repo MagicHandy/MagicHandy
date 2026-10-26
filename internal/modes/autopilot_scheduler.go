@@ -107,6 +107,7 @@ func (m *Manager) planAutopilotMotion(ctx context.Context, engine Engine, genera
 	if operationCtx.Err() != nil || !m.modeGenerationActive(ModeAutopilot, generation) {
 		return
 	}
+	m.recordPlanningOutcome(choice, generation)
 	now := m.options.Now()
 	m.mu.Lock()
 	if m.loop.mode != ModeAutopilot || m.loop.generation != generation || m.chat.pending || m.user.stopped {
@@ -537,7 +538,7 @@ func (m *Manager) tickAutopilotSpeech(ctx context.Context, engine Engine, genera
 		return
 	}
 
-	announcement := m.options.Announce(operationCtx, choice.say)
+	announcement := m.options.Announce(operationCtx, choice.say, choice.speechSource)
 	if operationCtx.Err() != nil || !m.modeGenerationActive(ModeAutopilot, generation) {
 		return
 	}

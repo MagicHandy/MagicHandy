@@ -8,6 +8,24 @@ import { MotionVisualizer } from "./MotionVisualizer";
 afterEach(() => setLocaleForTest("en", english));
 
 describe("MotionVisualizer", () => {
+  it.each(["Layered", "Creative v2"])("shows the backend pace estimate for %s without requiring Creative geometry", (name) => {
+    render(<MotionVisualizer motion={{ available: true, engine: {
+      running: true, paused: false,
+      target: { pattern_name: name, source: "chat", speed_percent: 100 },
+      pace: {
+        requested_percent: 100, effective_percent: 78.7,
+        requested_mean_travel_percent_per_second: 363.6,
+        commanded_mean_travel_percent_per_second: 291.5,
+        commanded_peak_velocity_percent_per_second: 362.6,
+        device_peak_velocity_percent_per_second: 363.6,
+        limited: true, limiters: ["device_velocity"],
+      },
+    } }} />);
+    expect(screen.getByText("Estimated pace")).toBeInTheDocument();
+    expect(screen.getByText("79% / 100%")).toHaveAttribute("title", expect.stringContaining("Commanded estimate, not measured device speed."));
+    expect(screen.queryByText("Speed")).not.toBeInTheDocument();
+  });
+
   it("distinguishes startup from active playback", () => {
     render(
       <MotionVisualizer

@@ -276,6 +276,9 @@ export function AutopilotControl() {
   return (
     <div className="autopilot-control" data-active={active || undefined} aria-busy={Boolean(pending) || undefined}>
       <h2 className="control-card-title">{t("Autopilot")}</h2>
+      {active && (modes?.planning_failures ?? 0) >= 2 && <p className="autopilot-planning-warning" role="note">
+        {t("Autopilot couldn't plan the next change. It will retry.")} <a href="#/settings/diagnostics">{t("Diagnostics")}</a>
+      </p>}
       <div className="control-row autopilot-head">
       <span className="autopilot-control-dot" aria-hidden="true" />
       <div className="autopilot-control-copy">

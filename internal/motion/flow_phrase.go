@@ -89,11 +89,7 @@ func (s PhraseStroke) validateWithin(bottom, top, previousTop, index, groups int
 func compilePhraseCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	legs, durations := phraseLegs(spec, handyModel)
 	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel), acceleration: flowAccelerationBudget, jerk: flowJerkBudget}
-	curves, err := fitLegCurves(legs, durations, budget)
-	if err != nil {
-		return Curve{}, err
-	}
-	curve, err := assembleLegCurve(legs, curves, "Layered phrase")
+	curve, err := fitLayeredCurve(legs, durations, budget, "Layered phrase")
 	if err != nil {
 		return Curve{}, err
 	}
@@ -138,7 +134,7 @@ func phraseLegs(spec FlowSpec, handyModel string) ([]gestureLeg, []int64) {
 					span := math.Abs(to - from)
 					millis := spec.flowClock(span, float64(spec.SpeedPercent), pace, span, handyModel) / 2
 					legs = append(legs, gestureLeg{from: from, to: to, weight: 1, softness: float64(spec.TurnSoftnessPercent) / 100, sourceCycle: u})
-					durations = append(durations, int64(math.Ceil(millis)))
+					durations = append(durations, layeredDurationMillis(millis))
 				}
 				previousTop = float64(stroke.TopPercent)
 				previous = stroke

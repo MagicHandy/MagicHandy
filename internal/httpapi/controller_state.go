@@ -34,7 +34,7 @@ type controllerRuntime struct {
 	lossGrantID    string
 	ownerCtx       context.Context
 	ownerCancel    context.CancelFunc
-	requests       map[uint64]context.CancelFunc
+	requests       map[uint64]context.CancelCauseFunc
 	requestID      uint64
 	tickets        []controllerCommandTicket
 }
@@ -108,7 +108,7 @@ func (c *controllerRuntime) BeginTakeover(actor controllerIdentity) (controllerS
 	if c.active == actor && !c.expiredLocked() {
 		return c.snapshotLocked(actor), false, nil
 	}
-	c.cancelOwnerLocked()
+	c.cancelOwnerLocked(errChatControlChanged)
 	c.pending = actor
 	return c.snapshotLocked(actor), true, nil
 }
@@ -216,10 +216,10 @@ func (c *controllerRuntime) AdvanceStopGeneration() {
 	if c.active.sessionKey == "" {
 		// Local control keeps its lease and generation across Stop, but a
 		// phone's in-flight action must still be canceled before engine work.
-		c.cancelRequestsLocked()
+		c.cancelRequestsLocked(errChatEmergencyStop)
 		return
 	}
-	c.cancelOwnerLocked()
+	c.cancelOwnerLocked(errChatEmergencyStop)
 	c.generation++
 	c.ownerCtx, c.ownerCancel = context.WithCancel(context.Background())
 	c.tickets = nil
@@ -227,7 +227,7 @@ func (c *controllerRuntime) AdvanceStopGeneration() {
 }
 
 func (c *controllerRuntime) activateLocked(actor controllerIdentity) {
-	c.cancelOwnerLocked()
+	c.cancelOwnerLocked(errChatControlChanged)
 	c.active = actor
 	c.generation++
 	c.activeSince = c.clock()
@@ -238,22 +238,25 @@ func (c *controllerRuntime) activateLocked(actor controllerIdentity) {
 	c.issueCommandTicketLocked()
 }
 
-func (c *controllerRuntime) cancelOwnerLocked() {
-	c.cancelRequestsLocked()
+// cancelOwnerLocked ends the current ownership lifetime. The cause tells bound
+// requests why: Emergency Stop lets their responses close normally, while an
+// ownership change interrupts them at once (ADR 0029).
+func (c *controllerRuntime) cancelOwnerLocked(cause error) {
+	c.cancelRequestsLocked(cause)
 	if c.ownerCancel != nil {
 		c.ownerCancel()
 	}
 }
 
-func (c *controllerRuntime) cancelRequestsLocked() {
+func (c *controllerRuntime) cancelRequestsLocked(cause error) {
 	for id, cancel := range c.requests {
-		cancel()
+		cancel(cause)
 		delete(c.requests, id)
 	}
 }
 
 func (c *controllerRuntime) clearOwnerLocked() {
-	c.cancelOwnerLocked()
+	c.cancelOwnerLocked(errChatControlChanged)
 	c.active = controllerIdentity{}
 	c.activeSince = time.Time{}
 	c.lastSeenAt = time.Time{}

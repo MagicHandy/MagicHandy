@@ -12,6 +12,7 @@ export function VoiceQuickControls() {
   const configured = Boolean(voice?.enabled && voice.tts_provider && voice.tts_provider !== "none");
   const authoritative = voice?.speak_replies ?? false;
   const ttsWorker = state?.voice?.workers?.tts;
+  const ttsLoading = ttsWorker?.state === "starting" || ttsWorker?.model_state === "loading";
   const ttsReady = ttsWorker?.state === "running" && ttsWorker?.model_state === "ready";
   const [enabled, setEnabled] = useState(authoritative);
   const [saving, setSaving] = useState(false);
@@ -42,7 +43,7 @@ export function VoiceQuickControls() {
       {enabled && !ttsReady && (
         <span className="status-readout voice-quick-warning">
           <span className="status-dot" data-state="warn" />
-          <span className="status-text">{t("Voice output is not ready — start it in Settings → Voice")}</span>
+          <span className="status-text">{ttsLoading ? t("Loading...") : t("Voice output is not ready — start it in Settings → Voice")}</span>
         </span>
       )}
     </>

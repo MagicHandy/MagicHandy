@@ -44,7 +44,11 @@ const (
 
 // AutopilotResponse is a validated motion-plan or speech-check-in response.
 type AutopilotResponse struct {
-	Reply string
+	// Provider and Model are filled by the caller from the resolved role, never
+	// from model JSON. They follow a check-in through deferred publication.
+	Provider string
+	Model    string
+	Reply    string
 	// Intent is a short planning handle for motion-only turns. Asking the model
 	// to name a concept before numbers reduces copy-the-current-target behavior;
 	// it is diagnostic context, not executable motion.
@@ -98,10 +102,14 @@ func (s AutopilotService) Complete(ctx context.Context, kind AutopilotKind, requ
 	if kind != AutopilotKindMotion && kind != AutopilotKindSpeech {
 		return AutopilotResponse{}, fmt.Errorf("unknown Autopilot request kind %q", kind)
 	}
-	message, err := ValidateUserMessage(request.Message)
-	if err != nil {
-		return AutopilotResponse{}, err
+	// This is app-generated planning context, not a typed chat message. The
+	// provider budgets the complete request (including schema/output reserves).
+	// Applying the 4 KiB interactive limit here silently disabled rich plans.
+	message := strings.TrimSpace(request.Message)
+	if message == "" {
+		return AutopilotResponse{}, errors.New("autopilot context is required")
 	}
+	request.Message = message
 	if s.Capabilities.Motion && (s.Capabilities.MotionMode == MotionModeLayered || s.Capabilities.MotionMode == MotionModeCreativeV2) {
 		return s.completeLayeredAutopilot(ctx, kind, request, localPlan)
 	}

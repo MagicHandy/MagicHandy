@@ -13,6 +13,9 @@ import (
 const (
 	accessWatchdogInterval = time.Second
 	shutdownWriteGrace     = 5 * time.Second
+	// stopSocketGrace bounds only the closing socket reads and writes of work
+	// that Emergency Stop canceled; the canceled work itself ends at once.
+	stopSocketGrace = 2 * time.Second
 )
 
 type controllerCancellationKey struct{}
@@ -128,7 +131,7 @@ func (s *Server) trackSessionActivity(next http.Handler) http.Handler {
 		stopServer := context.AfterFunc(s.lifecycleCtx, func() { cancel(errChatServerStopped) })
 		defer stopServer()
 		if authenticated && r.URL.Path != "/api/controller/takeover" {
-			binding := &controllerRequestBinding{cancel: func() { cancel(errChatControlChanged) }}
+			binding := &controllerRequestBinding{cancel: cancel}
 			// The device browser must still deliver Stop when a remote controller
 			// takes over. Its gateway traffic is bound to its login and gateway,
 			// while a handler may explicitly bind an administrative control action.
@@ -144,15 +147,8 @@ func (s *Server) trackSessionActivity(next http.Handler) http.Handler {
 		interrupted := make(chan struct{})
 		interrupt := context.AfterFunc(ctx, func() {
 			defer close(interrupted)
-			now := time.Now()
-			writeDeadline := now
-			if s.quiescing.Load() {
-				// Healthy shutdown must finish HTTP framing after the handler
-				// returns. Keep that write bounded for stalled receivers, while
-				// live-server session/ownership revocation still interrupts now.
-				writeDeadline = now.Add(shutdownWriteGrace)
-			}
-			_ = http.NewResponseController(w).SetReadDeadline(now)
+			readDeadline, writeDeadline := s.interruptionDeadlines(context.Cause(ctx), time.Now())
+			_ = http.NewResponseController(w).SetReadDeadline(readDeadline)
 			_ = http.NewResponseController(w).SetWriteDeadline(writeDeadline)
 			if r.Body != nil {
 				_ = r.Body.Close()
@@ -165,6 +161,26 @@ func (s *Server) trackSessionActivity(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// interruptionDeadlines bounds socket reads and writes once a request is
+// canceled. Healthy shutdown lets responses finish their framing. Emergency
+// Stop does too, so a canceled chat stream still delivers its closing events
+// instead of a reset the browser reports only as a network error. Stop bounds
+// reads by the same grace: an expired read fails HTTP/1.1's background read,
+// which cancels the connection's context, and a response that then closes
+// cleanly would leave that keep-alive connection serving every later request
+// already canceled. Session and ownership revocation on a running server
+// still interrupt at once.
+func (s *Server) interruptionDeadlines(cause error, now time.Time) (read, write time.Time) {
+	switch {
+	case s.quiescing.Load():
+		return now, now.Add(shutdownWriteGrace)
+	case errors.Is(cause, errChatEmergencyStop):
+		return now.Add(stopSocketGrace), now.Add(stopSocketGrace)
+	default:
+		return now, now
+	}
 }
 
 func (s *Server) startAccessWatchdog() {

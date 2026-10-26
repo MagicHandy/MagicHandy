@@ -528,3 +528,6 @@ button.chat-avatar:focus-visible {
 .confirm-dialog {
   width: min(440px, calc(100vw - 32px));
 }
+
+/* A planning fault is distinct from an intentional hold; no raw provider errors. */
+.autopilot-planning-warning { margin: 0 0 10px; padding: 8px 10px; border: 1px solid var(--line); color: var(--warn); font-size: var(--fs-label); line-height: 1.45; }

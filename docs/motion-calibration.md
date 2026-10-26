@@ -4,6 +4,26 @@ Status: implemented effective-pace calibration, C2 Creative compiler, and
 retained stopped-run diagnostics; awaiting matched real-device confirmation
 (2026-08-23)
 
+## Layered saturation integration — 2026-10-26
+
+The Original Handy / Cloud / Layered report is reproducible before transport
+dispatch. The former 2400/24000 acceleration/jerk envelope and conservative
+clock restricted mean pace, particularly on short strokes. Alpha.75 uses the
+shared Creative envelope (7500/150000) and exact joint fitting with existing
+cruise candidates for constrained neutral turns. Requested pace, explicit
+softness and relative rates remain authored; device velocity limits and the
+shared engine/sampling/Stop path remain authoritative. Layered and Creative v2
+now expose the backend effective/requested pace as an estimate in the UI.
+
+The [speed-support evaluation](layered-speed-support-review-2026-10-26.md)
+retains the initial 99 cases and physical A/B evidence. The user judged the
+faster full, short and counted patterns smooth on Original Handy Cloud.
+Production compilation matches their 4116/1536/2660 ms six-cycle periods.
+An additional 132-case rendered matrix and simulated-latency retarget/Stop
+capture cover integration. This is not a claim of physical acceptance on every
+model/transport or of measured motor velocity. The installed app reportedly
+felt slower than matched baseline commands; that distinction remains open.
+
 ## Creative v2 follow-up — 2026-10-11
 
 The newer Creative v2 gesture compiler could exhaust the device velocity

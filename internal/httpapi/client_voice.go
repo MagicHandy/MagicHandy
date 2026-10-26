@@ -27,7 +27,7 @@ func (s *Server) clientVoiceState(r *http.Request) map[string]any {
 
 func clientModelState(state string) string {
 	switch state {
-	case "", "loading", "loaded", "unloaded", "failed", "ready", "unknown":
+	case "", "loading", "unloading", "loaded", "unloaded", "failed", "ready", "unknown":
 		return state
 	default:
 		return "unknown"

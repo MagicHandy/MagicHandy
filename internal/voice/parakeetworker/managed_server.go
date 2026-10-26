@@ -206,6 +206,9 @@ func (b *serverTail) WriteString(value string) {
 }
 
 func (b *serverTail) String() string {
+	if b == nil {
+		return ""
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return strings.TrimSpace(string(b.data))
