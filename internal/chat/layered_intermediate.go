@@ -7,8 +7,43 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
 )
+
+// The 12B sometimes expresses the same pace twice (e.g. 45 -> 35 and -10).
+// Accept that one unambiguous result without adding the delta twice. Compare
+// against the actual parse base, including recall; conflicting choices still
+// reach the strict validator. No conversation text or model value is changed.
+func parseIntermediateLayeredReply(raw string, current motion.FlowSpec, limits config.MotionSettings) (AssistantResponse, motion.FlowSpec, []string, error) {
+	root, err := uniqueLayeredObject(json.RawMessage(raw))
+	if err != nil {
+		return AssistantResponse{}, current, nil, err
+	}
+	edits, err := uniqueLayeredObject(root["edits"])
+	if err != nil {
+		return AssistantResponse{}, current, nil, err
+	}
+	if edits["controls"] != nil && edits["change_by"] != nil {
+		controls, controlErr := uniqueLayeredObject(edits["controls"])
+		changes, changeErr := uniqueLayeredObject(edits["change_by"])
+		var absolute, delta int
+		if controlErr == nil && changeErr == nil && string(controls["speed_percent"]) != "null" && string(changes["speed_percent"]) != "null" &&
+			json.Unmarshal(controls["speed_percent"], &absolute) == nil && json.Unmarshal(changes["speed_percent"], &delta) == nil &&
+			delta >= -100 && delta <= 100 && absolute == current.SpeedPercent+delta {
+			delete(changes, "speed_percent")
+			if len(changes) == 0 {
+				delete(edits, "change_by")
+			} else {
+				edits["change_by"], _ = json.Marshal(changes)
+			}
+			root["edits"], _ = json.Marshal(edits)
+			encoded, _ := json.Marshal(root)
+			raw = string(encoded)
+		}
+	}
+	return ParseLayeredReply(raw, current, limits)
+}
 
 // Local Layered uses small, independent edit groups. The semantic score and
 // validator are shared with hosted/legacy replies; no user text is interpreted
@@ -45,8 +80,11 @@ func intermediateEditGroups(value json.RawMessage) (map[string]json.RawMessage, 
 		}
 		for _, item := range items {
 			fields, err := uniqueLayeredObject(item)
-			if err != nil || len(fields) != 1 {
-				return nil, errors.New("each Layered edit must name exactly one group")
+			// Schema-constrained output still uses one group per item. When a
+			// provider returns several independent groups together, their meaning
+			// is identical: the transaction has no item-order semantics.
+			if err != nil || len(fields) == 0 {
+				return nil, errors.New("each Layered edit must name at least one group")
 			}
 			for key, field := range fields {
 				if !slices.Contains(intermediateLayeredGroups, key) || edits[key] != nil {

@@ -9,7 +9,7 @@ func TestVibrationOnlyReadinessConstrainsSchemaAndUnconstrainedReplies(t *testin
 	for _, mode := range []MotionMode{MotionModeLayered, MotionModeCreativeV2} {
 		for _, ready := range []bool{true, false} {
 			for _, armed := range []bool{true, false} {
-				state := MotionContext{MotionMode: mode, Outputs: &OutputContext{Vibrator: &VibrationContext{Ready: ready, Armed: armed}}}
+				state := MotionContext{MotionMode: mode, Outputs: &OutputContext{Vibrator: &VibrationContext{Ready: ready, Stopped: !armed}}}
 				caps := Capabilities{Motion: true, MotionMode: mode, IntermediateMotion: true}
 				schema := InteractiveResponseSchema(nil, caps, &state)
 				available := ready && armed

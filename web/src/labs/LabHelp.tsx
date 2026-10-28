@@ -29,7 +29,7 @@ export function LabHelp() {
       </>}
       {topic==="modes"&&<>
         <p>{t("Changing the interface loads its default prompt. The next reply uses the selected model, prompt and matching conversation history.")}</p>
-        <dl><dt>{t("Creative v2")}</dt><dd>{t("Generate asymmetric sweeps, localized strokes and shrinking rebounds. Edit focus, sweep, rebounds or inertia while preserving other controls. Switching to or from this generator starts a new Lab score.")}</dd>
+        <dl><dt>{t("Simple")}</dt><dd>{t("Generate asymmetric sweeps, localized strokes and shrinking rebounds. Edit focus, sweep, rebounds or inertia while preserving other controls. Switching to or from this generator starts a new Lab score.")}</dd>
           <dt>{t("Stroke ends")}</dt><dd>{t("Describe each stroke by where it turns: how deep it goes and where it turns back near the tip, each with its own variation. Accents weave in plunges, flicks and pauses. Switching to or from the stroke modes starts a new Lab score.")}</dd>
           <dt>{t("Groove and accents")}</dt><dd>{t("A steady groove set by its deepest and shallowest points and its feel, with accents woven in now and then.")}</dd>
           <dt>{t("Plain words")}</dt><dd>{t("Everyday words for how deep every stroke goes, how far it pulls back, variety, accents and pace. The app builds the strokes from the words.")}</dd>
@@ -41,14 +41,14 @@ export function LabHelp() {
           <dt>{t("New library")}</dt><dd>{t("Compare action names, descriptive IDs and opaque handles for the same pattern catalog. The three modes change naming, not motion.")}</dd>
         </dl>
         <p>{t("Legacy built-ins are disabled on update and cannot be re-enabled. Their saved names and weights remain available with their exports.")}</p>
-        <p>{t("Creative v2 develops reach, timing and location continuously across 64 cycles. Focus roaming moves both endpoints; set it to zero to hold a location. Mixed focus changes stroke width. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. Variation lets the phrase breathe: the pace eases off or briefly quickens, landing points and accents vary from stroke to stroke, and a few turns linger. The finite realization repeats until evolved; safety limits still apply.")}</p>
+        <p>{t("Simple develops reach, timing and location continuously across 64 cycles. Focus roaming moves both endpoints; set it to zero to hold a location. Mixed focus changes stroke width. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. Variation lets the phrase breathe: the pace eases off or briefly quickens, landing points and accents vary from stroke to stroke, and a few turns linger. The finite realization repeats until evolved; safety limits still apply.")}</p>
       </>}
       {topic==="autopilot"&&<>
         <p>{t("Turn on Autopilot to continue this Lab conversation with the selected model, prompt and schema after each quiet interval, with or without Live motion.")}</p>
         <p>{t("Sending a message interrupts an Autopilot reply. Failed output pauses Autopilot for inspection. Stop ends the session and cancels pending replies, even without a connected device.")}</p>
         <p>{t("Lab Autopilot tests the selected conversation contract. Production Autopilot has additional planning policies and is not changed by these settings.")}</p>
         <p>{t("Layered starts with fresh variation. During Autopilot the model reads the latest human messages, keeps whatever in them still applies, including a wish to keep the motion exactly as it is, and develops the rest. Those messages remain available independently of automatic replies. Each score is finite; Layered Lab continuations add up to half a quiet interval of timing variation.")}</p>
-        <p>{t("Creative v2 Autopilot uses the same judgment. When a planning turn changes other controls, an accent it does not choose again (unequal timing, rebounds or strong inertia) fades, so accents last only while they keep being chosen. Without continuation the finite score repeats.")}</p>
+        <p>{t("Simple Autopilot uses the same judgment. When a planning turn changes other controls, an accent it does not choose again (unequal timing, rebounds or strong inertia) fades, so accents last only while they keep being chosen. Without continuation the finite score repeats.")}</p>
       </>}
       {topic==="motion"&&<>
         <p>{t("This generator plays the continuous score below.")}</p>

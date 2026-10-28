@@ -26,7 +26,7 @@ func TestVibrationEnvelopeBoundsAndContinuity(t *testing.T) {
 			if err := spec.Validate(); err != nil {
 				t.Fatal(err)
 			}
-			plan := vibrationPlan{spec: spec, fromLevel: 20}
+			plan := vibrationPlan{spec: spec}
 			previous := plan.LevelAt(0)
 			for at := int64(1); at < 60_000; at++ {
 				value := plan.LevelAt(at)
@@ -36,6 +36,19 @@ func TestVibrationEnvelopeBoundsAndContinuity(t *testing.T) {
 				previous = value
 			}
 		}
+	}
+}
+
+func TestIndependentVibrationUsesTheChosenLevelWithoutARetargetRamp(t *testing.T) {
+	e := &Engine{}
+	e.setVibrationLocked(VibrationSpec{Mode: "steady", MinPercent: 20, MaxPercent: 20}, 0)
+	e.setVibrationLocked(VibrationSpec{Mode: "steady", MinPercent: 80, MaxPercent: 80}, 3000)
+	if level := e.vibration.LevelAt(3000); level != 80 {
+		t.Fatalf("independent level was forced through a ramp: %v", level)
+	}
+	e.setVibrationLocked(VibrationSpec{Mode: "wave", MinPercent: 10, MaxPercent: 90, PeriodSeconds: 4}, 4000)
+	if e.vibration.LevelAt(4000) != 10 || e.vibration.LevelAt(6000) != 90 {
+		t.Fatal("wave no longer uses its chosen range and period")
 	}
 }
 
@@ -201,5 +214,45 @@ func TestVibrationOnlyPauseResumeAndNewStart(t *testing.T) {
 	started, err := engine.Start(t.Context(), testTarget(), config.DefaultSettings().Motion)
 	if err != nil || started.Target.Vibration != nil || started.Target.VibrationOnly {
 		t.Fatalf("new run inherited override: %+v %v", started, err)
+	}
+}
+
+func TestVibrationFollowCarriesARangeInPercentOfMax(t *testing.T) {
+	for _, spec := range []VibrationSpec{
+		{Mode: "follow"},
+		{Mode: "follow", MaxPercent: 60},
+		{Mode: "follow", MinPercent: 20, MaxPercent: 70},
+	} {
+		if err := spec.Validate(); err != nil {
+			t.Fatalf("%+v: %v", spec, err)
+		}
+	}
+	for _, spec := range []VibrationSpec{
+		{Mode: "follow", MinPercent: 70, MaxPercent: 20},
+		{Mode: "follow", MaxPercent: 60, PeriodSeconds: 2},
+		{Mode: "off", MaxPercent: 10},
+	} {
+		if err := spec.Validate(); err == nil {
+			t.Fatalf("accepted %+v", spec)
+		}
+	}
+	e := &Engine{}
+	e.setVibrationLocked(VibrationSpec{Mode: "follow", MinPercent: 20, MaxPercent: 70}, 0)
+	frame := e.vibrationFrameLocked(0)
+	if !frame.Follow || frame.FollowMinPercent != 20 || frame.FollowMaxPercent != 70 || len(frame.Points) != 0 {
+		t.Fatalf("follow frame = %+v", frame)
+	}
+}
+
+func TestFollowSpeedBandMatchesTheSavedSpeedLimits(t *testing.T) {
+	settings := config.DefaultSettings().EffectiveMotion()
+	low, high := FollowSpeedBand(settings)
+	// Speed 20 and 80 on the original Handy: 102.6 and 325.7 mm/s over 110 mm.
+	if math.Abs(low-0.933) > 0.005 || math.Abs(high-2.961) > 0.005 {
+		t.Fatalf("band = %.3f..%.3f spans/s", low, high)
+	}
+	settings.SpeedMinPercent, settings.SpeedMaxPercent = 50, 50
+	if low, high := FollowSpeedBand(settings); low != high {
+		t.Fatalf("a single saved speed gave %.3f..%.3f", low, high)
 	}
 }

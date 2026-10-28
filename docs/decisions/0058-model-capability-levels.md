@@ -1,5 +1,10 @@
 # ADR 0058: Model capabilities independent of provider
 
+> Amended by [ADR 0061](0061-model-controlled-vibration-level.md): Simple (Layered)
+> and Intermediate set one vibration level under the user's Max; Advanced keeps
+> the envelope in % of Max. Only a person lifts Stop's pause: a fresh chat
+> request, Resume now, or choosing the device again.
+
 Status: implemented with automated and live-model acceptance, 2026-10-25.
 
 Local deployment does not imply a small model, and a larger context alone does

@@ -48,7 +48,7 @@ func TestNaturalMotionCapabilityHonestyLive(t *testing.T) {
 				current := motion.VibrationSpec{Mode: "wave", MinPercent: 15, MaxPercent: 70, PeriodSeconds: 8}
 				state := naturalState(&score, mode, limits)
 				state.Paused = tc.paused
-				state.Outputs = &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: !tc.disconnected, Armed: !tc.unarmed, Follow: "speed", Motors: 2, Current: &current}}
+				state.Outputs = &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: !tc.disconnected, Stopped: tc.unarmed, Follow: "speed", Motors: 2, Current: &current}}
 				if tc.solo {
 					state.Outputs.Strokers = 0
 				}

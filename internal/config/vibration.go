@@ -6,8 +6,8 @@ import (
 )
 
 // DeviceVibrator is a Buttplug vibrator reached through Intiface Central. It
-// follows the shared motion frame through a conversion profile; the model
-// never controls its intensity.
+// follows the shared motion frame through a conversion profile, at a level the
+// model may choose under the user's Max (ADR 0061).
 const DeviceVibrator = "vibrator"
 
 // Vibration conversion profiles: what the vibration level follows.
@@ -24,30 +24,45 @@ const (
 	VibrationDepthTip  = "tip"
 )
 
+// Who sets the vibration level under Max: the chat model, or nobody (the
+// vibrator then follows movement at Max).
+const (
+	VibrationLevelModel  = "model"
+	VibrationLevelManual = "manual"
+)
+
 // Vibration setting ranges and defaults.
 const (
 	VibrationDefaultCeilingPercent = 40
 	VibrationMaxTimingOffsetMs     = 300
 )
 
-// VibrationSettings configures vibrator output. The ceiling caps the live
-// intensity the user raises from the connection manager; the live intensity
-// itself starts at 0 on every connection and is never persisted.
+// VibrationSettings configures vibrator output. The ceiling is the user's Max:
+// it caps every output, including the level the model chooses. The minimum is
+// the floor of movement-following vibration.
 type VibrationSettings struct {
 	Follow             string `json:"follow"`
 	DepthEnd           string `json:"depth_end"`
 	MinimumPercent     int    `json:"minimum_percent"`
 	CeilingPercent     int    `json:"ceiling_percent"`
 	TimingOffsetMillis int    `json:"timing_offset_ms"`
+	LevelControl       string `json:"level_control"`
 }
 
-// DefaultVibrationSettings starts low and follows stroke speed.
+// DefaultVibrationSettings starts low, follows stroke speed and lets the model
+// choose the level under Max.
 func DefaultVibrationSettings() VibrationSettings {
 	return VibrationSettings{
 		Follow:         VibrationFollowSpeed,
 		DepthEnd:       VibrationDepthBase,
 		CeilingPercent: VibrationDefaultCeilingPercent,
+		LevelControl:   VibrationLevelModel,
 	}
+}
+
+// ModelSetsLevel reports whether the chat model chooses the level under Max.
+func (s VibrationSettings) ModelSetsLevel() bool {
+	return s.LevelControl != VibrationLevelManual
 }
 
 // applyMissingVibrationDefaults fills a block that older settings lack. A
@@ -58,6 +73,9 @@ func applyMissingVibrationDefaults(settings VibrationSettings) VibrationSettings
 	}
 	if settings.DepthEnd == "" {
 		settings.DepthEnd = VibrationDepthBase
+	}
+	if settings.LevelControl == "" {
+		settings.LevelControl = VibrationLevelModel
 	}
 	return settings
 }
@@ -77,6 +95,9 @@ func validateVibrationSettings(settings VibrationSettings) error {
 	}
 	if settings.DepthEnd != VibrationDepthBase && settings.DepthEnd != VibrationDepthTip {
 		return fmt.Errorf("unknown vibration depth end %q", settings.DepthEnd)
+	}
+	if settings.LevelControl != VibrationLevelModel && settings.LevelControl != VibrationLevelManual {
+		return fmt.Errorf("unknown vibration level control %q", settings.LevelControl)
 	}
 	if settings.CeilingPercent < 0 || settings.CeilingPercent > 100 || settings.MinimumPercent < 0 || settings.MinimumPercent > settings.CeilingPercent {
 		return fmt.Errorf("the vibration range must satisfy 0 <= minimum <= ceiling <= 100")

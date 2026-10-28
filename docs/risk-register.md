@@ -209,11 +209,10 @@ reach the other.
 
 Mitigation:
 
-- the user alone raises the live intensity, which starts at 0 on every
-  connection and selection. Motion only shapes the level beneath it, never
-  above the saved ceiling (default 40%). Advanced model contracts may choose an
-  engine-owned relative envelope under ADRs 0057/0058, but cannot raise arming or
-  limits. A capability choice, local or on a connection such as LM Studio, is
+- the user owns Max (default 40%), which caps every output and is rechecked
+  at write. With model control on, the model chooses a level beneath it under
+  ADR 0061 (Simple/Intermediate glide; Advanced envelopes in % of Max), but
+  cannot raise Max, change participation or lift a Stop pause. A capability choice, local or on a connection such as LM Studio, is
   not proof of model quality; Simple remains the default for the local model and
   new compatible servers, and the tested 12B model is recommended only through
   Intermediate
@@ -221,13 +220,15 @@ Mitigation:
   explicit zero; Stop adds `StopDeviceCmd`, and generation fencing keeps any
   older `ScalarCmd` from following a Stop
 - Emergency Stop closes write admission and sends `StopAllDevices` on a live
-  session whatever the engine and selections are. It also zeroes the
-  intensity, and an unconfirmed stop fails the session
-- a fresh manual chat request may restore only the previously human-selected
-  intensity under [ADR 0059](decisions/0059-manual-chat-resume-after-stop.md).
-  Permission binds the same selection and current Stop/control/level revisions.
-  Questions and autonomous work cannot consume it; explicit zero, reconnection
-  and faults clear it. Failed dispatch rolls back without undoing newer controls.
+  session whatever the engine and selections are. It also suspends the
+  vibrator, and an unconfirmed stop fails the session
+- a fresh manual chat request may lift that suspension under
+  [ADR 0061](decisions/0061-model-controlled-vibration-level.md), as can
+  Resume now or reselection. Permission binds the same selection and control
+  generation; questions and autonomous work cannot use it, and a failed
+  dispatch suspends again without undoing newer controls. Removing the
+  per-session arming step is accepted: a vibrator in playback vibrates at the
+  model's level under Max when a run starts
   No model-selected strength or language rule grants this permission
 - a watchdog stops a stalled pacer and allows only silence until the run
   stops, and a stalled pacer stops the keepalive so Intiface's own watchdog

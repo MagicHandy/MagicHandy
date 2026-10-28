@@ -56,7 +56,7 @@ func TestIndependentVibrationLive(t *testing.T) {
 					before = FreshCreativeV2Score(40)
 				}
 				before.Seed = 117
-				outputs := &OutputContext{Strokers: tc.linear, Vibrator: &VibrationContext{Independent: true, Follow: "speed", Ready: true, Armed: tc.armed, Motors: 2}}
+				outputs := &OutputContext{Strokers: tc.linear, Vibrator: &VibrationContext{Independent: true, Follow: "speed", Ready: true, Stopped: !tc.armed, Motors: 2}}
 				state := MotionContext{MotionMode: mode, Layered: &before, Running: tc.running, SpeedPercent: 40, SpeedMinPercent: 10, SpeedMaxPercent: 80, Outputs: outputs}
 				caps := Capabilities{Motion: true, MotionMode: mode, AdvancedMotion: hosted, VibrationControl: true, PreserveConversationText: hosted}
 				var tested llm.Provider = provider
@@ -135,7 +135,7 @@ func TestIndependentVibrationAutopilotLive(t *testing.T) {
 				}
 				before.Seed = 933
 				current := motion.VibrationSpec{Mode: "wave", MinPercent: 15, MaxPercent: 70, PeriodSeconds: 8}
-				state := MotionContext{MotionMode: mode, Layered: &before, Running: true, Autopilot: true, SpeedPercent: 40, SpeedMinPercent: 10, SpeedMaxPercent: 80, UserRequests: []string{tc.wish}, UserRequestSecondsAgo: []int{5}, Outputs: &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true, Armed: true, Follow: "speed", Motors: 2, Current: &current}}}
+				state := MotionContext{MotionMode: mode, Layered: &before, Running: true, Autopilot: true, SpeedPercent: 40, SpeedMinPercent: 10, SpeedMaxPercent: 80, UserRequests: []string{tc.wish}, UserRequestSecondsAgo: []int{5}, Outputs: &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true, Follow: "speed", Motors: 2, Current: &current}}}
 				caps := Capabilities{Motion: true, MotionMode: mode, AdvancedMotion: true, PreserveConversationText: true, AutoTiming: true}
 				svc := AutopilotService{Provider: provider, Model: model, Capabilities: caps, MotionContext: &state, ReasoningMode: "off"}
 				started := time.Now()

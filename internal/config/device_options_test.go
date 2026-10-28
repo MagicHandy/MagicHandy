@@ -111,3 +111,14 @@ func TestDeviceOptionsPatchTrimsTheIntifaceAddressAndPolicy(t *testing.T) {
 		t.Fatalf("not trimmed: %+v", next.Device)
 	}
 }
+
+func TestDeviceOptionsPatchTurnsModelControlOff(t *testing.T) {
+	s := DefaultSettings()
+	next, err := s.ApplyDeviceOptionsPatch(patchFromJSON(t, `{"vibration":{"level_control":"manual"}}`))
+	if err != nil || next.Vibration.LevelControl != VibrationLevelManual || next.Vibration.CeilingPercent != s.Vibration.CeilingPercent {
+		t.Fatalf("patched = %+v %v", next.Vibration, err)
+	}
+	if _, err := s.ApplyDeviceOptionsPatch(patchFromJSON(t, `{"vibration":{"level_control":"sometimes"}}`)); err == nil {
+		t.Fatal("accepted an unknown level control")
+	}
+}

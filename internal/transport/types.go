@@ -165,17 +165,25 @@ type AppendPointsCommand struct {
 	// output ignore it. An empty linear frame updates only this output.
 	Vibration     *VibrationFrame `json:"vibration,omitempty"`
 	VibrationOnly bool            `json:"vibration_only,omitempty"`
+	// SpeedPercent is the plan's commanded pace, 1..100, when it has one. A
+	// vibrator reads it as The Handy's intensity until a model chooses its
+	// level (ADR 0061); other owners ignore it.
+	SpeedPercent int `json:"speed_percent,omitempty"`
 }
 
 // VibrationFrame replaces a short, covered envelope on the shared stream clock.
 // Revision changes fence any level prepared from an older semantic envelope.
 type VibrationFrame struct {
-	Revision uint64       `json:"revision"`
-	Follow   bool         `json:"follow,omitempty"`
-	Points   []TimedLevel `json:"points,omitempty"`
+	Revision uint64 `json:"revision"`
+	Follow   bool   `json:"follow,omitempty"`
+	// A follow frame's range in percent of Max; zero max follows at the
+	// owner's level.
+	FollowMinPercent float64      `json:"follow_min_percent,omitempty"`
+	FollowMaxPercent float64      `json:"follow_max_percent,omitempty"`
+	Points           []TimedLevel `json:"points,omitempty"`
 }
 
-// TimedLevel is engine-sampled relative vibration drive, in 0..100.
+// TimedLevel is engine-sampled vibration drive in percent of Max, 0..100.
 type TimedLevel struct {
 	TimeMillis   int64   `json:"time_ms"`
 	LevelPercent float64 `json:"level_percent"`

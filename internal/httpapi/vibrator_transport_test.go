@@ -65,7 +65,7 @@ func connectVibrator(t *testing.T, server *Server) {
 		t.Fatalf("connect = %d %+v", code, snapshot)
 	}
 	code, snapshot := vibratorRequest(t, server, "/api/transport/intiface/vibrator/select", simulatedVibratorIndex, true)
-	if code != http.StatusOK || !snapshot.Vibrator.Selected || len(snapshot.Vibrator.Motors) != 2 || snapshot.Vibrator.IntensityPercent != 0 {
+	if code != http.StatusOK || !snapshot.Vibrator.Selected || len(snapshot.Vibrator.Motors) != 2 || snapshot.Vibrator.Suspended {
 		t.Fatalf("select = %d %+v", code, snapshot.Vibrator)
 	}
 }
@@ -129,29 +129,35 @@ func TestHandyAndVibratorShareOneIntifaceSession(t *testing.T) {
 	}
 }
 
-func TestVibratorIntensityRaisesNeedTheHostAndLoweringIsOpen(t *testing.T) {
+func TestVibratorResumeNeedsTheHostAndTheCurrentStopSequence(t *testing.T) {
 	server := newVibratorTestServer(t, config.DeviceVibrator)
 	connectVibrator(t, server)
-	if code, _ := vibratorRequest(t, server, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":30}`, false); code == http.StatusOK {
-		t.Fatal("a non-controller raised the intensity")
+	if _, err := server.emergencyStop(t.Context(), "resume_test"); err != nil {
+		t.Fatal(err)
 	}
-	code, snapshot := vibratorRequest(t, server, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":90}`, true)
-	if code != http.StatusOK || snapshot.Vibrator.IntensityPercent != config.VibrationDefaultCeilingPercent {
-		t.Fatalf("raise above the ceiling = %d %+v; it must stop at the ceiling", code, snapshot.Vibrator)
+	current := strconv.FormatUint(server.stopSequence.Load(), 10)
+	if code, _ := vibratorRequest(t, server, "/api/transport/intiface/vibrator/resume", `{}`, false, stopSequenceHeader, current); code == http.StatusOK {
+		t.Fatal("a non-controller resumed the vibrator")
 	}
-	if code, snapshot := vibratorRequest(t, server, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":10}`, false); code != http.StatusOK || snapshot.Vibrator.IntensityPercent != 10 {
-		t.Fatalf("lowering without control = %d %+v", code, snapshot.Vibrator)
+	if code, _ := vibratorRequest(t, server, "/api/transport/intiface/vibrator/resume", `{}`, true); code != http.StatusBadRequest {
+		t.Fatalf("resume without a Stop sequence = %d", code)
 	}
 	stale := strconv.FormatUint(server.stopSequence.Load()+1, 10)
-	if code, _ := vibratorRequest(t, server, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":20}`, true, stopSequenceHeader, stale); code != http.StatusConflict {
-		t.Fatalf("a raise from before a Stop = %d", code)
+	if code, _ := vibratorRequest(t, server, "/api/transport/intiface/vibrator/resume", `{}`, true, stopSequenceHeader, stale); code != http.StatusConflict {
+		t.Fatalf("a resume from another Stop = %d", code)
+	}
+	if !server.intifaceSnapshot().Vibrator.Suspended {
+		t.Fatal("a refused resume lifted the suspension")
+	}
+	code, snapshot := vibratorRequest(t, server, "/api/transport/intiface/vibrator/resume", `{}`, true, stopSequenceHeader, current)
+	if code != http.StatusOK || snapshot.Vibrator.Suspended || snapshot.Vibrator.CeilingPercent != config.VibrationDefaultCeilingPercent {
+		t.Fatalf("resume = %d %+v", code, snapshot.Vibrator)
 	}
 }
 
 func TestVibratorTestNeedsTheStopSequence(t *testing.T) {
 	server := newVibratorTestServer(t, config.DeviceVibrator)
 	connectVibrator(t, server)
-	_, _ = vibratorRequest(t, server, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":30}`, true)
 	if code, _ := vibratorRequest(t, server, "/api/transport/intiface/vibrator/test", `{}`, true); code != http.StatusBadRequest {
 		t.Fatalf("test without a Stop sequence = %d", code)
 	}
@@ -161,32 +167,38 @@ func TestVibratorTestNeedsTheStopSequence(t *testing.T) {
 	}
 }
 
-func TestGlobalStopZeroesTheVibratorIntensity(t *testing.T) {
+func TestGlobalStopSuspendsTheVibrator(t *testing.T) {
 	server := newVibratorTestServer(t, config.DeviceVibrator)
 	connectVibrator(t, server)
-	_, _ = vibratorRequest(t, server, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":30}`, true)
 	recorder := httptest.NewRecorder()
 	server.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/motion/stop", strings.NewReader(`{}`)))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("Stop = %d %s", recorder.Code, recorder.Body.String())
 	}
-	if intensity := server.intifaceSnapshot().Vibrator.IntensityPercent; intensity != 0 {
-		t.Fatalf("intensity after Stop = %d", intensity)
+	if status := server.intifaceSnapshot().Vibrator; !status.Suspended || status.SilentReason != "stopped" || status.CeilingPercent != config.VibrationDefaultCeilingPercent {
+		t.Fatalf("after Stop: %+v", status)
 	}
 }
 
 func TestVibrationSettingsApplyLive(t *testing.T) {
 	server := newVibratorTestServer(t, config.DeviceVibrator)
 	connectVibrator(t, server)
-	_, _ = vibratorRequest(t, server, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":40}`, true)
 	previous, _ := server.store.Snapshot()
 	next := previous
 	next.Vibration.CeilingPercent = 25
 	if err := server.applySettingsRuntimeTransition(context.Background(), previous, next); err != nil {
 		t.Fatal(err)
 	}
-	if status := server.intifaceSnapshot().Vibrator; status.CeilingPercent != 25 || status.IntensityPercent != 25 {
-		t.Fatalf("a lowered ceiling must lower the live intensity: %+v", status)
+	if status := server.intifaceSnapshot().Vibrator; status.CeilingPercent != 25 {
+		t.Fatalf("a lowered Max must apply live: %+v", status)
+	}
+	manual := next
+	manual.Vibration.LevelControl = config.VibrationLevelManual
+	if err := server.applySettingsRuntimeTransition(context.Background(), next, manual); err != nil {
+		t.Fatal(err)
+	}
+	if status := server.intifaceSnapshot().Vibrator; status.ModelControl {
+		t.Fatalf("model control stayed on: %+v", status)
 	}
 	// Removing the vibrator from the inventory ends its lease.
 	removed := next

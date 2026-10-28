@@ -31,7 +31,13 @@ func TestCapturedVibrationEnvelopes(t *testing.T) {
 		}
 		for _, row := range source.Turns {
 			row["capture_file"] = filepath.Base(path)
-			if value := row["vibration"]; value != nil && row["valid"] == true {
+			value, valid := row["vibration"], row["valid"] == true
+			// ADR 0061's level suite retains the parsed command, including an
+			// accepted envelope whose intent check failed. Plot those too.
+			if command, ok := row["command"].(map[string]any); ok {
+				value, valid = command["vibration"], true
+			}
+			if value != nil && valid {
 				encoded, _ := json.Marshal(value)
 				var spec VibrationSpec
 				if err := json.Unmarshal(encoded, &spec); err != nil {
@@ -50,7 +56,7 @@ func TestCapturedVibrationEnvelopes(t *testing.T) {
 			rows = append(rows, row)
 		}
 	}
-	encoded, err := json.Marshal(map[string]any{"turns": rows, "signal": "engine relative drive before human intensity, quantization and startup fade"})
+	encoded, err := json.Marshal(map[string]any{"turns": rows, "signal": "engine drive in percent of user Max, before quantization and startup fade"})
 	if err != nil {
 		t.Fatal(err)
 	}

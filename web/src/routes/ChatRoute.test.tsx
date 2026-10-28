@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   appState: { modes: {} } as {
     modes: { mode?: string };
-    settings?: { llm?: { motion_generation_mode?: string; motion_capabilities?: { motion?: boolean; area_focus?: boolean; experimental_patterns?: boolean } } };
+    settings?: { llm?: { motion_generation_mode?: string; original_creative_mode?: boolean; motion_capabilities?: { motion?: boolean; area_focus?: boolean; experimental_patterns?: boolean } } };
     chat?: { active_session_id?: string; latest_seq?: number; current_mood?: string };
     uptime_seconds?: number;
   },
@@ -102,16 +102,21 @@ describe("ChatRoute", () => {
       modes: {},
       settings: { llm: { motion_generation_mode: "pattern", motion_capabilities: { motion: true } } },
     };
-    mocks.setLLMMotionMode.mockResolvedValue({ mode: "dynamic" });
-    render(<ChatRoute />);
+    mocks.setLLMMotionMode.mockResolvedValue({ mode: "layered" });
+    const view = render(<ChatRoute />);
 
     const controls = screen.getByRole("complementary", { name: "Motion controls" });
     const mode = within(controls).getByRole("combobox", { name: "LLM motion" });
     expect(mode).toHaveValue("pattern");
+    // The original Creative mode is retired until Settings offers it again.
     expect(within(mode).getAllByRole("option").map((option) => option.textContent))
-      .toEqual(["Layered", "Creative v2", "Creative", "Pattern library", "Off"]);
+      .toEqual(["Layered", "Simple", "Pattern library", "Off"]);
     expect(mode).toHaveAccessibleDescription("The AI picks from your enabled library patterns and sets the speed.");
 
+    mocks.appState = { modes: {}, settings: { llm: { motion_generation_mode: "pattern", original_creative_mode: true, motion_capabilities: { motion: true } } } };
+    view.rerender(<ChatRoute />);
+    expect(within(mode).getAllByRole("option").map((option) => option.textContent))
+      .toEqual(["Layered", "Simple", "Creative", "Pattern library", "Off"]);
     fireEvent.change(mode, { target: { value: "dynamic" } });
     await waitFor(() => expect(mocks.setLLMMotionMode).toHaveBeenCalledWith("dynamic"));
     fireEvent.change(mode, { target: { value: "layered" } });

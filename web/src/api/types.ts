@@ -17,6 +17,14 @@ export type MotionStyle = "gentle" | "balanced" | "intense";
 export type HandyModel = "handy_original" | "handy_2_standard" | "handy_2_pro";
 export type NotificationCategory = "app" | "system" | "library" | "voice" | "updates";
 
+/** A model's vibration envelope in percent of the user's Max (ADRs 0057, 0061). */
+export interface VibrationEnvelope {
+  mode: "follow" | "off" | "steady" | "wave" | "pulse";
+  min_percent: number;
+  max_percent: number;
+  period_seconds: number;
+}
+
 export interface MotionSettings {
   speed_min_percent: number;
   speed_max_percent: number;
@@ -97,7 +105,7 @@ export interface EngineSnapshot {
   recent_command_latency_ms?: number;
   target?: {
     vibration_only?: boolean;
-    vibration?: { mode: "follow" | "off" | "steady" | "wave" | "pulse"; min_percent: number; max_percent: number; period_seconds: number };
+    vibration?: VibrationEnvelope;
     label?: string;
     source?: string;
     speed_percent?: number;

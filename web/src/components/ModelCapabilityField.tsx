@@ -4,9 +4,9 @@ import { capabilityNames, contextLabel } from "../util/model-connections";
 import { FieldRow } from "./SetupSection";
 
 function levelHint(level: ModelCapabilityLevel): string {
-  return level === "simple" ? t("Compact prompts for smaller models. Vibration follows movement.")
-    : level === "intermediate" ? t("Fuller guidance and grouped motion edits for capable models. Vibration follows movement.")
-      : t("Counted phrases, independent vibration, Auto timing and response repair. Choose it only for a model that handles complex instructions reliably.");
+  return level === "simple" ? t("Compact prompts for smaller models. In Layered they also set the vibration level.")
+    : level === "intermediate" ? t("Fuller guidance and grouped motion edits for capable models. They also set the vibration level.")
+      : t("Counted phrases, vibration patterns of their own, Auto timing and response repair. Choose it only for a model that handles complex instructions reliably.");
 }
 
 // One capability and context pair for every model: the local model and each

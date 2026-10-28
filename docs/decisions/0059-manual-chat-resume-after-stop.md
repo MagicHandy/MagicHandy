@@ -1,6 +1,10 @@
 # ADR 0059: Fresh manual chat after Stop
 
-Status: implemented, 2026-10-25.
+Status: implemented, 2026-10-25. Superseded by
+[ADR 0061](0061-model-controlled-vibration-level.md): Stop now suspends the
+vibrator instead of zeroing a live intensity, and the same fresh manual request
+(or Resume now, or reselection) lifts the suspension. **Keep vibration off** is
+replaced by turning the vibrator out of playback.
 
 An earlier Stop cancels older work; it must not prevent a new motion request.
 The Handy already supports this lifecycle. Vibrator Emergency Stop also resets

@@ -60,7 +60,7 @@ func TestOutputAwarenessLive(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			before := DefaultLayeredScore(40)
 			before.Seed = 117
-			outputs := &OutputContext{Strokers: tc.linear, Vibrator: &VibrationContext{Follow: tc.follow, DepthEnd: "tip", Ready: true, Armed: tc.armed, Motors: 2}}
+			outputs := &OutputContext{Strokers: tc.linear, Vibrator: &VibrationContext{Follow: tc.follow, DepthEnd: "tip", Ready: true, Stopped: !tc.armed, Motors: 2}}
 			state := MotionContext{MotionMode: MotionModeLayered, Layered: &before, Running: tc.running, SpeedPercent: 40, SpeedMinPercent: 10, SpeedMaxPercent: 80}
 			if (hosted || naturalIntermediate()) && variant == "aware" {
 				state.Outputs = outputs

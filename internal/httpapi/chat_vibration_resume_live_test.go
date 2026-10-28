@@ -6,10 +6,13 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/chat"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/diagnostics"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
@@ -41,6 +44,9 @@ func TestManualVibrationResumeProductionChatLive(t *testing.T) {
 	s.llm.provider, s.traces = capture, diagnostics.NewTraceRing(4096)
 	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
 		settings.LLM.Model, settings.LLM.ReasoningMode = model, config.LLMReasoningOff
+		if hosted {
+			settings.LLM.Connections[0].Model = model
+		}
 		if !hosted {
 			settings.LLM.Provider, settings.LLM.ConversationConnectionID = config.LLMProviderOllama, "local"
 			settings.LLM.LocalCapabilityLevel = config.ModelCapabilityIntermediate
@@ -69,8 +75,23 @@ func TestManualVibrationResumeProductionChatLive(t *testing.T) {
 				return settings
 			})
 		}
-		for i, message := range []string{"What is the current playback state?", "Resume with a gently varying rhythm.", "What does the intensity ceiling do?", "Start again with a different flowing rhythm."} {
-			if i == 0 || i == 2 {
+		// Begin with a real saved score so "where we left off" exercises
+		// continuation, not a fresh default with nothing to restore.
+		baseline := chat.DefaultLayeredScore(35)
+		baseline.Seed = 20261028
+		if _, err := s.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionStart, Layered: &baseline}); err != nil {
+			t.Fatal(err)
+		}
+		messages := []string{"What is the current playback state?", "Continue where we left off.",
+			"What does the vibrator's Max do?", "Resume both devices with the same rhythm.",
+			"Would continuing restore the previous rhythm? Just explain.", "Continue the previous rhythm with the same settings.",
+			"How fast was the last motion? Keep playback stopped while answering.", "Start again with a different flowing rhythm."}
+		if onlyVibrator {
+			messages[3] = "Resume the vibrator with the same rhythm."
+		}
+		for i, message := range messages {
+			previous := s.currentMotionEngine().Snapshot().Target.Flow
+			if i%2 == 0 {
 				stopVibrationForResume(t, s)
 			}
 			calls, started := capture.calls, time.Now()
@@ -84,9 +105,12 @@ func TestManualVibrationResumeProductionChatLive(t *testing.T) {
 			wantMotion := i%2 == 1
 			pass := !strings.Contains(response, "event: error") && !strings.Contains(response, `"repaired":true`) && !strings.Contains(response, `"semantic_fallback":true`) && capture.calls-calls == 1 && after.Running == wantMotion
 			if wantMotion {
-				pass = pass && v.IntensityPercent == 40
+				pass = pass && !v.Suspended
+				if i != 7 {
+					pass = pass && reflect.DeepEqual(previous, after.Target.Flow)
+				}
 			} else {
-				pass = pass && v.IntensityPercent == 0
+				pass = pass && v.Suspended
 			}
 			// A successful answer with no motion is still a valid response.
 			valid := !strings.Contains(response, "event: error") && strings.Contains(response, "event: message")
@@ -96,8 +120,8 @@ func TestManualVibrationResumeProductionChatLive(t *testing.T) {
 			}
 		}
 		_, _ = s.emergencyStop(t.Context(), "live_resume_finished")
-		// Explicitly arm the same simulated selection for the next scenario.
-		_, _ = vibratorRequest(t, s, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":40}`, true)
+		// Explicitly resume the same simulated selection for the next scenario.
+		_, _ = vibratorRequest(t, s, "/api/transport/intiface/vibrator/resume", `{}`, true, stopSequenceHeader, strconv.FormatUint(s.stopSequence.Load(), 10))
 	}
 }
 
@@ -113,7 +137,7 @@ func (p *resumeStateTrialProvider) StreamChat(ctx context.Context, input llm.Cha
 		messages := append([]llm.Message(nil), input.Messages[:last]...)
 		cue := "Current app state for this turn: playback is stopped, not paused. Previous chat describes earlier runs. A new motion request may start the saved or revised rhythm; a question leaves playback stopped."
 		if os.Getenv("MAGICHANDY_SIMPLE_RESUME_CUE") == "full" {
-			cue += " Vibration follows the shared motion within the intensity set by the user; its ceiling caps vibration, not stroke speed. You cannot change that setting."
+			cue += " Vibration follows the shared motion under the user's Max; Max caps vibration, not stroke speed. You cannot change Max."
 		}
 		input.Messages = append(messages, llm.Message{Role: "system", Content: cue}, input.Messages[last])
 	}

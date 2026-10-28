@@ -202,16 +202,11 @@ func TestLocalCapabilityOutputFactsReachProductionTurns(t *testing.T) {
 		settings, _ := s.store.Snapshot()
 		settings.LLM = settings.LLM.ConversationSettings()
 		state := s.chatTurnMotion(settings, nil, "")
-		if level == config.ModelCapabilitySimple {
-			if state.Outputs != nil {
-				t.Fatal("simple local contract acquired output context")
-			}
-			continue
-		}
 		if state.Outputs == nil || state.Outputs.Strokers != 1 || state.Outputs.Vibrator == nil ||
-			!state.Outputs.Vibrator.Ready || !state.Outputs.Vibrator.Armed ||
-			state.Outputs.Vibrator.Independent != (level == config.ModelCapabilityAdvanced) {
-			t.Fatalf("%s live context lost output facts: %+v", level, state.Outputs)
+			!state.Outputs.Vibrator.Ready || state.Outputs.Vibrator.Stopped || state.Outputs.Vibrator.LevelPercent != 100 || !state.Outputs.Vibrator.LevelFollowsHandy ||
+			state.Outputs.Vibrator.Independent != (level == config.ModelCapabilityAdvanced) ||
+			state.Outputs.Vibrator.LevelControl != (level != config.ModelCapabilityAdvanced) {
+			t.Fatalf("%s live context lost output facts: %+v", level, state.Outputs.Vibrator)
 		}
 	}
 }
@@ -239,7 +234,7 @@ func TestIntermediateUnarmedVibrationFactsReachChatRequest(t *testing.T) {
 		prompt.WriteString(message.Content)
 	}
 	if !strings.Contains(prompt.String(), `"connected_and_selected":false`) ||
-		!strings.Contains(prompt.String(), `"user_has_set_nonzero_intensity":false`) ||
+		!strings.Contains(prompt.String(), `"level_control":true`) ||
 		strings.Contains(string(provider.requests[0].JSONSchema), `"const":"start"`) || len(fake.Commands()) != 0 {
 		t.Fatal("live chat omitted output readiness or retained start authority")
 	}

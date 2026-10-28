@@ -50,13 +50,13 @@ describe("streamlined LLM Lab",()=>{
     expect(screen.getByRole("button",{name:"Send"})).toBeDisabled();expect(screen.getByRole("switch",{name:"Live motion"})).toBeDisabled();
     expect(screen.getByRole("button",{name:"Deeper"})).toBeDisabled();
   });
-  it("loads an authoritative new score when selecting Creative v2",async()=>{
+  it("loads an authoritative new score when selecting Simple (Creative v2)",async()=>{
     vi.mocked(labApi.reset).mockResolvedValue({...labState(),revision:1});
     vi.mocked(labApi.chat).mockResolvedValue({...labState(),revision:2});
     await ready();
-    fireEvent.click(screen.getByRole("button",{name:"Creative v2"}));
+    fireEvent.click(screen.getByRole("button",{name:"Simple"}));
     await waitFor(()=>expect(labApi.reset).toHaveBeenCalledWith(undefined,"creative_v2"));
-    await waitFor(()=>expect(screen.getByRole("button",{name:"Creative v2"})).toHaveAttribute("aria-pressed","true"));
+    await waitFor(()=>expect(screen.getByRole("button",{name:"Simple"})).toHaveAttribute("aria-pressed","true"));
     type("Mix full strokes with base rebounds.");fireEvent.click(screen.getByRole("button",{name:"Send"}));
     await waitFor(()=>expect(labApi.chat).toHaveBeenCalledWith(expect.objectContaining({method:"creative_v2",prompt:"gesture-prompt",revision:1}),expect.any(AbortSignal)));
   });

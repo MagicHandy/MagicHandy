@@ -33,13 +33,14 @@ export interface DeviceAction {
   reason?: string;
 }
 
-/** A live level: Coyote strength A and B, the vibrator's intensity. */
+/** A live level: Coyote strength A and B, the vibrator's Max. */
 export interface DeviceLevelModel {
   id: string;
   label: string;
   /** Null while the device has not confirmed it. */
   value: number | null;
-  ceiling: number;
+  /** The limit the value is read against; none shows the value alone. */
+  ceiling?: number;
   unit: "" | "%";
   canLower: boolean;
   canRaise: boolean;
@@ -58,10 +59,21 @@ export interface DeviceLevelGroup {
   /** The group's accessible name, which says whose levels these are. */
   name: string;
   levels: DeviceLevelModel[];
-  /** An explicit zero, including clearing permission to resume later. */
-  zero?: { label: string; run: () => void; disabled: boolean };
+  /** One explicit action beside the caption: Zero both, Resume now. */
+  action?: { label: string; run: () => void; disabled: boolean };
+  /** A switch under the levels, such as who sets the vibrator's level. */
+  toggle?: DeviceLevelToggleModel;
   /** A note under the levels, such as an unconfirmed zero. */
   note?: string;
+}
+
+export interface DeviceLevelToggleModel {
+  label: string;
+  checked: boolean;
+  /** What the switch means now, such as the model's level. */
+  readout: string;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
 }
 
 export interface DeviceModel {

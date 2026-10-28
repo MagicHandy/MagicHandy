@@ -51,13 +51,14 @@ func newVibratorFixture(t *testing.T, configure func(*fakeButtplugServer)) *vibr
 	return &vibratorFixture{t: t, server: server, hub: hub, vibrator: hub.vibrator, clock: clock}
 }
 
-func (f *vibratorFixture) selectAndArm(intensity float64, follow string) Transport {
+// selectAndArm chooses the vibrator with Max at level and model control off,
+// so movement-following output reaches Max.
+func (f *vibratorFixture) selectAndArm(level float64, follow string) Transport {
 	f.t.Helper()
 	if err := f.vibrator.Select(context.Background(), 3); err != nil {
 		f.t.Fatal(err)
 	}
-	f.vibrator.Configure(VibratorConfig{Profile: vibration.Profile{Follow: follow, DepthEnd: vibration.DepthBase}, Ceiling: 0.4})
-	f.vibrator.SetIntensity(intensity)
+	f.vibrator.Configure(VibratorConfig{Profile: vibration.Profile{Follow: follow, DepthEnd: vibration.DepthBase}, Ceiling: level})
 	run, err := f.vibrator.MotionTransport()
 	if err != nil {
 		f.t.Fatal(err)
@@ -109,7 +110,7 @@ func countKind(server *fakeButtplugServer, kind string) int {
 	return count
 }
 
-func TestVibratorSelectionUsesOnlyVibrateMotorsAndStartsAtZero(t *testing.T) {
+func TestVibratorSelectionUsesOnlyVibrateMotors(t *testing.T) {
 	f := newVibratorFixture(t, nil)
 	if err := f.vibrator.Select(context.Background(), 3); err != nil {
 		t.Fatal(err)
@@ -118,7 +119,7 @@ func TestVibratorSelectionUsesOnlyVibrateMotorsAndStartsAtZero(t *testing.T) {
 		t.Fatalf("Select stopped device %d", index)
 	}
 	status := f.vibrator.Status()
-	if !status.Selected || len(status.Motors) != 2 || status.Motors[0].Index != 0 || status.Motors[1].Index != 2 || status.IntensityPercent != 0 {
+	if !status.Selected || len(status.Motors) != 2 || status.Motors[0].Index != 0 || status.Motors[1].Index != 2 || status.Suspended || status.LevelSource != "handy" || status.ModelLevelPercent != 100 {
 		t.Fatalf("status = %+v", status)
 	}
 	if err := f.vibrator.Select(context.Background(), 7); !errors.Is(err, errVibratorNoMotors) {
@@ -148,7 +149,7 @@ func TestVibratorFollowsTheFrameAndSendsOnlyStepChanges(t *testing.T) {
 	if _, err := run.Play(ctx, PlayCommand{StreamID: "s"}); err != nil {
 		t.Fatal(err)
 	}
-	// Fade-in: the level rises over two seconds to the live intensity.
+	// Fade-in: the level rises over two seconds to Max.
 	f.pace(1120 * time.Millisecond)
 	half := lastScalars(t, f.server)
 	if math.Abs(half[0]-0.2) > 0.051 || half[2] != half[0] || half[1] != 0 {
@@ -157,15 +158,15 @@ func TestVibratorFollowsTheFrameAndSendsOnlyStepChanges(t *testing.T) {
 	f.pace(2 * time.Second)
 	full := lastScalars(t, f.server)
 	if full[0] != 0.4 || full[2] != 0.4 {
-		t.Fatalf("settled scalars = %v, want the 40%% intensity", full)
+		t.Fatalf("settled scalars = %v, want the 40%% Max", full)
 	}
 	sent := countKind(f.server, "ScalarCmd")
 	f.pace(100 * time.Millisecond)
 	if countKind(f.server, "ScalarCmd") != sent {
 		t.Fatal("an unchanged level was sent again")
 	}
-	// Lowering the intensity takes effect on the next send.
-	f.vibrator.SetIntensity(0.1)
+	// Lowering Max takes effect on the next send.
+	f.vibrator.Configure(VibratorConfig{Profile: vibration.Profile{Follow: vibration.FollowSteady, DepthEnd: vibration.DepthBase}, Ceiling: 0.1})
 	f.pace(0)
 	if lowered := lastScalars(t, f.server); lowered[0] != 0.1 {
 		t.Fatalf("lowered scalars = %v", lowered)
@@ -204,7 +205,7 @@ func TestVibratorSpacesLevelsByTheDeviceTimingGapButNotZeros(t *testing.T) {
 		}
 	}
 	// A zero is never held back.
-	f.vibrator.SetIntensity(0)
+	f.vibrator.Configure(VibratorConfig{Profile: vibration.Profile{Follow: vibration.FollowSteady, DepthEnd: vibration.DepthBase}})
 	f.pace(0)
 	if countKind(f.server, "ScalarCmd") != sent+1 || lastScalars(t, f.server)[0] != 0 {
 		t.Fatalf("the zero waited for the timing gap: %v", lastScalars(t, f.server))
@@ -250,7 +251,7 @@ func TestVibratorMissingAcknowledgementStopsTheDevice(t *testing.T) {
 	}
 }
 
-func TestVibratorEmergencyStopZeroesTheIntensity(t *testing.T) {
+func TestVibratorEmergencyStopSuspendsUntilAPersonResumes(t *testing.T) {
 	f := newVibratorFixture(t, nil)
 	run := f.selectAndArm(0.3, vibration.FollowSteady)
 	ctx := context.Background()
@@ -259,8 +260,27 @@ func TestVibratorEmergencyStopZeroesTheIntensity(t *testing.T) {
 	if err := f.hub.EmergencyStop(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if status := f.vibrator.Status(); status.IntensityPercent != 0 || status.PlaybackState != "idle" {
+	status := f.vibrator.Status()
+	if !status.Suspended || status.SilentReason != "stopped" || status.PlaybackState != "idle" || status.CeilingPercent != 30 {
 		t.Fatalf("after Emergency Stop: %+v", status)
+	}
+	// A run started without a person's resume stays silent.
+	run, err := f.vibrator.MotionTransport()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = run.AppendPoints(ctx, strokeCommand("after", 10_000))
+	_, _ = run.Play(ctx, PlayCommand{StreamID: "after"})
+	f.pace(3 * time.Second)
+	if scalars := lastScalars(t, f.server); scalars[0] != 0 {
+		t.Fatalf("a suspended vibrator played %v", scalars)
+	}
+	if err := f.vibrator.ResumeAt(f.vibrator.ControlGeneration()); err != nil {
+		t.Fatal(err)
+	}
+	f.pace(100 * time.Millisecond)
+	if scalars := lastScalars(t, f.server); scalars[0] != 0.3 {
+		t.Fatalf("after Resume now: %v", scalars)
 	}
 }
 
@@ -292,7 +312,7 @@ func TestVibratorTestStaysBelowTheTestCeilingAndEnds(t *testing.T) {
 	if scalars := lastScalars(t, f.server); scalars[0] != 0 {
 		t.Fatalf("after the test: %v", scalars)
 	}
-	f.vibrator.SetIntensity(0)
+	f.vibrator.Configure(VibratorConfig{Profile: vibration.Profile{Follow: vibration.FollowSteady, DepthEnd: vibration.DepthBase}})
 	if err := f.vibrator.Test(); !errors.Is(err, errVibratorSilent) {
 		t.Fatalf("a silent test was accepted: %v", err)
 	}

@@ -50,7 +50,7 @@ const vibratorSession: IntifaceTransportSnapshot = {
   address: "ws://127.0.0.1:12345",
   status: { connected: true, scanning: false, playback_state: "idle", max_ping_time_ms: 0, queue_depth: 0, devices: [] },
   leases: ["vibrator"],
-  vibrator: { selected: true, device_index: 3, device_name: "Simulated Vibrator", motors: [{ index: 0, step_count: 20 }], intensity_percent: 15, ceiling_percent: 40, effective_ceiling_percent: 40, level_percent: 0, playback_state: "idle", testing: false, commanded_count: 0, acknowledged_count: 0, rejected_count: 0, timeout_count: 0 },
+  vibrator: { selected: true, device_index: 3, device_name: "Simulated Vibrator", motors: [{ index: 0, step_count: 20 }], ceiling_percent: 40, effective_ceiling_percent: 40, model_control: true, model_level_percent: 50, level_percent: 0, playback_state: "idle", testing: false, commanded_count: 0, acknowledged_count: 0, rejected_count: 0, timeout_count: 0 },
   diagnostics: {},
 };
 
@@ -100,7 +100,7 @@ describe("the device panel", () => {
       expect(within(row).getAllByRole("button").filter((button) => /^(Connect|Disconnect|Reconnect) /.test(button.getAttribute("aria-label") ?? ""))).toHaveLength(1);
     }
     expect(within(panel).getByRole("group", { name: "Coyote strength" })).toBeInTheDocument();
-    expect(within(panel).getByRole("group", { name: "Vibrator intensity" })).toBeInTheDocument();
+    expect(within(panel).getByRole("group", { name: "Vibrator strength" })).toBeInTheDocument();
     expect(within(panel).queryByRole("textbox")).toBeNull();
     expect(within(panel).queryByRole("combobox")).toBeNull();
   });

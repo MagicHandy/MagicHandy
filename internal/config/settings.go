@@ -556,6 +556,9 @@ type LLMUpdate struct {
 	// MotionGenerationMode replaces the saved model motion vocabulary when
 	// present; omission preserves compatibility with older settings clients.
 	MotionGenerationMode *string `json:"motion_generation_mode,omitempty"`
+	// OriginalCreativeMode offers or hides the retired original Creative mode;
+	// omission preserves it.
+	OriginalCreativeMode *bool `json:"original_creative_mode,omitempty"`
 	// MotionCapabilities replaces the saved gates when present; omitted
 	// preserves the current persisted values (older clients keep working).
 	MotionCapabilities *LLMMotionCapabilities `json:"motion_capabilities,omitempty"`
@@ -589,6 +592,7 @@ func LLMUpdateFromSettings(settings LLMSettings) LLMUpdate {
 		CustomAnatomy:               &settings.CustomAnatomy,
 		PersonaDescription:          &settings.PersonaDescription,
 		MotionGenerationMode:        &settings.MotionGenerationMode,
+		OriginalCreativeMode:        &settings.OriginalCreativeMode,
 		MotionCapabilities:          settings.MotionCapabilities,
 	}
 }
@@ -1395,6 +1399,10 @@ func normalizeLLMStrings(settings LLMSettings) LLMSettings {
 	settings.PromptSet = strings.TrimSpace(settings.PromptSet)
 	settings.ReasoningMode = strings.TrimSpace(settings.ReasoningMode)
 	settings.MotionGenerationMode = strings.ToLower(strings.TrimSpace(settings.MotionGenerationMode))
+	// A chat that uses the original Creative mode keeps it offered (ADR 0062).
+	if settings.MotionGenerationMode == LLMMotionModeDynamic {
+		settings.OriginalCreativeMode = true
+	}
 	settings.ChatVoice = strings.ToLower(strings.TrimSpace(settings.ChatVoice))
 	settings.ReplyLength = strings.ToLower(strings.TrimSpace(settings.ReplyLength))
 	settings.UserAnatomy = strings.ToLower(strings.TrimSpace(settings.UserAnatomy))

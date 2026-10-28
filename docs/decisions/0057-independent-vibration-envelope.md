@@ -1,5 +1,10 @@
 # ADR 0057: Independent vibration in the shared engine
 
+> Amended by [ADR 0061](0061-model-controlled-vibration-level.md): envelope values
+> are percentages of the user's Max, not relative drive inside an armed
+> intensity, and `follow` may carry its own range. Advanced changes apply
+> exactly, without a rate limit.
+
 Status: implemented with automated/simulated acceptance, 2026-10-25. Physical vibrator acceptance remains open.
 
 The owner requested independent model control of vibration alongside The Handy.

@@ -37,25 +37,11 @@ func normalizeHostedLayeredComposition(edits map[string]json.RawMessage) error {
 	if !hasGeometry {
 		return nil
 	}
-	if err := validateHostedGeometryControls(edits, geometry); err != nil {
-		return err
-	}
+	// Do not reject controls solely because geometry also selects them. The
+	// shared applyLayeredGeometryEdit compares their resolved values against
+	// that geometry, including relative edits against the actual recalled base.
+	// Agreeing endpoints/anchors are redundant; differing values still fail.
 	return validateHostedGeometryLayers(edits)
-}
-
-func validateHostedGeometryControls(edits map[string]json.RawMessage, geometry string) error {
-	if raw, present := edits["controls"]; present {
-		controls, err := uniqueLayeredObject(raw)
-		if err != nil {
-			return err
-		}
-		for name := range controls {
-			if name == "anchor_percent" || name == "variation_mode" || (geometry == "full_slider" && (name == "min_percent" || name == "max_percent")) {
-				return errors.New("named geometry owns its shape controls; use manual composition for custom shape edits")
-			}
-		}
-	}
-	return nil
 }
 
 func validateHostedGeometryLayers(edits map[string]json.RawMessage) error {

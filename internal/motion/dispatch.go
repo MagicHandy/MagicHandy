@@ -41,6 +41,7 @@ func (e *Engine) dispatchThrough(
 	}
 	e.mu.Lock()
 	appendCommand.VibrationOnly = e.plan.Target.VibrationOnly
+	appendCommand.SpeedPercent = e.plan.Target.SpeedPercent
 	appendCommand.Vibration = e.vibrationFrameLocked(e.estimatedPlaybackMillisLocked(e.now()))
 	e.mu.Unlock()
 	result, err := e.transport.AppendPoints(commandCtx, appendCommand)

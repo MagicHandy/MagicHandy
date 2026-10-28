@@ -5,11 +5,14 @@ import (
 	"errors"
 	"math"
 
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
-// VibrationSpec is relative drive inside the human's armed intensity, never a
-// hardware level or permission to raise that intensity. It drives all motors.
+// VibrationSpec is drive in percent of the user's Max (ADR 0061), never a
+// hardware level or permission to raise Max. It drives all motors. Follow may
+// carry a range: min_percent is the floor and max_percent the strength while
+// vibration follows movement; all zeros follow at the vibrator's own level.
 type VibrationSpec struct {
 	Mode          string  `json:"mode"`
 	MinPercent    int     `json:"min_percent"`
@@ -23,9 +26,13 @@ func (s VibrationSpec) Validate() error {
 		return errors.New("vibration requires 0 <= min_percent <= max_percent <= 100 and a finite period_seconds")
 	}
 	switch s.Mode {
-	case "follow", "off":
+	case "follow":
+		if s.PeriodSeconds != 0 {
+			return errors.New("vibration follow requires period_seconds 0")
+		}
+	case "off":
 		if s.MinPercent != 0 || s.MaxPercent != 0 || s.PeriodSeconds != 0 {
-			return errors.New("vibration follow/off requires min_percent, max_percent and period_seconds all 0")
+			return errors.New("vibration off requires min_percent, max_percent and period_seconds all 0")
 		}
 	case "steady":
 		if s.MinPercent != s.MaxPercent || s.PeriodSeconds != 0 {
@@ -44,7 +51,6 @@ func (s VibrationSpec) Validate() error {
 type vibrationPlan struct {
 	spec       VibrationSpec
 	fromMillis int64
-	fromLevel  float64
 	revision   uint64
 }
 
@@ -63,20 +69,18 @@ func (p vibrationPlan) LevelAt(at int64) float64 {
 		}
 		level = float64(p.spec.MinPercent) + float64(p.spec.MaxPercent-p.spec.MinPercent)*x
 	}
-	weight := smoothVibration(clampVibration(float64(at-p.fromMillis) / 600))
-	return p.fromLevel + (level-p.fromLevel)*weight
+	// The model owns this independent envelope. Do not impose the local
+	// scalar control's glide or a fixed retarget ramp on it. The transport
+	// still fades in a new/resumed session and enforces the user's Max.
+	return level
 }
 
 func clampVibration(x float64) float64  { return math.Max(0, math.Min(1, x)) }
 func smoothVibration(x float64) float64 { return x * x * (3 - 2*x) }
 
 func (e *Engine) setVibrationLocked(spec VibrationSpec, at int64) {
-	from := 0.0
-	if e.vibration != nil {
-		from = e.vibration.LevelAt(at)
-	}
 	e.vibrationRevision++
-	e.vibration = &vibrationPlan{spec: spec, fromMillis: at, fromLevel: from, revision: e.vibrationRevision}
+	e.vibration = &vibrationPlan{spec: spec, fromMillis: at, revision: e.vibrationRevision}
 	snapshot := spec
 	e.plan.Target.Vibration = &snapshot
 }
@@ -86,7 +90,9 @@ func (e *Engine) vibrationFrameLocked(at int64) *transport.VibrationFrame {
 		return nil
 	}
 	frame := &transport.VibrationFrame{Revision: e.vibration.revision, Follow: e.vibration.spec.Mode == "follow"}
-	if !frame.Follow {
+	if frame.Follow {
+		frame.FollowMinPercent, frame.FollowMaxPercent = float64(e.vibration.spec.MinPercent), float64(e.vibration.spec.MaxPercent)
+	} else {
 		// Cover the saved +/-300ms timing offset and pacer scheduling jitter.
 		for t := max(int64(0), at/100*100-500); t <= max(int64(0), at)+2500; t += 100 {
 			frame.Points = append(frame.Points, transport.TimedLevel{TimeMillis: t, LevelPercent: math.Max(0, math.Min(100, e.vibration.LevelAt(t)))})
@@ -94,6 +100,15 @@ func (e *Engine) vibrationFrameLocked(at int64) *transport.VibrationFrame {
 	}
 	e.vibrationTail = at + 2500
 	return frame
+}
+
+// FollowSpeedBand returns the averaged carriage speeds, in full spans per
+// second, at the user's slowest and fastest saved Handy speeds. Vibration that
+// follows speed spans this band (ADR 0061).
+func FollowSpeedBand(settings config.MotionSettings) (float64, float64) {
+	settings = normalizeMotionSettings(settings)
+	return referenceTravelRateForSpeed(settings.SpeedMinPercent, settings.HandyModel) / 100,
+		referenceTravelRateForSpeed(settings.SpeedMaxPercent, settings.HandyModel) / 100
 }
 
 // ApplyVibration changes only the scalar envelope. It neither retargets the

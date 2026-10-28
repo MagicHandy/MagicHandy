@@ -89,3 +89,52 @@ func TestVibratorOnlyPlaybackIsValid(t *testing.T) {
 		t.Fatalf("vibrator only: %+v", normalized.Device)
 	}
 }
+
+func TestVibrationLevelControlDefaultsToTheModelAndValidates(t *testing.T) {
+	defaults := DefaultVibrationSettings()
+	if defaults.LevelControl != VibrationLevelModel || !defaults.ModelSetsLevel() {
+		t.Fatalf("defaults = %+v", defaults)
+	}
+	// A block saved before ADR 0061 keeps its values and gains model control.
+	stored := VibrationSettings{Follow: VibrationFollowDepth, DepthEnd: VibrationDepthTip, MinimumPercent: 5, CeilingPercent: 30}
+	if migrated := applyMissingVibrationDefaults(stored); migrated.LevelControl != VibrationLevelModel || migrated.CeilingPercent != 30 || migrated.Follow != VibrationFollowDepth {
+		t.Fatalf("migrated = %+v", migrated)
+	}
+	manual := defaults
+	manual.LevelControl = VibrationLevelManual
+	if err := validateVibrationSettings(manual); err != nil || manual.ModelSetsLevel() {
+		t.Fatalf("manual control: %v", err)
+	}
+	manual.LevelControl = "autopilot"
+	if err := validateVibrationSettings(manual); err == nil {
+		t.Fatal("accepted an unknown level control")
+	}
+}
+
+func TestOriginalCreativeModeIsHiddenUntilRestored(t *testing.T) {
+	settings := DefaultSettings()
+	if settings.LLM.OriginalCreativeMode || settings.LLM.MotionGenerationMode != LLMMotionModeLayered {
+		t.Fatalf("defaults = %q original=%t", settings.LLM.MotionGenerationMode, settings.LLM.OriginalCreativeMode)
+	}
+	// A chat already on the original Creative mode keeps it offered.
+	settings.LLM.MotionGenerationMode = LLMMotionModeDynamic
+	normalized, err := NormalizeSettings(settings)
+	if err != nil || !normalized.LLM.OriginalCreativeMode {
+		t.Fatalf("saved dynamic: %v original=%t", err, normalized.LLM.OriginalCreativeMode)
+	}
+	// Hiding it moves that chat to the default mode.
+	off := false
+	next, err := applyLLMUpdate(normalized.LLM, LLMUpdate{OriginalCreativeMode: &off})
+	if err != nil || next.OriginalCreativeMode || next.MotionGenerationMode != LLMMotionModeLayered {
+		t.Fatalf("hidden: %v mode=%q original=%t", err, next.MotionGenerationMode, next.OriginalCreativeMode)
+	}
+	on := true
+	if restored, err := applyLLMUpdate(next, LLMUpdate{OriginalCreativeMode: &on}); err != nil || !restored.OriginalCreativeMode || restored.MotionGenerationMode != LLMMotionModeLayered {
+		t.Fatalf("restored: %v %+v", err, restored.MotionGenerationMode)
+	}
+	// Settings from before the selector still adopt Creative, and keep it offered.
+	legacy, _, err := loadSettingsFromBytes([]byte(`{"version":2,"llm":{"model":"local"}}`))
+	if err != nil || legacy.LLM.MotionGenerationMode != LLMMotionModeDynamic || !legacy.LLM.OriginalCreativeMode {
+		t.Fatalf("pre-selector: %v mode=%q original=%t", err, legacy.LLM.MotionGenerationMode, legacy.LLM.OriginalCreativeMode)
+	}
+}

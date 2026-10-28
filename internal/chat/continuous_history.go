@@ -103,12 +103,16 @@ func spokenReply(content string) string {
 	return content
 }
 
-func continuousOutputGuard(capabilities Capabilities) string {
-	empty := "{}"
+// continuousEmptyEdits is this mode's "no linear change" edits value.
+func continuousEmptyEdits(capabilities Capabilities) string {
 	if capabilities.MotionMode == MotionModeCreativeV2 || (capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion) {
-		empty = "[]"
+		return "[]"
 	}
-	guard := `FINAL OUTPUT RULE: Return one JSON object using this mode's contract. Conversation requires "edits":` + empty + `; no evolution. Reply in the selected voice, not the technical examples' style. Never output a "motion" field. Close JSON after the final sentence; no trailing blank lines.`
+	return "{}"
+}
+
+func continuousOutputGuard(capabilities Capabilities) string {
+	guard := `FINAL OUTPUT RULE: Return one JSON object using this mode's contract. Conversation requires "edits":` + continuousEmptyEdits(capabilities) + `; no evolution. Reply in the selected voice, not the technical examples' style. Never output a "motion" field. Close JSON after the final sentence; no trailing blank lines.`
 	if capabilities.MoodTracking {
 		guard += ` Optional "new_mood" may use a listed mood.`
 	}

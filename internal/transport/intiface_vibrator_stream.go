@@ -86,9 +86,13 @@ func (v *IntifaceVibrator) appendPoints(ctx context.Context, command AppendPoint
 			v.stream.vibration = companion.Timeline{}
 			v.stream.vibrationRevision = 0
 			v.stream.independent = false
+			v.stream.followRange = false
 			v.stream.id = command.StreamID
 		}
 		v.stream.timeline = next
+		if command.SpeedPercent > 0 || newStream {
+			v.stream.speedPercent = command.SpeedPercent
+		}
 		v.applyVibrationFrameLocked(command.Vibration, envelope)
 	}
 	v.mu.Unlock()

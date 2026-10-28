@@ -11,14 +11,15 @@ const vibratorEventCapacity = 128
 // device names/addresses, credentials, or raw server errors. Command is a local
 // sequence joining a scalar write to its acknowledgement.
 type VibratorEvent struct {
-	At               string               `json:"at"`
-	Kind             string               `json:"kind"`
-	Command          uint64               `json:"command,omitempty"`
-	Generation       uint64               `json:"generation"`
-	IntensityPercent int                  `json:"intensity_percent"`
-	CeilingPercent   int                  `json:"ceiling_percent"`
-	State            string               `json:"state"`
-	Levels           []VibratorMotorLevel `json:"levels,omitempty"`
+	At                string               `json:"at"`
+	Kind              string               `json:"kind"`
+	Command           uint64               `json:"command,omitempty"`
+	Generation        uint64               `json:"generation"`
+	ModelLevelPercent int                  `json:"model_level_percent"`
+	CeilingPercent    int                  `json:"ceiling_percent"`
+	Suspended         bool                 `json:"suspended,omitempty"`
+	State             string               `json:"state"`
+	Levels            []VibratorMotorLevel `json:"levels,omitempty"`
 }
 
 // VibratorMotorLevel is a commanded, quantized estimate, not motor telemetry.
@@ -29,8 +30,8 @@ type VibratorMotorLevel struct {
 
 func (v *IntifaceVibrator) addEventLocked(kind string, command uint64, steps []int) {
 	event := VibratorEvent{At: v.clock().UTC().Format(time.RFC3339Nano), Kind: kind,
-		Command: command, Generation: v.stream.generation, IntensityPercent: percent(v.intensity),
-		CeilingPercent: percent(v.config.Ceiling), State: v.playbackStateLocked()}
+		Command: command, Generation: v.stream.generation, ModelLevelPercent: percent(v.effectiveLevelLocked()),
+		CeilingPercent: percent(v.config.Ceiling), Suspended: v.suspended, State: v.playbackStateLocked()}
 	for index, step := range steps {
 		if index < len(v.selection.motors) {
 			motor := v.selection.motors[index]

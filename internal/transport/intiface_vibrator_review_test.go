@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -25,15 +26,20 @@ func TestVibratorTestDeadlineAllowsNextHealthyPacerTick(t *testing.T) {
 	}
 }
 
-func TestVibratorLowerOnlyRequestCannotBecomeRaise(t *testing.T) {
+func TestVibratorStoppedLevelCanOnlyFall(t *testing.T) {
 	f := newVibratorFixture(t, nil)
 	f.selectAndArm(.4, vibration.FollowSteady)
-	admission := f.vibrator.ControlGeneration()
-	if _, err := f.vibrator.SetIntensityAt(admission, 0, false); err != nil {
+	if err := f.vibrator.SetModelLevel(.5, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.vibrator.SetIntensityAt(admission, .35, false); err == nil || f.vibrator.Intensity() != 0 {
-		t.Fatal("a queued lowering restored intensity after a newer zero")
+	if err := f.hub.EmergencyStop(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.vibrator.SetModelLevel(.9, true); !errors.Is(err, errVibratorStopped) || f.vibrator.ModelLevel() != .5 {
+		t.Fatalf("a stale model raise crossed Stop: %v level=%v", err, f.vibrator.ModelLevel())
+	}
+	if err := f.vibrator.SetModelLevel(.2, true); err != nil || f.vibrator.ModelLevel() != .2 {
+		t.Fatalf("lowering after Stop: %v level=%v", err, f.vibrator.ModelLevel())
 	}
 }
 
@@ -49,7 +55,7 @@ func TestVibratorFailureSurvivesPolicyChangeButNotNextRun(t *testing.T) {
 	if !ok {
 		t.Fatal("missing prepared command")
 	}
-	_, _ = f.vibrator.SetIntensityAt(f.vibrator.ControlGeneration(), .3, false)
+	_ = f.vibrator.SetModelLevel(.3, false)
 	f.vibrator.failSend(send, errIntifaceResponseTime, true)
 	if f.vibrator.Status().PlaybackState != "stale" {
 		t.Fatal("settings edit hid a failed write from the active run")

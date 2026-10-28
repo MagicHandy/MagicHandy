@@ -8,6 +8,7 @@ import { EMPTY_INTIFACE } from "./runtime";
 import { chipSummary } from "./status";
 import type { DeviceContext } from "./types";
 import { vibratorDevice } from "./vibrator";
+import type { VibrationSettings } from "../api/types";
 
 vi.mock("../api/client", () => ({
   api: {
@@ -22,7 +23,8 @@ vi.mock("../api/client", () => ({
     intifaceDisconnect: vi.fn(),
     nativeBluetoothConnect: vi.fn(),
     nativeBluetoothDisconnect: vi.fn(),
-    vibratorIntensity: vi.fn(),
+    saveDeviceOptions: vi.fn(),
+    vibratorResume: vi.fn(),
     vibratorTest: vi.fn(),
   },
 }));
@@ -196,9 +198,15 @@ describe("The Coyote's descriptor", () => {
 describe("The vibrator's descriptor", () => {
   const vibrator = (patch: Partial<NonNullable<IntifaceTransportSnapshot["vibrator"]>> = {}) => ({
     selected: true, device_index: 3, device_name: "Simulated Vibrator", motors: [{ index: 0, step_count: 20 }],
-    intensity_percent: 15, ceiling_percent: 40, effective_ceiling_percent: 40, level_percent: 0, playback_state: "idle", testing: false,
+    ceiling_percent: 40, effective_ceiling_percent: 40, model_control: true, model_level_percent: 50, level_source: "model" as const, level_percent: 0, playback_state: "idle", testing: false,
     commanded_count: 0, acknowledged_count: 0, rejected_count: 0, timeout_count: 0, ...patch,
   });
+  const vibration = (patch: Partial<VibrationSettings> = {}): Partial<PublicSettings> => ({
+    vibration: { follow: "speed", depth_end: "base", minimum_percent: 0, ceiling_percent: 40, timing_offset_ms: 0, level_control: "model", ...patch },
+  });
+  const chatFeatures = (features: Record<string, boolean>) => ({ settings: { model_routing: { chat: { features } } } }) as unknown as DeviceContext["state"];
+  const connected = (patch: Partial<NonNullable<IntifaceTransportSnapshot["vibrator"]>> = {}) =>
+    intiface({ leases: ["vibrator"], status: { connected: true }, vibrator: vibrator(patch) });
 
   it("does not count a session that only the Handy holds", () => {
     const model = vibratorDevice.model(makeCtx({ intiface: intiface({ leases: ["handy"], status: { connected: true } }) }));
@@ -210,36 +218,66 @@ describe("The vibrator's descriptor", () => {
     expect(model).toMatchObject({ status: "needs_setup", details: ["choose a device"], action: { kind: "setup" } });
   });
 
-  it("raises with the Stop sequence, lowers without it, and stops at the ceiling", async () => {
-    const ctx = makeCtx({ intiface: intiface({ leases: ["vibrator"], status: { connected: true }, vibrator: vibrator() }) });
+  it("steps the saved Max and keeps the minimum at or below it", async () => {
+    const ctx = makeCtx({ intiface: connected() }, vibration({ minimum_percent: 40 }));
     const [level] = vibratorDevice.model(ctx).levels!.levels;
-    expect(level).toMatchObject({ label: "Intensity", value: 15, ceiling: 40, unit: "%" });
+    expect(level).toMatchObject({ label: "Max", value: 40, unit: "%" });
+    expect(level.ceiling).toBeUndefined();
     level.raise();
     level.lower();
-    await vi.waitFor(() => expect(api.vibratorIntensity).toHaveBeenCalledTimes(2));
-    expect(api.vibratorIntensity).toHaveBeenNthCalledWith(1, 20, 7);
-    expect(api.vibratorIntensity).toHaveBeenNthCalledWith(2, 10, undefined);
-    const top = vibratorDevice.model(makeCtx({ intiface: intiface({ leases: ["vibrator"], status: { connected: true }, vibrator: vibrator({ intensity_percent: 40 }) }) })).levels!.levels[0];
+    await vi.waitFor(() => expect(api.saveDeviceOptions).toHaveBeenCalledTimes(2));
+    expect(api.saveDeviceOptions).toHaveBeenNthCalledWith(1, { vibration: { ceiling_percent: 45, minimum_percent: 40 } });
+    expect(api.saveDeviceOptions).toHaveBeenNthCalledWith(2, { vibration: { ceiling_percent: 35, minimum_percent: 35 } });
+    const top = vibratorDevice.model(makeCtx({ intiface: connected() }, vibration({ ceiling_percent: 100 }))).levels!.levels[0];
     expect(top.canRaise).toBe(false);
   });
 
-  it("tests only while motion is paused and never at zero", () => {
-    const running = makeCtx({ engineActive: true, intiface: intiface({ leases: ["vibrator"], status: { connected: true }, vibrator: vibrator() }) });
+  it("tests only while motion is paused and never at a zero Max", () => {
+    const running = makeCtx({ engineActive: true, intiface: connected() }, vibration());
     expect(vibratorDevice.model(running).levels!.levels[0].canTest).toBe(false);
-    const zero = makeCtx({ intiface: intiface({ leases: ["vibrator"], status: { connected: true }, vibrator: vibrator({ intensity_percent: 0 }) }) });
-    expect(vibratorDevice.model(zero).levels!.levels[0]).toMatchObject({ canTest: false, canLower: false });
+    const zero = makeCtx({ intiface: connected({ ceiling_percent: 0, effective_ceiling_percent: 0, silent_reason: "max_zero" }) }, vibration({ ceiling_percent: 0 }));
+    const model = vibratorDevice.model(zero);
+    expect(model.levels!.levels[0]).toMatchObject({ canTest: false, canLower: false });
+    expect(model.levels!.note).toMatch(/Raise the max/);
+    expect(model.status).toBe("silent");
   });
 
-  it("can clear the backend's post-Stop resume permission without raising output", async () => {
-    const ctx = makeCtx({ intiface: intiface({ leases: ["vibrator"], status: { connected: true }, vibrator: vibrator({ intensity_percent: 0, resume_intensity_percent: 35, silent_reason: "emergency_stop" }) }) });
+  it("shows who sets the level and switches it as a saved setting", async () => {
+    const ctx = makeCtx({ state: chatFeatures({ vibration_level: true }), intiface: connected() }, vibration());
     const levels = vibratorDevice.model(ctx).levels!;
-    expect(levels.note).toContain("35% intensity");
-    expect(levels.zero).toMatchObject({ label: "Keep vibration off", disabled: false });
-    levels.zero!.run();
-    await vi.waitFor(() => expect(api.vibratorIntensity).toHaveBeenCalledWith(0, undefined));
-    expect(vibratorDevice.model({ ...ctx, locked: true }).levels!.zero!.disabled).toBe(true);
-    const cleared = { ...ctx, intiface: { ...ctx.intiface, vibrator: vibrator({ intensity_percent: 0 }) } };
-    expect(vibratorDevice.model(cleared).levels!.zero).toBeUndefined();
+    expect(levels.toggle).toMatchObject({ label: "Model sets level", checked: true, readout: "50% of max", disabled: false });
+    expect(levels.note).toMatch(/model picks the level/);
+    levels.toggle!.onChange(false);
+    await vi.waitFor(() => expect(api.saveDeviceOptions).toHaveBeenCalledWith({ vibration: { level_control: "manual" } }));
+    const manual = vibratorDevice.model(makeCtx({ state: chatFeatures({ vibration_level: true }), intiface: connected() }, vibration({ level_control: "manual" }))).levels!;
+    expect(manual.toggle).toMatchObject({ checked: false, readout: "Off" });
+    expect(manual.note).toMatch(/follows movement at your max/);
+    // Before the model chooses, the level follows The Handy.
+    const handy = vibratorDevice.model(makeCtx({ state: chatFeatures({ vibration_level: true }), intiface: connected({ level_source: "handy", model_level_percent: 100 }) }, vibration())).levels!;
+    expect(handy.toggle).toMatchObject({ checked: true, readout: "Follows The Handy" });
+    expect(handy.note).toMatch(/Until the model chooses a level, vibration follows The Handy/);
+    // A chat model with no vibration vocabulary gets no switch.
+    expect(vibratorDevice.model(makeCtx({ intiface: connected() }, vibration())).levels!.toggle).toBeUndefined();
+  });
+
+  it("offers Resume now after Stop, only to the host", async () => {
+    const ctx = makeCtx({ intiface: connected({ suspended: true, silent_reason: "stopped" }) }, vibration());
+    const model = vibratorDevice.model(ctx);
+    expect(model.status).toBe("silent");
+    expect(model.levels).toMatchObject({ label: "Paused by Stop", action: { label: "Resume now", disabled: false } });
+    expect(model.levels!.note).toMatch(/next motion request can resume it/);
+    model.levels!.action!.run();
+    await vi.waitFor(() => expect(api.vibratorResume).toHaveBeenCalledWith(7));
+    expect(vibratorDevice.model({ ...ctx, canConfigureHost: false }).levels!.action!.disabled).toBe(true);
+    expect(vibratorDevice.model(makeCtx({ intiface: connected() }, vibration())).levels!.action).toBeUndefined();
+  });
+
+  it("shows the actual Advanced envelope and ignores it when model control is off", () => {
+    const state = { ...chatFeatures({ independent_vibration: true }), motion: { engine: { target: { vibration: { mode: "steady", min_percent: 70, max_percent: 70, period_seconds: 0 } } } } } as DeviceContext["state"];
+    const ctx = makeCtx({ state, engineActive: true, intiface: connected({ level_source: "handy" }) }, vibration());
+    expect(vibratorDevice.model(ctx).levels!.toggle!.readout).toBe("Steady at 70% of max");
+    const manual = vibratorDevice.model(makeCtx({ ...ctx, settings: { ...ctx.settings!, vibration: { ...ctx.settings!.vibration!, level_control: "manual" } } }));
+    expect(manual.levels!.toggle!.readout).toBe("Off");
   });
 
   it("says when the motors' steps lower the effective ceiling", () => {

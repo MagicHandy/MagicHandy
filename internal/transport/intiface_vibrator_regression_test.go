@@ -33,7 +33,7 @@ func TestVibratorStartupCoverage(t *testing.T) {
 }
 
 func TestVibratorRechecksLoweredLimitsAtWrite(t *testing.T) {
-	for _, change := range []string{"intensity", "ceiling"} {
+	for _, change := range []string{"max"} {
 		t.Run(change, func(t *testing.T) {
 			f := newVibratorFixture(t, nil)
 			run := f.selectAndArm(0.4, vibration.FollowSteady)
@@ -54,13 +54,7 @@ func TestVibratorRechecksLoweredLimitsAtWrite(t *testing.T) {
 			}
 			// This is the real race boundary: a command has been prepared,
 			// but has not yet passed the session writer admission check.
-			if change == "intensity" {
-				if _, err := f.vibrator.SetIntensityAt(f.vibrator.ControlGeneration(), 0.1, false); err != nil {
-					t.Fatal(err)
-				}
-			} else {
-				f.vibrator.Configure(VibratorConfig{Profile: vibration.Profile{Follow: vibration.FollowSteady}, Ceiling: 0.1})
-			}
+			f.vibrator.Configure(VibratorConfig{Profile: vibration.Profile{Follow: vibration.FollowSteady}, Ceiling: 0.1})
 			f.vibrator.send(f.hub.session.sessionCtx, send)
 			waitForTest(t, time.Second, func() bool { f.vibrator.mu.Lock(); defer f.vibrator.mu.Unlock(); return !f.vibrator.inFlight })
 			sent := lastScalars(t, f.server)
@@ -74,7 +68,7 @@ func TestVibratorRechecksLoweredLimitsAtWrite(t *testing.T) {
 	}
 }
 
-func TestVibratorQuantizationRespectsLiveIntensity(t *testing.T) {
+func TestVibratorQuantizationRespectsMax(t *testing.T) {
 	f := newVibratorFixture(t, nil)
 	run := f.selectAndArm(0.03, vibration.FollowSteady)
 	if _, err := run.AppendPoints(context.Background(), strokeCommand("review-quantize", 10_000)); err != nil {
@@ -85,10 +79,10 @@ func TestVibratorQuantizationRespectsLiveIntensity(t *testing.T) {
 	}
 	f.pace(3 * time.Second)
 	sent := lastScalars(t, f.server)
-	t.Logf("live intensity=3%%; transmitted=%v; status=%+v", sent, f.vibrator.Status())
+	t.Logf("Max=3%%; transmitted=%v; status=%+v", sent, f.vibrator.Status())
 	for index, level := range sent {
 		if level > .03 {
-			t.Errorf("motor %d level %.2f exceeds live intensity .03", index, level)
+			t.Errorf("motor %d level %.2f exceeds Max .03", index, level)
 		}
 	}
 }

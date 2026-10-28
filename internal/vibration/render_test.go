@@ -116,3 +116,30 @@ func TestQuantizeHoldsAStepAndRoundsTheCeilingDown(t *testing.T) {
 		t.Fatal("zero is always exact")
 	}
 }
+
+func TestFollowSpeedSpansTheSavedSpeedBand(t *testing.T) {
+	band := Profile{Follow: FollowSpeed, SpeedLow: 1, SpeedHigh: 3}
+	for _, tc := range []struct{ speed, want float64 }{
+		{0, 0}, {0.5, speedBandFloor / 2}, {1, speedBandFloor}, {2, (1 + speedBandFloor) / 2}, {3, 1}, {6, 1},
+	} {
+		if got := speedDrive(tc.speed, band); math.Abs(got-tc.want) > 1e-9 {
+			t.Fatalf("speed %.1f: drive %.4f, want %.4f", tc.speed, got, tc.want)
+		}
+	}
+	if got := speedDrive(1, Profile{Follow: FollowSpeed}); math.Abs(got-(1-math.Exp(-1/speedScale))) > 1e-9 {
+		t.Fatalf("no band: %.4f", got)
+	}
+	if got := speedDrive(2, Profile{Follow: FollowSpeed, SpeedLow: 2, SpeedHigh: 2}); got != 1 {
+		t.Fatalf("single saved speed: %.4f", got)
+	}
+}
+
+func TestFollowSpeedBandSeparatesSlowAndFastStrokes(t *testing.T) {
+	band := Profile{Follow: FollowSpeed, SpeedLow: 0.933, SpeedHigh: 2.961}
+	// Full strokes at the band's ends: one span per 1072 ms and per 338 ms.
+	slow := settle(NewRenderer(band), strokes(t, 1072, 10_000), 6000)
+	fast := settle(NewRenderer(band), strokes(t, 338, 10_000), 6000)
+	if slow > 0.45 || fast < 0.9 {
+		t.Fatalf("drive slow %.3f fast %.3f; the band must span the speed range", slow, fast)
+	}
+}

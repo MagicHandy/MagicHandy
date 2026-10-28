@@ -54,7 +54,7 @@ func TestIntermediateLayeredRejectsAmbiguityWithoutMutation(t *testing.T) {
 		`[{"controls":{"speed_percent":45,"speed_percent":55}}]`,
 		`[{"geometry":"full_slider_and_tip"},{"range":{"min_percent":20,"max_percent":100}}]`,
 		`[{"geometry":"full_slider_and_tip"},{"change_by":{"min_percent":5}}]`,
-		`[{"geometry":"wander","evolve":true}]`, `[{"unknown":true}]`,
+		`[{}]`, `[{"unknown":true}]`,
 		`[{"controls":{"speed_percent":45}},{"change_by":{"speed_percent":5}}]`,
 		`null`,
 	} {
@@ -67,6 +67,33 @@ func TestIntermediateLayeredRejectsAmbiguityWithoutMutation(t *testing.T) {
 		if err == nil || reply.Motion != nil || !reflect.DeepEqual(current, *before) {
 			t.Fatalf("invalid edits mutated score: %s (%v)", edits, err)
 		}
+	}
+}
+
+func TestIntermediateLayeredAcceptsOnlyEquivalentPaceRepresentations(t *testing.T) {
+	for _, tc := range []struct {
+		name, edits string
+		valid       bool
+	}{
+		{"same result", `[{"controls":{"speed_percent":35}},{"change_by":{"speed_percent":-10}}]`, true},
+		{"different result", `[{"controls":{"speed_percent":35}},{"change_by":{"speed_percent":-15}}]`, false},
+		{"null delta", `[{"controls":{"speed_percent":45}},{"change_by":{"speed_percent":null}}]`, false},
+		{"duplicate key", `[{"controls":{"speed_percent":35}},{"change_by":{"speed_percent":-10,"speed_percent":-15}}]`, false},
+		{"fractional delta", `[{"controls":{"speed_percent":35}},{"change_by":{"speed_percent":-10.5}}]`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			state := levelState(true)
+			state.Layered.SpeedPercent = 45
+			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, IntermediateMotion: true}
+			svc := Service{Capabilities: &caps}
+			result, err := svc.parseLayeredResponse(`{"action":"update","edits":`+tc.edits+`,"vibration_level":70,"reply":"Slower strokes and stronger vibration."}`, *state.Layered, state, config.DefaultSettings().Motion, false)
+			if (err == nil) != tc.valid {
+				t.Fatalf("valid=%t: %v", tc.valid, err)
+			}
+			if tc.valid && (result.Motion == nil || result.Motion.Layered.SpeedPercent != 35 || *result.Motion.VibrationLevel != 70 || state.Layered.SpeedPercent != 45) {
+				t.Fatalf("duplicate changed the requested result or original state: %+v", result.Motion)
+			}
+		})
 	}
 }
 
@@ -104,7 +131,7 @@ func TestIntermediateFullGuidanceFits32KAcrossVoiceAndState(t *testing.T) {
 	for _, voice := range []VoiceLevel{VoiceUtility, VoiceWarm, VoiceIntimate, VoiceExplicit} {
 		for _, state := range []MotionContext{{Running: true}, {Paused: true}, {}} {
 			state.MotionMode, state.SpeedMinPercent, state.SpeedMaxPercent = MotionModeLayered, 10, 100
-			state.Outputs = &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Ready: true, Armed: true, Follow: "speed", Motors: 2}}
+			state.Outputs = &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Ready: true, Follow: "speed", Motors: 2}}
 			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, IntermediateMotion: true, Voice: voice}
 			prompt := ComposeInteractivePrompt(set, nil, nil, caps, &state, nil, PromptBudgetSettings{ContextSize: 32768, MaxOutputTokens: 512})
 			schema := InteractiveResponseSchema(nil, caps, &state)

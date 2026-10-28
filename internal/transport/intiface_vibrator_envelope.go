@@ -16,6 +16,9 @@ func vibrationFrameTimeline(frame *VibrationFrame) (companion.Timeline, error) {
 	if len(frame.Points) > 64 || (!frame.Follow && len(frame.Points) < 2) || (frame.Follow && len(frame.Points) != 0) {
 		return next, errors.New("invalid vibration frame size")
 	}
+	if !validFollowRange(frame) {
+		return next, errors.New("vibration follow range must satisfy 0 <= min <= max <= 100")
+	}
 	points := make([]companion.Point, len(frame.Points))
 	for i, point := range frame.Points {
 		if math.IsNaN(point.LevelPercent) || math.IsInf(point.LevelPercent, 0) || point.LevelPercent < 0 || point.LevelPercent > 100 {
@@ -44,6 +47,18 @@ func (v *IntifaceVibrator) applyVibrationFrameLocked(frame *VibrationFrame, next
 	}
 	v.stream.vibrationRevision = frame.Revision
 	v.stream.independent = !frame.Follow
+	v.stream.followRange = frame.Follow && frame.FollowMaxPercent > 0
+	v.stream.followLow, v.stream.followHigh = frame.FollowMinPercent/100, frame.FollowMaxPercent/100
 	v.stream.vibration = next
 	v.signalLocked()
+}
+
+// validFollowRange accepts a follow frame's range in percent of Max; other
+// frames carry none.
+func validFollowRange(frame *VibrationFrame) bool {
+	low, high := frame.FollowMinPercent, frame.FollowMaxPercent
+	if math.IsNaN(low) || math.IsNaN(high) || low < 0 || high > 100 || low > high {
+		return false
+	}
+	return frame.Follow || (low == 0 && high == 0)
 }

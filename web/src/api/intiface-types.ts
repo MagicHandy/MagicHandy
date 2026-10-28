@@ -23,8 +23,11 @@ export interface VibrationSettings {
   follow: "speed" | "depth" | "steady";
   depth_end: "base" | "tip";
   minimum_percent: number;
+  /** The user's Max: it caps every output, including the model's level. */
   ceiling_percent: number;
   timing_offset_ms: number;
+  /** Who sets the level under Max (ADR 0061); manual follows at Max. */
+  level_control: "model" | "manual";
 }
 
 /** One vibration motor the vibrator drives. */
@@ -42,11 +45,20 @@ export interface IntifaceVibratorStatus {
   device_index?: number;
   device_name?: string;
   motors: IntifaceVibratorMotor[];
-  intensity_percent: number;
-  /** Previous human level available to a fresh manual chat motion request. */
-  resume_intensity_percent?: number;
+  /** The user's Max, and the highest motor level at or below it. */
   ceiling_percent: number;
   effective_ceiling_percent: number;
+  /** The setting is on and the chat model can set vibration. */
+  model_control: boolean;
+  /** The level as a percentage of Max: the model's, or The Handy's intensity. */
+  model_level_percent: number;
+  /** "model" once a model chose the level; "handy" while it follows The Handy. */
+  level_source?: "model" | "handy";
+  /** The last nonzero model level, while the level is 0. */
+  previous_level_percent?: number;
+  /** Stop paused the vibrator until a person resumes it. */
+  suspended?: boolean;
+  /** The last commanded motor level, not measured vibration. */
   level_percent: number;
   playback_state: string;
   testing: boolean;
@@ -56,7 +68,6 @@ export interface IntifaceVibratorStatus {
   timeout_count: number;
   last_error?: string;
   silent_reason?: string;
-  effective_intensity_percent?: number;
   test_available?: boolean;
 }
 

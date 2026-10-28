@@ -349,17 +349,19 @@ idioms. The backend owns every value: the models only read its snapshots.
   the device page can supply, such as a key, a device choice or the safety
   notes) and **Connection lost** (`--danger`: it dropped, or a degraded run
   left it). A failed attempt adds "last attempt failed" to Not connected.
-- **Level:** the label, `N of ceiling` in `--font-mono`, neutral 32px `−`/`+`
-  steps (44px on coarse pointers) and the one green **Test**. Steps are never
-  red or green and never start output. Test needs the current Stop sequence and
-  plays only while motion is paused. Coyote strength A and B share a caption
-  row with a quiet **Zero both**; the vibrator has one Intensity level. The
-  ceiling comes from the device page.
-- **After Stop:** when the backend retains a vibrator resume level, show a
-  concise explanation that a new chat motion request can resume it, plus a
-  quiet **Keep vibration off** action that clears it through the intensity
-  endpoint. Do not infer this state in the frontend. Add-device capability
-  notes stay in the compact choice row and include the Advanced local exception.
+- **Level:** the label, `N of ceiling` (or the value alone when there is no
+  ceiling) in `--font-mono`, neutral 32px `−`/`+` steps (44px on coarse
+  pointers) and the one green **Test**. Steps are never red or green and never
+  start output. Test needs the current Stop sequence and plays only while
+  motion is paused. Coyote strength A and B share a caption row with a quiet
+  **Zero both**; the vibrator has one **Max** level, the same saved setting as
+  its page, and a **Model sets level** switch row when the chat model can set
+  vibration. The group's one quiet action sits in the caption row.
+- **After Stop:** when the backend reports the vibrator suspended, the caption
+  reads **Paused by Stop** with a quiet **Resume now**, and the note says the
+  next motion request can resume it and that turning it out of playback keeps it off. Do
+  not infer this state in the frontend. Add-device capability notes stay in the
+  compact choice row.
 - **Glyphs:** centered 16-unit SVG drawings in `currentColor` (The Handy,
   Coyote, Vibrator, Intiface Central, Bluetooth on this computer). Render at
   20px in 32px panel tiles, 24px in 36px Settings/Add/connection tiles, and 28px

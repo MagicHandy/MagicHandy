@@ -7,7 +7,7 @@ import { api } from "../api/client";
 import { ArrowRightIcon } from "../shell/icons";
 import { t } from "../i18n";
 import { statusWord } from "./status";
-import type { DeviceAction, DeviceContext, DeviceDescriptor, DeviceLevelGroup, DeviceLevelModel, DeviceModel } from "./types";
+import type { DeviceAction, DeviceContext, DeviceDescriptor, DeviceLevelGroup, DeviceLevelModel, DeviceLevelToggleModel, DeviceModel } from "./types";
 
 export function deviceRoute(id: string): string {
   return `#/settings/devices/${id}`;
@@ -96,23 +96,41 @@ export function DeviceLevels({ group }: { group: DeviceLevelGroup }) {
   const several = group.levels.length > 1;
   return (
     <div className="device-levels" role="group" aria-label={group.name}>
-      {(several || group.zero) && (
+      {(several || group.action) && (
         <div className="device-levels-head">
           <span>{group.label}</span>
-          {group.zero && <button type="button" className="btn btn-quiet btn-sm" disabled={group.zero.disabled} onClick={group.zero.run}>{group.zero.label}</button>}
+          {group.action && <button type="button" className="btn btn-quiet btn-sm" disabled={group.action.disabled} onClick={group.action.run}>{group.action.label}</button>}
         </div>
       )}
       {group.levels.map((level) => <DeviceLevel key={level.id} level={level} />)}
+      {group.toggle && <DeviceLevelToggle toggle={group.toggle} />}
       {group.note && <p className="hint device-levels-note">{group.note}</p>}
+    </div>
+  );
+}
+
+/** A switch row in a level group: label, what it means now, then the switch. */
+function DeviceLevelToggle({ toggle }: { toggle: DeviceLevelToggleModel }) {
+  const id = useId();
+  return (
+    <div className="device-level device-level-toggle">
+      <label className="device-level-label" htmlFor={id}>{toggle.label}</label>
+      <output className="device-level-value" htmlFor={id}>{toggle.readout}</output>
+      <span className="toggle">
+        <input id={id} type="checkbox" role="switch" checked={toggle.checked} disabled={toggle.disabled}
+          onChange={(event) => toggle.onChange(event.target.checked)} />
+        <span className="track" aria-hidden="true" />
+      </span>
     </div>
   );
 }
 
 /** A live level: "N of ceiling" with neutral steps and the one green Test. */
 export function DeviceLevel({ level }: { level: DeviceLevelModel }) {
+  const shown = (amount: number) => level.unit === "%" ? t("{n}%", { n: amount }) : amount;
   const value = level.value === null
     ? t("Confirming strength…")
-    : t("{value} of {ceiling}", { value: level.unit === "%" ? t("{n}%", { n: level.value }) : level.value, ceiling: level.ceiling });
+    : level.ceiling === undefined ? String(shown(level.value)) : t("{value} of {ceiling}", { value: shown(level.value), ceiling: shown(level.ceiling) });
   return (
     <div className="device-level">
       <span className="device-level-label">{level.label}</span>

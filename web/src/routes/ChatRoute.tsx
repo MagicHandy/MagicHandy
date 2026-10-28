@@ -69,10 +69,13 @@ export function ChatRoute() {
   const motionMode: MotionMode = savedMotionMode === "dynamic" || savedMotionMode === "pattern" || savedMotionMode === "layered" || savedMotionMode === "creative_v2" || savedMotionMode === "off"
     ? savedMotionMode
     : motionCapabilities?.motion === false ? "off" : "dynamic";
+  // The original Creative mode is retired; Settings > Chat can offer it again
+  // (ADR 0062). Creative v2 is shown as Simple.
+  const offerOriginalCreative = state?.settings?.llm?.original_creative_mode === true || motionMode === "dynamic";
   const motionModeOptions: ReadonlyArray<{ value: MotionMode; label: string }> = [
     { value: "layered", label: t("Layered") },
-    { value: "creative_v2", label: t("Creative v2") },
-    { value: "dynamic", label: t("Creative") },
+    { value: "creative_v2", label: t("Simple") },
+    ...(offerOriginalCreative ? [{ value: "dynamic" as const, label: t("Creative") }] : []),
     { value: "pattern", label: t("Pattern library") },
     { value: "off", label: t("Off") },
   ];
