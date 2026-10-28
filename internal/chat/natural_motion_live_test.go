@@ -353,7 +353,7 @@ func TestNaturalVibrationConversationLive(t *testing.T) {
 				t.Run(fmt.Sprintf("turn_%02d", i+1), func(t *testing.T) {
 					before, beforeVibration := *motion.CloneFlowSpec(&score), current
 					state := naturalState(&score, mode, limits)
-					state.Outputs = &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true, Armed: true, Follow: "speed", Motors: 2, Current: &current}}
+					state.Outputs = &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true, Follow: "speed", Motors: 2, Current: &current}}
 					caps := Capabilities{Motion: true, MotionMode: mode, AdvancedMotion: true, PreserveConversationText: true}
 					svc := Service{Provider: provider, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: naturalMaxTokens(), PromptBudget: naturalPromptBudget()}
 					started, calls := time.Now(), provider.calls

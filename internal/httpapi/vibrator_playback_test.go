@@ -40,9 +40,6 @@ func TestVibratorEngineStartup(t *testing.T) {
 						t.Fatalf("linear select %d", code)
 					}
 				}
-				if code, _ := vibratorRequest(t, server, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":40}`, true); code != 200 {
-					t.Fatalf("arm %d", code)
-				}
 				engine, admission, err := server.motionEngineForStart()
 				if err != nil {
 					t.Fatal(err)

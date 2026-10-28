@@ -105,7 +105,7 @@ export function IntifaceDeviceChoice({ ctx, device }: { ctx: DeviceContext; devi
       if (!Number.isInteger(index)) return;
       void ctx.run("vibrator", "select", async () => {
         ctx.setIntiface(await api.vibratorSelect(index));
-        return t("Vibrator ready. Raise the intensity when you want it.");
+        return t("Vibrator ready. Playback stays within your Max.");
       });
       return;
     }

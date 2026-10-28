@@ -1,5 +1,10 @@
 # ADR 0047: Intiface vibrator output
 
+> Amended by [ADR 0061](0061-model-controlled-vibration-level.md): the model now
+> chooses the level under a saved user Max, Stop suspends rather than zeroes, and
+> following speed spans the saved speed band. Connection, pacing, quantization,
+> watchdog and Stop protocol below are unchanged.
+
 ## Status
 
 Accepted 2026-10-15. Implemented and tested against simulated Buttplug servers

@@ -18,7 +18,7 @@ func TestOutputFactsLeaveLocalPromptsAndSchemasUnchanged(t *testing.T) {
 			caps := Capabilities{Motion: mode != MotionModeOff, MotionMode: mode}
 			before := ComposeInteractivePrompt(set, nil, nil, caps, &state, nil).Prompt
 			schema := string(InteractiveResponseSchema(nil, caps, &state))
-			state.Outputs = &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true, Armed: true}}
+			state.Outputs = &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true}}
 			if after := ComposeInteractivePrompt(set, nil, nil, caps, &state, nil).Prompt; after != before {
 				t.Fatalf("local %s prompt changed", mode)
 			}
@@ -31,7 +31,7 @@ func TestOutputFactsLeaveLocalPromptsAndSchemasUnchanged(t *testing.T) {
 
 func TestIndependentVibrationValidationAndIsolation(t *testing.T) {
 	before := DefaultLayeredScore(40)
-	state := MotionContext{MotionMode: MotionModeLayered, Running: true, Layered: &before, Outputs: &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true, Armed: true}}}
+	state := MotionContext{MotionMode: MotionModeLayered, Running: true, Layered: &before, Outputs: &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true}}}
 	caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true}
 	svc := Service{Capabilities: &caps}
 	raw := `{"action":"none","edits":{},"vibration":{"mode":"wave","min_percent":10,"max_percent":70,"period_seconds":4},"reply":"Independent swell."}`
@@ -51,11 +51,11 @@ func TestIndependentVibrationValidationAndIsolation(t *testing.T) {
 			t.Fatalf("accepted malformed envelope: %s", bad)
 		}
 	}
-	state.Outputs.Vibrator.Armed = false
+	state.Outputs.Vibrator.Stopped = true
 	if _, err := svc.parseLayeredResponse(raw, before, state, config.DefaultSettings().Motion, false); err == nil {
 		t.Fatal("model armed a zero-intensity device")
 	}
-	state.Outputs.Vibrator.Armed = true
+	state.Outputs.Vibrator.Stopped = false
 	state.Paused = true
 	if _, err := svc.parseLayeredResponse(raw, before, state, config.DefaultSettings().Motion, false); err == nil {
 		t.Fatal("model changed a paused output")
@@ -76,7 +76,7 @@ func TestGeometryRepairNamesConflictingStructuredFields(t *testing.T) {
 }
 
 func TestUnavailableVibrationStrictSchemaUsesTypedOffOrNull(t *testing.T) {
-	state := MotionContext{MotionMode: MotionModeLayered, Outputs: &OutputContext{Vibrator: &VibrationContext{Independent: true, Ready: true}}}
+	state := MotionContext{MotionMode: MotionModeLayered, Outputs: &OutputContext{Vibrator: &VibrationContext{Independent: true, Ready: true, Stopped: true}}}
 	caps := Capabilities{Motion: true, AdvancedMotion: true, MotionMode: MotionModeLayered}
 	raw, err := llm.OpenAISchema(InteractiveResponseSchema(nil, caps, &state))
 	if err != nil {
@@ -96,7 +96,7 @@ func TestUnavailableVibrationStrictSchemaUsesTypedOffOrNull(t *testing.T) {
 		}
 		mode := object["properties"].(map[string]any)["mode"].(map[string]any)["enum"].([]any)
 		if len(mode) != 1 || mode[0] != "off" {
-			t.Fatal("unarmed schema enabled output")
+			t.Fatal("a stopped schema enabled output")
 		}
 	}
 }

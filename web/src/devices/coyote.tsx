@@ -69,7 +69,7 @@ function coyoteModel(ctx: DeviceContext): DeviceModel {
       label: t("Strength"),
       name: t("Coyote strength"),
       levels: [coyoteLevel(ctx, status, "a"), coyoteLevel(ctx, status, "b")],
-      zero: { label: t("Zero both"), disabled: ctx.locked, run: () => ctx.send(async () => ctx.setCoyote(await api.coyoteZero())) },
+      action: { label: t("Zero both"), disabled: ctx.locked, run: () => ctx.send(async () => ctx.setCoyote(await api.coyoteZero())) },
       note: status.strength_source === "zero_command" ? t("Zero command accepted. The device has not reported a strength change.") : undefined,
     } : undefined,
     readout: connected && status?.strength_known ? t("A {a} · B {b}", { a: status.strength_a, b: status.strength_b }) : undefined,

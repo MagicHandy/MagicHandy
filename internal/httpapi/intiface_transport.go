@@ -175,7 +175,7 @@ func (s *Server) openIntifaceHub(ctx context.Context, address string) error {
 		return errors.New("intiface Central is not reachable; confirm it is running and the saved server address is correct")
 	}
 	settings, _ := s.store.Snapshot()
-	hub.Vibrator().Configure(vibratorConfig(settings.Vibration))
+	hub.Vibrator().Configure(vibratorConfig(settings))
 	s.intiface.mu.Lock()
 	s.intiface.hub = hub
 	s.intiface.leases = map[string]bool{}

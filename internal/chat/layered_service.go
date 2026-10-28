@@ -78,6 +78,13 @@ func parseContinuousReply(raw string, current motion.FlowSpec, state MotionConte
 	if err == nil && recalled {
 		changed = labChangedControls(current, next)
 	}
+	// The prompt shows an unset widest stroke as the band's width. A model that
+	// copies it back has not narrowed anything: it is the same geometry, so it
+	// must not retarget a running plan (seen on E4B vibration-only turns).
+	if err == nil && base.RangeCeilingPercent == 0 && next.RangeCeilingPercent != 0 && next.RangeCeilingPercent == next.MaxPercent-next.MinPercent {
+		next.RangeCeilingPercent = 0
+		changed = labChangedControls(current, next)
+	}
 	return response, next, changed, err
 }
 
@@ -193,6 +200,10 @@ func (s Service) continuousPrompt(prompt PromptSet, capabilities Capabilities, s
 		system = composeSystem(prompt, s.Memories, nil, capabilities, &promptState, s.ConversationContext, s.PromptBudget)
 	}
 	schema = withVibrationSchema(schema, capabilities, &state)
+	if !s.TrustedMotionInput {
+		// The local level is a live-chat choice; Autopilot keeps it as set.
+		schema = withVibrationLevelSchema(schema, capabilities, &state)
+	}
 	if !capabilities.Motion {
 		schema = nil
 	}
@@ -239,9 +250,7 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 			return AssistantResponse{}, err
 		}
 	}
-	var vibration *motion.VibrationSpec
-	var vibrationErr error
-	raw, vibration, vibrationErr = takeVibration(raw, capabilities, state)
+	raw, vibration, vibrationLevel, vibrationErr := s.takeVibrationFields(raw, capabilities, state)
 	if vibrationErr != nil {
 		return AssistantResponse{}, vibrationErr
 	}
@@ -252,16 +261,15 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 	parser := ParseLayeredReply
 	if capabilities.MotionMode == MotionModeCreativeV2 {
 		parser = ParseCreativeV2Reply
+	} else if capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
+		parser = parseIntermediateLayeredReply
 	}
 	response, next, changed, err := parseContinuousReply(raw, current, state, limits, parser)
 	if err == nil {
 		err = s.authorizeLayeredReply(&response, next, changed, state)
 	}
-	if err == nil && vibration != nil {
-		if response.Motion == nil {
-			response.Motion = &MotionCommand{Action: MotionActionNone}
-		}
-		response.Motion.Vibration = vibration
+	if err == nil {
+		attachVibration(&response, vibration, vibrationLevel)
 	}
 	response.nextCheckSeconds = nextCheck
 	return response, err
@@ -272,7 +280,7 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 	capabilities.AutoTiming = s.autoTiming(kind)
 	service := Service{Provider: s.Provider, Prompt: s.Prompt, Model: s.Model, MaxTokens: s.MaxTokens,
 		ReasoningMode: s.ReasoningMode, ReasoningBudgetTokens: s.ReasoningBudgetTokens, Memories: s.Memories,
-		MotionContext: s.MotionContext, ConversationContext: s.ConversationContext, Capabilities: &capabilities, TrustedMotionInput: true,
+		MotionContext: withoutLiveVibrationLevel(s.MotionContext), ConversationContext: s.ConversationContext, Capabilities: &capabilities, TrustedMotionInput: true,
 		AutonomousTemperature: s.Temperature, PromptBudget: s.PromptBudget}
 	service.localAutopilotPlan = kind == AutopilotKindMotion && localPlan
 	if service.localAutopilotPlan {
@@ -308,4 +316,33 @@ func (s AutopilotService) completeLayeredAutopilot(ctx context.Context, kind Aut
 	}
 	return AutopilotResponse{Reply: result.Response.Reply, Motion: command, Next: AutopilotTimingNormal, Variability: "settled",
 		NextCheckSeconds: result.Response.nextCheckSeconds}, nil
+}
+
+// takeVibrationFields removes the vibration fields before the motion parser
+// sees the reply: the Advanced envelope, and the live-chat level that
+// Autopilot does not receive.
+func (s Service) takeVibrationFields(raw string, capabilities Capabilities, state MotionContext) (string, *motion.VibrationSpec, *int, error) {
+	raw, vibration, err := takeVibration(raw, capabilities, state)
+	if err != nil || s.TrustedMotionInput {
+		return raw, vibration, nil, err
+	}
+	raw, level, err := takeVibrationLevel(raw, capabilities, state)
+	return raw, vibration, level, err
+}
+
+// attachVibration adds vibration changes to a reply, as a vibration-only
+// command when the reply changed no motion.
+func attachVibration(response *AssistantResponse, vibration *motion.VibrationSpec, level *int) {
+	if vibration == nil && level == nil {
+		return
+	}
+	if response.Motion == nil {
+		response.Motion = &MotionCommand{Action: MotionActionNone}
+	}
+	if vibration != nil {
+		response.Motion.Vibration = vibration
+	}
+	if level != nil {
+		response.Motion.VibrationLevel = level
+	}
 }

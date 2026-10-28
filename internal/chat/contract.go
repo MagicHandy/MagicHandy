@@ -85,8 +85,11 @@ type AssistantResponse struct {
 // MotionCommand is semantic motion intent, not a transport command.
 type MotionCommand struct {
 	Vibration *motion.VibrationSpec `json:"vibration,omitempty"`
-	Action    string                `json:"action"`
-	PatternID string                `json:"pattern_id,omitempty"`
+	// VibrationLevel is the Simple/Intermediate level as a percentage of the
+	// user's Max (ADR 0061). Nil keeps the current level.
+	VibrationLevel *int   `json:"vibration_level,omitempty"`
+	Action         string `json:"action"`
+	PatternID      string `json:"pattern_id,omitempty"`
 	// Intensity is accepted only to decode responses produced by older prompts.
 	// normalizePacing removes it before validation and dispatch.
 	Intensity    *int `json:"intensity,omitempty"`

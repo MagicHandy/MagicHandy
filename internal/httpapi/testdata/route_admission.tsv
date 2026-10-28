@@ -238,7 +238,7 @@ host	POST /api/transport/intiface/disconnect
 host	POST /api/transport/intiface/scan
 host	POST /api/transport/intiface/select
 host	POST /api/transport/intiface/vibrator/select
-control	POST /api/transport/intiface/vibrator/intensity
+control	POST /api/transport/intiface/vibrator/resume
 control	POST /api/transport/intiface/vibrator/test
 host	POST /api/transport/coyote/connect
 host	POST /api/transport/coyote/discover

@@ -43,7 +43,7 @@ func TestVibrationFormatPreservationLive(t *testing.T) {
 			}
 			current := motion.VibrationSpec{Mode: "wave", MinPercent: 15, MaxPercent: 70, PeriodSeconds: 8}
 			state := MotionContext{MotionMode: MotionModeLayered, Layered: &before, Running: true, SpeedPercent: 40, SpeedMinPercent: 10, SpeedMaxPercent: 80,
-				Outputs: &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true, Armed: true, Follow: "speed", Motors: 2, Current: &current}}}
+				Outputs: &OutputContext{Strokers: 1, Vibrator: &VibrationContext{Independent: true, Ready: true, Follow: "speed", Motors: 2, Current: &current}}}
 			caps := Capabilities{Motion: true, MotionMode: MotionModeLayered, AdvancedMotion: true, PreserveConversationText: true}
 			wrapped := &vibrationFormatProvider{Provider: provider, variant: variant}
 			svc := Service{Provider: wrapped, Model: model, Capabilities: &caps, MotionContext: &state, ReasoningMode: "off", MaxTokens: 1000}

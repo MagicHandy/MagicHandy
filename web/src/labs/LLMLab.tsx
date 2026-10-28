@@ -14,7 +14,7 @@ const moreModes=["edits","controls","sequence","layers","library_actions","libra
 
 function modeLabel(method:string):string {
   switch(method) {
-  case "creative_v2":return t("Creative v2");
+  case "creative_v2":return t("Simple");
   case "layered":return t("Layered");
   case "stroke_ends":return t("Stroke ends");
   case "groove":return t("Groove and accents");

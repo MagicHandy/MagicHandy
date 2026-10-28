@@ -170,7 +170,7 @@ func InteractiveResponseSchema(patterns []PatternChoice, capabilities Capabiliti
 	}
 	_, limits := layeredContextScore(&current)
 	schema := continuousEditSchema(limits, capabilities, current)
-	return withVibrationSchema(continuousActionSchema(schema, current), capabilities, &current)
+	return withVibrationLevelSchema(withVibrationSchema(continuousActionSchema(schema, current), capabilities, &current), capabilities, &current)
 }
 
 // Both interactive and autonomous requests use the same tier's edit grammar;

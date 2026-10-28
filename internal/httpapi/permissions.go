@@ -132,7 +132,7 @@ func controlRoute(r *http.Request) bool {
 		"/api/media/videos/tags", "/api/media/tags/rename", "/api/media/tags/delete",
 		"/api/remote/presence", "/api/remote/commands", "/api/remote/keepalive", "/api/remote/edge", "/api/remote/edge/resume",
 		"/api/transport/coyote/strength", "/api/transport/coyote/test", "/api/transport/coyote/zero",
-		"/api/transport/intiface/vibrator/intensity", "/api/transport/intiface/vibrator/test":
+		"/api/transport/intiface/vibrator/resume", "/api/transport/intiface/vibrator/test":
 		return true
 	default:
 		return false

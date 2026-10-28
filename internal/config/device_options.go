@@ -45,6 +45,7 @@ type VibrationPatch struct {
 	MinimumPercent     *int    `json:"minimum_percent,omitempty"`
 	CeilingPercent     *int    `json:"ceiling_percent,omitempty"`
 	TimingOffsetMillis *int    `json:"timing_offset_ms,omitempty"`
+	LevelControl       *string `json:"level_control,omitempty"`
 }
 
 var errEmptyDeviceOptionsPatch = errors.New("the device options change names no setting")
@@ -91,6 +92,7 @@ func (s Settings) ApplyDeviceOptionsPatch(patch DeviceOptionsPatch) (Settings, e
 		patchInt(&next.Vibration.MinimumPercent, vibration.MinimumPercent)
 		patchInt(&next.Vibration.CeilingPercent, vibration.CeilingPercent)
 		patchInt(&next.Vibration.TimingOffsetMillis, vibration.TimingOffsetMillis)
+		patchString(&next.Vibration.LevelControl, vibration.LevelControl)
 	}
 	return NormalizeSettings(next)
 }

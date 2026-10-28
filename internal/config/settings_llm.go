@@ -39,6 +39,9 @@ type LLMSettings struct {
 	// MotionGenerationMode selects the single model-facing motion vocabulary.
 	// Dynamic geometry and pattern IDs are never advertised together.
 	MotionGenerationMode string `json:"motion_generation_mode"`
+	// OriginalCreativeMode offers the retired original Creative (dynamic)
+	// vocabulary again (ADR 0062). Choosing dynamic keeps it on.
+	OriginalCreativeMode bool `json:"original_creative_mode,omitempty"`
 	// MotionCapabilities gates which motion control methods the model may
 	// use. A nil pointer means "never saved" and resolves to the defaults, so
 	// older payloads keep today's behavior; an explicit all-false is a valid

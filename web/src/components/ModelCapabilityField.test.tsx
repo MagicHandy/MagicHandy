@@ -33,7 +33,7 @@ describe("local model capability", () => {
     const context = screen.getByRole("combobox", { name: "Context" });
     expect(context).toHaveValue("65536");
     expect(within(context).queryByRole("option", { name: "32K" })).not.toBeInTheDocument();
-    expect(screen.getByText(/Counted phrases, independent vibration, Auto timing and response repair/)).toBeInTheDocument();
+    expect(screen.getByText(/Counted phrases, vibration patterns of their own, Auto timing and response repair/)).toBeInTheDocument();
     fireEvent.change(context, { target: { value: "131072" } });
     fireEvent.change(selector, { target: { value: "simple" } });
     expect(JSON.parse(screen.getByTestId("draft").textContent!)).toMatchObject({ llama_cpp_context_size: 131072, max_output_tokens: 1024, local_capability_level: "simple" });

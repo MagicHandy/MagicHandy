@@ -76,7 +76,7 @@ func (s *Server) validateModelVibration(spec *motion.VibrationSpec, model config
 		return err
 	}
 	settings, _ := s.store.Snapshot()
-	if !model.ModelFeatures().IndependentVibration || !settings.Device.Plays(config.DeviceVibrator) {
+	if !model.ModelFeatures().IndependentVibration || !settings.Device.Plays(config.DeviceVibrator) || !settings.Vibration.ModelSetsLevel() {
 		return errors.New("independent vibration is unavailable in the current playback/model configuration")
 	}
 	if err := s.vibrationReadiness(); err != nil {
@@ -84,8 +84,37 @@ func (s *Server) validateModelVibration(spec *motion.VibrationSpec, model config
 	}
 	owner, _ := s.currentVibrator()
 	status := owner.Status()
-	if spec.Mode != "off" && status.EffectiveIntensityPercent == 0 {
-		return fmt.Errorf("%w: raise its intensity in the device panel first; the model cannot raise it", errVibrationUnavailable)
+	if spec.Mode != "off" && status.Suspended {
+		return fmt.Errorf("%w: Stop paused it; send a new message or choose Resume now in the device panel", errVibrationUnavailable)
+	}
+	if spec.Mode != "off" && status.EffectiveCeilingPercent == 0 {
+		return fmt.Errorf("%w: raise its Max in the device panel first; the model cannot raise it", errVibrationUnavailable)
+	}
+	return nil
+}
+
+// applyChatVibrationLevel records a Simple or Intermediate level. It glides
+// toward the new value and never starts or reshapes motion (ADR 0061).
+func (s *Server) applyChatVibrationLevel(level int) error {
+	if level < 0 || level > 100 {
+		return errors.New("vibration_level must be between 0 and 100")
+	}
+	settings, _ := s.store.Snapshot()
+	if !settings.LLM.ConversationSettings().ModelFeatures().VibrationLevel || !settings.Vibration.ModelSetsLevel() {
+		return fmt.Errorf("%w: the chat model cannot set the vibration level", errVibrationUnavailable)
+	}
+	if err := s.vibrationReadiness(); err != nil {
+		return err
+	}
+	if engine := s.currentMotionEngine(); engine != nil && engine.Snapshot().Paused {
+		return errors.New("playback is paused; resume it in the app before changing vibration")
+	}
+	owner, err := s.currentVibrator()
+	if err != nil {
+		return fmt.Errorf("%w: connect and select the vibrator first", errVibrationUnavailable)
+	}
+	if err := owner.SetModelLevel(float64(level)/100, true); err != nil {
+		return fmt.Errorf("%w: %v", errVibrationUnavailable, err)
 	}
 	return nil
 }

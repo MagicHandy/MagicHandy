@@ -51,12 +51,15 @@ func (v *IntifaceVibrator) composeLocked(now time.Time) (vibratorSend, bool) {
 	return send, true
 }
 
-// targetLocked returns the current drive; every composed command carries the
-// current output generation, including tests and silence.
+// targetLocked returns the current level; every composed command carries the
+// current output generation, including tests and silence. Independent
+// envelopes and an Advanced follow range are percentages of Max, applied
+// exactly. Ordinary following reaches Minimum..level, where the level is Max
+// or the model's share of it (ADR 0061).
 func (v *IntifaceVibrator) targetLocked(now time.Time) float64 {
 	if !v.testUntil.IsZero() {
 		if now.Before(v.testUntil) {
-			return min(v.intensity, vibratorTestCeiling)
+			return min(v.config.Ceiling, vibratorTestCeiling)
 		}
 		v.testUntil = time.Time{}
 		v.testDeadline.Store(0)
@@ -69,7 +72,7 @@ func (v *IntifaceVibrator) targetLocked(now time.Time) float64 {
 	}
 	at := v.stream.origin.StreamMillis(now) - float64(v.config.OffsetMillis)
 	drive, covered := v.stream.renderer.Drive(&v.stream.timeline, at)
-	if v.stream.independent {
+	if v.stream.independent && !v.config.FollowOnly {
 		drive, covered = v.stream.renderer.DriveEnvelope(&v.stream.vibration, at)
 	}
 	previous := v.stream.state
@@ -84,10 +87,46 @@ func (v *IntifaceVibrator) targetLocked(now time.Time) float64 {
 		v.playingFlag.Store(false)
 		return 0
 	}
-	if v.stream.independent {
-		return drive * v.intensity
+	switch {
+	case v.suspended:
+		return 0
+	case v.stream.independent && !v.config.FollowOnly:
+		return drive * v.config.Ceiling
+	case v.stream.followRange && !v.config.FollowOnly:
+		if drive <= 0 {
+			return 0
+		}
+		return v.config.Ceiling * (v.stream.followLow + drive*(v.stream.followHigh-v.stream.followLow))
+	default:
+		return vibration.Output(drive, v.config.Minimum, v.followLimitLocked(now))
 	}
-	return vibration.Output(drive, v.config.Minimum, v.intensity)
+}
+
+// followLimitLocked is the level that ordinary following reaches: Max, or the
+// model's share of it while the model controls the level.
+func (v *IntifaceVibrator) followLimitLocked(now time.Time) float64 {
+	if !v.config.ModelControl {
+		return v.config.Ceiling
+	}
+	return v.config.Ceiling * v.glide.at(now, v.effectiveLevelLocked())
+}
+
+// levelGlide moves a Simple or Intermediate level change toward its target at
+// a bounded rate. The zero value applies the target at once.
+type levelGlide struct {
+	from  float64
+	start time.Time
+}
+
+func (g levelGlide) at(now time.Time, target float64) float64 {
+	if g.start.IsZero() {
+		return target
+	}
+	moved := float64(now.Sub(g.start)) / float64(vibratorGlideFullScale)
+	if g.from < target {
+		return math.Min(target, g.from+moved)
+	}
+	return math.Max(target, g.from-moved)
 }
 
 // send writes one level command and correlates its acknowledgement without
@@ -232,20 +271,21 @@ func (v *IntifaceVibrator) currentSendLocked(send vibratorSend) bool {
 }
 
 func (v *IntifaceVibrator) outputLimitLocked(now time.Time) float64 {
-	limit := min(v.config.Ceiling, v.intensity)
+	limit := v.config.Ceiling
 	if !v.testUntil.IsZero() {
 		if !now.Before(v.testUntil) {
 			return 0
 		}
 		return min(limit, vibratorTestCeiling)
 	}
-	if !v.stream.playing {
+	if !v.stream.playing || v.suspended {
 		return 0
 	}
 	return limit
 }
 
-func (v *IntifaceVibrator) effectiveIntensityLocked(limit float64) float64 {
+// effectiveLimitLocked is the highest motor level at or below limit and Max.
+func (v *IntifaceVibrator) effectiveLimitLocked(limit float64) float64 {
 	maximum := 0.0
 	for _, motor := range v.selection.motors {
 		steps := float64(motor.StepCount)
@@ -295,13 +335,14 @@ func (v *IntifaceVibrator) silentReasonLocked() string {
 		return "watchdog_stopped"
 	case v.stream.state == "starving" || v.stream.state == "starved":
 		return "buffer_empty"
-	case v.intensity == 0:
-		if v.zeroReason == "emergency_stop" {
-			return v.zeroReason
-		}
-		return "intensity_zero"
-	case v.effectiveIntensityLocked(v.intensity) == 0:
+	case v.suspended:
+		return "stopped"
+	case v.config.Ceiling == 0:
+		return "max_zero"
+	case v.effectiveLimitLocked(v.config.Ceiling) == 0:
 		return "below_motor_step"
+	case v.config.ModelControl && v.levelChosen && v.modelLevel == 0 && !v.stream.independent && !v.stream.followRange:
+		return "level_zero"
 	case !v.stream.playing && v.testUntil.IsZero():
 		return "idle"
 	case v.level == 0:

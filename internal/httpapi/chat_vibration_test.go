@@ -25,7 +25,6 @@ func independentVibrationServer(t *testing.T) *Server {
 	for _, r := range []struct{ path, body string }{
 		{"/api/transport/intiface/connect", `{}`},
 		{"/api/transport/intiface/select", `{"device_index":0,"actuator_index":0}`},
-		{"/api/transport/intiface/vibrator/intensity", `{"intensity_percent":40}`},
 	} {
 		if code, _ := vibratorRequest(t, s, r.path, r.body, true); code != 200 {
 			t.Fatalf("%s = %d", r.path, code)
@@ -61,8 +60,8 @@ func TestChatIndependentVibrationMixedLifecycle(t *testing.T) {
 		t.Fatalf("off retargeted Handy: %+v %v", result, err)
 	}
 	time.Sleep(150 * time.Millisecond)
-	if v := s.intifaceSnapshot().Vibrator; v.LevelPercent != 0 || v.IntensityPercent != 40 {
-		t.Fatalf("off changed arming or failed: %+v", v)
+	if v := s.intifaceSnapshot().Vibrator; v.LevelPercent != 0 || v.CeilingPercent != 40 || v.Suspended {
+		t.Fatalf("off changed Max or failed: %+v", v)
 	}
 	if !engine.Snapshot().Running {
 		t.Fatal("vibration off stopped linear run")
@@ -72,7 +71,7 @@ func TestChatIndependentVibrationMixedLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err = s.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionNone, Vibration: &steady}); err == nil {
-		t.Fatal("model rearmed after Emergency Stop")
+		t.Fatal("model resumed the vibrator after Emergency Stop")
 	}
 }
 
@@ -150,24 +149,86 @@ func TestStoppedEnvelopeIsNotReportedAsCurrent(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings, _ := s.store.Snapshot()
-	if s.chatOutputContext(settings.LLM.ConversationSettings()).Vibrator.Current != nil {
+	v := s.chatOutputContext(settings.LLM.ConversationSettings()).Vibrator
+	if v.Current != nil {
 		t.Fatal("stopped plan presented as current vibration")
+	}
+	if v.Previous == nil || *v.Previous != spec || v.ResumeOnMotionRequest {
+		t.Fatal("stopped envelope lost its continuation data or gained resume authority")
 	}
 }
 
-func TestVibrationLostArmingDoesNotDiscardValidLinearUpdate(t *testing.T) {
+func TestVibrationLostMaxDoesNotDiscardValidLinearUpdate(t *testing.T) {
 	s := independentVibrationServer(t)
 	flow := chat.DefaultLayeredScore(40)
 	if _, err := s.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionStart, Layered: &flow}); err != nil {
 		t.Fatal(err)
 	}
-	if code, _ := vibratorRequest(t, s, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":0}`, true); code != 200 {
-		t.Fatal(code)
+	previous, _ := s.store.Snapshot()
+	next := previous
+	next.Vibration.CeilingPercent = 0
+	saveSettings(t, s.store, func(config.Settings) config.Settings { return next })
+	if err := s.applySettingsRuntimeTransition(t.Context(), previous, next); err != nil {
+		t.Fatal(err)
 	}
 	flow.SpeedPercent = 50
 	spec := motion.VibrationSpec{Mode: "steady", MinPercent: 50, MaxPercent: 50}
 	result, err := s.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionUpdate, Layered: &flow, Vibration: &spec})
-	if err == nil || !result.Applied || !result.Engine.Running || result.Engine.Target.SpeedPercent != 50 || s.intifaceSnapshot().Vibrator.IntensityPercent != 0 {
+	if err == nil || !result.Applied || !result.Engine.Running || result.Engine.Target.SpeedPercent != 50 || s.intifaceSnapshot().Vibrator.CeilingPercent != 0 {
 		t.Fatalf("partial output was not applied/reported: %+v %v", result, err)
+	}
+}
+
+func TestChatVibrationLevelUnderMaxRespectsStopAndManualControl(t *testing.T) {
+	s := independentVibrationServer(t)
+	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+		settings.LLM.ConversationConnectionID = "local"
+		settings.LLM.LocalCapabilityLevel = config.ModelCapabilityIntermediate
+		settings.LLM.LlamaCPPContextSize, settings.LLM.MaxOutputTokens = 32768, 512
+		return settings
+	})
+	level := 80
+	result, err := s.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionNone, VibrationLevel: &level})
+	if err != nil || !result.Applied || s.currentMotionEngine() != nil {
+		t.Fatalf("level-only change: %+v %v", result, err)
+	}
+	if v := s.intifaceSnapshot().Vibrator; v.ModelLevelPercent != 80 || v.CeilingPercent != 40 {
+		t.Fatalf("level = %+v", v)
+	}
+	flow := chat.DefaultLayeredScore(40)
+	level = 30
+	result, err = s.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionStart, Layered: &flow, VibrationLevel: &level})
+	if err != nil || !result.Applied || !result.Engine.Running || s.intifaceSnapshot().Vibrator.ModelLevelPercent != 30 {
+		t.Fatalf("start with a level: %+v %v", result, err)
+	}
+	if _, err := s.emergencyStop(t.Context(), "level_test"); err != nil {
+		t.Fatal(err)
+	}
+	level = 90
+	if _, err := s.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionNone, VibrationLevel: &level}); err == nil || s.intifaceSnapshot().Vibrator.ModelLevelPercent != 30 {
+		t.Fatalf("a raise crossed Stop: %v %+v", err, s.intifaceSnapshot().Vibrator)
+	}
+	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+		settings.Vibration.LevelControl = config.VibrationLevelManual
+		return settings
+	})
+	level = 10
+	if _, err := s.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionNone, VibrationLevel: &level}); err == nil {
+		t.Fatal("the model set a level with model control off")
+	}
+}
+
+func TestQuickMotionModeOffersOriginalCreativeOnlyWhenRestored(t *testing.T) {
+	current := config.DefaultSettings()
+	if _, _, err := (llmMotionModeRequest{Mode: config.LLMMotionModeDynamic}).apply(current); err == nil {
+		t.Fatal("the hidden original Creative mode was chosen")
+	}
+	current.LLM.OriginalCreativeMode = true
+	next, changed, err := (llmMotionModeRequest{Mode: config.LLMMotionModeDynamic}).apply(current)
+	if err != nil || !changed || next.LLM.MotionGenerationMode != config.LLMMotionModeDynamic {
+		t.Fatalf("restored: %v %q", err, next.LLM.MotionGenerationMode)
+	}
+	if next, _, err := (llmMotionModeRequest{Mode: config.LLMMotionModeCreativeV2}).apply(config.DefaultSettings()); err != nil || next.LLM.MotionGenerationMode != config.LLMMotionModeCreativeV2 {
+		t.Fatalf("Simple (creative_v2): %v", err)
 	}
 }

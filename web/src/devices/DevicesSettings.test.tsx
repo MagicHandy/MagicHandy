@@ -294,10 +294,40 @@ describe("The vibrator's page", () => {
     expect(screen.getByRole("radiogroup", { name: "Strongest at" })).toBeInTheDocument();
   });
 
+  it("sets one Max and lets the chat model set the level beneath it", async () => {
+    vi.mocked(api.saveDeviceOptions).mockImplementation(async (patch) => {
+      Object.assign(app.state.settings!.vibration!, patch.vibration);
+      return { settings: app.state.settings! };
+    });
+    app.state.settings!.vibration!.level_control = "model";
+    (app.state.settings as unknown as { model_routing: unknown }).model_routing = { chat: { features: { vibration_level: true } } };
+    app.state.intiface_transport = session({
+      leases: ["vibrator"], status: { connected: true, scanning: false, playback_state: "idle", max_ping_time_ms: 0, queue_depth: 0, devices: [] },
+      vibrator: { selected: true, device_index: 3, device_name: "Simulated Vibrator", motors: [{ index: 0, step_count: 20 }], ceiling_percent: 40, effective_ceiling_percent: 40,
+        model_control: true, model_level_percent: 50, level_source: "model", level_percent: 0, playback_state: "idle", testing: false, commanded_count: 0, acknowledged_count: 0, rejected_count: 0, timeout_count: 0 },
+    });
+    renderPage("vibrator");
+    expect(screen.getByRole("slider", { name: "Max" })).toHaveValue("40");
+    expect(screen.queryByText("Level range")).toBeNull();
+    const control = screen.getByRole("switch", { name: "Model control" });
+    expect(control).toBeChecked();
+    expect(screen.getByText("Following movement at 50% of max")).toBeInTheDocument();
+    expect(screen.getByText(/sets the level as vibration follows movement/)).toBeInTheDocument();
+    await act(async () => fireEvent.click(control));
+    expect(api.saveDeviceOptions).toHaveBeenCalledWith({ vibration: { level_control: "manual" } });
+    expect(screen.getByRole("slider", { name: "Minimum while moving" })).toHaveAttribute("max", "40");
+  });
+
+  it("explains that a chat model without vibration control follows at Max", () => {
+    renderPage("vibrator");
+    expect(screen.getByRole("switch", { name: "Model control" })).toBeDisabled();
+    expect(screen.getByText(/cannot set vibration, so it follows movement at your max/)).toBeInTheDocument();
+  });
+
   it("offers to add a device that is not added yet", async () => {
     app.state = stateWith({ configured: ["handy"] });
     renderPage("vibrator");
-    expect(screen.getByText(/Independent vibration needs an Advanced model, such as a hosted one/)).toBeInTheDocument();
+    expect(screen.getByText(/Your chat model sets the level under the max you choose/)).toBeInTheDocument();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Add Vibrator" })));
     expect(api.changeDeviceConnection).toHaveBeenCalledWith("vibrator", "add");
   });

@@ -1,5 +1,19 @@
 # Goal Scorecard
 
+## 2026-10-28 — Model-controlled vibration level
+
+Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags
+'-s -w'`: **24,292,864 -> 24,336,896 B** (+44,032 B) against `43ac5d58`,
+including the embedded UI, continuation fixes and response-boundary review. Main JS
+**1,307,460 -> 1,313,724 B raw** (+6,264 B) and
+**351,669 -> 353,128 B gzip** (+1,459 B); CSS is unchanged at
+**210,037 B / 36,604 B gzip**. Canonical UI **2,841,582 -> 2,857,145 B**
+(+15,563 B, including the four lazy locale bundles); gzip uses Python with
+`mtime=0`. No dependency, goroutine, worker, timer or request is added; the
+level glide is computed on the existing 100 ms pacer tick. No RSS or
+cold-start change is claimed. See
+[ADR 0061](decisions/0061-model-controlled-vibration-level.md).
+
 ## 2026-10-26 — Layered independent-review follow-up
 
 Against alpha.75 `37775586`, Windows amd64 Go 1.26.10,

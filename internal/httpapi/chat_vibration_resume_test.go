@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -19,8 +20,8 @@ func stopVibrationForResume(t *testing.T, s *Server) {
 	if _, err := s.emergencyStop(t.Context(), "manual_resume_test"); err != nil {
 		t.Fatal(err)
 	}
-	if v := s.intifaceSnapshot().Vibrator; v.IntensityPercent != 0 || v.ResumeIntensityPercent != 40 {
-		t.Fatalf("Stop did not silence and remember the human level: %+v", v)
+	if v := s.intifaceSnapshot().Vibrator; !v.Suspended || v.CeilingPercent != 40 {
+		t.Fatalf("Stop did not suspend the vibrator under the same Max: %+v", v)
 	}
 }
 
@@ -47,13 +48,13 @@ func TestManualChatResumesVibrationAfterStop(t *testing.T) {
 			s.llm.provider = provider
 			stopVibrationForResume(t, s)
 			body := postChatStream(t, s, `{"message":"What is the current playback state?"}`)
-			if strings.Contains(body, "event: error") || s.intifaceSnapshot().Vibrator.IntensityPercent != 0 {
-				t.Fatalf("ordinary question changed intensity: %s", body)
+			if strings.Contains(body, "event: error") || !s.intifaceSnapshot().Vibrator.Suspended {
+				t.Fatalf("ordinary question resumed the vibrator: %s", body)
 			}
 			for range 2 {
 				body = postChatStream(t, s, `{"message":"Resume with a gently varying rhythm."}`)
 				engine := s.currentMotionEngine()
-				if strings.Contains(body, "event: error") || engine == nil || !engine.Snapshot().Running || s.intifaceSnapshot().Vibrator.IntensityPercent != 40 {
+				if strings.Contains(body, "event: error") || engine == nil || !engine.Snapshot().Running || s.intifaceSnapshot().Vibrator.Suspended {
 					t.Fatalf("fresh request failed to resume: %s", body)
 				}
 				stopVibrationForResume(t, s)
@@ -65,7 +66,7 @@ func TestManualChatResumesVibrationAfterStop(t *testing.T) {
 			for _, message := range provider.requests[1].Messages {
 				prompt += message.Content
 			}
-			if level != config.ModelCapabilitySimple && !strings.Contains(prompt, `"manual_request_can_resume_previous_intensity":true`) {
+			if level != config.ModelCapabilitySimple && !strings.Contains(prompt, `"manual_request_can_resume_after_stop":true`) {
 				t.Fatal("manual permission did not reach model")
 			}
 			if level == config.ModelCapabilitySimple && (!strings.Contains(prompt, "Current app state for this turn: playback is stopped") || strings.Contains(prompt, "Active playback outputs")) {
@@ -77,7 +78,7 @@ func TestManualChatResumesVibrationAfterStop(t *testing.T) {
 
 // An admitted human request does not survive a later Stop or a changed output.
 func TestManualVibrationResumeRejectsChangedAuthority(t *testing.T) {
-	for _, change := range []string{"stop", "zero", "disconnect", "off", "cancel"} {
+	for _, change := range []string{"stop", "resume now", "manual control", "disconnect", "off", "cancel"} {
 		t.Run(change, func(t *testing.T) {
 			s := independentVibrationServer(t)
 			stopVibrationForResume(t, s)
@@ -88,8 +89,13 @@ func TestManualVibrationResumeRejectsChangedAuthority(t *testing.T) {
 			switch change {
 			case "stop":
 				_, _ = s.emergencyStop(t.Context(), "new_stop")
-			case "zero":
-				_, _ = vibratorRequest(t, s, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":0}`, true)
+			case "resume now":
+				_, _ = vibratorRequest(t, s, "/api/transport/intiface/vibrator/resume", `{}`, true, stopSequenceHeader, strconv.FormatUint(sequence, 10))
+			case "manual control":
+				saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+					settings.Vibration.LevelControl = config.VibrationLevelManual
+					return settings
+				})
 			case "disconnect":
 				_, _ = vibratorRequest(t, s, "/api/transport/intiface/disconnect", `{"device":"vibrator"}`, true)
 			case "off":
@@ -102,8 +108,11 @@ func TestManualVibrationResumeRejectsChangedAuthority(t *testing.T) {
 			}
 			spec := motion.VibrationSpec{Mode: "steady", MinPercent: 50, MaxPercent: 50}
 			result, err := s.dispatchChatMotionAt(ctx, &chat.MotionCommand{Action: chat.MotionActionNone, Vibration: &spec}, &sequence)
-			if err == nil || result.Applied || s.intifaceSnapshot().Vibrator.IntensityPercent != 0 {
-				t.Fatalf("changed authority resumed: %+v %v", result, err)
+			if err == nil || result.Applied {
+				t.Fatalf("changed authority applied: %+v %v", result, err)
+			}
+			if change != "resume now" && change != "disconnect" && !s.intifaceSnapshot().Vibrator.Suspended {
+				t.Fatalf("changed authority lifted the suspension: %+v", s.intifaceSnapshot().Vibrator)
 			}
 		})
 	}
@@ -118,13 +127,13 @@ func TestBackgroundVibrationCannotUseManualResume(t *testing.T) {
 	}
 	spec := motion.VibrationSpec{Mode: "steady", MinPercent: 50, MaxPercent: 50}
 	if _, err := s.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionNone, Vibration: &spec}); err == nil {
-		t.Fatal("background command restored intensity")
+		t.Fatal("background command resumed the vibrator")
 	}
 }
 
 func TestManualVibrationResumeRepair(t *testing.T) {
 	for _, revoke := range []bool{false, true} {
-		t.Run(map[bool]string{false: "fresh repair", true: "zero before repair"}[revoke], func(t *testing.T) {
+		t.Run(map[bool]string{false: "fresh repair", true: "resume now before repair"}[revoke], func(t *testing.T) {
 			s := independentVibrationServer(t)
 			configureResponseRepair(t, s, false)
 			p := &scriptedLLMProvider{responses: []string{`{"action":"none","edits":{},"vibration":{"mode":"wave","min_percent":20,"max_percent":160,"period_seconds":4},"reply":"Invalid."}`, vibrationResumeResponse}}
@@ -132,14 +141,14 @@ func TestManualVibrationResumeRepair(t *testing.T) {
 			stopVibrationForResume(t, s)
 			session, id := repairOffer(t, s, postChatStream(t, s, `{"message":"Resume a gentle vibration wave."}`))
 			if revoke {
-				_, _ = vibratorRequest(t, s, "/api/transport/intiface/vibrator/intensity", `{"intensity_percent":0}`, true)
+				_, _ = vibratorRequest(t, s, "/api/transport/intiface/vibrator/resume", `{}`, true, stopSequenceHeader, strconv.FormatUint(s.stopSequence.Load(), 10))
 			}
 			r := postRepair(s, session, id)
 			if revoke {
-				if r.Code != http.StatusConflict || p.callCount() != 1 || s.intifaceSnapshot().Vibrator.IntensityPercent != 0 {
+				if r.Code != http.StatusConflict || p.callCount() != 1 {
 					t.Fatalf("revoked repair: %d %s", r.Code, r.Body.String())
 				}
-			} else if r.Code != http.StatusOK || !strings.Contains(r.Body.String(), `"applied":true`) || s.intifaceSnapshot().Vibrator.IntensityPercent != 40 {
+			} else if r.Code != http.StatusOK || !strings.Contains(r.Body.String(), `"applied":true`) || s.intifaceSnapshot().Vibrator.Suspended {
 				t.Fatalf("fresh repair could not resume: %d %s", r.Code, r.Body.String())
 			}
 		})
@@ -161,7 +170,83 @@ func TestNewStopDuringManualChatGenerationStaysStopped(t *testing.T) {
 	stopVibrationForResume(t, s)
 	s.llm.provider = &stopDuringResumeProvider{&scriptedLLMProvider{responses: []string{vibrationResumeResponse}}, func() { _, _ = s.emergencyStop(t.Context(), "during_generation") }}
 	body := postChatStream(t, s, `{"message":"Resume a gentle vibration wave."}`)
-	if strings.Contains(body, `"applied":true`) || s.intifaceSnapshot().Vibrator.IntensityPercent != 0 {
+	if strings.Contains(body, `"applied":true`) || !s.intifaceSnapshot().Vibrator.Suspended {
 		t.Fatalf("late reply revived output: %s", body)
+	}
+}
+
+func TestFailedManualStartWithALevelRestoresVibratorSuspension(t *testing.T) {
+	s := independentVibrationServer(t)
+	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+		settings.LLM.ConversationConnectionID = "local"
+		settings.LLM.LocalCapabilityLevel = config.ModelCapabilityIntermediate
+		settings.LLM.LlamaCPPContextSize, settings.LLM.MaxOutputTokens = 32768, 512
+		return settings
+	})
+	stopVibrationForResume(t, s)
+	settings, _ := s.store.Snapshot()
+	sequence := s.stopSequence.Load()
+	ctx := s.withManualVibrationResume(t.Context(), settings, sequence)
+	flow := chat.DefaultLayeredScore(40)
+	flow.MinPercent, flow.MaxPercent = 90, 10 // rejected by the shared planner
+	level := 30
+	result, err := s.dispatchChatMotionAt(ctx, &chat.MotionCommand{Action: chat.MotionActionStart, Layered: &flow, VibrationLevel: &level}, &sequence)
+	if err == nil || result.Applied || !s.intifaceSnapshot().Vibrator.Suspended {
+		t.Fatalf("failed start lost suspension: %+v %v %+v", result, err, s.intifaceSnapshot().Vibrator)
+	}
+}
+
+func TestStoppedChatRetainsTheContinuousScoreWithoutStartAuthority(t *testing.T) {
+	s := independentVibrationServer(t)
+	flow := chat.DefaultLayeredScore(43)
+	flow.Seed = 20261028
+	if _, err := s.dispatchChatMotion(t.Context(), &chat.MotionCommand{Action: chat.MotionActionStart, Layered: &flow}); err != nil {
+		t.Fatal(err)
+	}
+	before := s.currentMotionEngine().Snapshot().Target.Flow
+	stopVibrationForResume(t, s)
+	settings, _ := s.store.Snapshot()
+	state := s.chatMotionContext(settings.EffectiveMotion(), settings.LLM.ConversationSettings())
+	if state.Running || state.Paused || state.ManualRestartAvailable || state.Outputs.Vibrator.ResumeOnMotionRequest || state.Layered == nil ||
+		state.Layered.SpeedPercent != before.SpeedPercent || state.Layered.Seed != before.Seed {
+		t.Fatalf("stopped context lost its score or gained authority: %+v", state)
+	}
+	state.Layered.SpeedPercent = 20
+	if s.currentMotionEngine().Snapshot().Target.Flow.SpeedPercent != 43 {
+		t.Fatal("context aliases the engine score")
+	}
+}
+
+func TestQuestionEchoCannotLiftVibratorStop(t *testing.T) {
+	for _, advanced := range []bool{false, true} {
+		t.Run(map[bool]string{false: "scalar level", true: "follow envelope"}[advanced], func(t *testing.T) {
+			s := independentVibrationServer(t)
+			level := 50
+			command := &chat.MotionCommand{Action: chat.MotionActionNone, Vibration: &motion.VibrationSpec{Mode: "follow", MaxPercent: level}}
+			if !advanced {
+				saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+					settings.LLM.ConversationConnectionID = "local"
+					settings.LLM.LocalCapabilityLevel = config.ModelCapabilityIntermediate
+					settings.LLM.LlamaCPPContextSize, settings.LLM.MaxOutputTokens = 32768, 512
+					return settings
+				})
+				owner, _ := s.currentVibrator()
+				if err := owner.SetModelLevel(.5, false); err != nil {
+					t.Fatal(err)
+				}
+				command.Vibration, command.VibrationLevel = nil, &level
+			}
+			stopVibrationForResume(t, s)
+			settings, _ := s.store.Snapshot()
+			sequence := s.stopSequence.Load()
+			ctx := s.withManualVibrationResume(t.Context(), settings, sequence)
+			result, err := s.dispatchChatMotionAt(ctx, command, &sequence)
+			if err != nil || !result.Applied {
+				t.Fatalf("a harmless settings echo became a user-visible failure: %+v %v", result, err)
+			}
+			if !s.intifaceSnapshot().Vibrator.Suspended {
+				t.Fatal("an echoed setting cleared Stop without a start command")
+			}
+		})
 	}
 }

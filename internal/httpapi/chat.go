@@ -660,7 +660,7 @@ func (s *Server) dispatchChatMotion(ctx context.Context, command *chat.MotionCom
 }
 
 func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
-	if command != nil && (command.Vibration != nil || (command.Action != "" && command.Action != chat.MotionActionNone && command.Action != chat.MotionActionStop)) {
+	if command != nil && (command.Vibration != nil || command.VibrationLevel != nil || (command.Action != "" && command.Action != chat.MotionActionNone && command.Action != chat.MotionActionStop)) {
 		release, err := s.beginDeferredMotion(ctx)
 		if err != nil {
 			return chatMotionDispatch{Action: command.Action}, err
@@ -686,6 +686,9 @@ func (s *Server) dispatchChatMotionAt(ctx context.Context, command *chat.MotionC
 // engine admission so a Stop that lands during admission cannot be overtaken
 // by the motion it was meant to prevent.
 func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
+	if command != nil && command.VibrationLevel != nil {
+		return s.dispatchChatVibrationLevel(ctx, command, stopSequence)
+	}
 	if command != nil && command.Vibration != nil {
 		if err := s.validateChatVibration(command.Vibration); err != nil {
 			if errors.Is(err, errVibrationUnavailable) && command.Action != "" && command.Action != chat.MotionActionNone {
@@ -735,6 +738,20 @@ func (s *Server) dispatchChatMotionLocked(ctx context.Context, command *chat.Mot
 	default:
 		return chatMotionDispatch{Action: command.Action}, fmt.Errorf("unsupported motion action %q", command.Action)
 	}
+}
+
+// dispatchChatVibrationLevel applies a Simple or Intermediate level first; it
+// never moves anything, so the rest of the command is dispatched as if it had
+// come alone.
+func (s *Server) dispatchChatVibrationLevel(ctx context.Context, command *chat.MotionCommand, stopSequence *uint64) (chatMotionDispatch, error) {
+	levelErr := s.applyChatVibrationLevel(*command.VibrationLevel)
+	rest := *command
+	rest.VibrationLevel = nil
+	if rest.Vibration == nil && (rest.Action == "" || rest.Action == chat.MotionActionNone) {
+		return chatMotionDispatch{Action: "vibration", Applied: levelErr == nil}, levelErr
+	}
+	result, err := s.dispatchChatMotionLocked(ctx, &rest, stopSequence)
+	return result, errors.Join(err, levelErr)
 }
 
 // validateChatMotionMode prevents a streamed result from crossing a mode
@@ -1005,15 +1022,22 @@ func (s *Server) chatMotionContext(settings config.MotionSettings, llmSettings c
 		MotionMode:      chatMotionMode(llmSettings.MotionGenerationMode),
 		Envelope:        motion.CurrentPlanningEnvelope(settings),
 	}
-	if llmSettings.AdvancedMotion() || llmSettings.IntermediateMotion() {
-		context.Outputs = s.chatOutputContext(llmSettings)
-	}
+	// Every capability level gets the vibrator facts; Simple's prompt uses only
+	// its level (ADR 0061).
+	context.Outputs = s.chatOutputContext(llmSettings)
 	engine := s.currentMotionEngine()
 	if engine == nil {
 		return context
 	}
 	snapshot := engine.Snapshot()
 	if !snapshot.Running && !snapshot.Paused {
+		// Stop ends execution, not the saved continuous score. A fresh manual
+		// continuation needs the actual previous rhythm instead of a new
+		// default. Running/Paused stay false and dispatch still admits a start.
+		context.Layered = motion.CloneFlowSpec(snapshot.Target.Flow)
+		if context.Layered != nil {
+			context.SpeedPercent = snapshot.Target.SpeedPercent
+		}
 		return context
 	}
 	context.Running = snapshot.Running && !snapshot.Target.VibrationOnly

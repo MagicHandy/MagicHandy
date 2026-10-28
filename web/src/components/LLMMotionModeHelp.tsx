@@ -11,7 +11,7 @@ export function llmMotionModeHelp(mode: string): string {
     case "layered":
       return t("The AI adjusts reach, location and pace separately and keeps the rest.");
     case "creative_v2":
-      return t("A flowing phrase that keeps developing over many strokes. The default.");
+      return t("A flowing phrase that keeps developing over many strokes.");
     case "off":
       return t("The AI only talks and never moves the device.");
     default:

@@ -97,8 +97,8 @@ It has not been tested on hardware yet.
 3. Choose the device and select **Use this vibrator**. Every vibration motor on
    it runs together.
 4. In the device panel (the device chip at the top right), turn on **In
-   playback** and raise **Intensity** when you want output. It starts at 0 on
-   every connection and selection, and only you change it.
+   playback**. **Max** (default 40%) is the strongest it goes; with **Model
+   sets level** on, the chat model chooses the level beneath it.
 
 Behavior and safety:
 
@@ -109,11 +109,13 @@ Behavior and safety:
   both the linear actuator and the vibrator. Its address is under the same
   Connections section.
 - **Profiles.** On the vibrator's page in **Settings > Devices**, the level
-  follows stroke speed (default), stroke depth (strongest at the base or tip),
-  or stays steady while motion plays. Its **Level range** (the minimum and the
-  ceiling, default 40%) is saved there, and a ±300 ms timing offset under
-  **Settings > Devices > Playback**. The level maps between the minimum and the live
-  intensity, so at an intensity of 0 the vibrator is silent.
+  follows stroke speed (default; it spans your saved Handy speed range), stroke
+  depth (strongest at the base or tip), or stays steady while motion plays.
+  **Max**, **Model control** and **Minimum while moving** are saved there, and
+  a ±300 ms timing offset under **Settings > Devices > Playback**. Following
+  vibration maps between the minimum and the level: Max, or the model's share
+  of it (ADR 0061). Simple models in Layered and Intermediate models set one
+  level; Advanced models can also play their own patterns in % of Max.
 - **Pacing.** Levels are whole steps of each motor's `StepCount`, sent through
   `ScalarCmd` on a 100 ms tick, only when the step changes and never faster
   than the device's advisory timing gap. A 2 s fade-in starts every Play and
@@ -121,22 +123,22 @@ Behavior and safety:
 - **Stopping.** Pause, Stop, loss of coverage, the end of Test, Exclude and
   removal send an explicit zero, because a vibrator keeps its last level.
   Stop also sends `StopDeviceCmd`. A rejected or missing response stops the
-  vibrator and applies the linked failure policy. Emergency Stop also sets
-  the intensity back to 0. A new manual chat motion request can resume the
-  previously chosen intensity on that connection, within the current ceiling.
-  Questions and background planning cannot. **Keep vibration off**, reconnection
-  and reselection clear this permission. A later Stop still cancels an in-flight
-  request. See [ADR 0059](decisions/0059-manual-chat-resume-after-stop.md).
-- **Test** runs one second at the lower of the intensity and 25%, only while
-  motion is paused.
+  vibrator and applies the linked failure policy. Emergency Stop also pauses
+  the vibrator: your next manual chat request, **Resume now** in the device
+  panel or choosing the device again resumes it; questions and background
+  planning cannot. To keep it off, turn it out of playback. A later Stop still
+  cancels an in-flight request. See
+  [ADR 0061](decisions/0061-model-controlled-vibration-level.md).
+- **Test** runs one second at the lower of Max and 25%, only while motion is
+  paused.
 - **Keepalive.** When Intiface Central reports no ping timeout, the vibrator
   row says that only a closed connection stops the vibrator if MagicHandy
   stops responding.
 
 The vibrator's status is under `intiface_transport.vibrator` in
-`GET /api/state`: the device and motors, the intensity, the ceiling and the
-effective ceiling, the current level, the playback state and the command
-counts.
+`GET /api/state`: the device and motors, Max and the effective Max, whether
+model control is in effect and the model's level, whether Stop paused it, the
+current commanded level, the playback state and the command counts.
 
 ## Validation Status
 

@@ -31,4 +31,6 @@ export interface LLMSettings {
     persona_description?: string;
     motion_capabilities?: LLMMotionCapabilities;
 		motion_generation_mode: "dynamic" | "pattern" | "layered" | "creative_v2" | "off" | string;
+		/** Offers the retired original Creative ("dynamic") mode again (ADR 0062). */
+		original_creative_mode?: boolean;
 }

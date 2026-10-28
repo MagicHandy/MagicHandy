@@ -17,8 +17,9 @@ type manualVibrationResume struct {
 	sequence uint64
 }
 
-// Only the fresh manual chat endpoint captures this permission. Autopilot,
-// reviewers and diagnostic previews never receive it. No output changes here.
+// Only the fresh manual chat endpoint captures this permission to lift Stop's
+// suspension. Autopilot, reviewers and diagnostic previews never receive it.
+// No output changes here.
 func (s *Server) withManualVibrationResume(ctx context.Context, settings config.Settings, sequence uint64) context.Context {
 	if !chatCapabilities(settings.LLM, nil).Motion || !settings.Device.Plays(config.DeviceVibrator) {
 		return ctx
@@ -61,7 +62,8 @@ func resumesVibration(command *chat.MotionCommand) bool {
 		return false
 	}
 	linear := command.Action != "" && command.Action != chat.MotionActionNone
-	return linear || (command.Vibration != nil && command.Vibration.MaxPercent > 0)
+	return linear || (command.Vibration != nil && command.Vibration.MaxPercent > 0) ||
+		(command.VibrationLevel != nil && *command.VibrationLevel > 0)
 }
 
 func (s *Server) dispatchManualChatMotion(ctx context.Context, command *chat.MotionCommand, sequence *uint64) (chatMotionDispatch, error) {
@@ -77,12 +79,17 @@ func (s *Server) dispatchManualChatMotion(ctx context.Context, command *chat.Mot
 			return chatMotionDispatch{}, err
 		}
 	}
-	rollback, err := resume.owner.ResumeIntensityForManualRequest(resume.permit)
+	rollback, err := resume.owner.ResumeForManualRequest(resume.permit)
 	if err != nil {
 		return chatMotionDispatch{}, err
 	}
 	result, err := s.dispatchChatMotionLocked(ctx, command, sequence)
-	if err != nil || !result.Applied {
+	// Keep ordinary command acceptance. A level/follow echo can be a valid
+	// settings-only reply, but does not start playback. Restore suspension
+	// after such a reply without turning it into an error or requiring new
+	// wording from the person. Actual starts retain the resume permission.
+	engine := s.currentMotionEngine()
+	if err != nil || !result.Applied || engine == nil || !engine.Snapshot().Running {
 		rollback()
 	}
 	return result, err

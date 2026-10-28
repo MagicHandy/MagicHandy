@@ -101,7 +101,7 @@ func (s LLMSettings) LocalContextSize() int {
 }
 
 // ModelFeatures is backend-owned UI capability data, not connection readiness
-// or permission to raise output intensity. It never changes provider routing.
+// or permission to raise a user's Max. It never changes provider routing.
 type ModelFeatures struct {
 	Level                string `json:"level"`
 	MinimumContext       int    `json:"minimum_context"`
@@ -109,14 +109,23 @@ type ModelFeatures struct {
 	PrepareDecisions     bool   `json:"prepare_decisions"`
 	IntermediatePlanning bool   `json:"intermediate_planning"`
 	IndependentVibration bool   `json:"independent_vibration"`
-	ResponseRepair       bool   `json:"response_repair"`
+	// VibrationLevel is the Simple/Intermediate vocabulary: one level under
+	// Max while vibration follows movement (ADR 0061).
+	VibrationLevel bool `json:"vibration_level"`
+	ResponseRepair bool `json:"response_repair"`
 }
 
 // ModelFeatures projects the effective capabilities of a resolved model role.
 func (s LLMSettings) ModelFeatures() ModelFeatures {
 	advanced := s.AdvancedMotion()
+	continuous := s.MotionGenerationMode == LLMMotionModeLayered || s.MotionGenerationMode == LLMMotionModeCreativeV2
 	return ModelFeatures{Level: s.ModelCapabilityLevel(), MinimumContext: MinimumLocalContext(s.ModelCapabilityLevel()),
 		AutoTiming: advanced, PrepareDecisions: advanced, ResponseRepair: advanced,
-		IntermediatePlanning: s.IntermediateMotion() && (s.MotionGenerationMode == LLMMotionModeLayered || s.MotionGenerationMode == LLMMotionModeCreativeV2),
-		IndependentVibration: advanced && (s.MotionGenerationMode == LLMMotionModeLayered || s.MotionGenerationMode == LLMMotionModeCreativeV2)}
+		IntermediatePlanning: s.IntermediateMotion() && continuous,
+		IndependentVibration: advanced && continuous,
+		// E4B kept strokes and chose levels well in Layered (18/20) but
+		// overran its output copying Creative v2 scores (8/20), so Simple
+		// Creative v2 follows at Max (ADR 0061).
+		VibrationLevel: !advanced && (s.MotionGenerationMode == LLMMotionModeLayered ||
+			(s.IntermediateMotion() && s.MotionGenerationMode == LLMMotionModeCreativeV2))}
 }

@@ -485,6 +485,9 @@ func (s *Server) settingsAndUpdateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/settings/reset", s.handleSettingsReset)
 }
 
+// errOriginalCreativeHidden refuses the retired mode until Settings offers it.
+var errOriginalCreativeHidden = errors.New("turn on the original Creative mode in Settings > Chat > Conversation first")
+
 // llmMotionModeRequest is the Chat motion card: the mode, plus the two Pattern
 // library options that only that mode reads.
 type llmMotionModeRequest struct {
@@ -494,6 +497,9 @@ type llmMotionModeRequest struct {
 }
 
 func (body llmMotionModeRequest) apply(current config.Settings) (next config.Settings, modeChanged bool, err error) {
+	if body.Mode == config.LLMMotionModeDynamic && !current.LLM.OriginalCreativeMode {
+		return current, false, errOriginalCreativeHidden
+	}
 	modeChanged = current.LLM.MotionGenerationMode != body.Mode
 	current.LLM.MotionGenerationMode = body.Mode
 	capabilities := current.LLM.Capabilities()

@@ -43,10 +43,10 @@ func TestLocalResumeCueKeepsMessagesAndOnlyAppliesToEligibleTurns(t *testing.T) 
 }
 
 func TestManualResumeOutputGuideAndIntermediateGuard(t *testing.T) {
-	v := &VibrationContext{Ready: true, Independent: true}
+	v := &VibrationContext{Ready: true, Independent: true, Stopped: true}
 	state := MotionContext{Outputs: &OutputContext{Vibrator: v}}
 	if !unavailableVibrationOnly(state) {
-		t.Fatal("unarmed device has no start authority")
+		t.Fatal("a device paused by Stop has no start authority")
 	}
 	v.ResumeOnMotionRequest = true
 	if unavailableVibrationOnly(state) {

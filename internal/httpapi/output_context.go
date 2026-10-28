@@ -17,17 +17,27 @@ func (s *Server) chatOutputContext(model config.LLMSettings) *chat.OutputContext
 			output.Strokers++
 		}
 	}
-	output.Vibrator.Independent = model.ModelFeatures().IndependentVibration
+	features, modelSets := model.ModelFeatures(), settings.Vibration.ModelSetsLevel()
+	output.Vibrator.Independent = features.IndependentVibration && modelSets
+	output.Vibrator.LevelControl = features.VibrationLevel && modelSets
 	if engine := s.currentMotionEngine(); engine != nil {
 		state := engine.Snapshot()
 		if state.Running || state.Paused {
 			output.Vibrator.Current = state.Target.Vibration
+		} else if output.Vibrator.Independent {
+			// Saved data for an explicit continuation, never a playing envelope
+			// or authority for autonomous work to cross Stop.
+			output.Vibrator.Previous = state.Target.Vibration
 		}
 	}
 	if vibrator, err := s.currentVibrator(); err == nil {
 		state := vibrator.Status()
-		output.Vibrator.Ready = state.Selected && state.PlaybackState != "stale" && !s.vibratorRetired()
-		output.Vibrator.Armed = state.EffectiveIntensityPercent > 0
+		// A Max below one motor step is as silent as a missing device.
+		output.Vibrator.Ready = state.Selected && state.PlaybackState != "stale" && !s.vibratorRetired() && state.EffectiveCeilingPercent > 0
+		output.Vibrator.Stopped = state.Suspended
+		output.Vibrator.LevelPercent = state.ModelLevelPercent
+		output.Vibrator.LevelFollowsHandy = state.LevelSource != "model"
+		output.Vibrator.PreviousLevelPercent = state.PreviousLevelPercent
 		output.Vibrator.Motors = len(state.Motors)
 	}
 	return output

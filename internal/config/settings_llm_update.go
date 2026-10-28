@@ -62,10 +62,7 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 	if update.PersonaDescription != nil {
 		personaDescription = *update.PersonaDescription
 	}
-	motionGenerationMode := current.MotionGenerationMode
-	if update.MotionGenerationMode != nil {
-		motionGenerationMode = *update.MotionGenerationMode
-	}
+	motionGenerationMode, originalCreative := motionModeUpdate(current, update)
 	capabilities := current.MotionCapabilities
 	if update.MotionCapabilities != nil {
 		copied := *update.MotionCapabilities
@@ -97,8 +94,25 @@ func applyLLMUpdate(current LLMSettings, update LLMUpdate) (LLMSettings, error) 
 		CustomAnatomy:               customAnatomy,
 		PersonaDescription:          personaDescription,
 		MotionGenerationMode:        motionGenerationMode,
+		OriginalCreativeMode:        originalCreative,
 		MotionCapabilities:          capabilities,
 	}), nil
+}
+
+// Hiding the original Creative mode moves an active selection to Layered,
+// while an omitted toggle keeps the user's existing mode preference.
+func motionModeUpdate(current LLMSettings, update LLMUpdate) (string, bool) {
+	mode, original := current.MotionGenerationMode, current.OriginalCreativeMode
+	if update.MotionGenerationMode != nil {
+		mode = *update.MotionGenerationMode
+	}
+	if update.OriginalCreativeMode != nil {
+		original = *update.OriginalCreativeMode
+		if !original && strings.EqualFold(strings.TrimSpace(mode), LLMMotionModeDynamic) {
+			mode = LLMMotionModeLayered
+		}
+	}
+	return mode, original
 }
 
 // A capability change may raise the required allocation, while omitted fields

@@ -34,8 +34,12 @@ const (
 	// cancelling, which an endpoint difference would.
 	SpeedWindowMillis = 250
 	speedSamples      = 6
-	// speedScale is v0 in full spans per second for the saturating curve.
+	// speedScale is v0 in full spans per second for the saturating curve
+	// used when no speed band is known.
 	speedScale = 1.2
+	// speedBandFloor is the drive at the band's slowest speed. Slower motion
+	// fades linearly to zero, so a held position is silent.
+	speedBandFloor = 0.35
 	// Faster attack than release: the level rises with a new stroke and dips
 	// smoothly through a turnaround instead of stalling the motor.
 	attackMillis  = 80
@@ -49,10 +53,14 @@ const (
 	hysteresisSteps = 0.75
 )
 
-// Profile is the user's conversion profile.
+// Profile is the user's conversion profile. SpeedLow and SpeedHigh are the
+// averaged carriage speeds, in full spans per second, at the user's slowest
+// and fastest saved Handy speeds; zero keeps the saturating curve.
 type Profile struct {
-	Follow   string
-	DepthEnd string
+	Follow    string
+	DepthEnd  string
+	SpeedLow  float64
+	SpeedHigh float64
 }
 
 // Renderer converts the frame into a drive fraction in 0..1.
@@ -147,7 +155,26 @@ func (r *Renderer) raw(timeline *companion.Timeline, streamMillis float64) float
 	case FollowSteady:
 		return 1
 	default:
-		return 1 - math.Exp(-averageSpeed(timeline, streamMillis)/speedScale)
+		return speedDrive(averageSpeed(timeline, streamMillis), r.profile)
+	}
+}
+
+// speedDrive spans the user's speed band: 35% of the level at the slowest
+// saved speed up to the full level at the fastest, so the Handy's whole speed
+// range is felt instead of saturating near its middle (ADR 0061).
+func speedDrive(speed float64, profile Profile) float64 {
+	low, high := profile.SpeedLow, profile.SpeedHigh
+	switch {
+	case speed <= 0:
+		return 0
+	case low <= 0:
+		return 1 - math.Exp(-speed/speedScale)
+	case speed < low:
+		return speedBandFloor * speed / low
+	case high <= low:
+		return 1
+	default:
+		return speedBandFloor + (1-speedBandFloor)*clamp((speed-low)/(high-low), 0, 1)
 	}
 }
 
@@ -187,6 +214,16 @@ func (r *Renderer) smooth(raw, streamMillis float64) float64 {
 
 func (r *Renderer) fade(streamMillis float64) float64 {
 	return clamp((streamMillis-r.fadeFrom)/FadeMillis, 0, 1)
+}
+
+// SpeedPercentLevel places a commanded speed within the saved speed band on the
+// same scale as following speed: 35% at the slowest saved speed up to 1 at the
+// fastest. It is The Handy's intensity for profiles that do not follow speed.
+func SpeedPercentLevel(speed, low, high int) float64 {
+	if speed <= 0 || high <= low {
+		return 1
+	}
+	return speedBandFloor + (1-speedBandFloor)*clamp(float64(speed-low)/float64(high-low), 0, 1)
 }
 
 // Output maps a drive fraction into the range from the minimum up to the

@@ -9,19 +9,20 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 	"github.com/mapledaemon/MagicHandy/internal/vibration"
 )
 
 var (
-	errVibratorHostOnly     = errors.New("only the host can raise the vibrator intensity or test it")
+	errVibratorHostOnly     = errors.New("only the host can resume or test the vibrator")
 	errVibratorNotConnected = errors.New("connect the vibrator first")
 	errVibratorNotSaved     = errors.New("add a vibrator connection before connecting it")
 )
 
 func (s *Server) vibratorRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/transport/intiface/vibrator/select", s.handleVibratorSelect)
-	mux.HandleFunc("POST /api/transport/intiface/vibrator/intensity", s.handleVibratorIntensity)
+	mux.HandleFunc("POST /api/transport/intiface/vibrator/resume", s.handleVibratorResume)
 	mux.HandleFunc("POST /api/transport/intiface/vibrator/test", s.handleVibratorTest)
 }
 
@@ -50,8 +51,7 @@ func (s *Server) vibratorMotionTransport() (transport.Transport, error) {
 }
 
 // handleVibratorSelect chooses the vibrator device. A run that includes the
-// vibrator stops first; the device is stopped before it is ready, and the
-// live intensity starts again at zero.
+// vibrator stops first, and the device is stopped before it is ready.
 func (s *Server) handleVibratorSelect(w http.ResponseWriter, r *http.Request) {
 	if !s.requireController(w, r) {
 		return
@@ -93,11 +93,10 @@ func (s *Server) handleVibratorSelect(w http.ResponseWriter, r *http.Request) {
 	s.writeIntifaceResult(w, err)
 }
 
-// handleVibratorIntensity sets the live intensity. Lowering needs no
-// controller admission, like Stop; raising needs the controlling host and
-// the current Stop sequence, and is refused if the vibrator was stopped,
-// reselected or reconnected since the request was prepared.
-func (s *Server) handleVibratorIntensity(w http.ResponseWriter, r *http.Request) {
+// handleVibratorResume lifts the suspension Emergency Stop left (Resume now).
+// It plays nothing by itself. Like a test, it is an explicit host action fenced
+// by the current Stop sequence and the vibrator's control generation.
+func (s *Server) handleVibratorResume(w http.ResponseWriter, r *http.Request) {
 	vibrator, err := s.currentVibrator()
 	if err != nil {
 		finishUnreadBody(w, r)
@@ -105,33 +104,23 @@ func (s *Server) handleVibratorIntensity(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	generation := vibrator.ControlGeneration()
-	var body struct {
-		IntensityPercent int `json:"intensity_percent"`
-	}
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	if !s.requireController(w, r) {
 		return
 	}
-	if body.IntensityPercent < 0 || body.IntensityPercent > 100 {
-		writeError(w, http.StatusBadRequest, errors.New("the vibrator intensity must be between 0 and 100%"))
+	if !s.capabilities(r).ConfigureHost {
+		writeError(w, http.StatusForbidden, errVibratorHostOnly)
 		return
 	}
-	target := float64(body.IntensityPercent) / 100
-	allowRaise := target > vibrator.Intensity()
-	if allowRaise {
-		if _, err := s.requestStopSequence(r); err != nil {
-			writeError(w, http.StatusConflict, err)
-			return
-		}
-		if !s.requireController(w, r) {
-			return
-		}
-		if !s.capabilities(r).ConfigureHost {
-			writeError(w, http.StatusForbidden, errVibratorHostOnly)
-			return
-		}
+	finishUnreadBody(w, r)
+	if strings.TrimSpace(r.Header.Get(stopSequenceHeader)) == "" {
+		writeError(w, http.StatusBadRequest, errors.New("resuming the vibrator needs the current Stop sequence"))
+		return
 	}
-	if _, err := vibrator.SetIntensityAt(generation, target, allowRaise); err != nil {
+	if _, err := s.requestStopSequence(r); err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	if err := vibrator.ResumeAt(generation); err != nil {
 		writeError(w, http.StatusConflict, err)
 		return
 	}
@@ -190,13 +179,24 @@ func (s *Server) stopForVibratorDisconnect(ctx context.Context) error {
 	return s.stopAndClearMotionEngine(ctx, "vibrator_disconnected")
 }
 
-// vibratorConfig converts saved settings to the owner's fractions.
-func vibratorConfig(settings config.VibrationSettings) transport.VibratorConfig {
+// vibratorConfig converts saved settings to the owner's fractions. Following
+// speed spans the saved Handy speed band. Model control is effective only when
+// the chat model has a vibration vocabulary; otherwise following runs at Max.
+func vibratorConfig(settings config.Settings) transport.VibratorConfig {
+	vibrationSettings := settings.Vibration
+	motionSettings := settings.EffectiveMotion()
+	low, high := motion.FollowSpeedBand(motionSettings)
+	features := settings.LLM.ConversationSettings().ModelFeatures()
 	return transport.VibratorConfig{
-		Profile:      vibration.Profile{Follow: settings.Follow, DepthEnd: settings.DepthEnd},
-		Minimum:      float64(settings.MinimumPercent) / 100,
-		Ceiling:      float64(settings.CeilingPercent) / 100,
-		OffsetMillis: settings.TimingOffsetMillis,
+		Profile: vibration.Profile{Follow: vibrationSettings.Follow, DepthEnd: vibrationSettings.DepthEnd,
+			SpeedLow: low, SpeedHigh: high},
+		Minimum:         float64(vibrationSettings.MinimumPercent) / 100,
+		Ceiling:         float64(vibrationSettings.CeilingPercent) / 100,
+		OffsetMillis:    vibrationSettings.TimingOffsetMillis,
+		ModelControl:    vibrationSettings.ModelSetsLevel() && (features.VibrationLevel || features.IndependentVibration),
+		FollowOnly:      !vibrationSettings.ModelSetsLevel(),
+		SpeedMinPercent: motionSettings.SpeedMinPercent,
+		SpeedMaxPercent: motionSettings.SpeedMaxPercent,
 	}
 }
 
@@ -206,12 +206,12 @@ func (s *Server) applyVibratorSettingsTransition(ctx context.Context, previous, 
 	if previous.Device.HasDevice(config.DeviceVibrator) && !next.Device.HasDevice(config.DeviceVibrator) {
 		return s.releaseIntifaceLease(ctx, config.DeviceVibrator)
 	}
-	if previous.Vibration != next.Vibration {
+	if vibratorConfig(previous) != vibratorConfig(next) {
 		s.intiface.mu.Lock()
 		hub := s.intiface.hub
 		s.intiface.mu.Unlock()
 		if hub != nil {
-			hub.Vibrator().Configure(vibratorConfig(next.Vibration))
+			hub.Vibrator().Configure(vibratorConfig(next))
 		}
 	}
 	return nil

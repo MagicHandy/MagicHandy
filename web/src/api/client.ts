@@ -936,11 +936,11 @@ export const api = {
     request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/select", { device_index, actuator_index }),
   vibratorSelect: (device_index: number) =>
     request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/select", { device_index }),
-  // Raising sends the Stop sequence so a raise prepared before a Stop is
-  // refused; lowering needs no control and never does.
-  vibratorIntensity: (intensity_percent: number, stopSequence?: number) =>
-    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/intensity", { intensity_percent }, undefined,
-      stopSequence === undefined ? undefined : { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
+  // Resume now lifts the pause Stop left. Like a test, it carries the Stop
+  // sequence, so one prepared before another Stop is refused.
+  vibratorResume: (stopSequence: number) =>
+    request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/resume", {}, undefined,
+      { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),
   vibratorTest: (stopSequence: number) =>
     request<IntifaceTransportSnapshot>("POST", "/api/transport/intiface/vibrator/test", {}, undefined,
       { [STOP_SEQUENCE_HEADER]: String(stopSequence) }),

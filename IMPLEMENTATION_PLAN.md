@@ -1,10 +1,16 @@
 # MagicHandy Go Implementation Plan
 
-Fresh manual chat can resume a stopped vibrator at its previous human-selected
-intensity, using a one-use backend permission and the shared engine; Stop still
-cancels older work. Questions and autonomous decisions cannot restore intensity.
-See [ADR 0059](docs/decisions/0059-manual-chat-resume-after-stop.md) for authority,
-UI behavior, model evidence and limitations.
+The chat model sets the vibrator's level under a saved user Max: Simple
+(Layered) and Intermediate through one `vibration_level`, Advanced through its
+envelope in % of Max. Stop pauses the vibrator until a fresh manual motion request,
+Resume now or reselection; autonomous decisions cannot lift it. See
+[ADR 0061](docs/decisions/0061-model-controlled-vibration-level.md) for
+authority, UI behavior, model evidence and limitations.
+
+The [response-boundary review](docs/vibrator-level-review-2026-10-28.md#response-boundary-follow-up)
+accepts equivalent compound edit grouping, geometry-compatible control echoes
+and null vibration no-ops. Model prompts/schemas and output authority stay
+unchanged; conflicting edits still fail through the shared validator.
 
 ## Core Direction
 
@@ -3030,8 +3036,8 @@ alone ([ADR 0047](docs/decisions/0047-intiface-vibrator-output.md)):
 - One Intiface session is shared by the linear owner and the vibrator owner,
   with a lease per connected device.
 - The vibrator follows the shared frame through a speed, depth or steady
-  profile (`internal/vibration`). Its live intensity starts at 0, and the
-  model never controls it.
+  profile (`internal/vibration`). Following speed spans the saved speed band,
+  and the model chooses the level under the user's Max (ADR 0061).
 - `-simulate-motion` builds include an in-process Intiface server with a
   simulated stroker and vibrator (`internal/buttplugsim`).
 

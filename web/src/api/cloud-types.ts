@@ -54,6 +54,8 @@ export interface ModelRoute {
     prepare_decisions: boolean;
     intermediate_planning?: boolean;
     independent_vibration: boolean;
+    /** The Simple/Intermediate vibration level under Max. */
+    vibration_level?: boolean;
     response_repair: boolean;
   };
   kind: "local" | "hosted" | "decisions" | "unavailable";

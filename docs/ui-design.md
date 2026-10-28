@@ -945,14 +945,16 @@ hoc per-widget colors) are not.
   regardless of controller ownership. The panel keeps no strength state of its
   own. Commanded pulse widths are labeled as commanded, never as measured
   output.
-- The vibrator (ADR 0047) connects its own lease on Intiface Central, and its
-  page chooses the device from those with vibration motors (**Use this
-  vibrator**). Its **Intensity** level reads "N% of ceiling" with neutral
-  `−`/`+` steps and a green **Test** that plays while motion is paused. The
-  intensity starts at 0, and intensity steps never begin output. A note says
-  when the motors' steps lower the effective ceiling; Settings > Devices >
-  Connections says which devices share the Intiface session and whether it has
-  a keepalive timeout.
+- The vibrator (ADRs 0047 and 0061) connects its own lease on Intiface
+  Central, and its page chooses the device from those with vibration motors
+  (**Use this vibrator**). Its **Max** level shows the saved Max with neutral
+  `−`/`+` steps and a green **Test** that plays while motion is paused; steps
+  save the same setting as the page's Max slider and never begin output. When
+  the chat model can set vibration, a **Model sets level** switch shows the
+  model's level as a share of Max. After Stop the caption reads **Paused by
+  Stop** with a quiet **Resume now**. A note says when the motors' steps lower
+  the effective Max; Settings > Devices > Connections says which devices share
+  the Intiface session and whether it has a keepalive timeout.
 - Status is the dot and word on each row; the panel has no connection artwork.
   [Connection artwork](connection-artwork.md) records the retired strip.
 - Exactly one client may command the device. Additional clients open read-only:

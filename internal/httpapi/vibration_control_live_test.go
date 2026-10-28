@@ -56,9 +56,9 @@ func TestIndependentVibrationProductionChatLive(t *testing.T) {
 		}
 	})
 	for i, request := range []string{
-		"Start the vibrator pulsing between 20 and 60 percent of my armed intensity every 3 seconds. Keep The Handy stopped.",
+		"Start the vibrator pulsing between 20 and 60 percent of my Max every 3 seconds. Keep The Handy stopped.",
 		"Now start The Handy with full-device sweeps at 50 percent speed. Keep the existing vibration pulse unchanged.",
-		"Keep The Handy exactly unchanged. Change only vibration to a smooth six-second wave from 10 to 50 percent of my armed intensity.",
+		"Keep The Handy exactly unchanged. Change only vibration to a smooth six-second wave from 10 to 50 percent of my Max.",
 		"Turn off only the vibrator. Keep The Handy moving exactly as it is.",
 		"Bring the vibrator back with a gentle eight-second wave of your choosing. Leave The Handy exactly unchanged.",
 		"Keep that vibration unchanged. On The Handy repeat two shorter strokes at the tip followed by one full-device sweep, flowing between them without pauses. Keep the current base speed.",
@@ -125,7 +125,7 @@ func TestIndependentVibrationProductionChatLive(t *testing.T) {
 	if _, err := s.emergencyStop(t.Context(), "live_review_finished"); err != nil {
 		t.Fatal(err)
 	}
-	if s.currentMotionEngine().Snapshot().Running || s.intifaceSnapshot().Vibrator.IntensityPercent != 0 {
-		t.Fatal("global Stop did not stop and zero intensity")
+	if s.currentMotionEngine().Snapshot().Running || !s.intifaceSnapshot().Vibrator.Suspended {
+		t.Fatal("global Stop did not stop and suspend the vibrator")
 	}
 }

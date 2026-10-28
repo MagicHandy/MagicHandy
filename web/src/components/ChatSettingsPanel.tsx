@@ -123,6 +123,21 @@ export function ChatSettingsPanel({ section, settings: s, saved, activeLLM, mode
                 </span>
               </label>
             </div>
+            <div className="group">
+              <h4 className="group-title">{t("Motion modes")}</h4>
+              <label className="toggle-line">
+                <span className="toggle">
+                  <input
+                    type="checkbox"
+                    checked={s.llm.original_creative_mode === true}
+                    disabled={locked}
+                    onChange={(event) => patchLLM({ original_creative_mode: event.target.checked })}
+                  />
+                  <span className="track" aria-hidden="true" />
+                </span>
+                <span>{t("Offer the original Creative mode")}<small>{t("Retired from the LLM motion choices. Turning it off moves a chat that uses it to Layered.")}</small></span>
+              </label>
+            </div>
           </>
         )}
 

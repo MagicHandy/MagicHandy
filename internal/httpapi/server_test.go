@@ -515,13 +515,13 @@ func TestLLMMotionModeAPIUpdatesOnlyModelMotionVocabulary(t *testing.T) {
 	before, _ := server.store.Snapshot()
 
 	recorder := httptest.NewRecorder()
-	request := withController(httptest.NewRequest(http.MethodPut, "/api/settings/llm-motion-mode", strings.NewReader(`{"mode":"dynamic"}`)))
+	request := withController(httptest.NewRequest(http.MethodPut, "/api/settings/llm-motion-mode", strings.NewReader(`{"mode":"creative_v2"}`)))
 	server.Handler().ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200: %s", recorder.Code, recorder.Body.String())
 	}
 	after, _ := server.store.Snapshot()
-	if after.LLM.MotionGenerationMode != config.LLMMotionModeDynamic || !after.LLM.Capabilities().Motion {
+	if after.LLM.MotionGenerationMode != config.LLMMotionModeCreativeV2 || !after.LLM.Capabilities().Motion {
 		t.Fatalf("saved LLM motion settings = %+v", after.LLM)
 	}
 	offRecorder := httptest.NewRecorder()
