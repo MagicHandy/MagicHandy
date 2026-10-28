@@ -71,7 +71,7 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
     if (!mounted.current || signatureRef.current !== snapshot) return;
     setModels(result.models);
     if (current.provider === "chatgpt" && !current.model && result.models[0]) {
-      const recommended = result.models.find(model => model.id === "gpt-6-sol") ?? result.models.find(model => model.id === "gpt-6.1-sol") ?? result.models[0];
+      const recommended = result.models.find(model => model.id === "gpt-6.1-terra") ?? result.models.find(model => model.id === "gpt-6-sol") ?? result.models.find(model => model.id === "gpt-6.1-sol") ?? result.models[0];
       patchRef.current(selectedModelChange(recommended, recommended.id, current, capabilityFloor(connectionCapability(current), capabilityOptions)));
     }
   }

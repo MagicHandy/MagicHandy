@@ -1,5 +1,18 @@
 # Goal Scorecard
 
+## 2026-10-28 — ChatGPT Terra default
+
+Against alpha.77 `892d555b`, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core including
+embedded UI **24,336,896 -> 24,336,384 B** (-512 B). Main JS
+**1,313,724 -> 1,313,581 B raw** (-143 B), **353,128 -> 353,088 B gzip**
+(-40 B); CSS remains **210,037 / 36,604 B** raw/gzip. Canonical UI
+**2,857,145 -> 2,856,409 B** (-736 B), including the lazy locale bundles;
+gzip uses Python with `mtime=0`. This changes the preferred catalog entry and
+recommendation copy only. No new dependency, inference call, background work,
+or local model behavior is added. No RSS/cold-start improvement is claimed.
+See the [Terra evaluation](chatgpt-terra-evaluation-2026-10-28.md).
+
 ## 2026-10-28 — Model-controlled vibration level
 
 Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags

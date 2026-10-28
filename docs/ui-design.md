@@ -1365,10 +1365,13 @@ unlocking model or credential controls. Routing rows, unsaved state, active
 errors and readiness are live state, not dismissible guidance. Compact unboxed
 notice styling keeps these explanations from adding another layer of cards.
 
-New ChatGPT choices recommend GPT-6 Sol with Low reasoning, based on the
-October 8 production motion fixture. Setup keeps this to one line and a
-collapsed Response speed disclosure; Settings explains the Luna/simple-edit
-and GPT-6.1 alternatives. Effort choices follow account metadata. Local model
+New ChatGPT choices recommend GPT-6.1 Terra with Low reasoning, based on the
+[October 28 matched evaluation](chatgpt-terra-evaluation-2026-10-28.md). Setup
+and Settings keep this to one line and a collapsed Response speed disclosure.
+Catalog discovery preselects Terra only for an empty ChatGPT model choice;
+when unavailable, it retains the GPT-6 Sol, GPT-6.1 Sol, then first available
+fallback order. Saved model and reasoning choices are preserved. Effort choices
+follow account metadata. Local model
 controls are unchanged. A successful check displays elapsed seconds without
 presenting a single text probe as a motion latency guarantee. Effort changes
 invalidate readiness. Small catalogs omit search; manual IDs stay secondary.
