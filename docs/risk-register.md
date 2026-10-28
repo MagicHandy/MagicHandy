@@ -1007,6 +1007,14 @@ Mitigation:
 - test same-pattern and cross-pattern handoffs
 - use real-device validation before broad feature work
 
+October 28: an installed alpha.77 trace identified chat canceling an Autopilot
+upload after its target had committed. Recovery correctly stopped the ambiguous
+stream, but this normal handoff should not have canceled the upload. Active
+retarget dispatch now completes under bounded engine-run ownership; canceled
+pending targets remain rejected and Stop/Pause still revoke the run. The
+[overlap review](autopilot-chat-continuity-review-2026-10-28.md) records the
+before/after regression and the remaining physical acceptance check.
+
 Exit evidence:
 
 - real-device retarget tests pass without regular stop/go behavior

@@ -316,6 +316,22 @@ Reverse-direction changes:
 
 ## Recovery Behavior
 
+An interactive turn may supersede Autopilot while its target update is being
+acknowledged. Request cancellation is not a device failure. The engine checks
+the caller after acquiring target ownership and again after replenishing the
+existing stream, before committing a replacement. Canceled pending targets do
+not apply. Once committed, the update completes under the active run's
+cancellation and a ten-second dispatch deadline, rather than the superseded
+chat/planner request. This is the same ownership principle used for admitted
+vibration edits.
+
+Stop/Pause still cancel every wire operation through the run context and fence
+later dispatch. A transport failure, acknowledgement timeout, or ambiguous
+accepted command still enters recovery Stop. Startup remains cancelable by its
+request; this policy only completes updates to motion that is already active.
+The [chat/Autopilot overlap investigation](autopilot-chat-continuity-review-2026-10-28.md)
+records the observed failure and regression coverage.
+
 If device state reports paused, starved, rejected, or past buffered tail:
 
 - do not keep appending points to a stream the device is not playing

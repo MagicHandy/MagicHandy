@@ -815,7 +815,7 @@ func TestEngineStopsAfterUncertainAppendFailure(t *testing.T) {
 	}
 }
 
-func TestCanceledRetargetRecoversAfterAcceptedAppend(t *testing.T) {
+func TestStopCancelsCommittedRetargetAfterRequestWasCanceled(t *testing.T) {
 	commandTransport := newCancelAfterAcceptanceTransport()
 	engine := newTestEngine(t, commandTransport, diagnostics.NewTraceRing(128), time.Hour)
 	if _, err := engine.Start(context.Background(), testTarget(), config.DefaultSettings().Motion); err != nil {
@@ -839,20 +839,25 @@ func TestCanceledRetargetRecoversAfterAcceptedAppend(t *testing.T) {
 		t.Fatal("retarget append did not reach the transport")
 	}
 	cancel()
+	// Once the replacement is committed, superseding its request lets the
+	// upload finish. The active run still owns it: Stop must cancel it now.
+	if _, err := engine.Stop(context.Background(), "stop_committed_retarget"); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
 	select {
 	case err := <-done:
 		if err == nil {
-			t.Fatal("canceled retarget unexpectedly succeeded")
+			t.Fatal("stopped retarget unexpectedly succeeded")
 		}
 	case <-time.After(time.Second):
-		t.Fatal("canceled retarget did not recover")
+		t.Fatal("Stop did not cancel the committed retarget")
 	}
 	if state := engine.Snapshot(); state.Running {
-		t.Fatalf("state = %+v, want recovery stopped", state)
+		t.Fatalf("state = %+v, want stopped", state)
 	}
 	commands := commandTransport.Commands()
 	if len(commands) == 0 || commands[len(commands)-1].Kind != transport.CommandKindStop {
-		t.Fatalf("commands = %+v, want Stop after canceled accepted append", commands)
+		t.Fatalf("commands = %+v, want Stop after accepted append", commands)
 	}
 }
 
