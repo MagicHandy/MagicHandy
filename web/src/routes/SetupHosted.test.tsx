@@ -293,10 +293,15 @@ describe("Easy hosted setup", () => {
   });
 
   it("discovers connected ChatGPT models automatically without running a generation", async () => {
+    vi.mocked(api.modelConnectionModels).mockResolvedValue({ models: [
+      { id: "gpt-6-sol", name: "GPT-6 Sol", reasoning_efforts: ["low", "medium"] },
+      { id: "gpt-6.1-terra", name: "GPT-6.1 Terra", reasoning_efforts: ["low", "medium"] },
+    ] });
     await openEasy();
     fireEvent.click(screen.getByRole("radio", { name: /^ChatGPT/ }));
     const select = await screen.findByRole("combobox", { name: "Available models" });
-    await waitFor(() => expect(select).toHaveValue("hosted-model"));
+    await waitFor(() => expect(select).toHaveValue("gpt-6.1-terra"));
+    expect(screen.getByRole("combobox", { name: "Reasoning effort", hidden: true })).toHaveValue("low");
     expect(api.modelConnectionModels).toHaveBeenCalledOnce();
     expect(api.modelConnectionTest).not.toHaveBeenCalled();
     expect(screen.getByRole("checkbox", { name: /^Keep chat local/ })).not.toBeChecked();
@@ -306,12 +311,18 @@ describe("Easy hosted setup", () => {
   });
 
   it("restores exact readiness after reload and invalidates a changed model", async () => {
-    const connection = { ...newModelConnection("chatgpt", []), model: "hosted-model" };
+    const connection = { ...newModelConnection("chatgpt", []), model: "hosted-model", reasoning_effort: "medium" };
+    vi.mocked(api.modelConnectionModels).mockResolvedValue({ models: [
+      { id: "gpt-6.1-terra", name: "GPT-6.1 Terra", reasoning_efforts: ["low", "medium"] },
+      { id: "hosted-model", name: "Saved model", reasoning_efforts: ["low", "medium"] },
+    ] });
     settings.llm = { ...settings.llm, connections: [connection], conversation_connection_id: connection.id };
     vi.mocked(api.cloudPlanningStatus).mockResolvedValue({ ...cloudStatus, connection_readiness: { [connection.id]: { provider: "chatgpt", model: connection.model, ready: true, state: "ready", connection } } });
     await openEasy();
     const select = await screen.findByRole("combobox", { name: "Available models" });
     await waitFor(() => expect(continueButton()).toBeEnabled());
+    expect(select).toHaveValue("hosted-model");
+    expect(screen.getByRole("combobox", { name: "Reasoning effort", hidden: true })).toHaveValue("medium");
     expect(screen.getByText("Ready")).toBeVisible();
     expect(api.modelConnectionTest).not.toHaveBeenCalled();
     fireEvent.change(select, { target: { value: "" } });

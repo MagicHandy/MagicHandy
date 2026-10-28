@@ -31,45 +31,45 @@ func TestVibrationLevelLive(t *testing.T) {
 	}
 	type check func(command *MotionCommand, before motion.FlowSpec, level int) bool
 	stronger := func(command *MotionCommand, before motion.FlowSpec, level int) bool {
-		got, ok := chosenLevel(command, advanced)
+		got, ok := chosenLevel(command, advanced, level)
 		return ok && got > level && linearUnchanged(command, before)
 	}
 	gentler := func(command *MotionCommand, before motion.FlowSpec, level int) bool {
-		got, ok := chosenLevel(command, advanced)
+		got, ok := chosenLevel(command, advanced, level)
 		return ok && got < level && got > 0 && linearUnchanged(command, before)
 	}
-	off := func(command *MotionCommand, before motion.FlowSpec, _ int) bool {
-		got, ok := chosenLevel(command, advanced)
+	off := func(command *MotionCommand, before motion.FlowSpec, level int) bool {
+		got, ok := chosenLevel(command, advanced, level)
 		return ok && got == 0 && linearUnchanged(command, before)
 	}
-	full := func(command *MotionCommand, before motion.FlowSpec, _ int) bool {
-		got, ok := chosenLevel(command, advanced)
+	full := func(command *MotionCommand, before motion.FlowSpec, level int) bool {
+		got, ok := chosenLevel(command, advanced, level)
 		return ok && got >= 95 && linearUnchanged(command, before)
 	}
 	slowerStronger := func(command *MotionCommand, before motion.FlowSpec, level int) bool {
-		got, ok := chosenLevel(command, advanced)
+		got, ok := chosenLevel(command, advanced, level)
 		return ok && got > level && command.Layered != nil && command.Layered.SpeedPercent < before.SpeedPercent
 	}
 	fasterOnly := func(command *MotionCommand, before motion.FlowSpec, level int) bool {
-		got, ok := chosenLevel(command, advanced)
+		got, ok := chosenLevel(command, advanced, level)
 		return (!ok || got == level) && command != nil && command.Layered != nil && command.Layered.SpeedPercent > before.SpeedPercent
 	}
 	unchanged := func(command *MotionCommand, before motion.FlowSpec, level int) bool {
-		got, ok := chosenLevel(command, advanced)
+		got, ok := chosenLevel(command, advanced, level)
 		return (!ok || got == level) && linearUnchanged(command, before)
 	}
 	// Starting requires a chosen level (ADR 0061); before one, vibration
 	// follows The Handy at the full Max.
-	softStart := func(command *MotionCommand, _ motion.FlowSpec, _ int) bool {
-		got, ok := chosenLevel(command, advanced)
+	softStart := func(command *MotionCommand, _ motion.FlowSpec, level int) bool {
+		got, ok := chosenLevel(command, advanced, level)
 		return ok && got > 0 && got <= 50 && command.Action == MotionActionStart
 	}
-	plainStart := func(command *MotionCommand, _ motion.FlowSpec, _ int) bool {
-		got, ok := chosenLevel(command, advanced)
+	plainStart := func(command *MotionCommand, _ motion.FlowSpec, level int) bool {
+		got, ok := chosenLevel(command, advanced, level)
 		return ok && got > 0 && command.Action == MotionActionStart
 	}
-	strongStart := func(command *MotionCommand, _ motion.FlowSpec, _ int) bool {
-		got, ok := chosenLevel(command, advanced)
+	strongStart := func(command *MotionCommand, _ motion.FlowSpec, level int) bool {
+		got, ok := chosenLevel(command, advanced, level)
 		// This request names vibration, not strokes. Advanced may start an
 		// independent envelope with action none, without moving The Handy.
 		independentStart := advanced && command != nil && command.Action == MotionActionNone && command.Vibration != nil &&
@@ -77,11 +77,11 @@ func TestVibrationLevelLive(t *testing.T) {
 		return ok && got >= 70 && (command.Action == MotionActionStart || independentStart)
 	}
 	littleMore := func(command *MotionCommand, before motion.FlowSpec, level int) bool {
-		got, ok := chosenLevel(command, advanced)
+		got, ok := chosenLevel(command, advanced, level)
 		return ok && got > level && got <= level+40 && linearUnchanged(command, before)
 	}
-	backOn := func(command *MotionCommand, before motion.FlowSpec, _ int) bool {
-		got, ok := chosenLevel(command, advanced)
+	backOn := func(command *MotionCommand, before motion.FlowSpec, level int) bool {
+		got, ok := chosenLevel(command, advanced, level)
 		return ok && got > 0 && linearUnchanged(command, before)
 	}
 	startHistory := []llm.Message{{Role: "user", Content: "Start slowly, with gentle vibration."}, {Role: "assistant", Content: "Starting a slow, gentle motion with low vibration."}}
@@ -147,8 +147,8 @@ func TestVibrationLevelLive(t *testing.T) {
 				}
 				result, err := service.Complete(t.Context(), Request{Message: tc.message, History: history}, nil)
 				command := result.Response.Motion
-				pass := err == nil && !result.Repaired && !result.SemanticFallback && result.Response.Reply != "" && provider.calls-calls == 1 && tc.check(command, before, tc.level)
-				got, chosen := chosenLevel(command, advanced)
+				pass := err == nil && !result.Repaired && !result.SemanticFallback && result.Response.Reply != "" && provider.calls-calls == 1 && tc.check(command, before, vibrator.LevelPercent)
+				got, chosen := chosenLevel(command, advanced, vibrator.LevelPercent)
 				encoded, _ := json.Marshal(command)
 				rows = append(rows, map[string]any{
 					"before": before, "limits": limits, "running_before": tc.running,
@@ -169,7 +169,7 @@ func TestVibrationLevelLive(t *testing.T) {
 
 // chosenLevel reads the level a reply set: vibration_level for the local tiers,
 // the envelope's strength for Advanced (0 for off).
-func chosenLevel(command *MotionCommand, advanced bool) (int, bool) {
+func chosenLevel(command *MotionCommand, advanced bool, retainedLevel int) (int, bool) {
 	if command == nil {
 		return 0, false
 	}
@@ -185,7 +185,30 @@ func chosenLevel(command *MotionCommand, advanced bool) (int, bool) {
 	if command.Vibration.Mode == "off" {
 		return 0, true
 	}
+	// All-zero follow is the legacy "keep the owner's level" command, not
+	// silence. Judge it against the backend-reported retained level just as the
+	// transport does; explicit off/steady-zero remain zero.
+	if command.Vibration.Mode == "follow" && command.Vibration.MinPercent == 0 && command.Vibration.MaxPercent == 0 {
+		return retainedLevel, true
+	}
 	return command.Vibration.MaxPercent, true
+}
+
+func TestChosenVibrationLevelUsesFollowSemantics(t *testing.T) {
+	for _, tc := range []struct {
+		mode                     string
+		min, max, retained, want int
+	}{
+		{"follow", 0, 0, 70, 70}, {"follow", 0, 0, 0, 0},
+		{"follow", 10, 60, 70, 60}, {"off", 0, 0, 70, 0},
+		{"steady", 0, 0, 70, 0}, {"steady", 30, 30, 70, 30},
+	} {
+		command := &MotionCommand{Vibration: &motion.VibrationSpec{Mode: tc.mode, MinPercent: tc.min, MaxPercent: tc.max}}
+		got, set := chosenLevel(command, true, tc.retained)
+		if !set || got != tc.want {
+			t.Fatalf("%+v: got %d (set %t)", tc, got, set)
+		}
+	}
 }
 
 func linearUnchanged(command *MotionCommand, before motion.FlowSpec) bool {

@@ -39,7 +39,7 @@ export function ModelResponseSettings({ connection, models, disabled, patch, com
       </select>
     </label>;
   if (compact && connection.provider === "chatgpt") return <div className="form-row form-row-plain model-response-settings">
-    <p className="hint">{t("Recommended for motion: GPT-6 Sol with Low reasoning.")}</p>
+    <p className="hint">{t("Recommended for motion: GPT-6.1 Terra with Low reasoning.")}</p>
     <details><summary>{t("Response speed") + ": " + (names[effort] ?? t("Provider default"))}</summary>
       {effortField}
       <DismissibleNotice id="model-response-speed" className="model-help"><p className="hint">{t("Low reasoning favors quick updates. Faster service tiers are not verified for ChatGPT plan connections. Response time also depends on the network and account load.")}</p></DismissibleNotice>
@@ -50,9 +50,9 @@ export function ModelResponseSettings({ connection, models, disabled, patch, com
   return <div className="form-row form-row-plain model-response-settings">
     {effortField}
     {connection.provider === "chatgpt" && <DismissibleNotice id="model-response-speed" className="model-help">
-      <p className="hint">{t("Recommended for motion: GPT-6 Sol with Low reasoning.")}</p>
+      <p className="hint">{t("Recommended for motion: GPT-6.1 Terra with Low reasoning.")}</p>
       <details><summary>{t("About response speed")}</summary>
-      <p className="hint">{t("Start with GPT-6 Sol and Low reasoning for responsive, reliable motion. GPT-6 Luna is quicker for simple edits but missed details in compound requests. GPT-6.1 Sol is a more deliberate alternative.")}</p>
+      <p className="hint">{t("GPT-6.1 Terra with Low reasoning responded faster than GPT-6 Sol in our motion tests, with similar instruction-following results.")}</p>
       <p className="hint">{t("Low reasoning favors quick updates. Faster service tiers are not verified for ChatGPT plan connections. Response time also depends on the network and account load.")}</p>
     </details></DismissibleNotice>}
   </div>;

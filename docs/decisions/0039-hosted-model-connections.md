@@ -152,6 +152,12 @@ malformed. One-call inference is unchanged. Reasoning
 effort is a connection setting and part of readiness identity. ChatGPT exposes
 account-advertised efforts; new choices prefer Low when supported. Empirical
 guidance recommends GPT-6 Sol / Low, without claiming an unverified Fast tier.
+The October 28 follow-up changes the recommendation and empty ChatGPT model
+selection to GPT-6.1 Terra / Low after a 113-request-per-model comparison found
+lower latency with the same intent-check score. Discovery still respects the
+account catalog, preserves saved choices and falls back to the previous model
+order when Terra is unavailable. See the
+[Terra evaluation](../chatgpt-terra-evaluation-2026-10-28.md).
 Hosted strict schemas wrap root action unions in a required proposal object
 and add constant types, then unwrap strictly before the original domain parser.
 Credential directories and Windows ACL support initialize on first use, so a
