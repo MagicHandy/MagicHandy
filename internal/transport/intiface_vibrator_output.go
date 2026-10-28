@@ -341,7 +341,7 @@ func (v *IntifaceVibrator) silentReasonLocked() string {
 		return "max_zero"
 	case v.effectiveLimitLocked(v.config.Ceiling) == 0:
 		return "below_motor_step"
-	case v.config.ModelControl && v.levelChosen && v.modelLevel == 0 && !v.stream.independent && !v.stream.followRange:
+	case v.config.ModelControl && v.levelChosen && v.modelLevel == 0 && v.level == 0 && !v.stream.independent && !v.stream.followRange:
 		return "level_zero"
 	case !v.stream.playing && v.testUntil.IsZero():
 		return "idle"

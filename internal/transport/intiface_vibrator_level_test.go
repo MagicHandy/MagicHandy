@@ -102,6 +102,22 @@ func TestVibratorLevelZeroSilencesOnlyTheVibrator(t *testing.T) {
 	}
 }
 
+func TestVibratorZeroLevelGlideDoesNotReportSilenceBeforeZeroOutput(t *testing.T) {
+	f := newVibratorFixture(t, nil)
+	f.playSteady(nil)
+	if err := f.vibrator.SetModelLevel(0, true); err != nil {
+		t.Fatal(err)
+	}
+	f.pace(100 * time.Millisecond)
+	if status := f.vibrator.Status(); status.LevelPercent <= 0 || status.SilentReason != "" {
+		t.Fatalf("positive glide output was reported silent: %+v", status)
+	}
+	f.pace(1500 * time.Millisecond)
+	if status := f.vibrator.Status(); status.LevelPercent != 0 || status.SilentReason != "level_zero" {
+		t.Fatalf("completed zero glide was not silent: %+v", status)
+	}
+}
+
 func TestVibratorAdvancedFollowRangeAndEnvelopeUseMax(t *testing.T) {
 	f := newVibratorFixture(t, nil)
 	// Steady drive is 1, so a 25..75% follow range reaches 75% of Max.

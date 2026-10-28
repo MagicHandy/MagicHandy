@@ -4,7 +4,8 @@
 
 Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags
 '-s -w'`: **24,292,864 -> 24,336,896 B** (+44,032 B) against `43ac5d58`,
-including the embedded UI, continuation fixes and response-boundary review. Main JS
+including the embedded UI, continuation fixes, response-boundary review and
+the final zero-glide status correction (re-measured, same byte size). Main JS
 **1,307,460 -> 1,313,724 B raw** (+6,264 B) and
 **351,669 -> 353,128 B gzip** (+1,459 B); CSS is unchanged at
 **210,037 B / 36,604 B gzip**. Canonical UI **2,841,582 -> 2,857,145 B**

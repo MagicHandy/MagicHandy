@@ -37,7 +37,12 @@ suspension when dispatch has not started playback. Stopped score/envelope data
 is context, never authority. Equivalent pace pairs resolve once against the
 actual/recalled score. Combined independent edit groups, agreeing geometry and
 `vibration:null` retain duplicate/conflict/bounds and non-null authority checks.
-No blocker was found in the integration source review.
+The final review found an early Silence status during a scalar glide to zero:
+the requested model level was zero while positive motor commands were still
+being sent. A regression reproduced 35% commanded output with `level_zero`.
+The status now waits for the last commanded output to reach zero; the pacer,
+glide, write bounds and Stop behavior are unchanged. The regression checks both
+the positive glide and completed zero output.
 
 ## Evidence and limits
 
@@ -95,19 +100,21 @@ directory, manifests/checksums, exact installer lifecycle, clean reviewed
 source and current-main tag provenance remain mandatory.
 
 Updates' local architecture, config, chat, motion, transport and vibration
-tests pass. PowerShell 5.1 installer tests pass. The release-policy test keeps
+tests pass. PowerShell 5.1 and 7 installer tests pass. The release-policy test keeps
 the negative alpha.65 and future alpha.78 cases. The canonical UI totals
 2,857,145 B as recorded. No workflow, dependency or optional runtime pin changed.
 
 ## Review app
 
-Preserve the isolated current-source app at `http://127.0.0.1:50305/#/chat`,
+Preserve the original isolated app at `http://127.0.0.1:50305/#/chat`.
+The final status correction runs in a parallel isolated current-source app
+at `http://127.0.0.1:50306/#/chat`,
 with `-simulate-motion`, remote listener disabled and local Ollama Gemma 12B
 Intermediate. The source thread's real-generation probe and text-only reply
 passed without repair/fallback/motion; compound edits, Stop, a question and
 unchanged continuation preserved exact FlowSpec and vibration level. Both
 in-process simulated devices are selected, Autopilot is off and playback is
 stopped. Updates revalidates this exact app and leaves a review tab open before
-handoff. Updates' fresh PowerShell 7 generation probe succeeds; app chat answers
-the Max-setting question in 1.532 s with Motion none, no repair/fallback and
-playback idle. No credentials or user data are copied.
+handoff. Updates' fresh PowerShell 7 generation probe succeeds on both apps;
+text-only app chat is also checked on the final build without repair/fallback
+or motion. Both have fresh isolated data and no credentials or user data are copied.
