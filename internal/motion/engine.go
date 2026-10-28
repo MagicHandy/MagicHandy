@@ -24,6 +24,7 @@ const (
 	minLeadMillis           = int64(500)
 	maxLeadMillis           = int64(2000)
 	defaultStopTimeout      = 15 * time.Second
+	targetDispatchTimeout   = 10 * time.Second
 )
 
 type loopRecoveryContextKey struct{}
@@ -313,16 +314,27 @@ func (e *Engine) applyTarget(ctx context.Context, target MotionTarget, reason st
 		}
 		return e.startAtGeneration(ctx, target, settings, admission+1, true)
 	}
-	if err := e.ensureLeadBuffer(ctx, runEpoch, "retarget_lead_points"); err != nil {
+	// Replenishing the current run and sending an admitted replacement are
+	// engine work. Superseding a chat/planner request must not abort an upload
+	// that may already be accepted, forcing recovery Stop. Each wire command
+	// still follows the run context, so Stop/Pause cancels it immediately;
+	// the timeout also bounds a stalled transport. Check the caller again
+	// before committing the replacement, so canceled queued edits never apply.
+	dispatchCtx, cancelDispatch := context.WithTimeout(context.WithoutCancel(ctx), targetDispatchTimeout)
+	defer cancelDispatch()
+	if err := e.ensureLeadBuffer(dispatchCtx, runEpoch, "retarget_lead_points"); err != nil {
 		return e.Snapshot(), err
 	}
 	if err := ctx.Err(); err != nil {
 		return e.Snapshot(), err
 	}
+	if err := dispatchCtx.Err(); err != nil {
+		return e.Snapshot(), err
+	}
 	if err := e.retarget(runEpoch, target, reason); err != nil {
 		return e.Snapshot(), err
 	}
-	err = e.dispatchNextChunk(ctx, runEpoch, "retarget_points")
+	err = e.dispatchNextChunk(dispatchCtx, runEpoch, "retarget_points")
 	return e.Snapshot(), err
 }
 

@@ -1,5 +1,15 @@
 # Goal Scorecard
 
+## 2026-10-28 — Chat/Autopilot upload continuity
+
+Against alpha.77 `892d555b`, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: final core including
+embedded UI **24,336,896 -> 24,337,408 B** (+512 B). Canonical UI remains
+**2,856,409 B**, the Terra-default measurement below. The continuity fix adds
+a bounded context to existing dispatch, with no dependency, embedded asset,
+background loop or sampler change. No RSS/cold-start improvement is claimed.
+See the [alpha.78 review](alpha78-release-review-2026-10-28.md).
+
 ## 2026-10-28 — ChatGPT Terra default
 
 Against alpha.77 `892d555b`, Windows amd64 Go 1.26.10,
