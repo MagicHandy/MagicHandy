@@ -124,13 +124,7 @@ func (s *Server) handleModelConnectionTest(w http.ResponseWriter, r *http.Reques
 	provider, err := s.newHostedProvider(ctx, body.Connection, time.Duration(settings.LLM.RequestTimeoutMillis)*time.Millisecond)
 	if err == nil {
 		var raw string
-		maxTokens := 64
-		if body.Connection.Provider == config.LLMProviderOpenRouter && body.Connection.ReasoningEffort != "none" && (body.Connection.ReasoningEnabled == nil || *body.Connection.ReasoningEnabled) {
-			// OpenRouter counts hidden reasoning against max_tokens. A tiny
-			// answer budget can exhaust before a healthy model emits readiness.
-			maxTokens = 2048
-		}
-		raw, err = provider.StreamChat(ctx, llm.ChatRequest{Model: body.Connection.Model, MaxTokens: maxTokens, ReasoningMode: "off", Messages: []llm.Message{{Role: "system", Content: "Text-only connection test. Return exactly {\"ready\":true}."}, {Role: "user", Content: "Confirm readiness."}}, JSONSchema: json.RawMessage(`{"type":"object","properties":{"ready":{"type":"boolean"}},"required":["ready"],"additionalProperties":false}`)}, nil)
+		raw, err = provider.StreamChat(ctx, llm.ChatRequest{Model: body.Connection.Model, MaxTokens: 64, ReasoningMode: "off", Messages: []llm.Message{{Role: "system", Content: "Text-only connection test. Return exactly {\"ready\":true}."}, {Role: "user", Content: "Confirm readiness."}}, JSONSchema: json.RawMessage(`{"type":"object","properties":{"ready":{"type":"boolean"}},"required":["ready"],"additionalProperties":false}`)}, nil)
 		var result struct {
 			Ready bool `json:"ready"`
 		}

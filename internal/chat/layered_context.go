@@ -22,7 +22,7 @@ func hostedCommandedReach(context MotionContext, capabilities Capabilities) stri
 
 // Project only model-facing controls. Explicit paired widths avoid an omitted
 // ceiling (engine zero sentinel) being mistaken for the requested narrow width.
-func layeredScoreContext(score motion.FlowSpec) map[string]any {
+func layeredScoreContext(score motion.FlowSpec, advanced bool) map[string]any {
 	ceiling := score.RangeCeilingPercent
 	if ceiling == 0 {
 		ceiling = score.MaxPercent - score.MinPercent
@@ -40,6 +40,9 @@ func layeredScoreContext(score motion.FlowSpec) map[string]any {
 	}
 	if score.TurnSoftnessPercent != 0 || score.CadenceHoldPercent != 0 {
 		context["authored_turn_shape_read_only"] = map[string]int{"turn_softness_percent": score.TurnSoftnessPercent, "cadence_hold_percent": score.CadenceHoldPercent}
+	}
+	if advanced {
+		context["stroke_width"] = map[string]int{"shortest_percent": score.RangeFloorPercent, "widest_percent": ceiling}
 	}
 	return context
 }

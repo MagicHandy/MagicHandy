@@ -212,3 +212,57 @@ mandatory catalogue fixtures at
 `http://127.0.0.1:50316/.scratch/reasoning-preview.html`; this is an explicitly
 labeled private component preview, not a second shipped frontend or a claim
 that an API key has been installed in the review app.
+
+## Independent regression review follow-up
+
+Claude Opus 5.5, **xhigh**, reviewed `9247dc54..31898408` and the current source
+read-only through Claude Code. Its successful run had no MCP servers and only
+Read/Grep/Glob access. The review and reproduction logs remain ignored under
+`.scratch/openrouter-claude-review/`; no credentials or private example text
+were included. These are review fixes, not another model-quality benchmark.
+
+| Finding | Assessment and implemented change |
+| --- | --- |
+| Off becomes Provider default when moving from an effort model to an on/off-only model | Reproduced independently, then confirmed by Claude. Preserve the Off intent using the destination's supported representation. Mandatory/unsupported models still clear incompatible choices. |
+| A saved choice appears invalid while model discovery is loading | Reproduced independently, then confirmed by Claude. Unknown metadata retains the saved label; only confirmed incompatible metadata shows the unavailable warning. |
+| Check model succeeds with a larger completion budget than real requests | Reproduced through the HTTP chat path: readiness got 2,048 tokens, chat got 256 and the simulated provider ended with `length`. The OpenRouter adapter now applies one minimum allowance before input admission across every call. Off retains ordinary per-request budgets. |
+| Autopilot and reviewer evidence still use the old stroke-width names | Reproduced in actual composed messages. A shared score renderer now exposes the Advanced length names consistently in state, recall, Autopilot and before/applied reviewer evidence. Simple and Intermediate keep their prior names. |
+| Repair feedback names fields that the Advanced schema forbids | Reproduced for incompatible geometry, reversed widths, a floor outside the band and a ceiling outside the band. Translate known validator field names at the Advanced boundary, retaining the original cause and unchanged rejection. Position endpoint names are never rewritten. |
+| Unsupported reasoning becomes a generic outage in Autopilot | Reproduced. Motion already held safely: this was an explanation bug, not evidence of an unsafe fallback. A typed `reasoning` outcome now keeps the actionable message. Tests confirm zero generation and transport calls. |
+| Provider default hides the advertised effort | Adopted. Show a compact translated label, such as Provider default (High), without silently changing the selection. |
+
+Claude also noted that Lab comparisons inherit the connection's reasoning
+choice. This is left explicit: incompatible comparisons fail with the actionable
+error instead of silently testing a different reasoning policy. Speculative
+per-backend capability inference and additional reasoning-budget tuning were
+deferred. The 2,048-token minimum corrects the reproduced discrepancy; it does
+not guarantee that every model or arbitrarily complex answer will complete.
+
+The changes preserve the previous Advanced grammar and semantic values; they
+finish applying its already-evaluated field vocabulary. The earlier shared-engine
+atlas remains the motion-character evidence. No new motion recipe, geometry,
+sampler, provider fallback, language classifier or hardware command is added.
+Local Advanced receives the same consistent vocabulary; this review does not
+claim a new live quality result for local Advanced. No OpenRouter test credits
+were spent during this follow-up.
+
+Validation passed: full Go tests and race suite, vet, lint (zero issues),
+architecture/lifecycle gates, pure-Go Windows build, TypeScript, five-locale
+audit, **1,076 UI tests across 131 files**, and the canonical frontend build.
+Regression cases were observed failing before their fixes. Additional provider
+tests cover the readiness/candidate/Edge/chat/reviewer answer budgets, preserve
+larger caps, reserve input space before generation, and retain explicit Off.
+Grammar tests preserve rejection atomicity and underlying typed errors as well
+as Simple/Intermediate diagnostics. Browser checks verified model switching,
+mandatory reasoning, loading metadata and the default-effort label.
+
+The current-source isolated app is running at
+`http://127.0.0.1:50319/#/settings/chat/model`, with Ollama Gemma 12B selected,
+Intermediate capability, simulated devices, LLM motion off and Autopilot off.
+The readiness script completed a real generation. A text-only app chat returned
+a nonempty reply in **347 ms**, with no repair/fallback and motion idle; this is
+a warm local smoke check, not a cloud latency comparison. The reasoning control
+preview at `http://127.0.0.1:50316/.scratch/reasoning-preview.html` uses simulated
+catalogue metadata and the actual shared production component. Screenshots and
+logs remain in the ignored review directory. Existing app processes were left
+running; no hardware was connected or commanded.

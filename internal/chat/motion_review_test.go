@@ -62,7 +62,7 @@ func TestMotionReviewEvidenceOmitsPersonaAndPriorScores(t *testing.T) {
 	// Its typed evidence has no persona or memory fields. Context also drops the
 	// ordinary model's earlier scores and user requests in favor of its bounded input.
 	current := FreshCreativeV2Score(25)
-	encoded, err := json.Marshal(reviewTarget(motion.MotionTarget{Flow: &current, Label: "private persona label"}))
+	encoded, err := json.Marshal(reviewTarget(motion.MotionTarget{Flow: &current, Label: "private persona label"}, true))
 	if err != nil || strings.Contains(string(encoded), "private") || !strings.Contains(string(encoded), "seed") {
 		t.Fatalf("evidence %s: %v", encoded, err)
 	}

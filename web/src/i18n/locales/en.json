@@ -3481,5 +3481,10 @@
   "Enabled — provider decides effort": "Enabled — provider decides effort",
   "This model requires reasoning. Lower effort usually responds sooner.": "This model requires reasoning. Lower effort usually responds sooner.",
   "Less reasoning can respond sooner, but may reduce motion quality. Provider default keeps the model's own setting.": "Less reasoning can respond sooner, but may reduce motion quality. Provider default keeps the model's own setting.",
-  "Saved setting unavailable — choose another": "Saved setting unavailable — choose another"
+  "Saved setting unavailable — choose another": "Saved setting unavailable — choose another",
+  "Minimal": "Minimal",
+  "Low": "Low",
+  "High": "High",
+  "Extra high": "Extra high",
+  "Maximum": "Maximum"
 }

@@ -20,7 +20,8 @@ func parseHostedLayeredReply(raw string, current motion.FlowSpec, limits config.
 	if err != nil {
 		return AssistantResponse{}, current, nil, err
 	}
-	return ParseLayeredReply(normalized, current, limits)
+	response, next, changed, err := ParseLayeredReply(normalized, current, limits)
+	return response, next, changed, hostedStrokeLengthError(err)
 }
 
 func normalizeLayeredOperations(raw string) (string, error) {

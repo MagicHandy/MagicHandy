@@ -101,7 +101,7 @@ func RunLLMLab(ctx context.Context, provider llm.Provider, model, method, prompt
 	recipeID, _ := labCurrentRecipe(method, current)
 	var score any = current
 	if method == "layered" {
-		score = layeredScoreContext(current)
+		score = layeredScoreContext(current, false)
 	}
 	if method == "creative_v2" {
 		score = creativeV2ScoreContext(current)

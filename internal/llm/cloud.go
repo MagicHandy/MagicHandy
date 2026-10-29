@@ -37,6 +37,8 @@ func (e *CloudError) Error() string {
 		return "Decisions selects complete library patterns. Choose Library motion to use it."
 	case "capability":
 		return "This model or provider does not support the selected structured output policy. Choose another output mode for this connection."
+	case "reasoning":
+		return "The selected model does not support this reasoning setting. Choose Provider default or a supported option."
 	case "context":
 		return "This request exceeds the model's context capacity. Choose a smaller Conversation history setting for this provider or a model with more context."
 	default:

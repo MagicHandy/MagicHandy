@@ -3481,5 +3481,10 @@
   "Enabled — provider decides effort": "Activado — el proveedor decide el esfuerzo",
   "This model requires reasoning. Lower effort usually responds sooner.": "Este modelo requiere razonamiento. Un esfuerzo menor suele responder antes.",
   "Less reasoning can respond sooner, but may reduce motion quality. Provider default keeps the model's own setting.": "Menos razonamiento puede responder antes, pero reducir la calidad del movimiento. Predeterminado del proveedor conserva el ajuste del modelo.",
-  "Saved setting unavailable — choose another": "El ajuste guardado no está disponible — elige otro"
+  "Saved setting unavailable — choose another": "El ajuste guardado no está disponible — elige otro",
+  "Minimal": "Mínimo",
+  "Low": "Bajo",
+  "High": "Alto",
+  "Extra high": "Muy alto",
+  "Maximum": "Máximo"
 }

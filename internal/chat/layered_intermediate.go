@@ -157,7 +157,7 @@ func normalizeIntermediateGeometry(edits, controls map[string]json.RawMessage) e
 }
 
 func intermediateLayeredScoreContext(score motion.FlowSpec) map[string]any {
-	state := layeredScoreContext(score)
+	state := layeredScoreContext(score, false)
 	controls := state["controls"].(map[string]any)
 	state["range"] = map[string]any{"min_percent": controls["min_percent"], "max_percent": controls["max_percent"]}
 	delete(controls, "min_percent")

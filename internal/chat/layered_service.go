@@ -36,13 +36,11 @@ func layeredContextScore(state *MotionContext) (motion.FlowSpec, config.MotionSe
 
 func layeredContextInstructions(state MotionContext, capabilities Capabilities) string {
 	score, limits := layeredContextScore(&state)
-	var scoreContext any = layeredScoreContext(score)
+	var scoreContext any = layeredScoreContext(score, capabilities.AdvancedMotion)
 	if state.MotionMode == MotionModeCreativeV2 {
 		scoreContext = creativeV2ScoreContext(score)
 	} else if capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
 		scoreContext = intermediateLayeredScoreContext(score)
-	} else if capabilities.AdvancedMotion {
-		hostedStrokeLengthContext(scoreContext.(map[string]any))
 	}
 	if state.MotionMode == MotionModeLayered && !capabilities.AdvancedMotion && !capabilities.DirectionalPace && score.DirectionalPace != nil {
 		// A tier switch preserves playing motion. Describe inherited timing

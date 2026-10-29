@@ -6,6 +6,28 @@ import { ModelResponseSettings, selectedModelChange } from "./ModelResponseSetti
 const connection = { ...newModelConnection("openrouter", []), model: "fixture" };
 const model = { id: "fixture", name: "Fixture", reasoning_supported: true, reasoning_efforts: ["none", "low", "high"] };
 describe("OpenRouter reasoning", () => {
+ it("shows the advertised default effort without selecting an override", () => {
+  const patch = vi.fn();
+  render(<ModelResponseSettings connection={connection} models={[{ ...model, default_reasoning_effort: "high" }]} disabled={false} patch={patch} />);
+  expect(screen.getByRole("combobox", { name: "Reasoning" })).toHaveDisplayValue("Provider default (High)");
+  expect(patch).not.toHaveBeenCalled();
+ });
+ it("preserves Off when switching to a model with on/off but no none effort", () => {
+  const budgetModel = { ...model, id: "budget-model", reasoning_efforts: [] };
+  expect(selectedModelChange(budgetModel, budgetModel.id, { ...connection, reasoning_effort: "none" })).toMatchObject({
+   reasoning_effort: "", reasoning_enabled: false,
+  });
+ });
+ it("does not call a saved setting unavailable before catalogue discovery", () => {
+  const patch = vi.fn();
+  const saved = { ...connection, reasoning_effort: "low" };
+  const { rerender } = render(<ModelResponseSettings connection={saved} models={[]} disabled={true} patch={patch} />);
+  expect(screen.queryByRole("option", { name: "Saved setting unavailable — choose another" })).not.toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "Reasoning" })).toHaveDisplayValue("Low — quicker responses");
+  expect(patch).not.toHaveBeenCalled();
+  rerender(<ModelResponseSettings connection={saved} models={[{ ...model, reasoning_supported: false, reasoning_efforts: [] }]} disabled={false} patch={patch} />);
+  expect(screen.getByRole("option", { name: "Saved setting unavailable — choose another" })).toBeDisabled();
+ });
  it("uses discovered options and the advertised none effort for Off", () => {
   const patch=vi.fn();render(<ModelResponseSettings connection={connection} models={[model]} disabled={false} patch={patch} compact />);
   const select=screen.getByRole("combobox",{name:"Reasoning"});

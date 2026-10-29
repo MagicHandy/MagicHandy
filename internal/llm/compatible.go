@@ -219,6 +219,9 @@ func (p *CompatibleProvider) modelCapabilities(ctx context.Context) (HostedModel
 func (p *CompatibleProvider) StreamChat(ctx context.Context, request ChatRequest, onDelta func(string) error) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.options.Timeout)
 	defer cancel()
+	if p.options.Provider == "openrouter" {
+		request.MaxTokens = OpenRouterOutputTokens(request.MaxTokens, p.options.ReasoningEffort, p.options.ReasoningEnabled)
+	}
 	bounded, budget, err := BudgetChatRequest(request, p.options.ContextSize)
 	if request.OnBudget != nil {
 		request.OnBudget(budget)

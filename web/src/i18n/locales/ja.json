@@ -3481,5 +3481,10 @@
   "Enabled — provider decides effort": "有効 — 推論の強さはプロバイダーが決定",
   "This model requires reasoning. Lower effort usually responds sooner.": "このモデルには推論が必要です。通常、強さを下げると応答が速くなります。",
   "Less reasoning can respond sooner, but may reduce motion quality. Provider default keeps the model's own setting.": "推論を減らすと応答が速くなる場合がありますが、動きの品質が下がることもあります。プロバイダーの既定値ではモデル本来の設定を使います。",
-  "Saved setting unavailable — choose another": "保存済みの設定は利用できません — 別の設定を選択"
+  "Saved setting unavailable — choose another": "保存済みの設定は利用できません — 別の設定を選択",
+  "Minimal": "最小限",
+  "Low": "低",
+  "High": "高",
+  "Extra high": "非常に高",
+  "Maximum": "最大"
 }

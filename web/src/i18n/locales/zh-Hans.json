@@ -3481,5 +3481,10 @@
   "Enabled — provider decides effort": "启用 — 由提供方决定推理强度",
   "This model requires reasoning. Lower effort usually responds sooner.": "此模型必须启用推理。较低的推理强度通常响应更快。",
   "Less reasoning can respond sooner, but may reduce motion quality. Provider default keeps the model's own setting.": "减少推理可加快响应，但可能降低运动质量。提供方默认值会保留模型本身的设置。",
-  "Saved setting unavailable — choose another": "已保存的设置不可用 — 请选择其他设置"
+  "Saved setting unavailable — choose another": "已保存的设置不可用 — 请选择其他设置",
+  "Minimal": "最低",
+  "Low": "低",
+  "High": "高",
+  "Extra high": "极高",
+  "Maximum": "最高"
 }

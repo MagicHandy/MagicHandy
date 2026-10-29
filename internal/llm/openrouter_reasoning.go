@@ -2,11 +2,21 @@ package llm
 
 import (
 	"encoding/json"
-	"errors"
 	"slices"
 )
 
 var routerEfforts = []string{"none", "minimal", "low", "medium", "high", "xhigh", "max"}
+
+// OpenRouterOutputTokens reserves room for hidden reasoning, which shares the
+// completion cap with the answer. Apply this before input admission, for every
+// call (including short decisions, repairs and readiness), not just in the UI
+// connection check. It is a ceiling, not a request to generate more text.
+func OpenRouterOutputTokens(answerTokens int, effort string, enabled *bool) int {
+	if effort == "none" || (enabled != nil && !*enabled) {
+		return answerTokens
+	}
+	return max(answerTokens, 2048)
+}
 
 type compatibleCatalogModel struct {
 	HostedModel
@@ -52,7 +62,7 @@ func routerReasoning(model HostedModel, effort string, enabled *bool) (map[strin
 	if !model.ReasoningSupported || (effort != "" && enabled != nil) ||
 		(effort != "" && !slices.Contains(model.ReasoningEfforts, effort)) ||
 		(model.ReasoningMandatory && (effort == "none" || (enabled != nil && !*enabled))) {
-		return nil, errors.New("the selected model does not support this reasoning setting; choose Provider default or a supported option")
+		return nil, &CloudError{Kind: "reasoning"}
 	}
 	if enabled != nil {
 		return map[string]any{"enabled": *enabled}, nil

@@ -23,7 +23,7 @@ func writeAutopilotMotionFacts(builder *strings.Builder, context AutopilotContex
 		// A mode switch changes the next decision's grammar before it replaces
 		// the active segment. Describe that segment by its actual score type.
 		activeMode := MotionModeLayered
-		var score any = layeredScoreContext(*context.CurrentFlow)
+		var score any = layeredScoreContext(*context.CurrentFlow, context.Hosted)
 		if context.CurrentFlow.Gesture != nil {
 			activeMode = MotionModeCreativeV2
 			score = creativeV2ScoreContext(*context.CurrentFlow)

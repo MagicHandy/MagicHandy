@@ -1,5 +1,24 @@
 # Goal Scorecard
 
+## 2026-10-29 — OpenRouter regression review follow-up
+
+Against `31898408`, canonical UI **2,861,586 -> 2,862,704 B** (+1,118 B).
+Windows amd64 pure-Go core including UI **24,410,112 -> 24,414,208 B**
+(+4,096 B), with the same `-trimpath -buildvcs=false -ldflags '-s -w'`
+flags. The selector preserves explicit Off, distinguishes loading metadata
+from unsupported settings, and displays the advertised default effort.
+
+OpenRouter's 2,048-token reasoning allowance now applies to every generation
+path before input admission, not just Check model. Larger requested budgets
+are retained; explicit Off, ChatGPT/OpenAI and local budgets are unchanged.
+The ceiling does not force a longer answer, but a reasoning model can now use
+more tokens instead of truncating. No latency/cost improvement is claimed.
+Advanced Layered Autopilot/reviewer facts use the same length names as their
+schema (+8 bytes per score); error feedback follows that vocabulary too.
+Simple/Intermediate prompts and motion values/validation remain unchanged.
+No dependency, worker, timer or extra inference step is added. No RSS/startup
+claim is made. See the [review disposition](openrouter-reasoning-review-2026-10-29.md#independent-regression-review-follow-up).
+
 ## 2026-10-29 — OpenRouter reasoning and Advanced Layered vocabulary
 
 Against `9247dc54` (application code `a97ddbe0`), Windows amd64 Go 1.26.10,

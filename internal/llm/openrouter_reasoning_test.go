@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 )
@@ -33,6 +34,62 @@ func TestOpenRouterReasoningDiscovery(t *testing.T) {
 				t.Fatalf("catalog: %+v", m)
 			}
 		})
+	}
+}
+
+func TestOpenRouterReasoningHeadroomCoversEveryAnswerBudget(t *testing.T) {
+	// These are the production readiness, candidate, Edge, chat and review
+	// answer sizes. The provider boundary covers each, including repaired calls.
+	for _, answer := range []int{64, 128, 192, 256, 512, 1536, 4096} {
+		for _, effort := range []string{"", "none", "low", "high"} {
+			var sent int
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/models" {
+					_, _ = fmt.Fprint(w, `{"data":[{"id":"fixture","supported_parameters":["max_tokens","reasoning"],"reasoning":{"supported_efforts":["none","low","high"]}}]}`)
+					return
+				}
+				var body struct {
+					MaxTokens int `json:"max_tokens"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Error(err)
+				}
+				sent = body.MaxTokens
+				compatibleTestStream(w, "Ready")
+			}))
+			p, err := NewCompatibleProvider(CompatibleOptions{HTTPProviderOptions: HTTPProviderOptions{BaseURL: server.URL, Model: "fixture", ContextSize: 16384}, Provider: "openrouter", ReasoningEffort: effort})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var budget PromptBudget
+			_, err = p.StreamChat(t.Context(), ChatRequest{MaxTokens: answer, OnBudget: func(b PromptBudget) { budget = b }}, nil)
+			server.Close()
+			want := max(answer, 2048)
+			if effort == "none" {
+				want = answer
+			}
+			if err != nil || sent != want || budget.LimitBytes != PromptInputByteLimit(16384, want, 0, 0) {
+				t.Fatalf("answer=%d effort=%q sent=%d budget=%+v err=%v", answer, effort, sent, budget, err)
+			}
+		}
+	}
+}
+
+func TestOpenRouterReasoningHeadroomReservesInputBeforeGeneration(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+	p, err := NewCompatibleProvider(CompatibleOptions{HTTPProviderOptions: HTTPProviderOptions{BaseURL: server.URL, Model: "fixture", ContextSize: 8192}, Provider: "openrouter"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Fits with only 256 answer tokens, but not with the reasoning reserve.
+	_, err = p.StreamChat(t.Context(), ChatRequest{MaxTokens: 256, Messages: []Message{{Role: "system", Content: strings.Repeat("x", 5000)}}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "input budget") || calls != 0 {
+		t.Fatalf("reasoning reserve admitted an oversized request: calls=%d err=%v", calls, err)
 	}
 }
 
@@ -89,6 +146,9 @@ func TestOpenRouterReasoningWireAndRejection(t *testing.T) {
 				raw, err := p.StreamChat(t.Context(), ChatRequest{MaxTokens: 64}, nil)
 				if (err != nil) != tc.reject {
 					t.Fatalf("raw=%q err=%v", raw, err)
+				}
+				if tc.reject && !IsCloudOutcome(err) {
+					t.Fatalf("reasoning capability failure lost its cloud outcome type: %v", err)
 				}
 			}
 			if catalogs.Load() != 1 {
