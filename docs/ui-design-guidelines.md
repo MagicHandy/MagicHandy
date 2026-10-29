@@ -797,6 +797,14 @@ the connection header, a muted accent-tinted form body, and stronger horizontal
 row dividers so account, model and history settings remain distinct. Keep nested
 history help inside its row group without doubling rules or adding another card.
 
+OpenRouter reasoning (2026-10-29) uses the same label-and-control row in Setup
+and Settings. Offer Provider default, Off when allowed, Enabled, and only the
+catalogue's supported effort levels. Do not imply lower effort always preserves
+quality. Required-reasoning models explain why Off is absent. A stale saved
+choice stays visible as unavailable with Provider default available for recovery;
+do not silently alter it while discovery is loading. Changing models clears
+incompatible choices. Keep detailed provider metadata out of the normal flow.
+
 
 ### Saved devices and playback
 

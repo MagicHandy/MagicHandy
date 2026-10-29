@@ -121,7 +121,7 @@ export function ModelConnectionEditor({ connection, locked, patch, onReady = () 
   const connected = connection.provider === "chatgpt" ? accountReady : keySaved || Boolean(connection.no_authentication);
   const filtered = models.filter(model => `${model.name} ${model.id}`.toLowerCase().includes(search.toLowerCase())).slice(0, 50);
   const floor = capabilityFloor(connectionCapability(connection), capabilityOptions);
-  const manualModel = <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={connection.model} disabled={disabled} onChange={event => patch({ model: event.target.value, reasoning_effort: "", context_window: connection.provider === "compatible" ? Math.max(connection.context_window || 0, floor) : floor })} /></label>;
+  const manualModel = <label className="field"><span className="label">{t("Model ID")}</span><input type="text" value={connection.model} disabled={disabled} onChange={event => patch({ model: event.target.value, reasoning_effort: "", reasoning_enabled: undefined, context_window: connection.provider === "compatible" ? Math.max(connection.context_window || 0, floor) : floor })} /></label>;
   const checkModel = () => void run("check", async () => {
     const current = connectionRef.current;
     const snapshot = connectionSignature(current);

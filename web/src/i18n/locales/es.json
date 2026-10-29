@@ -3477,5 +3477,9 @@
   "Vibrator ready. Playback stays within your Max.": "Vibrador listo. La reproducción se mantiene dentro de tu máximo.",
   "Your next motion request can resume it. To keep it off, turn off In playback.": "Tu próxima solicitud de movimiento puede reanudarlo. Para mantenerlo apagado, desactiva En reproducción.",
   "Stop pauses the vibrator until you request motion or choose Resume now in the device panel. Your max and model control stay as they are.": "Detener pausa el vibrador hasta que solicites movimiento o elijas Reanudar ahora en el panel de dispositivos. El máximo y el control del modelo no cambian.",
-  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "Un segundo al menor valor entre tu máximo y el 25%, con la reproducción detenida o pausada. Elige primero un dispositivo."
+  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "Un segundo al menor valor entre tu máximo y el 25%, con la reproducción detenida o pausada. Elige primero un dispositivo.",
+  "Enabled — provider decides effort": "Activado — el proveedor decide el esfuerzo",
+  "This model requires reasoning. Lower effort usually responds sooner.": "Este modelo requiere razonamiento. Un esfuerzo menor suele responder antes.",
+  "Less reasoning can respond sooner, but may reduce motion quality. Provider default keeps the model's own setting.": "Menos razonamiento puede responder antes, pero reducir la calidad del movimiento. Predeterminado del proveedor conserva el ajuste del modelo.",
+  "Saved setting unavailable — choose another": "El ajuste guardado no está disponible — elige otro"
 }

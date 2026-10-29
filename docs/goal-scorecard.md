@@ -1,5 +1,24 @@
 # Goal Scorecard
 
+## 2026-10-29 — OpenRouter reasoning and Advanced Layered vocabulary
+
+Against `9247dc54` (application code `a97ddbe0`), Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core including
+embedded UI **24,390,656 -> 24,410,112 B** (+19,456 B; section-aligned).
+Canonical UI **2,856,207 -> 2,861,586 B** (+5,379 B). No dependency, worker,
+motion loop or inference step is added. OpenRouter reuses its existing
+fifteen-minute catalogue cache for reasoning capabilities. Check model permits
+a 2,048-token total completion budget when reasoning may be enabled, instead
+of prematurely exhausting a 64-token check; it remains one explicit call.
+
+The Advanced Layered response schema grows by about 3.8 KB in the evaluated
+fixtures, within the existing 64K context floor; Simple/Intermediate stay
+unchanged. Seven matched Terra calls per version measured median **3.672 ->
+3.812 s**; final DeepSeek trials measured **1.278 s** median. Small sequential
+samples with mixed cache warmth are not evidence of a fixed latency delta.
+No RSS or startup claim is made. See the
+[model and implementation review](openrouter-reasoning-review-2026-10-29.md).
+
 ## 2026-10-29 — Top-speed reversals
 
 Against alpha.79 `f21853ab`, Windows amd64 Go 1.26.10,

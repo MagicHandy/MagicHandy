@@ -41,6 +41,9 @@ func normalizeLayeredOperations(raw string) (string, error) {
 	if err := normalizeHostedLayerOperations(edits); err != nil {
 		return "", err
 	}
+	if err := normalizeHostedStrokeLengths(edits); err != nil {
+		return "", err
+	}
 	if err := normalizeHostedLayeredComposition(edits); err != nil {
 		return "", err
 	}

@@ -41,6 +41,8 @@ func layeredContextInstructions(state MotionContext, capabilities Capabilities) 
 		scoreContext = creativeV2ScoreContext(score)
 	} else if capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
 		scoreContext = intermediateLayeredScoreContext(score)
+	} else if capabilities.AdvancedMotion {
+		hostedStrokeLengthContext(scoreContext.(map[string]any))
 	}
 	if state.MotionMode == MotionModeLayered && !capabilities.AdvancedMotion && !capabilities.DirectionalPace && score.DirectionalPace != nil {
 		// A tier switch preserves playing motion. Describe inherited timing
@@ -63,12 +65,16 @@ func layeredContextInstructions(state MotionContext, capabilities Capabilities) 
 	}
 	recall := ""
 	if earlier := recallableScores(state); len(earlier) > 0 {
-		context["earlier_scores"] = earlierScoresContext(earlier, state)
+		context["earlier_scores"] = earlierScoresContext(earlier, state, capabilities.AdvancedMotion)
 		recall = earlierScoresGuide + "\n"
 	}
 	encoded, _ := json.Marshal(context)
-	return "Authoritative continuous motion state, refreshed for this turn:\n" + string(encoded) + "\n" + labPlanningContextGuide + recall +
+	text := "Authoritative continuous motion state, refreshed for this turn:\n" + string(encoded) + "\n" + labPlanningContextGuide + recall +
 		"A stopped device starts only for a direct motion request; a paused device cannot be resumed by model edits. Ordinary conversation and questions require reply only."
+	if capabilities.AdvancedMotion && state.MotionMode == MotionModeLayered {
+		text += "\n" + hostedStrokeLengthGuide
+	}
+	return text
 }
 
 // parseContinuousReply applies a recalled earlier score, when the reply names

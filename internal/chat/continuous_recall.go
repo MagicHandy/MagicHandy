@@ -41,12 +41,14 @@ type earlierScoreContext struct {
 	Score             any      `json:"score"`
 }
 
-func earlierScoresContext(scores []EarlierScore, state MotionContext) []earlierScoreContext {
+func earlierScoresContext(scores []EarlierScore, state MotionContext, advanced bool) []earlierScoreContext {
 	out := make([]earlierScoreContext, len(scores))
 	for i, score := range scores {
 		var described any = layeredScoreContext(score.Flow)
 		if state.MotionMode == MotionModeCreativeV2 {
 			described = creativeV2ScoreContext(score.Flow)
+		} else if advanced {
+			hostedStrokeLengthContext(described.(map[string]any))
 		}
 		out[i] = earlierScoreContext{ID: i + 1, StartedSecondsAgo: score.StartedSecondsAgo, PlayedSeconds: score.PlayedSeconds,
 			SaidWhilePlaying: saidWhilePlaying(score, state), Score: described}

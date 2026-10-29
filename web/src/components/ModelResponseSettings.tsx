@@ -1,6 +1,7 @@
 import { DismissibleNotice } from "./DismissibleNotice";
 import type { HostedModel, ModelConnection } from "../api/cloud-types";
 import { t } from "../i18n";
+import { OpenRouterReasoning, routerReasoningChange } from "./OpenRouterReasoning";
 
 export function modelReadyMessage(elapsedMillis?: number): string {
   return elapsedMillis && elapsedMillis > 0 ? t("Ready · {seconds} s", { seconds: (elapsedMillis / 1000).toFixed(1) }) : t("Ready");
@@ -15,13 +16,14 @@ export function selectedModelChange(model: HostedModel | undefined, id: string, 
   const current = connection.reasoning_effort ?? "";
   const kept = Math.max(connection.context_window || 0, floor);
   const suggestedWindow = connection.provider === "compatible" ? kept : (model?.context_length ?? 0) >= 131072 ? 131072 : floor;
-  return { model: id, reasoning_effort: levels.includes(current) ? current : levels.includes("low") ? "low" : "",
+  return { model: id, ...(connection.provider === "openrouter" ? routerReasoningChange(connection, model) : { reasoning_effort: levels.includes(current) ? current : levels.includes("low") ? "low" : "" }),
     context_window: id === connection.model ? kept : suggestedWindow };
 }
 
 export function ModelResponseSettings({ connection, models, disabled, patch, compact = false }: {
   connection: ModelConnection; models: HostedModel[]; disabled: boolean; patch: (change: Partial<ModelConnection>) => void; compact?: boolean;
 }) {
+  if (connection.provider === "openrouter") return <OpenRouterReasoning connection={connection} model={models.find(item => item.id === connection.model)} disabled={disabled} patch={patch} />;
   if (connection.provider !== "chatgpt" && connection.provider !== "openai") return null;
   const model = models.find(item => item.id === connection.model);
   const levels = model?.reasoning_efforts ?? [];
