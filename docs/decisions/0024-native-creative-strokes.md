@@ -124,3 +124,15 @@ user-stopped Cloud session and the subsequent generator/handoff evaluation.
 The [roaming review](../creative-v2-roaming-review-2026-09-05.md) records the
 default tip bias, removal of specific example recipes, general roaming control
 and the retained prompt failures.
+
+
+## October 28 amendment: variation does not insert rests
+
+The seeded Creative v2 phrasing previously included occasional 110–280 ms
+stationary holds. An installed-session trace reproduced a 166 ms hold while the
+person requested continuous motion. Those implicit rests are removed; ordinary
+variation still changes reach, pace, landings and accents. The separate Lab-only
+Stroke experiment retains its explicitly experimental rest vocabulary. Edge
+uses reduced pace/reach with normal rounded reversals, rather than added turn
+softness that could persist as an invisible speed limit in later Layered edits.
+See [the session repair review](../layered-session-repair-review-2026-10-28.md).

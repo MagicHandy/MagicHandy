@@ -8,7 +8,9 @@ import (
 )
 
 // HoldingTarget is deliberately cheap and independent of inference. Keep the
-// familiar working region, soften the turns, and reduce pace inside saved limits.
+// familiar working region and reduce pace inside saved limits. Use the normal
+// rounded reversals: extra softness flattened turns into near-rests and then
+// persisted as an invisible high-speed restriction in later Layered edits.
 func HoldingTarget(state ActiveMotionState, settings config.MotionSettings) (MotionTarget, error) {
 	lo, hi := 0, 100
 	if state.Perceptual.PositionMaxPercent > state.Perceptual.PositionMinPercent || state.Perceptual.Pace.RequestedPercent > 0 {
@@ -37,7 +39,7 @@ func HoldingTarget(state ActiveMotionState, settings config.MotionSettings) (Mot
 	flow.MinPercent, flow.MaxPercent = start, start+width
 	flow.RangeFloorPercent, flow.RangeCeilingPercent = width, width
 	flow.SpeedPercent, flow.PaceVariationPercent = speed, 0
-	flow.TurnSoftnessPercent, flow.AnchorPercent = 85, 50
+	flow.AnchorPercent = 50
 	target, err := FlowTarget(flow, settings)
 	target.Source, target.Label = "edge", "Gentle hold"
 	return target, err

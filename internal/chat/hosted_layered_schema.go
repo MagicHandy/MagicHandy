@@ -14,6 +14,7 @@ func hostedLayeredEditSchema(fields map[string]any) map[string]any {
 		return map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}
 	}
 	manual := maps.Clone(fields)
+	manual["directional_pace"] = hostedDirectionalPaceSchema()
 	delete(manual, "geometry")
 	manual["composition"] = map[string]any{"const": "manual"}
 	controls := fields["controls"].(map[string]any)["properties"].(map[string]any)
@@ -23,11 +24,12 @@ func hostedLayeredEditSchema(fields map[string]any) map[string]any {
 	}
 	paceLayer := fields["layers"].(map[string]any)["properties"].(map[string]any)["pace"]
 	geometry := map[string]any{
-		"composition": map[string]any{"const": "geometry"},
-		"controls":    object(paceControls),
-		"layers":      object(map[string]any{"pace": paceLayer}),
-		"evolve":      fields["evolve"],
-		"geometry":    map[string]any{"const": "full_slider"},
+		"directional_pace": hostedDirectionalPaceSchema(),
+		"composition":      map[string]any{"const": "geometry"},
+		"controls":         object(paceControls),
+		"layers":           object(map[string]any{"pace": paceLayer}),
+		"evolve":           fields["evolve"],
+		"geometry":         map[string]any{"const": "full_slider"},
 	}
 	// Decide full-slider travel before emitting controls. Sharing the same
 	// discriminator with the band-preserving branch let constrained decoding
@@ -50,7 +52,7 @@ func hostedLayeredEditSchema(fields map[string]any) map[string]any {
 	// A phrase has no field range/center layer to follow. Existing copied pace
 	// envelopes remain ordinary independent layers; new follow edits are absent.
 	phrasePace := map[string]any{"oneOf": paceLayer.(map[string]any)["oneOf"].([]any)[:2]}
-	phrase := object(map[string]any{"composition": map[string]any{"const": "phrase"}, "phrase": hostedPhraseSchema(), "controls": object(paceControls), "layers": object(map[string]any{"pace": phrasePace}), "evolve": fields["evolve"]}, "composition", "phrase")
+	phrase := object(map[string]any{"composition": map[string]any{"const": "phrase"}, "phrase": hostedPhraseSchema(), "controls": object(paceControls), "layers": object(map[string]any{"pace": phrasePace}), "evolve": fields["evolve"], "directional_pace": hostedDirectionalPaceSchema()}, "composition", "phrase")
 	return map[string]any{"oneOf": []any{
 		map[string]any{"const": map[string]any{}},
 		object(manual, "composition"),

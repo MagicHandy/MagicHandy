@@ -16,7 +16,8 @@ import (
 type FlowSpec struct {
 	Gesture *GestureSpec `json:"gesture,omitempty"`
 	// Phrase is an explicitly counted stroke motif inside Layered mode.
-	Phrase *FlowPhrase `json:"phrase,omitempty"`
+	Phrase          *FlowPhrase      `json:"phrase,omitempty"`
+	DirectionalPace *DirectionalPace `json:"directional_pace,omitempty"`
 	// Strokes is an LLM Lab experiment; see StrokeSpec.
 	Strokes *StrokeSpec `json:"strokes,omitempty"`
 	// Freestyle is one window of the Freestyle mode's generated stream.
@@ -95,12 +96,29 @@ func (s FlowSpec) Validate(settings config.MotionSettings) error {
 }
 
 func (s FlowSpec) validateControls(settings config.MotionSettings) error {
-	if s.MinPercent < 0 || s.MinPercent > 90 || s.MaxPercent < 10 || s.MaxPercent > 100 || s.MaxPercent-s.MinPercent < 10 ||
-		s.RangeFloorPercent < 10 || s.RangeFloorPercent > s.MaxPercent-s.MinPercent ||
-		s.AnchorPercent < 0 || s.AnchorPercent > 100 || s.MemoryCycles < 2 || s.MemoryCycles > 32 ||
-		s.PaceVariationPercent < 0 || s.PaceVariationPercent > 40 || s.Seed == 0 ||
-		len(s.Steps) > 4 || len(s.Layers) > 3 {
-		return errors.New("flow controls exceed their supported bounds")
+	// Report the resolved field, including the result of relative edits. An
+	// undifferentiated bounds error made repair repeat a negative anchor after
+	// recall because every value in the emitted delta looked individually valid.
+	for _, field := range []struct {
+		name           string
+		value, low, hi int
+	}{
+		{"min_percent", s.MinPercent, 0, 90},
+		{"max_percent", s.MaxPercent, s.MinPercent + 10, 100},
+		{"range_floor_percent", s.RangeFloorPercent, 10, s.MaxPercent - s.MinPercent},
+		{"anchor_percent", s.AnchorPercent, 0, 100},
+		{"memory_cycles", s.MemoryCycles, 2, 32},
+		{"pace_variation_percent", s.PaceVariationPercent, 0, 40},
+	} {
+		if field.value < field.low || field.value > field.hi {
+			return fmt.Errorf("flow %s resolves to %d; must be within %d..%d", field.name, field.value, field.low, field.hi)
+		}
+	}
+	if s.Seed == 0 {
+		return errors.New("flow seed must be nonzero")
+	}
+	if len(s.Steps) > 4 || len(s.Layers) > 3 {
+		return errors.New("flow supports at most four steps and three layers")
 	}
 	settings = normalizeMotionSettings(settings)
 	if s.SpeedPercent < settings.SpeedMinPercent || s.SpeedPercent > settings.SpeedMaxPercent {
@@ -110,6 +128,9 @@ func (s FlowSpec) validateControls(settings config.MotionSettings) error {
 }
 
 func (s FlowSpec) validateOptionalControls() error {
+	if err := s.validateDirectionalPace(); err != nil {
+		return err
+	}
 	if err := s.validateExperiments(); err != nil {
 		return err
 	}
@@ -159,6 +180,9 @@ const flowJerkBudget = runtimeMaxJerkPercentPerSecond3
 func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, error) {
 	if err := spec.Validate(settings); err != nil {
 		return MotionTarget{}, err
+	}
+	if spec.DirectionalPace != nil && spec.DirectionalPace.UpRatePercent == 100 && spec.DirectionalPace.DownRatePercent == 100 {
+		spec.DirectionalPace = nil
 	}
 	var curve Curve
 	var window *streamWindow

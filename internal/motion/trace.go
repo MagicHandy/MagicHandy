@@ -208,6 +208,7 @@ func traceTargetWithPace(target MotionTarget, settings config.MotionSettings, pa
 		ProgramIdentifier:      target.ProgramID,
 		MediaIdentifier:        target.MediaID,
 		MediaSpeedLimitEnabled: target.MediaSpeedLimitEnabled,
+		HandyModel:             settings.HandyModel,
 	}
 	if target.AreaFocus != nil {
 		trace.AreaMinPercent = target.AreaFocus.MinPercent
@@ -231,14 +232,21 @@ func traceTargetWithPace(target MotionTarget, settings config.MotionSettings, pa
 		for _, anchor := range dynamic.Anchors {
 			trace.DynamicAnchors = append(trace.DynamicAnchors, anchor.Name)
 		}
-		if pace.RequestedPercent > 0 {
-			trace.EffectiveSpeedPercent = pace.EffectivePercent
-			trace.PaceLimited = pace.Limited
-			trace.PaceLimiters = append([]string(nil), pace.Limiters...)
-			trace.CommandedMeanTravel = pace.CommandedMeanTravelPerSecond
-			trace.CommandedPeakVelocity = pace.CommandedPeakVelocityPerSecond
-			trace.DevicePeakVelocity = pace.DevicePeakVelocityPerSecond
+	}
+	if target.Flow != nil {
+		trace.MotionKind = "flow"
+		trace.TurnSoftnessPercent, trace.CadenceHoldPercent = target.Flow.TurnSoftnessPercent, target.Flow.CadenceHoldPercent
+		if target.Flow.DirectionalPace != nil {
+			trace.UpRatePercent, trace.DownRatePercent = target.Flow.DirectionalPace.UpRatePercent, target.Flow.DirectionalPace.DownRatePercent
 		}
+	}
+	if pace.RequestedPercent > 0 {
+		trace.EffectiveSpeedPercent = pace.EffectivePercent
+		trace.PaceLimited = pace.Limited
+		trace.PaceLimiters = append([]string(nil), pace.Limiters...)
+		trace.CommandedMeanTravel = pace.CommandedMeanTravelPerSecond
+		trace.CommandedPeakVelocity = pace.CommandedPeakVelocityPerSecond
+		trace.DevicePeakVelocity = pace.DevicePeakVelocityPerSecond
 	}
 	return trace
 }

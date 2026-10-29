@@ -44,7 +44,7 @@ func TestHostedLayeredResponsesRoundTrip(t *testing.T) {
 				_, _ = fmt.Fprintf(w, "data: %s\n\ndata: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\"}}\n\n", delta)
 			}))
 			defer server.Close()
-			provider, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{BaseURL: server.URL, Model: "test-model", PlanUsage: plan, ContextSize: 32768, Token: func(context.Context) (string, error) { return "test", nil }})
+			provider, err := llm.NewOpenAIResponsesProvider(llm.OpenAIOptions{BaseURL: server.URL, Model: "test-model", PlanUsage: plan, ContextSize: config.MinimumExternalContext, Token: func(context.Context) (string, error) { return "test", nil }})
 			if err != nil {
 				t.Fatal(err)
 			}

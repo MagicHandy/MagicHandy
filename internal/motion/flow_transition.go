@@ -99,6 +99,27 @@ func samePhraseSlots(previous, next MotionPlan) bool {
 			return false
 		}
 	}
+	if len(a.Regions) != len(b.Regions) {
+		return false
+	}
+	for i := range a.Regions {
+		if a.Regions[i].Count != b.Regions[i].Count || a.Regions[i].Cycle != b.Regions[i].Cycle {
+			return false
+		}
+	}
+	left, right := a.OrderedTurns(), b.OrderedTurns()
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i].slot != right[i].slot {
+			return false
+		}
+		previous := (i + len(left) - 1) % len(left)
+		if (left[i].PositionPercent > left[previous].PositionPercent) != (right[i].PositionPercent > right[previous].PositionPercent) {
+			return false
+		}
+	}
 	return true
 }
 

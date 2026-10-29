@@ -7,9 +7,6 @@ type gestureBand struct {
 	// Per-stroke character. A requested accent is a tendency that breathes
 	// through the phrase, not a constant stamped on every stroke.
 	contrast, inertia float64
-	// lingerTop and lingerBottom are rests, in seconds, at this stroke's upper
-	// turn and at the lower turn that follows it.
-	lingerTop, lingerBottom float64
 }
 
 // Reach and clock are correlated fields, not a choice between local/full
@@ -70,8 +67,7 @@ func gestureBands(s FlowSpec) []gestureBand {
 		low = clampFloat(low, float64(s.MinPercent), float64(s.MaxPercent))
 		high = clampFloat(high, float64(s.MinPercent), float64(s.MaxPercent))
 		bands[i] = gestureBand{low: low, high: high, pace: phrase.timeScale,
-			contrast: math.Min(0.8, float64(g.ContrastPercent)/100*phrase.accent), inertia: phrase.inertia,
-			lingerTop: phrase.lingerTop, lingerBottom: phrase.lingerBottom}
+			contrast: math.Min(0.8, float64(g.ContrastPercent)/100*phrase.accent), inertia: phrase.inertia}
 	}
 	return bands
 }

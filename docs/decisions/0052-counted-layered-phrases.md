@@ -80,3 +80,65 @@ still apply. Physical Cloud feel remains a separate acceptance check.
 
 See [the evaluation](../layered-range-review-2026-10-23.md) for failed candidates,
 real ChatGPT trials, kinematic/transport tests, visual review and limitations.
+
+
+## October 28 extension: complete regional cycles and directional pace
+
+The paired `strokes` representation cannot describe separated regions in an
+arbitrary order: every preceding top must remain above the next bottom. This
+is a valid reversal constraint, not a rule to weaken. An evaluated alternative
+let the model author every reversal; it produced valid-looking motifs with
+wrong cycle counts and was not retained.
+
+`phrase.regions` instead explicitly requests complete local out-and-back
+cycles plus connecting travel. Each of one to six regions selects bottom/top,
+count (1–8), relative rate (1–100), and `cycle` (`up_down` starts at the bottom;
+`down_up` starts at the top). Total local cycles are bounded at 24. The compiler
+joins neighboring endpoints with straight travel. A boundary passed in the same
+direction is a waypoint, not a reversal: merge those legs instead of inserting
+a detour or stop. The merged rate preserves summed travel time, weighted by
+distance; equal rates remain exactly equal. Connecting travel uses the destination
+region's rate. It adds no extra complete local cycles. The periodic sequence,
+including its seam, must reverse by at least ten points at each actual turn.
+An incompatible small reversal is rejected with a geometric explanation rather
+than silently widening reach or inventing another stroke. Geometry, counts and
+rates are explicit model choices; no human text is classified.
+
+Both representations expand to the same bounded semantic leg list, then use
+the existing fitter, sampler and transport. Before waypoint merging, a region
+motif has at most 54 nodes (48 local plus six region starts). Whole motifs repeat
+over the ordinary horizon. Regional handoffs retain ordinal slots only when
+local counts, cycle directions, retained semantic boundary slots and turn
+directions match. An equal total leg count alone is insufficient. The legacy
+`strokes` vocabulary and timing remain compatible.
+
+Optional `FlowSpec.directional_pace` chooses `up_rate_percent` (toward semantic
+100/tip) and `down_rate_percent` (toward 0/base). Both are 1–100% multipliers of
+base travel rate, combined with existing group rates and pace modulation. This
+supports rapid travel one way and a slower return without replacing geometry
+or inventing an alternating pace wave. Omission preserves the current choice;
+both rates 100 restores the legacy symmetric clock. No direction is favored.
+The transport still owns the user's physical reversal mapping.
+
+For explicitly unequal direction rates, a common clock scale preserves relative
+leg durations around the whole motif, including connecting travel and the seam.
+Independent leg fitting, or pairing arbitrary neighboring indices, could invert
+the intended contrast on short, fast strokes. This reuses the same exact joint
+fitting and cruise candidates, and never raises velocity, acceleration or jerk
+limits. Cruise eligibility uses the individual leg's constraint result: a slow
+leg stretched only to preserve rhythm keeps its rounded shape. This accepts a
+lower average pace to preserve directional rhythm. Symmetric/default scores
+retain their physically accepted timing.
+
+Only Advanced capability advertises and accepts model-authored direction rates.
+The tested Simple/E4B and Intermediate/12B candidates handled basic contrast but
+failed compound follow-ups; their normal prompts and schemas remain unchanged.
+Switching to a smaller capability does not erase a playing asymmetric score;
+its direction rates are exposed as read-only facts. Two 100% rates canonicalize
+to the ordinary symmetric score in the motion layer as well as the chat parser.
+Other explicit rates remain model-authored choices, visible in context and traces;
+there is no language classifier, forced preferred ratio or hidden pace floor.
+
+See [the session repair evaluation](../layered-session-repair-review-2026-10-28.md)
+for failed representations, tier trials, compiled plots, Stop tests and required
+physical follow-up. These results do not establish carriage smoothness.

@@ -9,7 +9,7 @@ func compileFlowCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	legs, durations := flowLegs(spec, handyModel)
 	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel),
 		acceleration: flowAccelerationBudget, jerk: flowJerkBudget}
-	curve, err := fitLayeredCurve(legs, durations, budget, "flow")
+	curve, err := fitLayeredCurve(legs, durations, budget, "flow", spec.hasDirectionalContrast())
 	if err != nil {
 		return Curve{}, err
 	}
@@ -75,6 +75,11 @@ func flowLegs(spec FlowSpec, handyModel string) ([]gestureLeg, []int64) {
 		offset += run
 	}
 	legs, durations = coalesceFlowChatter(legs, durations)
+	// Apply direction after geometric cleanup so it cannot change which
+	// reversals survive. The joint fitter reconciles the unequal travel times.
+	for i, leg := range legs {
+		durations[i] = layeredDurationMillis(float64(durations[i]) / spec.directionRate(leg.from, leg.to))
+	}
 	for i := 1; i < len(legs); i++ {
 		for legs[i].sourceCycle < legs[i-1].sourceCycle {
 			legs[i].sourceCycle += spec.cycleCount()

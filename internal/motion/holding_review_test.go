@@ -154,7 +154,6 @@ func TestEdgeVisualReview(t *testing.T) {
 			spec.SpeedPercent = row.Context.Holding
 			spec.PaceVariationPercent = 0
 			spec.AnchorPercent = 50
-			spec.TurnSoftnessPercent = 85
 			hold, err := FlowTarget(spec, limits)
 			if err != nil {
 				t.Fatal(err)

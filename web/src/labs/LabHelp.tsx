@@ -41,7 +41,7 @@ export function LabHelp() {
           <dt>{t("New library")}</dt><dd>{t("Compare action names, descriptive IDs and opaque handles for the same pattern catalog. The three modes change naming, not motion.")}</dd>
         </dl>
         <p>{t("Legacy built-ins are disabled on update and cannot be re-enabled. Their saved names and weights remain available with their exports.")}</p>
-        <p>{t("Simple develops reach, timing and location continuously across 64 cycles. Focus roaming moves both endpoints; set it to zero to hold a location. Mixed focus changes stroke width. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. Variation lets the phrase breathe: the pace eases off or briefly quickens, landing points and accents vary from stroke to stroke, and a few turns linger. The finite realization repeats until evolved; safety limits still apply.")}</p>
+        <p>{t("Simple develops reach, timing and location continuously across 64 cycles. Focus roaming moves both endpoints; set it to zero to hold a location. Mixed focus changes stroke width. Rebounds contract and recover within that flow. Inertia shapes travel, not impacts. Variation lets the phrase breathe: the pace eases off or briefly quickens, while landing points and accents vary without inserted rests. The finite realization repeats until evolved; safety limits still apply.")}</p>
       </>}
       {topic==="autopilot"&&<>
         <p>{t("Turn on Autopilot to continue this Lab conversation with the selected model, prompt and schema after each quiet interval, with or without Live motion.")}</p>

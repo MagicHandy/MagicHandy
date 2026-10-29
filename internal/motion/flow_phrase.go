@@ -10,7 +10,23 @@ import (
 // semantic content for the same Layered joint fitter, plan, sampler and Stop.
 // No device coordinates, timestamps, private playback or implicit rests exist.
 type FlowPhrase struct {
-	Strokes []PhraseStroke `json:"strokes"`
+	Strokes []PhraseStroke `json:"strokes,omitempty"`
+	// Regions count complete local cycles and explicitly request connecting
+	// travel. The compiler, not a model's turn arithmetic, builds those joins.
+	Regions []PhraseRegion `json:"regions,omitempty"`
+}
+
+// PhraseRegion requests complete local cycles and continuous travel to the next region.
+type PhraseRegion struct {
+	PhraseStroke
+	Cycle string `json:"cycle"` // up_down starts at bottom; down_up at top.
+}
+
+// PhraseTurn names a reversal and the relative travel rate arriving there.
+type PhraseTurn struct {
+	PositionPercent int     `json:"position_percent"`
+	RatePercent     float64 `json:"rate_percent"`
+	slot            int     // Stable semantic boundary used only for ordinal handoff compatibility.
 }
 
 // PhraseStroke contributes Count lower/upper turn pairs, directly joined to
@@ -37,6 +53,12 @@ func (s FlowSpec) validatePhrase() error {
 		if layer.Axis != "pace" {
 			return errors.New("counted phrase geometry cannot also use range or center layers")
 		}
+	}
+	if len(p.Regions) > 0 {
+		if len(p.Strokes) > 0 {
+			return errors.New("phrase must choose one representation")
+		}
+		return s.validatePhraseRegions()
 	}
 	if len(p.Strokes) < 1 || len(p.Strokes) > 6 {
 		return errors.New("a Layered phrase needs one to six stroke groups")
@@ -89,7 +111,7 @@ func (s PhraseStroke) validateWithin(bottom, top, previousTop, index, groups int
 func compilePhraseCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	legs, durations := phraseLegs(spec, handyModel)
 	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel), acceleration: flowAccelerationBudget, jerk: flowJerkBudget}
-	curve, err := fitLayeredCurve(legs, durations, budget, "Layered phrase")
+	curve, err := fitLayeredCurve(legs, durations, budget, "Layered phrase", spec.hasDirectionalContrast())
 	if err != nil {
 		return Curve{}, err
 	}
@@ -102,43 +124,33 @@ func compilePhraseCurve(spec FlowSpec, handyModel string) (Curve, error) {
 }
 
 func phraseLegs(spec FlowSpec, handyModel string) ([]gestureLeg, []int64) {
-	p := spec.Phrase
-	count := 0
-	for _, stroke := range p.Strokes {
-		count += stroke.Count
+	turns := spec.Phrase.OrderedTurns()
+	if len(turns) < 2 {
+		return nil, nil
 	}
-	// Repeat whole motifs over the ordinary Layered horizon. A three-stroke
-	// motif must not compress a long pace layer into just three strokes.
+	count := len(turns) / 2
+	// Repeat whole motifs over the normal horizon, without compressing a long
+	// pace envelope into one short motif.
 	repeats := max(1, (int(spec.cycleCount())+count-1)/count)
 	spec.LoopCycles = count * repeats
-	legs := make([]gestureLeg, 0, 2*count*repeats)
-	durations := make([]int64, 0, 2*count*repeats)
-	previousTop := float64(p.Strokes[len(p.Strokes)-1].TopPercent)
-	previous := p.Strokes[len(p.Strokes)-1]
+	legs := make([]gestureLeg, 0, len(turns)*repeats)
+	durations := make([]int64, 0, len(turns)*repeats)
+	previous := turns[len(turns)-1]
 	for range repeats {
-		for _, stroke := range p.Strokes {
-			for range stroke.Count {
-				for half := range 2 {
-					from, to := previousTop, float64(stroke.BottomPercent)
-					rate := phraseDescentRate(previous, stroke)
-					if half == 1 {
-						from, to = float64(stroke.BottomPercent), float64(stroke.TopPercent)
-						rate = stroke.RatePercent
-					}
-					u := float64(len(legs)) / 2
-					variation := float64(spec.PaceVariationPercent) / 100
-					pace := (1 - variation + variation*spec.field(u+0.25, 0x85ebca6b)) * float64(rate) / 100
-					for _, layer := range spec.Layers {
-						pace *= flowPaceFactor(layer, spec.layerEnvelope(u+0.25, layer))
-					}
-					span := math.Abs(to - from)
-					millis := spec.flowClock(span, float64(spec.SpeedPercent), pace, span, handyModel) / 2
-					legs = append(legs, gestureLeg{from: from, to: to, weight: 1, softness: float64(spec.TurnSoftnessPercent) / 100, sourceCycle: u})
-					durations = append(durations, layeredDurationMillis(millis))
-				}
-				previousTop = float64(stroke.TopPercent)
-				previous = stroke
+		for _, turn := range turns {
+			from, to := float64(previous.PositionPercent), float64(turn.PositionPercent)
+			u := float64(len(legs)) / 2
+			variation := float64(spec.PaceVariationPercent) / 100
+			pace := (1 - variation + variation*spec.field(u+0.25, 0x85ebca6b)) * float64(turn.RatePercent) / 100
+			for _, layer := range spec.Layers {
+				pace *= flowPaceFactor(layer, spec.layerEnvelope(u+0.25, layer))
 			}
+			pace *= spec.directionRate(from, to)
+			span := math.Abs(to - from)
+			millis := spec.flowClock(span, float64(spec.SpeedPercent), pace, span, handyModel) / 2
+			legs = append(legs, gestureLeg{from: from, to: to, weight: 1, softness: float64(spec.TurnSoftnessPercent) / 100, sourceCycle: u})
+			durations = append(durations, layeredDurationMillis(millis))
+			previous = turn
 		}
 	}
 	return legs, durations

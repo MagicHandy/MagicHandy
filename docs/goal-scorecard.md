@@ -1,5 +1,19 @@
 # Goal Scorecard
 
+## 2026-10-28 — Layered session repair and directional capability
+
+Against alpha.78 `69a33dc0`, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core including
+embedded UI **24,337,408 -> 24,376,832 B** (+39,424 B). Canonical UI
+**2,856,409 -> 2,856,207 B** (-202 B); main JS
+**1,313,581 -> 1,313,547 B raw** (-34 B), **353,088 -> 353,078 B gzip**
+(-10 B). CSS stays **210,037 / 36,604 B** raw/gzip. No new production
+dependency, worker, timer or model call is added. Local capability trials ran
+in CPU-only development workers, which are not part of the product. Simple and
+Intermediate direction schemas/prompts remain unchanged after their failed
+trials. No RSS/cold-start claim is made. See the
+[session repair and capability evaluation](layered-session-repair-review-2026-10-28.md).
+
 ## 2026-10-28 — Chat/Autopilot upload continuity
 
 Against alpha.77 `892d555b`, Windows amd64 Go 1.26.10,

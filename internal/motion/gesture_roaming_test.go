@@ -62,20 +62,13 @@ func TestGestureRoamingKeepsOverlappingWindowsAndReplay(t *testing.T) {
 	}
 }
 
-// travelLegs drops lingering rests, checking that each is a brief hold at the
-// previous stroke's end rather than hidden travel.
+// Every Creative v2 leg must travel; variation is not permission to stop.
 func travelLegs(t *testing.T, legs []gestureLeg) []gestureLeg {
 	t.Helper()
-	travel := make([]gestureLeg, 0, len(legs))
 	for _, leg := range legs {
-		if leg.rest == 0 {
-			travel = append(travel, leg)
-			continue
-		}
-		if leg.from != leg.to || leg.rest < lingerMinimumSeconds || leg.rest > lingerMinimumSeconds+lingerSpanSeconds ||
-			(len(travel) > 0 && travel[len(travel)-1].to != leg.from) {
-			t.Fatalf("a lingering turn moved or lasted %.3f s", leg.rest)
+		if leg.rest != 0 || leg.from == leg.to {
+			t.Fatal("Creative v2 inserted a stationary leg")
 		}
 	}
-	return travel
+	return legs
 }

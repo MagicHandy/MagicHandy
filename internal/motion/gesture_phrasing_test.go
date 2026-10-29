@@ -67,20 +67,17 @@ func TestGestureFlurriesAreShortQuickAndKeepHeldAnchors(t *testing.T) {
 	}
 }
 
-func TestGestureLingeringTurnsAreBriefRareAndInsideTheBand(t *testing.T) {
+func TestGestureVariationNeverInsertsRestsAndStaysInsideTheBand(t *testing.T) {
 	settings := config.DefaultSettings().Motion
 	settings.SpeedMinPercent, settings.SpeedMaxPercent = 1, 100
-	for _, variation := range []int{35, 100} {
+	for _, variation := range []int{0, 35, 50, 100} {
 		s := gestureFixture()
 		s.Gesture.VariationPercent = variation
-		rests, turns := 0, 0
 		for seed := uint32(1); seed <= 20; seed++ {
 			s.Seed = seed
 			for _, leg := range gestureLegs(s) {
-				if leg.rest > 0 {
-					rests++
-				} else {
-					turns++
+				if leg.rest > 0 || leg.from == leg.to {
+					t.Fatalf("seed %d variation %d inserted a stationary hold", seed, variation)
 				}
 			}
 			target, err := FlowTarget(s, settings)
@@ -94,10 +91,6 @@ func TestGestureLingeringTurnsAreBriefRareAndInsideTheBand(t *testing.T) {
 				}
 			}
 		}
-		share := float64(rests) / float64(turns)
-		if want := lingerChance * float64(variation) / 100; share == 0 || share > 2*want {
-			t.Fatalf("variation %d: %.3f of turns linger, want about %.3f", variation, share, want)
-		}
 	}
 }
 
@@ -106,7 +99,7 @@ func TestGesturePhrasingIsExactWithoutVariation(t *testing.T) {
 	s.Gesture.VariationPercent, s.Gesture.FocusMixPercent = 0, 0
 	s.Gesture.FasterDirection, s.Gesture.ContrastPercent = "tip", 40
 	for i, band := range gestureBands(s) {
-		if band.pace != 1 || band.contrast != 0.4 || band.inertia != 0.25 || band.lingerTop != 0 || band.lingerBottom != 0 ||
+		if band.pace != 1 || band.contrast != 0.4 || band.inertia != 0.25 ||
 			band.low != 5 || band.high != 95 {
 			t.Fatalf("stroke %d varied without variation: %+v", i, band)
 		}

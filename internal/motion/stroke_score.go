@@ -167,10 +167,19 @@ func (s FlowSpec) strokeUnits() []strokeUnit {
 	units := make([]strokeUnit, 0, cycles+16)
 	for i := range cycles {
 		unit := strokeUnit{bottom: bottoms[i], top: tops[i], pace: s.strokePace(i, variation),
-			restTop: s.linger(2*i, variation), restBottom: s.linger(2*i+1, variation)}
+			restTop: s.strokeLinger(2*i, variation), restBottom: s.strokeLinger(2*i+1, variation)}
 		units = append(units, s.accentUnits(i, unit)...)
 	}
 	return separateStrokeUnits(units)
+}
+
+// Keep the separate, Lab-only stroke experiment's historical rest vocabulary.
+// Production Creative v2 no longer inserts holds through general variation.
+func (s FlowSpec) strokeLinger(turn int, variation float64) float64 {
+	if flowHashUnit(s.Seed^0x7142, strokeKey(turn)) >= 0.05*variation {
+		return 0
+	}
+	return 0.11 + 0.17*flowHashUnit(s.Seed^0x8253, strokeKey(turn))
 }
 
 // turnSeries is where one turn lands on each stroke. Every character draws

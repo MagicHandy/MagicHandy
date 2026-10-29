@@ -34,17 +34,14 @@ func TestGestureMixedReachTraversesIntermediateWidths(t *testing.T) {
 func TestGestureReversalsCarryContinuousAcceleration(t *testing.T) {
 	s := gestureFixture()
 	s.Gesture.InertiaPercent, s.Gesture.ReboundCount = 70, 3
-	// Without variation no turn lingers, so every reversal keeps moving.
+	// Every reversal keeps moving, with or without seeded variation.
 	s.Gesture.VariationPercent = 0
 	if settled := settledGestureTurns(t, s); settled != 0 {
 		t.Fatalf("%d strokes settle to zero acceleration at their reversal", settled)
 	}
-	// With variation a seeded minority of turns rest briefly on purpose; the
-	// rest keep the shared turn acceleration.
 	s.Gesture.VariationPercent = 70
-	turns := 2 * 64
-	if settled := settledGestureTurns(t, s); settled == 0 || settled > turns/8 {
-		t.Fatalf("lingering turns: %d of %d", settled, turns)
+	if settled := settledGestureTurns(t, s); settled != 0 {
+		t.Fatalf("variation inserted %d settled turns", settled)
 	}
 }
 

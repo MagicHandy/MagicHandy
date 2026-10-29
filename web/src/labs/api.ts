@@ -6,7 +6,9 @@ export interface FlowStep { min_percent: number; max_percent: number; speed_perc
 export interface FlowLayer { axis: "range" | "center" | "pace"; amount_percent: number; period_cycles: number; phase_percent: number; shape?: "wave" | "drift" | "alternate"; low_rate_percent?: number; inverted?: boolean }
 export interface StrokeTurn { at_percent: number; vary_to_percent: number; character: string }
 export interface FlowSpec {
-  phrase?: {strokes: Array<{bottom_percent: number; top_percent: number; count: number; rate_percent: number}>};
+  phrase?: {strokes: Array<{bottom_percent: number; top_percent: number; count: number; rate_percent: number}>; regions?: never}
+    | {regions: Array<{bottom_percent: number; top_percent: number; count: number; rate_percent: number; cycle: "up_down" | "down_up"}>; strokes?: never};
+  directional_pace?: {up_rate_percent: number; down_rate_percent: number};
   strokes?: {bottom: StrokeTurn; top: StrokeTurn; accents?: Array<{move: string; rate: string}>; variation_percent: number};
 	gesture?: {focus_percent:number;focus_width_percent:number;focus_mix_percent:number;focus_roam_percent?:number;faster_direction:string;contrast_percent:number;inertia_percent:number;rebound_count:number;rebound_decay_percent:number;variation_percent:number};
   min_percent: number; max_percent: number; speed_percent: number; range_floor_percent: number;
