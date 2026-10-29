@@ -19,6 +19,9 @@ func writeAutopilotSpeechFacts(b *strings.Builder, c AutopilotContext) {
 	fmt.Fprintf(b, "Requested overall pace: %d%%.\n", c.CurrentSpeed)
 	if c.CurrentFlow != nil {
 		f := c.CurrentFlow
+		if f.DirectionalPace != nil {
+			fmt.Fprintf(b, "Directional travel rates: up toward tip %d%%, down toward base %d%% of base rate, before other pace modulation.\n", f.DirectionalPace.UpRatePercent, f.DirectionalPace.DownRatePercent)
+		}
 		if f.Gesture != nil {
 			writeGestureSpeechFacts(b, *f)
 		} else if f.Phrase != nil {
@@ -49,7 +52,15 @@ func writeAutopilotSpeechFacts(b *strings.Builder, c AutopilotContext) {
 }
 
 func writePhraseSpeechFacts(b *strings.Builder, f motion.FlowSpec) {
-	b.WriteString("These counted groups repeat in order; reach does not wander between their selected turning positions.\n")
+	if len(f.Phrase.Regions) > 0 {
+		b.WriteString("Regions repeat complete local cycles. Their final return and next approach may share continuous connecting travel through a region boundary, without an extra reversal.\n")
+		for i, r := range f.Phrase.Regions {
+			fmt.Fprintf(b, "Region %d: %d %s cycles within %d..%d%% at %d%% of base rate.\n", i+1, r.Count, r.Cycle, r.BottomPercent, r.TopPercent, r.RatePercent)
+		}
+	}
+	if len(f.Phrase.Strokes) > 0 {
+		b.WriteString("These counted groups repeat in order; reach does not wander between their selected turning positions.\n")
+	}
 	for i, group := range f.Phrase.Strokes {
 		fmt.Fprintf(b, "Group %d: %d strokes with lower/upper turns %d/%d%%; relative travel rate %d%% of the selected base rate.\n", i+1, group.Count, group.BottomPercent, group.TopPercent, group.RatePercent)
 	}

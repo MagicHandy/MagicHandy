@@ -11,9 +11,14 @@ func CloneFlowSpec(spec *FlowSpec) *FlowSpec {
 		return nil
 	}
 	cloned := *spec
+	if spec.DirectionalPace != nil {
+		pace := *spec.DirectionalPace
+		cloned.DirectionalPace = &pace
+	}
 	if spec.Phrase != nil {
 		phrase := *spec.Phrase
 		phrase.Strokes = slices.Clone(phrase.Strokes)
+		phrase.Regions = slices.Clone(phrase.Regions)
 		cloned.Phrase = &phrase
 	}
 	if spec.Gesture != nil {

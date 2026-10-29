@@ -76,14 +76,8 @@ func gestureLegs(s FlowSpec) []gestureLeg {
 		returning := (band.contrast + next.contrast) / 2
 		legs = append(legs, gestureLeg{from: band.low, to: band.high, weight: gestureLegWeight(g, band.contrast, band.low, band.high, band.pace),
 			inertia: band.inertia, contrast: band.contrast})
-		if band.lingerTop > 0 {
-			legs = append(legs, gestureLeg{from: band.high, to: band.high, rest: band.lingerTop})
-		}
 		legs = append(legs, gestureLeg{from: band.high, to: next.low, weight: gestureLegWeight(g, returning, band.high, next.low, (band.pace+next.pace)/2),
 			inertia: (band.inertia + next.inertia) / 2, contrast: returning})
-		if band.lingerBottom > 0 {
-			legs = append(legs, gestureLeg{from: next.low, to: next.low, rest: band.lingerBottom})
-		}
 	}
 	return legs
 }

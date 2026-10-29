@@ -15,14 +15,15 @@ import (
 // no device commands, playback clock or turnaround shaping. A counted phrase
 // supplies semantic turning pairs, not scheduled playback sections.
 type LayeredEdit struct {
-	Phrase       *motion.FlowPhrase         `json:"phrase,omitempty"`
-	Geometry     string                     `json:"geometry,omitempty"`
-	StrokeWidth  *LayeredStrokeWidth        `json:"stroke_width,omitempty"`
-	Controls     map[string]json.RawMessage `json:"controls,omitempty"`
-	ChangeBy     map[string]json.RawMessage `json:"change_by,omitempty"`
-	Layers       []LayeredLayerEdit         `json:"layers,omitempty"`
-	RemoveLayers []string                   `json:"remove_layers,omitempty"`
-	Evolve       bool                       `json:"evolve,omitempty"`
+	DirectionalPace *motion.DirectionalPace    `json:"directional_pace,omitempty"`
+	Phrase          *motion.FlowPhrase         `json:"phrase,omitempty"`
+	Geometry        string                     `json:"geometry,omitempty"`
+	StrokeWidth     *LayeredStrokeWidth        `json:"stroke_width,omitempty"`
+	Controls        map[string]json.RawMessage `json:"controls,omitempty"`
+	ChangeBy        map[string]json.RawMessage `json:"change_by,omitempty"`
+	Layers          []LayeredLayerEdit         `json:"layers,omitempty"`
+	RemoveLayers    []string                   `json:"remove_layers,omitempty"`
+	Evolve          bool                       `json:"evolve,omitempty"`
 }
 
 // LayeredStrokeWidth pairs the shortest and widest requested stroke.
@@ -121,6 +122,11 @@ func rejectLayeredNulls(raw string) error {
 			return err
 		}
 	}
+	if raw, present := fields["directional_pace"]; present {
+		if err := validateDirectionalPaceObject(raw); err != nil {
+			return err
+		}
+	}
 	var layers []map[string]json.RawMessage
 	if value, ok := fields["layers"]; ok {
 		if err := json.Unmarshal(value, &layers); err != nil {
@@ -168,6 +174,7 @@ func ApplyLayeredEdit(edit LayeredEdit, current motion.FlowSpec, limits config.M
 	}
 	encoded, _ = json.Marshal(fields)
 	_ = json.Unmarshal(encoded, &next)
+	applyLayeredDirectionalPace(&next, edit.DirectionalPace)
 	if _, relative := edit.ChangeBy["speed_percent"]; relative {
 		// A relative step past a saved speed limit has one reading: go as far as
 		// the limit allows. Rejecting it kept the old pace after a request to

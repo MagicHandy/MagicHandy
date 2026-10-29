@@ -170,7 +170,7 @@ func contractInstructions(capabilities Capabilities) string {
 	if capabilities.MotionMode == MotionModeLayered {
 		text := layeredContract
 		if capabilities.AdvancedMotion {
-			text = hostedLayeredContract(text) + "\n" + hostedPaceGuide + "\n" + hostedLayeredCoordinationGuide + "\n" + hostedLayeredPhraseGuide + "\n" + hostedLayeredRegionGuide
+			text = hostedLayeredContract(text) + "\n" + hostedPaceGuide + "\n" + hostedLayeredCoordinationGuide + "\n" + hostedLayeredPhraseGuide + "\n" + hostedLayeredRegionGuide + "\n" + hostedDirectionalPaceGuide
 		} else if capabilities.IntermediateMotion {
 			text = intermediateLayeredContract(text)
 		}
@@ -227,6 +227,9 @@ type Capabilities struct {
 	IntermediateMotion bool
 	// Evaluation can exercise the compact local grammar without changing production.
 	VibrationControl bool
+	// DirectionalPace lets opt-in evaluations exercise a compact candidate
+	// without advertising it to a production tier. Advanced includes it.
+	DirectionalPace bool
 	// SchemaUnenforced marks a provider that may ignore the response schema,
 	// such as an external OpenAI-compatible server. Its Creative v2 contract
 	// omits the reach guide: without the schema, local Gemma 12B wrote

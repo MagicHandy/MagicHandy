@@ -5,7 +5,8 @@ import "math"
 // Phrasing is the per-stroke timing and reach texture that keeps a Creative v2
 // phrase from reading as a metronome: stretches that ease off, short flurries
 // of quicker strokes, landing points that differ a little from stroke to
-// stroke, accents that come and go, and turns that occasionally linger. Every
+// stroke and accents that come and go. Variation never inserts stationary
+// holds: brief seeded rests felt like playback failures, even at high speed. Every
 // value is drawn from the score's seed, so a saved score replays exactly, and
 // every amount scales with variation_percent: zero repeats each stroke exactly.
 //
@@ -21,8 +22,6 @@ type gesturePhrase struct {
 	accent float64
 	// inertia is this stroke's realized inertia, 0..1.
 	inertia float64
-	// lingerTop and lingerBottom rest at the upper and following lower turn.
-	lingerTop, lingerBottom float64
 }
 
 const (
@@ -35,12 +34,6 @@ const (
 	// flurryChance is the chance per stroke and unit of variation that a short
 	// flurry of two to four quicker strokes starts there.
 	flurryChance = 0.06
-	// lingerChance is the chance per turn and unit of variation that a turn
-	// rests briefly before reversing.
-	lingerChance = 0.05
-	// lingerMinimumSeconds keeps a rest above the shared minimum reversal gap.
-	lingerMinimumSeconds = 0.11
-	lingerSpanSeconds    = 0.17
 	// landingInset is the most a reversal lands inside its planned endpoint,
 	// as a share of the stroke per unit of variation.
 	landingInset = 0.2
@@ -60,8 +53,6 @@ func (s FlowSpec) gesturePhrase(i, cycles int, variation float64) gesturePhrase 
 		phrase.timeScale /= quick
 		phrase.flurrySpan = span
 	}
-	phrase.lingerTop = s.linger(2*i, variation)
-	phrase.lingerBottom = s.linger(2*i+1, variation)
 	return phrase
 }
 
@@ -90,14 +81,6 @@ func (s FlowSpec) flurry(i, cycles int, variation float64) (quick, span float64,
 		}
 	}
 	return 1, 1, false
-}
-
-// linger returns a brief rest, in seconds, for a seeded minority of turns.
-func (s FlowSpec) linger(turn int, variation float64) float64 {
-	if flowHashUnit(s.Seed^0x7142, strokeKey(turn)) >= lingerChance*variation {
-		return 0
-	}
-	return lingerMinimumSeconds + lingerSpanSeconds*flowHashUnit(s.Seed^0x8253, strokeKey(turn))
 }
 
 // landing moves a stroke's endpoints a little inside its planned band, drawn

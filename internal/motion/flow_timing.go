@@ -19,11 +19,24 @@ func layeredDurationMillis(millis float64) int64 {
 // constrained, try the existing cruise profiles and retain a strictly faster
 // valid fit. Unconstrained timing and explicitly softened turns keep their
 // original shape; no language-dependent speed or range rules are involved.
-func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, name string) (Curve, error) {
+func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, name string, preserveRhythm bool) (Curve, error) {
+	fit := fitLegCurves
+	if preserveRhythm {
+		fit = fitLayeredRhythmCurves
+	}
 	fittedDurations := slices.Clone(durations)
-	curves, err := fitLegCurves(legs, fittedDurations, budget)
+	curves, err := fit(legs, fittedDurations, budget)
 	if err != nil {
 		return Curve{}, err
+	}
+	// Distinguish physically constrained legs from slower companions stretched
+	// only to preserve the authored rhythm. The latter keep their rounded shape.
+	constrainedDurations := fittedDurations
+	if preserveRhythm {
+		constrainedDurations = slices.Clone(durations)
+		if _, err := fitLegCurves(legs, constrainedDurations, budget); err != nil {
+			return Curve{}, err
+		}
 	}
 	best, err := assembleLegCurve(legs, curves, name)
 	if err != nil {
@@ -46,7 +59,7 @@ func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, nam
 		for i := range candidateLegs {
 			// A fast neighbor must not flatten an already feasible slow stroke.
 			// The joint fitter still reconciles their common turnaround state.
-			if fittedDurations[i] <= durations[i] {
+			if constrainedDurations[i] <= durations[i] {
 				candidateLegs[i] = legs[i]
 			}
 			changed = changed || candidateLegs[i].cruise != legs[i].cruise
@@ -54,7 +67,7 @@ func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, nam
 		if !changed {
 			continue
 		}
-		candidateCurves, fitErr := fitLegCurves(candidateLegs, slices.Clone(durations), budget)
+		candidateCurves, fitErr := fit(candidateLegs, slices.Clone(durations), budget)
 		if fitErr != nil {
 			continue // An optional profile must not invalidate a fitted score.
 		}

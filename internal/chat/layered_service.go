@@ -42,6 +42,13 @@ func layeredContextInstructions(state MotionContext, capabilities Capabilities) 
 	} else if capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
 		scoreContext = intermediateLayeredScoreContext(score)
 	}
+	if state.MotionMode == MotionModeLayered && !capabilities.AdvancedMotion && !capabilities.DirectionalPace && score.DirectionalPace != nil {
+		// A tier switch preserves playing motion. Describe inherited timing
+		// honestly without advertising an edit unsupported by the selected tier.
+		fields := scoreContext.(map[string]any)
+		delete(fields, "directional_pace")
+		fields["authored_directional_pace_read_only"] = score.DirectionalPace
+	}
 	context := map[string]any{
 		"current_score": scoreContext, "running": state.Running, "paused": state.Paused,
 		"saved_limits":                      map[string]int{"speed_min_percent": limits.SpeedMinPercent, "speed_max_percent": limits.SpeedMaxPercent},
@@ -75,6 +82,9 @@ func parseContinuousReply(raw string, current motion.FlowSpec, state MotionConte
 		return AssistantResponse{}, current, nil, err
 	}
 	response, next, changed, err := parser(parsed, base, limits)
+	if err != nil && recalled {
+		err = fmt.Errorf("edits applied to recalled score (anchor_percent %d, speed_percent %d): %w", base.AnchorPercent, base.SpeedPercent, err)
+	}
 	if err == nil && recalled {
 		changed = labChangedControls(current, next)
 	}
@@ -247,6 +257,11 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 		var err error
 		raw, err = normalizeLayeredOperations(raw)
 		if err != nil {
+			return AssistantResponse{}, err
+		}
+	}
+	if capabilities.MotionMode == MotionModeLayered {
+		if err := validateDirectionCapability(raw, capabilities); err != nil {
 			return AssistantResponse{}, err
 		}
 	}

@@ -14,6 +14,13 @@ unchanged; conflicting edits still fail through the shared validator.
 
 ## Core Direction
 
+The October 28 [installed-session repair](docs/layered-session-repair-review-2026-10-28.md)
+removes implicit Creative v2 rests and Edge's inherited turn-softness cap, fixes
+phrase recall and ambiguous validation feedback, and adds bounded regional
+cycles plus direction-specific pace to Layered. All content uses the shared
+compiler and Stop path. Model capability exposure is based on separate tier
+trials; physical validation remains separate from compiled/transport evidence.
+
 The October 26 [Layered review follow-up](docs/layered-review-followup-2026-10-26.md)
 separates planned pace from physical limiting, preserves feasible slow legs
 beside fast strokes, bounds gentle joins relative to the two plans, and lets

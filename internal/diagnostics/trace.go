@@ -63,6 +63,11 @@ type MotionTraceTarget struct {
 	SoftAnchorPositionPercent int      `json:"soft_anchor_position_percent,omitempty"`
 	SoftAnchorWeightPercent   int      `json:"soft_anchor_weight_percent,omitempty"`
 	MotionKind                string   `json:"motion_kind,omitempty"`
+	HandyModel                string   `json:"handy_model,omitempty"`
+	TurnSoftnessPercent       int      `json:"turn_softness_percent,omitempty"`
+	CadenceHoldPercent        int      `json:"cadence_hold_percent,omitempty"`
+	UpRatePercent             int      `json:"up_rate_percent,omitempty"`
+	DownRatePercent           int      `json:"down_rate_percent,omitempty"`
 	DynamicCenterPercent      int      `json:"dynamic_center_percent,omitempty"`
 	DynamicSpanPercent        int      `json:"dynamic_span_percent,omitempty"`
 	DynamicSpanMinPercent     int      `json:"dynamic_span_min_percent,omitempty"`
