@@ -13,6 +13,7 @@ export interface ModelConnection {
   model: string;
   output_mode: "auto" | "strict" | "json" | "prompt";
   reasoning_effort?: string;
+  reasoning_enabled?: boolean;
   context_window?: number;
   history_size?: "" | "recent" | "long" | "extended";
   supported_parameters?: string[];
@@ -25,7 +26,7 @@ export interface ModelConnection {
   capability_level?: import("./llm-settings-types").ModelCapabilityLevel;
 }
 
-export interface HostedModel { id: string; name: string; supported_parameters?: string[]; reasoning_efforts?: string[]; default_reasoning_effort?: string; context_length?: number }
+export interface HostedModel { id: string; name: string; supported_parameters?: string[]; reasoning_efforts?: string[]; default_reasoning_effort?: string; reasoning_supported?: boolean; reasoning_mandatory?: boolean; context_length?: number }
 
 export interface CloudPlanningStatus {
   connection: {

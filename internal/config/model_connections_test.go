@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 )
@@ -61,7 +62,39 @@ func TestModelConnectionReasoningStaysWithSupportedProtocol(t *testing.T) {
 		t.Fatal("unknown effort accepted")
 	}
 	connection.ReasoningEffort, connection.Provider = "low", LLMProviderOpenRouter
+	if err := connection.Normalize().Validate(); err != nil {
+		t.Fatal(err)
+	}
+	connection.Provider = LLMProviderCompatible
 	if err := connection.Validate(); err == nil {
 		t.Fatal("unsupported protocol silently ignored effort")
+	}
+}
+
+func TestOpenRouterReasoningEnabledPersistsFalseAndRejectsConflict(t *testing.T) {
+	off := false
+	c := ModelConnection{ID: "router", Name: "Router", Provider: LLMProviderOpenRouter, Model: "fixture", ReasoningEnabled: &off}.Normalize()
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored ModelConnection
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.ReasoningEnabled == nil || *restored.ReasoningEnabled {
+		t.Fatal("explicit Off became provider default")
+	}
+	c.ReasoningEffort = "low"
+	if c.Validate() == nil {
+		t.Fatal("conflicting reasoning settings accepted")
+	}
+	c.ReasoningEffort = ""
+	c.Provider = LLMProviderOpenAI
+	if c.Validate() == nil {
+		t.Fatal("enabled silently ignored by another protocol")
 	}
 }

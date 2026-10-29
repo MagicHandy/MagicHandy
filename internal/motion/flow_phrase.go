@@ -110,7 +110,7 @@ func (s PhraseStroke) validateWithin(bottom, top, previousTop, index, groups int
 
 func compilePhraseCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	legs, durations := phraseLegs(spec, handyModel)
-	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel), acceleration: flowAccelerationBudget, jerk: flowJerkBudget}
+	budget := topSpeedBudget(spec.peakSpeedPercent(), handyModel)
 	curve, err := fitLayeredCurve(legs, durations, budget, "Layered phrase", spec.hasDirectionalContrast())
 	if err != nil {
 		return Curve{}, err

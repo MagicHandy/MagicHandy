@@ -81,6 +81,41 @@ outside app settings and exports. Refresh is serialized across processes.
 Losing plan authorization invalidates existing readiness and request sources.
 The callback server drains its confirmation response before closing.
 
+### October 29 amendment: OpenRouter reasoning controls
+
+OpenRouter connections can retain Provider default, disable reasoning, enable
+provider-selected reasoning, or choose an advertised effort. Discovery reads the
+catalogue's nested `reasoning` metadata, including mandatory reasoning and the
+distinction between omitted, empty and null `supported_efforts`. An unsupported
+saved choice fails before generation and remains recoverable in the editor.
+Switching models retains only compatible choices. No effort is selected silently.
+
+The compatible adapter sends OpenRouter's nested `reasoning` object, never the
+OpenAI Responses or local llama.cpp reasoning fields. Capability discovery uses
+the existing fifteen-minute provider cache. Changing reasoning invalidates the
+provider and exact-connection readiness proof. Setup and Settings use the same
+compact selector. The regression-review follow-up moves the 2,048-token minimum
+completion allowance into the OpenRouter adapter for every request, before
+input budgeting. Hidden reasoning shares that allowance with the answer; a
+successful connection check must not conceal a much smaller production budget.
+Chat, Autopilot, Edge, review and repair therefore share this policy. Larger
+requested budgets are retained; explicit Off keeps ordinary per-request answer
+budgets, including the 64-token check. Prompt composition reserves the same room.
+The check remains a bounded text-only generation and does not authorize motion.
+Unsupported reasoning choices keep an actionable typed cloud error through
+Autopilot rather than being mislabeled as a provider outage.
+
+Advanced Layered uses a single score projection for current state, recall,
+Autopilot facts and reviewer evidence. All expose `shortest_percent` and
+`widest_percent` for lengths; position endpoints remain `min_percent` and
+`max_percent`. Repair diagnostics translate only these known validator field
+names at the schema boundary and preserve the underlying error. They do not
+reinterpret user language, modify a rejected score or relax domain validation.
+
+See the [implementation and model evaluation](../openrouter-reasoning-review-2026-10-29.md)
+and [OpenRouter's reasoning contract](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens).
+ChatGPT/OpenAI reasoning behavior and saved local settings are unchanged.
+
 ### October 18 amendment: responsive authentication and Windows storage
 
 Issuer discovery, code exchange, refresh/JWKS requests and revocation run outside

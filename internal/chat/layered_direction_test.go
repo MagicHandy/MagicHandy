@@ -54,7 +54,7 @@ func TestLayeredDirectionRejectsMalformedTransactionally(t *testing.T) {
 			t.Fatalf("malformed direction changed score: %s %v", value, err)
 		}
 	}
-	data, _ := json.Marshal(layeredScoreContext(before))
+	data, _ := json.Marshal(layeredScoreContext(before, false))
 	if !strings.Contains(string(data), "directional_pace") {
 		t.Fatal("model cannot see active direction rates")
 	}

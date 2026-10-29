@@ -30,6 +30,7 @@ type ModelConnection struct {
 	BaseURL             string   `json:"base_url"`
 	Model               string   `json:"model"`
 	ReasoningEffort     string   `json:"reasoning_effort,omitempty"`
+	ReasoningEnabled    *bool    `json:"reasoning_enabled,omitempty"`
 	ContextWindow       int      `json:"context_window,omitempty"`
 	HistorySize         string   `json:"history_size,omitempty"`
 	OutputMode          string   `json:"output_mode"`
@@ -142,8 +143,11 @@ func (c ModelConnection) validateReasoning() error {
 	if !oneOf(c.ReasoningEffort, "", "none", "minimal", "low", "medium", "high", "xhigh", "max") {
 		return errors.New("invalid model reasoning effort")
 	}
-	if c.ReasoningEffort != "" && c.Provider != LLMProviderChatGPT && c.Provider != LLMProviderOpenAI {
-		return errors.New("reasoning effort requires a ChatGPT or OpenAI connection")
+	if c.ReasoningEffort != "" && c.Provider != LLMProviderChatGPT && c.Provider != LLMProviderOpenAI && c.Provider != LLMProviderOpenRouter {
+		return errors.New("reasoning effort requires a ChatGPT, OpenAI or OpenRouter connection")
+	}
+	if c.ReasoningEnabled != nil && (c.Provider != LLMProviderOpenRouter || c.ReasoningEffort != "") {
+		return errors.New("reasoning on/off requires OpenRouter and cannot be combined with an effort")
 	}
 	return nil
 }

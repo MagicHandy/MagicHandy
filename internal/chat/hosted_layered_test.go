@@ -161,7 +161,7 @@ func TestHostedLayeredSchemaMakesOperationsExclusive(t *testing.T) {
 		OneOf      []json.RawMessage          `json:"oneOf"`
 	}
 	_ = json.Unmarshal(schema.Properties["edits"], &edits)
-	if len(edits.OneOf) != 5 {
+	if len(edits.OneOf) != 6 {
 		t.Fatal("expected hold, manual, disjoint geometry and counted phrase branches")
 	}
 	_ = json.Unmarshal(edits.OneOf[1], &edits)

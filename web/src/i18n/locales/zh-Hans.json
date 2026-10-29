@@ -3477,5 +3477,14 @@
   "Vibrator ready. Playback stays within your Max.": "振动器已就绪。播放输出不会超过你设置的上限。",
   "Your next motion request can resume it. To keep it off, turn off In playback.": "下一次动作请求可以恢复运行。若要保持关闭，请关闭“参与播放”。",
   "Stop pauses the vibrator until you request motion or choose Resume now in the device panel. Your max and model control stay as they are.": "停止会暂停振动器，直到你请求动作或在设备面板中选择“立即恢复”。上限和模型控制设置保持不变。",
-  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "在播放停止或暂停时，以你设置的上限和25%中的较低值运行一秒。请先选择设备。"
+  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "在播放停止或暂停时，以你设置的上限和25%中的较低值运行一秒。请先选择设备。",
+  "Enabled — provider decides effort": "启用 — 由提供方决定推理强度",
+  "This model requires reasoning. Lower effort usually responds sooner.": "此模型必须启用推理。较低的推理强度通常响应更快。",
+  "Less reasoning can respond sooner, but may reduce motion quality. Provider default keeps the model's own setting.": "减少推理可加快响应，但可能降低运动质量。提供方默认值会保留模型本身的设置。",
+  "Saved setting unavailable — choose another": "已保存的设置不可用 — 请选择其他设置",
+  "Minimal": "最低",
+  "Low": "低",
+  "High": "高",
+  "Extra high": "极高",
+  "Maximum": "最高"
 }

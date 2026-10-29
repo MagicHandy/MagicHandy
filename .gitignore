@@ -32,7 +32,7 @@ coverage.out
 *.log
 /diagnostics/
 /traces/
-/.scratch/
+.scratch/
 https-private/
 openai-private/
 

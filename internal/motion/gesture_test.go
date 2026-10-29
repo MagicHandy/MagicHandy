@@ -43,10 +43,10 @@ func TestGestureKinematicsAcrossSeedsDirectionsAndDeviceEnvelopes(t *testing.T) 
 					if plan.Perceptual.CommandedPeakVelocityPerSecond > referenceTravelRateForSpeed(100, model)*1.001 {
 						t.Fatal("velocity limit")
 					}
-					if a := plan.curve.maximumAccelerationPerMillis2() * 1e6 / (factor * factor); a > runtimeMaxAccelerationPercentPerSecond2*1.001 {
+					if a := plan.curve.maximumAccelerationPerMillis2() * 1e6 / (factor * factor); a > envelopeAcceleration(plan)*1.001 {
 						t.Fatalf("acceleration %f", a)
 					}
-					if j := plan.curve.maximumJerkPerMillis3() * 1e9 / (factor * factor * factor); j > runtimeMaxJerkPercentPerSecond3*1.001 {
+					if j := plan.curve.maximumJerkPerMillis3() * 1e9 / (factor * factor * factor); j > envelopeJerk(plan)*1.001 {
 						t.Fatalf("jerk %f", j)
 					}
 					if gap := reversalGap(plan.curve.authoredKnots, plan.curve.duration, true); float64(gap)*factor < float64(runtimeMinimumReversalGapMillis)-0.01 {

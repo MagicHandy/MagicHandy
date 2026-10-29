@@ -34,7 +34,7 @@ func refineBufferedVelocity(samples, probes []MotionSample, resolution, maximumV
 		return samples
 	}
 	const minimumSpacing = int64(40)
-	tolerance := quantizedProbeTolerance(probes, resolution, wireApproximationTolerance)
+	tolerance := (samplingTolerance{position: wireApproximationTolerance}).probeTolerance(probes, resolution)
 	result := []MotionSample{samples[0]}
 	var split func(MotionSample, MotionSample)
 	split = func(left, right MotionSample) {

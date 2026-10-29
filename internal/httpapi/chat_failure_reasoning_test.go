@@ -9,7 +9,7 @@ import (
 )
 
 func TestChatFailureReportsActualResponsesReasoning(t *testing.T) {
-	for _, provider := range []string{config.LLMProviderChatGPT, config.LLMProviderOpenAI} {
+	for _, provider := range []string{config.LLMProviderChatGPT, config.LLMProviderOpenAI, config.LLMProviderOpenRouter} {
 		for _, effort := range []string{"none", "low", ""} {
 			t.Run(provider+"/"+effort, func(t *testing.T) {
 				settings := config.LLMSettings{ReasoningMode: "off"}.WithConnection(config.ModelConnection{

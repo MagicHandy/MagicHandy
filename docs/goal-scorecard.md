@@ -1,5 +1,62 @@
 # Goal Scorecard
 
+## 2026-10-29 — OpenRouter regression review follow-up
+
+Against `31898408`, canonical UI **2,861,586 -> 2,862,704 B** (+1,118 B).
+Windows amd64 pure-Go core including UI **24,410,112 -> 24,414,208 B**
+(+4,096 B), with the same `-trimpath -buildvcs=false -ldflags '-s -w'`
+flags. The selector preserves explicit Off, distinguishes loading metadata
+from unsupported settings, and displays the advertised default effort.
+
+OpenRouter's 2,048-token reasoning allowance now applies to every generation
+path before input admission, not just Check model. Larger requested budgets
+are retained; explicit Off, ChatGPT/OpenAI and local budgets are unchanged.
+The ceiling does not force a longer answer, but a reasoning model can now use
+more tokens instead of truncating. No latency/cost improvement is claimed.
+Advanced Layered Autopilot/reviewer facts use the same length names as their
+schema (+8 bytes per score); error feedback follows that vocabulary too.
+Simple/Intermediate prompts and motion values/validation remain unchanged.
+No dependency, worker, timer or extra inference step is added. No RSS/startup
+claim is made. See the [review disposition](openrouter-reasoning-review-2026-10-29.md#independent-regression-review-follow-up).
+
+## 2026-10-29 — OpenRouter reasoning and Advanced Layered vocabulary
+
+Against `9247dc54` (application code `a97ddbe0`), Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core including
+embedded UI **24,390,656 -> 24,410,112 B** (+19,456 B; section-aligned).
+Canonical UI **2,856,207 -> 2,861,586 B** (+5,379 B). No dependency, worker,
+motion loop or inference step is added. OpenRouter reuses its existing
+fifteen-minute catalogue cache for reasoning capabilities. Check model permits
+a 2,048-token total completion budget when reasoning may be enabled, instead
+of prematurely exhausting a 64-token check; it remains one explicit call.
+
+The Advanced Layered response schema grows by about 3.8 KB in the evaluated
+fixtures, within the existing 64K context floor; Simple/Intermediate stay
+unchanged. Seven matched Terra calls per version measured median **3.672 ->
+3.812 s**; final DeepSeek trials measured **1.278 s** median. Small sequential
+samples with mixed cache warmth are not evidence of a fixed latency delta.
+No RSS or startup claim is made. See the
+[model and implementation review](openrouter-reasoning-review-2026-10-29.md).
+
+## 2026-10-29 — Top-speed reversals
+
+Against alpha.79 `f21853ab`, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core including
+embedded UI **24,376,832 -> 24,390,656 B** (+13,824 B; section-aligned). The
+canonical UI is unchanged. No dependency, worker, timer or model call is added;
+fitting tries at most thirteen extra cruise candidates, and only for requests
+above 75%. Two 300 ms benchmark repetitions (Ryzen 9950X3D, GOMAXPROCS=3)
+measure full/compound/default-field compilation at 100% at approximately
+**0.81/0.95/11.18 -> 3.05/3.72/42.87 ms**, with transient allocations
+**0.52/0.65/6.75 -> 2.02/2.48/27.90 MB**. This is bounded compile-time work,
+not another sampling loop. At 25%, the same fixtures remain about
+**0.135/0.047/1.58 -> 0.135/0.047/1.59 ms**. The ordinary sparse-frame
+benchmark measures **69.4–69.7 -> 71.7–71.8 µs**, with the same 26 allocations
+and 92,928 B per frame. These local microbenchmarks are not a latency or RSS
+guarantee. No RSS/cold-start claim is made. See
+[ADR 0064](decisions/0064-top-speed-reversals.md) and the
+[whole-path review](motion-path-review-2026-10-29.md).
+
 ## 2026-10-28 — Layered session repair and directional capability
 
 Against alpha.78 `69a33dc0`, Windows amd64 Go 1.26.10,

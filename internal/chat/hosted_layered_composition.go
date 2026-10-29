@@ -24,12 +24,12 @@ func normalizeHostedLayeredComposition(edits map[string]json.RawMessage) error {
 	}
 	if raw, present := edits["composition"]; present {
 		var composition string
-		if json.Unmarshal(raw, &composition) == nil && composition == "full_slider" {
+		if json.Unmarshal(raw, &composition) == nil && (composition == "full_slider" || composition == "full_band") {
 			if hasGeometry {
-				return errors.New("full_slider composition does not also name a geometry")
+				return errors.New("full travel composition does not also name a geometry")
 			}
-			geometry, hasGeometry = "full_slider", true
-			edits["geometry"] = json.RawMessage(`"full_slider"`)
+			geometry, hasGeometry = composition, true
+			edits["geometry"], _ = json.Marshal(composition)
 		} else if (composition != "manual" && composition != "geometry") || (composition == "geometry") != hasGeometry {
 			return errors.New("composition must select either manual edits or a named geometry")
 		}

@@ -95,7 +95,7 @@ func TestDirectionalRegionalClockKeepsRelativeTimingAcrossSeam(t *testing.T) {
 
 func assertDirectionPlan(t *testing.T, plan MotionPlan, model string, mirror bool) {
 	t.Helper()
-	if maximumPlanAcceleration(plan) > flowAccelerationBudget*1.001 || maximumPlanJerk(plan) > flowJerkBudget*1.001 || plan.Perceptual.CommandedPeakVelocityPerSecond > referenceTravelRateForSpeed(100, model)*1.001 {
+	if maximumPlanAcceleration(plan) > envelopeAcceleration(plan)*1.001 || maximumPlanJerk(plan) > envelopeJerk(plan)*1.001 || plan.Perceptual.CommandedPeakVelocityPerSecond > referenceTravelRateForSpeed(100, model)*1.001 {
 		t.Fatal("directional motion exceeded shared envelope")
 	}
 	var up, down int64

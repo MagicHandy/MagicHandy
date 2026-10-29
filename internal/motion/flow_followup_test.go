@@ -111,7 +111,7 @@ func TestLayeredCruisePreservesFeasibleSlowLegsBesideFastStrokes(t *testing.T) {
 			spec.Phrase.Strokes[1].RatePercent = rate
 			legs, requested := phraseLegs(spec, settings.HandyModel)
 			fitted := slices.Clone(requested)
-			original, err := fitLegCurves(legs, fitted, legBudget{referenceTravelRateForSpeed(100, settings.HandyModel), flowAccelerationBudget, flowJerkBudget})
+			original, err := fitLegCurves(legs, fitted, legBudget{velocity: referenceTravelRateForSpeed(100, settings.HandyModel), acceleration: flowAccelerationBudget, jerk: flowJerkBudget})
 			if err != nil {
 				t.Fatal(err)
 			}

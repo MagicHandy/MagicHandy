@@ -49,7 +49,8 @@ func TestSessionMotionReview(t *testing.T) {
 				e := speedSupportCloudReview(target, settings)
 				e.ID, e.Name, e.Group = fmt.Sprintf("%s-%s-%d", model, name, speed), name, "session-motion"
 				entries = append(entries, e)
-				if e.Error != "" || e.PeakAcceleration > flowAccelerationBudget*1.001 || e.PeakJerk > flowJerkBudget*1.001 || e.AccelerationJump > .01 || e.VelocityJump > .01 {
+				acceleration, jerk := targetMotionEnvelope(target)
+				if e.Error != "" || e.PeakAcceleration > acceleration*1.001 || e.PeakJerk > jerk*1.001 || e.AccelerationJump > .01 || e.VelocityJump > .01 {
 					t.Errorf("%s invalid fit: %s jumps %g/%g", e.ID, e.Error, e.VelocityJump, e.AccelerationJump)
 				}
 				logSpeedSupport(t, e)

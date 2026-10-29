@@ -20,7 +20,8 @@ func parseHostedLayeredReply(raw string, current motion.FlowSpec, limits config.
 	if err != nil {
 		return AssistantResponse{}, current, nil, err
 	}
-	return ParseLayeredReply(normalized, current, limits)
+	response, next, changed, err := ParseLayeredReply(normalized, current, limits)
+	return response, next, changed, hostedStrokeLengthError(err)
 }
 
 func normalizeLayeredOperations(raw string) (string, error) {
@@ -39,6 +40,9 @@ func normalizeLayeredOperations(raw string) (string, error) {
 		return "", errors.New("hosted Layered edits require one set or adjust operation per control; change_by is not allowed")
 	}
 	if err := normalizeHostedLayerOperations(edits); err != nil {
+		return "", err
+	}
+	if err := normalizeHostedStrokeLengths(edits); err != nil {
 		return "", err
 	}
 	if err := normalizeHostedLayeredComposition(edits); err != nil {

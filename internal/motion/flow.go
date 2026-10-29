@@ -170,10 +170,9 @@ func (s FlowSpec) validateLayers() error {
 }
 
 // Layered uses the same fitted kinematic envelope as the other generated
-// stroke grammars. Softness and pace modulation belong to the authored score;
-// an additional quiet clock must not silently cap its requested travel rate.
-const flowAccelerationBudget = runtimeMaxAccelerationPercentPerSecond2
-const flowJerkBudget = runtimeMaxJerkPercentPerSecond3
+// stroke grammars, widened only above the top-speed knee (ADR 0064). Softness
+// and pace modulation belong to the authored score; an additional quiet clock
+// must not silently cap its requested travel rate.
 
 // FlowTarget compiles the score once into immutable kinematic content. The
 // ordinary engine owns playback, live limit changes, handoffs and Stop.
@@ -211,13 +210,11 @@ func FlowTarget(spec FlowSpec, settings config.MotionSettings) (MotionTarget, er
 	hash := fnv.New64a()
 	_, _ = hash.Write(encoded)
 	id := fmt.Sprintf("flow-%x", hash.Sum64())
-	peakSpeed := spec.SpeedPercent
-	for _, step := range spec.Steps {
-		peakSpeed = max(peakSpeed, step.SpeedPercent)
-	}
+	peakSpeed := spec.peakSpeedPercent()
+	acceleration, jerk := topSpeedEnvelope(peakSpeed)
 	content := &preparedMotion{id: id, name: name, curve: curve, stream: window,
 		referenceRate: referenceTravelRateForSpeed(peakSpeed, settings.HandyModel),
-		acceleration:  flowAccelerationBudget, jerk: flowJerkBudget}
+		acceleration:  acceleration, jerk: jerk}
 	return MotionTarget{Label: name, Source: TargetSourceMotionLab,
 		SpeedPercent: peakSpeed, Flow: CloneFlowSpec(&spec), prepared: content}, nil
 }

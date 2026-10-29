@@ -60,6 +60,9 @@ type gestureLeg struct {
 	// cruise flattens the velocity crest of a roomy, velocity-limited stroke.
 	// The turn endpoints and shared acceleration still belong to the joint fit.
 	cruise float64
+	// cruiseRamp shortens the cruise ramps to this share of the ordinary
+	// ones for a top-speed stroke (ADR 0064); zero keeps them.
+	cruiseRamp float64
 	// sourceCycle retains Layered's field coordinate across timing fits/merges.
 	sourceCycle float64
 }

@@ -7,8 +7,13 @@ import (
 
 // legBudget is the kinematic envelope a stroke sequence is fitted inside:
 // peak velocity in percent per second, acceleration and jerk.
+// cruiseRampFloor is the shortest cruise ramp share a stroke may try (ADR
+// 0064); zero keeps the ordinary ramps. widenedLegMillis, when set, keeps an
+// envelope wider than the runtime one from turning a stroke faster than that.
 type legBudget struct {
 	velocity, acceleration, jerk float64
+	cruiseRampFloor              float64
+	widenedLegMillis             float64
 }
 
 // Adjacent strokes share one acceleration at their reversal. Fit that joint
@@ -16,8 +21,7 @@ type legBudget struct {
 func fitGestureCurves(spec FlowSpec, legs []gestureLeg, handyModel string) ([]Curve, error) {
 	durations := make([]int64, len(legs))
 	rate := referenceTravelRateForSpeed(spec.SpeedPercent, handyModel)
-	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel),
-		acceleration: runtimeMaxAccelerationPercentPerSecond2, jerk: runtimeMaxJerkPercentPerSecond3}
+	budget := topSpeedBudget(spec.SpeedPercent, handyModel)
 	for i, leg := range legs {
 		if leg.rest > 0 {
 			durations[i] = int64(math.Ceil(leg.rest * 1000))
@@ -47,7 +51,7 @@ func fitLegCurves(legs []gestureLeg, durations []int64, budget legBudget) ([]Cur
 		changed := false
 		for i, leg := range legs {
 			curves[i] = gestureTurnCurve(leg, durations[i], turns[i], turns[(i+1)%len(legs)])
-			if scale := legTimeScale(curves[i], budget); scale > 1 {
+			if scale := legTimeScale(curves[i], budget.forLeg(leg)); scale > 1 {
 				durations[i] = int64(math.Ceil(float64(durations[i]) * scale * 1.002))
 				changed = true
 			}
@@ -60,6 +64,19 @@ func fitLegCurves(legs []gestureLeg, durations []int64, budget legBudget) ([]Cur
 }
 
 func legTimeScale(curve Curve, budget legBudget) float64 {
+	scale := legEnvelopeScale(curve, budget)
+	if budget.widenedLegMillis > 0 && float64(curve.duration)*scale < budget.widenedLegMillis {
+		// A widened top-speed envelope (ADR 0064) may not turn a stroke faster
+		// than immediate transports can command. A stroke the runtime envelope
+		// already turns faster keeps that timing.
+		base := budget
+		base.acceleration, base.jerk = runtimeMaxAccelerationPercentPerSecond2, runtimeMaxJerkPercentPerSecond3
+		scale = math.Max(scale, math.Min(legEnvelopeScale(curve, base), budget.widenedLegMillis/float64(curve.duration)))
+	}
+	return scale
+}
+
+func legEnvelopeScale(curve Curve, budget legBudget) float64 {
 	floor := math.Max(float64(runtimeMinimumReversalGapMillis)/float64(curve.duration), curve.maximumVelocityPerMillis()*1000/budget.velocity)
 	floor = math.Max(floor, math.Sqrt(curve.maximumAccelerationPerMillis2()*1e6/budget.acceleration))
 	return math.Max(floor, math.Cbrt(curve.maximumJerkPerMillis3()*1e9/budget.jerk))

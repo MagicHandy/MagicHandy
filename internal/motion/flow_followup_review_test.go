@@ -54,7 +54,7 @@ func TestLayeredFollowupReview(t *testing.T) {
 			entries = append(entries, entry)
 			legs, desired := phraseLegs(spec, settings.HandyModel)
 			fitted := slices.Clone(desired)
-			original, err := fitLegCurves(legs, fitted, legBudget{referenceTravelRateForSpeed(100, settings.HandyModel), flowAccelerationBudget, flowJerkBudget})
+			original, err := fitLegCurves(legs, fitted, legBudget{velocity: referenceTravelRateForSpeed(100, settings.HandyModel), acceleration: flowAccelerationBudget, jerk: flowJerkBudget})
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -76,8 +76,8 @@ func TestHostedLayeredGeometryCompositionRetainsDomainResults(t *testing.T) {
 	for _, geometry := range layeredGeometries {
 		t.Run(geometry, func(t *testing.T) {
 			wire := `{"proposal":{"action":"update","stay_unchanged":false,"reply":"Test.","edits":{"composition":"geometry","geometry":"` + geometry + `","controls":null,"layers":null,"evolve":null}}}`
-			if geometry == "full_slider" {
-				wire = `{"proposal":{"action":"update","stay_unchanged":false,"reply":"Test.","edits":{"composition":"full_slider","controls":null,"layers":null,"evolve":null}}}`
+			if geometry == "full_slider" || geometry == "full_band" {
+				wire = `{"proposal":{"action":"update","stay_unchanged":false,"reply":"Test.","edits":{"composition":"` + geometry + `","controls":null,"layers":null,"evolve":null}}}`
 			}
 			domain, err := llm.DomainOutput(wire, schema)
 			if err != nil {

@@ -70,7 +70,7 @@ func TestRegionalRandomScoresStaySmoothBoundedAndStopFree(t *testing.T) {
 			t.Fatalf("trial%d: %v", trial, err)
 		}
 		plan := NewMotionPlan("regional", target, settings, 0, 0, time.Unix(0, 0))
-		if maximumPlanAcceleration(plan) > flowAccelerationBudget*1.001 || maximumPlanJerk(plan) > flowJerkBudget*1.001 {
+		if maximumPlanAcceleration(plan) > envelopeAcceleration(plan)*1.001 || maximumPlanJerk(plan) > envelopeJerk(plan)*1.001 {
 			t.Fatal("regional plan escaped envelope")
 		}
 		for i, q := range plan.curve.quintics {

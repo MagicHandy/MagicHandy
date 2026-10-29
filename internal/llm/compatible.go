@@ -31,6 +31,8 @@ type CompatibleOptions struct {
 	AllowedProviders    []string
 	DataCollection      string
 	ZeroDataRetention   bool
+	ReasoningEffort     string
+	ReasoningEnabled    *bool
 }
 
 // HostedModel is provider catalog metadata, independent of local runtimes.
@@ -40,6 +42,8 @@ type HostedModel struct {
 	SupportedParameters    []string `json:"supported_parameters,omitempty"`
 	ReasoningEfforts       []string `json:"reasoning_efforts,omitempty"`
 	DefaultReasoningEffort string   `json:"default_reasoning_effort,omitempty"`
+	ReasoningSupported     bool     `json:"reasoning_supported,omitempty"`
+	ReasoningMandatory     bool     `json:"reasoning_mandatory,omitempty"`
 	ContextLength          int      `json:"context_length,omitempty"`
 }
 
@@ -48,7 +52,7 @@ type HostedModel struct {
 type CompatibleProvider struct {
 	options        CompatibleOptions
 	mu             sync.Mutex
-	parameters     []string
+	model          HostedModel
 	capabilitiesAt time.Time
 }
 
@@ -150,13 +154,17 @@ func (p *CompatibleProvider) Models(ctx context.Context) ([]HostedModel, error) 
 	}
 	defer func() { _ = response.Body.Close() }()
 	var catalog struct {
-		Data []HostedModel `json:"data"`
+		Data []compatibleCatalogModel `json:"data"`
 	}
 	if json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(&catalog) != nil {
 		return nil, &CloudError{Kind: "unavailable"}
 	}
 	models := make([]HostedModel, 0, len(catalog.Data))
-	for _, model := range catalog.Data {
+	for _, item := range catalog.Data {
+		model := item.HostedModel
+		if p.options.Provider == "openrouter" {
+			model = item.withRouterReasoning()
+		}
 		if ValidateCloudModel(model.ID) == nil {
 			if model.Name == "" {
 				model.Name = model.ID
@@ -185,32 +193,35 @@ func (p *CompatibleProvider) Status(ctx context.Context) ProviderStatus {
 	return status
 }
 
-func (p *CompatibleProvider) supportedParameters(ctx context.Context) ([]string, error) {
+func (p *CompatibleProvider) modelCapabilities(ctx context.Context) (HostedModel, error) {
 	if p.options.Provider != "openrouter" {
-		return p.options.SupportedParameters, nil
+		return HostedModel{SupportedParameters: p.options.SupportedParameters}, nil
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if time.Since(p.capabilitiesAt) < 15*time.Minute {
-		return append([]string(nil), p.parameters...), nil
+		return p.model, nil
 	}
 	models, err := p.Models(ctx)
 	if err != nil {
-		return nil, err
+		return HostedModel{}, err
 	}
 	index := slices.IndexFunc(models, func(model HostedModel) bool { return model.ID == p.options.Model })
 	if index < 0 {
-		return nil, &CloudError{Kind: "model"}
+		return HostedModel{}, &CloudError{Kind: "model"}
 	}
-	p.parameters = append([]string(nil), models[index].SupportedParameters...)
+	p.model = models[index]
 	p.capabilitiesAt = time.Now()
-	return append([]string(nil), p.parameters...), nil
+	return p.model, nil
 }
 
 // StreamChat releases output only after a successful terminal stream event.
 func (p *CompatibleProvider) StreamChat(ctx context.Context, request ChatRequest, onDelta func(string) error) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.options.Timeout)
 	defer cancel()
+	if p.options.Provider == "openrouter" {
+		request.MaxTokens = OpenRouterOutputTokens(request.MaxTokens, p.options.ReasoningEffort, p.options.ReasoningEnabled)
+	}
 	bounded, budget, err := BudgetChatRequest(request, p.options.ContextSize)
 	if request.OnBudget != nil {
 		request.OnBudget(budget)
@@ -218,13 +229,22 @@ func (p *CompatibleProvider) StreamChat(ctx context.Context, request ChatRequest
 	if err != nil {
 		return "", err
 	}
-	parameters, err := p.supportedParameters(ctx)
+	model, err := p.modelCapabilities(ctx)
 	if err != nil {
 		return "", err
 	}
-	body, strict, err := p.completionBody(bounded, parameters)
+	body, strict, err := p.completionBody(bounded, model.SupportedParameters)
 	if err != nil {
 		return "", err
+	}
+	if p.options.Provider == "openrouter" {
+		reasoning, err := routerReasoning(model, p.options.ReasoningEffort, p.options.ReasoningEnabled)
+		if err != nil {
+			return "", err
+		}
+		if reasoning != nil {
+			body["reasoning"] = reasoning
+		}
 	}
 	encoded, err := json.Marshal(body)
 	if err != nil {

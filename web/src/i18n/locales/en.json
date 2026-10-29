@@ -3477,5 +3477,14 @@
   "Vibrator ready. Playback stays within your Max.": "Vibrator ready. Playback stays within your Max.",
   "Your next motion request can resume it. To keep it off, turn off In playback.": "Your next motion request can resume it. To keep it off, turn off In playback.",
   "Stop pauses the vibrator until you request motion or choose Resume now in the device panel. Your max and model control stay as they are.": "Stop pauses the vibrator until you request motion or choose Resume now in the device panel. Your max and model control stay as they are.",
-  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first."
+  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.",
+  "Enabled — provider decides effort": "Enabled — provider decides effort",
+  "This model requires reasoning. Lower effort usually responds sooner.": "This model requires reasoning. Lower effort usually responds sooner.",
+  "Less reasoning can respond sooner, but may reduce motion quality. Provider default keeps the model's own setting.": "Less reasoning can respond sooner, but may reduce motion quality. Provider default keeps the model's own setting.",
+  "Saved setting unavailable — choose another": "Saved setting unavailable — choose another",
+  "Minimal": "Minimal",
+  "Low": "Low",
+  "High": "High",
+  "Extra high": "Extra high",
+  "Maximum": "Maximum"
 }

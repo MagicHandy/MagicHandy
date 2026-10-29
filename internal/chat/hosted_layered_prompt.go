@@ -51,6 +51,18 @@ func hostedLayeredExample(line string) string {
 		delete(edits, "change_by")
 	}
 	convertHostedLayerExample(edits)
+	if raw := edits["stroke_width"]; raw != nil {
+		var width map[string]json.RawMessage
+		if json.Unmarshal(raw, &width) == nil {
+			for old, name := range map[string]string{"min_percent": "shortest_percent", "max_percent": "widest_percent"} {
+				if value, present := width[old]; present {
+					width[name] = value
+					delete(width, old)
+				}
+			}
+			edits["stroke_width"], _ = json.Marshal(width)
+		}
+	}
 	if len(edits) == 0 {
 		return line
 	}
@@ -60,6 +72,10 @@ func hostedLayeredExample(line string) string {
 	}
 	if string(edits["geometry"]) == `"full_slider"` || string(edits["composition"]) == `"full_slider"` {
 		composition = "full_slider"
+		delete(edits, "geometry")
+	}
+	if string(edits["geometry"]) == `"full_band"` || string(edits["composition"]) == `"full_band"` {
+		composition = "full_band"
 		delete(edits, "geometry")
 	}
 	edits["composition"], _ = json.Marshal(composition)

@@ -7,8 +7,7 @@ import "math"
 // reversal from slowing the entire phrase.
 func compileFlowCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	legs, durations := flowLegs(spec, handyModel)
-	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel),
-		acceleration: flowAccelerationBudget, jerk: flowJerkBudget}
+	budget := topSpeedBudget(spec.peakSpeedPercent(), handyModel)
 	curve, err := fitLayeredCurve(legs, durations, budget, "flow", spec.hasDirectionalContrast())
 	if err != nil {
 		return Curve{}, err

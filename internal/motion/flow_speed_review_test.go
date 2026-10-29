@@ -33,7 +33,8 @@ func TestLayeredReleaseSpeedReview(t *testing.T) {
 				entry := speedSupportCloudReview(target, settings)
 				entry.ID, entry.Name, entry.Group = fmt.Sprintf("%s-%s-%d", model, name, speed), name, "layered-release"
 				entries = append(entries, entry)
-				if entry.Error != "" || entry.PeakAcceleration > flowAccelerationBudget*1.001 || entry.PeakJerk > flowJerkBudget*1.001 ||
+				acceleration, jerk := targetMotionEnvelope(target)
+				if entry.Error != "" || entry.PeakAcceleration > acceleration*1.001 || entry.PeakJerk > jerk*1.001 ||
 					entry.Summary.CommandedPeakVelocityPerSecond > referenceTravelRateForSpeed(100, model)*1.001 || entry.VelocityJump > .01 || entry.AccelerationJump > .01 {
 					t.Errorf("%s: error=%s accel=%f jerk=%f jumps=%f/%f", entry.ID, entry.Error, entry.PeakAcceleration, entry.PeakJerk, entry.VelocityJump, entry.AccelerationJump)
 				}

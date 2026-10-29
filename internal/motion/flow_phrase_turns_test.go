@@ -54,7 +54,7 @@ func TestRegionalPhraseKeepsCyclesAndBoundedSmoothLoop(t *testing.T) {
 							t.Fatalf("turn%d=%f want%d", i, k.PositionPercent, want)
 						}
 					}
-					if maximumPlanAcceleration(plan) > flowAccelerationBudget*1.001 || maximumPlanJerk(plan) > flowJerkBudget*1.001 || plan.Perceptual.CommandedPeakVelocityPerSecond > referenceTravelRateForSpeed(100, model)*1.001 {
+					if maximumPlanAcceleration(plan) > envelopeAcceleration(plan)*1.001 || maximumPlanJerk(plan) > envelopeJerk(plan)*1.001 || plan.Perceptual.CommandedPeakVelocityPerSecond > referenceTravelRateForSpeed(100, model)*1.001 {
 						t.Fatal("ordered motif exceeded the shared envelope")
 					}
 					for i, q := range plan.curve.quintics {

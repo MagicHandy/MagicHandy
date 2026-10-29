@@ -66,12 +66,12 @@ func fitSpacedMotionSamplesPreferred(probes []MotionSample, floor, preferred int
 // time creates avoidable speed pulses, particularly beside a reversal. Fixed
 // knots and the already submitted append tail keep their exact times.
 // A final interval projection enforces the velocity ceiling after rounding.
-func fitQuantizedMotionTiming(samples, probes []MotionSample, mandatory map[int64]struct{}, resolution, maximumVelocity, positionTolerance float64, floor int64) ([]MotionSample, error) {
+func fitQuantizedMotionTiming(samples, probes []MotionSample, mandatory map[int64]struct{}, resolution, maximumVelocity float64, budget samplingTolerance, floor int64) ([]MotionSample, error) {
 	if len(samples) < 2 {
 		return samples, nil
 	}
 	result := append([]MotionSample(nil), samples...)
-	tolerance := quantizedProbeTolerance(probes, resolution, positionTolerance)
+	tolerance := budget.probeTolerance(probes, resolution)
 	encoded := func(sample MotionSample) float64 {
 		if resolution <= 0 {
 			return sample.PositionPercent
@@ -129,7 +129,7 @@ func fitQuantizedMotionTiming(samples, probes []MotionSample, mandatory map[int6
 			result[index].TimeMillis = min(latest[index-start], max(result[index-1].TimeMillis+minimum(result[index-1], result[index]), at))
 		}
 		if alignCrossings {
-			if err := verifyRetimedSamples(result[start:end+1], originalTimes, probes, resolution, positionTolerance); err != nil {
+			if err := verifyRetimedSamples(result[start:end+1], originalTimes, probes, resolution, budget); err != nil {
 				return nil, err
 			}
 		}
@@ -138,10 +138,10 @@ func fitQuantizedMotionTiming(samples, probes []MotionSample, mandatory map[int6
 	return result, nil
 }
 
-func verifyRetimedSamples(samples []MotionSample, originalTimes []int64, probes []MotionSample, resolution, positionTolerance float64) error {
+func verifyRetimedSamples(samples []MotionSample, originalTimes []int64, probes []MotionSample, resolution float64, budget samplingTolerance) error {
 	for index := 1; index < len(samples); index++ {
 		changed := samples[index-1].TimeMillis != originalTimes[index-1] || samples[index].TimeMillis != originalTimes[index]
-		tolerance := quantizedIntervalTolerance(probes, samples[index-1].TimeMillis, samples[index].TimeMillis, resolution, positionTolerance)
+		tolerance := quantizedIntervalTolerance(probes, samples[index-1].TimeMillis, samples[index].TimeMillis, resolution, budget)
 		if changed && !wireSegmentFits(samples[index-1], samples[index], probes, resolution, tolerance) {
 			return fmt.Errorf("quantized motion timing loses trajectory fidelity between %dms and %dms", samples[index-1].TimeMillis, samples[index].TimeMillis)
 		}
@@ -153,13 +153,13 @@ func verifyRetimedSamples(samples []MotionSample, originalTimes []int64, probes 
 // A distant, sparse part of a transition must not consume the entire error
 // budget of a densely inspected fast leg. The position budget and A*dt²/8
 // bound are unchanged; only the interval used for that bound is corrected.
-func quantizedIntervalTolerance(probes []MotionSample, start, end int64, resolution, positionTolerance float64) float64 {
+func quantizedIntervalTolerance(probes []MotionSample, start, end int64, resolution float64, budget samplingTolerance) float64 {
 	first := sort.Search(len(probes), func(i int) bool { return probes[i].TimeMillis >= start })
 	if first > 0 && (first == len(probes) || probes[first].TimeMillis > start) {
 		first--
 	}
 	last := sort.Search(len(probes), func(i int) bool { return probes[i].TimeMillis >= end })
-	return quantizedProbeTolerance(probes[first:min(last+1, len(probes))], resolution, positionTolerance)
+	return budget.probeTolerance(probes[first:min(last+1, len(probes))], resolution)
 }
 
 // Crossing alignment is only meaningful within one direction of travel. A

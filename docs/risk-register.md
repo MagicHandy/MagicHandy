@@ -643,6 +643,26 @@ This register tracks rewrite risks that should survive between phases. A risk st
 
 Level: High
 
+Status 2026-10-29: the owner reported that speed never reaches The Handy's
+maximum. Effective pace saturated near 79% for full strokes from about 85%
+requested, because rounded turns met the velocity ceiling. Above a 75% knee
+the envelope now widens and cruise ramps may shorten
+([ADR 0064](decisions/0064-top-speed-reversals.md)). 100% reaches 86.6% for
+full strokes with estimated peak acceleration near 1.3 g; these are software
+turn-quality limits, not manufacturer acceleration ratings. All 198 tested
+outputs up to 75% match alpha.79, including transmitted points, after fixing
+the proposal's false acceleration estimate at rounded append anchors.
+Narrow strokes still saturate at timing limits. The widened envelope does not
+shorten strokes below 120 ms (existing faster feasible strokes are retained).
+The first [Original Handy Cloud comparison](top-speed-cloud-audition-2026-10-29.md)
+accepted full, short and compound patterns at 100%: B was faster while keeping
+smoothness and the compound rhythm. Intermediate speeds, live transitions and
+other hardware/transports still need physical acceptance; the earlier accepted
+top feel now sits near 84% requested.
+The [whole-path review](motion-path-review-2026-10-29.md) retains filter-removal
+failures, 690 final Cloud/BLE/immediate sampling cases, 180 monotone joins and
+simulated-latency Stop evidence. None is a substitute for physical acceptance.
+
 Status 2026-10-11: a renewed Cloud / Creative v2 report reproduces premature
 velocity-crest saturation in the shared compiler (full-range requested 75%
 delivered 56.72% effective pace). Bounded whole-phrase cruise fitting reaches

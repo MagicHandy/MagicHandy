@@ -4,6 +4,25 @@ Status: implemented effective-pace calibration, C2 Creative compiler, and
 retained stopped-run diagnostics; awaiting matched real-device confirmation
 (2026-08-23)
 
+## Top-speed reversals — 2026-10-29
+
+Requests from about 85% up all played at the same pace: 78.7% effective for
+full strokes on the Original Handy. 100% means mean travel equal to the
+device's peak velocity, and rounded turns reached that ceiling first.
+[ADR 0064](decisions/0064-top-speed-reversals.md) widens the turn envelope
+above a 75% knee (3× acceleration and 8× jerk at 100%) and lets velocity-limited
+cruise strokes shorten their ramps when that is strictly faster. Full-range
+Layered and Full sweeps now reach 86.6% at 100% and Simple 71.2%. Fits at and
+below 75%, including the accepted alpha.75 timings at the knee, are unchanged.
+The widened envelope does not shorten a stroke below 120 ms; strokes already
+feasible faster under the old envelope retain their timing. Very narrow
+patterns still saturate at their timing floor. These are software trajectory
+estimates, with physical acceptance still open. The
+[whole-path review](motion-path-review-2026-10-29.md) corrects an initial
+sampling regression, compares independent filter removals, verifies actual
+Cloud and buffered native/browser BLE policies, and records the higher
+compilation cost of the bounded top-speed search.
+
 ## Layered saturation integration — 2026-10-26
 
 The [review follow-up](layered-review-followup-2026-10-26.md) limits optional

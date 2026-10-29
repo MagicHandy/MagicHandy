@@ -130,11 +130,19 @@ func compileGestureCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	if float64(best.duration) <= requested*1.005 {
 		return best, nil
 	}
-	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel),
-		acceleration: runtimeMaxAccelerationPercentPerSecond2, jerk: runtimeMaxJerkPercentPerSecond3}
-	for _, amount := range []float64{0.25, 0.5, 0.75, 1} {
+	budget := topSpeedBudget(spec.SpeedPercent, handyModel)
+	// Require a meaningful gain over the original rounded shape, then keep
+	// the best eligible fit. Comparing the threshold with each successive
+	// winner can discard a faster candidate merely because an intermediate
+	// profile was also available.
+	cruiseThreshold := float64(best.duration) * 0.995
+	for _, cruise := range cruiseCandidates(budget) {
+		if budget.cruiseRampFloor >= 1 {
+			// Preserve the physically accepted ordinary-speed selection.
+			cruiseThreshold = float64(best.duration) * 0.995
+		}
 		candidateLegs := slices.Clone(legs)
-		if !fitGestureCruise(candidateLegs, amount, budget) {
+		if !fitGestureCruise(withCruiseRamp(candidateLegs, cruise.ramp), cruise.amount, budget) {
 			continue
 		}
 		candidateCurves, fitErr := fitGestureCurves(spec, candidateLegs, handyModel)
@@ -142,7 +150,7 @@ func compileGestureCurve(spec FlowSpec, handyModel string) (Curve, error) {
 			continue
 		}
 		candidate, fitErr := assembleLegCurve(candidateLegs, candidateCurves, "creative v2")
-		if fitErr == nil && float64(candidate.duration) < float64(best.duration)*0.995 {
+		if fitErr == nil && candidate.duration < best.duration && float64(candidate.duration) < cruiseThreshold {
 			best = candidate
 		}
 		if float64(best.duration) <= requested*1.005 {

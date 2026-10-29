@@ -24,6 +24,9 @@ func chatPromptBudget(settings config.LLMSettings) chat.PromptBudgetSettings {
 	budget := chat.PromptBudgetSettings{MaxOutputTokens: settings.MaxOutputTokens}
 	if settings.ActiveConnection != nil {
 		budget.ContextSize, _, _ = settings.ActiveConnection.ConversationWindow()
+		if settings.ActiveConnection.Provider == config.LLMProviderOpenRouter {
+			budget.MaxOutputTokens = llm.OpenRouterOutputTokens(budget.MaxOutputTokens, settings.ActiveConnection.ReasoningEffort, settings.ActiveConnection.ReasoningEnabled)
+		}
 	} else if settings.ModelCapabilityLevel() != config.ModelCapabilitySimple {
 		budget.ContextSize = settings.LocalContextSize()
 	}

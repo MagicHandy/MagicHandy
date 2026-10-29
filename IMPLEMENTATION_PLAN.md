@@ -1,5 +1,17 @@
 # MagicHandy Go Implementation Plan
 
+Broad strokes gain additional speed above 75%: the turn envelope widens above
+that knee and velocity-limited cruise strokes may shorten their ramps, so 100%
+reaches 86.6% effective for full strokes instead of stopping near 79%. The
+whole-path review preserves sparse output at ordinary speeds and retains older
+filters only where their removal regressed patterning/fidelity. Very short
+strokes still meet timing limits. The first Original Handy Cloud comparison
+accepted the faster full, short and compound patterns at 100%; intermediate
+speeds and live transitions still need physical coverage. See the
+[hardware report](docs/top-speed-cloud-audition-2026-10-29.md).
+See [ADR 0064](docs/decisions/0064-top-speed-reversals.md) and the
+[comparison evidence](docs/motion-path-review-2026-10-29.md).
+
 The chat model sets the vibrator's level under a saved user Max: Simple
 (Layered) and Intermediate through one `vibration_level`, Advanced through its
 envelope in % of Max. Stop pauses the vibrator until a fresh manual motion request,

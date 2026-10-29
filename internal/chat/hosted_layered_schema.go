@@ -41,9 +41,14 @@ func hostedLayeredEditSchema(fields map[string]any) map[string]any {
 	bandControls := maps.Clone(paceControls)
 	bandControls["min_percent"], bandControls["max_percent"] = controls["min_percent"], controls["max_percent"]
 	geometry["controls"] = object(bandControls)
+	// Filling a band fixes both stroke lengths to that band. Give it its own
+	// branch so constrained output cannot also select contradictory lengths.
+	fullBandFields := maps.Clone(fullFields)
+	fullBandFields["composition"] = map[string]any{"const": "full_band"}
+	fullBandFields["controls"] = object(bandControls)
 	var names []string
 	for _, name := range layeredGeometries {
-		if name != "full_slider" {
+		if name != "full_slider" && name != "full_band" {
 			names = append(names, name)
 		}
 	}
@@ -58,6 +63,7 @@ func hostedLayeredEditSchema(fields map[string]any) map[string]any {
 		object(manual, "composition"),
 		object(geometry, "composition", "geometry"),
 		fullSlider,
+		object(fullBandFields, "composition"),
 		phrase,
 	}}
 }

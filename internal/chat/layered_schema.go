@@ -48,6 +48,7 @@ func layeredResponseSchema(limits config.MotionSettings, mood, operations bool) 
 	edits["geometry"] = map[string]any{"type": "string", "enum": layeredGeometries}
 	properties := map[string]any{"edits": object(edits, []string{}), "reply": map[string]any{"type": "string"}}
 	if operations {
+		edits["stroke_width"] = object(map[string]any{"shortest_percent": integer(10, 100), "widest_percent": integer(10, 100)}, []string{"shortest_percent", "widest_percent"})
 		edits["layers"] = hostedLayeredLayersSchema(layer)
 		delete(edits, "remove_layers")
 		properties["edits"] = hostedLayeredEditSchema(edits)

@@ -33,8 +33,9 @@ func preparedPlan(id string, target MotionTarget, settings config.MotionSettings
 	factor := content.referenceRate * gain / requestedRate
 	factor = math.Max(factor, totalCurveTravel(curve.authoredKnots)*gain*1000/float64(curve.duration)/requestedRate)
 	factor = math.Max(factor, curve.maximumVelocityPerMillis()*gain*1000/referenceTravelRateForSpeed(100, settings.HandyModel))
-	acceleration := math.Min(content.acceleration, runtimeMaxAccelerationPercentPerSecond2)
-	jerk := math.Min(content.jerk, runtimeMaxJerkPercentPerSecond3)
+	// Content fitted for a faster request keeps no extra envelope at a slower
+	// one: the requested speed's own envelope bounds the played curve.
+	acceleration, jerk := targetMotionEnvelope(target)
 	factor = math.Max(factor, math.Sqrt(curve.maximumAccelerationPerMillis2()*gain*1e6/acceleration))
 	factor = math.Max(factor, math.Cbrt(curve.maximumJerkPerMillis3()*gain*1e9/jerk))
 	if gap := reversalGap(curve.authoredKnots, curve.duration, curve.loop); gap > 0 {

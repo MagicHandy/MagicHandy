@@ -50,9 +50,9 @@ func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, nam
 	if softened || best.duration <= best.plannedDuration {
 		return best, nil
 	}
-	for _, amount := range []float64{.25, .5, .75, 1} {
+	for _, candidate := range cruiseCandidates(budget) {
 		candidateLegs := slices.Clone(legs)
-		if !fitGestureCruise(candidateLegs, amount, budget) {
+		if !fitGestureCruise(withCruiseRamp(candidateLegs, candidate.ramp), candidate.amount, budget) {
 			continue
 		}
 		changed := false
@@ -71,11 +71,34 @@ func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, nam
 		if fitErr != nil {
 			continue // An optional profile must not invalidate a fitted score.
 		}
-		candidate, fitErr := assembleLegCurve(candidateLegs, candidateCurves, name)
-		if fitErr == nil && candidate.duration < best.duration {
-			candidate.plannedDuration = best.plannedDuration
-			best = candidate
+		fitted, fitErr := assembleLegCurve(candidateLegs, candidateCurves, name)
+		if fitErr == nil && fitted.duration < best.duration {
+			fitted.plannedDuration = best.plannedDuration
+			best = fitted
 		}
 	}
 	return best, nil
+}
+
+type cruiseCandidate struct{ amount, ramp float64 }
+
+// cruiseCandidates are the cruise profiles a constrained score tries: the
+// ordinary ramps at increasing amounts, then, above the top-speed knee, full
+// cruise with shorter ramps (ADR 0064).
+func cruiseCandidates(budget legBudget) []cruiseCandidate {
+	candidates := []cruiseCandidate{{.25, 1}, {.5, 1}, {.75, 1}, {1, 1}}
+	for _, ramp := range cruiseRampCandidates(budget)[1:] {
+		candidates = append(candidates, cruiseCandidate{1, ramp})
+	}
+	return candidates
+}
+
+// withCruiseRamp gives every stroke the ramp share; 1 keeps the ordinary ramps.
+func withCruiseRamp(legs []gestureLeg, ramp float64) []gestureLeg {
+	if ramp < 1 {
+		for i := range legs {
+			legs[i].cruiseRamp = ramp
+		}
+	}
+	return legs
 }

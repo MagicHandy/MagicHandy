@@ -78,7 +78,7 @@ func (s MotionReviewService) Complete(ctx context.Context, input MotionReviewInp
 	evidence := map[string]any{
 		"source": input.Source, "request": input.Request,
 		"recent_user_requests_oldest_first": input.RecentRequests,
-		"before":                            reviewTarget(input.Before), "applied": reviewTarget(input.After),
+		"before":                            reviewTarget(input.Before, s.Capabilities.AdvancedMotion), "applied": reviewTarget(input.After, s.Capabilities.AdvancedMotion),
 		"authoritative_state": motionContextInstructions(state, s.Capabilities, s.Patterns),
 	}
 	if input.Autopilot != nil {
@@ -101,13 +101,13 @@ func (s MotionReviewService) Complete(ctx context.Context, input MotionReviewInp
 	return s.parse(raw, state, input.Limits)
 }
 
-func reviewTarget(target motion.MotionTarget) any {
+func reviewTarget(target motion.MotionTarget, advanced bool) any {
 	if target.Flow != nil {
 		var score map[string]any
 		if target.Flow.Gesture != nil {
 			score = creativeV2ScoreContext(*target.Flow)
 		} else {
-			score = layeredScoreContext(*target.Flow)
+			score = layeredScoreContext(*target.Flow, advanced)
 		}
 		score["seed"] = target.Flow.Seed
 		return score
