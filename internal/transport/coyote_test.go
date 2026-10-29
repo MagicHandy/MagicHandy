@@ -414,3 +414,39 @@ func TestFanOutCoyoteLossStopsTheLinkedRun(t *testing.T) {
 		t.Fatalf("fan-out must report a failed linked session, got %q", diagnostics.PlaybackState)
 	}
 }
+
+// A connected Coyote names what the user must raise before anything is felt:
+// every connection starts at zero, and a zero ceiling allows nothing (ADR 0063).
+func TestCoyoteReportsWhyItIsSilent(t *testing.T) {
+	fixture := newCoyoteFixture(t)
+	if status := fixture.owner.Status(); status.SilentReason != "" {
+		t.Fatalf("disconnected: %q", status.SilentReason)
+	}
+	fixture.connect()
+	fixture.confirm()
+	// A commanded zero is not a measurement: silence needs the device's report.
+	if status := fixture.owner.Status(); status.SilentReason != "" || status.StrengthSource != "zero_command" {
+		t.Fatalf("a new connection = %q (%s), want no claim yet", status.SilentReason, status.StrengthSource)
+	}
+	if _, err := fixture.owner.AdjustStrength(estim.ChannelB, 2); err != nil {
+		t.Fatal(err)
+	}
+	fixture.pace(1)
+	if status := fixture.waitFor("raise report", func(status CoyoteStatus) bool { return status.StrengthB == 2 }); status.SilentReason != "" {
+		t.Fatalf("a raised channel = %q", status.SilentReason)
+	}
+	if _, err := fixture.owner.AdjustStrength(estim.ChannelB, -2); err != nil {
+		t.Fatal(err)
+	}
+	fixture.pace(1)
+	if status := fixture.waitFor("lower report", func(status CoyoteStatus) bool { return status.StrengthB == 0 && !status.StrengthPending }); status.SilentReason != "strength_zero" {
+		t.Fatalf("a reported zero = %q (%s), want strength_zero", status.SilentReason, status.StrengthSource)
+	}
+	if err := fixture.owner.Configure(CoyoteConfig{Profile: estim.Profile{Follow: estim.FollowStroke, MinHz: 40, MaxHz: 100}}); err != nil {
+		t.Fatal(err)
+	}
+	fixture.pace(1)
+	if status := fixture.waitFor("zero ceilings", func(status CoyoteStatus) bool { return status.LimitsApplied && status.CeilingA == 0 }); status.SilentReason != "ceiling_zero" {
+		t.Fatalf("zero ceilings = %q (%+v)", status.SilentReason, status)
+	}
+}

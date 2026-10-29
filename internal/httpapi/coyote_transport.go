@@ -13,6 +13,7 @@ import (
 	"github.com/mapledaemon/MagicHandy/internal/ble/workerclient"
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/estim"
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -59,28 +60,34 @@ func (s *Server) configureCoyote(runtime Runtime, settings config.Settings, logg
 	}
 	s.coyote.owner = transport.NewCoyote(transport.CoyoteOptions{Connector: connector})
 	s.coyote.discoverer, _ = connector.(ble.Discoverer)
-	_ = s.coyote.owner.Configure(coyoteConfig(settings.Estim))
+	_ = s.coyote.owner.Configure(coyoteConfig(settings))
 }
 
-func coyoteConfig(settings config.EstimSettings) transport.CoyoteConfig {
+// coyoteConfig converts saved settings for the owner. Following speed spans
+// the saved Handy speed band, on the vibrator's scale (ADR 0063).
+func coyoteConfig(settings config.Settings) transport.CoyoteConfig {
+	estimSettings := settings.Estim
+	low, high := motion.FollowSpeedBand(settings.EffectiveMotion())
 	return transport.CoyoteConfig{
 		Limits: estim.Limits{
-			StrengthA:         settings.MaxStrengthA,
-			StrengthB:         settings.MaxStrengthB,
-			FrequencyBalanceA: settings.FrequencyBalanceA,
-			FrequencyBalanceB: settings.FrequencyBalanceB,
-			IntensityBalanceA: settings.IntensityBalanceA,
-			IntensityBalanceB: settings.IntensityBalanceB,
+			StrengthA:         estimSettings.MaxStrengthA,
+			StrengthB:         estimSettings.MaxStrengthB,
+			FrequencyBalanceA: estimSettings.FrequencyBalanceA,
+			FrequencyBalanceB: estimSettings.FrequencyBalanceB,
+			IntensityBalanceA: estimSettings.IntensityBalanceA,
+			IntensityBalanceB: estimSettings.IntensityBalanceB,
 		},
 		Profile: estim.Profile{
-			Follow:       settings.Follow,
-			MinHz:        settings.FrequencyMinHz,
-			MaxHz:        settings.FrequencyMaxHz,
-			Balance:      settings.Balance,
-			SwapChannels: settings.SwapChannels,
+			Follow:       estimSettings.Follow,
+			MinHz:        estimSettings.FrequencyMinHz,
+			MaxHz:        estimSettings.FrequencyMaxHz,
+			Balance:      estimSettings.Balance,
+			SwapChannels: estimSettings.SwapChannels,
+			SpeedLow:     low,
+			SpeedHigh:    high,
 		},
-		OffsetMillis:      settings.TimingOffsetMillis,
-		RememberedAddress: settings.RememberedAddress,
+		OffsetMillis:      estimSettings.TimingOffsetMillis,
+		RememberedAddress: estimSettings.RememberedAddress,
 	}
 }
 
@@ -193,7 +200,7 @@ func (s *Server) handleCoyoteConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, errCoyoteSafetyPending)
 		return
 	}
-	if err := s.coyote.owner.Configure(coyoteConfig(settings.Estim)); err != nil {
+	if err := s.coyote.owner.Configure(coyoteConfig(settings)); err != nil {
 		writeError(w, http.StatusBadGateway, err)
 		return
 	}
@@ -395,8 +402,10 @@ func (s *Server) applyCoyoteSettingsTransition(previous, next config.Settings) e
 	if previous.Device.Plays(config.DeviceOutputCoyote) && !next.Device.Plays(config.DeviceOutputCoyote) {
 		zeroErr = s.coyote.owner.EmergencyZero()
 	}
-	if previous.Estim != next.Estim {
-		return errors.Join(zeroErr, s.coyote.owner.Configure(coyoteConfig(next.Estim)))
+	// A speed band change reshapes following too; unchanged ceilings are not
+	// rewritten to the device.
+	if coyoteConfig(previous) != coyoteConfig(next) {
+		return errors.Join(zeroErr, s.coyote.owner.Configure(coyoteConfig(next)))
 	}
 	return zeroErr
 }

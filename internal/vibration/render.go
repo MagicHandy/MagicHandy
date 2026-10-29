@@ -25,25 +25,24 @@ const (
 	DepthTip  = "tip"
 )
 
-// Rendering constants. They are starting points, not measured values: the
-// smoothing, the speed scale and the user's timing offset are tuned together
-// during hardware acceptance, because smoothing, radio and motor lag add up.
+// Rendering constants. The smoothing, the speed scale and the user's timing
+// offset are tuned together, because smoothing, radio and motor lag add up.
+// The first physical test found the 250 ms window and release left following
+// speed close to constant: about one motor step per stroke (ADR 0063).
 const (
 	// SpeedWindowMillis is the look-back window for averaged absolute
-	// velocity. Averaging |dp| over the window keeps a reversal from
-	// cancelling, which an endpoint difference would.
-	SpeedWindowMillis = 250
+	// velocity, one pacer tick, so each stroke's own speed comes through.
+	// Averaging |dp| over the window keeps a reversal from cancelling, which
+	// an endpoint difference would.
+	SpeedWindowMillis = 100
 	speedSamples      = 6
 	// speedScale is v0 in full spans per second for the saturating curve
 	// used when no speed band is known.
 	speedScale = 1.2
-	// speedBandFloor is the drive at the band's slowest speed. Slower motion
-	// fades linearly to zero, so a held position is silent.
-	speedBandFloor = 0.35
 	// Faster attack than release: the level rises with a new stroke and dips
-	// smoothly through a turnaround instead of stalling the motor.
-	attackMillis  = 80
-	releaseMillis = 250
+	// through a turnaround without stalling the motor.
+	attackMillis  = 40
+	releaseMillis = 100
 	depthGamma    = 1.5
 	// FadeMillis is the fade-in at every Play and Resume.
 	FadeMillis = 2000
@@ -159,23 +158,17 @@ func (r *Renderer) raw(timeline *companion.Timeline, streamMillis float64) float
 	}
 }
 
-// speedDrive spans the user's speed band: 35% of the level at the slowest
-// saved speed up to the full level at the fastest, so the Handy's whole speed
-// range is felt instead of saturating near its middle (ADR 0061).
+// speedDrive spans the user's speed band on the scale every companion output
+// shares, so the Handy's whole speed range is felt instead of saturating near
+// its middle (ADRs 0061 and 0063).
 func speedDrive(speed float64, profile Profile) float64 {
-	low, high := profile.SpeedLow, profile.SpeedHigh
-	switch {
-	case speed <= 0:
-		return 0
-	case low <= 0:
-		return 1 - math.Exp(-speed/speedScale)
-	case speed < low:
-		return speedBandFloor * speed / low
-	case high <= low:
-		return 1
-	default:
-		return speedBandFloor + (1-speedBandFloor)*clamp((speed-low)/(high-low), 0, 1)
+	if drive, ok := companion.SpeedBandDrive(speed, profile.SpeedLow, profile.SpeedHigh); ok {
+		return drive
 	}
+	if speed <= 0 {
+		return 0
+	}
+	return 1 - math.Exp(-speed/speedScale)
 }
 
 // averageSpeed is the mean absolute velocity over the window ending at
@@ -217,13 +210,14 @@ func (r *Renderer) fade(streamMillis float64) float64 {
 }
 
 // SpeedPercentLevel places a commanded speed within the saved speed band on the
-// same scale as following speed: 35% at the slowest saved speed up to 1 at the
-// fastest. It is The Handy's intensity for profiles that do not follow speed.
+// same scale as following speed: companion.SpeedBandFloor at the slowest saved
+// speed up to 1 at the fastest. It is The Handy's intensity for profiles that
+// do not follow speed.
 func SpeedPercentLevel(speed, low, high int) float64 {
 	if speed <= 0 || high <= low {
 		return 1
 	}
-	return speedBandFloor + (1-speedBandFloor)*clamp(float64(speed-low)/float64(high-low), 0, 1)
+	return companion.SpeedBandFloor + (1-companion.SpeedBandFloor)*clamp(float64(speed-low)/float64(high-low), 0, 1)
 }
 
 // Output maps a drive fraction into the range from the minimum up to the
@@ -239,7 +233,10 @@ func Output(drive, minimum, intensity float64) float64 {
 
 // Quantize picks the actuator step for level with steps steps. last is the
 // step sent before, or -1. The ceiling quantizes downward: a coarse motor
-// gets its nearest step at or below it, never above.
+// gets its nearest step at or below it, never above. A positive level keeps
+// at least the lowest step the ceiling allows, so a turnaround's dip does not
+// switch the motor off and on with every stroke (ADR 0063); only a zero level
+// is silent.
 func Quantize(level float64, steps, last int, ceiling float64) int {
 	if level <= 0 || steps <= 0 {
 		return 0
@@ -250,7 +247,7 @@ func Quantize(level float64, steps, last int, ceiling float64) int {
 		step = int(math.Round(target))
 	}
 	highest := int(math.Floor(clamp(ceiling, 0, 1)*float64(steps) + 1e-9))
-	return max(0, min(step, highest))
+	return max(min(1, highest), min(step, highest))
 }
 
 func clamp(value, low, high float64) float64 {

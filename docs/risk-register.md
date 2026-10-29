@@ -293,6 +293,13 @@ Mitigation:
   the waist, no pacemaker, heart condition, epilepsy or pregnancy)
 - simulation covers the full protocol without a device; automated tests never
   reach hardware
+- chat models are told a playing Coyote's facts and that only the user changes
+  or silences it ([ADR 0063](decisions/0063-perceptible-following-and-coyote-facts.md)),
+  so a request for stronger, weaker or no e-stim points to the device panel
+  instead of a claimed change; they receive no strength numbers or control
+- reading speed on the saved Handy band never widens the pulses past the
+  earlier curve at any speed, so that change can only soften output at a given
+  strength; the panel reads Silent while motion plays at zero strength
 
 Residual risk: physical feel, Stop latency (including decay after the last
 packet), Windows Bluetooth behavior and the

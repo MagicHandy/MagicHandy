@@ -2,6 +2,8 @@ package estim
 
 import (
 	"math"
+
+	"github.com/mapledaemon/MagicHandy/internal/companion"
 )
 
 // Follow modes of the conversion profile. None of them maps position to
@@ -19,24 +21,30 @@ const (
 )
 
 // Profile is the user's conversion profile. Frequencies are pulse rates in
-// Hz; DG-LAB's period form is derived at the boundary.
+// Hz; DG-LAB's period form is derived at the boundary. SpeedLow and SpeedHigh
+// are the averaged carriage speeds, in full spans per second, at the user's
+// slowest and fastest saved Handy speeds; zero keeps the saturating curve.
 type Profile struct {
 	Follow       string
 	MinHz        int
 	MaxHz        int
 	Balance      int
 	SwapChannels bool
+	SpeedLow     float64
+	SpeedHigh    float64
 }
 
 // Rendering constants. Speeds are in full spans per second; times in stream
 // milliseconds.
 const (
-	widthFloor          = 0.15
-	positionWidth       = 0.6
-	channelFloor        = 0.25
-	speedScale          = 1.5
-	attackMillis        = 60.0
-	releaseMillis       = 250.0
+	widthFloor    = 0.15
+	positionWidth = 0.6
+	channelFloor  = 0.25
+	speedScale    = 1.5
+	attackMillis  = 60.0
+	// The release lets each turnaround narrow the pulses: 250 ms filled the
+	// dips, as it did for the vibrator (ADR 0063).
+	releaseMillis       = 150.0
 	tempoMillis         = 1500.0
 	fadeInMillis        = 2000.0
 	frequencyStepHz     = 5
@@ -81,6 +89,7 @@ func NormalizeProfile(profile Profile) Profile {
 	profile.MinHz = clampInt(profile.MinHz, minPulseRateHz, maxPulseRateHz)
 	profile.MaxHz = clampInt(profile.MaxHz, profile.MinHz, maxPulseRateHz)
 	profile.Balance = clampInt(profile.Balance, -100, 100)
+	profile.SpeedLow, profile.SpeedHigh = math.Max(0, profile.SpeedLow), math.Max(0, profile.SpeedHigh)
 	return profile
 }
 
@@ -145,7 +154,7 @@ func sample(timeline *Timeline, center float64) (position float64, speed float64
 func (r *Renderer) smooth(speed float64, covered bool) {
 	target := 0.0
 	if covered {
-		target = 1 - math.Exp(-speed/speedScale)
+		target = speedDrive(speed, r.profile)
 	}
 	timeConstant := releaseMillis
 	if target > r.envelope {
@@ -153,6 +162,23 @@ func (r *Renderer) smooth(speed float64, covered bool) {
 	}
 	r.envelope += (target - r.envelope) * (1 - math.Exp(-FrameMillis/timeConstant))
 	r.tempo += (target - r.tempo) * (1 - math.Exp(-FrameMillis/tempoMillis))
+}
+
+// speedDrive spans the user's saved speed band on the scale the vibrator
+// shares, so faster movement widens the pulses and raises the rate across the
+// whole band instead of saturating near its middle (ADR 0063). It never
+// exceeds the earlier saturating curve at any speed, so the change can only
+// soften output at a given strength. Strength is untouched: this only shapes
+// the pulses beneath it.
+func speedDrive(speed float64, profile Profile) float64 {
+	if speed <= 0 {
+		return 0
+	}
+	curve := 1 - math.Exp(-speed/speedScale)
+	if drive, ok := companion.SpeedBandDrive(speed, profile.SpeedLow, profile.SpeedHigh); ok {
+		return math.Min(drive, curve)
+	}
+	return curve
 }
 
 func (r *Renderer) width() float64 {

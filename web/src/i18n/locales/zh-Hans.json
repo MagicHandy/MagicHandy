@@ -3233,7 +3233,6 @@
   "The Coyote enforces these itself, even against its own switches, and keeps them after you disconnect. MagicHandy never raises strength on its own.": "郊狼会自行执行这些上限，即使对其自身拨杆也有效，断开后仍会保留。MagicHandy 从不自行提高强度。",
   "Pulse rate": "脉冲频率",
   "Follows the pace within this range, in short held steps.": "在此范围内跟随节奏，分短步并短暂保持。",
-  "Shifts strength toward one channel.": "将强度偏向一个通道。",
   "More A": "偏 A",
   "More B": "偏 B",
   "Balance parameters, written to the Coyote": "平衡参数（写入郊狼）",
@@ -3477,5 +3476,8 @@
   "Vibrator ready. Playback stays within your Max.": "振动器已就绪。播放输出不会超过你设置的上限。",
   "Your next motion request can resume it. To keep it off, turn off In playback.": "下一次动作请求可以恢复运行。若要保持关闭，请关闭“参与播放”。",
   "Stop pauses the vibrator until you request motion or choose Resume now in the device panel. Your max and model control stay as they are.": "停止会暂停振动器，直到你请求动作或在设备面板中选择“立即恢复”。上限和模型控制设置保持不变。",
-  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "在播放停止或暂停时，以你设置的上限和25%中的较低值运行一秒。请先选择设备。"
+  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "在播放停止或暂停时，以你设置的上限和25%中的较低值运行一秒。请先选择设备。",
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "两个上限都为 0。请在 Coyote 的输出设置中调高上限，才能设置强度。",
+  "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "两个通道都为 0，因此没有任何感觉。准备好后再调高一个通道。",
+  "Shifts the pulses toward one channel.": "将脉冲偏向一个通道。"
 }

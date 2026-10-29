@@ -3233,7 +3233,6 @@
   "The Coyote enforces these itself, even against its own switches, and keeps them after you disconnect. MagicHandy never raises strength on its own.": "The Coyote enforces these itself, even against its own switches, and keeps them after you disconnect. MagicHandy never raises strength on its own.",
   "Pulse rate": "Pulse rate",
   "Follows the pace within this range, in short held steps.": "Follows the pace within this range, in short held steps.",
-  "Shifts strength toward one channel.": "Shifts strength toward one channel.",
   "More A": "More A",
   "More B": "More B",
   "Balance parameters, written to the Coyote": "Balance parameters, written to the Coyote",
@@ -3477,5 +3476,8 @@
   "Vibrator ready. Playback stays within your Max.": "Vibrator ready. Playback stays within your Max.",
   "Your next motion request can resume it. To keep it off, turn off In playback.": "Your next motion request can resume it. To keep it off, turn off In playback.",
   "Stop pauses the vibrator until you request motion or choose Resume now in the device panel. Your max and model control stay as they are.": "Stop pauses the vibrator until you request motion or choose Resume now in the device panel. Your max and model control stay as they are.",
-  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first."
+  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.",
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.",
+  "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.",
+  "Shifts the pulses toward one channel.": "Shifts the pulses toward one channel."
 }

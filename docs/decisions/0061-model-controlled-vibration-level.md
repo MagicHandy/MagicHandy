@@ -3,6 +3,11 @@
 Status: implemented with automated, simulated and live-model acceptance,
 2026-10-28. Physical vibrator acceptance remains open.
 
+> Amended by [ADR 0063](0063-perceptible-following-and-coyote-facts.md):
+> following speed reads each stroke over one 100 ms tick, with 40/100 ms
+> smoothing, and the band floor is 20% rather than the 35% of decision 7. The
+> first physical test found the earlier speed following close to constant.
+
 This supersedes the intensity authority in [ADR 0047](0047-intiface-vibrator-output.md)
 ("the model never controls its intensity") and the Stop restoration rules in
 [ADR 0058](0058-model-capability-levels.md) and

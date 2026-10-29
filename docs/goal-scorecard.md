@@ -1,5 +1,17 @@
 # Goal Scorecard
 
+## 2026-10-29 — Perceptible speed following and Coyote facts
+
+Against alpha.79 `f21853ab`, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core including
+embedded UI **24,376,832 -> 24,388,608 B** (+11,776 B). Canonical UI
+**2,856,207 -> 2,858,444 B** (+2,237 B); main JS
+**1,313,547 -> 1,314,293 B raw** (+746 B), **353,078 -> 353,284 B gzip**
+(+206 B). CSS stays **210,037 / 36,604 B** raw/gzip. No dependency, worker,
+timer or model call is added; the vibrator still sends at most one command per
+100 ms tick. No RSS/cold-start claim is made. See
+[ADR 0063](decisions/0063-perceptible-following-and-coyote-facts.md).
+
 ## 2026-10-28 — Layered session repair and directional capability
 
 Against alpha.78 `69a33dc0`, Windows amd64 Go 1.26.10,

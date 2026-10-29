@@ -1,6 +1,7 @@
 package estim
 
 import (
+	"math"
 	"testing"
 )
 
@@ -129,6 +130,28 @@ func TestRendererSpeedSetsPulseWidthNotStrength(t *testing.T) {
 	}
 	if average(fastPackets) <= average(slowPackets)+10 {
 		t.Fatalf("faster strokes should widen pulses: slow %.1f fast %.1f", average(slowPackets), average(fastPackets))
+	}
+}
+
+// The saved speed band gives pace the contrast the saturating curve lost, but
+// never widens the pulses past that curve at any speed: at a given strength
+// the change can only soften output (ADR 0063).
+func TestRendererSpeedBandAddsContrastWithoutWidening(t *testing.T) {
+	band := Profile{Follow: FollowSpeed, MinHz: 40, MaxHz: 100, SpeedLow: 0.291, SpeedHigh: 3.636}
+	previous := 0.0
+	for speed := 0.0; speed <= 6; speed += 0.05 {
+		drive, curve := speedDrive(speed, band), 1-math.Exp(-speed/speedScale)
+		if drive > curve+1e-12 || drive < previous-1e-12 {
+			t.Fatalf("speed %.2f: drive %.4f (curve %.4f, previous %.4f) must not exceed the curve or fall", speed, drive, curve, previous)
+		}
+		previous = drive
+	}
+	ratio := speedDrive(2.4, band) / speedDrive(1, band)
+	if curveRatio := (1 - math.Exp(-2.4/speedScale)) / (1 - math.Exp(-1/speedScale)); ratio < curveRatio+0.25 {
+		t.Fatalf("pace contrast %.2f, the curve alone gives %.2f", ratio, curveRatio)
+	}
+	if got := speedDrive(1, Profile{Follow: FollowSpeed}); math.Abs(got-(1-math.Exp(-1/speedScale))) > 1e-12 {
+		t.Fatalf("without a band the curve stays: %.4f", got)
 	}
 }
 

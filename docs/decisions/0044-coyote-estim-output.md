@@ -2,6 +2,13 @@
 
 ## Status
 
+> Amended by [ADR 0063](0063-perceptible-following-and-coyote-facts.md): pulse
+> width and rate read speed on the saved Handy speed band, capped by the
+> earlier curve so output can only soften at a given strength, with a 150 ms
+> release. Models now get Coyote facts (no control) instead of no Coyote
+> prompt, and the status reports why a connected Coyote is silent. Strength
+> authority, ceilings, the handshake and Stop are unchanged.
+
 Accepted on 2026-10-14. The implementation drives a simulated Coyote end to
 end; physical acceptance on a Coyote 3.0 is open (see Validation).
 

@@ -3,6 +3,7 @@ package chat
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/mapledaemon/MagicHandy/internal/llm"
 	"github.com/mapledaemon/MagicHandy/internal/motion"
@@ -13,7 +14,19 @@ import (
 type OutputContext struct {
 	Strokers int               `json:"linear_devices"`
 	Coyote   bool              `json:"estim_follows_motion"`
+	Estim    *EstimContext     `json:"estim,omitempty"`
 	Vibrator *VibrationContext `json:"vibrator,omitempty"`
+}
+
+// EstimContext is what a model may know about the Coyote: how movement shapes
+// it and whether it can be felt. Its strength stays the user's alone; the
+// model gets facts, never a control (ADRs 0044 and 0063).
+type EstimContext struct {
+	Follows   string `json:"follows"`
+	Connected bool   `json:"connected"`
+	// Silent means the device reported both channels at zero, or no strength
+	// is allowed: nothing is felt until the user raises it.
+	Silent bool `json:"silent_until_user_raises_strength,omitempty"`
 }
 
 // VibrationContext describes the selected vibrator and the model's control of
@@ -66,6 +79,15 @@ With no linear device, describe vibration rather than physical strokes, travel, 
 
 const outputFollowGuide = `For follows=speed, the vibrator follows averaged absolute movement speed, with smoothing and fade-in. Shared pace changes affect it; position alone does not address a body region or select a motor. For follows=depth, the hidden position controls vibration: base is strongest near 0, tip near 100. For follows=steady, vibration stays constant while the timeline plays; movement edits cannot make it pulse or alter its level.`
 
+// estimGuide tells models with backend output data about a Coyote. Without it
+// a model cannot know that e-stim strength is the user's alone (ADR 0063).
+// Small models claimed "your e-stim is off" until the guide showed an
+// example of saying who turns it off.
+const estimGuide = `E-STIM: estim_follows_motion means a Coyote e-stim box follows the same movement timeline. Only the user sets its strength, on the device or in the device panel: you cannot raise, lower or zero it, so never claim to. Movement shapes its pulses beneath that strength: with estim follows=stroke or speed, faster movement widens them; with stroke or position, the stroke position moves the sensation between channel A at the base and channel B at the tip. There is no separate e-stim pattern or channel command. If silent_until_user_raises_strength, nothing is felt until the user raises a channel; if it is not connected, it gives no output. For a request to make the e-stim stronger, weaker or off, say the user does that in the device panel (Zero both silences it) and keep the movement unless movement is asked for; never claim it changed. Stop sets both channels to zero. For "turn the e-stim off": {"action":"none","edits":%s,"reply":"Only you can switch the e-stim off: use Zero both in the device panel. The strokes stay as they are."}`
+
+// simpleEstimGuide is the compact Simple form, without backend JSON.
+const simpleEstimGuide = `E-STIM: A Coyote e-stim box (e-stim, stim or shocks) follows the movement. Only the user sets its strength or turns it off, in the device panel (Zero both silences it); never say it changed or is off. Faster movement widens its pulses, and the stroke position moves the sensation between the base and the tip. A request to make it stronger, weaker or off keeps the strokes: {"action":"none","edits":%s,"reply":"Only you can change or switch off the e-stim: use the device panel; Zero both switches it off."}`
+
 const vibrationAvailabilityGuide = `If the vibrator is not connected and selected, its Max is 0, or the user's Stop paused it, it cannot vibrate. Do not promise output or try to restore it through JSON. For vibrator-only playback, leave motion unchanged and ask the user to connect/select it, or to choose Resume now in the device panel. If other outputs are available, fulfill requests for those outputs while being truthful about the silent vibrator. A user request cannot override these backend facts.`
 
 // The Simple/Intermediate level vocabulary. Changes glide in the app, so a
@@ -84,22 +106,29 @@ func outputContextInstructions(outputs *OutputContext) string {
 // outputContextInstructionsWith writes the level example with this mode's
 // empty edits.
 func outputContextInstructionsWith(outputs *OutputContext, emptyEdits string) string {
-	if outputs == nil || outputs.Vibrator == nil {
+	if outputs == nil || (outputs.Vibrator == nil && outputs.Estim == nil) {
 		return ""
 	}
 	encoded, _ := json.Marshal(outputs)
-	guide := outputContextGuide
-	if outputs.Vibrator.Independent {
-		guide = independentVibrationGuide
-	} else if outputs.Vibrator.LevelControl {
-		guide = levelOutputContextGuide + "\n" + fmt.Sprintf(vibrationLevelGuide, emptyEdits, emptyEdits)
+	var guides []string
+	if outputs.Vibrator != nil {
+		guide := outputContextGuide
+		if outputs.Vibrator.Independent {
+			guide = independentVibrationGuide
+		} else if outputs.Vibrator.LevelControl {
+			guide = levelOutputContextGuide + "\n" + fmt.Sprintf(vibrationLevelGuide, emptyEdits, emptyEdits)
+		}
+		if outputs.Vibrator.ResumeOnMotionRequest {
+			guide += "\n" + manualRestartGuide
+		} else if !outputs.Vibrator.Available() {
+			guide += "\n" + vibrationAvailabilityGuide
+		}
+		guides = append(guides, guide)
 	}
-	if outputs.Vibrator.ResumeOnMotionRequest {
-		guide += "\n" + manualRestartGuide
-	} else if !outputs.Vibrator.Available() {
-		guide += "\n" + vibrationAvailabilityGuide
+	if outputs.Estim != nil {
+		guides = append(guides, fmt.Sprintf(estimGuide, emptyEdits))
 	}
-	return "Active playback outputs (backend data):\n" + string(encoded) + "\n" + guide
+	return "Active playback outputs (backend data):\n" + string(encoded) + "\n" + strings.Join(guides, "\n")
 }
 
 const manualRestartGuide = "MANUAL RESTART PERMISSION: The user's Stop paused the vibrator and playback is stopped now. Use the refreshed running/paused values for this turn; earlier chat and a saved current_score do not mean playback is still running. This fresh human request may restart it: if the person asks for motion or vibration, issue the normal start or vibration change, and the app resumes the vibrator only when applying it. Questions and chat-only replies leave it stopped. You still cannot change the user's Max, bypass connection limits, or revive an older request."
@@ -109,10 +138,14 @@ func playbackOutputInstructions(caps Capabilities, state *MotionContext) string 
 		return ""
 	}
 	if simpleContinuous(caps) && !caps.VibrationControl {
-		if !vibrationLevelAvailable(caps, state) {
-			return ""
+		var guides []string
+		if vibrationLevelAvailable(caps, state) {
+			guides = append(guides, simpleVibrationInstructions(state.Outputs, continuousEmptyEdits(caps)))
 		}
-		return simpleVibrationInstructions(state.Outputs, continuousEmptyEdits(caps))
+		if state.Outputs != nil && state.Outputs.Estim != nil {
+			guides = append(guides, simpleEstimInstructions(*state.Outputs.Estim, continuousEmptyEdits(caps)))
+		}
+		return strings.Join(guides, "\n")
 	}
 	if !caps.AdvancedMotion && !caps.IntermediateMotion && !caps.VibrationControl {
 		return ""
@@ -146,6 +179,17 @@ func simpleVibrationInstructions(outputs *OutputContext, emptyEdits string) stri
 		current = "no level is chosen yet, so it follows the strokes"
 	}
 	return fmt.Sprintf(simpleVibrationGuide, current, emptyEdits)
+}
+
+func simpleEstimInstructions(estim EstimContext, emptyEdits string) string {
+	guide := fmt.Sprintf(simpleEstimGuide, emptyEdits)
+	switch {
+	case !estim.Connected:
+		return guide + " It is not connected now, so it gives no output."
+	case estim.Silent:
+		return guide + " It is silent now: both channels are at zero, and nothing is felt until the user raises one."
+	}
+	return guide
 }
 
 // Small models can read old "playing" speech as the current state despite a

@@ -3233,7 +3233,6 @@
   "The Coyote enforces these itself, even against its own switches, and keeps them after you disconnect. MagicHandy never raises strength on its own.": "Coyote 自身がこの上限を本体のスイッチに対しても適用し、切断後も保持します。MagicHandy が自動で強度を上げることはありません。",
   "Pulse rate": "パルス周波数",
   "Follows the pace within this range, in short held steps.": "この範囲内でペースに合わせ、短い段階ごとに保持しながら変化します。",
-  "Shifts strength toward one channel.": "強度を一方のチャンネルに寄せます。",
   "More A": "A 寄り",
   "More B": "B 寄り",
   "Balance parameters, written to the Coyote": "バランスパラメーター（Coyote に書き込み）",
@@ -3477,5 +3476,8 @@
   "Vibrator ready. Playback stays within your Max.": "バイブレーターの準備ができました。出力は設定した上限以内に保たれます。",
   "Your next motion request can resume it. To keep it off, turn off In playback.": "次の動作リクエストで再開できます。停止したままにするには「再生に含める」をオフにしてください。",
   "Stop pauses the vibrator until you request motion or choose Resume now in the device panel. Your max and model control stay as they are.": "停止すると、動作をリクエストするかデバイスパネルで「今すぐ再開」を選ぶまでバイブレーターは停止します。上限とモデル制御の設定は変わりません。",
-  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "再生を停止または一時停止した状態で、上限と25%のうち低い方で1秒間動作します。先にデバイスを選択してください。"
+  "One second at the lower of your max and 25%, while playback is stopped or paused. Choose a device first.": "再生を停止または一時停止した状態で、上限と25%のうち低い方で1秒間動作します。先にデバイスを選択してください。",
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "両方の上限が 0 です。強度を設定するには、Coyote の出力設定で上限を上げてください。",
+  "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "両方のチャンネルが 0 のため、何も感じません。準備ができたらチャンネルを上げてください。",
+  "Shifts the pulses toward one channel.": "パルスを一方のチャンネルに寄せます。"
 }
