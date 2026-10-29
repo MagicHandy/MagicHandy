@@ -107,9 +107,9 @@ func TestLoopPlaybackHonorsRuntimeSafetyEnvelope(t *testing.T) {
 			PatternID: definition.ID, Pattern: &definition, SpeedPercent: 100,
 		}, settings, 0, 0, time.Unix(0, 0))
 		playedAcceleration := maximumPlanAcceleration(plan)
-		if playedAcceleration > runtimeMaxAccelerationPercentPerSecond2*1.001 {
+		if ceiling := envelopeAcceleration(plan); playedAcceleration > ceiling*1.001 {
 			t.Errorf("%s acceleration = %.1f%%/s^2, over %.1f", definition.Name,
-				playedAcceleration, runtimeMaxAccelerationPercentPerSecond2)
+				playedAcceleration, ceiling)
 		}
 		metrics, err := MeasureCurve(definition.Points, definition.CycleMillis, true)
 		if err != nil {

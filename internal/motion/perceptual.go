@@ -167,13 +167,14 @@ func summarizeMotionPace(
 		(timeFactor * timeFactor) * 1e6
 	maximumJerk := curve.maximumJerkPerMillis3() * gain /
 		(timeFactor * timeFactor * timeFactor) * 1e9
+	ceilingAcceleration, ceilingJerk := targetMotionEnvelope(target)
 	if perceptual.CommandedPeakVelocityPerSecond >= devicePeak*paceLimitDetectionThreshold {
 		pace.Limiters = append(pace.Limiters, paceLimiterDeviceVelocity)
 	}
-	if maximumAcceleration >= runtimeMaxAccelerationPercentPerSecond2*paceLimitDetectionThreshold {
+	if maximumAcceleration >= ceilingAcceleration*paceLimitDetectionThreshold {
 		pace.Limiters = append(pace.Limiters, paceLimiterAcceleration)
 	}
-	if maximumJerk >= runtimeMaxJerkPercentPerSecond3*paceLimitDetectionThreshold {
+	if maximumJerk >= ceilingJerk*paceLimitDetectionThreshold {
 		pace.Limiters = append(pace.Limiters, paceLimiterJerk)
 	}
 	if gap := reversalGap(curve.authoredKnots, curve.duration, true); gap > 0 {

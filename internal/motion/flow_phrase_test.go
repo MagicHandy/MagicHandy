@@ -198,7 +198,7 @@ func assertPhrasePlan(t *testing.T, plan MotionPlan, shape [3]int, settings conf
 			t.Fatalf("turn %d: got %f want %d", i, k.PositionPercent, want)
 		}
 	}
-	if maximumPlanAcceleration(plan) > flowAccelerationBudget*1.001 || maximumPlanJerk(plan) > flowJerkBudget*1.001 {
+	if maximumPlanAcceleration(plan) > envelopeAcceleration(plan)*1.001 || maximumPlanJerk(plan) > envelopeJerk(plan)*1.001 {
 		t.Fatal("phrase bypassed Layered envelope")
 	}
 	for i, segment := range plan.curve.quintics {

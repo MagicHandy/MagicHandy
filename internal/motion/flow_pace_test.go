@@ -57,7 +57,7 @@ func TestFlowPaceFloorCreatesContrastWithoutMovingTheBand(t *testing.T) {
 					}
 					plan := NewMotionPlan("pace-floor", target, settings, 0, 0, time.Unix(0, 0))
 					factor := float64(plan.PeriodMillis) / float64(plan.curve.duration)
-					if plan.curve.maximumAccelerationPerMillis2()*1e6/(factor*factor) > flowAccelerationBudget*1.001 || plan.curve.maximumJerkPerMillis3()*1e9/(factor*factor*factor) > flowJerkBudget*1.001 {
+					if plan.curve.maximumAccelerationPerMillis2()*1e6/(factor*factor) > envelopeAcceleration(plan)*1.001 || plan.curve.maximumJerkPerMillis3()*1e9/(factor*factor*factor) > envelopeJerk(plan)*1.001 {
 						t.Fatal("rate floor bypassed kinematic limits")
 					}
 					for at := int64(0); at < plan.PeriodMillis; at += max(1, plan.PeriodMillis/1000) {

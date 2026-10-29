@@ -33,10 +33,10 @@ func TestContinuousCatalogUsesKinematicCompilerAndPreservesRuntimeLimits(t *test
 				if plan.compileErr != nil || plan.Target.prepared == nil || plan.Target.Dynamic != nil || plan.Target.PatternID != recipe.ID {
 					t.Fatalf("recipe bypassed kinematic compilation: %+v %v", plan.Target, plan.compileErr)
 				}
-				if acceleration := maximumPlanAcceleration(plan); acceleration > flowAccelerationBudget*1.001 {
+				if acceleration := maximumPlanAcceleration(plan); acceleration > envelopeAcceleration(plan)*1.001 {
 					t.Fatalf("%s %d acceleration %.1f", recipe.ID, speed, acceleration)
 				}
-				if jerk := maximumPlanJerk(plan); jerk > flowJerkBudget*1.001 {
+				if jerk := maximumPlanJerk(plan); jerk > envelopeJerk(plan)*1.001 {
 					t.Fatalf("%s %d jerk %.1f", recipe.ID, speed, jerk)
 				}
 				if plan.Perceptual.CommandedPeakVelocityPerSecond > referenceTravelRateForSpeed(100, model)*1.001 {

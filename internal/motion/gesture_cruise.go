@@ -18,7 +18,7 @@ func fitGestureCruise(legs []gestureLeg, amount float64, budget legBudget) bool 
 		geometry := clampFloat((span-20)/55, 0, 1)
 		geometry *= geometry * (3 - 2*geometry)
 		leg.cruise = amount * geometry
-		if leg.cruise > 0 && legTimeScale(gestureLegCurve(leg, 1000), budget) < legTimeScale(original, budget) {
+		if leg.cruise > 0 && legTimeScale(gestureLegCurve(leg, 1000), budget.forLeg(leg)) < legTimeScale(original, budget) {
 			legs[i] = leg
 			changed = true
 		}
@@ -44,6 +44,9 @@ func strokeProgress(leg gestureLeg, u float64) (position, velocity, acceleration
 
 func cruiseRamps(leg gestureLeg) (rise, fall float64) {
 	ramp := 0.38 - 0.001*math.Abs(leg.to-leg.from)
+	if leg.cruiseRamp > 0 {
+		ramp *= leg.cruiseRamp
+	}
 	return ramp * (1 + 0.65*leg.inertia), ramp * (1 - 0.65*leg.inertia)
 }
 

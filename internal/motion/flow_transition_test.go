@@ -59,8 +59,9 @@ func assertLayeredSplice(t *testing.T, previous, next MotionPlan, bridge *planTr
 		math.Abs(stroke.velocity(1)-v) > 1e-7 || math.Abs(stroke.acceleration(1)-a) > 1e-7 {
 		t.Fatal("splice lost outgoing kinematic state")
 	}
+	ceilingAcceleration, ceilingJerk := joinEnvelope(previous, next)
 	if stroke.maximumVelocity()*1000 > referenceTravelRateForSpeed(100, settings.HandyModel)*1.00001 ||
-		stroke.maximumAcceleration()*1e6 > flowAccelerationBudget*1.00001 || stroke.maximumJerk()*1e9 > flowJerkBudget*1.00001 {
+		stroke.maximumAcceleration()*1e6 > ceilingAcceleration*1.00001 || stroke.maximumJerk()*1e9 > ceilingJerk*1.00001 {
 		t.Fatal("splice exceeded existing envelope")
 	}
 	for at := bridge.startMillis; at < bridge.strokeStartMillis; at += 5 {

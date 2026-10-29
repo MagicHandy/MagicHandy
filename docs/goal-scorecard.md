@@ -1,5 +1,24 @@
 # Goal Scorecard
 
+## 2026-10-29 — Top-speed reversals
+
+Against alpha.79 `f21853ab`, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core including
+embedded UI **24,376,832 -> 24,390,656 B** (+13,824 B; section-aligned). The
+canonical UI is unchanged. No dependency, worker, timer or model call is added;
+fitting tries at most thirteen extra cruise candidates, and only for requests
+above 75%. Two 300 ms benchmark repetitions (Ryzen 9950X3D, GOMAXPROCS=3)
+measure full/compound/default-field compilation at 100% at approximately
+**0.81/0.95/11.18 -> 3.05/3.72/42.87 ms**, with transient allocations
+**0.52/0.65/6.75 -> 2.02/2.48/27.90 MB**. This is bounded compile-time work,
+not another sampling loop. At 25%, the same fixtures remain about
+**0.135/0.047/1.58 -> 0.135/0.047/1.59 ms**. The ordinary sparse-frame
+benchmark measures **69.4–69.7 -> 71.7–71.8 µs**, with the same 26 allocations
+and 92,928 B per frame. These local microbenchmarks are not a latency or RSS
+guarantee. No RSS/cold-start claim is made. See
+[ADR 0064](decisions/0064-top-speed-reversals.md) and the
+[whole-path review](motion-path-review-2026-10-29.md).
+
 ## 2026-10-28 — Layered session repair and directional capability
 
 Against alpha.78 `69a33dc0`, Windows amd64 Go 1.26.10,

@@ -17,6 +17,7 @@ func layeredJoinBudget(previous, next MotionPlan) legBudget {
 		acceleration = math.Max(acceleration, layeredJoinHeadroom*plan.curve.maximumAccelerationPerMillis2()*plan.focus.gain()*factor*factor*1e6)
 		jerk = math.Max(jerk, layeredJoinHeadroom*plan.curve.maximumJerkPerMillis3()*plan.focus.gain()*factor*factor*factor*1e9)
 	}
+	ceilingAcceleration, ceilingJerk := topSpeedEnvelope(max(previous.Target.SpeedPercent, next.Target.SpeedPercent))
 	return legBudget{velocity: referenceTravelRateForSpeed(100, next.timingModel),
-		acceleration: math.Min(acceleration, flowAccelerationBudget), jerk: math.Min(jerk, flowJerkBudget)}
+		acceleration: math.Min(acceleration, ceilingAcceleration), jerk: math.Min(jerk, ceilingJerk)}
 }

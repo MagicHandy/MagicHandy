@@ -42,7 +42,7 @@ func TestLayeredChangedPhraseJoinsWithoutCrossfadeAndPreservesTargets(t *testing
 						t.Fatal("representable phrase join used oscillator blend")
 					}
 					assertLayeredSplice(t, old, next, bridge, settings)
-					assertSampledJoinContinuity(t, next, bridge)
+					assertSampledJoinContinuity(t, old, next, bridge)
 					if !singleCrestJoin(*bridge.stroke, bridge.stroke.position(1)-bridge.stroke.position(0)) {
 						t.Fatal("join introduced a braking shoulder")
 					}
@@ -103,7 +103,7 @@ func TestLayeredShapeJoinAcceptedGeometryStaysInsideSharedEnvelope(t *testing.T)
 			if bridge := layeredTurnTransition(old, nil, &next, at); bridge != nil {
 				accepted++
 				assertLayeredSplice(t, old, next, bridge, settings)
-				assertSampledJoinContinuity(t, next, bridge)
+				assertSampledJoinContinuity(t, old, next, bridge)
 			}
 		}
 	}
@@ -112,7 +112,7 @@ func TestLayeredShapeJoinAcceptedGeometryStaysInsideSharedEnvelope(t *testing.T)
 	}
 }
 
-func assertSampledJoinContinuity(t *testing.T, next MotionPlan, bridge *planTransition) {
+func assertSampledJoinContinuity(t *testing.T, previous, next MotionPlan, bridge *planTransition) {
 	t.Helper()
 	for _, at := range []int64{bridge.strokeStartMillis, bridge.endMillis} {
 		p := func(offset int64) float64 { return sampleMotionPath(next, bridge, at+offset).PositionPercent }
@@ -123,8 +123,12 @@ func assertSampledJoinContinuity(t *testing.T, next MotionPlan, bridge *planTran
 		// Each acceleration estimate is centered one millisecond away from
 		// the join. Their allowed difference follows the actual jerk envelope.
 		// assertLayeredSplice separately checks exact C2 continuity at 1e-7.
-		accelerationDifference := 2*flowJerkBudget/1e9 + 1e-8
-		if math.Abs(leftV-rightV) > 1e-4 || math.Abs(leftA-rightA) > accelerationDifference {
+		// One-sided differences also carry truncation error in proportion to
+		// jerk; the velocity bound scales with the join's jerk envelope.
+		_, jerk := joinEnvelope(previous, next)
+		accelerationDifference := 2*jerk/1e9 + 1e-8
+		velocityDifference := 1e-4 * math.Max(1, jerk/flowJerkBudget)
+		if math.Abs(leftV-rightV) > velocityDifference || math.Abs(leftA-rightA) > accelerationDifference {
 			t.Fatalf("sampled join is discontinuous at %d: velocity %g/%g acceleration %g/%g", at, leftV, rightV, leftA, rightA)
 		}
 	}
@@ -151,7 +155,7 @@ func TestLayeredSoftTurnJoinFollowsAuthoredDirectionAtRest(t *testing.T) {
 				t.Fatal("soft turn continued the old stroke past its destination")
 			}
 			assertLayeredSplice(t, old, next, bridge, settings)
-			assertSampledJoinContinuity(t, next, bridge)
+			assertSampledJoinContinuity(t, old, next, bridge)
 		}
 	}
 	if accepted == 0 {

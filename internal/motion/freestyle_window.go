@@ -16,8 +16,7 @@ func compileFreestyleCurve(spec FlowSpec, handyModel string) (Curve, *streamWind
 	f := stream.spec
 	first := f.StartStroke - freestyleContextStrokes
 	strokes := stream.generate(first, f.StartStroke+f.Strokes+freestyleContextStrokes)
-	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel),
-		acceleration: runtimeMaxAccelerationPercentPerSecond2, jerk: runtimeMaxJerkPercentPerSecond3}
+	budget := topSpeedBudget(spec.peakSpeedPercent(), handyModel)
 	legs, durations, strokeLeg := stream.legs(strokes, first, budget)
 	curves, err := fitLegCurves(legs, durations, budget)
 	if err != nil {

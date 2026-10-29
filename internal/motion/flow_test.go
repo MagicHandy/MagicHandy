@@ -27,10 +27,10 @@ func TestFlowIndependentCarrierAndRuntimeEnvelope(t *testing.T) {
 			if peak := plan.curve.maximumVelocityPerMillis() * 1000 / factor; peak > referenceTravelRateForSpeed(100, settings.HandyModel)*1.001 {
 				t.Fatalf("velocity %f exceeds requested cap", peak)
 			}
-			if a := plan.curve.maximumAccelerationPerMillis2() * 1e6 / (factor * factor); a > flowAccelerationBudget*1.001 {
+			if a := plan.curve.maximumAccelerationPerMillis2() * 1e6 / (factor * factor); a > envelopeAcceleration(plan)*1.001 {
 				t.Fatalf("acceleration %f", a)
 			}
-			if j := plan.curve.maximumJerkPerMillis3() * 1e9 / (factor * factor * factor); j > flowJerkBudget*1.001 {
+			if j := plan.curve.maximumJerkPerMillis3() * 1e9 / (factor * factor * factor); j > envelopeJerk(plan)*1.001 {
 				t.Fatalf("jerk %f", j)
 			}
 			if len(plan.curve.authoredKnots) < 120 {

@@ -85,7 +85,7 @@ func TestFlowShapedLayersUseSharedBoundedPlannerAcrossProfiles(t *testing.T) {
 						t.Fatal("semantic score changed on roundtrip")
 					}
 					factor := float64(a.PeriodMillis) / float64(a.curve.duration)
-					if a.curve.maximumAccelerationPerMillis2()*1e6/(factor*factor) > flowAccelerationBudget*1.001 || a.curve.maximumJerkPerMillis3()*1e9/(factor*factor*factor) > flowJerkBudget*1.001 {
+					if a.curve.maximumAccelerationPerMillis2()*1e6/(factor*factor) > envelopeAcceleration(a)*1.001 || a.curve.maximumJerkPerMillis3()*1e9/(factor*factor*factor) > envelopeJerk(a)*1.001 {
 						t.Fatal("derivative budget exceeded")
 					}
 					if a.Perceptual.CommandedPeakVelocityPerSecond > referenceTravelRateForSpeed(100, profile)*1.001 {

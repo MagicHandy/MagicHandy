@@ -44,10 +44,10 @@ func assertExperimentPlan(t *testing.T, plan MotionPlan, spec FlowSpec, settings
 	if peak := plan.curve.maximumVelocityPerMillis() * 1000 / factor; peak > referenceTravelRateForSpeed(100, settings.HandyModel)*1.001 {
 		t.Fatalf("%s velocity %f", plan.ID, peak)
 	}
-	if a := plan.curve.maximumAccelerationPerMillis2() * 1e6 / (factor * factor); a > flowAccelerationBudget*1.001 {
+	if a := plan.curve.maximumAccelerationPerMillis2() * 1e6 / (factor * factor); a > envelopeAcceleration(plan)*1.001 {
 		t.Fatalf("%s acceleration %f", plan.ID, a)
 	}
-	if j := plan.curve.maximumJerkPerMillis3() * 1e9 / (factor * factor * factor); j > flowJerkBudget*1.001 {
+	if j := plan.curve.maximumJerkPerMillis3() * 1e9 / (factor * factor * factor); j > envelopeJerk(plan)*1.001 {
 		t.Fatalf("%s jerk %f", plan.ID, j)
 	}
 	for index, left := range plan.curve.quintics {

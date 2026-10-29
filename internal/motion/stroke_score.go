@@ -116,8 +116,7 @@ func compileStrokeCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	legs := strokeLegs(spec)
 	durations := make([]int64, len(legs))
 	rate := referenceTravelRateForSpeed(spec.SpeedPercent, handyModel)
-	budget := legBudget{velocity: referenceTravelRateForSpeed(100, handyModel),
-		acceleration: runtimeMaxAccelerationPercentPerSecond2, jerk: runtimeMaxJerkPercentPerSecond3}
+	budget := topSpeedBudget(spec.peakSpeedPercent(), handyModel)
 	for i, leg := range legs {
 		if leg.rest > 0 {
 			durations[i] = int64(math.Ceil(leg.rest * 1000))

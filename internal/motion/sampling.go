@@ -243,7 +243,7 @@ func (e *Engine) fitImmediateMotionSamples(reference []MotionSample, resolution 
 		samples = removeRedundantQuantizedSamples(samples, resolution, mandatory)
 	}
 	samples, err = fitQuantizedMotionTiming(samples, reference, mandatory, resolution,
-		referenceTravelRateForSpeed(100, e.settings.HandyModel), wireApproximationTolerance, e.minimumPointIntervalMillis)
+		referenceTravelRateForSpeed(100, e.settings.HandyModel), e.samplingTolerance(wireApproximationTolerance), e.minimumPointIntervalMillis)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -258,7 +258,7 @@ func (e *Engine) retimeBufferedSamples(samples, reference []MotionSample, mandat
 		samples = append([]MotionSample{*e.lastSample}, samples...)
 	}
 	if e.transition == nil {
-		fitted, err := fitQuantizedMotionTiming(samples, reference, mandatory, resolution, referenceTravelRateForSpeed(100, e.settings.HandyModel), positionTolerance, 1)
+		fitted, err := fitQuantizedMotionTiming(samples, reference, mandatory, resolution, referenceTravelRateForSpeed(100, e.settings.HandyModel), e.samplingTolerance(positionTolerance), 1)
 		if err != nil {
 			return nil, err
 		}
@@ -288,7 +288,7 @@ func (e *Engine) retimeBufferedSamples(samples, reference []MotionSample, mandat
 			end++
 		}
 		section, err := fitQuantizedMotionTiming(samples[start:end+1], reference, mandatory, resolution,
-			referenceTravelRateForSpeed(100, e.settings.HandyModel), positionTolerance, 1)
+			referenceTravelRateForSpeed(100, e.settings.HandyModel), e.samplingTolerance(positionTolerance), 1)
 		if err != nil {
 			return nil, err
 		}

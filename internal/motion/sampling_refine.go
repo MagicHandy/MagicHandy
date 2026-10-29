@@ -13,7 +13,7 @@ func (e *Engine) refineContinuousSamples(samples, reference []MotionSample, mand
 	}
 	// Removing duplicate positions can erase easing near a reversal. Restore
 	// distinct points against the path, including the immutable append tail.
-	samples = refineQuantizedMotionSamples(samples, reference, resolution, positionTolerance)
+	samples = refineQuantizedMotionSamples(samples, reference, resolution, e.samplingTolerance(positionTolerance))
 	if inTransition {
 		samples = stabilizeTransitionSamples(samples, mandatory)
 	}
@@ -28,11 +28,11 @@ func (e *Engine) refineContinuousSamples(samples, reference []MotionSample, mand
 // must round differently from both segment ends. Mandatory reversals, prior
 // append tails and intentional holds stay intact. The usual chunk point cap
 // still rejects content that cannot be represented within transport capacity.
-func refineQuantizedMotionSamples(samples, probes []MotionSample, resolution, positionTolerance float64) []MotionSample {
+func refineQuantizedMotionSamples(samples, probes []MotionSample, resolution float64, budget samplingTolerance) []MotionSample {
 	if len(samples) < 2 || len(probes) < 3 {
 		return samples
 	}
-	tolerance := quantizedProbeTolerance(probes, resolution, positionTolerance)
+	tolerance := budget.probeTolerance(probes, resolution)
 	result := []MotionSample{samples[0]}
 	var split func(MotionSample, MotionSample)
 	split = func(left, right MotionSample) {
@@ -62,16 +62,4 @@ func refineQuantizedMotionSamples(samples, probes []MotionSample, resolution, po
 		split(samples[index-1], samples[index])
 	}
 	return result
-}
-
-// Probe agreement alone can hide a small error crest between probes. Reserve
-// the linear-interpolation error A*dt²/8 under the existing acceleration bound,
-// so the selected position budget still holds between densely inspected probes.
-func quantizedProbeTolerance(probes []MotionSample, resolution, positionTolerance float64) float64 {
-	var gap int64
-	for i := 1; i < len(probes); i++ {
-		gap = max(gap, probes[i].TimeMillis-probes[i-1].TimeMillis)
-	}
-	reserve := runtimeMaxAccelerationPercentPerSecond2 * float64(gap) * float64(gap) / 8e6
-	return resolution/2 + math.Max(0, positionTolerance-reserve)
 }

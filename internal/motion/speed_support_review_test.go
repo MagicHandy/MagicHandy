@@ -8,7 +8,6 @@ import (
 	"os"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
@@ -90,7 +89,7 @@ func speedSupportAlternative(t *testing.T, spec FlowSpec, settings config.Motion
 	}
 	// Freeze the pre-alpha.75 envelope so historical comparisons stay meaningful
 	// after production Layered adopts the physically accepted faster candidate.
-	budget := legBudget{referenceTravelRateForSpeed(100, settings.HandyModel), 2400, 24000}
+	budget := legBudget{velocity: referenceTravelRateForSpeed(100, settings.HandyModel), acceleration: 2400, jerk: 24000}
 	if variant != "exact-current-envelope" {
 		budget.acceleration, budget.jerk = runtimeMaxAccelerationPercentPerSecond2, runtimeMaxJerkPercentPerSecond3
 	}
@@ -143,27 +142,12 @@ func speedSupportAlternative(t *testing.T, spec FlowSpec, settings config.Motion
 // Use the shipping Cloud sampling preference for the quantized overlay. The
 // ordinary review helper uses the conservative cross-transport approximation.
 func speedSupportCloudReview(target MotionTarget, settings config.MotionSettings) Review {
-	entry := ReviewMotionOutput(target, settings)
-	if entry.Error != "" {
-		return entry
-	}
-	plan := NewMotionPlan("speed-support-review", target, settings, 0, 0, time.Unix(0, 0))
 	caps := (&transport.CloudRESTTransport{}).MotionSamplingCapabilities()
-	engine := &Engine{plan: plan, settings: settings, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
-		preservePlanKnots: true, positionResolutionPercent: caps.PositionResolutionPercent, maximumChunkPoints: caps.MaximumPointsPerAppend,
-		preferSparseGeneratedMotion: caps.PreferSparseGeneratedMotion}
-	entry.Wire = nil
-	for engine.nextSampleMillis < min(plan.PeriodMillis, int64(12000)) {
-		points, err := engine.nextMotionSamplesLocked()
-		if err != nil {
-			entry.Error = err.Error()
-			break
-		}
-		for _, point := range points {
-			entry.Wire = append(entry.Wire, CurvePoint{TimeMillis: point.TimeMillis, PositionPercent: math.Round(point.PositionPercent)})
-		}
-	}
-	return entry
+	return reviewMotionOutput(target, settings, func(engine *Engine) {
+		engine.positionResolutionPercent = caps.PositionResolutionPercent
+		engine.maximumChunkPoints = caps.MaximumPointsPerAppend
+		engine.preferSparseGeneratedMotion = caps.PreferSparseGeneratedMotion
+	})
 }
 
 func logSpeedSupport(t *testing.T, entry Review) {

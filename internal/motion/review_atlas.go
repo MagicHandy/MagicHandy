@@ -36,6 +36,13 @@ type Review struct {
 // ReviewMotionOutput never constructs a transport or starts an engine loop.
 // It exercises the same buffered frame fitter used by a real engine.
 func ReviewMotionOutput(target MotionTarget, settings config.MotionSettings) Review {
+	return reviewMotionOutput(target, settings, nil)
+}
+
+// A review must sample the selected transport policy directly. Sampling a
+// different policy first can reject a trajectory before the intended policy
+// is even evaluated, and can hide the sparse Cloud output being reviewed.
+func reviewMotionOutput(target MotionTarget, settings config.MotionSettings, configure func(*Engine)) Review {
 	plan := NewMotionPlan("visual-review", target, settings, 0, 0, time.Unix(0, 0))
 	review := Review{ID: string(plan.PatternID), Name: plan.Target.PatternName, PeriodMillis: plan.PeriodMillis,
 		SpeedPercent: plan.Target.SpeedPercent, HandyModel: settings.HandyModel}
@@ -66,6 +73,9 @@ func ReviewMotionOutput(target MotionTarget, settings config.MotionSettings) Rev
 	}
 	engine := &Engine{plan: plan, settings: settings, chunkSize: defaultChunkSize, sampleInterval: defaultSampleInterval,
 		preservePlanKnots: true, positionResolutionPercent: 1, maximumChunkPoints: maximumAdaptiveChunkPoints}
+	if configure != nil {
+		configure(engine)
+	}
 	for engine.nextSampleMillis < min(plan.PeriodMillis, int64(12000)) {
 		points, err := engine.nextMotionSamplesLocked()
 		if err != nil {
@@ -73,7 +83,11 @@ func ReviewMotionOutput(target MotionTarget, settings config.MotionSettings) Rev
 			return review
 		}
 		for _, point := range points {
-			review.Wire = append(review.Wire, CurvePoint{TimeMillis: point.TimeMillis, PositionPercent: math.Round(point.PositionPercent)})
+			position := point.PositionPercent
+			if engine.positionResolutionPercent > 0 {
+				position = quantizedMotionPosition(position, engine.positionResolutionPercent)
+			}
+			review.Wire = append(review.Wire, CurvePoint{TimeMillis: point.TimeMillis, PositionPercent: position})
 		}
 	}
 	return review
