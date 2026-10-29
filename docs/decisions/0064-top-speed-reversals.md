@@ -2,7 +2,9 @@
 
 Status: implemented with automated and rendered review, 2026-10-29, at the
 owner's choice; amended by the [whole-path review](../motion-path-review-2026-10-29.md).
-Physical acceptance on Original Handy Cloud is open.
+The first Original Handy Cloud comparison accepted full-range, short and
+compound patterns at 100%; broader physical coverage remains open. See the
+[hardware report](../top-speed-cloud-audition-2026-10-29.md).
 
 This amends the top of the range accepted in the
 [Layered speed-support review](../layered-speed-support-review-2026-10-26.md).
@@ -80,9 +82,11 @@ The device velocity ceiling, the user's saved speed limits, Stop and every
 transport path are unchanged. Anyone who preferred the earlier top-end feel
 can save a maximum speed near 84%.
 
-Physical feel at the top, especially the sharper turns on short strokes, is
-not yet accepted. A matched Original Handy Cloud comparison at 85%, 92% and
-100% is the open acceptance step.
+The first matched Original Handy Cloud comparison at 100% found both versions
+smooth, B slightly faster on full and short strokes, and its compound rhythm
+distinct and smooth. Short strokes added no reported chatter, vibration or
+harshness. Intermediate speeds, live transitions and other devices/transports
+remain separate acceptance steps.
 
 ## Evidence
 

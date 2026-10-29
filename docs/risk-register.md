@@ -654,9 +654,11 @@ outputs up to 75% match alpha.79, including transmitted points, after fixing
 the proposal's false acceleration estimate at rounded append anchors.
 Narrow strokes still saturate at timing limits. The widened envelope does not
 shorten strokes below 120 ms (existing faster feasible strokes are retained).
-The sharper top-end turns
-await matched Original Handy Cloud acceptance; the earlier accepted top feel
-now sits near 84% requested.
+The first [Original Handy Cloud comparison](top-speed-cloud-audition-2026-10-29.md)
+accepted full, short and compound patterns at 100%: B was faster while keeping
+smoothness and the compound rhythm. Intermediate speeds, live transitions and
+other hardware/transports still need physical acceptance; the earlier accepted
+top feel now sits near 84% requested.
 The [whole-path review](motion-path-review-2026-10-29.md) retains filter-removal
 failures, 690 final Cloud/BLE/immediate sampling cases, 180 monotone joins and
 simulated-latency Stop evidence. None is a substitute for physical acceptance.

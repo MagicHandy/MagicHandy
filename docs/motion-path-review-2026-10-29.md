@@ -3,8 +3,11 @@
 This reviews the unfinished `claude/handy-top-speed` changes against alpha.79
 `f21853ab`. It follows the owner's clarification that older filters **may** now
 hurt motion and may be unnecessary after the successful sparse-point audition.
-No installed-app settings, controller state, GPU allocation or real hardware
-were changed. The review app and CPU-only model worker use isolated state.
+The inert review changed no installed-app settings, controller state, GPU
+allocation or real hardware. The review app and CPU-only model worker use
+isolated state. A subsequent explicitly authorized
+[Cloud hardware comparison](top-speed-cloud-audition-2026-10-29.md) accepted
+full-range, short and compound patterns at 100% on the Original Handy.
 
 ## Findings and adopted corrections
 
@@ -154,6 +157,11 @@ provider call, no repair/fallback and no motion. This CPU-only readiness probe
 is not a production inference latency comparison.
 
 ## Physical acceptance before release
+
+The [first hardware comparison](top-speed-cloud-audition-2026-10-29.md) is now
+complete: at 100%, B was faster and remained smooth in the three matched
+patterns, with the compound rhythm retained. The remaining coverage below is
+still open; the result is specific to those scenarios and one Original Handy.
 
 Keep the installed session unchanged until a dedicated audition is authorized.
 Compare alpha.79, the conservative 1.5×/2× variant, and the final candidate on
