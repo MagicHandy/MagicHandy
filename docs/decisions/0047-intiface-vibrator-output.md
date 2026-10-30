@@ -4,6 +4,9 @@
 > chooses the level under a saved user Max, Stop suspends rather than zeroes, and
 > following speed spans the saved speed band. Connection, pacing, quantization,
 > watchdog and Stop protocol below are unchanged.
+>
+> Amended by [ADR 0063](0063-perceptible-following-and-coyote-facts.md): follow
+> speed now averages over 100 ms with a 40 ms attack and 100 ms release.
 
 ## Status
 

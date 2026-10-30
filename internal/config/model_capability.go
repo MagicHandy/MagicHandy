@@ -6,12 +6,16 @@ package config
 const (
 	ModelCapabilitySimple       = "simple"
 	ModelCapabilityIntermediate = "intermediate"
-	ModelCapabilityAdvanced     = "advanced"
+	// ModelCapabilityAdvancedNoReasoning is the Advanced contract plus a
+	// private planning note in the same generation, for strong models run
+	// without reasoning (ADR 0065). Every Advanced feature applies to it.
+	ModelCapabilityAdvancedNoReasoning = "advanced_no_reasoning"
+	ModelCapabilityAdvanced            = "advanced"
 )
 
 // ModelCapabilityLevels lists the user-selectable contracts.
 func ModelCapabilityLevels() []string {
-	return []string{ModelCapabilitySimple, ModelCapabilityIntermediate, ModelCapabilityAdvanced}
+	return []string{ModelCapabilitySimple, ModelCapabilityIntermediate, ModelCapabilityAdvancedNoReasoning, ModelCapabilityAdvanced}
 }
 
 // ModelCapabilityLevel resolves a role's contract without changing its provider.
@@ -23,7 +27,7 @@ func (s LLMSettings) ModelCapabilityLevel() string {
 		return ModelCapabilityAdvanced
 	}
 	switch s.LocalCapabilityLevel {
-	case ModelCapabilityIntermediate, ModelCapabilityAdvanced:
+	case ModelCapabilityIntermediate, ModelCapabilityAdvancedNoReasoning, ModelCapabilityAdvanced:
 		return s.LocalCapabilityLevel
 	default:
 		return ModelCapabilitySimple
@@ -34,7 +38,7 @@ func (s LLMSettings) ModelCapabilityLevel() string {
 // Studio may run a small model, so the level is chosen with the connection.
 func (c ModelConnection) ModelCapabilityLevel() string {
 	switch c.CapabilityLevel {
-	case ModelCapabilitySimple, ModelCapabilityIntermediate:
+	case ModelCapabilitySimple, ModelCapabilityIntermediate, ModelCapabilityAdvancedNoReasoning:
 		return c.CapabilityLevel
 	default:
 		return ModelCapabilityAdvanced
@@ -43,7 +47,13 @@ func (c ModelConnection) ModelCapabilityLevel() string {
 
 // AdvancedMotion enables the complete model-facing motion toolset.
 func (s LLMSettings) AdvancedMotion() bool {
-	return s.ModelCapabilityLevel() == ModelCapabilityAdvanced
+	level := s.ModelCapabilityLevel()
+	return level == ModelCapabilityAdvanced || level == ModelCapabilityAdvancedNoReasoning
+}
+
+// ChatPlanNote adds the private planning note to the Advanced chat contract.
+func (s LLMSettings) ChatPlanNote() bool {
+	return s.ModelCapabilityLevel() == ModelCapabilityAdvancedNoReasoning
 }
 
 // IntermediateMotion enables the expanded local contract after explicit opt-in.
@@ -51,11 +61,22 @@ func (s LLMSettings) IntermediateMotion() bool {
 	return s.ModelCapabilityLevel() == ModelCapabilityIntermediate
 }
 
+// ConnectionOutputFloor is a connection's per-request output floor for its
+// capability. The saved Max output stays the local model's budget, so a
+// Simple local default cannot truncate an Advanced connection's structured
+// replies. ChatGPT plan usage sends no output cap at all.
+func (s LLMSettings) ConnectionOutputFloor() int {
+	if s.ActiveConnection == nil || s.ModelCapabilityLevel() == ModelCapabilitySimple {
+		return 0
+	}
+	return MinimumLocalOutput(s.ModelCapabilityLevel())
+}
+
 // MinimumLocalContext reserves space for the selected contract and its schema.
 // Connections use the same floors for their request budget.
 func MinimumLocalContext(level string) int {
 	switch level {
-	case ModelCapabilityAdvanced:
+	case ModelCapabilityAdvanced, ModelCapabilityAdvancedNoReasoning:
 		return MinimumExternalContext
 	case ModelCapabilityIntermediate:
 		return 32768
@@ -64,11 +85,12 @@ func MinimumLocalContext(level string) int {
 	}
 }
 
-// MinimumLocalOutput leaves room to finish a rich structured reply. It changes only
-// explicitly selected local tiers; legacy/simple output limits are preserved.
+// MinimumLocalOutput leaves room to finish a rich structured reply. It raises
+// only explicitly selected local tiers' saved limit; legacy/simple output
+// limits are preserved. Connections apply it per request instead.
 func MinimumLocalOutput(level string) int {
 	switch level {
-	case ModelCapabilityAdvanced:
+	case ModelCapabilityAdvanced, ModelCapabilityAdvancedNoReasoning:
 		return 1024
 	case ModelCapabilityIntermediate:
 		return 512
@@ -85,9 +107,10 @@ type ModelCapabilityOption struct {
 }
 
 // ModelCapabilityOptions describes valid choices for settings clients. Output
-// floors apply to the local model; connections use their own output limits.
+// floors raise the local model's saved limit; connections apply them per
+// request (ConnectionOutputFloor).
 func ModelCapabilityOptions() []ModelCapabilityOption {
-	options := make([]ModelCapabilityOption, 0, 3)
+	options := make([]ModelCapabilityOption, 0, 4)
 	for _, level := range ModelCapabilityLevels() {
 		options = append(options, ModelCapabilityOption{level, MinimumLocalContext(level), MinimumLocalOutput(level)})
 	}

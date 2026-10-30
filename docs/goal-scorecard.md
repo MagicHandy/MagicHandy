@@ -1,5 +1,37 @@
 # Goal Scorecard
 
+## 2026-10-29 — Alpha.81 combined release review
+
+Includes PR #358 and OpenRouter planning/routing against alpha.80 `1f89a3b9`,
+Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
+core including UI **24,414,208 -> 24,433,664 B** (+19,456 B); canonical UI
+**2,862,704 -> 2,871,754 B** (+9,050 B). No dependency, worker or inference round
+added. Companion dispatch retains its existing cadence; changes affect renderer
+constants and backend facts. No new RSS, startup or physical-acceptance claim.
+See the [combined review](alpha81-release-review-2026-10-29.md).
+
+## 2026-10-29 — Advanced (no reasoning) and OpenRouter limits
+
+Against `1f89a3b9` (alpha.80), Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
+
+- Core including embedded UI: **24,414,208 -> 24,420,352 B** (+6,144 B).
+- Canonical UI: **2,862,704 -> 2,869,517 B** (+6,813 B), from one capability
+  option, one host-order select and translations.
+
+No dependency, worker, timer or inference step is added. The no-reasoning
+level's private note is part of the same generation. On DeepSeek V4.1 Flash it
+added about 0.1 s to the median, with completions of about 200 tokens. The
+level is opt-in; Advanced prompts are byte-identical.
+
+Connection requests now apply their level's output floor: 512 tokens for
+Intermediate and 1,024 for both Advanced levels. The previous inherited global
+default of 256 cut off about 40% of DeepSeek's Advanced replies. OpenRouter's
+reasoning reserve now follows the effort, from 2,048 to 8,192 tokens, capped at
+a quarter of the context. These are ceilings, not instructions to lengthen answers. New
+OpenRouter connections ask for the fastest hosts. No RSS or startup claim is
+made. See the [parity review](openrouter-deepseek-parity-review-2026-10-29.md).
+
 ## 2026-10-29 — OpenRouter regression review follow-up
 
 Against `31898408`, canonical UI **2,861,586 -> 2,862,704 B** (+1,118 B).
@@ -56,6 +88,17 @@ and 92,928 B per frame. These local microbenchmarks are not a latency or RSS
 guarantee. No RSS/cold-start claim is made. See
 [ADR 0064](decisions/0064-top-speed-reversals.md) and the
 [whole-path review](motion-path-review-2026-10-29.md).
+## 2026-10-29 — Perceptible speed following and Coyote facts
+
+Against alpha.79 `f21853ab`, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core including
+embedded UI **24,376,832 -> 24,388,608 B** (+11,776 B). Canonical UI
+**2,856,207 -> 2,858,444 B** (+2,237 B); main JS
+**1,313,547 -> 1,314,293 B raw** (+746 B), **353,078 -> 353,284 B gzip**
+(+206 B). CSS stays **210,037 / 36,604 B** raw/gzip. No dependency, worker,
+timer or model call is added; the vibrator still sends at most one command per
+100 ms tick. No RSS/cold-start claim is made. See
+[ADR 0063](decisions/0063-perceptible-following-and-coyote-facts.md).
 
 ## 2026-10-28 — Layered session repair and directional capability
 

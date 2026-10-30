@@ -155,6 +155,18 @@ describe("The Coyote's descriptor", () => {
     expect(model.readout).toBe("A 12 · B 8");
   });
 
+  it("reads Silent, not Playing, while motion plays at zero strength, and says what to raise", () => {
+    const zero = coyoteSnapshot({ strength_a: 0, strength_b: 0, silent_reason: "strength_zero" });
+    const playing = coyoteDevice.model(makeCtx({ coyote: zero, engineActive: true }));
+    expect(playing.status).toBe("silent");
+    expect(playing.levels!.note).toBe("Both channels are at 0, so nothing is felt. Raise a channel when you are ready.");
+    expect(coyoteDevice.model(makeCtx({ coyote: zero })).status).not.toBe("silent");
+    // The applied zero ceiling is actionable even before a strength report.
+    const capped = coyoteDevice.model(makeCtx({ coyote: coyoteSnapshot({ ceiling_a: 0, ceiling_b: 0, strength_a: 0, strength_b: 0, strength_source: "zero_command", silent_reason: "ceiling_zero" }), engineActive: true }));
+    expect(capped.levels!.note).toBe("Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.");
+    expect(coyoteDevice.model(makeCtx({ coyote: coyoteSnapshot(), engineActive: true })).status).not.toBe("silent");
+  });
+
   it("blocks raising and Test until the strength is confirmed, but always allows lowering", () => {
     const pending = coyoteDevice.model(makeCtx({ coyote: coyoteSnapshot({ strength_known: false, strength_a: 0 }) })).levels!.levels[0];
     expect(pending).toMatchObject({ value: null, canLower: true, canRaise: false, canTest: false });

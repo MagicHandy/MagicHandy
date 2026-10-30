@@ -6,7 +6,8 @@ import { FieldRow } from "./SetupSection";
 function levelHint(level: ModelCapabilityLevel): string {
   return level === "simple" ? t("Compact prompts for smaller models. In Layered they also set the vibration level.")
     : level === "intermediate" ? t("Fuller guidance and grouped motion edits for capable models. They also set the vibration level.")
-      : t("Counted phrases, vibration patterns of their own, Auto timing and response repair. Choose it only for a model that handles complex instructions reliably.");
+      : level === "advanced_no_reasoning" ? t("All Advanced features, plus a brief planning step for chat motion requests. For capable models answering without reasoning. This does not change the model's reasoning setting.")
+        : t("Counted phrases, vibration patterns of their own, Auto timing and response repair. Choose it only for a model that handles complex instructions reliably. With reasoning off, try Advanced (no reasoning).");
 }
 
 // One capability and context pair for every model: the local model and each

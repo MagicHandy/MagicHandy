@@ -838,8 +838,11 @@ additional-method choice. Do not promise physical synchronization. See
 
 ### Model capability levels (2026-10-25)
 
-Every model shares Simple / Intermediate / Advanced: the local model and each
-external connection, in Settings and in setup. Use backend option names and
+Every model shares Simple / Intermediate / Advanced (no reasoning) / Advanced:
+the local model and each external connection, in Settings and in setup.
+Advanced (no reasoning) is Advanced plus a private planning note for capable
+models answering without reasoning
+([ADR 0065](decisions/0065-advanced-no-reasoning-and-openrouter-limits.md)). Use backend option names and
 budget floors. Capability and Context are one pair of field rows with the same
 labels everywhere, and budgets read 16K, 32K, 64K, 128K and 256K. Managed
 llama.cpp always shows Context; Ollama shows it above Simple; a server

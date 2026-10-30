@@ -68,6 +68,10 @@ type CoyoteStatus struct {
 	StarvedPackets        uint64 `json:"starved_packets"`
 	MaxSendLatenessMillis int64  `json:"max_send_lateness_ms"`
 	LastError             string `json:"last_error,omitempty"`
+	// SilentReason says why a connected Coyote cannot be felt, even while
+	// motion plays: "ceiling_zero" (no strength is allowed) or
+	// "strength_zero" (the device reported both channels at zero).
+	SilentReason string `json:"silent_reason,omitempty"`
 }
 
 // CoyoteOptions configures the owner.
@@ -558,7 +562,24 @@ func (c *Coyote) Status() CoyoteStatus {
 		percent := *c.battery
 		status.BatteryPercent = &percent
 	}
+	status.SilentReason = coyoteSilentReason(status)
 	return status
+}
+
+// coyoteSilentReason reports what the user must raise before output can be
+// felt. Only the user raises strength, so the reason names their step. A
+// commanded zero is not a measurement (ADR 0044): silence at zero strength
+// needs the device's own report.
+func coyoteSilentReason(status CoyoteStatus) string {
+	switch {
+	case !status.Connected:
+		return ""
+	case status.LimitsApplied && status.CeilingA == 0 && status.CeilingB == 0:
+		return "ceiling_zero"
+	case status.StrengthKnown && status.StrengthSource == "reported" && status.StrengthA == 0 && status.StrengthB == 0:
+		return "strength_zero"
+	}
+	return ""
 }
 
 func encodePacket(packet estim.Packet) ([]byte, error) {

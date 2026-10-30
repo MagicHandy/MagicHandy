@@ -103,6 +103,17 @@ describe("model roles and external providers", () => {
     expect(retry).not.toBeChecked();
   });
 
+  it.each(["advanced", "advanced_no_reasoning"] as const)("keeps repair available and second opinion hidden for %s connections", async level => {
+    quietCatalog();
+    const connection = { ...chatgpt, capability_level: level };
+    render(<Panel initial={{ connections: [connection], conversation_connection_id: connection.id, provider: "ollama", model: "local-model" } as PublicSettings["llm"]} />);
+    expect(screen.getByRole("checkbox", { name: /^Automatically repair/ })).toBeChecked();
+    expect(screen.queryByRole("combobox", { name: "Second opinion" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Autopilot model" }), { target: { value: "local" } });
+    expect(screen.getByRole("combobox", { name: "Second opinion" })).toHaveValue("off");
+    expect(screen.getByRole("checkbox", { name: /^Automatically repair/ })).toBeChecked();
+  });
+
   it("defaults hosted response repair on, preserves routing, and restores it when model drafts are discarded", async () => {
     quietCatalog();
     render(<Panel initial={{ connections: [chatgpt], conversation_connection_id: chatgpt.id, provider: "ollama", model: "local-model" } as PublicSettings["llm"]} />);

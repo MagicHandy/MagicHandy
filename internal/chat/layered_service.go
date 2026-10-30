@@ -161,6 +161,9 @@ func (s Service) completeLayered(ctx context.Context, request Request, emit func
 	} else if s.localAutopilotPlan {
 		messages = localPlanningMessages(messages, state)
 	}
+	if usesChatPlanNote(capabilities, s.TrustedMotionInput) {
+		messages = withChatPlanMessages(messages, capabilities.MotionMode)
+	}
 	input := llm.ChatRequest{Messages: messages,
 		HistoryMessagesDropped: request.HistoryMessagesDropped + hostedHistoryDropped(request.History, messages, capabilities),
 		Model:                  s.Model, Temperature: temperature, TopP: chatTopP, RepeatPenalty: chatRepeatPenalty, RepeatLastN: chatRepeatLastN,
@@ -224,6 +227,9 @@ func (s Service) continuousPrompt(prompt PromptSet, capabilities Capabilities, s
 	if s.localAutopilotPlan {
 		schema = withLocalPlanSchema(schema)
 	}
+	if usesChatPlanNote(capabilities, s.TrustedMotionInput) {
+		schema = withChatPlanSchema(schema)
+	}
 	return system, schema
 }
 
@@ -239,17 +245,28 @@ func (s Service) finalizeLayeredResponse(response AssistantResponse, state Motio
 	return response
 }
 
-func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
-	capabilities := s.capabilities()
+// takePlanNotes removes the private planning note a contract asked for:
+// local Autopilot's basis (ADR 0060) or the no-reasoning chat basis (ADR 0065).
+func (s Service) takePlanNotes(raw string, capabilities Capabilities) (string, error) {
+	var err error
 	if s.localAutopilotPlan {
-		var err error
-		raw, err = takeLocalPlanNote(raw)
-		if err != nil {
-			return AssistantResponse{}, err
+		if raw, err = takeLocalPlanNote(raw); err != nil {
+			return raw, err
 		}
 	}
+	if usesChatPlanNote(capabilities, s.TrustedMotionInput) {
+		raw, _, err = takeChatPlanNote(raw)
+	}
+	return raw, err
+}
+
+func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state MotionContext, limits config.MotionSettings, autoTiming bool) (AssistantResponse, error) {
+	capabilities := s.capabilities()
+	raw, err := s.takePlanNotes(raw, capabilities)
+	if err != nil {
+		return AssistantResponse{}, err
+	}
 	if capabilities.MotionMode == MotionModeLayered && capabilities.IntermediateMotion && !capabilities.AdvancedMotion {
-		var err error
 		raw, err = normalizeIntermediateLayeredReply(raw)
 		if err != nil {
 			return AssistantResponse{}, err
@@ -258,7 +275,6 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 	if capabilities.MotionMode == MotionModeLayered && capabilities.AdvancedMotion {
 		// Validate the original object before metadata/recall extraction can
 		// re-encode it and conceal duplicate fields from an unconstrained model.
-		var err error
 		raw, err = normalizeLayeredOperations(raw)
 		if err != nil {
 			return AssistantResponse{}, err

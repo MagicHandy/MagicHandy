@@ -92,6 +92,25 @@ func TestCompatibleEmitsOnlyDeclaredParameters(t *testing.T) {
 	}
 }
 
+// Default routing balances by price and can pick a slow host; a saved order
+// replaces that balancing. No order means no sort key, as before.
+func TestOpenRouterRoutingOrder(t *testing.T) {
+	for _, order := range []string{"", "throughput", "latency", "price"} {
+		provider, err := NewCompatibleProvider(CompatibleOptions{HTTPProviderOptions: HTTPProviderOptions{BaseURL: "https://openrouter.ai/api/v1", Model: "provider/model"}, Provider: "openrouter", OutputMode: "prompt", DataCollection: "deny", ProviderSort: order})
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _, err := provider.completionBody(ChatRequest{MaxTokens: 64}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		routing := body["provider"].(map[string]any)
+		if sort, present := routing["sort"]; present != (order != "") || (present && sort != order) {
+			t.Errorf("order %q sent provider routing %v", order, routing)
+		}
+	}
+}
+
 // A server on this computer left on automatic output (LM Studio, an MLX server,
 // llama-server, vLLM, Ollama) gets the app's sampling and the standard
 // non-strict schema form. Declared policies and remote endpoints are unchanged.

@@ -38,6 +38,24 @@ describe("local model capability", () => {
     fireEvent.change(selector, { target: { value: "simple" } });
     expect(JSON.parse(screen.getByTestId("draft").textContent!)).toMatchObject({ llama_cpp_context_size: 131072, max_output_tokens: 1024, local_capability_level: "simple" });
   });
+  it("offers Advanced (no reasoning) with Advanced floors and names the models it suits", () => {
+    const withNoReasoning: ModelCapabilityOption[] = [...options.slice(0, 2), { level: "advanced_no_reasoning", minimum_context: 65536, minimum_output: 1024 }, options[2]];
+    function NoReasoningField() {
+      const [settings, setSettings] = useState(initial);
+      return <><ModelCapabilityField settings={settings} options={withNoReasoning} contextSizes={sizes} locked={false}
+        patch={change => setSettings(current => ({ ...current, ...change }))} />
+        <output data-testid="draft">{JSON.stringify(settings)}</output></>;
+    }
+    render(<NoReasoningField />);
+    const selector = screen.getByRole("combobox", { name: "Capability" });
+    expect(within(selector).getAllByRole("option").map(option => option.textContent)).toEqual(["Simple", "Intermediate", "Advanced (no reasoning)", "Advanced"]);
+    fireEvent.change(selector, { target: { value: "advanced_no_reasoning" } });
+    expect(screen.getByRole("combobox", { name: "Context" })).toHaveValue("65536");
+    expect(screen.getByText(/For capable models answering without reasoning/)).toHaveTextContent("This does not change the model's reasoning setting.");
+    expect(JSON.parse(screen.getByTestId("draft").textContent!)).toMatchObject({ max_output_tokens: 1024, local_capability_level: "advanced_no_reasoning" });
+    fireEvent.change(selector, { target: { value: "advanced" } });
+    expect(screen.getByText(/With reasoning off, try Advanced \(no reasoning\)/)).toBeInTheDocument();
+  });
   it("distinguishes server allocation from the application budget and respects read-only access", () => {
     const patch = vi.fn();
     render(<ModelCapabilityField settings={{ ...initial, provider: "llama_cpp", llama_cpp_mode: "external", local_capability_level: "advanced", llama_cpp_context_size: 65536 }}

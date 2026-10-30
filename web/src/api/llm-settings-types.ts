@@ -1,6 +1,6 @@
 import type { LLMMotionCapabilities, LLMUserAnatomy } from './types';
 
-export type ModelCapabilityLevel = "simple" | "intermediate" | "advanced";
+export type ModelCapabilityLevel = "simple" | "intermediate" | "advanced_no_reasoning" | "advanced";
 export interface ModelCapabilityOption { level: ModelCapabilityLevel; minimum_context: number; minimum_output: number }
 
 // Mirrors the backend model settings; private credentials have no API field.

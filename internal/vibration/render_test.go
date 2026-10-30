@@ -115,12 +115,17 @@ func TestQuantizeHoldsAStepAndRoundsTheCeilingDown(t *testing.T) {
 	if Quantize(0, 20, 5, 1) != 0 {
 		t.Fatal("zero is always exact")
 	}
+	// A turnaround's small positive level keeps the lowest step instead of
+	// switching the motor off and on with every stroke.
+	if Quantize(0.02, 20, -1, 0.4) != 1 || Quantize(0.02, 20, 1, 0.4) != 1 {
+		t.Fatal("a positive level must keep the lowest allowed step")
+	}
 }
 
 func TestFollowSpeedSpansTheSavedSpeedBand(t *testing.T) {
 	band := Profile{Follow: FollowSpeed, SpeedLow: 1, SpeedHigh: 3}
 	for _, tc := range []struct{ speed, want float64 }{
-		{0, 0}, {0.5, speedBandFloor / 2}, {1, speedBandFloor}, {2, (1 + speedBandFloor) / 2}, {3, 1}, {6, 1},
+		{0, 0}, {0.5, companion.SpeedBandFloor / 2}, {1, companion.SpeedBandFloor}, {2, (1 + companion.SpeedBandFloor) / 2}, {3, 1}, {6, 1},
 	} {
 		if got := speedDrive(tc.speed, band); math.Abs(got-tc.want) > 1e-9 {
 			t.Fatalf("speed %.1f: drive %.4f, want %.4f", tc.speed, got, tc.want)
@@ -131,6 +136,47 @@ func TestFollowSpeedSpansTheSavedSpeedBand(t *testing.T) {
 	}
 	if got := speedDrive(2, Profile{Follow: FollowSpeed, SpeedLow: 2, SpeedHigh: 2}); got != 1 {
 		t.Fatalf("single saved speed: %.4f", got)
+	}
+}
+
+// smoothStrokes builds full-span strokes with an eased velocity profile, as
+// the shared sampler emits them: still at each turnaround, fastest mid-stroke.
+func smoothStrokes(t *testing.T, periodMillis, durationMillis int64) *companion.Timeline {
+	t.Helper()
+	timeline := &companion.Timeline{}
+	var points []companion.Point
+	for at := int64(0); at <= durationMillis; at += 25 {
+		phase := 2 * math.Pi * float64(at) / float64(periodMillis)
+		points = append(points, companion.Point{TimeMillis: at, Position: 50 - 50*math.Cos(phase)})
+	}
+	if err := timeline.Append(points); err != nil {
+		t.Fatal(err)
+	}
+	return timeline
+}
+
+// The first physical test found following speed close to constant: a 250 ms
+// average and release left about one motor step per stroke (ADR 0063).
+func TestFollowSpeedRisesAndFallsWithEachStroke(t *testing.T) {
+	// The user's 1..100 band on The Handy original, and moderate strokes at
+	// about 1.6 spans per second.
+	band := Profile{Follow: FollowSpeed, SpeedLow: 0.291, SpeedHigh: 3.636}
+	timeline := smoothStrokes(t, 1250, 20_000)
+	renderer := NewRenderer(band)
+	renderer.Restart(0)
+	low, high := 1.0, 0.0
+	steps, last := map[int]bool{}, -1
+	for at := 0.0; at <= 19_000; at += 100 {
+		drive, _ := renderer.Drive(timeline, at)
+		if at < 4000 {
+			continue
+		}
+		low, high = math.Min(low, drive), math.Max(high, drive)
+		last = Quantize(Output(drive, 0, 0.7), 20, last, 0.7)
+		steps[last] = true
+	}
+	if high-low < 0.3 || len(steps) < 4 {
+		t.Fatalf("drive %.2f..%.2f over %d motor steps; following must rise and fall with each stroke", low, high, len(steps))
 	}
 }
 

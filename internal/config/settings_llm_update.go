@@ -135,7 +135,7 @@ func localCapabilityUpdate(current LLMSettings, update LLMUpdate) (string, int, 
 	if update.MaxOutputTokens != nil {
 		maxOutputTokens = *update.MaxOutputTokens
 	}
-	if level == ModelCapabilityIntermediate || level == ModelCapabilityAdvanced {
+	if level == ModelCapabilityIntermediate || level == ModelCapabilityAdvancedNoReasoning || level == ModelCapabilityAdvanced {
 		maxOutputTokens = max(maxOutputTokens, MinimumLocalOutput(level))
 	}
 	return level, contextSize, maxOutputTokens, nil

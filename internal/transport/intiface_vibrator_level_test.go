@@ -218,8 +218,8 @@ func TestVibratorFollowsTheHandysSpeedUntilTheModelChooses(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.pace(3 * time.Second)
-	// The slowest saved speed is 35% of the level: .14 of a 20-step motor.
-	if scalars := lastScalars(t, f.server); scalars[0] != .15 {
+	// The slowest saved speed is 20% of the level: .08, step .1 of a 20-step motor.
+	if scalars := lastScalars(t, f.server); scalars[0] != .1 {
 		t.Fatalf("slowest speed = %v", scalars)
 	}
 	faster := AppendPointsCommand{StreamID: command.StreamID, Points: []TimedPoint{{TimeMillis: 20_000, PositionPercent: 50}}, SpeedPercent: 80}

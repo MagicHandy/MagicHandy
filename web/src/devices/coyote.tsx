@@ -45,9 +45,12 @@ function coyoteModel(ctx: DeviceContext): DeviceModel {
   const helperMissing = Boolean(snapshot && !snapshot.available && !status?.simulated);
   const setup = !estim?.safety_acknowledged ? t("safety notes first") : helperMissing ? t("Bluetooth helper missing") : undefined;
   const dropped = !connected && status?.playback_state === "stale";
+  // Motion can play while nothing is felt: strength is the user's alone.
+  const silent = connected && (status?.silent_reason === "strength_zero" || status?.silent_reason === "ceiling_zero");
   const word: DeviceStatusWord = ctx.busy.coyote === "connect" || status?.connecting
     ? "connecting"
-    : setup && !connected ? "needs_setup" : dropped ? "lost" : liveStatus(ctx, "coyote", connected);
+    : setup && !connected ? "needs_setup" : dropped ? "lost"
+      : silent && ctx.engineActive && ctx.playing.includes("coyote") ? "silent" : liveStatus(ctx, "coyote", connected);
   const details = word === "needs_setup" && setup
     ? [setup]
     : word === "lost" ? [dropped ? t("dropped") : t("left this run")]
@@ -70,7 +73,9 @@ function coyoteModel(ctx: DeviceContext): DeviceModel {
       name: t("Coyote strength"),
       levels: [coyoteLevel(ctx, status, "a"), coyoteLevel(ctx, status, "b")],
       action: { label: t("Zero both"), disabled: ctx.locked, run: () => ctx.send(async () => ctx.setCoyote(await api.coyoteZero())) },
-      note: status.strength_source === "zero_command" ? t("Zero command accepted. The device has not reported a strength change.") : undefined,
+      note: status.silent_reason === "ceiling_zero" ? t("Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.")
+        : status.strength_source === "zero_command" ? t("Zero command accepted. The device has not reported a strength change.")
+          : status.silent_reason === "strength_zero" ? t("Both channels are at 0, so nothing is felt. Raise a channel when you are ready.") : undefined,
     } : undefined,
     readout: connected && status?.strength_known ? t("A {a} · B {b}", { a: status.strength_a, b: status.strength_b }) : undefined,
     summary: [t("Bluetooth on this computer"), t("ceilings {a} and {b}", { a: estim?.max_strength_a ?? 0, b: estim?.max_strength_b ?? 0 })].join(" · "),

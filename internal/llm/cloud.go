@@ -21,6 +21,8 @@ func (e *CloudError) Error() string {
 		return "The selected cloud provider declined this request."
 	case "quota":
 		return "Cloud usage is unavailable or its limit was reached. Review your usage settings."
+	case "rate_limit":
+		return "The provider is temporarily limiting requests. Wait a moment and try again."
 	case "signed_out":
 		return "Connect the selected cloud account again."
 	case "permission":
@@ -55,8 +57,10 @@ func IsCloudOutcome(err error) bool {
 func cloudResponseError(status int, code string) error {
 	kind := "unavailable"
 	switch {
-	case code == "subscription_sharing_usage_limit_exceeded" || code == "subscription_sharing_usage_unavailable" || status == 429 || status == 402:
+	case code == "subscription_sharing_usage_limit_exceeded" || code == "subscription_sharing_usage_unavailable" || code == "insufficient_quota" || status == 402:
 		kind = "quota"
+	case status == 429 || code == "rate_limit_exceeded":
+		kind = "rate_limit"
 	case status == 401:
 		kind = "signed_out"
 	case status == 403:

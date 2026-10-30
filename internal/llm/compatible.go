@@ -33,6 +33,8 @@ type CompatibleOptions struct {
 	ZeroDataRetention   bool
 	ReasoningEffort     string
 	ReasoningEnabled    *bool
+	// ProviderSort is OpenRouter's provider.sort; empty keeps its default.
+	ProviderSort string
 }
 
 // HostedModel is provider catalog metadata, independent of local runtimes.
@@ -121,7 +123,7 @@ func (p *CompatibleProvider) request(ctx context.Context, method, path string, b
 			// another output mode on its connection, not a retry.
 			return nil, &CloudError{Kind: "capability"}
 		}
-		return nil, cloudResponseError(response.StatusCode, "")
+		return nil, cloudResponseError(response.StatusCode, code)
 	}
 	return response, nil
 }
@@ -220,7 +222,7 @@ func (p *CompatibleProvider) StreamChat(ctx context.Context, request ChatRequest
 	ctx, cancel := context.WithTimeout(ctx, p.options.Timeout)
 	defer cancel()
 	if p.options.Provider == "openrouter" {
-		request.MaxTokens = OpenRouterOutputTokens(request.MaxTokens, p.options.ReasoningEffort, p.options.ReasoningEnabled)
+		request.MaxTokens = OpenRouterOutputTokens(request.MaxTokens, p.options.ReasoningEffort, p.options.ReasoningEnabled, p.options.ContextSize)
 	}
 	bounded, budget, err := BudgetChatRequest(request, p.options.ContextSize)
 	if request.OnBudget != nil {
@@ -283,6 +285,9 @@ func (p *CompatibleProvider) completionBody(request ChatRequest, parameters []st
 		body["provider"] = map[string]any{"allow_fallbacks": p.options.AllowFallbacks, "require_parameters": true, "data_collection": p.options.DataCollection, "zdr": p.options.ZeroDataRetention}
 		if len(p.options.AllowedProviders) > 0 {
 			body["provider"].(map[string]any)["only"] = p.options.AllowedProviders
+		}
+		if p.options.ProviderSort != "" {
+			body["provider"].(map[string]any)["sort"] = p.options.ProviderSort
 		}
 		body["transforms"] = []string{}
 	}

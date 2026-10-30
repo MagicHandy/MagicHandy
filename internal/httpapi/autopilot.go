@@ -195,7 +195,7 @@ func (s *Server) autopilotModelTurn(
 		Provider:                    provider,
 		Prompt:                      prompt,
 		Model:                       settings.LLM.Model,
-		MaxTokens:                   settings.LLM.MaxOutputTokens,
+		MaxTokens:                   max(settings.LLM.MaxOutputTokens, settings.LLM.ConnectionOutputFloor()),
 		ReasoningMode:               settings.LLM.ReasoningMode,
 		ReasoningBudgetTokens:       managedLlamaReasoningBudget(settings.LLM, s.managedLLM.Snapshot().Runtime.Current),
 		PromptBudget:                chatPromptBudget(settings.LLM),

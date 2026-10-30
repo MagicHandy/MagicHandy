@@ -14,7 +14,7 @@ export function initialEasyAIChoice(settings?: PublicSettings["llm"]): EasyAICho
   const conversation = settings?.conversation_connection_id || "local";
   if (planner && !(planner.provider === "conversation" && (planner.context_policy || "conversation") === "conversation")
     && !(conversation === "local" && planner.provider === "connection" && planner.connection_id !== "local" && planner.context_policy === "technical")) return "saved";
-  if (settings?.connections?.some(connection => connection.allow_fallbacks || connection.data_collection === "allow" || connection.zero_data_retention || connection.allowed_providers?.length || connection.output_mode !== "auto")) return "saved";
+  if (settings?.connections?.some(connection => connection.allow_fallbacks || connection.data_collection === "allow" || connection.zero_data_retention || connection.allowed_providers?.length || connection.output_mode !== "auto" || (connection.provider_sort && connection.provider_sort !== "throughput"))) return "saved";
   const id = setupCloudConnectionID(settings);
   const connection = settings?.connections?.find(item => item.id === id);
   return connection ? connection.provider === "chatgpt" ? "chatgpt" : "cloud" : "local";

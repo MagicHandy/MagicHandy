@@ -1,5 +1,18 @@
 # MagicHandy Go Implementation Plan
 
+A fourth capability level, Advanced (no reasoning), gives capable models
+answering without reasoning a private planning note before chat edits. It
+raised DeepSeek V4.1 Flash with reasoning Off from 80-82% to 89% of the hosted
+suites, against GPT 6.1 Terra's 94-95%, with replies in about 0.9 s instead of
+about 5 s. Full parity is not claimed.
+
+- **Output limits.** Connection requests now apply their level's output floor.
+- **Reasoning reserve.** OpenRouter's reserve follows the reasoning effort.
+- **Routing.** New OpenRouter connections ask for the fastest hosts.
+
+See [ADR 0065](docs/decisions/0065-advanced-no-reasoning-and-openrouter-limits.md)
+and the [parity review](docs/openrouter-deepseek-parity-review-2026-10-29.md).
+
 Broad strokes gain additional speed above 75%: the turn envelope widens above
 that knee and velocity-limited cruise strokes may shorten their ramps, so 100%
 reaches 86.6% effective for full strokes instead of stopping near 79%. The
@@ -18,6 +31,12 @@ envelope in % of Max. Stop pauses the vibrator until a fresh manual motion reque
 Resume now or reselection; autonomous decisions cannot lift it. See
 [ADR 0061](docs/decisions/0061-model-controlled-vibration-level.md) for
 authority, UI behavior, model evidence and limitations.
+
+Following speed reads each stroke and spans the saved Handy speed band on one
+scale shared by the vibrator and the Coyote. Models are told a playing
+Coyote's facts without gaining a control, and the Coyote reports why it is
+silent. See [ADR 0063](docs/decisions/0063-perceptible-following-and-coyote-facts.md)
+and the [review](docs/follow-speed-coyote-review-2026-10-29.md).
 
 The [response-boundary review](docs/vibrator-level-review-2026-10-28.md#response-boundary-follow-up)
 accepts equivalent compound edit grouping, geometry-compatible control echoes

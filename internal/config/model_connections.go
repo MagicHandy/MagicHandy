@@ -39,7 +39,10 @@ type ModelConnection struct {
 	AllowedProviders    []string `json:"allowed_providers,omitempty"`
 	DataCollection      string   `json:"data_collection"`
 	ZeroDataRetention   bool     `json:"zero_data_retention"`
-	NoAuthentication    bool     `json:"no_authentication,omitempty"`
+	// ProviderSort is OpenRouter's provider.sort. Empty keeps its default
+	// balanced routing; throughput or latency choose the fastest hosts first.
+	ProviderSort     string `json:"provider_sort,omitempty"`
+	NoAuthentication bool   `json:"no_authentication,omitempty"`
 	// CapabilityLevel is the model's motion contract. Empty keeps Advanced.
 	CapabilityLevel string `json:"capability_level,omitempty"`
 }
@@ -66,6 +69,7 @@ func (c ModelConnection) Normalize() ModelConnection {
 	if c.DataCollection == "" {
 		c.DataCollection = "deny"
 	}
+	c.ProviderSort = strings.ToLower(strings.TrimSpace(c.ProviderSort))
 	switch c.Provider {
 	case LLMProviderChatGPT, LLMProviderOpenAI:
 		c.BaseURL = "https://api.openai.com/v1"
@@ -89,8 +93,8 @@ func (c ModelConnection) Validate() error {
 	if err := c.validateEndpoint(); err != nil {
 		return err
 	}
-	if !oneOf(c.OutputMode, "auto", "strict", "json", "prompt") || !oneOf(c.DataCollection, "deny", "allow") || len(c.AllowedProviders) > 16 {
-		return errors.New("invalid model capability or routing policy")
+	if err := c.validateRouting(); err != nil {
+		return err
 	}
 	if c.NoAuthentication && c.Provider != LLMProviderCompatible {
 		return errors.New("this provider requires its own credentials")
@@ -102,6 +106,17 @@ func (c ModelConnection) Validate() error {
 		if !oneOf(parameter, "temperature", "top_p", "max_tokens", "max_completion_tokens", "response_format", "structured_outputs") {
 			return errors.New("unsupported provider parameter")
 		}
+	}
+	return nil
+}
+
+// validateRouting checks output policy and OpenRouter host restrictions.
+func (c ModelConnection) validateRouting() error {
+	if !oneOf(c.OutputMode, "auto", "strict", "json", "prompt") || !oneOf(c.DataCollection, "deny", "allow") || len(c.AllowedProviders) > 16 {
+		return errors.New("invalid model capability or routing policy")
+	}
+	if !oneOf(c.ProviderSort, "", "price", "throughput", "latency") || (c.ProviderSort != "" && c.Provider != LLMProviderOpenRouter) {
+		return errors.New("routing order must be price, throughput or latency, and applies only to OpenRouter")
 	}
 	for _, provider := range c.AllowedProviders {
 		if len(provider) == 0 || len(provider) > 120 {

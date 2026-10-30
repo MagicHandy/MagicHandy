@@ -6,12 +6,28 @@ Accepted; amended 2026-10-29 after Microsoft completed the false-positive
 review, for the alpha.9 installer correction, alpha.10's runtime readiness
 corrections, alpha.11's update-discovery and clean-machine voice correction, and
 alpha.13's restored setup distribution after alpha.12 was withdrawn, and the
-reviewed alpha.14 through alpha.64 and alpha.66 through alpha.80
+reviewed alpha.14 through alpha.64 and alpha.66 through alpha.81
 package-preserving releases.
 This supersedes ADR 0013 where that ADR defines public unsigned setup
 publication.
 
 ## Context
+
+### Alpha.81 amendment
+
+The maintainer requested review and publication of Claude's OpenRouter and
+model-capability work. The [alpha.81 integration review](../alpha81-release-review-2026-10-29.md)
+records the source snapshot, independent regression fixes, corrected evaluation
+method, live production-path checks and remaining limitations. The separate
+vibrator/COYOTE follow-profile PR remains outside this release.
+
+Only `0.1.0-alpha.81` joins ReviewedUnsignedPublic. Alpha.82 and later require
+a new review; alpha.65 remains excluded. The existing llama.cpp pin, payload,
+native x64 loader, non-solid ZIP, installer contract and three public assets
+are unchanged. Source and exact-binary vulnerability scans, exact-artifact
+Defender scanning, installer lifecycle, manifests/checksums, green CI and
+exact-current-main provenance remain mandatory. The old Microsoft case does
+not approve new hashes. Trusted signing remains the target.
 
 ### Alpha.80 amendment
 
@@ -1045,11 +1061,11 @@ Negative:
   portable ZIP and one-entry checksum file and rejects any setup executable.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy ReviewedUnsignedPublic` requires an
   alpha.8 through alpha.11, alpha.13 through alpha.64, or alpha.66 through
-  alpha.80 version, the recorded Microsoft case ID, the
+  alpha.81 version, the recorded Microsoft case ID, the
   setup/portable/checksum set, x64 PE headers, unsigned status, exact hashes,
   and supports the complete installer lifecycle.
 - Alpha.9 through alpha.11, alpha.13 through alpha.64, and alpha.66 through
-  alpha.80 reviewed setup workflows run Microsoft Defender against the exact public artifact directory
+  alpha.81 reviewed setup workflows run Microsoft Defender against the exact public artifact directory
   before verification or release creation.
 - `Test-WindowsRelease.ps1 -ArtifactPolicy SignedPublic` requires valid,
   timestamped Authenticode from the explicitly pinned signer on the setup
