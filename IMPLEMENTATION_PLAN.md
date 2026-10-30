@@ -32,6 +32,12 @@ Resume now or reselection; autonomous decisions cannot lift it. See
 [ADR 0061](docs/decisions/0061-model-controlled-vibration-level.md) for
 authority, UI behavior, model evidence and limitations.
 
+Following speed reads each stroke and spans the saved Handy speed band on one
+scale shared by the vibrator and the Coyote. Models are told a playing
+Coyote's facts without gaining a control, and the Coyote reports why it is
+silent. See [ADR 0063](docs/decisions/0063-perceptible-following-and-coyote-facts.md)
+and the [review](docs/follow-speed-coyote-review-2026-10-29.md).
+
 The [response-boundary review](docs/vibrator-level-review-2026-10-28.md#response-boundary-follow-up)
 accepts equivalent compound edit grouping, geometry-compatible control echoes
 and null vibration no-ops. Model prompts/schemas and output authority stay

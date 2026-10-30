@@ -3240,7 +3240,6 @@
   "The Coyote enforces these itself, even against its own switches, and keeps them after you disconnect. MagicHandy never raises strength on its own.": "Coyote 自身がこの上限を本体のスイッチに対しても適用し、切断後も保持します。MagicHandy が自動で強度を上げることはありません。",
   "Pulse rate": "パルス周波数",
   "Follows the pace within this range, in short held steps.": "この範囲内でペースに合わせ、短い段階ごとに保持しながら変化します。",
-  "Shifts strength toward one channel.": "強度を一方のチャンネルに寄せます。",
   "More A": "A 寄り",
   "More B": "B 寄り",
   "Balance parameters, written to the Coyote": "バランスパラメーター（Coyote に書き込み）",
@@ -3495,5 +3494,8 @@
   "Low": "低",
   "High": "高",
   "Extra high": "非常に高",
-  "Maximum": "最大"
+  "Maximum": "最大",
+  "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "両方のチャンネルが 0 のため、何も感じません。準備ができたらチャンネルを上げてください。",
+  "Shifts the pulses toward one channel.": "パルスを一方のチャンネルに寄せます。",
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "両方の上限が 0 です。強度を設定するには、Coyote の出力設定で上限を上げてください。"
 }

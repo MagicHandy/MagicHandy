@@ -56,6 +56,8 @@ export interface CoyoteStatus {
   starved_packets: number;
   max_send_lateness_ms: number;
   last_error?: string;
+  /** Why a connected Coyote cannot be felt (ADR 0063). */
+  silent_reason?: "strength_zero" | "ceiling_zero" | string;
 }
 
 export interface CoyoteTransportSnapshot {

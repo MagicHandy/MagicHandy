@@ -1,5 +1,15 @@
 # Goal Scorecard
 
+## 2026-10-29 — Alpha.81 combined release review
+
+Includes PR #358 and OpenRouter planning/routing against alpha.80 `1f89a3b9`,
+Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
+core including UI **24,414,208 -> 24,433,664 B** (+19,456 B); canonical UI
+**2,862,704 -> 2,871,754 B** (+9,050 B). No dependency, worker or inference round
+added. Companion dispatch retains its existing cadence; changes affect renderer
+constants and backend facts. No new RSS, startup or physical-acceptance claim.
+See the [combined review](alpha81-release-review-2026-10-29.md).
+
 ## 2026-10-29 — Advanced (no reasoning) and OpenRouter limits
 
 Against `1f89a3b9` (alpha.80), Windows amd64 Go 1.26.10,
@@ -78,6 +88,17 @@ and 92,928 B per frame. These local microbenchmarks are not a latency or RSS
 guarantee. No RSS/cold-start claim is made. See
 [ADR 0064](decisions/0064-top-speed-reversals.md) and the
 [whole-path review](motion-path-review-2026-10-29.md).
+## 2026-10-29 — Perceptible speed following and Coyote facts
+
+Against alpha.79 `f21853ab`, Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`: core including
+embedded UI **24,376,832 -> 24,388,608 B** (+11,776 B). Canonical UI
+**2,856,207 -> 2,858,444 B** (+2,237 B); main JS
+**1,313,547 -> 1,314,293 B raw** (+746 B), **353,078 -> 353,284 B gzip**
+(+206 B). CSS stays **210,037 / 36,604 B** raw/gzip. No dependency, worker,
+timer or model call is added; the vibrator still sends at most one command per
+100 ms tick. No RSS/cold-start claim is made. See
+[ADR 0063](decisions/0063-perceptible-following-and-coyote-facts.md).
 
 ## 2026-10-28 — Layered session repair and directional capability
 

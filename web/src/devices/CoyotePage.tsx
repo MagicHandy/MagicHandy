@@ -174,7 +174,7 @@ export function CoyoteOutputSection({ ctx }: DeviceSectionProps) {
       <OptionRow label={t("Pulse rate")} hint={t("Follows the pace within this range, in short held steps.")}>
         <RangeSlider label={t("Pulse rate")} floor={1} ceil={100} unit="Hz" minValue={rate.min} maxValue={rate.max} disabled={locked} onChange={setRate} />
       </OptionRow>
-      <OptionRow label={t("Channel balance")} hint={t("Shifts strength toward one channel.")}>
+      <OptionRow label={t("Channel balance")} hint={t("Shifts the pulses toward one channel.")}>
         <ValueSlider label={t("Channel balance")} hideLabel value={balance} min={-100} max={100} step={5} disabled={locked} valueText={balanceText}
           ends={[t("More A"), t("More B")]} onChange={setBalance} />
       </OptionRow>

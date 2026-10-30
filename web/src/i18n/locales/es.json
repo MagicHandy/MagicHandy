@@ -3240,7 +3240,6 @@
   "The Coyote enforces these itself, even against its own switches, and keeps them after you disconnect. MagicHandy never raises strength on its own.": "El Coyote los aplica por sí mismo, incluso frente a sus propios interruptores, y los conserva al desconectarlo. MagicHandy nunca sube la intensidad por su cuenta.",
   "Pulse rate": "Frecuencia de pulsos",
   "Follows the pace within this range, in short held steps.": "Sigue el ritmo dentro de este rango, en pasos breves que se mantienen.",
-  "Shifts strength toward one channel.": "Desplaza la intensidad hacia un canal.",
   "More A": "Más A",
   "More B": "Más B",
   "Balance parameters, written to the Coyote": "Parámetros de equilibrio, escritos en el Coyote",
@@ -3495,5 +3494,8 @@
   "Low": "Bajo",
   "High": "Alto",
   "Extra high": "Muy alto",
-  "Maximum": "Máximo"
+  "Maximum": "Máximo",
+  "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "Ambos canales están en 0, así que no se siente nada. Sube un canal cuando quieras.",
+  "Shifts the pulses toward one channel.": "Desplaza los pulsos hacia un canal.",
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "Ambos límites están en 0. Súbelos en los ajustes de salida del Coyote para permitir intensidad."
 }

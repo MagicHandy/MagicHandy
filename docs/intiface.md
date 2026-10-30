@@ -109,8 +109,11 @@ Behavior and safety:
   both the linear actuator and the vibrator. Its address is under the same
   Connections section.
 - **Profiles.** On the vibrator's page in **Settings > Devices**, the level
-  follows stroke speed (default; it spans your saved Handy speed range), stroke
-  depth (strongest at the base or tip), or stays steady while motion plays.
+  follows stroke speed (default), stroke depth (strongest at the base or tip),
+  or stays steady while motion plays. Following speed reads each stroke over
+  one 100 ms tick: it rises mid-stroke and with faster pace, dips at each
+  turnaround without switching the motor off, and spans your saved Handy speed
+  range from 20% at its slowest (ADR 0063).
   **Max**, **Model control** and **Minimum while moving** are saved there, and
   a ±300 ms timing offset under **Settings > Devices > Playback**. Following
   vibration maps between the minimum and the level: Max, or the model's share

@@ -5,9 +5,9 @@
 Reviewed Claude's uncommitted `claude/deepseek-parity` work against alpha.80
 `1f89a3b9e9bb50b6685bd89b7c1fb11da03daca0`, preserving its source worktree and
 capturing the patch in ignored local evidence. The release branch is
-`codex/release-alpha81`. PR #358 (follow speed and COYOTE) is separate and is
-not included. No dependency, llama.cpp runtime, worker or transport change is
-part of this release.
+`codex/release-alpha81`. At the owner's explicit request, the release also
+includes PR #358 (speed following and COYOTE); its independent follow-up is
+recorded below. No dependency or llama.cpp runtime change is part of this release.
 
 Retain the optional Advanced (no reasoning) capability, connection-specific
 output floors, effort-sized OpenRouter reasoning reserves and host order UI.
@@ -68,10 +68,11 @@ within its human restriction. Continuous changes retain variation rather than
 becoming fixed patterns. Detailed plots show zero planned velocity/acceleration
 knot jumps and close sparse-wire position overlays, with no introduced flat
 rest at the phrase join. Wire-segment velocity remains piecewise; plots are
-commanded estimates, not carriage telemetry. No motion-engine or transport
-behavior was changed and no hardware was connected during this review.
+commanded estimates, not carriage telemetry. The OpenRouter changes do not alter motion-engine or transport behavior.
+The additional companion-rendering changes are reviewed separately below.
+No hardware was connected during this review.
 
-## Validation
+## Initial OpenRouter validation
 
 - Full `go test ./...`, `go test -race -timeout 20m ./...`, `go vet ./...` and
   golangci-lint passed. Final affected tests and lint passed after the guide edit.
@@ -92,6 +93,62 @@ Ignored evidence includes `go-test.log`, `go-race.log`, `go-vet.log`, `lint.log`
 `final-affected.log`, `final-lint.log`, `frontend-*.log`, `installer-ps*.log`,
 `review-readiness.log`, UI screenshots and the corrected intent audit. Raw model
 responses/private analyses are intentionally not published in Git.
+
+## Inclusion and independent review of PR #358
+
+The owner subsequently requested #358 in this same update. Its original commits
+are retained as a merge parent so the PR remains traceable. Translation conflicts
+were merged by source key and the single canonical UI was rebuilt from combined
+source. No legacy hashed bundle is retained.
+
+The review agrees with shortening the vibrator's speed window/smoothing and
+lowering its speed-band floor: the old output was nearly constant after motor
+quantization. Max remains an absolute ceiling, zero remains exact, and the
+100 ms owner cadence is unchanged. COYOTE uses the same speed-band scale capped
+by its earlier saturating curve, a faster release, and the existing user-only
+strength and Stop path. Band changes reconfigure shaping without rewriting
+unchanged hardware ceilings. No second motion engine is introduced.
+
+Two context corrections were added: Simple now receives facts only for the
+selected follow profile, and every tier distinguishes a zero allowed ceiling
+from a reported zero strength. Initial expanded 12B trials preserved motion but
+answered all six profile/ceiling explanation questions incorrectly. Replacing a
+conditional menu of profiles with the backend-selected facts corrected all six
+in the follow-up; this is backend state selection, not language classification.
+
+Fresh production evaluations: 12B Intermediate, Terra Advanced and DeepSeek's
+new planning tier each pass 18/18 control-contract cases. All replies were read;
+profile and zero-ceiling explanations were correct after the change. 12B still
+uses occasional loose wording such as calling a connected but silent box
+"active"; it also explicitly says output is silent and does not claim to change
+strength. GPT's independent vibration screen passes 26/26. These are small
+utility-voice screens, not broad model parity claims. A fresh E4B runtime launch
+was blocked by automatic approval review with only "blocked by policy"; its
+prior 23/24 evidence is retained, not described as a new validation.
+
+A separate inert comparison feeds the shared planner/buffered sampler into
+alpha.80 and combined vibrator renderers and the combined COYOTE renderer:
+12 scenarios, saved bands 1–100 and 20–80, speeds 25/45/70, ordinary and narrow
+upper travel, Max 70%, 20-step motor. At band 1–100 and speed 45, output changes
+from 40–50% to 25–50%; at speed 70, formerly constant 55% becomes 35–60%.
+All observed levels remain at or below Max. Both overview figures were inspected;
+turnarounds show distinct dips, with no repeated zero/off pulses after fade-in.
+COYOTE pulse widths vary by motion beneath unchanged strength. This is simulated
+command output, not physical motor response or perceived electrical sensation.
+Physical acceptance on the user's vibrator and COYOTE remains outstanding.
+
+The 110 combined live records, including earlier mistaken explanations and
+unchanged/no-motion replies, are retained in `combined-proposals.json` and
+`combined-atlas/` (11 distinct moving plots, one inspected overview). Other
+ignored artifacts: `follow-render.go`, `follow-render.json`, both
+`follow-render-*.png`, `combined-coyote-*.json`, and `combined-vibration-gpt.json`.
+
+Combined full Go tests, vet and lint pass; frontend typecheck, localization,
+build and all 1,082 tests pass. Focused renderer/transport tests include Stop,
+teardown, ceilings, silence reporting and band changes. Combined race testing
+and exact-commit CI are required before merging/publication. Combined stripped
+core plus UI is 24,433,664 B (+19,456 versus alpha.80); UI is 2,871,754 B (+9,050).
+No dependency or extra inference request is introduced.
 
 ## Publication policy
 

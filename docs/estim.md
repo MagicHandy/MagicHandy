@@ -12,7 +12,11 @@ alongside The Handy. The decision record is
   epilepsy, or during pregnancy.
 - MagicHandy never raises channel strength on its own. Only your steps in the
   app or the Coyote's own switches do. The model, modes, scripts and videos
-  shape the pulses beneath the strength you set.
+  shape the pulses beneath the strength you set. Chat models are told this:
+  asked for stronger, weaker or no e-stim, they point you to the device panel
+  and **Zero both** instead of changing anything.
+- While motion plays with both channels reported at 0, the panel reads
+  **Silent** and says what to raise.
 - Stop and `Esc` set both channels to zero. Pause only silences the output.
 
 The Coyote's page in Settings > Devices shows these notes before the first
@@ -69,6 +73,10 @@ The Coyote's page in Settings › Devices saves each of these as you change it:
   - *Position*: a steady pulse width moves between the channels.
 - **Pulse rate** (default 40–100 Hz): the rate follows the pace within the
   range, in 5 Hz steps held for at least 500 ms.
+- Speed is read on your saved Handy speed range, the same scale the vibrator
+  uses, so a faster pace widens the pulses across the whole range. The pulses
+  are never wider than before this change at any speed, so at a given strength
+  output can only be softer (ADR 0063).
 - **Channel balance** and **Swap channels**.
 - **Balance parameters** (advanced): DG-LAB's frequency and intensity balance,
   written with the ceilings. Defaults are 160 and 0.

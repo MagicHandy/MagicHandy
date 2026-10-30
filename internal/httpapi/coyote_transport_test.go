@@ -11,6 +11,7 @@ import (
 
 	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/estim"
+	"github.com/mapledaemon/MagicHandy/internal/motion"
 	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
@@ -244,5 +245,67 @@ func TestStateReportsTheCoyote(t *testing.T) {
 	}
 	if state.Coyote.Output != config.DeviceOutputCoyote || state.Settings.Device.Output != config.DeviceOutputCoyote || !state.Coyote.Available {
 		t.Fatalf("state = %+v", state)
+	}
+}
+
+// Following speed spans the saved Handy speed band on the vibrator's scale, so
+// a band change reconfigures the Coyote (ADR 0063).
+func TestCoyoteConfigFollowsTheSavedSpeedBand(t *testing.T) {
+	settings := config.DefaultSettings()
+	low, high := motion.FollowSpeedBand(settings.EffectiveMotion())
+	profile := coyoteConfig(settings).Profile
+	if profile.SpeedLow != low || profile.SpeedHigh != high || low <= 0 || high <= low {
+		t.Fatalf("profile band %.3f..%.3f, want %.3f..%.3f", profile.SpeedLow, profile.SpeedHigh, low, high)
+	}
+	wider := settings
+	wider.Motion.SpeedMinPercent, wider.Motion.SpeedMaxPercent = 1, 100
+	if coyoteConfig(wider) == coyoteConfig(settings) {
+		t.Fatal("a speed band change must reconfigure the Coyote")
+	}
+	if coyoteConfig(wider).Limits != coyoteConfig(settings).Limits {
+		t.Fatal("a speed band change must not touch the device ceilings")
+	}
+}
+
+// A Coyote reaches the model as facts, never a control: the context describes
+// it without a vibrator, and reports silence until the user raises a channel
+// (ADR 0063). Strength numbers stay out of the model's context.
+func TestCoyoteFactsReachTheChatModel(t *testing.T) {
+	server, _ := newCoyoteTestServer(t, config.DeviceOutputHandyCoyote, true)
+	settings, _ := server.store.Snapshot()
+	outputs := server.chatOutputContext(settings.LLM.ConversationSettings())
+	if outputs == nil || !outputs.Coyote || outputs.Vibrator != nil || outputs.Estim == nil || outputs.Strokers != 1 ||
+		outputs.Estim.Connected || outputs.Estim.Silent || outputs.Estim.Follows != settings.Estim.Follow {
+		t.Fatalf("disconnected Coyote facts = %+v", outputs)
+	}
+	connectCoyote(t, server)
+	// A commanded zero is not a measurement, so silence is not claimed yet.
+	if estim := server.chatOutputContext(settings.LLM.ConversationSettings()).Estim; !estim.Connected || estim.Silent {
+		t.Fatalf("a new connection: %+v", estim)
+	}
+	if code, _ := coyoteRequest(t, server, http.MethodPost, "/api/transport/coyote/strength", `{"channel":"b","delta":1}`, true); code != http.StatusOK {
+		t.Fatalf("raise = %d", code)
+	}
+	waitCoyoteStatus(t, server, func(status transport.CoyoteStatus) bool { return status.StrengthB == 1 && !status.StrengthPending })
+	outputs = server.chatOutputContext(settings.LLM.ConversationSettings())
+	if outputs.Estim.Silent {
+		t.Fatalf("a raised channel is felt: %+v", outputs.Estim)
+	}
+	if code, _ := coyoteRequest(t, server, http.MethodPost, "/api/transport/coyote/strength", `{"channel":"b","delta":-1}`, true); code != http.StatusOK {
+		t.Fatalf("lower = %d", code)
+	}
+	waitCoyoteStatus(t, server, func(status transport.CoyoteStatus) bool { return status.StrengthB == 0 && !status.StrengthPending })
+	if estim := server.chatOutputContext(settings.LLM.ConversationSettings()).Estim; !estim.Silent {
+		t.Fatalf("the device reported zero on both channels: %+v", estim)
+	}
+	if encoded, _ := json.Marshal(outputs); strings.Contains(string(encoded), "strength_b") || strings.Contains(string(encoded), "ceiling") {
+		t.Fatalf("strength numbers leaked into the model context: %s", encoded)
+	}
+	saveSettings(t, server.store, func(settings config.Settings) config.Settings {
+		settings.Device = settings.Device.WithPlaybackOutput(config.DeviceOutputHandy)
+		return settings
+	})
+	if outputs := server.chatOutputContext(settings.LLM.ConversationSettings()); outputs != nil {
+		t.Fatalf("Handy-only playback has no output context: %+v", outputs)
 	}
 }

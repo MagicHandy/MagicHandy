@@ -3240,7 +3240,6 @@
   "The Coyote enforces these itself, even against its own switches, and keeps them after you disconnect. MagicHandy never raises strength on its own.": "郊狼会自行执行这些上限，即使对其自身拨杆也有效，断开后仍会保留。MagicHandy 从不自行提高强度。",
   "Pulse rate": "脉冲频率",
   "Follows the pace within this range, in short held steps.": "在此范围内跟随节奏，分短步并短暂保持。",
-  "Shifts strength toward one channel.": "将强度偏向一个通道。",
   "More A": "偏 A",
   "More B": "偏 B",
   "Balance parameters, written to the Coyote": "平衡参数（写入郊狼）",
@@ -3495,5 +3494,8 @@
   "Low": "低",
   "High": "高",
   "Extra high": "极高",
-  "Maximum": "最高"
+  "Maximum": "最高",
+  "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "两个通道都为 0，因此没有任何感觉。准备好后再调高一个通道。",
+  "Shifts the pulses toward one channel.": "将脉冲偏向一个通道。",
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "两个上限都为 0。请在 Coyote 的输出设置中调高上限，才能设置强度。"
 }
