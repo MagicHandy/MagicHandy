@@ -73,8 +73,8 @@ function coyoteModel(ctx: DeviceContext): DeviceModel {
       name: t("Coyote strength"),
       levels: [coyoteLevel(ctx, status, "a"), coyoteLevel(ctx, status, "b")],
       action: { label: t("Zero both"), disabled: ctx.locked, run: () => ctx.send(async () => ctx.setCoyote(await api.coyoteZero())) },
-      note: status.strength_source === "zero_command" ? t("Zero command accepted. The device has not reported a strength change.")
-        : status.silent_reason === "ceiling_zero" ? t("Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.")
+      note: status.silent_reason === "ceiling_zero" ? t("Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.")
+        : status.strength_source === "zero_command" ? t("Zero command accepted. The device has not reported a strength change.")
           : status.silent_reason === "strength_zero" ? t("Both channels are at 0, so nothing is felt. Raise a channel when you are ready.") : undefined,
     } : undefined,
     readout: connected && status?.strength_known ? t("A {a} · B {b}", { a: status.strength_a, b: status.strength_b }) : undefined,

@@ -161,7 +161,8 @@ describe("The Coyote's descriptor", () => {
     expect(playing.status).toBe("silent");
     expect(playing.levels!.note).toBe("Both channels are at 0, so nothing is felt. Raise a channel when you are ready.");
     expect(coyoteDevice.model(makeCtx({ coyote: zero })).status).not.toBe("silent");
-    const capped = coyoteDevice.model(makeCtx({ coyote: coyoteSnapshot({ ceiling_a: 0, ceiling_b: 0, strength_a: 0, strength_b: 0, silent_reason: "ceiling_zero" }), engineActive: true }));
+    // The applied zero ceiling is actionable even before a strength report.
+    const capped = coyoteDevice.model(makeCtx({ coyote: coyoteSnapshot({ ceiling_a: 0, ceiling_b: 0, strength_a: 0, strength_b: 0, strength_source: "zero_command", silent_reason: "ceiling_zero" }), engineActive: true }));
     expect(capped.levels!.note).toBe("Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.");
     expect(coyoteDevice.model(makeCtx({ coyote: coyoteSnapshot(), engineActive: true })).status).not.toBe("silent");
   });

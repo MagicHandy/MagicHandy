@@ -109,6 +109,13 @@ by its earlier saturating curve, a faster release, and the existing user-only
 strength and Stop path. Band changes reconfigure shaping without rewriting
 unchanged hardware ceilings. No second motion engine is introduced.
 
+The simulator UI review also found that the initial zero-command notice hid
+the more actionable zero-ceiling explanation. The device panel now prioritizes
+the applied ceiling reason; the unreported-strength notice remains otherwise.
+Its regression test and canonical bundle pass. The combined app at port 50333
+completed readiness generation and a normal text-only chat in 766 ms with
+motion off, and its simulated COYOTE connected at zero without real hardware.
+
 Two context corrections were added: Simple now receives facts only for the
 selected follow profile, and every tier distinguishes a zero allowed ceiling
 from a reported zero strength. Initial expanded 12B trials preserved motion but
@@ -145,8 +152,8 @@ ignored artifacts: `follow-render.go`, `follow-render.json`, both
 
 Combined full Go tests, vet and lint pass; frontend typecheck, localization,
 build and all 1,082 tests pass. Focused renderer/transport tests include Stop,
-teardown, ceilings, silence reporting and band changes. Combined race testing
-and exact-commit CI are required before merging/publication. Combined stripped
+teardown, ceilings, silence reporting and band changes. Combined focused race tests also pass, including HTTP/device teardown.
+Exact-commit CI is required before merging/publication. Combined stripped
 core plus UI is 24,433,664 B (+19,456 versus alpha.80); UI is 2,871,754 B (+9,050).
 No dependency or extra inference request is introduced.
 
