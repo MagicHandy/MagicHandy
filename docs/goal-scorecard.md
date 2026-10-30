@@ -1,5 +1,15 @@
 # Goal Scorecard
 
+## 2026-10-30 — Alpha.81 repair-persistence follow-up
+
+With the same Windows amd64 Go 1.26.10 and stripped pure-Go measurement flags
+below, core plus UI is **24,434,688 B** (+1,024 B over the combined review;
++20,480 B versus alpha.80). UI remains **2,871,754 B**. No dependency or worker
+is added. Repairable failed responses receive up to two seconds to persist their
+diagnostic record instead of 500 ms; successful responses and motion timing are
+unchanged. The bounded writer-contention and rollback tests accompany
+[ADR 0053](decisions/0053-hosted-chat-response-repair.md).
+
 ## 2026-10-29 — Alpha.81 combined release review
 
 Includes PR #358 and OpenRouter planning/routing against alpha.80 `1f89a3b9`,

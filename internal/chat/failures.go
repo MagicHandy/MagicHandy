@@ -65,7 +65,10 @@ func (l *MessageLog) SaveFailure(ctx context.Context, sessionID string, failure 
 		_, pruneErr := tx.ExecContext(ctx, `DELETE FROM chat_failures WHERE seq NOT IN (SELECT seq FROM chat_failures ORDER BY seq DESC LIMIT ?)`, FailureRetention)
 		return pruneErr
 	})
-	return id, err
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
 // SetFailureRepairOutcome amends only the non-secret cancellation outcome of

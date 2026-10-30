@@ -1,10 +1,38 @@
 package chat
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 	"testing"
 )
+
+func TestFailedRequestRollbackDoesNotExposeAnUncommittedID(t *testing.T) {
+	log := openTestLog(t)
+	session, err := log.ActiveSessionID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range FailureRetention {
+		if _, err := log.SaveFailure(t.Context(), session, RequestFailure{Error: "retained"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := log.db.WithTx(t.Context(), func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(t.Context(), `CREATE TRIGGER fail_failure_pruning BEFORE DELETE ON chat_failures BEGIN SELECT RAISE(ABORT, 'test pruning failure'); END`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	id, err := log.SaveFailure(t.Context(), session, RequestFailure{Error: "rolled back"})
+	if err == nil || id != 0 {
+		t.Fatalf("failed transaction exposed an ID: %d %v", id, err)
+	}
+	items, err := log.Failures(t.Context(), session)
+	if err != nil || len(items) != FailureRetention || items[0].Error != "retained" {
+		t.Fatalf("transaction was not rolled back: %+v %v", items, err)
+	}
+}
 
 func TestFailedRequestsAreBoundedDurableAndOutsideConversation(t *testing.T) {
 	directory := t.TempDir()

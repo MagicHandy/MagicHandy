@@ -157,6 +157,30 @@ Exact-commit CI is required before merging/publication. Combined stripped
 core plus UI is 24,433,664 B (+19,456 versus alpha.80); UI is 2,871,754 B (+9,050).
 No dependency or extra inference request is introduced.
 
+## Final persistence follow-up
+
+The merged-main race run repeated the missing manual-vibration repair offer
+seen in an earlier duplicate PR run. Publication was held. Isolated delayed
+replies and CPU-contention probes did not reproduce it, but a controlled 750 ms
+hold of the real shared database writer reproduced the same missing offer with
+current admission and motion guards and no saved failure row. The 500 ms
+diagnostic-save deadline had expired. This is a demonstrated cause of the
+symptom; CI's discarded fixture logger did not retain the original storage
+cause, so the original CI failure cannot be attributed conclusively.
+
+Repairable, unattempted responses now get up to two seconds to retain their
+failure ID; other diagnostic writes keep 500 ms. Successful chat is unaffected.
+A second test holds the writer indefinitely and verifies bounded failure, no
+repair offer and no motion. Failure persistence now returns zero on transaction
+rollback, with a pruning-trigger regression test. Existing control and Stop
+guards are unchanged. Safe timeout/cancellation flags improve future diagnosis.
+The focused before/after reproduction and race runs are retained in ignored
+`repair-contention-*.log` and `repair-followup-race.log`; temporary pressure
+probes are retained outside the source tree. Fresh exact-commit CI is required.
+Focused repair/Stop/failure race tests passed across CPU settings 1, 2 and 4
+with three repetitions each. The final stripped core plus UI is 24,434,688 B
+(+20,480 B versus alpha.80); the UI bundle is unchanged by this follow-up.
+
 ## Publication policy
 
 Alpha.81 adds one explicit version to the existing reviewed unsigned-alpha

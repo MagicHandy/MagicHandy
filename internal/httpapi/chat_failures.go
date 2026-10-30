@@ -128,7 +128,15 @@ func (s *Server) chatFailureEvidence(result chat.Result, failure error, diagnost
 }
 
 func (s *Server) recordChatFailure(ctx context.Context, sessionID string, result chat.Result, failure error, diagnostics chat.MessageDiagnostics, outcome string) (int64, string) {
-	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	timeout := 500 * time.Millisecond
+	if result.CanRepair() {
+		// The manual repair offer needs a retained failure ID. Brief writer
+		// contention must not silently remove it, while a blocked datastore
+		// still cannot hold a failed request indefinitely. The parent context
+		// and the later repair freshness checks remain authoritative.
+		timeout = 2 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	settings, _ := s.store.Snapshot()
 	modelSettings := settings.LLM.ConversationSettings()
@@ -145,7 +153,8 @@ func (s *Server) recordChatFailure(ctx context.Context, sessionID string, result
 	}
 	id, err := s.chatLog.SaveFailure(ctx, sessionID, item)
 	if err != nil {
-		s.logger.Warn("chat failure diagnostics could not be saved")
+		s.logger.Warn("chat failure diagnostics could not be saved",
+			"timed_out", errors.Is(ctx.Err(), context.DeadlineExceeded), "canceled", errors.Is(ctx.Err(), context.Canceled))
 	}
 	return id, item.Error
 }

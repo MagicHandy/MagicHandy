@@ -64,12 +64,25 @@ only a safe repair action and shared conversation status; raw failures and
 provider diagnostics remain administrator-only.
 
 Stop, request cancellation and stale work still retain the already rejected
-attempt under an independent 500 ms diagnostic-write deadline. This cannot
+attempt under a bounded diagnostic-write deadline. This cannot
 publish a reply, speak or dispatch motion. `repair_outcome` distinguishes a
 successful replacement, failed correction, Stop, cancellation and stale work;
 a late cancellation updates only that existing record's non-secret outcome.
 The captured original provider/mode remains the diagnostic provenance even
 when cancellation was caused by a later settings change.
+
+Diagnostics normally have a 500 ms persistence deadline. An unattempted,
+repairable response gets up to two seconds because its manual repair action
+requires a durable failure ID. Alpha.81 release checks reproduced a missing
+repair action with a 750 ms database-writer hold while all request and device
+permissions remained current. The longer bound affects only failed responses;
+it adds no model call or wait to a successful response. An attached parent
+context still cancels persistence, and all existing Stop, controller, output,
+conversation and motion freshness checks run before a repair is offered or used.
+A blocked writer still returns an error without a repair offer. A failed or
+rolled-back diagnostic transaction returns no ID, even if SQLite allocated one
+before its rollback. Persistence warnings expose only timeout/cancellation
+flags, never raw storage errors or private response content.
 
 Capturing the optional repair context happens before composition. If that
 capture fails, repair admission closes while the ordinary request can still
