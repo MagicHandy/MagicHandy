@@ -11,11 +11,26 @@ var routerEfforts = []string{"none", "minimal", "low", "medium", "high", "xhigh"
 // completion cap with the answer. Apply this before input admission, for every
 // call (including short decisions, repairs and readiness), not just in the UI
 // connection check. It is a ceiling, not a request to generate more text.
-func OpenRouterOutputTokens(answerTokens int, effort string, enabled *bool) int {
+//
+// The reserve follows the effort: DeepSeek V4.1 Flash used up to 6.0K
+// completion tokens at low effort and 7.4K at its default, so a fixed 2,048
+// cap cut off about a third of its answers. A quarter of a known context is
+// the most a reserve takes from input admission.
+func OpenRouterOutputTokens(answerTokens int, effort string, enabled *bool, contextSize int) int {
 	if effort == "none" || (enabled != nil && !*enabled) {
 		return answerTokens
 	}
-	return max(answerTokens, 2048)
+	reserve := 8192
+	switch effort {
+	case "minimal":
+		reserve = 2048
+	case "low":
+		reserve = 6144
+	}
+	if contextSize > 0 {
+		reserve = min(reserve, contextSize/4)
+	}
+	return max(answerTokens+reserve, 2048)
 }
 
 type compatibleCatalogModel struct {

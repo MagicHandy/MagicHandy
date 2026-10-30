@@ -71,16 +71,18 @@ func TestOpenRouterAutopilotKeepsReasoningFailureActionable(t *testing.T) {
 
 func TestOpenRouterReadinessAllowsReasoningBeforeAnswer(t *testing.T) {
 	yes, no := true, false
+	// The model check answers in 64 tokens; chat on this Advanced connection
+	// gets its 1,024-token floor. Reasoning adds an effort-sized reserve.
 	for _, tc := range []struct {
 		name, effort string
 		enabled      *bool
-		budget       int
+		reserve      int
 	}{
-		{name: "provider default", budget: 2048},
-		{name: "enabled", enabled: &yes, budget: 2048},
-		{name: "low", effort: "low", budget: 2048},
-		{name: "disabled", enabled: &no, budget: 64},
-		{name: "none", effort: "none", budget: 64},
+		{name: "provider default", reserve: 8192},
+		{name: "enabled", enabled: &yes, reserve: 8192},
+		{name: "low", effort: "low", reserve: 6144},
+		{name: "disabled", enabled: &no},
+		{name: "none", effort: "none"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			s, fake, _ := hostedFixture(t, func(http.ResponseWriter, *http.Request) { t.Error("wrong provider") })
@@ -103,10 +105,13 @@ func TestOpenRouterReadinessAllowsReasoningBeforeAnswer(t *testing.T) {
 				if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 					t.Fatal(err)
 				}
-				wantBudget := tc.budget
-				if calls == 2 && wantBudget == 64 {
-					// Off keeps each caller's ordinary answer budget.
-					wantBudget = config.DefaultSettings().LLM.ChatMaxOutputTokens(config.LLMReplyLengthShort)
+				answer := 64
+				if calls == 2 {
+					answer = config.MinimumLocalOutput(config.ModelCapabilityAdvanced)
+				}
+				wantBudget := answer
+				if tc.reserve > 0 {
+					wantBudget = max(answer+tc.reserve, 2048)
 				}
 				if request.MaxTokens != wantBudget {
 					t.Errorf("call %d budget = %d, want %d", calls, request.MaxTokens, wantBudget)
@@ -114,7 +119,7 @@ func TestOpenRouterReadinessAllowsReasoningBeforeAnswer(t *testing.T) {
 				if tc.name == "provider default" && request.Reasoning != nil {
 					t.Error("test overrode provider default reasoning")
 				}
-				if tc.budget == 2048 && request.MaxTokens < 2048 {
+				if tc.reserve > 0 && request.MaxTokens < answer+tc.reserve {
 					// A model using its output allowance on hidden reasoning.
 					_, _ = fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\ndata: [DONE]\n\n")
 				} else if calls == 1 {

@@ -4,7 +4,7 @@ import type { CloudPlanningStatus, ModelConnection, ModelRoute, ModelRoutingSnap
 import type { ModelCapabilityLevel, ModelCapabilityOption } from "../api/llm-settings-types";
 import type { LLMProviderStatus, PublicSettings } from "../api/types";
 import { t, translateKnown } from "../i18n";
-import { capabilityNames, connectionCapability, connectionRoles, connectionSignature, modelConnectionLabel, modelProviderNames, modelSettingsPatch, modelSettingsSignature, newModelConnection, removeConnection, roleCapability, type ModelRole } from "../util/model-connections";
+import { capabilityNames, connectionCapability, connectionRoles, connectionSignature, isAdvancedCapability, modelConnectionLabel, modelProviderNames, modelSettingsPatch, modelSettingsSignature, newModelConnection, removeConnection, roleCapability, type ModelRole } from "../util/model-connections";
 import { DecisionsConnection } from "./DecisionsConnection";
 import { ModelConnectionEditor } from "./ModelConnectionEditor";
 import { SecondOpinionRow } from "./MotionReviewerSettings";
@@ -93,7 +93,7 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
   const usesLocal = conversationID === "local" || planner.provider === "local" || planner.connection_id === "local" || Boolean(conversation && settings.retry_refusal_locally);
   const chatLevel = roleCapability(settings, conversationID);
   const autopilotLevel = plannerCapability(settings, conversationID);
-  const reviewable = [chatLevel, autopilotLevel].some(level => level !== undefined && level !== "advanced");
+  const reviewable = [chatLevel, autopilotLevel].some(level => level !== undefined && !isAdvancedCapability(level));
   const routeHint = chatRouteText(routing);
   const [localOpen, setLocalOpen] = useState(usesLocal);
   // Assigning a role to the local model opens it, since it may need setting up.
@@ -125,7 +125,7 @@ export function ModelConnectionsPanel({ settings, saved, routing, locked, patch,
           </select>
         </FieldRow>}
         <SecondOpinionRow settings={settings} locked={locked} eligible={reviewable} patch={patch} />
-        {chatLevel === "advanced" && <label className="toggle-line form-row"><span className="toggle"><input type="checkbox" disabled={locked} checked={settings.hosted_response_repair_enabled ?? true} onChange={event => patch({ hosted_response_repair_enabled: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Automatically repair rejected chat responses")}<small>{t("Ask the same model once to correct an invalid response. Adds time and another model request. When off, eligible chat errors offer Repair response.")}</small></span></label>}
+        {isAdvancedCapability(chatLevel) && <label className="toggle-line form-row"><span className="toggle"><input type="checkbox" disabled={locked} checked={settings.hosted_response_repair_enabled ?? true} onChange={event => patch({ hosted_response_repair_enabled: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Automatically repair rejected chat responses")}<small>{t("Ask the same model once to correct an invalid response. Adds time and another model request. When off, eligible chat errors offer Repair response.")}</small></span></label>}
         {conversation && !setup && <label className="toggle-line form-row"><span className="toggle"><input type="checkbox" disabled={locked} checked={Boolean(settings.retry_refusal_locally)} onChange={event => patch({ retry_refusal_locally: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Retry declined chat requests with the local model")}<small>{settings.retry_refusal_locally
           ? t("Local retry model: {provider} · {model}", { provider: settings.provider === "ollama" ? "Ollama" : "llama.cpp", model: settings.model || t("Choose a model") })
           : t("One local attempt after an explicit provider refusal, using your local prompt and the original conversation. Errors, incomplete output and refusal wording in an otherwise valid reply do not trigger a retry. Autopilot is unchanged.")}</small></span></label>}

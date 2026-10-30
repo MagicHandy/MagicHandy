@@ -1,5 +1,27 @@
 # Goal Scorecard
 
+## 2026-10-29 — Advanced (no reasoning) and OpenRouter limits
+
+Against `1f89a3b9` (alpha.80), Windows amd64 Go 1.26.10,
+`CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
+
+- Core including embedded UI: **24,414,208 -> 24,420,352 B** (+6,144 B).
+- Canonical UI: **2,862,704 -> 2,869,517 B** (+6,813 B), from one capability
+  option, one host-order select and translations.
+
+No dependency, worker, timer or inference step is added. The no-reasoning
+level's private note is part of the same generation. On DeepSeek V4.1 Flash it
+added about 0.1 s to the median, with completions of about 200 tokens. The
+level is opt-in; Advanced prompts are byte-identical.
+
+Connection requests now apply their level's output floor: 512 tokens for
+Intermediate and 1,024 for both Advanced levels. The previous inherited global
+default of 256 cut off about 40% of DeepSeek's Advanced replies. OpenRouter's
+reasoning reserve now follows the effort, from 2,048 to 8,192 tokens, capped at
+a quarter of the context. These are ceilings, not instructions to lengthen answers. New
+OpenRouter connections ask for the fastest hosts. No RSS or startup claim is
+made. See the [parity review](openrouter-deepseek-parity-review-2026-10-29.md).
+
 ## 2026-10-29 — OpenRouter regression review follow-up
 
 Against `31898408`, canonical UI **2,861,586 -> 2,862,704 B** (+1,118 B).

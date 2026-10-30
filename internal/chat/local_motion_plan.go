@@ -41,6 +41,12 @@ func localPlanningMessages(messages []llm.Message, state MotionContext) []llm.Me
 // A note precedes edits in the constrained decoder. It is inert model metadata,
 // never a parsed language rule, constraint lock, or independent motion command.
 func withLocalPlanSchema(schema json.RawMessage) json.RawMessage {
+	return withPlanNoteSchema(schema, map[string]any{"type": "string", "maxLength": localPlanNoteLimit})
+}
+
+// withPlanNoteSchema adds the required basis to every branch that carries
+// edits. "basis" sorts before "edits", so constrained decoding writes it first.
+func withPlanNoteSchema(schema json.RawMessage, note map[string]any) json.RawMessage {
 	var root map[string]any
 	if json.Unmarshal(schema, &root) != nil {
 		return schema
@@ -58,7 +64,7 @@ func withLocalPlanSchema(schema json.RawMessage) json.RawMessage {
 			}
 		}
 		if fields, ok := object["properties"].(map[string]any); ok && fields["edits"] != nil {
-			fields["basis"] = map[string]any{"type": "string", "maxLength": localPlanNoteLimit}
+			fields["basis"] = note
 			required, _ := object["required"].([]any)
 			object["required"] = append(required, "basis")
 		}

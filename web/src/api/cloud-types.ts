@@ -21,6 +21,8 @@ export interface ModelConnection {
   allowed_providers?: string[];
   data_collection: "deny" | "allow";
   zero_data_retention: boolean;
+  // OpenRouter's provider.sort. Absent keeps its balanced routing.
+  provider_sort?: "" | "throughput" | "latency" | "price";
   no_authentication?: boolean;
   // The model's motion contract. Absent means Advanced (saved before levels).
   capability_level?: import("./llm-settings-types").ModelCapabilityLevel;

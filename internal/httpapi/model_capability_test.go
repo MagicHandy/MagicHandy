@@ -86,12 +86,16 @@ func TestLocalTierReachesChatAndPlanningCapabilities(t *testing.T) {
 			settings.LLM.MaxOutputTokens = config.MinimumLocalOutput(level)
 			settings.Autopilot.AutoMotionTiming, settings.Autopilot.PrepareNextDecision = true, true
 			caps := chatCapabilities(settings.LLM, nil)
-			advanced := level == config.ModelCapabilityAdvanced
+			// Advanced (no reasoning) is the Advanced contract plus its planning note.
+			advanced := level == config.ModelCapabilityAdvanced || level == config.ModelCapabilityAdvancedNoReasoning
 			if caps.SimpleMotion != (level == config.ModelCapabilitySimple) {
 				t.Fatalf("Simple guidance not isolated to its selected level: %+v", caps)
 			}
 			if caps.AdvancedMotion != advanced || caps.IntermediateMotion != (level == config.ModelCapabilityIntermediate) || caps.PreserveConversationText != advanced || autoMotionTiming(chat.AutopilotKindMotion, settings) != advanced || prepareAutopilotDecisions(settings) != advanced {
 				t.Fatalf("capabilities not applied: %+v", caps)
+			}
+			if caps.ChatPlanNote != (level == config.ModelCapabilityAdvancedNoReasoning) {
+				t.Fatalf("chat plan note not isolated to its selected level: %+v", caps)
 			}
 			if autoMotionTiming(chat.AutopilotKindSpeech, settings) {
 				t.Fatal("speech acquired timing")
@@ -180,7 +184,7 @@ func TestAdvancedLocalHistoryUsesBoundedExternalWindow(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := chat.PromptHistoryLimit
-		if level == config.ModelCapabilityAdvanced {
+		if level == config.ModelCapabilityAdvanced || level == config.ModelCapabilityAdvancedNoReasoning {
 			want = 64
 		}
 		if len(context.History) != want {
@@ -204,8 +208,8 @@ func TestLocalCapabilityOutputFactsReachProductionTurns(t *testing.T) {
 		state := s.chatTurnMotion(settings, nil, "")
 		if state.Outputs == nil || state.Outputs.Strokers != 1 || state.Outputs.Vibrator == nil ||
 			!state.Outputs.Vibrator.Ready || state.Outputs.Vibrator.Stopped || state.Outputs.Vibrator.LevelPercent != 100 || !state.Outputs.Vibrator.LevelFollowsHandy ||
-			state.Outputs.Vibrator.Independent != (level == config.ModelCapabilityAdvanced) ||
-			state.Outputs.Vibrator.LevelControl != (level != config.ModelCapabilityAdvanced) {
+			state.Outputs.Vibrator.Independent != settings.LLM.AdvancedMotion() ||
+			state.Outputs.Vibrator.LevelControl != !settings.LLM.AdvancedMotion() {
 			t.Fatalf("%s live context lost output facts: %+v", level, state.Outputs.Vibrator)
 		}
 	}

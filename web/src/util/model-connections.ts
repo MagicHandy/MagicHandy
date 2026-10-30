@@ -3,14 +3,19 @@ import type { LLMSettings, ModelCapabilityLevel, ModelCapabilityOption } from ".
 
 export const modelProviderNames = { chatgpt: "ChatGPT", openrouter: "OpenRouter", openai: "OpenAI API", compatible: "Other compatible provider" } as const;
 
-export const capabilityNames: Record<ModelCapabilityLevel, string> = { simple: "Simple", intermediate: "Intermediate", advanced: "Advanced" };
+export const capabilityNames: Record<ModelCapabilityLevel, string> = { simple: "Simple", intermediate: "Intermediate", advanced_no_reasoning: "Advanced (no reasoning)", advanced: "Advanced" };
+
+// Draft controls use the same two Advanced contracts as the backend resolver.
+export function isAdvancedCapability(level: ModelCapabilityLevel | undefined): boolean {
+  return level === "advanced" || level === "advanced_no_reasoning";
+}
 
 // Request budgets a connection may select; the backend validates the same list.
 export const connectionContextSizes = [16384, 32768, 65536, 131072, 262144] as const;
 
 // The backend publishes each level's floor. These fallbacks match it for a
 // client that renders before options arrive.
-const fallbackFloors: Record<ModelCapabilityLevel, number> = { simple: 16384, intermediate: 32768, advanced: 65536 };
+const fallbackFloors: Record<ModelCapabilityLevel, number> = { simple: 16384, intermediate: 32768, advanced_no_reasoning: 65536, advanced: 65536 };
 
 export function connectionCapability(connection: Pick<ModelConnection, "capability_level">): ModelCapabilityLevel {
   return connection.capability_level ?? "advanced";
@@ -45,7 +50,7 @@ export function connectionSignature(connection: ModelConnection): string {
     connection.provider === "openrouter" ? "https://openrouter.ai/api/v1" : connection.provider === "chatgpt" || connection.provider === "openai" ? "https://api.openai.com/v1" : connection.base_url.trim().replace(/\/+$/, ""),
     connection.model.trim(), connection.output_mode || "auto", connection.supported_parameters ?? [],
     Boolean(connection.allow_fallbacks), connection.allowed_providers ?? [], connection.data_collection || "deny",
-    Boolean(connection.zero_data_retention), Boolean(connection.no_authentication),
+    Boolean(connection.zero_data_retention), connection.provider_sort ?? "", Boolean(connection.no_authentication),
     connection.reasoning_effort ?? "",
     connection.reasoning_enabled ?? null,
     connection.context_window || 65536,
@@ -60,10 +65,13 @@ export function newModelConnection(provider: ModelConnection["provider"], connec
   // A compatible server often runs a small model, so it starts Simple, like an
   // unknown local model. Hosted providers keep the Advanced contract.
   const compact = provider === "compatible" ? { capability_level: "simple" as const, context_window: fallbackFloors.simple } : {};
+  // Motion waits for a complete reply, and OpenRouter's balanced default can
+  // pick a slow host, so new OpenRouter connections ask for the fastest.
+  const routing = provider === "openrouter" ? { provider_sort: "throughput" as const } : {};
   return {
     id: `${provider}-${number}`, name: names[provider], provider,
     base_url: provider === "openrouter" ? "https://openrouter.ai/api/v1" : provider === "compatible" ? "http://127.0.0.1:8000/v1" : "https://api.openai.com/v1",
-    model: "", output_mode: "auto", allow_fallbacks: false, data_collection: "deny", zero_data_retention: false, ...compact,
+    model: "", output_mode: "auto", allow_fallbacks: false, data_collection: "deny", zero_data_retention: false, ...compact, ...routing,
   };
 }
 

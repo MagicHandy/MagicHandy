@@ -194,6 +194,11 @@ function AdvancedRows({ connection, disabled, patch }: { connection: ModelConnec
     </FieldRow>
     {connection.provider === "compatible" && <label className="toggle-line form-row"><span className="toggle"><input disabled={disabled} type="checkbox" checked={connection.supported_parameters?.includes("max_tokens") ?? false} onChange={event => patch({ supported_parameters: event.target.checked ? ["max_tokens", "temperature", "top_p"] : [] })} /><span className="track" aria-hidden="true" /></span><span>{t("Endpoint supports standard token and sampling parameters")}</span></label>}
     {connection.provider === "openrouter" && <>
+      <FieldRow id={`connection-sort-${id}`} label={t("Host order")} hint={t("Motion waits for the complete reply, so faster hosts answer sooner. They can cost more per token.")}>
+        <select id={`connection-sort-${id}`} aria-describedby={`connection-sort-${id}-hint`} disabled={disabled} value={connection.provider_sort ?? ""} onChange={event => patch({ provider_sort: event.target.value as ModelConnection["provider_sort"] })}>
+          <option value="throughput">{t("Fastest output")}</option><option value="latency">{t("Fastest first token")}</option><option value="price">{t("Lowest price")}</option><option value="">{t("OpenRouter balanced")}</option>
+        </select>
+      </FieldRow>
       <label className="toggle-line form-row"><span className="toggle"><input disabled={disabled} type="checkbox" checked={connection.allow_fallbacks} onChange={event => patch({ allow_fallbacks: event.target.checked })} /><span className="track" aria-hidden="true" /></span><span>{t("Allow OpenRouter to fall back between compatible hosts")}</span></label>
       <FieldRow id={`connection-allowed-${id}`} label={t("Allowed OpenRouter providers")} stack>
         <input id={`connection-allowed-${id}`} disabled={disabled} type="text" value={connection.allowed_providers?.join(", ") ?? ""} onChange={event => patch({ allowed_providers: event.target.value.split(",").map(value => value.trim()).filter(Boolean) })} />

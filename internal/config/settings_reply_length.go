@@ -28,10 +28,11 @@ func ValidLLMReplyLength(length string) bool {
 
 // ChatMaxOutputTokens is the output budget for one chat reply at the given
 // reply length: the saved cap, raised for detailed replies so they can
-// finish inside the JSON contract.
+// finish inside the JSON contract, and to a connection's capability floor.
 func (s LLMSettings) ChatMaxOutputTokens(replyLength string) int {
-	if replyLength == LLMReplyLengthDetailed && s.MaxOutputTokens < DetailedReplyMinOutputTokens {
-		return DetailedReplyMinOutputTokens
+	tokens := s.MaxOutputTokens
+	if replyLength == LLMReplyLengthDetailed && tokens < DetailedReplyMinOutputTokens {
+		tokens = DetailedReplyMinOutputTokens
 	}
-	return s.MaxOutputTokens
+	return max(tokens, s.ConnectionOutputFloor())
 }

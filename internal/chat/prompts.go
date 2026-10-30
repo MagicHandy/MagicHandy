@@ -225,6 +225,9 @@ type Capabilities struct {
 	AdvancedMotion bool
 	// IntermediateMotion enables the fuller local contract after explicit opt-in.
 	IntermediateMotion bool
+	// ChatPlanNote adds a private planning note before Advanced chat edits in
+	// the same generation (ADR 0065). It requires AdvancedMotion.
+	ChatPlanNote bool
 	// Evaluation can exercise the compact local grammar without changing production.
 	VibrationControl bool
 	// DirectionalPace lets opt-in evaluations exercise a compact candidate

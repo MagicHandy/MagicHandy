@@ -31,6 +31,9 @@ func TestHostedLayeredLiveOperations(t *testing.T) {
 
 func hostedLayeredLiveProvider(t *testing.T) (*hostedLayeredCapture, string) {
 	t.Helper()
+	if provider, model, ok := openRouterLiveProvider(t); ok {
+		return &hostedLayeredCapture{Provider: withLiveLevel(provider)}, model
+	}
 	directory, model := os.Getenv("MAGICHANDY_HOSTED_DATA_DIR"), os.Getenv("MAGICHANDY_LIVE_MODEL")
 	if directory == "" || model == "" {
 		t.Skip("set MAGICHANDY_HOSTED_DATA_DIR and MAGICHANDY_LIVE_MODEL for an existing ChatGPT sign-in")
@@ -59,7 +62,7 @@ func hostedLayeredLiveProvider(t *testing.T) (*hostedLayeredCapture, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &hostedLayeredCapture{Provider: responses}, model
+	return &hostedLayeredCapture{Provider: withLiveLevel(responses)}, model
 }
 
 func saveHostedLayeredRows(t *testing.T, rows []map[string]any) {

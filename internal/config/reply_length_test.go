@@ -57,3 +57,28 @@ func TestDetailedRepliesRaiseOnlyASmallOutputBudget(t *testing.T) {
 		t.Fatalf("detailed lowered a larger saved budget to %d", got)
 	}
 }
+
+// A connection's capability floor applies to its own requests: DeepSeek's
+// Advanced replies ran past 256 tokens about 40% of the time. The saved local
+// limit and Simple connections keep the saved budget.
+func TestConnectionOutputFloorFollowsItsCapability(t *testing.T) {
+	settings := DefaultSettings().LLM
+	settings.MaxOutputTokens = 256
+	if got := settings.ChatMaxOutputTokens(LLMReplyLengthBalanced); got != 256 {
+		t.Fatalf("local budget = %d, want the saved 256", got)
+	}
+	for level, want := range map[string]int{
+		ModelCapabilitySimple: 256, ModelCapabilityIntermediate: 512,
+		ModelCapabilityAdvancedNoReasoning: 1024, ModelCapabilityAdvanced: 1024, "": 1024,
+	} {
+		connection := ModelConnection{ID: "router", Name: "Router", Provider: LLMProviderOpenRouter, Model: "provider/model", CapabilityLevel: level}.Normalize()
+		settings.ActiveConnection = &connection
+		if got := settings.ChatMaxOutputTokens(LLMReplyLengthBalanced); got != want {
+			t.Errorf("%q connection budget = %d, want %d", level, got, want)
+		}
+	}
+	settings.MaxOutputTokens = 2048
+	if got := settings.ChatMaxOutputTokens(LLMReplyLengthShort); got != 2048 {
+		t.Fatalf("the floor lowered a larger saved budget to %d", got)
+	}
+}

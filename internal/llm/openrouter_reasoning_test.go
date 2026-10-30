@@ -64,7 +64,8 @@ func TestOpenRouterReasoningHeadroomCoversEveryAnswerBudget(t *testing.T) {
 			var budget PromptBudget
 			_, err = p.StreamChat(t.Context(), ChatRequest{MaxTokens: answer, OnBudget: func(b PromptBudget) { budget = b }}, nil)
 			server.Close()
-			want := max(answer, 2048)
+			// A 16K context caps every reserve at a quarter of it.
+			want := answer + 4096
 			if effort == "none" {
 				want = answer
 			}
@@ -158,5 +159,34 @@ func TestOpenRouterReasoningWireAndRejection(t *testing.T) {
 				t.Fatal("unsupported setting sent to generation")
 			}
 		})
+	}
+}
+
+// The reserve follows the effort and never takes more than a quarter of a
+// known context from input admission; Off sends the answer budget alone.
+func TestOpenRouterReasoningReserveFollowsEffort(t *testing.T) {
+	off := false
+	for _, tc := range []struct {
+		effort  string
+		enabled *bool
+		context int
+		want    int
+	}{
+		{"none", nil, 65536, 512},
+		{"", &off, 65536, 512},
+		{"minimal", nil, 65536, 512 + 2048},
+		{"low", nil, 65536, 512 + 6144},
+		{"medium", nil, 65536, 512 + 8192},
+		{"high", nil, 65536, 512 + 8192},
+		{"", nil, 65536, 512 + 8192},
+		{"high", nil, 16384, 512 + 4096},
+		{"high", nil, 0, 512 + 8192},
+	} {
+		if got := OpenRouterOutputTokens(512, tc.effort, tc.enabled, tc.context); got != tc.want {
+			t.Errorf("effort %q enabled %v context %d: %d tokens, want %d", tc.effort, tc.enabled, tc.context, got, tc.want)
+		}
+	}
+	if got := OpenRouterOutputTokens(16, "minimal", nil, 4096); got != 2048 {
+		t.Errorf("a tiny budget kept %d tokens, want the 2,048 floor", got)
 	}
 }

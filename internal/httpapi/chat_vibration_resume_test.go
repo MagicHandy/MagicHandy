@@ -26,7 +26,7 @@ func stopVibrationForResume(t *testing.T, s *Server) {
 }
 
 func TestManualChatResumesVibrationAfterStop(t *testing.T) {
-	for _, level := range []string{"external", config.ModelCapabilityAdvanced, config.ModelCapabilityIntermediate, config.ModelCapabilitySimple} {
+	for _, level := range []string{"external", config.ModelCapabilityAdvanced, config.ModelCapabilityAdvancedNoReasoning, config.ModelCapabilityIntermediate, config.ModelCapabilitySimple} {
 		t.Run(level, func(t *testing.T) {
 			s := independentVibrationServer(t)
 			response := vibrationResumeResponse

@@ -46,6 +46,13 @@ with model control on, Simple (Layered) and Intermediate models set one
 in percent of Max. Max, model control, playback participation and lifting a
 Stop pause belong to the user.
 
+Advanced (no reasoning) models
+([ADR 0065](decisions/0065-advanced-no-reasoning-and-openrouter-limits.md))
+emit the Advanced contract. In interactive Layered and Creative v2 chat they
+also write a required private `basis` string before `edits`. The parser removes
+it before validation. It is never reply text, speech, memory or a motion
+command, and it grants no authority.
+
 Replies and motion descriptions still assume a linear stroker, which is
 untrue when only the Coyote or a vibrator plays. The
 [device-aware model responses plan](device-aware-prompts-plan-2026-10-15.md)

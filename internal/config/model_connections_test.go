@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -96,5 +97,30 @@ func TestOpenRouterReasoningEnabledPersistsFalseAndRejectsConflict(t *testing.T)
 	c.Provider = LLMProviderOpenAI
 	if c.Validate() == nil {
 		t.Fatal("enabled silently ignored by another protocol")
+	}
+}
+
+func TestOpenRouterRoutingOrderIsValidatedAndPersisted(t *testing.T) {
+	connection := ModelConnection{ID: "router", Name: "Router", Provider: LLMProviderOpenRouter, Model: "provider/model", ProviderSort: " Throughput "}.Normalize()
+	if connection.ProviderSort != "throughput" || connection.Validate() != nil {
+		t.Fatalf("routing order = %q, %v", connection.ProviderSort, connection.Validate())
+	}
+	encoded, _ := json.Marshal(connection)
+	var restored ModelConnection
+	if json.Unmarshal(encoded, &restored) != nil || restored.ProviderSort != "throughput" {
+		t.Fatalf("routing order did not persist: %s", encoded)
+	}
+	connection.ProviderSort = ""
+	if encoded, _ = json.Marshal(connection); connection.Validate() != nil || strings.Contains(string(encoded), "provider_sort") {
+		t.Fatalf("default routing must stay valid and unsaved: %s", encoded)
+	}
+	for _, invalid := range []ModelConnection{
+		{ID: "router", Name: "Router", Provider: LLMProviderOpenRouter, Model: "provider/model", ProviderSort: "fastest"},
+		{ID: "chatgpt", Name: "ChatGPT", Provider: LLMProviderChatGPT, Model: "gpt", ProviderSort: "throughput"},
+		{ID: "compatible", Name: "Compatible", Provider: LLMProviderCompatible, BaseURL: "http://127.0.0.1:8000/v1", Model: "model", ProviderSort: "latency"},
+	} {
+		if invalid.Normalize().Validate() == nil {
+			t.Errorf("accepted routing order %q for %s", invalid.ProviderSort, invalid.Provider)
+		}
 	}
 }

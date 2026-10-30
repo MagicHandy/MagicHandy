@@ -21,11 +21,11 @@ type preparedLLMProvider struct {
 }
 
 func chatPromptBudget(settings config.LLMSettings) chat.PromptBudgetSettings {
-	budget := chat.PromptBudgetSettings{MaxOutputTokens: settings.MaxOutputTokens}
+	budget := chat.PromptBudgetSettings{MaxOutputTokens: max(settings.MaxOutputTokens, settings.ConnectionOutputFloor())}
 	if settings.ActiveConnection != nil {
 		budget.ContextSize, _, _ = settings.ActiveConnection.ConversationWindow()
 		if settings.ActiveConnection.Provider == config.LLMProviderOpenRouter {
-			budget.MaxOutputTokens = llm.OpenRouterOutputTokens(budget.MaxOutputTokens, settings.ActiveConnection.ReasoningEffort, settings.ActiveConnection.ReasoningEnabled)
+			budget.MaxOutputTokens = llm.OpenRouterOutputTokens(budget.MaxOutputTokens, settings.ActiveConnection.ReasoningEffort, settings.ActiveConnection.ReasoningEnabled, budget.ContextSize)
 		}
 	} else if settings.ModelCapabilityLevel() != config.ModelCapabilitySimple {
 		budget.ContextSize = settings.LocalContextSize()

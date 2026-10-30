@@ -4,6 +4,12 @@
 > and Intermediate set one vibration level under the user's Max; Advanced keeps
 > the envelope in % of Max. Only a person lifts Stop's pause: a fresh chat
 > request, Resume now, or choosing the device again.
+>
+> Amended by [ADR 0065](0065-advanced-no-reasoning-and-openrouter-limits.md): a
+> fourth level, Advanced (no reasoning), has every Advanced feature plus a
+> private planning note before interactive chat edits, for capable models
+> answering without reasoning. A connection's level floor now also applies to
+> its own requests.
 
 Status: implemented with automated and live-model acceptance, 2026-10-25.
 
