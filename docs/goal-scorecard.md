@@ -1,5 +1,14 @@
 # Goal Scorecard
 
+## 2026-10-31 — Directional field fitting and startup arrival failures
+
+Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
+core plus embedded UI **24,434,688 -> 24,438,272 B** (+3,584 B). The canonical
+UI remains unchanged. No dependency, worker, timer or model inference step was
+added. Curve compilation remains bounded to 16 joint/contrast fitting passes;
+unchanged symmetric motion retains the existing path. No new RSS or cold-start
+performance claim is made. See the [session review](session-pace-recovery-2026-10-31.md).
+
 ## 2026-10-30 — Alpha.81 repair-persistence follow-up
 
 With the same Windows amd64 Go 1.26.10 and stripped pure-Go measurement flags

@@ -346,6 +346,11 @@ func (e *Engine) abortStartup(ctx context.Context, runEpoch uint64, reason strin
 	result, stopErr := e.transport.Stop(stopCtx, stopCommand)
 	stopCancel()
 	annotation := "startup_failure=true"
+	if errors.Is(cause, ErrStartupArrival) {
+		annotation += ";failure_kind=arrival_not_reached"
+	} else if errors.Is(cause, ErrUnsafeStartupState) {
+		annotation += ";failure_kind=unsafe_geometry"
+	}
 	if errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
 		annotation = "startup_cancelled=true"
 	}

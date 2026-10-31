@@ -13,16 +13,18 @@ func layeredDurationMillis(millis float64) int64 {
 	return max(1, int64(math.Ceil(millis-math.Max(1e-6, millis*2e-8))))
 }
 
+type layeredCurveFitter func([]gestureLeg, []int64, legBudget) ([]Curve, error)
+
 // fitLayeredCurve preserves the score's destinations, counts and requested
 // timing. The shared joint fitter only lengthens legs when exact velocity,
 // acceleration or jerk bounds require it. If rounded neutral strokes are
 // constrained, try the existing cruise profiles and retain a strictly faster
 // valid fit. Unconstrained timing and explicitly softened turns keep their
 // original shape; no language-dependent speed or range rules are involved.
-func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, name string, preserveRhythm bool) (Curve, error) {
-	fit := fitLegCurves
-	if preserveRhythm {
-		fit = fitLayeredRhythmCurves
+func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, name string, rhythmFit layeredCurveFitter) (Curve, error) {
+	fit := layeredCurveFitter(fitLegCurves)
+	if rhythmFit != nil {
+		fit = rhythmFit
 	}
 	fittedDurations := slices.Clone(durations)
 	curves, err := fit(legs, fittedDurations, budget)
@@ -32,7 +34,7 @@ func fitLayeredCurve(legs []gestureLeg, durations []int64, budget legBudget, nam
 	// Distinguish physically constrained legs from slower companions stretched
 	// only to preserve the authored rhythm. The latter keep their rounded shape.
 	constrainedDurations := fittedDurations
-	if preserveRhythm {
+	if rhythmFit != nil {
 		constrainedDurations = slices.Clone(durations)
 		if _, err := fitLegCurves(legs, constrainedDurations, budget); err != nil {
 			return Curve{}, err

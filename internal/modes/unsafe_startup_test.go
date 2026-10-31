@@ -11,7 +11,13 @@ import (
 )
 
 func TestUnsafeStartupCannotRetryWhileTeardownWaits(t *testing.T) {
-	engine := &fakeEngine{startErr: fmt.Errorf("%w: outside recoverable travel", motion.ErrUnsafeStartupState)}
+	for _, failure := range []error{motion.ErrUnsafeStartupState, motion.ErrStartupArrival} {
+		t.Run(failure.Error(), func(t *testing.T) { testStartupCannotRetryWhileTeardownWaits(t, failure) })
+	}
+}
+
+func testStartupCannotRetryWhileTeardownWaits(t *testing.T, failure error) {
+	engine := &fakeEngine{startErr: fmt.Errorf("%w: physical positioning failed", failure)}
 	clock := &fakeClock{now: time.Unix(0, 0)}
 	decider := &fakeDecider{decisions: []Decision{{Segment: Segment{
 		Dynamic: &motion.DynamicDefinition{CenterPercent: 50, SpanPercent: 30}, SpeedPercent: 28,
@@ -42,4 +48,12 @@ func TestUnsafeStartupCannotRetryWhileTeardownWaits(t *testing.T) {
 	}
 	releaseTeardown()
 	waitFor(t, time.Second, func() bool { return !manager.Status().Active })
+	// A checked device can still be started by a new explicit user action.
+	engine.mu.Lock()
+	engine.startErr = nil
+	engine.mu.Unlock()
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatal(err)
+	}
+	waitForAutonomousStart(t, manager, engine)
 }

@@ -226,7 +226,7 @@ func TestEngineFailsStoppedWhenLeadInNeverArrives(t *testing.T) {
 	settings.StrokeMaxPercent = 80
 
 	_, err := engine.Start(context.Background(), MotionTarget{PatternID: PatternStroke, SpeedPercent: 20}, settings)
-	if err == nil || !strings.Contains(err.Error(), "did not settle 40.00 mm from target") {
+	if !errors.Is(err, ErrStartupArrival) || !strings.Contains(err.Error(), "did not settle 40.00 mm from target") {
 		t.Fatalf("Start error = %v, want bounded arrival failure", err)
 	}
 	commands := owner.Commands()

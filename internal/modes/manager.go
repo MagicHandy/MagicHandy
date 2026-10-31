@@ -478,12 +478,11 @@ func (m *Manager) backoff(mode string, generation uint64, event string, err erro
 }
 
 // handleStartFailure keeps transient transport/model failures retryable while
-// opening the circuit for physical geometry that the shared motion engine has
-// already classified as unsafe. Retrying unchanged unsafe state only repeats
-// Stop and read-only Cloud calls, flashes the UI between starting and idle, and
-// cannot make the slider position or calibration become safer.
+// opening the circuit for unsafe geometry or an accepted lead-in that failed
+// its arrival check. Retrying unchanged physical failures repeats positioning
+// moves without resolving why the device did not reach its commanded target.
 func (m *Manager) handleStartFailure(mode string, generation uint64, event string, err error) {
-	if !errors.Is(err, motion.ErrUnsafeStartupState) {
+	if !errors.Is(err, motion.ErrUnsafeStartupState) && !errors.Is(err, motion.ErrStartupArrival) {
 		m.backoff(mode, generation, event, err)
 		return
 	}
@@ -503,9 +502,13 @@ func (m *Manager) handleStartFailure(mode string, generation uint64, event strin
 		return
 	}
 	m.trace(mode, event, nil, err.Error())
+	reason := "unsafe_startup_state"
+	if errors.Is(err, motion.ErrStartupArrival) {
+		reason = "startup_position_unverified"
+	}
 	// Stop waits for the mode loop, so it must run after this tick returns to the
 	// loop rather than waiting on its own goroutine.
-	go m.stopLoopAtGeneration(mode, generation, "unsafe_startup_state")
+	go m.stopLoopAtGeneration(mode, generation, reason)
 }
 
 func (m *Manager) beginStartOperation(

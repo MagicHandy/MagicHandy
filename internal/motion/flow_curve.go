@@ -8,7 +8,13 @@ import "math"
 func compileFlowCurve(spec FlowSpec, handyModel string) (Curve, error) {
 	legs, durations := flowLegs(spec, handyModel)
 	budget := topSpeedBudget(spec.peakSpeedPercent(), handyModel)
-	curve, err := fitLayeredCurve(legs, durations, budget, "flow", spec.hasDirectionalContrast())
+	var rhythmFit layeredCurveFitter
+	if spec.hasDirectionalContrast() {
+		rhythmFit = func(legs []gestureLeg, durations []int64, budget legBudget) ([]Curve, error) {
+			return fitDirectionalFieldCurves(legs, durations, budget, spec.DirectionalPace.UpRatePercent > spec.DirectionalPace.DownRatePercent)
+		}
+	}
+	curve, err := fitLayeredCurve(legs, durations, budget, "flow", rhythmFit)
 	if err != nil {
 		return Curve{}, err
 	}

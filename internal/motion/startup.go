@@ -51,6 +51,12 @@ const (
 // attempted after the device position or calibration changes.
 var ErrUnsafeStartupState = errors.New("motion startup state is unsafe")
 
+// ErrStartupArrival marks a completed lead-in that did not reach and settle at
+// its commanded target. A transient HTTP failure is different: repeatedly
+// issuing new autonomous lead-ins cannot establish why an accepted move missed.
+// A fresh explicit user start may retry after the device has been checked.
+var ErrStartupArrival = errors.New("device did not settle at the starting position")
+
 type startupMotionProfile struct {
 	settings              transport.StrokeWindowCommand
 	observedFullPercent   float64
@@ -207,7 +213,7 @@ func startupArrivalReady(state transport.MotionStartupState, profile startupMoti
 	fullMinimum := profile.targetAbsolute - profile.targetFullPercent/100*profile.fullTravelAbsolute
 	fullMaximum := fullMinimum + profile.fullTravelAbsolute
 	if state.PositionAbsolute < fullMinimum-arrivalTolerance || state.PositionAbsolute > fullMaximum+arrivalTolerance {
-		return false, errors.New("motion startup position moved outside calibrated full travel")
+		return false, fmt.Errorf("%w: motion startup position moved outside calibrated full travel", ErrStartupArrival)
 	}
 	return math.Abs(state.PositionAbsolute-profile.targetAbsolute) <= arrivalTolerance &&
 		state.SpeedAbsolute <= startupStationarySpeedAbsolute &&
@@ -227,7 +233,8 @@ func startupArrivalError(state transport.MotionStartupState, profile startupMoti
 	arrivalTolerance := profile.fullTravelAbsolute * startupPositionTolerancePercent / 100
 	if arrivalError > arrivalTolerance {
 		return fmt.Errorf(
-			"motion startup lead-in %s %.2f mm from target, outside %.1f%% travel tolerance",
+			"%w: motion startup lead-in %s %.2f mm from target, outside %.1f%% travel tolerance",
+			ErrStartupArrival,
 			disposition,
 			arrivalError,
 			startupPositionTolerancePercent,
@@ -235,12 +242,13 @@ func startupArrivalError(state transport.MotionStartupState, profile startupMoti
 	}
 	if state.SpeedAbsolute > startupStationarySpeedAbsolute {
 		return fmt.Errorf(
-			"motion startup lead-in %s while device slider speed remained %.2f",
+			"%w: motion startup lead-in %s while device slider speed remained %.2f",
+			ErrStartupArrival,
 			disposition,
 			state.SpeedAbsolute,
 		)
 	}
-	return fmt.Errorf("motion startup lead-in %s outside the requested stroke window", disposition)
+	return fmt.Errorf("%w: motion startup lead-in %s outside the requested stroke window", ErrStartupArrival, disposition)
 }
 
 func (e *Engine) readStationaryStartupState(
