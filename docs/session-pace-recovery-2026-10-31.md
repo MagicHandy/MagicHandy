@@ -290,7 +290,10 @@ completed a real text-only Gemma 12B chat without motion and is left stopped.
 
 ## Remaining physical follow-up
 
-Before publication, compare alpha.81 and the candidate with identical seeds,
+The owner requested release after the focused acceptance above. The broader
+matrix remains separate follow-up, not a completed physical acceptance claim
+for alpha.82; see the [release assessment](alpha82-release-review-2026-10-31.md).
+Compare alpha.81 and the candidate with identical seeds,
 Cloud, the correct Original Handy profile and saved 0–97% window. Include the
 captured alternating field at 25/60/78/100%, both directional orientations,
 full strokes, counted regional transfers, a live pace edit and Stop. Record
