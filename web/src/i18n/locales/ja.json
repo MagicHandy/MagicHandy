@@ -3497,5 +3497,14 @@
   "Maximum": "最大",
   "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "両方のチャンネルが 0 のため、何も感じません。準備ができたらチャンネルを上げてください。",
   "Shifts the pulses toward one channel.": "パルスを一方のチャンネルに寄せます。",
-  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "両方の上限が 0 です。強度を設定するには、Coyote の出力設定で上限を上げてください。"
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "両方の上限が 0 です。強度を設定するには、Coyote の出力設定で上限を上げてください。",
+  "Position needs a recheck": "位置の再確認が必要です",
+  "The device reported a position outside its calibrated travel.": "デバイスが報告した位置が校正済みの可動範囲外でした。",
+  "The device did not settle at the requested starting position.": "デバイスが指定された開始位置で静止しませんでした。",
+  "Rechecking…": "再確認中…",
+  "Reset and recheck": "リセットして再確認",
+  "Use the controlling tab to reset the position check.": "操作中のタブから位置確認をリセットしてください。",
+  "Stops the device and refreshes its position. Playback stays stopped.": "デバイスを停止し、位置を再取得します。再生は停止したままです。",
+  "Position rechecked. Playback is stopped; start again when ready.": "位置を再確認しました。再生は停止中です。準備ができたら再開してください。",
+  "Could not recheck the device position.": "デバイスの位置を再確認できませんでした。"
 }

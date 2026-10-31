@@ -36,6 +36,10 @@ func (e *Engine) snapshotLocked() ActiveMotionState {
 		LastError:                  redactedError(e.lastError),
 		Perceptual:                 e.plan.Perceptual,
 	}
+	if e.startupRecovery != nil {
+		recovery := *e.startupRecovery
+		state.StartupRecovery = &recovery
+	}
 	if provider, ok := e.transport.(transport.LinkedSessionStatusProvider); ok {
 		status := provider.LinkedSessionStatus()
 		state.LinkedSession = &status

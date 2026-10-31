@@ -3497,5 +3497,14 @@
   "Maximum": "Máximo",
   "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "Ambos canales están en 0, así que no se siente nada. Sube un canal cuando quieras.",
   "Shifts the pulses toward one channel.": "Desplaza los pulsos hacia un canal.",
-  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "Ambos límites están en 0. Súbelos en los ajustes de salida del Coyote para permitir intensidad."
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "Ambos límites están en 0. Súbelos en los ajustes de salida del Coyote para permitir intensidad.",
+  "Position needs a recheck": "Hay que comprobar la posición",
+  "The device reported a position outside its calibrated travel.": "El dispositivo informó de una posición fuera de su recorrido calibrado.",
+  "The device did not settle at the requested starting position.": "El dispositivo no se detuvo en la posición inicial solicitada.",
+  "Rechecking…": "Comprobando…",
+  "Reset and recheck": "Restablecer y comprobar",
+  "Use the controlling tab to reset the position check.": "Usa la pestaña que tiene el control para restablecer la comprobación de posición.",
+  "Stops the device and refreshes its position. Playback stays stopped.": "Detiene el dispositivo y actualiza su posición. La reproducción permanece detenida.",
+  "Position rechecked. Playback is stopped; start again when ready.": "Posición comprobada. La reproducción está detenida; vuelve a iniciarla cuando quieras.",
+  "Could not recheck the device position.": "No se pudo comprobar la posición del dispositivo."
 }

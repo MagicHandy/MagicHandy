@@ -86,6 +86,8 @@ type Engine struct {
 	currentSample                  *MotionSample
 	lastResult                     *transport.CommandResult
 	lastError                      string
+	startupRecovery                *StartupRecoveryState
+	startupResetCancel             context.CancelFunc
 	latencyMillis                  []int64
 	transition                     *planTransition
 	preservePlanKnots              bool
@@ -127,6 +129,7 @@ type ActiveMotionState struct {
 	LastSample                 *MotionSample                  `json:"last_sample,omitempty"`
 	LastResult                 *transport.CommandResult       `json:"last_result,omitempty"`
 	LastError                  string                         `json:"last_error,omitempty"`
+	StartupRecovery            *StartupRecoveryState          `json:"startup_recovery,omitempty"`
 	// Pace is the compact backend-authoritative Creative output readout. It is
 	// safe for the motion SSE because it contains no curve points or payloads.
 	Pace *PaceSummary `json:"pace,omitempty"`
@@ -509,6 +512,7 @@ func (e *Engine) beginResume(loopCtx context.Context, reason string, cancel cont
 	e.nextSampleMillis = 0
 	e.lastResult = nil
 	e.lastError = ""
+	e.startupRecovery = nil
 	e.latencyMillis = nil
 	e.transition = nil
 	e.frozenPhase = e.pausedPhase
@@ -554,6 +558,9 @@ func (e *Engine) Stop(ctx context.Context, reason string) (ActiveMotionState, er
 	}
 	e.mu.Lock()
 	e.stopGeneration++
+	if e.startupResetCancel != nil {
+		e.startupResetCancel()
+	}
 	e.stopBarriers++
 	cancel, done, active := e.stopLoopLocked()
 	if !active {
@@ -632,6 +639,7 @@ func (e *Engine) begin(ctx context.Context, loopCtx context.Context, target Moti
 	e.lastError = ""
 	e.latencyMillis = nil
 	e.transition = nil
+	e.startupRecovery = nil
 	e.paused = false
 	e.completing = false
 	e.starting = true

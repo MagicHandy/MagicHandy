@@ -196,6 +196,7 @@ control	POST /api/motion/edge
 control	POST /api/motion/edge/resume
 control	POST /api/motion/quick
 control	POST /api/motion/resume
+control	POST /api/motion/reset-position
 control	POST /api/motion/start
 public	POST /api/motion/stop
 control	POST /api/motion/target

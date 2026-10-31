@@ -580,6 +580,7 @@ export const api = {
   followVibration: () => request("POST", "/api/motion/vibration/follow", {}),
   pauseMotion: () => request("POST", "/api/motion/pause", {}),
   resumeMotion: () => request("POST", "/api/motion/resume", {}),
+  resetMotionPosition: (failureID: string) => request<import("./types").MotionInfo>("POST", "/api/motion/reset-position", { failure_id: failureID }),
   activateEdge: () => request("POST", "/api/motion/edge", {}),
   resumeEdge: () => request("POST", "/api/motion/edge/resume", {}),
   applyQuick: (patch: Partial<{

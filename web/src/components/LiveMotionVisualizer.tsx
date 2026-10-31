@@ -1,6 +1,7 @@
 import { useAppState, useMotionState } from "../state/app-state";
 import { LiveVibrationReadout, showsVibration } from "./VibrationReadout";
 import { MotionVisualizer } from "./MotionVisualizer";
+import { StartupRecoveryNotice } from "./StartupRecoveryNotice";
 import type { VisualizerDevice } from "./visualizer/device";
 
 /** The dispatch owner and saved Handy model, which pick the visualizer drawing. */
@@ -15,5 +16,5 @@ export function LiveMotionVisualizer({ mini = false }: { mini?: boolean }) {
   const device = useVisualizerDevice();
   const { state } = useAppState();
   if (showsVibration(state?.settings, motion)) return <LiveVibrationReadout mini={mini} />;
-  return <MotionVisualizer motion={motion} mini={mini} device={device} />;
+  return <><MotionVisualizer motion={motion} mini={mini} device={device} />{!mini && <StartupRecoveryNotice />}</>;
 }

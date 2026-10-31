@@ -37,6 +37,15 @@ Use existing tokens instead of raw hex values in implementation, and do not
 invent parallel values. A component-local value either stays local to that
 component or is promoted to a token before it is reused elsewhere.
 
+Positioning failures remain visible after a failed run, through the backend's
+`startup_recovery` snapshot. Chat's Motion status and the device panel share a
+compact bordered notice with **Reset and recheck**. It shows **Rechecking…**
+while busy and disables the action for read-only/offline clients. The notice
+clears only after a successful backend recheck; success explicitly says that
+playback remains stopped. The action neither resumes motion nor overrides
+arrival verification on the next start. Emergency Stop stays reachable during
+the entire operation.
+
 ## Design Tokens
 
 ### Color roles

@@ -106,7 +106,7 @@ func (s *Server) motionStateValue() map[string]any {
 				"engine":    snapshot,
 			}
 		}
-		if snapshot.LinkedSession != nil && snapshot.LinkedSession.Status == "failed" {
+		if snapshot.StartupRecovery != nil || snapshot.LinkedSession != nil && snapshot.LinkedSession.Status == "failed" {
 			// Keep the failure visible after Stop, independently of whether
 			// the selected connections are ready for another run.
 			state["engine"] = snapshot

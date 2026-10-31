@@ -273,7 +273,7 @@ func (e *Engine) readStationaryStartupState(
 			}
 		}
 	}
-	return transport.MotionStartupState{}, errors.New("device slider remained in motion after the motion startup Stop")
+	return transport.MotionStartupState{}, fmt.Errorf("%w: device slider remained in motion after the motion startup Stop", ErrStartupArrival)
 }
 
 func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.MotionStartupState, owners ...transport.Transport) (startupMotionProfile, error) {
@@ -282,34 +282,18 @@ func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.Moti
 	if err := e.validateRunLocked(runEpoch); err != nil {
 		return startupMotionProfile{}, err
 	}
-	if err := validateStartupState(state); err != nil {
-		return startupMotionProfile{}, err
-	}
-
 	settings := transport.StrokeWindowCommand{
 		MinPercent:       e.settings.StrokeMinPercent,
 		MaxPercent:       e.settings.StrokeMaxPercent,
 		ReverseDirection: e.settings.ReverseDirection,
 	}
-	calibration, err := newStartupCalibration(state)
+	calibration, err := checkedStartupCalibration(state)
 	if err != nil {
 		return startupMotionProfile{}, err
 	}
 	first := sampleMotionPath(e.plan, e.transition, 0).PositionPercent
 	targetFullPercent := physicalPositionForSemantic(first, settings)
 	observedFullPercent := calibration.fullPercentAt(state.PositionAbsolute)
-	if observedFullPercent < -startupCalibrationTolerancePercent ||
-		observedFullPercent > 100+startupCalibrationTolerancePercent {
-		// The geometry the device reported is the only thing that can explain this
-		// refusal, so it belongs in the message. Without it the failure is a dead
-		// end: it names a calibration nobody can see.
-		return startupMotionProfile{}, fmt.Errorf(
-			"%w: motion startup absolute position was outside calibrated full travel "+
-				"(position %.2f maps to %.1f%% of travel; device reported slide %.1f-%.1f%% as %.2f-%.2f)",
-			ErrUnsafeStartupState, state.PositionAbsolute, observedFullPercent,
-			state.StrokeMinPercent, state.StrokeMaxPercent,
-			state.StrokeMinAbsolute, state.StrokeMaxAbsolute)
-	}
 	currentFullPercent := math.Max(0, math.Min(100, observedFullPercent))
 	unionMinimum := math.Floor(min(currentFullPercent, state.StrokeMinPercent, float64(settings.MinPercent)))
 	unionMaximum := math.Ceil(max(currentFullPercent, state.StrokeMaxPercent, float64(settings.MaxPercent)))
@@ -385,7 +369,11 @@ func (e *Engine) readMotionStartupState(
 	}
 	state, results, err := provider.ReadMotionStartupState(commandCtx)
 	cleanup()
+	e.recordStartupObservation(reason, state, results, err)
+	return state, results, err
+}
 
+func (e *Engine) recordStartupObservation(reason string, state transport.MotionStartupState, results transport.MotionStartupStateResults, err error) {
 	sliderErr := error(nil)
 	strokeErr := error(nil)
 	if err != nil {
@@ -417,7 +405,6 @@ func (e *Engine) readMotionStartupState(
 	if err != nil {
 		e.rememberError(err)
 	}
-	return state, results, err
 }
 
 func (e *Engine) stopTransportForStartup(ctx context.Context, runEpoch uint64, reason string, owners ...transport.Transport) error {

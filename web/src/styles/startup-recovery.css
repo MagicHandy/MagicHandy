@@ -1,0 +1,14 @@
+.startup-recovery {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  margin-top: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  font-size: var(--fs-label);
+}
+.startup-recovery > strong { color: var(--warn); }
+.startup-recovery > p { margin: 0; line-height: 1.45; }
+.startup-recovery > small { color: var(--muted); font-size: var(--fs-hint); line-height: 1.45; }
+.startup-recovery > button { justify-self: start; }

@@ -1,5 +1,17 @@
 # Goal Scorecard
 
+## 2026-10-31 — Position reset and recheck
+
+Same Windows amd64 Go 1.26.10 stripped pure-Go flags as the pace review:
+**24,438,272 -> 24,467,968 B** (+29,696 B), including the embedded UI and all
+five locale catalogs. Main JS **1,319,862 -> 1,322,072 B** (+2,210 B), gzip
+**354,752 -> 355,335 B** (+583 B). Main CSS **210,037 -> 210,443 B** (+406 B),
+gzip **36,604 -> 36,663 B** (+59 B). One small conditional recovery notice is
+shared between Chat and the device panel; no dependency or persistent worker
+was added. The reset's read has a 15-second bound and runs only on explicit
+request. No new idle RSS or cold-start performance claim is made. See the
+[position-reset follow-up](session-pace-recovery-2026-10-31.md#position-reset-follow-up).
+
 ## 2026-10-31 — Directional field fitting and startup arrival failures
 
 Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:

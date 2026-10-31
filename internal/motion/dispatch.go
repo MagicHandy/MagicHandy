@@ -365,6 +365,7 @@ func (e *Engine) abortStartup(ctx context.Context, runEpoch uint64, reason strin
 	} else {
 		e.lastError = cause.Error()
 	}
+	e.rememberStartupRecoveryLocked(cause)
 	e.endStopBarrierLocked()
 	e.mu.Unlock()
 	e.commandMu.Unlock()

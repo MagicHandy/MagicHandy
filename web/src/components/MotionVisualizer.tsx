@@ -51,7 +51,7 @@ export function MotionVisualizer({ motion, mini = false, device, kind: kindOverr
   );
   const wirePosition = engine?.settings?.reverse_direction ? 100 - semanticPosition : semanticPosition;
   const pos = min + (wirePosition / 100) * (max - min);
-  const hasError = Boolean(engine?.last_error || motion?.error);
+  const hasError = Boolean(engine?.startup_recovery || engine?.last_error || motion?.error);
   let state = "idle";
   if (motion?.available === false) {
     state = "unavailable";

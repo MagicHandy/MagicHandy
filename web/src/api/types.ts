@@ -138,6 +138,7 @@ export interface EngineSnapshot {
   pace?: MotionPaceSummary;
   settings?: MotionSettings;
   last_error?: string;
+  startup_recovery?: { id: string; kind: "arrival_not_reached" | "unsafe_geometry"; resetting: boolean };
 }
 
 export interface BackendObservation {

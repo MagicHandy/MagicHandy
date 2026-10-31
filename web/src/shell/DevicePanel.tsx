@@ -5,6 +5,7 @@
 import { useEffect, useId, useRef } from "react";
 import { isHandy } from "../api/devices";
 import { QuickSettings } from "../components/QuickSettings";
+import { StartupRecoveryNotice } from "../components/StartupRecoveryNotice";
 import { DeviceRow } from "../devices/DeviceRow";
 import { DevicesGlyph } from "../devices/glyphs";
 import { deviceDescriptor, useDevices, type DeviceEntry } from "../devices/registry";
@@ -153,6 +154,7 @@ function PanelNotices({ ctx, devices }: { ctx: DeviceContext; devices: DeviceEnt
     ?? deviceDescriptor(id)?.name() ?? t("Additional Handy"));
   return (
     <>
+      <StartupRecoveryNotice />
       {!ctx.backendOnline && <p className="form-status device-panel-reason">{t("Core offline.")}</p>}
       {ctx.backendOnline && ctx.readOnly && (
         <div className="device-panel-watch">

@@ -3497,5 +3497,14 @@
   "Maximum": "最高",
   "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "两个通道都为 0，因此没有任何感觉。准备好后再调高一个通道。",
   "Shifts the pulses toward one channel.": "将脉冲偏向一个通道。",
-  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "两个上限都为 0。请在 Coyote 的输出设置中调高上限，才能设置强度。"
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "两个上限都为 0。请在 Coyote 的输出设置中调高上限，才能设置强度。",
+  "Position needs a recheck": "需要重新检查位置",
+  "The device reported a position outside its calibrated travel.": "设备报告的位置超出了校准行程。",
+  "The device did not settle at the requested starting position.": "设备未停稳在指定的起始位置。",
+  "Rechecking…": "正在重新检查…",
+  "Reset and recheck": "重置并重新检查",
+  "Use the controlling tab to reset the position check.": "请在控制标签页中重置位置检查。",
+  "Stops the device and refreshes its position. Playback stays stopped.": "停止设备并刷新其位置。播放将保持停止。",
+  "Position rechecked. Playback is stopped; start again when ready.": "位置已重新检查。播放已停止；准备好后可重新开始。",
+  "Could not recheck the device position.": "无法重新检查设备位置。"
 }

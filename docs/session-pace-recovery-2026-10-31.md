@@ -140,6 +140,49 @@ generation on local Gemma 12B through Ollama. A separate application chat turn
 completed in 486 ms with a non-empty reply, one provider call, no repair or
 fallback, and no motion. This is readiness evidence, not a model latency study.
 
+## Position reset follow-up
+
+The owner explicitly chose **Reset and recheck only**, without an arrival-check
+override. A typed startup failure now survives the idle motion snapshot and is
+shown beside Motion status in Chat and in the device panel on every route.
+The compact Graphite notice explains the failure, provides **Reset and recheck**,
+and says that playback stays stopped. While working, the button says
+**Rechecking…** and is disabled. Read-only/offline clients cannot reset it.
+
+`POST /api/motion/reset-position` requires controller authority and the opaque
+failure ID from the current engine. It invalidates pending model/mode work,
+confirms Stop, and re-reads every participating slider's position and calibration.
+Stationarity and the existing calibrated-travel bounds must pass before the
+failure is cleared. Invalid readings, failed Stop, and missing feedback leave
+the error recoverable. It does not emit points, Play, a positioning move, a
+stroke-window change, or a calibration offset. A new explicit start still runs
+the unchanged arrival verification.
+
+Reset holds the engine's start barrier, so new motion cannot cross its read.
+Emergency Stop cancels the read before waiting for the command lock, and the
+reset cannot acknowledge success across a newer Stop generation. The HTTP
+operation binds cancellation for both authenticated and local unauthenticated
+controllers after invalidating earlier work. This fixed a test-detected case
+where local Emergency Stop could otherwise wait for the read's timeout. Stale
+and duplicate failure IDs are rejected without a second reset. The route's
+control admission policy is recorded in the admission matrix.
+
+Tests cover failed arrival, invalid geometry, non-finite readings, a moving
+slider, Stop failure, linked sliders, stale/duplicate actions, Stop cancellation,
+new-start exclusion, and successful explicit starts after reset. UI tests cover
+backend-authoritative dismissal, pending/error states and read-only/offline
+access. The complete Go and race suites, vet, lint, production build, localization
+audit, frontend typecheck and all **1,088 frontend tests** passed.
+
+The isolated review at `http://127.0.0.1:50338/#/chat` uses the production backend
+and embedded UI with a stationary in-process transport fixture; no hardware is
+reachable. Both Chat and the device panel were exercised through a simulated
+arrival failure, reset, and stopped success. The trace contains only Stop and
+position/calibration reads for reset, followed by `playback_resumed=false`.
+A real local Gemma 12B text-only chat completed in 344 ms without repair or
+fallback. Test logs, screenshots and simulator traces are retained under
+`.scratch/position-reset-20261031/`, outside git.
+
 ## Required physical follow-up
 
 Before publication, compare alpha.81 and the candidate with identical seeds,
