@@ -65,4 +65,14 @@ describe("StartupRecoveryNotice", () => {
     render(<StartupRecoveryNotice />);
     expect(screen.getByText("The device reported a position outside its calibrated travel.")).toBeVisible();
   });
+
+  it.each([
+    ["invalid_telemetry", "The device returned invalid position or calibration readings."],
+    ["moving_after_stop", "The device was still moving after Stop."],
+  ] as const)("describes %s accurately", (kind, message) => {
+    app.motion!.engine!.startup_recovery!.kind = kind;
+    render(<StartupRecoveryNotice announce />);
+    expect(screen.getByRole("status")).toHaveTextContent(message);
+    expect(screen.getByRole("region", { name: "Position needs a recheck" })).toBeVisible();
+  });
 });

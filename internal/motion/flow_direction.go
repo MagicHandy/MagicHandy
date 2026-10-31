@@ -77,8 +77,12 @@ func fitLayeredRhythmCurves(legs []gestureLeg, durations []int64, budget legBudg
 // legs. This keeps a single tight reversal from throttling all 64 cycles.
 // The ordinary joint fitter still owns bounds and acceleration continuity.
 func fitDirectionalFieldCurves(legs []gestureLeg, durations []int64, budget legBudget, upFast bool) ([]Curve, error) {
+	return fitDirectionalFieldPasses(legs, durations, budget, upFast, 16)
+}
+
+func fitDirectionalFieldPasses(legs []gestureLeg, durations []int64, budget legBudget, upFast bool, passes int) ([]Curve, error) {
 	requested := slices.Clone(durations)
-	for range 16 {
+	for range passes {
 		curves, err := fitLegCurves(legs, durations, budget)
 		if err != nil {
 			return nil, err
@@ -101,5 +105,8 @@ func fitDirectionalFieldCurves(legs []gestureLeg, durations []int64, budget legB
 			return curves, nil
 		}
 	}
-	return nil, errors.New("directional field timing did not converge inside the shared motion envelope")
+	// A difficult local fit may still have a valid common clock. Preserve that
+	// safe, slower alternative instead of rejecting the whole selected pattern.
+	copy(durations, requested)
+	return fitLayeredRhythmCurves(legs, durations, budget)
 }

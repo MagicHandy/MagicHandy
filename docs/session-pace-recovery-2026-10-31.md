@@ -153,7 +153,8 @@ and says that playback stays stopped. While working, the button says
 failure ID from the current engine. It invalidates pending model/mode work,
 confirms Stop, and re-reads every participating slider's position and calibration.
 Stationarity and the existing calibrated-travel bounds must pass before the
-failure is cleared. Invalid readings, failed Stop, and missing feedback leave
+reset clears the failure. A new explicit start can also supersede the old fault,
+but still has to pass its normal startup checks. Invalid readings, failed Stop, and missing feedback leave
 the error recoverable. It does not emit points, Play, a positioning move, a
 stroke-window change, or a calibration offset. A new explicit start still runs
 the unchanged arrival verification.
@@ -163,25 +164,66 @@ Emergency Stop cancels the read before waiting for the command lock, and the
 reset cannot acknowledge success across a newer Stop generation. The HTTP
 operation binds cancellation for both authenticated and local unauthenticated
 controllers after invalidating earlier work. This fixed a test-detected case
-where local Emergency Stop could otherwise wait for the read's timeout. Stale
-and duplicate failure IDs are rejected without a second reset. The route's
+where local Emergency Stop could otherwise wait for the read's timeout. A Stop
+that arrives while the reset request is still being decoded also invalidates
+admission. The lifecycle lock is released before device reads and response I/O;
+replacement invalidates or cancels the old engine's reset. Stale and duplicate
+failure IDs are rejected without a second reset. The route's
 control admission policy is recorded in the admission matrix.
 
 Tests cover failed arrival, invalid geometry, non-finite readings, a moving
 slider, Stop failure, linked sliders, stale/duplicate actions, Stop cancellation,
 new-start exclusion, and successful explicit starts after reset. UI tests cover
 backend-authoritative dismissal, pending/error states and read-only/offline
-access. The complete Go and race suites, vet, lint, production build, localization
-audit, frontend typecheck and all **1,088 frontend tests** passed.
+access. Additional tests cover Stop during request decoding, engine replacement
+during a blocked read, an available lifecycle lock during device I/O, and
+reset-specific chat cancellation. The complete Go and race suites, vet, lint,
+production build, localization audit, frontend typecheck and all **1,090 frontend
+tests** passed after the review fixes.
 
 The isolated review at `http://127.0.0.1:50338/#/chat` uses the production backend
 and embedded UI with a stationary in-process transport fixture; no hardware is
 reachable. Both Chat and the device panel were exercised through a simulated
 arrival failure, reset, and stopped success. The trace contains only Stop and
 position/calibration reads for reset, followed by `playback_resumed=false`.
-A real local Gemma 12B text-only chat completed in 344 ms without repair or
-fallback. Test logs, screenshots and simulator traces are retained under
+A real local Gemma 12B text-only chat on the final refreshed build completed in
+391 ms (126 ms to first token) without repair, fallback, or motion. The provider
+readiness probe also completed real generation. Test logs, screenshots and
+simulator traces are retained under
 `.scratch/position-reset-20261031/`, outside git.
+
+## Claude second opinion and decisions
+
+Claude Opus 5.5 at xhigh reviewed the recent source and tests through the CLI in
+read-only mode. It reported no critical or high-severity safety findings. Its
+low-severity admission/lifecycle findings were reproduced with focused tests and
+fixed as described above. Chat and remote cancellation now say that a position
+reset interrupted the work instead of incorrectly calling it Emergency Stop.
+The recovery notice distinguishes invalid telemetry, motion continuing after
+Stop, missed arrival, and unsafe geometry. Only its explanation is a live
+announcement; the action is outside the live region. Success says that readings
+were checked and the next start checks arrival again, without implying that
+calibration or the underlying arrival mismatch has been repaired.
+
+Claude also identified a valid-pattern rejection on local fitting exhaustion.
+After 16 local passes, a directional field now tries the existing bounded
+common-clock fit with its original requested timings. This preserves a valid,
+slower solution when available. A forced-exhaustion regression verifies the
+fallback matches that solver, remains within the same budgets, and does not
+speed up authored legs. A second regression checks that distant unconstrained
+legs retain their timings at 78% and 100% for both direction orientations.
+Recompiling the 108-case comparison after this change produced **zero changed
+trajectories and zero failures**; the retained visual atlas therefore still
+represents those outputs exactly.
+
+The review's medium-severity motion-character concern remains a physical
+acceptance item: preserving directional contrast around a constrained short
+fast stroke can transfer extra slowdown to its adjacent long slow strokes. The
+local fit is still substantially faster than stretching all 64 cycles, but
+numerical validity does not prove that this cadence is preferable. No further
+directional timing change was made without that comparison. Minor suggestions
+such as a participant label in a linked-device notice or a top-bar recovery
+hint remain optional UI follow-ups rather than release safety findings.
 
 ## Required physical follow-up
 
@@ -191,6 +233,12 @@ captured alternating field at 25/60/78/100%, both directional orientations,
 full strokes, counted regional transfers, a live pace edit and Stop. Record
 turn quality, cadence contrast, append latency and the actual trace. Keep
 unrelated devices disconnected.
+
+Include a short fast flick adjacent to a full-range slow transfer at 78% and
+100%, in both direction orientations. Compare the local fit with a common-clock
+fit, checking whether the preserved contrast causes an objectionable cadence
+change in neighboring strokes. Preserve the same endpoints, seeds and authored
+direction rates in the comparison.
 
 Investigate the startup discrepancy separately with authorized read-only state
 capture and a bounded lead-in audition. Retain the actual Cloud API failure

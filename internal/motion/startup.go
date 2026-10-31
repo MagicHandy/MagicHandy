@@ -273,7 +273,7 @@ func (e *Engine) readStationaryStartupState(
 			}
 		}
 	}
-	return transport.MotionStartupState{}, fmt.Errorf("%w: device slider remained in motion after the motion startup Stop", ErrStartupArrival)
+	return transport.MotionStartupState{}, fmt.Errorf("%w: %w", ErrStartupArrival, errStartupMoving)
 }
 
 func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.MotionStartupState, owners ...transport.Transport) (startupMotionProfile, error) {

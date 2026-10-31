@@ -3506,5 +3506,13 @@
   "Use the controlling tab to reset the position check.": "请在控制标签页中重置位置检查。",
   "Stops the device and refreshes its position. Playback stays stopped.": "停止设备并刷新其位置。播放将保持停止。",
   "Position rechecked. Playback is stopped; start again when ready.": "位置已重新检查。播放已停止；准备好后可重新开始。",
-  "Could not recheck the device position.": "无法重新检查设备位置。"
+  "Could not recheck the device position.": "无法重新检查设备位置。",
+  "Device stopped and position readings checked. The next start checks arrival again.": "设备已停止，位置读数已检查。下次启动时会再次检查是否到达目标位置。",
+  "The device returned invalid position or calibration readings.": "设备返回了无效的位置或校准读数。",
+  "The device was still moving after Stop.": "停止后设备仍在移动。",
+  "Position recheck was interrupted. Try again when ready.": "位置复查已中断。准备好后请重试。",
+  "The device did not respond in time. Position still needs a recheck.": "设备未及时响应。仍需重新检查位置。",
+  "The reply was interrupted by the position reset. Please send your request again when ready.": "位置重置中断了回复。准备好后请重新发送请求。",
+  "The reply was saved, but the position reset canceled its motion and speech.": "回复已保存，但位置重置取消了相关运动和语音。",
+  "Position reset cleared the command.": "位置重置已清除该指令。"
 }

@@ -211,15 +211,19 @@ func (c *controllerRuntime) SessionKey() string {
 }
 
 func (c *controllerRuntime) AdvanceStopGeneration() {
+	c.advanceStopGeneration(errChatEmergencyStop)
+}
+
+func (c *controllerRuntime) advanceStopGeneration(cause error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.active.sessionKey == "" {
 		// Local control keeps its lease and generation across Stop, but a
 		// phone's in-flight action must still be canceled before engine work.
-		c.cancelRequestsLocked(errChatEmergencyStop)
+		c.cancelRequestsLocked(cause)
 		return
 	}
-	c.cancelOwnerLocked(errChatEmergencyStop)
+	c.cancelOwnerLocked(cause)
 	c.generation++
 	c.ownerCtx, c.ownerCancel = context.WithCancel(context.Background())
 	c.tickets = nil

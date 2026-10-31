@@ -153,7 +153,7 @@ func (s *Server) handleRemoteCommand(w http.ResponseWriter, r *http.Request) {
 	sent, err := s.remote.Send(sender, command)
 	if err == nil {
 		if s.stopSequence.Load() != sequence {
-			s.remote.Cancel(sent.ID, "Emergency Stop cleared the command.")
+			s.remote.Cancel(sent.ID, s.stopCommandClearedMessage())
 			writeError(w, http.StatusConflict, remote.ErrCommandUnavailable)
 			return
 		}
@@ -227,7 +227,7 @@ func (s *Server) handleRemoteClaim(w http.ResponseWriter, r *http.Request) {
 	command, remaining, err := s.remote.Claim(executor, id)
 	if err != nil || command.StopSequence != sequence || s.stopSequence.Load() != sequence {
 		if err == nil {
-			s.remote.Cancel(id, "Emergency Stop cleared the command.")
+			s.remote.Cancel(id, s.stopCommandClearedMessage())
 		}
 		writeError(w, http.StatusConflict, remote.ErrCommandUnavailable)
 		return

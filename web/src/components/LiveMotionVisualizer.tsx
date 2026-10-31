@@ -16,5 +16,5 @@ export function LiveMotionVisualizer({ mini = false }: { mini?: boolean }) {
   const device = useVisualizerDevice();
   const { state } = useAppState();
   if (showsVibration(state?.settings, motion)) return <LiveVibrationReadout mini={mini} />;
-  return <><MotionVisualizer motion={motion} mini={mini} device={device} />{!mini && <StartupRecoveryNotice />}</>;
+  return <><MotionVisualizer motion={motion} mini={mini} device={device} />{!mini && <StartupRecoveryNotice announce />}</>;
 }

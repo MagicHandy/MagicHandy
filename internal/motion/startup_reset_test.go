@@ -211,3 +211,35 @@ func TestPositionResetRechecksEveryLinkedSlider(t *testing.T) {
 		}
 	}
 }
+
+func TestPositionResetCannotCrossAnEarlierStop(t *testing.T) {
+	owner := &startupStateTransport{Fake: transport.NewFake(), states: []transport.MotionStartupState{resetTestPosition(50)}}
+	e, id := failedPositionEngine(t, owner)
+	admission := e.AdmissionGeneration()
+	if _, err := e.Stop(t.Context(), "newer_stop"); err != nil {
+		t.Fatal(err)
+	}
+	before := len(owner.Commands())
+	state, err := e.ResetStartupPositionAtGeneration(t.Context(), id, admission)
+	if !errors.Is(err, ErrStartupRecoveryUnavailable) || state.StartupRecovery == nil || len(owner.Commands()) != before {
+		t.Fatalf("reset crossed Stop: %v, %+v", err, state.StartupRecovery)
+	}
+}
+
+func TestPositionRecoveryDistinguishesInvalidReadingsAndMovingDevice(t *testing.T) {
+	for _, kind := range []string{"invalid_telemetry", "moving_after_stop"} {
+		state := resetTestPosition(50)
+		if kind == "invalid_telemetry" {
+			state.StrokeMaxAbsolute = 0
+		} else {
+			state.SpeedAbsolute = 20
+		}
+		owner := &startupStateTransport{Fake: transport.NewFake(), states: []transport.MotionStartupState{state}}
+		e := newTestEngine(t, owner, diagnostics.NewTraceRing(32), time.Hour)
+		e.startupWait = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
+		got, err := e.Start(t.Context(), MotionTarget{PatternID: PatternStroke, SpeedPercent: 20}, config.DefaultSettings().Motion)
+		if err == nil || got.StartupRecovery == nil || got.StartupRecovery.Kind != kind {
+			t.Fatalf("wanted %s: %+v %v", kind, got.StartupRecovery, err)
+		}
+	}
+}

@@ -44,6 +44,15 @@ func (s *Server) emitChatCancellationAt(ctx context.Context, stop uint64, emit s
 		}
 	}
 	if s.stopSequence.Load() != stop {
+		if s.lastStopWasPositionReset() {
+			payload := map[string]string{"message": chatPositionResetMessage}
+			if replyRetained {
+				payload["message"], payload["reply_retained"] = chatPositionResetAfterReply, "true"
+			}
+			_ = emit("error", payload)
+			_ = emit("done", map[string]any{"ok": false})
+			return
+		}
 		if replyRetained {
 			emitChatPostReplyCancellation(emit)
 		} else {

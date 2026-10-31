@@ -208,3 +208,79 @@ func TestAuthenticatedPositionResetAndStop(t *testing.T) {
 		})
 	}
 }
+
+func TestPositionRecheckDoesNotHoldLifecycleLockAndReplacementCancelsIt(t *testing.T) {
+	s, owner, id := positionResetServer(t)
+	entered := make(chan struct{})
+	owner.mu.Lock()
+	owner.readEntered = entered
+	owner.mu.Unlock()
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- resetPositionRequest(s, id, "test-controller") }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("reset did not start")
+	}
+	if !s.motion.lifecycleMu.TryLock() {
+		t.Fatal("recheck held the lifecycle lock during I/O")
+	}
+	s.motion.lifecycleMu.Unlock()
+	replaced := make(chan error, 1)
+	go func() { replaced <- s.stopAndClearMotionEngine(t.Context(), "device_disconnected") }()
+	select {
+	case err := <-replaced:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("replacement did not cancel reset")
+	}
+	select {
+	case w := <-done:
+		if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "Position recheck was interrupted") {
+			t.Fatalf("unclear cancellation: %d %s", w.Code, w.Body.String())
+		}
+	case <-time.After(time.Second):
+		t.Fatal("reset did not exit")
+	}
+}
+
+type positionResetRequestBody struct {
+	*strings.Reader
+	entered, release chan struct{}
+	once             sync.Once
+}
+
+func (b *positionResetRequestBody) Read(p []byte) (int, error) {
+	b.once.Do(func() { close(b.entered); <-b.release })
+	return b.Reader.Read(p)
+}
+
+func TestLocalPositionResetCannotMissStopDuringAdmission(t *testing.T) {
+	s, owner, id := positionResetServer(t)
+	body := &positionResetRequestBody{Reader: strings.NewReader(fmt.Sprintf(`{"failure_id":%q}`, id)), entered: make(chan struct{}), release: make(chan struct{})}
+	r := withController(httptest.NewRequest(http.MethodPost, "/api/motion/reset-position", body))
+	r.Header.Set("Content-Type", "application/json")
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- serveCommand(s, r) }()
+	select {
+	case <-body.entered:
+	case <-time.After(time.Second):
+		t.Fatal("request did not start reading")
+	}
+	callMotion(t, s, http.MethodPost, "/api/motion/stop", "{}")
+	before := len(owner.Commands())
+	close(body.release)
+	select {
+	case w := <-done:
+		if w.Code != http.StatusConflict || len(owner.Commands()) != before {
+			t.Fatalf("stale reset touched device: %d", w.Code)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("request did not finish")
+	}
+	if s.currentMotionEngine().Snapshot().StartupRecovery == nil {
+		t.Fatal("stale reset cleared failure")
+	}
+}

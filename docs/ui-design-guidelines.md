@@ -40,11 +40,13 @@ component or is promoted to a token before it is reused elsewhere.
 Positioning failures remain visible after a failed run, through the backend's
 `startup_recovery` snapshot. Chat's Motion status and the device panel share a
 compact bordered notice with **Reset and recheck**. It shows **Rechecking…**
-while busy and disables the action for read-only/offline clients. The notice
-clears only after a successful backend recheck; success explicitly says that
-playback remains stopped. The action neither resumes motion nor overrides
-arrival verification on the next start. Emergency Stop stays reachable during
-the entire operation.
+while busy and disables the action for read-only/offline clients. The backend
+clears the notice after a successful recheck or supersedes it when a new explicit
+start is admitted; the frontend never dismisses it speculatively. The notice
+distinguishes missed arrival, invalid readings, motion after Stop, and travel
+geometry errors. Success says that readings were checked, playback is stopped,
+and the next start checks arrival again. The action neither resumes motion nor
+overrides arrival verification. Emergency Stop stays reachable throughout.
 
 ## Design Tokens
 

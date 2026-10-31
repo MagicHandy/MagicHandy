@@ -3506,5 +3506,13 @@
   "Use the controlling tab to reset the position check.": "Usa la pestaña que tiene el control para restablecer la comprobación de posición.",
   "Stops the device and refreshes its position. Playback stays stopped.": "Detiene el dispositivo y actualiza su posición. La reproducción permanece detenida.",
   "Position rechecked. Playback is stopped; start again when ready.": "Posición comprobada. La reproducción está detenida; vuelve a iniciarla cuando quieras.",
-  "Could not recheck the device position.": "No se pudo comprobar la posición del dispositivo."
+  "Could not recheck the device position.": "No se pudo comprobar la posición del dispositivo.",
+  "Device stopped and position readings checked. The next start checks arrival again.": "Dispositivo detenido y lecturas de posición comprobadas. El próximo inicio volverá a comprobar la llegada.",
+  "The device returned invalid position or calibration readings.": "El dispositivo devolvió lecturas de posición o calibración no válidas.",
+  "The device was still moving after Stop.": "El dispositivo seguía moviéndose después de detenerlo.",
+  "Position recheck was interrupted. Try again when ready.": "Se interrumpió la comprobación de posición. Vuelve a intentarlo cuando quieras.",
+  "The device did not respond in time. Position still needs a recheck.": "El dispositivo no respondió a tiempo. Todavía hay que comprobar la posición.",
+  "The reply was interrupted by the position reset. Please send your request again when ready.": "El restablecimiento de posición interrumpió la respuesta. Vuelve a enviar tu solicitud cuando quieras.",
+  "The reply was saved, but the position reset canceled its motion and speech.": "La respuesta se guardó, pero el restablecimiento de posición canceló su movimiento y voz.",
+  "Position reset cleared the command.": "El restablecimiento de posición canceló el comando."
 }

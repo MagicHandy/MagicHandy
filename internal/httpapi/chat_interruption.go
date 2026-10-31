@@ -14,6 +14,7 @@ var (
 	// Emergency Stop ends admitted work without ending its owner's control, so
 	// a canceled response may still close normally (ADR 0029).
 	errChatEmergencyStop = fmt.Errorf("emergency stop: %w", context.Canceled)
+	errChatPositionReset = fmt.Errorf("position reset: %w", context.Canceled)
 	errChatAccessEnded   = fmt.Errorf("sign-in session ended: %w", context.Canceled)
 	errChatServerStopped = fmt.Errorf("application shutting down: %w", context.Canceled)
 )
@@ -26,10 +27,15 @@ const (
 	chatAccessEndedMessage          = "Your sign-in session ended before the reply finished. Sign in again to continue."
 	chatServerStoppedMessage        = "MagicHandy is shutting down, so this reply could not finish."
 	chatPostReplyInterruptedMessage = "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again."
+	chatPositionResetMessage        = "The reply was interrupted by the position reset. Please send your request again when ready."
+	chatPositionResetAfterReply     = "The reply was saved, but the position reset canceled its motion and speech."
 )
 
 func (s *Server) chatInterruptionMessage(ctx context.Context, stop uint64, failure error) string {
 	if s.stopSequence.Load() != stop {
+		if s.lastStopWasPositionReset() {
+			return chatPositionResetMessage
+		}
 		return "Chat canceled by Emergency Stop."
 	}
 	cause := context.Cause(ctx)
@@ -39,6 +45,7 @@ func (s *Server) chatInterruptionMessage(ctx context.Context, stop uint64, failu
 	}{
 		// Stop cancels admitted work just before it advances the sequence.
 		{errChatEmergencyStop, "Chat canceled by Emergency Stop."},
+		{errChatPositionReset, chatPositionResetMessage},
 		{errLLMSettingsChanged, chatChangedMessage},
 		{errChatControlChanged, chatControlChangedMessage},
 		{errChatAccessEnded, chatAccessEndedMessage},
@@ -82,6 +89,7 @@ func (e retainedChatFailure) Unwrap() error { return e.cause }
 func sharedChatInterruption(message string) bool {
 	switch message {
 	case chatInterruptedMessage, chatTimedOutMessage, chatChangedMessage, chatControlChangedMessage,
+		chatPositionResetMessage, chatPositionResetAfterReply,
 		chatAccessEndedMessage, chatServerStoppedMessage, chatPostReplyInterruptedMessage,
 		"Chat canceled by Emergency Stop.",
 		"Emergency Stop canceled this reply's motion and speech.":

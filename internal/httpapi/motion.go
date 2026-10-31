@@ -516,8 +516,15 @@ func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context
 			detach()
 		}
 	}
-	s.controller.AdvanceStopGeneration()
+	cause := errChatEmergencyStop
+	if reason == "position_reset" {
+		cause = errChatPositionReset
+	}
+	s.controller.advanceStopGeneration(cause)
 	sequence := s.stopSequence.Add(1)
+	if reason == "position_reset" {
+		s.recordPositionResetSequence(sequence)
+	}
 	// Local readiness checks and warmups are not chat turns. Cancel their
 	// scheduler lane too, including installations without account sessions.
 	s.llmRequests.invalidate()
@@ -530,7 +537,7 @@ func (s *Server) invalidateWorkForStop(reason string, origins ...context.Context
 	}
 	// A remote command requested before this Stop must not run after it.
 	if s.remote != nil {
-		s.remote.Clear("Emergency Stop cleared the command.")
+		s.remote.Clear(s.stopCommandClearedMessage())
 	}
 	s.chatWorkspace.CancelTurns()
 	// No lock is taken around invalidation: the epoch above is already

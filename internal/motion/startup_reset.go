@@ -20,14 +20,27 @@ type StartupRecoveryState struct {
 // ErrStartupRecoveryUnavailable rejects stale or concurrent reset actions.
 var ErrStartupRecoveryUnavailable = errors.New("the position error changed; refresh before resetting")
 
-func (e *Engine) rememberStartupRecoveryLocked(cause error) {
-	kind := ""
+var (
+	errStartupReadings = errors.New("device position or calibration readings are invalid")
+	errStartupMoving   = errors.New("device slider remained in motion after Stop")
+)
+
+func startupRecoveryKind(cause error) string {
 	switch {
+	case errors.Is(cause, errStartupReadings):
+		return "invalid_telemetry"
+	case errors.Is(cause, errStartupMoving):
+		return "moving_after_stop"
 	case errors.Is(cause, ErrStartupArrival):
-		kind = "arrival_not_reached"
+		return "arrival_not_reached"
 	case errors.Is(cause, ErrUnsafeStartupState):
-		kind = "unsafe_geometry"
+		return "unsafe_geometry"
 	}
+	return ""
+}
+
+func (e *Engine) rememberStartupRecoveryLocked(cause error) {
+	kind := startupRecoveryKind(cause)
 	if kind != "" {
 		e.startupRecovery = &StartupRecoveryState{ID: rand.Text(), Kind: kind}
 	}
@@ -37,11 +50,18 @@ func (e *Engine) rememberStartupRecoveryLocked(cause error) {
 // neither positions the slider nor resumes the failed target, and grants no
 // exemption from arrival verification on the next explicit start.
 func (e *Engine) ResetStartupPosition(ctx context.Context, failureID string) (ActiveMotionState, error) {
-	err := e.resetStartupPosition(ctx, failureID)
+	return e.ResetStartupPositionAtGeneration(ctx, failureID, e.AdmissionGeneration())
+}
+
+// ResetStartupPositionAtGeneration admits an idle reset without retaining the
+// server's lifecycle lock during device I/O. Replacement must Stop this engine,
+// which either invalidates admission or cancels an already admitted reset.
+func (e *Engine) ResetStartupPositionAtGeneration(ctx context.Context, failureID string, admission uint64) (ActiveMotionState, error) {
+	err := e.resetStartupPosition(ctx, failureID, admission)
 	return e.Snapshot(), err
 }
 
-func (e *Engine) resetStartupPosition(ctx context.Context, failureID string) (err error) {
+func (e *Engine) resetStartupPosition(ctx context.Context, failureID string, admission uint64) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultStopTimeout)
 	defer cancel()
 	e.mu.Lock()
@@ -49,12 +69,11 @@ func (e *Engine) resetStartupPosition(ctx context.Context, failureID string) (er
 		e.mu.Unlock()
 		return ctx.Err()
 	}
-	if e.startupRecovery == nil || e.startupRecovery.ID != failureID ||
+	if e.stopGeneration != admission || e.startupRecovery == nil || e.startupRecovery.ID != failureID ||
 		e.startupRecovery.Resetting || e.running || e.starting || e.completing || e.stopBarriers > 0 {
 		e.mu.Unlock()
 		return ErrStartupRecoveryUnavailable
 	}
-	admission := e.stopGeneration
 	e.startupRecovery.Resetting = true
 	e.startupResetCancel = cancel
 	e.stopBarriers++ // New starts cannot cross the stop-and-read operation.
@@ -76,6 +95,9 @@ func (e *Engine) resetStartupPosition(ctx context.Context, failureID string) (er
 			}
 			if err != nil {
 				e.lastError = err.Error()
+				if kind := startupRecoveryKind(err); kind != "" {
+					e.startupRecovery.Kind = kind
+				}
 				return
 			}
 			e.startupRecovery = nil
@@ -148,16 +170,16 @@ func (e *Engine) recheckStartupPosition(ctx context.Context, provider transport.
 			}
 		}
 	}
-	return errors.New("the device is still moving after Stop; position was not reset")
+	return errStartupMoving
 }
 
 func checkedStartupCalibration(state transport.MotionStartupState) (startupCalibration, error) {
 	if err := validateStartupState(state); err != nil {
-		return startupCalibration{}, fmt.Errorf("%w: %w", ErrUnsafeStartupState, err)
+		return startupCalibration{}, fmt.Errorf("%w: %w: %v", ErrUnsafeStartupState, errStartupReadings, err)
 	}
 	calibration, err := newStartupCalibration(state)
 	if err != nil {
-		return startupCalibration{}, fmt.Errorf("%w: %w", ErrUnsafeStartupState, err)
+		return startupCalibration{}, fmt.Errorf("%w: %w: %v", ErrUnsafeStartupState, errStartupReadings, err)
 	}
 	observed := calibration.fullPercentAt(state.PositionAbsolute)
 	if observed < -startupCalibrationTolerancePercent || observed > 100+startupCalibrationTolerancePercent {

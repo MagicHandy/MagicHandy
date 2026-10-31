@@ -130,48 +130,49 @@ type Server struct {
 	modelCheck        modelCheckRuntimeState
 	// runtimeUpdater starts a managed llama.cpp install; tests replace it so
 	// nothing downloads a runtime.
-	runtimeUpdater      func(backend string) (llm.ManagedLlamaRuntimeBuild, error)
-	runtimeUpdateWG     sync.WaitGroup
-	models              *llm.ModelManager
-	managedLLM          *llm.ManagedLlamaRuntimeManager
-	setup               *setupManager
-	updates             *updatecheck.Checker
-	controller          controllerRuntime
-	commands            commandRuntime
-	observations        observationRuntime
-	personalization     personalizationRuntime
-	personas            *persona.Store
-	modes               *modes.Manager
-	voice               *voice.Manager
-	voiceExecutable     string
-	voiceDataDir        string
-	voiceModuleUpdates  voiceModuleUpdateCache
-	voiceAutoloadMu     sync.Mutex
-	voiceAutoloadCancel context.CancelFunc
-	voiceAutoloadWG     sync.WaitGroup
-	voiceAutoloadID     uint64
-	stopSequence        atomic.Uint64
-	quiescing           atomic.Bool
-	lifecycleCtx        context.Context
-	lifecycleCancel     context.CancelFunc
-	quiesceOnce         sync.Once
-	closeOnce           sync.Once
-	settingsLifecycleMu sync.Mutex
-	personaMutationMu   sync.Mutex
-	chatWorkspace       *chatapp.Workspace
-	chatRepair          chatRepairRuntime
-	chatSpeechMu        chatPublicationGate
-	chatSpeechRequests  map[int64]string
-	hostPathPicker      hostPathPicker
-	chatLog             *chat.MessageLog
-	patterns            *patterns.Library
-	media               *media.Catalog
-	mediaSync           *mediaSyncRuntime
-	remoteURL           string
-	remote              *remote.Hub
-	started             time.Time
-	version             VersionInfo
-	handler             http.Handler
+	runtimeUpdater        func(backend string) (llm.ManagedLlamaRuntimeBuild, error)
+	runtimeUpdateWG       sync.WaitGroup
+	models                *llm.ModelManager
+	managedLLM            *llm.ManagedLlamaRuntimeManager
+	setup                 *setupManager
+	updates               *updatecheck.Checker
+	controller            controllerRuntime
+	commands              commandRuntime
+	observations          observationRuntime
+	personalization       personalizationRuntime
+	personas              *persona.Store
+	modes                 *modes.Manager
+	voice                 *voice.Manager
+	voiceExecutable       string
+	voiceDataDir          string
+	voiceModuleUpdates    voiceModuleUpdateCache
+	voiceAutoloadMu       sync.Mutex
+	voiceAutoloadCancel   context.CancelFunc
+	voiceAutoloadWG       sync.WaitGroup
+	voiceAutoloadID       uint64
+	stopSequence          atomic.Uint64
+	positionResetSequence atomic.Uint64
+	quiescing             atomic.Bool
+	lifecycleCtx          context.Context
+	lifecycleCancel       context.CancelFunc
+	quiesceOnce           sync.Once
+	closeOnce             sync.Once
+	settingsLifecycleMu   sync.Mutex
+	personaMutationMu     sync.Mutex
+	chatWorkspace         *chatapp.Workspace
+	chatRepair            chatRepairRuntime
+	chatSpeechMu          chatPublicationGate
+	chatSpeechRequests    map[int64]string
+	hostPathPicker        hostPathPicker
+	chatLog               *chat.MessageLog
+	patterns              *patterns.Library
+	media                 *media.Catalog
+	mediaSync             *mediaSyncRuntime
+	remoteURL             string
+	remote                *remote.Hub
+	started               time.Time
+	version               VersionInfo
+	handler               http.Handler
 }
 
 // New wires the HTTP API to the embedded static assets and structured logger.

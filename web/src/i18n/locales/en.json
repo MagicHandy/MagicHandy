@@ -3506,5 +3506,13 @@
   "Use the controlling tab to reset the position check.": "Use the controlling tab to reset the position check.",
   "Stops the device and refreshes its position. Playback stays stopped.": "Stops the device and refreshes its position. Playback stays stopped.",
   "Position rechecked. Playback is stopped; start again when ready.": "Position rechecked. Playback is stopped; start again when ready.",
-  "Could not recheck the device position.": "Could not recheck the device position."
+  "Could not recheck the device position.": "Could not recheck the device position.",
+  "Device stopped and position readings checked. The next start checks arrival again.": "Device stopped and position readings checked. The next start checks arrival again.",
+  "The device returned invalid position or calibration readings.": "The device returned invalid position or calibration readings.",
+  "The device was still moving after Stop.": "The device was still moving after Stop.",
+  "Position recheck was interrupted. Try again when ready.": "Position recheck was interrupted. Try again when ready.",
+  "The device did not respond in time. Position still needs a recheck.": "The device did not respond in time. Position still needs a recheck.",
+  "The reply was interrupted by the position reset. Please send your request again when ready.": "The reply was interrupted by the position reset. Please send your request again when ready.",
+  "The reply was saved, but the position reset canceled its motion and speech.": "The reply was saved, but the position reset canceled its motion and speech.",
+  "Position reset cleared the command.": "Position reset cleared the command."
 }
