@@ -28,6 +28,7 @@ func TestChatInterruptionExplainsKnownCausesWithoutClaimingStop(t *testing.T) {
 		{"control", errChatControlChanged, chatControlChangedMessage},
 		{"sign_in", errChatAccessEnded, chatAccessEndedMessage},
 		{"shutdown", errChatServerStopped, chatServerStoppedMessage},
+		{"position_reset", errChatPositionReset, chatPositionResetMessage},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancelCause(t.Context())
@@ -66,6 +67,42 @@ func TestChatInterruptionExplainsKnownCausesWithoutClaimingStop(t *testing.T) {
 	}
 	if got := s.chatInterruptionMessage(t.Context(), s.stopSequence.Load(), errors.New("model supplied the words context canceled")); got != "" {
 		t.Fatal("classified untrusted language as a lifecycle event")
+	}
+}
+
+func TestPositionResetCancellationIsNotCalledEmergencyStop(t *testing.T) {
+	s := newTestServer(t)
+	before := s.stopSequence.Load()
+	finish, sequence := s.beginGlobalStop("position_reset")
+	finish()
+	if got := s.chatInterruptionMessage(t.Context(), before, context.Canceled); got != chatPositionResetMessage {
+		t.Fatalf("wrong reset explanation: %s", got)
+	}
+	if s.stopCommandClearedMessage() != "Position reset cleared the command." {
+		t.Fatal("remote command mislabeled")
+	}
+	for _, retained := range []bool{false, true} {
+		var message string
+		emit := func(event string, payload any) error {
+			if event == "error" {
+				message = clientChatFailure(payload)
+			}
+			return nil
+		}
+		s.emitChatCancellationAt(t.Context(), before, emit, retained)
+		want := chatPositionResetMessage
+		if retained {
+			want = chatPositionResetAfterReply
+		}
+		if message != want {
+			t.Fatalf("wrong shared cancellation: %s", message)
+		}
+	}
+	finish, _ = s.beginGlobalStop("ui_stop")
+	finish()
+	s.recordPositionResetSequence(sequence - 1)
+	if s.lastStopWasPositionReset() || s.stopCommandClearedMessage() != "Emergency Stop cleared the command." {
+		t.Fatal("a newer Emergency Stop retained the reset label")
 	}
 }
 

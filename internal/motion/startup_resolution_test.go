@@ -2,6 +2,7 @@ package motion
 
 import (
 	"context"
+	"errors"
 	"math"
 	"strings"
 	"testing"
@@ -91,7 +92,7 @@ func TestStartupStillRejectsMissedEncodedTargets(t *testing.T) {
 			engine := newTestEngine(t, owner, diagnostics.NewTraceRing(64), time.Hour)
 			engine.startupWait = func(context.Context, time.Duration) error { return nil }
 			_, err := engine.Start(context.Background(), startupResolutionMediaTarget(16.458333333333336), config.DefaultSettings().Motion)
-			if err == nil || !strings.Contains(err.Error(), "motion startup lead-in") {
+			if !errors.Is(err, ErrStartupArrival) || !strings.Contains(err.Error(), "motion startup lead-in") {
 				t.Fatalf("unsafe arrival error = %v", err)
 			}
 			if countCommands(owner.Commands(), transport.CommandKindPointsPlay) != 1 ||

@@ -176,7 +176,7 @@ func (s *Server) interruptionDeadlines(cause error, now time.Time) (read, write 
 	switch {
 	case s.quiescing.Load():
 		return now, now.Add(shutdownWriteGrace)
-	case errors.Is(cause, errChatEmergencyStop):
+	case errors.Is(cause, errChatEmergencyStop), errors.Is(cause, errChatPositionReset):
 		return now.Add(stopSocketGrace), now.Add(stopSocketGrace)
 	default:
 		return now, now

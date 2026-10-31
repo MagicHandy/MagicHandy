@@ -51,6 +51,12 @@ const (
 // attempted after the device position or calibration changes.
 var ErrUnsafeStartupState = errors.New("motion startup state is unsafe")
 
+// ErrStartupArrival marks a completed lead-in that did not reach and settle at
+// its commanded target. A transient HTTP failure is different: repeatedly
+// issuing new autonomous lead-ins cannot establish why an accepted move missed.
+// A fresh explicit user start may retry after the device has been checked.
+var ErrStartupArrival = errors.New("device did not settle at the starting position")
+
 type startupMotionProfile struct {
 	settings              transport.StrokeWindowCommand
 	observedFullPercent   float64
@@ -201,13 +207,13 @@ func (e *Engine) waitForStartupArrival(
 
 func startupArrivalReady(state transport.MotionStartupState, profile startupMotionProfile) (bool, error) {
 	if err := validateStartupState(state); err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: %w: %v", ErrStartupArrival, errStartupReadings, err)
 	}
 	arrivalTolerance := profile.fullTravelAbsolute * startupPositionTolerancePercent / 100
 	fullMinimum := profile.targetAbsolute - profile.targetFullPercent/100*profile.fullTravelAbsolute
 	fullMaximum := fullMinimum + profile.fullTravelAbsolute
 	if state.PositionAbsolute < fullMinimum-arrivalTolerance || state.PositionAbsolute > fullMaximum+arrivalTolerance {
-		return false, errors.New("motion startup position moved outside calibrated full travel")
+		return false, fmt.Errorf("%w: motion startup position moved outside calibrated full travel", ErrStartupArrival)
 	}
 	return math.Abs(state.PositionAbsolute-profile.targetAbsolute) <= arrivalTolerance &&
 		state.SpeedAbsolute <= startupStationarySpeedAbsolute &&
@@ -227,7 +233,8 @@ func startupArrivalError(state transport.MotionStartupState, profile startupMoti
 	arrivalTolerance := profile.fullTravelAbsolute * startupPositionTolerancePercent / 100
 	if arrivalError > arrivalTolerance {
 		return fmt.Errorf(
-			"motion startup lead-in %s %.2f mm from target, outside %.1f%% travel tolerance",
+			"%w: motion startup lead-in %s %.2f mm from target, outside %.1f%% travel tolerance",
+			ErrStartupArrival,
 			disposition,
 			arrivalError,
 			startupPositionTolerancePercent,
@@ -235,12 +242,13 @@ func startupArrivalError(state transport.MotionStartupState, profile startupMoti
 	}
 	if state.SpeedAbsolute > startupStationarySpeedAbsolute {
 		return fmt.Errorf(
-			"motion startup lead-in %s while device slider speed remained %.2f",
+			"%w: motion startup lead-in %s while device slider speed remained %.2f",
+			ErrStartupArrival,
 			disposition,
 			state.SpeedAbsolute,
 		)
 	}
-	return fmt.Errorf("motion startup lead-in %s outside the requested stroke window", disposition)
+	return fmt.Errorf("%w: motion startup lead-in %s outside the requested stroke window", ErrStartupArrival, disposition)
 }
 
 func (e *Engine) readStationaryStartupState(
@@ -265,7 +273,7 @@ func (e *Engine) readStationaryStartupState(
 			}
 		}
 	}
-	return transport.MotionStartupState{}, errors.New("device slider remained in motion after the motion startup Stop")
+	return transport.MotionStartupState{}, fmt.Errorf("%w: %w", ErrStartupArrival, errStartupMoving)
 }
 
 func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.MotionStartupState, owners ...transport.Transport) (startupMotionProfile, error) {
@@ -274,34 +282,18 @@ func (e *Engine) buildStartupMotionProfile(runEpoch uint64, state transport.Moti
 	if err := e.validateRunLocked(runEpoch); err != nil {
 		return startupMotionProfile{}, err
 	}
-	if err := validateStartupState(state); err != nil {
-		return startupMotionProfile{}, err
-	}
-
 	settings := transport.StrokeWindowCommand{
 		MinPercent:       e.settings.StrokeMinPercent,
 		MaxPercent:       e.settings.StrokeMaxPercent,
 		ReverseDirection: e.settings.ReverseDirection,
 	}
-	calibration, err := newStartupCalibration(state)
+	calibration, err := checkedStartupCalibration(state)
 	if err != nil {
 		return startupMotionProfile{}, err
 	}
 	first := sampleMotionPath(e.plan, e.transition, 0).PositionPercent
 	targetFullPercent := physicalPositionForSemantic(first, settings)
 	observedFullPercent := calibration.fullPercentAt(state.PositionAbsolute)
-	if observedFullPercent < -startupCalibrationTolerancePercent ||
-		observedFullPercent > 100+startupCalibrationTolerancePercent {
-		// The geometry the device reported is the only thing that can explain this
-		// refusal, so it belongs in the message. Without it the failure is a dead
-		// end: it names a calibration nobody can see.
-		return startupMotionProfile{}, fmt.Errorf(
-			"%w: motion startup absolute position was outside calibrated full travel "+
-				"(position %.2f maps to %.1f%% of travel; device reported slide %.1f-%.1f%% as %.2f-%.2f)",
-			ErrUnsafeStartupState, state.PositionAbsolute, observedFullPercent,
-			state.StrokeMinPercent, state.StrokeMaxPercent,
-			state.StrokeMinAbsolute, state.StrokeMaxAbsolute)
-	}
 	currentFullPercent := math.Max(0, math.Min(100, observedFullPercent))
 	unionMinimum := math.Floor(min(currentFullPercent, state.StrokeMinPercent, float64(settings.MinPercent)))
 	unionMaximum := math.Ceil(max(currentFullPercent, state.StrokeMaxPercent, float64(settings.MaxPercent)))
@@ -377,7 +369,11 @@ func (e *Engine) readMotionStartupState(
 	}
 	state, results, err := provider.ReadMotionStartupState(commandCtx)
 	cleanup()
+	e.recordStartupObservation(reason, state, results, err)
+	return state, results, err
+}
 
+func (e *Engine) recordStartupObservation(reason string, state transport.MotionStartupState, results transport.MotionStartupStateResults, err error) {
 	sliderErr := error(nil)
 	strokeErr := error(nil)
 	if err != nil {
@@ -409,7 +405,6 @@ func (e *Engine) readMotionStartupState(
 	if err != nil {
 		e.rememberError(err)
 	}
-	return state, results, err
 }
 
 func (e *Engine) stopTransportForStartup(ctx context.Context, runEpoch uint64, reason string, owners ...transport.Transport) error {

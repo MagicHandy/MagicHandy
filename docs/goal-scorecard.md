@@ -1,5 +1,30 @@
 # Goal Scorecard
 
+## 2026-10-31 — Position reset and recheck
+
+Same Windows amd64 Go 1.26.10 stripped pure-Go flags as the pace review:
+**24,438,272 -> 24,478,720 B** (+40,448 B), including the embedded UI and all
+five locale catalogs. Main JS **1,319,862 -> 1,323,379 B** (+3,517 B), gzip
+**354,752 -> 355,603 B** (+851 B). Main CSS **210,037 -> 210,443 B** (+406 B),
+gzip **36,604 -> 36,663 B** (+59 B). One small conditional recovery notice is
+shared between Chat and the device panel; no dependency or persistent worker
+was added. The reset's read has a 15-second bound and runs only on explicit
+request. Directional fitting retains its 16-pass local bound and uses the
+existing bounded common-clock solver if those passes are exhausted. No new idle
+RSS or cold-start performance claim is made. Updates remeasured after the
+arrival-telemetry classification correction: **24,478,720 B**, unchanged with
+the same stripped flags; no UI source changed in that follow-up. See the
+[position-reset follow-up](session-pace-recovery-2026-10-31.md#position-reset-follow-up).
+
+## 2026-10-31 — Directional field fitting and startup arrival failures
+
+Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
+core plus embedded UI **24,434,688 -> 24,438,272 B** (+3,584 B). The canonical
+UI remains unchanged. No dependency, worker, timer or model inference step was
+added. Curve compilation remains bounded to 16 joint/contrast fitting passes;
+unchanged symmetric motion retains the existing path. No new RSS or cold-start
+performance claim is made. See the [session review](session-pace-recovery-2026-10-31.md).
+
 ## 2026-10-30 — Alpha.81 repair-persistence follow-up
 
 With the same Windows amd64 Go 1.26.10 and stripped pure-Go measurement flags

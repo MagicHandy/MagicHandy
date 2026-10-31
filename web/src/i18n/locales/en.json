@@ -3497,5 +3497,22 @@
   "Maximum": "Maximum",
   "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.",
   "Shifts the pulses toward one channel.": "Shifts the pulses toward one channel.",
-  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength."
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.",
+  "Position needs a recheck": "Position needs a recheck",
+  "The device reported a position outside its calibrated travel.": "The device reported a position outside its calibrated travel.",
+  "The device did not settle at the requested starting position.": "The device did not settle at the requested starting position.",
+  "Rechecking…": "Rechecking…",
+  "Reset and recheck": "Reset and recheck",
+  "Use the controlling tab to reset the position check.": "Use the controlling tab to reset the position check.",
+  "Stops the device and refreshes its position. Playback stays stopped.": "Stops the device and refreshes its position. Playback stays stopped.",
+  "Position rechecked. Playback is stopped; start again when ready.": "Position rechecked. Playback is stopped; start again when ready.",
+  "Could not recheck the device position.": "Could not recheck the device position.",
+  "Device stopped and position readings checked. The next start checks arrival again.": "Device stopped and position readings checked. The next start checks arrival again.",
+  "The device returned invalid position or calibration readings.": "The device returned invalid position or calibration readings.",
+  "The device was still moving after Stop.": "The device was still moving after Stop.",
+  "Position recheck was interrupted. Try again when ready.": "Position recheck was interrupted. Try again when ready.",
+  "The device did not respond in time. Position still needs a recheck.": "The device did not respond in time. Position still needs a recheck.",
+  "The reply was interrupted by the position reset. Please send your request again when ready.": "The reply was interrupted by the position reset. Please send your request again when ready.",
+  "The reply was saved, but the position reset canceled its motion and speech.": "The reply was saved, but the position reset canceled its motion and speech.",
+  "Position reset cleared the command.": "Position reset cleared the command."
 }

@@ -4,6 +4,15 @@ Status: implemented effective-pace calibration, C2 Creative compiler, and
 retained stopped-run diagnostics; awaiting matched real-device confirmation
 (2026-08-23)
 
+## Directional field fitting — 2026-10-31
+
+The [installed-session review](session-pace-recovery-2026-10-31.md) found that
+unequal direction rates could stretch an entire wandering field for its single
+worst reversal. Fields now preserve directional contrast at neighboring turns
+while fitting locally; counted phrases retain their common clock. Existing
+calibration, kinematic limits and sparse output policy are unchanged. Physical
+A/B acceptance of this new timing remains required before publication.
+
 ## Top-speed reversals — 2026-10-29
 
 Requests from about 85% up all played at the same pace: 78.7% effective for

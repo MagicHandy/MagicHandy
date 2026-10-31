@@ -3497,5 +3497,22 @@
   "Maximum": "Máximo",
   "Both channels are at 0, so nothing is felt. Raise a channel when you are ready.": "Os dois canais estão em 0, então nada é sentido. Aumente um canal quando quiser.",
   "Shifts the pulses toward one channel.": "Desloca os pulsos para um canal.",
-  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "Os dois limites estão em 0. Aumente-os nas configurações de saída do Coyote para permitir intensidade."
+  "Both ceilings are 0. Raise them in the Coyote's Output settings to allow strength.": "Os dois limites estão em 0. Aumente-os nas configurações de saída do Coyote para permitir intensidade.",
+  "Position needs a recheck": "A posição precisa ser verificada",
+  "The device reported a position outside its calibrated travel.": "O dispositivo informou uma posição fora do curso calibrado.",
+  "The device did not settle at the requested starting position.": "O dispositivo não parou na posição inicial solicitada.",
+  "Rechecking…": "Verificando…",
+  "Reset and recheck": "Redefinir e verificar",
+  "Use the controlling tab to reset the position check.": "Use a aba que está no controle para redefinir a verificação de posição.",
+  "Stops the device and refreshes its position. Playback stays stopped.": "Para o dispositivo e atualiza sua posição. A reprodução continua parada.",
+  "Position rechecked. Playback is stopped; start again when ready.": "Posição verificada. A reprodução está parada; inicie novamente quando quiser.",
+  "Could not recheck the device position.": "Não foi possível verificar a posição do dispositivo.",
+  "Device stopped and position readings checked. The next start checks arrival again.": "Dispositivo parado e leituras de posição verificadas. O próximo início verificará a chegada novamente.",
+  "The device returned invalid position or calibration readings.": "O dispositivo retornou leituras de posição ou calibração inválidas.",
+  "The device was still moving after Stop.": "O dispositivo continuou se movendo após o comando Parar.",
+  "Position recheck was interrupted. Try again when ready.": "A verificação de posição foi interrompida. Tente novamente quando quiser.",
+  "The device did not respond in time. Position still needs a recheck.": "O dispositivo não respondeu a tempo. A posição ainda precisa ser verificada.",
+  "The reply was interrupted by the position reset. Please send your request again when ready.": "A redefinição de posição interrompeu a resposta. Envie sua solicitação novamente quando quiser.",
+  "The reply was saved, but the position reset canceled its motion and speech.": "A resposta foi salva, mas a redefinição de posição cancelou o movimento e a fala.",
+  "Position reset cleared the command.": "A redefinição de posição cancelou o comando."
 }
