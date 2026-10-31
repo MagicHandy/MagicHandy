@@ -61,6 +61,15 @@ Updates independently reviews source and retained visual/evaluation evidence,
 reruns focused safety/release checks and requires all final PR/main/tag gates.
 Runtime evidence and private captures remain ignored under `.scratch/`.
 
+Updates reproduced one additional classification gap in six regression cases:
+invalid position, speed or calibration telemetry during arrival or stopped
+verification returned an untyped error, leaving autonomous retry enabled and
+omitting the recovery notice. Arrival validation now wraps that failure with
+`ErrStartupArrival` and the invalid-readings category. The tests require stopped
+state, the invalid-telemetry notice, one lead-in Play only and a final Stop.
+Transport/read errors retain their existing handling; no bound or trajectory
+changes. This release correction follows the earlier Claude review.
+
 ## Focused physical acceptance and remaining limits
 
 Original Handy, Cloud, saved window 0–97%, eight-leg short-reversal/long-transfer
@@ -98,9 +107,10 @@ x64/non-solid setup, full installer lifecycle, manifests/checksums, three public
 assets, clean source and exact-current-main provenance remain mandatory.
 
 Preserve the user-launched simulator at `http://127.0.0.1:50338/#/chat` and
-stopped physical audition app on port 50339. The simulator uses current
-production source, a stationary fixture and local Gemma 12B Intermediate/32K
+stopped physical audition app on port 50339. The original simulator uses the
+handed-off production source, a stationary fixture and local Gemma 12B Intermediate/32K
 through Ollama. The source's final text-only reply completed in 391 ms without
-repair/fallback/motion. Updates rechecks real generation and the app chat path,
-then leaves the simulator tab open, Motion Idle, LLM motion Off and Autopilot
-Off. No further hardware test or installed-data recovery is authorized here.
+repair/fallback/motion. Updates builds a parallel isolated simulator for the
+arrival-classification correction, checks real generation and the app chat path,
+and leaves its review tab open, Motion Idle, LLM motion Off and Autopilot Off.
+No further hardware test or installed-data recovery is authorized here.

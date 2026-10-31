@@ -207,7 +207,7 @@ func (e *Engine) waitForStartupArrival(
 
 func startupArrivalReady(state transport.MotionStartupState, profile startupMotionProfile) (bool, error) {
 	if err := validateStartupState(state); err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: %w: %v", ErrStartupArrival, errStartupReadings, err)
 	}
 	arrivalTolerance := profile.fullTravelAbsolute * startupPositionTolerancePercent / 100
 	fullMinimum := profile.targetAbsolute - profile.targetFullPercent/100*profile.fullTravelAbsolute

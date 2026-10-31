@@ -11,7 +11,9 @@ shared between Chat and the device panel; no dependency or persistent worker
 was added. The reset's read has a 15-second bound and runs only on explicit
 request. Directional fitting retains its 16-pass local bound and uses the
 existing bounded common-clock solver if those passes are exhausted. No new idle
-RSS or cold-start performance claim is made. See the
+RSS or cold-start performance claim is made. Updates remeasured after the
+arrival-telemetry classification correction: **24,478,720 B**, unchanged with
+the same stripped flags; no UI source changed in that follow-up. See the
 [position-reset follow-up](session-pace-recovery-2026-10-31.md#position-reset-follow-up).
 
 ## 2026-10-31 — Directional field fitting and startup arrival failures
