@@ -216,16 +216,79 @@ Recompiling the 108-case comparison after this change produced **zero changed
 trajectories and zero failures**; the retained visual atlas therefore still
 represents those outputs exactly.
 
-The review's medium-severity motion-character concern remains a physical
-acceptance item: preserving directional contrast around a constrained short
+The review raised a medium-severity motion-character concern for physical
+acceptance: preserving directional contrast around a constrained short
 fast stroke can transfer extra slowdown to its adjacent long slow strokes. The
 local fit is still substantially faster than stretching all 64 cycles, but
 numerical validity does not prove that this cadence is preferable. No further
-directional timing change was made without that comparison. Minor suggestions
+directional timing change was made before that comparison. The focused physical
+result below supports retaining the local fit for this case. Minor suggestions
 such as a participant label in a linked-device notice or a top-bar recovery
 hint remain optional UI follow-ups rather than release safety findings.
 
-## Required physical follow-up
+## Focused physical comparison — completed October 31
+
+The owner confirmed that the Original Handy was clear, could move freely, and
+other playback was stopped. An isolated current-source audition on port 50339
+used Handy Cloud, the Original profile, a 0–97% saved stroke window, and LLM
+motion off. The existing hardware-test credential was read without modifying its
+profile and used in memory; it was not copied to the isolated settings. The
+installed session and unrelated devices were not controlled.
+
+The focused semantic endpoint sequence was
+`0, 100, 0, 100, 90, 100, 0, 100, 0`: a short upper-range reversal beside
+long strokes, matching the local-fit regression's geometry. Requested times
+used the selected speed's reference travel rate and an 85:100 direction ratio.
+An ignored, fixture-restricted build overlay selected either the production
+local fit (**A**) or the existing common-clock fitter (**B**), both through
+`fitLayeredCurve` and the normal HTTP admission, shared engine, sparse sampler,
+Cloud dispatch, startup verification and Stop. No kinematic bound or transport
+behavior changed. This was a numerical stress fixture, not a newly generated
+LLM response or an exact reconstruction of the discarded session.
+
+All eight outputs were rendered from the shared engine before playback. The
+overview and representative 78%/100% details in both directions showed the
+same endpoint sequence, rounded turns, no added rests or derivative jumps,
+and sparse wire points following the planned position. A retained a slower
+long neighbor while leaving distant strokes faster. B slowed the whole loop.
+
+Each run lasted 18 seconds, with A first and B second in one command. A short
+stopped pause separated runs; ordinary Cloud startup preparation also took
+time. The first 78% pair was repeated at the owner's request. There were **10
+runs across five pairs**, covering four unique conditions:
+
+| Requested speed | Up/down rates | Local loop | Common-clock loop | Owner's assessment |
+| --- | --- | ---: | ---: | --- |
+| 78% | 85/100 | 3.782 s | 8.761 s | A was better and felt natural |
+| 100% | 85/100 | 3.391 s | 7.982 s | A was still better and natural |
+| 78% | 100/85 | 3.782 s | 8.761 s | A was better and felt natural |
+| 100% | 100/85 | 3.391 s | 7.982 s | A was better and natural |
+
+Loop times are compiled estimates, not measured carriage speed. The owner
+confirmed clean Stops in the first and final pairs. Cloud reported stopped
+after every run and at every pair's final check. All 446 running-state samples
+remained running without an engine error, and no retained transport result
+failed. The 170 point uploads had **336 ms median, 376 ms p95, 541 ms maximum**
+latency. Start requests, including positioning/prebuffering, ranged from
+2.620 to 7.130 seconds (median 5.681 s). End-of-run Stop requests had a 352 ms
+median, ranging from 327 to 1,681 ms. All extra Play events were startup
+positioning; there was no mid-run restart. All ten startup arrival checks
+passed, so this test did not reproduce or explain the earlier mismatch.
+
+**Decision: retain the local fit.** The suspected cadence downside did not
+justify changing or removing it in this fixture at either speed or direction.
+The common-clock path remains the convergence fallback. This is single-device,
+unblinded acceptance of the focused case; it does not replace the broader
+captured-field/live-edit comparison or investigation of the original Cloud
+failure. No production source changed during this audition.
+
+Ignored evidence is under `.scratch/focused-pace-20261031/`: the restricted
+overlay and provenance in the runner, eight-case `atlas.json`, visual overview
+and detailed plots, five timestamped paired captures with per-run traces,
+`feedback.json`, `summary.json`, and the LLM readiness log. The review app also
+completed a real text-only Gemma 12B chat without motion and is left stopped.
+
+## Remaining physical follow-up
 
 Before publication, compare alpha.81 and the candidate with identical seeds,
 Cloud, the correct Original Handy profile and saved 0–97% window. Include the
@@ -234,11 +297,8 @@ full strokes, counted regional transfers, a live pace edit and Stop. Record
 turn quality, cadence contrast, append latency and the actual trace. Keep
 unrelated devices disconnected.
 
-Include a short fast flick adjacent to a full-range slow transfer at 78% and
-100%, in both direction orientations. Compare the local fit with a common-clock
-fit, checking whether the preserved contrast causes an objectionable cadence
-change in neighboring strokes. Preserve the same endpoints, seeds and authored
-direction rates in the comparison.
+The focused short-flick/long-transfer acceptance item is complete as recorded
+above; repeat it if directional fitting changes again.
 
 Investigate the startup discrepancy separately with authorized read-only state
 capture and a bounded lead-in audition. Retain the actual Cloud API failure
