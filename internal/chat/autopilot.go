@@ -61,10 +61,14 @@ type AutopilotContext struct {
 	LocalStrokeCV        int
 	LocalStrokeRange     int
 	RecentPositionBands  []PositionBand
-	MotionFeedback       string
-	MotionMinSeconds     int
-	MotionMaxSeconds     int
-	MotionChangeLevel    int
+	// RecentScores are the distinct continuous scores played just before the
+	// current one, newest first. Only hosted Layered planning shows them, as
+	// observations without recall IDs or the person's words.
+	RecentScores      []EarlierScore
+	MotionFeedback    string
+	MotionMinSeconds  int
+	MotionMaxSeconds  int
+	MotionChangeLevel int
 	// AutoTiming asks a hosted planner for next_check_seconds in place of the
 	// soon/normal/later category. RecentCheckSeconds lists its recent choices,
 	// oldest first, as observations.

@@ -80,6 +80,7 @@ func writeContinuousAutopilotContext(builder *strings.Builder, context Autopilot
 	writeAutopilotMotionFacts(builder, context, true)
 	writeSessionProgress(builder, context)
 	writeRecentCreativeBands(builder, context.RecentPositionBands)
+	writeRecentScores(builder, context)
 	if context.AutoTiming {
 		writeAutoTiming(builder, context, true)
 	} else {
@@ -112,6 +113,11 @@ func writeContinuousAutopilotContext(builder *strings.Builder, context Autopilot
 	// into scope-aware planning after validation at its larger context budget.
 	if context.Hosted || context.Intermediate {
 		builder.WriteString(hostedContinuousPlanningGuide)
+		// Measured for Layered only; its counted phrases do not exist in
+		// Creative v2, whose planning keeps its validated prompt.
+		if context.Hosted && context.MotionMode == MotionModeLayered {
+			builder.WriteString(hostedAutopilotDirectionGuide)
+		}
 	} else {
 		fmt.Fprintf(builder, "Pace: use the width of the saved %d-%d%% speed range across the session rather than settling into one comfortable band. Easing down is what makes the next climb land; several stretches in a row at nearly the same speed_percent read as flat. When they say it is too much, or say they are close and you choose to hold them off, set speed_percent within a few points of %d%% at once, not partway, and keep it there while that was less than about a minute ago. Once the pace has stayed in the lower third for a minute or two and they have said nothing new since, rebuild: raise speed_percent by about 5 points each stretch and keep rising over the following stretches until it suits the moment again. A wish for a slow pace, such as going slow to make it last, is lasting: keep pace in the lower third and vary it there until they say otherwise.\n",
 			context.SpeedMinPercent, context.SpeedMaxPercent, context.SpeedMinPercent)
@@ -120,6 +126,43 @@ func writeContinuousAutopilotContext(builder *strings.Builder, context Autopilot
 		fmt.Fprintf(builder, "Quality feedback: %s\n", context.MotionFeedback)
 	}
 }
+
+// writeRecentScores shows a hosted Layered planner the scores played just
+// before the current one. Seeing only the current score, and told that an
+// earlier alternation is no constraint, GPT-6.1 Terra flipped between two
+// alternating templates every 10-16 seconds for minutes when asked to invent
+// strokes. Recall IDs and the person's words are left out: planning turns that
+// saw those re-read an old "go back" after chat had already answered it.
+func writeRecentScores(builder *strings.Builder, context AutopilotContext) {
+	if !context.Hosted || context.MotionMode != MotionModeLayered || len(context.RecentScores) == 0 {
+		return
+	}
+	type recentScore struct {
+		StartedSecondsAgo int `json:"started_seconds_ago"`
+		PlayedSeconds     int `json:"played_seconds"`
+		Score             any `json:"score"`
+	}
+	scores := make([]recentScore, 0, len(context.RecentScores))
+	for _, score := range context.RecentScores {
+		if score.Flow.Gesture != nil {
+			continue
+		}
+		scores = append(scores, recentScore{StartedSecondsAgo: score.StartedSecondsAgo, PlayedSeconds: score.PlayedSeconds,
+			Score: layeredScoreContext(score.Flow, true)})
+	}
+	if len(scores) == 0 {
+		return
+	}
+	encoded, _ := json.Marshal(scores)
+	fmt.Fprintf(builder, "Scores played just before the current one, newest first: %s. They are what the person has just felt, not targets or requests. Going back to one of them is a repeat, not a new contrast: when you vary, choose an idea that neither they nor the current score already cover.\n", encoded)
+}
+
+// hostedAutopilotDirectionGuide is hosted-only planning policy from a live
+// session: asked to build toward the edge, GPT held 20% for several stretches,
+// and asked to keep inventing simple strokes at full speed it only
+// alternated layer templates and eased the pace. Local prompts are unchanged.
+const hostedAutopilotDirectionGuide = `Direction: when the person names where the session should go, such as building toward a peak, bringing them close or to the edge, or winding down, keep moving there across stretches until they say it is reached or change it. Make each stretch a felt step that way, mostly through pace; holds and easing back suit open-ended stretches, not a requested build. Qualities they asked of the strokes themselves, such as simple, smooth, full length or fast, last across your variations until they change them: vary inside them. To invent strokes, compose distinct ideas; counted phrases that mix short and long strokes in different regions are yours to use, not only for counts the person spelled out.
+`
 
 // Originally evaluated for hosted models, then independently validated locally.
 // Both resolve active user constraints before choosing variation.
