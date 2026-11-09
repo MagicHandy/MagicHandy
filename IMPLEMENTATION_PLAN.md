@@ -1,5 +1,16 @@
 # MagicHandy Go Implementation Plan
 
+Hosted Layered Autopilot now sees the scores it played just before the current
+one, as observations without recall, and keeps moving toward a destination the
+person named. Hosted chat acts now on the immediate part of a request that
+also names a later cue, and counts an ordered progression step by step. In
+replays of an alpha.82 session, GPT-6.1 Terra built the requested pace in 8 of
+8 chat turns instead of 4, stopped alternating two templates when asked to
+invent, and counted a widening progression in 5 of 5. Seventeen default hosted
+suites went from 230 to 235 of 265 checks. Timing and local prompts are
+unchanged. See [ADR 0066](docs/decisions/0066-hosted-planning-direction-and-recent-scores.md)
+and the [review](docs/autopilot-followthrough-review-2026-11-08.md).
+
 A fourth capability level, Advanced (no reasoning), gives capable models
 answering without reasoning a private planning note before chat edits. It
 raised DeepSeek V4.1 Flash with reasoning Off from 80-82% to 89% of the hosted

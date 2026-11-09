@@ -35,7 +35,7 @@ func (s *Server) emitChatCancellationAt(ctx context.Context, stop uint64, emit s
 			}
 			payload := map[string]string{"message": message}
 			if replyRetained {
-				payload["message"] = chatPostReplyInterruptedMessage
+				payload["message"] = postReplyInterruption(ctx)
 				payload["reply_retained"] = "true"
 			}
 			_ = emit("error", payload)
@@ -63,7 +63,7 @@ func (s *Server) emitChatCancellationAt(ctx context.Context, stop uint64, emit s
 	message := s.chatInterruptionMessage(ctx, stop, context.Canceled)
 	payload := map[string]string{"message": message}
 	if replyRetained {
-		payload["message"], payload["reply_retained"] = chatPostReplyInterruptedMessage, "true"
+		payload["message"], payload["reply_retained"] = postReplyInterruption(ctx), "true"
 	}
 	_ = emit("error", payload)
 	_ = emit("done", map[string]any{"ok": false})

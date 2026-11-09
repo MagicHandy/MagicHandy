@@ -62,6 +62,9 @@ plan-ID guards fence these operations. Repeated Edge is idempotent; Return is
 separate. Stop clears the override, a lost transport latches recovery off, and
 model errors retain a manual hold. Limits or chat revoke automatic return.
 Current engine snapshots reconcile changed plans before exposing holding state.
+A chat reply that Edge cancels says Edge interrupted it, or once saved that Edge
+canceled its motion and speech, and its failure record names `edge` rather than
+a settings change or Emergency Stop.
 
 An accepted Edge command cannot erase device-buffered points. The UI explains
 that queued motion may briefly continue and retains the independent Stop

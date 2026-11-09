@@ -259,6 +259,32 @@ func TestAutopilotPromptContextCarriesCompiledFeel(t *testing.T) {
 	}
 }
 
+// Advanced Layered planning sees the scores it just played, including models
+// hosted locally. Simple and Intermediate keep their validated prompt bytes.
+func TestAutopilotPromptContextShowsRecentScoresToAdvancedLayeredOnly(t *testing.T) {
+	current, earlier := chat.DefaultLayeredScore(40), chat.DefaultLayeredScore(40)
+	earlier.AnchorPercent = 100
+	input := modes.DecisionInput{CurrentFlow: &current, CurrentSpeed: 40,
+		RecentScores: []modes.EarlierScore{{Flow: &earlier, StartedSecondsAgo: 14, PlayedSeconds: 12}}}
+	hosted := chat.FullCapabilities()
+	hosted.MotionMode, hosted.AdvancedMotion = chat.MotionModeLayered, true
+	context := autopilotPromptContext(input, hosted)
+	if len(context.RecentScores) != 1 || context.RecentScores[0].Flow.AnchorPercent != 100 || context.RecentScores[0].StartedSecondsAgo != 14 {
+		t.Fatalf("hosted recent scores = %+v", context.RecentScores)
+	}
+	if message := chat.AutopilotMotionMessage(context); !strings.Contains(message, `Scores played just before the current one, newest first: [{"started_seconds_ago":14,"played_seconds":12`) {
+		t.Fatalf("recent scores missing from hosted planning prompt:\n%s", message)
+	}
+	for _, intermediate := range []bool{false, true} {
+		local := hosted
+		local.AdvancedMotion, local.IntermediateMotion = false, intermediate
+		if context := autopilotPromptContext(input, local); len(context.RecentScores) != 0 ||
+			strings.Contains(chat.AutopilotMotionMessage(context), "Scores played just before") {
+			t.Fatalf("compact planning (intermediate=%t) received recent scores: %+v", intermediate, context.RecentScores)
+		}
+	}
+}
+
 func TestAutopilotMotionTemperatureFollowsChangeRateWithoutAffectingSpeech(t *testing.T) {
 	low := autopilotTemperature(chat.AutopilotKindMotion, 1)
 	balanced := autopilotTemperature(chat.AutopilotKindMotion, 4)

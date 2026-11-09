@@ -109,6 +109,9 @@ type DecisionInput struct {
 	// RecentCheckSeconds lists the planner's recent auto-timing horizons, oldest
 	// first. They are observations, so a model can notice it keeps one length.
 	RecentCheckSeconds []int
+	// RecentScores are the distinct continuous scores played just before the
+	// current one, newest first, for motion planning only.
+	RecentScores []EarlierScore
 	// Lookahead is how long before its stretch ends a prepared decision is
 	// planned. The ages above are already projected to that boundary; callers
 	// that measure their own ages, such as chat history, add it to now.
@@ -422,6 +425,9 @@ func (m *Manager) decisionInput(motionPlanning bool) DecisionInput {
 			input.ArcPercent = m.arcPercentLocked(now)
 		}
 	}
+	if motionPlanning {
+		input.RecentScores = recentPlanningScores(m.earlierScoresLocked(now))
+	}
 	if current == nil && m.motion.segment.hasContent() {
 		fallback := m.motion.segment.Target(modeLabel(m.loop.mode), m.loop.mode)
 		fallback.Pattern = m.motion.pattern
@@ -444,6 +450,21 @@ func (m *Manager) decisionInput(motionPlanning bool) DecisionInput {
 	input.MotionMinSeconds, input.MotionMaxSeconds = autopilot.MotionWindow()
 	input.MotionChangeLevel = autopilot.MotionChangeLevel
 	return input
+}
+
+// recentPlanningScores keeps the scores a planner has just played: the newest
+// three distinct earlier scores that finished within three minutes. Older scores
+// kept for chat recall are not recent stretches.
+func recentPlanningScores(scores []EarlierScore) []EarlierScore {
+	const limit, window = 3, 180
+	out := make([]EarlierScore, 0, limit)
+	for _, score := range scores {
+		if len(out) == limit || score.StartedSecondsAgo-score.PlayedSeconds > window {
+			break
+		}
+		out = append(out, score)
+	}
+	return out
 }
 
 // preparedLookaheadLocked reports how far ahead of now a prepared motion

@@ -49,7 +49,7 @@ type Workspace struct {
 	epoch           uint64
 	nextID          uint64
 	activeID        uint64
-	activeCancel    context.CancelFunc
+	activeCancel    context.CancelCauseFunc
 }
 
 // NewWorkspace borrows persistence and the application lifetime. A nil mode
@@ -80,11 +80,11 @@ func (w *Workspace) Revision() uint64 {
 func (w *Workspace) beginTurn(parent context.Context, sessionID string, expected *uint64) (context.Context, context.CancelFunc, error) {
 	// Admission itself may wait on SQLite; link shutdown before that read, not
 	// only after the turn has entered the active slot.
-	ctx, cancel := w.withLifetime(parent)
+	ctx, cancel := w.withLifetimeCause(parent)
 	admitted := false
 	defer func() {
 		if !admitted {
-			cancel()
+			cancel(nil)
 		}
 	}()
 	w.turnsMu.Lock()
@@ -121,7 +121,7 @@ func (w *Workspace) beginTurn(parent context.Context, sessionID string, expected
 	w.activeID, w.activeCancel = id, cancel
 	admitted = true
 	return ctx, sync.OnceFunc(func() {
-		cancel()
+		cancel(nil)
 		w.turnsMu.Lock()
 		if w.activeID == id {
 			w.activeCancel = nil
@@ -131,13 +131,24 @@ func (w *Workspace) beginTurn(parent context.Context, sessionID string, expected
 }
 
 func (w *Workspace) withLifetime(parent context.Context) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(parent)
-	stopLifetime := context.AfterFunc(w.lifetime, cancel)
-	return ctx, func() { stopLifetime(); cancel() }
+	ctx, cancel := w.withLifetimeCause(parent)
+	return ctx, func() { cancel(nil) }
+}
+
+// withLifetimeCause lets a turn's canceler name the event that ended it. A nil
+// cause reads as context.Canceled, as a plain cancellation does.
+func (w *Workspace) withLifetimeCause(parent context.Context) (context.Context, context.CancelCauseFunc) {
+	ctx, cancel := context.WithCancelCause(parent)
+	stopLifetime := context.AfterFunc(w.lifetime, func() { cancel(nil) })
+	return ctx, func(cause error) { stopLifetime(); cancel(cause) }
 }
 
 // CancelTurns never waits on the session gate, persistence, or mode teardown.
-func (w *Workspace) CancelTurns() {
+func (w *Workspace) CancelTurns() { w.CancelTurnsWithCause(nil) }
+
+// CancelTurnsWithCause is CancelTurns for an application event the canceled
+// reply should name, such as Edge. A nil cause reads as context.Canceled.
+func (w *Workspace) CancelTurnsWithCause(cause error) {
 	if w == nil {
 		return
 	}
@@ -147,7 +158,7 @@ func (w *Workspace) CancelTurns() {
 	w.activeCancel = nil
 	w.turnsMu.Unlock()
 	if cancel != nil {
-		cancel()
+		cancel(cause)
 	}
 }
 

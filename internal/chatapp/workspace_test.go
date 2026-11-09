@@ -3,6 +3,7 @@ package chatapp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -86,6 +87,31 @@ func assertBlockedMutations(t *testing.T, w *Workspace, session string, want err
 	}
 	if !errors.Is(err, want) {
 		t.Fatalf("persona change error = %v, want %v", err, want)
+	}
+}
+
+// A canceler can name the application event that ended a turn, such as Edge,
+// so the reply can explain it. A plain cancellation still reads as Canceled.
+func TestCanceledTurnNamesItsCause(t *testing.T) {
+	w, _, session := testWorkspace(t, nil)
+	edge := fmt.Errorf("edge: %w", context.Canceled)
+	named, finishNamed, err := w.BeginTurn(t.Context(), session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.CancelTurnsWithCause(edge)
+	finishNamed()
+	if named.Err() != context.Canceled || context.Cause(named) != edge {
+		t.Fatalf("named turn: err %v, cause %v", named.Err(), context.Cause(named))
+	}
+	plain, finishPlain, err := w.BeginTurn(t.Context(), session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer finishPlain()
+	w.CancelTurns()
+	if context.Cause(plain) != context.Canceled {
+		t.Fatalf("plain turn cause %v", context.Cause(plain))
 	}
 }
 
