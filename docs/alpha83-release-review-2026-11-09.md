@@ -42,12 +42,25 @@ scenario instead of counting unchanged low pace as a successful easing/hold.
 The scripted regression retains both failed turns and their errors. Capability
 tests/docs now cover both compact tiers and Advanced local connections.
 
+The first integrated branch CI race run exposed missing rejected-attempt
+diagnostics after a failed automatic correction, although the duplicate PR
+run and accepted source run passed. The original failure log is retained.
+A controlled 750 ms SQLite writer hold reproduced the loss under the existing
+500 ms diagnostic deadline. Completed correction attempts now receive the
+same bounded two-second persistence allowance as manual repair offers. The
+regression preserves both rejected responses and their failed outcome; blocked
+writer cases still return within the request bound without another model call,
+reply publication or motion. Three focused race repetitions passed after the
+fix. No retention assertion or CI gate was weakened.
+
 ## Evidence and limits
 
 Fresh production ChatGPT GPT-6.1 Terra / low reasoning passed all 17 synthetic
 follow-through turns without provider or validation failures, plus a separate
-initial chat smoke. The build sequence changed 20 to 32%, then selected
-28/35/70/82/92%; easing selected 18/22/16/21%. Six invented scores stayed at
+initial chat smoke. The chat scenario changed 20 to 32%; a separate planner
+scenario started at 20% and selected 28/35/70/82/92%. These are separate
+synthetic starting states, not one continuous chat-to-Autopilot run. Easing
+selected 18/22/16/21%. Six invented scores stayed at
 100% with six geometries and no A/B returns. Ordered widening produced six
 centered counted groups from 45–55 through 20–80. These are observed model
 choices, not hard-coded targets or guarantees. Seventeen-turn median/mean/max
@@ -73,8 +86,12 @@ uses isolated data and local Gemma 12B. A real generation probe passed; app
 chat returned non-empty text in 483 ms with one provider call and no
 repair/fallback/motion. Browser testing verified Edge's explanation during a
 streamed reply, then Emergency Stop left simulated playback idle. Updates
-reuses this process because the integrated production Go/UI source matches
-the handoff, and verifies its LLM and final visible state before handoff.
+initially reused that process while production source matched the handoff.
+The later diagnostic-persistence correction requires a parallel isolated
+simulator at `http://127.0.0.1:50355/#/chat`, with local Gemma, LLM motion Off
+and Autopilot Off. Updates prepares that app and requires real generation,
+text-only app chat and visible idle-state verification before handoff; the
+user-launched source simulator is preserved.
 
 ## Budget
 

@@ -129,11 +129,12 @@ func (s *Server) chatFailureEvidence(result chat.Result, failure error, diagnost
 
 func (s *Server) recordChatFailure(ctx context.Context, sessionID string, result chat.Result, failure error, diagnostics chat.MessageDiagnostics, outcome string) (int64, string) {
 	timeout := 500 * time.Millisecond
-	if result.CanRepair() {
-		// The manual repair offer needs a retained failure ID. Brief writer
-		// contention must not silently remove it, while a blocked datastore
-		// still cannot hold a failed request indefinitely. The parent context
-		// and the later repair freshness checks remain authoritative.
+	if result.CanRepair() || result.RepairAttempted {
+		// Manual repair offers need a retained failure ID, and completed
+		// corrections need their rejected-attempt evidence even if they fail.
+		// Allow brief writer contention for both, while a blocked datastore
+		// cannot hold a request indefinitely. Parent cancellation and later
+		// repair freshness checks remain authoritative.
 		timeout = 2 * time.Second
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)

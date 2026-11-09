@@ -13,6 +13,11 @@ Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
 - No dependency, worker, model inference round or timing-floor change. Recent
   planning observations are bounded to three distinct scores finished within
   three minutes. Simple/Intermediate prompts retain their bytes.
+- Remeasured after the CI-discovered diagnostic-retention correction: core
+  remains **24,490,496 B** and UI is unchanged. Completed correction attempts
+  use the existing two-second diagnostic persistence bound, with no new
+  retry, worker or model call. Controlled writer-contention regressions cover
+  retained failure evidence and a writer that remains blocked.
 
 Source review's unstripped dev build was 33,246,208 B. Its post-test idle
 working set/private bytes were 90,804,224/65,572,864 B; that is a dev-session
