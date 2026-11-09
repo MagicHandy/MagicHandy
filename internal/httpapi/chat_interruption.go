@@ -9,12 +9,16 @@ import (
 // Causes describe application events, never inferred words in a conversation.
 // They keep errors.Is(context.Canceled) working for lifecycle callers.
 var (
-	errLLMSettingsChanged = fmt.Errorf("model settings changed: %w", context.Canceled)
+	// Saved model, motion or device settings changed, or the cloud account did.
+	// The quick speed and stroke controls save motion settings too.
+	errLLMSettingsChanged = fmt.Errorf("model or motion settings changed: %w", context.Canceled)
 	errChatControlChanged = fmt.Errorf("controller changed or disconnected: %w", context.Canceled)
 	// Emergency Stop ends admitted work without ending its owner's control, so
 	// a canceled response may still close normally (ADR 0029).
 	errChatEmergencyStop = fmt.Errorf("emergency stop: %w", context.Canceled)
 	errChatPositionReset = fmt.Errorf("position reset: %w", context.Canceled)
+	// Edge cancels a reply in flight so that it cannot override the gentle hold.
+	errChatEdge          = fmt.Errorf("edge: %w", context.Canceled)
 	errChatAccessEnded   = fmt.Errorf("sign-in session ended: %w", context.Canceled)
 	errChatServerStopped = fmt.Errorf("application shutting down: %w", context.Canceled)
 )
@@ -29,6 +33,8 @@ const (
 	chatPostReplyInterruptedMessage = "The reply was saved, but its motion or speech was interrupted. Check the current controls before trying again."
 	chatPositionResetMessage        = "The reply was interrupted by the position reset. Please send your request again when ready."
 	chatPositionResetAfterReply     = "The reply was saved, but the position reset canceled its motion and speech."
+	chatEdgeMessage                 = "Edge interrupted this reply. Send it again if you still want it."
+	chatEdgeAfterReply              = "The reply was saved, but Edge canceled its motion and speech."
 )
 
 func (s *Server) chatInterruptionMessage(ctx context.Context, stop uint64, failure error) string {
@@ -46,6 +52,7 @@ func (s *Server) chatInterruptionMessage(ctx context.Context, stop uint64, failu
 		// Stop cancels admitted work just before it advances the sequence.
 		{errChatEmergencyStop, "Chat canceled by Emergency Stop."},
 		{errChatPositionReset, chatPositionResetMessage},
+		{errChatEdge, chatEdgeMessage},
 		{errLLMSettingsChanged, chatChangedMessage},
 		{errChatControlChanged, chatControlChangedMessage},
 		{errChatAccessEnded, chatAccessEndedMessage},
@@ -76,6 +83,14 @@ func (s *Server) chatInterruptionMessage(ctx context.Context, stop uint64, failu
 	return ""
 }
 
+// postReplyInterruption names what canceled a saved reply's motion and speech.
+func postReplyInterruption(ctx context.Context) string {
+	if errors.Is(context.Cause(ctx), errChatEdge) {
+		return chatEdgeAfterReply
+	}
+	return chatPostReplyInterruptedMessage
+}
+
 // The public error text is redacted, while its typed cause remains available
 // for lifecycle classification. Error never formats the private cause.
 type retainedChatFailure struct {
@@ -89,7 +104,7 @@ func (e retainedChatFailure) Unwrap() error { return e.cause }
 func sharedChatInterruption(message string) bool {
 	switch message {
 	case chatInterruptedMessage, chatTimedOutMessage, chatChangedMessage, chatControlChangedMessage,
-		chatPositionResetMessage, chatPositionResetAfterReply,
+		chatPositionResetMessage, chatPositionResetAfterReply, chatEdgeMessage, chatEdgeAfterReply,
 		chatAccessEndedMessage, chatServerStoppedMessage, chatPostReplyInterruptedMessage,
 		"Chat canceled by Emergency Stop.",
 		"Emergency Stop canceled this reply's motion and speech.":
