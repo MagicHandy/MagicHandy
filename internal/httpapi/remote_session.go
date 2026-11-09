@@ -159,9 +159,9 @@ func (s *Server) remoteEdge(w http.ResponseWriter, r *http.Request, returning bo
 
 // activateEdge applies the gentle hold for any admitted caller. Chat and
 // planning in flight are canceled without the Stop path; their own contexts and
-// plan guards reject late work.
+// plan guards reject late work. A canceled reply names Edge as its cause.
 func (s *Server) activateEdge(ctx context.Context) (modes.Status, error) {
-	s.chatWorkspace.CancelTurns()
+	s.chatWorkspace.CancelTurnsWithCause(errChatEdge)
 	s.motionReview.invalidate()
 	s.cloudRequests.invalidate()
 	s.autopilotHold.release()

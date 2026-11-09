@@ -3514,5 +3514,7 @@
   "The device did not respond in time. Position still needs a recheck.": "The device did not respond in time. Position still needs a recheck.",
   "The reply was interrupted by the position reset. Please send your request again when ready.": "The reply was interrupted by the position reset. Please send your request again when ready.",
   "The reply was saved, but the position reset canceled its motion and speech.": "The reply was saved, but the position reset canceled its motion and speech.",
+  "Edge interrupted this reply. Send it again if you still want it.": "Edge interrupted this reply. Send it again if you still want it.",
+  "The reply was saved, but Edge canceled its motion and speech.": "The reply was saved, but Edge canceled its motion and speech.",
   "Position reset cleared the command.": "Position reset cleared the command."
 }

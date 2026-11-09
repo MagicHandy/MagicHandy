@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mapledaemon/MagicHandy/internal/chat"
+	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
 func TestChatInterruptionExplainsKnownCausesWithoutClaimingStop(t *testing.T) {
@@ -137,12 +138,120 @@ func TestInterruptedHostedReplyRetainsTechnicalEvidenceWithoutApplyingDraft(t *t
 	}
 	session, _ := s.chatLog.ActiveSessionIDContext(t.Context())
 	failures, err := s.chatLog.Failures(t.Context(), session)
-	if err != nil || len(failures) != 1 || failures[0].Kind != "interrupted" || !strings.Contains(failures[0].Error, "model settings changed") {
+	if err != nil || len(failures) != 1 || failures[0].Kind != "interrupted" || !strings.Contains(failures[0].Error, "model or motion settings changed") {
 		t.Fatalf("missing technical evidence: %+v %v", failures, err)
 	}
 	items, err := s.chatLog.RecentSessionContext(t.Context(), session, 10)
 	if err != nil || len(items) != 1 || items[0].Role != chat.MessageRoleUser {
 		t.Fatalf("canceled draft persisted: %+v %v", items, err)
+	}
+}
+
+// interruptHostedReply starts a hosted reply, runs interrupt while the provider
+// request is in flight, and returns the stream and the one recorded failure.
+func interruptHostedReply(t *testing.T, interrupt func(*Server)) (string, chat.RequestFailure, *transport.Fake) {
+	t.Helper()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	s, fake, _ := hostedFixture(t, func(_ http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		close(started)
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	})
+	t.Cleanup(func() { close(release) })
+	done := make(chan string, 1)
+	go func() { done <- postChatStream(t, s, `{"message":"Text-only greeting."}`) }()
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("request not started")
+	}
+	interrupt(s)
+	var stream string
+	select {
+	case stream = <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("cancellation did not finish")
+	}
+	session, _ := s.chatLog.ActiveSessionIDContext(t.Context())
+	failures, err := s.chatLog.Failures(t.Context(), session)
+	if err != nil || len(failures) != 1 || failures[0].Kind != "interrupted" {
+		t.Fatalf("missing technical evidence: %+v %v", failures, err)
+	}
+	return stream, failures[0], fake
+}
+
+// Edge cancels a reply in flight so it cannot override the gentle hold. The
+// reply says so and records Edge, not a settings change or Emergency Stop.
+func TestEdgeInterruptsHostedReplyWithItsOwnExplanation(t *testing.T) {
+	stream, failure, fake := interruptHostedReply(t, func(s *Server) {
+		// No motion runs here, so the hold itself is refused after the
+		// cancellation; only the interrupted reply is under test.
+		_, _ = s.activateEdge(t.Context())
+	})
+	if !strings.Contains(stream, chatEdgeMessage) || strings.Contains(stream, chatChangedMessage) ||
+		strings.Contains(stream, "Emergency Stop") || strings.Contains(stream, "event: motion") || len(fake.Commands()) != 0 {
+		t.Fatalf("wrong interruption: %s", stream)
+	}
+	if !strings.HasPrefix(failure.Error, "edge") {
+		t.Fatalf("recorded cause = %q", failure.Error)
+	}
+}
+
+// The quick speed and stroke controls save motion settings, which retires a
+// hosted reply in flight. Its message and record both name a settings change.
+func TestQuickMotionChangeExplainsTheRetiredHostedReply(t *testing.T) {
+	stream, failure, _ := interruptHostedReply(t, func(s *Server) {
+		request := withController(httptest.NewRequest(http.MethodPost, "/api/motion/quick", strings.NewReader(`{"speed_max_percent":70}`)))
+		request.Header.Set("Content-Type", "application/json")
+		recorder := httptest.NewRecorder()
+		s.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Errorf("quick control status = %d, body = %s", recorder.Code, recorder.Body.String())
+		}
+	})
+	if !strings.Contains(stream, chatChangedMessage) || strings.Contains(stream, chatEdgeMessage) {
+		t.Fatalf("wrong interruption: %s", stream)
+	}
+	if !strings.HasPrefix(failure.Error, "model or motion settings changed") {
+		t.Fatalf("recorded cause = %q", failure.Error)
+	}
+}
+
+func TestEdgeCancellationNamesEdgeBeforeAndAfterTheReply(t *testing.T) {
+	s := newTestServer(t)
+	ctx, cancel := context.WithCancelCause(t.Context())
+	cancel(errChatEdge)
+	stop := s.stopSequence.Load()
+	if got := s.chatInterruptionMessage(ctx, stop, context.Canceled); got != chatEdgeMessage {
+		t.Fatalf("Edge mislabeled: %s", got)
+	}
+	if outcome := s.chatRepairCancellationOutcome(ctx, stop, context.Canceled); outcome != "canceled" {
+		t.Fatalf("Edge is a cancellation, not stale repair input: %s", outcome)
+	}
+	for _, retained := range []bool{false, true} {
+		var message string
+		emit := func(event string, payload any) error {
+			if event == "error" {
+				message = clientChatFailure(payload)
+			}
+			return nil
+		}
+		s.emitChatCancellationAt(ctx, stop, emit, retained)
+		want := chatEdgeMessage
+		if retained {
+			want = chatEdgeAfterReply
+		}
+		if message != want {
+			t.Fatalf("wrong shared Edge cancellation: %s", message)
+		}
+	}
+	s.stopSequence.Add(1)
+	if got := s.chatInterruptionMessage(ctx, stop, context.Canceled); got != "Chat canceled by Emergency Stop." {
+		t.Fatalf("Stop did not take priority over Edge: %s", got)
 	}
 }
 
