@@ -37,7 +37,7 @@ func ComposeInteractivePrompt(set PromptSet, memories []string, patterns []Patte
 			section.Bytes = len(section.Text)
 		}
 		if section.ID == "output_guard" {
-			sections = appendPromptSection(sections, "live_action", "Live chat action", continuousActionGuideFor(current))
+			sections = appendPromptSection(sections, "live_action", "Live chat action", liveActionGuide(capabilities, current))
 			if !capabilities.AdvancedMotion && capabilities.MotionMode == MotionModeLayered && state != nil && !current.Running && !current.Paused {
 				sections = appendPromptSection(sections, "local_start_intent", "Stopped motion intent", localStoppedIntentGuide)
 			}
