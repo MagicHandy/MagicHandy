@@ -368,6 +368,14 @@ func autopilotPromptContext(input modes.DecisionInput, capabilities chat.Capabil
 		modelContext.RecentSpeeds = append(modelContext.RecentSpeeds, chat.SpeedStep{SpeedPercent: step.SpeedPercent, SecondsAgo: step.SecondsAgo, Interactive: step.Interactive})
 	}
 	modelContext.RecentCheckSeconds = append([]int(nil), input.RecentCheckSeconds...)
+	if capabilities.AdvancedMotion && capabilities.MotionMode == chat.MotionModeLayered {
+		for _, score := range input.RecentScores {
+			if score.Flow != nil {
+				modelContext.RecentScores = append(modelContext.RecentScores, chat.EarlierScore{Flow: *motion.CloneFlowSpec(score.Flow),
+					StartedSecondsAgo: score.StartedSecondsAgo, PlayedSeconds: score.PlayedSeconds})
+			}
+		}
+	}
 	for _, band := range input.RecentPositionBands {
 		modelContext.RecentPositionBands = append(modelContext.RecentPositionBands, chat.PositionBand{
 			Minimum: int(math.Round(band.MinimumPercent)),

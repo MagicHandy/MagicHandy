@@ -1139,6 +1139,74 @@ func TestAutopilotRemembersEarlierDistinctScores(t *testing.T) {
 	}
 }
 
+// A planner shown only the playing score flipped between two templates every
+// stretch. Motion planning also receives the scores just played, newest
+// first, while the playing score is never listed as an earlier one.
+func TestAutopilotPlanningSeesRecentScores(t *testing.T) {
+	engine := &fakeEngine{}
+	clock := &fakeClock{now: time.Unix(0, 0)}
+	var decisions []Decision
+	for _, anchor := range []int{0, 100, 50, 25} {
+		spec := motion.DefaultFlowSpec()
+		spec.AnchorPercent = anchor
+		decisions = append(decisions, Decision{Segment: Segment{Flow: &spec, SpeedPercent: 30, DurationMillis: 4000}})
+	}
+	decider := &fakeDecider{decisions: decisions}
+	manager := newAutopilotManager(t, engine, clock, decider, &announceLog{})
+	if _, err := manager.Start(context.Background(), ModeAutopilot); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	waitForAutonomousStart(t, manager, engine)
+	advanceUntil(t, clock, func() bool {
+		decider.mu.Lock()
+		defer decider.mu.Unlock()
+		return decider.calls >= 4
+	})
+	decider.mu.Lock()
+	defer decider.mu.Unlock()
+	for _, input := range decider.inputs {
+		if input.CurrentFlow == nil || input.CurrentFlow.AnchorPercent != 50 {
+			continue
+		}
+		var anchors []int
+		for _, score := range input.RecentScores {
+			anchors = append(anchors, score.Flow.AnchorPercent)
+		}
+		if !slices.Equal(anchors, []int{100, 0}) {
+			t.Fatalf("recent scores while anchor 50 plays = %v, want [100 0]", anchors)
+		}
+		return
+	}
+	t.Fatal("no planning input while anchor 50 played")
+}
+
+func TestRecentPlanningScoresKeepsTheNewestThreeWithinThreeMinutes(t *testing.T) {
+	spec := motion.DefaultFlowSpec()
+	scores := []EarlierScore{
+		{Flow: &spec, StartedSecondsAgo: 12}, {Flow: &spec, StartedSecondsAgo: 30}, {Flow: &spec, StartedSecondsAgo: 70},
+		{Flow: &spec, StartedSecondsAgo: 90},
+	}
+	if got := recentPlanningScores(scores); len(got) != 3 || got[2].StartedSecondsAgo != 70 {
+		t.Fatalf("recent planning scores = %+v", got)
+	}
+	// A score kept for chat recall because the person spoke during it long ago
+	// is not a recent stretch.
+	old := []EarlierScore{{Flow: &spec, StartedSecondsAgo: 20}, {Flow: &spec, StartedSecondsAgo: 400}}
+	if got := recentPlanningScores(old); len(got) != 1 {
+		t.Fatalf("recent planning scores = %+v", got)
+	}
+	// Auto timing can hold a score for five minutes. It is still something
+	// just felt when replaced, even though it began outside the window.
+	long := []EarlierScore{
+		{Flow: &spec, StartedSecondsAgo: 310, PlayedSeconds: 300},
+		{Flow: &spec, StartedSecondsAgo: 480, PlayedSeconds: 300},
+		{Flow: &spec, StartedSecondsAgo: 481, PlayedSeconds: 300},
+	}
+	if got := recentPlanningScores(long); len(got) != 2 || got[0].PlayedSeconds != 300 {
+		t.Fatalf("long recently finished scores = %+v", got)
+	}
+}
+
 // Planning can change the character every stretch, so a score that played
 // while the person spoke stays recallable after newer scores would have pushed
 // it out.

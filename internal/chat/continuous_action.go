@@ -64,6 +64,22 @@ const continuousActionGuide = `LIVE CHAT DECISION: Include top-level "action" be
 Use "none" with empty edits for chat/questions or explicitly prospective/settings-only requests. Use "update" for edits or motion feedback while running. While stopped, a fresh motion request uses "start", even without saying "start" or after an earlier Stop. While paused, use "none"; only the app can resume.
 Interpret the whole request: a question can accompany an edit, and preserving one control does not forbid changing another. Preserve unrequested controls. Stroke timing, layer period and overall pace are separate. Describe only emitted edits; words alone change nothing.`
 
+// liveActionGuide is the live chat action section. Hosted advanced motion also
+// reads requests that name a later cue (ADR 0066).
+func liveActionGuide(capabilities Capabilities, current MotionContext) string {
+	action := continuousActionGuideFor(current)
+	if capabilities.AdvancedMotion && !unavailableVibrationOnly(current) {
+		action += "\n" + hostedLiveIntentGuide
+	}
+	return action
+}
+
+// hostedLiveIntentGuide covers two readings a hosted model missed in a live
+// session. Asked to build toward the edge now and to slow down on a later cue,
+// GPT-6.1 Terra changed nothing or slowed down in half of eight replays: it
+// treated the whole message as prospective, or read the edge as the tip.
+const hostedLiveIntentGuide = `A message can pair something to do now with something to do on a later cue: encode the part for now in this turn, and let the cued part wait for its cue. Being close, or at the edge, describes how near the person is to climax, not a slider position; a request to bring them there asks you to build intensity now.`
+
 // continuousKeepGuide is offered only while continuous Autopilot composes the
 // motion, the one time a standing wish has any effect.
 const continuousKeepGuide = `

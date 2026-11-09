@@ -1,5 +1,32 @@
 # Goal Scorecard
 
+## 2026-11-09 — Alpha.83 Edge explanations and Advanced follow-through
+
+Against alpha.82 `98f2ea83`, reviewed source `f2819daf`, Windows amd64
+Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false -ldflags '-s -w'`:
+
+- Core including canonical embedded UI: **24,478,720 -> 24,490,496 B**
+  (+11,776 B). The baseline was rebuilt with the same flags on this host.
+- Canonical UI: **2,884,094 -> 2,885,533 B** (+1,439 B), nine files before
+  and after. Main JS **1,323,379 -> 1,323,641 B** (+262 B), gzip
+  **355,603 -> 355,646 B** (+43 B). CSS remains **210,443 B**, gzip **36,663 B**.
+- No dependency, worker, model inference round or timing-floor change. Recent
+  planning observations are bounded to three distinct scores finished within
+  three minutes. Simple/Intermediate prompts retain their bytes.
+- Remeasured after the CI-discovered diagnostic-retention correction: core
+  remains **24,490,496 B** and UI is unchanged. Completed correction attempts
+  use the existing two-second diagnostic persistence bound, with no new
+  retry, worker or model call. Controlled writer-contention regressions cover
+  retained failure evidence and a writer that remains blocked.
+
+Source review's unstripped dev build was 33,246,208 B. Its post-test idle
+working set/private bytes were 90,804,224/65,572,864 B; that is a dev-session
+observation, not a comparable release idle/active RSS or cold-start benchmark.
+No new performance improvement is claimed. Release packaging continues to
+retain symbols for exact-binary vulnerability scans. See the
+[integration review](alpha83-release-review-2026-11-09.md) and
+[source evaluation](autopilot-followthrough-review-2026-11-08.md).
+
 ## 2026-10-31 — Position reset and recheck
 
 Same Windows amd64 Go 1.26.10 stripped pure-Go flags as the pace review:

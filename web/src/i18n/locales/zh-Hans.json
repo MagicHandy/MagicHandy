@@ -3514,5 +3514,7 @@
   "The device did not respond in time. Position still needs a recheck.": "设备未及时响应。仍需重新检查位置。",
   "The reply was interrupted by the position reset. Please send your request again when ready.": "位置重置中断了回复。准备好后请重新发送请求。",
   "The reply was saved, but the position reset canceled its motion and speech.": "回复已保存，但位置重置取消了相关运动和语音。",
+  "Edge interrupted this reply. Send it again if you still want it.": "边缘控制中断了此回复。如仍需要，请重新发送。",
+  "The reply was saved, but Edge canceled its motion and speech.": "回复已保存，但边缘控制取消了相关运动和语音。",
   "Position reset cleared the command.": "位置重置已清除该指令。"
 }

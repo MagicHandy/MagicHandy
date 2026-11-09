@@ -11,17 +11,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mapledaemon/MagicHandy/internal/config"
 	"github.com/mapledaemon/MagicHandy/internal/llm"
+	"github.com/mapledaemon/MagicHandy/internal/transport"
 )
 
 type persistenceContentionProvider struct {
 	*scriptedLLMProvider
-	beforeReturn func()
+	beforeReturn     func()
+	beforeReturnCall int
 }
 
 func (p *persistenceContentionProvider) StreamChat(ctx context.Context, req llm.ChatRequest, delta func(string) error) (string, error) {
 	response, err := p.scriptedLLMProvider.StreamChat(ctx, req, delta)
-	if before := p.beforeReturn; before != nil {
+	if before := p.beforeReturn; before != nil && (p.beforeReturnCall == 0 || p.callCount() == p.beforeReturnCall) {
 		p.beforeReturn = nil
 		before()
 	}
@@ -85,23 +88,64 @@ func TestManualRepairSurvivesBriefDiagnosticWriterContention(t *testing.T) {
 	}
 }
 
-func TestManualRepairDoesNotWaitIndefinitelyForDiagnosticWriter(t *testing.T) {
-	s := independentVibrationServer(t)
-	configureResponseRepair(t, s, false)
-	p := &persistenceContentionProvider{scriptedLLMProvider: &scriptedLLMProvider{responses: []string{
-		`{"action":"none","edits":{},"vibration":{"mode":"wave","min_percent":20,"max_percent":160,"period_seconds":4},"reply":"Invalid."}`,
-	}}}
-	p.beforeReturn = func() { occupyFailureWriter(t, s) }
-	s.llm.provider = p
-	stopVibrationForResume(t, s)
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-	r := withController(httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(`{"message":"Resume a gentle vibration wave."}`)).WithContext(ctx))
-	r.Header.Set(stopSequenceHeader, strconv.FormatUint(s.stopSequence.Load(), 10))
-	w := httptest.NewRecorder()
-	s.Handler().ServeHTTP(w, r)
-	if ctx.Err() != nil || !strings.Contains(w.Body.String(), "event: error") || strings.Contains(w.Body.String(), `"available":true`) ||
-		!s.intifaceSnapshot().Vibrator.Suspended || p.callCount() != 1 {
-		t.Fatalf("blocked writer lost its bound or gained repair/motion authority: %s", w.Body.String())
+func TestFailedAutomaticRepairSurvivesBriefDiagnosticWriterContention(t *testing.T) {
+	raw := `{"action":"start","edits":[{"speed_percent":30}],"reply":"` + strings.Repeat("x", 12001) + `"}`
+	fake := transport.NewFake()
+	p := &persistenceContentionProvider{
+		scriptedLLMProvider: &scriptedLLMProvider{responses: []string{raw, raw}},
+		beforeReturnCall:    2,
+	}
+	s := newTestServerWithRuntime(t, Runtime{Transport: fake, MotionTransport: fake, LLMProvider: p})
+	t.Cleanup(s.Close)
+	saveSettings(t, s.store, func(settings config.Settings) config.Settings {
+		settings.LLM.MotionGenerationMode = config.LLMMotionModeCreativeV2
+		return settings
+	})
+	configureResponseRepair(t, s, true)
+	p.beforeReturn = func() {
+		unblock := occupyFailureWriter(t, s)
+		// Failed automatic correction evidence needs the same brief-contention
+		// allowance as an eligible manual repair, while remaining bounded.
+		timer := time.AfterFunc(750*time.Millisecond, unblock)
+		t.Cleanup(func() { timer.Stop() })
+	}
+	stream := postChatStream(t, s, `{"message":"hello"}`)
+	if !strings.Contains(stream, "event: error") || !strings.Contains(stream, "reply is 12001 bytes") ||
+		strings.Contains(stream, "event: motion") || strings.Contains(stream, "event: message") ||
+		len(fake.Commands()) != 0 || p.callCount() != 2 {
+		t.Fatalf("rejected correction gained reply/motion authority or an extra attempt: %s", stream)
+	}
+	assertOnlyUserChatHistory(t, s)
+	assertRejectedCreativeAttempts(t, s, raw, "reply is 12001 bytes")
+}
+
+func TestResponseRepairDoesNotWaitIndefinitelyForDiagnosticWriter(t *testing.T) {
+	for _, automatic := range []bool{false, true} {
+		t.Run(strconv.FormatBool(automatic), func(t *testing.T) {
+			s := independentVibrationServer(t)
+			configureResponseRepair(t, s, automatic)
+			raw := `{"action":"none","edits":{},"vibration":{"mode":"wave","min_percent":20,"max_percent":160,"period_seconds":4},"reply":"Invalid."}`
+			calls := 1
+			if automatic {
+				calls = 2
+			}
+			p := &persistenceContentionProvider{
+				scriptedLLMProvider: &scriptedLLMProvider{responses: []string{raw, raw}},
+				beforeReturnCall:    calls,
+			}
+			p.beforeReturn = func() { occupyFailureWriter(t, s) }
+			s.llm.provider = p
+			stopVibrationForResume(t, s)
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			r := withController(httptest.NewRequest(http.MethodPost, "/api/chat/stream", strings.NewReader(`{"message":"Resume a gentle vibration wave."}`)).WithContext(ctx))
+			r.Header.Set(stopSequenceHeader, strconv.FormatUint(s.stopSequence.Load(), 10))
+			w := httptest.NewRecorder()
+			s.Handler().ServeHTTP(w, r)
+			if ctx.Err() != nil || !strings.Contains(w.Body.String(), "event: error") || strings.Contains(w.Body.String(), `"available":true`) ||
+				!s.intifaceSnapshot().Vibrator.Suspended || p.callCount() != calls {
+				t.Fatalf("blocked writer lost its bound or gained repair/motion authority: %s", w.Body.String())
+			}
+		})
 	}
 }

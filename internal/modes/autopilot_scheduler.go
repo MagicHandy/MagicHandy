@@ -347,8 +347,8 @@ func (m *Manager) earlierScoresLocked(now time.Time) []EarlierScore {
 }
 
 // EarlierScores reports the run's earlier distinct continuous scores, newest
-// first, for a live chat turn. Planning turns do not see them: they re-read an
-// old "go back" and recalled again after chat had already answered it.
+// first, for a live chat turn. Planning receives only the recent subset as
+// observations, without recall IDs or old requests to repeat.
 func (m *Manager) EarlierScores() []EarlierScore {
 	now := m.options.Now()
 	m.mu.Lock()

@@ -3514,5 +3514,7 @@
   "The device did not respond in time. Position still needs a recheck.": "デバイスの応答がタイムアウトしました。位置の再確認が必要です。",
   "The reply was interrupted by the position reset. Please send your request again when ready.": "位置のリセットにより返信が中断されました。準備ができたらリクエストを再送してください。",
   "The reply was saved, but the position reset canceled its motion and speech.": "返信は保存されましたが、位置のリセットにより動作と音声がキャンセルされました。",
+  "Edge interrupted this reply. Send it again if you still want it.": "寸止めによりこの返答は中断されました。必要ならもう一度送信してください。",
+  "The reply was saved, but Edge canceled its motion and speech.": "返答は保存されましたが、寸止めにより動作と音声がキャンセルされました。",
   "Position reset cleared the command.": "位置のリセットによりコマンドが取り消されました。"
 }
