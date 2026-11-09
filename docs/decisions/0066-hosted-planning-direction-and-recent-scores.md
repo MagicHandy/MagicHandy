@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted 2026-11-09. Hosted Layered planning and hosted chat only; local
+Accepted 2026-11-09. Advanced-capability Layered planning and chat, including
+local models explicitly configured as Advanced. Simple and Intermediate
 prompts keep their bytes. See the
 [follow-through review](../autopilot-followthrough-review-2026-11-08.md).
 Extends [ADR 0031](0031-model-judged-autopilot-continuity.md): planning still
@@ -41,14 +42,15 @@ two templates faster.
 ## Decision
 
 1. **Recent scores for hosted Layered planning.** `DecisionInput.RecentScores`
-   carries up to three distinct continuous scores that started within the
+   carries up to three distinct continuous scores that finished within the
    last 180 seconds before the current one, newest first, for motion planning
    only. Hosted Layered planning shows them as "scores played just before the
    current one": what the person has just felt, not targets or requests. They
    carry no recall IDs and none of the person's words, so a planner cannot
    re-read an old request as fresh, which is why ADR 0031 offers recall only
    to chat. Going back to one is described as a repeat, not a new contrast.
-   Gesture scores are omitted.
+   Gesture scores are omitted. A long stretch remains recent when it ends;
+   its start time alone must not age it out of this window.
 2. **Direction guidance for hosted Layered planning.** When the person names
    where the session should go, such as building toward a peak, bringing them
    close or to the edge, or winding down, the planner keeps moving there across
@@ -79,8 +81,9 @@ named: no host trend raises pace with elapsed time, which ADR 0031 rules out.
   depending on how many recent scores there are. Request counts are unchanged.
 - A planner can still return to an earlier score deliberately; it is told that
   this repeats what the person just felt.
-- Local planners, Decisions, Creative v2 planning and speech check-ins are
-  unchanged.
+- Simple and Intermediate planners, Decisions, Creative v2 planning and speech
+  check-ins are unchanged. "Hosted" here names the Advanced contract, not a
+  restriction on provider location; Advanced local models use the same contract.
 - Replays of the session's turns used OpenRouter's `openai/gpt-6.1-terra`
   (reasoning low) and the production prompt builders. Chat built the
   requested pace in eight of eight turns, up from four, and Autopilot reached
@@ -97,8 +100,9 @@ named: no host trend raises pace with elapsed time, which ADR 0031 rules out.
 ## Validation
 
 Unit tests cover the newest-three, 180-second window of `RecentScores`, that
-only hosted Layered planning receives and renders them, that the rendered
+only Advanced-capability Layered planning receives and renders them, that the rendered
 scores carry no recall IDs or the person's words, and that each new guide
-appears only for hosted advanced motion. `TestHostedFollowThroughLive`
+appears only for Advanced motion. `TestHostedFollowThroughLive`
 (`liveeval`) repeats the four situations with synthetic requests and retains
-every result for motion-atlas review.
+every result for motion-atlas review. Failed provider calls fail the synthetic
+scenario even if the unchanged score would otherwise satisfy a hold request.

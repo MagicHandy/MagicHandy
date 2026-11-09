@@ -3,6 +3,7 @@
 package chat
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -26,7 +27,7 @@ func TestHostedFollowThroughLive(t *testing.T) {
 	t.Cleanup(func() { saveHostedLayeredRows(t, rows) })
 	keep := func(scenario []map[string]any, pass bool) {
 		for _, row := range scenario {
-			row["intent_pass"] = pass
+			row["intent_pass"] = pass && row["valid"] == true
 		}
 		rows = append(rows, scenario...)
 		saveHostedLayeredRows(t, rows)
@@ -51,7 +52,7 @@ func TestHostedFollowThroughLive(t *testing.T) {
 		t.Run(fmt.Sprintf("cued_build_autopilot_%d", repeat), func(t *testing.T) {
 			session := newFollowthroughSession(followthroughSlowScore(), 55)
 			session.ask(build, "Building toward the edge gradually. Tell me when they're nearly there.", 6)
-			scores, scenario := followthroughPlanner(t, provider, model, "cued_build_autopilot", session, 5)
+			scores, scenario, valid := followthroughPlanner(t, provider, model, "cued_build_autopilot", session, 5)
 			drops := 0
 			previous := followthroughSlowScore().SpeedPercent
 			for _, score := range scores {
@@ -61,7 +62,7 @@ func TestHostedFollowThroughLive(t *testing.T) {
 				previous = score.SpeedPercent
 			}
 			last := scores[len(scores)-1].SpeedPercent
-			pass := len(scores) == 5 && last >= followthroughSlowScore().SpeedPercent+25 && drops <= 1
+			pass := valid && len(scores) == 5 && last >= followthroughSlowScore().SpeedPercent+25 && drops <= 1
 			t.Logf("trajectory=%s drops=%d pass=%t", followthroughSpeeds(scores), drops, pass)
 			keep(scenario, pass)
 			if !pass {
@@ -75,8 +76,8 @@ func TestHostedFollowThroughLive(t *testing.T) {
 			session.speeds = []SpeedStep{{SpeedPercent: 60, SecondsAgo: 90, Interactive: true}, {SpeedPercent: 18, SecondsAgo: 5, Interactive: true}}
 			session.ask(build, "Building toward the edge.", 120)
 			session.ask("They're nearly there. Ease right off.", "Easing right off.", 6)
-			scores, scenario := followthroughPlanner(t, provider, model, "cue_arrives", session, 4)
-			pass := len(scores) == 4
+			scores, scenario, valid := followthroughPlanner(t, provider, model, "cue_arrives", session, 4)
+			pass := valid && len(scores) == 4
 			for _, score := range scores[:min(3, len(scores))] {
 				pass = pass && score.SpeedPercent <= 30
 			}
@@ -91,7 +92,7 @@ func TestHostedFollowThroughLive(t *testing.T) {
 			session.speeds = []SpeedStep{{SpeedPercent: 100, SecondsAgo: 20, Interactive: true}}
 			session.ask("Keep coming up with new strokes on your own. Nothing fancy, and stay at top speed.",
 				"I'll keep inventing plain strokes at top speed.", 8)
-			scores, scenario := followthroughPlanner(t, provider, model, "invented_strokes", session, 6)
+			scores, scenario, valid := followthroughPlanner(t, provider, model, "invented_strokes", session, 6)
 			distinct, returns, slowest := map[string]bool{}, 0, 100
 			geometries := []string{autopilotGeometry(followthroughFastScore())}
 			for _, score := range scores {
@@ -104,7 +105,7 @@ func TestHostedFollowThroughLive(t *testing.T) {
 				geometries = append(geometries, geometry)
 				slowest = min(slowest, score.SpeedPercent)
 			}
-			pass := len(scores) == 6 && len(distinct) >= 4 && returns <= 1 && slowest >= 90
+			pass := valid && len(scores) == 6 && len(distinct) >= 4 && returns <= 1 && slowest >= 90
 			t.Logf("distinct=%d returns=%d slowest=%d pass=%t", len(distinct), returns, slowest, pass)
 			keep(scenario, pass)
 			if !pass {
@@ -245,7 +246,7 @@ func (s *followthroughSession) recentScores() []EarlierScore {
 	for i := len(s.played) - 1; i >= 0 && len(out) < 3; i-- {
 		mark := s.played[i]
 		started := int(s.now.Sub(mark.since).Seconds())
-		if started > 180 {
+		if int(s.now.Sub(mark.until).Seconds()) > 180 {
 			break
 		}
 		if autopilotGeometry(mark.flow) == autopilotGeometry(s.current) {
@@ -264,10 +265,11 @@ func (s *followthroughSession) recentScores() []EarlierScore {
 
 // followthroughPlanner runs consecutive Autopilot motion turns, advancing
 // simulated time by each turn's own horizon.
-func followthroughPlanner(t *testing.T, provider *hostedLayeredCapture, model, name string, s *followthroughSession, turns int) ([]motion.FlowSpec, []map[string]any) {
+func followthroughPlanner(t *testing.T, provider *hostedLayeredCapture, model, name string, s *followthroughSession, turns int) ([]motion.FlowSpec, []map[string]any, bool) {
 	caps := followthroughCaps()
 	caps.AutoTiming = true
 	scores, rows := []motion.FlowSpec{}, []map[string]any{}
+	valid := true
 	for turn := 0; turn < turns; turn++ {
 		requests, ages := []string{}, []int{}
 		for _, request := range s.requests {
@@ -288,9 +290,10 @@ func followthroughPlanner(t *testing.T, provider *hostedLayeredCapture, model, n
 			ReasoningMode: "off", Temperature: 0.81, PromptBudget: PromptBudgetSettings{ContextSize: 131072, MaxOutputTokens: 1024}}
 		started := time.Now()
 		response, err := service.Complete(t.Context(), AutopilotKindMotion, Request{Message: AutopilotMotionMessage(context), History: s.history})
+		valid = valid && err == nil
 		rows = append(rows, hostedLayeredLiveRow(fmt.Sprintf("%s_%d", name, turn+1), model, requests[len(requests)-1], provider.raw, before, response.Motion, followthroughSettings(), started, err, false))
 		after := before
-		if response.Motion != nil && response.Motion.Layered != nil {
+		if err == nil && response.Motion != nil && response.Motion.Layered != nil {
 			after = *motion.CloneFlowSpec(response.Motion.Layered)
 		}
 		t.Logf("turn %d next=%d speed %d->%d err=%v", turn+1, response.NextCheckSeconds, before.SpeedPercent, after.SpeedPercent, err)
@@ -314,7 +317,28 @@ func followthroughPlanner(t *testing.T, provider *hostedLayeredCapture, model, n
 		s.now = s.now.Add(time.Duration(horizon) * time.Second)
 		s.segment++
 	}
-	return scores, rows
+	return scores, rows, valid
+}
+
+// Failed calls leave the last score playing; that is not a successful model
+// choice to hold it, even if the unchanged speed fits the requested easing.
+func TestFollowthroughPlannerRejectsFailedHolds(t *testing.T) {
+	slow := followthroughSlowScore()
+	slow.SpeedPercent = 18
+	session := newFollowthroughSession(slow, 5)
+	session.ask("Ease right off.", "Easing off.", 6)
+	provider := &hostedLayeredCapture{Provider: &scriptedProvider{
+		responses: []string{"", ""}, responseErrors: []error{errors.New("provider unavailable"), errors.New("provider unavailable")},
+	}}
+	scores, rows, valid := followthroughPlanner(t, provider, "scripted", "failed_hold", session, 2)
+	if valid || len(rows) != 2 || len(scores) != 2 {
+		t.Fatalf("failed hold evaluation: valid=%t rows=%d scores=%d", valid, len(rows), len(scores))
+	}
+	for i, row := range rows {
+		if row["valid"] != false || row["error"] == nil || row["intent_pass"] != false || scores[i].SpeedPercent != 18 {
+			t.Fatalf("failure %d was not retained as a failed unchanged score: %+v", i, row)
+		}
+	}
 }
 
 func followthroughSpeeds(scores []motion.FlowSpec) string {

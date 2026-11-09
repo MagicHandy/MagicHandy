@@ -453,13 +453,13 @@ func (m *Manager) decisionInput(motionPlanning bool) DecisionInput {
 }
 
 // recentPlanningScores keeps the scores a planner has just played: the newest
-// three distinct earlier scores that began within three minutes. Older scores
+// three distinct earlier scores that finished within three minutes. Older scores
 // kept for chat recall are not recent stretches.
 func recentPlanningScores(scores []EarlierScore) []EarlierScore {
 	const limit, window = 3, 180
 	out := make([]EarlierScore, 0, limit)
 	for _, score := range scores {
-		if len(out) == limit || score.StartedSecondsAgo > window {
+		if len(out) == limit || score.StartedSecondsAgo-score.PlayedSeconds > window {
 			break
 		}
 		out = append(out, score)

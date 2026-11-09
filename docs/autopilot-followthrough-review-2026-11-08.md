@@ -129,24 +129,79 @@ each changed case was compared with its earlier output in detail.
   compiling, and the regional timing reply compiled smoothly but did not keep
   the requested per-region timing.
 
-The synthetic sessions in `TestHostedFollowThroughLive` are not in the atlas
-because they were not run (see Tests).
+The original atlas does not include the synthetic sessions in
+`TestHostedFollowThroughLive`; they were run in the independent release review
+below and retained in a separate atlas.
 
 ### Tests
 
 Unit tests cover the newest-three, three-minute window of recent scores; that
-only hosted Layered planning receives them; that they carry no recall IDs or
-the person's words; and that each new guide reaches only hosted advanced
+only Advanced Layered planning receives them; that they carry no recall IDs or
+the person's words; and that each new guide reaches only Advanced
 motion, and the planning guide only Layered. `TestHostedFollowThroughLive`
 (`liveeval`) repeats the four situations with synthetic requests and retains
-every result for atlas review. It was not run: the OpenRouter evaluation
-credit was exhausted and the ChatGPT evaluation sign-in had expired.
+every result for atlas review. The original review could not run it because
+the OpenRouter evaluation credit was exhausted and the evaluation sign-in had
+expired. The independent release review used an available ChatGPT sign-in.
+
+### Independent release review, 2026-11-09
+
+Reviewed PRs #363 and #364 together against alpha.82. The Edge change preserves
+Stop precedence, typed cancellation, retained replies and the existing stale-work
+boundary. The follow-through changes stay in prompt composition and context:
+they do not change the shared compiler, timing fit, point sampler, transports,
+or the 8–300 second Auto timing range.
+
+Two review corrections were retained:
+
+- Recent scores expire three minutes after they **finish**, not after they
+  start. Otherwise a five-minute Auto timing stretch disappeared from recent
+  history immediately upon replacement. Tests include the exact window boundary.
+- The synthetic evaluation now fails a scenario on any failed model call.
+  Previously a provider failure could preserve the prior low speed and pass as
+  a successful easing/hold choice. A scripted provider-failure test verifies
+  that both failed turns remain in the report with unchanged motion and errors.
+
+The capability gate is Advanced (including Advanced local connections), not
+provider location. Simple and Intermediate prompt bytes remain unchanged;
+adapter tests cover both compact tiers.
+
+Fresh GPT-6.1 Terra / low-reasoning evaluation through the production ChatGPT
+provider passed all 17 turns across five synthetic cases without a provider or
+validation error. The immediate build changed 20 to 32%; five subsequent
+planning choices were 28, 35, 70, 82 and 92%. After the easing cue, choices stayed
+at 18, 22, 16 and 21%. Six invented scores remained at 100%, had six distinct
+geometries and no A/B returns. The widening request produced six counted,
+centered groups from 45–55 through 20–80. These are observations, not fixed pace
+targets or rules. Median generation latency was 5.554 s, mean 6.777 s and maximum
+13.657 s; a separate initial chat smoke also passed in 7.99 s. This is a focused
+sample, not proof that every phrasing or future model response succeeds.
+
+All 18 captured outputs were compiled by the shared engine and rendered into
+17 distinct plots and two overview sheets under
+`.scratch/alpha83-review/motion-atlas`. Both overview sheets were inspected, plus
+the detailed 70% build, 22% easing, alternating-region 100%, base-anchored 100%
+and widening progression plots. The outputs retain distinct widths, anchored
+returns and ordered widening; the wire overlay follows the planned curves.
+No new plateau, extra reversal or discontinuity issue was found. A build can
+still choose a large pace step (35 to 70 here); these charts cover steady motion,
+not physical sensation or a new hardware transition test. Raw results, timing,
+and every accepted output are in the adjacent `followthrough.json` and
+`hosted-smoke.json`; the exporter retained every case.
+
+Focused full-package tests passed for `chat`, `chatapp`, `modes`, and `httpapi`.
+Race tests passed for Edge, interruption/cancellation and recent-score paths.
+The evaluation failure regression and CGO-free app build passed. The isolated
+review app completed a real Gemma 12B text-only chat in one provider call, with
+no repair/fallback and playback stopped. Browser testing then interrupted a
+streamed reply with Edge during simulated Full sweeps: the chat displayed
+"Edge interrupted this reply. Send it again if you still want it." Emergency
+Stop ended the simulated hold and left the app idle. No real hardware was used.
 
 ## Not covered
 
 - Physical feel. All evidence is model output and compiled motion.
-- The synthetic live evaluation above, and the opt-in suite rows that did not
-  run.
+- The original opt-in suite rows that did not run.
 - The smaller misses in finding 4.
 - Whether a quick control should retire a reply in flight. That remains the
   documented stale-work rule.

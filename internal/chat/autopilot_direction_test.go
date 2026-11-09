@@ -40,8 +40,8 @@ func TestHostedAutopilotPlanningAddsDirectionAndRecentScores(t *testing.T) {
 }
 
 // Hosted live chat encodes the immediate part of a request that also names a
-// later cue, and counts stroke-by-stroke progressions. Local prompts do not
-// change.
+// later cue, and counts stroke-by-stroke progressions. Simple and Intermediate
+// prompts do not change; Advanced local models share this contract.
 func TestHostedLiveChatGuidesCuedRequestsAndProgressions(t *testing.T) {
 	for _, advanced := range []bool{true, false} {
 		provider := &layeredTestProvider{raw: `{"action":"none","edits":{},"reply":"Ready."}`}

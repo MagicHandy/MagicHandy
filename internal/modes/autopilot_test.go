@@ -1195,6 +1195,16 @@ func TestRecentPlanningScoresKeepsTheNewestThreeWithinThreeMinutes(t *testing.T)
 	if got := recentPlanningScores(old); len(got) != 1 {
 		t.Fatalf("recent planning scores = %+v", got)
 	}
+	// Auto timing can hold a score for five minutes. It is still something
+	// just felt when replaced, even though it began outside the window.
+	long := []EarlierScore{
+		{Flow: &spec, StartedSecondsAgo: 310, PlayedSeconds: 300},
+		{Flow: &spec, StartedSecondsAgo: 480, PlayedSeconds: 300},
+		{Flow: &spec, StartedSecondsAgo: 481, PlayedSeconds: 300},
+	}
+	if got := recentPlanningScores(long); len(got) != 2 || got[0].PlayedSeconds != 300 {
+		t.Fatalf("long recently finished scores = %+v", got)
+	}
 }
 
 // Planning can change the character every stretch, so a score that played
