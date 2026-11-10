@@ -112,7 +112,11 @@ func continuousEmptyEdits(capabilities Capabilities) string {
 }
 
 func continuousOutputGuard(capabilities Capabilities) string {
-	guard := `FINAL OUTPUT RULE: Return one JSON object using this mode's contract. Conversation requires "edits":` + continuousEmptyEdits(capabilities) + `; no evolution. Reply in the selected voice, not the technical examples' style. Never output a "motion" field. Close JSON after the final sentence; no trailing blank lines.`
+	quiet := `Conversation requires "edits":`
+	if capabilities.AdvancedMotion {
+		quiet = `Questions and talk that is not about the motion require "edits":`
+	}
+	guard := `FINAL OUTPUT RULE: Return one JSON object using this mode's contract. ` + quiet + continuousEmptyEdits(capabilities) + `; no evolution. Reply in the selected voice, not the technical examples' style. Never output a "motion" field. Close JSON after the final sentence; no trailing blank lines.`
 	if capabilities.MoodTracking {
 		guard += ` Optional "new_mood" may use a listed mood.`
 	}

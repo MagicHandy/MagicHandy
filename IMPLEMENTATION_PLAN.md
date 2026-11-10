@@ -1,5 +1,19 @@
 # MagicHandy Go Implementation Plan
 
+Advanced chat now keeps a roleplay's reply and motion in step. Reactions such
+as an invitation, asking for more, getting close or winding down are motion
+feedback, any change a reply describes is made in the same turn, and finishing
+eases the motion off. On all 24 voice and style presets and six roleplay
+types, without explicit motion requests, GPT-6.1 Terra's scene coherence rose
+from 2.83 to about 4 of 5 and DeepSeek V4.1 Flash's from 3.03 to 3.97. Both now
+start on an invitation and ease off at the end. Cold, specific requests are
+unchanged within run-to-run variation. Reaction styles still never mention
+motion. Release review also adds a bare Advanced live Stop action through the
+shared engine, corrects evaluation failure reporting, and verifies post-Stop
+reactions versus fresh invitations. Simple/Intermediate and autonomous
+contracts retain their behavior. See [ADR 0067](docs/decisions/0067-advanced-chat-keeps-scene-reply-and-motion-in-step.md)
+and the [review](docs/roleplay-flow-review-2026-11-09.md).
+
 Hosted Layered Autopilot now sees the scores it played just before the current
 one, as observations without recall, and keeps moving toward a destination the
 person named. Hosted chat acts now on the immediate part of a request that

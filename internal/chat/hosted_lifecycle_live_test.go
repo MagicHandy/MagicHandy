@@ -56,11 +56,7 @@ func TestHostedStoppedMotionIntentLive(t *testing.T) {
 				pass = pass && command != nil && command.Action == MotionActionStart
 			}
 			if tc.counted && pass {
-				pass = command.Layered != nil && command.Layered.Phrase != nil && len(command.Layered.Phrase.Strokes) == 2
-				if pass {
-					groups := command.Layered.Phrase.Strokes
-					pass = groups[0].Count == 2 && groups[1].Count == 1 && groups[0].BottomPercent > groups[1].BottomPercent && groups[1].BottomPercent == 0 && groups[1].TopPercent == 100
-				}
+				pass = lifecycleCountedPattern(command)
 			}
 			row := hostedLayeredLiveRow(tc.name, model, tc.message, result.Raw, before, command, limits, started, err, pass)
 			row["method"], row["motion_command"], row["reply"], row["provider_calls"] = tc.mode, command, result.Response.Reply, provider.calls-calls
@@ -76,6 +72,22 @@ func TestHostedStoppedMotionIntentLive(t *testing.T) {
 			}
 		})
 	}
+}
+
+func lifecycleCountedPattern(command *MotionCommand) bool {
+	if command == nil || command.Layered == nil || command.Layered.Phrase == nil {
+		return false
+	}
+	phrase := command.Layered.Phrase
+	groups := phrase.Strokes
+	if len(phrase.Regions) > 0 {
+		groups = nil
+		for _, region := range phrase.Regions {
+			groups = append(groups, region.PhraseStroke)
+		}
+	}
+	return len(groups) == 2 && groups[0].Count == 2 && groups[1].Count == 1 &&
+		groups[0].BottomPercent > groups[1].BottomPercent && groups[1].BottomPercent == 0 && groups[1].TopPercent == 100
 }
 
 func hostedLifecyclePatterns(mode MotionMode) []PatternChoice {
@@ -103,6 +115,19 @@ func hostedLifecycleCases() []hostedLifecycleCase {
 		} {
 			tc.mode = mode
 			cases = append(cases, tc)
+		}
+		if mode == MotionModeLayered || mode == MotionModeCreativeV2 {
+			for _, tc := range []hostedLifecycleCase{
+				{name: "invitation", message: "All set. You can begin now.", start: true},
+				{name: "after_stop_reaction", message: "That last run felt really good.", afterStop: true},
+				{name: "after_stop_rest", message: "That was great. I need a break now.", afterStop: true},
+				{name: "future_invitation", message: "I'll be ready to start in a minute, but not yet."},
+				{name: "invitation_paused", message: "All set. You can begin now.", paused: true},
+				{name: "invitation_llm_off", message: "All set. You can begin now.", off: true},
+			} {
+				tc.mode = mode
+				cases = append(cases, tc)
+			}
 		}
 	}
 	return append(cases,

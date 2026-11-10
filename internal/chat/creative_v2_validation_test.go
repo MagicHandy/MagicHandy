@@ -66,7 +66,7 @@ func TestCreativeV2GuidedOutputRequiresAReplyInEveryActionBranch(t *testing.T) {
 					Properties map[string]json.RawMessage `json:"properties"`
 				} `json:"oneOf"`
 			}
-			if err := json.Unmarshal(continuousActionSchema(withRecallSchema(base, MotionModeCreativeV2, 1), state), &live); err != nil {
+			if err := json.Unmarshal(continuousActionSchema(withRecallSchema(base, MotionModeCreativeV2, 1), state, false), &live); err != nil {
 				t.Fatal(err)
 			}
 			for _, branch := range live.OneOf {

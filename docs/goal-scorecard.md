@@ -1,5 +1,18 @@
 # Goal Scorecard
 
+## 2026-11-09 — Alpha.84 scene feedback and explicit Advanced Stop
+
+Same Windows amd64 Go 1.26.10, `CGO_ENABLED=0 -trimpath -buildvcs=false
+-ldflags '-s -w'` measurement as alpha.83: **24,490,496 -> 24,495,104 B**
+(+4,608 B), including the unchanged canonical UI (**2,885,533 B**, nine files).
+No dependency, worker, timer, frontend asset or successful-request inference
+round is added. The scene guide applies only to Advanced live chat; local
+Simple/Intermediate prompts retain their existing behavior. Observed trial
+latency increased about 0.7–0.8 seconds at the median; the
+[review](roleplay-flow-review-2026-11-09.md#independent-release-review-and-corrections)
+records that tradeoff and the uncontrolled comparison limits. No idle RSS or
+cold-start improvement is claimed.
+
 ## 2026-11-09 — Alpha.83 Edge explanations and Advanced follow-through
 
 Against alpha.82 `98f2ea83`, reviewed source `f2819daf`, Windows amd64
