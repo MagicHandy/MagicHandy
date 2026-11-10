@@ -15,7 +15,7 @@ func vibrationControlAvailable(c Capabilities, state *MotionContext) bool {
 
 const independentVibrationGuide = `INDEPENDENT VIBRATION: Top-level vibration is separate from the linear action/edits. Omit it (or null) to preserve vibration. To change it, emit {"mode":"follow|off|steady|wave|pulse","min_percent":integer,"max_percent":integer,"period_seconds":number}. Percentages are of the user's Max, the strongest the user allows; you choose the strength within it, and 100 is that Max. Changes apply exactly as written. Starting linear movement requires vibration for the start, usually follow with max_percent as its strength. Never claim to change the user's Max. All vibrator motors are driven together; individual motor control is unavailable.
 follow tracks the movement through the saved profile, from min_percent while moving up to max_percent at its strongest, with period_seconds:0; all zeros follow at level_percent_of_max. With follows=speed it rises toward max_percent mid-stroke and at faster pace and dips toward min_percent at each turnaround, so keep a wide range when vibration should follow the movement. off silences only vibration and requires all zeros. steady requires equal min/max and period_seconds:0. wave is a smooth swell; pulse has rounded rises/falls and distinct plateaus. Both use 0<=min_percent<=max_percent<=100 and a full-cycle period_seconds of 0.5..30. Choose values for the request, not a fixed preferred level or rhythm.
-For a vibrator-only request, use linear action:none and empty edits plus vibration. It can start vibration from idle without starting The Handy. During linear playback it changes only vibration, preserving the exact Handy score and phase. For both devices, supply both the ordinary linear action/edits and vibration. Unmentioned outputs stay unchanged. Do not change linear pace/geometry just to make the vibrator stronger or pulse. Stop only the vibrator with mode:off; global Stop is the app's Stop control. Follow speed/depth is optional, not a constraint on independent patterns.
+For a vibrator-only request, use linear action:none and empty edits plus vibration. It can start vibration from idle without starting The Handy. During linear playback it changes only vibration, preserving the exact Handy score and phase. For both devices, supply both the ordinary linear action/edits and vibration. Unmentioned outputs stay unchanged. Do not change linear pace/geometry just to make the vibrator stronger or pulse. Stop only the vibrator with mode:off. When the live chat contract offers action:stop, it stops all outputs with empty edits and vibration:null; the app's Stop control is always available. Follow speed/depth is optional, not a constraint on independent patterns.
 From idle, only steady/wave/pulse start independent vibration with action:none. follow needs a playing movement timeline: to resume its saved rhythm use action:start and empty edits, including when the vibrator is the only playback device. previous_envelope is the last stopped vibration pattern, not active output; reuse it when asked to continue unchanged. A positive level or follow object alone does not start an idle timeline.
 While paused or chat-only, make no output edits. With no linear device, describe buzzing/levels/rhythm rather than physical strokes or travel. Explain limits honestly, without inventing independent motor control.`
 
@@ -134,12 +134,17 @@ func withVibrationLevelSchema(schema json.RawMessage, caps Capabilities, state *
 }
 
 // addTopLevelProperty requires a field on the object and on each action
-// branch; the start branch takes start, which may require a choice.
+// branch; start may require a choice, while stop forbids output edits.
 func addTopLevelProperty(node map[string]any, name string, value, start any) {
 	if fields, ok := node["properties"].(map[string]any); ok {
 		chosen := value
-		if action, ok := fields["action"].(map[string]any); ok && action["const"] == MotionActionStart {
-			chosen = start
+		if action, ok := fields["action"].(map[string]any); ok {
+			switch action["const"] {
+			case MotionActionStart:
+				chosen = start
+			case MotionActionStop:
+				chosen = map[string]any{"type": "null"}
+			}
 		}
 		fields[name] = chosen
 		required, _ := node["required"].([]any)

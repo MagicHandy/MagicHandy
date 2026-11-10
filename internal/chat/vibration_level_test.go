@@ -181,7 +181,11 @@ func TestStartingMovementRequiresTheModelToChooseALevel(t *testing.T) {
 					Properties map[string]map[string]any `json:"properties"`
 				} `json:"oneOf"`
 			}
-			if err := json.Unmarshal(InteractiveResponseSchema(nil, tc.caps, &state), &schema); err != nil || len(schema.OneOf) != 2 {
+			branches := 2
+			if tc.caps.AdvancedMotion {
+				branches++ // Advanced live chat also offers a bare Stop.
+			}
+			if err := json.Unmarshal(InteractiveResponseSchema(nil, tc.caps, &state), &schema); err != nil || len(schema.OneOf) != branches {
 				t.Fatalf("branches: %v", err)
 			}
 			for _, branch := range schema.OneOf {

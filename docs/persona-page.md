@@ -261,6 +261,16 @@ Two invariants for the block, both testable:
    existing user's prompt is byte-identical until they opt in. Worth a test:
    `ComposeSystem` output for a `neutral` persona equals today's output.
 
+Advanced live chat adds one code-owned scene guide that is the same for every
+persona ([ADR 0067](decisions/0067-advanced-chat-keeps-scene-reply-and-motion-in-step.md)):
+a scene's reactions are motion feedback, and the reply and the motion must
+agree. Both invariants still hold. No style block mentions motion, and the
+guide grants no authority by itself: limits and capability gates remain enforced.
+Advanced live Layered and Creative v2 also expose an explicit bare Stop through
+the shared engine; other lifecycle and autonomous contracts remain unchanged. A style still shapes only the words; the model may
+show the same character in motion choices it was already allowed to make when
+the person leaves the lead to it.
+
 ---
 
 ## 3. What a persona may and may never carry
