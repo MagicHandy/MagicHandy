@@ -18,10 +18,11 @@ publication.
 The maintainer requested review of Claude's latest Advanced chat reply/motion
 consistency work and another release. The
 [alpha.84 integration review](../alpha84-release-review-2026-11-09.md) records
-release preparation independently of the source review. At preparation time,
-the exact accepted source and evaluation evidence are still pending. No merge,
-tag or publication is authorized until that handoff; full final-head review,
-green PR and merged-main gates, and exact-artifact verification remain required.
+release preparation, the completed source handoff in PR #366 at `d3dbb4b7`,
+and its evidence and limits. Updates owns integration and publication after
+that handoff; full final-head review, green PR and merged-main gates, and
+exact-artifact verification remain required. The Advanced bare Stop addition
+uses the existing shared path and creates no new motion or transport owner.
 
 Only `0.1.0-alpha.84` joins ReviewedUnsignedPublic. Alpha.85 and later require
 a new review; alpha.65 remains excluded. The llama.cpp pin, five-executable
