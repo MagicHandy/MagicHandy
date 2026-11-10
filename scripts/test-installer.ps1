@@ -43,15 +43,20 @@ function Assert-Throws([scriptblock]$Action, [string]$Pattern, [string]$Message)
 
 function Get-AvailableLoopbackPort {
     param([switch]$WithRemote)
-    for ($attempt = 0; $attempt -lt 32; $attempt++) {
-        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    # Do not ask the outbound ephemeral allocator for a fixture port: after
+    # this probe closes, a child process's network traffic can claim port+1
+    # before the fixed-port app starts. Randomize in a separate range and
+    # still probe both sockets; occupied/excluded ports are never assumed free.
+    for ($attempt = 0; $attempt -lt 128; $attempt++) {
+        $port = Get-Random -Minimum 20000 -Maximum 40000
+        $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $port)
         $remoteListener = $null
         try {
-            $listener.Start()
-            $port = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
+            $listener.ExclusiveAddressUse = $true
+            try { $listener.Start() } catch [System.Net.Sockets.SocketException] { continue }
             if ($WithRemote) {
-                if ($port -eq 65535) { continue }
                 $remoteListener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $port + 1)
+                $remoteListener.ExclusiveAddressUse = $true
                 try { $remoteListener.Start() } catch [System.Net.Sockets.SocketException] { continue }
             }
             return $port
@@ -121,6 +126,44 @@ try {
         $path = Join-Path $Repo $file
         [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
         Assert-Equal -Expected 0 -Actual $errors.Count -Message "$file should parse"
+    }
+    Write-Host 'Checking fixture port selection skips occupied main and remote sockets...'
+    $releaseAst = [Management.Automation.Language.Parser]::ParseFile(
+        (Join-Path $Repo 'scripts\release\Test-WindowsRelease.ps1'), [ref]$tokens, [ref]$errors)
+    $releasePortDefinition = $releaseAst.Find({
+        $args[0] -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $args[0].Name -eq 'Get-AvailableLoopbackPort'
+    }, $true)
+    $portDefinitions = @(
+        ('function Get-AvailableLoopbackPort {' + (Get-Command Get-AvailableLoopbackPort).Definition + '}'),
+        $releasePortDefinition.Extent.Text
+    )
+    foreach ($definition in $portDefinitions) {
+        & {
+            param($Definition)
+            Invoke-Expression $Definition
+            foreach ($occupiedOffset in @(0, 1)) {
+                $blockedPort = Get-AvailableLoopbackPort -WithRemote
+                $blocker = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $blockedPort + $occupiedOffset)
+                $blocker.ExclusiveAddressUse = $true
+                try {
+                    $blocker.Start()
+                    $availablePort = Get-AvailableLoopbackPort -WithRemote
+                    $candidates = [Collections.Generic.Queue[int]]::new()
+                    $candidates.Enqueue($blockedPort)
+                    $candidates.Enqueue($availablePort)
+                    # Force a busy first candidate, including a free main
+                    # socket whose adjacent remote socket is occupied.
+                    function Get-Random { param($Minimum, $Maximum) $candidates.Dequeue() }
+                    $selected = Get-AvailableLoopbackPort -WithRemote
+                    Assert-Equal -Expected $availablePort -Actual $selected -Message 'fixture must skip an occupied port pair'
+                    Assert-Equal -Expected 0 -Actual $candidates.Count -Message 'fixture should try the next candidate'
+                } finally {
+                    Remove-Item Function:Get-Random -ErrorAction SilentlyContinue
+                    $blocker.Stop()
+                }
+            }
+        } $definition
     }
     Assert-True -Condition (Test-Path -LiteralPath (Join-Path $Repo 'scripts\tts\chatterbox-server.py') -PathType Leaf) -Message 'Chatterbox launcher shim should ship with the installer'
     $ttsRuntimeProbe = Join-Path $Repo 'scripts\tts\runtime-probe.py'

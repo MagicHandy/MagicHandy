@@ -166,14 +166,17 @@ function Wait-MagicHandyReady {
 function Get-AvailableLoopbackPort {
     # The app binds both its main and adjacent remote socket before healthz.
     # A free main port alone does not establish that the app can start.
-    for ($attempt = 0; $attempt -lt 32; $attempt++) {
-        $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    # Avoid the usual outbound ephemeral range: a released adjacent port can
+    # otherwise be claimed by network traffic before the fixed-port launch.
+    for ($attempt = 0; $attempt -lt 128; $attempt++) {
+        $port = Get-Random -Minimum 20000 -Maximum 40000
+        $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port)
         $remote = $null
         try {
-            $listener.Start()
-            $port = ([Net.IPEndPoint]$listener.LocalEndpoint).Port
-            if ($port -eq 65535) { continue }
+            $listener.ExclusiveAddressUse = $true
+            try { $listener.Start() } catch [Net.Sockets.SocketException] { continue }
             $remote = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, $port + 1)
+            $remote.ExclusiveAddressUse = $true
             try { $remote.Start() } catch [Net.Sockets.SocketException] { continue }
             return $port
         } finally {

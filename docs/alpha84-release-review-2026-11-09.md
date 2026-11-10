@@ -64,6 +64,20 @@ retained and its suite passed when run sequentially. No source or assertion was
 changed to bypass that collision. Further installer runs use one suite at a
 time and never stop another session to free a port.
 
+The first integrated PR installer job failed at verified relaunch: the main
+listener bound, but Windows denied adjacent remote port 51586 with error
+10013. The same-head branch installer job passed. The fixture had probed both
+ports using an OS-assigned ephemeral main port, then released them before
+launch; that leaves the pair exposed to outbound allocation during startup.
+Installer and release-acceptance fixtures now choose random candidates in
+20000–39999, probe both sockets exclusively, and skip occupied or excluded
+candidates. This reduces that race without changing production binding,
+fixed-port failure behavior, readiness checks or any acceptance assertion.
+The failed job and startup reports remain retained. Deterministic checks force
+occupied main and remote candidates for both helpers, and both complete
+PowerShell 5.1/7 installer suites pass sequentially after the correction.
+New-head CI remains required.
+
 Source review passed the full Go suite, vet, lint, pure-Go build, harness unit
 checks and focused Stop/late-response race tests. Fresh GPT-6.1 Terra tests
 passed 27/27 lifecycle cases and two five-turn feedback conversations without
