@@ -67,8 +67,12 @@ func layeredContextInstructions(state MotionContext, capabilities Capabilities) 
 		recall = earlierScoresGuide + "\n"
 	}
 	encoded, _ := json.Marshal(context)
-	text := "Authoritative continuous motion state, refreshed for this turn:\n" + string(encoded) + "\n" + labPlanningContextGuide + recall +
-		"A stopped device starts only for a direct motion request; a paused device cannot be resumed by model edits. Ordinary conversation and questions require reply only."
+	closing := "A stopped device starts only for a direct motion request; a paused device cannot be resumed by model edits. Ordinary conversation and questions require reply only."
+	if capabilities.AdvancedMotion {
+		// A scene's reactions are motion feedback for hosted models (hostedSceneGuide).
+		closing = "A stopped device starts only when the person asks for motion or invites you to begin, never for a reaction to earlier motion; a paused device cannot be resumed by model edits. Questions and talk that is not about the motion require reply only."
+	}
+	text := "Authoritative continuous motion state, refreshed for this turn:\n" + string(encoded) + "\n" + labPlanningContextGuide + recall + closing
 	if capabilities.AdvancedMotion && state.MotionMode == MotionModeLayered {
 		text += "\n" + hostedStrokeLengthGuide
 	}
@@ -304,7 +308,7 @@ func (s Service) parseLayeredResponse(raw string, current motion.FlowSpec, state
 		err = s.authorizeLayeredReply(&response, next, changed, state)
 	}
 	if err == nil {
-		attachVibration(&response, vibration, vibrationLevel)
+		err = attachVibration(&response, vibration, vibrationLevel)
 	}
 	response.nextCheckSeconds = nextCheck
 	return response, err
@@ -367,9 +371,12 @@ func (s Service) takeVibrationFields(raw string, capabilities Capabilities, stat
 
 // attachVibration adds vibration changes to a reply, as a vibration-only
 // command when the reply changed no motion.
-func attachVibration(response *AssistantResponse, vibration *motion.VibrationSpec, level *int) {
+func attachVibration(response *AssistantResponse, vibration *motion.VibrationSpec, level *int) error {
 	if vibration == nil && level == nil {
-		return
+		return nil
+	}
+	if response.Motion != nil && response.Motion.Action == MotionActionStop {
+		return fmt.Errorf("action stop cannot include vibration changes; omit vibration or use null")
 	}
 	if response.Motion == nil {
 		response.Motion = &MotionCommand{Action: MotionActionNone}
@@ -380,4 +387,5 @@ func attachVibration(response *AssistantResponse, vibration *motion.VibrationSpe
 	if level != nil {
 		response.Motion.VibrationLevel = level
 	}
+	return nil
 }

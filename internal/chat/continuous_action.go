@@ -10,7 +10,7 @@ import (
 
 // continuousActionSchema constrains decisions using backend state, never words
 // in a chat message. The model interprets intent; the engine enforces limits.
-func continuousActionSchema(schema json.RawMessage, state MotionContext) json.RawMessage {
+func continuousActionSchema(schema json.RawMessage, state MotionContext, allowStop bool) json.RawMessage {
 	var root struct {
 		Properties map[string]json.RawMessage `json:"properties"`
 		Required   []string                   `json:"required"`
@@ -25,6 +25,9 @@ func continuousActionSchema(schema json.RawMessage, state MotionContext) json.Ra
 		} else {
 			actions = append(actions, MotionActionStart)
 		}
+	}
+	if allowStop && !unavailableVibrationOnly(state) {
+		actions = append(actions, MotionActionStop)
 	}
 	required := append(slices.Clone(root.Required), "action")
 	if state.Autopilot {
@@ -43,7 +46,7 @@ func continuousActionSchema(schema json.RawMessage, state MotionContext) json.Ra
 		if state.Autopilot {
 			fields["stay_unchanged"] = json.RawMessage(`{"type":"boolean"}`)
 		}
-		if action == MotionActionNone {
+		if action == MotionActionNone || action == MotionActionStop {
 			var empty any = map[string]any{}
 			var editShape struct {
 				Type string `json:"type"`
@@ -65,14 +68,23 @@ Use "none" with empty edits for chat/questions or explicitly prospective/setting
 Interpret the whole request: a question can accompany an edit, and preserving one control does not forbid changing another. Preserve unrequested controls. Stroke timing, layer period and overall pace are separate. Describe only emitted edits; words alone change nothing.`
 
 // liveActionGuide is the live chat action section. Hosted advanced motion also
-// reads requests that name a later cue (ADR 0066).
+// reads requests that name a later cue (ADR 0066) and keeps a scene's reply and
+// motion in step.
 func liveActionGuide(capabilities Capabilities, current MotionContext) string {
 	action := continuousActionGuideFor(current)
 	if capabilities.AdvancedMotion && !unavailableVibrationOnly(current) {
-		action += "\n" + hostedLiveIntentGuide
+		action += "\n" + advancedStopGuide + "\n" + hostedLiveIntentGuide + "\n" + hostedSceneGuide
 	}
 	return action
 }
+
+const advancedStopGuide = `Use action "stop" with empty edits to stop all playback, including Autopilot. It is also allowed while paused; it never resumes motion. Omit vibration or use null with stop. Easing off while continuing uses update instead. Claim a complete rest or stopped device only with stop, or when already stopped.`
+
+// hostedSceneGuide keeps a roleplay's reply and motion in step. Hosted models
+// read reactions as conversation: in synthetic persona scenes the motion stayed
+// unchanged through invitations, requests for more and winding down, while
+// replies described touch starting, quickening or resting.
+const hostedSceneGuide = `In a scene, the reply and the motion are one act. The person's reactions are motion feedback even when they name no control: an invitation to begin, pleasure, asking for more, saying they are close, finishing, or wanting to rest. Answer them in character with the motion as well as the words. Praise usually means keep what works; once they finish or need to catch their breath, ease off or stop unless they ask for more. Holding them off, telling them to wait or not yet, means slower or lighter motion, not faster. Whenever the reply says the stroking starts, stops or rests, speeds up or slows down, goes deeper or shallower, or changes length, make that change in this turn's edits. Never describe resting, holding still or catching breath while the motion keeps its pace, and when you keep the motion as it is, do not describe it changing. Kissing or touching elsewhere is not the motion.`
 
 // hostedLiveIntentGuide covers two readings a hosted model missed in a live
 // session. Asked to build toward the edge now and to slow down on a later cue,
@@ -103,17 +115,14 @@ func (s Service) authorizeLayeredReply(response *AssistantResponse, after motion
 	if !s.capabilities().Motion {
 		return nil
 	}
+	if response.continuousAction == MotionActionStop {
+		return s.authorizeContinuousStop(response, changed)
+	}
 	if unavailableVibrationOnly(state) {
-		if len(changed) > 0 || (response.continuousAction != "" && response.continuousAction != MotionActionNone) {
-			return errors.New("the selected vibrator is not ready or has zero intensity; motion edits cannot arm it")
-		}
-		return nil
+		return requireUnchangedContinuous(response, changed, "the selected vibrator is not ready or has zero intensity; motion edits cannot arm it")
 	}
 	if state.Paused {
-		if len(changed) > 0 || (response.continuousAction != "" && response.continuousAction != MotionActionNone) {
-			return errors.New("continuous motion is paused; edits cannot resume it")
-		}
-		return nil
+		return requireUnchangedContinuous(response, changed, "continuous motion is paused; edits cannot resume it")
 	}
 	action := response.continuousAction
 	// Scheduled decisions already have explicit authority from the scheduler.
@@ -145,5 +154,23 @@ func (s Service) authorizeLayeredReply(response *AssistantResponse, after motion
 		return errors.New("continuous chat requires action none, start or update")
 	}
 	response.Motion = &MotionCommand{Action: action, Layered: motion.CloneFlowSpec(&after)}
+	return nil
+}
+
+func requireUnchangedContinuous(response *AssistantResponse, changed []string, reason string) error {
+	if len(changed) > 0 || (response.continuousAction != "" && response.continuousAction != MotionActionNone) {
+		return errors.New(reason)
+	}
+	return nil
+}
+
+func (s Service) authorizeContinuousStop(response *AssistantResponse, changed []string) error {
+	if !s.capabilities().AdvancedMotion || s.TrustedMotionInput {
+		return errors.New("action stop is available only to Advanced live chat")
+	}
+	if len(changed) != 0 {
+		return errors.New("action stop requires unchanged motion; use empty edits")
+	}
+	response.Motion = &MotionCommand{Action: MotionActionStop}
 	return nil
 }

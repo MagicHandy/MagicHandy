@@ -91,7 +91,7 @@ func TestContinuousDecisionSchemaUsesOnlyBackendState(t *testing.T) {
 					Required   []string                   `json:"required"`
 				} `json:"oneOf"`
 			}
-			if err := json.Unmarshal(continuousActionSchema(schema, state), &decoded); err != nil {
+			if err := json.Unmarshal(continuousActionSchema(schema, state, false), &decoded); err != nil {
 				t.Fatal(err)
 			}
 			want := []string{"none"}
